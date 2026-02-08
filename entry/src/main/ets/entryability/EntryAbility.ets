@@ -1,6 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { IBestInit } from "@ibestservices/ibest-ui"
 
 const DOMAIN = 0x0000;
 
@@ -28,6 +29,23 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+
+      windowStage.getMainWindow((err, window) => {
+        if (err.code) {
+          console.error('获取主窗口失败: ' + JSON.stringify(err));
+          return;
+        }
+
+        window.setWindowKeepScreenOn(true)
+          .then(() => {
+            console.log("禁止熄屏成功！")
+          })
+          .catch(() => {
+            console.error("禁止熄屏失败")
+          })
+      })
+
+      IBestInit(windowStage, this.context)
     });
   }
 
