@@ -24,8 +24,13 @@ struct Index {
       Navigation(this.pageStack) {
         Scroll() {
           HomePage()
-        }.scrollBar(BarState.Off)
+        }
+        .height("100%")
+        .scrollBar(BarState.Off)
       }
+      .width("100%")
+      .height("100%")
+      .hideToolBar(true)
       .mode(NavigationMode.Stack)
       .navDestination(this.PageBuilder)
 
