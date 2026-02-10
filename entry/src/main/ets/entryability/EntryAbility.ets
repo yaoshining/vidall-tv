@@ -46,6 +46,7 @@ export default class EntryAbility extends UIAbility {
       })
 
       IBestInit(windowStage, this.context)
+
     });
   }
 

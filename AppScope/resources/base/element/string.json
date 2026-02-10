@@ -3,6 +3,18 @@
     {
       "name": "app_name",
       "value": "VidAll TV"
+    },
+    {
+      "name": "reason_read_media",
+      "value": "用于选择您需要的文件夹"
+    },
+    {
+      "name": "reason_internet",
+      "value": "用户在播放视频时访问互联网"
+    },
+    {
+      "name": "reason_get_network_info",
+      "value": "用户在播放视频时获取网络相关信息"
     }
   ]
 }
