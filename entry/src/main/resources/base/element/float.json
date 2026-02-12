@@ -1,8 +1,51 @@
 {
-  "float": [
-    {
-      "name": "page_text_font_size",
-      "value": "50fp"
-    }
-  ]
+  "float": [{
+    "name": "font_h1_display",
+    "value": "96fp"
+  }, {
+    "name": "font_h2_display",
+    "value": "72fp"
+  }, {
+    "name": "font_h3_display",
+    "value": "60fp"
+  }, {
+    "name": "font_h4_display",
+    "value": "48fp"
+  }, {
+    "name": "font_h5_display",
+    "value": "40fp"
+  }, {
+    "name": "font_h6_title_large",
+    "value": "36fp"
+  }, {
+    "name": "font_h7_title_small",
+    "value": "30fp"
+  }, {
+    "name": "font_h8_title_secondary",
+    "value": "24fp"
+  }, {
+    "name": "font_subtitle_1",
+    "value": "20fp"
+  }, {
+    "name": "font_subtitle_2",
+    "value": "18fp"
+  }, {
+    "name": "font_subtitle_3",
+    "value": "16fp"
+  }, {
+    "name": "font_body_1",
+    "value": "18fp"
+  }, {
+    "name": "font_body_2",
+    "value": "16fp"
+  }, {
+    "name": "font_body_3",
+    "value": "14fp"
+  }, {
+    "name": "font_caption",
+    "value": "12fp"
+  }, {
+    "name": "font_caption_1",
+    "value": "10fp"
+  }]
 }

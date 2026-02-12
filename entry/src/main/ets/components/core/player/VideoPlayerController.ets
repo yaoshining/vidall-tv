@@ -1,17 +1,36 @@
 import { media } from "@kit.MediaKit";
 import fs from "@ohos.file.fs";
-import { VideoDataType } from "./Constants";
+import { AVPlayerState, PlayerEvents, VideoDataType } from "./Constants";
 import { VideoData } from "./VideoData";
+import { BusinessError, emitter } from "@kit.BasicServicesKit";
+import { hilog } from "@kit.PerformanceAnalysisKit";
+import { CommonConstants } from "../../../common/constants/CommonConstants";
+import { millisecondsToTime } from "../../../utils/TimeUtil";
 
+const TAG = '[VideoPlayerController]';
+
+@ObservedV2
 export class VideoPlayerController {
   private avPlayer?: media.AVPlayer
-  private surfaceId: string = ''
+  @Trace surfaceId: string = ''
+  @Trace duration = 0
+  @Trace isPlaying = false
+  @Trace isReady = false
+  @Trace currentTime = 0
+  @Trace currentBufferTime = 0
+  @Trace isLoading = false
+  @Trace progress = 0
+  seekTimer = 0
 
   async initAVPlayer(videoData: VideoData, surfaceId: string) {
     try {
       let avPlayer = await media.createAVPlayer()
       this.avPlayer = avPlayer
       avPlayer.surfaceId = surfaceId
+      this.surfaceId = surfaceId
+
+      this.setAVPlayerCallbacks(avPlayer)
+
       if (videoData.type === VideoDataType.URL) {
         avPlayer.url = videoData.videoSrc
       }
@@ -23,30 +42,37 @@ export class VideoPlayerController {
         }
       }
 
-      avPlayer.on('stateChange', (state) => {
-        switch (state) {
-          case 'idle':
-            break
-          case 'initialized':
-            avPlayer.surfaceId = surfaceId
-            avPlayer.prepare().catch(() => {
-              // TODO: Implement error handling.
-            })
-            break
-          case 'prepared':
-            avPlayer.url = 'https://vjs.zencdn.net/v/oceans.mp4'
-            avPlayer.play()
-            break
-          default:
-            break
-        }
-      })
-      await avPlayer.prepare()
-      await avPlayer.play()
+      this.setAVPlayerStateChangeCallback(avPlayer)
     } catch (error) {
       if (error) {
         console.error(`Video Player creation error: ${error}`)
         return
+      }
+    }
+  }
+
+  async play() {
+    await this.avPlayer?.play().catch((err: BusinessError) => {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `play failed, code is ${err.code}, message is ${err.message}`);
+    })
+  }
+
+  async pause() {
+    if (this.avPlayer?.state === AVPlayerState.PLAYING) {
+      await this.avPlayer?.pause().catch((err: BusinessError) => {
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `play failed, code is ${err.code}, message is ${err.message}`);
+      })
+    }
+  }
+
+  async toggle() {
+    if (this.avPlayer) {
+      if (this.avPlayer.state === AVPlayerState.PLAYING) {
+        await this.pause()
+      } else {
+        await this.play()
       }
     }
   }
@@ -59,5 +85,71 @@ export class VideoPlayerController {
         // TODO: Implement error handling.
       }
     }
+  }
+
+  async seek(time: number) {
+    clearTimeout(this.seekTimer)
+    if (this.avPlayer) {
+      await this.pause()
+      this.avPlayer.seek(time)
+      this.seekTimer = setTimeout(async () => {
+        await this.avPlayer?.play()
+      }, 500)
+    }
+  }
+
+  async forward(milliseconds: number) {
+    this.seek(this.currentTime + milliseconds)
+  }
+
+  async backward(milliseconds: number) {
+    this.seek(this.currentTime - milliseconds)
+  }
+
+  private setAVPlayerStateChangeCallback(avPlayer: media.AVPlayer) {
+    avPlayer.on('stateChange', (state) => {
+      switch (state) {
+        case AVPlayerState.IDLE:
+          break
+        case AVPlayerState.INITIALIZED:
+          avPlayer.surfaceId = this.surfaceId
+          avPlayer.prepare().catch((err: BusinessError) => {
+            hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+              `prepare failed, code is ${err.code}, message is ${err.message}`);
+          })
+          break
+        case AVPlayerState.PREPARED:
+          this.duration = avPlayer.duration
+          this.currentTime = avPlayer.currentTime
+          this.isReady = true
+          emitter.emit(PlayerEvents.PREPARED)
+          break
+        case AVPlayerState.PLAYING:
+          this.isPlaying = true
+          emitter.emit(PlayerEvents.PLAYING)
+          break
+        case AVPlayerState.PAUSED:
+          this.isPlaying = false
+        default:
+          break
+      }
+    })
+  }
+
+  private setAVPlayerCallbacks(avPlayer: media.AVPlayer) {
+    avPlayer.on("timeUpdate", () => {
+      this.currentTime = avPlayer.currentTime
+      this.progress = this.currentTime / this.duration
+    })
+  }
+
+  @Computed
+  get durationDisplay(): string {
+    return millisecondsToTime(this.duration)
+  }
+
+  @Computed
+  get currentTimeDisplay(): string {
+    return millisecondsToTime(this.currentTime)
   }
 }

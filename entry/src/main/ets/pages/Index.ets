@@ -1,6 +1,7 @@
 import { SidebarStore } from '../stores/sidebar/SidebarStore';
 import { HomePage } from './home';
 import { PlayerPage } from './player/index';
+import { SettingsPage } from './settings/Index';
 
 @Entry
 @ComponentV2
@@ -12,6 +13,9 @@ struct Index {
   PageBuilder(name: string) {
     if (name === PlayerPage.PAGE_NAME) {
       PlayerPage();
+    }
+    if (name === SettingsPage.PAGE_NAME) {
+      SettingsPage();
     }
   }
 

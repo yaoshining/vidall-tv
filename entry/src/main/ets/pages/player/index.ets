@@ -13,7 +13,7 @@ export struct PlayerPage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   private videoPlayerController = new VideoPlayerController()
   private videoData?: VideoData
-
+  @Local isBackPressedOnce: boolean = false
 
   static PAGE_NAME = 'player'
 
@@ -23,15 +23,32 @@ export struct PlayerPage {
         if (this.videoData) {
           VideoPlayer({
             controller: this.videoPlayerController,
-            data: this.videoData
+            data: this.videoData,
+            autoPlay: true
           })
-            .id('TestHelloWorld')
             .alignRules({
               center: { anchor: '__container__', align: VerticalAlign.Center },
               middle: { anchor: '__container__', align: HorizontalAlign.Center }
             })
-            .onClick(() => {
-              this.pageStack.pop()
+        }
+
+        if (this.isBackPressedOnce) {
+          Text("再次按返回键退出播放")
+            .margin({ bottom: 40 })
+            .fontSize(14)
+            .fontColor(Color.White)
+            .backgroundColor('#66000000')
+            .padding(8)
+            .borderRadius(4)
+            .animation({
+              duration: 200,
+              curve: Curve.EaseInOut,
+              iterations: 1,
+              playMode: PlayMode.Normal
+            })
+            .alignRules({
+              bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+              middle: { anchor: '__container__', align: HorizontalAlign.Center }
             })
         }
       }
@@ -53,6 +70,17 @@ export struct PlayerPage {
             videoSrc: pageParam.fileUrl
           }
         }
+      }
+    })
+    .onBackPressed(() => {
+      if (this.isBackPressedOnce) {
+        return false
+      } else {
+        this.isBackPressedOnce = true
+        setTimeout(() => {
+          this.isBackPressedOnce = false
+        }, 2000)
+        return true
       }
     })
     .hideTitleBar(true)

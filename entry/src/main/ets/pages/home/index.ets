@@ -6,7 +6,8 @@ import { SidebarStore } from "../../stores/sidebar/SidebarStore"
 import { TabBarStore } from "../../stores/tabbar/TabBarStore"
 import { common } from "@kit.AbilityKit"
 import { picker } from "@kit.CoreFileKit"
-import { PlayerPageParam } from "../player"
+import { PlayerPage, PlayerPageParam } from "../player"
+import { SettingsPage } from "../settings/Index"
 
 interface TabItem {
   id: number,
@@ -73,7 +74,10 @@ export struct HomePage {
               btnBorderColor: Color.Transparent,
               iconBuilder: (): void => this.settingIBestIconBuilder('setting-o'),
               onBtnClick: () => {
-                this.sidebarModel.sidebarOpened = true
+                // this.sidebarModel.sidebarOpened = true
+                this.pageStack.pushPath({
+                  name: SettingsPage.PAGE_NAME
+                })
               }
             })
             IBestDivider({ vertical: true })
@@ -163,7 +167,7 @@ export struct HomePage {
                       }
                       try {
                         this.pageStack.pushPath({
-                          name: 'player',
+                          name: PlayerPage.PAGE_NAME,
                           param: JSON.stringify(pageParam)
                         }, true)
                       } catch (error) {
@@ -178,19 +182,11 @@ export struct HomePage {
               })
                 .onClick(() => {
                   this.pageStack.pushPath({
-                    name: 'player',
+                    name: PlayerPage.PAGE_NAME,
                     param: JSON.stringify({
                       url: 'https://vjs.zencdn.net/v/oceans.mp4'
                     })
                   }, true)
-                  // this.getUIContext().getRouter().pushUrl({
-                  //   url: 'pages/Test'
-                  // }, router.RouterMode.Single, (err) => {
-                  //   if (err) {
-                  //     console.error(`Invoke pushUrl failed, code is ${err.code}, message is ${err.message}`)
-                  //     return
-                  //   }
-                  // })
                 })
             }
             ForEach(Array.from(Array(50)), (_i: number, index: number) => {
