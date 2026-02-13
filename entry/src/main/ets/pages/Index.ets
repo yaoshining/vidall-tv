@@ -1,4 +1,5 @@
 import { SidebarStore } from '../stores/sidebar/SidebarStore';
+import { FileExplorerPage } from './files';
 import { HomePage } from './home';
 import { PlayerPage } from './player/index';
 import { SettingsPage } from './settings/Index';
@@ -13,14 +14,15 @@ struct Index {
   PageBuilder(name: string) {
     if (name === PlayerPage.PAGE_NAME) {
       PlayerPage();
-    }
-    if (name === SettingsPage.PAGE_NAME) {
+    } else if (name === SettingsPage.PAGE_NAME) {
       SettingsPage();
+    } else if (name === FileExplorerPage.PAGE_NAME) {
+      FileExplorerPage();
     }
   }
 
   aboutToAppear(): void {
-    // this.pageStack.pushPath({ name: 'player' })
+    this.pageStack.pushPath({ name: FileExplorerPage.PAGE_NAME })
   }
 
   build() {
@@ -30,6 +32,7 @@ struct Index {
           HomePage()
         }
         .height("100%")
+        .align(Alignment.TopStart)
         .scrollBar(BarState.Off)
       }
       .width("100%")

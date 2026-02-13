@@ -15,6 +15,10 @@
     {
       "name": "reason_get_network_info",
       "value": "用户在播放视频时获取网络相关信息"
+    },
+    {
+      "name": "reason_file_access_persist",
+      "value": "用于持久化用户对文件的授权"
     }
   ]
 }
