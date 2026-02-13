@@ -34,7 +34,6 @@ interface ColorsInterface {
 export struct FileExplorer {
   @Param @Require controller: FileExplorerController
   @Event onFileClick: (event: FileClickEvent) => void = () => {};
-  @Event onBack: () => boolean = () => true;
 
   // 深色主题颜色定义
   private readonly COLORS: ColorsInterface = {

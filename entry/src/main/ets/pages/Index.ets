@@ -21,10 +21,6 @@ struct Index {
     }
   }
 
-  aboutToAppear(): void {
-    this.pageStack.pushPath({ name: FileExplorerPage.PAGE_NAME })
-  }
-
   build() {
     Stack() {
       Navigation(this.pageStack) {

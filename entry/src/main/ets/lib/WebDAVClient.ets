@@ -1,5 +1,6 @@
 import socket from '@ohos.net.socket';
 import buffer from '@ohos.buffer';
+import fs from '@ohos.file.fs';
 
 export interface WebDAVConfig {
   baseUrl: string;
@@ -22,6 +23,13 @@ class HttpResponse {
   statusText: string = '';
   headers: Map<string, string> = new Map();
   body: string = '';
+}
+
+// 新增：流式下载进度回调
+export interface StreamDownloadCallback {
+  onProgress?: (downloaded: number, total: number) => void;
+  onComplete?: (filePath: string) => void;
+  onError?: (error: Error) => void;
 }
 
 export class WebDAVClient {
@@ -51,6 +59,23 @@ export class WebDAVClient {
     }
 
     console.info(`WebDAV: host=${this.host}, port=${this.port}, https=${this.isHttps}`);
+  }
+
+  /**
+   * 获取 Auth Header（用于外部调用）
+   */
+  public getAuthHeaderPublic(): string {
+    return this.getAuthHeader();
+  }
+
+  /**
+   * 获取完整的 WebDAV URL（用于流式播放）
+   */
+  public getFullUrl(path: string): string {
+    let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+    let fullPath = basePath + (path.startsWith('/') ? path : '/' + path);
+
+    return `${this.isHttps ? 'https' : 'http'}://${this.host}:${this.port}${fullPath}`;
   }
 
   private getAuthHeader(): string {
@@ -132,14 +157,12 @@ export class WebDAVClient {
         }
       }, this.timeout);
 
-      // 修复：监听消息事件
       tcp.on('message', (value: socket.SocketMessageInfo) => {
         if (isComplete) return;
 
         try {
           console.info('Message event triggered');
 
-          // 检查 message 是否为空
           if (!value.message) {
             console.warn('Received null message');
             return;
@@ -147,7 +170,6 @@ export class WebDAVClient {
 
           const messageData = value.message as ArrayBuffer;
 
-          // 检查 ArrayBuffer 大小
           if (messageData.byteLength === 0) {
             console.warn('Received empty ArrayBuffer');
             return;
@@ -161,7 +183,6 @@ export class WebDAVClient {
 
           console.info(`Received ${chunk.length} bytes, total: ${fullResponseData.length}`);
 
-          // 检查是否完整
           if (this.isHttpResponseComplete(fullResponseData)) {
             console.info('Complete response detected');
             isComplete = true;
@@ -181,7 +202,6 @@ export class WebDAVClient {
         }
       });
 
-      // 监听连接关闭
       tcp.on('close', () => {
         console.info(`Connection closed, received data: ${hasReceivedData}`);
 
@@ -202,7 +222,6 @@ export class WebDAVClient {
         }
       });
 
-      // 监听错误
       tcp.on('error', (err: Error) => {
         console.error('Socket error:', JSON.stringify(err));
 
@@ -214,12 +233,10 @@ export class WebDAVClient {
         }
       });
 
-      // 连接
       tcp.connect({ address: address, timeout: 10000 })
         .then(() => {
           console.info('Connected, sending request...');
 
-          // 构建请求
           let request = `${method} ${path} HTTP/1.1\r\n`;
           request += `Host: ${this.host}:${this.port}\r\n`;
 
@@ -247,7 +264,6 @@ export class WebDAVClient {
           console.info(request);
           console.info('=== END ===');
 
-          // 发送
           const sendBuffer = buffer.from(request, 'utf-8');
 
           return tcp.send({ data: sendBuffer.buffer });
@@ -255,12 +271,10 @@ export class WebDAVClient {
         .then(() => {
           console.info('Request sent, waiting for response...');
 
-          // 发送后立即尝试接收（备用方案）
           setTimeout(() => {
             if (!hasReceivedData && !isComplete) {
               console.info('No message event received, trying manual receive...');
 
-              // 尝试手动接收
               tcp.getState().then((state: socket.SocketStateBase) => {
                 console.info('Socket state:', JSON.stringify(state));
 
@@ -284,6 +298,245 @@ export class WebDAVClient {
             isComplete = true;
             clearTimeout(timeoutId);
             tcp.close();
+            reject(err);
+          }
+        });
+    });
+  }
+
+  /**
+   * 新增：流式下载文件（带进度回调）
+   * @param remotePath 远程文件路径
+   * @param localFilePath 本地保存路径
+   * @param callback 进度回调
+   */
+  async downloadFileStream(
+    remotePath: string,
+    localFilePath: string,
+    callback?: StreamDownloadCallback
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tcp = socket.constructTCPSocketInstance();
+      let fileHandle: fs.File | null = null;
+      let isComplete = false;
+      let headerReceived = false;
+      let contentLength = 0;
+      let downloadedBytes = 0;
+      let headerData = '';
+
+      const address: socket.NetAddress = {
+        address: this.host,
+        port: this.port,
+        family: 1
+      };
+
+      console.info(`WebDAV Stream Download: Connecting to ${this.host}:${this.port}`);
+
+      const timeoutId = setTimeout(() => {
+        if (!isComplete) {
+          console.error('Download timeout');
+          isComplete = true;
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+            } catch (error) {
+              console.error('Close file error:', error);
+            }
+          }
+          tcp.close();
+          callback?.onError?.(new Error('Download timeout'));
+          reject(new Error('Download timeout'));
+        }
+      }, this.timeout);
+
+      // 监听数据接收
+      tcp.on('message', (value: socket.SocketMessageInfo) => {
+        if (isComplete) return;
+
+        try {
+          if (!value.message || (value.message as ArrayBuffer).byteLength === 0) {
+            return;
+          }
+
+          const messageData = value.message as ArrayBuffer;
+          const receivedBuffer = buffer.from(messageData);
+
+          if (!headerReceived) {
+            // 还在接收 HTTP 头
+            const chunk = receivedBuffer.toString('utf-8');
+            headerData += chunk;
+
+            const headerEndIndex = headerData.indexOf('\r\n\r\n');
+            if (headerEndIndex !== -1) {
+              headerReceived = true;
+
+              // 解析 HTTP 头
+              const headerSection = headerData.substring(0, headerEndIndex);
+              const bodyStart = headerEndIndex + 4;
+
+              // 检查状态码
+              const statusMatch = headerSection.match(/HTTP\/[\d.]+\s+(\d+)/);
+              if (statusMatch) {
+                const statusCode = parseInt(statusMatch[1]);
+                if (statusCode !== 200) {
+                  throw new Error(`HTTP ${statusCode}`);
+                }
+              }
+
+              // 获取 Content-Length
+              const contentLengthMatch = headerSection.match(/Content-Length:\s*(\d+)/i);
+              if (contentLengthMatch) {
+                contentLength = parseInt(contentLengthMatch[1]);
+                console.info(`Content-Length: ${contentLength}`);
+              }
+
+              // 打开文件用于写入
+              fileHandle = fs.openSync(localFilePath, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE);
+
+              // 写入头部之后的数据
+              if (bodyStart < headerData.length) {
+                const initialBody = headerData.substring(bodyStart);
+                const bodyBuffer = buffer.from(initialBody, 'utf-8');
+                fs.writeSync(fileHandle.fd, bodyBuffer.buffer);
+                downloadedBytes += bodyBuffer.length;
+
+                callback?.onProgress?.(downloadedBytes, contentLength);
+              }
+            }
+          } else {
+            // 写入文件数据
+            if (fileHandle !== null) {
+              fs.writeSync(fileHandle.fd, messageData);
+              downloadedBytes += messageData.byteLength;
+
+              console.info(`Downloaded: ${downloadedBytes} / ${contentLength}`);
+
+              callback?.onProgress?.(downloadedBytes, contentLength);
+
+              // 检查是否下载完成
+              if (contentLength > 0 && downloadedBytes >= contentLength) {
+                console.info('Download completed');
+                isComplete = true;
+                clearTimeout(timeoutId);
+
+                fs.closeSync(fileHandle);
+                fileHandle = null;
+
+                tcp.close();
+
+                callback?.onComplete?.(localFilePath);
+                resolve();
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Download error:', JSON.stringify(error));
+          if (!isComplete) {
+            isComplete = true;
+            clearTimeout(timeoutId);
+
+            if (fileHandle !== null) {
+              try {
+                fs.closeSync(fileHandle);
+              } catch (e) {
+                console.error('Close file error:', e);
+              }
+            }
+
+            tcp.close();
+            callback?.onError?.(error as Error);
+            reject(error);
+          }
+        }
+      });
+
+      // 监听连接关闭
+      tcp.on('close', () => {
+        console.info('Connection closed');
+
+        if (!isComplete) {
+          isComplete = true;
+          clearTimeout(timeoutId);
+
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+            } catch (error) {
+              console.error('Close file error:', error);
+            }
+          }
+
+          if (downloadedBytes === contentLength && contentLength > 0) {
+            callback?.onComplete?.(localFilePath);
+            resolve();
+          } else {
+            const error = new Error('Connection closed unexpectedly');
+            callback?.onError?.(error);
+            reject(error);
+          }
+        }
+      });
+
+      // 监听错误
+      tcp.on('error', (err: Error) => {
+        console.error('Socket error:', JSON.stringify(err));
+
+        if (!isComplete) {
+          isComplete = true;
+          clearTimeout(timeoutId);
+
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+            } catch (error) {
+              console.error('Close file error:', error);
+            }
+          }
+
+          tcp.close();
+          callback?.onError?.(err);
+          reject(err);
+        }
+      });
+
+      // 构建文件路径
+      let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+      let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
+
+      // 连接并发送请求
+      tcp.connect({ address: address, timeout: 10000 })
+        .then(() => {
+          console.info('Connected, requesting file...');
+
+          // 构建 GET 请求
+          let request = `GET ${fullPath} HTTP/1.1\r\n`;
+          request += `Host: ${this.host}:${this.port}\r\n`;
+          request += `User-Agent: WebDAV-Client/1.0\r\n`;
+
+          const authHeader = this.getAuthHeader();
+          if (authHeader) {
+            request += `Authorization: ${authHeader}\r\n`;
+          }
+
+          request += `Connection: close\r\n`;
+          request += `\r\n`;
+
+          console.info('Sending download request:', fullPath);
+
+          const sendBuffer = buffer.from(request, 'utf-8');
+          return tcp.send({ data: sendBuffer.buffer });
+        })
+        .then(() => {
+          console.info('Download request sent');
+        })
+        .catch((err: Error) => {
+          console.error('Connect/Send error:', JSON.stringify(err));
+
+          if (!isComplete) {
+            isComplete = true;
+            clearTimeout(timeoutId);
+            tcp.close();
+            callback?.onError?.(err);
             reject(err);
           }
         });

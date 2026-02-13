@@ -38,7 +38,7 @@ export struct MediaLibraryTab {
                 try {
                   this.pageStack.pushPath({
                     name: PlayerPage.PAGE_NAME,
-                    param: JSON.stringify(pageParam)
+                    param: pageParam
                   }, true)
                 } catch (error) {
                   console.error(`Player error: ${error}`)
@@ -55,9 +55,7 @@ export struct MediaLibraryTab {
             const url = 'https://vjs.zencdn.net/v/oceans.mp4'
             this.pageStack.pushPath({
               name: PlayerPage.PAGE_NAME,
-              param: JSON.stringify({
-                url
-              })
+              param: { url } as PlayerPageParam
             }, true)
           })
       }

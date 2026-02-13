@@ -22,17 +22,31 @@ export class VideoPlayerController {
   @Trace progress = 0
   seekTimer = 0
 
-  async initAVPlayer(videoData: VideoData, surfaceId: string) {
+  async initAVPlayer(videoData: VideoData, surfaceId: string, player?: media.AVPlayer) {
     try {
-      let avPlayer = await media.createAVPlayer()
+      let avPlayer = player || await media.createAVPlayer()
       this.avPlayer = avPlayer
-      avPlayer.surfaceId = surfaceId
       this.surfaceId = surfaceId
+
+      avPlayer.videoScaleType = media.VideoScaleType.VIDEO_SCALE_TYPE_FIT
 
       this.setAVPlayerCallbacks(avPlayer)
 
       if (videoData.type === VideoDataType.URL) {
-        avPlayer.url = videoData.videoSrc
+        // avPlayer.url = videoData.videoSrc
+
+        // {
+        //   'Authorization': 'Basic eWFvOnlzMTk4NzU2',
+        // // 'Authorization': 'Basic Y2RrZDpkYXJ0dmpoeA==',
+        // "User-Agent": "VidALL/1.0.0",
+        // }
+
+        // 设置播放策略，设置缓冲区数据量为3s。
+        let playbackStrategy : media.PlaybackStrategy =
+          {preferredWidth: 1, preferredHeight: 2, preferredBufferDuration: 3, preferredHdr: false};
+        const mediaSource =
+          media.createMediaSourceWithUrl(videoData.videoSrc, videoData.httpHeader)
+        avPlayer.setMediaSource(mediaSource, playbackStrategy)
       }
 
       if (videoData.type === VideoDataType.FILE_URI) {
@@ -130,6 +144,16 @@ export class VideoPlayerController {
           break
         case AVPlayerState.PAUSED:
           this.isPlaying = false
+          break
+        case AVPlayerState.COMPLETED:
+          this.isPlaying = false
+          break
+        case AVPlayerState.STOPPED:
+          this.isPlaying = false
+          break
+        case AVPlayerState.ERROR:
+          this.isPlaying = false
+          break
         default:
           break
       }
@@ -141,6 +165,11 @@ export class VideoPlayerController {
       this.currentTime = avPlayer.currentTime
       this.progress = this.currentTime / this.duration
     })
+
+    avPlayer.on('error', (error: Error) => {
+      console.error('AVPlayer error:', JSON.stringify(error));
+      this.isLoading = false;
+    });
   }
 
   @Computed

@@ -6,6 +6,7 @@ import { VideoPlayerController } from "../../components/core/player/VideoPlayerC
 export interface PlayerPageParam {
   fileUrl?: string;
   url?: string;
+  httpHeader?: Record<string, string>
 }
 
 @ComponentV2
@@ -56,18 +57,19 @@ export struct PlayerPage {
       .width('100%')
     }
     .onReady((context) => {
-      let paramStr = context.pathInfo.param as string
-      if (paramStr) {
-        let pageParam = JSON.parse(paramStr) as PlayerPageParam
+      let pageParam = context.pathInfo.param as PlayerPageParam
+      if (pageParam) {
         if (pageParam.url) {
           this.videoData = {
             type: VideoDataType.URL,
-            videoSrc: pageParam.url
+            videoSrc: pageParam.url,
+            httpHeader: pageParam.httpHeader
           }
         } else if (pageParam.fileUrl) {
           this.videoData = {
             type: VideoDataType.FILE_URI,
-            videoSrc: pageParam.fileUrl
+            videoSrc: pageParam.fileUrl,
+            httpHeader: pageParam.httpHeader
           }
         }
       }

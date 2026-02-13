@@ -106,7 +106,6 @@ export class FileExplorerController {
   }
 
   handleBack(): void {
-    console.log('current path: ' + this.currentPath)
     if (this.currentPath === '/') {
       const handled = this.onBack();
       if (!handled) {
