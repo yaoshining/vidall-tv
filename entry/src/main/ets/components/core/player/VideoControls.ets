@@ -7,6 +7,7 @@ struct VideoControls {
   @Require @Param videoController: VideoPlayerController
   @Require @Param dialogController: CustomDialogController
   closeTimer?: number
+  seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
 
   build() {
@@ -15,7 +16,7 @@ struct VideoControls {
         justifyContent: FlexAlign.SpaceBetween,
         alignItems: ItemAlign.Start
       }) {
-        Text("视频名字")
+        Text(this.videoController.name)
           .fontSize($r('app.float.font_h8_title_secondary'))
         Text("功能区")
       }
@@ -73,9 +74,9 @@ struct VideoControls {
             max: this.videoController.duration,
             style: SliderStyle.OutSet
           })
-            .onChange(debounce<(value: number) => void>((value) => {
+            .onChange((value) => {
               this.videoController.seek(value)
-            }, 10))
+            })
             .flexGrow(1)
           Text(`${this.videoController.durationDisplay}`)
             .flexShrink(0)
@@ -109,6 +110,7 @@ struct VideoControls {
 
   aboutToDisappear(): void {
     clearTimeout(this.closeTimer)
+    clearTimeout(this.seekTimer)
   }
 }
 

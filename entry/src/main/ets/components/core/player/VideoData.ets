@@ -4,7 +4,7 @@ export interface VideoData {
   type: VideoDataType;
   videoSrc: string;
   httpHeader?: Record<string, string>;
-  name?: string | Resource;
+  name?: ResourceStr;
   description?: ResourceStr;
   head?: Resource;
   caption?: string;

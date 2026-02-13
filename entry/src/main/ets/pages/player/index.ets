@@ -6,7 +6,8 @@ import { VideoPlayerController } from "../../components/core/player/VideoPlayerC
 export interface PlayerPageParam {
   fileUrl?: string;
   url?: string;
-  httpHeader?: Record<string, string>
+  httpHeader?: Record<string, string>;
+  title?: string;
 }
 
 @ComponentV2
@@ -62,15 +63,17 @@ export struct PlayerPage {
         if (pageParam.url) {
           this.videoData = {
             type: VideoDataType.URL,
-            videoSrc: pageParam.url,
-            httpHeader: pageParam.httpHeader
+            videoSrc: pageParam.url
           }
         } else if (pageParam.fileUrl) {
           this.videoData = {
             type: VideoDataType.FILE_URI,
-            videoSrc: pageParam.fileUrl,
-            httpHeader: pageParam.httpHeader
+            videoSrc: pageParam.fileUrl
           }
+        }
+        if (this.videoData) {
+          this.videoData.httpHeader = pageParam.httpHeader
+          this.videoData.name = pageParam.title
         }
       }
     })

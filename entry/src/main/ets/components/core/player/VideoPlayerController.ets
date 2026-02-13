@@ -12,17 +12,20 @@ const TAG = '[VideoPlayerController]';
 @ObservedV2
 export class VideoPlayerController {
   private avPlayer?: media.AVPlayer
+  @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
   @Trace duration = 0
   @Trace isPlaying = false
   @Trace isReady = false
+  @Trace isSeeking = false
   @Trace currentTime = 0
   @Trace currentBufferTime = 0
   @Trace isLoading = false
   @Trace progress = 0
-  seekTimer = 0
+  private timeToSeek = -1  // -1表示没有要seek的时间，大于-1表示正在seek还没来的及处理的时间
 
   async initAVPlayer(videoData: VideoData, surfaceId: string, player?: media.AVPlayer) {
+    this.name = videoData.name || ''
     try {
       let avPlayer = player || await media.createAVPlayer()
       this.avPlayer = avPlayer
@@ -66,6 +69,9 @@ export class VideoPlayerController {
   }
 
   async play() {
+    if (this.isSeeking) {
+      return
+    }
     await this.avPlayer?.play().catch((err: BusinessError) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `play failed, code is ${err.code}, message is ${err.message}`);
@@ -102,13 +108,15 @@ export class VideoPlayerController {
   }
 
   async seek(time: number) {
-    clearTimeout(this.seekTimer)
     if (this.avPlayer) {
       await this.pause()
-      this.avPlayer.seek(time)
-      this.seekTimer = setTimeout(async () => {
-        await this.avPlayer?.play()
-      }, 500)
+      this.currentTime = time
+      if (!this.isSeeking) {
+        this.isSeeking = true
+        this.avPlayer.seek(time)
+      } else {
+        this.timeToSeek = time
+      }
     }
   }
 
@@ -170,6 +178,16 @@ export class VideoPlayerController {
       console.error('AVPlayer error:', JSON.stringify(error));
       this.isLoading = false;
     });
+
+    avPlayer.on('seekDone', async () => {
+      if (this.timeToSeek > -1) {
+        avPlayer.seek(this.timeToSeek)
+        this.timeToSeek = -1
+        this.isSeeking = false
+      } else {
+        await avPlayer.play()
+      }
+    })
   }
 
   @Computed
