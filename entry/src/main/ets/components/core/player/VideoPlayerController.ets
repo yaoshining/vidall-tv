@@ -28,6 +28,8 @@ export class VideoPlayerController {
   @Trace subtitleUpdateCounter: number = 0  // 字幕更新计数器，用于强制触发更新
   private timeToSeek = -1  // -1表示没有要seek的时间，大于-1表示正在seek还没来的及处理的时间
   private subtitleClearTimer?: number  // 字幕清空定时器
+  private subtitleRemainingTime: number = 0  // 字幕剩余显示时间（毫秒）
+  private subtitlePauseTime: number = 0  // 字幕暂停时的时间戳
 
   async initAVPlayer(videoData: VideoData, surfaceId: string, player?: media.AVPlayer): Promise<void> {
     this.name = videoData.name || ''
@@ -160,10 +162,14 @@ export class VideoPlayerController {
           break
         case AVPlayerState.PLAYING:
           this.isPlaying = true
+          // 恢复字幕定时器
+          this.resumeSubtitleTimer()
           emitter.emit(PlayerEvents.PLAYING)
           break
         case AVPlayerState.PAUSED:
           this.isPlaying = false
+          // 暂停字幕定时器
+          this.pauseSubtitleTimer()
           break
         case AVPlayerState.COMPLETED:
           this.isPlaying = false
@@ -218,26 +224,25 @@ export class VideoPlayerController {
           this.currentSubtitleText = info.text
 
           // 计算字幕显示时长
-          // SubtitleInfo 只有 startTime 和 duration，没有 endTime
           let displayDuration = 0
           if (info.duration !== undefined && info.duration > 0) {
             displayDuration = info.duration
           } else {
-            // 如果没有时长信息，默认显示 3 秒
-            displayDuration = 3000
+            displayDuration = 3000  // 默认 3 秒
           }
 
-          console.log(`[VideoPlayerController] Setting subtitle clear timer: ${displayDuration}ms`)
+          this.subtitleRemainingTime = displayDuration
+          console.log(`[VideoPlayerController] Subtitle duration: ${displayDuration}ms`)
 
-          // 设置定时器在字幕结束时清空
-          this.subtitleClearTimer = setTimeout(() => {
-            console.log(`[VideoPlayerController] Clearing subtitle after ${displayDuration}ms`)
-            this.currentSubtitleText = ''
-            this.subtitleUpdateCounter++
-            this.subtitleClearTimer = undefined
-          }, displayDuration)
+          // 只有在播放状态才设置定时器
+          if (this.isPlaying) {
+            this.startSubtitleTimer()
+          } else {
+            console.log(`[VideoPlayerController] Video paused, subtitle timer not started`)
+          }
         } else {
           this.currentSubtitleText = ''
+          this.subtitleRemainingTime = 0
         }
 
         // 更新计数器，强制触发 UI 更新
@@ -248,6 +253,51 @@ export class VideoPlayerController {
     } catch (error) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `Failed to register subtitle listener: ${JSON.stringify(error)}`);
+    }
+  }
+
+  /**
+   * 启动字幕清空定时器
+   */
+  private startSubtitleTimer(): void {
+    if (this.subtitleRemainingTime <= 0) {
+      return
+    }
+
+    this.subtitlePauseTime = Date.now()
+    console.log(`[VideoPlayerController] Starting subtitle timer: ${this.subtitleRemainingTime}ms`)
+
+    this.subtitleClearTimer = setTimeout(() => {
+      console.log(`[VideoPlayerController] Clearing subtitle`)
+      this.currentSubtitleText = ''
+      this.subtitleUpdateCounter++
+      this.subtitleClearTimer = undefined
+      this.subtitleRemainingTime = 0
+    }, this.subtitleRemainingTime)
+  }
+
+  /**
+   * 暂停字幕清空定时器
+   */
+  private pauseSubtitleTimer(): void {
+    if (this.subtitleClearTimer) {
+      clearTimeout(this.subtitleClearTimer)
+      this.subtitleClearTimer = undefined
+
+      // 计算剩余时间
+      const elapsed = Date.now() - this.subtitlePauseTime
+      this.subtitleRemainingTime = Math.max(0, this.subtitleRemainingTime - elapsed)
+      console.log(`[VideoPlayerController] Subtitle timer paused, remaining: ${this.subtitleRemainingTime}ms`)
+    }
+  }
+
+  /**
+   * 恢复字幕清空定时器
+   */
+  private resumeSubtitleTimer(): void {
+    if (this.subtitleRemainingTime > 0 && this.currentSubtitleText.length > 0) {
+      console.log(`[VideoPlayerController] Resuming subtitle timer: ${this.subtitleRemainingTime}ms`)
+      this.startSubtitleTimer()
     }
   }
 
