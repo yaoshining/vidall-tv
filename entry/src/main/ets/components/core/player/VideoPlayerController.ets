@@ -27,6 +27,7 @@ export class VideoPlayerController {
   @Trace currentSubtitleText: string = ''  // 当前显示的字幕文本
   @Trace subtitleUpdateCounter: number = 0  // 字幕更新计数器，用于强制触发更新
   private timeToSeek = -1  // -1表示没有要seek的时间，大于-1表示正在seek还没来的及处理的时间
+  private subtitleClearTimer?: number  // 字幕清空定时器
 
   async initAVPlayer(videoData: VideoData, surfaceId: string, player?: media.AVPlayer): Promise<void> {
     this.name = videoData.name || ''
@@ -104,6 +105,12 @@ export class VideoPlayerController {
   async release(): Promise<void> {
     if (this.avPlayer) {
       try {
+        // 清理字幕定时器
+        if (this.subtitleClearTimer) {
+          clearTimeout(this.subtitleClearTimer)
+          this.subtitleClearTimer = undefined
+        }
+
         await this.avPlayer.release()
       } catch (error) {
         // TODO: Implement error handling.
@@ -199,17 +206,43 @@ export class VideoPlayerController {
     try {
       avPlayer.on('subtitleUpdate', (info: media.SubtitleInfo) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `Subtitle update: text="${info.text}", startTime=${info.startTime}ms`);
+          `Subtitle update: text="${info.text}", startTime=${info.startTime}ms, duration=${info.duration}ms`);
+
+        // 清除之前的定时器
+        if (this.subtitleClearTimer) {
+          clearTimeout(this.subtitleClearTimer)
+          this.subtitleClearTimer = undefined
+        }
 
         if (info && info.text) {
           this.currentSubtitleText = info.text
+
+          // 计算字幕显示时长
+          // SubtitleInfo 只有 startTime 和 duration，没有 endTime
+          let displayDuration = 0
+          if (info.duration !== undefined && info.duration > 0) {
+            displayDuration = info.duration
+          } else {
+            // 如果没有时长信息，默认显示 3 秒
+            displayDuration = 3000
+          }
+
+          console.log(`[VideoPlayerController] Setting subtitle clear timer: ${displayDuration}ms`)
+
+          // 设置定时器在字幕结束时清空
+          this.subtitleClearTimer = setTimeout(() => {
+            console.log(`[VideoPlayerController] Clearing subtitle after ${displayDuration}ms`)
+            this.currentSubtitleText = ''
+            this.subtitleUpdateCounter++
+            this.subtitleClearTimer = undefined
+          }, displayDuration)
         } else {
           this.currentSubtitleText = ''
         }
 
         // 更新计数器，强制触发 UI 更新
         this.subtitleUpdateCounter++
-        console.log(`[VideoPlayerController] subtitleUpdateCounter: ${this.subtitleUpdateCounter}, text: ${this.currentSubtitleText}`)
+        console.log(`[VideoPlayerController] subtitleUpdateCounter: ${this.subtitleUpdateCounter}, text length: ${this.currentSubtitleText.length}`)
       })
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'Subtitle update listener registered successfully');
     } catch (error) {

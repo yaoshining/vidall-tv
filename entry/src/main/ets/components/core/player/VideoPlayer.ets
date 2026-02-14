@@ -53,17 +53,26 @@ export struct VideoPlayer {
   @Computed
   get parsedSubtitle(): ParsedSubtitle | null {
     // 触发依赖：读取 subtitleUpdateCounter 确保每次更新都重新计算
-    const _ = this.controller.subtitleUpdateCounter
+    const counter = this.controller.subtitleUpdateCounter
+    const text = this.controller.currentSubtitleText
 
-    if (this.controller.currentSubtitleText) {
-      const pureText = this.extractSubtitleText(this.controller.currentSubtitleText)
-      if (pureText.length > 0) {
-        const parsed = SubtitleParserFactory.parse(pureText)
-        this.convertFontSize(parsed)
-        console.log(`[VideoPlayer] Subtitle parsed, counter=${this.controller.subtitleUpdateCounter}, lines=${parsed.lines.length}`)
-        return parsed
-      }
+    console.log(`[VideoPlayer] Computing subtitle, counter=${counter}, text length=${text.length}`)
+
+    // 如果字幕文本为空或只有空白字符，返回 null
+    if (!text || text.trim().length === 0) {
+      console.log(`[VideoPlayer] Subtitle cleared`)
+      return null
     }
+
+    const pureText = this.extractSubtitleText(text)
+    if (pureText.length > 0) {
+      const parsed = SubtitleParserFactory.parse(pureText)
+      this.convertFontSize(parsed)
+      console.log(`[VideoPlayer] Subtitle parsed, lines=${parsed.lines.length}`)
+      return parsed
+    }
+
+    console.log(`[VideoPlayer] No pure text extracted`)
     return null
   }
 
