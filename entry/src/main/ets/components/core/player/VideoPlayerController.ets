@@ -25,6 +25,7 @@ export class VideoPlayerController {
   @Trace subtitleTracks: media.MediaDescription[] = []
   @Trace currentSubtitleTrack: number = -1  // -1表示关闭字幕
   @Trace currentSubtitleText: string = ''  // 当前显示的字幕文本
+  @Trace subtitleUpdateCounter: number = 0  // 字幕更新计数器，用于强制触发更新
   private timeToSeek = -1  // -1表示没有要seek的时间，大于-1表示正在seek还没来的及处理的时间
 
   async initAVPlayer(videoData: VideoData, surfaceId: string, player?: media.AVPlayer): Promise<void> {
@@ -205,6 +206,10 @@ export class VideoPlayerController {
         } else {
           this.currentSubtitleText = ''
         }
+
+        // 更新计数器，强制触发 UI 更新
+        this.subtitleUpdateCounter++
+        console.log(`[VideoPlayerController] subtitleUpdateCounter: ${this.subtitleUpdateCounter}, text: ${this.currentSubtitleText}`)
       })
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'Subtitle update listener registered successfully');
     } catch (error) {

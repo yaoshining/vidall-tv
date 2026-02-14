@@ -5,134 +5,6 @@ import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 
-/**
- * 字幕渲染组件
- * 独立组件，避免在 Builder 中执行解析逻辑
- */
-@Component
-struct SubtitleRenderer {
-  @Prop @Watch('onSubtitleTextChange') subtitleText: string = ''
-  @State parsedSubtitle: ParsedSubtitle | null = null
-
-  aboutToAppear(): void {
-    this.parseSubtitle()
-  }
-
-  /**
-   * 监听字幕文本变化
-   */
-  onSubtitleTextChange(): void {
-    this.parseSubtitle()
-  }
-
-  /**
-   * 解析字幕文本
-   */
-  private parseSubtitle(): void {
-    if (this.subtitleText && this.subtitleText.trim().length > 0) {
-      // 提取纯字幕内容（去除时间戳等格式信息）
-      const pureText = this.extractSubtitleText(this.subtitleText)
-      if (pureText.length > 0) {
-        this.parsedSubtitle = SubtitleParserFactory.parse(pureText)
-        // 转换字号：ASS 格式使用 pt，需要转换为 fp
-        this.convertFontSize(this.parsedSubtitle)
-      } else {
-        this.parsedSubtitle = null
-      }
-    } else {
-      this.parsedSubtitle = null
-    }
-  }
-
-  /**
-   * 转换字号：pt -> fp
-   * ASS 格式中的字号单位是 pt（点），需要转换为 HarmonyOS 的 fp
-   * 转换规则：
-   * - 1pt ≈ 1.33px
-   * - ASS 字号通常较大（如 85pt），需要缩放到合适的显示大小
-   * - 缩放比例：pt * 0.25 ≈ 合适的 fp 值（可根据实际效果调整）
-   */
-  private convertFontSize(parsed: ParsedSubtitle | null): void {
-    if (!parsed) {
-      return
-    }
-
-    const PT_TO_FP_SCALE = 0.25  // ASS 字号缩放比例，可根据实际效果调整
-
-    for (let i = 0; i < parsed.lines.length; i++) {
-      const line = parsed.lines[i]
-      for (let j = 0; j < line.length; j++) {
-        const segment = line[j]
-        if (segment.fontSize !== undefined && segment.fontSize > 0) {
-          // 将 pt 转换为 fp，并应用缩放
-          segment.fontSize = segment.fontSize * PT_TO_FP_SCALE
-        }
-      }
-    }
-  }
-
-  /**
-   * 提取纯字幕文本
-   * 格式示例: "20,0,subtitle,,0,0,0,,给你最后一次机会\N{\fs85.545}I won't say it again."
-   * 需要提取最后的字幕文本部分
-   */
-  private extractSubtitleText(raw: string): string {
-    // ASS 格式：逗号分隔的字段，最后一个字段是字幕文本
-    // 格式: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-
-    // 查找最后一个逗号后的内容
-    let lastCommaIndex = -1
-    let commaCount = 0
-
-    for (let i = 0; i < raw.length; i++) {
-      if (raw[i] === ',') {
-        commaCount++
-        // ASS 格式通常有 9 个逗号，第 9 个逗号后是文本
-        if (commaCount >= 8) {
-          lastCommaIndex = i
-          break
-        }
-      }
-    }
-
-    if (lastCommaIndex !== -1 && lastCommaIndex < raw.length - 1) {
-      return raw.substring(lastCommaIndex + 1)
-    }
-
-    // 如果没有找到逗号，可能是纯字幕文本，直接返回
-    return raw
-  }
-
-  build() {
-    if (this.parsedSubtitle && this.parsedSubtitle.lines.length > 0) {
-      Column({ space: 4 }) {
-        ForEach(this.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
-          Row({ space: 2 }) {
-            ForEach(line, (segment: SubtitleSegment, segmentIndex: number) => {
-              Text(segment.text)
-                .fontSize(segment.fontSize || 20)
-                .fontColor(segment.fontColor || Color.White)
-                .fontWeight(segment.bold ? FontWeight.Bold : FontWeight.Normal)
-                .fontStyle(segment.italic ? FontStyle.Italic : FontStyle.Normal)
-                .decoration({
-                  type: segment.underline ? TextDecorationType.Underline : TextDecorationType.None,
-                  color: segment.fontColor || Color.White
-                })
-                .textShadow({
-                  radius: 3,
-                  offsetX: 3,
-                  offsetY: 3,
-                  color: Color.Black
-                })
-            }, (segment: SubtitleSegment, index: number) => `segment-${lineIndex}-${index}`)
-          }
-          .justifyContent(FlexAlign.Center)
-        }, (line: SubtitleSegment[], index: number) => `line-${index}`)
-      }
-    }
-  }
-}
-
 @ComponentV2
 export struct VideoPlayer {
   private xComponentController = new XComponentController()
@@ -175,34 +47,99 @@ export struct VideoPlayer {
   })
 
   /**
-   * 字幕渲染器
-   * 支持多种字幕格式（ASS/SSA、纯文本等）
+   * 计算属性：自动解析字幕
+   * 当 subtitleUpdateCounter 或 currentSubtitleText 变化时自动重新计算
    */
-  @Builder
-  SubtitleRenderer() {
+  @Computed
+  get parsedSubtitle(): ParsedSubtitle | null {
+    // 触发依赖：读取 subtitleUpdateCounter 确保每次更新都重新计算
+    const _ = this.controller.subtitleUpdateCounter
+
     if (this.controller.currentSubtitleText) {
-      Column({ space: 4 }) {
-        this.RenderSubtitleLines(this.controller.currentSubtitleText)
+      const pureText = this.extractSubtitleText(this.controller.currentSubtitleText)
+      if (pureText.length > 0) {
+        const parsed = SubtitleParserFactory.parse(pureText)
+        this.convertFontSize(parsed)
+        console.log(`[VideoPlayer] Subtitle parsed, counter=${this.controller.subtitleUpdateCounter}, lines=${parsed.lines.length}`)
+        return parsed
       }
-      .padding({ left: 20, right: 20, top: 8, bottom: 8 })
-      // .backgroundColor('rgba(0, 0, 0, 0.7)')
-      // .borderRadius(4)
-      // .shadow({
-      //   radius: 8,
-      //   color: 'rgba(0, 0, 0, 0.8)',
-      //   offsetX: 0,
-      //   offsetY: 2
-      // })
+    }
+    return null
+  }
+
+  /**
+   * 提取纯字幕文本
+   */
+  private extractSubtitleText(raw: string): string {
+    let lastCommaIndex = -1
+    let commaCount = 0
+
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] === ',') {
+        commaCount++
+        if (commaCount >= 8) {
+          lastCommaIndex = i
+          break
+        }
+      }
+    }
+
+    if (lastCommaIndex !== -1 && lastCommaIndex < raw.length - 1) {
+      return raw.substring(lastCommaIndex + 1)
+    }
+
+    return raw
+  }
+
+  /**
+   * 转换字号：pt -> fp
+   */
+  private convertFontSize(parsed: ParsedSubtitle): void {
+    const PT_TO_FP_SCALE = 0.25
+
+    for (let i = 0; i < parsed.lines.length; i++) {
+      const line = parsed.lines[i]
+      for (let j = 0; j < line.length; j++) {
+        const segment = line[j]
+        if (segment.fontSize !== undefined && segment.fontSize > 0) {
+          segment.fontSize = segment.fontSize * PT_TO_FP_SCALE
+        }
+      }
     }
   }
 
   /**
-   * 渲染字幕行（接收字幕文本作为参数）
+   * 字幕渲染器 - 纯 UI 渲染
    */
   @Builder
-  RenderSubtitleLines(subtitleText: string) {
-    // 在这里解析并渲染
-    SubtitleRenderer({ subtitleText: subtitleText })
+  SubtitleRenderer() {
+    if (this.parsedSubtitle && this.parsedSubtitle.lines.length > 0) {
+      Column({ space: 4 }) {
+        ForEach(this.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
+          Row({ space: 2 }) {
+            ForEach(line, (segment: SubtitleSegment, segmentIndex: number) => {
+              Text(segment.text)
+                .fontSize(segment.fontSize || 20)
+                .fontColor(segment.fontColor || Color.White)
+                .fontWeight(segment.bold ? FontWeight.Bold : FontWeight.Normal)
+                .fontStyle(segment.italic ? FontStyle.Italic : FontStyle.Normal)
+                .decoration({
+                  type: segment.underline ? TextDecorationType.Underline : TextDecorationType.None,
+                  color: segment.fontColor || Color.White
+                })
+                .textShadow({
+                  radius: 3,
+                  offsetX: 3,
+                  offsetY: 3,
+                  color: Color.Black
+                })
+            }, (segment: SubtitleSegment, index: number) => `segment-${lineIndex}-${index}-${this.controller.subtitleUpdateCounter}`)
+          }
+          .justifyContent(FlexAlign.Center)
+        }, (line: SubtitleSegment[], index: number) => `line-${index}-${this.controller.subtitleUpdateCounter}`)
+      }
+      .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+    }
   }
 
   build() {
