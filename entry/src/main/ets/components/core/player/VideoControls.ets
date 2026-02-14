@@ -11,6 +11,7 @@ struct VideoControls {
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
   @Local showSubtitleMenu: boolean = false
+  @Local sliderHovered: boolean = false
 
   @Builder
   SubtitleMenu() {
@@ -180,10 +181,19 @@ struct VideoControls {
             max: this.videoController.duration,
             style: SliderStyle.OutSet
           })
+            .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
+            .trackThickness(this.sliderHovered ? 8 : 4)
             .onChange((value) => {
               this.videoController.seek(value)
             })
+            .onHover((isHover: boolean) => {
+              this.sliderHovered = isHover
+            })
             .flexGrow(1)
+            .animation({
+              duration: 200,
+              curve: Curve.EaseInOut
+            })
           Text(`${this.videoController.durationDisplay}`)
             .flexShrink(0)
         }
