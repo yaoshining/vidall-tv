@@ -3,6 +3,56 @@ import { VideoData } from "./VideoData"
 import { VideoPlayerController } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "./Constants"
+import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
+
+/**
+ * 字幕渲染组件
+ * 独立组件，避免在 Builder 中执行解析逻辑
+ */
+@Component
+struct SubtitleRenderer {
+  @Prop subtitleText: string = ''
+  private parsedSubtitle: ParsedSubtitle | null = null
+
+  aboutToAppear(): void {
+    // 在组件生命周期中解析字幕
+    if (this.subtitleText) {
+      this.parsedSubtitle = SubtitleParserFactory.parse(this.subtitleText)
+    }
+  }
+
+  aboutToUpdate(): void {
+    // 更新时重新解析
+    if (this.subtitleText) {
+      this.parsedSubtitle = SubtitleParserFactory.parse(this.subtitleText)
+    } else {
+      this.parsedSubtitle = null
+    }
+  }
+
+  build() {
+    if (this.parsedSubtitle && this.parsedSubtitle.lines.length > 0) {
+      Column({ space: 4 }) {
+        ForEach(this.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
+          Row({ space: 2 }) {
+            ForEach(line, (segment: SubtitleSegment, segmentIndex: number) => {
+              Text(segment.text)
+                .fontSize(segment.fontSize || 20)
+                .fontColor(segment.fontColor || Color.White)
+                .fontWeight(segment.bold ? FontWeight.Bold : FontWeight.Normal)
+                .fontStyle(segment.italic ? FontStyle.Italic : FontStyle.Normal)
+                .decoration({
+                  type: segment.underline ? TextDecorationType.Underline : TextDecorationType.None,
+                  color: segment.fontColor || Color.White
+                })
+            }, (segment: SubtitleSegment, index: number) => `segment-${lineIndex}-${index}`)
+          }
+          .justifyContent(FlexAlign.Center)
+        }, (line: SubtitleSegment[], index: number) => `line-${index}`)
+      }
+    }
+  }
+}
 
 @ComponentV2
 export struct VideoPlayer {
@@ -45,6 +95,37 @@ export struct VideoPlayer {
     }
   })
 
+  /**
+   * 字幕渲染器
+   * 支持多种字幕格式（ASS/SSA、纯文本等）
+   */
+  @Builder
+  SubtitleRenderer() {
+    if (this.controller.currentSubtitleText) {
+      Column({ space: 4 }) {
+        this.RenderSubtitleLines(this.controller.currentSubtitleText)
+      }
+      .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+      .backgroundColor('rgba(0, 0, 0, 0.7)')
+      .borderRadius(4)
+      .shadow({
+        radius: 8,
+        color: 'rgba(0, 0, 0, 0.8)',
+        offsetX: 0,
+        offsetY: 2
+      })
+    }
+  }
+
+  /**
+   * 渲染字幕行（接收字幕文本作为参数）
+   */
+  @Builder
+  RenderSubtitleLines(subtitleText: string) {
+    // 在这里解析并渲染
+    SubtitleRenderer({ subtitleText: subtitleText })
+  }
+
   build() {
     Stack() {
       XComponent({
@@ -80,6 +161,17 @@ export struct VideoPlayer {
         .width("100%")
         .height("100%")
         .renderFit(RenderFit.RESIZE_CONTAIN)
+
+      // 字幕显示层 - 使用字幕渲染器支持多种格式
+      Row() {
+        this.SubtitleRenderer()
+      }
+      .width('100%')
+      .height('100%')
+      .padding({ left: 40, right: 40, bottom: 80 })
+      .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Bottom)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
   }
 }

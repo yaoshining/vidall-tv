@@ -1,6 +1,7 @@
 import { debounce } from "@ibestservices/ibest-ui"
 import { VideoPlayerController } from "./VideoPlayerController"
 import { LengthMetrics } from "@kit.ArkUI"
+import { media } from "@kit.MediaKit"
 
 @ComponentV2
 struct VideoControls {
@@ -9,6 +10,66 @@ struct VideoControls {
   closeTimer?: number
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
+  @Local showSubtitleMenu: boolean = false
+
+  @Builder
+  SubtitleMenu() {
+    Column() {
+      List() {
+        // 关闭字幕选项
+        ListItem() {
+          Row() {
+            Text('关闭字幕')
+              .fontSize(16)
+              .fontColor(Color.White)
+            if (this.videoController.currentSubtitleTrack === -1) {
+              SymbolGlyph($r('sys.symbol.checkmark'))
+                .fontColor([Color.White])
+                .fontSize(20)
+            }
+          }
+          .width('100%')
+          .height(50)
+          .justifyContent(FlexAlign.SpaceBetween)
+          .padding({ left: 20, right: 20 })
+        }
+        .onClick(() => {
+          this.videoController.selectSubtitleTrack(-1)
+          this.showSubtitleMenu = false
+          this.enableAutoHide()
+        })
+
+        // 字幕轨道列表
+        ForEach(this.videoController.subtitleTracks, (track: media.MediaDescription, index: number) => {
+          ListItem() {
+            Row() {
+              Text(this.videoController.getSubtitleTrackName(index))
+                .fontSize(16)
+                .fontColor(Color.White)
+              if (this.videoController.currentSubtitleTrack === index) {
+                SymbolGlyph($r('sys.symbol.checkmark'))
+                  .fontColor([Color.White])
+                  .fontSize(20)
+              }
+            }
+            .width('100%')
+            .height(50)
+            .justifyContent(FlexAlign.SpaceBetween)
+            .padding({ left: 20, right: 20 })
+          }
+          .onClick(() => {
+            this.videoController.selectSubtitleTrack(index)
+            this.showSubtitleMenu = false
+            this.enableAutoHide()
+          })
+        })
+      }
+      .width('100%')
+      .backgroundColor('rgba(0, 0, 0, 0.8)')
+      .borderRadius(8)
+    }
+    .padding(10)
+  }
 
   build() {
     RelativeContainer() {
@@ -29,7 +90,25 @@ struct VideoControls {
           .textOverflow({
             overflow: TextOverflow.Ellipsis
           })
-        Text("功能区")
+
+        // 字幕按钮
+        if (this.videoController.subtitleTracks.length > 0) {
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
+              .fontColor([this.videoController.currentSubtitleTrack >= 0 ? Color.White : Color.Gray])
+              .fontSize(24)
+            Text(this.videoController.getSubtitleTrackName(this.videoController.currentSubtitleTrack))
+              .fontSize(14)
+              .fontColor(this.videoController.currentSubtitleTrack >= 0 ? Color.White : Color.Gray)
+          }
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor('rgba(0, 0, 0, 0.5)')
+          .borderRadius(20)
+          .onClick(() => {
+            this.showSubtitleMenu = !this.showSubtitleMenu
+            clearTimeout(this.closeTimer)
+          })
+        }
       }
       .linearGradient({
         direction: GradientDirection.Bottom,
@@ -44,6 +123,22 @@ struct VideoControls {
       })
       .height("20%")
       .padding(20)
+
+      // 字幕选择菜单
+      if (this.showSubtitleMenu) {
+        Column() {
+          this.SubtitleMenu()
+        }
+        .alignRules({
+          top: { anchor: '__container__', align: VerticalAlign.Top },
+          right: { anchor: '__container__', align: HorizontalAlign.End }
+        })
+        .margin({ top: 80, right: 20 })
+        .width('300vp')
+        .onClick(() => {
+          // 阻止事件冒泡
+        })
+      }
 
       if (!this.videoController.isPlaying) {
         // 播放按钮透明毛玻璃效果，带播放图标
@@ -112,7 +207,7 @@ struct VideoControls {
     })
   }
 
-  private enableAutoHide() {
+  private enableAutoHide(): void {
     if (this.videoController.isPlaying) {
       clearTimeout(this.closeTimer)
       this.closeTimer = setTimeout(() => {
