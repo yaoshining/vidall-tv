@@ -1,6 +1,7 @@
 import socket from '@ohos.net.socket';
 import buffer from '@ohos.buffer';
 import fs from '@ohos.file.fs';
+import http from '@ohos.net.http';
 
 export interface WebDAVConfig {
   baseUrl: string;
@@ -30,6 +31,13 @@ export interface StreamDownloadCallback {
   onProgress?: (downloaded: number, total: number) => void;
   onComplete?: (filePath: string) => void;
   onError?: (error: Error) => void;
+}
+
+interface GeneratedTypeLiteralInterface_1 {
+  host: string;
+  port: number;
+  path: string;
+  isHttps: boolean;
 }
 
 export class WebDAVClient {
@@ -305,16 +313,25 @@ export class WebDAVClient {
   }
 
   /**
-   * 流式下载文件（带进度回调）- 修复版
+   * 流式下载文件（带进度回调）- 修复版，支持302重定向
    * @param remotePath 远程文件路径
    * @param localFilePath 本地保存路径
    * @param callback 进度回调
+   * @param redirectCount 重定向计数（内部使用，防止无限重定向）
    */
   async downloadFileStream(
     remotePath: string,
     localFilePath: string,
-    callback?: StreamDownloadCallback
+    callback?: StreamDownloadCallback,
+    redirectCount: number = 0
   ): Promise<void> {
+    // 防止无限重定向
+    const MAX_REDIRECTS = 5;
+    if (redirectCount > MAX_REDIRECTS) {
+      const error = new Error(`Too many redirects (>${MAX_REDIRECTS})`);
+      callback?.onError?.(error);
+      throw error;
+    }
     return new Promise((resolve, reject) => {
       const tcp = socket.constructTCPSocketInstance();
       let fileHandle: fs.File | null = null;
@@ -407,6 +424,55 @@ export class WebDAVClient {
                 const statusText = statusMatch[2];
 
                 console.info(`HTTP Status: ${statusCode} ${statusText}`);
+
+                // 处理重定向 (301, 302, 303, 307, 308)
+                if (statusCode === 301 || statusCode === 302 || statusCode === 303 ||
+                    statusCode === 307 || statusCode === 308) {
+                  console.info(`Redirect detected: ${statusCode}`);
+
+                  // 提取 Location 头
+                  const locationMatch = headerSection.match(/Location:\s*(.+)/i);
+                  if (locationMatch) {
+                    const redirectUrl = locationMatch[1].trim();
+                    console.info(`Redirect to: ${redirectUrl}`);
+
+                    // 关闭当前连接
+                    isComplete = true;
+                    clearTimeout(timeoutId);
+                    tcp.close();
+
+                    // 解析重定向URL并递归调用
+                    try {
+                      const parsedUrl = this.parseRedirectUrl(redirectUrl);
+                      console.info(`Parsed redirect: host=${parsedUrl.host}, port=${parsedUrl.port}, path=${parsedUrl.path}`);
+
+                      // 调用重定向下载
+                      this.downloadFileStreamWithRedirect(
+                        parsedUrl.host,
+                        parsedUrl.port,
+                        parsedUrl.path,
+                        parsedUrl.isHttps,
+                        localFilePath,
+                        callback,
+                        redirectCount + 1
+                      ).then(() => {
+                        resolve();
+                      }).catch((err: Error) => {
+                        reject(err);
+                      });
+
+                      return; // 退出当前处理
+                    } catch (parseError) {
+                      const error = new Error(`Failed to parse redirect URL: ${parseError}`);
+                      callback?.onError?.(error);
+                      reject(error);
+                      return;
+                    }
+                  } else {
+                    const error = new Error(`Redirect ${statusCode} without Location header`);
+                    throw error;
+                  }
+                }
 
                 if (statusCode !== 200) {
                   throw new Error(`HTTP ${statusCode}: ${statusText}`);
@@ -867,21 +933,725 @@ export class WebDAVClient {
 
   /**
    * 编码 URI 路径（保留斜杠）
+   * 注意：智能处理已编码和未编码的路径段
    */
   private encodeURIPath(path: string): string {
-    // 分割路径，对每个部分单独编码，然后重新组合
+    // 分割路径，对每个部分单独检查和编码
     const parts = path.split('/');
     const encodedParts: string[] = [];
 
     for (let i = 0; i < parts.length; i++) {
       if (parts[i]) {
-        // 使用 encodeURIComponent 对每个路径段进行编码
-        encodedParts.push(encodeURIComponent(parts[i]));
+        const part = parts[i];
+
+        // 检查这个路径段是否已经被完全编码
+        // 如果解码后再编码能得到相同的结果，说明已编码
+        try {
+          const decoded = decodeURIComponent(part);
+          const reencoded = encodeURIComponent(decoded);
+
+          if (reencoded === part) {
+            // 已经正确编码，直接使用
+            encodedParts.push(part);
+          } else {
+            // 未正确编码或部分编码，重新编码
+            // 但首先尝试解码，如果包含已编码的内容（如%20），需要先解码
+            const hasEncodedChars = /%[0-9A-F]{2}/i.test(part);
+            if (hasEncodedChars) {
+              // 包含编码字符，先解码再重新编码
+              encodedParts.push(encodeURIComponent(decoded));
+            } else {
+              // 不包含编码字符，直接编码
+              encodedParts.push(encodeURIComponent(part));
+            }
+          }
+        } catch (e) {
+          // 解码失败，说明包含无效的编码序列，直接编码原始字符串
+          encodedParts.push(encodeURIComponent(part));
+        }
       } else {
         encodedParts.push('');
       }
     }
 
-    return encodedParts.join('/');
+    const result = encodedParts.join('/');
+    console.info(`Path encoding: "${path}" -> "${result}"`);
+    return result;
+  }
+
+  /**
+   * 解析重定向URL
+   */
+  private parseRedirectUrl(url: string): GeneratedTypeLiteralInterface_1 {
+    // 支持相对路径和绝对路径
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      // 绝对URL
+      const urlPattern = /^(https?):\/\/([^:\/]+)(?::(\d+))?(\/.*)?$/;
+      const match = url.match(urlPattern);
+
+      if (match) {
+        const isHttps = match[1] === 'https';
+        const host = match[2];
+        const port = match[3] ? parseInt(match[3]) : (isHttps ? 443 : 80);
+        const path = match[4] || '/';
+
+        return { host, port, path, isHttps };
+      } else {
+        throw new Error('Invalid redirect URL format');
+      }
+    } else if (url.startsWith('/')) {
+      // 相对路径（同一主机）
+      return {
+        host: this.host,
+        port: this.port,
+        path: url,
+        isHttps: this.isHttps
+      };
+    } else {
+      throw new Error('Unsupported redirect URL format');
+    }
+  }
+
+  /**
+   * 使用指定的host和port进行重定向下载
+   */
+  private async downloadFileStreamWithRedirect(
+    host: string,
+    port: number,
+    path: string,
+    isHttps: boolean,
+    localFilePath: string,
+    callback?: StreamDownloadCallback,
+    redirectCount: number = 0
+  ): Promise<void> {
+    // 如果是HTTPS，使用http模块
+    if (isHttps || port === 443) {
+      console.info('Using http module for HTTPS redirect download');
+      return this.downloadWithHttpModule(host, port, path, localFilePath, callback, redirectCount);
+    }
+
+    // 否则使用socket（HTTP）
+    return new Promise((resolve, reject) => {
+      const tcp = socket.constructTCPSocketInstance();
+      let fileHandle: fs.File | null = null;
+      let isComplete = false;
+      let headerReceived = false;
+      let contentLength = 0;
+      let downloadedBytes = 0;
+      let headerData = '';
+      let headerBuffer: ArrayBuffer[] = [];
+      let noDataCount = 0;
+
+      const address: socket.NetAddress = {
+        address: host,
+        port: port,
+        family: 1
+      };
+
+      console.info(`WebDAV Redirect Download: Connecting to ${host}:${port}, path: ${path}`);
+
+      const timeoutId = setTimeout(() => {
+        if (!isComplete) {
+          console.error(`Redirect download timeout. Downloaded: ${downloadedBytes}/${contentLength}`);
+          isComplete = true;
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+            } catch (error) {
+              console.error('Close file error:', error);
+            }
+          }
+          tcp.close();
+
+          if (contentLength > 0 && downloadedBytes > contentLength * 0.95) {
+            console.warn('Downloaded >95%, treating as complete');
+            callback?.onComplete?.(localFilePath);
+            resolve();
+          } else {
+            callback?.onError?.(new Error('Redirect download timeout'));
+            reject(new Error('Redirect download timeout'));
+          }
+        }
+      }, this.timeout * 2);
+
+      // 监听数据接收
+      tcp.on('message', (value: socket.SocketMessageInfo) => {
+        if (isComplete) return;
+
+        try {
+          if (!value.message || (value.message as ArrayBuffer).byteLength === 0) {
+            noDataCount++;
+            console.warn(`Received empty data, count: ${noDataCount}`);
+            if (noDataCount > 5) {
+              console.error('Too many empty data packets');
+            }
+            return;
+          }
+
+          noDataCount = 0;
+          const messageData = value.message as ArrayBuffer;
+          console.info(`Received packet: ${messageData.byteLength} bytes`);
+
+          if (!headerReceived) {
+            headerBuffer.push(messageData);
+
+            const receivedBuffer = buffer.from(messageData);
+            const chunk = receivedBuffer.toString('utf-8');
+            headerData += chunk;
+
+            const headerEndIndex = headerData.indexOf('\r\n\r\n');
+            if (headerEndIndex !== -1) {
+              headerReceived = true;
+
+              const headerSection = headerData.substring(0, headerEndIndex);
+              const bodyStartInString = headerEndIndex + 4;
+
+              console.info('=== REDIRECT HTTP RESPONSE HEADER ===');
+              console.info(headerSection);
+              console.info('=== END HEADER ===');
+
+              const statusMatch = headerSection.match(/HTTP\/[\d.]+\s+(\d+)\s+(.+)/);
+              if (statusMatch) {
+                const statusCode = parseInt(statusMatch[1]);
+                const statusText = statusMatch[2];
+
+                console.info(`HTTP Status: ${statusCode} ${statusText}`);
+
+                // 再次处理重定向（递归）
+                if (statusCode === 301 || statusCode === 302 || statusCode === 303 ||
+                    statusCode === 307 || statusCode === 308) {
+                  console.info(`Another redirect detected: ${statusCode}`);
+
+                  const locationMatch = headerSection.match(/Location:\s*(.+)/i);
+                  if (locationMatch) {
+                    const redirectUrl = locationMatch[1].trim();
+                    console.info(`Redirect again to: ${redirectUrl}`);
+
+                    isComplete = true;
+                    clearTimeout(timeoutId);
+                    tcp.close();
+
+                    try {
+                      const parsedUrl = this.parseRedirectUrl(redirectUrl);
+                      this.downloadFileStreamWithRedirect(
+                        parsedUrl.host,
+                        parsedUrl.port,
+                        parsedUrl.path,
+                        parsedUrl.isHttps,
+                        localFilePath,
+                        callback,
+                        redirectCount + 1
+                      ).then(() => {
+                        resolve();
+                      }).catch((err: Error) => {
+                        reject(err);
+                      });
+                      return;
+                    } catch (parseError) {
+                      const error = new Error(`Failed to parse redirect URL: ${parseError}`);
+                      callback?.onError?.(error);
+                      reject(error);
+                      return;
+                    }
+                  }
+                }
+
+                if (statusCode !== 200) {
+                  throw new Error(`HTTP ${statusCode}: ${statusText}`);
+                }
+              } else {
+                throw new Error('Invalid HTTP response');
+              }
+
+              const contentLengthMatch = headerSection.match(/Content-Length:\s*(\d+)/i);
+              if (contentLengthMatch) {
+                contentLength = parseInt(contentLengthMatch[1]);
+                console.info(`Content-Length: ${contentLength} bytes (${(contentLength/1024/1024).toFixed(2)} MB)`);
+              } else {
+                console.warn('No Content-Length header found');
+              }
+
+              fileHandle = fs.openSync(localFilePath, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+
+              // 写入body数据
+              let totalHeaderBytes = 0;
+              let headerEndBufferIndex = -1;
+              let headerEndByteOffset = 0;
+
+              for (let i = 0; i < headerBuffer.length; i++) {
+                const bufStr = buffer.from(headerBuffer[i]).toString('utf-8');
+                const bufLen = bufStr.length;
+
+                if (totalHeaderBytes + bufLen >= bodyStartInString) {
+                  headerEndBufferIndex = i;
+                  headerEndByteOffset = bodyStartInString - totalHeaderBytes;
+                  break;
+                }
+
+                totalHeaderBytes += bufLen;
+              }
+
+              if (headerEndBufferIndex >= 0 && headerEndBufferIndex < headerBuffer.length) {
+                const firstBuf = headerBuffer[headerEndBufferIndex];
+                const firstBufStr = buffer.from(firstBuf).toString('utf-8');
+                const headerBytesInFirstBuf = buffer.from(firstBufStr.substring(0, headerEndByteOffset), 'utf-8').length;
+
+                if (headerBytesInFirstBuf < firstBuf.byteLength) {
+                  const firstBodyData = firstBuf.slice(headerBytesInFirstBuf);
+                  fs.writeSync(fileHandle.fd, firstBodyData);
+                  downloadedBytes += firstBodyData.byteLength;
+                  console.info(`Wrote first body chunk: ${firstBodyData.byteLength} bytes`);
+                }
+
+                for (let i = headerEndBufferIndex + 1; i < headerBuffer.length; i++) {
+                  fs.writeSync(fileHandle.fd, headerBuffer[i]);
+                  downloadedBytes += headerBuffer[i].byteLength;
+                  console.info(`Wrote header buffer ${i}: ${headerBuffer[i].byteLength} bytes`);
+                }
+              }
+
+              headerBuffer = [];
+
+              console.info(`Initial body bytes written: ${downloadedBytes}/${contentLength}`);
+              callback?.onProgress?.(downloadedBytes, contentLength);
+
+              if (contentLength > 0 && downloadedBytes >= contentLength) {
+                console.info('Download completed in header processing');
+                isComplete = true;
+                clearTimeout(timeoutId);
+
+                fs.closeSync(fileHandle);
+                fileHandle = null;
+
+                tcp.close();
+
+                callback?.onComplete?.(localFilePath);
+                resolve();
+              }
+            }
+          } else {
+            // 继续写入文件数据
+            if (fileHandle !== null) {
+              fs.writeSync(fileHandle.fd, messageData);
+              downloadedBytes += messageData.byteLength;
+
+              const percentage = ((downloadedBytes / contentLength) * 100).toFixed(2);
+              console.info(`Downloaded: ${downloadedBytes}/${contentLength} (${percentage}%)`);
+
+              callback?.onProgress?.(downloadedBytes, contentLength);
+
+              if (contentLength > 0 && downloadedBytes >= contentLength) {
+                console.info('Download completed - all bytes received');
+                isComplete = true;
+                clearTimeout(timeoutId);
+
+                fs.closeSync(fileHandle);
+                fileHandle = null;
+
+                tcp.close();
+
+                callback?.onComplete?.(localFilePath);
+                resolve();
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Redirect download error:', JSON.stringify(error));
+          if (!isComplete) {
+            isComplete = true;
+            clearTimeout(timeoutId);
+
+            if (fileHandle !== null) {
+              try {
+                fs.closeSync(fileHandle);
+              } catch (e) {
+                console.error('Close file error:', e);
+              }
+            }
+
+            tcp.close();
+            callback?.onError?.(error as Error);
+            reject(error);
+          }
+        }
+      });
+
+      // 监听连接关闭
+      tcp.on('close', () => {
+        console.info(`Redirect connection closed. Downloaded: ${downloadedBytes}/${contentLength}`);
+
+        if (!isComplete) {
+          isComplete = true;
+          clearTimeout(timeoutId);
+
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+            } catch (error) {
+              console.error('Close file error:', error);
+            }
+          }
+
+          if (contentLength > 0) {
+            const completionRate = (downloadedBytes / contentLength) * 100;
+            console.info(`Download completion rate: ${completionRate.toFixed(2)}%`);
+
+            if (completionRate >= 99.9) {
+              console.warn('Download >99.9% complete, treating as successful');
+              callback?.onComplete?.(localFilePath);
+              resolve();
+            } else if (downloadedBytes === contentLength) {
+              console.info('Download completed successfully');
+              callback?.onComplete?.(localFilePath);
+              resolve();
+            } else {
+              const missingBytes = contentLength - downloadedBytes;
+              const error = new Error(`Connection closed unexpectedly. Downloaded: ${downloadedBytes}/${contentLength} (missing ${missingBytes} bytes)`);
+              callback?.onError?.(error);
+              reject(error);
+            }
+          } else {
+            console.warn('No Content-Length, assuming download complete');
+            callback?.onComplete?.(localFilePath);
+            resolve();
+          }
+        }
+      });
+
+      // 监听错误
+      tcp.on('error', (err: Error) => {
+        console.error('Redirect socket error:', JSON.stringify(err));
+
+        if (!isComplete) {
+          isComplete = true;
+          clearTimeout(timeoutId);
+
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+            } catch (error) {
+              console.error('Close file error:', error);
+            }
+          }
+
+          tcp.close();
+          callback?.onError?.(err);
+          reject(err);
+        }
+      });
+
+      // 连接并发送请求
+      tcp.connect({ address: address, timeout: 10000 })
+        .then(() => {
+          console.info('Connected to redirect target, sending download request...');
+
+          let request = `GET ${path} HTTP/1.1\r\n`;
+          request += `Host: ${host}\r\n`;  // 不要包含端口号在Host头中（对于标准端口）
+          request += `User-Agent: WebDAV-Client/1.0\r\n`;
+          request += `Accept: */*\r\n`;
+
+          // 重定向请求通常不需要原始的认证信息
+          // CDN和文件服务器使用URL中的签名参数进行验证
+          // 只有当重定向到同一主机时才发送认证信息
+          if (host === this.host && port === this.port) {
+            const authHeader = this.getAuthHeader();
+            if (authHeader) {
+              request += `Authorization: ${authHeader}\r\n`;
+              console.info('Redirect to same host, including auth');
+            }
+          } else {
+            console.info('Redirect to different host, skipping auth (using URL signature)');
+          }
+
+          request += `Connection: close\r\n`;
+          request += `\r\n`;
+
+          console.info('=== REDIRECT DOWNLOAD REQUEST ===');
+          console.info(request);
+          console.info('=== END REQUEST ===');
+
+          const sendBuffer = buffer.from(request, 'utf-8');
+          return tcp.send({ data: sendBuffer.buffer });
+        })
+        .then(() => {
+          console.info('Redirect download request sent successfully');
+        })
+        .catch((err: Error) => {
+          console.error('Redirect connect/send error:', JSON.stringify(err));
+
+          if (!isComplete) {
+            isComplete = true;
+            clearTimeout(timeoutId);
+            tcp.close();
+            callback?.onError?.(err);
+            reject(err);
+          }
+        });
+    });
+  }
+
+  /**
+   * 使用http模块处理HTTPS重定向下载
+   */
+  private async downloadWithHttpModule(
+    host: string,
+    port: number,
+    path: string,
+    localFilePath: string,
+    callback?: StreamDownloadCallback,
+    redirectCount: number = 0
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const protocol = port === 443 ? 'https' : 'http';
+      const portStr = (port === 443 || port === 80) ? '' : `:${port}`;
+      const url = `${protocol}://${host}${portStr}${path}`;
+
+      console.info(`Downloading with http module: ${url}`);
+
+      const httpRequest = http.createHttp();
+      let fileHandle: fs.File | null = null;
+      let downloadedBytes = 0;
+      let contentLength = 0;
+
+      // 监听进度事件
+      httpRequest.on('dataReceive', (data: ArrayBuffer) => {
+        try {
+          if (fileHandle === null) {
+            fileHandle = fs.openSync(localFilePath, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+          }
+
+          fs.writeSync(fileHandle.fd, data);
+          downloadedBytes += data.byteLength;
+
+          if (contentLength > 0) {
+            const percentage = ((downloadedBytes / contentLength) * 100).toFixed(2);
+            console.info(`HTTP download progress: ${downloadedBytes}/${contentLength} (${percentage}%)`);
+            callback?.onProgress?.(downloadedBytes, contentLength);
+          } else {
+            console.info(`HTTP download progress: ${downloadedBytes} bytes`);
+          }
+        } catch (error) {
+          console.error('Data receive error:', JSON.stringify(error));
+        }
+      });
+
+      // 监听响应头
+      httpRequest.on('headersReceive', (headers: object) => {
+        console.info('=== HTTP HEADERS RECEIVED ===');
+        console.info(JSON.stringify(headers));
+
+        const contentLengthHeader = (headers['content-length'] || headers['Content-Length']) as string;
+        if (contentLengthHeader) {
+          contentLength = parseInt(contentLengthHeader as string);
+          console.info(`Content-Length from headers: ${contentLength} bytes (${(contentLength/1024/1024).toFixed(2)} MB)`);
+        }
+      });
+
+      try {
+        httpRequest.request(url, {
+          method: http.RequestMethod.GET,
+          connectTimeout: this.timeout,
+          readTimeout: this.timeout * 2,
+          header: {
+            'User-Agent': 'WebDAV-Client/1.0',
+            'Accept': '*/*'
+          },
+          expectDataType: http.HttpDataType.ARRAY_BUFFER  // 使用ArrayBuffer接收数据
+        }, (err, data) => {
+          if (err) {
+            console.error('HTTP request error:', JSON.stringify(err));
+
+            if (fileHandle !== null) {
+              try {
+                fs.closeSync(fileHandle);
+              } catch (e) {
+                console.error('Close file error:', e);
+              }
+            }
+
+            httpRequest.off('dataReceive');
+            httpRequest.off('headersReceive');
+            httpRequest.destroy();
+            callback?.onError?.(err as Error);
+            reject(err);
+            return;
+          }
+
+          const responseCode = data.responseCode;
+          console.info(`HTTP response code: ${responseCode}`);
+
+          // 处理重定向
+          if (responseCode === 301 || responseCode === 302 || responseCode === 303 ||
+              responseCode === 307 || responseCode === 308) {
+            const location = (data.header['location'] || data.header['Location']) as string;
+
+            if (location) {
+              console.info(`HTTP module detected redirect to: ${location}`);
+
+              if (fileHandle !== null) {
+                try {
+                  fs.closeSync(fileHandle);
+                  fileHandle = null;
+                } catch (e) {
+                  console.error('Close file error:', e);
+                }
+              }
+
+              httpRequest.off('dataReceive');
+              httpRequest.off('headersReceive');
+              httpRequest.destroy();
+
+              try {
+                const parsedUrl = this.parseRedirectUrl(location as string);
+                this.downloadFileStreamWithRedirect(
+                  parsedUrl.host,
+                  parsedUrl.port,
+                  parsedUrl.path,
+                  parsedUrl.isHttps,
+                  localFilePath,
+                  callback,
+                  redirectCount + 1
+                ).then(() => {
+                  resolve();
+                }).catch((err: Error) => {
+                  reject(err);
+                });
+              } catch (parseError) {
+                const error = new Error(`Failed to parse redirect URL: ${parseError}`);
+                callback?.onError?.(error);
+                reject(error);
+              }
+              return;
+            }
+          }
+
+          // 检查响应状态
+          if (responseCode !== 200) {
+            const error = new Error(`HTTP ${responseCode}`);
+
+            if (fileHandle !== null) {
+              try {
+                fs.closeSync(fileHandle);
+              } catch (e) {
+                console.error('Close file error:', e);
+              }
+            }
+
+            httpRequest.off('dataReceive');
+            httpRequest.off('headersReceive');
+            httpRequest.destroy();
+            callback?.onError?.(error);
+            reject(error);
+            return;
+          }
+
+          // 如果downloadedBytes为0，说明dataReceive事件没有触发，需要从result中获取数据
+          if (downloadedBytes === 0 && data.result) {
+            console.info('Data not received via dataReceive event, using result directly');
+
+            try {
+              // 获取Content-Length
+              if (contentLength === 0) {
+                const contentLengthHeader = (data.header['content-length'] || data.header['Content-Length']) as string;
+                if (contentLengthHeader) {
+                  contentLength = parseInt(contentLengthHeader);
+                  console.info(`Content-Length: ${contentLength} bytes`);
+                }
+              }
+
+              // 处理result数据
+              let resultData: ArrayBuffer;
+
+              if (typeof data.result === 'string') {
+                console.info('Result is string, converting to ArrayBuffer');
+                resultData = buffer.from(data.result, 'utf-8').buffer;
+              } else if (data.result instanceof ArrayBuffer) {
+                console.info('Result is ArrayBuffer');
+                resultData = data.result;
+              } else if (data.result instanceof Object) {
+                console.info('Result is Object, converting to string first');
+                const resultStr = JSON.stringify(data.result);
+                resultData = buffer.from(resultStr, 'utf-8').buffer;
+              } else {
+                throw new Error('Unsupported response type: ' + typeof data.result);
+              }
+
+              downloadedBytes = resultData.byteLength;
+              console.info(`Writing ${downloadedBytes} bytes to file`);
+
+              // 写入文件
+              if (fileHandle === null) {
+                fileHandle = fs.openSync(localFilePath, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+              }
+              fs.writeSync(fileHandle.fd, resultData);
+
+              console.info('File written successfully via result');
+
+              if (contentLength > 0) {
+                callback?.onProgress?.(downloadedBytes, contentLength);
+              }
+            } catch (writeError) {
+              console.error('File write error:', JSON.stringify(writeError));
+
+              if (fileHandle !== null) {
+                try {
+                  fs.closeSync(fileHandle);
+                } catch (e) {
+                  console.error('Close file error:', e);
+                }
+              }
+
+              httpRequest.off('dataReceive');
+              httpRequest.off('headersReceive');
+              httpRequest.destroy();
+              callback?.onError?.(writeError as Error);
+              reject(writeError);
+              return;
+            }
+          }
+
+          // 下载完成
+          console.info(`HTTP download completed: ${downloadedBytes} bytes`);
+
+          if (fileHandle !== null) {
+            try {
+              fs.closeSync(fileHandle);
+              fileHandle = null;
+            } catch (e) {
+              console.error('Close file error:', e);
+            }
+          }
+
+          httpRequest.off('dataReceive');
+          httpRequest.off('headersReceive');
+          httpRequest.destroy();
+
+          if (downloadedBytes === 0) {
+            const error = new Error('No data received from server');
+            callback?.onError?.(error);
+            reject(error);
+          } else {
+            callback?.onComplete?.(localFilePath);
+            resolve();
+          }
+        });
+      } catch (error) {
+        console.error('HTTP module error:', JSON.stringify(error));
+
+        if (fileHandle !== null) {
+          try {
+            fs.closeSync(fileHandle);
+          } catch (e) {
+            console.error('Close file error:', e);
+          }
+        }
+
+        httpRequest.off('dataReceive');
+        httpRequest.off('headersReceive');
+        httpRequest.destroy();
+        callback?.onError?.(error as Error);
+        reject(error);
+      }
+    });
   }
 }
