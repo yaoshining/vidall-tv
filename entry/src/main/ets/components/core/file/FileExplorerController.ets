@@ -22,6 +22,7 @@ export class FileExplorerController {
 
   @Trace sortField: 'name' | 'size' | 'date' = 'name';
   @Trace sortAscending: boolean = true;
+  @Trace showHiddenFiles: boolean = false;
   onFolderChange: (path: string) => void = () => {}
   /**
    * 当文件夹回退到根目录时触发
@@ -70,7 +71,16 @@ export class FileExplorerController {
    */
   @Computed
   get sortedResources(): WebDAVResource[] {
-    const sorted = this.resources.slice();
+    // 先过滤隐藏文件
+    let filtered = this.resources;
+    if (!this.showHiddenFiles) {
+      filtered = this.resources.filter(resource => {
+        // 过滤掉以.开头的隐藏文件和文件夹
+        return !resource.displayName.startsWith('.');
+      });
+    }
+
+    const sorted = filtered.slice();
 
     sorted.sort((a, b) => {
       if (a.isCollection && !b.isCollection) return -1;

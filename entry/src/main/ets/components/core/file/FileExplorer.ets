@@ -207,6 +207,16 @@ export struct FileExplorer {
           })
           .margin({ right: 10 })
 
+        Button(this.controller.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
+          .fontSize(16)
+          .height(40)
+          .backgroundColor(this.COLORS.button)
+          .fontColor(this.controller.showHiddenFiles ? this.COLORS.accent : this.COLORS.secondaryText)
+          .onClick(() => {
+            this.controller.showHiddenFiles = !this.controller.showHiddenFiles;
+          })
+          .margin({ right: 10 })
+
         Text(`文件：${this.controller.sortedResources.length}`)
           .fontSize(14)
           .fontColor(this.COLORS.tertiaryText)
@@ -339,7 +349,7 @@ export struct FileExplorer {
                     Text(resource.displayName)
                       .fontSize($r('app.float.font_h7_title_small'))
                       .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .textOverflow({ overflow: TextOverflow.MARQUEE })
                       .fontColor(resource.isCollection
                         ? this.COLORS.accent
                         : this.COLORS.primaryText)
