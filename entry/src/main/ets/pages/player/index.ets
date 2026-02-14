@@ -26,7 +26,7 @@ export struct PlayerPage {
           VideoPlayer({
             controller: this.videoPlayerController,
             data: this.videoData,
-            autoPlay: true
+            autoPlay: false
           })
             .alignRules({
               center: { anchor: '__container__', align: VerticalAlign.Center },
@@ -36,12 +36,19 @@ export struct PlayerPage {
 
         if (this.isBackPressedOnce) {
           Text("再次按返回键退出播放")
-            .margin({ bottom: 40 })
-            .fontSize(14)
+            .margin({ bottom: 100 })
+            .fontSize($r('app.float.font_h7_title_small'))
             .fontColor(Color.White)
-            .backgroundColor('#66000000')
+            .backgroundColor('#99000000')
             .padding(8)
             .borderRadius(4)
+            .backdropBlur(0.8)
+            .shadow({
+              radius: 8,
+              color: '#66000000',
+              offsetX: 2,
+              offsetY: 2,
+            })
             .animation({
               duration: 200,
               curve: Curve.EaseInOut,

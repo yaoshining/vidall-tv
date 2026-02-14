@@ -46,34 +46,40 @@ export struct VideoPlayer {
   })
 
   build() {
-    XComponent({
-      id: 'playerXComponent',
-      type: XComponentType.SURFACE,
-      controller: this.xComponentController
-    })
-      .onLoad(() => {
-        this.surfaceId = this.xComponentController.getXComponentSurfaceId()
-        this.controller.initAVPlayer(this.data, this.surfaceId)
-        emitter.once(PlayerEvents.PREPARED, () => {
-          this.controller.play()
-        })
+    Stack() {
+      XComponent({
+        id: 'playerXComponent',
+        type: XComponentType.SURFACE,
+        controller: this.xComponentController
       })
-      .onClick(async () => {
-        await this.controller.pause()
-        this.controlsDialogController.open()
-      })
-      .gesture(
-        SwipeGesture()
-          .onAction((event: SwipeGestureEvent) => {
-            if (!this.controlsOpened) {
-              this.controlsDialogController.open()
+        .onLoad(() => {
+          this.surfaceId = this.xComponentController.getXComponentSurfaceId()
+          this.controller.initAVPlayer(this.data, this.surfaceId)
+          emitter.once(PlayerEvents.PREPARED, () => {
+            if (this.autoPlay) {
+              this.controller.play()
             } else {
-              console.log('swipe direction: ' + JSON.stringify(event))
+              this.controlsDialogController.open()
             }
           })
-      )
-      .width("100%")
-      .height("100%")
-      .renderFit(RenderFit.RESIZE_CONTAIN)
+        })
+        .onClick(async () => {
+          await this.controller.pause()
+          this.controlsDialogController.open()
+        })
+        .gesture(
+          SwipeGesture()
+            .onAction((event: SwipeGestureEvent) => {
+              if (!this.controlsOpened) {
+                this.controlsDialogController.open()
+              } else {
+                console.log('swipe direction: ' + JSON.stringify(event))
+              }
+            })
+        )
+        .width("100%")
+        .height("100%")
+        .renderFit(RenderFit.RESIZE_CONTAIN)
+    }
   }
 }

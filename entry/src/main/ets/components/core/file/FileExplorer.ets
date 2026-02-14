@@ -333,11 +333,11 @@ export struct FileExplorer {
                 // 图标和名称
                 Row({ space: 12 }) {
                   Text(this.getFileIcon(resource))
-                    .fontSize(24)
+                    .fontSize($r('app.float.font_h6_title_large'))
 
                   Column() {
                     Text(resource.displayName)
-                      .fontSize(15)
+                      .fontSize($r('app.float.font_h7_title_small'))
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .fontColor(resource.isCollection
@@ -353,7 +353,7 @@ export struct FileExplorer {
 
                 // 文件大小
                 Text(resource.isCollection ? '-' : this.formatFileSize(resource.size))
-                  .fontSize(13)
+                  .fontSize($r('app.float.font_subtitle_1'))
                   .fontColor(this.COLORS.tertiaryText)
                   .layoutWeight(2)
                   .textAlign(TextAlign.End)

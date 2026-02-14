@@ -46,7 +46,7 @@ export class VideoPlayerController {
 
         // 设置播放策略，设置缓冲区数据量为3s。
         let playbackStrategy : media.PlaybackStrategy =
-          {preferredWidth: 1, preferredHeight: 2, preferredBufferDuration: 3, preferredHdr: false};
+          {preferredWidth: 1, preferredHeight: 2, preferredBufferDuration: 3, preferredHdr: true};
         const mediaSource =
           media.createMediaSourceWithUrl(videoData.videoSrc, videoData.httpHeader)
         avPlayer.setMediaSource(mediaSource, playbackStrategy)

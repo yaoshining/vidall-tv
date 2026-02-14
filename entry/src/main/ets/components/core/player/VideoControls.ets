@@ -18,6 +18,17 @@ struct VideoControls {
       }) {
         Text(this.videoController.name)
           .fontSize($r('app.float.font_h8_title_secondary'))
+          .textShadow({
+            radius: 3,
+            offsetX: 3,
+            offsetY: 3,
+            color: Color.Black
+          })
+          .width("80%")
+          .maxLines(1)
+          .textOverflow({
+            overflow: TextOverflow.Ellipsis
+          })
         Text("功能区")
       }
       .linearGradient({
@@ -97,15 +108,23 @@ struct VideoControls {
     }
     .onClick(async () => {
       await this.videoController.toggle()
-      if (this.videoController.isPlaying) {
-        clearTimeout(this.closeTimer)
-        this.closeTimer = setTimeout(() => {
-          this.dialogController.close()
-        }, this.AUTO_CLOSE_TIMEOUT)
-      } else {
-        clearTimeout(this.closeTimer)
-      }
+      this.enableAutoHide()
     })
+  }
+
+  private enableAutoHide() {
+    if (this.videoController.isPlaying) {
+      clearTimeout(this.closeTimer)
+      this.closeTimer = setTimeout(() => {
+        this.dialogController.close()
+      }, this.AUTO_CLOSE_TIMEOUT)
+    } else {
+      clearTimeout(this.closeTimer)
+    }
+  }
+
+  aboutToAppear(): void {
+    this.enableAutoHide()
   }
 
   aboutToDisappear(): void {
