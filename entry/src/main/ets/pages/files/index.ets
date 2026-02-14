@@ -7,6 +7,7 @@ import { common } from "@kit.AbilityKit";
 import { util } from "@kit.ArkTS";
 import { filePreview } from "@kit.PreviewKit";
 import { fileIo } from "@kit.CoreFileKit";
+import { ImagePreviewDialog } from "../../components/core/file/ImagePreview";
 
 const config: WebDAVConfig = {
   baseUrl: 'http://www.baidu.com',
@@ -34,28 +35,22 @@ export struct FileExplorerPage {
 
   build() {
     NavDestination() {
-      if (this.imagePath) {
-        Image(this.imagePath)
-          .width(200)
-          .height(200)
-          .alt($r('app.media.foreground'))
-          .objectFit(ImageFit.Cover)
-          .onError(error => {
-            console.error(error.message)
-          })
+      Stack() {
+        FileExplorer({
+          controller: this.fileExplorerController,
+          onFileClick: event => {
+            const displayName = event.resource.displayName
+            if (this.isVideoFile(displayName)) {
+              this.playVideo(event.fullPath, event.resource.displayName)
+            }
+            if (this.isImageFile(displayName)) {
+              this.previewImage(event.fullPath, displayName)
+            }
+          }
+        })
       }
-      FileExplorer({
-        controller: this.fileExplorerController,
-        onFileClick: event => {
-          const displayName = event.resource.displayName
-          if (this.isVideoFile(displayName)) {
-            this.playVideo(event.fullPath, event.resource.displayName)
-          }
-          if (this.isImageFile(displayName)) {
-            this.previewImage(event.fullPath, displayName)
-          }
-        }
-      })
+      .width('100%')
+      .height('100%')
     }
     .onReady((context) => {
       const param = context.pathInfo.param as WebDAVConfig
@@ -63,6 +58,11 @@ export struct FileExplorerPage {
       this.changePath(this.fileExplorerController.currentPath)
     })
     .onBackPressed(() => {
+      // 如果正在预览图片，先关闭图片预览
+      if (this.imagePath) {
+        this.imagePath = ''
+        return true
+      }
       this.fileExplorerController.handleBack()
       return true
     })
@@ -74,6 +74,7 @@ export struct FileExplorerPage {
     const authHeader = this.client.getAuthHeaderPublic()
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const tempPath = context.tempDir + "/" + displayName
+
     this.client.downloadFileStream(path, tempPath, {
       onProgress: (downloaded, total) => {
         const percentage = (downloaded / total * 100).toFixed(2);
@@ -81,9 +82,25 @@ export struct FileExplorerPage {
       },
       onComplete: (filePath) => {
         console.info('下载完成:', filePath);
+        // 更新图片路径以显示图片
+        this.imagePath = 'file://' + filePath;
+
+        const dialogController: CustomDialogController = new CustomDialogController({
+          builder: ImagePreviewDialog({
+            imageSrc: this.imagePath,
+          }),
+          width: '100%',
+          height: '100%',
+          maskColor: Color.Transparent,
+          cornerRadius: 0,
+          customStyle: true,
+        })
+
+        dialogController.open()
       },
       onError: (error) => {
         console.error('下载失败:', error);
+        IBestToast.show('图片加载失败: ' + error);
       }
     })
   }

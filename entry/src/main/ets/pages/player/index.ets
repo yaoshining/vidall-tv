@@ -26,7 +26,7 @@ export struct PlayerPage {
           VideoPlayer({
             controller: this.videoPlayerController,
             data: this.videoData,
-            autoPlay: false
+            autoPlay: true
           })
             .alignRules({
               center: { anchor: '__container__', align: VerticalAlign.Center },
