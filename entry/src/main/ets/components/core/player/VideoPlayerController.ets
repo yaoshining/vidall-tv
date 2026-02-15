@@ -76,9 +76,9 @@ export class VideoPlayerController {
   }
 
   async play(): Promise<void> {
-    if (this.isSeeking) {
-      return
-    }
+    // if (this.isSeeking) {
+    //   return
+    // }
     await this.avPlayer?.play().catch((err: BusinessError) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `play failed, code is ${err.code}, message is ${err.message}`);
@@ -198,13 +198,15 @@ export class VideoPlayerController {
     });
 
     avPlayer.on('seekDone', async () => {
-      if (this.timeToSeek > -1) {
+      console.log(`time to seek is: ` + this.timeToSeek);
+      if (!this.isSeeking) {
         avPlayer.seek(this.timeToSeek)
         this.timeToSeek = -1
-        this.isSeeking = false
       } else {
         await avPlayer.play()
       }
+
+      this.isSeeking = false
     })
 
     // 监听字幕更新事件

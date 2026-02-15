@@ -183,8 +183,18 @@ struct VideoControls {
           })
             .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
             .trackThickness(this.sliderHovered ? 8 : 4)
-            .onChange((value) => {
-              this.videoController.seek(value)
+            .onChange((value, mode) => {
+              if (mode === SliderChangeMode.Begin) {
+                this.videoController.pause()
+                this.videoController.currentTime = value
+                this.videoController.seek(value)
+              }
+              if (mode === SliderChangeMode.Moving) {
+                this.videoController.currentTime = value
+              }
+              if (mode === SliderChangeMode.End) {
+                this.videoController.seek(value)
+              }
             })
             .onHover((isHover: boolean) => {
               this.sliderHovered = isHover
@@ -211,6 +221,7 @@ struct VideoControls {
       .height("20%")
       .padding(20)
     }
+    .hitTestBehavior(HitTestMode.Transparent)
     .onClick(async () => {
       await this.videoController.toggle()
       this.enableAutoHide()
