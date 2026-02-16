@@ -8,28 +8,15 @@ export function FileSourceSettingBuilder() {
     title: "文件源"
   }) {
     SettingListItemGroup({
-      title: "WebDAV"
-    }) {
-      SettingListItem({
-        title: "添加 WebDAV",
-        isLink: true
-      })
-    }
-
-    SettingListItemGroup({
-      title: "SMB"
-    }) {
-      SettingListItem({
-        title: "添加 SMB",
-        isLink: true
-      })
-    }
-
-    SettingListItemGroup({
       title: "已添加的文件源"
     }) {
       SettingListItem({
         title: "暂无文件源"
+      })
+
+      SettingListItem({
+        title: "添加文件源",
+        isLink: true
       })
     }
   }

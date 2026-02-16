@@ -8,6 +8,36 @@ import SettingType from "../SettingType";
 struct HomeSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
 
+  @Builder
+  userIcon() {
+    Text("👤")
+      .fontSize(20)
+  }
+
+  @Builder
+  exitIcon() {
+    Text("🚪")
+      .fontSize(20)
+  }
+
+  @Builder
+  folderIcon() {
+    Text("📁")
+      .fontSize(20)
+  }
+
+  @Builder
+  serverIcon() {
+    Text("🖥️")
+      .fontSize(20)
+  }
+
+  @Builder
+  libraryIcon() {
+    Text("📚")
+      .fontSize(20)
+  }
+
   build() {
     SettingContainer({
       title: "配置"
@@ -17,11 +47,13 @@ struct HomeSettingBuilderComponent {
       }) {
         SettingListItem({
           title: "VidAll",
-          value: "全平台可用"
+          value: "全平台可用",
+          iconBuilder: this.userIcon
         })
         SettingListItem({
           title: "退出登录",
-          isLink: true
+          isLink: true,
+          iconBuilder: this.exitIcon
         })
       }
 
@@ -33,21 +65,24 @@ struct HomeSettingBuilderComponent {
           isLink: true,
           onItemClick: () => {
             this.controller.pushType(SettingType.FILE_SOURCE)
-          }
+          },
+          iconBuilder: this.folderIcon
         })
         SettingListItem({
           title: "影视服务器",
           isLink: true,
           onItemClick: () => {
             this.controller.pushType(SettingType.VIDEO_SERVER)
-          }
+          },
+          iconBuilder: this.serverIcon
         })
         SettingListItem({
           title: "资源库",
           isLink: true,
           onItemClick: () => {
             this.controller.pushType(SettingType.RESOURCE_LIBRARY)
-          }
+          },
+          iconBuilder: this.libraryIcon
         })
       }
 
