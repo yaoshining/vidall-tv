@@ -3,7 +3,6 @@ import { FileExplorerPage } from './files';
 import { HomePage } from './home';
 import { PlayerPage } from './player/index';
 import { SettingsPage } from './settings/Index';
-
 @Entry
 @ComponentV2
 struct Index {

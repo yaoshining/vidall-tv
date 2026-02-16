@@ -10,7 +10,7 @@ export struct SettingListItem {
   build() {
     ListItem() {
       Row() {
-        Row({ space: 6 }) {
+        Row({ space: 12 }) {
           // 插入自定义图标
           if (this.iconBuilder) {
             this.iconBuilder()

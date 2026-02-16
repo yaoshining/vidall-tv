@@ -15,7 +15,7 @@ function vipTitleBuilder() {
       .fontSize($r("app.float.font_subtitle_2"))
       .fontWeight(FontWeight.Bold)
   }
-  .backgroundColor("#ffe29507")
+  .backgroundColor("#ffa56e03")
   .padding({ top: 2, bottom: 2, left: 10, right: 10 })
   .borderRadius("30%")
 }
