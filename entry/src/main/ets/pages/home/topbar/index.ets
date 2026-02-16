@@ -1,8 +1,9 @@
-import { IBestButton, IBestDivider, IBestIcon } from "@ibestservices/ibest-ui"
+import { IBestButton, IBestDivider, IBestIcon, IBestToast } from "@ibestservices/ibest-ui"
 import { LengthMetrics } from "@kit.ArkUI"
 import { LucideCloudDownload } from "lucide"
 import { BasicClock } from "../../../components/common/BasicClock"
-import { SettingsPage } from "../../settings/Index"
+import { SettingsPage, SettingsPageParam } from "../../settings/Index"
+import SettingType from "../../settings/SettingType"
 
 @ComponentV2
 export struct HomeTopBar {
@@ -79,8 +80,17 @@ export struct HomeTopBar {
         IBestButton({
           buttonSize: "small",
           btnBorderColor: Color.Transparent,
+          onBtnClick: () => {
+            this.pageStack.pushPath({
+              name: SettingsPage.PAGE_NAME,
+              param: {
+                type: SettingType.FILE_SOURCE
+              } as SettingsPageParam
+            })
+          },
           iconBuilder: (): void => this.settingHuaweiIconBuilder($r('sys.symbol.folder_badge_plus'))
-        }).bindTips('添加/修改文件源')
+        })
+          .bindTips('添加/修改文件源')
       }
 
       Flex({

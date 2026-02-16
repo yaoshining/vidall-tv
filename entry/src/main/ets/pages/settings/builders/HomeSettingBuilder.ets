@@ -4,39 +4,25 @@ import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
 
+@Builder
+function vipTitleBuilder() {
+  Text("VidAll")
+    .fontSize($r("app.float.font_subtitle_1"))
+    .fontWeight(FontWeight.Bold)
+
+  Column() {
+    Text("Pro")
+      .fontSize($r("app.float.font_subtitle_2"))
+      .fontWeight(FontWeight.Bold)
+  }
+  .backgroundColor("#ffe29507")
+  .padding({ top: 2, bottom: 2, left: 10, right: 10 })
+  .borderRadius("30%")
+}
+
 @ComponentV2
 struct HomeSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
-
-  @Builder
-  userIcon() {
-    Text("👤")
-      .fontSize(20)
-  }
-
-  @Builder
-  exitIcon() {
-    Text("🚪")
-      .fontSize(20)
-  }
-
-  @Builder
-  folderIcon() {
-    Text("📁")
-      .fontSize(20)
-  }
-
-  @Builder
-  serverIcon() {
-    Text("🖥️")
-      .fontSize(20)
-  }
-
-  @Builder
-  libraryIcon() {
-    Text("📚")
-      .fontSize(20)
-  }
 
   build() {
     SettingContainer({
@@ -46,14 +32,12 @@ struct HomeSettingBuilderComponent {
         title: "账号"
       }) {
         SettingListItem({
-          title: "VidAll",
           value: "全平台可用",
-          iconBuilder: this.userIcon
+          titleBuilder: vipTitleBuilder
         })
         SettingListItem({
           title: "退出登录",
           isLink: true,
-          iconBuilder: this.exitIcon
         })
       }
 
@@ -66,7 +50,6 @@ struct HomeSettingBuilderComponent {
           onItemClick: () => {
             this.controller.pushType(SettingType.FILE_SOURCE)
           },
-          iconBuilder: this.folderIcon
         })
         SettingListItem({
           title: "影视服务器",
@@ -74,7 +57,6 @@ struct HomeSettingBuilderComponent {
           onItemClick: () => {
             this.controller.pushType(SettingType.VIDEO_SERVER)
           },
-          iconBuilder: this.serverIcon
         })
         SettingListItem({
           title: "资源库",
@@ -82,7 +64,6 @@ struct HomeSettingBuilderComponent {
           onItemClick: () => {
             this.controller.pushType(SettingType.RESOURCE_LIBRARY)
           },
-          iconBuilder: this.libraryIcon
         })
       }
 

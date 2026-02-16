@@ -5,6 +5,7 @@ export struct SettingListItem {
   @Param isLink: boolean = false
   @Param onItemClick: () => void = () => {}
   @BuilderParam iconBuilder?: () => void
+  @BuilderParam titleBuilder?: () => void
 
   build() {
     ListItem() {
@@ -14,8 +15,12 @@ export struct SettingListItem {
           if (this.iconBuilder) {
             this.iconBuilder()
           }
-          Text(this.title)
-            .fontSize($r("app.float.font_subtitle_1"))
+          if (this.titleBuilder) {
+            this.titleBuilder()
+          } else {
+            Text(this.title)
+              .fontSize($r("app.float.font_subtitle_1"))
+          }
         }
         .alignItems(VerticalAlign.Center)
 

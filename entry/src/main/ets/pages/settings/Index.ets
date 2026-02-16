@@ -1,3 +1,4 @@
+import { AddFileSourceBuilder } from "./builders/AddFileSourceBuilder"
 import { FileSourceSettingBuilder } from "./builders/FileSourceSettingBuilder"
 import { HomeSettingBuilder } from "./builders/HomeSettingBuilder"
 import { ResourceLibrarySettingBuilder } from "./builders/ResourceLibrarySettingBuilder"
@@ -38,7 +39,10 @@ export struct SettingsPage {
               HomeSettingBuilder()
             }
             if (this.controller.type === SettingType.FILE_SOURCE) {
-              FileSourceSettingBuilder()
+              FileSourceSettingBuilder(this.controller)
+            }
+            if (this.controller.type === SettingType.ADD_FILE_SOURCE) {
+              AddFileSourceBuilder()
             }
             if (this.controller.type === SettingType.VIDEO_SERVER) {
               VideoServerSettingBuilder()
@@ -68,7 +72,7 @@ export struct SettingsPage {
       .height("100%")
       .padding(20)
       .onClick(() => {
-        this.handleBack()
+        this.pageStack.pop(true)
       })
       .backgroundColor('#88000000')
     }
