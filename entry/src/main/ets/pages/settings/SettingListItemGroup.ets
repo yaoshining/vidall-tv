@@ -1,8 +1,8 @@
-import { ListGroupHeaderBuilder } from "./builders"
+import { ListGroupHeaderBuilder } from "./builders/ListGroupHeaderBuilder"
 
 @ComponentV2
 export struct SettingListItemGroup {
-  @Require @Param title: string
+  @Param title: string = ''
   @BuilderParam contentBuilder: () => void
 
   build() {

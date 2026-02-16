@@ -1,14 +1,19 @@
 @ComponentV2
 export struct SettingListItem {
-  @Require @Param title: string
+  @Param title: string = ''
   @Param value: string = ''
   @Param isLink: boolean = false
+  @BuilderParam titleBuilder?: () => void
 
   build() {
     ListItem() {
       Row() {
-        Text(this.title)
-          .fontSize($r("app.float.font_subtitle_1"))
+        if (this.titleBuilder) {
+          this.titleBuilder()
+        } else {
+          Text(this.title)
+            .fontSize($r("app.float.font_subtitle_1"))
+        }
         Row() {
           if (this.value) {
             Text(this.value)
