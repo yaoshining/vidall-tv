@@ -3,6 +3,7 @@ export struct SettingListItem {
   @Param title: string = ''
   @Param value: string = ''
   @Param isLink: boolean = false
+  @Param onItemClick: () => void = () => {}
   @BuilderParam titleBuilder?: () => void
 
   build() {
@@ -40,5 +41,10 @@ export struct SettingListItem {
     .height(50)
     .borderRadius(8)
     .backgroundColor("#333333")
+    .onClick(() => {
+      if (this.onItemClick) {
+        this.onItemClick()
+      }
+    })
   }
 }
