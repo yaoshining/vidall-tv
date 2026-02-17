@@ -14,18 +14,21 @@ struct WebDAVConfigBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
 
   // 表单状态
-  @Local serverName: string = ''
-  @Local serverUrl: string = ''
-  @Local username: string = ''
-  @Local password: string = ''
-  @Local protocol: 'http' | 'https' = 'https'
-  @Local port: number = 443
-  @Local rootPath: string = '/'
+  @Local serverName: string = 'mynas'
+  @Local serverUrl: string = '192.168.3.59'
+  @Local username: string = 'yao'
+  @Local password: string = 'ys198756'
+  @Local protocol: 'http' | 'https' = 'http'
+  @Local port: number = 80
+  @Local rootPath: string = '/dav'
   @Local urlError: string = ''
 
   // Loading 状态
   @Local isLoading: boolean = false
   @Local loadingText: string = ''
+
+  // 焦点状态管理
+  @Local currentFocusIndex: number = 0
 
   // 防抖验证函数
   private debouncedValidateUrl: CancellableFunction =
@@ -37,6 +40,13 @@ struct WebDAVConfigBuilderComponent {
   // 是否为编辑模式
   private isEditMode: boolean = false
   private editingFileSourceId: number | undefined = undefined
+
+  /**
+   * 跳转到下一个输入框
+   */
+  private focusNext(): void {
+    this.currentFocusIndex++
+  }
 
   aboutToAppear(): void {
     // 创建防抖验证函数已在成员变量初始化时完成
@@ -346,10 +356,14 @@ struct WebDAVConfigBuilderComponent {
             .placeholderFont({ size: 16 })
             .enabled(!this.isLoading)
             .id('serverNameInput')
-            .defaultFocus(true)
+            .key(`serverName_${this.currentFocusIndex === 0 ? 'focus' : 'blur'}`)
+            .defaultFocus(this.currentFocusIndex === 0)
             .enterKeyType(EnterKeyType.Next)
             .onChange((value: string) => {
               this.serverName = value
+            })
+            .onSubmit(() => {
+              this.focusNext()
             })
         }
         .width("100%")
@@ -410,10 +424,15 @@ struct WebDAVConfigBuilderComponent {
               .placeholderFont({ size: 16 })
               .enabled(!this.isLoading)
               .id('serverUrlInput')
+              .key(`serverUrl_${this.currentFocusIndex === 1 ? 'focus' : 'blur'}`)
+              .defaultFocus(this.currentFocusIndex === 1)
               .enterKeyType(EnterKeyType.Next)
               .onChange((value: string) => {
                 this.serverUrl = value
                 this.debouncedValidateUrl.call(value)
+              })
+              .onSubmit(() => {
+                this.focusNext()
               })
           }
           .width("100%")
@@ -451,9 +470,14 @@ struct WebDAVConfigBuilderComponent {
             .placeholderFont({ size: 16 })
             .enabled(!this.isLoading)
             .id('rootPathInput')
+            .key(`rootPath_${this.currentFocusIndex === 2 ? 'focus' : 'blur'}`)
+            .defaultFocus(this.currentFocusIndex === 2)
             .enterKeyType(EnterKeyType.Next)
             .onChange((value: string) => {
               this.rootPath = value
+            })
+            .onSubmit(() => {
+              this.focusNext()
             })
         }
         .width("100%")
@@ -476,12 +500,17 @@ struct WebDAVConfigBuilderComponent {
             .type(InputType.Number)
             .enabled(!this.isLoading)
             .id('portInput')
+            .key(`port_${this.currentFocusIndex === 3 ? 'focus' : 'blur'}`)
+            .defaultFocus(this.currentFocusIndex === 3)
             .enterKeyType(EnterKeyType.Next)
             .onChange((value: string) => {
               const portNum = parseInt(value)
               if (!isNaN(portNum)) {
                 this.port = portNum
               }
+            })
+            .onSubmit(() => {
+              this.focusNext()
             })
         }
         .width("100%")
@@ -503,9 +532,14 @@ struct WebDAVConfigBuilderComponent {
             .placeholderFont({ size: 16 })
             .enabled(!this.isLoading)
             .id('usernameInput')
+            .key(`username_${this.currentFocusIndex === 4 ? 'focus' : 'blur'}`)
+            .defaultFocus(this.currentFocusIndex === 4)
             .enterKeyType(EnterKeyType.Next)
             .onChange((value: string) => {
               this.username = value
+            })
+            .onSubmit(() => {
+              this.focusNext()
             })
         }
         .width("100%")
@@ -528,9 +562,14 @@ struct WebDAVConfigBuilderComponent {
             .type(InputType.Password)
             .enabled(!this.isLoading)
             .id('passwordInput')
+            .key(`password_${this.currentFocusIndex === 5 ? 'focus' : 'blur'}`)
+            .defaultFocus(this.currentFocusIndex === 5)
             .enterKeyType(EnterKeyType.Done)
             .onChange((value: string) => {
               this.password = value
+            })
+            .onSubmit(() => {
+              // 最后一个输入框，关闭键盘
             })
         }
         .width("100%")
