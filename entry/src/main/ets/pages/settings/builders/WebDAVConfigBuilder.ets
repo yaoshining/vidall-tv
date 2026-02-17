@@ -14,13 +14,13 @@ struct WebDAVConfigBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
 
   // 表单状态
-  @Local serverName: string = 'mynas'
-  @Local serverUrl: string = '192.168.3.59'
-  @Local username: string = 'yao'
-  @Local password: string = 'ys198756'
+  @Local serverName: string = ''
+  @Local serverUrl: string = ''
+  @Local username: string = ''
+  @Local password: string = ''
   @Local protocol: 'http' | 'https' = 'http'
   @Local port: number = 80
-  @Local rootPath: string = '/dav'
+  @Local rootPath: string = ''
   @Local urlError: string = ''
 
   // Loading 状态

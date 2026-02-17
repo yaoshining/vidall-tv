@@ -41,50 +41,36 @@ export class CryptoUtil {
    */
   static async encrypt(plaintext: string): Promise<string> {
     try {
-      console.info('CryptoUtil: Starting encryption...');
-
       // 派生密钥
-      console.info('CryptoUtil: Deriving key...');
       const keyData = await CryptoUtil.deriveKey();
-      console.info('CryptoUtil: Key derived, length:', keyData.length);
 
       // 生成随机 IV
-      console.info('CryptoUtil: Generating random IV...');
       const iv = cryptoFramework.createRandom().generateRandomSync(CryptoUtil.IV_SIZE).data;
-      console.info('CryptoUtil: IV generated, length:', iv.length);
 
       // 创建对称密钥
-      console.info('CryptoUtil: Creating symmetric key...');
       const keyBlob: cryptoFramework.DataBlob = {
         data: keyData
       };
       const symKeyGenerator = cryptoFramework.createSymKeyGenerator('AES256');
       const symKey = await symKeyGenerator.convertKey(keyBlob);
-      console.info('CryptoUtil: Symmetric key created');
 
       // 创建加密器（使用 CBC 模式 + PKCS7 填充）
-      console.info('CryptoUtil: Creating cipher...');
       const cipher = cryptoFramework.createCipher('AES256|CBC|PKCS7');
       const ivParams: cryptoFramework.IvParamsSpec = {
         algName: 'IvParamsSpec',
         iv: { data: iv }
       };
 
-      console.info('CryptoUtil: Initializing cipher...');
       await cipher.init(cryptoFramework.CryptoMode.ENCRYPT_MODE, symKey, ivParams);
-      console.info('CryptoUtil: Cipher initialized');
 
       // 加密数据
-      console.info('CryptoUtil: Encrypting data...');
       const plaintextData = buffer.from(plaintext, 'utf-8').buffer;
       const encryptData = await cipher.doFinal({ data: new Uint8Array(plaintextData) });
-      console.info('CryptoUtil: Data encrypted');
 
       // 转换为 Base64 并组合
       const ivBase64 = buffer.from(iv.buffer).toString('base64');
       const ciphertextBase64 = buffer.from(encryptData.data.buffer).toString('base64');
 
-      console.info('CryptoUtil: Encryption completed successfully');
       return `${ivBase64}:${ciphertextBase64}`;
     } catch (error) {
       console.error('CryptoUtil: Encryption failed', JSON.stringify(error));
