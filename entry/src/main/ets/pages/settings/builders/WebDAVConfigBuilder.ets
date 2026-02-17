@@ -1,6 +1,4 @@
 import { SettingContainer } from "../SettingContainer"
-import { SettingListItem } from "../SettingListItem"
-import { SettingListItemGroup } from "../SettingListItemGroup"
 import { SettingsController } from "../SettingsController"
 import { FileSourceStore } from "../../../lib/stores/FileSourceStore"
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel"
@@ -8,6 +6,7 @@ import { DebounceUtil, CancellableFunction } from "../../../lib/utils/DebounceUt
 import { ValidationUtil } from "../../../lib/utils/ValidationUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import promptAction from '@ohos.promptAction'
+import { IBestButton } from "@ibestservices/ibest-ui"
 
 @ComponentV2
 struct WebDAVConfigBuilderComponent {
@@ -77,6 +76,10 @@ struct WebDAVConfigBuilderComponent {
 
     try {
       const store = FileSourceStore.getInstance()
+
+      // 确保缓存已加载
+      await store.loadFileSources()
+
       const fileSource = store.getFileSourceById(this.editingFileSourceId)
 
       if (fileSource) {
@@ -88,42 +91,22 @@ struct WebDAVConfigBuilderComponent {
         this.protocol = config.protocol
         this.port = config.port
         this.rootPath = config.rootPath
+      } else {
+        promptAction.showToast({
+          message: '文件源不存在'
+        } as promptAction.ShowToastOptions)
+        this.controller.popType()
       }
     } catch (error) {
       console.error('Failed to load edit data:', JSON.stringify(error))
-      promptAction.showToast({ message: '加载数据失败' })
+      promptAction.showToast({
+        message: '加载数据失败'
+      } as promptAction.ShowToastOptions)
+      this.controller.popType()
     } finally {
       this.isLoading = false
       this.loadingText = ''
     }
-  }
-
-  /**
-   * 处理协议选择
-   */
-  private handleProtocolSelect(): void {
-    AlertDialog.show({
-      title: '选择协议',
-      message: '',
-      primaryButton: {
-        value: 'HTTP',
-        action: () => {
-          this.protocol = 'http'
-          if (this.port === 443) {
-            this.port = 80
-          }
-        }
-      },
-      secondaryButton: {
-        value: 'HTTPS',
-        action: () => {
-          this.protocol = 'https'
-          if (this.port === 80) {
-            this.port = 443
-          }
-        }
-      }
-    })
   }
 
   /**
@@ -338,105 +321,73 @@ struct WebDAVConfigBuilderComponent {
     SettingContainer({
       title: this.isEditMode ? "编辑 WebDAV" : "添加 WebDAV"
     }) {
-      SettingListItemGroup({
-        title: ""
-      }) {
+      Column({ space: 20 }) {
         // 服务器名称
-        Row() {
-          Text("服务器名称")
-            .fontSize(16)
-            .width(100)
-            .textAlign(TextAlign.End)
-            .margin({ right: 12 })
+        TextInput({ text: this.serverName, placeholder: "服务器名称" })
+          .height(40)
+          .fontSize(16)
+          .placeholderFont({ size: 16 })
+          .enabled(!this.isLoading)
+          .id('serverNameInput')
+          .key(`serverName_${this.currentFocusIndex === 0 ? 'focus' : 'blur'}`)
+          .defaultFocus(this.currentFocusIndex === 0)
+          .enterKeyType(EnterKeyType.Next)
+          .onChange((value: string) => {
+            this.serverName = value
+          })
+          .onSubmit(() => {
+            this.focusNext()
+          })
 
-          TextInput({ text: this.serverName, placeholder: "必填" })
-            .layoutWeight(1)
+        Select([
+          { value: 'HTTP' },
+          { value: 'HTTPS' }
+        ])
+          .selected(this.protocol === 'https' ? 1 : 0)
+          .value(this.protocol.toUpperCase())
+          .font({ size: 16 })
+          .selectedOptionFont({ size: 16 })
+          .optionFont({ size: 16 })
+          .height(40)
+          .width("100%")
+          .hoverEffect(HoverEffect.Highlight)
+          .scale({
+            x: 1,
+            y: 1
+          })
+          .enabled(!this.isLoading)
+          .controlSize(ControlSize.SMALL)
+          .onSelect((index: number) => {
+            if (index === 0) {
+              this.protocol = 'http'
+              if (this.port === 443) {
+                this.port = 80
+              }
+            } else {
+              this.protocol = 'https'
+              if (this.port === 80) {
+                this.port = 443
+              }
+            }
+          })
+
+        Column() {
+          TextInput({ text: this.serverUrl, placeholder: "服务器地址" })
             .height(40)
             .fontSize(16)
             .placeholderFont({ size: 16 })
             .enabled(!this.isLoading)
-            .id('serverNameInput')
-            .key(`serverName_${this.currentFocusIndex === 0 ? 'focus' : 'blur'}`)
-            .defaultFocus(this.currentFocusIndex === 0)
+            .id('serverUrlInput')
+            .key(`serverUrl_${this.currentFocusIndex === 1 ? 'focus' : 'blur'}`)
+            .defaultFocus(this.currentFocusIndex === 1)
             .enterKeyType(EnterKeyType.Next)
             .onChange((value: string) => {
-              this.serverName = value
+              this.serverUrl = value
+              this.debouncedValidateUrl.call(value)
             })
             .onSubmit(() => {
               this.focusNext()
             })
-        }
-        .width("100%")
-        .padding(16)
-        .alignItems(VerticalAlign.Center)
-
-        // 协议选择
-        Row() {
-          Text("协议")
-            .fontSize(16)
-            .width(100)
-            .textAlign(TextAlign.End)
-            .margin({ right: 12 })
-
-          Select([
-            { value: 'HTTP' },
-            { value: 'HTTPS' }
-          ])
-            .selected(this.protocol === 'https' ? 1 : 0)
-            .value(this.protocol.toUpperCase())
-            .font({ size: 16 })
-            .selectedOptionFont({ size: 16 })
-            .optionFont({ size: 16 })
-            .height(40)
-            .layoutWeight(1)
-            .enabled(!this.isLoading)
-            .onSelect((index: number) => {
-              if (index === 0) {
-                this.protocol = 'http'
-                if (this.port === 443) {
-                  this.port = 80
-                }
-              } else {
-                this.protocol = 'https'
-                if (this.port === 80) {
-                  this.port = 443
-                }
-              }
-            })
-        }
-        .width("100%")
-        .padding(16)
-        .alignItems(VerticalAlign.Center)
-
-        // 服务器地址
-        Column() {
-          Row() {
-            Text("服务器地址")
-              .fontSize(16)
-              .width(100)
-              .textAlign(TextAlign.End)
-              .margin({ right: 12 })
-
-            TextInput({ text: this.serverUrl, placeholder: "必填" })
-              .layoutWeight(1)
-              .height(40)
-              .fontSize(16)
-              .placeholderFont({ size: 16 })
-              .enabled(!this.isLoading)
-              .id('serverUrlInput')
-              .key(`serverUrl_${this.currentFocusIndex === 1 ? 'focus' : 'blur'}`)
-              .defaultFocus(this.currentFocusIndex === 1)
-              .enterKeyType(EnterKeyType.Next)
-              .onChange((value: string) => {
-                this.serverUrl = value
-                this.debouncedValidateUrl.call(value)
-              })
-              .onSubmit(() => {
-                this.focusNext()
-              })
-          }
-          .width("100%")
-          .alignItems(VerticalAlign.Center)
 
           if (this.urlError) {
             Row() {
@@ -446,159 +397,117 @@ struct WebDAVConfigBuilderComponent {
               Text(this.urlError)
                 .fontSize(12)
                 .fontColor(Color.Red)
-                .layoutWeight(1)
                 .margin({ top: 4 })
             }
             .width("100%")
           }
         }
-        .width("100%")
-        .padding(16)
 
-        // 路径（可选）
-        Row() {
-          Text("路径")
-            .fontSize(16)
-            .width(100)
-            .textAlign(TextAlign.End)
-            .margin({ right: 12 })
-
-          TextInput({ text: this.rootPath, placeholder: "选填" })
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(16)
-            .placeholderFont({ size: 16 })
-            .enabled(!this.isLoading)
-            .id('rootPathInput')
-            .key(`rootPath_${this.currentFocusIndex === 2 ? 'focus' : 'blur'}`)
-            .defaultFocus(this.currentFocusIndex === 2)
-            .enterKeyType(EnterKeyType.Next)
-            .onChange((value: string) => {
-              this.rootPath = value
-            })
-            .onSubmit(() => {
-              this.focusNext()
-            })
-        }
-        .width("100%")
-        .padding(16)
-        .alignItems(VerticalAlign.Center)
-
-        // 端口
-        Row() {
-          Text("端口")
-            .fontSize(16)
-            .width(100)
-            .textAlign(TextAlign.End)
-            .margin({ right: 12 })
-
-          TextInput({ text: this.port.toString(), placeholder: "必填" })
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(16)
-            .placeholderFont({ size: 16 })
-            .type(InputType.Number)
-            .enabled(!this.isLoading)
-            .id('portInput')
-            .key(`port_${this.currentFocusIndex === 3 ? 'focus' : 'blur'}`)
-            .defaultFocus(this.currentFocusIndex === 3)
-            .enterKeyType(EnterKeyType.Next)
-            .onChange((value: string) => {
-              const portNum = parseInt(value)
-              if (!isNaN(portNum)) {
-                this.port = portNum
-              }
-            })
-            .onSubmit(() => {
-              this.focusNext()
-            })
-        }
-        .width("100%")
-        .padding(16)
-        .alignItems(VerticalAlign.Center)
-
-        // 用户名
-        Row() {
-          Text("用户名")
-            .fontSize(16)
-            .width(100)
-            .textAlign(TextAlign.End)
-            .margin({ right: 12 })
-
-          TextInput({ text: this.username, placeholder: "必填" })
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(16)
-            .placeholderFont({ size: 16 })
-            .enabled(!this.isLoading)
-            .id('usernameInput')
-            .key(`username_${this.currentFocusIndex === 4 ? 'focus' : 'blur'}`)
-            .defaultFocus(this.currentFocusIndex === 4)
-            .enterKeyType(EnterKeyType.Next)
-            .onChange((value: string) => {
-              this.username = value
-            })
-            .onSubmit(() => {
-              this.focusNext()
-            })
-        }
-        .width("100%")
-        .padding(16)
-        .alignItems(VerticalAlign.Center)
-
-        // 密码
-        Row() {
-          Text("密码")
-            .fontSize(16)
-            .width(100)
-            .textAlign(TextAlign.End)
-            .margin({ right: 12 })
-
-          TextInput({ text: this.password, placeholder: "必填" })
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(16)
-            .placeholderFont({ size: 16 })
-            .type(InputType.Password)
-            .enabled(!this.isLoading)
-            .id('passwordInput')
-            .key(`password_${this.currentFocusIndex === 5 ? 'focus' : 'blur'}`)
-            .defaultFocus(this.currentFocusIndex === 5)
-            .enterKeyType(EnterKeyType.Done)
-            .onChange((value: string) => {
-              this.password = value
-            })
-            .onSubmit(() => {
-              // 最后一个输入框，关闭键盘
-            })
-        }
-        .width("100%")
-        .padding(16)
-        .alignItems(VerticalAlign.Center)
-      }
-
-      // 操作按钮
-      Row({ space: 16 }) {
-        Button(this.isLoading && this.loadingText === '测试连接中...' ? this.loadingText : '测试连接')
+        TextInput({ text: this.port.toString(), placeholder: "端口" })
+          .height(40)
           .fontSize(16)
-          .layoutWeight(1)
+          .placeholderFont({ size: 16 })
+          .type(InputType.Number)
           .enabled(!this.isLoading)
-          .onClick(() => {
-            this.handleTestConnection()
+          .id('portInput')
+          .key(`port_${this.currentFocusIndex === 3 ? 'focus' : 'blur'}`)
+          .defaultFocus(this.currentFocusIndex === 3)
+          .enterKeyType(EnterKeyType.Next)
+          .onChange((value: string) => {
+            const portNum = parseInt(value)
+            if (!isNaN(portNum)) {
+              this.port = portNum
+            }
+          })
+          .onSubmit(() => {
+            this.focusNext()
           })
 
-        Button(this.isLoading && this.loadingText === '保存中...' ? this.loadingText : '保存')
+        TextInput({ text: this.username, placeholder: "用户名" })
+          .height(40)
           .fontSize(16)
-          .layoutWeight(1)
-          .type(ButtonType.Normal)
-          .backgroundColor('#007DFF')
+          .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
-          .onClick(() => {
-            this.handleSave()
+          .id('usernameInput')
+          .key(`username_${this.currentFocusIndex === 4 ? 'focus' : 'blur'}`)
+          .defaultFocus(this.currentFocusIndex === 4)
+          .enterKeyType(EnterKeyType.Next)
+          .onChange((value: string) => {
+            this.username = value
           })
+          .onSubmit(() => {
+            this.focusNext()
+          })
+
+        TextInput({ text: this.password, placeholder: "密码" })
+          .height(40)
+          .fontSize(16)
+          .placeholderFont({ size: 16 })
+          .type(InputType.Password)
+          .enabled(!this.isLoading)
+          .id('passwordInput')
+          .key(`password_${this.currentFocusIndex === 5 ? 'focus' : 'blur'}`)
+          .defaultFocus(this.currentFocusIndex === 5)
+          .enterKeyType(EnterKeyType.Done)
+          .onChange((value: string) => {
+            this.password = value
+          })
+          .onSubmit(() => {
+            // 最后一个输入框，关闭键盘
+          })
+
+        TextInput({ text: this.rootPath, placeholder: "路径(可选)" })
+          .height(40)
+          .fontSize(16)
+          .placeholderFont({ size: 16 })
+          .enabled(!this.isLoading)
+          .id('rootPathInput')
+          .key(`rootPath_${this.currentFocusIndex === 2 ? 'focus' : 'blur'}`)
+          .defaultFocus(this.currentFocusIndex === 2)
+          .enterKeyType(EnterKeyType.Next)
+          .onChange((value: string) => {
+            this.rootPath = value
+          })
+          .onSubmit(() => {
+            this.focusNext()
+          })
+
+        // 操作按钮
+        Row({ space: 16 }) {
+          IBestButton({
+            text: '测试连接',
+            loadingText: this.loadingText,
+            type: 'default',
+            btnWidth: '100%',
+            plain: true,
+            btnFontSize: 20,
+            loading: this.isLoading && this.loadingText === '测试连接中...',
+            onBtnClick: () => {
+              this.handleTestConnection()
+            }
+          })
+            .layoutWeight(1)
+            .enabled(!this.isLoading)
+
+          IBestButton({
+            text: '保存',
+            loadingText: this.loadingText,
+            type: 'primary',
+            color: Color.White,
+            fontColor: Color.Black,
+            btnWidth: '100%',
+            btnFontSize: 20,
+            loading: this.isLoading && this.loadingText === '保存中...',
+            onBtnClick: () => {
+              this.handleSave()
+            }
+          })
+            .layoutWeight(1)
+            .enabled(!this.isLoading)
+        }
+        .width("100%")
+        .padding(16)
       }
-      .width("100%")
-      .padding(16)
     }
   }
 }
