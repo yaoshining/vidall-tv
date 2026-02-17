@@ -33,6 +33,11 @@ export interface StreamDownloadCallback {
   onError?: (error: Error) => void;
 }
 
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+}
+
 interface GeneratedTypeLiteralInterface_1 {
   host: string;
   port: number;
@@ -837,6 +842,107 @@ export class WebDAVClient {
     }
   }
 
+  /**
+   * 测试 WebDAV 连接
+   * @returns 测试结果
+   */
+  async testConnection(): Promise<TestConnectionResult> {
+    try {
+      console.info('Testing WebDAV connection...');
+      console.info('BaseUrl:', this.baseUrl);
+
+      // 直接使用 PROPFIND 请求测试认证和根目录访问
+      // 不使用 OPTIONS，因为很多 WebDAV 服务器不支持该方法（会返回 405）
+      try {
+        // 提取路径部分
+        let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+        if (!basePath) {
+          basePath = '/';
+        }
+
+        console.info('Testing path:', basePath);
+
+        const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:">
+  <D:prop>
+    <D:resourcetype/>
+  </D:prop>
+</D:propfind>`;
+
+        const propfindHeaders: Record<string, string> = {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Depth': '0',
+          'User-Agent': 'WebDAV-Client/1.0',
+          'Accept': '*/*'
+        };
+
+        const authHeader = this.getAuthHeader();
+        if (authHeader) {
+          propfindHeaders['Authorization'] = authHeader;
+        }
+
+        const response = await this.sendRawHttpRequest('PROPFIND', basePath, propfindHeaders, propfindBody);
+
+        console.info('PROPFIND response status:', response.statusCode);
+
+        if (response.statusCode === 401) {
+          const result: TestConnectionResult = {
+            success: false,
+            message: '认证失败，请检查用户名和密码'
+          };
+          return result;
+        }
+
+        if (response.statusCode === 404) {
+          const result: TestConnectionResult = {
+            success: false,
+            message: '路径不存在或无权限访问'
+          };
+          return result;
+        }
+
+        if (response.statusCode === 405) {
+          const result: TestConnectionResult = {
+            success: false,
+            message: '服务器不支持 WebDAV 协议或 PROPFIND 方法被禁用'
+          };
+          return result;
+        }
+
+        if (response.statusCode !== 207 && response.statusCode !== 200) {
+          const result: TestConnectionResult = {
+            success: false,
+            message: `服务器返回错误：HTTP ${response.statusCode}`
+          };
+          return result;
+        }
+
+        console.info('WebDAV connection test successful');
+      } catch (error) {
+        console.error('Connection test failed:', JSON.stringify(error));
+        const result: TestConnectionResult = {
+          success: false,
+          message: '无法连接到服务器，请检查服务器地址和网络连接'
+        };
+        return result;
+      }
+
+      // 所有测试通过
+      const result: TestConnectionResult = {
+        success: true,
+        message: '连接成功'
+      };
+      return result;
+    } catch (error) {
+      console.error('Test connection error:', JSON.stringify(error));
+      const result: TestConnectionResult = {
+        success: false,
+        message: '测试连接时发生未知错误：' + JSON.stringify(error)
+      };
+      return result;
+    }
+  }
+
   private parsePropfindResponse(xmlText: string): WebDAVResource[] {
     const resources: WebDAVResource[] = [];
 
@@ -906,30 +1012,6 @@ export class WebDAVClient {
     return '';
   }
 
-  async testConnection(): Promise<boolean> {
-    let fullPath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-    if (!fullPath) {
-      fullPath = '/';
-    }
-
-    const headers: Record<string, string> = {
-      'User-Agent': 'WebDAV-Client/1.0'
-    };
-
-    const authHeader = this.getAuthHeader();
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
-
-    try {
-      const response = await this.sendRawHttpRequest('OPTIONS', fullPath, headers);
-      console.info('OPTIONS:', response.statusCode);
-      return response.statusCode >= 200 && response.statusCode < 400;
-    } catch (error) {
-      console.error('Test error:', JSON.stringify(error));
-      return false;
-    }
-  }
 
   /**
    * 编码 URI 路径（保留斜杠）
@@ -1215,6 +1297,7 @@ export class WebDAVClient {
               console.info(`Initial body bytes written: ${downloadedBytes}/${contentLength}`);
               callback?.onProgress?.(downloadedBytes, contentLength);
 
+              // 检查是否已经完成
               if (contentLength > 0 && downloadedBytes >= contentLength) {
                 console.info('Download completed in header processing');
                 isComplete = true;
@@ -1240,6 +1323,7 @@ export class WebDAVClient {
 
               callback?.onProgress?.(downloadedBytes, contentLength);
 
+              // 检查是否下载完成
               if (contentLength > 0 && downloadedBytes >= contentLength) {
                 console.info('Download completed - all bytes received');
                 isComplete = true;
@@ -1655,3 +1739,6 @@ export class WebDAVClient {
     });
   }
 }
+
+
+

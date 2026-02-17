@@ -4,17 +4,22 @@ import SettingType from "./SettingType";
 export class SettingsController {
   @Trace title: string = "设置"
   @Trace type: SettingType = SettingType.HOME
+  @Trace params: Record<string, Object> | undefined = undefined
   private typeStack: SettingType[] = []
+  private paramsStack: (Record<string, Object> | undefined)[] = []
 
   /**
    * 推入新的设置类型到堆栈
    * @param newType 新的设置类型
+   * @param params 可选的参数对象
    */
-  pushType(newType: SettingType): void {
-    // 将当前类型压入堆栈
+  pushType(newType: SettingType, params?: Record<string, Object>): void {
+    // 将当前类型和参数压入堆栈
     this.typeStack.push(this.type)
-    // 切换到新类型
+    this.paramsStack.push(this.params)
+    // 切换到新类型和新参数
     this.type = newType
+    this.params = params
   }
 
   /**
@@ -23,10 +28,12 @@ export class SettingsController {
    */
   popType(): boolean {
     if (this.typeStack.length > 0) {
-      // 从堆栈中取出上一个类型
+      // 从堆栈中取出上一个类型和参数
       const previousType = this.typeStack.pop()
+      const previousParams = this.paramsStack.pop()
       if (previousType) {
         this.type = previousType
+        this.params = previousParams
         return true
       }
     }
@@ -46,6 +53,8 @@ export class SettingsController {
    */
   clearStack(): void {
     this.typeStack = []
+    this.paramsStack = []
+    this.params = undefined
   }
 
   /**
@@ -54,6 +63,8 @@ export class SettingsController {
    */
   reset(initialType: SettingType = SettingType.HOME): void {
     this.typeStack = []
+    this.paramsStack = []
     this.type = initialType
+    this.params = undefined
   }
 }

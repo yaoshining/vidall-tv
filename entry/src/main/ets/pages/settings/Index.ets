@@ -3,6 +3,7 @@ import { FileSourceSettingBuilder } from "./builders/FileSourceSettingBuilder"
 import { HomeSettingBuilder } from "./builders/HomeSettingBuilder"
 import { ResourceLibrarySettingBuilder } from "./builders/ResourceLibrarySettingBuilder"
 import { VideoServerSettingBuilder } from "./builders/VideoServerSettingBuilder"
+import { WebDAVConfigBuilder } from "./builders/WebDAVConfigBuilder"
 import { SettingsController } from "./SettingsController"
 import SettingType from "./SettingType"
 
@@ -43,6 +44,9 @@ export struct SettingsPage {
             }
             if (this.controller.type === SettingType.ADD_FILE_SOURCE) {
               AddFileSourceBuilder()
+            }
+            if (this.controller.type === SettingType.WEBDAV_CONFIG) {
+              WebDAVConfigBuilder()
             }
             if (this.controller.type === SettingType.VIDEO_SERVER) {
               VideoServerSettingBuilder()

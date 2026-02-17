@@ -4,4 +4,5 @@ export default class SettingType {
   static VIDEO_SERVER = "videoServer"  // 影视服务器
   static RESOURCE_LIBRARY = "resourceLibrary" // 资源库
   static ADD_FILE_SOURCE = "addFileSource" // 添加文件源
+  static WEBDAV_CONFIG = "webdavConfig" // WebDAV 配置
 }

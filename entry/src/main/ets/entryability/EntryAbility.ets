@@ -2,6 +2,7 @@ import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.Ab
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { IBestInit } from "@ibestservices/ibest-ui"
+import { FileSourceDatabase } from '../lib/database/FileSourceDatabase';
 
 const DOMAIN = 0x0000;
 
@@ -13,6 +14,15 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+
+    // 初始化数据库
+    FileSourceDatabase.getInstance(this.context).init()
+      .then(() => {
+        hilog.info(DOMAIN, 'testTag', 'Database initialized successfully');
+      })
+      .catch((err: Error) => {
+        hilog.error(DOMAIN, 'testTag', 'Failed to init database: %{public}s', JSON.stringify(err));
+      });
   }
 
   onDestroy(): void {

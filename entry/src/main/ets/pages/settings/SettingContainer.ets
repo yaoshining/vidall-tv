@@ -22,7 +22,7 @@ export struct SettingContainer {
         this.menuBuilder()
       }
       .width("100%")
-      .height("100%")
+      .layoutWeight(1)
       .backgroundColor("#222222")
     }
     .id("menuContainer")
