@@ -64,8 +64,9 @@ export class FileSourceStore {
   /**
    * 添加文件源
    * @param fileSource 文件源对象
+   * @returns 新插入的文件源 ID
    */
-  async addFileSource(fileSource: FileSource): Promise<void> {
+  async addFileSource(fileSource: FileSource): Promise<number> {
     try {
       console.info('FileSourceStore: Adding file source');
       const database = FileSourceDatabase.getInstance();
@@ -77,6 +78,7 @@ export class FileSourceStore {
       this.lastUpdateTime = Date.now();
 
       console.info(`FileSourceStore: Added file source with id ${rowId}`);
+      return rowId;
     } catch (error) {
       console.error('FileSourceStore: Failed to add file source', JSON.stringify(error));
       throw new Error('Failed to add file source: ' + JSON.stringify(error));

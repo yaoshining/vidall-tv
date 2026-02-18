@@ -4,6 +4,7 @@ import { HomeSettingBuilder } from "./builders/HomeSettingBuilder"
 import { ResourceLibrarySettingBuilder } from "./builders/ResourceLibrarySettingBuilder"
 import { VideoServerSettingBuilder } from "./builders/VideoServerSettingBuilder"
 import { WebDAVConfigBuilder } from "./builders/WebDAVConfigBuilder"
+import { DirectorySelectorBuilder } from "./builders/DirectorySelectorBuilder"
 import { SettingsController } from "./SettingsController"
 import SettingType from "./SettingType"
 
@@ -22,11 +23,11 @@ export struct SettingsPage {
    * 处理返回操作
    */
   handleBack(): void {
-    // 如果有历史记录，返回上一个菜单
-    if (this.controller.canGoBack()) {
-      this.controller.popType()
-    } else {
-      // 否则关闭设置页面
+    // 使用 controller 的统一返回处理
+    const handled = this.controller.handleBack()
+
+    // 如果 controller 没有处理（返回 false），则关闭设置页面
+    if (!handled) {
       this.pageStack.pop()
     }
   }
@@ -47,6 +48,9 @@ export struct SettingsPage {
             }
             if (this.controller.type === SettingType.WEBDAV_CONFIG) {
               WebDAVConfigBuilder()
+            }
+            if (this.controller.type === SettingType.DIRECTORY_SELECTOR) {
+              DirectorySelectorBuilder()
             }
             if (this.controller.type === SettingType.VIDEO_SERVER) {
               VideoServerSettingBuilder()

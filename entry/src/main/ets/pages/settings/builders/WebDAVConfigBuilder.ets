@@ -1,5 +1,6 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
+import SettingType from "../SettingType"
 import { FileSourceStore } from "../../../lib/stores/FileSourceStore"
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel"
 import { DebounceUtil, CancellableFunction } from "../../../lib/utils/DebounceUtil"
@@ -290,18 +291,52 @@ struct WebDAVConfigBuilderComponent {
       }
 
       const store = FileSourceStore.getInstance()
+      let sourceId: number
 
       if (this.isEditMode && this.editingFileSourceId) {
         // 更新模式
         fileSource.id = this.editingFileSourceId
         await store.updateFileSource(fileSource)
+        sourceId = this.editingFileSourceId
       } else {
         // 新增模式
-        await store.addFileSource(fileSource)
+        sourceId = await store.addFileSource(fileSource)
       }
 
-      promptAction.showToast({ message: '保存成功' })
-      this.controller.popType()
+      // 构造完整的 baseUrl
+      let serverAddress = this.serverUrl
+      let port = this.port
+
+      // 如果服务器地址中已经包含端口，提取它们
+      if (serverAddress.includes(':')) {
+        const parts = serverAddress.split(':')
+        serverAddress = parts[0]
+        const portInUrl = parseInt(parts[1])
+        if (!isNaN(portInUrl)) {
+          port = portInUrl
+        }
+      }
+
+      // 构造基础 URL
+      let baseUrl = `${this.protocol}://${serverAddress}:${port}`
+
+      // 添加路径
+      if (path !== '/') {
+        const formattedPath = path.startsWith('/') ? path : '/' + path
+        baseUrl = baseUrl + formattedPath
+      }
+
+      // 跳转到文件夹选择器
+      const params: ESObject = {}
+      params['sourceId'] = sourceId as Object
+      params['baseUrl'] = baseUrl as Object
+      params['username'] = this.username as Object
+      params['password'] = this.password as Object
+      params['protocol'] = this.protocol as Object
+      params['port'] = port as Object
+      params['rootPath'] = path as Object
+
+      this.controller.pushType(SettingType.DIRECTORY_SELECTOR, params as Record<string, Object>)
     } catch (error) {
       AlertDialog.show({
         title: '保存失败',

@@ -8,6 +8,33 @@ export class SettingsController {
   private typeStack: SettingType[] = []
   private paramsStack: (Record<string, Object> | undefined)[] = []
 
+  // 自定义返回处理器
+  private customBackHandler: (() => boolean) | null = null
+
+  /**
+   * 设置自定义返回处理器
+   * @param handler 返回处理函数，返回 true 表示已处理，false 表示使用默认行为
+   */
+  setBackHandler(handler: (() => boolean) | null): void {
+    this.customBackHandler = handler
+  }
+
+  /**
+   * 处理返回操作
+   * @returns true 表示已处理，false 表示使用默认行为
+   */
+  handleBack(): boolean {
+    // 先尝试自定义处理器
+    if (this.customBackHandler) {
+      const handled = this.customBackHandler()
+      if (handled) {
+        return true
+      }
+    }
+    // 默认行为：从堆栈弹出
+    return this.popType()
+  }
+
   /**
    * 推入新的设置类型到堆栈
    * @param newType 新的设置类型

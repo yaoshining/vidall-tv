@@ -301,6 +301,91 @@ export class FileSourceDatabase {
       createdAt: createdAt
     };
   }
+
+  /**
+   * 批量插入文件源目录关联
+   */
+  async insertDirectories(sourceId: number, paths: string[]): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+
+    if (paths.length === 0) {
+      console.info('FileSourceDatabase: No directories to insert');
+      return;
+    }
+
+    try {
+      // 批量插入目录记录
+      for (const path of paths) {
+        const valueBucket: relationalStore.ValuesBucket = {
+          source_id: sourceId,
+          directory_path: path
+        };
+        await this.rdbStore.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
+      }
+      console.info(`FileSourceDatabase: Inserted ${paths.length} directory(ies) for source ${sourceId}`);
+    } catch (error) {
+      console.error('FileSourceDatabase: Failed to insert directories', JSON.stringify(error));
+      throw new Error('Failed to insert directories: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 删除指定文件源的所有目录关联
+   */
+  async deleteDirectoriesBySourceId(sourceId: number): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
+      predicates.equalTo('source_id', sourceId);
+
+      const rows = await this.rdbStore.delete(predicates);
+      console.info(`FileSourceDatabase: Deleted ${rows} directory(ies) for source ${sourceId}`);
+    } catch (error) {
+      console.error('FileSourceDatabase: Failed to delete directories', JSON.stringify(error));
+      throw new Error('Failed to delete directories: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 查询指定文件源的所有目录关联
+   */
+  async getDirectoriesBySourceId(sourceId: number): Promise<import('../models/FileSourceModel').FileSourceDirectory[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
+      predicates.equalTo('source_id', sourceId);
+
+      const resultSet = await this.rdbStore.query(predicates);
+
+      const directories: import('../models/FileSourceModel').FileSourceDirectory[] = [];
+      while (resultSet.goToNextRow()) {
+        const id = resultSet.getLong(resultSet.getColumnIndex('id'));
+        const sourceIdVal = resultSet.getLong(resultSet.getColumnIndex('source_id'));
+        const directoryPath = resultSet.getString(resultSet.getColumnIndex('directory_path'));
+
+        directories.push({
+          id: id,
+          sourceId: sourceIdVal,
+          directoryPath: directoryPath
+        });
+      }
+
+      resultSet.close();
+      console.info(`FileSourceDatabase: Retrieved ${directories.length} directory(ies) for source ${sourceId}`);
+      return directories;
+    } catch (error) {
+      console.error('FileSourceDatabase: Failed to get directories', JSON.stringify(error));
+      throw new Error('Failed to get directories: ' + JSON.stringify(error));
+    }
+  }
 }
 
 

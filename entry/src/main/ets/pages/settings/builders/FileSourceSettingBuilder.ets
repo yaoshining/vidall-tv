@@ -4,7 +4,7 @@ import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
 import { FileSourceStore } from "../../../lib/stores/FileSourceStore";
-import { FileSource, FileSourceType } from "../../../lib/models/FileSourceModel";
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel";
 import {
   WebdavIcon,
   SmbIcon,
@@ -126,6 +126,74 @@ struct FileSourceSettingBuilderComponent {
     // ...existing code...
   }
 
+  /**
+   * 打开文件夹选择器
+   */
+  handleOpenDirectorySelector(fileSource: FileSource): void {
+    console.info('FileSourceSettingBuilder: Open directory selector', fileSource.id)
+
+    // 检查 id 是否存在
+    if (!fileSource.id) {
+      promptAction.showToast({
+        message: '文件源 ID 不存在'
+      } as promptAction.ShowToastOptions)
+      return
+    }
+
+    // 目前只支持 WebDAV 类型
+    if (fileSource.type === FileSourceType.WEBDAV) {
+      try {
+        // 解析配置
+        const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig
+
+        // 构造完整的 baseUrl
+        let serverAddress = config.url
+        let port = config.port
+
+        // 如果服务器地址中已经包含端口，提取它们
+        if (serverAddress.includes(':')) {
+          const parts = serverAddress.split(':')
+          serverAddress = parts[0]
+          const portInUrl = parseInt(parts[1])
+          if (!isNaN(portInUrl)) {
+            port = portInUrl
+          }
+        }
+
+        // 构造基础 URL
+        let baseUrl = `${config.protocol}://${serverAddress}:${port}`
+
+        // 添加路径
+        const path = config.rootPath || '/'
+        if (path !== '/') {
+          const formattedPath = path.startsWith('/') ? path : '/' + path
+          baseUrl = baseUrl + formattedPath
+        }
+
+        // 跳转到文件夹选择器
+        const params: ESObject = {}
+        params['sourceId'] = fileSource.id as Object
+        params['baseUrl'] = baseUrl as Object
+        params['username'] = config.username as Object
+        params['password'] = config.password as Object
+        params['protocol'] = config.protocol as Object
+        params['port'] = port as Object
+        params['rootPath'] = path as Object
+
+        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, params as Record<string, Object>)
+      } catch (error) {
+        console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
+        promptAction.showToast({
+          message: '解析配置失败'
+        } as promptAction.ShowToastOptions)
+      }
+    } else {
+      promptAction.showToast({
+        message: '该类型暂不支持文件夹管理'
+      } as promptAction.ShowToastOptions)
+    }
+  }
+
   build() {
     SettingContainer({
       title: "文件源"
@@ -171,11 +239,8 @@ struct FileSourceSettingBuilderComponent {
               }
             ],
             onItemClick: () => {
-              // 点击进入文件列表详情页（后续实现）
-              console.info('FileSourceSettingBuilder: Click file source', fileSource.id)
-              promptAction.showToast({
-                message: '文件列表功能即将上线'
-              } as promptAction.ShowToastOptions)
+              // 点击打开文件夹选择器
+              this.handleOpenDirectorySelector(fileSource)
             }
           })
         }, (fileSource: FileSource) => fileSource.id?.toString() || '')
