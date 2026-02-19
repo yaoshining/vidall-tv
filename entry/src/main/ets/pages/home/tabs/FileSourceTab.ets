@@ -1,6 +1,10 @@
 import { LengthMetrics } from "@kit.ArkUI"
-import { WebDAVConfig } from "../../../lib/WebDAVClient"
+import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
+import { FileSourceStore } from "../../../lib/stores/FileSourceStore"
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel"
+import { FileSourceDatabase } from "../../../lib/database/FileSourceDatabase"
+import { FileSourceDirectory } from "../../../lib/models/FileSourceModel"
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -14,15 +18,174 @@ const config2: WebDAVConfig = {
   password: 'dartvjhx'
 }
 
+/**
+ * 文件夹项接口，包含文件夹信息和所属文件源信息
+ */
+interface DirectoryItem {
+  directoryPath: string;
+  directoryName: string;
+  fileSourceName: string;
+  fileSource: FileSource;
+}
+
 @ComponentV2
 export struct FileSourceTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
+  @Local fileSourceStore: FileSourceStore = FileSourceStore.getInstance()
+  @Local isLoading: boolean = false
+  @Local directoryItems: DirectoryItem[] = []
+
+  aboutToAppear(): void {
+    // 加载文件夹列表
+    this.loadDirectories()
+  }
+
+  /**
+   * 加载所有文件源的文件夹列表
+   */
+  async loadDirectories(): Promise<void> {
+    try {
+      this.isLoading = true
+
+      // 加载文件源
+      await this.fileSourceStore.loadFileSources()
+
+      // 收集所有文件夹
+      const directories: DirectoryItem[] = []
+      const database = FileSourceDatabase.getInstance()
+
+      for (const fileSource of this.fileSourceStore.fileSources) {
+        if (fileSource.id) {
+          const dirs = await database.getDirectoriesBySourceId(fileSource.id)
+
+          for (const dir of dirs) {
+            // 从路径中提取文件夹名称
+            const pathParts = dir.directoryPath.split('/').filter(p => p.length > 0)
+            const dirName = pathParts.length > 0 ? pathParts[pathParts.length - 1] : '根目录'
+
+            directories.push({
+              directoryPath: dir.directoryPath,
+              directoryName: dirName,
+              fileSourceName: fileSource.name,
+              fileSource: fileSource
+            })
+          }
+        }
+      }
+
+      this.directoryItems = directories
+      console.info(`FileSourceTab: Loaded ${directories.length} directories`)
+    } catch (error) {
+      console.error('FileSourceTab: Failed to load directories', JSON.stringify(error))
+    } finally {
+      this.isLoading = false
+    }
+  }
+
+  /**
+   * 构造 WebDAV 配置并指定初始路径
+   */
+  private buildWebDAVConfigForDirectory(item: DirectoryItem): WebDAVConfig | null {
+    try {
+      const config = JSON.parse(item.fileSource.configJson) as WebDAVSourceConfig
+
+      // 处理服务器地址和端口
+      let serverAddress = config.url
+      let port = config.port
+
+      if (serverAddress.includes(':')) {
+        const parts = serverAddress.split(':')
+        serverAddress = parts[0]
+        const portInUrl = parseInt(parts[1])
+        if (!isNaN(portInUrl)) {
+          port = portInUrl
+        }
+      }
+
+      // 构造基础 URL
+      let baseUrl = `${config.protocol}://${serverAddress}:${port}`
+
+      // 添加根路径
+      const rootPath = config.rootPath || '/'
+      if (rootPath !== '/') {
+        const formattedPath = rootPath.startsWith('/') ? rootPath : '/' + rootPath
+        baseUrl = baseUrl + formattedPath
+      }
+
+      // 将文件夹路径添加到 baseUrl
+      const fullPath = rootPath === '/' ? item.directoryPath : rootPath + item.directoryPath
+
+      return {
+        baseUrl: baseUrl + item.directoryPath,
+        username: config.username,
+        password: config.password,
+        timeout: 10000
+      }
+    } catch (error) {
+      console.error('FileSourceTab: Failed to build WebDAV config', JSON.stringify(error))
+      return null
+    }
+  }
+
+  /**
+   * 处理文件夹点击
+   */
+  private handleDirectoryClick(item: DirectoryItem): void {
+    if (item.fileSource.type === FileSourceType.WEBDAV) {
+      const config = this.buildWebDAVConfigForDirectory(item)
+      if (config) {
+        this.pageStack.pushPath({
+          name: FileExplorerPage.PAGE_NAME,
+          param: config as WebDAVConfig
+        }, false)
+      }
+    } else {
+      console.warn('FileSourceTab: Unsupported file source type', item.fileSource.type)
+    }
+  }
 
   build() {
     GridRow({
       gutter: 10,
       columns: 2
     }) {
+      // 从数据库加载的文件夹列表
+      ForEach(this.directoryItems, (item: DirectoryItem) => {
+        GridCol() {
+          Flex({
+            alignItems: ItemAlign.Center,
+            justifyContent: FlexAlign.Start,
+            space: {
+              main: LengthMetrics.vp(20)
+            }
+          }) {
+            Image($r('app.media.empty_folder'))
+              .height("100%")
+            Flex({
+              direction: FlexDirection.Column,
+              justifyContent: FlexAlign.SpaceAround,
+            }) {
+              Text(item.directoryName)
+                .fontSize($r('app.float.font_subtitle_1'))
+                .fontWeight(FontWeight.Bold)
+              Text(item.fileSourceName)
+                .opacity(0.6)
+                .fontSize(12)
+            }
+            .height("100%")
+          }
+        }
+        .onClick(() => {
+          this.handleDirectoryClick(item)
+        })
+        .height(80)
+        .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+        .borderRadius(6)
+        .backgroundColor("#373737")
+        .hoverEffect(HoverEffect.Highlight)
+      }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}`)
+
+      // 原有的写死的两个配置（保留用于测试）
       GridCol() {
         Flex({
           alignItems: ItemAlign.Center,
