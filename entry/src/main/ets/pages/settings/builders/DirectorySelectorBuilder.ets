@@ -24,11 +24,13 @@ struct DirectorySelectorBuilderComponent {
   @Local errorMessage: string = ''
   @Local currentPath: string = '/'
   @Local selectedPaths: Set<string> = new Set()
+  @Local isAllSelected: boolean = false  // 是否选中了"全部文件夹"
 
   // 私有变量
   private pathHistory: string[] = ['/']
   private sourceId: number = 0
   private webdavClient: WebDAVClient | null = null
+  private previousSelectedPaths: Set<string> = new Set()  // 备份之前的选择状态
 
   aboutToAppear(): void {
     // 注册自定义返回处理器
@@ -97,7 +99,14 @@ struct DirectorySelectorBuilderComponent {
         this.selectedPaths.add(dir.directoryPath)
       })
 
-      console.info(`DirectorySelector: Loaded ${this.selectedPaths.size} selected paths`)
+      // 检查是否选择了"全部文件夹"（根路径标记）
+      if (this.selectedPaths.has('/') && this.selectedPaths.size === 1) {
+        // 只有一个路径且是根路径，说明用户之前选择了"全部文件夹"
+        this.isAllSelected = true
+        console.info('DirectorySelector: Detected "all folders" selection')
+      }
+
+      console.info(`DirectorySelector: Loaded ${this.selectedPaths.size} selected paths, isAllSelected: ${this.isAllSelected}`)
     } catch (error) {
       console.error('DirectorySelector: Failed to load selected directories', JSON.stringify(error))
       // 不阻断流程，继续执行
@@ -337,6 +346,26 @@ struct DirectorySelectorBuilderComponent {
     this.loadCurrentDirectory()
   }
 
+  /**
+   * 全部选择或取消选择
+   */
+  private handleSelectAll(): void {
+    if (this.isAllSelected) {
+      // 取消全选 - 恢复之前的选择状态
+      this.selectedPaths = new Set(this.previousSelectedPaths)
+      this.isAllSelected = false
+      console.info('DirectorySelector: Deselected all folders, restored previous selection')
+    } else {
+      // 全选 - 备份当前选择，然后只保存根路径标记
+      this.previousSelectedPaths = new Set(this.selectedPaths)
+
+      // 清空当前选择，只保留根路径标记表示"全部文件夹"
+      this.selectedPaths = new Set(['/'])
+      this.isAllSelected = true
+      console.info('DirectorySelector: Selected all folders (saved as root path)')
+    }
+  }
+
   build() {
     SettingContainer({
       title: "选择文件夹"
@@ -429,6 +458,35 @@ struct DirectorySelectorBuilderComponent {
             // 文件夹列表
             Scroll() {
               Column({ space: 0 }) {
+                // "全部文件夹"选项（始终在最顶部）
+                Row() {
+                  Text('📂')
+                    .fontSize(24)
+                    .margin({ right: 12 })
+
+                  Text('全部文件夹')
+                    .fontSize(16)
+                    .fontColor($r('sys.color.ohos_id_color_emphasize'))
+                    .fontWeight(FontWeight.Medium)
+                    .layoutWeight(1)
+
+                  Checkbox()
+                    .select(this.isAllSelected)
+                    .selectedColor($r('sys.color.ohos_id_color_emphasize'))
+                    .onChange(() => {
+                      this.handleSelectAll()
+                    })
+                }
+                .width('100%')
+                .height(56)
+                .padding({ left: 16, right: 16 })
+                .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+                .border({
+                  width: { bottom: 2 },
+                  color: $r('sys.color.ohos_id_color_emphasize')
+                })
+
+                // 具体文件夹列表
                 ForEach(this.directories, (directory: WebDAVResource) => {
                   Row() {
                     Text('📁')
@@ -442,18 +500,24 @@ struct DirectorySelectorBuilderComponent {
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-                    Checkbox()
-                      .select(this.isSelected(directory))
-                      .selectedColor($r('sys.color.ohos_id_color_emphasize'))
-                      .onChange(() => {
-                        this.handleToggleSelection(directory)
-                      })
+                    // 当选中"全部文件夹"时，隐藏具体文件夹的选择框
+                    if (!this.isAllSelected) {
+                      Checkbox()
+                        .select(this.isSelected(directory))
+                        .selectedColor($r('sys.color.ohos_id_color_emphasize'))
+                        .onChange(() => {
+                          this.handleToggleSelection(directory)
+                        })
+                    }
                   }
                   .width('100%')
                   .height(56)
                   .padding({ left: 16, right: 16 })
                   .onClick(() => {
-                    this.handleEnterDirectory(directory)
+                    // 只有未选中"全部文件夹"时才允许进入子目录
+                    if (!this.isAllSelected) {
+                      this.handleEnterDirectory(directory)
+                    }
                   })
                   .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
                   .border({
@@ -462,9 +526,12 @@ struct DirectorySelectorBuilderComponent {
                   })
                   .stateStyles({
                     pressed: {
-                      .backgroundColor($r('sys.color.ohos_id_color_click_effect'))
+                      .backgroundColor(this.isAllSelected ?
+                        $r('sys.color.ohos_id_color_sub_background') :
+                        $r('sys.color.ohos_id_color_click_effect'))
                     }
                   })
+                  .opacity(this.isAllSelected ? 0.5 : 1)  // 选中"全部"时降低透明度
                 }, (directory: WebDAVResource) => directory.href)
               }
             }
@@ -511,17 +578,3 @@ struct DirectorySelectorBuilderComponent {
 export function DirectorySelectorBuilder() {
   DirectorySelectorBuilderComponent()
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
