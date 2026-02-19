@@ -5,6 +5,7 @@ import { FileSourceStore } from "../../../lib/stores/FileSourceStore"
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel"
 import { FileSourceDatabase } from "../../../lib/database/FileSourceDatabase"
 import { FileSourceDirectory } from "../../../lib/models/FileSourceModel"
+import promptAction from '@ohos.promptAction'
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -33,22 +34,55 @@ export struct FileSourceTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Local fileSourceStore: FileSourceStore = FileSourceStore.getInstance()
   @Local isLoading: boolean = false
+  @Local isRefreshing: boolean = false
   @Local directoryItems: DirectoryItem[] = []
+  private refreshTimer: number = -1
 
   aboutToAppear(): void {
     // 加载文件夹列表
     this.loadDirectories()
+
+    // 监听文件源变化，自动刷新列表
+    this.startAutoRefresh()
+  }
+
+  aboutToDisappear(): void {
+    // 清除定时器
+    if (this.refreshTimer !== -1) {
+      clearInterval(this.refreshTimer)
+      this.refreshTimer = -1
+    }
+  }
+
+  /**
+   * 启动自动刷新监听
+   * 每隔一段时间检查文件源是否有变化
+   */
+  private startAutoRefresh(): void {
+    // 每3秒检查一次是否需要刷新
+    this.refreshTimer = setInterval(() => {
+      // 强制重新加载文件源缓存
+      this.fileSourceStore.loadFileSources(true).then(() => {
+        // 静默刷新目录列表
+        this.loadDirectories(true)
+      }).catch((error: BusinessError) => {
+        console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
+      })
+    }, 3000)
   }
 
   /**
    * 加载所有文件源的文件夹列表
+   * @param silent 是否静默加载（不显示加载状态）
    */
-  async loadDirectories(): Promise<void> {
+  async loadDirectories(silent: boolean = false): Promise<void> {
     try {
-      this.isLoading = true
+      if (!silent) {
+        this.isLoading = true
+      }
 
-      // 加载文件源
-      await this.fileSourceStore.loadFileSources()
+      // 加载文件源（强制刷新）
+      await this.fileSourceStore.loadFileSources(true)
 
       // 收集所有文件夹
       const directories: DirectoryItem[] = []
@@ -77,8 +111,15 @@ export struct FileSourceTab {
       console.info(`FileSourceTab: Loaded ${directories.length} directories`)
     } catch (error) {
       console.error('FileSourceTab: Failed to load directories', JSON.stringify(error))
+      if (!silent) {
+        promptAction.showToast({
+          message: '加载失败'
+        } as promptAction.ShowToastOptions)
+      }
     } finally {
-      this.isLoading = false
+      if (!silent) {
+        this.isLoading = false
+      }
     }
   }
 
@@ -144,119 +185,72 @@ export struct FileSourceTab {
     }
   }
 
+  /**
+   * 处理下拉刷新
+   */
+  private async handleRefresh(): Promise<void> {
+    this.isRefreshing = true
+
+    try {
+      // 强制重新加载数据
+      await this.loadDirectories()
+
+      promptAction.showToast({
+        message: '刷新成功'
+      } as promptAction.ShowToastOptions)
+    } catch (error) {
+      console.error('FileSourceTab: Refresh failed', JSON.stringify(error))
+      promptAction.showToast({
+        message: '刷新失败'
+      } as promptAction.ShowToastOptions)
+    } finally {
+      this.isRefreshing = false
+    }
+  }
+
   build() {
-    GridRow({
-      gutter: 10,
-      columns: 2
-    }) {
-      // 从数据库加载的文件夹列表
-      ForEach(this.directoryItems, (item: DirectoryItem) => {
-        GridCol() {
-          Flex({
-            alignItems: ItemAlign.Center,
-            justifyContent: FlexAlign.Start,
-            space: {
-              main: LengthMetrics.vp(20)
-            }
-          }) {
-            Image($r('app.media.empty_folder'))
-              .height("100%")
+    Refresh({ refreshing: $$this.isRefreshing }) {
+      GridRow({
+        gutter: 10,
+        columns: 2
+      }) {
+        // 从数据库加载的文件夹列表
+        ForEach(this.directoryItems, (item: DirectoryItem) => {
+          GridCol() {
             Flex({
-              direction: FlexDirection.Column,
-              justifyContent: FlexAlign.SpaceAround,
+              alignItems: ItemAlign.Center,
+              justifyContent: FlexAlign.Start,
+              space: {
+                main: LengthMetrics.vp(20)
+              }
             }) {
-              Text(item.directoryName)
-                .fontSize($r('app.float.font_subtitle_1'))
-                .fontWeight(FontWeight.Bold)
-              Text(item.fileSourceName)
-                .opacity(0.6)
-                .fontSize(12)
+              Image($r('app.media.empty_folder'))
+                .height("100%")
+              Flex({
+                direction: FlexDirection.Column,
+                justifyContent: FlexAlign.SpaceAround,
+              }) {
+                Text(item.directoryName)
+                  .fontSize($r('app.float.font_subtitle_1'))
+                  .fontWeight(FontWeight.Bold)
+                Text(item.fileSourceName)
+                  .opacity(0.6)
+                  .fontSize(12)
+              }
+              .height("100%")
             }
-            .height("100%")
           }
-        }
-        .onClick(() => {
-          this.handleDirectoryClick(item)
-        })
-        .height(80)
-        .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-        .borderRadius(6)
-        .backgroundColor("#373737")
-        .hoverEffect(HoverEffect.Highlight)
-      }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}`)
+          .onClick(() => {
+            this.handleDirectoryClick(item)
+          })
+          .height(80)
+          .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+          .borderRadius(6)
+          .backgroundColor("#373737")
+          .hoverEffect(HoverEffect.Highlight)
+        }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}`)
 
-      // 原有的写死的两个配置（保留用于测试）
-      GridCol() {
-        Flex({
-          alignItems: ItemAlign.Center,
-          justifyContent: FlexAlign.Start,
-          space: {
-            main: LengthMetrics.vp(20)
-          }
-        }) {
-          Image($r('app.media.empty_folder'))
-            .height("100%")
-          Flex({
-            direction: FlexDirection.Column,
-            justifyContent: FlexAlign.SpaceAround,
-          }) {
-            Text("全部文件")
-              .fontSize($r('app.float.font_subtitle_1'))
-              .fontWeight(FontWeight.Bold)
-            Text("我的OpenList")
-              .opacity(0.6)
-          }
-          .height("100%")
-        }
-      }
-      .onClick(() => {
-        this.pageStack.pushPath({
-          name: FileExplorerPage.PAGE_NAME,
-          param: config1 as WebDAVConfig
-        }, false)
-      })
-      .height(80)
-      .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-      .borderRadius(6)
-      .backgroundColor("#373737")
-      .hoverEffect(HoverEffect.Highlight)
-
-      GridCol() {
-        Flex({
-          alignItems: ItemAlign.Center,
-          justifyContent: FlexAlign.Start,
-          space: {
-            main: LengthMetrics.vp(20)
-          }
-        }) {
-          Image($r('app.media.empty_folder'))
-            .height("100%")
-          Flex({
-            direction: FlexDirection.Column,
-            justifyContent: FlexAlign.SpaceAround,
-          }) {
-            Text("全部文件")
-              .fontSize($r('app.float.font_subtitle_1'))
-              .fontWeight(FontWeight.Bold)
-            Text("我的PickPack")
-              .opacity(0.6)
-          }
-          .height("100%")
-        }
-      }
-      .onClick(() => {
-        this.pageStack.pushPath({
-          name: FileExplorerPage.PAGE_NAME,
-          param: config2 as WebDAVConfig
-        }, false)
-      })
-      .height(80)
-      .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-      .borderRadius(6)
-      .backgroundColor("#373737")
-      .hoverEffect(HoverEffect.Highlight)
-
-      ForEach(Array.from(Array(10)), () => {
+        // 原有的写死的两个配置（保留用于测试）
         GridCol() {
           Flex({
             alignItems: ItemAlign.Center,
@@ -274,18 +268,93 @@ export struct FileSourceTab {
               Text("全部文件")
                 .fontSize($r('app.float.font_subtitle_1'))
                 .fontWeight(FontWeight.Bold)
-              Text("我的WebDAV")
+              Text("我的OpenList")
                 .opacity(0.6)
             }
             .height("100%")
           }
         }
+        .onClick(() => {
+          this.pageStack.pushPath({
+            name: FileExplorerPage.PAGE_NAME,
+            param: config1 as WebDAVConfig
+          }, false)
+        })
         .height(80)
         .padding({ left: 20, right: 20, top: 10, bottom: 10 })
         .borderRadius(6)
         .backgroundColor("#373737")
         .hoverEffect(HoverEffect.Highlight)
-      })
+
+        GridCol() {
+          Flex({
+            alignItems: ItemAlign.Center,
+            justifyContent: FlexAlign.Start,
+            space: {
+              main: LengthMetrics.vp(20)
+            }
+          }) {
+            Image($r('app.media.empty_folder'))
+              .height("100%")
+            Flex({
+              direction: FlexDirection.Column,
+              justifyContent: FlexAlign.SpaceAround,
+            }) {
+              Text("全部文件")
+                .fontSize($r('app.float.font_subtitle_1'))
+                .fontWeight(FontWeight.Bold)
+              Text("我的PickPack")
+                .opacity(0.6)
+            }
+            .height("100%")
+          }
+        }
+        .onClick(() => {
+          this.pageStack.pushPath({
+            name: FileExplorerPage.PAGE_NAME,
+            param: config2 as WebDAVConfig
+          }, false)
+        })
+        .height(80)
+        .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+        .borderRadius(6)
+        .backgroundColor("#373737")
+        .hoverEffect(HoverEffect.Highlight)
+
+        ForEach(Array.from(Array(10)), () => {
+          GridCol() {
+            Flex({
+              alignItems: ItemAlign.Center,
+              justifyContent: FlexAlign.Start,
+              space: {
+                main: LengthMetrics.vp(20)
+              }
+            }) {
+              Image($r('app.media.empty_folder'))
+                .height("100%")
+              Flex({
+                direction: FlexDirection.Column,
+                justifyContent: FlexAlign.SpaceAround,
+              }) {
+                Text("全部文件")
+                  .fontSize($r('app.float.font_subtitle_1'))
+                  .fontWeight(FontWeight.Bold)
+                Text("我的WebDAV")
+                  .opacity(0.6)
+              }
+              .height("100%")
+            }
+          }
+          .height(80)
+          .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+          .borderRadius(6)
+          .backgroundColor("#373737")
+          .hoverEffect(HoverEffect.Highlight)
+        })
+      }
     }
+    .onRefreshing(() => {
+      this.handleRefresh()
+    })
   }
 }
