@@ -1,11 +1,10 @@
 import { LengthMetrics } from "@kit.ArkUI"
-import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
+import { WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
 import promptAction from '@ohos.promptAction'
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
-import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
-import { FileSourceModel } from "../../../stores/files/FileSourceModel"
+import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -19,28 +18,17 @@ const config2: WebDAVConfig = {
   password: 'dartvjhx'
 }
 
-/**
- * 文件夹项接口，包含文件夹信息和所属文件源信息
- */
-interface DirectoryItem {
-  directoryPath: string;
-  directoryName: string;
-  fileSourceName: string;
-  fileSource: FileSource;
-}
-
 @ComponentV2
 export struct FileSourceTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Local fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local isLoading: boolean = false
   @Local isRefreshing: boolean = false
-  @Local directoryItems: DirectoryItem[] = []
   private refreshTimer: number = -1
 
   aboutToAppear(): void {
-    // 加载文件夹列表
-    this.loadDirectories()
+    // 更新软件源
+    this.fileSourceModel.loadFileSources(true)
 
     // 监听文件源变化，自动刷新列表
     this.startAutoRefresh()
@@ -78,58 +66,6 @@ export struct FileSourceTab {
       //   console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
       // })
     }, 3000)
-  }
-
-  /**
-   * 加载所有文件源的文件夹列表
-   * @param silent 是否静默加载（不显示加载状态）
-   */
-  async loadDirectories(silent: boolean = false): Promise<void> {
-    try {
-      if (!silent) {
-        this.isLoading = true
-      }
-
-      // 加载文件源（强制刷新）
-      await this.fileSourceModel.loadFileSources(true)
-
-      // 收集所有文件夹
-      const directories: DirectoryItem[] = []
-      const database = FileSourceDatabase.getInstance()
-
-      for (const fileSource of this.fileSourceModel.fileSources) {
-        if (fileSource.id) {
-          const dirs = await database.getDirectoriesBySourceId(fileSource.id)
-
-          for (const dir of dirs) {
-            // 从路径中提取文件夹名称
-            const pathParts = dir.directoryPath.split('/').filter(p => p.length > 0)
-            const dirName = pathParts.length > 0 ? pathParts[pathParts.length - 1] : '根目录'
-
-            directories.push({
-              directoryPath: dir.directoryPath,
-              directoryName: dirName,
-              fileSourceName: fileSource.name,
-              fileSource: fileSource
-            })
-          }
-        }
-      }
-
-      this.directoryItems = directories
-      console.info(`FileSourceTab: Loaded ${directories.length} directories`)
-    } catch (error) {
-      console.error('FileSourceTab: Failed to load directories', JSON.stringify(error))
-      if (!silent) {
-        promptAction.showToast({
-          message: '加载失败'
-        } as promptAction.ShowToastOptions)
-      }
-    } finally {
-      if (!silent) {
-        this.isLoading = false
-      }
-    }
   }
 
   /**
@@ -202,9 +138,9 @@ export struct FileSourceTab {
 
     try {
       // 强制重新加载数据
-      await this.loadDirectories()
+      await this.fileSourceModel.loadFileSources(true)
 
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '刷新成功'
       } as promptAction.ShowToastOptions)
     } catch (error) {
@@ -224,7 +160,7 @@ export struct FileSourceTab {
         columns: 2
       }) {
         // 从数据库加载的文件夹列表
-        ForEach(this.directoryItems, (item: DirectoryItem) => {
+        ForEach(this.fileSourceModel.directories, (item: DirectoryItem) => {
           GridCol() {
             Flex({
               alignItems: ItemAlign.Center,

@@ -4,6 +4,8 @@ import { WebDAVClient, WebDAVConfig, WebDAVResource } from "../../../lib/WebDAVC
 import promptAction from '@ohos.promptAction'
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { FileSourceDirectory } from "../../../db/models/FileSourceEntity";
+import { FileSourceModel } from "../../../stores/files/FileSourceModel";
+import { FileSourceStore } from "../../../stores/files/FileSourceStore";
 
 /**
  * 面包屑项接口
@@ -25,6 +27,7 @@ struct DirectorySelectorBuilderComponent {
   @Local currentPath: string = '/'
   @Local selectedPaths: Set<string> = new Set()
   @Local isAllSelected: boolean = false  // 是否选中了"全部文件夹"
+  fileSourceModel: FileSourceModel = FileSourceStore.getState()
 
   // 私有变量
   private pathHistory: string[] = ['/']
@@ -227,6 +230,7 @@ struct DirectorySelectorBuilderComponent {
       // 插入新选择
       const pathsArray = Array.from(this.selectedPaths)
       await database.insertDirectories(this.sourceId, pathsArray)
+      await this.fileSourceModel.loadFileSources(true)
 
       console.info(`DirectorySelector: Saved ${pathsArray.length} directories`)
 

@@ -2,6 +2,16 @@ import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { FileSource } from "../../db/models/FileSourceEntity";
 
 /**
+ * 文件夹项接口，包含文件夹信息和所属文件源信息
+ */
+export interface DirectoryItem {
+  directoryPath: string;
+  directoryName: string;
+  fileSourceName: string;
+  fileSource: FileSource;
+}
+
+/**
  * 文件源缓存管理类
  * 使用单例模式管理文件源数据缓存
  */
@@ -12,6 +22,8 @@ export class FileSourceModel {
 
   // 文件源列表
   @Trace fileSources: FileSource[] = [];
+
+  @Trace directories: DirectoryItem[] = [];
 
   // 是否已加载
   @Trace isLoaded: boolean = false;
@@ -36,6 +48,7 @@ export class FileSourceModel {
       console.info('FileSourceStore: Loading file sources from database');
       const database = FileSourceDatabase.getInstance();
       this.fileSources = await database.getAllFileSources();
+      await this.loadFileSourceDirectories(this.fileSources)
       this.isLoaded = true;
       this.lastUpdateTime = now;
       console.info(`FileSourceStore: Loaded ${this.fileSources.length} file source(s)`);
@@ -43,6 +56,32 @@ export class FileSourceModel {
       console.error('FileSourceStore: Failed to load file sources', JSON.stringify(error));
       throw new Error('Failed to load file sources: ' + JSON.stringify(error));
     }
+  }
+
+  private async loadFileSourceDirectories(fileSources: FileSource[]) {
+    const directories: DirectoryItem[] = []
+    const database = FileSourceDatabase.getInstance()
+
+    for (const fileSource of fileSources) {
+      if (fileSource.id) {
+        const dirs = await database.getDirectoriesBySourceId(fileSource.id)
+
+        for (const dir of dirs) {
+          // 从路径中提取文件夹名称
+          const pathParts = dir.directoryPath.split('/').filter(p => p.length > 0)
+          const dirName = pathParts.length > 0 ? pathParts[pathParts.length - 1] : '根目录'
+
+          directories.push({
+            directoryPath: dir.directoryPath,
+            directoryName: dirName,
+            fileSourceName: fileSource.name,
+            fileSource: fileSource
+          })
+        }
+      }
+    }
+
+    this.directories = directories
   }
 
   /**
