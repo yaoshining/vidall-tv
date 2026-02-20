@@ -2,6 +2,7 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../db/models/FileSourceEntity';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
+import { VideoInfoUtil } from './VideoInfoUtil';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -228,6 +229,37 @@ export class WebDAVAdapter implements ISourceAdapter {
           );
 
           results.push(info);
+
+          // 异步抓取媒体详细信息（不阻塞扫描主流程，失败只打印警告）
+          const authHeader = this.client.getAuthHeaderPublic();
+          const httpHeader: Record<string, string> = authHeader ? { 'Authorization': authHeader } : {};
+          const fullUrl = this.client.getFullUrl(relativePath);
+          VideoInfoUtil.fetch(fullUrl, httpHeader).then((videoInfo) => {
+            if (videoInfo.success) {
+              console.info(
+                `[VideoScanner][MEDIA] ${fileName} | ` +
+                `时长=${videoInfo.durationText} | ` +
+                `分辨率=${videoInfo.width ?? '?'}x${videoInfo.height ?? '?'} | ` +
+                `编码=${videoInfo.videoCodec ?? '?'} | ` +
+                `帧率=${videoInfo.frameRate ?? '?'}fps | ` +
+                `码率=${videoInfo.bitrate !== undefined ? Math.round(videoInfo.bitrate / 1000) + 'kbps' : '?'} | ` +
+                `音轨=${videoInfo.audioTracks.length} 字幕轨=${videoInfo.subtitleTracks.length}`
+              );
+              videoInfo.audioTracks.forEach((t, i) => {
+                console.info(
+                  `[VideoScanner][MEDIA]   音轨[${i}] codec=${t.codec ?? '?'} ` +
+                  `${t.sampleRate ?? '?'}Hz ${t.channelCount ?? '?'}ch 语言=${t.language ?? '?'}`
+                );
+              });
+              videoInfo.subtitleTracks.forEach((t, i) => {
+                console.info(
+                  `[VideoScanner][MEDIA]   字幕轨[${i}] codec=${t.codec ?? '?'} 语言=${t.language ?? '?'}`
+                );
+              });
+            } else {
+              console.warn(`[VideoScanner][MEDIA] 媒体信息抓取失败: ${fileName} — ${videoInfo.errorMessage ?? ''}`);
+            }
+          });
         }
       }
     }

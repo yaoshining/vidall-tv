@@ -5,6 +5,7 @@ import promptAction from '@ohos.promptAction'
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
+import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -27,11 +28,10 @@ export struct FileSourceTab {
   private refreshTimer: number = -1
 
   aboutToAppear(): void {
-    // 更新软件源
-    this.fileSourceModel.loadFileSources(true)
-
-    // 监听文件源变化，自动刷新列表
-    this.startAutoRefresh()
+    FileSourceDatabase.onReady(() => {
+      // 更新软件源
+      this.fileSourceModel.loadFileSources(true)
+    })
   }
 
   aboutToDisappear(): void {
@@ -46,26 +46,6 @@ export struct FileSourceTab {
   onFileSourcesChange(mon: IMonitor) {
     const newFileSources = mon.value<FileSource[]>("fileSourceStore.fileSources")?.now
     console.log('new file sources: ' + JSON.stringify(newFileSources))
-  }
-
-  /**
-   * 启动自动刷新监听
-   * 每隔一段时间检查文件源是否有变化
-   */
-  private startAutoRefresh(): void {
-    // 每3秒检查一次是否需要刷新
-    this.refreshTimer = setInterval(() => {
-      // this.loadDirectories(true).catch((error: BusinessError) => {
-      //   console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
-      // })
-      // // 强制重新加载文件源缓存
-      // this.fileSourceStore.loadFileSources(true).then(() => {
-      //   // 静默刷新目录列表
-      //   this.loadDirectories(true)
-      // }).catch((error: BusinessError) => {
-      //   console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
-      // })
-    }, 3000)
   }
 
   /**

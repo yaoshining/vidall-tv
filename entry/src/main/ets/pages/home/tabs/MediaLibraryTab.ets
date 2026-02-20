@@ -3,6 +3,7 @@ import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { common } from "@kit.AbilityKit"
 import { picker } from "@kit.CoreFileKit"
 import { PlayerPage, PlayerPageParam } from "../../player"
+import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 
 @ComponentV2
 export struct MediaLibraryTab {
@@ -58,6 +59,11 @@ export struct MediaLibraryTab {
               param: { url } as PlayerPageParam
             }, true)
           })
+      }
+      Column() {
+        Button("扫描视频").onClick((event: ClickEvent) => {
+          VideoScannerUtil.scan(this.getUIContext().getHostContext()!)
+        })
       }
       ForEach(Array.from(Array(50)), (_i: number, index: number) => {
         Row() {

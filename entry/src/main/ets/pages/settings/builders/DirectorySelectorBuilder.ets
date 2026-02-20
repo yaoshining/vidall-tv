@@ -234,7 +234,7 @@ struct DirectorySelectorBuilderComponent {
 
       console.info(`DirectorySelector: Saved ${pathsArray.length} directories`)
 
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '保存成功'
       } as promptAction.ShowToastOptions)
 
@@ -484,7 +484,7 @@ struct DirectorySelectorBuilderComponent {
                 .width('100%')
                 .height(56)
                 .padding({ left: 16, right: 16 })
-                .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+                // .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
                 .border({
                   width: { bottom: 2 },
                   color: $r('sys.color.ohos_id_color_emphasize')
@@ -523,7 +523,7 @@ struct DirectorySelectorBuilderComponent {
                       this.handleEnterDirectory(directory)
                     }
                   })
-                  .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+                  // .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
                   .border({
                     width: { bottom: 1 },
                     color: $r('sys.color.ohos_id_color_list_separator')
@@ -546,7 +546,7 @@ struct DirectorySelectorBuilderComponent {
           }
         }
         .layoutWeight(1)
-        .backgroundColor($r('sys.color.ohos_id_color_background'))
+        // .backgroundColor($r('sys.color.ohos_id_color_background'))
         .alignItems(HorizontalAlign.Start)
 
         // 底部操作栏
@@ -569,11 +569,11 @@ struct DirectorySelectorBuilderComponent {
         }
         .width('100%')
         .padding(16)
-        .backgroundColor($r('sys.color.ohos_id_color_background'))
+        // .backgroundColor($r('sys.color.ohos_id_color_background'))
       }
       .width('100%')
       .height('100%')
-      .backgroundColor($r('sys.color.ohos_id_color_background'))
+      // .backgroundColor($r('sys.color.ohos_id_color_background'))
     }
   }
 }

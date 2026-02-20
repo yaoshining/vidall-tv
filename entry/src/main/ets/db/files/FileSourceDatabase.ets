@@ -2,6 +2,7 @@ import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
+import { emitter } from "@kit.BasicServicesKit";
 
 /**
  * 文件源数据库管理类
@@ -13,6 +14,7 @@ export class FileSourceDatabase {
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
+  private static readonly DATABASE_READY = 'FILE_SOURCES_DB_READY'
 
   // 单例实例
   private static instance: FileSourceDatabase | null = null;
@@ -56,6 +58,7 @@ export class FileSourceDatabase {
       };
 
       this.rdbStore = await relationalStore.getRdbStore(this.context, config);
+      emitter.emit(FileSourceDatabase.DATABASE_READY)
 
       // 创建表
       await this.onCreate(this.rdbStore);
@@ -384,6 +387,14 @@ export class FileSourceDatabase {
     } catch (error) {
       console.error('FileSourceDatabase: Failed to get directories', JSON.stringify(error));
       throw new Error('Failed to get directories: ' + JSON.stringify(error));
+    }
+  }
+
+  static onReady(callback: Callback<emitter.EventData>) {
+    if (FileSourceDatabase.instance && FileSourceDatabase.instance.rdbStore) {
+      callback({})
+    } else {
+      emitter.once(FileSourceDatabase.DATABASE_READY, callback)
     }
   }
 }
