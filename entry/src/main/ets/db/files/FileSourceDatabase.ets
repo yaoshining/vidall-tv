@@ -1,7 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceType } from '../models/FileSourceModel';
-import { CryptoUtil } from '../utils/CryptoUtil';
+import { CryptoUtil } from '../../utils/CryptoUtil';
 
 /**
  * 文件源数据库管理类

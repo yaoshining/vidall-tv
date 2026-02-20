@@ -3,8 +3,6 @@ import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
-import { FileSourceStore } from "../../../lib/stores/FileSourceStore";
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel";
 import {
   WebdavIcon,
   SmbIcon,
@@ -16,6 +14,8 @@ import {
   OtherIcon
 } from "./IconBuilders";
 import promptAction from '@ohos.promptAction';
+import { FileSourceStore } from "../../../stores/files/FileSourceStore";
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceModel";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {
@@ -134,7 +134,7 @@ struct FileSourceSettingBuilderComponent {
 
     // 检查 id 是否存在
     if (!fileSource.id) {
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '文件源 ID 不存在'
       } as promptAction.ShowToastOptions)
       return

@@ -1,13 +1,13 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
 import SettingType from "../SettingType"
-import { FileSourceStore } from "../../../lib/stores/FileSourceStore"
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel"
-import { DebounceUtil, CancellableFunction } from "../../../lib/utils/DebounceUtil"
-import { ValidationUtil } from "../../../lib/utils/ValidationUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import promptAction from '@ohos.promptAction'
 import { IBestButton } from "@ibestservices/ibest-ui"
+import { FileSourceStore } from "../../../stores/files/FileSourceStore"
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceModel"
+import { CancellableFunction, DebounceUtil } from "../../../utils/DebounceUtil"
+import { ValidationUtil } from "../../../utils/ValidationUtil"
 
 @ComponentV2
 struct WebDAVConfigBuilderComponent {
@@ -93,7 +93,7 @@ struct WebDAVConfigBuilderComponent {
         this.port = config.port
         this.rootPath = config.rootPath
       } else {
-        promptAction.showToast({
+        this.getUIContext().getPromptAction().showToast({
           message: '文件源不存在'
         } as promptAction.ShowToastOptions)
         this.controller.popType()
@@ -129,7 +129,8 @@ struct WebDAVConfigBuilderComponent {
 
     // 检查 URL 格式错误
     if (this.urlError) {
-      promptAction.showToast({ message: '请先修正 URL 格式错误' })
+      this.getUIContext().getPromptAction()
+        .showToast({ message: '请先修正 URL 格式错误' })
       return
     }
 

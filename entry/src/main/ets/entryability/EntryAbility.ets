@@ -2,7 +2,7 @@ import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.Ab
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { IBestInit } from "@ibestservices/ibest-ui"
-import { FileSourceDatabase } from '../lib/database/FileSourceDatabase';
+import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 
 const DOMAIN = 0x0000;
 

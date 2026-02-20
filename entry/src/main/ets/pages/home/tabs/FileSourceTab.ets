@@ -1,11 +1,10 @@
 import { LengthMetrics } from "@kit.ArkUI"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
-import { FileSourceStore } from "../../../lib/stores/FileSourceStore"
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../lib/models/FileSourceModel"
-import { FileSourceDatabase } from "../../../lib/database/FileSourceDatabase"
-import { FileSourceDirectory } from "../../../lib/models/FileSourceModel"
 import promptAction from '@ohos.promptAction'
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceModel"
+import { FileSourceStore } from "../../../stores/files/FileSourceStore"
+import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -54,6 +53,12 @@ export struct FileSourceTab {
     }
   }
 
+  @Monitor('fileSourceStore.fileSources')
+  onFileSourcesChange(mon: IMonitor) {
+    const newFileSources = mon.value<FileSource[]>("fileSourceStore.fileSources")?.now
+    console.log('new file sources: ' + JSON.stringify(newFileSources))
+  }
+
   /**
    * 启动自动刷新监听
    * 每隔一段时间检查文件源是否有变化
@@ -61,13 +66,16 @@ export struct FileSourceTab {
   private startAutoRefresh(): void {
     // 每3秒检查一次是否需要刷新
     this.refreshTimer = setInterval(() => {
-      // 强制重新加载文件源缓存
-      this.fileSourceStore.loadFileSources(true).then(() => {
-        // 静默刷新目录列表
-        this.loadDirectories(true)
-      }).catch((error: BusinessError) => {
-        console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
-      })
+      // this.loadDirectories(true).catch((error: BusinessError) => {
+      //   console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
+      // })
+      // // 强制重新加载文件源缓存
+      // this.fileSourceStore.loadFileSources(true).then(() => {
+      //   // 静默刷新目录列表
+      //   this.loadDirectories(true)
+      // }).catch((error: BusinessError) => {
+      //   console.error('FileSourceTab: Auto refresh failed', JSON.stringify(error))
+      // })
     }, 3000)
   }
 
@@ -235,7 +243,6 @@ export struct FileSourceTab {
                   .fontWeight(FontWeight.Bold)
                 Text(item.fileSourceName)
                   .opacity(0.6)
-                  .fontSize(12)
               }
               .height("100%")
             }

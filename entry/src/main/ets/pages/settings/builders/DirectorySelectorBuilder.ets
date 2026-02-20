@@ -1,9 +1,9 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from "../../../lib/WebDAVClient"
-import { FileSourceDatabase } from "../../../lib/database/FileSourceDatabase"
-import { FileSourceDirectory } from "../../../lib/models/FileSourceModel"
 import promptAction from '@ohos.promptAction'
+import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
+import { FileSourceDirectory } from "../../../db/models/FileSourceModel";
 
 /**
  * 面包屑项接口
