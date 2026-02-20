@@ -799,7 +799,9 @@ export class WebDAVClient {
       fullPath = '/' + fullPath;
     }
 
-    console.info('Listing:', fullPath);
+    // 对路径中的空格等特殊字符进行 URL 编码，避免 HTTP 请求行格式错误（400 Bad Request）
+    const encodedPath = this.encodeURIPath(fullPath);
+    console.info('Listing:', fullPath, '→ encoded:', encodedPath);
 
     const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
@@ -825,7 +827,7 @@ export class WebDAVClient {
     }
 
     try {
-      const response = await this.sendRawHttpRequest('PROPFIND', fullPath, headers, propfindBody);
+      const response = await this.sendRawHttpRequest('PROPFIND', encodedPath, headers, propfindBody);
 
       console.info('PROPFIND response:', response.statusCode);
 
@@ -862,6 +864,7 @@ export class WebDAVClient {
 
         console.info('Testing path:', basePath);
 
+        const encodedBasePath = this.encodeURIPath(basePath);
         const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
   <D:prop>
@@ -881,7 +884,7 @@ export class WebDAVClient {
           propfindHeaders['Authorization'] = authHeader;
         }
 
-        const response = await this.sendRawHttpRequest('PROPFIND', basePath, propfindHeaders, propfindBody);
+        const response = await this.sendRawHttpRequest('PROPFIND', encodedBasePath, propfindHeaders, propfindBody);
 
         console.info('PROPFIND response status:', response.statusCode);
 
