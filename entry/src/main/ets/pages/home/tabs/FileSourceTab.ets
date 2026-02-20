@@ -5,6 +5,7 @@ import promptAction from '@ohos.promptAction'
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { FileSourceModel } from "../../../stores/files/FileSourceModel"
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -31,7 +32,7 @@ interface DirectoryItem {
 @ComponentV2
 export struct FileSourceTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
-  @Local fileSourceStore: FileSourceStore = FileSourceStore.getInstance()
+  @Local fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local isLoading: boolean = false
   @Local isRefreshing: boolean = false
   @Local directoryItems: DirectoryItem[] = []
@@ -90,13 +91,13 @@ export struct FileSourceTab {
       }
 
       // 加载文件源（强制刷新）
-      await this.fileSourceStore.loadFileSources(true)
+      await this.fileSourceModel.loadFileSources(true)
 
       // 收集所有文件夹
       const directories: DirectoryItem[] = []
       const database = FileSourceDatabase.getInstance()
 
-      for (const fileSource of this.fileSourceStore.fileSources) {
+      for (const fileSource of this.fileSourceModel.fileSources) {
         if (fileSource.id) {
           const dirs = await database.getDirectoriesBySourceId(fileSource.id)
 

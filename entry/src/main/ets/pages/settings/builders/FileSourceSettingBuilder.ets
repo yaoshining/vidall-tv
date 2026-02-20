@@ -16,11 +16,12 @@ import {
 import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity";
+import { FileSourceModel } from "../../../stores/files/FileSourceModel";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
-  @Local fileSourceStore: FileSourceStore = FileSourceStore.getInstance()
+  @Local fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local isLoading: boolean = false
 
   aboutToAppear(): void {
@@ -31,7 +32,7 @@ struct FileSourceSettingBuilderComponent {
   async loadFileSources(): Promise<void> {
     try {
       this.isLoading = true
-      await this.fileSourceStore.loadFileSources()
+      await this.fileSourceModel.loadFileSources()
     } catch (error) {
       console.error('FileSourceSettingBuilder: Failed to load file sources', JSON.stringify(error))
       promptAction.showToast({
@@ -214,7 +215,7 @@ struct FileSourceSettingBuilderComponent {
         }
 
         // 显示文件源列表
-        ForEach(this.fileSourceStore.fileSources, (fileSource: FileSource) => {
+        ForEach(this.fileSourceModel.fileSources, (fileSource: FileSource) => {
           SettingListItem({
             icon: () => {
               this.getFileSourceTypeIcon(fileSource.type)

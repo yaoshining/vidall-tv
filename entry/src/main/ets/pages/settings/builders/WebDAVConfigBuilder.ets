@@ -76,7 +76,7 @@ struct WebDAVConfigBuilderComponent {
     this.loadingText = '加载中...'
 
     try {
-      const store = FileSourceStore.getInstance()
+      const store = FileSourceStore.getState()
 
       // 确保缓存已加载
       await store.loadFileSources()
@@ -291,7 +291,7 @@ struct WebDAVConfigBuilderComponent {
         createdAt: Date.now()
       }
 
-      const store = FileSourceStore.getInstance()
+      const store = FileSourceStore.getState()
       let sourceId: number
 
       if (this.isEditMode && this.editingFileSourceId) {

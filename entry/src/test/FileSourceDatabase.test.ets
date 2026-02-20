@@ -1,8 +1,7 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
-import { FileSourceDatabase } from '../main/ets/lib/database/FileSourceDatabase';
-import { FileSource, FileSourceType, WebDAVSourceConfig } from '../main/ets/lib/models/FileSourceModel';
-import { CryptoUtil } from '../main/ets/lib/utils/CryptoUtil';
 import relationalStore from '@ohos.data.relationalStore';
+import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
+import { CryptoUtil } from '../main/ets/utils/CryptoUtil';
 
 export default function fileSourceDatabaseTest() {
   describe('FileSourceDatabase', () => {
@@ -369,7 +368,7 @@ export default function fileSourceDatabaseTest() {
         expect(parts.length).assertEqual(2); // iv:ciphertext
 
         // 加密后的内容不应该等于原文
-        expect(encrypted).assertNotEqual(originalText);
+        expect(encrypted).not().assertEqual(originalText);
 
         // 解密
         const decrypted = await CryptoUtil.decrypt(encrypted);
@@ -380,7 +379,7 @@ export default function fileSourceDatabaseTest() {
 
         // 测试多次加密，每次结果应该不同（因为使用随机 IV）
         const encrypted2 = await CryptoUtil.encrypt(originalText);
-        expect(encrypted2).assertNotEqual(encrypted);
+        expect(encrypted2).not().assertEqual(encrypted);
 
         // 但解密后都应该是原文
         const decrypted2 = await CryptoUtil.decrypt(encrypted2);
