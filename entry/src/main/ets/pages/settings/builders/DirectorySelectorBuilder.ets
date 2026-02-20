@@ -3,7 +3,7 @@ import { SettingsController } from "../SettingsController"
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from "../../../lib/WebDAVClient"
 import promptAction from '@ohos.promptAction'
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
-import { FileSourceDirectory } from "../../../db/models/FileSourceModel";
+import { FileSourceDirectory } from "../../../db/models/FileSourceEntity";
 
 /**
  * 面包屑项接口

@@ -15,7 +15,7 @@ import {
 } from "./IconBuilders";
 import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceModel";
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {

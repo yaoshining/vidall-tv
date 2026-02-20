@@ -5,7 +5,7 @@ import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import promptAction from '@ohos.promptAction'
 import { IBestButton } from "@ibestservices/ibest-ui"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceModel"
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { CancellableFunction, DebounceUtil } from "../../../utils/DebounceUtil"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 

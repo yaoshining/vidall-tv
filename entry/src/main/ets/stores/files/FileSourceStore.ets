@@ -1,5 +1,5 @@
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
-import { FileSource } from "../../db/models/FileSourceModel";
+import { FileSource } from "../../db/models/FileSourceEntity";
 
 /**
  * 文件源缓存管理类

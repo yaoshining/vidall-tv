@@ -2,7 +2,7 @@ import { LengthMetrics } from "@kit.ArkUI"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
 import promptAction from '@ohos.promptAction'
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceModel"
+import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 

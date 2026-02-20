@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
-import { FileSource, FileSourceType } from '../models/FileSourceModel';
+import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 
 /**
@@ -354,7 +354,7 @@ export class FileSourceDatabase {
   /**
    * 查询指定文件源的所有目录关联
    */
-  async getDirectoriesBySourceId(sourceId: number): Promise<import('../models/FileSourceModel').FileSourceDirectory[]> {
+  async getDirectoriesBySourceId(sourceId: number): Promise<FileSourceDirectory[]> {
     if (this.rdbStore === null) {
       throw new Error('Database not initialized');
     }
@@ -365,7 +365,7 @@ export class FileSourceDatabase {
 
       const resultSet = await this.rdbStore.query(predicates);
 
-      const directories: import('../models/FileSourceModel').FileSourceDirectory[] = [];
+      const directories: FileSourceDirectory[] = [];
       while (resultSet.goToNextRow()) {
         const id = resultSet.getLong(resultSet.getColumnIndex('id'));
         const sourceIdVal = resultSet.getLong(resultSet.getColumnIndex('source_id'));
