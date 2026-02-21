@@ -10,10 +10,12 @@ import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 // ─────────────────────────────────────────────
 // 常量
 // ─────────────────────────────────────────────
-const POSTER_WIDTH = 120;
-const POSTER_HEIGHT = 180;
-const WIDE_WIDTH = 240;
-const WIDE_HEIGHT = 135;
+const POSTER_WIDTH = 180;
+const PORTRAIT_ASPECT_RATIO = 2/3;
+const LANDSCAPE_ASPECT_RATIO = 16/9;
+
+const WIDE_WIDTH = 360;
+// const WIDE_HEIGHT = 135;
 /** 评分标签卡片尺寸 */
 const RATING_CARD_W = 110;
 const RATING_CARD_H = 60;
@@ -38,6 +40,14 @@ function ratingText(item: MediaItem): string {
   if (item.rating === undefined) { return ''; }
   return item.rating.toFixed(1);
 }
+/** 仅返回 '4K' 或 '1080p'，其他分辨率返回空字符串 */
+function resolutionLabel(width?: number, height?: number): string {
+  if (width === undefined || height === undefined) { return ''; }
+  const h = height > width ? width : height; // 取短边（竖向视频兼容）
+  if (h >= 2160 || width >= 3840) { return '4K'; }
+  if (h >= 1080 || width >= 1920) { return '1080P'; }
+  return '';
+}
 function genreList(item: MediaItem): string[] {
   if (!item.genresJson) { return []; }
   try { return JSON.parse(item.genresJson) as string[]; } catch { return []; }
@@ -59,41 +69,80 @@ struct PosterCard {
   private getPoster(): string { return posterSrc(this.item); }
   private hasPosterImg(): boolean { return hasPoster(this.item); }
   private getRating(): string { return ratingText(this.item); }
+  private getResolution(): string { return resolutionLabel(this.item.width, this.item.height); }
 
   build() {
-    Column() {
-      Stack({ alignContent: Alignment.TopEnd }) {
+    Column({ space: 4 }) {
+      Stack({ alignContent: Alignment.TopStart }) {
+        // 海报图 / 占位
         if (this.hasPosterImg()) {
           Image(this.getPoster())
-            .width(POSTER_WIDTH).height(POSTER_HEIGHT)
-            .objectFit(ImageFit.Cover).borderRadius(6)
+            .width(POSTER_WIDTH)
+            .aspectRatio(PORTRAIT_ASPECT_RATIO)
+            .hoverEffect(HoverEffect.Scale)
+            .objectFit(ImageFit.Cover)
         } else {
           Column() {
             Text(this.getTitle())
               .fontSize(11).fontColor('#CCCCCC').textAlign(TextAlign.Center)
               .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).padding(8)
           }
-          .width(POSTER_WIDTH).height(POSTER_HEIGHT)
+          .width(POSTER_WIDTH)
+          .aspectRatio(PORTRAIT_ASPECT_RATIO)
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
+
+        // 底部黑色渐变（覆盖下方 20%）
+        if (this.getRating().length > 0) {
+          Column()
+            .width(POSTER_WIDTH)
+            .height("28%")
+            .linearGradient({
+              angle: 180,
+              colors: [['#00000000', 0.0], ['#CC000000', 1.0]]
+            })
+            .borderRadius({ bottomLeft: 6, bottomRight: 6 })
+            .position({ left: 0, bottom: 0 })
+        }
+
+        // 右上角分辨率标签
+        if (this.getResolution().length > 0) {
+          Text(this.getResolution())
+            .fontSize(9).fontColor(this.getResolution() === '1080P' ? Color.White : Color.Black)
+            .backgroundColor(this.getResolution() === '1080P' ? '#66000000' : '#FFA500')
+            .padding({ top: 2, bottom: 2 })
+            .borderRadius(4)
+            .width("32fp")
+            .textAlign(TextAlign.Center)
+            .position({ top: 2, right: 2 })
+        }
+
+        // 右下角评分（橘黄色，透明背景）
         if (this.getRating().length > 0) {
           Text(this.getRating())
-            .fontSize(10).fontColor(Color.White).backgroundColor('#CC000000')
-            .padding({ left: 4, right: 4, top: 2, bottom: 2 })
-            .borderRadius({ topRight: 6, bottomLeft: 4 })
+            .fontSize(11).fontColor('#FFA500').fontWeight(FontWeight.Bold)
+            .padding({ left: 4, right: 4, bottom: 4 })
+            .position({ right: 2, bottom: 2 })
         }
       }
+      .borderRadius(6)
+      .clip(true)
+      .width(POSTER_WIDTH)
+      .aspectRatio(PORTRAIT_ASPECT_RATIO)
+
       Text(this.getTitle())
-        .fontSize(11).fontColor('#DDDDDD').maxLines(1)
+        .fontSize(16).fontColor('#DDDDDD').maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width(POSTER_WIDTH).margin({ top: 4 })
+        .textAlign(TextAlign.Center)
     }
-    .width(POSTER_WIDTH).alignItems(HorizontalAlign.Start)
+    .width(POSTER_WIDTH)
+    .alignItems(HorizontalAlign.Start)
   }
 }
 
 // ─────────────────────────────────────────────
-// 合集卡片（电视剧/综艺，显示集数角标）
+// 合集卡片（电视剧/综艺）
 // ─────────────────────────────────────────────
 @ComponentV2
 struct SeriesCard {
@@ -107,33 +156,81 @@ struct SeriesCard {
     return (this.group.posterLocalPath !== undefined && this.group.posterLocalPath.length > 0)
       || (this.group.posterUrl !== undefined && this.group.posterUrl.length > 0);
   }
+  private getRating(): string {
+    if (this.group.rating === undefined) { return ''; }
+    return this.group.rating.toFixed(1);
+  }
+  private getResolution(): string {
+    const ep = this.group.episodes.length > 0 ? this.group.episodes[0] : undefined;
+    if (ep === undefined) { return ''; }
+    return resolutionLabel(ep.width, ep.height);
+  }
 
   build() {
-    Column() {
-      Stack({ alignContent: Alignment.BottomEnd }) {
+    Column({ space: 4 }) {
+      Stack({ alignContent: Alignment.TopStart }) {
+        // 海报图 / 占位
         if (this.hasPosterImg()) {
           Image(this.getPoster())
-            .width(POSTER_WIDTH).height(POSTER_HEIGHT)
-            .objectFit(ImageFit.Cover).borderRadius(6)
+            .width(POSTER_WIDTH)
+            .aspectRatio(PORTRAIT_ASPECT_RATIO)
+            .hoverEffect(HoverEffect.Scale)
+            .objectFit(ImageFit.Cover)
         } else {
           Column() {
             Text(this.getTitle())
               .fontSize(11).fontColor('#CCCCCC').textAlign(TextAlign.Center)
               .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).padding(8)
           }
-          .width(POSTER_WIDTH).height(POSTER_HEIGHT)
+          .width(POSTER_WIDTH)
+          .aspectRatio(PORTRAIT_ASPECT_RATIO)
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
-        // 集数角标
-        Text(`共 ${this.group.episodeCount} 集`)
-          .fontSize(9).fontColor(Color.White).backgroundColor('#CC000000')
-          .padding({ left: 4, right: 4, top: 2, bottom: 2 })
-          .borderRadius({ topLeft: 4, bottomRight: 6 })
+
+        // 底部黑色渐变（覆盖下方 28%）
+        if (this.getRating().length > 0) {
+          Column()
+            .width(POSTER_WIDTH)
+            .height("28%")
+            .linearGradient({
+              angle: 180,
+              colors: [['#00000000', 0.0], ['#CC000000', 1.0]]
+            })
+            .borderRadius({ bottomLeft: 6, bottomRight: 6 })
+            .position({ left: 0, bottom: 0 })
+        }
+
+        // 右上角分辨率标签
+        if (this.getResolution().length > 0) {
+          Text(this.getResolution())
+            .fontSize(9).fontColor(this.getResolution() === '1080P' ? Color.White : Color.Black)
+            .backgroundColor(this.getResolution() === '1080P' ? '#66000000' : '#FFA500')
+            .padding({ top: 2, bottom: 2 })
+            .borderRadius(4)
+            .width('32fp')
+            .textAlign(TextAlign.Center)
+            .position({ top: 2, right: 2 })
+        }
+
+        // 右下角评分（橘黄色，透明背景）
+        if (this.getRating().length > 0) {
+          Text(this.getRating())
+            .fontSize(11).fontColor('#FFA500').fontWeight(FontWeight.Bold)
+            .padding({ left: 4, right: 4, bottom: 4 })
+            .position({ right: 2, bottom: 2 })
+        }
       }
+      .borderRadius(6)
+      .clip(true)
+      .width(POSTER_WIDTH)
+      .aspectRatio(PORTRAIT_ASPECT_RATIO)
+
       Text(this.getTitle())
-        .fontSize(11).fontColor('#DDDDDD').maxLines(1)
+        .fontSize(16).fontColor('#DDDDDD').maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .width(POSTER_WIDTH).margin({ top: 4 })
+        .textAlign(TextAlign.Center)
+        .width(POSTER_WIDTH)
+        .margin({ top: 4 })
     }
     .width(POSTER_WIDTH).alignItems(HorizontalAlign.Start)
   }
@@ -213,7 +310,8 @@ struct GenreCard {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column()
-        .width(WIDE_WIDTH).height(WIDE_HEIGHT)
+        .width(WIDE_WIDTH)
+        .aspectRatio(LANDSCAPE_ASPECT_RATIO)
         .linearGradient({ angle: 135, colors: [['#3A1C71', 0.0], ['#D76D77', 0.5], ['#FFAF7B', 1.0]] })
         .borderRadius(6)
       Column() {
@@ -221,7 +319,8 @@ struct GenreCard {
         Text(`${this.count} 部`).fontSize(11).fontColor('#DDDDDD').margin({ top: 4 })
       }
     }
-    .width(WIDE_WIDTH).height(WIDE_HEIGHT)
+    .width(WIDE_WIDTH)
+    .aspectRatio(LANDSCAPE_ASPECT_RATIO)
   }
 }
 
@@ -245,10 +344,12 @@ struct MixedCard {
   }
 
   build() {
-    if (this.isSeries()) {
-      SeriesCard({ group: this.getSeries() })
-    } else {
-      PosterCard({ item: this.getVideo() })
+    Column() {
+      if (this.isSeries()) {
+        SeriesCard({ group: this.getSeries() })
+      } else {
+        PosterCard({ item: this.getVideo() })
+      }
     }
   }
 }
@@ -271,8 +372,8 @@ struct SectionRow {
         {
           this.content()
         }
-          .padding({ left: 16, right: 16 })
-          .alignItems(VerticalAlign.Top)
+        .padding({ left: 16, right: 16 })
+        .alignItems(VerticalAlign.Top)
       }
       .align(Alignment.Start)
       .scrollable(ScrollDirection.Horizontal)
@@ -293,15 +394,20 @@ struct PlaceholderWideCard {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column()
-        .width(WIDE_WIDTH).height(WIDE_HEIGHT)
-        .backgroundColor('#1A1A2E').borderRadius(6)
+        .width(WIDE_WIDTH)
+        .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+        .backgroundColor('#1A1A2E')
+        .hoverEffect(HoverEffect.Scale)
         .border({ width: 1, color: '#333355', style: BorderStyle.Dashed })
       Column() {
         Text('▶').fontSize(20).fontColor('#555577')
         Text(this.label).fontSize(11).fontColor('#555577').margin({ top: 4 })
       }
     }
-    .width(WIDE_WIDTH).height(WIDE_HEIGHT)
+    .clip(true)
+    .borderRadius(6)
+    .width(WIDE_WIDTH)
+    .aspectRatio(LANDSCAPE_ASPECT_RATIO)
   }
 }
 
