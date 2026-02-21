@@ -35,7 +35,7 @@ struct FileSourceSettingBuilderComponent {
       await this.fileSourceModel.loadFileSources()
     } catch (error) {
       console.error('FileSourceSettingBuilder: Failed to load file sources', JSON.stringify(error))
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '加载文件源失败'
       } as promptAction.ShowToastOptions)
     } finally {

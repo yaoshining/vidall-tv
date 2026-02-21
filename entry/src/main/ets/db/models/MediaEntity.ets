@@ -82,3 +82,91 @@ export interface PlayHistoryEntity {
   updatedAt: number;
 }
 
+/**
+ * 视频 + 刮削信息的聚合视图（UI 展示用）
+ * 对应 videos LEFT JOIN scrape_info
+ */
+export interface MediaItem {
+  // ── videos 字段 ──
+  id: number;
+  sourceId: number;
+  directoryPath: string;
+  filePath: string;
+  fileName: string;
+  fileSize?: number;
+  durationMs?: number;
+  width?: number;
+  height?: number;
+  videoCodec?: string;
+  scannedAt: number;
+  // ── scrape_info 字段（未刮削时为 undefined）──
+  provider?: string;
+  providerId?: string;
+  mediaType?: string;
+  title?: string;
+  originalTitle?: string;
+  overview?: string;
+  releaseDate?: string;
+  rating?: number;
+  genresJson?: string;
+  posterUrl?: string;
+  backdropUrl?: string;
+  posterLocalPath?: string;
+  backdropLocalPath?: string;
+}
+
+/** 媒体统计信息 */
+export interface MediaStats {
+  total: number;
+  movies: number;
+  tv: number;
+  other: number;
+}
+
+/**
+ * 混合列表项：可以是单个视频，也可以是合集
+ * kind='video'  → 单独视频（电影或无法归组的文件）
+ * kind='series' → 多集合集
+ */
+export interface MediaListItem {
+  kind: 'video' | 'series';
+  /** kind='video' 时有值 */
+  video?: MediaItem;
+  /** kind='series' 时有值 */
+  series?: SeriesGroup;
+  /** 用于排序的时间戳（ms） */
+  sortTs: number;
+}
+
+/**
+ * 合集（电视剧/综艺多集归并）
+ * 以 scrape_info 中相同 provider_id 的记录聚合，或以目录名推断
+ */
+export interface SeriesGroup {
+  /** 合集标题（来自 scrape_info.title 或目录名） */
+  title: string;
+  /** 合集海报 URL */
+  posterUrl?: string;
+  posterLocalPath?: string;
+  /** 评分 */
+  rating?: number;
+  /** 集数 */
+  episodeCount: number;
+  /** 所有剧集 */
+  episodes: MediaItem[];
+  /** 最新一集的 scanned_at */
+  latestScannedAt: number;
+}
+
+/**
+ * 年代分组（用于"上映年代"横向滚动）
+ * label: 如 '今年' / '2020s' / '2010s'
+ * years: 该年代内实际有视频的年份列表
+ * count: 该年代视频总数
+ */
+export interface DecadeGroup {
+  label: string;
+  years: string[];
+  count: number;
+}
+

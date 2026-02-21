@@ -1,7 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
-import { VideoEntity, ScrapeInfoEntity } from '../models/MediaEntity';
+import { VideoEntity, ScrapeInfoEntity, MediaItem, MediaStats, SeriesGroup } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { emitter } from "@kit.BasicServicesKit";
 
@@ -674,6 +674,456 @@ export class FileSourceDatabase {
       scrapedAt: get('scraped_at'),
       rawJson: str('raw_json')
     };
+  }
+
+  // ─────────────────────────────────────────────
+  // 媒体库查询（videos JOIN scrape_info）
+  // ─────────────────────────────────────────────
+
+  /**
+   * 查询所有视频（含刮削信息，LEFT JOIN），按 scanned_at 倒序
+   */
+  async getAllMediaItems(): Promise<MediaItem[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const sql = `
+        SELECT v.*, s.provider, s.provider_id, s.media_type, s.title AS scrape_title,
+               s.original_title, s.overview, s.release_date, s.rating,
+               s.genres_json, s.poster_url, s.backdrop_url,
+               s.poster_local_path, s.backdrop_local_path, s.scraped_at
+        FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+        LEFT JOIN ${FileSourceDatabase.TABLE_SCRAPE_INFO} s ON v.id = s.video_id
+        ORDER BY v.scanned_at DESC
+      `;
+      const rs = await this.rdbStore.querySql(sql);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        items.push(this.parseMediaItem(rs));
+      }
+      rs.close();
+      console.info(`[FileSourceDatabase] getAllMediaItems: ${items.length} 条`);
+      return items;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getAllMediaItems 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 按媒体类型查询（movie / tv）
+   */
+  async getMediaItemsByType(mediaType: string): Promise<MediaItem[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const sql = `
+        SELECT v.*, s.provider, s.provider_id, s.media_type, s.title AS scrape_title,
+               s.original_title, s.overview, s.release_date, s.rating,
+               s.genres_json, s.poster_url, s.backdrop_url,
+               s.poster_local_path, s.backdrop_local_path, s.scraped_at
+        FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+        INNER JOIN ${FileSourceDatabase.TABLE_SCRAPE_INFO} s ON v.id = s.video_id
+        WHERE s.media_type = ?
+        ORDER BY v.scanned_at DESC
+      `;
+      const rs = await this.rdbStore.querySql(sql, [mediaType]);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        items.push(this.parseMediaItem(rs));
+      }
+      rs.close();
+      return items;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getMediaItemsByType 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 查询所有有刮削数据的视频，按评分倒序
+   */
+  async getMediaItemsByRating(): Promise<MediaItem[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const sql = `
+        SELECT v.*, s.provider, s.provider_id, s.media_type, s.title AS scrape_title,
+               s.original_title, s.overview, s.release_date, s.rating,
+               s.genres_json, s.poster_url, s.backdrop_url,
+               s.poster_local_path, s.backdrop_local_path, s.scraped_at
+        FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+        INNER JOIN ${FileSourceDatabase.TABLE_SCRAPE_INFO} s ON v.id = s.video_id
+        WHERE s.rating IS NOT NULL
+        ORDER BY s.rating DESC
+      `;
+      const rs = await this.rdbStore.querySql(sql);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        items.push(this.parseMediaItem(rs));
+      }
+      rs.close();
+      return items;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getMediaItemsByRating 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 查询所有不重复的上映年份列表（倒序）
+   */
+  async getDistinctReleaseYears(): Promise<string[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const sql = `
+        SELECT DISTINCT substr(s.release_date, 1, 4) AS year
+        FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s
+        WHERE s.release_date IS NOT NULL AND length(s.release_date) >= 4
+        ORDER BY year DESC
+      `;
+      const rs = await this.rdbStore.querySql(sql);
+      const years: string[] = [];
+      while (rs.goToNextRow()) {
+        const y = rs.getString(rs.getColumnIndex('year'));
+        if (y) {
+          years.push(y);
+        }
+      }
+      rs.close();
+      return years;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getDistinctReleaseYears 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 按上映年份查询视频
+   */
+  async getMediaItemsByYear(year: string): Promise<MediaItem[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const sql = `
+        SELECT v.*, s.provider, s.provider_id, s.media_type, s.title AS scrape_title,
+               s.original_title, s.overview, s.release_date, s.rating,
+               s.genres_json, s.poster_url, s.backdrop_url,
+               s.poster_local_path, s.backdrop_local_path, s.scraped_at
+        FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+        INNER JOIN ${FileSourceDatabase.TABLE_SCRAPE_INFO} s ON v.id = s.video_id
+        WHERE substr(s.release_date, 1, 4) = ?
+        ORDER BY s.release_date DESC
+      `;
+      const rs = await this.rdbStore.querySql(sql, [year]);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        items.push(this.parseMediaItem(rs));
+      }
+      rs.close();
+      return items;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getMediaItemsByYear 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 统计各类型数量
+   */
+  async getMediaStats(): Promise<MediaStats> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const totalRs = await this.rdbStore.querySql(
+        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_VIDEOS}`
+      );
+      totalRs.goToFirstRow();
+      const total = totalRs.getLong(totalRs.getColumnIndex('cnt'));
+      totalRs.close();
+
+      const movieRs = await this.rdbStore.querySql(
+        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE media_type = 'movie'`
+      );
+      movieRs.goToFirstRow();
+      const movies = movieRs.getLong(movieRs.getColumnIndex('cnt'));
+      movieRs.close();
+
+      const tvRs = await this.rdbStore.querySql(
+        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE media_type = 'tv'`
+      );
+      tvRs.goToFirstRow();
+      const tv = tvRs.getLong(tvRs.getColumnIndex('cnt'));
+      tvRs.close();
+
+      const scrapedRs = await this.rdbStore.querySql(
+        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
+      );
+      scrapedRs.goToFirstRow();
+      const scraped = scrapedRs.getLong(scrapedRs.getColumnIndex('cnt'));
+      scrapedRs.close();
+
+      return {
+        total,
+        movies,
+        tv,
+        other: total - scraped
+      };
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getMediaStats 失败: ${JSON.stringify(error)}`);
+      const stats: MediaStats = { total: 0, movies: 0, tv: 0, other: 0 };
+      return stats;
+    }
+  }
+
+  private parseMediaItem(rs: relationalStore.ResultSet): MediaItem {
+    const getL = (col: string): number => {
+      const idx = rs.getColumnIndex(col);
+      return idx >= 0 && !rs.isColumnNull(idx) ? rs.getLong(idx) : 0;
+    };
+    const str = (col: string): string | undefined => {
+      const idx = rs.getColumnIndex(col);
+      return idx >= 0 && !rs.isColumnNull(idx) ? rs.getString(idx) : undefined;
+    };
+    const dbl = (col: string): number | undefined => {
+      const idx = rs.getColumnIndex(col);
+      return idx >= 0 && !rs.isColumnNull(idx) ? rs.getDouble(idx) : undefined;
+    };
+    return {
+      // videos 字段
+      id: getL('id'),
+      sourceId: getL('source_id'),
+      directoryPath: rs.getString(rs.getColumnIndex('directory_path')),
+      filePath: rs.getString(rs.getColumnIndex('file_path')),
+      fileName: rs.getString(rs.getColumnIndex('file_name')),
+      fileSize: str('file_size') !== undefined ? getL('file_size') : undefined,
+      durationMs: str('duration_ms') !== undefined ? getL('duration_ms') : undefined,
+      width: str('width') !== undefined ? getL('width') : undefined,
+      height: str('height') !== undefined ? getL('height') : undefined,
+      videoCodec: str('video_codec'),
+      scannedAt: getL('scanned_at'),
+      // scrape_info 字段
+      provider: str('provider'),
+      providerId: str('provider_id'),
+      mediaType: str('media_type'),
+      title: str('scrape_title'),
+      originalTitle: str('original_title'),
+      overview: str('overview'),
+      releaseDate: str('release_date'),
+      rating: dbl('rating'),
+      genresJson: str('genres_json'),
+      posterUrl: str('poster_url'),
+      backdropUrl: str('backdrop_url'),
+      posterLocalPath: str('poster_local_path'),
+      backdropLocalPath: str('backdrop_local_path'),
+    };
+  }
+
+  /**
+   * 聚合电视剧/综艺合集
+   *
+   * 聚合策略：
+   * 1. 有刮削数据（media_type='tv'）-> 以 provider::providerId 聚合
+   * 2. 无刮削数据 -> 以视频文件的"直接父目录"路径聚合，
+   *    同目录 >= 2 个视频才算合集（单文件不算）
+   *    若父目录名是通用季名（如 Season1、S01、第1季）则再取上一级目录名作合集标题
+   */
+  async getSeriesGroups(): Promise<SeriesGroup[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const scrapedTv = await this.getMediaItemsByType('tv');
+      const unscrapedAll = await this.getUnscrapedMediaItems();
+
+      const providerMap = new Map<string, MediaItem[]>();
+
+      // ── 有刮削 tv：以 provider::providerId 聚合 ──
+      for (const item of scrapedTv) {
+        const key = `scraped::${item.provider ?? ''}::${item.providerId ?? ''}`;
+        const existing = providerMap.get(key);
+        if (existing) {
+          existing.push(item);
+        } else {
+          providerMap.set(key, [item]);
+        }
+      }
+
+      // ── 无刮削：以直接父目录聚合，先统计数量 ──
+      const unscrapedMap = new Map<string, MediaItem[]>();
+      for (const item of unscrapedAll) {
+        const parentDir = this.getParentDir(item.filePath);
+        const existing = unscrapedMap.get(parentDir);
+        if (existing) {
+          existing.push(item);
+        } else {
+          unscrapedMap.set(parentDir, [item]);
+        }
+      }
+
+      // 只有同目录 >= 2 个文件才算合集
+      const unscrapedEntries: string[] = [];
+      unscrapedMap.forEach((_v: MediaItem[], k: string) => {
+        unscrapedEntries.push(k);
+      });
+      for (const parentDir of unscrapedEntries) {
+        const items = unscrapedMap.get(parentDir);
+        if (items !== undefined && items.length >= 2) {
+          providerMap.set(`unscraped::${parentDir}`, items);
+        }
+      }
+
+      const groups: SeriesGroup[] = [];
+      const providerKeys: string[] = [];
+      providerMap.forEach((_v: MediaItem[], k: string) => {
+        providerKeys.push(k);
+      });
+
+      for (const key of providerKeys) {
+        const items = providerMap.get(key);
+        if (items === undefined || items.length === 0) {
+          continue;
+        }
+        const first = items[0];
+        if (first === undefined) {
+          continue;
+        }
+        let latestScannedAt = 0;
+        for (const it of items) {
+          if (it.scannedAt > latestScannedAt) {
+            latestScannedAt = it.scannedAt;
+          }
+        }
+
+        // 合集标题
+        let groupTitle: string;
+        if (first.title) {
+          groupTitle = first.title;
+        } else {
+          const parentDir = this.getParentDir(first.filePath);
+          const segments = parentDir.split('/').filter((s: string) => s.length > 0);
+          const lastSeg = segments.length > 0 ? segments[segments.length - 1] : '';
+          const dirName = lastSeg ?? '';
+          if (this.isGenericSeasonName(dirName) && segments.length >= 2) {
+            const parentSeg = segments[segments.length - 2];
+            groupTitle = parentSeg ?? dirName;
+          } else {
+            groupTitle = dirName.length > 0 ? dirName : first.fileName;
+          }
+        }
+        void key;
+
+        const group: SeriesGroup = {
+          title: groupTitle,
+          posterUrl: first.posterUrl,
+          posterLocalPath: first.posterLocalPath,
+          rating: first.rating,
+          episodeCount: items.length,
+          episodes: items,
+          latestScannedAt
+        };
+        groups.push(group);
+      }
+
+      groups.sort((a, b) => b.latestScannedAt - a.latestScannedAt);
+      console.info(
+        `[FileSourceDatabase] getSeriesGroups: ${groups.length} 组` +
+        `（有刮削 tv=${scrapedTv.length} 集，无刮削候选=${unscrapedAll.length} 个）`
+      );
+      return groups;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getSeriesGroups 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 判断目录名是否是通用季名，如 Season1/Season 1/S01/第1季/第一季 等
+   */
+  private isGenericSeasonName(name: string): boolean {
+    const lower = name.toLowerCase();
+    return lower.startsWith('season') ||
+      lower.startsWith('s0') ||
+      lower.startsWith('s1') ||
+      lower.startsWith('s2') ||
+      lower.startsWith('s3') ||
+      name.startsWith('第') ||
+      lower === 'extras' ||
+      lower === 'specials' ||
+      lower === 'featurettes';
+  }
+
+  /** 辅助：取文件路径的直接父目录（去掉最后一段文件名） */
+  private getParentDir(filePath: string): string {
+    const lastSlash = filePath.lastIndexOf('/');
+    if (lastSlash <= 0) {
+      return '/';
+    }
+    return filePath.substring(0, lastSlash);
+  }
+
+  /** 查询所有没有刮削数据的视频（scrape_info 为 NULL） */
+  private async getUnscrapedMediaItems(): Promise<MediaItem[]> {
+    if (this.rdbStore === null) {
+      return [];
+    }
+    try {
+      const sql = `
+        SELECT v.*, NULL AS provider, NULL AS provider_id, NULL AS media_type,
+               NULL AS scrape_title, NULL AS original_title, NULL AS overview,
+               NULL AS release_date, NULL AS rating, NULL AS genres_json,
+               NULL AS poster_url, NULL AS backdrop_url,
+               NULL AS poster_local_path, NULL AS backdrop_local_path,
+               NULL AS scraped_at
+        FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s WHERE s.video_id = v.id
+        )
+        ORDER BY v.scanned_at DESC
+      `;
+      const rs = await this.rdbStore.querySql(sql);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        items.push(this.parseMediaItem(rs));
+      }
+      rs.close();
+      return items;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getUnscrapedMediaItems 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * 获取最近一次扫描时间（videos 表中最大 scanned_at）
+   * 返回 0 表示未扫描
+   */
+  async getLatestScanTime(): Promise<number> {
+    if (this.rdbStore === null) {
+      return 0;
+    }
+    try {
+      const rs = await this.rdbStore.querySql(
+        `SELECT MAX(scanned_at) AS latest FROM ${FileSourceDatabase.TABLE_VIDEOS}`
+      );
+      if (rs.goToFirstRow()) {
+        const idx = rs.getColumnIndex('latest');
+        const val = rs.isColumnNull(idx) ? 0 : rs.getLong(idx);
+        rs.close();
+        return val;
+      }
+      rs.close();
+      return 0;
+    } catch {
+      return 0;
+    }
   }
 
   static onReady(callback: Callback<emitter.EventData>) {
