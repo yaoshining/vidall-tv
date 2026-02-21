@@ -7,6 +7,7 @@ import { FileSource } from "../../db/models/FileSourceEntity";
 export interface DirectoryItem {
   directoryPath: string;
   directoryName: string;
+  customName: string;
   fileSourceName: string;
   fileSource: FileSource;
 }
@@ -77,6 +78,7 @@ export class FileSourceModel {
           directories.push({
             directoryPath: dir.directoryPath,
             directoryName: dirName,
+            customName: dir.customName || dirName,
             fileSourceName: fileSource.name,
             fileSource: fileSource
           })

@@ -42,6 +42,7 @@ export interface FileSourceDirectory {
   id?: number;
   sourceId: number;
   directoryPath: string;
+  customName?: string;
 }
 
 /**

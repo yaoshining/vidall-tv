@@ -93,6 +93,7 @@ export class FileSourceDatabase {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           source_id INTEGER NOT NULL,
           directory_path TEXT NOT NULL,
+          custom_name TEXT,
           FOREIGN KEY(source_id) REFERENCES ${FileSourceDatabase.TABLE_FILE_SOURCES}(id) ON DELETE CASCADE
         )
       `;
@@ -308,26 +309,26 @@ export class FileSourceDatabase {
   /**
    * 批量插入文件源目录关联
    */
-  async insertDirectories(sourceId: number, paths: string[]): Promise<void> {
+  async insertDirectories(sourceId: number, directories: FileSourceDirectory[]): Promise<void> {
     if (this.rdbStore === null) {
       throw new Error('Database not initialized');
     }
 
-    if (paths.length === 0) {
+    if (directories.length === 0) {
       console.info('FileSourceDatabase: No directories to insert');
       return;
     }
 
     try {
-      // 批量插入目录记录
-      for (const path of paths) {
+      for (const dir of directories) {
         const valueBucket: relationalStore.ValuesBucket = {
           source_id: sourceId,
-          directory_path: path
+          directory_path: dir.directoryPath,
+          custom_name: dir.customName ?? null
         };
         await this.rdbStore.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
       }
-      console.info(`FileSourceDatabase: Inserted ${paths.length} directory(ies) for source ${sourceId}`);
+      console.info(`FileSourceDatabase: Inserted ${directories.length} directory(ies) for source ${sourceId}`);
     } catch (error) {
       console.error('FileSourceDatabase: Failed to insert directories', JSON.stringify(error));
       throw new Error('Failed to insert directories: ' + JSON.stringify(error));
@@ -373,11 +374,14 @@ export class FileSourceDatabase {
         const id = resultSet.getLong(resultSet.getColumnIndex('id'));
         const sourceIdVal = resultSet.getLong(resultSet.getColumnIndex('source_id'));
         const directoryPath = resultSet.getString(resultSet.getColumnIndex('directory_path'));
+        const customNameIdx = resultSet.getColumnIndex('custom_name');
+        const customName = resultSet.isColumnNull(customNameIdx) ? undefined : resultSet.getString(customNameIdx);
 
         directories.push({
           id: id,
           sourceId: sourceIdVal,
-          directoryPath: directoryPath
+          directoryPath: directoryPath,
+          customName: customName
         });
       }
 

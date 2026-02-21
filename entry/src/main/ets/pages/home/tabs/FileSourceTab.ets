@@ -151,7 +151,7 @@ export struct FileSourceTab {
               direction: FlexDirection.Column,
               justifyContent: FlexAlign.SpaceAround,
             }) {
-              Text(item.directoryName)
+              Text(item.customName)
                 .fontSize($r('app.float.font_subtitle_1'))
                 .fontWeight(FontWeight.Bold)
               Text(item.fileSourceName)
@@ -168,7 +168,7 @@ export struct FileSourceTab {
         .borderRadius(6)
         .backgroundColor("#373737")
         .hoverEffect(HoverEffect.Highlight)
-      }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}`)
+      }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}_${item.customName}`)
 
       // 原有的写死的两个配置（保留用于测试）
       GridCol() {
