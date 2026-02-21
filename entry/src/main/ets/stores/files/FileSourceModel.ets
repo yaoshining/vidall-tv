@@ -20,6 +20,9 @@ export class FileSourceModel {
   // 缓存有效期：5 分钟
   private static readonly CACHE_DURATION = 5 * 60 * 1000;
 
+  // 刷新触发计数，每次自增触发 Tab 刷新
+  @Trace refreshTick: number = 0;
+
   // 文件源列表
   @Trace fileSources: FileSource[] = [];
 

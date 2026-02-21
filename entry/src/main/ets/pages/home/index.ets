@@ -3,24 +3,26 @@ import { SidebarStore } from "../../stores/sidebar/SidebarStore"
 import { TabBarStore } from "../../stores/tabbar/TabBarStore"
 import { HomeTopBar } from "./topbar"
 import { TabContentBuilder } from "./tabs"
-import { TabItem } from "../../stores/tabbar/TabBarModel"
+import { TabItem, TabItemCode } from "../../stores/tabbar/TabBarModel"
+import { FileSourceStore } from "../../stores/files/FileSourceStore"
 
 @ComponentV2
 @Preview({
   deviceType: 'tv',
-  width: 2800, // 可选的TV典型宽度
+  width: 2800,
   height: 1575,
 })
 export struct HomePage {
   tabBarModel = TabBarStore.getState()
   sidebarModel = SidebarStore.getState()
+  fileSourceModel = FileSourceStore.getState()
   @Local handlePopup: boolean = true;
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
 
   swiperController = new SwiperController()
 
   build() {
-    Column() {
+    Scroll() {
       Column() {
         HomeTopBar()
 
@@ -40,7 +42,14 @@ export struct HomePage {
               .type(ButtonType.Normal)
               .borderRadius(8)
               .onClick(() => {
-                this.swiperController.changeIndex(index, true)
+                if (this.tabBarModel.currentTabIndex === index) {
+                  // 已激活状态再次点击 → 对应 store 的 refreshTick 自增
+                  if (tab.code === TabItemCode.FILE_SOURCE) {
+                    this.fileSourceModel.refreshTick++
+                  }
+                } else {
+                  this.swiperController.changeIndex(index, true)
+                }
               })
           })
         }
@@ -51,26 +60,27 @@ export struct HomePage {
           top: 10,
           bottom: 20
         })
-      }
 
-      Swiper(this.swiperController) {
-        ForEach(this.tabBarModel.tabs, (tab: TabItem) => {
-          Column() {
-            TabContentBuilder(tab)
-          }
-          .width("100%")
-          .padding({ left: 20, right: 20 })
+        Swiper(this.swiperController) {
+          ForEach(this.tabBarModel.tabs, (tab: TabItem) => {
+            Column() {
+              TabContentBuilder(tab)
+            }
+            .width("100%")
+            .padding({ left: 20, right: 20 })
+          })
+        }
+        .onChange((index) => {
+          this.tabBarModel.currentTabIndex = index
         })
+        .index(this.tabBarModel.currentTabIndex)
+        .indicator(false)
+        .cachedCount(this.tabBarModel.tabs.length)
       }
-      .onChange((index) => {
-        this.tabBarModel.currentTabIndex = index
-      })
-      .index(this.tabBarModel.currentTabIndex)
-      .indicator(false)
-      .flexGrow(1)
+      .constraintSize({ minHeight: '100%' })
     }
-    .constraintSize({
-      minHeight: '100%'
-    })
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
   }
 }
