@@ -3,6 +3,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { IBestInit } from "@ibestservices/ibest-ui"
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
+import { AppPreferences, PrefKey } from '../utils/AppPreferences';
 
 const DOMAIN = 0x0000;
 
@@ -15,7 +16,16 @@ export default class EntryAbility extends UIAbility {
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
 
-    // 初始化数据库
+    // 并行初始化 AppPreferences 和数据库
+    AppPreferences.init(this.context)
+      .then(async () => {
+        hilog.info(DOMAIN, 'testTag', 'AppPreferences initialized successfully');
+        await AppPreferences.set(PrefKey.TMDB_API_KEY, '8a4f81133468d801df27c9cdcb5c33af');
+      })
+      .catch((err: Error) => {
+        hilog.error(DOMAIN, 'testTag', 'Failed to init AppPreferences: %{public}s', JSON.stringify(err));
+      });
+
     FileSourceDatabase.getInstance(this.context).init()
       .then(() => {
         hilog.info(DOMAIN, 'testTag', 'Database initialized successfully');

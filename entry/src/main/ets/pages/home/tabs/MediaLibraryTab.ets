@@ -4,12 +4,36 @@ import { common } from "@kit.AbilityKit"
 import { picker } from "@kit.CoreFileKit"
 import { PlayerPage, PlayerPageParam } from "../../player"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
+import { ScrapeClient } from "../../../lib/ScrapeClient"
+import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 
 @ComponentV2
 export struct MediaLibraryTab {
   tabBarModel: TabBarModel = TabBarStore.getState()
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Require @Param tab: TabItem
+  @Local isScanning: boolean = false
+
+  private async startScan(): Promise<void> {
+    if (this.isScanning) {
+      console.warn('[MediaLibraryTab] 扫描已在进行中，忽略重复点击');
+      return;
+    }
+    this.isScanning = true;
+    try {
+      const context = this.getUIContext().getHostContext()!;
+      const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+      console.info(`[MediaLibraryTab] TMDB API Key: ${tmdbKey.length > 0 ? '已配置(' + tmdbKey.length + '字符)' : '未配置'}`);
+      const scrapeClient = tmdbKey.length > 0 ? new ScrapeClient({ tmdbApiKey: tmdbKey }) : undefined;
+      const result = await VideoScannerUtil.scan(context, scrapeClient);
+      console.info(`[MediaLibraryTab] 扫描完成，共 ${result.totalVideos} 个视频，耗时 ${result.elapsedMs}ms`);
+    } catch (e) {
+      const err = e as Error;
+      console.error(`[MediaLibraryTab] 扫描异常: ${err.message}`);
+    } finally {
+      this.isScanning = false;
+    }
+  }
 
   build() {
     Column() {
@@ -61,9 +85,11 @@ export struct MediaLibraryTab {
           })
       }
       Column() {
-        Button("扫描视频").onClick((event: ClickEvent) => {
-          VideoScannerUtil.scan(this.getUIContext().getHostContext()!)
-        })
+        Button(this.isScanning ? "扫描中..." : "扫描视频")
+          .enabled(!this.isScanning)
+          .onClick(() => {
+            this.startScan();
+          })
       }
       ForEach(Array.from(Array(50)), (_i: number, index: number) => {
         Row() {

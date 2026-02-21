@@ -2,7 +2,9 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../db/models/FileSourceEntity';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
-import { VideoInfoUtil } from './VideoInfoUtil';
+import { VideoInfoUtil, TrackInfo } from './VideoInfoUtil';
+import { ScrapeClient } from '../lib/ScrapeClient';
+import { VideoEntity, ScrapeInfoEntity } from '../db/models/MediaEntity';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -10,27 +12,17 @@ import { VideoInfoUtil } from './VideoInfoUtil';
 
 /** 扫描到的单个视频文件信息 */
 export interface VideoFileInfo {
-  /** 所属文件源 ID */
   sourceId: number;
-  /** 所属文件源名称 */
   sourceName: string;
-  /** 文件源类型 */
   sourceType: FileSourceType;
-  /** 扫描起始目录路径 */
   directoryPath: string;
-  /** 文件完整路径（用于去重） */
   filePath: string;
-  /** 文件名 */
   fileName: string;
-  /** 文件大小（字节），可能为 undefined */
   fileSize?: number;
-  /** 最后修改时间字符串 */
   lastModified?: string;
-  /** MIME 类型 */
   contentType?: string;
 }
 
-/** 每个文件源的扫描统计 */
 export interface SourceScanStat {
   sourceId: number;
   sourceName: string;
@@ -39,33 +31,19 @@ export interface SourceScanStat {
   videosFound: number;
 }
 
-/** 扫描汇总结果 */
 export interface ScanResult {
-  /** 实际扫描的目录总数 */
   totalDirectories: number;
-  /** 去重后发现的视频总数 */
   totalVideos: number;
-  /** 各文件源统计 */
   perSourceStats: SourceScanStat[];
-  /** 总耗时（毫秒） */
   elapsedMs: number;
-  /** 所有视频文件信息列表 */
   videos: VideoFileInfo[];
 }
 
-/** 扫描选项 */
 export interface ScanOptions {
-  /**
-   * 最大递归深度，默认 5 层
-   * 后续可在 UI 设置页或数据库目录表中按目录/文件源自定义
-   */
   maxDepth: number;
 }
 
-/** 默认扫描选项 */
-const DEFAULT_SCAN_OPTIONS: ScanOptions = {
-  maxDepth: 5
-};
+const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5 };
 
 // ─────────────────────────────────────────────
 // 视频扩展名白名单
@@ -79,11 +57,9 @@ const VIDEO_EXTENSIONS: Set<string> = new Set([
 ]);
 
 function isVideoFile(fileName: string, contentType?: string): boolean {
-  // 通过 contentType 判断
   if (contentType && contentType.toLowerCase().startsWith('video/')) {
     return true;
   }
-  // 通过扩展名判断
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex !== -1) {
     const ext = fileName.substring(dotIndex + 1).toLowerCase();
@@ -95,19 +71,10 @@ function isVideoFile(fileName: string, contentType?: string): boolean {
 }
 
 // ─────────────────────────────────────────────
-// 适配器接口（统一扩展点）
+// 适配器接口
 // ─────────────────────────────────────────────
 
-/**
- * 文件源适配器接口
- * 每种协议实现该接口，VideoScannerUtil 通过此接口统一调用
- */
 export interface ISourceAdapter {
-  /**
-   * 扫描指定目录，返回该目录下（含子目录）所有视频文件信息
-   * @param directoryPath 起始目录路径
-   * @param options       扫描选项
-   */
   scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]>;
 }
 
@@ -118,29 +85,24 @@ export interface ISourceAdapter {
 export class WebDAVAdapter implements ISourceAdapter {
   private client: WebDAVClient;
   private fileSource: FileSource;
-  /** WebDAV 挂载根路径，如 /dav，用于剥离 href 中的前缀 */
   private basePath: string;
+  private scrapeClient?: ScrapeClient;
 
-  constructor(fileSource: FileSource) {
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient) {
     this.fileSource = fileSource;
+    this.scrapeClient = scrapeClient;
 
     const config = JSON.parse(fileSource.configJson) as Record<string, string>;
-
-    // baseUrl = protocol://host:port/rootPath
-    // WebDAVClient.listDirectory(path) 内部会把 baseUrl 里的路径部分提取出来再拼 path
-    // 所以 baseUrl 必须带 rootPath，传入 listDirectory 的 path 只传相对于 rootPath 的路径
     const protocol = config['protocol'] ?? 'http';
     const host = config['url'] ?? '';
     const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
     const rootPath = config['rootPath'] ?? '';
     const normalizedRoot = rootPath && !rootPath.startsWith('/') ? '/' + rootPath : rootPath;
-    this.basePath = normalizedRoot.replace(/\/$/, ''); // 去掉末尾斜杠，便于后续 startsWith 匹配
+    this.basePath = normalizedRoot.replace(/\/$/, '');
     const baseUrl = `${protocol}://${host}:${port}${normalizedRoot}`;
 
     console.info(
-      `[VideoScanner][WebDAV] 解析配置 — protocol="${protocol}" ` +
-      `host="${host}" port="${port}" rootPath="${normalizedRoot}" ` +
-      `baseUrl="${baseUrl}" username="${config['username'] ?? '(空)'}"`
+      `[VideoScanner][WebDAV] 解析配置 — url="${host}" username="${config['username'] ?? ''}" rootPath="${normalizedRoot}"`
     );
     const webdavConfig: WebDAVConfig = {
       baseUrl: baseUrl,
@@ -159,10 +121,8 @@ export class WebDAVAdapter implements ISourceAdapter {
   }
 
   async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
-    console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath}，文件源: ${this.fileSource.name}，最大深度: ${options.maxDepth}`);
+    console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
-    // depth=0 表示配置目录本身，进入子目录后变为 1、2...
-    // maxDepth=5 表示从配置目录往下最多递归 5 层
     await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results);
     return results;
   }
@@ -185,25 +145,20 @@ export class WebDAVAdapter implements ISourceAdapter {
     }
 
     for (const resource of resources) {
-      // href 是服务器返回的完整路径（含 basePath 前缀），需剥离后才能再次传给 listDirectory
       const decodedHref = this.decodePath(resource.href);
-      // 用于传给 listDirectory 的相对路径
       const relativePath = this.toRelativePath(decodedHref);
 
-      // 跳过当前目录自身
       if (this.isSamePath(relativePath, currentPath)) {
         continue;
       }
 
       if (resource.isCollection) {
-        // 是子目录
         if (depth >= maxDepth) {
           console.info(`[VideoScanner][MAX_DEPTH] 已达最大深度 ${maxDepth}，跳过子目录: ${relativePath}`);
           continue;
         }
         await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, results);
       } else {
-        // 是文件，判断是否为视频
         const fileName = resource.displayName || this.extractFileName(decodedHref);
         if (isVideoFile(fileName, resource.contentType)) {
           const info: VideoFileInfo = {
@@ -220,21 +175,21 @@ export class WebDAVAdapter implements ISourceAdapter {
 
           console.info(
             `[VideoScanner][VIDEO] ` +
-            `文件源=${this.fileSource.name} | ` +
-            `路径=${decodedHref} | ` +
-            `文件名=${fileName} | ` +
+            `文件源=${this.fileSource.name} | 路径=${decodedHref} | 文件名=${fileName} | ` +
             `大小=${resource.size !== undefined ? resource.size + ' bytes' : '未知'} | ` +
-            `修改时间=${resource.lastModified ?? '未知'} | ` +
-            `类型=${resource.contentType ?? '未知'}`
+            `修改时间=${resource.lastModified ?? '未知'} | 类型=${resource.contentType ?? '未知'}`
           );
 
           results.push(info);
 
-          // 异步抓取媒体详细信息（不阻塞扫描主流程，失败只打印警告）
+          // ── 异步落库 + 刮削（不阻塞扫描主流程）────────────────
           const authHeader = this.client.getAuthHeaderPublic();
           const httpHeader: Record<string, string> = authHeader ? { 'Authorization': authHeader } : {};
           const fullUrl = this.client.getFullUrl(relativePath);
-          VideoInfoUtil.fetch(fullUrl, httpHeader).then((videoInfo) => {
+          const capturedInfo = info;
+          const capturedScrapeClient = this.scrapeClient;
+
+          VideoInfoUtil.fetch(fullUrl, httpHeader).then(async (videoInfo) => {
             if (videoInfo.success) {
               console.info(
                 `[VideoScanner][MEDIA] ${fileName} | ` +
@@ -242,30 +197,104 @@ export class WebDAVAdapter implements ISourceAdapter {
                 `分辨率=${videoInfo.width ?? '?'}x${videoInfo.height ?? '?'} | ` +
                 `编码=${videoInfo.videoCodec ?? '?'} | ` +
                 `帧率=${videoInfo.frameRate ?? '?'}fps | ` +
-                `码率=${videoInfo.bitrate !== undefined ? Math.round(videoInfo.bitrate / 1000) + 'kbps' : '?'} | ` +
                 `音轨=${videoInfo.audioTracks.length} 字幕轨=${videoInfo.subtitleTracks.length}`
               );
-              videoInfo.audioTracks.forEach((t, i) => {
-                console.info(
-                  `[VideoScanner][MEDIA]   音轨[${i}] codec=${t.codec ?? '?'} ` +
-                  `${t.sampleRate ?? '?'}Hz ${t.channelCount ?? '?'}ch 语言=${t.language ?? '?'}`
-                );
+              videoInfo.audioTracks.forEach((t: TrackInfo, i: number) => {
+                console.info(`[VideoScanner][MEDIA]   音轨[${i}] codec=${t.codec ?? '?'} ${t.sampleRate ?? '?'}Hz ${t.channelCount ?? '?'}ch 语言=${t.language ?? '?'}`);
               });
-              videoInfo.subtitleTracks.forEach((t, i) => {
-                console.info(
-                  `[VideoScanner][MEDIA]   字幕轨[${i}] codec=${t.codec ?? '?'} 语言=${t.language ?? '?'}`
-                );
+              videoInfo.subtitleTracks.forEach((t: TrackInfo, i: number) => {
+                console.info(`[VideoScanner][MEDIA]   字幕轨[${i}] codec=${t.codec ?? '?'} 语言=${t.language ?? '?'}`);
               });
             } else {
               console.warn(`[VideoScanner][MEDIA] 媒体信息抓取失败: ${fileName} — ${videoInfo.errorMessage ?? ''}`);
             }
+
+            // 落库
+            const videoEntity: VideoEntity = {
+              sourceId: capturedInfo.sourceId,
+              directoryPath: capturedInfo.directoryPath,
+              filePath: capturedInfo.filePath,
+              fileName: capturedInfo.fileName,
+              fileSize: capturedInfo.fileSize,
+              lastModified: capturedInfo.lastModified,
+              contentType: capturedInfo.contentType,
+              durationMs: videoInfo.success ? videoInfo.durationMs : undefined,
+              width: videoInfo.success ? videoInfo.width : undefined,
+              height: videoInfo.success ? videoInfo.height : undefined,
+              frameRate: videoInfo.success ? videoInfo.frameRate : undefined,
+              videoCodec: videoInfo.success ? videoInfo.videoCodec : undefined,
+              audioTracksJson: videoInfo.success ? JSON.stringify(videoInfo.audioTracks) : undefined,
+              subtitleTracksJson: videoInfo.success ? JSON.stringify(videoInfo.subtitleTracks) : undefined,
+              scannedAt: Date.now()
+            };
+
+            let videoId: number = -1;
+            try {
+              videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity);
+              console.info(`[VideoScanner][DB] 落库成功 videoId=${videoId} fileName=${fileName}`);
+            } catch (dbErr) {
+              console.warn(`[VideoScanner][DB] 落库失败 fileName=${fileName}: ${JSON.stringify(dbErr)}`);
+              return;
+            }
+
+            // 刮削（已有记录跳过）
+            if (!capturedScrapeClient) {
+              return;
+            }
+            try {
+              const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
+              if (existing) {
+                console.info(`[VideoScanner][SCRAPE] 已有刮削记录，跳过 fileName=${fileName} title="${existing.title}"`);
+                return;
+              }
+            } catch {
+              // 查询失败时继续尝试刮削
+            }
+
+            console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
+            capturedScrapeClient.autoScrape(fileName).then(async (scrapeResult) => {
+              if (!scrapeResult) {
+                console.warn(`[VideoScanner][SCRAPE] 刮削无结果 fileName=${fileName}`);
+                return;
+              }
+              console.info(
+                `[VideoScanner][SCRAPE] 刮削成功 fileName=${fileName} | ` +
+                `title="${scrapeResult.title}" | provider=${scrapeResult.provider} | ` +
+                `type=${scrapeResult.mediaType} | rating=${scrapeResult.rating ?? '-'} | ` +
+                `releaseDate=${scrapeResult.releaseDate ?? '-'} | posterUrl=${scrapeResult.posterUrl ?? '无'}`
+              );
+              const scrapeEntity: ScrapeInfoEntity = {
+                videoId: videoId,
+                provider: scrapeResult.provider,
+                providerId: scrapeResult.providerId,
+                mediaType: scrapeResult.mediaType,
+                title: scrapeResult.title,
+                originalTitle: scrapeResult.originalTitle,
+                overview: scrapeResult.overview,
+                releaseDate: scrapeResult.releaseDate,
+                rating: scrapeResult.rating,
+                genresJson: scrapeResult.genres ? JSON.stringify(scrapeResult.genres) : undefined,
+                castJson: scrapeResult.cast ? JSON.stringify(scrapeResult.cast) : undefined,
+                directorsJson: scrapeResult.directors ? JSON.stringify(scrapeResult.directors) : undefined,
+                posterUrl: scrapeResult.posterUrl,
+                backdropUrl: scrapeResult.backdropUrl,
+                scrapedAt: Date.now()
+              };
+              try {
+                await FileSourceDatabase.getInstance().upsertScrapeInfo(scrapeEntity);
+                console.info(`[VideoScanner][SCRAPE] 入库成功 videoId=${videoId} title="${scrapeResult.title}"`);
+              } catch (scrapeDbErr) {
+                console.warn(`[VideoScanner][SCRAPE] 入库失败 fileName=${fileName}: ${JSON.stringify(scrapeDbErr)}`);
+              }
+            }).catch((scrapeErr: Error) => {
+              console.warn(`[VideoScanner][SCRAPE] autoScrape 异常 fileName=${fileName}: ${scrapeErr.message}`);
+            });
           });
         }
       }
     }
   }
 
-  /** 将 href 路径解码 */
   private decodePath(href: string): string {
     try {
       return decodeURIComponent(href);
@@ -274,10 +303,6 @@ export class WebDAVAdapter implements ISourceAdapter {
     }
   }
 
-  /**
-   * 把服务器返回的完整路径（含 basePath 前缀）剥离为相对路径
-   * 例：basePath=/dav，href=/dav/nas/movie/ → /nas/movie/
-   */
   private toRelativePath(fullPath: string): string {
     if (this.basePath && fullPath.startsWith(this.basePath)) {
       const rel = fullPath.substring(this.basePath.length);
@@ -286,12 +311,10 @@ export class WebDAVAdapter implements ISourceAdapter {
     return fullPath;
   }
 
-  /** 判断两个路径是否等价（忽略末尾斜杠） */
   private isSamePath(a: string, b: string): boolean {
     return a.replace(/\/$/, '') === b.replace(/\/$/, '');
   }
 
-  /** 从路径中提取文件名 */
   private extractFileName(path: string): string {
     const parts = path.replace(/\/$/, '').split('/');
     return parts[parts.length - 1] ?? path;
@@ -324,23 +347,10 @@ export class UnsupportedAdapter implements ISourceAdapter {
 // 适配器工厂
 // ─────────────────────────────────────────────
 
-function createAdapter(fileSource: FileSource): ISourceAdapter {
+function createAdapter(fileSource: FileSource, scrapeClient?: ScrapeClient): ISourceAdapter {
   switch (fileSource.type) {
     case FileSourceType.WEBDAV:
-      return new WebDAVAdapter(fileSource);
-    // 预留：后续各协议在此添加对应 case
-    // case FileSourceType.SMB:
-    //   return new SMBAdapter(fileSource);
-    // case FileSourceType.ALIYUN:
-    //   return new AliyunAdapter(fileSource);
-    // case FileSourceType.BAIDU:
-    //   return new BaiduAdapter(fileSource);
-    // case FileSourceType.CLOUD_123:
-    //   return new Cloud123Adapter(fileSource);
-    // case FileSourceType.CLOUD_139:
-    //   return new Cloud139Adapter(fileSource);
-    // case FileSourceType.CLOUD_115:
-    //   return new Cloud115Adapter(fileSource);
+      return new WebDAVAdapter(fileSource, scrapeClient);
     default:
       return new UnsupportedAdapter(fileSource.name, fileSource.type);
   }
@@ -350,49 +360,33 @@ function createAdapter(fileSource: FileSource): ISourceAdapter {
 // 核心扫描工具类
 // ─────────────────────────────────────────────
 
-/**
- * 视频扫描工具
- *
- * 使用方式：
- * ```typescript
- * const result = await VideoScannerUtil.scan(context);
- * // 或自定义深度
- * const result = await VideoScannerUtil.scan(context, { maxDepth: 3 });
- * ```
- */
 export class VideoScannerUtil {
   /**
    * 扫描所有已配置文件源中的视频文件
-   * @param context   鸿蒙 Context，用于初始化数据库
-   * @param options   扫描选项（可选，默认 maxDepth=5）
-   * @returns         扫描汇总结果
+   * @param context       鸿蒙 Context
+   * @param scrapeClient  刮削客户端（可选，不传则跳过刮削）
+   * @param options       扫描选项（可选，默认 maxDepth=5）
    */
-  static async scan(context: Context, options?: Partial<ScanOptions>): Promise<ScanResult> {
+  static async scan(context: Context, scrapeClient?: ScrapeClient, options?: Partial<ScanOptions>): Promise<ScanResult> {
     const scanOptions: ScanOptions = {
       maxDepth: (options?.maxDepth !== undefined) ? options.maxDepth : DEFAULT_SCAN_OPTIONS.maxDepth
     };
 
     const startTime = Date.now();
     console.info(`[VideoScanner] ======== 开始视频扫描 ========`);
-    console.info(`[VideoScanner] 扫描参数: maxDepth=${scanOptions.maxDepth}`);
+    console.info(`[VideoScanner] 扫描参数: maxDepth=${scanOptions.maxDepth}, 刮削=${scrapeClient ? '开启' : '关闭'}`);
 
-    // ① 初始化数据库
     const db = FileSourceDatabase.getInstance(context);
     await db.init();
 
-    // ② 读取所有文件源
     const fileSources = await db.getAllFileSources();
     console.info(`[VideoScanner] 共找到 ${fileSources.length} 个文件源`);
 
-    // 用于去重的路径集合
     const seenPaths = new Set<string>();
-
-    // 汇总数据
     const allVideos: VideoFileInfo[] = [];
     const perSourceStats: SourceScanStat[] = [];
     let totalDirectories = 0;
 
-    // ③ 逐文件源扫描
     for (const fileSource of fileSources) {
       if (!fileSource.id) {
         continue;
@@ -400,12 +394,11 @@ export class VideoScannerUtil {
 
       console.info(`[VideoScanner] ──── 文件源: "${fileSource.name}" (${fileSource.type}) ────`);
 
-      // 读取该文件源下所有目录配置
       let directories: FileSourceDirectory[] = [];
       try {
         directories = await db.getDirectoriesBySourceId(fileSource.id);
       } catch (err) {
-        console.error(`[VideoScanner][ERROR] 读取文件源 "${fileSource.name}" 的目录列表失败: ${JSON.stringify(err)}`);
+        console.error(`[VideoScanner][ERROR] 读取文件源 "${fileSource.name}" 目录失败: ${JSON.stringify(err)}`);
         continue;
       }
 
@@ -414,7 +407,7 @@ export class VideoScannerUtil {
       let adapter: ISourceAdapter;
       try {
         console.info(`[VideoScanner] 正在创建适配器，协议=${fileSource.type}`);
-        adapter = createAdapter(fileSource);
+        adapter = createAdapter(fileSource, scrapeClient);
         console.info(`[VideoScanner] 适配器创建成功`);
       } catch (err) {
         console.error(`[VideoScanner][ERROR] 创建适配器失败: ${JSON.stringify(err)}`);
@@ -429,23 +422,20 @@ export class VideoScannerUtil {
         videosFound: 0
       };
 
-      // ④ 逐目录扫描
       for (const dir of directories) {
         totalDirectories++;
         stat.directoriesScanned++;
-
         console.info(`[VideoScanner] 准备扫描目录(${stat.directoriesScanned}/${directories.length}): ${dir.directoryPath}`);
 
         let found: VideoFileInfo[] = [];
         try {
           found = await adapter.scan(dir.directoryPath, scanOptions);
-          console.info(`[VideoScanner] 目录 "${dir.directoryPath}" 扫描完毕，本次找到 ${found.length} 个视频`);
+          console.info(`[VideoScanner] 目录 "${dir.directoryPath}" 扫描完毕，找到 ${found.length} 个视频`);
         } catch (err) {
-          console.error(`[VideoScanner][ERROR] 扫描目录 "${dir.directoryPath}" 时发生异常: ${JSON.stringify(err)}`);
+          console.error(`[VideoScanner][ERROR] 扫描目录 "${dir.directoryPath}" 异常: ${JSON.stringify(err)}`);
           continue;
         }
 
-        // ⑤ 去重后加入结果
         for (const video of found) {
           if (!seenPaths.has(video.filePath)) {
             seenPaths.add(video.filePath);
@@ -458,12 +448,10 @@ export class VideoScannerUtil {
       }
 
       perSourceStats.push(stat);
-      console.info(`[VideoScanner] 文件源 "${fileSource.name}" 扫描完成，发现 ${stat.videosFound} 个视频（扫描了 ${stat.directoriesScanned} 个目录）`);
+      console.info(`[VideoScanner] 文件源 "${fileSource.name}" 完成，视频=${stat.videosFound} 目录=${stat.directoriesScanned}`);
     }
 
     const elapsedMs = Date.now() - startTime;
-
-    // ⑥ 打印统计汇总
     console.info(`[VideoScanner] ======== 扫描完成 ========`);
     console.info(`[VideoScanner][STATS] 总耗时: ${elapsedMs} ms`);
     console.info(`[VideoScanner][STATS] 扫描目录总数: ${totalDirectories}`);
@@ -485,6 +473,3 @@ export class VideoScannerUtil {
     };
   }
 }
-
-
-
