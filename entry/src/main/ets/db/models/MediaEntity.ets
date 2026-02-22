@@ -145,6 +145,8 @@ export interface MediaListItem {
 export interface SeriesGroup {
   /** 合集标题（来自 scrape_info.title 或目录名） */
   title: string;
+  /** 季数标签，如 'S1'、'第八季'，有多季时用于区分，单季时可为空 */
+  seasonLabel?: string;
   /** 合集海报 URL */
   posterUrl?: string;
   posterLocalPath?: string;

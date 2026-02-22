@@ -1002,9 +1002,11 @@ export class FileSourceDatabase {
           }
         }
 
-        // 合集标题
+        // 合集标题 + 季标签
         let groupTitle: string;
+        let seasonLabel: string | undefined = undefined;
         if (first.title) {
+          // 有刮削，直接用 scrape title，暂无季信息
           groupTitle = first.title;
         } else {
           const parentDir = this.getParentDir(first.filePath);
@@ -1012,8 +1014,10 @@ export class FileSourceDatabase {
           const lastSeg = segments.length > 0 ? segments[segments.length - 1] : '';
           const dirName = lastSeg ?? '';
           if (this.isGenericSeasonName(dirName) && segments.length >= 2) {
+            // 父目录是季名：剧名取上级，季标签保留目录名并格式化
             const parentSeg = segments[segments.length - 2];
             groupTitle = parentSeg ?? dirName;
+            seasonLabel = this.formatSeasonLabel(dirName);
           } else {
             groupTitle = dirName.length > 0 ? dirName : first.fileName;
           }
@@ -1022,6 +1026,7 @@ export class FileSourceDatabase {
 
         const group: SeriesGroup = {
           title: groupTitle,
+          seasonLabel,
           posterUrl: first.posterUrl,
           posterLocalPath: first.posterLocalPath,
           rating: first.rating,
@@ -1058,6 +1063,38 @@ export class FileSourceDatabase {
       lower === 'extras' ||
       lower === 'specials' ||
       lower === 'featurettes';
+  }
+
+  /**
+   * 把目录名格式化为短季标签显示在卡片上
+   * Season1 / Season 1 → S1
+   * S01 / S1 → S1
+   * 第八季 → 第8季（保留中文）
+   * extras / specials → 特典
+   */
+  private formatSeasonLabel(dirName: string): string {
+    const lower = dirName.toLowerCase().trim();
+    // Season N / Season N
+    const seasonMatch = lower.match(/^season\s*(\d+)$/);
+    if (seasonMatch) {
+      return `S${seasonMatch[1]}`;
+    }
+    // S01 / S1 等
+    const sMatch = lower.match(/^s(\d+)$/);
+    if (sMatch) {
+      const n = parseInt(sMatch[1]);
+      return `S${n}`;
+    }
+    // 第N季（中文数字保留原样）
+    if (dirName.startsWith('第') && dirName.endsWith('季')) {
+      return dirName;
+    }
+    // 特典类
+    if (lower === 'extras' || lower === 'specials' || lower === 'featurettes') {
+      return '特典';
+    }
+    // 其他直接返回原名（截短）
+    return dirName.length > 6 ? dirName.substring(0, 6) : dirName;
   }
 
   /** 辅助：取文件路径的直接父目录（去掉最后一段文件名） */

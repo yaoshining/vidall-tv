@@ -165,6 +165,9 @@ struct SeriesCard {
     if (ep === undefined) { return ''; }
     return resolutionLabel(ep.width, ep.height);
   }
+  private getSeasonLabel(): string {
+    return this.group.seasonLabel ?? '';
+  }
 
   build() {
     Column({ space: 4 }) {
@@ -188,7 +191,7 @@ struct SeriesCard {
         }
 
         // 底部黑色渐变（覆盖下方 28%）
-        if (this.getRating().length > 0) {
+        if (this.getRating().length > 0 || this.getSeasonLabel().length > 0) {
           Column()
             .width(POSTER_WIDTH)
             .height("28%")
@@ -210,6 +213,14 @@ struct SeriesCard {
             .width('32fp')
             .textAlign(TextAlign.Center)
             .position({ top: 2, right: 2 })
+        }
+
+        // 左下角季标签（白字，半透明黑底）
+        if (this.getSeasonLabel().length > 0) {
+          Text(this.getSeasonLabel())
+            .fontSize(10).fontColor(Color.White).fontWeight(FontWeight.Medium)
+            .padding({ left: 4, right: 4, bottom: 4 })
+            .position({ left: 2, bottom: 2 })
         }
 
         // 右下角评分（橘黄色，透明背景）
