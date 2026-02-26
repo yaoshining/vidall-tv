@@ -1,5 +1,6 @@
 import { debounce } from "@ibestservices/ibest-ui"
 import { VideoPlayerController } from "./VideoPlayerController"
+import { SubtitleTrackItem } from "./VideoPlayerController"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 
@@ -17,13 +18,13 @@ struct VideoControls {
   SubtitleMenu() {
     Column() {
       List() {
-        // 关闭字幕选项
+        // 关闭字幕
         ListItem() {
           Row() {
             Text('关闭字幕')
               .fontSize(16)
               .fontColor(Color.White)
-            if (this.videoController.currentSubtitleTrack === -1) {
+            if (this.videoController.activeSubtitleIndex === -1) {
               SymbolGlyph($r('sys.symbol.checkmark'))
                 .fontColor([Color.White])
                 .fontSize(20)
@@ -35,31 +36,40 @@ struct VideoControls {
           .padding({ left: 20, right: 20 })
         }
         .onClick(() => {
-          this.videoController.selectSubtitleTrack(-1)
+          this.videoController.switchSubtitleTrack(-1)
           this.showSubtitleMenu = false
           this.enableAutoHide()
         })
 
-        // 字幕轨道列表
-        ForEach(this.videoController.subtitleTracks, (track: media.MediaDescription, index: number) => {
+        // 所有字幕轨道（内嵌 + 外部）
+        ForEach(this.videoController.allSubtitleTracks, (item: SubtitleTrackItem, index: number) => {
           ListItem() {
             Row() {
-              Text(this.videoController.getSubtitleTrackName(index))
-                .fontSize(16)
-                .fontColor(Color.White)
-              if (this.videoController.currentSubtitleTrack === index) {
+              Column({ space: 2 }) {
+                Text(item.displayName)
+                  .fontSize(16)
+                  .fontColor(Color.White)
+                if (item.kind === 'external') {
+                  Text('外部文件')
+                    .fontSize(11)
+                    .fontColor('#FFA500')
+                }
+              }
+              .alignItems(HorizontalAlign.Start)
+
+              if (this.videoController.activeSubtitleIndex === index) {
                 SymbolGlyph($r('sys.symbol.checkmark'))
                   .fontColor([Color.White])
                   .fontSize(20)
               }
             }
             .width('100%')
-            .height(50)
+            .height(item.kind === 'external' ? 60 : 50)
             .justifyContent(FlexAlign.SpaceBetween)
             .padding({ left: 20, right: 20 })
           }
           .onClick(() => {
-            this.videoController.selectSubtitleTrack(index)
+            this.videoController.switchSubtitleTrack(index)
             this.showSubtitleMenu = false
             this.enableAutoHide()
           })
@@ -93,14 +103,14 @@ struct VideoControls {
           })
 
         // 字幕按钮
-        if (this.videoController.subtitleTracks.length > 0) {
+        if (this.videoController.allSubtitleTracks.length > 0) {
           Row({ space: 8 }) {
             SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
-              .fontColor([this.videoController.currentSubtitleTrack >= 0 ? Color.White : Color.Gray])
+              .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
               .fontSize(24)
-            Text(this.videoController.getSubtitleTrackName(this.videoController.currentSubtitleTrack))
+            Text(this.getActiveSubtitleName())
               .fontSize(14)
-              .fontColor(this.videoController.currentSubtitleTrack >= 0 ? Color.White : Color.Gray)
+              .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
           }
           .padding({ left: 12, right: 12, top: 8, bottom: 8 })
           .backgroundColor('rgba(0, 0, 0, 0.5)')
@@ -226,6 +236,18 @@ struct VideoControls {
       await this.videoController.toggle()
       this.enableAutoHide()
     })
+  }
+
+  private getActiveSubtitleName(): string {
+    const idx = this.videoController.activeSubtitleIndex;
+    if (idx < 0) {
+      return '字幕';
+    }
+    const tracks = this.videoController.allSubtitleTracks;
+    if (idx < tracks.length) {
+      return tracks[idx].displayName;
+    }
+    return '字幕';
   }
 
   private enableAutoHide(): void {

@@ -13,6 +13,13 @@ export enum SubtitleFormat {
   VTT = 'vtt'                // WebVTT 格式
 }
 
+/** SRT 字幕条目（时间轴驱动用） */
+export interface SrtEntry {
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
 /**
  * 解析后的字幕片段
  */
@@ -278,7 +285,7 @@ export class PlainTextParser {
  */
 export class SubtitleParserFactory {
   /**
-   * 自动检测字幕格式并解析
+   * 自动检测字幕格式并解析（用于 ASS 内嵌字幕文本片段的渲染）
    */
   static parse(text: string): ParsedSubtitle {
     if (!text || text.trim().length === 0) {
@@ -316,3 +323,462 @@ export class SubtitleParserFactory {
     return false;
   }
 }
+
+// ─────────────────────────────────────────────
+// 共用工具函数（模块级，供 SrtParser / AssFileParser 共用）
+// ─────────────────────────────────────────────
+
+/** 统一换行符：\r\n → \n，单独 \r → \n（不用正则） */
+function normalizeNewlines(text: string): string {
+  let result = '';
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\r') {
+      result += '\n';
+      if (i + 1 < text.length && text[i + 1] === '\n') {
+        i++;
+      }
+    } else {
+      result += text[i];
+    }
+  }
+  return result;
+}
+
+/**
+ * 按空行分割文本块（不用正则）
+ * 连续空行或只含空白的行视为分隔符
+ */
+function splitByBlankLine(text: string): string[] {
+  const blocks: string[] = [];
+  const lines = text.split('\n');
+  let current = '';
+  for (const line of lines) {
+    if (line.trim().length === 0) {
+      if (current.length > 0) {
+        blocks.push(current);
+        current = '';
+      }
+    } else {
+      if (current.length > 0) {
+        current += '\n';
+      }
+      current += line;
+    }
+  }
+  if (current.length > 0) {
+    blocks.push(current);
+  }
+  return blocks;
+}
+
+// ─────────────────────────────────────────────
+// SRT 解析器（外部字幕文件，时间轴驱动）
+// ─────────────────────────────────────────────
+
+/**
+ * SRT / subrip 格式解析器
+ *
+ * SRT 格式示例：
+ * ```
+ * 1
+ * 00:00:01,000 --> 00:00:03,500
+ * Hello, world!
+ *
+ * 2
+ * 00:00:04,000 --> 00:00:06,000
+ * Second subtitle line
+ * ```
+ *
+ * 用法：
+ * const entries = SrtParser.parse(srtText);
+ * const current = SrtParser.findAt(entries, currentTimeMs);
+ */
+export class SrtParser {
+
+  static parse(content: string): SrtEntry[] {
+    const entries: SrtEntry[] = [];
+    const normalized = normalizeNewlines(content);
+    const blocks = splitByBlankLine(normalized);
+
+    for (const block of blocks) {
+      const trimmed = block.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+      const entry = SrtParser.parseBlock(trimmed);
+      if (entry !== null) {
+        entries.push(entry);
+      }
+    }
+
+    entries.sort((a: SrtEntry, b: SrtEntry) => a.startMs - b.startMs);
+    return entries;
+  }
+
+  /**
+   * 根据当前播放时间（ms）查找对应字幕，没有则返回空字符串
+   */
+  static findAt(entries: SrtEntry[], currentMs: number): string {
+    for (const entry of entries) {
+      if (currentMs >= entry.startMs && currentMs <= entry.endMs) {
+        return entry.text;
+      }
+    }
+    return '';
+  }
+
+  /**
+   * 解析单个 SRT 块
+   */
+  private static parseBlock(block: string): SrtEntry | null {
+    const lines = block.split('\n');
+    if (lines.length < 2) {
+      return null;
+    }
+
+    // 第一行是序号（跳过）
+    // 找时间轴行（包含 -->）
+    let timeLine = '';
+    let textStartIndex = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('-->') !== -1) {
+        timeLine = lines[i];
+        textStartIndex = i + 1;
+        break;
+      }
+    }
+
+    if (timeLine.length === 0) {
+      return null;
+    }
+
+    const times = SrtParser.parseTimeLine(timeLine);
+    if (times === null) {
+      return null;
+    }
+
+    // 剩余行是字幕文本，去除 HTML 标签（如 <i>、<b>）
+    const textLines: string[] = [];
+    for (let i = textStartIndex; i < lines.length; i++) {
+      const cleaned = SrtParser.stripHtml(lines[i].trim());
+      if (cleaned.length > 0) {
+        textLines.push(cleaned);
+      }
+    }
+
+    if (textLines.length === 0) {
+      return null;
+    }
+
+    const entry: SrtEntry = {
+      startMs: times[0],
+      endMs: times[1],
+      text: textLines.join('\n')
+    };
+    return entry;
+  }
+
+  /**
+   * 解析时间轴行 "00:00:01,000 --> 00:00:03,500"
+   * 返回 [startMs, endMs]，失败返回 null
+   */
+  private static parseTimeLine(line: string): number[] | null {
+    const arrowIdx = line.indexOf('-->');
+    if (arrowIdx < 0) {
+      return null;
+    }
+    const startStr = line.substring(0, arrowIdx).trim();
+    const endStr = line.substring(arrowIdx + 3).trim();
+
+    const startMs = SrtParser.parseTimestamp(startStr);
+    const endMs = SrtParser.parseTimestamp(endStr);
+
+    if (startMs < 0 || endMs < 0) {
+      return null;
+    }
+    const result: number[] = [startMs, endMs];
+    return result;
+  }
+
+  private static parseTimestamp(ts: string): number {
+    let normalized = '';
+    for (let i = 0; i < ts.length; i++) {
+      normalized += ts[i] === ',' ? '.' : ts[i];
+    }
+    const parts = normalized.split(':');
+    if (parts.length !== 3) {
+      return -1;
+    }
+    const p0 = parts[0];
+    const p1 = parts[1];
+    const p2 = parts[2];
+    if (p0 === undefined || p1 === undefined || p2 === undefined) {
+      return -1;
+    }
+    const h = parseInt(p0);
+    const m = parseInt(p1);
+    const secParts = p2.split('.');
+    const sp0 = secParts[0];
+    if (sp0 === undefined) {
+      return -1;
+    }
+    const s = parseInt(sp0);
+    const sp1 = secParts[1];
+    let msStr = sp1 !== undefined ? sp1.substring(0, 3) : '0';
+    while (msStr.length < 3) {
+      msStr += '0';
+    }
+    const ms = parseInt(msStr);
+    if (isNaN(h) || isNaN(m) || isNaN(s) || isNaN(ms)) {
+      return -1;
+    }
+    return ((h * 3600 + m * 60 + s) * 1000) + ms;
+  }
+
+  private static stripHtml(text: string): string {
+    let result = '';
+    let inTag = false;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '<') {
+        inTag = true;
+      } else if (text[i] === '>') {
+        inTag = false;
+      } else if (!inTag) {
+        result += text[i];
+      }
+    }
+    return result;
+  }
+}
+
+// ─────────────────────────────────────────────
+// ASS/SSA 文件解析器（时间轴驱动，外部字幕文件用）
+// ─────────────────────────────────────────────
+
+/**
+ * 解析完整 ASS/SSA 字幕文件，返回 SrtEntry[] 时间轴条目
+ *
+ * ASS Dialogue 行格式（[Events] 节）：
+ *   Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+ *   字段索引：  0      1     2    3      4     5        6       7      8      9
+ *
+ * 时间格式：H:MM:SS.cs（H=小时，cs=百分之一秒）
+ *   例：0:01:23.45 → 83450 ms
+ *
+ * 用法：
+ *   const entries = AssFileParser.parse(assFileContent);
+ *   const text = SrtParser.findAt(entries, currentMs);
+ */
+export class AssFileParser {
+
+  /**
+   * 解析 ASS/SSA 文件内容，返回按时间排序的 SrtEntry 数组
+   */
+  static parse(content: string): SrtEntry[] {
+    const entries: SrtEntry[] = [];
+    const normalized = normalizeNewlines(content);
+    const lines = normalized.split('\n');
+
+    let inEvents = false;
+    // Format 行决定各字段的列索引
+    let startIdx = 1;   // 默认 Dialogue 第 2 字段
+    let endIdx = 2;     // 默认 Dialogue 第 3 字段
+    let textIdx = 9;    // 默认 Dialogue 第 10 字段
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+
+      // 检测节标题
+      if (line.startsWith('[')) {
+        inEvents = line.toLowerCase() === '[events]';
+        continue;
+      }
+
+      if (!inEvents) {
+        continue;
+      }
+
+      // 解析 Format 行，确定字段顺序
+      if (line.startsWith('Format:')) {
+        const formatStr = line.substring('Format:'.length).trim();
+        const rawFields = formatStr.split(',');
+        const fields: string[] = [];
+        for (const f of rawFields) {
+          fields.push(f.trim().toLowerCase());
+        }
+        const si = fields.indexOf('start');
+        const ei = fields.indexOf('end');
+        const ti = fields.indexOf('text');
+        startIdx = si >= 0 ? si : 1;
+        endIdx = ei >= 0 ? ei : 2;
+        textIdx = ti >= 0 ? ti : 9;
+        continue;
+      }
+
+      // 解析 Dialogue 行
+      if (!line.startsWith('Dialogue:')) {
+        continue;
+      }
+
+      const entry = AssFileParser.parseDialogue(line, startIdx, endIdx, textIdx);
+      if (entry !== null) {
+        entries.push(entry);
+      }
+    }
+
+    entries.sort((a: SrtEntry, b: SrtEntry) => a.startMs - b.startMs);
+    return entries;
+  }
+
+  /**
+   * 解析单行 Dialogue
+   */
+  private static parseDialogue(
+    line: string,
+    startIdx: number,
+    endIdx: number,
+    textIdx: number
+  ): SrtEntry | null {
+    // 去掉 "Dialogue:" 前缀
+    const content = line.substring('Dialogue:'.length).trim();
+
+    // 按逗号分割，但 text 字段（最后一个）可能含逗号，需只分割 textIdx 次
+    const maxSplit = textIdx + 1;
+    const parts = AssFileParser.splitN(content, ',', maxSplit);
+
+    if (parts.length < textIdx + 1) {
+      return null;
+    }
+
+    const startPart = parts[startIdx];
+    const endPart = parts[endIdx];
+    const textPart = parts[textIdx];
+    if (startPart === undefined || endPart === undefined || textPart === undefined) {
+      return null;
+    }
+
+    const startMs = AssFileParser.parseAssTime(startPart.trim());
+    const endMs = AssFileParser.parseAssTime(endPart.trim());
+
+    if (startMs < 0 || endMs < 0) {
+      return null;
+    }
+
+    const cleanText = AssFileParser.stripAssTags(textPart);
+
+    if (cleanText.trim().length === 0) {
+      return null;
+    }
+
+    const entry: SrtEntry = {
+      startMs,
+      endMs,
+      text: cleanText
+    };
+    return entry;
+  }
+
+  /**
+   * 解析 ASS 时间戳 "H:MM:SS.cs" → ms
+   * cs = centiseconds（百分之一秒）
+   */
+  private static parseAssTime(ts: string): number {
+    const colonParts = ts.split(':');
+    if (colonParts.length !== 3) {
+      return -1;
+    }
+    const p0 = colonParts[0];
+    const p1 = colonParts[1];
+    const p2 = colonParts[2];
+    if (p0 === undefined || p1 === undefined || p2 === undefined) {
+      return -1;
+    }
+    const h = parseInt(p0);
+    const m = parseInt(p1);
+    const secParts = p2.split('.');
+    const sp0 = secParts[0];
+    if (sp0 === undefined) {
+      return -1;
+    }
+    const s = parseInt(sp0);
+    const sp1 = secParts[1];
+    let csStr = sp1 !== undefined ? sp1.substring(0, 2) : '0';
+    while (csStr.length < 2) {
+      csStr += '0';
+    }
+    const cs = parseInt(csStr);
+    if (isNaN(h) || isNaN(m) || isNaN(s) || isNaN(cs)) {
+      return -1;
+    }
+    return (h * 3600 + m * 60 + s) * 1000 + cs * 10;
+  }
+
+  /**
+   * 去除 ASS 样式标签（{\xxx}）并处理换行符 \N \n
+   */
+  private static stripAssTags(text: string): string {
+    let result = '';
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === '{') {
+        // 找到对应的 }
+        const end = text.indexOf('}', i);
+        if (end >= 0) {
+          i = end + 1;
+          continue;
+        }
+      }
+      // \N 和 \n 转为换行
+      if (text[i] === '\\' && i + 1 < text.length) {
+        const next = text[i + 1];
+        if (next === 'N' || next === 'n') {
+          result += '\n';
+          i += 2;
+          continue;
+        }
+        // \h 是不间断空格
+        if (next === 'h') {
+          result += ' ';
+          i += 2;
+          continue;
+        }
+      }
+      result += text[i];
+      i++;
+    }
+    return result.trim();
+  }
+
+  /**
+   * 按分隔符分割字符串，最多分割 n 次（最后一段保留剩余所有内容）
+   */
+  private static splitN(str: string, sep: string, n: number): string[] {
+    const result: string[] = [];
+    let remaining = str;
+    for (let i = 0; i < n - 1; i++) {
+      const idx = remaining.indexOf(sep);
+      if (idx < 0) {
+        break;
+      }
+      result.push(remaining.substring(0, idx));
+      remaining = remaining.substring(idx + sep.length);
+    }
+    result.push(remaining);
+    return result;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

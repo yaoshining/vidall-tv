@@ -52,29 +52,32 @@ export struct VideoPlayer {
    */
   @Computed
   get parsedSubtitle(): ParsedSubtitle | null {
-    // 触发依赖：读取 subtitleUpdateCounter 确保每次更新都重新计算
     const counter = this.controller.subtitleUpdateCounter
     const text = this.controller.currentSubtitleText
 
-    console.log(`[VideoPlayer] Computing subtitle, counter=${counter}, text length=${text.length}`)
-
-    // 如果字幕文本为空或只有空白字符，返回 null
     if (!text || text.trim().length === 0) {
-      console.log(`[VideoPlayer] Subtitle cleared`)
       return null
     }
 
-    const pureText = this.extractSubtitleText(text)
-    if (pureText.length > 0) {
-      const parsed = SubtitleParserFactory.parse(pureText)
-      this.convertFontSize(parsed)
-      console.log(`[VideoPlayer] Subtitle parsed, lines=${parsed.lines.length}`)
-      return parsed
+    let pureText: string
+    if (this.controller.hasSrtSubtitle) {
+      // 外部 SRT：currentSubtitleText 已是纯文本，直接用
+      pureText = text
+    } else {
+      // 内嵌字幕（ASS Dialogue 行）：截取第 8 个逗号后的内容
+      pureText = this.extractSubtitleText(text)
     }
 
-    console.log(`[VideoPlayer] No pure text extracted`)
-    return null
+    if (pureText.trim().length === 0) {
+      return null
+    }
+
+    const parsed = SubtitleParserFactory.parse(pureText)
+    this.convertFontSize(parsed)
+    console.log(`[VideoPlayer] counter=${counter} lines=${parsed.lines.length} srt=${this.controller.hasSrtSubtitle}`)
+    return parsed
   }
+
 
   /**
    * 提取纯字幕文本
