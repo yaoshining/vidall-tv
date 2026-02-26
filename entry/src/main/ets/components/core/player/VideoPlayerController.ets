@@ -43,7 +43,7 @@ export class VideoPlayerController {
    * 切换为 'ijkplayer' 后，VideoPlayer UI 层需要使用 libraryname='ijkplayer_napi'
    * 的 XComponent，并在 onLoad 回调中调用 controller.setIjkContext(context, id)。
    */
-  backend: PlayerBackend = 'ijkplayer';
+  backend: PlayerBackend = 'avplayer';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;

@@ -255,6 +255,8 @@ struct VideoControls {
                 // 始终同步 hoverTimeMs，保证 tooltip 时间正确
                 this.hoverTimeMs = value
                 if (mode === SliderChangeMode.Begin) {
+                  // 开始拖动时先取消自动关闭，避免拖动期间控件消失
+                  clearTimeout(this.closeTimer)
                   this.videoController.pause()
                   this.videoController.currentTime = value
                   this.videoController.seek(value)
@@ -264,6 +266,11 @@ struct VideoControls {
                 }
                 if (mode === SliderChangeMode.End) {
                   this.videoController.seek(value)
+                  this.videoController.play().then(() => {
+                    // forceStart=true：无论 isPlaying 状态如何都启动定时器
+                    // 避免 play() 异步完成前 isPlaying 仍为 false 导致定时器不启动
+                    this.enableAutoHide(true)
+                  })
                 }
               })
               .onHover((isHover: boolean, event: HoverEvent) => {
@@ -341,14 +348,12 @@ struct VideoControls {
     return '字幕';
   }
 
-  private enableAutoHide(): void {
-    if (this.videoController.isPlaying) {
-      clearTimeout(this.closeTimer)
+  private enableAutoHide(forceStart: boolean = false): void {
+    clearTimeout(this.closeTimer)
+    if (forceStart || this.videoController.isPlaying) {
       this.closeTimer = setTimeout(() => {
         this.dialogController.close()
       }, this.AUTO_CLOSE_TIMEOUT)
-    } else {
-      clearTimeout(this.closeTimer)
     }
   }
 
