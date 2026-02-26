@@ -572,26 +572,35 @@ export class SrtParser {
  */
 export class AssFileParser {
 
-  /**
-   * 解析 ASS/SSA 文件内容，返回按时间排序的 SrtEntry 数组
-   */
   static parse(content: string): SrtEntry[] {
+    // 去除 UTF-8 BOM（0xEF 0xBB 0xBF，字符串中表现为 '\uFEFF'）
+    let raw = content;
+    if (raw.length > 0 && raw.charCodeAt(0) === 0xFEFF) {
+      raw = raw.substring(1);
+    }
+
     const entries: SrtEntry[] = [];
-    const normalized = normalizeNewlines(content);
+    const normalized = normalizeNewlines(raw);
     const lines = normalized.split('\n');
 
     let inEvents = false;
-    // Format 行决定各字段的列索引
-    let startIdx = 1;   // 默认 Dialogue 第 2 字段
-    let endIdx = 2;     // 默认 Dialogue 第 3 字段
-    let textIdx = 9;    // 默认 Dialogue 第 10 字段
+    let startIdx = 1;
+    let endIdx = 2;
+    let textIdx = 9;
+
+    // 用 Map 合并同时段多条 Dialogue（key = "startMs_endMs"）
+    const mergeMap: Map<string, SrtEntry> = new Map();
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
+      if (line.length === 0) {
+        continue;
+      }
 
       // 检测节标题
-      if (line.startsWith('[')) {
-        inEvents = line.toLowerCase() === '[events]';
+      if (line.charAt(0) === '[') {
+        const lower = line.toLowerCase();
+        inEvents = lower === '[events]';
         continue;
       }
 
@@ -599,7 +608,7 @@ export class AssFileParser {
         continue;
       }
 
-      // 解析 Format 行，确定字段顺序
+      // Format 行
       if (line.startsWith('Format:')) {
         const formatStr = line.substring('Format:'.length).trim();
         const rawFields = formatStr.split(',');
@@ -611,39 +620,54 @@ export class AssFileParser {
         const ei = fields.indexOf('end');
         const ti = fields.indexOf('text');
         startIdx = si >= 0 ? si : 1;
-        endIdx = ei >= 0 ? ei : 2;
-        textIdx = ti >= 0 ? ti : 9;
+        endIdx   = ei >= 0 ? ei : 2;
+        textIdx  = ti >= 0 ? ti : 9;
         continue;
       }
 
-      // 解析 Dialogue 行
+      // Comment 行跳过
+      if (line.startsWith('Comment:')) {
+        continue;
+      }
+
+      // Dialogue 行
       if (!line.startsWith('Dialogue:')) {
         continue;
       }
 
       const entry = AssFileParser.parseDialogue(line, startIdx, endIdx, textIdx);
-      if (entry !== null) {
-        entries.push(entry);
+      if (entry === null) {
+        continue;
+      }
+
+      // 合并同时段多条 Dialogue（libass 行为：叠加显示）
+      const key = `${entry.startMs}_${entry.endMs}`;
+      const existing = mergeMap.get(key);
+      if (existing !== undefined) {
+        // 同时段追加，用换行分隔
+        if (entry.text.trim().length > 0) {
+          existing.text = existing.text + '\n' + entry.text;
+        }
+      } else {
+        mergeMap.set(key, entry);
       }
     }
 
+    // 收集并排序
+    mergeMap.forEach((entry: SrtEntry) => {
+      entries.push(entry);
+    });
     entries.sort((a: SrtEntry, b: SrtEntry) => a.startMs - b.startMs);
     return entries;
   }
 
-  /**
-   * 解析单行 Dialogue
-   */
   private static parseDialogue(
     line: string,
     startIdx: number,
     endIdx: number,
     textIdx: number
   ): SrtEntry | null {
-    // 去掉 "Dialogue:" 前缀
     const content = line.substring('Dialogue:'.length).trim();
-
-    // 按逗号分割，但 text 字段（最后一个）可能含逗号，需只分割 textIdx 次
     const maxSplit = textIdx + 1;
     const parts = AssFileParser.splitN(content, ',', maxSplit);
 
@@ -652,37 +676,27 @@ export class AssFileParser {
     }
 
     const startPart = parts[startIdx];
-    const endPart = parts[endIdx];
-    const textPart = parts[textIdx];
+    const endPart   = parts[endIdx];
+    const textPart  = parts[textIdx];
     if (startPart === undefined || endPart === undefined || textPart === undefined) {
       return null;
     }
 
     const startMs = AssFileParser.parseAssTime(startPart.trim());
-    const endMs = AssFileParser.parseAssTime(endPart.trim());
-
+    const endMs   = AssFileParser.parseAssTime(endPart.trim());
     if (startMs < 0 || endMs < 0) {
       return null;
     }
 
     const cleanText = AssFileParser.stripAssTags(textPart);
-
     if (cleanText.trim().length === 0) {
       return null;
     }
 
-    const entry: SrtEntry = {
-      startMs,
-      endMs,
-      text: cleanText
-    };
+    const entry: SrtEntry = { startMs, endMs, text: cleanText };
     return entry;
   }
 
-  /**
-   * 解析 ASS 时间戳 "H:MM:SS.cs" → ms
-   * cs = centiseconds（百分之一秒）
-   */
   private static parseAssTime(ts: string): number {
     const colonParts = ts.split(':');
     if (colonParts.length !== 3) {
@@ -715,44 +729,75 @@ export class AssFileParser {
   }
 
   /**
-   * 去除 ASS 样式标签（{\xxx}）并处理换行符 \N \n
+   * 剥除 ASS 样式标签，参照 libass 规范：
+   *
+   * 1. {tags} 块整体跳过（包括 \t(...) 等复杂标签）
+   * 2. 未闭合的 { 直接跳过（libass 行为：忽略到行尾）
+   * 3. \N / \n → 换行
+   * 4. \h → 不间断空格（U+00A0）
+   * 5. \{ → 字面 {（转义）
+   * 6. \} → 字面 }（转义）
+   * 7. \q0~\q3 → 忽略
+   * 8. 连续换行去重（libass 不会叠加空行）
    */
-  private static stripAssTags(text: string): string {
+  static stripAssTags(text: string): string {
     let result = '';
     let i = 0;
     while (i < text.length) {
-      if (text[i] === '{') {
-        // 找到对应的 }
-        const end = text.indexOf('}', i);
-        if (end >= 0) {
-          i = end + 1;
-          continue;
-        }
-      }
-      // \N 和 \n 转为换行
-      if (text[i] === '\\' && i + 1 < text.length) {
+      const ch = text[i];
+
+      // 转义序列
+      if (ch === '\\' && i + 1 < text.length) {
         const next = text[i + 1];
         if (next === 'N' || next === 'n') {
           result += '\n';
           i += 2;
           continue;
         }
-        // \h 是不间断空格
         if (next === 'h') {
-          result += ' ';
+          result += '\u00A0'; // 不间断空格
           i += 2;
           continue;
         }
+        // \{ 和 \} 转义
+        if (next === '{' || next === '}') {
+          result += next;
+          i += 2;
+          continue;
+        }
+        // \q 换行模式（\q0~\q3）—— 忽略整个 \qN
+        if (next === 'q' && i + 2 < text.length) {
+          const qn = text[i + 2];
+          if (qn >= '0' && qn <= '3') {
+            i += 3;
+            continue;
+          }
+        }
+        // 其他 \ 序列原样输出（比如 \K、\k 等 karaoke 标签在大括号外罕见，保留）
+        result += ch;
+        i++;
+        continue;
       }
-      result += text[i];
+
+      // {tags} 块：跳过到 }
+      if (ch === '{') {
+        const end = text.indexOf('}', i + 1);
+        if (end >= 0) {
+          i = end + 1; // 跳过整个 {tags}
+        } else {
+          // 未闭合 {：libass 行为是忽略到行尾
+          i = text.length;
+        }
+        continue;
+      }
+
+      result += ch;
       i++;
     }
+
     return result.trim();
   }
 
-  /**
-   * 按分隔符分割字符串，最多分割 n 次（最后一段保留剩余所有内容）
-   */
   private static splitN(str: string, sep: string, n: number): string[] {
     const result: string[] = [];
     let remaining = str;

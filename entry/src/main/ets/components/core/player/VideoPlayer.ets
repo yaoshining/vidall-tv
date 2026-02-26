@@ -139,19 +139,14 @@ export struct VideoPlayer {
     return cleaned
   }
 
-  /** 去除 ASS 样式标签 {\xxx} 并处理 \N \n */
+  /** 剥除 ASS 样式标签，参照 libass 规范 */
   private stripAssTags(text: string): string {
     let result = ''
     let i = 0
     while (i < text.length) {
-      if (text[i] === '{') {
-        const end = text.indexOf('}', i)
-        if (end >= 0) {
-          i = end + 1
-          continue
-        }
-      }
-      if (text[i] === '\\' && i + 1 < text.length) {
+      const ch = text[i]
+      // 转义序列
+      if (ch === '\\' && i + 1 < text.length) {
         const next = text[i + 1]
         if (next === 'N' || next === 'n') {
           result += '\n'
@@ -159,12 +154,38 @@ export struct VideoPlayer {
           continue
         }
         if (next === 'h') {
-          result += ' '
+          result += '\u00A0'
           i += 2
           continue
         }
+        if (next === '{' || next === '}') {
+          result += next
+          i += 2
+          continue
+        }
+        if (next === 'q' && i + 2 < text.length) {
+          const qn = text[i + 2]
+          if (qn >= '0' && qn <= '3') {
+            i += 3
+            continue
+          }
+        }
+        result += ch
+        i++
+        continue
       }
-      result += text[i]
+      // {tags} 块：跳过到 }
+      if (ch === '{') {
+        const end = text.indexOf('}', i + 1)
+        if (end >= 0) {
+          i = end + 1
+        } else {
+          // 未闭合 {：忽略到末尾
+          i = text.length
+        }
+        continue
+      }
+      result += ch
       i++
     }
     return result.trim()
