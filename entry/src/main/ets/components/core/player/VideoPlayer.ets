@@ -59,14 +59,9 @@ export struct VideoPlayer {
       return null
     }
 
-    let pureText: string
-    if (this.controller.hasSrtSubtitle) {
-      // 外部 SRT：currentSubtitleText 已是纯文本，直接用
-      pureText = text
-    } else {
-      // 内嵌字幕（ASS Dialogue 行）：截取第 8 个逗号后的内容
-      pureText = this.extractSubtitleText(text)
-    }
+    // 自动检测：是否是 ASS Dialogue 行（有 9 个以上逗号且前段是数字/空字符串）
+    // 如果是，截取第 9 个逗号后的纯文本；否则直接当纯文本渲染
+    const pureText = this.extractSubtitleText(text)
 
     if (pureText.trim().length === 0) {
       return null
@@ -74,33 +69,105 @@ export struct VideoPlayer {
 
     const parsed = SubtitleParserFactory.parse(pureText)
     this.convertFontSize(parsed)
-    console.log(`[VideoPlayer] counter=${counter} lines=${parsed.lines.length} srt=${this.controller.hasSrtSubtitle}`)
+    console.log(`[VideoPlayer] counter=${counter} lines=${parsed.lines.length}`)
     return parsed
   }
 
-
   /**
-   * 提取纯字幕文本
+   * 智能提取字幕文本：
+   * - 检测是否为 ASS Dialogue 格式（至少 8 个逗号且第 1 字段是数字），是则截取第 8 个逗号后的内容
+   * - 否则原文返回（SRT/纯文本）
+   *
+   * subtitleUpdate 回调格式（已验证，非标准 Dialogue 格式）：
+   *   序号,?,Style,?,?,?,?,?,Text
+   *   0    1 2     3 4 5 6 7 8
+   * 共 9 字段，8 个逗号，Text 在第 9 字段
+   *
+   * 示例：98,0,Subtitle,,0,0,0,,我真不该把她留在那儿
    */
   private extractSubtitleText(raw: string): string {
-    let lastCommaIndex = -1
+    // 快速检测：找前 8 个逗号
     let commaCount = 0
-
+    let eighthCommaIdx = -1
     for (let i = 0; i < raw.length; i++) {
       if (raw[i] === ',') {
         commaCount++
-        if (commaCount >= 8) {
-          lastCommaIndex = i
+        if (commaCount === 8) {
+          eighthCommaIdx = i
           break
         }
       }
     }
 
-    if (lastCommaIndex !== -1 && lastCommaIndex < raw.length - 1) {
-      return raw.substring(lastCommaIndex + 1)
+    // 不足 8 个逗号，不是 ASS Dialogue 格式，原文返回
+    if (eighthCommaIdx < 0) {
+      return raw
     }
 
-    return raw
+    // 检验第一个字段是否为数字（ASS Dialogue 的序号/Layer 总是数字）
+    const firstCommaIdx = raw.indexOf(',')
+    if (firstCommaIdx > 0) {
+      const firstField = raw.substring(0, firstCommaIdx).trim()
+      if (firstField.length === 0) {
+        // 第一字段为空，不是 ASS Dialogue
+        return raw
+      }
+      let isNum = true
+      for (let i = 0; i < firstField.length; i++) {
+        const c = firstField[i]
+        if (c < '0' || c > '9') {
+          isNum = false
+          break
+        }
+      }
+      if (!isNum) {
+        // 第一字段不是纯数字，不是 ASS Dialogue，原文返回
+        return raw
+      }
+    } else {
+      // 没有逗号或第一个逗号在开头，不是 ASS Dialogue
+      return raw
+    }
+
+    // 确认是 ASS Dialogue，截取第 8 个逗号后的内容（Text 字段）
+    const assText = raw.substring(eighthCommaIdx + 1)
+    console.log(`[VideoPlayer] 检测到 ASS Dialogue 格式（8逗号），原文前80字符: ${raw.substring(0, 80)}`)
+    console.log(`[VideoPlayer] 截取第8个逗号后: ${assText.substring(0, 60)}`)
+    // 去掉 ASS 样式标签 {xxx}
+    const cleaned = this.stripAssTags(assText)
+    console.log(`[VideoPlayer] 剥除样式标签后: ${cleaned.substring(0, 60)}`)
+    return cleaned
+  }
+
+  /** 去除 ASS 样式标签 {\xxx} 并处理 \N \n */
+  private stripAssTags(text: string): string {
+    let result = ''
+    let i = 0
+    while (i < text.length) {
+      if (text[i] === '{') {
+        const end = text.indexOf('}', i)
+        if (end >= 0) {
+          i = end + 1
+          continue
+        }
+      }
+      if (text[i] === '\\' && i + 1 < text.length) {
+        const next = text[i + 1]
+        if (next === 'N' || next === 'n') {
+          result += '\n'
+          i += 2
+          continue
+        }
+        if (next === 'h') {
+          result += ' '
+          i += 2
+          continue
+        }
+      }
+      result += text[i]
+      i++
+    }
+    return result.trim()
   }
 
   /**

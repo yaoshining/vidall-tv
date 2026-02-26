@@ -271,14 +271,18 @@ export class VideoPlayerController {
       this.isSeeking = false
     })
 
-    // 监听字幕更新事件
-    // 根据官方文档，内置字幕会通过 subtitleUpdate 回调实时推送
     try {
       avPlayer.on('subtitleUpdate', (info: media.SubtitleInfo) => {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `Subtitle update: text="${info.text}", startTime=${info.startTime}ms, duration=${info.duration}ms`);
+        // 若已激活外部字幕（SRT/ASS 时间轴驱动），忽略内嵌字幕回调，避免覆盖
+        if (this.srtEntries.length > 0) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `内嵌字幕回调被屏蔽（外部字幕已激活），text="${info.text?.substring(0, 50)}"`);
+          return;
+        }
 
-        // 清除之前的定时器
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `内嵌字幕回调: text="${info.text?.substring(0, 80)}" startTime=${info.startTime}ms duration=${info.duration}ms`);
+
         if (this.subtitleClearTimer) {
           clearTimeout(this.subtitleClearTimer)
           this.subtitleClearTimer = undefined
@@ -287,36 +291,29 @@ export class VideoPlayerController {
         if (info && info.text) {
           this.currentSubtitleText = info.text
 
-          // 计算字幕显示时长
           let displayDuration = 0
           if (info.duration !== undefined && info.duration > 0) {
             displayDuration = info.duration
           } else {
-            displayDuration = 3000  // 默认 3 秒
+            displayDuration = 3000
           }
 
           this.subtitleRemainingTime = displayDuration
-          console.log(`[VideoPlayerController] Subtitle duration: ${displayDuration}ms`)
 
-          // 只有在播放状态才设置定时器
           if (this.isPlaying) {
             this.startSubtitleTimer()
-          } else {
-            console.log(`[VideoPlayerController] Video paused, subtitle timer not started`)
           }
         } else {
           this.currentSubtitleText = ''
           this.subtitleRemainingTime = 0
         }
 
-        // 更新计数器，强制触发 UI 更新
         this.subtitleUpdateCounter++
-        console.log(`[VideoPlayerController] subtitleUpdateCounter: ${this.subtitleUpdateCounter}, text length: ${this.currentSubtitleText.length}`)
       })
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'Subtitle update listener registered successfully');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '内嵌字幕监听已注册');
     } catch (error) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `Failed to register subtitle listener: ${JSON.stringify(error)}`);
+        `注册内嵌字幕监听失败: ${JSON.stringify(error)}`);
     }
   }
 
@@ -580,11 +577,11 @@ export class VideoPlayerController {
     this.subtitleUpdateCounter++;
 
     if (allIndex < 0) {
-      // 关闭字幕：清空 SRT，同时关闭内嵌（旧版兼容）
+      // 关闭字幕：清空 SRT，关闭内嵌
       this.srtEntries = [];
       this.lastSrtText = '';
-      this.currentSubtitleTrack = -1;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '字幕已关闭');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '关闭字幕，将调用 selectSubtitleTrack(-1)');
+      await this.selectSubtitleTrack(-1);
       return;
     }
 
@@ -607,12 +604,14 @@ export class VideoPlayerController {
           `⚠️ 外部字幕条目为空，字幕将不显示。请检查文件下载和解析日志。`);
       }
     } else {
-      // 切换到内嵌字幕（API 19 实际无回调，仅保留结构）
+      // 切换到内嵌字幕：清空外部字幕，调用 selectSubtitleTrack 激活 AVPlayer 内嵌轨道
       this.srtEntries = [];
       this.lastSrtText = '';
       const internalIdx = item.internalIndex ?? 0;
-      this.currentSubtitleTrack = internalIdx;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `切换到内嵌字幕轨道 ${internalIdx}`);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `切换到内嵌字幕轨道 ${internalIdx}，将调用 selectSubtitleTrack 激活`);
+      // 调用旧方法激活内嵌轨道（会触发 AVPlayer 的 selectTrack）
+      await this.selectSubtitleTrack(internalIdx);
     }
   }
 
@@ -760,23 +759,38 @@ export class VideoPlayerController {
         method: http.RequestMethod.GET,
         header: headers,
         connectTimeout: 10000,
-        readTimeout: 15000
+        readTimeout: 15000,
+        expectDataType: http.HttpDataType.STRING
       }, (err: BusinessError, resp: http.HttpResponse) => {
         req.destroy();
         if (err) {
+          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+            `SRT 下载失败: code=${err.code} msg=${err.message} url=${url}`);
           reject(err);
           return;
         }
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `SRT HTTP 响应: ${resp.responseCode}, resultType=${typeof resp.result}`);
         if (resp.responseCode !== 200) {
           reject(new Error(`HTTP ${resp.responseCode}`) as BusinessError);
           return;
         }
         const body = resp.result as string;
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `SRT 下载完成，内容大小: ${body.length} 字节`);
+          `SRT 下载完成，内容大小: ${body.length} 字节，前50字符: ${body.substring(0, 50)}`);
+        if (body.length === 0) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'SRT 文件内容为空');
+          resolve([]);
+          return;
+        }
         const entries = SrtParser.parse(body);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `SRT 解析完成，共 ${entries.length} 条`);
+        if (entries.length > 0) {
+          const e0 = entries[0];
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `SRT 第1条: ${e0.startMs}ms→${e0.endMs}ms: ${e0.text.substring(0, 40)}`);
+        }
         resolve(entries);
       });
     });
@@ -790,15 +804,18 @@ export class VideoPlayerController {
         method: http.RequestMethod.GET,
         header: headers,
         connectTimeout: 10000,
-        readTimeout: 15000
+        readTimeout: 15000,
+        expectDataType: http.HttpDataType.STRING
       }, (err: BusinessError, resp: http.HttpResponse) => {
         req.destroy();
         if (err) {
           hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-            `ASS 下载失败: code=${err.code} msg=${err.message}`);
+            `ASS 下载失败: code=${err.code} msg=${err.message} url=${url}`);
           reject(err);
           return;
         }
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `ASS HTTP 响应: ${resp.responseCode}, resultType=${typeof resp.result}`);
         if (resp.responseCode !== 200) {
           hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
             `ASS 下载 HTTP 状态异常: ${resp.responseCode}`);
@@ -807,13 +824,19 @@ export class VideoPlayerController {
         }
         const body = resp.result as string;
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `ASS 下载完成，内容大小: ${body.length} 字节`);
+          `ASS 下载完成，内容大小: ${body.length} 字节，前50字符: ${body.substring(0, 50)}`);
+        if (body.length === 0) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'ASS 文件内容为空');
+          resolve([]);
+          return;
+        }
         const entries = AssFileParser.parse(body);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `ASS 解析完成，共 ${entries.length} 条，前3条示例:`);
-        for (let i = 0; i < Math.min(3, entries.length); i++) {
+          `ASS 解析完成，共 ${entries.length} 条`);
+        if (entries.length > 0) {
+          const e0 = entries[0];
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `  [${i}] ${entries[i].startMs}ms→${entries[i].endMs}ms: ${entries[i].text.substring(0, 30)}`);
+            `ASS 第1条: ${e0.startMs}ms→${e0.endMs}ms: ${e0.text.substring(0, 40)}`);
         }
         resolve(entries);
       });
