@@ -1,6 +1,4 @@
-import { media } from "@kit.MediaKit";
-import fs from "@ohos.file.fs";
-import { AVPlayerState, PlayerEvents, VideoDataType } from "./Constants";
+import { PlayerEvents, VideoDataType } from "./Constants";
 import { VideoData } from "./VideoData";
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from "@kit.PerformanceAnalysisKit";
@@ -8,6 +6,8 @@ import { CommonConstants } from "../../../common/constants/CommonConstants";
 import { millisecondsToTime } from "../../../utils/TimeUtil";
 import { SrtEntry, SrtParser, AssFileParser } from "./SubtitleRenderer";
 import { http } from "@kit.NetworkKit";
+import { IPlayer, TrackInfo } from "./IPlayer";
+import { AVPlayerAdapter } from "./AVPlayerAdapter";
 
 const TAG = '[VideoPlayerController]';
 
@@ -34,7 +34,8 @@ export interface SubtitleTrackItem {
 
 @ObservedV2
 export class VideoPlayerController {
-  private avPlayer?: media.AVPlayer
+  /** 当前使用的播放内核，默认为 AVPlayerAdapter */
+  private player?: IPlayer;
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
   @Trace duration = 0
@@ -45,277 +46,192 @@ export class VideoPlayerController {
   @Trace currentBufferTime = 0
   @Trace isLoading = false
   @Trace progress = 0
-  @Trace subtitleTracks: media.MediaDescription[] = []
+  /** 内嵌字幕轨道列表（来自 getTrackInfos） */
+  @Trace subtitleTracks: TrackInfo[] = []
   @Trace currentSubtitleTrack: number = -1
   @Trace currentSubtitleText: string = ''
   @Trace subtitleUpdateCounter: number = 0
-  /** 统一字幕轨道列表（内嵌 + 外部，供菜单展示） */
   @Trace allSubtitleTracks: SubtitleTrackItem[] = [];
-  /** 当前激活的字幕轨道在 allSubtitleTracks 中的索引，-1 表示关闭 */
   @Trace activeSubtitleIndex: number = -1;
-  /** 解析后的外部 SRT 字幕条目（时间轴驱动） */
   private srtEntries: SrtEntry[] = [];
-  /** 当前通过 timeUpdate 显示的字幕文本（避免每帧重复赋值） */
   private lastSrtText: string = '';
-  /** 当前播放的 VideoData（供 prepared 后自动查找字幕使用） */
   private currentVideoData?: VideoData;
   private timeToSeek = -1
-  private subtitleClearTimer?: number  // 字幕清空定时器
-  private subtitleRemainingTime: number = 0  // 字幕剩余显示时间（毫秒）
-  private subtitlePauseTime: number = 0  // 字幕暂停时的时间戳
+  private subtitleClearTimer?: number
+  private subtitleRemainingTime: number = 0
+  private subtitlePauseTime: number = 0
 
-  async initAVPlayer(videoData: VideoData, surfaceId: string, player?: media.AVPlayer): Promise<void> {
+  /**
+   * 初始化播放器，默认使用 AVPlayerAdapter。
+   * 未来切换内核时，只需传入不同的 IPlayer 实现即可。
+   */
+  async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
-    try {
-      let avPlayer = player || await media.createAVPlayer()
-      this.avPlayer = avPlayer
-      this.surfaceId = surfaceId
+    this.surfaceId = surfaceId;
 
-      avPlayer.videoScaleType = media.VideoScaleType.VIDEO_SCALE_TYPE_FIT
-
-      this.setAVPlayerCallbacks(avPlayer)
-
-      if (videoData.type === VideoDataType.URL) {
-        // avPlayer.url = videoData.videoSrc
-
-        // {
-        //   'Authorization': 'Basic eWFvOnlzMTk4NzU2',
-        // // 'Authorization': 'Basic Y2RrZDpkYXJ0dmpoeA==',
-        // "User-Agent": "VidALL/1.0.0",
-        // }
-
-        // 设置播放策略，设置缓冲区数据量为3s。
-        let playbackStrategy : media.PlaybackStrategy =
-          {preferredWidth: 1, preferredHeight: 2, preferredBufferDuration: 3, preferredHdr: true};
-        const mediaSource =
-          media.createMediaSourceWithUrl(videoData.videoSrc, videoData.httpHeader)
-        avPlayer.setMediaSource(mediaSource, playbackStrategy)
-      }
-
-      if (videoData.type === VideoDataType.FILE_URI) {
-        let file = fs.openSync(videoData.videoSrc, fs.OpenMode.READ_ONLY)
-        avPlayer.fdSrc = {
-          fd: file.fd
-        }
-      }
-
-      this.setAVPlayerStateChangeCallback(avPlayer)
-
-      // 重置字幕状态
-      this.srtEntries = [];
-      this.lastSrtText = '';
-      this.currentSubtitleText = '';
-      this.subtitleUpdateCounter = 0;
-      this.allSubtitleTracks = [];
-      this.activeSubtitleIndex = -1;
-
-      // 如果提供了外部 SRT 字幕 URL，异步下载并解析
-      if (videoData.subtitleUrl) {
-        this.loadExternalSrt(videoData.subtitleUrl, videoData.subtitleHeaders)
-          .catch((e: BusinessError) => {
-            hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `外部字幕加载失败: ${e.message}`);
-          });
-      }
-    } catch (error) {
-      if (error) {
-        console.error(`Video Player creation error: ${error}`)
-        return
-      }
+    // 释放旧 player
+    if (this.player) {
+      await this.player.release().catch(() => {});
+      this.player = undefined;
     }
-  }
 
-  async play(): Promise<void> {
-    // if (this.isSeeking) {
-    //   return
-    // }
-    await this.avPlayer?.play().catch((err: BusinessError) => {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `play failed, code is ${err.code}, message is ${err.message}`);
-    })
-  }
+    // 重置状态
+    this.isReady = false;
+    this.isPlaying = false;
+    this.duration = 0;
+    this.currentTime = 0;
+    this.progress = 0;
+    this.srtEntries = [];
+    this.lastSrtText = '';
+    this.currentSubtitleText = '';
+    this.subtitleUpdateCounter = 0;
+    this.allSubtitleTracks = [];
+    this.activeSubtitleIndex = -1;
 
-  async pause(): Promise<void> {
-    if (this.avPlayer?.state === AVPlayerState.PLAYING) {
-      await this.avPlayer?.pause().catch((err: BusinessError) => {
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `play failed, code is ${err.code}, message is ${err.message}`);
-      })
-    }
-  }
+    // 创建 AVPlayerAdapter（后续可换成其他 IPlayer 实现）
+    const adapter = new AVPlayerAdapter();
 
-  async toggle(): Promise<void> {
-    if (this.avPlayer) {
-      if (this.avPlayer.state === AVPlayerState.PLAYING) {
-        await this.pause()
-      } else {
-        await this.play()
-      }
-    }
-  }
-
-  async release(): Promise<void> {
-    if (this.avPlayer) {
-      try {
-        if (this.subtitleClearTimer) {
-          clearTimeout(this.subtitleClearTimer)
-          this.subtitleClearTimer = undefined
-        }
-        // 清理 SRT 状态
-        this.srtEntries = [];
-        this.lastSrtText = '';
-        this.currentSubtitleText = '';
-        await this.avPlayer.release()
-      } catch (error) {
-        // TODO: Implement error handling.
-      }
-    }
-  }
-
-  async seek(time: number): Promise<void> {
-    if (this.avPlayer) {
-      await this.pause()
-      this.currentTime = time
-      if (!this.isSeeking) {
-        this.isSeeking = true
-        this.avPlayer.seek(time)
-      } else {
-        this.timeToSeek = time
-      }
-    }
-  }
-
-  async forward(milliseconds: number): Promise<void> {
-    this.seek(this.currentTime + milliseconds)
-  }
-
-  async backward(milliseconds: number): Promise<void> {
-    this.seek(this.currentTime - milliseconds)
-  }
-
-  private setAVPlayerStateChangeCallback(avPlayer: media.AVPlayer): void {
-    avPlayer.on('stateChange', (state: string) => {
-      switch (state) {
-        case AVPlayerState.IDLE:
-          break
-        case AVPlayerState.INITIALIZED:
-          avPlayer.surfaceId = this.surfaceId
-          avPlayer.prepare().catch((err: BusinessError) => {
-            hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-              `prepare failed, code is ${err.code}, message is ${err.message}`);
-          })
-          break
-        case AVPlayerState.PREPARED:
-          this.duration = avPlayer.duration
-          this.currentTime = avPlayer.currentTime
-          this.isReady = true
-          this.loadSubtitleTracks(avPlayer)
-          emitter.emit(PlayerEvents.PREPARED)
-          break
-        case AVPlayerState.PLAYING:
-          this.isPlaying = true
-          // 恢复字幕定时器
-          this.resumeSubtitleTimer()
-          emitter.emit(PlayerEvents.PLAYING)
-          break
-        case AVPlayerState.PAUSED:
-          this.isPlaying = false
-          // 暂停字幕定时器
-          this.pauseSubtitleTimer()
-          break
-        case AVPlayerState.COMPLETED:
-          this.isPlaying = false
-          break
-        case AVPlayerState.STOPPED:
-          this.isPlaying = false
-          break
-        case AVPlayerState.ERROR:
-          this.isPlaying = false
-          break
-        default:
-          break
-      }
-    })
-  }
-
-  private setAVPlayerCallbacks(avPlayer: media.AVPlayer): void {
-    avPlayer.on("timeUpdate", () => {
-      this.currentTime = avPlayer.currentTime
-      this.progress = this.currentTime / this.duration
-
+    // 注册所有 IPlayer 事件回调
+    adapter.onReady(() => this.onPlayerReady());
+    adapter.onPlay(() => {
+      this.isPlaying = true;
+      this.isLoading = false;
+      this.resumeSubtitleTimer();
+      emitter.emit(PlayerEvents.PLAYING);
+    });
+    adapter.onPaused(() => {
+      this.isPlaying = false;
+      this.pauseSubtitleTimer();
+    });
+    adapter.onCompleted(() => {
+      this.isPlaying = false;
+    });
+    adapter.onStopped(() => {
+      this.isPlaying = false;
+    });
+    adapter.onTimeUpdate((currentTime: number) => {
+      this.currentTime = currentTime;
+      this.progress = this.duration > 0 ? currentTime / this.duration : 0;
       // SRT 时间轴驱动字幕
       if (this.srtEntries.length > 0) {
-        const text = SrtParser.findAt(this.srtEntries, this.currentTime);
+        const text = SrtParser.findAt(this.srtEntries, currentTime);
         if (text !== this.lastSrtText) {
           this.lastSrtText = text;
           this.currentSubtitleText = text;
           this.subtitleUpdateCounter++;
         }
       }
-    })
-
-    avPlayer.on('error', (error: Error) => {
-      console.error('AVPlayer error:', JSON.stringify(error));
+    });
+    adapter.onError((error: Error) => {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
       this.isLoading = false;
     });
-
-    avPlayer.on('seekDone', async () => {
-      console.log(`time to seek is: ` + this.timeToSeek);
-      if (!this.isSeeking) {
-        avPlayer.seek(this.timeToSeek)
-        this.timeToSeek = -1
+    adapter.onSeekDone(() => {
+      if (this.timeToSeek >= 0) {
+        adapter.seek(this.timeToSeek);
+        this.timeToSeek = -1;
       } else {
-        await avPlayer.play()
+        this.player?.play().catch(() => {});
       }
+      this.isSeeking = false;
+    });
+    adapter.onSubtitleUpdate((info) => {
+      // 外部字幕激活时屏蔽内嵌回调
+      if (this.srtEntries.length > 0) {
+        return;
+      }
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `内嵌字幕回调: text="${info.text?.substring(0, 80)}" duration=${info.duration}ms`);
+      if (this.subtitleClearTimer) {
+        clearTimeout(this.subtitleClearTimer);
+        this.subtitleClearTimer = undefined;
+      }
+      if (info.text) {
+        this.currentSubtitleText = info.text;
+        const displayDuration = (info.duration && info.duration > 0) ? info.duration : 3000;
+        this.subtitleRemainingTime = displayDuration;
+        if (this.isPlaying) { this.startSubtitleTimer(); }
+      } else {
+        this.currentSubtitleText = '';
+        this.subtitleRemainingTime = 0;
+      }
+      this.subtitleUpdateCounter++;
+    });
 
-      this.isSeeking = false
-    })
+    this.player = adapter;
 
     try {
-      avPlayer.on('subtitleUpdate', (info: media.SubtitleInfo) => {
-        // 若已激活外部字幕（SRT/ASS 时间轴驱动），忽略内嵌字幕回调，避免覆盖
-        if (this.srtEntries.length > 0) {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `内嵌字幕回调被屏蔽（外部字幕已激活），text="${info.text?.substring(0, 50)}"`);
-          return;
-        }
-
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `内嵌字幕回调: text="${info.text?.substring(0, 80)}" startTime=${info.startTime}ms duration=${info.duration}ms`);
-
-        if (this.subtitleClearTimer) {
-          clearTimeout(this.subtitleClearTimer)
-          this.subtitleClearTimer = undefined
-        }
-
-        if (info && info.text) {
-          this.currentSubtitleText = info.text
-
-          let displayDuration = 0
-          if (info.duration !== undefined && info.duration > 0) {
-            displayDuration = info.duration
-          } else {
-            displayDuration = 3000
-          }
-
-          this.subtitleRemainingTime = displayDuration
-
-          if (this.isPlaying) {
-            this.startSubtitleTimer()
-          }
-        } else {
-          this.currentSubtitleText = ''
-          this.subtitleRemainingTime = 0
-        }
-
-        this.subtitleUpdateCounter++
-      })
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '内嵌字幕监听已注册');
-    } catch (error) {
+      await adapter.init(videoData, surfaceId);
+    } catch (e) {
+      const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `注册内嵌字幕监听失败: ${JSON.stringify(error)}`);
+        `init 失败: code=${err.code} msg=${err.message}`);
     }
   }
+
+  /** prepared 后回调：读取 duration、加载字幕轨道 */
+  private async onPlayerReady(): Promise<void> {
+    this.duration = this.player?.duration ?? 0;
+    this.currentTime = this.player?.currentTime ?? 0;
+    this.isReady = true;
+    emitter.emit(PlayerEvents.PREPARED);
+    await this.loadSubtitleTracks();
+  }
+
+  async play(): Promise<void> {
+    await this.player?.play().catch((err: BusinessError) => {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `play 失败: code=${err.code} msg=${err.message}`);
+    });
+  }
+
+  async pause(): Promise<void> {
+    await this.player?.pause().catch((err: BusinessError) => {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `pause 失败: code=${err.code} msg=${err.message}`);
+    });
+  }
+
+  async toggle(): Promise<void> {
+    await this.player?.toggle();
+  }
+
+  async release(): Promise<void> {
+    if (this.subtitleClearTimer) {
+      clearTimeout(this.subtitleClearTimer);
+      this.subtitleClearTimer = undefined;
+    }
+    this.srtEntries = [];
+    this.lastSrtText = '';
+    this.currentSubtitleText = '';
+    if (this.player) {
+      await this.player.release().catch(() => {});
+      this.player = undefined;
+    }
+  }
+
+  async seek(time: number): Promise<void> {
+    if (!this.player) { return; }
+    await this.pause();
+    this.currentTime = time;
+    if (!this.isSeeking) {
+      this.isSeeking = true;
+      this.player.seek(time);
+    } else {
+      this.timeToSeek = time;
+    }
+  }
+
+  async forward(milliseconds: number): Promise<void> {
+    this.seek(this.currentTime + milliseconds);
+  }
+
+  async backward(milliseconds: number): Promise<void> {
+    this.seek(this.currentTime - milliseconds);
+  }
+
+  // ─── 字幕定时器 ───
 
   /**
    * 启动字幕清空定时器
@@ -377,38 +293,37 @@ export class VideoPlayerController {
     return this.srtEntries.length > 0;
   }
 
-  /**
-   * 加载字幕轨道列表
-   */
-  private async loadSubtitleTracks(avPlayer: media.AVPlayer): Promise<void> {
+  private async loadSubtitleTracks(): Promise<void> {
+    if (!this.player) { return; }
+
     try {
-      const trackDescription = await avPlayer.getTrackDescription();
-      if (trackDescription && trackDescription.length > 0) {
-        this.subtitleTracks = trackDescription.filter((track: media.MediaDescription) => {
-          return track[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] === media.MediaType.MEDIA_TYPE_SUBTITLE;
-        });
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `内嵌字幕轨道数: ${this.subtitleTracks.length}`);
-        this.subtitleTracks.forEach((track: media.MediaDescription, index: number) => {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG, `内嵌字幕[${index}]: ${JSON.stringify(track)}`);
-        });
-      }
-    } catch (error) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `getTrackDescription 失败: ${JSON.stringify(error)}`);
+      const allTracks = await this.player.getTrackInfos();
+      this.subtitleTracks = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `内嵌字幕轨道数: ${this.subtitleTracks.length}`);
+      this.subtitleTracks.forEach((t: TrackInfo, i: number) => {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `内嵌字幕[${i}]: trackIndex=${t.trackIndex} mime=${t.mimeType} lang=${t.language}`);
+      });
+    } catch (e) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `getTrackInfos 失败: ${JSON.stringify(e)}`);
     }
 
-    // 构建内嵌轨道列表
+    // 构建内嵌轨道条目
     const tracks: SubtitleTrackItem[] = [];
     for (let i = 0; i < this.subtitleTracks.length; i++) {
+      const t = this.subtitleTracks[i];
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName: this.getSubtitleTrackName(i),
-        internalIndex: i
+        internalIndex: t.trackIndex
       };
       tracks.push(item);
     }
     this.allSubtitleTracks = tracks;
 
-    // 查找外部字幕（异步，完成后追加到列表）
+    // 探测外部字幕
     if (this.currentVideoData && this.currentVideoData.type === VideoDataType.URL) {
       const externalItems = await this.findExternalSubtitles(
         this.currentVideoData.videoSrc,
@@ -416,14 +331,9 @@ export class VideoPlayerController {
       );
       if (externalItems.length > 0) {
         const updated: SubtitleTrackItem[] = [];
-        for (const t of this.allSubtitleTracks) {
-          updated.push(t);
-        }
-        for (const ext of externalItems) {
-          updated.push(ext);
-        }
+        for (const t of this.allSubtitleTracks) { updated.push(t); }
+        for (const ext of externalItems) { updated.push(ext); }
         this.allSubtitleTracks = updated;
-        // 默认激活第一个外部字幕
         const firstExtIdx = updated.findIndex((t: SubtitleTrackItem) => t.kind === 'external');
         if (firstExtIdx >= 0) {
           await this.switchSubtitleTrack(firstExtIdx);
@@ -432,112 +342,44 @@ export class VideoPlayerController {
       }
     }
 
-    // 无外部字幕时，若有内嵌轨道默认激活第一条
     if (this.allSubtitleTracks.length > 0) {
       await this.switchSubtitleTrack(0);
     }
   }
 
-  /**
-   * 选择字幕轨道
-   * @param trackIndex 字幕轨道索引，-1表示关闭字幕
-   */
   async selectSubtitleTrack(trackIndex: number): Promise<void> {
-    if (!this.avPlayer) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, 'AVPlayer not initialized');
-      return
+    if (!this.player) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, 'player not initialized');
+      return;
     }
-
-    // 记录切换前的播放状态
-    const wasPlaying = this.isPlaying
-
     try {
-      // 根据官方文档：播放过程中动态切换需先 pause()
-      if (wasPlaying) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'Pausing playback before subtitle track switch');
-        await this.pause()
-      }
-
-      if (trackIndex === -1) {
-        // 关闭字幕：只更新状态，不调用 deselectTrack
-        this.currentSubtitleTrack = -1
-        this.currentSubtitleText = ''  // 清空字幕
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'Subtitle disabled');
-      } else if (trackIndex >= 0 && trackIndex < this.subtitleTracks.length) {
-        // 选择新的字幕轨道
-        const track = this.subtitleTracks[trackIndex]
-        const trackIndexInPlayer = track[media.MediaDescriptionKey.MD_KEY_TRACK_INDEX] as number
-        const language = track[media.MediaDescriptionKey.MD_KEY_LANGUAGE] as string || 'unknown'
-
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `Selecting subtitle track ${trackIndex}: trackIndex=${trackIndexInPlayer}, language=${language}`);
-
-        // 清空当前字幕文本，等待新字幕更新
-        this.currentSubtitleText = ''
-
-        // 选择字幕轨道
-        await this.avPlayer.selectTrack(trackIndexInPlayer)
-        this.currentSubtitleTrack = trackIndex
-
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `Successfully selected subtitle track ${trackIndex}. Waiting for subtitleUpdate callbacks...`);
-      }
-
-      // 根据官方文档：切换后重新 play()
-      if (wasPlaying) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'Resuming playback after subtitle track switch');
-        await this.play()
-      }
-    } catch (error) {
-      const err = error as BusinessError
+      await this.player.selectTrack(trackIndex);
+      this.currentSubtitleTrack = trackIndex;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        trackIndex < 0 ? '字幕已关闭' : `内嵌字幕轨道 ${trackIndex} 已激活`);
+    } catch (e) {
+      const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `Failed to select subtitle track: code=${err.code}, message=${err.message}`);
-
-      // 即使出错也尝试恢复播放
-      if (wasPlaying) {
-        try {
-          await this.play()
-        } catch (playError) {
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-            `Failed to resume playback: ${JSON.stringify(playError)}`);
-        }
-      }
+        `selectSubtitleTrack 失败: code=${err.code} msg=${err.message}`);
     }
   }
 
-  /**
-   * 获取字幕轨道的显示名称
-   */
   getSubtitleTrackName(trackIndex: number): string {
     if (trackIndex === -1) {
-      return '关闭字幕'
+      return '关闭字幕';
     }
-
     if (trackIndex >= 0 && trackIndex < this.subtitleTracks.length) {
-      const track = this.subtitleTracks[trackIndex]
-
-      // 尝试获取字幕的各种信息
-      const language = track[media.MediaDescriptionKey.MD_KEY_LANGUAGE] as string
-      const mimeType = track[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] as string
-
-      // 构建显示名称
-      let displayName = ''
-
-      if (language) {
-        // 将语言代码转换为更友好的名称
-        displayName = this.getLanguageName(language)
-      } else if (mimeType) {
-        // 从MIME类型提取格式信息
-        const format = mimeType.split('/').pop() || ''
-        displayName = `字幕 ${trackIndex + 1} (${format})`
-      } else {
-        displayName = `字幕 ${trackIndex + 1}`
+      const track = this.subtitleTracks[trackIndex];
+      if (track.language) {
+        return this.getLanguageName(track.language);
       }
-
-      return displayName
+      if (track.mimeType) {
+        const format = track.mimeType.split('/').pop() ?? '';
+        return `字幕 ${trackIndex + 1} (${format})`;
+      }
+      return `字幕 ${trackIndex + 1}`;
     }
-
-    return '字幕'
+    return '字幕';
   }
 
   /**
@@ -864,60 +706,5 @@ export class VideoPlayerController {
     }
     return withoutExt;
   }
-
-  /**
-   * 下载并解析外部 SRT 字幕文件
-   * 解析成功后写入 srtEntries，timeUpdate 会自动驱动显示
-   */
-  private async loadExternalSrt(url: string, headers?: Record<string, string>): Promise<void> {
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `开始加载外部字幕: ${url}`);
-
-    const reqHeaders: Record<string, string> = {
-      'User-Agent': 'VidALL/1.0.0',
-      'Accept': 'text/plain,*/*'
-    };
-    if (headers) {
-      const keys = Object.keys(headers);
-      for (const k of keys) {
-        reqHeaders[k] = headers[k];
-      }
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      const req = http.createHttp();
-      req.request(url, {
-        method: http.RequestMethod.GET,
-        header: reqHeaders,
-        connectTimeout: 10000,
-        readTimeout: 15000
-      }, (err: BusinessError, resp: http.HttpResponse) => {
-        req.destroy();
-        if (err) {
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-            `字幕下载失败: code=${err.code} msg=${err.message}`);
-          reject(err);
-          return;
-        }
-        if (resp.responseCode !== 200) {
-          const e = new Error(`字幕服务器返回 ${resp.responseCode}`);
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, e.message);
-          reject(e as BusinessError);
-          return;
-        }
-        try {
-          const body = resp.result as string;
-          const entries = SrtParser.parse(body);
-          this.srtEntries = entries;
-          this.lastSrtText = '';
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `外部字幕加载成功，共 ${entries.length} 条`);
-          resolve();
-        } catch (parseErr) {
-          const e = parseErr as BusinessError;
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG, `字幕解析失败: ${e.message}`);
-          reject(e);
-        }
-      });
-    });
-  }
 }
+
