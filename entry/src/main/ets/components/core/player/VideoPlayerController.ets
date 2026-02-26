@@ -8,6 +8,10 @@ import { SrtEntry, SrtParser, AssFileParser } from "./SubtitleRenderer";
 import { http } from "@kit.NetworkKit";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
+import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
+
+/** 播放内核类型 */
+export type PlayerBackend = 'avplayer' | 'ijkplayer';
 
 const TAG = '[VideoPlayerController]';
 
@@ -34,7 +38,14 @@ export interface SubtitleTrackItem {
 
 @ObservedV2
 export class VideoPlayerController {
-  /** 当前使用的播放内核，默认为 AVPlayerAdapter */
+  /**
+   * 播放内核选择，默认 'avplayer'。
+   * 切换为 'ijkplayer' 后，VideoPlayer UI 层需要使用 libraryname='ijkplayer_napi'
+   * 的 XComponent，并在 onLoad 回调中调用 controller.setIjkContext(context, id)。
+   */
+  backend: PlayerBackend = 'ijkplayer';
+
+  /** 当前使用的播放内核实例 */
   private player?: IPlayer;
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
@@ -62,8 +73,10 @@ export class VideoPlayerController {
   private subtitlePauseTime: number = 0
 
   /**
-   * 初始化播放器，默认使用 AVPlayerAdapter。
-   * 未来切换内核时，只需传入不同的 IPlayer 实现即可。
+   * 初始化播放器。
+   * - backend='avplayer'：直接用 surfaceId 初始化，与之前行为一致。
+   * - backend='ijkplayer'：创建 IjkPlayerAdapter，surfaceId 暂时忽略，
+   *   需要 VideoPlayer UI 层在 XComponent.onLoad 里调用 setIjkContext()。
    */
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     this.name = videoData.name || ''
@@ -89,8 +102,17 @@ export class VideoPlayerController {
     this.allSubtitleTracks = [];
     this.activeSubtitleIndex = -1;
 
-    // 创建 AVPlayerAdapter（后续可换成其他 IPlayer 实现）
-    const adapter = new AVPlayerAdapter();
+    // 根据 backend 创建对应适配器
+    let adapter: IPlayer;
+    if (this.backend === 'ijkplayer') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
+      adapter = new IjkPlayerAdapter();
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: 使用 AVPlayerAdapter');
+      adapter = new AVPlayerAdapter();
+    }
 
     // 注册所有 IPlayer 事件回调
     adapter.onReady(() => this.onPlayerReady());
@@ -161,12 +183,55 @@ export class VideoPlayerController {
 
     this.player = adapter;
 
-    try {
-      await adapter.init(videoData, surfaceId);
-    } catch (e) {
-      const err = e as BusinessError;
+    if (this.backend === 'ijkplayer') {
+      // IjkPlayer 需要先由 UI 层绑定 XComponent context，
+      // VideoPlayer.ets 的 onLoad 回调会调用 setIjkContext() 来完成真正的 init
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
+    } else {
+      try {
+        await adapter.init(videoData, surfaceId);
+      } catch (e) {
+        const err = e as BusinessError;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `init 失败: code=${err.code} msg=${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * 供 VideoPlayer UI 层在 ijkplayer XComponent.onLoad 回调中调用。
+   * 必须在 initPlayer() 之后调用，绑定 XComponent context 后触发真正的 init。
+   *
+   * 时序说明：
+   * 1. UI 层先注册 emitter.once(PREPARED)
+   * 2. UI 层调 initPlayer()（创建 IjkPlayerAdapter 但不调 native_setup）
+   * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
+   */
+  async setIjkContext(context: object, xComponentId: string): Promise<void> {
+    if (this.backend !== 'ijkplayer') {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'setIjkContext() 被调用但 backend 不是 ijkplayer，忽略');
+      return;
+    }
+    if (!this.player) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `init 失败: code=${err.code} msg=${err.message}`);
+        'setIjkContext() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
+      return;
+    }
+    const ijkAdapter = this.player as IjkPlayerAdapter;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `setIjkContext: 绑定 XComponent id=${xComponentId}，开始完整 init 流程...`);
+    // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 后立即调用 setContext
+    ijkAdapter.setPendingContext(context, xComponentId);
+    if (this.currentVideoData) {
+      try {
+        await ijkAdapter.init(this.currentVideoData, this.surfaceId);
+      } catch (e) {
+        const err = e as BusinessError;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `setIjkContext init 失败: ${err.message}`);
+      }
     }
   }
 

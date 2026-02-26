@@ -245,39 +245,98 @@ export struct VideoPlayer {
 
   build() {
     Stack() {
-      XComponent({
-        id: 'playerXComponent',
-        type: XComponentType.SURFACE,
-        controller: this.xComponentController
-      })
-        .onLoad(() => {
-          this.surfaceId = this.xComponentController.getXComponentSurfaceId()
-          this.controller.initPlayer(this.data, this.surfaceId)
-          emitter.once(PlayerEvents.PREPARED, () => {
-            if (this.autoPlay) {
-              this.controller.play()
-            } else {
-              this.controlsDialogController.open()
-            }
-          })
+      // AVPlayer 内核：使用 XComponentController 获取 surfaceId
+      if (this.controller.backend === 'avplayer') {
+        XComponent({
+          id: 'playerXComponent',
+          type: XComponentType.SURFACE,
+          controller: this.xComponentController
         })
-        .onClick(async () => {
-          await this.controller.pause()
-          this.controlsDialogController.open()
-        })
-        .gesture(
-          SwipeGesture()
-            .onAction((event: SwipeGestureEvent) => {
-              if (!this.controlsOpened) {
-                this.controlsDialogController.open()
+          .onLoad(() => {
+            this.surfaceId = this.xComponentController.getXComponentSurfaceId()
+            // ⚠️ 先注册 PREPARED 监听再触发 init，避免快速回调时事件丢失
+            emitter.once(PlayerEvents.PREPARED, () => {
+              if (this.autoPlay) {
+                this.controller.play()
               } else {
-                console.log('swipe direction: ' + JSON.stringify(event))
+                this.controlsDialogController.open()
               }
             })
-        )
+            this.controller.initPlayer(this.data, this.surfaceId)
+          })
+          .onClick(async () => {
+            await this.controller.pause()
+            this.controlsDialogController.open()
+          })
+          .gesture(
+            SwipeGesture()
+              .onAction((event: SwipeGestureEvent) => {
+                if (!this.controlsOpened) {
+                  this.controlsDialogController.open()
+                } else {
+                  console.log('swipe direction: ' + JSON.stringify(event))
+                }
+              })
+          )
+          .width("100%")
+          .height("100%")
+          .renderFit(RenderFit.RESIZE_CONTAIN)
+          .backgroundColor(Color.Black)
+      } else {
+        // IjkPlayer 内核：必须用 libraryname 模式，不能用 XComponentController
+        // ⚠️ libraryname 模式的 XComponent 原生层会抢占触摸事件，onClick/gesture 无效，
+        //    需要在上方叠加透明触摸层来拦截交互。
+        Stack() {
+          XComponent({
+            id: 'ijkPlayerXComponent',
+            type: XComponentType.SURFACE,
+            libraryname: 'ijkplayer_napi'
+          })
+            .onLoad((context: object) => {
+              // ⚠️ 必须先注册 PREPARED 监听，再触发 init！
+              emitter.once(PlayerEvents.PREPARED, () => {
+                if (this.autoPlay) {
+                  this.controller.play()
+                } else {
+                  this.controlsDialogController.open()
+                }
+              })
+              // ⚠️ 用 setTimeout 延迟，确保 XComponent Surface 的 native 层已完全 ready
+              setTimeout(() => {
+                this.surfaceId = 'ijkPlayerXComponent'
+                this.controller.initPlayer(this.data, this.surfaceId).then(() => {
+                  this.controller.setIjkContext(context, 'ijkPlayerXComponent')
+                })
+              }, 100)
+            })
+            .width("100%")
+            .height("100%")
+            .renderFit(RenderFit.RESIZE_CONTAIN)
+            .backgroundColor(Color.Black)
+
+          // 透明触摸拦截层：专门处理点击和手势，解决 libraryname 模式事件不透传问题
+          Stack()
+            .width("100%")
+            .height("100%")
+            .backgroundColor(Color.Transparent)
+            .onClick(async () => {
+              await this.controller.pause()
+              this.controlsDialogController.open()
+            })
+            .gesture(
+              SwipeGesture()
+                .onAction((event: SwipeGestureEvent) => {
+                  if (!this.controlsOpened) {
+                    this.controlsDialogController.open()
+                  } else {
+                    console.log('swipe direction: ' + JSON.stringify(event))
+                  }
+                })
+            )
+        }
         .width("100%")
         .height("100%")
-        .renderFit(RenderFit.RESIZE_CONTAIN)
+      }
 
       // 字幕显示层 - 使用字幕渲染器支持多种格式
       Row() {
@@ -290,5 +349,6 @@ export struct VideoPlayer {
       .alignItems(VerticalAlign.Bottom)
       .hitTestBehavior(HitTestMode.Transparent)
     }
+    .backgroundColor(Color.Black)
   }
 }
