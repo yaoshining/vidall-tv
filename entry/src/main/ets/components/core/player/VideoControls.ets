@@ -13,6 +13,52 @@ struct VideoControls {
   private AUTO_CLOSE_TIMEOUT = 5000
   @Local showSubtitleMenu: boolean = false
   @Local sliderHovered: boolean = false
+  // ── 进度条 hover tooltip ──
+  @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
+  @Local sliderWidth: number = 0      // Slider 组件实际宽度（vp）
+
+  /** 将毫秒格式化为 HH:MM:SS 或 MM:SS */
+  private formatTime(ms: number): string {
+    const totalSec = Math.floor(ms / 1000)
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    const s = totalSec % 60
+    const mm = m < 10 ? `0${m}` : `${m}`
+    const ss = s < 10 ? `0${s}` : `${s}`
+    if (h > 0) {
+      const hh = h < 10 ? `0${h}` : `${h}`
+      return `${hh}:${mm}:${ss}`
+    }
+    return `${mm}:${ss}`
+  }
+
+  @Builder
+  SliderTooltip() {
+    Text(this.formatTime(this.hoverTimeMs))
+      .fontSize(20)
+      .fontColor(Color.White)
+      .fontWeight(FontWeight.Medium)
+      .textAlign(TextAlign.Center)
+      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+      .backgroundColor('#CC000000')
+      .borderRadius(8)
+      .width(100)
+      .position({ x: this.getTooltipOffsetX(), y: 0 })
+  }
+
+  /** 计算 tooltip 左边距：按当前时间比例居中对齐，并限制不超出两端 */
+  private getTooltipOffsetX(): number {
+    const TOOLTIP_W = 100   // 与 SliderTooltip 的 .width(100) 保持一致
+    if (this.sliderWidth <= 0 || this.videoController.duration <= 0) {
+      return 0
+    }
+    const ratio = this.hoverTimeMs / this.videoController.duration
+    const center = ratio * this.sliderWidth
+    const raw = center - TOOLTIP_W / 2
+    if (raw < 0) return 0
+    if (raw + TOOLTIP_W > this.sliderWidth) return this.sliderWidth - TOOLTIP_W
+    return raw
+  }
 
   @Builder
   SubtitleMenu() {
@@ -185,35 +231,80 @@ struct VideoControls {
         }) {
           Text(`${this.videoController.currentTimeDisplay}`)
             .flexShrink(0)
-          Slider({
-            value: this.videoController.currentTime,
-            min: 0,
-            max: this.videoController.duration,
-            style: SliderStyle.OutSet
-          })
-            .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
-            .trackThickness(this.sliderHovered ? 8 : 4)
-            .onChange((value, mode) => {
-              if (mode === SliderChangeMode.Begin) {
-                this.videoController.pause()
-                this.videoController.currentTime = value
-                this.videoController.seek(value)
-              }
-              if (mode === SliderChangeMode.Moving) {
-                this.videoController.currentTime = value
-              }
-              if (mode === SliderChangeMode.End) {
-                this.videoController.seek(value)
-              }
+          // Slider + hover tooltip
+          Stack({ alignContent: Alignment.Bottom }) {
+            // tooltip 层：始终渲染，用 visibility 控制显隐，避免 Builder 条件分支失效
+            Row() {
+              this.SliderTooltip()
+            }
+            .width('100%')
+            .height(44)
+            .hitTestBehavior(HitTestMode.Transparent)
+            .offset({ y: -42 })
+            .visibility(this.sliderHovered ? Visibility.Visible : Visibility.Hidden)
+
+            Slider({
+              value: this.videoController.currentTime,
+              min: 0,
+              max: this.videoController.duration,
+              style: SliderStyle.OutSet
             })
-            .onHover((isHover: boolean) => {
-              this.sliderHovered = isHover
-            })
-            .flexGrow(1)
-            .animation({
-              duration: 200,
-              curve: Curve.EaseInOut
-            })
+              .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
+              .trackThickness(this.sliderHovered ? 8 : 4)
+              .onChange((value, mode) => {
+                // 始终同步 hoverTimeMs，保证 tooltip 时间正确
+                this.hoverTimeMs = value
+                if (mode === SliderChangeMode.Begin) {
+                  this.videoController.pause()
+                  this.videoController.currentTime = value
+                  this.videoController.seek(value)
+                }
+                if (mode === SliderChangeMode.Moving) {
+                  this.videoController.currentTime = value
+                }
+                if (mode === SliderChangeMode.End) {
+                  this.videoController.seek(value)
+                }
+              })
+              .onHover((isHover: boolean, event: HoverEvent) => {
+                this.sliderHovered = isHover
+                if (isHover && event.x !== undefined) {
+                  const x: number = event.x
+                  if (this.sliderWidth > 0 && this.videoController.duration > 0) {
+                    const ratio = Math.max(0, Math.min(1, x / this.sliderWidth))
+                    this.hoverTimeMs = ratio * this.videoController.duration
+                  }
+                }
+              })
+              .onMouse((event: MouseEvent) => {
+                if (event.action === MouseAction.Move && event.x !== undefined) {
+                  this.sliderHovered = true
+                  const x: number = event.x
+                  if (this.sliderWidth > 0 && this.videoController.duration > 0) {
+                    const ratio = Math.max(0, Math.min(1, x / this.sliderWidth))
+                    this.hoverTimeMs = ratio * this.videoController.duration
+                  }
+                }
+              })
+              .onFocus(() => {
+                // 方向键焦点：显示 tooltip，初始化为当前播放位置
+                this.sliderHovered = true
+                this.hoverTimeMs = this.videoController.currentTime
+              })
+              .onBlur(() => {
+                this.sliderHovered = false
+              })
+              .onAreaChange((_oldVal, newVal) => {
+                this.sliderWidth = newVal.width as number
+              })
+              .width('100%')
+              .animation({
+                duration: 200,
+                curve: Curve.EaseInOut
+              })
+          }
+          .flexGrow(1)
+          .alignContent(Alignment.Bottom)
           Text(`${this.videoController.durationDisplay}`)
             .flexShrink(0)
         }
