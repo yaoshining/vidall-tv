@@ -8,6 +8,8 @@ import { SrtEntry, SrtParser, AssFileParser } from "./SubtitleRenderer";
 import { http } from "@kit.NetworkKit";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
+import { AnalyticsManager } from '../../../analytics/AnalyticsManager';
+import { EventType, SubtitleFormatType } from '../../../analytics/AnalyticsTypes';
 
 const TAG = '[VideoPlayerController]';
 
@@ -36,6 +38,7 @@ export interface SubtitleTrackItem {
 export class VideoPlayerController {
   /** 当前使用的播放内核，默认为 AVPlayerAdapter */
   private player?: IPlayer;
+  private analyticsManager: AnalyticsManager = AnalyticsManager.getInstance();
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
   @Trace duration = 0
@@ -414,15 +417,29 @@ export class VideoPlayerController {
    * allIndex = -1 表示关闭字幕
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
+    const fromIndex = this.activeSubtitleIndex;
     this.activeSubtitleIndex = allIndex;
     this.currentSubtitleText = '';
     this.subtitleUpdateCounter++;
+
+    // 记录字幕切换埋点
+    const mediaId = this.currentVideoData?.videoSrc || '';
+    let subtitleFormat: SubtitleFormatType = SubtitleFormatType.UNKNOWN;
 
     if (allIndex < 0) {
       // 关闭字幕：清空 SRT，关闭内嵌
       this.srtEntries = [];
       this.lastSrtText = '';
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, '关闭字幕，将调用 selectSubtitleTrack(-1)');
+
+      this.analyticsManager.track({
+        eventType: EventType.SUBTITLE_SWITCH,
+        mediaId: mediaId,
+        fromTrackIndex: fromIndex,
+        toTrackIndex: -1,
+        subtitleFormat: SubtitleFormatType.UNKNOWN
+      });
+
       await this.selectSubtitleTrack(-1);
       return;
     }
@@ -439,6 +456,19 @@ export class VideoPlayerController {
       this.srtEntries = entries;
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
+
+      // 判断外部字幕格式
+      if (item.url) {
+        const urlLower = item.url.toLowerCase();
+        if (urlLower.endsWith('.srt')) {
+          subtitleFormat = SubtitleFormatType.SRT;
+        } else if (urlLower.endsWith('.ass') || urlLower.endsWith('.ssa')) {
+          subtitleFormat = SubtitleFormatType.ASS;
+        } else if (urlLower.endsWith('.vtt')) {
+          subtitleFormat = SubtitleFormatType.VTT;
+        }
+      }
+
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `切换到外部字幕: ${item.displayName}，共 ${entries.length} 条，url=${item.url ?? ''}`);
       if (entries.length === 0) {
@@ -450,11 +480,22 @@ export class VideoPlayerController {
       this.srtEntries = [];
       this.lastSrtText = '';
       const internalIdx = item.internalIndex ?? 0;
+      subtitleFormat = SubtitleFormatType.EMBEDDED;
+
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `切换到内嵌字幕轨道 ${internalIdx}，将调用 selectSubtitleTrack 激活`);
       // 调用旧方法激活内嵌轨道（会触发 AVPlayer 的 selectTrack）
       await this.selectSubtitleTrack(internalIdx);
     }
+
+    // 记录字幕切换埋点
+    this.analyticsManager.track({
+      eventType: EventType.SUBTITLE_SWITCH,
+      mediaId: mediaId,
+      fromTrackIndex: fromIndex,
+      toTrackIndex: allIndex,
+      subtitleFormat: subtitleFormat
+    });
   }
 
   // ─────────────────────────────────────────────
