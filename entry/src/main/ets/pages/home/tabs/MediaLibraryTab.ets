@@ -25,6 +25,49 @@ const DECADE_CARD_W = 120;
 const DECADE_CARD_H = 60;
 
 // ─────────────────────────────────────────────
+// 接口定义
+// ─────────────────────────────────────────────
+/** FilterChip 组件参数接口 */
+interface FilterChipParams {
+  label: string;
+  options: string[];
+  onSelect: (index: number) => void;
+  isActive?: boolean;
+}
+
+/** 菜单项接口 */
+interface MenuItemOptions {
+  value: string;
+  action: () => void;
+}
+
+/** FilterChipParams 实现类 */
+class FilterChipParamsImpl implements FilterChipParams {
+  label: string;
+  options: string[];
+  onSelect: (index: number) => void;
+  isActive?: boolean;
+
+  constructor(label: string, options: string[], onSelect: (index: number) => void, isActive?: boolean) {
+    this.label = label;
+    this.options = options;
+    this.onSelect = onSelect;
+    this.isActive = isActive;
+  }
+}
+
+/** MenuItemOptions 实现类 */
+class MenuItemOptionsImpl implements MenuItemOptions {
+  value: string;
+  action: () => void;
+
+  constructor(value: string, action: () => void) {
+    this.value = value;
+    this.action = action;
+  }
+}
+
+// ─────────────────────────────────────────────
 // 工具函数
 // ─────────────────────────────────────────────
 function displayTitle(item: MediaItem): string {
@@ -683,49 +726,49 @@ export struct MediaLibraryTab {
       Scroll() {
         Row({ space: 12 }) {
           // 排序
-          this.FilterChip({
-            label: this.getSortLabel(),
-            options: ['最近更新', '名称', '年份', '评分'],
-            onSelect: (index: number) => {
+          this.FilterChip(new FilterChipParamsImpl(
+            this.getSortLabel(),
+            ['最近更新', '名称', '年份', '评分'],
+            (index: number) => {
               const sortTypes = [SortType.RECENT, SortType.NAME, SortType.YEAR, SortType.RATING];
               this.model.updateFilter({ sortType: sortTypes[index] });
             },
-            isActive: this.model.filterCriteria.sortType !== SortType.RECENT
-          })
+            this.model.filterCriteria.sortType !== SortType.RECENT
+          ))
 
           // 类型
-          this.FilterChip({
-            label: this.getMediaTypeLabel(),
-            options: ['全部', '电影', '电视剧'],
-            onSelect: (index: number) => {
+          this.FilterChip(new FilterChipParamsImpl(
+            this.getMediaTypeLabel(),
+            ['全部', '电影', '电视剧'],
+            (index: number) => {
               const types = ['all', 'movie', 'tv'];
               this.model.updateFilter({ mediaType: types[index] });
             },
-            isActive: this.model.filterCriteria.mediaType !== 'all'
-          })
+            this.model.filterCriteria.mediaType !== 'all'
+          ))
 
           // 年份
           if (this.model.allYears.length > 0) {
-            this.FilterChip({
-              label: this.model.filterCriteria.year || '年份',
-              options: ['不限', ...this.model.allYears],
-              onSelect: (index: number) => {
+            this.FilterChip(new FilterChipParamsImpl(
+              this.model.filterCriteria.year || '年份',
+              ['不限', ...this.model.allYears],
+              (index: number) => {
                 this.model.updateFilter({ year: index === 0 ? '' : this.model.allYears[index - 1] });
               },
-              isActive: this.model.filterCriteria.year.length > 0
-            })
+              this.model.filterCriteria.year.length > 0
+            ))
           }
 
           // 类别
           if (this.model.allGenres.length > 0) {
-            this.FilterChip({
-              label: this.model.filterCriteria.genre || '类别',
-              options: ['不限', ...this.model.allGenres],
-              onSelect: (index: number) => {
+            this.FilterChip(new FilterChipParamsImpl(
+              this.model.filterCriteria.genre || '类别',
+              ['不限', ...this.model.allGenres],
+              (index: number) => {
                 this.model.updateFilter({ genre: index === 0 ? '' : this.model.allGenres[index - 1] });
               },
-              isActive: this.model.filterCriteria.genre.length > 0
-            })
+              this.model.filterCriteria.genre.length > 0
+            ))
           }
         }
         .padding({ left: 16, right: 16 })
@@ -740,24 +783,27 @@ export struct MediaLibraryTab {
   }
 
   @Builder
-  FilterChip($$: { label: string, options: string[], onSelect: (index: number) => void, isActive?: boolean }) {
-    Button($$.label)
+  FilterChip(params: FilterChipParams) {
+    Button(params.label)
       .fontSize(13)
-      .fontColor($$.isActive ? '#FFFFFF' : '#DDDDDD')
-      .backgroundColor($$.isActive ? '#0D7FBF' : '#2A2A2A')
+      .fontColor(params.isActive ? '#FFFFFF' : '#DDDDDD')
+      .backgroundColor(params.isActive ? '#0D7FBF' : '#2A2A2A')
       .borderRadius(16)
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .onClick(() => {
-        $$.onSelect(0);
+        params.onSelect(0);
       })
-      .bindMenu($$.options.map((opt: string, idx: number) => {
-        return {
-          value: opt,
-          action: () => {
-            $$.onSelect(idx);
-          }
-        };
-      }))
+      .bindMenu(this.buildMenuItems(params.options, params.onSelect))
+  }
+
+  private buildMenuItems(options: string[], onSelect: (index: number) => void): MenuItemOptions[] {
+    const items: MenuItemOptions[] = [];
+    for (let i = 0; i < options.length; i++) {
+      items.push(new MenuItemOptionsImpl(options[i], () => {
+        onSelect(i);
+      }));
+    }
+    return items;
   }
 
   private getSortLabel(): string {

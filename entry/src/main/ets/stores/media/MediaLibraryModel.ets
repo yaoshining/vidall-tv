@@ -327,7 +327,25 @@ export class MediaLibraryModel {
    * 更新筛选条件
    */
   updateFilter(criteria: Partial<FilterCriteria>): void {
-    this.filterCriteria = { ...this.filterCriteria, ...criteria };
+    // ArkTS 不支持对象展开运算符，手动复制属性
+    if (criteria.searchKeyword !== undefined) {
+      this.filterCriteria.searchKeyword = criteria.searchKeyword;
+    }
+    if (criteria.mediaType !== undefined) {
+      this.filterCriteria.mediaType = criteria.mediaType;
+    }
+    if (criteria.year !== undefined) {
+      this.filterCriteria.year = criteria.year;
+    }
+    if (criteria.watchStatus !== undefined) {
+      this.filterCriteria.watchStatus = criteria.watchStatus;
+    }
+    if (criteria.genre !== undefined) {
+      this.filterCriteria.genre = criteria.genre;
+    }
+    if (criteria.sortType !== undefined) {
+      this.filterCriteria.sortType = criteria.sortType;
+    }
     this.applyFilters();
   }
 
