@@ -431,6 +431,10 @@ export struct MediaLibraryTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Require @Param tab: TabItem
   @Local isScanning: boolean = false
+  @Local showSortMenu: boolean = false
+  @Local showTypeMenu: boolean = false
+  @Local showYearMenu: boolean = false
+  @Local showGenreMenu: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
 
   aboutToAppear(): void {
@@ -656,7 +660,8 @@ export struct MediaLibraryTab {
             onSelect: (index: number) => {
               const sortTypes = [SortType.RECENT, SortType.NAME, SortType.YEAR, SortType.RATING];
               this.model.updateFilter({ sortType: sortTypes[index] });
-            }
+            },
+            isActive: this.model.filterCriteria.sortType !== SortType.RECENT
           })
 
           // 类型
@@ -666,7 +671,8 @@ export struct MediaLibraryTab {
             onSelect: (index: number) => {
               const types = ['all', 'movie', 'tv'];
               this.model.updateFilter({ mediaType: types[index] });
-            }
+            },
+            isActive: this.model.filterCriteria.mediaType !== 'all'
           })
 
           // 年份
@@ -676,7 +682,8 @@ export struct MediaLibraryTab {
               options: ['不限', ...this.model.allYears],
               onSelect: (index: number) => {
                 this.model.updateFilter({ year: index === 0 ? '' : this.model.allYears[index - 1] });
-              }
+              },
+              isActive: this.model.filterCriteria.year.length > 0
             })
           }
 
@@ -687,7 +694,8 @@ export struct MediaLibraryTab {
               options: ['不限', ...this.model.allGenres],
               onSelect: (index: number) => {
                 this.model.updateFilter({ genre: index === 0 ? '' : this.model.allGenres[index - 1] });
-              }
+              },
+              isActive: this.model.filterCriteria.genre.length > 0
             })
           }
         }
@@ -703,26 +711,24 @@ export struct MediaLibraryTab {
   }
 
   @Builder
-  FilterChip($$: { label: string, options: string[], onSelect: (index: number) => void }) {
+  FilterChip($$: { label: string, options: string[], onSelect: (index: number) => void, isActive?: boolean }) {
     Button($$.label)
       .fontSize(13)
-      .fontColor('#DDDDDD')
-      .backgroundColor('#2A2A2A')
+      .fontColor($$.isActive ? '#FFFFFF' : '#DDDDDD')
+      .backgroundColor($$.isActive ? '#0D7FBF' : '#2A2A2A')
       .borderRadius(16)
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .onClick(() => {
-        // 显示选择菜单（简化版，使用 AlertDialog）
-        AlertDialog.show({
-          title: '选择' + $$.label,
-          message: $$.options.join('\n'),
-          autoCancel: true,
-          alignment: DialogAlignment.Bottom,
-          confirm: {
-            value: '取消',
-            action: () => {}
-          }
-        });
+        $$.onSelect(0);
       })
+      .bindMenu($$.options.map((opt: string, idx: number) => {
+        return {
+          value: opt,
+          action: () => {
+            $$.onSelect(idx);
+          }
+        };
+      }))
   }
 
   private getSortLabel(): string {
