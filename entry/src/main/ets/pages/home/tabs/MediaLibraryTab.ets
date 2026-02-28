@@ -4,7 +4,7 @@ import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem } from "../../../db/models/MediaEntity"
-import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
+import { MediaLibraryModel, RatingLabel, SortType, FilterCriteria } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 
 // ─────────────────────────────────────────────
@@ -619,6 +619,169 @@ export struct MediaLibraryTab {
     .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
+  // ── 搜索和筛选栏 ──────────────────────────────
+  @Builder
+  FilterBar() {
+    Column() {
+      // 搜索框
+      Row({ space: 8 }) {
+        TextInput({ placeholder: '搜索片名...' })
+          .width('60%')
+          .height(40)
+          .backgroundColor('#1E1E1E')
+          .placeholderColor('#666666')
+          .fontColor('#FFFFFF')
+          .onChange((value: string) => {
+            this.model.updateFilter({ searchKeyword: value });
+          })
+
+        Button('重置')
+          .width(80)
+          .height(40)
+          .fontSize(14)
+          .onClick(() => {
+            this.model.resetFilters();
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 12 })
+
+      // 筛选条件行
+      Scroll() {
+        Row({ space: 12 }) {
+          // 排序
+          this.FilterChip({
+            label: this.getSortLabel(),
+            options: ['最近更新', '名称', '年份', '评分'],
+            onSelect: (index: number) => {
+              const sortTypes = [SortType.RECENT, SortType.NAME, SortType.YEAR, SortType.RATING];
+              this.model.updateFilter({ sortType: sortTypes[index] });
+            }
+          })
+
+          // 类型
+          this.FilterChip({
+            label: this.getMediaTypeLabel(),
+            options: ['全部', '电影', '电视剧'],
+            onSelect: (index: number) => {
+              const types = ['all', 'movie', 'tv'];
+              this.model.updateFilter({ mediaType: types[index] });
+            }
+          })
+
+          // 年份
+          if (this.model.allYears.length > 0) {
+            this.FilterChip({
+              label: this.model.filterCriteria.year || '年份',
+              options: ['不限', ...this.model.allYears],
+              onSelect: (index: number) => {
+                this.model.updateFilter({ year: index === 0 ? '' : this.model.allYears[index - 1] });
+              }
+            })
+          }
+
+          // 类别
+          if (this.model.allGenres.length > 0) {
+            this.FilterChip({
+              label: this.model.filterCriteria.genre || '类别',
+              options: ['不限', ...this.model.allGenres],
+              onSelect: (index: number) => {
+                this.model.updateFilter({ genre: index === 0 ? '' : this.model.allGenres[index - 1] });
+              }
+            })
+          }
+        }
+        .padding({ left: 16, right: 16 })
+      }
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .width('100%')
+      .margin({ top: 12, bottom: 12 })
+    }
+    .width('100%')
+    .backgroundColor('#0D0D0D')
+  }
+
+  @Builder
+  FilterChip($$: { label: string, options: string[], onSelect: (index: number) => void }) {
+    Button($$.label)
+      .fontSize(13)
+      .fontColor('#DDDDDD')
+      .backgroundColor('#2A2A2A')
+      .borderRadius(16)
+      .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+      .onClick(() => {
+        // 显示选择菜单（简化版，使用 AlertDialog）
+        AlertDialog.show({
+          title: '选择' + $$.label,
+          message: $$.options.join('\n'),
+          autoCancel: true,
+          alignment: DialogAlignment.Bottom,
+          confirm: {
+            value: '取消',
+            action: () => {}
+          }
+        });
+      })
+  }
+
+  private getSortLabel(): string {
+    switch (this.model.filterCriteria.sortType) {
+      case SortType.RECENT: return '最近更新';
+      case SortType.NAME: return '名称';
+      case SortType.YEAR: return '年份';
+      case SortType.RATING: return '评分';
+      default: return '排序';
+    }
+  }
+
+  private getMediaTypeLabel(): string {
+    switch (this.model.filterCriteria.mediaType) {
+      case 'all': return '全部';
+      case 'movie': return '电影';
+      case 'tv': return '电视剧';
+      default: return '类型';
+    }
+  }
+
+  // ── 筛选结果列表 ──────────────────────────────
+  @Builder
+  FilteredResultsSection() {
+    Column() {
+      Text(`共 ${this.model.filteredList.length} 个结果`)
+        .fontSize(14)
+        .fontColor('#AAAAAA')
+        .padding({ left: 16, top: 12, bottom: 8 })
+
+      if (this.model.filteredList.length === 0) {
+        Column() {
+          Text('暂无结果').fontSize(16).fontColor('#666666')
+          Text('请尝试调整筛选条件').fontSize(12).fontColor('#444444').margin({ top: 8 })
+        }
+        .width('100%')
+        .height(200)
+        .justifyContent(FlexAlign.Center)
+      } else {
+        // 使用 Grid 显示结果（支持多列布局）
+        Grid() {
+          ForEach(this.model.filteredList, (listItem: MediaListItem, index: number) => {
+            GridItem() {
+              MixedCard({ listItem })
+            }
+          }, (listItem: MediaListItem, index: number) => {
+            return `${listItem.kind}_${index}`;
+          })
+        }
+        .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
+        .rowsGap(16)
+        .columnsGap(12)
+        .padding({ left: 16, right: 16, bottom: 20 })
+        .width('100%')
+      }
+    }
+    .width('100%')
+  }
+
   build() {
     Column() {
       if (this.model.isLoading) {
@@ -627,17 +790,27 @@ export struct MediaLibraryTab {
         this.EmptyView()
         this.StatsAndScan()
       } else {
-        this.ContinueWatchingSection()
-        this.RecentlyAddedSection()
-        this.MoviesSection()
-        this.TvShowsSection()
-        this.UnwatchedSection()
-        this.GenreSection()
-        this.RatingSection()
-        this.DecadeSection()
-        this.StatsAndScan()
+        this.FilterBar()
+        Scroll() {
+          Column() {
+            this.FilteredResultsSection()
+            Divider().color('#333333').margin({ top: 20, bottom: 20 })
+            this.ContinueWatchingSection()
+            this.RecentlyAddedSection()
+            this.MoviesSection()
+            this.TvShowsSection()
+            this.UnwatchedSection()
+            this.GenreSection()
+            this.RatingSection()
+            this.DecadeSection()
+            this.StatsAndScan()
+          }
+        }
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Auto)
+        .width('100%')
+        .layoutWeight(1)
       }
     }
-    .width('100%').alignItems(HorizontalAlign.Start)
+    .width('100%').alignItems(HorizontalAlign.Start).height('100%')
   }
-}
