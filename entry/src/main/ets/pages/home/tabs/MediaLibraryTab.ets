@@ -895,3 +895,4 @@ export struct MediaLibraryTab {
     }
     .width('100%').alignItems(HorizontalAlign.Start).height('100%')
   }
+}
