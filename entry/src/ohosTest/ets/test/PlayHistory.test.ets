@@ -31,7 +31,7 @@ export default function playHistoryTest() {
 
       // 验证记录是否插入成功
       const result = await db.getPlayHistoryByVideoId(1);
-      expect(result).assertNotNull();
+      expect(result).not().assertNull();
       expect(result!.videoId).assertEqual(1);
       expect(result!.positionMs).assertEqual(60000);
       expect(result!.durationMs).assertEqual(600000);
@@ -59,7 +59,7 @@ export default function playHistoryTest() {
 
       // 验证记录是否更新
       const result = await db.getPlayHistoryByVideoId(2);
-      expect(result).assertNotNull();
+      expect(result).not().assertNull();
       expect(result!.videoId).assertEqual(2);
       expect(result!.positionMs).assertEqual(120000);
     })
@@ -82,7 +82,7 @@ export default function playHistoryTest() {
 
       // 验证记录存在
       let result = await db.getPlayHistoryByVideoId(3);
-      expect(result).assertNotNull();
+      expect(result).not().assertNull();
 
       // 删除记录
       await db.deletePlayHistory(3);
@@ -106,11 +106,11 @@ export default function playHistoryTest() {
 
       // 获取所有记录
       const allHistory = await db.getAllPlayHistory();
-      expect(allHistory.length).assertGreaterOrEqual(3);
+      expect(allHistory.length).assertLargerOrEqual(3)
 
       // 验证记录按更新时间倒序排列（最新的在前）
       for (let i = 0; i < allHistory.length - 1; i++) {
-        expect(allHistory[i].updatedAt).assertGreaterOrEqual(allHistory[i + 1].updatedAt);
+        expect(allHistory[i].updatedAt).assertLargerOrEqual(allHistory[i + 1].updatedAt);
       }
     })
   })
