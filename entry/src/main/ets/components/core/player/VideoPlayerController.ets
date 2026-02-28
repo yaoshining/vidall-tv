@@ -121,6 +121,8 @@ export class VideoPlayerController {
     adapter.onPaused(() => {
       this.isPlaying = false;
       this.pauseSubtitleTimer();
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[暂停事件] 触发保存进度 - currentTime=${this.currentTime}, duration=${this.duration}`);
       this.savePlayProgress();  // 暂停时立即保存进度
     });
     adapter.onCompleted(() => {
@@ -222,6 +224,8 @@ export class VideoPlayerController {
       this.subtitleClearTimer = undefined;
     }
     // 释放播放器前保存进度
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[release] 释放播放器前保存进度 - currentTime=${this.currentTime}, duration=${this.duration}`);
     this.stopProgressSaveTimer();
     await this.savePlayProgress();
     this.srtEntries = [];
@@ -746,6 +750,8 @@ export class VideoPlayerController {
 
     // 每隔 PROGRESS_SAVE_INTERVAL 保存一次进度
     this.progressSaveTimer = setInterval(() => {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[定时器] 触发保存进度 - currentTime=${this.currentTime}, duration=${this.duration}`);
       this.savePlayProgress();
     }, PROGRESS_SAVE_INTERVAL);
 
@@ -768,20 +774,34 @@ export class VideoPlayerController {
    * 保存播放进度到数据库（防抖：与上次保存位置变化小于3秒则跳过）
    */
   private async savePlayProgress(): Promise<void> {
+    // 日志：方法入口
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[savePlayProgress] 开始保存播放进度 - videoId=${this.videoId}, duration=${this.duration}, currentTime=${this.currentTime}`);
+
     if (this.videoId === undefined || this.duration === 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[savePlayProgress] 跳过保存 - videoId未定义(${this.videoId === undefined}) 或 duration为0(${this.duration === 0})`);
       return;
     }
 
     const currentPos = Math.floor(this.currentTime);
     const duration = Math.floor(this.duration);
 
+    // 日志：显示当前位置和上次保存位置
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[savePlayProgress] 位置检查 - currentPos=${currentPos}ms, lastSavedPosition=${this.lastSavedPosition}ms, diff=${Math.abs(currentPos - this.lastSavedPosition)}ms`);
+
     // 防抖：与上次保存的位置相差不到 3 秒，跳过保存
     if (Math.abs(currentPos - this.lastSavedPosition) < 3000) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[savePlayProgress] 跳过保存 - 防抖：位置变化小于3秒 (${Math.abs(currentPos - this.lastSavedPosition)}ms < 3000ms)`);
       return;
     }
 
     // 如果播放进度接近结尾（最后10秒），标记为已观看完成（可选：删除播放历史）
     if (duration > 0 && (duration - currentPos) < 10000) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[savePlayProgress] 接近结尾 - 剩余时间=${duration - currentPos}ms，尝试删除播放历史`);
       try {
         const db = FileSourceDatabase.getInstance();
         await db.deletePlayHistory(this.videoId);
@@ -797,6 +817,9 @@ export class VideoPlayerController {
     }
 
     // 保存播放进度
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[savePlayProgress] 准备调用 upsertPlayHistory - videoId=${this.videoId}, position=${currentPos}ms, duration=${duration}ms`);
+
     try {
       const db = FileSourceDatabase.getInstance();
       const entity: PlayHistoryEntity = {
@@ -805,7 +828,15 @@ export class VideoPlayerController {
         durationMs: duration,
         updatedAt: Date.now()
       };
+
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[savePlayProgress] 调用 upsertPlayHistory 前 - entity: ${JSON.stringify(entity)}`);
+
       await db.upsertPlayHistory(entity);
+
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[savePlayProgress] 调用 upsertPlayHistory 后 - 已完成`);
+
       this.lastSavedPosition = currentPos;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `保存播放进度: videoId=${this.videoId} position=${currentPos}ms duration=${duration}ms`);
