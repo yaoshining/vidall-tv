@@ -19,4 +19,6 @@ export interface VideoData {
   subtitleUrl?: string;
   /** 下载字幕文件时使用的 HTTP 请求头（如 Authorization: Basic xxx） */
   subtitleHeaders?: Record<string, string>;
+  /** 视频数据库ID，用于播放进度持久化 */
+  videoId?: number;
 }

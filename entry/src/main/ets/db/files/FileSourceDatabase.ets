@@ -1,7 +1,7 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
-import { VideoEntity, ScrapeInfoEntity, MediaItem, MediaStats, SeriesGroup } from '../models/MediaEntity';
+import { VideoEntity, ScrapeInfoEntity, MediaItem, MediaStats, SeriesGroup, PlayHistoryEntity } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { emitter } from "@kit.BasicServicesKit";
 
@@ -1169,6 +1169,118 @@ export class FileSourceDatabase {
     } else {
       emitter.once(FileSourceDatabase.DATABASE_READY, callback)
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // play_history 表操作
+  // ─────────────────────────────────────────────
+
+  /**
+   * 插入或更新播放历史（以 video_id 为唯一键）
+   */
+  async upsertPlayHistory(entity: PlayHistoryEntity): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const existing = await this.getPlayHistoryByVideoId(entity.videoId);
+      const bucket: relationalStore.ValuesBucket = {
+        video_id: entity.videoId,
+        position_ms: entity.positionMs,
+        duration_ms: entity.durationMs,
+        updated_at: entity.updatedAt
+      };
+
+      if (existing && existing.id !== undefined) {
+        const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_HISTORY);
+        pred.equalTo('id', existing.id);
+        await this.rdbStore.update(bucket, pred);
+        console.info(`[FileSourceDatabase] upsertPlayHistory UPDATE videoId=${entity.videoId} position=${entity.positionMs}ms`);
+      } else {
+        await this.rdbStore.insert(FileSourceDatabase.TABLE_PLAY_HISTORY, bucket);
+        console.info(`[FileSourceDatabase] upsertPlayHistory INSERT videoId=${entity.videoId} position=${entity.positionMs}ms`);
+      }
+    } catch (error) {
+      console.error(`[FileSourceDatabase] upsertPlayHistory 失败: ${JSON.stringify(error)}`);
+      throw new Error('upsertPlayHistory failed: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 根据 videoId 查询播放历史
+   */
+  async getPlayHistoryByVideoId(videoId: number): Promise<PlayHistoryEntity | null> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_HISTORY);
+      pred.equalTo('video_id', videoId);
+      const rs = await this.rdbStore.query(pred);
+      if (rs.goToFirstRow()) {
+        const entity = this.parsePlayHistoryEntity(rs);
+        rs.close();
+        return entity;
+      }
+      rs.close();
+      return null;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getPlayHistoryByVideoId 失败: ${JSON.stringify(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * 删除指定视频的播放历史
+   */
+  async deletePlayHistory(videoId: number): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_HISTORY);
+      pred.equalTo('video_id', videoId);
+      const rows = await this.rdbStore.delete(pred);
+      console.info(`[FileSourceDatabase] deletePlayHistory: 删除 ${rows} 条记录 for videoId=${videoId}`);
+    } catch (error) {
+      console.error(`[FileSourceDatabase] deletePlayHistory 失败: ${JSON.stringify(error)}`);
+      throw new Error('deletePlayHistory failed: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 获取所有播放历史（按更新时间倒序）
+   */
+  async getAllPlayHistory(): Promise<PlayHistoryEntity[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_HISTORY);
+      pred.orderByDesc('updated_at');
+      const rs = await this.rdbStore.query(pred);
+      const list: PlayHistoryEntity[] = [];
+      while (rs.goToNextRow()) {
+        list.push(this.parsePlayHistoryEntity(rs));
+      }
+      rs.close();
+      console.info(`[FileSourceDatabase] getAllPlayHistory: 获取 ${list.length} 条记录`);
+      return list;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getAllPlayHistory 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
+  private parsePlayHistoryEntity(rs: relationalStore.ResultSet): PlayHistoryEntity {
+    const get = (col: string): number => rs.getLong(rs.getColumnIndex(col));
+    return {
+      id: get('id'),
+      videoId: get('video_id'),
+      positionMs: get('position_ms'),
+      durationMs: get('duration_ms'),
+      updatedAt: get('updated_at')
+    };
   }
 }
 

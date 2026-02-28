@@ -8,8 +8,13 @@ import { SrtEntry, SrtParser, AssFileParser } from "./SubtitleRenderer";
 import { http } from "@kit.NetworkKit";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
+import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
+import { PlayHistoryEntity } from "../../../db/models/MediaEntity";
 
 const TAG = '[VideoPlayerController]';
+
+// 播放进度保存间隔（毫秒）
+const PROGRESS_SAVE_INTERVAL = 10000; // 每10秒保存一次
 
 // ─────────────────────────────────────────────
 // 统一字幕轨道描述
@@ -60,21 +65,32 @@ export class VideoPlayerController {
   private subtitleClearTimer?: number
   private subtitleRemainingTime: number = 0
   private subtitlePauseTime: number = 0
+  // 播放进度持久化相关
+  private videoId?: number;  // 视频数据库ID
+  private progressSaveTimer?: number;  // 定时保存进度的定时器
+  private lastSavedPosition: number = -1;  // 上次保存的播放位置
 
   /**
    * 初始化播放器，默认使用 AVPlayerAdapter。
    * 未来切换内核时，只需传入不同的 IPlayer 实现即可。
+   * @param videoData 视频数据
+   * @param surfaceId Surface ID
+   * @param videoId 可选，视频数据库ID，用于播放进度持久化
    */
-  async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
+  async initPlayer(videoData: VideoData, surfaceId: string, videoId?: number): Promise<void> {
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
     this.surfaceId = surfaceId;
+    this.videoId = videoId;
 
     // 释放旧 player
     if (this.player) {
       await this.player.release().catch(() => {});
       this.player = undefined;
     }
+
+    // 停止进度保存定时器
+    this.stopProgressSaveTimer();
 
     // 重置状态
     this.isReady = false;
@@ -88,6 +104,7 @@ export class VideoPlayerController {
     this.subtitleUpdateCounter = 0;
     this.allSubtitleTracks = [];
     this.activeSubtitleIndex = -1;
+    this.lastSavedPosition = -1;
 
     // 创建 AVPlayerAdapter（后续可换成其他 IPlayer 实现）
     const adapter = new AVPlayerAdapter();
@@ -98,11 +115,13 @@ export class VideoPlayerController {
       this.isPlaying = true;
       this.isLoading = false;
       this.resumeSubtitleTimer();
+      this.startProgressSaveTimer();  // 启动进度保存定时器
       emitter.emit(PlayerEvents.PLAYING);
     });
     adapter.onPaused(() => {
       this.isPlaying = false;
       this.pauseSubtitleTimer();
+      this.savePlayProgress();  // 暂停时立即保存进度
     });
     adapter.onCompleted(() => {
       this.isPlaying = false;
@@ -202,6 +221,9 @@ export class VideoPlayerController {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;
     }
+    // 释放播放器前保存进度
+    this.stopProgressSaveTimer();
+    await this.savePlayProgress();
     this.srtEntries = [];
     this.lastSrtText = '';
     this.currentSubtitleText = '';
@@ -705,6 +727,118 @@ export class VideoPlayerController {
       return this.getLanguageName(lang);
     }
     return withoutExt;
+  }
+
+  // ─────────────────────────────────────────────
+  // 播放进度持久化
+  // ─────────────────────────────────────────────
+
+  /**
+   * 启动播放进度定时保存定时器
+   */
+  private startProgressSaveTimer(): void {
+    // 清除旧定时器
+    this.stopProgressSaveTimer();
+
+    if (this.videoId === undefined) {
+      return; // 没有 videoId，不保存进度
+    }
+
+    // 每隔 PROGRESS_SAVE_INTERVAL 保存一次进度
+    this.progressSaveTimer = setInterval(() => {
+      this.savePlayProgress();
+    }, PROGRESS_SAVE_INTERVAL);
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `启动进度保存定时器，间隔 ${PROGRESS_SAVE_INTERVAL}ms`);
+  }
+
+  /**
+   * 停止播放进度定时保存定时器
+   */
+  private stopProgressSaveTimer(): void {
+    if (this.progressSaveTimer) {
+      clearInterval(this.progressSaveTimer);
+      this.progressSaveTimer = undefined;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '停止进度保存定时器');
+    }
+  }
+
+  /**
+   * 保存播放进度到数据库（防抖：与上次保存位置变化小于3秒则跳过）
+   */
+  private async savePlayProgress(): Promise<void> {
+    if (this.videoId === undefined || this.duration === 0) {
+      return;
+    }
+
+    const currentPos = Math.floor(this.currentTime);
+    const duration = Math.floor(this.duration);
+
+    // 防抖：与上次保存的位置相差不到 3 秒，跳过保存
+    if (Math.abs(currentPos - this.lastSavedPosition) < 3000) {
+      return;
+    }
+
+    // 如果播放进度接近结尾（最后10秒），标记为已观看完成（可选：删除播放历史）
+    if (duration > 0 && (duration - currentPos) < 10000) {
+      try {
+        const db = FileSourceDatabase.getInstance();
+        await db.deletePlayHistory(this.videoId);
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `视频已播放完成，删除播放历史 videoId=${this.videoId}`);
+        this.lastSavedPosition = currentPos;
+        return;
+      } catch (e) {
+        const err = e as Error;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `删除播放历史失败: ${err.message}`);
+      }
+    }
+
+    // 保存播放进度
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const entity: PlayHistoryEntity = {
+        videoId: this.videoId,
+        positionMs: currentPos,
+        durationMs: duration,
+        updatedAt: Date.now()
+      };
+      await db.upsertPlayHistory(entity);
+      this.lastSavedPosition = currentPos;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `保存播放进度: videoId=${this.videoId} position=${currentPos}ms duration=${duration}ms`);
+    } catch (e) {
+      const err = e as Error;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `保存播放进度失败: ${err.message}`);
+    }
+  }
+
+  /**
+   * 加载播放历史并返回上次播放位置（毫秒）
+   * @returns 上次播放位置，如果没有历史记录则返回 undefined
+   */
+  async loadPlayHistory(): Promise<number | undefined> {
+    if (this.videoId === undefined) {
+      return undefined;
+    }
+
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const history = await db.getPlayHistoryByVideoId(this.videoId);
+      if (history) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `加载播放历史: videoId=${this.videoId} position=${history.positionMs}ms`);
+        return history.positionMs;
+      }
+    } catch (e) {
+      const err = e as Error;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `加载播放历史失败: ${err.message}`);
+    }
+    return undefined;
   }
 }
 
