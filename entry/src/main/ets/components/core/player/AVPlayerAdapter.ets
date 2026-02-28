@@ -6,6 +6,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AVPlayerState, VideoDataType } from './Constants';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
+import { AnalyticsManager } from '../../../analytics/AnalyticsManager';
+import { EventType, SourceType, ErrorLevel, ErrorCode } from '../../../analytics/AnalyticsTypes';
 
 const TAG = '[AVPlayerAdapter]';
 
@@ -21,6 +23,14 @@ const TAG = '[AVPlayerAdapter]';
 export class AVPlayerAdapter implements IPlayer {
   private avPlayer?: media.AVPlayer;
   private _surfaceId: string = '';
+
+  // ─── 埋点相关 ───
+  private analyticsManager: AnalyticsManager = AnalyticsManager.getInstance();
+  private currentMediaId: string = '';
+  private currentSourceType: SourceType = SourceType.UNKNOWN;
+  private initStartTime: number = 0;
+  private prepareStartTime: number = 0;
+  private firstFrameReceived: boolean = false;
 
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
@@ -46,6 +56,28 @@ export class AVPlayerAdapter implements IPlayer {
 
   async init(videoData: VideoData, surfaceId: string): Promise<void> {
     this._surfaceId = surfaceId;
+    this.initStartTime = Date.now();
+    this.prepareStartTime = 0;
+    this.firstFrameReceived = false;
+
+    // 确定媒体ID和来源类型
+    this.currentMediaId = videoData.videoSrc;
+    if (videoData.type === VideoDataType.URL) {
+      this.currentSourceType = SourceType.URL;
+    } else if (videoData.type === VideoDataType.FILE_URI) {
+      this.currentSourceType = videoData.videoSrc.includes('webdav')
+        ? SourceType.WEBDAV
+        : SourceType.LOCAL;
+    }
+
+    // 记录播放开始埋点
+    this.analyticsManager.track({
+      eventType: EventType.PLAY_START,
+      mediaId: this.currentMediaId,
+      sourceType: this.currentSourceType,
+      duration: videoData.duration
+    });
+
     try {
       const player = await media.createAVPlayer();
       this.avPlayer = player;
@@ -75,6 +107,17 @@ export class AVPlayerAdapter implements IPlayer {
       const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `init 失败: code=${err.code} msg=${err.message}`);
+
+      // 记录播放失败埋点
+      this.analyticsManager.track({
+        eventType: EventType.PLAY_FAILED,
+        mediaId: this.currentMediaId,
+        sourceType: this.currentSourceType,
+        errorCode: ErrorCode.PLAY_INIT_FAILED,
+        errorMessage: `AVPlayerAdapter init failed: ${err.message}`,
+        errorLevel: ErrorLevel.ERROR
+      });
+
       throw new Error(`AVPlayerAdapter init failed: ${err.message}`);
     }
   }
@@ -169,15 +212,39 @@ export class AVPlayerAdapter implements IPlayer {
       return;
     }
     const wasPlaying = this.avPlayer.state === AVPlayerState.PLAYING;
+    const loadStartTime = Date.now();
     try {
       if (wasPlaying) { await this.avPlayer.pause(); }
       await this.avPlayer.selectTrack(trackIndex);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, `selectTrack(${trackIndex}) 成功`);
+
+      // 记录字幕加载成功埋点（内嵌字幕）
+      const loadTime = Date.now() - loadStartTime;
+      this.analyticsManager.track({
+        eventType: EventType.SUBTITLE_LOAD_SUCCESS,
+        mediaId: this.currentMediaId,
+        trackIndex: trackIndex,
+        subtitleFormat: 'embedded' as any,
+        loadTime: loadTime
+      });
+
       if (wasPlaying) { await this.avPlayer.play(); }
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `selectTrack(${trackIndex}) 失败: code=${err.code} msg=${err.message}`);
+
+      // 记录字幕加载失败埋点
+      this.analyticsManager.track({
+        eventType: EventType.SUBTITLE_LOAD_FAILED,
+        mediaId: this.currentMediaId,
+        trackIndex: trackIndex,
+        subtitleFormat: 'embedded' as any,
+        errorCode: ErrorCode.SUBTITLE_LOAD_FAILED,
+        errorMessage: `selectTrack(${trackIndex}) failed: ${err.message}`,
+        errorLevel: ErrorLevel.WARNING
+      });
+
       if (wasPlaying) {
         try { await this.avPlayer?.play(); } catch (_) {}
       }
@@ -238,17 +305,55 @@ export class AVPlayerAdapter implements IPlayer {
           break;
         case AVPlayerState.INITIALIZED:
           // 设置 Surface 并触发 prepare
+          this.prepareStartTime = Date.now();
           player.surfaceId = this._surfaceId;
           player.prepare().catch((err: BusinessError) => {
             hilog.error(CommonConstants.LOG_DOMAIN, TAG,
               `prepare 失败: code=${err.code} msg=${err.message}`);
+
+            // 记录准备失败埋点
+            this.analyticsManager.track({
+              eventType: EventType.PLAY_FAILED,
+              mediaId: this.currentMediaId,
+              sourceType: this.currentSourceType,
+              errorCode: ErrorCode.PLAY_PREPARE_FAILED,
+              errorMessage: `prepare failed: ${err.message}`,
+              errorLevel: ErrorLevel.ERROR
+            });
           });
           break;
         case AVPlayerState.PREPARED:
-          // 准备完成，通知 Controller
+          // 准备完成，记录准备成功埋点
+          const prepareTime = this.prepareStartTime > 0
+            ? Date.now() - this.prepareStartTime
+            : 0;
+          this.analyticsManager.track({
+            eventType: EventType.PLAY_PREPARED,
+            mediaId: this.currentMediaId,
+            sourceType: this.currentSourceType,
+            prepareTime: prepareTime
+          });
+
+          // 通知 Controller
           if (this._onReadyCb) { this._onReadyCb(); }
           break;
         case AVPlayerState.PLAYING:
+          // 首次播放时记录首帧时间
+          if (!this.firstFrameReceived && this.initStartTime > 0) {
+            const firstFrameTime = Date.now() - this.initStartTime;
+            this.firstFrameReceived = true;
+
+            this.analyticsManager.track({
+              eventType: EventType.PLAY_FIRST_FRAME,
+              mediaId: this.currentMediaId,
+              sourceType: this.currentSourceType,
+              firstFrameTime: firstFrameTime
+            });
+
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `首帧时间: ${firstFrameTime}ms`);
+          }
+
           if (this._onPlayCb) { this._onPlayCb(); }
           break;
         case AVPlayerState.PAUSED:
@@ -261,6 +366,16 @@ export class AVPlayerAdapter implements IPlayer {
           if (this._onStoppedCb) { this._onStoppedCb(); }
           break;
         case AVPlayerState.ERROR:
+          // 记录错误状态埋点
+          this.analyticsManager.track({
+            eventType: EventType.PLAY_FAILED,
+            mediaId: this.currentMediaId,
+            sourceType: this.currentSourceType,
+            errorCode: ErrorCode.PLAY_UNKNOWN_ERROR,
+            errorMessage: 'AVPlayer entered error state',
+            errorLevel: ErrorLevel.ERROR
+          });
+
           if (this._onErrorCb) {
             this._onErrorCb(new Error(`AVPlayer entered error state`));
           }
@@ -281,6 +396,17 @@ export class AVPlayerAdapter implements IPlayer {
     player.on('error', (error: Error) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer error: ${JSON.stringify(error)}`);
+
+      // 记录播放错误埋点
+      this.analyticsManager.track({
+        eventType: EventType.PLAY_FAILED,
+        mediaId: this.currentMediaId,
+        sourceType: this.currentSourceType,
+        errorCode: ErrorCode.PLAY_UNKNOWN_ERROR,
+        errorMessage: error.message || 'Unknown AVPlayer error',
+        errorLevel: ErrorLevel.ERROR
+      });
+
       if (this._onErrorCb) { this._onErrorCb(error); }
     });
 

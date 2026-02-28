@@ -5,6 +5,8 @@ import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient'
 import { VideoInfoUtil, TrackInfo } from './VideoInfoUtil';
 import { ScrapeClient } from '../lib/ScrapeClient';
 import { VideoEntity, ScrapeInfoEntity } from '../db/models/MediaEntity';
+import { AnalyticsManager } from '../analytics/AnalyticsManager';
+import { EventType, ErrorLevel, ErrorCode } from '../analytics/AnalyticsTypes';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -368,6 +370,7 @@ export class VideoScannerUtil {
    * @param options       扫描选项（可选，默认 maxDepth=5）
    */
   static async scan(context: Context, scrapeClient?: ScrapeClient, options?: Partial<ScanOptions>): Promise<ScanResult> {
+    const analyticsManager = AnalyticsManager.getInstance();
     const scanOptions: ScanOptions = {
       maxDepth: (options?.maxDepth !== undefined) ? options.maxDepth : DEFAULT_SCAN_OPTIONS.maxDepth
     };
@@ -387,6 +390,9 @@ export class VideoScannerUtil {
     const perSourceStats: SourceScanStat[] = [];
     let totalDirectories = 0;
 
+    // 用于记录失败文件列表
+    const failedFilesList: string[] = [];
+
     for (const fileSource of fileSources) {
       if (!fileSource.id) {
         continue;
@@ -399,6 +405,18 @@ export class VideoScannerUtil {
         directories = await db.getDirectoriesBySourceId(fileSource.id);
       } catch (err) {
         console.error(`[VideoScanner][ERROR] 读取文件源 "${fileSource.name}" 目录失败: ${JSON.stringify(err)}`);
+
+        // 记录扫描失败埋点
+        analyticsManager.track({
+          eventType: EventType.SCAN_FAILED,
+          sourceId: fileSource.id.toString(),
+          sourceName: fileSource.name,
+          failedFilesList: [],
+          errorCode: ErrorCode.SCAN_ACCESS_DENIED,
+          errorMessage: `读取文件源目录失败: ${JSON.stringify(err)}`,
+          errorLevel: ErrorLevel.ERROR
+        });
+
         continue;
       }
 
@@ -411,6 +429,18 @@ export class VideoScannerUtil {
         console.info(`[VideoScanner] 适配器创建成功`);
       } catch (err) {
         console.error(`[VideoScanner][ERROR] 创建适配器失败: ${JSON.stringify(err)}`);
+
+        // 记录扫描失败埋点
+        analyticsManager.track({
+          eventType: EventType.SCAN_FAILED,
+          sourceId: fileSource.id.toString(),
+          sourceName: fileSource.name,
+          failedFilesList: [],
+          errorCode: ErrorCode.SCAN_UNKNOWN_ERROR,
+          errorMessage: `创建适配器失败: ${JSON.stringify(err)}`,
+          errorLevel: ErrorLevel.ERROR
+        });
+
         continue;
       }
 
@@ -422,6 +452,10 @@ export class VideoScannerUtil {
         videosFound: 0
       };
 
+      let sourceTotalFiles = 0;
+      let sourceSuccessFiles = 0;
+      let sourceFailedFiles = 0;
+
       for (const dir of directories) {
         totalDirectories++;
         stat.directoriesScanned++;
@@ -431,8 +465,11 @@ export class VideoScannerUtil {
         try {
           found = await adapter.scan(dir.directoryPath, scanOptions);
           console.info(`[VideoScanner] 目录 "${dir.directoryPath}" 扫描完毕，找到 ${found.length} 个视频`);
+          sourceTotalFiles += found.length;
         } catch (err) {
           console.error(`[VideoScanner][ERROR] 扫描目录 "${dir.directoryPath}" 异常: ${JSON.stringify(err)}`);
+          failedFilesList.push(dir.directoryPath);
+          sourceFailedFiles++;
           continue;
         }
 
@@ -441,11 +478,27 @@ export class VideoScannerUtil {
             seenPaths.add(video.filePath);
             allVideos.push(video);
             stat.videosFound++;
+            sourceSuccessFiles++;
           } else {
             console.info(`[VideoScanner] 重复路径，已跳过: ${video.filePath}`);
           }
         }
       }
+
+      // 记录每个文件源的扫描完成埋点
+      const scanTime = Date.now() - startTime;
+      const coverageRate = sourceTotalFiles > 0 ? sourceSuccessFiles / sourceTotalFiles : 1.0;
+
+      analyticsManager.track({
+        eventType: EventType.SCAN_COMPLETED,
+        sourceId: fileSource.id.toString(),
+        sourceName: fileSource.name,
+        totalFiles: sourceTotalFiles,
+        successFiles: sourceSuccessFiles,
+        failedFiles: sourceFailedFiles,
+        scanTime: scanTime,
+        coverageRate: coverageRate
+      });
 
       perSourceStats.push(stat);
       console.info(`[VideoScanner] 文件源 "${fileSource.name}" 完成，视频=${stat.videosFound} 目录=${stat.directoriesScanned}`);
