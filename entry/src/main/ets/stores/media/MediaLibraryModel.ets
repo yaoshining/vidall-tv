@@ -18,6 +18,30 @@ export interface RatingLabel {
   count: number;
 }
 
+/** 排序方式 */
+export enum SortType {
+  RECENT = 'recent',      // 最近更新
+  NAME = 'name',          // 名称
+  YEAR = 'year',          // 年份
+  RATING = 'rating'       // 评分
+}
+
+/** 筛选条件 */
+export interface FilterCriteria {
+  /** 搜索关键词 */
+  searchKeyword: string;
+  /** 类型筛选：'all' | 'movie' | 'tv' */
+  mediaType: string;
+  /** 年份筛选：空字符串表示不限 */
+  year: string;
+  /** 播放状态：'all' | 'unwatched' | 'watching' */
+  watchStatus: string;
+  /** 类别筛选：空字符串表示不限 */
+  genre: string;
+  /** 排序方式 */
+  sortType: SortType;
+}
+
 @ObservedV2
 export class MediaLibraryModel {
   private static instance: MediaLibraryModel | null = null;
@@ -49,6 +73,25 @@ export class MediaLibraryModel {
   @Trace stats: MediaStats = { total: 0, movies: 0, tv: 0, other: 0 };
   /** 最近扫描时间戳（ms），0 表示未扫描 */
   @Trace latestScanTime: number = 0;
+
+  /** 筛选条件 */
+  @Trace filterCriteria: FilterCriteria = {
+    searchKeyword: '',
+    mediaType: 'all',
+    year: '',
+    watchStatus: 'all',
+    genre: '',
+    sortType: SortType.RECENT
+  };
+
+  /** 筛选后的结果列表 */
+  @Trace filteredList: MediaListItem[] = [];
+
+  /** 所有可选的类别列表 */
+  @Trace allGenres: string[] = [];
+
+  /** 所有可选的年份列表 */
+  @Trace allYears: string[] = [];
 
   async load(): Promise<void> {
     if (this.isLoading) {
@@ -106,6 +149,15 @@ export class MediaLibraryModel {
       // 年代分组
       this.decadeGroups = buildDecadeGroups(years);
 
+      // 提取所有类别
+      this.allGenres = this.extractAllGenres(all, seriesGroups);
+
+      // 存储所有年份
+      this.allYears = years;
+
+      // 初始化筛选结果（默认显示全部）
+      this.applyFilters();
+
       this.isLoaded = true;
       console.info(
         `[MediaLibraryModel] 加载完成 | 全部=${all.length} 电影=${movies.length} ` +
@@ -126,6 +178,190 @@ export class MediaLibraryModel {
     this.isLoaded = false;
     console.info('[MediaLibraryModel] reload 触发');
     await this.load();
+  }
+
+  /**
+   * 提取所有类别
+   */
+  private extractAllGenres(allVideos: MediaItem[], seriesGroups: SeriesGroup[]): string[] {
+    const genreSet = new Set<string>();
+    const all: MediaItem[] = [...allVideos];
+    for (const sg of seriesGroups) {
+      for (const ep of sg.episodes) {
+        all.push(ep);
+      }
+    }
+    for (const item of all) {
+      if (item.genresJson) {
+        try {
+          const genres = JSON.parse(item.genresJson) as string[];
+          genres.forEach(g => genreSet.add(g));
+        } catch (e) {
+          // 忽略解析错误
+        }
+      }
+    }
+    return Array.from(genreSet).sort();
+  }
+
+  /**
+   * 应用筛选条件
+   */
+  applyFilters(): void {
+    let result = [...this.recentlyAddedList];
+
+    // 搜索关键词筛选（片名模糊匹配）
+    if (this.filterCriteria.searchKeyword.trim().length > 0) {
+      const keyword = this.filterCriteria.searchKeyword.toLowerCase();
+      result = result.filter((item: MediaListItem) => {
+        if (item.kind === 'series') {
+          return item.series!.title.toLowerCase().includes(keyword);
+        } else {
+          const title = item.video!.title || item.video!.fileName;
+          return title.toLowerCase().includes(keyword);
+        }
+      });
+    }
+
+    // 类型筛选
+    if (this.filterCriteria.mediaType !== 'all') {
+      if (this.filterCriteria.mediaType === 'movie') {
+        result = result.filter((item: MediaListItem) =>
+          item.kind === 'video' && item.video!.mediaType === 'movie'
+        );
+      } else if (this.filterCriteria.mediaType === 'tv') {
+        result = result.filter((item: MediaListItem) =>
+          item.kind === 'series' || (item.kind === 'video' && item.video!.mediaType === 'tv')
+        );
+      }
+    }
+
+    // 年份筛选
+    if (this.filterCriteria.year.length > 0) {
+      result = result.filter((item: MediaListItem) => {
+        if (item.kind === 'series') {
+          const firstEp = item.series!.episodes[0];
+          return firstEp?.releaseDate?.startsWith(this.filterCriteria.year);
+        } else {
+          return item.video!.releaseDate?.startsWith(this.filterCriteria.year);
+        }
+      });
+    }
+
+    // 类别筛选
+    if (this.filterCriteria.genre.length > 0) {
+      result = result.filter((item: MediaListItem) => {
+        const checkGenres = (genresJson?: string): boolean => {
+          if (!genresJson) { return false; }
+          try {
+            const genres = JSON.parse(genresJson) as string[];
+            return genres.includes(this.filterCriteria.genre);
+          } catch (e) {
+            return false;
+          }
+        };
+        if (item.kind === 'series') {
+          const firstEp = item.series!.episodes[0];
+          return checkGenres(firstEp?.genresJson);
+        } else {
+          return checkGenres(item.video!.genresJson);
+        }
+      });
+    }
+
+    // 播放状态筛选（暂时只支持 unwatched，因为播放历史未实现）
+    if (this.filterCriteria.watchStatus === 'unwatched') {
+      // 当前 unwatchedList = recentlyAddedList，所以不做特殊处理
+    }
+
+    // 排序
+    this.sortList(result);
+
+    this.filteredList = result;
+    console.info(`[MediaLibraryModel] 筛选完成，结果数量: ${result.length}`);
+  }
+
+  /**
+   * 对列表进行排序
+   */
+  private sortList(list: MediaListItem[]): void {
+    switch (this.filterCriteria.sortType) {
+      case SortType.RECENT:
+        list.sort((a, b) => b.sortTs - a.sortTs);
+        break;
+      case SortType.NAME:
+        list.sort((a, b) => {
+          const nameA = a.kind === 'series' ? a.series!.title : (a.video!.title || a.video!.fileName);
+          const nameB = b.kind === 'series' ? b.series!.title : (b.video!.title || b.video!.fileName);
+          return nameA.localeCompare(nameB, 'zh-CN');
+        });
+        break;
+      case SortType.YEAR:
+        list.sort((a, b) => {
+          const getYear = (item: MediaListItem): string => {
+            if (item.kind === 'series') {
+              return item.series!.episodes[0]?.releaseDate || '';
+            } else {
+              return item.video!.releaseDate || '';
+            }
+          };
+          return getYear(b).localeCompare(getYear(a));
+        });
+        break;
+      case SortType.RATING:
+        list.sort((a, b) => {
+          const getRating = (item: MediaListItem): number => {
+            if (item.kind === 'series') {
+              return item.series!.rating || 0;
+            } else {
+              return item.video!.rating || 0;
+            }
+          };
+          return getRating(b) - getRating(a);
+        });
+        break;
+    }
+  }
+
+  /**
+   * 更新筛选条件
+   */
+  updateFilter(criteria: Partial<FilterCriteria>): void {
+    // ArkTS 不支持对象展开运算符，手动复制属性
+    if (criteria.searchKeyword !== undefined) {
+      this.filterCriteria.searchKeyword = criteria.searchKeyword;
+    }
+    if (criteria.mediaType !== undefined) {
+      this.filterCriteria.mediaType = criteria.mediaType;
+    }
+    if (criteria.year !== undefined) {
+      this.filterCriteria.year = criteria.year;
+    }
+    if (criteria.watchStatus !== undefined) {
+      this.filterCriteria.watchStatus = criteria.watchStatus;
+    }
+    if (criteria.genre !== undefined) {
+      this.filterCriteria.genre = criteria.genre;
+    }
+    if (criteria.sortType !== undefined) {
+      this.filterCriteria.sortType = criteria.sortType;
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * 重置筛选条件
+   */
+  resetFilters(): void {
+    this.filterCriteria = {
+      searchKeyword: '',
+      mediaType: 'all',
+      year: '',
+      watchStatus: 'all',
+      genre: '',
+      sortType: SortType.RECENT
+    };
+    this.applyFilters();
   }
 }
 
