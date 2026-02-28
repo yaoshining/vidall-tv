@@ -6,6 +6,7 @@ import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel, RatingLabel, SortType, FilterCriteria } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { DebounceUtil, CancellableFunction } from "../../../utils/DebounceUtil"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -435,7 +436,11 @@ export struct MediaLibraryTab {
   @Local showTypeMenu: boolean = false
   @Local showYearMenu: boolean = false
   @Local showGenreMenu: boolean = false
+  @Local searchText: string = ''
   model: MediaLibraryModel = MediaLibraryModel.getState()
+  private searchDebounce: CancellableFunction = DebounceUtil.debounce((keyword: string) => {
+    this.model.updateFilter({ searchKeyword: keyword });
+  }, 300)
 
   aboutToAppear(): void {
     FileSourceDatabase.onReady(() => {
@@ -629,21 +634,45 @@ export struct MediaLibraryTab {
     Column() {
       // 搜索框
       Row({ space: 8 }) {
-        TextInput({ placeholder: '搜索片名...' })
-          .width('60%')
-          .height(40)
-          .backgroundColor('#1E1E1E')
-          .placeholderColor('#666666')
-          .fontColor('#FFFFFF')
-          .onChange((value: string) => {
-            this.model.updateFilter({ searchKeyword: value });
-          })
+        Row() {
+          TextInput({ text: this.searchText, placeholder: '搜索片名...' })
+            .width('100%')
+            .height(40)
+            .backgroundColor('#1E1E1E')
+            .placeholderColor('#666666')
+            .fontColor('#FFFFFF')
+            .onChange((value: string) => {
+              this.searchText = value;
+              this.searchDebounce.call(value);
+            })
+            .layoutWeight(1)
+
+          if (this.searchText.length > 0) {
+            Button({ type: ButtonType.Circle }) {
+              Text('×')
+                .fontSize(20)
+                .fontColor('#AAAAAA')
+            }
+            .width(32)
+            .height(32)
+            .backgroundColor(Color.Transparent)
+            .onClick(() => {
+              this.searchText = '';
+              this.searchDebounce.cancel();
+              this.model.updateFilter({ searchKeyword: '' });
+            })
+            .margin({ right: 8 })
+          }
+        }
+        .width('60%')
 
         Button('重置')
           .width(80)
           .height(40)
           .fontSize(14)
           .onClick(() => {
+            this.searchText = '';
+            this.searchDebounce.cancel();
             this.model.resetFilters();
           })
       }
