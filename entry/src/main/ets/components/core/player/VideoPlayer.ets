@@ -252,7 +252,7 @@ export struct VideoPlayer {
       })
         .onLoad(() => {
           this.surfaceId = this.xComponentController.getXComponentSurfaceId()
-          this.controller.initPlayer(this.data, this.surfaceId)
+          this.controller.initPlayer(this.data, this.surfaceId, this.data.videoId)
           emitter.once(PlayerEvents.PREPARED, () => {
             if (this.autoPlay) {
               this.controller.play()
