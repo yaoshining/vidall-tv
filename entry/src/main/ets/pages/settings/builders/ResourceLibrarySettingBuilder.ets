@@ -30,18 +30,16 @@ struct ResourceLibrarySettingBuilderComponent {
         '2. 进入设置 → API 获取 API Key (v3 auth)\n' +
         '3. 将 API Key 填入下方输入框',
       autoCancel: false,
-      buttons: [
-        {
-          text: '取消',
-          action: () => {}
-        },
-        {
-          text: '配置',
-          action: () => {
-            this.showApiKeyInputDialog();
-          }
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      primaryButton: {
+        value: '配置',
+        action: () => {
+          this.showApiKeyInputDialog();
         }
-      ]
+      }
     });
   }
 
@@ -53,25 +51,35 @@ struct ResourceLibrarySettingBuilderComponent {
       title: '输入 TMDB API Key',
       message: '当前值：' + (this.tmdbApiKey ? '已配置' : '未配置'),
       autoCancel: false,
-      buttons: [
-        {
-          text: '取消',
-          action: () => {}
-        },
-        {
-          text: '保存',
-          action: () => {
-            // 由于 AlertDialog 不支持 TextInput，我们使用 prompt 方式
-            this.showPromptForApiKey();
-          }
-        },
-        {
-          text: '清除',
-          action: () => {
-            this.saveApiKey('');
-          }
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      primaryButton: {
+        value: '保存',
+        action: () => {
+          // 由于 AlertDialog 不支持 TextInput，我们使用 prompt 方式
+          this.showPromptForApiKey();
         }
-      ]
+      }
+    });
+  }
+
+  private showClearApiKeyDialog(): void {
+    AlertDialog.show({
+      title: '清除 API Key',
+      message: '确定要清除已配置的 TMDB API Key 吗？',
+      autoCancel: false,
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      primaryButton: {
+        value: '清除',
+        action: () => {
+          this.saveApiKey('');
+        }
+      }
     });
   }
 
@@ -83,7 +91,7 @@ struct ResourceLibrarySettingBuilderComponent {
       message: '请使用设置页面输入框修改 API Key',
       buttons: [
         {
-          text: '确定',
+          value: '确定',
           color: '#007DFF'
         }
       ]
@@ -146,6 +154,18 @@ struct ResourceLibrarySettingBuilderComponent {
               })
               .onSubmit(() => {
                 this.saveApiKey(this.tmdbApiKey);
+              })
+
+            // 清除按钮
+            Button('清除 API Key')
+              .width('90%')
+              .height(36)
+              .fontSize(14)
+              .margin({ left: 16, right: 16, bottom: 8 })
+              .buttonStyle(ButtonStyleMode.TEXTUAL)
+              .enabled(!this.isLoading)
+              .onClick(() => {
+                this.showClearApiKeyDialog();
               })
           }
         }
