@@ -91,7 +91,7 @@ struct ResourceLibrarySettingBuilderComponent {
       message: '请使用设置页面输入框修改 API Key',
       buttons: [
         {
-          value: '确定',
+          text: '确定',
           color: '#007DFF'
         }
       ]
