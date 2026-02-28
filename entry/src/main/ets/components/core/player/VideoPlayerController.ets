@@ -83,6 +83,9 @@ export class VideoPlayerController {
     this.surfaceId = surfaceId;
     this.videoId = videoId;
 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[initPlayer] 初始化播放器 - videoId=${videoId}, name=${videoData.name}`);
+
     // 释放旧 player
     if (this.player) {
       await this.player.release().catch(() => {});
@@ -744,7 +747,12 @@ export class VideoPlayerController {
     // 清除旧定时器
     this.stopProgressSaveTimer();
 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[startProgressSaveTimer] videoId=${this.videoId}, duration=${this.duration}`);
+
     if (this.videoId === undefined) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[startProgressSaveTimer] 跳过启动定时器 - videoId未定义`);
       return; // 没有 videoId，不保存进度
     }
 

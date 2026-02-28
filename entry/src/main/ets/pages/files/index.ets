@@ -105,16 +105,33 @@ export struct FileExplorerPage {
     })
   }
 
-  private playVideo(path: string, displayName: string) {
+  private async playVideo(path: string, displayName: string) {
     const url = this.client.getFullUrl(path)
     const authHeader = this.client.getAuthHeaderPublic()
+
+    // 查询数据库获取 videoId（用于播放进度持久化）
+    let videoId: number | undefined = undefined;
+    try {
+      const { FileSourceDatabase } = await import('../../db/files/FileSourceDatabase');
+      const db = FileSourceDatabase.getInstance();
+      const video = await db.getVideoByPath(path);
+      if (video && video.id !== undefined) {
+        videoId = video.id;
+        console.info(`[FileExplorerPage] 找到视频记录: path=${path}, videoId=${videoId}`);
+      } else {
+        console.warn(`[FileExplorerPage] 未找到视频记录: path=${path}`);
+      }
+    } catch (error) {
+      console.error(`[FileExplorerPage] 查询视频记录失败: ${JSON.stringify(error)}`);
+    }
 
     const pageParam: PlayerPageParam = {
       url: encodeURI(url),
       httpHeader: {
         'Authorization': authHeader
       },
-      title: displayName
+      title: displayName,
+      videoId: videoId
     }
 
     this.pageStack.pushPath({
