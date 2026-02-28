@@ -360,7 +360,27 @@ export class ScrapeClient {
   async autoScrape(fileName: string, providerOrder?: string[]): Promise<ScrapeResult | null> {
     const query = parseFileName(fileName);
     console.info(`[ScrapeClient] autoScrape "${fileName}" → title="${query.title}" year=${query.year ?? '-'} type=${query.mediaType}`);
-    const results = await this.search(query, providerOrder);
+
+    // 带重试的搜索逻辑（最多重试 1 次）
+    let results: ScrapeResult[] = [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const timeoutMs = 5000; // 5 秒超时
+        results = await this.searchWithTimeout(query, timeoutMs, providerOrder);
+        if (results.length > 0) {
+          break; // 搜索成功，跳出重试
+        }
+      } catch (e) {
+        const err = e as Error;
+        console.warn(`[ScrapeClient] autoScrape 尝试 ${attempt + 1}/2 失败: ${err.message}`);
+        if (attempt === 1) { // 最后一次尝试失败
+          throw err;
+        }
+        // 等待 1 秒后重试
+        await this.sleep(1000);
+      }
+    }
+
     if (results.length === 0) {
       console.warn(`[ScrapeClient] autoScrape 无匹配: "${fileName}"`);
       return null;
@@ -369,6 +389,29 @@ export class ScrapeClient {
     console.info(`[ScrapeClient] 命中 provider=${top.provider} id=${top.providerId} title="${top.title}"`);
     const mt: 'movie' | 'tv' = (top.mediaType === 'movie' || top.mediaType === 'tv') ? top.mediaType : 'movie';
     return this.fetchDetail(top.provider, top.providerId, mt, query.language ?? 'zh-CN');
+  }
+
+  /**
+   * 带超时的搜索
+   */
+  private async searchWithTimeout(
+    query: ScrapeQuery,
+    timeoutMs: number,
+    providerOrder?: string[]
+  ): Promise<ScrapeResult[]> {
+    return Promise.race([
+      this.search(query, providerOrder),
+      new Promise<ScrapeResult[]>((_, reject) => {
+        setTimeout(() => reject(new Error('刮削超时')), timeoutMs);
+      })
+    ]);
+  }
+
+  /**
+   * 睡眠指定毫秒数
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private async acquire(): Promise<void> {

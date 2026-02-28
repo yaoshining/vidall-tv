@@ -3,9 +3,10 @@ import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem } from "../../../db/models/MediaEntity"
+import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import promptAction from '@ohos.promptAction';
 
 // ─────────────────────────────────────────────
 // 常量
@@ -447,12 +448,106 @@ export struct MediaLibraryTab {
       const context = this.getUIContext().getHostContext()!;
       const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
       const scrapeClient = tmdbKey.length > 0 ? new ScrapeClient({ tmdbApiKey: tmdbKey }) : undefined;
+
+      if (!scrapeClient) {
+        promptAction.showToast({
+          message: '请先配置 TMDB API Key'
+        });
+        return;
+      }
+
       const result = await VideoScannerUtil.scan(context, scrapeClient);
       console.info(`[MediaLibraryTab] 扫描完成，共 ${result.totalVideos} 个视频，耗时 ${result.elapsedMs}ms`);
       await this.model.reload();
+      promptAction.showToast({
+        message: `扫描完成，共 ${result.totalVideos} 个视频`
+      });
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryTab] 扫描异常: ${err.message}`);
+      promptAction.showToast({
+        message: '扫描失败: ' + err.message
+      });
+    } finally {
+      this.isScanning = false;
+    }
+  }
+
+  /**
+   * 手动刷新元数据（重新刮削所有视频）
+   */
+  private async refreshMetadata(): Promise<void> {
+    if (this.isScanning) { return; }
+    this.isScanning = true;
+    try {
+      const context = this.getUIContext().getHostContext()!;
+      const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+
+      if (!tmdbKey || tmdbKey.length === 0) {
+        promptAction.showToast({
+          message: '请先配置 TMDB API Key'
+        });
+        return;
+      }
+
+      const scrapeClient = new ScrapeClient({ tmdbApiKey: tmdbKey });
+      const db = FileSourceDatabase.getInstance(context);
+
+      // 获取所有视频
+      const allVideos = await db.getAllVideos();
+      console.info(`[MediaLibraryTab] 开始刷新元数据，共 ${allVideos.length} 个视频`);
+
+      let successCount = 0;
+      let failedCount = 0;
+
+      // 逐个刮削
+      for (const video of allVideos) {
+        try {
+          const result = await scrapeClient.autoScrape(video.fileName);
+          if (result) {
+            // 保存刮削结果
+            const scrapeInfo: ScrapeInfoEntity = {
+              videoId: video.id!,
+              provider: result.provider,
+              providerId: result.providerId,
+              mediaType: result.mediaType,
+              title: result.title,
+              originalTitle: result.originalTitle,
+              overview: result.overview,
+              releaseDate: result.releaseDate,
+              rating: result.rating,
+              genresJson: result.genres ? JSON.stringify(result.genres) : undefined,
+              castJson: result.cast ? JSON.stringify(result.cast) : undefined,
+              directorsJson: result.directors ? JSON.stringify(result.directors) : undefined,
+              posterUrl: result.posterUrl,
+              backdropUrl: result.backdropUrl,
+              scrapedAt: Date.now(),
+              rawJson: result.rawJson
+            };
+            await db.upsertScrapeInfo(scrapeInfo);
+            successCount++;
+            console.info(`[MediaLibraryTab] 刮削成功: ${video.fileName}`);
+          } else {
+            failedCount++;
+            console.warn(`[MediaLibraryTab] 刮削失败（无匹配）: ${video.fileName}`);
+          }
+        } catch (e) {
+          failedCount++;
+          const err = e as Error;
+          console.error(`[MediaLibraryTab] 刮削异常: ${video.fileName}, ${err.message}`);
+        }
+      }
+
+      await this.model.reload();
+      promptAction.showToast({
+        message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个`
+      });
+    } catch (e) {
+      const err = e as Error;
+      console.error(`[MediaLibraryTab] 刷新元数据异常: ${err.message}`);
+      promptAction.showToast({
+        message: '刷新失败: ' + err.message
+      });
     } finally {
       this.isScanning = false;
     }
@@ -590,12 +685,21 @@ export struct MediaLibraryTab {
       Text(this.getLastScanText())
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
-      Button(this.isScanning ? '扫描中...' : '重新扫描')
-        .width(200).height(40).fontSize(14)
-        .enabled(!this.isScanning)
-        .buttonStyle(ButtonStyleMode.EMPHASIZED)
-        .onClick(() => { this.startScan(); })
-        .margin({ bottom: 40 })
+      Row({ space: 16 }) {
+        Button(this.isScanning ? '扫描中...' : '重新扫描')
+          .width(150).height(40).fontSize(14)
+          .enabled(!this.isScanning)
+          .buttonStyle(ButtonStyleMode.EMPHASIZED)
+          .onClick(() => { this.startScan(); })
+
+        Button(this.isScanning ? '刷新中...' : '刷新元数据')
+          .width(150).height(40).fontSize(14)
+          .enabled(!this.isScanning)
+          .buttonStyle(ButtonStyleMode.TEXTUAL)
+          .onClick(() => { this.refreshMetadata(); })
+      }
+      .justifyContent(FlexAlign.Center)
+      .margin({ bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
   }
