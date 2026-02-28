@@ -1180,7 +1180,8 @@ export class FileSourceDatabase {
    */
   async upsertPlayHistory(entity: PlayHistoryEntity): Promise<void> {
     if (this.rdbStore === null) {
-      throw new Error('Database not initialized');
+      console.error('[FileSourceDatabase] upsertPlayHistory 失败: Database not initialized');
+      return;
     }
     try {
       const existing = await this.getPlayHistoryByVideoId(entity.videoId);
@@ -1202,7 +1203,7 @@ export class FileSourceDatabase {
       }
     } catch (error) {
       console.error(`[FileSourceDatabase] upsertPlayHistory 失败: ${JSON.stringify(error)}`);
-      throw new Error('upsertPlayHistory failed: ' + JSON.stringify(error));
+      // 不再抛出异常，只记录错误，让调用者能够继续执行
     }
   }
 
