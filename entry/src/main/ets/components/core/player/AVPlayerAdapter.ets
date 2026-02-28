@@ -30,7 +30,10 @@ export class AVPlayerAdapter implements IPlayer {
   private _onStoppedCb?: () => void;
   private _onTimeUpdateCb?: (currentTime: number) => void;
   private _onErrorCb?: (error: Error) => void;
+  private _onUnsupportedFormatCb?: () => void;
   private _onSeekDoneCb?: () => void;
+  /** 最近一次 AVPlayer error 事件的错误码，用于在 stateChange(ERROR) 时区分错误类型 */
+  private _lastErrorCode: number = 0;
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
 
   // ─── IPlayer 属性 ───
@@ -215,6 +218,10 @@ export class AVPlayerAdapter implements IPlayer {
     this._onErrorCb = callback;
   }
 
+  onUnsupportedFormat(callback: () => void): void {
+    this._onUnsupportedFormatCb = callback;
+  }
+
   onSeekDone(callback: () => void): void {
     this._onSeekDoneCb = callback;
   }
@@ -261,9 +268,11 @@ export class AVPlayerAdapter implements IPlayer {
           if (this._onStoppedCb) { this._onStoppedCb(); }
           break;
         case AVPlayerState.ERROR:
-          if (this._onErrorCb) {
-            this._onErrorCb(new Error(`AVPlayer entered error state`));
-          }
+          // error 事件在 stateChange(ERROR) 之后才触发（实测顺序）
+          // 因此这里不能直接用 _lastErrorCode，改为在 error 事件里统一分发
+          // 仅做日志，实际回调由下方 error 事件处理
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `stateChange: error（等待 error 事件获取 code 后分发）`);
           break;
         default:
           break;
@@ -277,11 +286,23 @@ export class AVPlayerAdapter implements IPlayer {
       }
     });
 
-    // error
+    // error —— 实测在 stateChange('error') 之后触发，在此统一分发回调
     player.on('error', (error: Error) => {
+      const bizErr = error as BusinessError;
+      const code = bizErr.code ?? 0;
+      this._lastErrorCode = code;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `AVPlayer error: ${JSON.stringify(error)}`);
-      if (this._onErrorCb) { this._onErrorCb(error); }
+        `AVPlayer error: code=${code} msg=${bizErr.message}`);
+
+      // 格式/流不支持 → 触发 fallback 切换 ijkplayer
+      if (code === 5400106 || code === 5400103) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `格式不支持 (code=${code})，触发 onUnsupportedFormat`);
+        if (this._onUnsupportedFormatCb) { this._onUnsupportedFormatCb(); }
+      } else {
+        // 其他错误（网络、文件缺失等）走普通 onError
+        if (this._onErrorCb) { this._onErrorCb(error); }
+      }
     });
 
     // seekDone

@@ -13,6 +13,14 @@ export struct VideoPlayer {
   @Require @Param data: VideoData
   @Local controlsOpened: boolean = false
   @Param autoPlay: boolean = false
+  /** 镜像 controller.backend，用于驱动 if/else XComponent 分支重建 */
+  @Local useIjkPlayer: boolean = false
+
+  @Monitor('controller.backend')
+  onBackendChange(): void {
+    this.useIjkPlayer = this.controller.backend === 'ijkplayer'
+    console.info(`[VideoPlayer] backend 变更 → useIjkPlayer=${this.useIjkPlayer}`)
+  }
 
   controlsDialogController = new CustomDialogController({
     builder: VideoControlsDialog({
@@ -246,7 +254,7 @@ export struct VideoPlayer {
   build() {
     Stack() {
       // AVPlayer 内核：使用 XComponentController 获取 surfaceId
-      if (this.controller.backend === 'avplayer') {
+      if (!this.useIjkPlayer) {
         XComponent({
           id: 'playerXComponent',
           type: XComponentType.SURFACE,

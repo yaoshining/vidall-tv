@@ -318,6 +318,8 @@ export class IjkPlayerAdapter implements IPlayer {
   onStopped(callback: () => void): void { this._onStoppedCb = callback; }
   onTimeUpdate(callback: (currentTime: number) => void): void { this._onTimeUpdateCb = callback; }
   onError(callback: (error: Error) => void): void { this._onErrorCb = callback; }
+  /** IjkPlayer 不会触发格式不支持回调（ijkplayer 基于 FFmpeg，格式支持广泛） */
+  onUnsupportedFormat(_callback: () => void): void { /* no-op */ }
   onSeekDone(callback: () => void): void { this._onSeekDoneCb = callback; }
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void {
     this._onSubtitleUpdateCb = callback;
@@ -352,9 +354,13 @@ export class IjkPlayerAdapter implements IPlayer {
     // 跳帧（CPU 跟不上时保持音画同步，TV 端建议 1~5）
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'framedrop', '5');
 
-    // ── 硬解码（H.264 + H.265）──
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '1');
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '1');
+    // ── 解码方式 ──
+    // 软解码（兜底方案，兼容性最好，避免硬解绿点/黑屏问题）
+    // 如需开启硬解码，取消下面两行注释，但鸿蒙某些设备/格式硬解可能出现绿点
+    // this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '1');
+    // this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '1');
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '0');
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '0');
 
     // ── 网络超时（HTTP/WebDAV，单位 μs）──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, 'timeout', '10000000');

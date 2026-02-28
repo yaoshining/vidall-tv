@@ -60,6 +60,11 @@ export interface IPlayer {
   onStopped(callback: () => void): void;
   onTimeUpdate(callback: (currentTime: number) => void): void;
   onError(callback: (error: Error) => void): void;
+  /**
+   * 格式不支持回调：播放器遇到无法解码的格式时触发（如 AVPlayer 遇到 AC-3/EAC-3）。
+   * VideoPlayerController 收到此回调后会自动切换到 ijkplayer。
+   */
+  onUnsupportedFormat(callback: () => void): void;
   onSeekDone(callback: () => void): void;
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void;
 }

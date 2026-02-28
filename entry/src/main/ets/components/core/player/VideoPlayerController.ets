@@ -43,7 +43,7 @@ export class VideoPlayerController {
    * 切换为 'ijkplayer' 后，VideoPlayer UI 层需要使用 libraryname='ijkplayer_napi'
    * 的 XComponent，并在 onLoad 回调中调用 controller.setIjkContext(context, id)。
    */
-  backend: PlayerBackend = 'avplayer';
+  @Trace backend: PlayerBackend = 'avplayer';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
@@ -148,6 +148,20 @@ export class VideoPlayerController {
     adapter.onError((error: Error) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
       this.isLoading = false;
+    });
+    adapter.onUnsupportedFormat(() => {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'AVPlayer 不支持当前格式，自动切换到 IjkPlayer...');
+      this.isLoading = true;
+      // 先把 player 引用清空，防止后续调用
+      const oldPlayer = this.player;
+      this.player = undefined;
+      // 切换 backend（@Trace），触发 VideoPlayer UI 重建 → ijkPlayer XComponent.onLoad 触发
+      this.backend = 'ijkplayer';
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'backend 已切换为 ijkplayer，等待 UI 层 XComponent 重建...');
+      // 异步释放旧 player（不等待，不影响切换流程）
+      oldPlayer?.release().catch(() => {});
     });
     adapter.onSeekDone(() => {
       if (this.timeToSeek >= 0) {
