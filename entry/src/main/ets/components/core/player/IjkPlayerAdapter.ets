@@ -11,6 +11,7 @@ import type { OnSeekCompleteListener } from '@ohos/ijkplayer';
 import type { OnInfoListener } from '@ohos/ijkplayer';
 import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
 import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
+import { DeviceCapabilityUtil } from '../../../utils/DeviceCapabilityUtil';
 
 const TAG = '[IjkPlayerAdapter]';
 
@@ -169,7 +170,7 @@ export class IjkPlayerAdapter implements IPlayer {
       }
 
       // ── Step 5：setOption ──
-      this.applyDefaultOptions();
+      await this.applyDefaultOptions();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[5/8] setOption 完成');
 
       // ── Step 6：setOnXxxListener ──
@@ -336,7 +337,7 @@ export class IjkPlayerAdapter implements IPlayer {
    * 强行设置会导致 SDL_VoutFFmpeg_CreateOverlay 失败，视频黑屏只有声音。
    * 鸿蒙版底层使用 XComponent Surface，overlay format 由框架自动管理。
    */
-  private applyDefaultOptions(): void {
+  private async applyDefaultOptions(): Promise<void> {
     // ── 精确寻帧 ──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'enable-accurate-seek', '1');
 
@@ -354,13 +355,17 @@ export class IjkPlayerAdapter implements IPlayer {
     // 跳帧（CPU 跟不上时保持音画同步，TV 端建议 1~5）
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'framedrop', '5');
 
-    // ── 解码方式 ──
-    // 软解码（兜底方案，兼容性最好，避免硬解绿点/黑屏问题）
-    // 如需开启硬解码，取消下面两行注释，但鸿蒙某些设备/格式硬解可能出现绿点
-    // this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '1');
-    // this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '1');
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '0');
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '0');
+    // ── 硬件解码：查询设备能力后决定是否开启 ──
+    // overlay-format 是 Android 专用参数，鸿蒙版不需要设置，设置反而会黑屏
+    const hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
+    const useH264Hw = hwSupport.h264;
+    const useH265Hw = hwSupport.h265;
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
+      'mediacodec-all-videos', useH264Hw ? '1' : '0');
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
+      'mediacodec-hevc', useH265Hw ? '1' : '0');
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${useH265Hw ? '硬解✅' : '软解⚠️'}`);
 
     // ── 网络超时（HTTP/WebDAV，单位 μs）──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, 'timeout', '10000000');
@@ -373,7 +378,7 @@ export class IjkPlayerAdapter implements IPlayer {
     this.ijk.setScreenOnWhilePlaying(true);
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      '播放参数已应用：硬解(H264+H265)，精确寻帧，10s超时，start-on-prepared=0');
+      '播放参数已应用：精确寻帧，10s超时，start-on-prepared=0');
   }
 
   /**
