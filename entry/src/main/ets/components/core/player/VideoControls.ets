@@ -130,23 +130,17 @@ struct VideoControls {
 
   build() {
     RelativeContainer() {
+      // ── 顶部栏：标题 + 字幕按钮 ──
       Flex({
         justifyContent: FlexAlign.SpaceBetween,
         alignItems: ItemAlign.Start
       }) {
         Text(this.videoController.name)
           .fontSize($r('app.float.font_h8_title_secondary'))
-          .textShadow({
-            radius: 3,
-            offsetX: 3,
-            offsetY: 3,
-            color: Color.Black
-          })
+          .textShadow({ radius: 3, offsetX: 3, offsetY: 3, color: Color.Black })
           .width("80%")
           .maxLines(1)
-          .textOverflow({
-            overflow: TextOverflow.Ellipsis
-          })
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
         // 字幕按钮
         if (this.videoController.allSubtitleTracks.length > 0) {
@@ -169,10 +163,7 @@ struct VideoControls {
       }
       .linearGradient({
         direction: GradientDirection.Bottom,
-        colors: [
-          ['rgba(0, 0, 0, 0.3)', 0.0],
-          ['rgba(0, 0, 0, 0)', 1.0]
-        ]
+        colors: [['rgba(0, 0, 0, 0.3)', 0.0], ['rgba(0, 0, 0, 0)', 1.0]]
       })
       .alignRules({
         left: { anchor: '__container__', align: HorizontalAlign.Start },
@@ -181,24 +172,8 @@ struct VideoControls {
       .height("20%")
       .padding(20)
 
-      // 字幕选择菜单
-      if (this.showSubtitleMenu) {
-        Column() {
-          this.SubtitleMenu()
-        }
-        .alignRules({
-          top: { anchor: '__container__', align: VerticalAlign.Top },
-          right: { anchor: '__container__', align: HorizontalAlign.End }
-        })
-        .margin({ top: 80, right: 20 })
-        .width('300vp')
-        .onClick(() => {
-          // 阻止事件冒泡
-        })
-      }
-
+      // ── 播放暂停居中按钮 ──
       if (!this.videoController.isPlaying) {
-        // 播放按钮透明毛玻璃效果，带播放图标
         Column() {
           SymbolGlyph($r('sys.symbol.play_fill'))
             .fontColor([Color.White])
@@ -212,28 +187,22 @@ struct VideoControls {
         .backdropBlur(40)
         .padding(20)
         .borderRadius(99)
-        .border({
-          width: 1,
-          color: 'rgba(255, 255, 255, 0.2)'
-        })
+        .border({ width: 1, color: 'rgba(255, 255, 255, 0.2)' })
         .shadow({ radius: 20, color: 'rgba(0, 0, 0, 0.4)' })
       }
 
-      Flex({
-        alignItems: ItemAlign.End
-      }) {
+      // ── 底部进度条 ──
+      Flex({ alignItems: ItemAlign.End }) {
         Flex({
           alignItems: ItemAlign.Center,
           justifyContent: FlexAlign.SpaceBetween,
-          space: {
-            main: LengthMetrics.vp(6)
-          }
+          space: { main: LengthMetrics.vp(6) }
         }) {
           Text(`${this.videoController.currentTimeDisplay}`)
             .flexShrink(0)
           // Slider + hover tooltip
           Stack({ alignContent: Alignment.Bottom }) {
-            // tooltip 层：始终渲染，用 visibility 控制显隐，避免 Builder 条件分支失效
+            // tooltip 层
             Row() {
               this.SliderTooltip()
             }
@@ -252,10 +221,8 @@ struct VideoControls {
               .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
               .trackThickness(this.sliderHovered ? 8 : 4)
               .onChange((value, mode) => {
-                // 始终同步 hoverTimeMs，保证 tooltip 时间正确
                 this.hoverTimeMs = value
                 if (mode === SliderChangeMode.Begin) {
-                  // 开始拖动时先取消自动关闭，避免拖动期间控件消失
                   clearTimeout(this.closeTimer)
                   this.videoController.pause()
                   this.videoController.currentTime = value
@@ -267,8 +234,6 @@ struct VideoControls {
                 if (mode === SliderChangeMode.End) {
                   this.videoController.seek(value)
                   this.videoController.play().then(() => {
-                    // forceStart=true：无论 isPlaying 状态如何都启动定时器
-                    // 避免 play() 异步完成前 isPlaying 仍为 false 导致定时器不启动
                     this.enableAutoHide(true)
                   })
                 }
@@ -294,7 +259,6 @@ struct VideoControls {
                 }
               })
               .onFocus(() => {
-                // 方向键焦点：显示 tooltip，初始化为当前播放位置
                 this.sliderHovered = true
                 this.hoverTimeMs = this.videoController.currentTime
               })
@@ -305,10 +269,7 @@ struct VideoControls {
                 this.sliderWidth = newVal.width as number
               })
               .width('100%')
-              .animation({
-                duration: 200,
-                curve: Curve.EaseInOut
-              })
+              .animation({ duration: 200, curve: Curve.EaseInOut })
           }
           .flexGrow(1)
           .alignContent(Alignment.Bottom)
@@ -321,13 +282,26 @@ struct VideoControls {
       })
       .linearGradient({
         direction: GradientDirection.Top,
-        colors: [
-          ['rgba(0, 0, 0, 0.5)', 0.0],
-          ['rgba(0, 0, 0, 0)', 1.0]
-        ]
+        colors: [['rgba(0, 0, 0, 0.5)', 0.0], ['rgba(0, 0, 0, 0)', 1.0]]
       })
       .height("20%")
       .padding(20)
+
+      // ── 字幕菜单：必须在进度条之后声明，层叠在进度条之上 ──
+      if (this.showSubtitleMenu) {
+        Column() {
+          this.SubtitleMenu()
+        }
+        .alignRules({
+          top: { anchor: '__container__', align: VerticalAlign.Top },
+          right: { anchor: '__container__', align: HorizontalAlign.End }
+        })
+        .margin({ top: 80, right: 20 })
+        .width('300vp')
+        .onClick(() => {
+          // 阻止事件冒泡
+        })
+      }
     }
     .hitTestBehavior(HitTestMode.Transparent)
     .onClick(async () => {
