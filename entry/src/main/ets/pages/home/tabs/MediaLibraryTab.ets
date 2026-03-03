@@ -451,9 +451,8 @@ export struct MediaLibraryTab {
 
       if (!scrapeClient) {
         promptAction.showToast({
-          message: '请先配置 TMDB API Key'
+          message: '未配置 TMDB API Key，将跳过刮削'
         });
-        return;
       }
 
       const result = await VideoScannerUtil.scan(context, scrapeClient);
