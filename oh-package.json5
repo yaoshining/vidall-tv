@@ -4,7 +4,8 @@
   "dependencies": {
     "@ibestservices/ibest-ui": "2.1.4",
     "lucide": "^1.1.0",
-    "@hadss/state_store": "^1.0.0"
+    "@hadss/state_store": "^1.0.0",
+    "@ohos/ijkplayer": "^2.0.7"
   },
   "devDependencies": {
     "@ohos/hypium": "1.0.25",

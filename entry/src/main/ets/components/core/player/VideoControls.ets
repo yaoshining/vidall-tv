@@ -13,6 +13,52 @@ struct VideoControls {
   private AUTO_CLOSE_TIMEOUT = 5000
   @Local showSubtitleMenu: boolean = false
   @Local sliderHovered: boolean = false
+  // ── 进度条 hover tooltip ──
+  @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
+  @Local sliderWidth: number = 0      // Slider 组件实际宽度（vp）
+
+  /** 将毫秒格式化为 HH:MM:SS 或 MM:SS */
+  private formatTime(ms: number): string {
+    const totalSec = Math.floor(ms / 1000)
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    const s = totalSec % 60
+    const mm = m < 10 ? `0${m}` : `${m}`
+    const ss = s < 10 ? `0${s}` : `${s}`
+    if (h > 0) {
+      const hh = h < 10 ? `0${h}` : `${h}`
+      return `${hh}:${mm}:${ss}`
+    }
+    return `${mm}:${ss}`
+  }
+
+  @Builder
+  SliderTooltip() {
+    Text(this.formatTime(this.hoverTimeMs))
+      .fontSize(20)
+      .fontColor(Color.White)
+      .fontWeight(FontWeight.Medium)
+      .textAlign(TextAlign.Center)
+      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+      .backgroundColor('#CC000000')
+      .borderRadius(8)
+      .width(100)
+      .position({ x: this.getTooltipOffsetX(), y: 0 })
+  }
+
+  /** 计算 tooltip 左边距：按当前时间比例居中对齐，并限制不超出两端 */
+  private getTooltipOffsetX(): number {
+    const TOOLTIP_W = 100   // 与 SliderTooltip 的 .width(100) 保持一致
+    if (this.sliderWidth <= 0 || this.videoController.duration <= 0) {
+      return 0
+    }
+    const ratio = this.hoverTimeMs / this.videoController.duration
+    const center = ratio * this.sliderWidth
+    const raw = center - TOOLTIP_W / 2
+    if (raw < 0) return 0
+    if (raw + TOOLTIP_W > this.sliderWidth) return this.sliderWidth - TOOLTIP_W
+    return raw
+  }
 
   @Builder
   SubtitleMenu() {
@@ -84,23 +130,17 @@ struct VideoControls {
 
   build() {
     RelativeContainer() {
+      // ── 顶部栏：标题 + 字幕按钮 ──
       Flex({
         justifyContent: FlexAlign.SpaceBetween,
         alignItems: ItemAlign.Start
       }) {
         Text(this.videoController.name)
           .fontSize($r('app.float.font_h8_title_secondary'))
-          .textShadow({
-            radius: 3,
-            offsetX: 3,
-            offsetY: 3,
-            color: Color.Black
-          })
+          .textShadow({ radius: 3, offsetX: 3, offsetY: 3, color: Color.Black })
           .width("80%")
           .maxLines(1)
-          .textOverflow({
-            overflow: TextOverflow.Ellipsis
-          })
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
         // 字幕按钮
         if (this.videoController.allSubtitleTracks.length > 0) {
@@ -123,10 +163,7 @@ struct VideoControls {
       }
       .linearGradient({
         direction: GradientDirection.Bottom,
-        colors: [
-          ['rgba(0, 0, 0, 0.3)', 0.0],
-          ['rgba(0, 0, 0, 0)', 1.0]
-        ]
+        colors: [['rgba(0, 0, 0, 0.3)', 0.0], ['rgba(0, 0, 0, 0)', 1.0]]
       })
       .alignRules({
         left: { anchor: '__container__', align: HorizontalAlign.Start },
@@ -135,7 +172,122 @@ struct VideoControls {
       .height("20%")
       .padding(20)
 
-      // 字幕选择菜单
+      // ── 播放暂停居中按钮 ──
+      if (!this.videoController.isPlaying) {
+        Column() {
+          SymbolGlyph($r('sys.symbol.play_fill'))
+            .fontColor([Color.White])
+            .fontSize(48)
+        }
+        .alignRules({
+          center: { anchor: '__container__', align: VerticalAlign.Center },
+          middle: { anchor: '__container__', align: HorizontalAlign.Center }
+        })
+        .backgroundColor('rgba(200, 200, 200, 0.2)')
+        .backdropBlur(40)
+        .padding(20)
+        .borderRadius(99)
+        .border({ width: 1, color: 'rgba(255, 255, 255, 0.2)' })
+        .shadow({ radius: 20, color: 'rgba(0, 0, 0, 0.4)' })
+      }
+
+      // ── 底部进度条 ──
+      Flex({ alignItems: ItemAlign.End }) {
+        Flex({
+          alignItems: ItemAlign.Center,
+          justifyContent: FlexAlign.SpaceBetween,
+          space: { main: LengthMetrics.vp(6) }
+        }) {
+          Text(`${this.videoController.currentTimeDisplay}`)
+            .flexShrink(0)
+          // Slider + hover tooltip
+          Stack({ alignContent: Alignment.Bottom }) {
+            // tooltip 层
+            Row() {
+              this.SliderTooltip()
+            }
+            .width('100%')
+            .height(44)
+            .hitTestBehavior(HitTestMode.Transparent)
+            .offset({ y: -42 })
+            .visibility(this.sliderHovered ? Visibility.Visible : Visibility.Hidden)
+
+            Slider({
+              value: this.videoController.currentTime,
+              min: 0,
+              max: this.videoController.duration,
+              style: SliderStyle.OutSet
+            })
+              .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
+              .trackThickness(this.sliderHovered ? 8 : 4)
+              .onChange((value, mode) => {
+                this.hoverTimeMs = value
+                if (mode === SliderChangeMode.Begin) {
+                  clearTimeout(this.closeTimer)
+                  this.videoController.pause()
+                  this.videoController.currentTime = value
+                  this.videoController.seek(value)
+                }
+                if (mode === SliderChangeMode.Moving) {
+                  this.videoController.currentTime = value
+                }
+                if (mode === SliderChangeMode.End) {
+                  this.videoController.seek(value)
+                  this.videoController.play().then(() => {
+                    this.enableAutoHide(true)
+                  })
+                }
+              })
+              .onHover((isHover: boolean, event: HoverEvent) => {
+                this.sliderHovered = isHover
+                if (isHover && event.x !== undefined) {
+                  const x: number = event.x
+                  if (this.sliderWidth > 0 && this.videoController.duration > 0) {
+                    const ratio = Math.max(0, Math.min(1, x / this.sliderWidth))
+                    this.hoverTimeMs = ratio * this.videoController.duration
+                  }
+                }
+              })
+              .onMouse((event: MouseEvent) => {
+                if (event.action === MouseAction.Move && event.x !== undefined) {
+                  this.sliderHovered = true
+                  const x: number = event.x
+                  if (this.sliderWidth > 0 && this.videoController.duration > 0) {
+                    const ratio = Math.max(0, Math.min(1, x / this.sliderWidth))
+                    this.hoverTimeMs = ratio * this.videoController.duration
+                  }
+                }
+              })
+              .onFocus(() => {
+                this.sliderHovered = true
+                this.hoverTimeMs = this.videoController.currentTime
+              })
+              .onBlur(() => {
+                this.sliderHovered = false
+              })
+              .onAreaChange((_oldVal, newVal) => {
+                this.sliderWidth = newVal.width as number
+              })
+              .width('100%')
+              .animation({ duration: 200, curve: Curve.EaseInOut })
+          }
+          .flexGrow(1)
+          .alignContent(Alignment.Bottom)
+          Text(`${this.videoController.durationDisplay}`)
+            .flexShrink(0)
+        }
+      }
+      .alignRules({
+        bottom: { anchor: '__container__', align: VerticalAlign.Bottom }
+      })
+      .linearGradient({
+        direction: GradientDirection.Top,
+        colors: [['rgba(0, 0, 0, 0.5)', 0.0], ['rgba(0, 0, 0, 0)', 1.0]]
+      })
+      .height("20%")
+      .padding(20)
+
+      // ── 字幕菜单：必须在进度条之后声明，层叠在进度条之上 ──
       if (this.showSubtitleMenu) {
         Column() {
           this.SubtitleMenu()
@@ -150,86 +302,6 @@ struct VideoControls {
           // 阻止事件冒泡
         })
       }
-
-      if (!this.videoController.isPlaying) {
-        // 播放按钮透明毛玻璃效果，带播放图标
-        Column() {
-          SymbolGlyph($r('sys.symbol.play_fill'))
-            .fontColor([Color.White])
-            .fontSize(48)
-        }
-        .alignRules({
-          center: { anchor: '__container__', align: VerticalAlign.Center },
-          middle: { anchor: '__container__', align: HorizontalAlign.Center }
-        })
-        .backgroundColor('rgba(200, 200, 200, 0.2)')
-        .backdropBlur(40)
-        .padding(20)
-        .borderRadius(99)
-        .border({
-          width: 1,
-          color: 'rgba(255, 255, 255, 0.2)'
-        })
-        .shadow({ radius: 20, color: 'rgba(0, 0, 0, 0.4)' })
-      }
-
-      Flex({
-        alignItems: ItemAlign.End
-      }) {
-        Flex({
-          alignItems: ItemAlign.Center,
-          justifyContent: FlexAlign.SpaceBetween,
-          space: {
-            main: LengthMetrics.vp(6)
-          }
-        }) {
-          Text(`${this.videoController.currentTimeDisplay}`)
-            .flexShrink(0)
-          Slider({
-            value: this.videoController.currentTime,
-            min: 0,
-            max: this.videoController.duration,
-            style: SliderStyle.OutSet
-          })
-            .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
-            .trackThickness(this.sliderHovered ? 8 : 4)
-            .onChange((value, mode) => {
-              if (mode === SliderChangeMode.Begin) {
-                this.videoController.pause()
-                this.videoController.currentTime = value
-                this.videoController.seek(value)
-              }
-              if (mode === SliderChangeMode.Moving) {
-                this.videoController.currentTime = value
-              }
-              if (mode === SliderChangeMode.End) {
-                this.videoController.seek(value)
-              }
-            })
-            .onHover((isHover: boolean) => {
-              this.sliderHovered = isHover
-            })
-            .flexGrow(1)
-            .animation({
-              duration: 200,
-              curve: Curve.EaseInOut
-            })
-          Text(`${this.videoController.durationDisplay}`)
-            .flexShrink(0)
-        }
-      }
-      .alignRules({
-        bottom: { anchor: '__container__', align: VerticalAlign.Bottom }
-      })
-      .linearGradient({
-        direction: GradientDirection.Top,
-        colors: [
-          ['rgba(0, 0, 0, 0.5)', 0.0],
-          ['rgba(0, 0, 0, 0)', 1.0]
-        ]
-      })
-      .height("20%")
-      .padding(20)
     }
     .hitTestBehavior(HitTestMode.Transparent)
     .onClick(async () => {
@@ -250,14 +322,12 @@ struct VideoControls {
     return '字幕';
   }
 
-  private enableAutoHide(): void {
-    if (this.videoController.isPlaying) {
-      clearTimeout(this.closeTimer)
+  private enableAutoHide(forceStart: boolean = false): void {
+    clearTimeout(this.closeTimer)
+    if (forceStart || this.videoController.isPlaying) {
       this.closeTimer = setTimeout(() => {
         this.dialogController.close()
       }, this.AUTO_CLOSE_TIMEOUT)
-    } else {
-      clearTimeout(this.closeTimer)
     }
   }
 
