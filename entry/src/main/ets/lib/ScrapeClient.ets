@@ -414,12 +414,25 @@ export class ScrapeClient {
     timeoutMs: number,
     providerOrder?: string[]
   ): Promise<ScrapeResult[]> {
-    return Promise.race([
-      this.search(query, providerOrder),
-      new Promise<ScrapeResult[]>((_, reject) => {
-        setTimeout(() => reject(new Error('刮削超时')), timeoutMs);
-      })
-    ]);
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<ScrapeResult[]>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('刮削超时'));
+      }, timeoutMs) as unknown as number;
+    });
+
+    try {
+      // 注意：此处仅对调用方施加超时限制，底层 this.search() 当前仍会继续执行。
+      // 若要真正中止网络请求，应在 provider / HTTP 层引入可取消机制并在此处触发。
+      return await Promise.race([
+        this.search(query, providerOrder),
+        timeoutPromise,
+      ]);
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
   }
 
   /**
