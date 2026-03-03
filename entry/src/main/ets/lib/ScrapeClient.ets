@@ -69,18 +69,34 @@ export interface IScrapeProvider {
  */
 export function parseFileName(fileName: string): ScrapeQuery {
   const withoutExt = fileName.replace(/\.[^.]+$/, '');
-  const yearMatch = withoutExt.match(/[.(]((?:19|20)\d{2})[.)]/);
+  const yearPattern = /[.\[(]((?:19|20)\d{2})[.)\]]/;
+  const yearMatch = withoutExt.match(yearPattern);
   const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
   const episodeMatch = withoutExt.match(/S(\d{1,2})E(\d{1,2})/i);
   const mediaType: 'movie' | 'tv' = episodeMatch ? 'tv' : 'movie';
-  let title = withoutExt
-    .replace(/[.(]((?:19|20)\d{2})[.)]/g, ' ')
-    .replace(/S\d{1,2}E\d{1,2}.*/gi, '')
-    .replace(/\b(1080p|720p|4k|2160p|480p|uhd|hdr|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|dts|ac3|dd5\.1|atmos|truehd|remux|proper|repack)\b/gi, ' ')
+
+  let workStr = withoutExt;
+
+  // 移除年份
+  workStr = workStr.replace(new RegExp(yearPattern.source, 'g'), ' ');
+
+  // 移除剧集标记及后续内容
+  workStr = workStr.replace(/S\d{1,2}E\d{1,2}.*/gi, '');
+
+  // 找到第一个质量标记的位置，截断后续内容（通常是发布组名称）
+  const qualityPattern = /\b(1080p|720p|4k|2160p|480p|uhd|hdr|hdr10|hdr10plus|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|aac\d\.\d|dts|dts-?x|ddp?\d\.\d|dd5\.?1|ac3|atmos|truehd|remux|proper|repack|imax|dv|\d{1,2}bit|\d\.\d)\b/i;
+  const qualityMatch = workStr.match(qualityPattern);
+  if (qualityMatch && qualityMatch.index !== undefined) {
+    workStr = workStr.substring(0, qualityMatch.index);
+  }
+
+  // 清理特殊字符和多余空格
+  const title = workStr
     .replace(/[[\]()]/g, ' ')
     .replace(/[._-]/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
+
   return { title, year, mediaType, language: 'zh-CN' };
 }
 

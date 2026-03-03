@@ -237,5 +237,48 @@ export default function scrapeClientTest() {
       expect(query.year).assertUndefined();
       expect(query.mediaType).assertEqual('movie');
     });
+
+    /**
+     * 测试用例 16：测试高级音频编码标记 - DDP5.1、AAC2.0
+     */
+    it('should remove advanced audio codec markers like DDP5.1 and AAC2.0', 0, () => {
+      console.info('Test: parseFileName - advanced audio codecs');
+
+      const query1: ScrapeQuery = parseFileName('Dune.2021.2160p.WEB-DL.DDP5.1.Atmos.DV.HEVC-ABC.mkv');
+      expect(query1.title).assertEqual('Dune');
+      expect(query1.year).assertEqual(2021);
+
+      const query2: ScrapeQuery = parseFileName('Avatar.2009.1080p.BluRay.AAC2.0.x264-XYZ.mkv');
+      expect(query2.title).assertEqual('Avatar');
+      expect(query2.year).assertEqual(2009);
+    });
+
+    /**
+     * 测试用例 17：测试 Dolby Vision 标记清理
+     */
+    it('should remove DV (Dolby Vision) marker from filename', 0, () => {
+      console.info('Test: parseFileName - Dolby Vision marker');
+
+      const query: ScrapeQuery = parseFileName('The.Batman.2022.2160p.UHD.BluRay.DV.HDR10.TrueHD.7.1.x265.mkv');
+
+      expect(query.title).assertEqual('The Batman');
+      expect(query.year).assertEqual(2022);
+      expect(query.mediaType).assertEqual('movie');
+    });
+
+    /**
+     * 测试用例 18：测试复杂音频格式组合
+     */
+    it('should handle complex audio format combinations', 0, () => {
+      console.info('Test: parseFileName - complex audio formats');
+
+      const query1: ScrapeQuery = parseFileName('Oppenheimer.2023.IMAX.2160p.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265.mkv');
+      expect(query1.title).assertEqual('Oppenheimer');
+      expect(query1.year).assertEqual(2023);
+
+      const query2: ScrapeQuery = parseFileName('Top.Gun.Maverick.2022.2160p.DDP7.1.Atmos.DV.HDR10Plus.HEVC.mkv');
+      expect(query2.title).assertEqual('Top Gun Maverick');
+      expect(query2.year).assertEqual(2022);
+    });
   });
 }
