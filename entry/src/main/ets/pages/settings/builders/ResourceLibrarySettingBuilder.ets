@@ -45,7 +45,6 @@ struct ResourceLibrarySettingBuilderComponent {
 
   private showApiKeyInputDialog(): void {
     // 使用 TextInput 的 AlertDialog 变体
-    const inputValue: string = this.tmdbApiKey;
 
     AlertDialog.show({
       title: '输入 TMDB API Key',
