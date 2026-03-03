@@ -76,7 +76,8 @@ export function parseFileName(fileName: string): ScrapeQuery {
   let title = withoutExt
     .replace(/[.(]((?:19|20)\d{2})[.)]/g, ' ')
     .replace(/S\d{1,2}E\d{1,2}.*/gi, '')
-    .replace(/\b(1080p|720p|4k|2160p|480p|uhd|hdr|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|dts|ac3|dd5\.1|atmos|truehd|remux|proper|repack)\b/gi, ' ')
+    .replace(/\b(1080p|720p|4k|2160p|480p|uhd|hdr|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|dts|ac3|dd5\.1|atmos|truehd|remux|proper|repack|\d+bit|\d+\.\d+)\b/gi, ' ')
+    .replace(/(?<= )\.[xX](?=\.|$| )/g, '')
     .replace(/[[\]()]/g, ' ')
     .replace(/[._-]/g, ' ')
     .replace(/\s{2,}/g, ' ')
