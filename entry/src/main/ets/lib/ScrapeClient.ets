@@ -69,18 +69,34 @@ export interface IScrapeProvider {
  */
 export function parseFileName(fileName: string): ScrapeQuery {
   const withoutExt = fileName.replace(/\.[^.]+$/, '');
-  const yearMatch = withoutExt.match(/[.(]((?:19|20)\d{2})[.)]/);
+  const yearPattern = /[.\[(]((?:19|20)\d{2})[.)\]]/;
+  const yearMatch = withoutExt.match(yearPattern);
   const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
   const episodeMatch = withoutExt.match(/S(\d{1,2})E(\d{1,2})/i);
   const mediaType: 'movie' | 'tv' = episodeMatch ? 'tv' : 'movie';
-  let title = withoutExt
-    .replace(/[.(]((?:19|20)\d{2})[.)]/g, ' ')
-    .replace(/S\d{1,2}E\d{1,2}.*/gi, '')
-    .replace(/\b(1080p|720p|4k|2160p|480p|uhd|hdr|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|dts|ac3|dd5\.1|atmos|truehd|remux|proper|repack)\b/gi, ' ')
+
+  let workStr = withoutExt;
+
+  // 移除年份
+  workStr = workStr.replace(new RegExp(yearPattern.source, 'g'), ' ');
+
+  // 移除剧集标记及后续内容
+  workStr = workStr.replace(/S\d{1,2}E\d{1,2}.*/gi, '');
+
+  // 找到第一个质量标记的位置，截断后续内容（通常是发布组名称）
+  const qualityPattern = /\b(1080p|720p|4k|2160p|480p|uhd|hdr|hdr10|hdr10plus|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|aac\d\.\d|dts|dts-?x|ddp?\d\.\d|dd5\.?1|ac3|atmos|truehd|remux|proper|repack|imax|dv|\d{1,2}bit|\d\.\d)\b/i;
+  const qualityMatch = workStr.match(qualityPattern);
+  if (qualityMatch && qualityMatch.index !== undefined) {
+    workStr = workStr.substring(0, qualityMatch.index);
+  }
+
+  // 清理特殊字符和多余空格
+  const title = workStr
     .replace(/[[\]()]/g, ' ')
     .replace(/[._-]/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
+
   return { title, year, mediaType, language: 'zh-CN' };
 }
 
@@ -360,7 +376,26 @@ export class ScrapeClient {
   async autoScrape(fileName: string, providerOrder?: string[]): Promise<ScrapeResult | null> {
     const query = parseFileName(fileName);
     console.info(`[ScrapeClient] autoScrape "${fileName}" → title="${query.title}" year=${query.year ?? '-'} type=${query.mediaType}`);
-    const results = await this.search(query, providerOrder);
+
+    // 带重试的搜索逻辑（最多重试 1 次，仅在异常时重试）
+    let results: ScrapeResult[] = [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const timeoutMs = 5000; // 5 秒超时
+        results = await this.searchWithTimeout(query, timeoutMs, providerOrder);
+        // 无论是否有匹配结果，只要调用成功就不再重试
+        break;
+      } catch (e) {
+        const err = e as Error;
+        console.warn(`[ScrapeClient] autoScrape 尝试 ${attempt + 1}/2 失败: ${err.message}`);
+        if (attempt === 1) { // 最后一次尝试失败
+          throw err;
+        }
+        // 等待 1 秒后重试
+        await this.sleep(1000);
+      }
+    }
+
     if (results.length === 0) {
       console.warn(`[ScrapeClient] autoScrape 无匹配: "${fileName}"`);
       return null;
@@ -369,6 +404,42 @@ export class ScrapeClient {
     console.info(`[ScrapeClient] 命中 provider=${top.provider} id=${top.providerId} title="${top.title}"`);
     const mt: 'movie' | 'tv' = (top.mediaType === 'movie' || top.mediaType === 'tv') ? top.mediaType : 'movie';
     return this.fetchDetail(top.provider, top.providerId, mt, query.language ?? 'zh-CN');
+  }
+
+  /**
+   * 带超时的搜索
+   */
+  private async searchWithTimeout(
+    query: ScrapeQuery,
+    timeoutMs: number,
+    providerOrder?: string[]
+  ): Promise<ScrapeResult[]> {
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<ScrapeResult[]>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('刮削超时'));
+      }, timeoutMs) as unknown as number;
+    });
+
+    try {
+      // 注意：此处仅对调用方施加超时限制，底层 this.search() 当前仍会继续执行。
+      // 若要真正中止网络请求，应在 provider / HTTP 层引入可取消机制并在此处触发。
+      return await Promise.race([
+        this.search(query, providerOrder),
+        timeoutPromise,
+      ]);
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  /**
+   * 睡眠指定毫秒数
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private async acquire(): Promise<void> {

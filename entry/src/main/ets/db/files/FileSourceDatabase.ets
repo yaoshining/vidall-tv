@@ -540,6 +540,26 @@ export class FileSourceDatabase {
     }
   }
 
+  /** 获取所有视频 */
+  async getAllVideos(): Promise<VideoEntity[]> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_VIDEOS);
+      const rs = await this.rdbStore.query(pred);
+      const list: VideoEntity[] = [];
+      while (rs.goToNextRow()) {
+        list.push(this.parseVideoEntity(rs));
+      }
+      rs.close();
+      return list;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getAllVideos 失败: ${JSON.stringify(error)}`);
+      return [];
+    }
+  }
+
   private parseVideoEntity(rs: relationalStore.ResultSet): VideoEntity {
     const get = (col: string): number => rs.getLong(rs.getColumnIndex(col));
     const str = (col: string): string | undefined => {

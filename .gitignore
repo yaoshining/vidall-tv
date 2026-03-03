@@ -12,4 +12,6 @@
 /.appanalyzer
 .plans
 .github
+.DS_Store
+/.ai
 /docs
