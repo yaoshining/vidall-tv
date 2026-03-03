@@ -377,15 +377,14 @@ export class ScrapeClient {
     const query = parseFileName(fileName);
     console.info(`[ScrapeClient] autoScrape "${fileName}" → title="${query.title}" year=${query.year ?? '-'} type=${query.mediaType}`);
 
-    // 带重试的搜索逻辑（最多重试 1 次）
+    // 带重试的搜索逻辑（最多重试 1 次，仅在异常时重试）
     let results: ScrapeResult[] = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const timeoutMs = 5000; // 5 秒超时
         results = await this.searchWithTimeout(query, timeoutMs, providerOrder);
-        if (results.length > 0) {
-          break; // 搜索成功，跳出重试
-        }
+        // 无论是否有匹配结果，只要调用成功就不再重试
+        break;
       } catch (e) {
         const err = e as Error;
         console.warn(`[ScrapeClient] autoScrape 尝试 ${attempt + 1}/2 失败: ${err.message}`);
