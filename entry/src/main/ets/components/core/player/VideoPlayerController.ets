@@ -125,6 +125,27 @@ export class VideoPlayerController {
     this.audioTracks = [];
     this.activeAudioIndex = -1;
 
+    // ── 预置音轨：从数据库已读取，立即填充，无需等播放器 ready ──
+    // 这样用户打开播放页就能立即看到音轨列表，不必等待 ijkplayer prepareAsync 完成
+    if (videoData.presetAudioTracks && videoData.presetAudioTracks.length > 0) {
+      const presets = videoData.presetAudioTracks;
+      const tracks: AudioTrackItem[] = [];
+      for (let i = 0; i < presets.length; i++) {
+        const p = presets[i];
+        const item: AudioTrackItem = {
+          trackIndex: p.trackIndex,
+          displayName: p.displayName,
+          language: p.language,
+          mimeType: p.mimeType
+        };
+        tracks.push(item);
+      }
+      this.audioTracks = tracks;
+      this.activeAudioIndex = 0;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[initPlayer] 预置音轨已提前填充: ${tracks.length} 条`);
+    }
+
     // 根据 backend 创建对应适配器
     let adapter: IPlayer;
     if (this.backend === 'ijkplayer') {
@@ -455,40 +476,19 @@ export class VideoPlayerController {
     if (!this.player) { return; }
 
     try {
-      let audioTracksInfo: TrackInfo[] = [];
-
-      // ── 优先：VideoData.presetAudioTracks（调用方手动注入的音轨元数据）──
-      // 用于 ijkplayer backend 下 EAC-3/AC-3/DTS 等格式无法自动探测的情况
-      if (this.backend === 'ijkplayer'
-        && this.currentVideoData
-        && this.currentVideoData.presetAudioTracks
-        && this.currentVideoData.presetAudioTracks.length > 0) {
-        const presets = this.currentVideoData.presetAudioTracks;
+      // ── 已在 initPlayer 提前填充（presetAudioTracks 路径）──
+      // initPlayer 时若有 presetAudioTracks 已立即写入 this.audioTracks，
+      // onPlayerReady 时只需触发首轨选择，不需要重新构建列表
+      if (this.audioTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadAudioTracks] 使用预置音轨列表，共 ${presets.length} 条`);
-        const tracks: AudioTrackItem[] = [];
-        for (let i = 0; i < presets.length; i++) {
-          const p = presets[i];
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[loadAudioTracks] 预置音轨[${i}]: index=${p.trackIndex} name="${p.displayName}" lang=${p.language ?? ''}`);
-          const item: AudioTrackItem = {
-            trackIndex: p.trackIndex,
-            displayName: p.displayName,
-            language: p.language,
-            mimeType: p.mimeType
-          };
-          tracks.push(item);
-        }
-        this.audioTracks = tracks;
-        if (this.audioTracks.length > 0) {
-          await this.switchAudioTrack(0);
-        }
+          `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，直接选择默认轨道`);
+        await this.switchAudioTrack(0);
         return;
       }
 
-      // ── 次选：player.getTrackInfos()（AVPlayer 原生 / IjkPlayer getMediaInfo 解析）──
+      // ── player.getTrackInfos()（AVPlayer 原生 / IjkPlayer getMediaInfo 解析）──
       const allTracks = await this.player.getTrackInfos();
-      audioTracksInfo = allTracks.filter((t: TrackInfo) => t.trackType === 'audio');
+      const audioTracksInfo = allTracks.filter((t: TrackInfo) => t.trackType === 'audio');
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[loadAudioTracks] getTrackInfos() 返回音轨数: ${audioTracksInfo.length}`);
       audioTracksInfo.forEach((t: TrackInfo, i: number) => {
@@ -496,7 +496,6 @@ export class VideoPlayerController {
           `音轨[${i}]: trackIndex=${t.trackIndex} mime=${t.mimeType} lang=${t.language}`);
       });
 
-      // 构建音轨条目
       const tracks: AudioTrackItem[] = [];
       for (let i = 0; i < audioTracksInfo.length; i++) {
         const t = audioTracksInfo[i];
