@@ -8,8 +8,9 @@ import { util } from "@kit.ArkTS";
 import { filePreview } from "@kit.PreviewKit";
 import { fileIo } from "@kit.CoreFileKit";
 import { ImagePreviewDialog } from "../../components/core/file/ImagePreview";
-import { FfprobeUtil } from "../../utils/FfprobeUtil";
+import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { PresetAudioTrack } from "../../components/core/player/VideoData";
+import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 
 const config: WebDAVConfig = {
   baseUrl: 'http://www.baidu.com',
@@ -112,27 +113,54 @@ export struct FileExplorerPage {
     const authHeader = this.client.getAuthHeaderPublic();
     const httpHeader: Record<string, string> = { 'Authorization': authHeader };
 
-    // 用 ffprobe 探测完整音轨/字幕轨信息（支持 EAC-3、DTS、TrueHD 等所有格式）
     let presetAudioTracks: PresetAudioTrack[] = [];
+
+    // ── 优先：从数据库读取已落库的音轨信息（刮削时已写入 audio_tracks_json）──
+    // path 是相对路径（如 /nas/电影/xxx.mkv），数据库里的 filePath 与其对应
     try {
-      const probeResult = await FfprobeUtil.probe(encodeURI(url), httpHeader, 15000);
-      if (probeResult.success && probeResult.audioTracks.length > 0) {
-        for (let i = 0; i < probeResult.audioTracks.length; i++) {
-          const t = probeResult.audioTracks[i];
-          const item: PresetAudioTrack = {
-            trackIndex: t.index,
-            displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-            language: t.language,
-            mimeType: t.codecName
-          };
-          presetAudioTracks.push(item);
+      const videoEntity = await FileSourceDatabase.getInstance().getVideoByPath(path);
+      if (videoEntity && videoEntity.audioTracksJson && videoEntity.audioTracksJson.length > 0) {
+        const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
+        if (tracks.length > 0) {
+          for (let i = 0; i < tracks.length; i++) {
+            const t = tracks[i];
+            const item: PresetAudioTrack = {
+              trackIndex: t.index,
+              displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+              language: t.language,
+              mimeType: t.codecName
+            };
+            presetAudioTracks.push(item);
+          }
+          console.info(`[playVideo] 从数据库读取到 ${presetAudioTracks.length} 个音轨`);
         }
-        console.info(`[playVideo] ffprobe 探测到 ${presetAudioTracks.length} 个音轨`);
-      } else {
-        console.info(`[playVideo] ffprobe 探测失败或无音轨: ${probeResult.errorMessage ?? ''}`);
       }
     } catch (e) {
-      console.warn(`[playVideo] ffprobe 异常，忽略: ${JSON.stringify(e)}`);
+      console.warn(`[playVideo] 数据库读取音轨失败，将 fallback 到 ffprobe: ${JSON.stringify(e)}`);
+    }
+
+    // ── Fallback：数据库未命中（未扫描的文件）→ 实时 ffprobe 探测 ──
+    if (presetAudioTracks.length === 0) {
+      try {
+        const probeResult = await FfprobeUtil.probe(encodeURI(url), httpHeader, 15000);
+        if (probeResult.success && probeResult.audioTracks.length > 0) {
+          for (let i = 0; i < probeResult.audioTracks.length; i++) {
+            const t = probeResult.audioTracks[i];
+            const item: PresetAudioTrack = {
+              trackIndex: t.index,
+              displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+              language: t.language,
+              mimeType: t.codecName
+            };
+            presetAudioTracks.push(item);
+          }
+          console.info(`[playVideo] ffprobe 探测到 ${presetAudioTracks.length} 个音轨`);
+        } else {
+          console.info(`[playVideo] ffprobe 探测失败或无音轨: ${probeResult.errorMessage ?? ''}`);
+        }
+      } catch (e) {
+        console.warn(`[playVideo] ffprobe 异常，忽略: ${JSON.stringify(e)}`);
+      }
     }
 
     const pageParam: PlayerPageParam = {
