@@ -414,11 +414,11 @@ export class ScrapeClient {
     timeoutMs: number,
     providerOrder?: string[]
   ): Promise<ScrapeResult[]> {
-    let timeoutId: number | undefined;
+    let timeoutId: number = -1;
     const timeoutPromise = new Promise<ScrapeResult[]>((_, reject) => {
       timeoutId = setTimeout(() => {
         reject(new Error('刮削超时'));
-      }, timeoutMs) as unknown as number;
+      }, timeoutMs);
     });
 
     try {
@@ -429,7 +429,7 @@ export class ScrapeClient {
         timeoutPromise,
       ]);
     } finally {
-      if (timeoutId !== undefined) {
+      if (timeoutId >= 0) {
         clearTimeout(timeoutId);
       }
     }
