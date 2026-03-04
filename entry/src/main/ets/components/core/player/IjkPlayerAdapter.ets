@@ -377,12 +377,15 @@ export class IjkPlayerAdapter implements IPlayer {
       return;
     }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `selectTrack(${trackIndex}) — IjkPlayer 字幕轨道切换`);
+      `selectTrack(${trackIndex}) — 切换到 ijkplayer 流索引 ${trackIndex}`);
     try {
       this.ijk.selectTrack(trackIndex.toString());
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `selectTrack(${trackIndex}) 调用成功，等待 Controller seek flush 后恢复播放`);
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `selectTrack 异常: ${JSON.stringify(e)}`);
+      throw new Error(`selectTrack failed: ${JSON.stringify(e)}`);
     }
   }
 

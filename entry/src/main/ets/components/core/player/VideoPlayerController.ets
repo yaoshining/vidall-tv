@@ -693,16 +693,46 @@ export class VideoPlayerController {
       return;
     }
 
+    // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
+    const wasPlaying = this.isPlaying;
+    const seekBack = this.currentTime;
+
     try {
+      // 1. 暂停视频（避免音轨切换期间画面继续走而音轨还在旧轨）
+      if (wasPlaying) {
+        await this.player.pause();
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[switchAudioTrack] 暂停播放，当前时间=${seekBack}ms`);
+      }
+
+      // 2. 切换音轨
       const audioTrack = this.audioTracks[trackIndex];
       await this.player.selectTrack(audioTrack.trackIndex);
       this.activeAudioIndex = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `已切换到音轨: ${audioTrack.displayName} (trackIndex=${audioTrack.trackIndex})`);
+        `[switchAudioTrack] 音轨已切换: ${audioTrack.displayName} (trackIndex=${audioTrack.trackIndex})`);
+
+      // 3. seek 到当前位置，强制音频解码器 flush 并从正确位置开始解码
+      //    这样恢复播放时新音轨与视频帧完全对齐
+      if (wasPlaying && seekBack > 0) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[switchAudioTrack] seek flush 到 ${seekBack}ms`);
+        // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
+        this.isSeeking = true;
+        this.player.seek(seekBack);
+        // seekDone 回调里会调 play()，不需要在这里手动恢复
+      } else if (wasPlaying) {
+        // 时间为 0（片头），直接恢复播放
+        await this.player.play();
+      }
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `切换音轨失败: code=${err.code} msg=${err.message}`);
+      // 切换失败时尝试恢复播放
+      if (wasPlaying) {
+        await this.player.play().catch(() => {});
+      }
     }
   }
 
