@@ -152,7 +152,9 @@ struct VideoControls {
           .onClick(() => {
             this.videoController.switchAudioTrack(index)
             this.showAudioMenu = false
-            this.enableAutoHide()
+            // forceStart=true：切换后不管当前 isPlaying 状态（switchAudioTrack 内部会 pause）
+            // 都强制启动自动隐藏定时器，seekDone 恢复播放后控件会正常隐藏
+            this.enableAutoHide(true)
           })
         })
       }
