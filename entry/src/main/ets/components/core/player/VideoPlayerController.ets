@@ -36,6 +36,24 @@ export interface SubtitleTrackItem {
   url?: string;
 }
 
+// ─────────────────────────────────────────────
+// 音轨条目
+// ─────────────────────────────────────────────
+
+/**
+ * 音轨信息条目，用于音轨菜单显示和切换
+ */
+export interface AudioTrackItem {
+  /** 轨道索引（用于 selectTrack） */
+  trackIndex: number;
+  /** 显示名称，如 "中文 (AAC)"、"英语 (AC-3)" */
+  displayName: string;
+  /** 语言代码 */
+  language?: string;
+  /** MIME 类型 */
+  mimeType?: string;
+}
+
 @ObservedV2
 export class VideoPlayerController {
   /**
@@ -64,6 +82,9 @@ export class VideoPlayerController {
   @Trace subtitleUpdateCounter: number = 0
   @Trace allSubtitleTracks: SubtitleTrackItem[] = [];
   @Trace activeSubtitleIndex: number = -1;
+  /** 音轨列表 */
+  @Trace audioTracks: AudioTrackItem[] = [];
+  @Trace activeAudioIndex: number = -1;
   private srtEntries: SrtEntry[] = [];
   private lastSrtText: string = '';
   private currentVideoData?: VideoData;
@@ -101,6 +122,8 @@ export class VideoPlayerController {
     this.subtitleUpdateCounter = 0;
     this.allSubtitleTracks = [];
     this.activeSubtitleIndex = -1;
+    this.audioTracks = [];
+    this.activeAudioIndex = -1;
 
     // 根据 backend 创建对应适配器
     let adapter: IPlayer;
@@ -249,13 +272,14 @@ export class VideoPlayerController {
     }
   }
 
-  /** prepared 后回调：读取 duration、加载字幕轨道 */
+  /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
     this.duration = this.player?.duration ?? 0;
     this.currentTime = this.player?.currentTime ?? 0;
     this.isReady = true;
     emitter.emit(PlayerEvents.PREPARED);
     await this.loadSubtitleTracks();
+    await this.loadAudioTracks();
   }
 
   async play(): Promise<void> {
@@ -426,6 +450,120 @@ export class VideoPlayerController {
     }
   }
 
+  /** 加载音轨列表 */
+  private async loadAudioTracks(): Promise<void> {
+    if (!this.player) { return; }
+
+    try {
+      let audioTracksInfo: TrackInfo[] = [];
+
+      // ── 优先：VideoData.presetAudioTracks（调用方手动注入的音轨元数据）──
+      // 用于 ijkplayer backend 下 EAC-3/AC-3/DTS 等格式无法自动探测的情况
+      if (this.backend === 'ijkplayer'
+        && this.currentVideoData
+        && this.currentVideoData.presetAudioTracks
+        && this.currentVideoData.presetAudioTracks.length > 0) {
+        const presets = this.currentVideoData.presetAudioTracks;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[loadAudioTracks] 使用预置音轨列表，共 ${presets.length} 条`);
+        const tracks: AudioTrackItem[] = [];
+        for (let i = 0; i < presets.length; i++) {
+          const p = presets[i];
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[loadAudioTracks] 预置音轨[${i}]: index=${p.trackIndex} name="${p.displayName}" lang=${p.language ?? ''}`);
+          const item: AudioTrackItem = {
+            trackIndex: p.trackIndex,
+            displayName: p.displayName,
+            language: p.language,
+            mimeType: p.mimeType
+          };
+          tracks.push(item);
+        }
+        this.audioTracks = tracks;
+        if (this.audioTracks.length > 0) {
+          await this.switchAudioTrack(0);
+        }
+        return;
+      }
+
+      // ── 次选：player.getTrackInfos()（AVPlayer 原生 / IjkPlayer getMediaInfo 解析）──
+      const allTracks = await this.player.getTrackInfos();
+      audioTracksInfo = allTracks.filter((t: TrackInfo) => t.trackType === 'audio');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadAudioTracks] getTrackInfos() 返回音轨数: ${audioTracksInfo.length}`);
+      audioTracksInfo.forEach((t: TrackInfo, i: number) => {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `音轨[${i}]: trackIndex=${t.trackIndex} mime=${t.mimeType} lang=${t.language}`);
+      });
+
+      // 构建音轨条目
+      const tracks: AudioTrackItem[] = [];
+      for (let i = 0; i < audioTracksInfo.length; i++) {
+        const t = audioTracksInfo[i];
+        const item: AudioTrackItem = {
+          trackIndex: t.trackIndex,
+          displayName: this.getAudioTrackName(i, t),
+          language: t.language,
+          mimeType: t.mimeType
+        };
+        tracks.push(item);
+      }
+      this.audioTracks = tracks;
+
+      if (this.audioTracks.length > 0) {
+        await this.switchAudioTrack(0);
+      }
+    } catch (e) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `加载音轨失败: ${JSON.stringify(e)}`);
+    }
+  }
+
+  /** 获取音轨显示名称 */
+  private getAudioTrackName(trackIndex: number, trackInfo: TrackInfo): string {
+    let name = '';
+    if (trackInfo.language) {
+      name = this.getLanguageName(trackInfo.language);
+    } else {
+      name = `音轨 ${trackIndex + 1}`;
+    }
+
+    // 如果有 MIME 类型，添加格式信息
+    if (trackInfo.mimeType) {
+      const format = this.extractAudioFormat(trackInfo.mimeType);
+      if (format) {
+        name = `${name} (${format})`;
+      }
+    }
+
+    return name;
+  }
+
+  /** 从 MIME 类型提取音频格式 */
+  private extractAudioFormat(mimeType: string): string {
+    const audioFormats: Record<string, string> = {
+      'audio/mp4a-latm': 'AAC',
+      'audio/mp4a': 'AAC',
+      'audio/aac': 'AAC',
+      'audio/ac-3': 'AC-3',
+      'audio/eac3': 'E-AC-3',
+      'audio/mpeg': 'MP3',
+      'audio/flac': 'FLAC',
+      'audio/opus': 'Opus',
+      'audio/vorbis': 'Vorbis',
+      'audio/pcm': 'PCM',
+      'audio/dts': 'DTS'
+    };
+
+    for (const key of Object.keys(audioFormats)) {
+      if (mimeType.includes(key)) {
+        return audioFormats[key];
+      }
+    }
+
+    return '';
+  }
+
   async selectSubtitleTrack(trackIndex: number): Promise<void> {
     if (!this.player) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, 'player not initialized');
@@ -533,6 +671,38 @@ export class VideoPlayerController {
         `切换到内嵌字幕轨道 ${internalIdx}，将调用 selectSubtitleTrack 激活`);
       // 调用旧方法激活内嵌轨道（会触发 AVPlayer 的 selectTrack）
       await this.selectSubtitleTrack(internalIdx);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 音轨切换（供 UI 调用）
+  // ─────────────────────────────────────────────
+
+  /**
+   * 通过 audioTracks 索引切换音轨
+   */
+  async switchAudioTrack(trackIndex: number): Promise<void> {
+    if (trackIndex < 0 || trackIndex >= this.audioTracks.length) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `切换音轨失败: 索引越界 ${trackIndex}`);
+      return;
+    }
+
+    if (!this.player) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, '播放器未初始化');
+      return;
+    }
+
+    try {
+      const audioTrack = this.audioTracks[trackIndex];
+      await this.player.selectTrack(audioTrack.trackIndex);
+      this.activeAudioIndex = trackIndex;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `已切换到音轨: ${audioTrack.displayName} (trackIndex=${audioTrack.trackIndex})`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `切换音轨失败: code=${err.code} msg=${err.message}`);
     }
   }
 

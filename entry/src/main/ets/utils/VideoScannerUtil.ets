@@ -2,7 +2,7 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../db/models/FileSourceEntity';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
-import { VideoInfoUtil, TrackInfo } from './VideoInfoUtil';
+import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient } from '../lib/ScrapeClient';
 import { VideoEntity, ScrapeInfoEntity } from '../db/models/MediaEntity';
 
@@ -189,25 +189,29 @@ export class WebDAVAdapter implements ISourceAdapter {
           const capturedInfo = info;
           const capturedScrapeClient = this.scrapeClient;
 
-          VideoInfoUtil.fetch(fullUrl, httpHeader).then(async (videoInfo) => {
+          FfprobeUtil.probe(fullUrl, httpHeader).then(async (videoInfo) => {
             if (videoInfo.success) {
+              const mainVideo = videoInfo.videoTracks.length > 0 ? videoInfo.videoTracks[0] : undefined;
               console.info(
                 `[VideoScanner][MEDIA] ${fileName} | ` +
                 `时长=${videoInfo.durationText} | ` +
-                `分辨率=${videoInfo.width ?? '?'}x${videoInfo.height ?? '?'} | ` +
-                `编码=${videoInfo.videoCodec ?? '?'} | ` +
-                `帧率=${videoInfo.frameRate ?? '?'}fps | ` +
+                `分辨率=${mainVideo?.width ?? '?'}x${mainVideo?.height ?? '?'} | ` +
+                `编码=${mainVideo?.codecName ?? '?'} | ` +
+                `帧率=${mainVideo?.frameRate ?? '?'}fps | ` +
                 `音轨=${videoInfo.audioTracks.length} 字幕轨=${videoInfo.subtitleTracks.length}`
               );
-              videoInfo.audioTracks.forEach((t: TrackInfo, i: number) => {
-                console.info(`[VideoScanner][MEDIA]   音轨[${i}] codec=${t.codec ?? '?'} ${t.sampleRate ?? '?'}Hz ${t.channelCount ?? '?'}ch 语言=${t.language ?? '?'}`);
+              videoInfo.audioTracks.forEach((t: FfprobeTrack, i: number) => {
+                console.info(`[VideoScanner][MEDIA]   音轨[${i}] codec=${t.codecName} ${t.sampleRate ?? '?'}Hz ${t.channels ?? '?'}ch 语言=${t.language || '(未知)'}`);
               });
-              videoInfo.subtitleTracks.forEach((t: TrackInfo, i: number) => {
-                console.info(`[VideoScanner][MEDIA]   字幕轨[${i}] codec=${t.codec ?? '?'} 语言=${t.language ?? '?'}`);
+              videoInfo.subtitleTracks.forEach((t: FfprobeTrack, i: number) => {
+                console.info(`[VideoScanner][MEDIA]   字幕轨[${i}] codec=${t.codecName} 语言=${t.language || '(未知)'}`);
               });
             } else {
               console.warn(`[VideoScanner][MEDIA] 媒体信息抓取失败: ${fileName} — ${videoInfo.errorMessage ?? ''}`);
             }
+
+            const mainVideo = videoInfo.success && videoInfo.videoTracks.length > 0
+              ? videoInfo.videoTracks[0] : undefined;
 
             // 落库
             const videoEntity: VideoEntity = {
@@ -219,10 +223,10 @@ export class WebDAVAdapter implements ISourceAdapter {
               lastModified: capturedInfo.lastModified,
               contentType: capturedInfo.contentType,
               durationMs: videoInfo.success ? videoInfo.durationMs : undefined,
-              width: videoInfo.success ? videoInfo.width : undefined,
-              height: videoInfo.success ? videoInfo.height : undefined,
-              frameRate: videoInfo.success ? videoInfo.frameRate : undefined,
-              videoCodec: videoInfo.success ? videoInfo.videoCodec : undefined,
+              width: videoInfo.success ? mainVideo?.width : undefined,
+              height: videoInfo.success ? mainVideo?.height : undefined,
+              frameRate: videoInfo.success ? mainVideo?.frameRate : undefined,
+              videoCodec: videoInfo.success ? mainVideo?.codecName : undefined,
               audioTracksJson: videoInfo.success ? JSON.stringify(videoInfo.audioTracks) : undefined,
               subtitleTracksJson: videoInfo.success ? JSON.stringify(videoInfo.subtitleTracks) : undefined,
               scannedAt: Date.now()

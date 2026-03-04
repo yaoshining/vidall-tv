@@ -1,6 +1,6 @@
 import { VideoPlayer } from "../../components/core/player";
 import { VideoDataType } from "../../components/core/player/Constants";
-import { VideoData } from "../../components/core/player/VideoData";
+import { VideoData, PresetAudioTrack } from "../../components/core/player/VideoData";
 import { VideoPlayerController } from "../../components/core/player/VideoPlayerController";
 
 export interface PlayerPageParam {
@@ -8,6 +8,8 @@ export interface PlayerPageParam {
   url?: string;
   httpHeader?: Record<string, string>;
   title?: string;
+  /** 预置音轨列表（可选），用于 EAC-3/AC-3 等 AVPlayer 无法探测的格式 */
+  presetAudioTracks?: PresetAudioTrack[];
 }
 
 @ComponentV2
@@ -81,6 +83,9 @@ export struct PlayerPage {
         if (this.videoData) {
           this.videoData.httpHeader = pageParam.httpHeader
           this.videoData.name = pageParam.title
+          if (pageParam.presetAudioTracks && pageParam.presetAudioTracks.length > 0) {
+            this.videoData.presetAudioTracks = pageParam.presetAudioTracks
+          }
         }
       }
     })

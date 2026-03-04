@@ -1,6 +1,5 @@
 import { debounce } from "@ibestservices/ibest-ui"
-import { VideoPlayerController } from "./VideoPlayerController"
-import { SubtitleTrackItem } from "./VideoPlayerController"
+import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem } from "./VideoPlayerController"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 
@@ -12,6 +11,7 @@ struct VideoControls {
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
   @Local showSubtitleMenu: boolean = false
+  @Local showAudioMenu: boolean = false
   @Local sliderHovered: boolean = false
   // ── 进度条 hover tooltip ──
   @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
@@ -128,9 +128,44 @@ struct VideoControls {
     .padding(10)
   }
 
+  @Builder
+  AudioMenu() {
+    Column() {
+      List() {
+        ForEach(this.videoController.audioTracks, (item: AudioTrackItem, index: number) => {
+          ListItem() {
+            Row() {
+              Text(item.displayName)
+                .fontSize(16)
+                .fontColor(Color.White)
+              if (this.videoController.activeAudioIndex === index) {
+                SymbolGlyph($r('sys.symbol.checkmark'))
+                  .fontColor([Color.White])
+                  .fontSize(20)
+              }
+            }
+            .width('100%')
+            .height(50)
+            .justifyContent(FlexAlign.SpaceBetween)
+            .padding({ left: 20, right: 20 })
+          }
+          .onClick(() => {
+            this.videoController.switchAudioTrack(index)
+            this.showAudioMenu = false
+            this.enableAutoHide()
+          })
+        })
+      }
+      .width('100%')
+      .backgroundColor('rgba(0, 0, 0, 0.8)')
+      .borderRadius(8)
+    }
+    .padding(10)
+  }
+
   build() {
     RelativeContainer() {
-      // ── 顶部栏：标题 + 字幕按钮 ──
+      // ── 顶部栏：标题 + 音轨按钮 + 字幕按钮 ──
       Flex({
         justifyContent: FlexAlign.SpaceBetween,
         alignItems: ItemAlign.Start
@@ -138,28 +173,52 @@ struct VideoControls {
         Text(this.videoController.name)
           .fontSize($r('app.float.font_h8_title_secondary'))
           .textShadow({ radius: 3, offsetX: 3, offsetY: 3, color: Color.Black })
-          .width("80%")
+          .width("60%")
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        // 字幕按钮
-        if (this.videoController.allSubtitleTracks.length > 0) {
-          Row({ space: 8 }) {
-            SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
-              .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
-              .fontSize(24)
-            Text(this.getActiveSubtitleName())
-              .fontSize(14)
-              .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
+        // 音轨按钮 + 字幕按钮
+        Flex({ direction: FlexDirection.Row, justifyContent: FlexAlign.End, alignItems: ItemAlign.Center }) {
+          // 音轨按钮
+          if (this.videoController.audioTracks.length > 0) {
+            Row({ space: 8 }) {
+              SymbolGlyph($r('sys.symbol.folder'))
+                .fontColor([Color.White])
+                .fontSize(24)
+              Text(this.getActiveAudioName())
+                .fontSize(14)
+                .fontColor(Color.White)
+            }
+            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            .backgroundColor('rgba(0, 0, 0, 0.5)')
+            .borderRadius(20)
+            .onClick(() => {
+              this.showAudioMenu = !this.showAudioMenu
+              clearTimeout(this.closeTimer)
+            })
           }
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-          .backgroundColor('rgba(0, 0, 0, 0.5)')
-          .borderRadius(20)
-          .onClick(() => {
-            this.showSubtitleMenu = !this.showSubtitleMenu
-            clearTimeout(this.closeTimer)
-          })
+
+          // 字幕按钮
+          if (this.videoController.allSubtitleTracks.length > 0) {
+            Row({ space: 8 }) {
+              SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
+                .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
+                .fontSize(24)
+              Text(this.getActiveSubtitleName())
+                .fontSize(14)
+                .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
+            }
+            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            .backgroundColor('rgba(0, 0, 0, 0.5)')
+            .borderRadius(20)
+            .onClick(() => {
+              this.showSubtitleMenu = !this.showSubtitleMenu
+              clearTimeout(this.closeTimer)
+            })
+          }
         }
+        .width("40%")
+        .margin({ right: 8 })
       }
       .linearGradient({
         direction: GradientDirection.Bottom,
@@ -302,6 +361,22 @@ struct VideoControls {
           // 阻止事件冒泡
         })
       }
+
+      // ── 音轨菜单 ──
+      if (this.showAudioMenu) {
+        Column() {
+          this.AudioMenu()
+        }
+        .alignRules({
+          top: { anchor: '__container__', align: VerticalAlign.Top },
+          right: { anchor: '__container__', align: HorizontalAlign.End }
+        })
+        .margin({ top: 80, right: this.videoController.allSubtitleTracks.length > 0 ? 380 : 20 })
+        .width('300vp')
+        .onClick(() => {
+          // 阻止事件冒泡
+        })
+      }
     }
     .hitTestBehavior(HitTestMode.Transparent)
     .onClick(async () => {
@@ -320,6 +395,19 @@ struct VideoControls {
       return tracks[idx].displayName;
     }
     return '字幕';
+  }
+
+  private getActiveAudioName(): string {
+    const idx = this.videoController.activeAudioIndex;
+    if (idx >= 0 && idx < this.videoController.audioTracks.length) {
+      const audioTrack = this.videoController.audioTracks[idx];
+      // 截断长名称，最多显示 12 个字符
+      if (audioTrack.displayName.length > 12) {
+        return audioTrack.displayName.substring(0, 12) + '...';
+      }
+      return audioTrack.displayName;
+    }
+    return '音轨';
   }
 
   private enableAutoHide(forceStart: boolean = false): void {

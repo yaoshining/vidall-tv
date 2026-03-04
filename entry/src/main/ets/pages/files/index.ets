@@ -8,6 +8,8 @@ import { util } from "@kit.ArkTS";
 import { filePreview } from "@kit.PreviewKit";
 import { fileIo } from "@kit.CoreFileKit";
 import { ImagePreviewDialog } from "../../components/core/file/ImagePreview";
+import { FfprobeUtil } from "../../utils/FfprobeUtil";
+import { PresetAudioTrack } from "../../components/core/player/VideoData";
 
 const config: WebDAVConfig = {
   baseUrl: 'http://www.baidu.com',
@@ -105,22 +107,50 @@ export struct FileExplorerPage {
     })
   }
 
-  private playVideo(path: string, displayName: string) {
-    const url = this.client.getFullUrl(path)
-    const authHeader = this.client.getAuthHeaderPublic()
+  private async playVideo(path: string, displayName: string) {
+    const url = this.client.getFullUrl(path);
+    const authHeader = this.client.getAuthHeaderPublic();
+    const httpHeader: Record<string, string> = { 'Authorization': authHeader };
+
+    // 用 ffprobe 探测完整音轨/字幕轨信息（支持 EAC-3、DTS、TrueHD 等所有格式）
+    let presetAudioTracks: PresetAudioTrack[] = [];
+    try {
+      const probeResult = await FfprobeUtil.probe(encodeURI(url), httpHeader, 15000);
+      if (probeResult.success && probeResult.audioTracks.length > 0) {
+        for (let i = 0; i < probeResult.audioTracks.length; i++) {
+          const t = probeResult.audioTracks[i];
+          const item: PresetAudioTrack = {
+            trackIndex: t.index,
+            displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+            language: t.language,
+            mimeType: t.codecName
+          };
+          presetAudioTracks.push(item);
+        }
+        console.info(`[playVideo] ffprobe 探测到 ${presetAudioTracks.length} 个音轨`);
+      } else {
+        console.info(`[playVideo] ffprobe 探测失败或无音轨: ${probeResult.errorMessage ?? ''}`);
+      }
+    } catch (e) {
+      console.warn(`[playVideo] ffprobe 异常，忽略: ${JSON.stringify(e)}`);
+    }
 
     const pageParam: PlayerPageParam = {
       url: encodeURI(url),
-      httpHeader: {
-        'Authorization': authHeader
-      },
-      title: displayName
-    }
+      httpHeader: httpHeader,
+      title: displayName,
+      presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined
+    };
 
     this.pageStack.pushPath({
       name: PlayerPage.PAGE_NAME,
       param: pageParam
-    })
+    });
+  }
+
+  /** 语言代码转显示名称 */
+  private getLanguageName(lang: string): string {
+    return FfprobeUtil.getLanguageDisplayName(lang);
   }
 
   private changePath(newPath: string = '/') {

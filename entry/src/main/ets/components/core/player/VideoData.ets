@@ -1,5 +1,17 @@
 import { VideoDataType } from "./Constants";
 
+/** 预置音轨信息（用于 ijkplayer 无法自动枚举时手动注入） */
+export interface PresetAudioTrack {
+  /** IjkPlayer selectTrack() 使用的流索引 */
+  trackIndex: number;
+  /** 显示名称，如 "粤语 (E-AC-3)" */
+  displayName: string;
+  /** ISO 639-2 语言代码，如 "chi"、"eng" */
+  language?: string;
+  /** MIME 类型，如 "audio/eac3" */
+  mimeType?: string;
+}
+
 export interface VideoData {
   type: VideoDataType;
   videoSrc: string;
@@ -19,4 +31,10 @@ export interface VideoData {
   subtitleUrl?: string;
   /** 下载字幕文件时使用的 HTTP 请求头（如 Authorization: Basic xxx） */
   subtitleHeaders?: Record<string, string>;
+  /**
+   * 预置音轨列表（可选）。
+   * 当 backend='ijkplayer' 且 IjkPlayer 无法自动枚举多音轨时使用。
+   * 由调用方（播放页）根据文件元数据手动填充。
+   */
+  presetAudioTracks?: PresetAudioTrack[];
 }

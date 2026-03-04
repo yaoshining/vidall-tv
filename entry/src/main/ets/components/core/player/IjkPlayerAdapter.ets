@@ -288,11 +288,87 @@ export class IjkPlayerAdapter implements IPlayer {
   // ─── 轨道 ───
 
   async getTrackInfos(): Promise<TrackInfo[]> {
-    // IjkPlayer 没有原生轨道查询 API，返回空数组
-    // 字幕完全由外部文件驱动（VideoPlayerController 的 findExternalSubtitles 负责）
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      'getTrackInfos() 返回空（IjkPlayer 无原生轨道 API，字幕走外部文件）');
-    return Promise.resolve([]);
+    // 此方法作为 fallback，在 FfprobeUtil 探测失败时被调用。
+    // IjkPlayer 的 getMediaInfo().audioDecoder 只描述当前激活的一条音轨，
+    // 因此此方法最多返回单条音轨，仅用于兜底显示。
+    if (!this._isPrepared) {
+      const def: TrackInfo = { trackIndex: 0, trackType: 'audio', mimeType: 'audio/mp4a-latm', language: '' };
+      return Promise.resolve([def]);
+    }
+
+    const codecMimeMap: Record<string, string> = {
+      'aac': 'audio/mp4a-latm',
+      'mp3': 'audio/mpeg',
+      'ac3': 'audio/ac-3',
+      'eac3': 'audio/eac3',
+      'dts': 'audio/dts',
+      'flac': 'audio/flac',
+      'opus': 'audio/opus',
+      'vorbis': 'audio/vorbis',
+      'truehd': 'audio/truehd',
+      'pcm_s16le': 'audio/raw',
+    };
+
+    try {
+      const info: object = this.ijk.getMediaInfo();
+      const infoStr: string = JSON.stringify(info);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[getTrackInfos] getMediaInfo: ${infoStr}`);
+
+      const adMatch = infoStr.match(/"audioDecoder"\s*:\s*"([^"]+)"/);
+      const metaMatch = infoStr.match(/"meta"\s*:\s*"([^"]+)"/);
+      const audioDecoderStr = adMatch ? adMatch[1] : '';
+      const metaStr = metaMatch ? metaMatch[1] : '';
+      const langFromMeta = this.extractMetaValue(metaStr, 'language');
+
+      // 解析 audioDecoder："avcodec, eac3" → ["eac3"]
+      const decoderList: string[] = [];
+      if (audioDecoderStr.length > 0) {
+        const rawTokens = audioDecoderStr.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        let idx = 0;
+        while (idx < rawTokens.length) {
+          if (rawTokens[idx] === 'avcodec' && idx + 1 < rawTokens.length) {
+            decoderList.push(rawTokens[idx + 1]);
+            idx += 2;
+          } else {
+            decoderList.push(rawTokens[idx]);
+            idx += 1;
+          }
+        }
+      }
+
+      const tracks: TrackInfo[] = [];
+      for (let i = 0; i < decoderList.length; i++) {
+        const codec = decoderList[i].toLowerCase();
+        const item: TrackInfo = {
+          trackIndex: i,
+          trackType: 'audio',
+          mimeType: codecMimeMap[codec] ?? `audio/${codec}`,
+          language: i === 0 ? langFromMeta : ''
+        };
+        tracks.push(item);
+      }
+
+      if (tracks.length > 0) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `getTrackInfos() fallback 返回 ${tracks.length} 个音轨`);
+        return Promise.resolve(tracks);
+      }
+    } catch (e) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `getMediaInfo() 异常: ${JSON.stringify(e)}`);
+    }
+
+    const def: TrackInfo = { trackIndex: 0, trackType: 'audio', mimeType: 'audio/mp4a-latm', language: '' };
+    return Promise.resolve([def]);
+  }
+
+  /**
+   * 从 meta 字符串中提取指定 key 的 value
+   * meta 格式: "key:language,value:chi;key:sample_rate,value:48000;"
+   */
+  private extractMetaValue(meta: string, key: string): string {
+    // 匹配 "key:XXX,value:YYY;"
+    const pattern = new RegExp(`key:${key},value:([^;]+)`);
+    const m = meta.match(pattern);
+    return m ? m[1] : '';
   }
 
   async selectTrack(trackIndex: number): Promise<void> {
@@ -436,12 +512,8 @@ export class IjkPlayerAdapter implements IPlayer {
     // onInfo
     const onInfoListener: OnInfoListener = {
       onInfo: (what: number, extra: number) => {
-        // 常见 what 值：
-        // 700 = MEDIA_INFO_BUFFERING_START
-        // 701 = MEDIA_INFO_BUFFERING_END
-        // 703 = MEDIA_INFO_NETWORK_BANDWIDTH
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onInfo — what=${what} extra=${extra}`);
+        // 700=BUFFERING_START, 701=BUFFERING_END, 703=NETWORK_BANDWIDTH
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `onInfo — what=${what} extra=${extra}`);
       }
     };
     this.ijk.setOnInfoListener(onInfoListener);

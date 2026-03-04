@@ -5,6 +5,8 @@
   "main": "",
   "author": "",
   "license": "",
-  "dependencies": {}
+  "dependencies": {
+    "@sj/ffmpeg": "^2.0.2"
+  }
 }
 
