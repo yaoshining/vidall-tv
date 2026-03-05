@@ -1,9 +1,9 @@
 import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
-import { ScrapeClient } from "../../../lib/ScrapeClient"
+import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity } from "../../../db/models/MediaEntity"
+import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import promptAction from '@ohos.promptAction';
@@ -148,32 +148,51 @@ struct PosterCard {
 @ComponentV2
 struct SeriesCard {
   @Require @Param group: SeriesGroup
+  /** true = 最近添加/混合列表，显示季海报+季号；false = 电视剧栏，只显剧海报不显季 */
+  @Param showSeasonPoster: boolean = false
 
   private getTitle(): string { return this.group.title; }
+
   private getPoster(): string {
+    // 最近添加：优先季海报，无则剧海报
+    if (this.showSeasonPoster && this.group.seasonPosterUrl !== undefined && this.group.seasonPosterUrl.length > 0) {
+      return this.group.seasonPosterUrl;
+    }
     return this.group.posterLocalPath ?? this.group.posterUrl ?? '';
   }
+
   private hasPosterImg(): boolean {
+    if (this.showSeasonPoster && this.group.seasonPosterUrl !== undefined && this.group.seasonPosterUrl.length > 0) {
+      return true;
+    }
     return (this.group.posterLocalPath !== undefined && this.group.posterLocalPath.length > 0)
       || (this.group.posterUrl !== undefined && this.group.posterUrl.length > 0);
   }
+
   private getRating(): string {
     if (this.group.rating === undefined) { return ''; }
     return this.group.rating.toFixed(1);
   }
+
   private getResolution(): string {
     const ep = this.group.episodes.length > 0 ? this.group.episodes[0] : undefined;
     if (ep === undefined) { return ''; }
     return resolutionLabel(ep.width, ep.height);
   }
+
+  /** 最近添加时显示「第X季」标签，统一用中文格式 */
   private getSeasonLabel(): string {
+    if (!this.showSeasonPoster) { return ''; }
+    // 有刮削的季编号 → 第X季（阿拉伯数字）
+    if (this.group.seasonNumber !== undefined) {
+      return `第${this.group.seasonNumber}季`;
+    }
     return this.group.seasonLabel ?? '';
   }
 
   build() {
     Column({ space: 4 }) {
       Stack({ alignContent: Alignment.TopStart }) {
-        // 海报图 / 占位
         if (this.hasPosterImg()) {
           Image(this.getPoster())
             .width(POSTER_WIDTH)
@@ -191,7 +210,7 @@ struct SeriesCard {
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
 
-        // 底部黑色渐变（覆盖下方 28%）
+        // 底部黑色渐变
         if (this.getRating().length > 0 || this.getSeasonLabel().length > 0) {
           Column()
             .width(POSTER_WIDTH)
@@ -216,7 +235,7 @@ struct SeriesCard {
             .position({ top: 2, right: 2 })
         }
 
-        // 左下角季标签（白字，半透明黑底）
+        // 左下角季标签（最近添加时显示）
         if (this.getSeasonLabel().length > 0) {
           Text(this.getSeasonLabel())
             .fontSize(10).fontColor(Color.White).fontWeight(FontWeight.Medium)
@@ -224,7 +243,7 @@ struct SeriesCard {
             .position({ left: 2, bottom: 2 })
         }
 
-        // 右下角评分（橘黄色，透明背景）
+        // 右下角评分
         if (this.getRating().length > 0) {
           Text(this.getRating())
             .fontSize(11).fontColor('#FFA500').fontWeight(FontWeight.Bold)
@@ -358,7 +377,7 @@ struct MixedCard {
   build() {
     Column() {
       if (this.isSeries()) {
-        SeriesCard({ group: this.getSeries() })
+        SeriesCard({ group: this.getSeries(), showSeasonPoster: true })
       } else {
         PosterCard({ item: this.getVideo() })
       }
@@ -436,8 +455,31 @@ export struct MediaLibraryTab {
 
   aboutToAppear(): void {
     FileSourceDatabase.onReady(() => {
-      // 每次进入页面都重新加载，确保数据最新
-      this.model.reload();
+      this.model.reload().then(() => {
+        console.info(`[MediaLibraryTab][DIAG] reload完成:`
+          + ` isLoaded=${this.model.isLoaded}`
+          + ` recentlyAdded=${this.model.recentlyAdded.length}`
+          + ` movies=${this.model.movies.length}`
+          + ` seriesGroups=${this.model.seriesGroups.length}`
+          + ` recentlyAddedList=${this.model.recentlyAddedList.length}`
+          + ` ratingLabels=${this.model.ratingLabels.length}`
+          + ` decadeGroups=${this.model.decadeGroups.length}`
+        );
+        // 诊断 build() 分支判断条件
+        console.info(`[MediaLibraryTab][DIAG] build分支: isLoading=${this.model.isLoading}`
+          + ` isLoaded=${this.model.isLoaded}`
+          + ` recentlyAdded.length=${this.model.recentlyAdded.length}`
+          + ` → 显示${this.model.isLoading ? 'Loading' : (!this.model.isLoaded || this.model.recentlyAdded.length === 0) ? 'Empty' : '内容'}`
+        );
+        if (this.model.seriesGroups.length > 0) {
+          const sg = this.model.seriesGroups[0];
+          console.info(`[MediaLibraryTab][DIAG] 第一个SeriesGroup: title="${sg.title}" episodeCount=${sg.episodeCount} posterUrl=${sg.posterUrl ?? 'null'} rating=${sg.rating ?? 'null'}`);
+        }
+        if (this.model.movies.length > 0) {
+          const mv = this.model.movies[0];
+          console.info(`[MediaLibraryTab][DIAG] 第一个Movie: title="${mv.title ?? 'null'}" posterUrl=${mv.posterUrl ?? 'null'} rating=${mv.rating ?? 'null'}`);
+        }
+      });
     });
   }
 
@@ -492,44 +534,128 @@ export struct MediaLibraryTab {
       const scrapeClient = new ScrapeClient({ tmdbApiKey: tmdbKey });
       const db = FileSourceDatabase.getInstance(context);
 
-      // 获取所有视频
       const allVideos = await db.getAllVideos();
       console.info(`[MediaLibraryTab] 开始刷新元数据，共 ${allVideos.length} 个视频`);
 
       let successCount = 0;
       let failedCount = 0;
 
-      // 逐个刮削
       for (const video of allVideos) {
         try {
-          const result = await scrapeClient.autoScrape(video.fileName);
-          if (result) {
-            // 保存刮削结果
+          // 刷新元数据：无论是否已有 scrape_info，都重新刮削并更新
+          const parsed = parseFileName(video.fileName);
+          if (parsed.mediaType === 'movie') {
+            const movie = await scrapeClient.autoScrapeMovie(video.fileName);
+            if (!movie) { failedCount++; continue; }
+
+            let movieId: number;
+            const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
+            if (existingMovie && existingMovie.id !== undefined) {
+              movieId = existingMovie.id;
+              // 刷新：始终用最新刮削结果覆盖
+              const updateEntity: MovieEntity = {
+                id: existingMovie.id,
+                provider: movie.provider, providerId: movie.providerId, title: movie.title,
+                originalTitle: movie.originalTitle, overview: movie.overview,
+                releaseDate: movie.releaseDate, rating: movie.rating, voteCount: movie.voteCount,
+                posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                genresJson: movie.genresJson, castJson: movie.castJson,
+                directorsJson: movie.directorsJson, runtime: movie.runtime,
+                originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                scrapedAt: Date.now()
+              };
+              await db.upsertMovie(updateEntity);
+            } else {
+              const movieEntity: MovieEntity = {
+                provider: movie.provider, providerId: movie.providerId, title: movie.title,
+                originalTitle: movie.originalTitle, overview: movie.overview,
+                releaseDate: movie.releaseDate, rating: movie.rating, voteCount: movie.voteCount,
+                posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                genresJson: movie.genresJson, castJson: movie.castJson,
+                directorsJson: movie.directorsJson, runtime: movie.runtime,
+                originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                scrapedAt: Date.now()
+              };
+              movieId = await db.upsertMovie(movieEntity);
+            }
             const scrapeInfo: ScrapeInfoEntity = {
-              videoId: video.id!,
-              provider: result.provider,
-              providerId: result.providerId,
-              mediaType: result.mediaType,
-              title: result.title,
-              originalTitle: result.originalTitle,
-              overview: result.overview,
-              releaseDate: result.releaseDate,
-              rating: result.rating,
-              genresJson: result.genres ? JSON.stringify(result.genres) : undefined,
-              castJson: result.cast ? JSON.stringify(result.cast) : undefined,
-              directorsJson: result.directors ? JSON.stringify(result.directors) : undefined,
-              posterUrl: result.posterUrl,
-              backdropUrl: result.backdropUrl,
-              scrapedAt: Date.now(),
-              rawJson: result.rawJson
+              videoId: video.id!, provider: movie.provider, providerId: movie.providerId,
+              mediaType: 'movie', title: movie.title, originalTitle: movie.originalTitle,
+              movieId, scrapedAt: Date.now()
             };
             await db.upsertScrapeInfo(scrapeInfo);
             successCount++;
-            console.info(`[MediaLibraryTab] 刮削成功: ${video.fileName}`);
           } else {
-            failedCount++;
-            console.warn(`[MediaLibraryTab] 刮削失败（无匹配）: ${video.fileName}`);
+            const result = await scrapeClient.autoScrapeTvEpisode(video.fileName);
+            if (!result.series) { failedCount++; continue; }
+            const series: TvSeriesScrapeResult = result.series!;
+            const season = result.season;
+            const episode = result.episode;
+
+            let seriesId: number;
+            const seriesEntity: TvSeriesEntity = {
+              provider: series.provider, providerId: series.providerId, title: series.title,
+              originalTitle: series.originalTitle, overview: series.overview,
+              firstAirDate: series.firstAirDate, rating: series.rating, voteCount: series.voteCount,
+              posterPath: series.posterPath, backdropPath: series.backdropPath,
+              posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
+              genresJson: series.genresJson, castJson: series.castJson,
+              numberOfSeasons: series.numberOfSeasons,
+              originalLanguage: series.originalLanguage, rawJson: series.rawJson,
+              scrapedAt: Date.now()
+            };
+            seriesId = await db.upsertTvSeries(seriesEntity);
+
+            let seasonId: number | undefined;
+            if (season) {
+              const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
+              if (existingSeason && existingSeason.id !== undefined) {
+                seasonId = existingSeason.id;
+              } else {
+                const seasonEntity: TvSeasonEntity = {
+                  seriesId, provider: season.provider, providerId: season.providerId,
+                  seasonNumber: season.seasonNumber, title: season.title,
+                  overview: season.overview, airDate: season.airDate,
+                  episodeCount: season.episodeCount, posterPath: season.posterPath,
+                  posterUrl: season.posterUrl, rawJson: season.rawJson, scrapedAt: Date.now()
+                };
+                seasonId = await db.upsertTvSeason(seasonEntity);
+              }
+            }
+
+            let episodeId: number | undefined;
+            if (episode) {
+              const existingEp = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
+              if (existingEp && existingEp.id !== undefined) {
+                episodeId = existingEp.id;
+              } else {
+                const epEntity: TvEpisodeEntity = {
+                  seriesId, seasonId, provider: episode.provider, providerId: episode.providerId,
+                  seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+                  title: episode.title, overview: episode.overview, airDate: episode.airDate,
+                  runtime: episode.runtime, rating: episode.rating,
+                  stillPath: episode.stillPath, stillUrl: episode.stillUrl,
+                  rawJson: episode.rawJson, scrapedAt: Date.now()
+                };
+                episodeId = await db.upsertTvEpisode(epEntity);
+              }
+            }
+
+            const mediaType = episodeId !== undefined ? 'episode' : 'tv';
+            const scrapeInfo: ScrapeInfoEntity = {
+              videoId: video.id!, provider: series.provider,
+              providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
+              mediaType, title: episode?.title ?? series.title, originalTitle: series.originalTitle,
+              tvSeriesId: seriesId, episodeId,
+              seasonNumber: parsed.seasonNumber, episodeNumber: parsed.episodeNumber,
+              scrapedAt: Date.now()
+            };
+            await db.upsertScrapeInfo(scrapeInfo);
+            successCount++;
           }
+          console.info(`[MediaLibraryTab] 刮削成功: ${video.fileName}`);
         } catch (e) {
           failedCount++;
           const err = e as Error;
@@ -538,15 +664,11 @@ export struct MediaLibraryTab {
       }
 
       await this.model.reload();
-      promptAction.showToast({
-        message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个`
-      });
+      promptAction.showToast({ message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个` });
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryTab] 刷新元数据异常: ${err.message}`);
-      promptAction.showToast({
-        message: '刷新失败: ' + err.message
-      });
+      promptAction.showToast({ message: '刷新失败: ' + err.message });
     } finally {
       this.isScanning = false;
     }

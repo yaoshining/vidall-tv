@@ -3,8 +3,8 @@ import { FileSource, FileSourceDirectory, FileSourceType } from '../db/models/Fi
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
-import { ScrapeClient } from '../lib/ScrapeClient';
-import { VideoEntity, ScrapeInfoEntity } from '../db/models/MediaEntity';
+import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
+import { VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../db/models/MediaEntity';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -123,7 +123,14 @@ export class WebDAVAdapter implements ISourceAdapter {
   async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
     console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results);
+    const processingTasks: Promise<void>[] = [];
+    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results, processingTasks);
+    // 等待所有 ffprobe + 视频入库任务完成，确保 scan() 返回时 DB 已有数据
+    if (processingTasks.length > 0) {
+      console.info(`[VideoScanner][WebDAV] 等待 ${processingTasks.length} 个视频处理任务完成...`);
+      await Promise.all(processingTasks);
+      console.info(`[VideoScanner][WebDAV] 所有视频处理任务完成`);
+    }
     return results;
   }
 
@@ -132,7 +139,8 @@ export class WebDAVAdapter implements ISourceAdapter {
     currentPath: string,
     depth: number,
     maxDepth: number,
-    results: VideoFileInfo[]
+    results: VideoFileInfo[],
+    processingTasks: Promise<void>[]
   ): Promise<void> {
     console.info(`[VideoScanner][WebDAV] 进入目录: ${currentPath}（相对配置目录深度 ${depth}/${maxDepth}）`);
 
@@ -157,7 +165,7 @@ export class WebDAVAdapter implements ISourceAdapter {
           console.info(`[VideoScanner][MAX_DEPTH] 已达最大深度 ${maxDepth}，跳过子目录: ${relativePath}`);
           continue;
         }
-        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, results);
+        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, results, processingTasks);
       } else {
         const fileName = resource.displayName || this.extractFileName(decodedHref);
         if (isVideoFile(fileName, resource.contentType)) {
@@ -182,14 +190,14 @@ export class WebDAVAdapter implements ISourceAdapter {
 
           results.push(info);
 
-          // ── 异步落库 + 刮削（不阻塞扫描主流程）────────────────
+          // ── 落库 + 刮削：加入跟踪列表，确保 scan() 返回前所有视频已入库 ──
           const authHeader = this.client.getAuthHeaderPublic();
           const httpHeader: Record<string, string> = authHeader ? { 'Authorization': authHeader } : {};
           const fullUrl = this.client.getFullUrl(relativePath);
           const capturedInfo = info;
           const capturedScrapeClient = this.scrapeClient;
 
-          FfprobeUtil.probe(fullUrl, httpHeader).then(async (videoInfo) => {
+          const processingTask: Promise<void> = FfprobeUtil.probe(fullUrl, httpHeader).then(async (videoInfo) => {
             if (videoInfo.success) {
               const mainVideo = videoInfo.videoTracks.length > 0 ? videoInfo.videoTracks[0] : undefined;
               console.info(
@@ -248,52 +256,161 @@ export class WebDAVAdapter implements ISourceAdapter {
             try {
               const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
               if (existing) {
-                console.info(`[VideoScanner][SCRAPE] 已有刮削记录，跳过 fileName=${fileName} title="${existing.title}"`);
+                console.info(`[VideoScanner][SCRAPE] 已有刮削记录，跳过 fileName=${fileName}`);
                 return;
               }
             } catch {
-              // 查询失败时继续尝试刮削
+              // 查询失败继续
             }
 
             console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
-            capturedScrapeClient.autoScrape(fileName).then(async (scrapeResult) => {
-              if (!scrapeResult) {
-                console.warn(`[VideoScanner][SCRAPE] 刮削无结果 fileName=${fileName}`);
-                return;
-              }
-              console.info(
-                `[VideoScanner][SCRAPE] 刮削成功 fileName=${fileName} | ` +
-                `title="${scrapeResult.title}" | provider=${scrapeResult.provider} | ` +
-                `type=${scrapeResult.mediaType} | rating=${scrapeResult.rating ?? '-'} | ` +
-                `releaseDate=${scrapeResult.releaseDate ?? '-'} | posterUrl=${scrapeResult.posterUrl ?? '无'}`
-              );
-              const scrapeEntity: ScrapeInfoEntity = {
-                videoId: videoId,
-                provider: scrapeResult.provider,
-                providerId: scrapeResult.providerId,
-                mediaType: scrapeResult.mediaType,
-                title: scrapeResult.title,
-                originalTitle: scrapeResult.originalTitle,
-                overview: scrapeResult.overview,
-                releaseDate: scrapeResult.releaseDate,
-                rating: scrapeResult.rating,
-                genresJson: scrapeResult.genres ? JSON.stringify(scrapeResult.genres) : undefined,
-                castJson: scrapeResult.cast ? JSON.stringify(scrapeResult.cast) : undefined,
-                directorsJson: scrapeResult.directors ? JSON.stringify(scrapeResult.directors) : undefined,
-                posterUrl: scrapeResult.posterUrl,
-                backdropUrl: scrapeResult.backdropUrl,
-                scrapedAt: Date.now()
-              };
-              try {
-                await FileSourceDatabase.getInstance().upsertScrapeInfo(scrapeEntity);
-                console.info(`[VideoScanner][SCRAPE] 入库成功 videoId=${videoId} title="${scrapeResult.title}"`);
-              } catch (scrapeDbErr) {
-                console.warn(`[VideoScanner][SCRAPE] 入库失败 fileName=${fileName}: ${JSON.stringify(scrapeDbErr)}`);
-              }
-            }).catch((scrapeErr: Error) => {
-              console.warn(`[VideoScanner][SCRAPE] autoScrape 异常 fileName=${fileName}: ${scrapeErr.message}`);
-            });
+            const parsed = parseFileName(fileName);
+
+            if (parsed.mediaType === 'movie') {
+              // ── 电影 ──────────────────────────────────────────
+              capturedScrapeClient.autoScrapeMovie(fileName).then(async (movie) => {
+                if (!movie) { console.warn(`[VideoScanner][SCRAPE] 电影刮削无结果 ${fileName}`); return; }
+                console.info(`[VideoScanner][SCRAPE] 电影刮削结果 title="${movie.title}" posterUrl=${movie.posterUrl ? movie.posterUrl.substring(0, 40) : 'null'} rating=${movie.rating ?? 'null'}`);
+                const db = FileSourceDatabase.getInstance();
+                let movieId: number;
+                const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
+                if (existingMovie && existingMovie.id !== undefined) {
+                  movieId = existingMovie.id;
+                  console.info(`[VideoScanner][SCRAPE] 电影复用已有记录 movieId=${movieId} title="${movie.title}" 已有posterUrl=${existingMovie.posterUrl ? 'Y' : 'null'}`);
+                  // 复用时也更新海报等字段（避免旧记录没有 posterUrl）
+                  if (!existingMovie.posterUrl && movie.posterUrl) {
+                    const updateEntity: MovieEntity = {
+                      id: existingMovie.id,
+                      provider: movie.provider, providerId: movie.providerId,
+                      title: movie.title, originalTitle: movie.originalTitle,
+                      overview: movie.overview, releaseDate: movie.releaseDate,
+                      rating: movie.rating, voteCount: movie.voteCount,
+                      posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                      posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                      genresJson: movie.genresJson, castJson: movie.castJson,
+                      directorsJson: movie.directorsJson, runtime: movie.runtime,
+                      originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                      scrapedAt: Date.now()
+                    };
+                    await db.upsertMovie(updateEntity);
+                    console.info(`[VideoScanner][SCRAPE] 电影复用更新 posterUrl movieId=${movieId}`);
+                  }
+                } else {
+                  const movieEntity: MovieEntity = {
+                    provider: movie.provider, providerId: movie.providerId,
+                    title: movie.title, originalTitle: movie.originalTitle,
+                    overview: movie.overview, releaseDate: movie.releaseDate,
+                    rating: movie.rating, voteCount: movie.voteCount,
+                    posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                    posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                    genresJson: movie.genresJson, castJson: movie.castJson,
+                    directorsJson: movie.directorsJson, runtime: movie.runtime,
+                    originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                    scrapedAt: Date.now()
+                  };
+                  movieId = await db.upsertMovie(movieEntity);
+                  console.info(`[VideoScanner][SCRAPE] 电影入库 movieId=${movieId} title="${movie.title}"`);
+                }
+                const scrapeInfo: ScrapeInfoEntity = {
+                  videoId, provider: movie.provider, providerId: movie.providerId,
+                  mediaType: 'movie', title: movie.title, originalTitle: movie.originalTitle,
+                  movieId, scrapedAt: Date.now()
+                };
+                await db.upsertScrapeInfo(scrapeInfo);
+                console.info(`[VideoScanner][SCRAPE] scrape_info 落库 videoId=${videoId} movieId=${movieId}`);
+              }).catch((e: Error) => {
+                console.warn(`[VideoScanner][SCRAPE] 电影刮削异常 ${fileName}: ${e.message}`);
+              });
+            } else {
+              // ── 电视剧 ────────────────────────────────────────
+              capturedScrapeClient.autoScrapeTvEpisode(fileName).then(async (result) => {
+                if (!result.series) { console.warn(`[VideoScanner][SCRAPE] 剧集刮削无结果 ${fileName}`); return; }
+                const db = FileSourceDatabase.getInstance();
+                const series: TvSeriesScrapeResult = result.series!;
+                const season = result.season;
+                const episode = result.episode;
+
+                // tv_series：先查库，有则复用
+                let seriesId: number;
+                const existingSeries = await db.getTvSeriesByProviderId(series.provider, series.providerId);
+                if (existingSeries && existingSeries.id !== undefined) {
+                  seriesId = existingSeries.id;
+                  console.info(`[VideoScanner][SCRAPE] 剧集复用已有记录 seriesId=${seriesId} title="${series.title}"`);
+                } else {
+                  const seriesEntity: TvSeriesEntity = {
+                    provider: series.provider, providerId: series.providerId,
+                    title: series.title, originalTitle: series.originalTitle,
+                    overview: series.overview, firstAirDate: series.firstAirDate,
+                    rating: series.rating, voteCount: series.voteCount,
+                    posterPath: series.posterPath, backdropPath: series.backdropPath,
+                    posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
+                    genresJson: series.genresJson, castJson: series.castJson,
+                    numberOfSeasons: series.numberOfSeasons,
+                    originalLanguage: series.originalLanguage, rawJson: series.rawJson,
+                    scrapedAt: Date.now()
+                  };
+                  seriesId = await db.upsertTvSeries(seriesEntity);
+                  console.info(`[VideoScanner][SCRAPE] 剧集入库 seriesId=${seriesId} title="${series.title}"`);
+                }
+
+                // tv_season
+                let seasonId: number | undefined;
+                if (season) {
+                  const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
+                  if (existingSeason && existingSeason.id !== undefined) {
+                    seasonId = existingSeason.id;
+                  } else {
+                    const seasonEntity: TvSeasonEntity = {
+                      seriesId, provider: season.provider, providerId: season.providerId,
+                      seasonNumber: season.seasonNumber, title: season.title,
+                      overview: season.overview, airDate: season.airDate,
+                      episodeCount: season.episodeCount, posterPath: season.posterPath,
+                      posterUrl: season.posterUrl, rawJson: season.rawJson,
+                      scrapedAt: Date.now()
+                    };
+                    seasonId = await db.upsertTvSeason(seasonEntity);
+                  }
+                }
+
+                // tv_episode
+                let episodeId: number | undefined;
+                if (episode) {
+                  const existingEp = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
+                  if (existingEp && existingEp.id !== undefined) {
+                    episodeId = existingEp.id;
+                  } else {
+                    const epEntity: TvEpisodeEntity = {
+                      seriesId, seasonId, provider: episode.provider, providerId: episode.providerId,
+                      seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+                      title: episode.title, overview: episode.overview, airDate: episode.airDate,
+                      runtime: episode.runtime, rating: episode.rating,
+                      stillPath: episode.stillPath, stillUrl: episode.stillUrl,
+                      rawJson: episode.rawJson, scrapedAt: Date.now()
+                    };
+                    episodeId = await db.upsertTvEpisode(epEntity);
+                  }
+                }
+
+                const mediaType = episodeId !== undefined ? 'episode' : 'tv';
+                const scrapeInfo: ScrapeInfoEntity = {
+                  videoId, provider: series.provider,
+                  providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
+                  mediaType, title: episode?.title ?? series.title,
+                  originalTitle: series.originalTitle,
+                  tvSeriesId: seriesId, episodeId,
+                  seasonNumber: parsed.seasonNumber, episodeNumber: parsed.episodeNumber,
+                  scrapedAt: Date.now()
+                };
+                await db.upsertScrapeInfo(scrapeInfo);
+                console.info(`[VideoScanner][SCRAPE] tv scrape_info 落库 videoId=${videoId} S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'}`);
+              }).catch((e: Error) => {
+                console.warn(`[VideoScanner][SCRAPE] 剧集刮削异常 ${fileName}: ${e.message}`);
+              });
+            }
+          }).catch((e: Error) => {
+            console.warn(`[VideoScanner][PROCESS] 视频处理异常 ${fileName}: ${e.message}`);
           });
+          processingTasks.push(processingTask);
         }
       }
     }

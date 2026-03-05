@@ -61,11 +61,23 @@ export class MediaLibraryModel {
       const db = FileSourceDatabase.getInstance();
 
       const all: MediaItem[] = await db.getAllMediaItems();
+      console.info(`[MediaLibraryModel][DIAG] getAllMediaItems=${all.length}`);
+
       const movies: MediaItem[] = await db.getMediaItemsByType('movie');
+      console.info(`[MediaLibraryModel][DIAG] getMediaItemsByType(movie)=${movies.length}`);
+
       const byRating: MediaItem[] = await db.getMediaItemsByRating();
+      console.info(`[MediaLibraryModel][DIAG] getMediaItemsByRating=${byRating.length}`);
+
       const years: string[] = await db.getDistinctReleaseYears();
+      console.info(`[MediaLibraryModel][DIAG] getDistinctReleaseYears=${years.length} → ${JSON.stringify(years)}`);
+
       const stats: MediaStats = await db.getMediaStats();
-      const seriesGroups: SeriesGroup[] = await db.getSeriesGroups();
+      console.info(`[MediaLibraryModel][DIAG] stats=${JSON.stringify(stats)}`);
+
+      const seriesGroups: SeriesGroup[] = await db.getDistinctTvSeriesGroups();
+      console.info(`[MediaLibraryModel][DIAG] getDistinctTvSeriesGroups=${seriesGroups.length} 部`);
+
       const latestScanTime: number = await db.getLatestScanTime();
 
       this.recentlyAdded = all;
@@ -76,8 +88,11 @@ export class MediaLibraryModel {
       this.latestScanTime = latestScanTime;
       this.unwatched = all;
 
-      // 构建混合列表（合集 + 单独视频，按时间倒序）
-      this.recentlyAddedList = buildMixedList(all, seriesGroups);
+      // 构建已已最近添加列表：直接用 DB 查询（电视剧按季分组 + 电影，按 scraped_at 倒序）
+      this.recentlyAddedList = await db.getRecentlyAddedList();
+      const seriesInList = this.recentlyAddedList.filter((i: MediaListItem) => i.kind === 'series').length;
+      const videoInList = this.recentlyAddedList.filter((i: MediaListItem) => i.kind === 'video').length;
+      console.info(`[MediaLibraryModel][DIAG] recentlyAddedList=${this.recentlyAddedList.length} (series=${seriesInList} video=${videoInList})`);
       this.unwatchedList = this.recentlyAddedList; // 播放历史未实现时，未观看 = 全部
 
       // 评分标签（10→5 逆序，有数量的才显示）
@@ -109,10 +124,8 @@ export class MediaLibraryModel {
       this.isLoaded = true;
       console.info(
         `[MediaLibraryModel] 加载完成 | 全部=${all.length} 电影=${movies.length} ` +
-        `合集=${seriesGroups.length} 年代组=${this.decadeGroups.length}`
-      );
-      console.info(`[MediaLibraryModel] seriesGroups 明细: ${seriesGroups.map((g: SeriesGroup) => g.title + '(' + g.episodeCount + ')').join(', ')}`);
-    } catch (e) {
+        `电视剧=${seriesGroups.length} 年代组=${this.decadeGroups.length}`
+      );    } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryModel] 加载失败: ${err.message}`);
     } finally {

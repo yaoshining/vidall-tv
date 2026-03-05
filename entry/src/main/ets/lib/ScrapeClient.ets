@@ -3,10 +3,9 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
 
 // ─────────────────────────────────────────────
-// 刮削数据结构
+// 公共数据结构
 // ─────────────────────────────────────────────
 
-/** 演员 / 工作人员 */
 export interface ScrapeCredit {
   name: string;
   role?: string;
@@ -14,11 +13,22 @@ export interface ScrapeCredit {
   order?: number;
 }
 
-/** 刮削结果 */
-export interface ScrapeResult {
+/** 搜索参数 */
+export interface ScrapeQuery {
+  title: string;
+  year?: number;
+  mediaType?: 'movie' | 'tv';
+  language?: string;
+  /** 解析出的季数（仅 tv）*/
+  seasonNumber?: number;
+  /** 解析出的集数（仅 tv）*/
+  episodeNumber?: number;
+}
+
+/** 电影刮削结果 */
+export interface MovieScrapeResult {
   provider: string;
   providerId: string;
-  mediaType: 'movie' | 'tv' | 'episode' | 'unknown';
   title: string;
   originalTitle?: string;
   overview?: string;
@@ -29,80 +39,187 @@ export interface ScrapeResult {
   backdropPath?: string;
   posterUrl?: string;
   backdropUrl?: string;
-  genres?: string[];
-  cast?: ScrapeCredit[];
-  directors?: ScrapeCredit[];
-  seasonNumber?: number;
-  episodeNumber?: number;
-  originalLanguage?: string;
+  genresJson?: string;
+  castJson?: string;
+  directorsJson?: string;
   runtime?: number;
+  originalLanguage?: string;
   rawJson?: string;
 }
 
-/** 搜索参数 */
-export interface ScrapeQuery {
+/** 电视剧刮削结果（剧级别）*/
+export interface TvSeriesScrapeResult {
+  provider: string;
+  providerId: string;
+  title: string;
+  originalTitle?: string;
+  overview?: string;
+  firstAirDate?: string;
+  rating?: number;
+  voteCount?: number;
+  posterPath?: string;
+  backdropPath?: string;
+  posterUrl?: string;
+  backdropUrl?: string;
+  genresJson?: string;
+  castJson?: string;
+  numberOfSeasons?: number;
+  originalLanguage?: string;
+  rawJson?: string;
+}
+
+/** 季刮削结果 */
+export interface TvSeasonScrapeResult {
+  provider: string;
+  /** 格式：{seriesProviderId}_s{seasonNumber} */
+  providerId: string;
+  seasonNumber: number;
+  title?: string;
+  overview?: string;
+  airDate?: string;
+  episodeCount?: number;
+  posterPath?: string;
+  posterUrl?: string;
+  rawJson?: string;
+}
+
+/** 集刮削结果 */
+export interface TvEpisodeScrapeResult {
+  provider: string;
+  /** TMDB episode id */
+  providerId: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  title?: string;
+  overview?: string;
+  airDate?: string;
+  runtime?: number;
+  rating?: number;
+  stillPath?: string;
+  stillUrl?: string;
+  rawJson?: string;
+}
+
+/** autoScrapeTvEpisode 的返回值 */
+export interface TvEpisodeScrapeBundle {
+  series: TvSeriesScrapeResult | null;
+  season: TvSeasonScrapeResult | null;
+  episode: TvEpisodeScrapeResult | null;
+}
+
+// ─────────────────────────────────────────────
+// 文件名解析
+// ─────────────────────────────────────────────
+
+export interface ParsedFileName {
   title: string;
   year?: number;
-  mediaType?: 'movie' | 'tv';
-  language?: string;
+  mediaType: 'movie' | 'tv';
+  seasonNumber?: number;
+  episodeNumber?: number;
+  language: string;
 }
 
 /**
- * 刮削提供商接口
- * 新增数据源只需实现此接口并调用 ScrapeClient.registerProvider() 注册
+ * 从视频文件名解析标题、年份、媒体类型、季集信息
+ * 例：权力的游戏.Game.of.Thrones.S07E01.mkv → { title: '权力的游戏 Game of Thrones', mediaType: 'tv', seasonNumber: 7, episodeNumber: 1 }
+ * 例：Inception.2010.1080p.mkv              → { title: 'Inception', year: 2010, mediaType: 'movie' }
  */
-export interface IScrapeProvider {
-  readonly id: string;
-  isConfigured(): boolean;
-  search(query: ScrapeQuery): Promise<ScrapeResult[]>;
-  fetchDetail(providerId: string, mediaType: 'movie' | 'tv', language?: string): Promise<ScrapeResult | null>;
-}
-
-// ─────────────────────────────────────────────
-// 工具函数
-// ─────────────────────────────────────────────
-
-/**
- * 从视频文件名解析标题、年份、媒体类型
- * 例：Inception.2010.1080p.BluRay.mkv  → { title: 'Inception', year: 2010, mediaType: 'movie' }
- * 例：S02E03.Useful.Occupations.mkv    → { title: 'Useful Occupations', mediaType: 'tv' }
- */
-export function parseFileName(fileName: string): ScrapeQuery {
+export function parseFileName(fileName: string): ParsedFileName {
   const withoutExt = fileName.replace(/\.[^.]+$/, '');
+
+  // 年份
   const yearPattern = /[.\[(]((?:19|20)\d{2})[.)\]]/;
   const yearMatch = withoutExt.match(yearPattern);
   const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
-  const episodeMatch = withoutExt.match(/S(\d{1,2})E(\d{1,2})/i);
+
+  // 季集
+  const episodeMatch = withoutExt.match(/[Ss](\d{1,2})[Ee](\d{1,3})/);
+  const seasonNumber = episodeMatch ? parseInt(episodeMatch[1]) : undefined;
+  const episodeNumber = episodeMatch ? parseInt(episodeMatch[2]) : undefined;
   const mediaType: 'movie' | 'tv' = episodeMatch ? 'tv' : 'movie';
 
   let workStr = withoutExt;
-
-  // 移除年份
   workStr = workStr.replace(new RegExp(yearPattern.source, 'g'), ' ');
+  workStr = workStr.replace(/[Ss]\d{1,2}[Ee]\d{1,3}.*/gi, '');
 
-  // 移除剧集标记及后续内容
-  workStr = workStr.replace(/S\d{1,2}E\d{1,2}.*/gi, '');
-
-  // 找到第一个质量标记的位置，截断后续内容（通常是发布组名称）
   const qualityPattern = /\b(1080p|720p|4k|2160p|480p|uhd|hdr|hdr10|hdr10plus|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|aac\d\.\d|dts|dts-?x|ddp?\d\.\d|dd5\.?1|ac3|atmos|truehd|remux|proper|repack|imax|dv|\d{1,2}bit|\d\.\d)\b/i;
   const qualityMatch = workStr.match(qualityPattern);
   if (qualityMatch && qualityMatch.index !== undefined) {
     workStr = workStr.substring(0, qualityMatch.index);
   }
 
-  // 清理特殊字符和多余空格
   const title = workStr
     .replace(/[[\]()]/g, ' ')
     .replace(/[._-]/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  return { title, year, mediaType, language: 'zh-CN' };
+  return { title, year, mediaType, seasonNumber, episodeNumber, language: 'zh-CN' };
+}
+
+/**
+ * 从混合标题中生成候选搜索词列表（按优先级排序）
+ *
+ * 策略：
+ * - 纯中文标题（无英文）：中文 → 完整标题
+ * - 纯英文标题（无中文）：英文 → 完整标题
+ * - 中英混合：只用英文部分，不加中文（中文搜索易命中歧义剧）
+ *
+ * 例："权力的游戏 Game of Thrones" → ["Game of Thrones"]
+ * 例："权力的游戏" → ["权力的游戏"]
+ * 例："Game of Thrones" → ["Game of Thrones"]
+ */
+export function buildSearchTitles(title: string): string[] {
+  const candidates: string[] = [];
+  const hasChinese = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(title);
+  const hasEnglish = /[A-Za-z]{2,}/.test(title);
+  const englishMatch = title.match(/[A-Za-z][A-Za-z0-9\s''\-:,!?&.]+/);
+  const englishPart = englishMatch ? englishMatch[0].trim() : '';
+  const chineseMatch = title.match(/[\u4e00-\u9fff\u3400-\u4dbf\uff00-\uffef\u3000-\u303f：、。，！？《》【】「」\s]+/);
+  const chinesePart = chineseMatch ? chineseMatch[0].trim() : '';
+
+  if (hasChinese && hasEnglish) {
+    // 混合：只用英文（精度高、不歧义）
+    if (englishPart.length >= 2) {
+      candidates.push(englishPart);
+    } else {
+      candidates.push(title.trim());
+    }
+  } else if (hasEnglish) {
+    if (englishPart.length >= 2) { candidates.push(englishPart); }
+    if (!candidates.includes(title.trim())) { candidates.push(title.trim()); }
+  } else if (hasChinese) {
+    if (chinesePart.length >= 1) { candidates.push(chinesePart); }
+    if (!candidates.includes(title.trim())) { candidates.push(title.trim()); }
+  } else {
+    candidates.push(title.trim());
+  }
+  return candidates;
+}
+
+// ─────────────────────────────────────────────
+// Provider 接口
+// ─────────────────────────────────────────────
+
+export interface IScrapeProvider {
+  readonly id: string;
+  isConfigured(): boolean;
+  searchMovie(title: string, year?: number, language?: string): Promise<MovieScrapeResult[]>;
+  searchTv(title: string, year?: number, language?: string): Promise<TvSeriesScrapeResult[]>;
+  fetchMovieDetail(providerId: string, language?: string): Promise<MovieScrapeResult | null>;
+  fetchTvSeriesDetail(providerId: string, language?: string): Promise<TvSeriesScrapeResult | null>;
+  fetchSeason(seriesProviderId: string, seasonNumber: number, language?: string): Promise<TvSeasonScrapeResult | null>;
+  fetchEpisode(seriesProviderId: string, seasonNumber: number, episodeNumber: number, language?: string): Promise<TvEpisodeScrapeResult | null>;
 }
 
 // ─────────────────────────────────────────────
 // TMDB 内部类型
 // ─────────────────────────────────────────────
+
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const TMDB_STILL_BASE = 'https://image.tmdb.org/t/p/w300';
 
 interface TmdbSearchItem {
   id: number;
@@ -143,15 +260,12 @@ interface TmdbCredits {
   crew?: TmdbCrewItem[];
 }
 
-interface TmdbDetailResult {
+interface TmdbMovieDetail {
   id: number;
   title?: string;
-  name?: string;
   original_title?: string;
-  original_name?: string;
   overview?: string;
   release_date?: string;
-  first_air_date?: string;
   vote_average?: number;
   vote_count?: number;
   poster_path?: string;
@@ -159,8 +273,46 @@ interface TmdbDetailResult {
   genres?: TmdbGenre[];
   original_language?: string;
   runtime?: number;
+  credits?: TmdbCredits;
+}
+
+interface TmdbTvDetail {
+  id: number;
+  name?: string;
+  original_name?: string;
+  overview?: string;
+  first_air_date?: string;
+  vote_average?: number;
+  vote_count?: number;
+  poster_path?: string;
+  backdrop_path?: string;
+  genres?: TmdbGenre[];
+  original_language?: string;
+  number_of_seasons?: number;
   episode_run_time?: number[];
   credits?: TmdbCredits;
+}
+
+interface TmdbSeasonDetail {
+  id: number;
+  name?: string;
+  overview?: string;
+  air_date?: string;
+  season_number?: number;
+  episodes?: TmdbEpisodeItem[];
+  poster_path?: string;
+}
+
+interface TmdbEpisodeItem {
+  id: number;
+  name?: string;
+  overview?: string;
+  air_date?: string;
+  season_number?: number;
+  episode_number?: number;
+  runtime?: number;
+  vote_average?: number;
+  still_path?: string;
 }
 
 interface TmdbSearchResponse {
@@ -171,12 +323,13 @@ interface TmdbSearchResponse {
 // TMDB Provider
 // ─────────────────────────────────────────────
 
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
-
 export class TmdbProvider implements IScrapeProvider {
   readonly id = 'tmdb';
   private apiKey: string;
+  /** 上次发出请求的时间戳（ms），用于限速控制 */
+  private lastRequestTs: number = 0;
+  /** 请求间最小间隔 250ms，即 ≤4 req/s，远低于 TMDB 40 req/10s 上限 */
+  private static readonly MIN_REQUEST_INTERVAL_MS = 250;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -186,121 +339,211 @@ export class TmdbProvider implements IScrapeProvider {
     return this.apiKey.trim().length > 0;
   }
 
-  async search(query: ScrapeQuery): Promise<ScrapeResult[]> {
-    const lang = query.language ?? 'zh-CN';
-    const type = query.mediaType ?? 'movie';
-    const endpoint = type === 'tv' ? 'search/tv' : 'search/movie';
-    let url = `${TMDB_BASE_URL}/${endpoint}?api_key=${this.apiKey}&language=${lang}&query=${encodeURIComponent(query.title)}`;
-    if (query.year) {
-      url += type === 'tv' ? `&first_air_date_year=${query.year}` : `&year=${query.year}`;
-    }
-    console.info(`[TmdbProvider] 搜索 type=${type} title="${query.title}" year=${query.year ?? '-'}`);
+  async searchMovie(title: string, year?: number, language: string = 'zh-CN'): Promise<MovieScrapeResult[]> {
+    let url = `${TMDB_BASE_URL}/search/movie?api_key=${this.apiKey}&language=${language}&query=${encodeURIComponent(title)}`;
+    if (year) { url += `&year=${year}`; }
     const rawJson = await this.httpGet(url);
     const data = JSON.parse(rawJson) as TmdbSearchResponse;
-    const items = data.results ?? [];
-    console.info(`[TmdbProvider] 搜索结果 ${items.length} 条`);
-    return items.slice(0, 5).map(item => this.mapSearchItem(item, type, rawJson));
-  }
-
-  async fetchDetail(providerId: string, mediaType: 'movie' | 'tv', language: string = 'zh-CN'): Promise<ScrapeResult | null> {
-    const endpoint = mediaType === 'tv' ? `tv/${providerId}` : `movie/${providerId}`;
-    const url = `${TMDB_BASE_URL}/${endpoint}?api_key=${this.apiKey}&language=${language}&append_to_response=credits`;
-    console.info(`[TmdbProvider] 拉详情 id=${providerId} type=${mediaType}`);
-    const rawJson = await this.httpGet(url);
-    const item = JSON.parse(rawJson) as TmdbDetailResult;
-    return this.mapDetail(item, mediaType, rawJson);
-  }
-
-  private mapSearchItem(item: TmdbSearchItem, mediaType: 'movie' | 'tv', rawJson: string): ScrapeResult {
-    const posterUrl = item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : undefined;
-    const backdropUrl = item.backdrop_path ? `${TMDB_IMAGE_BASE_URL}${item.backdrop_path}` : undefined;
-    return {
-      provider: this.id,
-      providerId: String(item.id),
-      mediaType,
-      title: (mediaType === 'tv' ? item.name : item.title) ?? '',
-      originalTitle: (mediaType === 'tv' ? item.original_name : item.original_title) ?? undefined,
-      overview: item.overview ?? undefined,
-      releaseDate: (mediaType === 'tv' ? item.first_air_date : item.release_date) ?? undefined,
-      rating: item.vote_average ?? undefined,
-      voteCount: item.vote_count ?? undefined,
-      posterPath: item.poster_path ?? undefined,
-      backdropPath: item.backdrop_path ?? undefined,
-      posterUrl,
-      backdropUrl,
-      originalLanguage: item.original_language ?? undefined,
-      rawJson
-    };
-  }
-
-  private mapDetail(item: TmdbDetailResult, mediaType: 'movie' | 'tv', rawJson: string): ScrapeResult {
-    const posterUrl = item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : undefined;
-    const backdropUrl = item.backdrop_path ? `${TMDB_IMAGE_BASE_URL}${item.backdrop_path}` : undefined;
-    const cast: ScrapeCredit[] = (item.credits?.cast ?? []).slice(0, 20).map(c => {
-      const credit: ScrapeCredit = {
-        name: c.name ?? '',
-        role: c.character ?? undefined,
-        profilePath: c.profile_path ?? undefined,
-        order: c.order ?? undefined
+    const items = (data.results ?? []).slice(0, 5);
+    return items.map(item => {
+      const r: MovieScrapeResult = {
+        provider: this.id,
+        providerId: String(item.id),
+        title: item.title ?? '',
+        originalTitle: item.original_title ?? undefined,
+        overview: item.overview ?? undefined,
+        releaseDate: item.release_date ?? undefined,
+        rating: item.vote_average ?? undefined,
+        voteCount: item.vote_count ?? undefined,
+        posterPath: item.poster_path ?? undefined,
+        backdropPath: item.backdrop_path ?? undefined,
+        posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
+        backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+        originalLanguage: item.original_language ?? undefined,
+        rawJson
       };
-      return credit;
+      return r;
     });
-    const directors: ScrapeCredit[] = (item.credits?.crew ?? [])
-      .filter(c => c.job === 'Director')
-      .map(c => {
-        const credit: ScrapeCredit = {
-          name: c.name ?? '',
-          role: c.job ?? undefined,
-          profilePath: c.profile_path ?? undefined
-        };
-        return credit;
-      });
-    const genres: string[] = (item.genres ?? []).map(g => g.name);
-    const runtimeVal = mediaType === 'tv'
-      ? (item.episode_run_time && item.episode_run_time.length > 0 ? item.episode_run_time[0] : undefined)
-      : item.runtime;
-    return {
+  }
+
+  async searchTv(title: string, year?: number, language: string = 'zh-CN'): Promise<TvSeriesScrapeResult[]> {
+    let url = `${TMDB_BASE_URL}/search/tv?api_key=${this.apiKey}&language=${language}&query=${encodeURIComponent(title)}`;
+    if (year) { url += `&year=${year}`; }
+    const rawJson = await this.httpGet(url);
+    const data = JSON.parse(rawJson) as TmdbSearchResponse;
+    const items = (data.results ?? []).slice(0, 5);
+    return items.map(item => {
+      const r: TvSeriesScrapeResult = {
+        provider: this.id,
+        providerId: String(item.id),
+        title: item.name ?? '',
+        originalTitle: item.original_name ?? undefined,
+        overview: item.overview ?? undefined,
+        firstAirDate: item.first_air_date ?? undefined,
+        rating: item.vote_average ?? undefined,
+        voteCount: item.vote_count ?? undefined,
+        posterPath: item.poster_path ?? undefined,
+        backdropPath: item.backdrop_path ?? undefined,
+        posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
+        backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+        originalLanguage: item.original_language ?? undefined,
+        rawJson
+      };
+      return r;
+    });
+  }
+
+  async fetchMovieDetail(providerId: string, language: string = 'zh-CN'): Promise<MovieScrapeResult | null> {
+    const url = `${TMDB_BASE_URL}/movie/${providerId}?api_key=${this.apiKey}&language=${language}&append_to_response=credits`;
+    const rawJson = await this.httpGet(url);
+    const item = JSON.parse(rawJson) as TmdbMovieDetail;
+    const cast: ScrapeCredit[] = (item.credits?.cast ?? []).slice(0, 20).map(c => {
+      const cr: ScrapeCredit = { name: c.name ?? '', role: c.character, profilePath: c.profile_path ?? undefined, order: c.order };
+      return cr;
+    });
+    const directors: ScrapeCredit[] = (item.credits?.crew ?? []).filter(c => c.job === 'Director').map(c => {
+      const cr: ScrapeCredit = { name: c.name ?? '', role: c.job, profilePath: c.profile_path ?? undefined };
+      return cr;
+    });
+    const r: MovieScrapeResult = {
       provider: this.id,
       providerId: String(item.id),
-      mediaType,
-      title: (mediaType === 'tv' ? item.name : item.title) ?? '',
-      originalTitle: (mediaType === 'tv' ? item.original_name : item.original_title) ?? undefined,
+      title: item.title ?? '',
+      originalTitle: item.original_title ?? undefined,
       overview: item.overview ?? undefined,
-      releaseDate: (mediaType === 'tv' ? item.first_air_date : item.release_date) ?? undefined,
+      releaseDate: item.release_date ?? undefined,
       rating: item.vote_average ?? undefined,
       voteCount: item.vote_count ?? undefined,
       posterPath: item.poster_path ?? undefined,
       backdropPath: item.backdrop_path ?? undefined,
-      posterUrl,
-      backdropUrl,
-      genres: genres.length > 0 ? genres : undefined,
-      cast: cast.length > 0 ? cast : undefined,
-      directors: directors.length > 0 ? directors : undefined,
+      posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
+      backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+      genresJson: item.genres && item.genres.length > 0 ? JSON.stringify(item.genres.map(g => g.name)) : undefined,
+      castJson: cast.length > 0 ? JSON.stringify(cast) : undefined,
+      directorsJson: directors.length > 0 ? JSON.stringify(directors) : undefined,
+      runtime: item.runtime ?? undefined,
       originalLanguage: item.original_language ?? undefined,
-      runtime: runtimeVal,
       rawJson
     };
+    return r;
+  }
+
+  async fetchTvSeriesDetail(providerId: string, language: string = 'zh-CN'): Promise<TvSeriesScrapeResult | null> {
+    const url = `${TMDB_BASE_URL}/tv/${providerId}?api_key=${this.apiKey}&language=${language}&append_to_response=credits`;
+    const rawJson = await this.httpGet(url);
+    const item = JSON.parse(rawJson) as TmdbTvDetail;
+    const cast: ScrapeCredit[] = (item.credits?.cast ?? []).slice(0, 20).map(c => {
+      const cr: ScrapeCredit = { name: c.name ?? '', role: c.character, profilePath: c.profile_path ?? undefined, order: c.order };
+      return cr;
+    });
+    const r: TvSeriesScrapeResult = {
+      provider: this.id,
+      providerId: String(item.id),
+      title: item.name ?? '',
+      originalTitle: item.original_name ?? undefined,
+      overview: item.overview ?? undefined,
+      firstAirDate: item.first_air_date ?? undefined,
+      rating: item.vote_average ?? undefined,
+      voteCount: item.vote_count ?? undefined,
+      posterPath: item.poster_path ?? undefined,
+      backdropPath: item.backdrop_path ?? undefined,
+      posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
+      backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+      genresJson: item.genres && item.genres.length > 0 ? JSON.stringify(item.genres.map(g => g.name)) : undefined,
+      castJson: cast.length > 0 ? JSON.stringify(cast) : undefined,
+      numberOfSeasons: item.number_of_seasons ?? undefined,
+      originalLanguage: item.original_language ?? undefined,
+      rawJson
+    };
+    return r;
+  }
+
+  async fetchSeason(seriesProviderId: string, seasonNumber: number, language: string = 'zh-CN'): Promise<TvSeasonScrapeResult | null> {
+    const url = `${TMDB_BASE_URL}/tv/${seriesProviderId}/season/${seasonNumber}?api_key=${this.apiKey}&language=${language}`;
+    const rawJson = await this.httpGet(url);
+    const item = JSON.parse(rawJson) as TmdbSeasonDetail;
+    const r: TvSeasonScrapeResult = {
+      provider: this.id,
+      providerId: `${seriesProviderId}_s${seasonNumber}`,
+      seasonNumber,
+      title: item.name ?? undefined,
+      overview: item.overview ?? undefined,
+      airDate: item.air_date ?? undefined,
+      episodeCount: item.episodes ? item.episodes.length : undefined,
+      posterPath: item.poster_path ?? undefined,
+      posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
+      rawJson
+    };
+    return r;
+  }
+
+  async fetchEpisode(seriesProviderId: string, seasonNumber: number, episodeNumber: number, language: string = 'zh-CN'): Promise<TvEpisodeScrapeResult | null> {
+    const url = `${TMDB_BASE_URL}/tv/${seriesProviderId}/season/${seasonNumber}/episode/${episodeNumber}?api_key=${this.apiKey}&language=${language}`;
+    const rawJson = await this.httpGet(url);
+    const item = JSON.parse(rawJson) as TmdbEpisodeItem;
+    const r: TvEpisodeScrapeResult = {
+      provider: this.id,
+      providerId: String(item.id),
+      seasonNumber,
+      episodeNumber,
+      title: item.name ?? undefined,
+      overview: item.overview ?? undefined,
+      airDate: item.air_date ?? undefined,
+      runtime: item.runtime ?? undefined,
+      rating: item.vote_average ?? undefined,
+      stillPath: item.still_path ?? undefined,
+      stillUrl: item.still_path ? `${TMDB_STILL_BASE}${item.still_path}` : undefined,
+      rawJson
+    };
+    return r;
   }
 
   private async httpGet(url: string): Promise<string> {
-    const req = http.createHttp();
-    try {
-      const resp = await req.request(url, {
-        method: http.RequestMethod.GET,
-        header: { 'Accept': 'application/json' },
-        connectTimeout: 15000,
-        readTimeout: 15000
-      });
-      if (resp.responseCode !== 200) {
-        throw new Error(`TMDB HTTP ${resp.responseCode}`);
+    const maxRetries = 3;
+    let lastError: Error = new Error('未知错误');
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // 请求频率限制：确保上次请求后至少间隔 MIN_REQUEST_INTERVAL_MS
+      const now = Date.now();
+      const elapsed = now - this.lastRequestTs;
+      if (elapsed < TmdbProvider.MIN_REQUEST_INTERVAL_MS) {
+        await new Promise<void>((resolve) => setTimeout(resolve, TmdbProvider.MIN_REQUEST_INTERVAL_MS - elapsed));
       }
-      return resp.result as string;
-    } catch (e) {
-      const err = e as BusinessError;
-      throw new Error(`TMDB 请求失败: ${err.message ?? JSON.stringify(e)}`);
-    } finally {
-      req.destroy();
+      this.lastRequestTs = Date.now();
+
+      if (attempt > 0) {
+        // 重试额外等待：1s, 2s
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+      const req = http.createHttp();
+      try {
+        const resp = await req.request(url, {
+          method: http.RequestMethod.GET,
+          header: { 'Accept': 'application/json' },
+          connectTimeout: 15000,
+          readTimeout: 15000
+        });
+        if (resp.responseCode === 429) {
+          console.warn(`[TmdbProvider] 限速 429，第 ${attempt + 1} 次重试: ${url}`);
+          req.destroy();
+          lastError = new Error(`TMDB 429 限速`);
+          continue;
+        }
+        if (resp.responseCode !== 200) {
+          req.destroy();
+          throw new Error(`TMDB HTTP ${resp.responseCode}`);
+        }
+        req.destroy();
+        return resp.result as string;
+      } catch (e) {
+        req.destroy();
+        const err = e as BusinessError;
+        lastError = new Error(`TMDB 请求失败: ${err.message ?? JSON.stringify(e)}`);
+        if (attempt < maxRetries - 1) {
+          console.warn(`[TmdbProvider] 请求异常，第 ${attempt + 1} 次重试: ${lastError.message}`);
+        }
+      }
     }
+    throw lastError;
   }
 }
 
@@ -325,121 +568,154 @@ export class ScrapeClient {
 
   registerProvider(provider: IScrapeProvider): void {
     this.providers.set(provider.id, provider);
-    console.info(`[ScrapeClient] 注册 provider: ${provider.id}`);
   }
 
   getProviderIds(): string[] {
     return Array.from(this.providers.keys());
   }
 
-  async search(query: ScrapeQuery, providerOrder?: string[]): Promise<ScrapeResult[]> {
-    const order = providerOrder ?? await this.loadProviderOrder();
-    const orderedProviders = this.getOrderedProviders(order);
-    console.info(`[ScrapeClient] 搜索 title="${query.title}" providers=[${orderedProviders.map(p => p.id).join(',')}]`);
-    for (const provider of orderedProviders) {
-      await this.acquire();
-      try {
-        const results = await provider.search(query);
-        if (results.length > 0) {
-          console.info(`[ScrapeClient] provider=${provider.id} 命中 ${results.length} 条`);
-          return results;
-        }
-        console.info(`[ScrapeClient] provider=${provider.id} 无结果，继续`);
-      } catch (e) {
-        const err = e as BusinessError;
-        console.warn(`[ScrapeClient] provider=${provider.id} 失败: ${err.message ?? JSON.stringify(e)}`);
-      } finally {
-        this.releaseSlot();
-      }
-    }
-    return [];
-  }
-
-  async fetchDetail(
-    providerId: string,
-    resourceId: string,
-    mediaType: 'movie' | 'tv',
-    language: string = 'zh-CN'
-  ): Promise<ScrapeResult | null> {
-    const provider = this.providers.get(providerId);
-    if (!provider) {
-      throw new Error(`[ScrapeClient] 未找到 Provider: ${providerId}`);
-    }
+  /** 搜索电影，返回第一个命中的详情 */
+  async autoScrapeMovie(fileName: string): Promise<MovieScrapeResult | null> {
+    const parsed = parseFileName(fileName);
     await this.acquire();
     try {
-      return await provider.fetchDetail(resourceId, mediaType, language);
+      for (const provider of this.getActiveProviders()) {
+        try {
+          const searchTitles = buildSearchTitles(parsed.title);
+          for (const candidate of searchTitles) {
+            const results = await provider.searchMovie(candidate, parsed.year, 'zh-CN');
+            if (results.length > 0) {
+              console.info(`[ScrapeClient] autoScrapeMovie 命中候选标题="${candidate}" providerId=${results[0].providerId}`);
+              return await provider.fetchMovieDetail(results[0].providerId, 'zh-CN');
+            }
+          }
+        } catch (e) {
+          console.warn(`[ScrapeClient] searchMovie provider=${provider.id} 失败: ${JSON.stringify(e)}`);
+        }
+      }
+      return null;
     } finally {
       this.releaseSlot();
     }
   }
 
-  async autoScrape(fileName: string, providerOrder?: string[]): Promise<ScrapeResult | null> {
-    const query = parseFileName(fileName);
-    console.info(`[ScrapeClient] autoScrape "${fileName}" → title="${query.title}" year=${query.year ?? '-'} type=${query.mediaType}`);
-
-    // 带重试的搜索逻辑（最多重试 1 次，仅在异常时重试）
-    let results: ScrapeResult[] = [];
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const timeoutMs = 5000; // 5 秒超时
-        results = await this.searchWithTimeout(query, timeoutMs, providerOrder);
-        // 无论是否有匹配结果，只要调用成功就不再重试
-        break;
-      } catch (e) {
-        const err = e as Error;
-        console.warn(`[ScrapeClient] autoScrape 尝试 ${attempt + 1}/2 失败: ${err.message}`);
-        if (attempt === 1) { // 最后一次尝试失败
-          throw err;
-        }
-        // 等待 1 秒后重试
-        await this.sleep(1000);
-      }
-    }
-
-    if (results.length === 0) {
-      console.warn(`[ScrapeClient] autoScrape 无匹配: "${fileName}"`);
-      return null;
-    }
-    const top = results[0];
-    console.info(`[ScrapeClient] 命中 provider=${top.provider} id=${top.providerId} title="${top.title}"`);
-    const mt: 'movie' | 'tv' = (top.mediaType === 'movie' || top.mediaType === 'tv') ? top.mediaType : 'movie';
-    return this.fetchDetail(top.provider, top.providerId, mt, query.language ?? 'zh-CN');
-  }
-
   /**
-   * 带超时的搜索
+   * 自动刮削电视剧集
+   * 返回 TvEpisodeScrapeBundle，每项均可能为 null（查不到时）
    */
-  private async searchWithTimeout(
-    query: ScrapeQuery,
-    timeoutMs: number,
-    providerOrder?: string[]
-  ): Promise<ScrapeResult[]> {
-    let timeoutId: number = -1;
-    const timeoutPromise = new Promise<ScrapeResult[]>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error('刮削超时'));
-      }, timeoutMs);
-    });
+  async autoScrapeTvEpisode(fileName: string): Promise<TvEpisodeScrapeBundle> {
+    const parsed = parseFileName(fileName);
+    const empty: TvEpisodeScrapeBundle = { series: null, season: null, episode: null };
+    if (parsed.mediaType !== 'tv') {
+      console.warn(`[ScrapeClient] autoScrapeTvEpisode 跳过: mediaType=${parsed.mediaType} title="${parsed.title}" file=${fileName}`);
+      return empty;
+    }
+    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" → title="${parsed.title}" S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'} year=${parsed.year ?? '?'}`);
+    const searchTitlesLog = buildSearchTitles(parsed.title);
+    console.info(`[ScrapeClient] autoScrapeTvEpisode 候选标题: ${JSON.stringify(searchTitlesLog)}`);
 
+    await this.acquire();
     try {
-      // 注意：此处仅对调用方施加超时限制，底层 this.search() 当前仍会继续执行。
-      // 若要真正中止网络请求，应在 provider / HTTP 层引入可取消机制并在此处触发。
-      return await Promise.race([
-        this.search(query, providerOrder),
-        timeoutPromise,
-      ]);
-    } finally {
-      if (timeoutId >= 0) {
-        clearTimeout(timeoutId);
+      for (const provider of this.getActiveProviders()) {
+        try {
+          const searchTitles = buildSearchTitles(parsed.title);
+          let topSearch: TvSeriesScrapeResult | null = null;
+          for (const candidate of searchTitles) {
+            // 第一轮：带年份搜索（year= 参数，过滤精确）
+            let results = await provider.searchTv(candidate, parsed.year, 'zh-CN');
+            console.info(`[ScrapeClient] searchTv("${candidate}" year=${parsed.year ?? 'none'}) → ${results.length} 条结果${results.length > 0 ? ' 首条: ' + results[0].title + '(id=' + results[0].providerId + ')' : ''}`);
+            // 第二轮：带年份无结果时，降级为只用剧名搜索
+            if (results.length === 0 && parsed.year !== undefined) {
+              results = await provider.searchTv(candidate, undefined, 'zh-CN');
+              console.info(`[ScrapeClient] searchTv("${candidate}" 无年份降级) → ${results.length} 条结果${results.length > 0 ? ' 首条: ' + results[0].title + '(id=' + results[0].providerId + ')' : ''}`);
+            }
+            if (results.length > 0) {
+              topSearch = results[0];
+              console.info(`[ScrapeClient] autoScrapeTvEpisode 命中候选标题="${candidate}" providerId=${topSearch.providerId}`);
+              break;
+            }
+          }
+          if (!topSearch) {
+            console.warn(`[ScrapeClient] autoScrapeTvEpisode 所有候选标题均无结果，跳过 provider=${provider.id}`);
+            continue;
+          }
+          const series = await provider.fetchTvSeriesDetail(topSearch.providerId, 'zh-CN');
+          if (!series) {
+            console.warn(`[ScrapeClient] autoScrapeTvEpisode fetchTvSeriesDetail(${topSearch.providerId}) 返回 null`);
+            continue;
+          }
+          console.info(`[ScrapeClient] autoScrapeTvEpisode fetchTvSeriesDetail OK: title="${series.title}" posterUrl=${series.posterUrl ? 'Y' : 'N'}`);
+
+          let season: TvSeasonScrapeResult | null = null;
+          let episode: TvEpisodeScrapeResult | null = null;
+
+          if (parsed.seasonNumber !== undefined) {
+            season = await provider.fetchSeason(series.providerId, parsed.seasonNumber, 'zh-CN').catch((e: BusinessError) => {
+              console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${parsed.seasonNumber}) 失败: ${JSON.stringify(e)}`);
+              return null;
+            });
+            console.info(`[ScrapeClient] fetchSeason S${parsed.seasonNumber} → ${season ? 'OK posterUrl=' + (season.posterUrl ? 'Y' : 'N') : 'null'}`);
+            if (parsed.episodeNumber !== undefined) {
+              episode = await provider.fetchEpisode(series.providerId, parsed.seasonNumber, parsed.episodeNumber, 'zh-CN').catch((e: BusinessError) => {
+                console.warn(`[ScrapeClient] fetchEpisode(${series.providerId}, S${parsed.seasonNumber}E${parsed.episodeNumber}) 失败: ${JSON.stringify(e)}`);
+                return null;
+              });
+              console.info(`[ScrapeClient] fetchEpisode E${parsed.episodeNumber} → ${episode ? 'OK title="' + (episode.title ?? '') + '"' : 'null'}`);
+            }
+          }
+
+          const bundle: TvEpisodeScrapeBundle = { series, season, episode };
+          return bundle;
+        } catch (e) {
+          console.warn(`[ScrapeClient] autoScrapeTvEpisode provider=${provider.id} 失败: ${JSON.stringify(e)}`);
+        }
       }
+      return empty;
+    } finally {
+      this.releaseSlot();
     }
   }
 
-  /**
-   * 睡眠指定毫秒数
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  /** 直接拉取电视剧详情（已知 providerId） */
+  async fetchTvSeriesDetail(providerId: string, provider: string = 'tmdb'): Promise<TvSeriesScrapeResult | null> {
+    const p = this.providers.get(provider);
+    if (!p) { return null; }
+    await this.acquire();
+    try {
+      return await p.fetchTvSeriesDetail(providerId, 'zh-CN');
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  /** 直接拉取季详情 */
+  async fetchSeason(seriesProviderId: string, seasonNumber: number, provider: string = 'tmdb'): Promise<TvSeasonScrapeResult | null> {
+    const p = this.providers.get(provider);
+    if (!p) { return null; }
+    await this.acquire();
+    try {
+      return await p.fetchSeason(seriesProviderId, seasonNumber, 'zh-CN');
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  /** 直接拉取集详情 */
+  async fetchEpisode(seriesProviderId: string, seasonNumber: number, episodeNumber: number, provider: string = 'tmdb'): Promise<TvEpisodeScrapeResult | null> {
+    const p = this.providers.get(provider);
+    if (!p) { return null; }
+    await this.acquire();
+    try {
+      return await p.fetchEpisode(seriesProviderId, seasonNumber, episodeNumber, 'zh-CN');
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  private getActiveProviders(): IScrapeProvider[] {
+    const result: IScrapeProvider[] = [];
+    this.providers.forEach((p) => { if (p.isConfigured()) { result.push(p); } });
+    return result;
   }
 
   private async acquire(): Promise<void> {
@@ -460,32 +736,6 @@ export class ScrapeClient {
       this.runningCount++;
       next();
     }
-  }
-
-  private async loadProviderOrder(): Promise<string[]> {
-    const raw = await AppPreferences.get(PrefKey.SCRAPE_PROVIDER_ORDER, '["tmdb"]');
-    try {
-      return JSON.parse(raw) as string[];
-    } catch {
-      return ['tmdb'];
-    }
-  }
-
-  private getOrderedProviders(order: string[]): IScrapeProvider[] {
-    const all = Array.from(this.providers.values()).filter(p => p.isConfigured());
-    const ordered: IScrapeProvider[] = [];
-    for (const id of order) {
-      const found = all.find(x => x.id === id);
-      if (found) {
-        ordered.push(found);
-      }
-    }
-    for (const p of all) {
-      if (!ordered.find(x => x.id === p.id)) {
-        ordered.push(p);
-      }
-    }
-    return ordered;
   }
 }
 
