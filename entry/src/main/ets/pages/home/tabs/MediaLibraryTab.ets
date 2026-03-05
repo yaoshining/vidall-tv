@@ -7,6 +7,7 @@ import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeI
 import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import promptAction from '@ohos.promptAction';
+import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -270,7 +271,7 @@ struct SeriesCard {
     .onClick(() => {
       // 仅电视剧本体（非季卡片）才跳转详情页
       if (!this.showSeasonPoster && this.group.tvSeriesId !== undefined) {
-        this.pageStack.pushPathByName('seriesDetail', this.group);
+        this.pageStack.pushPathByName(SeriesDetailPage.PAGE_NAME, this.group);
       }
     })
   }

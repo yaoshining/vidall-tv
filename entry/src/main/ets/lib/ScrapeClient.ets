@@ -218,8 +218,14 @@ export interface IScrapeProvider {
 // ─────────────────────────────────────────────
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+/** 海报（垂直封面）：w500 适合列表卡片 */
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+/** 背景图（横幅）：w1280 适合TV大屏全屏展示 */
+const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
+/** 剧集缩略图 */
 const TMDB_STILL_BASE = 'https://image.tmdb.org/t/p/w300';
+/** 季海报 */
+const TMDB_SEASON_POSTER_BASE = 'https://image.tmdb.org/t/p/w342';
 
 interface TmdbSearchItem {
   id: number;
@@ -358,7 +364,7 @@ export class TmdbProvider implements IScrapeProvider {
         posterPath: item.poster_path ?? undefined,
         backdropPath: item.backdrop_path ?? undefined,
         posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
-        backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+        backdropUrl: item.backdrop_path ? `${TMDB_BACKDROP_BASE}${item.backdrop_path}` : undefined,
         originalLanguage: item.original_language ?? undefined,
         rawJson
       };
@@ -385,7 +391,7 @@ export class TmdbProvider implements IScrapeProvider {
         posterPath: item.poster_path ?? undefined,
         backdropPath: item.backdrop_path ?? undefined,
         posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
-        backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+        backdropUrl: item.backdrop_path ? `${TMDB_BACKDROP_BASE}${item.backdrop_path}` : undefined,
         originalLanguage: item.original_language ?? undefined,
         rawJson
       };
@@ -417,7 +423,7 @@ export class TmdbProvider implements IScrapeProvider {
       posterPath: item.poster_path ?? undefined,
       backdropPath: item.backdrop_path ?? undefined,
       posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
-      backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+      backdropUrl: item.backdrop_path ? `${TMDB_BACKDROP_BASE}${item.backdrop_path}` : undefined,
       genresJson: item.genres && item.genres.length > 0 ? JSON.stringify(item.genres.map(g => g.name)) : undefined,
       castJson: cast.length > 0 ? JSON.stringify(cast) : undefined,
       directorsJson: directors.length > 0 ? JSON.stringify(directors) : undefined,
@@ -448,7 +454,7 @@ export class TmdbProvider implements IScrapeProvider {
       posterPath: item.poster_path ?? undefined,
       backdropPath: item.backdrop_path ?? undefined,
       posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
-      backdropUrl: item.backdrop_path ? `${TMDB_IMAGE_BASE}${item.backdrop_path}` : undefined,
+      backdropUrl: item.backdrop_path ? `${TMDB_BACKDROP_BASE}${item.backdrop_path}` : undefined,
       genresJson: item.genres && item.genres.length > 0 ? JSON.stringify(item.genres.map(g => g.name)) : undefined,
       castJson: cast.length > 0 ? JSON.stringify(cast) : undefined,
       numberOfSeasons: item.number_of_seasons ?? undefined,
@@ -471,7 +477,7 @@ export class TmdbProvider implements IScrapeProvider {
       airDate: item.air_date ?? undefined,
       episodeCount: item.episodes ? item.episodes.length : undefined,
       posterPath: item.poster_path ?? undefined,
-      posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : undefined,
+      posterUrl: item.poster_path ? `${TMDB_SEASON_POSTER_BASE}${item.poster_path}` : undefined,
       rawJson
     };
     return r;
