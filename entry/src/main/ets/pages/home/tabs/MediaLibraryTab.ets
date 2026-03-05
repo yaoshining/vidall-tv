@@ -267,7 +267,6 @@ struct SeriesCard {
     }
     .width(POSTER_WIDTH)
     .alignItems(HorizontalAlign.Start)
-    .hoverEffect(HoverEffect.Scale)
     .onClick(() => {
       // 仅电视剧本体（非季卡片）才跳转详情页
       if (!this.showSeasonPoster && this.group.tvSeriesId !== undefined) {
