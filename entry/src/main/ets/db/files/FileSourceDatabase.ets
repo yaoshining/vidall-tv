@@ -960,14 +960,21 @@ export class FileSourceDatabase {
       throw new Error('Database not initialized');
     }
     try {
+      // TMDB 对剧集整体返回 media_type='tv'，对单集返回 media_type='episode'，两者都要纳入聚合
       const scrapedTv = await this.getMediaItemsByType('tv');
+      const scrapedEpisode = await this.getMediaItemsByType('episode');
+      const allScrapedTv: MediaItem[] = [];
+      for (const it of scrapedTv) { allScrapedTv.push(it); }
+      for (const it of scrapedEpisode) { allScrapedTv.push(it); }
+
       const unscrapedAll = await this.getUnscrapedMediaItems();
 
       const providerMap = new Map<string, MediaItem[]>();
 
-      // ── 有刮削 tv：以 provider::providerId 聚合 ──
-      for (const item of scrapedTv) {
-        const key = `scraped::${item.provider ?? ''}::${item.providerId ?? ''}`;
+      // ── 有刮削 tv/episode：以剧名（title 规范化）聚合 ──
+      for (const item of allScrapedTv) {
+        const baseTitle = this.extractBaseSeriesTitle(item.title ?? item.fileName);
+        const key = `scraped::${baseTitle}`;
         const existing = providerMap.get(key);
         if (existing) {
           existing.push(item);
@@ -1022,19 +1029,18 @@ export class FileSourceDatabase {
           }
         }
 
-        // 合集标题 + 季标签
+        // 合集标题：有刮削的统一用基础剧名（去掉"第X季"后缀），首页不显示季标签
         let groupTitle: string;
         let seasonLabel: string | undefined = undefined;
         if (first.title) {
-          // 有刮削，直接用 scrape title，暂无季信息
-          groupTitle = first.title;
+          // 有刮削：取基础剧名，首页不显示季标签（详情页再展开）
+          groupTitle = this.extractBaseSeriesTitle(first.title);
         } else {
           const parentDir = this.getParentDir(first.filePath);
           const segments = parentDir.split('/').filter((s: string) => s.length > 0);
           const lastSeg = segments.length > 0 ? segments[segments.length - 1] : '';
           const dirName = lastSeg ?? '';
           if (this.isGenericSeasonName(dirName) && segments.length >= 2) {
-            // 父目录是季名：剧名取上级，季标签保留目录名并格式化
             const parentSeg = segments[segments.length - 2];
             groupTitle = parentSeg ?? dirName;
             seasonLabel = this.formatSeasonLabel(dirName);
@@ -1044,12 +1050,35 @@ export class FileSourceDatabase {
         }
         void key;
 
+        // 从所有 items 中挑最佳代表作为封面：
+        // 优先选 title 与基础剧名完全一致的（不含季后缀），其次选有海报且评分最高的
+        let representative: MediaItem = first;
+        for (const it of items) {
+          const baseIt = this.extractBaseSeriesTitle(it.title ?? '');
+          const baseCur = this.extractBaseSeriesTitle(representative.title ?? '');
+          const itHasPoster = it.posterUrl !== undefined || it.posterLocalPath !== undefined;
+          const curHasPoster = representative.posterUrl !== undefined || representative.posterLocalPath !== undefined;
+          // 优先：title 经规范化后与 groupTitle 完全一致（即原始 title 不含季名后缀）
+          const itIsBase = it.title !== undefined && baseIt === it.title.trim();
+          const curIsBase = representative.title !== undefined && baseCur === representative.title.trim();
+          if (itIsBase && !curIsBase) {
+            representative = it;
+          } else if (itIsBase === curIsBase) {
+            // 同等优先级：有海报 > 评分高
+            if (itHasPoster && !curHasPoster) {
+              representative = it;
+            } else if (itHasPoster === curHasPoster && (it.rating ?? 0) > (representative.rating ?? 0)) {
+              representative = it;
+            }
+          }
+        }
+
         const group: SeriesGroup = {
           title: groupTitle,
           seasonLabel,
-          posterUrl: first.posterUrl,
-          posterLocalPath: first.posterLocalPath,
-          rating: first.rating,
+          posterUrl: representative.posterUrl,
+          posterLocalPath: representative.posterLocalPath,
+          rating: representative.rating,
           episodeCount: items.length,
           episodes: items,
           latestScannedAt
@@ -1060,7 +1089,7 @@ export class FileSourceDatabase {
       groups.sort((a, b) => b.latestScannedAt - a.latestScannedAt);
       console.info(
         `[FileSourceDatabase] getSeriesGroups: ${groups.length} 组` +
-        `（有刮削 tv=${scrapedTv.length} 集，无刮削候选=${unscrapedAll.length} 个）`
+        `（有刮削 tv=${scrapedTv.length} episode=${scrapedEpisode.length} 集，无刮削候选=${unscrapedAll.length} 个）`
       );
       return groups;
     } catch (error) {
@@ -1115,6 +1144,35 @@ export class FileSourceDatabase {
     }
     // 其他直接返回原名（截短）
     return dirName.length > 6 ? dirName.substring(0, 6) : dirName;
+  }
+
+  /**
+   * 从刮削标题中提取基础剧名，去掉季数后缀，用于首页合并同系列不同季。
+   *
+   * 处理示例：
+   *   "权力的游戏 第七季"  → "权力的游戏"
+   *   "Game of Thrones Season 7" → "Game of Thrones"
+   *   "The Crown (Season 4)"     → "The Crown"
+   *   "Breaking Bad"             → "Breaking Bad"（无变化）
+   */
+  private extractBaseSeriesTitle(title: string): string {
+    if (!title || title.length === 0) { return title; }
+    let t = title.trim();
+
+    // 中文：去掉末尾"第X季"（X 为数字或汉字数字）
+    // 例："权力的游戏 第七季" / "权力的游戏第3季"
+    t = t.replace(/\s*第[零一二三四五六七八九十百\d]+季\s*$/, '').trim();
+
+    // 英文：去掉末尾 Season N / S1 / (Season N) 等
+    // 例："Game of Thrones Season 7" / "The Crown (Season 4)"
+    t = t.replace(/\s*[\(（]?\s*[Ss]eason\s*\d+\s*[\)）]?\s*$/, '').trim();
+    t = t.replace(/\s*[\(（]?\s*[Ss]\d+\s*[\)）]?\s*$/, '').trim();
+
+    // 冒号 + 季名后缀："权力的游戏：第七季" / "Game of Thrones: Season 7"
+    t = t.replace(/\s*[：:]\s*第[零一二三四五六七八九十百\d]+季\s*$/, '').trim();
+    t = t.replace(/\s*[：:]\s*[Ss]eason\s*\d+\s*$/, '').trim();
+
+    return t.length > 0 ? t : title;
   }
 
   /** 辅助：取文件路径的直接父目录（去掉最后一段文件名） */
