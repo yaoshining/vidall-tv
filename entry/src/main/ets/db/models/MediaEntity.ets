@@ -222,6 +222,8 @@ export interface MediaListItem {
 
 export interface SeriesGroup {
   title: string;
+  /** tv_series 表主键，用于详情页加载剧集数据 */
+  tvSeriesId?: number;
   seasonLabel?: string;
   posterUrl?: string;
   posterLocalPath?: string;

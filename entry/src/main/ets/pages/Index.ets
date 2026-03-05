@@ -3,6 +3,7 @@ import { FileExplorerPage } from './files';
 import { HomePage } from './home';
 import { PlayerPage } from './player/index';
 import { SettingsPage } from './settings/Index';
+import { SeriesDetailPage } from './detail/SeriesDetailPage';
 @Entry
 @ComponentV2
 struct Index {
@@ -17,6 +18,8 @@ struct Index {
       SettingsPage();
     } else if (name === FileExplorerPage.PAGE_NAME) {
       FileExplorerPage();
+    } else if (name === SeriesDetailPage.PAGE_NAME) {
+      SeriesDetailPage();
     }
   }
 

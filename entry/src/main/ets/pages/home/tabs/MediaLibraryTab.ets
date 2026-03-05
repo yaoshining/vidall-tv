@@ -150,6 +150,7 @@ struct SeriesCard {
   @Require @Param group: SeriesGroup
   /** true = 最近添加/混合列表，显示季海报+季号；false = 电视剧栏，只显剧海报不显季 */
   @Param showSeasonPoster: boolean = false
+  @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
 
   private getTitle(): string { return this.group.title; }
 
@@ -263,7 +264,15 @@ struct SeriesCard {
         .width(POSTER_WIDTH)
         .margin({ top: 4 })
     }
-    .width(POSTER_WIDTH).alignItems(HorizontalAlign.Start)
+    .width(POSTER_WIDTH)
+    .alignItems(HorizontalAlign.Start)
+    .hoverEffect(HoverEffect.Scale)
+    .onClick(() => {
+      // 仅电视剧本体（非季卡片）才跳转详情页
+      if (!this.showSeasonPoster && this.group.tvSeriesId !== undefined) {
+        this.pageStack.pushPathByName('seriesDetail', this.group);
+      }
+    })
   }
 }
 

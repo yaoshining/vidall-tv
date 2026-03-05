@@ -1307,6 +1307,44 @@ export class FileSourceDatabase {
   }
 
   /**
+   * 按 tv_series_id 查询该剧所有分集（含元数据），按季号+集号排序
+   * 用于剧集详情页加载集列表
+   */
+  async getMediaItemsByTvSeriesId(seriesId: number): Promise<MediaItem[]> {
+    if (this.rdbStore === null) { return []; }
+    try {
+      const sql = this.mediaItemSql +
+        ' WHERE s.tv_series_id = ?' +
+        ' ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC';
+      const rs = await this.rdbStore.querySql(sql, [seriesId]);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
+      rs.close();
+      return items;
+    } catch (e) {
+      console.error('[DB][getMediaItemsByTvSeriesId]', JSON.stringify(e));
+      return [];
+    }
+  }
+
+  /**
+   * 按主键查询 tv_series 行（用于剧集详情页显示简介/类别/演员等）
+   */
+  async getTvSeriesById(id: number): Promise<TvSeriesEntity | null> {
+    if (this.rdbStore === null) { return null; }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
+      pred.equalTo('id', id);
+      const rs = await this.rdbStore.query(pred);
+      if (rs.goToFirstRow()) { const e = this.parseTvSeriesEntity(rs); rs.close(); return e; }
+      rs.close();
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 聚合电视剧/综艺合集
    *
    * 聚合策略：
@@ -1575,8 +1613,10 @@ export class FileSourceDatabase {
           const i = rs.getColumnIndex(col);
           return rs.isColumnNull(i) ? undefined : rs.getDouble(i);
         };
+        const seriesId = rs.getLong(rs.getColumnIndex('series_id'));
         const group: SeriesGroup = {
           title: rs.getString(rs.getColumnIndex('title')),
+          tvSeriesId: seriesId,
           posterUrl: str('poster_url'),
           backdropUrl: str('backdrop_url'),
           posterLocalPath: str('poster_local_path'),
