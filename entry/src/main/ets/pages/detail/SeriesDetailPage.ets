@@ -49,8 +49,27 @@ interface TmdbRawSeason {
   vote_average?: number;
 }
 
+interface TmdbRawCastItem {
+  name?: string;
+  character?: string;
+  profile_path?: string;
+  order?: number;
+}
+
+interface TmdbRawCrewItem {
+  name?: string;
+  job?: string;
+  profile_path?: string;
+}
+
+interface TmdbRawCredits {
+  cast?: TmdbRawCastItem[];
+  crew?: TmdbRawCrewItem[];
+}
+
 interface TmdbRawDetail {
   seasons?: TmdbRawSeason[];
+  credits?: TmdbRawCredits;
 }
 
 interface TmdbSimilarItem {
@@ -73,6 +92,22 @@ interface SimilarSeriesItem {
   posterLocalPath?: string;
   backdropUrl?: string;
   rating?: number;
+}
+
+/** 将 TMDB crew job 翻译为中文职位 */
+function translateJob(job: string): string {
+  if (job === 'Director') { return '导演'; }
+  if (job === 'Writer' || job === 'Screenplay' || job === 'Story') { return '编剧'; }
+  if (job === 'Editor') { return '剪辑师'; }
+  if (job === 'Director of Photography') { return '摄影指导'; }
+  if (job === 'Producer') { return '制片人'; }
+  if (job === 'Executive Producer') { return '执行制片人'; }
+  if (job === 'Composer' || job === 'Original Music Composer') { return '作曲'; }
+  if (job === 'Art Direction' || job === 'Production Design') { return '艺术指导'; }
+  if (job === 'Costume Design') { return '服装设计'; }
+  if (job === 'Casting') { return '选角导演'; }
+  if (job === 'Visual Effects Supervisor') { return '视效总监'; }
+  return job;
 }
 
 // ─────────────────────────────────────────────
@@ -232,10 +267,37 @@ export struct SeriesDetailPage {
         } catch (e) { this.seasons = []; }
       }
 
-      // 从 castJson 解析演职人员（存储结构为 ScrapeCredit[]）
-      const cj = entity.castJson;
-      if (cj !== undefined && cj.length > 0) {
-        try { this.cast = JSON.parse(cj) as ScrapeCredit[]; } catch (e) { this.cast = []; }
+      // 从 rawJson.credits 提取演员（cast）+ 幕后人员（crew）
+      if (rawStr !== undefined && rawStr.length > 0) {
+        try {
+          const detail2 = JSON.parse(rawStr) as TmdbRawDetail;
+          const allCredits: ScrapeCredit[] = [];
+          const castItems = detail2.credits?.cast ?? [];
+          for (const c of castItems.slice(0, 20)) {
+            const cr: ScrapeCredit = {
+              name: c.name ?? '',
+              role: c.character,
+              profilePath: c.profile_path,
+              order: c.order
+            };
+            allCredits.push(cr);
+          }
+          const castNames: string[] = [];
+          for (const cr of allCredits) { castNames.push(cr.name); }
+          const crewItems = detail2.credits?.crew ?? [];
+          for (const c of crewItems) {
+            const cName = c.name ?? '';
+            if (castNames.indexOf(cName) >= 0) { continue; }
+            const cr: ScrapeCredit = {
+              name: cName,
+              role: translateJob(c.job ?? ''),
+              profilePath: c.profile_path
+            };
+            allCredits.push(cr);
+            castNames.push(cName);
+          }
+          if (allCredits.length > 0) { this.cast = allCredits.filter((cr: ScrapeCredit) => cr.name != null && cr.name.length > 0); }
+        } catch (e) { /* cast 解析失败不影响页面 */ }
       }
 
       // 加载默认集信息（最小季最小集）用于续播卡片
@@ -830,7 +892,7 @@ export struct SeriesDetailPage {
                     .hoverEffect(HoverEffect.Scale)
                 } else {
                   Column() {
-                    Text(c.name.length > 0 ? c.name.substring(0, 1) : '?')
+                    Text((c.name != null && c.name.length > 0) ? c.name.substring(0, 1) : '?')
                       .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
                   }
                   .width(110).aspectRatio(2 / 3).borderRadius(6)
@@ -839,12 +901,12 @@ export struct SeriesDetailPage {
                   .hoverEffect(HoverEffect.Scale)
                 }
                 // 演员名
-                Text(c.name)
+                Text(c.name ?? '')
                   .fontSize(14).fontColor(Color.White)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .width(110).textAlign(TextAlign.Center)
                 // 饰演角色
-                if (c.role !== undefined && c.role.length > 0) {
+                if (c.role != null && c.role.length > 0) {
                   Text(c.role)
                     .fontSize(12).fontColor('#777777')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -852,7 +914,7 @@ export struct SeriesDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
-            }, (c: ScrapeCredit) => c.name)
+            }, (c: ScrapeCredit) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })
         }

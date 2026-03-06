@@ -1,4 +1,4 @@
-import { SeriesGroup, TvSeriesEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
+import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
 import { PlayerPageParam, PlayerPage } from '../player/index'
@@ -40,6 +40,71 @@ function formatDuration(ms: number | undefined): string {
 // 内部类型
 // ─────────────────────────────────────────────
 
+/** season raw_json 中 guest_stars 条目 */
+interface GuestStarRaw {
+  name?: string;
+  character?: string;
+  profile_path?: string;
+  order?: number;
+}
+
+/** season raw_json 中 crew 条目 */
+interface CrewRaw {
+  name?: string;
+  job?: string;
+  profile_path?: string;
+}
+
+/** season raw_json 顶层结构（TMDB TV Season detail） */
+interface SeasonRawJson {
+  name?: string;
+  overview?: string;
+  guest_stars?: GuestStarRaw[];
+  crew?: CrewRaw[];
+}
+
+/** tv_series.raw_json 中 credits.cast 条目 */
+interface TmdbSeriesCastItem {
+  name?: string;
+  character?: string;
+  profile_path?: string;
+  order?: number;
+}
+
+/** tv_series.raw_json 中 credits.crew 条目 */
+interface TmdbSeriesCrewItem {
+  name?: string;
+  job?: string;
+  profile_path?: string;
+}
+
+/** tv_series.raw_json 顶层 credits 节点 */
+interface TmdbSeriesCredits {
+  cast?: TmdbSeriesCastItem[];
+  crew?: TmdbSeriesCrewItem[];
+}
+
+/** tv_series.raw_json 顶层结构（仅取 credits 字段） */
+interface TmdbSeriesRawJson {
+  credits?: TmdbSeriesCredits;
+}
+
+/** 将 TMDB crew job 翻译为中文职位 */
+function translateJob(job: string): string {
+  if (job === 'Director') { return '导演'; }
+  if (job === 'Writer' || job === 'Screenplay' || job === 'Story') { return '编剧'; }
+  if (job === 'Editor') { return '剪辑师'; }
+  if (job === 'Director of Photography') { return '摄影指导'; }
+  if (job === 'Producer') { return '制片人'; }
+  if (job === 'Executive Producer') { return '执行制片人'; }
+  if (job === 'Composer' || job === 'Original Music Composer') { return '作曲'; }
+  if (job === 'Art Direction' || job === 'Production Design') { return '艺术指导'; }
+  if (job === 'Costume Design') { return '服装设计'; }
+  if (job === 'Casting') { return '选角导演'; }
+  if (job === 'Visual Effects Supervisor') { return '视效总监'; }
+  return job;
+}
+
 /** 集条目：持有文件媒体信息（播放用）+ 集元数据（展示用） */
 interface SeasonEpisodeItem {
   mediaItem: MediaItem;
@@ -61,6 +126,9 @@ export struct SeasonDetailPage {
   @Local showOverviewDialog: boolean = false
   @Local dominantBgColor: string = '#111111'
   @Local progressMap: Map<number, PlayProgressEntity> = new Map()
+  @Local seasonOverview: string = ''
+  @Local seasonTitle: string = ''
+  @Local seasonEntity: TvSeasonEntity | null = null
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -69,12 +137,29 @@ export struct SeasonDetailPage {
   private getSeasonNumber(): number { return this.group?.seasonNumber ?? 0; }
 
   private getSeasonLabel(): string {
+    const n = this.getSeasonNumber();
+    const base = n === 0 ? '特别篇' : `第 ${n} 季`;
+    if (this.seasonTitle.length > 0 && !this.isGenericSeasonTitle(this.seasonTitle, n)) {
+      return `${base}：${this.seasonTitle}`;
+    }
     if (this.group?.seasonLabel !== undefined && this.group.seasonLabel.length > 0) {
       return this.group.seasonLabel;
     }
-    const n = this.getSeasonNumber();
-    if (n === 0) { return '特别篇'; }
-    return `第 ${n} 季`;
+    return base;
+  }
+
+  /** 判断季名是否是通用季名（即和 base 含义相同，不需要拼接显示） */
+  private isGenericSeasonTitle(title: string, n: number): boolean {
+    const t = title.trim().toLowerCase();
+    // 匹配 "season 1"、"season1"、"第1季"、"第一季"、"第 1 季" 等
+    if (/^season\s*\d+$/.test(t)) { return true; }
+    if (/^第\s*\d+\s*季$/.test(t)) { return true; }
+    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
+      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+    if (n >= 0 && n < chineseNums.length) {
+      if (t === `第${chineseNums[n]}季`) { return true; }
+    }
+    return false;
   }
 
   private getBackdropUrl(): string {
@@ -95,7 +180,10 @@ export struct SeasonDetailPage {
     return r.toFixed(1);
   }
 
-  private getOverview(): string { return this.seriesEntity?.overview ?? ''; }
+  private getOverview(): string {
+    if (this.seasonOverview.length > 0) { return this.seasonOverview; }
+    return this.seriesEntity?.overview ?? '';
+  }
 
   private getGenres(): string[] { return parseGenresArr(this.seriesEntity?.genresJson); }
 
@@ -106,8 +194,14 @@ export struct SeasonDetailPage {
   private toOpaqueColor(hex: string): string { return '#FF' + hex.substring(1); }
 
   private getDialogPosterUrl(): string {
-    const path = this.seriesEntity?.posterPath;
-    if (path !== undefined && path.length > 0) { return tmdbImageUrl(path, 'w342'); }
+    // 优先用季海报
+    const seasonUrl = this.seasonEntity?.posterUrl ?? this.group?.seasonPosterUrl;
+    if (seasonUrl !== undefined && seasonUrl.length > 0) { return seasonUrl; }
+    const seasonPath = this.seasonEntity?.posterPath;
+    if (seasonPath !== undefined && seasonPath.length > 0) { return tmdbImageUrl(seasonPath, 'w342'); }
+    // 回退到剧集海报
+    const seriesPath = this.seriesEntity?.posterPath;
+    if (seriesPath !== undefined && seriesPath.length > 0) { return tmdbImageUrl(seriesPath, 'w342'); }
     return this.seriesEntity?.posterUrl ?? this.group?.posterUrl ?? '';
   }
 
@@ -187,16 +281,67 @@ export struct SeasonDetailPage {
     try {
       const db = FileSourceDatabase.getInstance();
 
-      // 加载剧集总信息（backdrop / cast / overview）
+      // 加载剧集总信息（backdrop / overview 兜底）
       const entity = await db.getTvSeriesById(seriesId);
       if (entity !== null) {
         this.seriesEntity = entity;
-        const cj = entity.castJson;
-        if (cj !== undefined && cj.length > 0) {
-          try { this.cast = JSON.parse(cj) as ScrapeCredit[]; } catch (e) { this.cast = []; }
-        }
         const bdUrl = this.getBackdropUrl();
         if (bdUrl.length > 0) { this.extractDominantColor(bdUrl); }
+      }
+
+      // 加载本季信息（overview / name 来自 season raw_json）
+      this.seasonEntity = await db.getTvSeason(seriesId, seasonNumber);
+      const seasonRawStr = this.seasonEntity?.rawJson;
+      if (seasonRawStr !== undefined && seasonRawStr.length > 0) {
+        try {
+          const sJson = JSON.parse(seasonRawStr) as SeasonRawJson;
+          const sOverview = sJson.overview;
+          if (sOverview !== undefined && sOverview.length > 0) {
+            this.seasonOverview = sOverview;
+          }
+          const sName = sJson.name;
+          if (sName !== undefined && sName.length > 0) {
+            this.seasonTitle = sName;
+          }
+        } catch (e) {
+          console.warn('[SeasonDetailPage] 解析 season raw_json 失败', JSON.stringify(e));
+        }
+      }
+
+      // 演职人员：从剧集 rawJson.credits 取 cast（演员）+ crew（幕后）
+      const seriesRawStr = this.seriesEntity?.rawJson;
+      if (seriesRawStr !== undefined && seriesRawStr.length > 0) {
+        try {
+          const seriesJson = JSON.parse(seriesRawStr) as TmdbSeriesRawJson;
+          const allCredits: ScrapeCredit[] = [];
+          const castItems = seriesJson.credits?.cast ?? [];
+          for (const c of castItems.slice(0, 20)) {
+            const cr: ScrapeCredit = {
+              name: c.name ?? '',
+              role: c.character,
+              profilePath: c.profile_path,
+              order: c.order
+            };
+            allCredits.push(cr);
+          }
+          const castNames: string[] = [];
+          for (const cr of allCredits) { castNames.push(cr.name); }
+          const crewItems = seriesJson.credits?.crew ?? [];
+          for (const c of crewItems) {
+            const cName = c.name ?? '';
+            if (castNames.indexOf(cName) >= 0) { continue; }
+            const cr: ScrapeCredit = {
+              name: cName,
+              role: translateJob(c.job ?? ''),
+              profilePath: c.profile_path
+            };
+            allCredits.push(cr);
+            castNames.push(cName);
+          }
+          if (allCredits.length > 0) { this.cast = allCredits.filter((cr: ScrapeCredit) => cr.name != null && cr.name.length > 0); }
+        } catch (e) {
+          console.warn('[SeasonDetailPage] 解析演职人员失败', JSON.stringify(e));
+        }
       }
 
       // 加载本季 MediaItem（含 sourceId、filePath，用于播放）
@@ -608,14 +753,14 @@ export struct SeasonDetailPage {
           Row({ space: 24 }) {
             ForEach(this.cast.slice(0, 15), (c: ScrapeCredit) => {
               Column({ space: 8 }) {
-                if (c.profilePath !== undefined && c.profilePath.length > 0) {
+                if ((c.profilePath ?? '').length > 0) {
                   Image(tmdbImageUrl(c.profilePath, 'w185'))
                     .width(110).aspectRatio(2 / 3)
                     .objectFit(ImageFit.Cover).borderRadius(6)
                     .hoverEffect(HoverEffect.Scale)
                 } else {
                   Column() {
-                    Text(c.name.length > 0 ? c.name.substring(0, 1) : '?')
+                    Text((c.name != null && c.name.length > 0) ? c.name.substring(0, 1) : '?')
                       .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
                   }
                   .width(110).aspectRatio(2 / 3).borderRadius(6)
@@ -623,11 +768,11 @@ export struct SeasonDetailPage {
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .hoverEffect(HoverEffect.Scale)
                 }
-                Text(c.name)
+                Text(c.name ?? '')
                   .fontSize(14).fontColor(Color.White)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .width(110).textAlign(TextAlign.Center)
-                if (c.role !== undefined && c.role.length > 0) {
+                if (c.role != null && c.role.length > 0) {
                   Text(c.role)
                     .fontSize(12).fontColor('#777777')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -635,7 +780,7 @@ export struct SeasonDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
-            }, (c: ScrapeCredit) => c.name)
+            }, (c: ScrapeCredit) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })
         }
@@ -684,10 +829,16 @@ export struct SeasonDetailPage {
               Image(this.getDialogPosterUrl())
                 .width(124).height(174).borderRadius(6)
                 .objectFit(ImageFit.Cover).backgroundColor('#2A2A2E')
-              Text(this.getSeriesTitle())
-                .fontSize(22).fontWeight(FontWeight.Bold).fontColor('#F0F0F0')
-                .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .lineHeight(32).width('100%')
+              Text(this.getSeasonLabel())
+                .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#F0F0F0')
+                .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .lineHeight(28).width('100%')
+              if (this.getSeriesTitle().length > 0) {
+                Text(this.getSeriesTitle())
+                  .fontSize(14).fontColor('#888888')
+                  .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width('100%')
+              }
               Column({ space: 8 }) {
                 if (this.getGenresText().length > 0) {
                   Text(`风格：${this.getGenresText()}`).fontSize(18).fontColor('#AAAAAA')
