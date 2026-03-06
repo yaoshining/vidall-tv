@@ -132,6 +132,17 @@ export struct SeriesDetailPage {
     return tmdbImageUrl(c.profilePath, 'w185');
   }
 
+  /** overview 是否超过 100 字 */
+  private isOverviewLong(): boolean { return this.getOverview().length > 100; }
+
+  /** 截断后的简介（前100字 + 省略号） */
+  private getOverviewShort(): string { return this.getOverview().substring(0, 100) + '...'; }
+
+  /** 将 #RRGGBB 转为完全不透明的 #FFRRGGBB（ARGB 8位），用于渐变颜色 */
+  private toOpaqueColor(hex: string): string {
+    return '#FF' + hex.substring(1);
+  }
+
   private buildSimilarGroup(item: SimilarSeriesItem): SeriesGroup {
     const g: SeriesGroup = {
       title: item.title,
@@ -394,7 +405,7 @@ export struct SeriesDetailPage {
         .width('100%').height('68%')
         .linearGradient({
           angle: 180,
-          colors: [['#00000000', 0.0], ['#FF000000', 1.0]]
+          colors: [['#00000000', 0.0], [this.toOpaqueColor(this.dominantBgColor), 1.0]]
         })
         .position({ left: 0, bottom: 0 })
 
@@ -403,7 +414,7 @@ export struct SeriesDetailPage {
         .width('55%').height('100%')
         .linearGradient({
           angle: 90,
-          colors: [['#EE000000', 0.0], ['#00000000', 1.0]]
+          colors: [[this.toOpaqueColor(this.dominantBgColor), 0.0], ['#00000000', 1.0]]
         })
         .position({ left: 0, top: 0 })
 
@@ -440,35 +451,23 @@ export struct SeriesDetailPage {
           }
           .alignItems(VerticalAlign.Center)
 
-          // 简介（省略号 + 更多 同行浮动）
+          // 简介：超100字截断显示 + 「更多」Span，不超出仅显示原文
           if (this.getOverview().length > 0) {
-            Stack({ alignContent: Alignment.BottomEnd }) {
-              Text(this.getOverview())
-                .fontSize(16).fontColor('#BBBBBB')
-                .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .lineHeight(26)
-                .width('100%')
-              // 右下角「...更多」按钮，覆盖在文本上，左侧渐变遮罩防止文字漏出
-              Row() {
-                // 渐变遮罩：从透明到背景色，平滑衔接省略号
-                Column()
-                  .width(60).height(26)
-                  .linearGradient({
-                    angle: 90,
-                    colors: [['#00000000', 0.0], [this.dominantBgColor + 'FF', 1.0]]
-                  })
-                Text('更多')
+            if (this.isOverviewLong()) {
+              Text() {
+                Span(this.getOverviewShort())
+                  .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
+                Span('更多')
                   .fontSize(14).fontColor('#1B78F2')
                   .fontWeight(FontWeight.Medium)
-                  .height(26).lineHeight(26)
-                  .padding({ left: 2 })
-                  .backgroundColor(this.dominantBgColor)
                   .onClick(() => { this.showOverviewDialog = true; })
               }
-              .alignItems(VerticalAlign.Bottom)
+              .constraintSize({ maxWidth: 700 })
+            } else {
+              Text(this.getOverview())
+                .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
+                .constraintSize({ maxWidth: 700 })
             }
-            .constraintSize({ maxWidth: 700 })
-            .alignSelf(ItemAlign.Start)
           }
         }
         .layoutWeight(1)
@@ -757,6 +756,13 @@ export struct SeriesDetailPage {
           this.loadData(param.tvSeriesId);
         }
       }
+    })
+    .onBackPressed(() => {
+      if (this.showOverviewDialog) {
+        this.showOverviewDialog = false;
+        return true;
+      }
+      return false;
     })
     .hideTitleBar(true)
   }
