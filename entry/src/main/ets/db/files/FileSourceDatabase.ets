@@ -996,6 +996,24 @@ export class FileSourceDatabase {
     } catch { return null; }
   }
 
+  /** 获取某部剧某季的全部集（按 episode_number 升序），用于季详情页集列表展示 */
+  async getEpisodesBySeriesAndSeason(seriesId: number, seasonNumber: number): Promise<TvEpisodeEntity[]> {
+    if (this.rdbStore === null) { return []; }
+    try {
+      const sql = `SELECT * FROM ${FileSourceDatabase.TABLE_TV_EPISODES}
+        WHERE series_id = ? AND season_number = ?
+        ORDER BY episode_number ASC`;
+      const rs = await this.rdbStore.querySql(sql, [seriesId, seasonNumber]);
+      const items: TvEpisodeEntity[] = [];
+      while (rs.goToNextRow()) { items.push(this.parseTvEpisodeEntity(rs)); }
+      rs.close();
+      return items;
+    } catch (e) {
+      console.error('[DB][getEpisodesBySeriesAndSeason]', JSON.stringify(e));
+      return [];
+    }
+  }
+
   /** 获取剧集中 season_number > 0 的最小季、最小集号的第一集（用于续播卡片默认展示） */
   async getFirstTvEpisode(seriesId: number): Promise<TvEpisodeEntity | null> {
     if (this.rdbStore === null) { return null; }
@@ -1732,6 +1750,7 @@ export class FileSourceDatabase {
         const sortTs = tvRs.getLong(tvRs.getColumnIndex('latest_scraped_at'));
         const group: SeriesGroup = {
           title: tvRs.getString(tvRs.getColumnIndex('title')),
+          tvSeriesId: tvRs.getLong(tvRs.getColumnIndex('tv_series_id')),
           seasonNumber: seasonNum > 0 ? seasonNum : undefined,
           seasonLabel: seasonNum > 0 ? `第${seasonNum}季` : undefined,
           posterUrl: str('poster_url'),

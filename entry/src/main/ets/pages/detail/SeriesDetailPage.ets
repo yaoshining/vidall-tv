@@ -1,6 +1,7 @@
 import { SeriesGroup, TvSeriesEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
+import { SeasonDetailPage } from './SeasonDetailPage'
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences'
 import { PlayerPageParam, PlayerPage } from '../player/index'
 import http from '@ohos.net.http'
@@ -774,7 +775,22 @@ export struct SeriesDetailPage {
               }
               .width(140).alignItems(HorizontalAlign.Start)
               .onClick(() => {
-                this.selectSeason(s.season_number ?? 0);
+                // 构造 SeriesGroup 跳转季详情页
+                const seasonGroup: SeriesGroup = {
+                  title: this.getTitle(),
+                  tvSeriesId: this.seriesEntity?.id,
+                  seasonNumber: s.season_number ?? 0,
+                  seasonLabel: this.getSeasonLabel(s),
+                  seasonPosterUrl: this.getSeasonPosterUrl(s),
+                  posterUrl: this.seriesEntity?.posterUrl ?? this.group?.posterUrl,
+                  posterLocalPath: this.seriesEntity?.posterLocalPath ?? this.group?.posterLocalPath,
+                  backdropUrl: this.seriesEntity?.backdropUrl ?? this.group?.backdropUrl,
+                  rating: this.seriesEntity?.rating ?? this.group?.rating,
+                  episodeCount: s.episode_count ?? 0,
+                  episodes: [],
+                  latestScannedAt: 0
+                };
+                this.pageStack.pushPathByName(SeasonDetailPage.PAGE_NAME, seasonGroup);
               })
             }, (s: TmdbRawSeason) => String(s.id ?? s.season_number ?? 0))
           }

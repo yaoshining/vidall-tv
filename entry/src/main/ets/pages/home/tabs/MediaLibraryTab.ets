@@ -8,6 +8,7 @@ import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibra
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
+import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -268,8 +269,11 @@ struct SeriesCard {
     .width(POSTER_WIDTH)
     .alignItems(HorizontalAlign.Start)
     .onClick(() => {
-      // 仅电视剧本体（非季卡片）才跳转详情页
-      if (!this.showSeasonPoster && this.group.tvSeriesId !== undefined) {
+      if (this.showSeasonPoster && this.group.seasonNumber !== undefined && this.group.tvSeriesId !== undefined) {
+        // 季卡片 → 跳转季详情页
+        this.pageStack.pushPathByName(SeasonDetailPage.PAGE_NAME, this.group);
+      } else if (!this.showSeasonPoster && this.group.tvSeriesId !== undefined) {
+        // 剧集卡片 → 跳转剧集详情页
         this.pageStack.pushPathByName(SeriesDetailPage.PAGE_NAME, this.group);
       }
     })

@@ -4,6 +4,7 @@ import { HomePage } from './home';
 import { PlayerPage } from './player/index';
 import { SettingsPage } from './settings/Index';
 import { SeriesDetailPage } from './detail/SeriesDetailPage';
+import { SeasonDetailPage } from './detail/SeasonDetailPage';
 @Entry
 @ComponentV2
 struct Index {
@@ -20,6 +21,8 @@ struct Index {
       FileExplorerPage();
     } else if (name === SeriesDetailPage.PAGE_NAME) {
       SeriesDetailPage();
+    } else if (name === SeasonDetailPage.PAGE_NAME) {
+      SeasonDetailPage();
     }
   }
 
