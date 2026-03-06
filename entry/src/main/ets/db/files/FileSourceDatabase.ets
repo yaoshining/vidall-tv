@@ -311,7 +311,7 @@ export class FileSourceDatabase {
         // v2/v3 → v4：清除所有媒体表，重建干净的 v3 结构
         // 注意：DROP 顺序需遵守外键依赖（先子表再父表）
         const dropOrder = [
-          'scrape_info', 'play_history', 'play_progress', 'tv_episodes', 'tv_seasons',
+          'scrape_info', 'play_history', 'tv_episodes', 'tv_seasons',
           'videos', 'movies', 'tv_series'
         ];
         for (const t of dropOrder) {
