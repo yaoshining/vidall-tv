@@ -9,6 +9,8 @@ import { http } from "@kit.NetworkKit";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
+import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
+import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 
 /** 播放内核类型 */
 export type PlayerBackend = 'avplayer' | 'ijkplayer';
@@ -93,6 +95,11 @@ export class VideoPlayerController {
   private subtitleRemainingTime: number = 0
   private subtitlePauseTime: number = 0
 
+  /** 播放进度上下文（由调用方在 initPlayer 前设置） */
+  progressContext: PlayProgressEntity | null = null;
+  /** 10s 防抖进度写入定时器 */
+  private progressTimer?: number;
+
   /**
    * 初始化播放器。
    * - backend='avplayer'：直接用 surfaceId 初始化，与之前行为一致。
@@ -164,17 +171,23 @@ export class VideoPlayerController {
       this.isPlaying = true;
       this.isLoading = false;
       this.resumeSubtitleTimer();
+      this.startProgressTimer();
       emitter.emit(PlayerEvents.PLAYING);
     });
     adapter.onPaused(() => {
       this.isPlaying = false;
       this.pauseSubtitleTimer();
+      this.stopProgressTimer();
+      this.saveProgressNow();
     });
     adapter.onCompleted(() => {
       this.isPlaying = false;
+      this.stopProgressTimer();
+      this.saveProgressNow();
     });
     adapter.onStopped(() => {
       this.isPlaying = false;
+      this.stopProgressTimer();
     });
     adapter.onTimeUpdate((currentTime: number) => {
       this.currentTime = currentTime;
@@ -322,6 +335,8 @@ export class VideoPlayerController {
   }
 
   async release(): Promise<void> {
+    this.stopProgressTimer();
+    this.saveProgressNow();
     if (this.subtitleClearTimer) {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;
@@ -400,6 +415,52 @@ export class VideoPlayerController {
       console.log(`[VideoPlayerController] Resuming subtitle timer: ${this.subtitleRemainingTime}ms`)
       this.startSubtitleTimer()
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // 播放进度持久化（10s 防抖写入）
+  // ─────────────────────────────────────────────
+
+  /**
+   * 启动 10s 防抖进度写入定时器，播放状态下每 10s 写一次进度。
+   */
+  private startProgressTimer(): void {
+    this.stopProgressTimer();
+    if (this.progressContext === null) { return; }
+    this.progressTimer = setInterval(() => {
+      this.saveProgressNow();
+    }, 10000);
+  }
+
+  /** 停止进度写入定时器 */
+  private stopProgressTimer(): void {
+    if (this.progressTimer !== undefined) {
+      clearInterval(this.progressTimer);
+      this.progressTimer = undefined;
+    }
+  }
+
+  /**
+   * 立即写入当前进度（用于暂停/退出/切后台时强制落盘）。
+   * 写入失败仅打 warn，不阻塞。
+   */
+  saveProgressNow(): void {
+    if (this.progressContext === null) { return; }
+    if (this.currentTime <= 0 && this.duration <= 0) { return; }
+    const ctx = this.progressContext;
+    const progress: PlayProgressEntity = {
+      videoId: ctx.videoId,
+      seriesProviderId: ctx.seriesProviderId,
+      seasonNumber: ctx.seasonNumber,
+      episodeNumber: ctx.episodeNumber,
+      positionMs: this.currentTime,
+      durationMs: this.duration > 0 ? this.duration : ctx.durationMs,
+      updatedAt: Date.now()
+    };
+    FileSourceDatabase.getInstance().upsertPlayProgress(progress).catch((e: BusinessError) => {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `进度写入失败: code=${e.code} msg=${e.message}`);
+    });
   }
 
   @Computed

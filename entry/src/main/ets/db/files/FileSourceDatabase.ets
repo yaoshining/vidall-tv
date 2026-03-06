@@ -3,18 +3,18 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
-  MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem
+  MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, PlayProgressEntity
 } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
-import { emitter } from "@kit.BasicServicesKit";
+import { BusinessError, emitter } from "@kit.BasicServicesKit";
 
 /**
- * 文件源数据库管理类 — DB v3
+ * 文件源数据库管理类 — DB v5
  * 表结构：file_sources, file_source_directories, videos, scrape_info,
- *         movies, tv_series, tv_seasons, tv_episodes, play_history
+ *         movies, tv_series, tv_seasons, tv_episodes, play_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 4;
+  private static readonly DB_VERSION = 5;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -24,7 +24,7 @@ export class FileSourceDatabase {
   private static readonly TABLE_TV_SERIES = 'tv_series';
   private static readonly TABLE_TV_SEASONS = 'tv_seasons';
   private static readonly TABLE_TV_EPISODES = 'tv_episodes';
-  private static readonly TABLE_PLAY_HISTORY = 'play_history';
+  private static readonly TABLE_PLAY_PROGRESS = 'play_progress';
   private static readonly DATABASE_READY = 'FILE_SOURCES_DB_READY'
 
   // 单例实例
@@ -283,15 +283,19 @@ export class FileSourceDatabase {
         FOREIGN KEY(episode_id) REFERENCES ${FileSourceDatabase.TABLE_TV_EPISODES}(id)
       )
     `);
-    // play_history
+    // play_progress（含媒体库上下文关联的播放进度表）
     await rdbStore.executeSql(`
-      CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_PLAY_HISTORY} (
+      CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_PLAY_PROGRESS} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         video_id INTEGER NOT NULL,
-        position_ms INTEGER NOT NULL,
-        duration_ms INTEGER NOT NULL,
+        series_provider_id TEXT NOT NULL DEFAULT '',
+        season_number INTEGER NOT NULL DEFAULT 0,
+        episode_number INTEGER NOT NULL DEFAULT 0,
+        position_ms INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL,
-        FOREIGN KEY(video_id) REFERENCES ${FileSourceDatabase.TABLE_VIDEOS}(id) ON DELETE CASCADE
+        FOREIGN KEY(video_id) REFERENCES ${FileSourceDatabase.TABLE_VIDEOS}(id) ON DELETE CASCADE,
+        UNIQUE(video_id)
       )
     `);
     console.info('FileSourceDatabase: v3 media tables created');
@@ -315,6 +319,26 @@ export class FileSourceDatabase {
           console.info(`FileSourceDatabase: DROP TABLE ${t}`);
         }
         await this.createMediaTablesV3(rdbStore);
+      }
+      if (oldVersion < 5) {
+        // v4 → v5：用带上下文字段的 play_progress 取代 play_history
+        await rdbStore.executeSql(`DROP TABLE IF EXISTS play_history`);
+        console.info(`FileSourceDatabase: DROP TABLE play_history`);
+        await rdbStore.executeSql(`
+          CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_PLAY_PROGRESS} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_id INTEGER NOT NULL,
+            series_provider_id TEXT NOT NULL DEFAULT '',
+            season_number INTEGER NOT NULL DEFAULT 0,
+            episode_number INTEGER NOT NULL DEFAULT 0,
+            position_ms INTEGER NOT NULL DEFAULT 0,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY(video_id) REFERENCES ${FileSourceDatabase.TABLE_VIDEOS}(id) ON DELETE CASCADE,
+            UNIQUE(video_id)
+          )
+        `);
+        console.info(`FileSourceDatabase: CREATE TABLE play_progress`);
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -1945,6 +1969,145 @@ export class FileSourceDatabase {
     } else {
       emitter.once(FileSourceDatabase.DATABASE_READY, callback)
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // play_progress 表操作
+  // ─────────────────────────────────────────────
+
+  /**
+   * 写入或更新播放进度（以 video_id 为唯一键，INSERT OR REPLACE）。
+   * 写入失败仅打 warn 日志，不抛出异常，不阻塞播放。
+   */
+  async upsertPlayProgress(progress: PlayProgressEntity): Promise<void> {
+    if (this.rdbStore === null) {
+      console.warn('[DB][upsertPlayProgress] DB 未初始化，跳过写入');
+      return;
+    }
+    try {
+      const sql = `
+        INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_PLAY_PROGRESS}
+          (video_id, series_provider_id, season_number, episode_number,
+           position_ms, duration_ms, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+      const args: relationalStore.ValueType[] = [
+        progress.videoId,
+        progress.seriesProviderId,
+        progress.seasonNumber,
+        progress.episodeNumber,
+        progress.positionMs,
+        progress.durationMs,
+        progress.updatedAt
+      ];
+      await this.rdbStore.executeSql(sql, args);
+      console.info(
+        `[DB][upsertPlayProgress] videoId=${progress.videoId} pos=${progress.positionMs}ms ` +
+        `series=${progress.seriesProviderId} s${progress.seasonNumber}e${progress.episodeNumber}`
+      );
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][upsertPlayProgress] 写入失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 查询指定视频的播放进度，不存在返回 null。
+   */
+  async getPlayProgress(videoId: number): Promise<PlayProgressEntity | null> {
+    if (this.rdbStore === null) { return null; }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_PROGRESS);
+      pred.equalTo('video_id', videoId);
+      const rs = await this.rdbStore.query(pred);
+      if (rs.goToFirstRow()) {
+        const entity = this.parsePlayProgressEntity(rs);
+        rs.close();
+        return entity;
+      }
+      rs.close();
+      return null;
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][getPlayProgress] 查询失败 videoId=${videoId} code=${err.code} msg=${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 批量查询某剧某季的播放进度列表（避免逐集查询）。
+   */
+  async getPlayProgressBySeriesContext(
+    seriesProviderId: string,
+    seasonNumber: number
+  ): Promise<PlayProgressEntity[]> {
+    if (this.rdbStore === null) { return []; }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_PROGRESS);
+      pred.equalTo('series_provider_id', seriesProviderId)
+        .and()
+        .equalTo('season_number', seasonNumber);
+      const rs = await this.rdbStore.query(pred);
+      const list: PlayProgressEntity[] = [];
+      while (rs.goToNextRow()) {
+        list.push(this.parsePlayProgressEntity(rs));
+      }
+      rs.close();
+      return list;
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(
+        `[DB][getPlayProgressBySeriesContext] 查询失败 series=${seriesProviderId} s=${seasonNumber} ` +
+        `code=${err.code} msg=${err.message}`
+      );
+      return [];
+    }
+  }
+
+  /**
+   * 查询某剧所有进度记录（用于 ContinueWatchingCard 展示最近播放集）。
+   */
+  async getPlayProgressBySeries(seriesProviderId: string): Promise<PlayProgressEntity[]> {
+    if (this.rdbStore === null) { return []; }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_PROGRESS);
+      pred.equalTo('series_provider_id', seriesProviderId).orderByDesc('updated_at');
+      const rs = await this.rdbStore.query(pred);
+      const list: PlayProgressEntity[] = [];
+      while (rs.goToNextRow()) {
+        list.push(this.parsePlayProgressEntity(rs));
+      }
+      rs.close();
+      return list;
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(
+        `[DB][getPlayProgressBySeries] 查询失败 series=${seriesProviderId} ` +
+        `code=${err.code} msg=${err.message}`
+      );
+      return [];
+    }
+  }
+
+  private parsePlayProgressEntity(rs: relationalStore.ResultSet): PlayProgressEntity {
+    const num = (col: string): number => {
+      const i = rs.getColumnIndex(col);
+      return rs.isColumnNull(i) ? 0 : rs.getLong(i);
+    };
+    const str = (col: string): string => {
+      const i = rs.getColumnIndex(col);
+      return rs.isColumnNull(i) ? '' : rs.getString(i);
+    };
+    return {
+      id: num('id'),
+      videoId: num('video_id'),
+      seriesProviderId: str('series_provider_id'),
+      seasonNumber: num('season_number'),
+      episodeNumber: num('episode_number'),
+      positionMs: num('position_ms'),
+      durationMs: num('duration_ms'),
+      updatedAt: num('updated_at')
+    };
   }
 }
 
