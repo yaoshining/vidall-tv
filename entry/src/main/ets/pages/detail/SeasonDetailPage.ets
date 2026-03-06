@@ -637,11 +637,18 @@ export struct SeasonDetailPage {
                 }
                 // 播放按钮覆盖
                 Column() {
-                  Text('▶').fontSize(22).fontColor(Color.White)
+                  SymbolGlyph($r('sys.symbol.play_fill'))
+                    .fontColor([Color.White])
+                    .fontSize(28)
                 }
-                .width(60).height(60)
-                .borderRadius(30).backgroundColor('#00000066')
+                .backgroundColor('rgba(200, 200, 200, 0.2)')
+                .backdropBlur(40)
+                .padding(14)
+                .borderRadius(99)
+                .border({ width: 1, color: 'rgba(255, 255, 255, 0.2)' })
+                .shadow({ radius: 20, color: 'rgba(0, 0, 0, 0.4)' })
                 .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+                .hitTestBehavior(HitTestMode.Transparent)
 
                 // 进度条（有进度时显示）
                 if (this.getEpisodeProgress(ep.mediaItem) > 0) {
@@ -654,6 +661,7 @@ export struct SeasonDetailPage {
                   .width(310).height(4)
                   .backgroundColor('#2E2E2E').borderRadius(2)
                   .position({ left: 0, bottom: 0 })
+                  .hitTestBehavior(HitTestMode.Transparent)
                 }
               }
               .width(310).height(174)
