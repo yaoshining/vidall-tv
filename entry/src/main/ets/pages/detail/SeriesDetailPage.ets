@@ -733,7 +733,7 @@ export struct SeriesDetailPage {
             ForEach(this.seasons, (s: TmdbRawSeason) => {
               Column({ space: 8 }) {
                 // 季海报
-                Stack({ alignContent: Alignment.BottomCenter }) {
+                Stack({ alignContent: Alignment.Bottom }) {
                   if (this.getSeasonPosterUrl(s).length > 0) {
                     Image(this.getSeasonPosterUrl(s))
                       .width(140).aspectRatio(2 / 3)
