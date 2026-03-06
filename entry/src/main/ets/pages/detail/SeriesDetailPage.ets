@@ -3,6 +3,8 @@ import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences'
 import http from '@ohos.net.http'
+import image from '@ohos.multimedia.image'
+import effectKit from '@ohos.effectKit'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -83,6 +85,8 @@ export struct SeriesDetailPage {
   @Local similarSeries: SimilarSeriesItem[] = []
   @Local isLoading: boolean = false
   @Local showOverviewDialog: boolean = false
+  /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
+  @Local dominantBgColor: string = '#111111'
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -185,6 +189,10 @@ export struct SeriesDetailPage {
         try { this.cast = JSON.parse(cj) as ScrapeCredit[]; } catch (e) { this.cast = []; }
       }
 
+      // 异步提取 backdrop 主色（fire-and-forget）
+      const bdUrl = this.getBackdropUrl();
+      if (bdUrl.length > 0) { this.extractDominantColor(bdUrl); }
+
       // 异步加载相似剧（fire-and-forget，不阻塞主流程）
       const pid = entity.providerId;
       const apiKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
@@ -195,6 +203,59 @@ export struct SeriesDetailPage {
       console.error('[SeriesDetailPage] loadData failed', JSON.stringify(e));
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  /**
+   * 下载 backdrop 图片并用 effectKit 提取最暗主色作为页面背景色。
+   * 提取失败时静默忽略，保持默认 #111111。
+   */
+  private async extractDominantColor(url: string): Promise<void> {
+    try {
+      const req = http.createHttp();
+      let buf: ArrayBuffer | undefined;
+      try {
+        const resp = await req.request(url, {
+          method: http.RequestMethod.GET,
+          expectDataType: http.HttpDataType.ARRAY_BUFFER,
+          connectTimeout: 8000,
+          readTimeout: 8000
+        });
+        req.destroy();
+        if (resp.responseCode !== 200) { return; }
+        buf = resp.result as ArrayBuffer;
+      } catch (e) {
+        req.destroy();
+        return;
+      }
+      if (buf === undefined || buf.byteLength === 0) { return; }
+
+      // 缩小尺寸加速：从 ArrayBuffer 创建 ImageSource，解码为小尺寸 PixelMap
+      const imgSrc = image.createImageSource(buf);
+      const pixelMap = await imgSrc.createPixelMap({
+        desiredSize: { width: 64, height: 36 },
+        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+      });
+      imgSrc.release();
+
+      // effectKit 提取主色
+      const picker = await effectKit.createColorPicker(pixelMap);
+      const mainColor = picker.getMainColorSync();
+      pixelMap.release();
+
+      // 将 RGB 分量各减暗 40%，保证背景色足够深
+      const darken = (v: number): number => Math.round(v * 0.4);
+      const toHex = (v: number): string => {
+        const h = v.toString(16);
+        return h.length < 2 ? '0' + h : h;
+      };
+      const r = darken(mainColor.red & 0xFF);
+      const g = darken(mainColor.green & 0xFF);
+      const b = darken(mainColor.blue & 0xFF);
+      this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
+    } catch (e) {
+      // 提取失败，保持默认色
+      console.warn('[SeriesDetailPage] extractDominantColor failed', JSON.stringify(e));
     }
   }
 
@@ -379,20 +440,35 @@ export struct SeriesDetailPage {
           }
           .alignItems(VerticalAlign.Center)
 
-          // 简介
+          // 简介（省略号 + 更多 同行浮动）
           if (this.getOverview().length > 0) {
-            Column({ space: 6 }) {
+            Stack({ alignContent: Alignment.BottomEnd }) {
               Text(this.getOverview())
                 .fontSize(16).fontColor('#BBBBBB')
                 .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
                 .lineHeight(26)
-                .constraintSize({ maxWidth: 700 })
-              Text('更多')
-                .fontSize(14).fontColor('#1B78F2')
-                .fontWeight(FontWeight.Medium)
-                .onClick(() => { this.showOverviewDialog = true; })
+                .width('100%')
+              // 右下角「...更多」按钮，覆盖在文本上，左侧渐变遮罩防止文字漏出
+              Row() {
+                // 渐变遮罩：从透明到背景色，平滑衔接省略号
+                Column()
+                  .width(60).height(26)
+                  .linearGradient({
+                    angle: 90,
+                    colors: [['#00000000', 0.0], [this.dominantBgColor + 'FF', 1.0]]
+                  })
+                Text('更多')
+                  .fontSize(14).fontColor('#1B78F2')
+                  .fontWeight(FontWeight.Medium)
+                  .height(26).lineHeight(26)
+                  .padding({ left: 2 })
+                  .backgroundColor(this.dominantBgColor)
+                  .onClick(() => { this.showOverviewDialog = true; })
+              }
+              .alignItems(VerticalAlign.Bottom)
             }
-            .alignItems(HorizontalAlign.Start)
+            .constraintSize({ maxWidth: 700 })
+            .alignSelf(ItemAlign.Start)
           }
         }
         .layoutWeight(1)
@@ -457,7 +533,7 @@ export struct SeriesDetailPage {
         Column().height(36)
       }
       .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor('#111111')
+      .backgroundColor(this.dominantBgColor)
     }
   }
 
@@ -515,7 +591,7 @@ export struct SeriesDetailPage {
         Column().height(36)
       }
       .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor('#111111')
+      .backgroundColor(this.dominantBgColor)
     }
   }
 
@@ -584,7 +660,7 @@ export struct SeriesDetailPage {
         Column().height(36)
       }
       .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor('#111111')
+      .backgroundColor(this.dominantBgColor)
     }
   }
 
@@ -646,7 +722,7 @@ export struct SeriesDetailPage {
             Column().height(80)
           }
           .width('100%')
-          .backgroundColor('#111111')
+          .backgroundColor(this.dominantBgColor)
         }
         .width('100%').height('100%')
         .scrollBar(BarState.Off)
@@ -671,7 +747,7 @@ export struct SeriesDetailPage {
         })
       }
       .width('100%').height('100%')
-      .backgroundColor('#000000')
+      .backgroundColor(this.dominantBgColor)
     }
     .onReady((context: NavDestinationContext) => {
       const param = context.pathInfo.param as SeriesGroup;
