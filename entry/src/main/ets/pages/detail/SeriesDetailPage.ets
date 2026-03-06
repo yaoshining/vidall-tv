@@ -92,8 +92,6 @@ export struct SeriesDetailPage {
   @Local dominantBgColor: string = '#111111'
   /** 当前选中显示的季号（-1 = 未选） */
   @Local selectedSeasonNumber: number = -1
-  /** 当前季的集列表 */
-  @Local seasonEpisodes: MediaItem[] = []
   /** 播放进度映射（key = videoId） */
   @Local progressMap: Map<number, PlayProgressEntity> = new Map()
   /** 最新播放进度（用于 ContinueWatchingCard） */
@@ -302,12 +300,9 @@ export struct SeriesDetailPage {
         }
       }
 
-      // 默认展开第一季集列表
+      // 默认高亮第一季
       if (this.seasons.length > 0) {
-        const firstSeason = this.seasons[0];
-        const firstSeasonNum = firstSeason.season_number ?? 0;
-        this.selectedSeasonNumber = firstSeasonNum;
-        this.loadSeasonEpisodes(allEpisodes, firstSeasonNum);
+        this.selectedSeasonNumber = this.seasons[0].season_number ?? 0;
       }
     } catch (e) {
       console.error('[SeriesDetailPage] loadData failed', JSON.stringify(e));
@@ -414,19 +409,7 @@ export struct SeriesDetailPage {
     }
   }
 
-  /**
-   * 根据季号筛选集列表并缓存
-   */
-  private loadSeasonEpisodes(allEpisodes: MediaItem[], seasonNumber: number): void {
-    const filtered: MediaItem[] = [];
-    for (const ep of allEpisodes) {
-      if ((ep.seasonNumber ?? 0) === seasonNumber) {
-        filtered.push(ep);
-      }
-    }
-    filtered.sort((a: MediaItem, b: MediaItem) => (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0));
-    this.seasonEpisodes = filtered;
-  }
+
 
   /** 获取续播卡片图片 URL：优先 firstEpisode.stillUrl，其次 stillPath 构造，最后 fallback 海报 */
   private getResumeCardStillUrl(): string {
@@ -460,26 +443,8 @@ export struct SeriesDetailPage {
 
   // ── Builders ──────────────────────────────────
 
-  /**
-   * 当用户切换季时重新加载集列表和进度
-   */
-  private async selectSeason(seasonNumber: number): Promise<void> {
+  private selectSeason(seasonNumber: number): void {
     this.selectedSeasonNumber = seasonNumber;
-    const allEps = this.group?.episodes ?? [];
-    this.loadSeasonEpisodes(allEps, seasonNumber);
-
-    // 按季+剧集批量刷新进度
-    const pid = this.seriesEntity?.providerId ?? '';
-    if (pid.length > 0) {
-      const db = FileSourceDatabase.getInstance();
-      const progressList = await db.getPlayProgressBySeriesContext(pid, seasonNumber);
-      // 合并到 progressMap（保留其他季的记录）
-      const newMap = new Map<number, PlayProgressEntity>(this.progressMap);
-      for (const p of progressList) {
-        newMap.set(p.videoId, p);
-      }
-      this.progressMap = newMap;
-    }
   }
 
   /**
@@ -565,7 +530,7 @@ export struct SeriesDetailPage {
           Column({ space: 10 }) {
             // 集号标签 + 标题
             Row({ space: 8 }) {
-              Text(`S${this.lastProgress.seasonNumber}E${this.lastProgress.episodeNumber}`)
+              Text(`S${String(this.lastProgress.seasonNumber).padStart(2, '0')}:E${String(this.lastProgress.episodeNumber).padStart(2, '0')}`)
                 .fontSize(12)
                 .fontColor('#1B78F2')
                 .padding({ left: 7, right: 7, top: 2, bottom: 2 })
@@ -643,10 +608,8 @@ export struct SeriesDetailPage {
               .padding({ left: 12, right: 12, top: 6, bottom: 6 })
               .backgroundColor('#1B78F2').borderRadius(4)
               .onClick(() => {
-                // 点击开始播放第一集
-                if (this.seasonEpisodes.length > 0) {
-                  this.playEpisode(this.seasonEpisodes[0]);
-                }
+                const eps = this.group?.episodes ?? [];
+                if (eps.length > 0) { this.playEpisode(eps[0]); }
               })
             }
             .alignItems(VerticalAlign.Center)
@@ -797,13 +760,6 @@ export struct SeriesDetailPage {
                     .justifyContent(FlexAlign.Center)
                     .hoverEffect(HoverEffect.Scale)
                   }
-                  // 选中季高亮下划线
-                  if (this.selectedSeasonNumber === (s.season_number ?? 0)) {
-                    Column()
-                      .width('100%').height(3)
-                      .backgroundColor('#1B78F2')
-                      .borderRadius({ bottomLeft: 3, bottomRight: 3 })
-                  }
                 }
                 .width(140).aspectRatio(2 / 3)
                 .borderRadius(6).clip(true)
@@ -811,12 +767,10 @@ export struct SeriesDetailPage {
                 // 第N季标签
                 Text(this.getSeasonLabel(s))
                   .fontSize(14)
-                  .fontColor(this.selectedSeasonNumber === (s.season_number ?? 0)
-                    ? '#1B78F2' : '#CCCCCC')
-                  .fontWeight(this.selectedSeasonNumber === (s.season_number ?? 0)
-                    ? FontWeight.Bold : FontWeight.Normal)
+                  .fontColor('#CCCCCC')
+                  .fontWeight(FontWeight.Normal)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width(140)
+                  .width(140).textAlign(TextAlign.Center)
               }
               .width(140).alignItems(HorizontalAlign.Start)
               .onClick(() => {
@@ -837,73 +791,7 @@ export struct SeriesDetailPage {
     }
   }
 
-  /** 集列表（当前季） */
-  @Builder
-  EpisodeSection() {
-    if (this.seasonEpisodes.length > 0) {
-      Column({ space: 0 }) {
-        Text('集')
-          .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          .padding({ left: 80, top: 0, bottom: 20 })
 
-        Column({ space: 2 }) {
-          ForEach(this.seasonEpisodes, (ep: MediaItem) => {
-            Row({ space: 14 }) {
-              // 集号标签
-              Text(`第 ${ep.episodeNumber ?? '-'} 集`)
-                .fontSize(14).fontColor('#AAAAAA')
-                .width(60).textAlign(TextAlign.Start)
-                .flexShrink(0)
-
-              // 集标题 + 进度条
-              Column({ space: 4 }) {
-                Row({ space: 8 }) {
-                  Text(ep.title ?? ep.fileName)
-                    .fontSize(15).fontColor(Color.White)
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    .layoutWeight(1)
-                  // 已看完标记
-                  if (this.isEpisodeWatched(ep)) {
-                    Text('✓ 已看')
-                      .fontSize(12).fontColor('#4CAF50')
-                      .flexShrink(0)
-                  }
-                }
-                .width('100%')
-                .alignItems(VerticalAlign.Center)
-
-                // 进度条（有进度时才显示）
-                if (this.getEpisodeProgress(ep) > 0) {
-                  Column() {
-                    Column()
-                      .width(`${Math.round(this.getEpisodeProgress(ep) * 100)}%`)
-                      .height('100%')
-                      .backgroundColor(this.isEpisodeWatched(ep) ? '#4CAF50' : '#1B78F2')
-                      .borderRadius(1)
-                  }
-                  .width('100%').height(2)
-                  .backgroundColor('#333333').borderRadius(1)
-                }
-              }
-              .layoutWeight(1)
-              .alignItems(HorizontalAlign.Start)
-            }
-            .width('100%')
-            .padding({ left: 80, right: 80, top: 12, bottom: 12 })
-            .backgroundColor('#00000000')
-            .hoverEffect(HoverEffect.Highlight)
-            .onClick(() => { this.playEpisode(ep); })
-
-            Divider().color('#1F1F1F').strokeWidth(1).margin({ left: 80, right: 80 })
-          }, (ep: MediaItem) => String(ep.id ?? ep.filePath))
-        }
-
-        Column().height(36)
-      }
-      .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.dominantBgColor)
-    }
-  }
 
   /** 演职人员横向滚动列表 */
   @Builder
@@ -1144,7 +1032,6 @@ export struct SeriesDetailPage {
           Column() {
             this.HeroSection()
             this.SeasonsSection()
-            this.EpisodeSection()
             this.CastSection()
             this.SimilarSection()
             Column().height(80)
