@@ -1,4 +1,4 @@
-import { SeriesGroup, TvSeriesEntity } from '../../db/models/MediaEntity'
+import { SeriesGroup, TvSeriesEntity, TvEpisodeEntity } from '../../db/models/MediaEntity'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences'
@@ -87,6 +87,8 @@ export struct SeriesDetailPage {
   @Local showOverviewDialog: boolean = false
   /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
   @Local dominantBgColor: string = '#111111'
+  /** 默认展示的第一集信息（S01E01 fallback），从 tv_episodes 加载 */
+  @Local firstEpisode: TvEpisodeEntity | undefined = undefined
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -224,6 +226,12 @@ export struct SeriesDetailPage {
         try { this.cast = JSON.parse(cj) as ScrapeCredit[]; } catch (e) { this.cast = []; }
       }
 
+      // 加载默认集信息（最小季最小集）用于续播卡片
+      try {
+        const ep = await db.getFirstTvEpisode(seriesId);
+        if (ep !== null) { this.firstEpisode = ep; }
+      } catch (e) { /* 加载失败忽略，保持占位 */ }
+
       // 异步提取 backdrop 主色（fire-and-forget）
       const bdUrl = this.getBackdropUrl();
       if (bdUrl.length > 0) { this.extractDominantColor(bdUrl); }
@@ -339,6 +347,36 @@ export struct SeriesDetailPage {
     }
   }
 
+  /** 获取续播卡片图片 URL：优先 firstEpisode.stillUrl，其次 stillPath 构造，最后 fallback 海报 */
+  private getResumeCardStillUrl(): string {
+    const ep = this.firstEpisode;
+    if (ep !== undefined) {
+      if (ep.stillUrl !== undefined && ep.stillUrl.length > 0) { return ep.stillUrl; }
+      if (ep.stillPath !== undefined && ep.stillPath.length > 0) {
+        return tmdbImageUrl(ep.stillPath, 'w342');
+      }
+    }
+    return '';
+  }
+
+  /** 续播卡片季集号标签，如 "S01:E01" */
+  private getResumeCardEpLabel(): string {
+    const ep = this.firstEpisode;
+    if (ep !== undefined) {
+      const sn = String(ep.seasonNumber).padStart(2, '0');
+      const en = String(ep.episodeNumber).padStart(2, '0');
+      return `S${sn}:E${en}`;
+    }
+    return 'S01:E01';
+  }
+
+  /** 续播卡片集标题 */
+  private getResumeCardTitle(): string {
+    const ep = this.firstEpisode;
+    if (ep !== undefined && ep.title !== undefined && ep.title.length > 0) { return ep.title; }
+    return '第 1 集';
+  }
+
   // ── Builders ──────────────────────────────────
 
   /** 继续播放占位卡片（右下角） */
@@ -346,32 +384,39 @@ export struct SeriesDetailPage {
   ContinueWatchingCard() {
     Column({ space: 0 }) {
       Row({ space: 14 }) {
-        // 集缩略图占位
-        Column()
-          .width(150)
-          .height(84)
-          .backgroundColor('#1C1C1C')
-          .borderRadius(4)
-          .border({ width: 1, color: '#2E2E2E' })
+        // 集缩略图：优先 stillPath/stillUrl，无则占位
+        if (this.getResumeCardStillUrl().length > 0) {
+          Image(this.getResumeCardStillUrl())
+            .width(150).height(84)
+            .borderRadius(4)
+            .objectFit(ImageFit.Cover)
+            .border({ width: 1, color: '#2E2E2E' })
+        } else {
+          Column()
+            .width(150).height(84)
+            .backgroundColor('#1C1C1C')
+            .borderRadius(4)
+            .border({ width: 1, color: '#2E2E2E' })
+        }
 
         // 信息部分
         Column({ space: 10 }) {
           // 集号标签 + 标题
           Row({ space: 8 }) {
-            Text('— —')
+            Text(this.getResumeCardEpLabel())
               .fontSize(12)
               .fontColor('#1B78F2')
               .padding({ left: 7, right: 7, top: 2, bottom: 2 })
               .backgroundColor('#192840')
               .borderRadius(3)
-            Text('暂无播放记录')
+            Text(this.getResumeCardTitle())
               .fontSize(14).fontColor('#CCCCCC').fontWeight(FontWeight.Medium)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               .layoutWeight(1)
           }
           .alignItems(VerticalAlign.Center)
 
-          // 进度条（0%）
+          // 进度条（0%，暂无进度）
           Column() {
             Column()
               .width('0%').height('100%')
@@ -384,12 +429,10 @@ export struct SeriesDetailPage {
           Row({ space: 10 }) {
             Row({ space: 6 }) {
               Text('▶').fontSize(12).fontColor(Color.White)
-              Text('继续播放').fontSize(14).fontColor(Color.White).fontWeight(FontWeight.Bold)
+              Text('开始播放').fontSize(14).fontColor(Color.White).fontWeight(FontWeight.Bold)
             }
             .padding({ left: 12, right: 12, top: 6, bottom: 6 })
             .backgroundColor('#1B78F2').borderRadius(4)
-
-            Text('播放历史即将上线').fontSize(12).fontColor('#505050')
           }
           .alignItems(VerticalAlign.Center)
         }

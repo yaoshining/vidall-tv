@@ -972,6 +972,20 @@ export class FileSourceDatabase {
     } catch { return null; }
   }
 
+  /** 获取剧集中 season_number > 0 的最小季、最小集号的第一集（用于续播卡片默认展示） */
+  async getFirstTvEpisode(seriesId: number): Promise<TvEpisodeEntity | null> {
+    if (this.rdbStore === null) { return null; }
+    try {
+      const sql = `SELECT * FROM ${FileSourceDatabase.TABLE_TV_EPISODES}
+        WHERE series_id = ? AND season_number > 0
+        ORDER BY season_number ASC, episode_number ASC
+        LIMIT 1`;
+      const rs = await this.rdbStore.querySql(sql, [seriesId]);
+      if (rs.goToFirstRow()) { const e = this.parseTvEpisodeEntity(rs); rs.close(); return e; }
+      rs.close(); return null;
+    } catch { return null; }
+  }
+
   async upsertTvEpisode(e: TvEpisodeEntity): Promise<number> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
     const existing = await this.getTvEpisode(e.seriesId, e.seasonNumber, e.episodeNumber);
