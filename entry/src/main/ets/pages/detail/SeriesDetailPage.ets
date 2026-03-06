@@ -143,6 +143,30 @@ export struct SeriesDetailPage {
     return '#FF' + hex.substring(1);
   }
 
+  /** 剧集海报 URL（优先 posterPath 构造高质量，否则回退 posterUrl） */
+  private getDialogPosterUrl(): string {
+    const path = this.seriesEntity?.posterPath;
+    if (path !== undefined && path.length > 0) { return tmdbImageUrl(path, 'w342'); }
+    return this.seriesEntity?.posterUrl ?? this.group?.posterUrl ?? '';
+  }
+
+  /** 风格标签文字，如 "剧情 / 动作" */
+  private getGenresText(): string {
+    const g = this.getGenres();
+    if (g.length === 0) { return ''; }
+    return g.slice(0, 3).join(' / ');
+  }
+
+  /** 非特别篇的总集数之和 */
+  private getTotalEpisodesText(): string {
+    let total = 0;
+    for (const s of this.seasons) {
+      if ((s.season_number ?? 0) > 0) { total += s.episode_count ?? 0; }
+    }
+    if (total === 0) { return ''; }
+    return `共 ${total} 集`;
+  }
+
   private buildSimilarGroup(item: SimilarSeriesItem): SeriesGroup {
     const g: SeriesGroup = {
       title: item.title,
@@ -671,36 +695,95 @@ export struct SeriesDetailPage {
         // 半透明遮罩
         Column()
           .width('100%').height('100%')
-          .backgroundColor('#CC000000')
+          .backgroundColor('#BB000000')
           .onClick(() => { this.showOverviewDialog = false; })
 
-        // 弹窗卡片
-        Column({ space: 24 }) {
+        // 卡片主体
+        Column() {
+          // ── 标题栏 ──────────────────────────────
           Row() {
-            Text('剧情简介')
-              .fontSize(24).fontColor(Color.White).fontWeight(FontWeight.Bold)
-              .layoutWeight(1)
+            Text('简介')
+              .fontSize(26).fontColor('#F0F0F0').fontWeight(FontWeight.Bold)
+              .layoutWeight(1).textAlign(TextAlign.Center)
             Text('✕')
-              .fontSize(24).fontColor('#888888')
-              .padding({ left: 16, right: 0, top: 4, bottom: 4 })
+              .fontSize(20).fontColor('#888892')
+              .width(48).height(48)
+              .textAlign(TextAlign.Center)
+              .borderRadius(24)
+              .backgroundColor('#2A2A2E')
               .onClick(() => { this.showOverviewDialog = false; })
           }
-          .alignItems(VerticalAlign.Center).width('100%')
+          .alignItems(VerticalAlign.Center)
+          .padding({ left: 24, right: 24, top: 0, bottom: 0 })
+          .height(80)
+          .width('100%')
+          .backgroundColor('#1E1E22')
 
-          Scroll() {
-            Text(this.getOverview())
-              .fontSize(18).fontColor('#DDDDDD').lineHeight(32)
-              .width('100%')
+          // 分隔线
+          Divider().color('#2E2E34').strokeWidth(1)
+
+          // ── 内容区（左右双面板）────────────────────
+          Row() {
+            // 左面板：海报 + 剧集元数据
+            Column({ space: 20 }) {
+              // 海报缩略图
+              Image(this.getDialogPosterUrl())
+                .width(124).height(174)
+                .borderRadius(6)
+                .objectFit(ImageFit.Cover)
+                .backgroundColor('#2A2A2E')
+
+              // 剧集标题
+              Text(this.getTitle())
+                .fontSize(22).fontWeight(FontWeight.Bold).fontColor('#F0F0F0')
+                .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .lineHeight(32)
+                .width('100%')
+
+              // 元数据
+              Column({ space: 8 }) {
+                if (this.getGenresText().length > 0) {
+                  Text(`风格：${this.getGenresText()}`)
+                    .fontSize(18).fontColor('#AAAAAA')
+                }
+                if (this.getTotalEpisodesText().length > 0) {
+                  Text(`${this.getTotalEpisodesText()}`)
+                    .fontSize(18).fontColor('#AAAAAA')
+                }
+                if (this.getYear().length > 0) {
+                  Text(`${this.getYear()}`)
+                    .fontSize(18).fontColor('#AAAAAA')
+                }
+              }
+              .alignItems(HorizontalAlign.Start).width('100%')
+            }
+            .width('28%')
+            .padding({ left: 48, right: 32, top: 48, bottom: 48 })
+            .alignItems(HorizontalAlign.Start)
+
+            // 垂直分隔线
+            Divider().vertical(true).color('#2A2A2E').strokeWidth(1).height('100%')
+
+            // 右面板：全文简介
+            Scroll() {
+              Text(this.getOverview())
+                .fontSize(20).fontColor('#C8C8D0').lineHeight(36)
+                .width('100%')
+            }
+            .scrollable(ScrollDirection.Vertical)
+            .scrollBar(BarState.Auto)
+            .scrollBarColor('#555560')
+            .layoutWeight(1)
+            .padding({ left: 40, right: 40, top: 48, bottom: 48 })
           }
-          .scrollable(ScrollDirection.Vertical)
-          .scrollBar(BarState.Auto)
-          .constraintSize({ maxHeight: 440 })
+          .alignItems(VerticalAlign.Top)
+          .layoutWeight(1)
         }
-        .padding({ left: 48, right: 48, top: 40, bottom: 40 })
-        .backgroundColor('#1E1E1E')
-        .borderRadius(12)
-        .border({ width: 1, color: '#33FFFFFF' })
-        .constraintSize({ maxWidth: 860, minWidth: 500 })
+        .width('85%').height('88%')
+        .backgroundColor('#18181C')
+        .borderRadius(16)
+        .border({ width: 1, color: '#2A2A2E' })
+        .clip(true)
       }
       .width('100%').height('100%')
     }
