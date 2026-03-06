@@ -94,4 +94,8 @@ export class PlayerEvents {
     eventId: 13,
     priority: emitter.EventPriority.HIGH
   };
+  static readonly APP_BACKGROUND: emitter.InnerEvent = {
+    eventId: 14,
+    priority: emitter.EventPriority.HIGH
+  };
 }

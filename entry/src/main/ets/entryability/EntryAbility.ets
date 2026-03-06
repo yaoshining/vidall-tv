@@ -4,6 +4,8 @@ import { window } from '@kit.ArkUI';
 import { IBestInit } from "@ibestservices/ibest-ui"
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
+import { emitter } from '@kit.BasicServicesKit';
+import { PlayerEvents } from '../components/core/player/Constants';
 
 const DOMAIN = 0x0000;
 
@@ -83,5 +85,7 @@ export default class EntryAbility extends UIAbility {
   onBackground(): void {
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
+    // 通知正在播放的播放器页面立即落盘进度
+    emitter.emit(PlayerEvents.APP_BACKGROUND);
   }
 }

@@ -155,14 +155,25 @@ export interface TvEpisodeEntity {
 }
 
 // ─────────────────────────────────────────────
-// 播放历史
+// 播放进度（含媒体库上下文关联）
 // ─────────────────────────────────────────────
 
-export interface PlayHistoryEntity {
+/** 播放进度实体（对应 play_progress 表） */
+export interface PlayProgressEntity {
   id?: number;
+  /** 关联 videos.id */
   videoId: number;
+  /** TMDB 剧集 ID，电影为空字符串 */
+  seriesProviderId: string;
+  /** 季号，电影为 0 */
+  seasonNumber: number;
+  /** 集号，电影为 0 */
+  episodeNumber: number;
+  /** 上次播放位置（毫秒） */
   positionMs: number;
+  /** 视频总时长（毫秒） */
   durationMs: number;
+  /** 最后更新时间戳 */
   updatedAt: number;
 }
 
