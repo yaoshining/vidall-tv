@@ -82,6 +82,7 @@ export struct SeriesDetailPage {
   @Local cast: ScrapeCredit[] = []
   @Local similarSeries: SimilarSeriesItem[] = []
   @Local isLoading: boolean = false
+  @Local showOverviewDialog: boolean = false
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -114,6 +115,13 @@ export struct SeriesDetailPage {
 
   private getSeasonPosterUrl(s: TmdbRawSeason): string {
     return tmdbImageUrl(s.poster_path, 'w342');
+  }
+
+  /** 第N季 / 特别篇 */
+  private getSeasonLabel(s: TmdbRawSeason): string {
+    const n = s.season_number ?? 0;
+    if (n === 0) { return '特别篇'; }
+    return `第 ${n} 季`;
   }
 
   private getCastProfileUrl(c: ScrapeCredit): string {
@@ -159,7 +167,15 @@ export struct SeriesDetailPage {
             if (bn === 0 && an !== 0) { return -1; }
             return an - bn;
           });
-          this.seasons = rawSeasons;
+          // 仅显示 scrape_info 中已刮削的季
+          const scrapedNums = await db.getScrapedSeasonNumbers(seriesId);
+          const filteredSeasons: TmdbRawSeason[] = [];
+          for (const s of rawSeasons) {
+            if (scrapedNums.indexOf(s.season_number ?? -1) >= 0) {
+              filteredSeasons.push(s);
+            }
+          }
+          this.seasons = filteredSeasons;
         } catch (e) { this.seasons = []; }
       }
 
@@ -365,11 +381,18 @@ export struct SeriesDetailPage {
 
           // 简介
           if (this.getOverview().length > 0) {
-            Text(this.getOverview())
-              .fontSize(16).fontColor('#BBBBBB')
-              .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .lineHeight(26)
-              .constraintSize({ maxWidth: 700 })
+            Column({ space: 6 }) {
+              Text(this.getOverview())
+                .fontSize(16).fontColor('#BBBBBB')
+                .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .lineHeight(26)
+                .constraintSize({ maxWidth: 700 })
+              Text('更多')
+                .fontSize(14).fontColor('#1B78F2')
+                .fontWeight(FontWeight.Medium)
+                .onClick(() => { this.showOverviewDialog = true; })
+            }
+            .alignItems(HorizontalAlign.Start)
           }
         }
         .layoutWeight(1)
@@ -406,11 +429,9 @@ export struct SeriesDetailPage {
                     .hoverEffect(HoverEffect.Scale)
                 } else {
                   Column() {
-                    Text(s.name ?? '')
-                      .fontSize(12).fontColor('#CCCCCC')
+                    Text(this.getSeasonLabel(s))
+                      .fontSize(14).fontColor('#CCCCCC')
                       .textAlign(TextAlign.Center)
-                      .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-                      .padding(8)
                   }
                   .width(140).aspectRatio(2 / 3)
                   .backgroundColor('#2A2A2A').borderRadius(6)
@@ -418,17 +439,11 @@ export struct SeriesDetailPage {
                   .hoverEffect(HoverEffect.Scale)
                 }
 
-                // 季名称
-                Text(s.name ?? '')
+                // 第N季标签
+                Text(this.getSeasonLabel(s))
                   .fontSize(14).fontColor('#CCCCCC')
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .width(140)
-
-                // 集数
-                if (s.episode_count !== undefined && s.episode_count > 0) {
-                  Text(`${s.episode_count} 集`)
-                    .fontSize(12).fontColor('#666666').width(140)
-                }
               }
               .width(140).alignItems(HorizontalAlign.Start)
             }, (s: TmdbRawSeason) => String(s.id ?? s.season_number ?? 0))
@@ -459,18 +474,18 @@ export struct SeriesDetailPage {
           Row({ space: 24 }) {
             ForEach(this.cast.slice(0, 15), (c: ScrapeCredit) => {
               Column({ space: 8 }) {
-                // 头像
+                // 人物照片（长方形）
                 if (this.getCastProfileUrl(c).length > 0) {
                   Image(this.getCastProfileUrl(c))
-                    .width(90).height(90).borderRadius(45)
-                    .objectFit(ImageFit.Cover)
+                    .width(110).aspectRatio(2 / 3)
+                    .objectFit(ImageFit.Cover).borderRadius(6)
                     .hoverEffect(HoverEffect.Scale)
                 } else {
                   Column() {
                     Text(c.name.length > 0 ? c.name.substring(0, 1) : '?')
                       .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
                   }
-                  .width(90).height(90).borderRadius(45)
+                  .width(110).aspectRatio(2 / 3).borderRadius(6)
                   .backgroundColor('#2A2A2A')
                   .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   .hoverEffect(HoverEffect.Scale)
@@ -479,16 +494,16 @@ export struct SeriesDetailPage {
                 Text(c.name)
                   .fontSize(14).fontColor(Color.White)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width(100).textAlign(TextAlign.Center)
+                  .width(110).textAlign(TextAlign.Center)
                 // 饰演角色
                 if (c.role !== undefined && c.role.length > 0) {
                   Text(c.role)
                     .fontSize(12).fontColor('#777777')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    .width(100).textAlign(TextAlign.Center)
+                    .width(110).textAlign(TextAlign.Center)
                 }
               }
-              .width(100).alignItems(HorizontalAlign.Center)
+              .width(110).alignItems(HorizontalAlign.Center)
             }, (c: ScrapeCredit) => c.name)
           }
           .padding({ left: 80, right: 80 })
@@ -573,6 +588,49 @@ export struct SeriesDetailPage {
     }
   }
 
+  /** 简介全文弹窗覆盖层 */
+  @Builder
+  OverviewDialog() {
+    if (this.showOverviewDialog) {
+      Stack({ alignContent: Alignment.Center }) {
+        // 半透明遮罩
+        Column()
+          .width('100%').height('100%')
+          .backgroundColor('#CC000000')
+          .onClick(() => { this.showOverviewDialog = false; })
+
+        // 弹窗卡片
+        Column({ space: 24 }) {
+          Row() {
+            Text('剧情简介')
+              .fontSize(24).fontColor(Color.White).fontWeight(FontWeight.Bold)
+              .layoutWeight(1)
+            Text('✕')
+              .fontSize(24).fontColor('#888888')
+              .padding({ left: 16, right: 0, top: 4, bottom: 4 })
+              .onClick(() => { this.showOverviewDialog = false; })
+          }
+          .alignItems(VerticalAlign.Center).width('100%')
+
+          Scroll() {
+            Text(this.getOverview())
+              .fontSize(18).fontColor('#DDDDDD').lineHeight(32)
+              .width('100%')
+          }
+          .scrollable(ScrollDirection.Vertical)
+          .scrollBar(BarState.Auto)
+          .constraintSize({ maxHeight: 440 })
+        }
+        .padding({ left: 48, right: 48, top: 40, bottom: 40 })
+        .backgroundColor('#1E1E1E')
+        .borderRadius(12)
+        .border({ width: 1, color: '#33FFFFFF' })
+        .constraintSize({ maxWidth: 860, minWidth: 500 })
+      }
+      .width('100%').height('100%')
+    }
+  }
+
   // ── 构建 ──────────────────────────────────────
 
   build() {
@@ -593,6 +651,9 @@ export struct SeriesDetailPage {
         .width('100%').height('100%')
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.None)
+
+        // 简介全文弹窗
+        this.OverviewDialog()
 
         // 顶部透明导航栏（后退按钮）
         Row() {

@@ -1068,6 +1068,23 @@ export class FileSourceDatabase {
     } catch { return null; }
   }
 
+  /** 查询 scrape_info 中某剧已刮削的所有季号（用于季列表过滤） */
+  async getScrapedSeasonNumbers(tvSeriesId: number): Promise<number[]> {
+    if (this.rdbStore === null) { return []; }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
+      pred.equalTo('tv_series_id', tvSeriesId).and().isNotNull('season_number');
+      const rs = await this.rdbStore.query(pred, ['season_number']);
+      const nums: number[] = [];
+      while (rs.goToNextRow()) {
+        const n = rs.getLong(rs.getColumnIndex('season_number'));
+        if (nums.indexOf(n) < 0) { nums.push(n); }
+      }
+      rs.close();
+      return nums;
+    } catch { return []; }
+  }
+
   async upsertScrapeInfo(e: ScrapeInfoEntity): Promise<void> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
     // 诊断日志
