@@ -21,49 +21,6 @@ struct ResourceLibrarySettingBuilderComponent {
     }
   }
 
-  private showApiKeyDialog(): void {
-    AlertDialog.show({
-      title: 'TMDB API Key 配置',
-      message: 'TMDB (The Movie Database) 是免费的电影数据库，需要注册获取 API Key。\n\n' +
-        '获取步骤：\n' +
-        '1. 访问 themoviedb.org 注册账号\n' +
-        '2. 进入设置 → API 获取 API Key (v3 auth)\n' +
-        '3. 将 API Key 填入下方输入框',
-      autoCancel: false,
-      secondaryButton: {
-        value: '取消',
-        action: () => {}
-      },
-      primaryButton: {
-        value: '配置',
-        action: () => {
-          this.showApiKeyInputDialog();
-        }
-      }
-    });
-  }
-
-  private showApiKeyInputDialog(): void {
-    // 使用 TextInput 的 AlertDialog 变体
-
-    AlertDialog.show({
-      title: '输入 TMDB API Key',
-      message: '当前值：' + (this.tmdbApiKey ? '已配置' : '未配置'),
-      autoCancel: false,
-      secondaryButton: {
-        value: '取消',
-        action: () => {}
-      },
-      primaryButton: {
-        value: '保存',
-        action: () => {
-          // 由于 AlertDialog 不支持 TextInput，我们使用 prompt 方式
-          this.showPromptForApiKey();
-        }
-      }
-    });
-  }
-
   private showClearApiKeyDialog(): void {
     AlertDialog.show({
       title: '清除 API Key',
@@ -79,21 +36,6 @@ struct ResourceLibrarySettingBuilderComponent {
           this.saveApiKey('');
         }
       }
-    });
-  }
-
-  private showPromptForApiKey(): void {
-    // HarmonyOS AlertDialog 不支持输入框，需要创建自定义对话框
-    // 暂时使用简化方案：点击后显示当前值，引导用户手动输入
-    promptAction.showDialog({
-      title: '设置 API Key',
-      message: '请使用设置页面输入框修改 API Key',
-      buttons: [
-        {
-          text: '确定',
-          color: '#007DFF'
-        }
-      ]
     });
   }
 
@@ -136,30 +78,39 @@ struct ResourceLibrarySettingBuilderComponent {
           .width('100%')
           .height(48)
           .padding({ left: 16, right: 16 })
-          .onClick(() => {
-            this.showApiKeyDialog();
-          })
 
-          // API Key 输入框（简化方案）
+          // 始终显示输入框，支持首次配置和更新
+          TextInput({ text: this.tmdbApiKey, placeholder: "输入 TMDB API Key" })
+            .type(InputType.Password)
+            .height(40)
+            .fontSize(14)
+            .margin({ left: 16, right: 16, bottom: 8 })
+            .enabled(!this.isLoading)
+            .onChange((value: string) => {
+              this.tmdbApiKey = value;
+            })
+            .onSubmit(() => {
+              this.saveApiKey(this.tmdbApiKey);
+            })
+
+          // 保存按钮（始终显示）
+          Button('保存')
+            .width('90%')
+            .height(36)
+            .fontSize(14)
+            .margin({ left: 16, right: 16, bottom: 8 })
+            .enabled(!this.isLoading && this.tmdbApiKey.length > 0)
+            .onClick(() => {
+              this.saveApiKey(this.tmdbApiKey);
+            })
+
+          // 清除按钮（仅已配置时显示）
           if (this.tmdbApiKey) {
-            TextInput({ text: this.tmdbApiKey, placeholder: "输入 TMDB API Key" })
-              .type(InputType.Password)
-              .height(40)
-              .fontSize(14)
-              .margin({ left: 16, right: 16, bottom: 8 })
-              .enabled(!this.isLoading)
-              .onChange((value: string) => {
-                this.tmdbApiKey = value;
-              })
-              .onSubmit(() => {
-                this.saveApiKey(this.tmdbApiKey);
-              })
-
-            // 清除按钮
             Button('清除 API Key')
               .width('90%')
               .height(36)
               .fontSize(14)
+              .fontColor('#FF5252')
               .margin({ left: 16, right: 16, bottom: 8 })
               .buttonStyle(ButtonStyleMode.TEXTUAL)
               .enabled(!this.isLoading)
