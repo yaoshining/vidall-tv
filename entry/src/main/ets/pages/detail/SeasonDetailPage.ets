@@ -274,6 +274,10 @@ export struct SeasonDetailPage {
     return `${pct}%`;
   }
 
+  private getEpisodeActionButtonBgColor(): string {
+    return '#662C2F33';
+  }
+
   // ── 数据加载 ──────────────────────────────────
 
   private async loadData(seriesId: number, seasonNumber: number): Promise<void> {
@@ -565,14 +569,14 @@ export struct SeasonDetailPage {
             Text('想看').fontSize(14).fontColor('#CCCCCC')
           }
           .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor('#FFFFFF22').borderRadius(6)
+          .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(6)
 
           Row({ space: 8 }) {
             Text('♥').fontSize(16).fontColor('#CCCCCC')
             Text('收藏').fontSize(14).fontColor('#CCCCCC')
           }
           .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor('#FFFFFF22').borderRadius(6)
+          .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(6)
         }
         .alignItems(VerticalAlign.Center)
       }
@@ -598,12 +602,12 @@ export struct SeasonDetailPage {
               .fontSize(22).fontColor('#CCCCCC')
               .width(36).height(36)
               .textAlign(TextAlign.Center)
-              .backgroundColor('#FFFFFF22').borderRadius(18)
+              .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(18)
             Text('›')
               .fontSize(22).fontColor('#CCCCCC')
               .width(36).height(36)
               .textAlign(TextAlign.Center)
-              .backgroundColor('#FFFFFF22').borderRadius(18)
+              .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(18)
           }
         }
         .width('100%')
@@ -669,7 +673,7 @@ export struct SeasonDetailPage {
               .onClick(() => { this.playEpisode(ep.mediaItem); })
 
               // 信息列
-              Column({ space: 10 }) {
+              Column({ space: 12 }) {
                 // 集标题
                 Text(this.getEpisodeLabel(ep))
                   .fontSize(20).fontColor(Color.White).fontWeight(FontWeight.Bold)
@@ -700,8 +704,9 @@ export struct SeasonDetailPage {
                 // 简介
                 if (this.getEpisodeOverview(ep).length > 0) {
                   Text(this.getEpisodeOverview(ep))
-                    .fontSize(15).fontColor('#AAAAAA').lineHeight(1.65)
-                    .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .fontSize(15).fontColor('#AAAAAA').lineHeight(24)
+                    .height(96)
+                    .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
               }
               .layoutWeight(1)
@@ -715,22 +720,22 @@ export struct SeasonDetailPage {
                   .fontSize(18).fontColor('#CCCCCC')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor('#FFFFFF22').borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
                 Text('✓')
                   .fontSize(18).fontColor('#CCCCCC')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor('#FFFFFF22').borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
                 Text('♥')
                   .fontSize(18).fontColor('#CCCCCC')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor('#FFFFFF22').borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
                 Text('⋮')
                   .fontSize(18).fontColor('#CCCCCC')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor('#FFFFFF22').borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
               }
               .alignSelf(ItemAlign.Center)
             }
