@@ -222,13 +222,14 @@ export struct VideoPlayer {
   @Builder
   SubtitleRenderer() {
     if (this.parsedSubtitle && this.parsedSubtitle.lines.length > 0) {
-      Column({ space: 2 }) {
+      Column({ space: 6 }) {
         ForEach(this.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
           Row({ space: 2 }) {
             ForEach(line, (segment: SubtitleSegment, segmentIndex: number) => {
               Text(segment.text)
                 // .fontSize(segment.fontSize || 20)
                 .fontSize(30)
+                .lineHeight(34)
                 .fontColor(segment.fontColor || Color.White)
                 .fontWeight(segment.bold ? FontWeight.Bold : FontWeight.Normal)
                 .fontStyle(segment.italic ? FontStyle.Italic : FontStyle.Normal)

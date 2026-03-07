@@ -565,18 +565,20 @@ export struct SeasonDetailPage {
           })
 
           Row({ space: 8 }) {
-            Text('✓').fontSize(16).fontColor('#CCCCCC')
-            Text('想看').fontSize(14).fontColor('#CCCCCC')
+            Text('✓').fontSize(16).fontColor('#AEB4BC')
+            Text('想看').fontSize(14).fontColor('#AEB4BC')
           }
           .padding({ left: 18, right: 18, top: 10, bottom: 10 })
           .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(6)
+          .border({ width: 1, color: '#33414B56' })
 
           Row({ space: 8 }) {
-            Text('♥').fontSize(16).fontColor('#CCCCCC')
-            Text('收藏').fontSize(14).fontColor('#CCCCCC')
+            Text('♥').fontSize(16).fontColor('#AEB4BC')
+            Text('收藏').fontSize(14).fontColor('#AEB4BC')
           }
           .padding({ left: 18, right: 18, top: 10, bottom: 10 })
           .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(6)
+          .border({ width: 1, color: '#33414B56' })
         }
         .alignItems(VerticalAlign.Center)
       }
@@ -717,22 +719,22 @@ export struct SeasonDetailPage {
               // 操作按钮行
               Row({ space: 8 }) {
                 Text('ⓘ')
-                  .fontSize(18).fontColor('#CCCCCC')
+                  .fontSize(18).fontColor('#B5BBC4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
                   .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
                 Text('✓')
-                  .fontSize(18).fontColor('#CCCCCC')
+                  .fontSize(18).fontColor('#B5BBC4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
                   .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
                 Text('♥')
-                  .fontSize(18).fontColor('#CCCCCC')
+                  .fontSize(18).fontColor('#B5BBC4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
                   .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
                 Text('⋮')
-                  .fontSize(18).fontColor('#CCCCCC')
+                  .fontSize(18).fontColor('#C6CCD4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
                   .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
