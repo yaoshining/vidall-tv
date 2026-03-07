@@ -809,7 +809,9 @@ export struct SeasonDetailPage {
                       .width(this.getProgressPercent(ep))
                       .height('100%')
                       .backgroundColor('#1B78F2').borderRadius(2)
+                      .alignSelf(ItemAlign.Start)
                   }
+                  .alignItems(HorizontalAlign.Start)
                   .width(310).height(4)
                   .backgroundColor('#2E2E2E').borderRadius(2)
                   .position({ left: 0, bottom: 0 })

@@ -612,7 +612,9 @@ export struct SeriesDetailPage {
                 .width(`${Math.round(this.getEpisodeProgress(this.lastEpisode) * 100)}%`)
                 .height('100%')
                 .backgroundColor('#1B78F2').borderRadius(2)
+                .alignSelf(ItemAlign.Start)
             }
+            .alignItems(HorizontalAlign.Start)
             .width('100%').height(4)
             .backgroundColor('#2E2E2E').borderRadius(2)
 
@@ -659,7 +661,9 @@ export struct SeriesDetailPage {
               Column()
                 .width('0%').height('100%')
                 .backgroundColor('#1B78F2').borderRadius(2)
+                .alignSelf(ItemAlign.Start)
             }
+            .alignItems(HorizontalAlign.Start)
             .width('100%').height(4)
             .backgroundColor('#2E2E2E').borderRadius(2)
 
