@@ -621,7 +621,7 @@ export struct SeasonDetailPage {
           Column({ space: 0 }) {
             // 分割线（首条不加）
             if (idx > 0) {
-              Divider().color('#2E2E2E').strokeWidth(1)
+              Divider().color('#24282D').strokeWidth(1)
             }
 
             // 集条目行

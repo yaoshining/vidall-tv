@@ -12,6 +12,8 @@ struct VideoControls {
   private AUTO_CLOSE_TIMEOUT = 5000
   @Local showSubtitleMenu: boolean = false
   @Local showAudioMenu: boolean = false
+  @Local audioButtonFocused: boolean = false
+  @Local subtitleButtonFocused: boolean = false
   @Local sliderHovered: boolean = false
   // ── 进度条 hover tooltip ──
   @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
@@ -193,8 +195,12 @@ struct VideoControls {
                 .fontColor(Color.White)
             }
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .backgroundColor('rgba(0, 0, 0, 0.5)')
+            .backgroundColor(this.audioButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
             .borderRadius(20)
+            .border({ width: this.audioButtonFocused ? 2 : 1, color: this.audioButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
+            .focusable(true)
+            .onFocus(() => { this.audioButtonFocused = true })
+            .onBlur(() => { this.audioButtonFocused = false })
             .onClick(() => {
               this.showAudioMenu = !this.showAudioMenu
               clearTimeout(this.closeTimer)
@@ -212,8 +218,12 @@ struct VideoControls {
                 .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
             }
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .backgroundColor('rgba(0, 0, 0, 0.5)')
+            .backgroundColor(this.subtitleButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
             .borderRadius(20)
+            .border({ width: this.subtitleButtonFocused ? 2 : 1, color: this.subtitleButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
+            .focusable(true)
+            .onFocus(() => { this.subtitleButtonFocused = true })
+            .onBlur(() => { this.subtitleButtonFocused = false })
             .onClick(() => {
               this.showSubtitleMenu = !this.showSubtitleMenu
               clearTimeout(this.closeTimer)
