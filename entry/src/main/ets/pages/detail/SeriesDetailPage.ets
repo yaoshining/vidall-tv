@@ -136,6 +136,9 @@ export struct SeriesDetailPage {
   @Local lastEpisode: MediaItem | null = null
   /** 默认展示的第一集信息（S01E01 fallback），从 tv_episodes 加载 */
   @Local firstEpisode: TvEpisodeEntity | undefined = undefined
+  /** ContinueWatchingCard 主按钮交互状态 */
+  @Local focusedContinueActionKey: string = ''
+  @Local hoveredContinueActionKey: string = ''
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -567,6 +570,46 @@ export struct SeriesDetailPage {
     return this.getEpisodeProgress(episode) >= 0.95;
   }
 
+  private isContinueActionFocused(action: string): boolean {
+    return this.focusedContinueActionKey === action;
+  }
+
+  private isContinueActionHovered(action: string): boolean {
+    return this.hoveredContinueActionKey === action;
+  }
+
+  private clearContinueActionFocusIfMatches(action: string): void {
+    if (this.focusedContinueActionKey === action) {
+      this.focusedContinueActionKey = '';
+    }
+  }
+
+  private clearContinueActionHoverIfMatches(action: string): void {
+    if (this.hoveredContinueActionKey === action) {
+      this.hoveredContinueActionKey = '';
+    }
+  }
+
+  private getContinueActionButtonBgColor(action: string): string {
+    if (this.isContinueActionFocused(action)) {
+      return '#3C8FF6';
+    }
+    if (this.isContinueActionHovered(action)) {
+      return '#2E82EA';
+    }
+    return '#1B78F2';
+  }
+
+  private getContinueActionButtonBorderColor(action: string): string {
+    if (this.isContinueActionFocused(action)) {
+      return '#66A9D8FF';
+    }
+    if (this.isContinueActionHovered(action)) {
+      return '#7FB7F4';
+    }
+    return '#00FFFFFF';
+  }
+
   /** 继续播放卡片（右下角） */
   @Builder
   ContinueWatchingCard() {
@@ -626,7 +669,18 @@ export struct SeriesDetailPage {
                   .fontSize(14).fontColor(Color.White).fontWeight(FontWeight.Bold)
               }
               .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-              .backgroundColor('#1B78F2').borderRadius(4)
+              .backgroundColor(this.getContinueActionButtonBgColor('resume')).borderRadius(4)
+              .border({ width: 2, color: this.getContinueActionButtonBorderColor('resume') })
+              .focusable(true)
+              .onFocus(() => { this.focusedContinueActionKey = 'resume'; })
+              .onBlur(() => { this.clearContinueActionFocusIfMatches('resume'); })
+              .onHover((isHover: boolean) => {
+                if (isHover) {
+                  this.hoveredContinueActionKey = 'resume';
+                } else {
+                  this.clearContinueActionHoverIfMatches('resume');
+                }
+              })
               .onClick(() => {
                 if (this.lastEpisode !== null) { this.playEpisode(this.lastEpisode); }
               })
@@ -673,7 +727,18 @@ export struct SeriesDetailPage {
                 Text('开始播放').fontSize(14).fontColor(Color.White).fontWeight(FontWeight.Bold)
               }
               .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-              .backgroundColor('#1B78F2').borderRadius(4)
+              .backgroundColor(this.getContinueActionButtonBgColor('start')).borderRadius(4)
+              .border({ width: 2, color: this.getContinueActionButtonBorderColor('start') })
+              .focusable(true)
+              .onFocus(() => { this.focusedContinueActionKey = 'start'; })
+              .onBlur(() => { this.clearContinueActionFocusIfMatches('start'); })
+              .onHover((isHover: boolean) => {
+                if (isHover) {
+                  this.hoveredContinueActionKey = 'start';
+                } else {
+                  this.clearContinueActionHoverIfMatches('start');
+                }
+              })
               .onClick(() => {
                 const eps = this.group?.episodes ?? [];
                 if (eps.length > 0) { this.playEpisode(eps[0]); }
