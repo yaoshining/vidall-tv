@@ -15,6 +15,7 @@ struct VideoControls {
   @Local audioButtonFocused: boolean = false
   @Local subtitleButtonFocused: boolean = false
   @Local sliderHovered: boolean = false
+  @Local sliderFocused: boolean = false
   // ── 进度条 hover tooltip ──
   @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
   @Local sliderWidth: number = 0      // Slider 组件实际宽度（vp）
@@ -290,8 +291,9 @@ struct VideoControls {
               max: this.videoController.duration,
               style: SliderStyle.OutSet
             })
-              .blockSize({ width: this.sliderHovered ? 20 : 12, height: this.sliderHovered ? 20 : 12 })
-              .trackThickness(this.sliderHovered ? 8 : 4)
+              .blockSize({ width: (this.sliderHovered || this.sliderFocused) ? 20 : 12, height: (this.sliderHovered || this.sliderFocused) ? 20 : 12 })
+              .trackThickness((this.sliderHovered || this.sliderFocused) ? 8 : 4)
+              .focusable(true)
               .onChange((value, mode) => {
                 this.hoverTimeMs = value
                 if (mode === SliderChangeMode.Begin) {
@@ -331,10 +333,12 @@ struct VideoControls {
                 }
               })
               .onFocus(() => {
+                this.sliderFocused = true
                 this.sliderHovered = true
                 this.hoverTimeMs = this.videoController.currentTime
               })
               .onBlur(() => {
+                this.sliderFocused = false
                 this.sliderHovered = false
               })
               .onAreaChange((_oldVal, newVal) => {

@@ -129,6 +129,10 @@ export struct SeasonDetailPage {
   @Local seasonOverview: string = ''
   @Local seasonTitle: string = ''
   @Local seasonEntity: TvSeasonEntity | null = null
+  @Local focusedEpisodeActionKey: string = ''
+  @Local hoveredEpisodeActionKey: string = ''
+  @Local focusedHeroActionKey: string = ''
+  @Local hoveredHeroActionKey: string = ''
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -272,6 +276,117 @@ export struct SeasonDetailPage {
   private getProgressPercent(ep: SeasonEpisodeItem): string {
     const pct = Math.round(this.getEpisodeProgress(ep.mediaItem) * 100);
     return `${pct}%`;
+  }
+
+  private buildEpisodeActionKey(ep: SeasonEpisodeItem, action: string): string {
+    const id = ep.mediaItem.id ?? -1;
+    return `${id}-${action}`;
+  }
+
+  private isEpisodeActionFocused(ep: SeasonEpisodeItem, action: string): boolean {
+    return this.focusedEpisodeActionKey === this.buildEpisodeActionKey(ep, action);
+  }
+
+  private isEpisodeActionHovered(ep: SeasonEpisodeItem, action: string): boolean {
+    return this.hoveredEpisodeActionKey === this.buildEpisodeActionKey(ep, action);
+  }
+
+  private clearEpisodeActionFocusIfMatches(ep: SeasonEpisodeItem, action: string): void {
+    const key = this.buildEpisodeActionKey(ep, action);
+    if (this.focusedEpisodeActionKey === key) {
+      this.focusedEpisodeActionKey = '';
+    }
+  }
+
+  private clearEpisodeActionHoverIfMatches(ep: SeasonEpisodeItem, action: string): void {
+    const key = this.buildEpisodeActionKey(ep, action);
+    if (this.hoveredEpisodeActionKey === key) {
+      this.hoveredEpisodeActionKey = '';
+    }
+  }
+
+  private getEpisodeActionCircleBg(ep: SeasonEpisodeItem, action: string): string {
+    if (this.isEpisodeActionFocused(ep, action)) {
+      return 'rgba(27, 120, 242, 0.36)';
+    }
+    if (this.isEpisodeActionHovered(ep, action)) {
+      return 'rgba(255, 255, 255, 0.20)';
+    }
+    return this.getEpisodeActionButtonBgColor();
+  }
+
+  private getEpisodeActionCircleBorder(ep: SeasonEpisodeItem, action: string): string {
+    if (this.isEpisodeActionFocused(ep, action)) {
+      return '#66A9D8FF';
+    }
+    if (this.isEpisodeActionHovered(ep, action)) {
+      return 'rgba(255, 255, 255, 0.38)';
+    }
+    return 'rgba(255, 255, 255, 0.18)';
+  }
+
+  private isHeroActionFocused(action: string): boolean {
+    return this.focusedHeroActionKey === action;
+  }
+
+  private isHeroActionHovered(action: string): boolean {
+    return this.hoveredHeroActionKey === action;
+  }
+
+  private isHeroActionActive(action: string): boolean {
+    return this.isHeroActionFocused(action) || this.isHeroActionHovered(action);
+  }
+
+  private clearHeroActionFocusIfMatches(action: string): void {
+    if (this.focusedHeroActionKey === action) {
+      this.focusedHeroActionKey = '';
+    }
+  }
+
+  private clearHeroActionHoverIfMatches(action: string): void {
+    if (this.hoveredHeroActionKey === action) {
+      this.hoveredHeroActionKey = '';
+    }
+  }
+
+  private getHeroPlayButtonBgColor(): string {
+    if (this.isHeroActionFocused('play')) {
+      return '#3C8FF6';
+    }
+    if (this.isHeroActionHovered('play')) {
+      return '#2E82EA';
+    }
+    return '#1B78F2';
+  }
+
+  private getHeroSecondaryButtonBgColor(action: string): string {
+    if (this.isHeroActionFocused(action)) {
+      return 'rgba(27, 120, 242, 0.36)';
+    }
+    if (this.isHeroActionHovered(action)) {
+      return 'rgba(255, 255, 255, 0.20)';
+    }
+    return this.getEpisodeActionButtonBgColor();
+  }
+
+  private getHeroSecondaryButtonBorderColor(action: string): string {
+    if (this.isHeroActionFocused(action)) {
+      return '#66A9D8FF';
+    }
+    if (this.isHeroActionHovered(action)) {
+      return 'rgba(255, 255, 255, 0.38)';
+    }
+    return '#00FFFFFF';
+  }
+
+  private getHeroPlayButtonBorderColor(): string {
+    if (this.isHeroActionFocused('play')) {
+      return '#66A9D8FF';
+    }
+    if (this.isHeroActionHovered('play')) {
+      return '#7FB7F4';
+    }
+    return '#00FFFFFF';
   }
 
   private getEpisodeActionButtonBgColor(): string {
@@ -557,7 +672,18 @@ export struct SeasonDetailPage {
             Text('开始播放').fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
           }
           .padding({ left: 24, right: 24, top: 10, bottom: 10 })
-          .backgroundColor('#1B78F2').borderRadius(6)
+          .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(6)
+          .border({ width: 2, color: this.getHeroPlayButtonBorderColor() })
+          .focusable(true)
+          .onFocus(() => { this.focusedHeroActionKey = 'play'; })
+          .onBlur(() => { this.clearHeroActionFocusIfMatches('play'); })
+          .onHover((isHover: boolean) => {
+            if (isHover) {
+              this.hoveredHeroActionKey = 'play';
+            } else {
+              this.clearHeroActionHoverIfMatches('play');
+            }
+          })
           .onClick(() => {
             if (this.seasonEpisodes.length > 0) {
               this.playEpisode(this.seasonEpisodes[0].mediaItem);
@@ -569,16 +695,36 @@ export struct SeasonDetailPage {
             Text('想看').fontSize(14).fontColor('#AEB4BC')
           }
           .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(6)
-          .border({ width: 1, color: '#33414B56' })
+          .backgroundColor(this.getHeroSecondaryButtonBgColor('wish')).borderRadius(6)
+          .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('wish') })
+          .focusable(true)
+          .onFocus(() => { this.focusedHeroActionKey = 'wish'; })
+          .onBlur(() => { this.clearHeroActionFocusIfMatches('wish'); })
+          .onHover((isHover: boolean) => {
+            if (isHover) {
+              this.hoveredHeroActionKey = 'wish';
+            } else {
+              this.clearHeroActionHoverIfMatches('wish');
+            }
+          })
 
           Row({ space: 8 }) {
             Text('♥').fontSize(16).fontColor('#AEB4BC')
             Text('收藏').fontSize(14).fontColor('#AEB4BC')
           }
           .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(6)
-          .border({ width: 1, color: '#33414B56' })
+          .backgroundColor(this.getHeroSecondaryButtonBgColor('favorite')).borderRadius(6)
+          .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('favorite') })
+          .focusable(true)
+          .onFocus(() => { this.focusedHeroActionKey = 'favorite'; })
+          .onBlur(() => { this.clearHeroActionFocusIfMatches('favorite'); })
+          .onHover((isHover: boolean) => {
+            if (isHover) {
+              this.hoveredHeroActionKey = 'favorite';
+            } else {
+              this.clearHeroActionHoverIfMatches('favorite');
+            }
+          })
         }
         .alignItems(VerticalAlign.Center)
       }
@@ -722,22 +868,66 @@ export struct SeasonDetailPage {
                   .fontSize(18).fontColor('#B5BBC4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'info')).borderRadius(22)
+                  .border({ width: this.isEpisodeActionFocused(ep, 'info') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'info') })
+                  .focusable(true)
+                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'info'); })
+                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'info'); })
+                  .onHover((isHover: boolean) => {
+                    if (isHover) {
+                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'info');
+                    } else {
+                      this.clearEpisodeActionHoverIfMatches(ep, 'info');
+                    }
+                  })
                 Text('✓')
                   .fontSize(18).fontColor('#B5BBC4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'check')).borderRadius(22)
+                  .border({ width: this.isEpisodeActionFocused(ep, 'check') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'check') })
+                  .focusable(true)
+                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'check'); })
+                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'check'); })
+                  .onHover((isHover: boolean) => {
+                    if (isHover) {
+                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'check');
+                    } else {
+                      this.clearEpisodeActionHoverIfMatches(ep, 'check');
+                    }
+                  })
                 Text('♥')
                   .fontSize(18).fontColor('#B5BBC4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'heart')).borderRadius(22)
+                  .border({ width: this.isEpisodeActionFocused(ep, 'heart') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'heart') })
+                  .focusable(true)
+                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'heart'); })
+                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'heart'); })
+                  .onHover((isHover: boolean) => {
+                    if (isHover) {
+                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'heart');
+                    } else {
+                      this.clearEpisodeActionHoverIfMatches(ep, 'heart');
+                    }
+                  })
                 Text('⋮')
                   .fontSize(18).fontColor('#C6CCD4')
                   .width(44).height(44)
                   .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(22)
+                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'more')).borderRadius(22)
+                  .border({ width: this.isEpisodeActionFocused(ep, 'more') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'more') })
+                  .focusable(true)
+                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'more'); })
+                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'more'); })
+                  .onHover((isHover: boolean) => {
+                    if (isHover) {
+                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'more');
+                    } else {
+                      this.clearEpisodeActionHoverIfMatches(ep, 'more');
+                    }
+                  })
               }
               .alignSelf(ItemAlign.Center)
             }
