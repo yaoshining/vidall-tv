@@ -133,6 +133,8 @@ export struct SeasonDetailPage {
   @Local hoveredEpisodeActionKey: string = ''
   @Local focusedHeroActionKey: string = ''
   @Local hoveredHeroActionKey: string = ''
+  @Local focusedEpisodeRowId: number = -1
+  @Local hoveredEpisodeRowId: number = -1
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -276,6 +278,56 @@ export struct SeasonDetailPage {
   private getProgressPercent(ep: SeasonEpisodeItem): string {
     const pct = Math.round(this.getEpisodeProgress(ep.mediaItem) * 100);
     return `${pct}%`;
+  }
+
+  private getEpisodeRowId(ep: SeasonEpisodeItem): number {
+    return ep.mediaItem.id ?? -1;
+  }
+
+  private isEpisodeRowFocused(ep: SeasonEpisodeItem): boolean {
+    return this.focusedEpisodeRowId === this.getEpisodeRowId(ep);
+  }
+
+  private isEpisodeRowHovered(ep: SeasonEpisodeItem): boolean {
+    return this.hoveredEpisodeRowId === this.getEpisodeRowId(ep);
+  }
+
+  private isEpisodeRowActive(ep: SeasonEpisodeItem): boolean {
+    return this.isEpisodeRowFocused(ep) || this.isEpisodeRowHovered(ep);
+  }
+
+  private clearEpisodeRowFocusIfMatches(ep: SeasonEpisodeItem): void {
+    const id = this.getEpisodeRowId(ep);
+    if (this.focusedEpisodeRowId === id) {
+      this.focusedEpisodeRowId = -1;
+    }
+  }
+
+  private clearEpisodeRowHoverIfMatches(ep: SeasonEpisodeItem): void {
+    const id = this.getEpisodeRowId(ep);
+    if (this.hoveredEpisodeRowId === id) {
+      this.hoveredEpisodeRowId = -1;
+    }
+  }
+
+  private getEpisodeRowBgColor(ep: SeasonEpisodeItem): string {
+    if (this.isEpisodeRowFocused(ep)) {
+      return 'rgba(255, 255, 255, 0.10)';
+    }
+    if (this.isEpisodeRowHovered(ep)) {
+      return 'rgba(255, 255, 255, 0.06)';
+    }
+    return '#00000000';
+  }
+
+  private getEpisodeRowBorderColor(ep: SeasonEpisodeItem): string {
+    if (this.isEpisodeRowFocused(ep)) {
+      return '#66A9D8FF';
+    }
+    if (this.isEpisodeRowHovered(ep)) {
+      return 'rgba(255, 255, 255, 0.32)';
+    }
+    return '#00FFFFFF';
   }
 
   private buildEpisodeActionKey(ep: SeasonEpisodeItem, action: string): string {
@@ -935,8 +987,21 @@ export struct SeasonDetailPage {
             }
             .width('100%')
             .padding({ left: 80, right: 80, top: 20, bottom: 20 })
+            .backgroundColor(this.getEpisodeRowBgColor(ep))
+            .borderRadius(8)
+            .border({ width: 2, color: this.getEpisodeRowBorderColor(ep) })
             .alignItems(VerticalAlign.Top)
-            .hoverEffect(HoverEffect.Highlight)
+            .focusable(true)
+            .onFocus(() => { this.focusedEpisodeRowId = this.getEpisodeRowId(ep); })
+            .onBlur(() => { this.clearEpisodeRowFocusIfMatches(ep); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredEpisodeRowId = this.getEpisodeRowId(ep);
+              } else {
+                this.clearEpisodeRowHoverIfMatches(ep);
+              }
+            })
+            .animation({ duration: 140, curve: Curve.EaseInOut })
           }
           .width('100%')
         }, (ep: SeasonEpisodeItem) => String(ep.mediaItem.id))
