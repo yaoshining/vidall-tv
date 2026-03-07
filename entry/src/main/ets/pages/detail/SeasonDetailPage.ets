@@ -742,6 +742,7 @@ export struct SeasonDetailPage {
             .width('100%')
             .padding({ left: 80, right: 80, top: 20, bottom: 20 })
             .alignItems(VerticalAlign.Top)
+            .hoverEffect(HoverEffect.Highlight)
           }
           .width('100%')
         }, (ep: SeasonEpisodeItem) => String(ep.mediaItem.id))

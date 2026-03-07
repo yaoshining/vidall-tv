@@ -174,6 +174,7 @@ struct VideoControls {
       }) {
         Text(this.videoController.name)
           .fontSize($r('app.float.font_h8_title_secondary'))
+          .fontColor(Color.White)
           .textShadow({ radius: 3, offsetX: 3, offsetY: 3, color: Color.Black })
           .width("60%")
           .maxLines(1)
@@ -224,13 +225,13 @@ struct VideoControls {
       }
       .linearGradient({
         direction: GradientDirection.Bottom,
-        colors: [['rgba(0, 0, 0, 0.3)', 0.0], ['rgba(0, 0, 0, 0)', 1.0]]
+        colors: [['rgba(0, 0, 0, 0.58)', 0.0], ['rgba(0, 0, 0, 0)', 1.0]]
       })
       .alignRules({
         left: { anchor: '__container__', align: HorizontalAlign.Start },
         top: { anchor: '__container__', align: VerticalAlign.Top }
       })
-      .height("20%")
+      .height("22%")
       .padding(20)
 
       // ── 播放暂停居中按钮 ──
