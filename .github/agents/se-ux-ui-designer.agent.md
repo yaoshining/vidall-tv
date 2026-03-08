@@ -143,7 +143,7 @@ tools: ['codebase', 'edit/editFiles', 'search', 'web/fetch', 'pencil/*']
 
 2. 工具选择页
    - 关键工具（必需）：Slack、GitHub、Email
-   - 推荐工具：Figma、Jira、Notion
+   - 推荐工具：Figma、Jira、Notion、Pencil
    - 可选工具：AWS Console、Analytics
    - 操作：“先配置关键工具”
 
