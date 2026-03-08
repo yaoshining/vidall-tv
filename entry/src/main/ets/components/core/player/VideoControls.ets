@@ -123,6 +123,67 @@ struct VideoControls {
             this.enableAutoHide()
           })
         })
+
+        // 字幕延迟调整（仅有字幕时显示）
+        if (this.videoController.activeSubtitleIndex >= 0) {
+          ListItem() {
+            Column({ space: 8 }) {
+              Text('字幕延迟')
+                .fontSize(13)
+                .fontColor('rgba(255,255,255,0.6)')
+                .alignSelf(ItemAlign.Start)
+                .padding({ left: 20 })
+              Row({ space: 8 }) {
+                Button('-500ms')
+                  .fontSize(13)
+                  .fontColor(Color.White)
+                  .backgroundColor('rgba(255,255,255,0.15)')
+                  .borderRadius(6)
+                  .height(36)
+                  .onClick(() => {
+                    this.videoController.adjustSubtitleDelay(-500)
+                  })
+                Button('-100ms')
+                  .fontSize(13)
+                  .fontColor(Color.White)
+                  .backgroundColor('rgba(255,255,255,0.15)')
+                  .borderRadius(6)
+                  .height(36)
+                  .onClick(() => {
+                    this.videoController.adjustSubtitleDelay(-100)
+                  })
+                Text(this.getDelayLabel())
+                  .fontSize(13)
+                  .fontColor(this.videoController.subtitleDelayMs === 0 ? 'rgba(255,255,255,0.6)' : '#FFD700')
+                  .width(80)
+                  .textAlign(TextAlign.Center)
+                Button('+100ms')
+                  .fontSize(13)
+                  .fontColor(Color.White)
+                  .backgroundColor('rgba(255,255,255,0.15)')
+                  .borderRadius(6)
+                  .height(36)
+                  .onClick(() => {
+                    this.videoController.adjustSubtitleDelay(100)
+                  })
+                Button('+500ms')
+                  .fontSize(13)
+                  .fontColor(Color.White)
+                  .backgroundColor('rgba(255,255,255,0.15)')
+                  .borderRadius(6)
+                  .height(36)
+                  .onClick(() => {
+                    this.videoController.adjustSubtitleDelay(500)
+                  })
+              }
+              .width('100%')
+              .justifyContent(FlexAlign.Center)
+              .padding({ left: 12, right: 12 })
+            }
+            .width('100%')
+            .padding({ top: 8, bottom: 8 })
+          }
+        }
       }
       .width('100%')
       .backgroundColor('rgba(0, 0, 0, 0.8)')
@@ -412,6 +473,13 @@ struct VideoControls {
       return tracks[idx].displayName;
     }
     return '字幕';
+  }
+
+  /** 格式化字幕延迟偏移显示文本，如 "+500ms"、"0ms"、"-100ms" */
+  private getDelayLabel(): string {
+    const d = this.videoController.subtitleDelayMs;
+    if (d === 0) { return '0ms'; }
+    return d > 0 ? `+${d}ms` : `${d}ms`;
   }
 
   private getActiveAudioName(): string {

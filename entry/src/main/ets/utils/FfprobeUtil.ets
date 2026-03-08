@@ -381,6 +381,20 @@ export class FfprobeUtil {
     }
     return langName;
   }
-}
 
+  /**
+   * 构建字幕轨显示名称
+   * e.g. "中文 (SRT)", "英语 (ASS)", "字幕 1"
+   */
+  static buildSubtitleTrackDisplayName(track: FfprobeTrack, index: number): string {
+    const langName = track.language
+      ? FfprobeUtil.getLanguageDisplayName(track.language)
+      : `字幕 ${index + 1}`;
+    const codecName = FfprobeUtil.getCodecDisplayName(track.codecName);
+    if (codecName) {
+      return `${langName} (${codecName})`;
+    }
+    return langName;
+  }
+}
 

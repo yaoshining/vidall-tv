@@ -84,6 +84,12 @@ export class VideoPlayerController {
   @Trace subtitleUpdateCounter: number = 0
   @Trace allSubtitleTracks: SubtitleTrackItem[] = [];
   @Trace activeSubtitleIndex: number = -1;
+  /**
+   * 字幕延迟偏移（单位 ms）。
+   * 正值表示字幕延迟显示（字幕偏慢，向后调），负值表示提前显示（字幕偏快，向前调）。
+   * 作用于外部 SRT/ASS/VTT 字幕时间轴查找，见 onTimeUpdate 回调。
+   */
+  @Trace subtitleDelayMs: number = 0;
   /** 音轨列表 */
   @Trace audioTracks: AudioTrackItem[] = [];
   @Trace activeAudioIndex: number = -1;
@@ -129,6 +135,7 @@ export class VideoPlayerController {
     this.subtitleUpdateCounter = 0;
     this.allSubtitleTracks = [];
     this.activeSubtitleIndex = -1;
+    this.subtitleDelayMs = 0;
     this.audioTracks = [];
     this.activeAudioIndex = -1;
 
@@ -192,9 +199,16 @@ export class VideoPlayerController {
     adapter.onTimeUpdate((currentTime: number) => {
       this.currentTime = currentTime;
       this.progress = this.duration > 0 ? currentTime / this.duration : 0;
-      // SRT 时间轴驱动字幕
+      // SRT 时间轴驱动字幕（应用字幕延迟偏移）
       if (this.srtEntries.length > 0) {
-        const text = SrtParser.findAt(this.srtEntries, currentTime);
+        // subtitleDelayMs 的含义：
+        //   > 0：用户感觉字幕偏慢，需要"往后推"。公式：adjustedTime = currentTime - delayMs
+        //       相当于在视频 currentTime 时，回溯 delayMs 之前的字幕内容，
+        //       使原本应在 startMs 出现的字幕推迟到 startMs + delayMs 才显示。
+        //   < 0：用户感觉字幕偏快，需要"往前提"。公式同上，减去负数 = 加上绝对值，
+        //       使原本应在 startMs 出现的字幕提前到 startMs + delayMs（负数）显示。
+        const adjustedTime = currentTime - this.subtitleDelayMs;
+        const text = SrtParser.findAt(this.srtEntries, adjustedTime);
         if (text !== this.lastSrtText) {
           this.lastSrtText = text;
           this.currentSubtitleText = text;
@@ -481,31 +495,54 @@ export class VideoPlayerController {
   private async loadSubtitleTracks(): Promise<void> {
     if (!this.player) { return; }
 
-    try {
-      const allTracks = await this.player.getTrackInfos();
-      this.subtitleTracks = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
+    const tracks: SubtitleTrackItem[] = [];
+
+    if (this.backend === 'ijkplayer' &&
+      this.currentVideoData?.presetSubtitleTracks &&
+      this.currentVideoData.presetSubtitleTracks.length > 0) {
+      // ── ijkplayer 后端：使用预置字幕轨（来自 ffprobe 探测结果）──
+      // IjkPlayer 不提供 getTrackInfos() 字幕，通过调用方预先注入的 presetSubtitleTracks 展示
+      const presets = this.currentVideoData.presetSubtitleTracks;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `内嵌字幕轨道数: ${this.subtitleTracks.length}`);
-      this.subtitleTracks.forEach((t: TrackInfo, i: number) => {
+        `[loadSubtitleTracks] ijkplayer 使用预置字幕轨: ${presets.length} 条`);
+      for (const p of presets) {
+        const item: SubtitleTrackItem = {
+          kind: 'internal',
+          displayName: p.displayName,
+          internalIndex: p.trackIndex
+        };
+        tracks.push(item);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `内嵌字幕[${i}]: trackIndex=${t.trackIndex} mime=${t.mimeType} lang=${t.language}`);
-      });
-    } catch (e) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `getTrackInfos 失败: ${JSON.stringify(e)}`);
+          `  预置字幕轨: trackIndex=${p.trackIndex} name="${p.displayName}"`);
+      }
+    } else {
+      // ── AVPlayer 后端（或 ijkplayer 无预置数据）：通过 getTrackInfos() 获取内嵌字幕 ──
+      try {
+        const allTracks = await this.player.getTrackInfos();
+        this.subtitleTracks = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `内嵌字幕轨道数: ${this.subtitleTracks.length}`);
+        this.subtitleTracks.forEach((t: TrackInfo, i: number) => {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `内嵌字幕[${i}]: trackIndex=${t.trackIndex} mime=${t.mimeType} lang=${t.language}`);
+        });
+      } catch (e) {
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `getTrackInfos 失败: ${JSON.stringify(e)}`);
+      }
+
+      // 构建内嵌轨道条目
+      for (let i = 0; i < this.subtitleTracks.length; i++) {
+        const t = this.subtitleTracks[i];
+        const item: SubtitleTrackItem = {
+          kind: 'internal',
+          displayName: this.getSubtitleTrackName(i),
+          internalIndex: t.trackIndex
+        };
+        tracks.push(item);
+      }
     }
 
-    // 构建内嵌轨道条目
-    const tracks: SubtitleTrackItem[] = [];
-    for (let i = 0; i < this.subtitleTracks.length; i++) {
-      const t = this.subtitleTracks[i];
-      const item: SubtitleTrackItem = {
-        kind: 'internal',
-        displayName: this.getSubtitleTrackName(i),
-        internalIndex: t.trackIndex
-      };
-      tracks.push(item);
-    }
     this.allSubtitleTracks = tracks;
 
     // 探测外部字幕
@@ -794,6 +831,31 @@ export class VideoPlayerController {
         await this.player.play().catch(() => {});
       }
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // 字幕延迟调整（供 UI 调用）
+  // ─────────────────────────────────────────────
+
+  /**
+   * 调整字幕延迟偏移量。
+   *
+   * @param deltaMs 增量（单位 ms）。
+   *   正值 → 字幕偏慢（画面已出但字幕还没出），增大 subtitleDelayMs，使字幕显示时刻后移
+   *   负值 → 字幕偏快（字幕出早了），减小 subtitleDelayMs，使字幕显示时刻前移
+   *
+   * 原理：SRT 查找时使用 `currentTime - subtitleDelayMs`。
+   *   - subtitleDelayMs > 0 → 在视频时间 T，查找 T - D 处的字幕，相当于字幕到 T + D 才出现（延迟）。
+   *   - subtitleDelayMs < 0 → 查找 T + |D| 处的字幕，相当于字幕在 T - |D| 时出现（提前）。
+   *
+   * 效果可感知时间 <= 下一帧 onTimeUpdate 间隔（≈ 250ms）。
+   */
+  adjustSubtitleDelay(deltaMs: number): void {
+    this.subtitleDelayMs += deltaMs;
+    // 重置上一条缓存文本，强制下一帧刷新字幕内容
+    this.lastSrtText = '';
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `字幕延迟调整: delta=${deltaMs}ms → 当前偏移=${this.subtitleDelayMs}ms`);
   }
 
   // ─────────────────────────────────────────────
