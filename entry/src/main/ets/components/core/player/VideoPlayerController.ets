@@ -100,6 +100,9 @@ export class VideoPlayerController {
   private subtitleClearTimer?: number
   private subtitleRemainingTime: number = 0
   private subtitlePauseTime: number = 0
+  /** SRT 诊断日志计数器（每隔 N 帧打一次，避免日志洪泛） */
+  private srtDiagCounter: number = 0;
+  private readonly SRT_DIAG_INTERVAL = 20; // 每 20 帧（约 5s）打一次诊断日志
 
   /** 播放进度上下文（由调用方在 initPlayer 前设置） */
   progressContext: PlayProgressEntity | null = null;
@@ -213,6 +216,18 @@ export class VideoPlayerController {
           this.lastSrtText = text;
           this.currentSubtitleText = text;
           this.subtitleUpdateCounter++;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[SRT] 字幕切换: currentTime=${currentTime}ms adjustedTime=${adjustedTime}ms` +
+            ` delay=${this.subtitleDelayMs}ms text="${text.length > 40 ? text.substring(0, 40) + '...' : text}"`);
+        }
+        // 每 SRT_DIAG_INTERVAL 帧打一次诊断日志，便于定位字幕不显示问题
+        this.srtDiagCounter++;
+        if (this.srtDiagCounter >= this.SRT_DIAG_INTERVAL) {
+          this.srtDiagCounter = 0;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[SRT诊断] currentTime=${currentTime}ms adjustedTime=${adjustedTime}ms` +
+            ` delay=${this.subtitleDelayMs}ms srtEntries=${this.srtEntries.length}` +
+            ` currentText="${this.currentSubtitleText.length > 40 ? this.currentSubtitleText.substring(0, 40) + '...' : this.currentSubtitleText}"`);
         }
       }
     });
@@ -493,7 +508,16 @@ export class VideoPlayerController {
   }
 
   private async loadSubtitleTracks(): Promise<void> {
-    if (!this.player) { return; }
+    if (!this.player) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[loadSubtitleTracks] player 未初始化，跳过');
+      return;
+    }
+
+    const presetCount = this.currentVideoData?.presetSubtitleTracks?.length ?? 0;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[loadSubtitleTracks] 开始 — backend=${this.backend}` +
+      ` presetSubtitleTracks=${presetCount}` +
+      ` videoSrc=${this.currentVideoData?.videoSrc?.substring(0, 80) ?? '(null)'}`);
 
     const tracks: SubtitleTrackItem[] = [];
 
@@ -504,7 +528,7 @@ export class VideoPlayerController {
       // IjkPlayer 不提供 getTrackInfos() 字幕，通过调用方预先注入的 presetSubtitleTracks 展示
       const presets = this.currentVideoData.presetSubtitleTracks;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] ijkplayer 使用预置字幕轨: ${presets.length} 条`);
+        `[loadSubtitleTracks] ▶ 走预置字幕路径，共 ${presets.length} 条`);
       for (const p of presets) {
         const item: SubtitleTrackItem = {
           kind: 'internal',
@@ -513,22 +537,29 @@ export class VideoPlayerController {
         };
         tracks.push(item);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `  预置字幕轨: trackIndex=${p.trackIndex} name="${p.displayName}"`);
+          `[loadSubtitleTracks]   预置字幕轨[${tracks.length - 1}]:` +
+          ` trackIndex=${p.trackIndex} displayName="${p.displayName}"` +
+          ` language=${p.language ?? '(无)'} codec=${p.codecName ?? '(无)'}`);
       }
     } else {
       // ── AVPlayer 后端（或 ijkplayer 无预置数据）：通过 getTrackInfos() 获取内嵌字幕 ──
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] ▶ 走 getTrackInfos() 路径` +
+        `（原因：backend=${this.backend}, presetCount=${presetCount}）`);
       try {
         const allTracks = await this.player.getTrackInfos();
         this.subtitleTracks = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `内嵌字幕轨道数: ${this.subtitleTracks.length}`);
+          `[loadSubtitleTracks] getTrackInfos() 返回总轨道 ${allTracks.length} 条，` +
+          `其中字幕轨 ${this.subtitleTracks.length} 条`);
         this.subtitleTracks.forEach((t: TrackInfo, i: number) => {
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `内嵌字幕[${i}]: trackIndex=${t.trackIndex} mime=${t.mimeType} lang=${t.language}`);
+            `[loadSubtitleTracks]   内嵌字幕[${i}]:` +
+            ` trackIndex=${t.trackIndex} mime=${t.mimeType ?? '(无)'} lang=${t.language ?? '(无)'}`);
         });
       } catch (e) {
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `getTrackInfos 失败: ${JSON.stringify(e)}`);
+          `[loadSubtitleTracks] getTrackInfos() 异常: ${JSON.stringify(e)}`);
       }
 
       // 构建内嵌轨道条目
@@ -540,32 +571,52 @@ export class VideoPlayerController {
           internalIndex: t.trackIndex
         };
         tracks.push(item);
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[loadSubtitleTracks]   构建内嵌条目[${i}]: "${item.displayName}" internalIndex=${item.internalIndex}`);
       }
     }
 
     this.allSubtitleTracks = tracks;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[loadSubtitleTracks] 内嵌/预置字幕条目构建完毕，共 ${tracks.length} 条，开始探测外部字幕...`);
 
     // 探测外部字幕
     if (this.currentVideoData && this.currentVideoData.type === VideoDataType.URL) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] 开始探测外部字幕，videoSrc=${this.currentVideoData.videoSrc.substring(0, 80)}`);
       const externalItems = await this.findExternalSubtitles(
         this.currentVideoData.videoSrc,
         this.currentVideoData.httpHeader
       );
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] 外部字幕探测结束，找到 ${externalItems.length} 个`);
       if (externalItems.length > 0) {
         const updated: SubtitleTrackItem[] = [];
         for (const t of this.allSubtitleTracks) { updated.push(t); }
         for (const ext of externalItems) { updated.push(ext); }
         this.allSubtitleTracks = updated;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[loadSubtitleTracks] 合并后 allSubtitleTracks 共 ${updated.length} 条 (内嵌+外部)`);
         const firstExtIdx = updated.findIndex((t: SubtitleTrackItem) => t.kind === 'external');
         if (firstExtIdx >= 0) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[loadSubtitleTracks] 自动激活第一个外部字幕 allIndex=${firstExtIdx}，名称="${updated[firstExtIdx].displayName}"`);
           await this.switchSubtitleTrack(firstExtIdx);
           return;
         }
       }
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] 跳过外部字幕探测（非 URL 类型 或 currentVideoData 为空）`);
     }
 
     if (this.allSubtitleTracks.length > 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] 自动激活第一条内嵌字幕 allIndex=0，名称="${this.allSubtitleTracks[0].displayName}"`);
       await this.switchSubtitleTrack(0);
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] 无任何字幕资源（内嵌 + 外部均为空），字幕功能不可用`);
     }
   }
 
@@ -663,18 +714,23 @@ export class VideoPlayerController {
 
   async selectSubtitleTrack(trackIndex: number): Promise<void> {
     if (!this.player) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, 'player not initialized');
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[selectSubtitleTrack] player 未初始化，无法切换到轨道 ${trackIndex}`);
       return;
     }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[selectSubtitleTrack] 调用 player.selectTrack(${trackIndex})，backend=${this.backend}`);
     try {
       await this.player.selectTrack(trackIndex);
       this.currentSubtitleTrack = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        trackIndex < 0 ? '字幕已关闭' : `内嵌字幕轨道 ${trackIndex} 已激活`);
+        trackIndex < 0
+          ? `[selectSubtitleTrack] ✓ 字幕已关闭 (trackIndex=${trackIndex})`
+          : `[selectSubtitleTrack] ✓ 内嵌字幕轨道 ${trackIndex} 已激活 (currentSubtitleTrack=${this.currentSubtitleTrack})`);
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `selectSubtitleTrack 失败: code=${err.code} msg=${err.message}`);
+        `[selectSubtitleTrack] ✗ 失败: trackIndex=${trackIndex} code=${err.code} msg=${err.message}`);
     }
   }
 
@@ -728,6 +784,13 @@ export class VideoPlayerController {
    * allIndex = -1 表示关闭字幕
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[switchSubtitleTrack] 请求切换: allIndex=${allIndex}` +
+      ` (当前 activeSubtitleIndex=${this.activeSubtitleIndex}` +
+      ` allSubtitleTracks.length=${this.allSubtitleTracks.length}` +
+      ` srtEntries.length=${this.srtEntries.length}` +
+      ` subtitleDelayMs=${this.subtitleDelayMs}ms)`);
+
     this.activeSubtitleIndex = allIndex;
     this.currentSubtitleText = '';
     this.subtitleUpdateCounter++;
@@ -736,16 +799,23 @@ export class VideoPlayerController {
       // 关闭字幕：清空 SRT，关闭内嵌
       this.srtEntries = [];
       this.lastSrtText = '';
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '关闭字幕，将调用 selectSubtitleTrack(-1)');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[switchSubtitleTrack] 关闭字幕，清空 srtEntries，调用 selectSubtitleTrack(-1)`);
       await this.selectSubtitleTrack(-1);
       return;
     }
 
     if (allIndex >= this.allSubtitleTracks.length) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[switchSubtitleTrack] allIndex=${allIndex} 越界 (长度=${this.allSubtitleTracks.length})，跳过`);
       return;
     }
 
     const item = this.allSubtitleTracks[allIndex];
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[switchSubtitleTrack] 目标字幕条目: kind="${item.kind}" displayName="${item.displayName}"` +
+      ` internalIndex=${item.internalIndex ?? '(无)'} url=${item.url ?? '(无)'}` +
+      ` srtEntries=${item.srtEntries?.length ?? 0}`);
 
     if (item.kind === 'external') {
       // 切换到外部 SRT/ASS
@@ -754,10 +824,16 @@ export class VideoPlayerController {
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `切换到外部字幕: ${item.displayName}，共 ${entries.length} 条，url=${item.url ?? ''}`);
+        `[switchSubtitleTrack] ✓ 切换到外部字幕: "${item.displayName}"` +
+        ` 共 ${entries.length} 条 url="${item.url ?? ''}"` +
+        ` subtitleDelayMs=${this.subtitleDelayMs}ms`);
       if (entries.length === 0) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `⚠️ 外部字幕条目为空，字幕将不显示。请检查文件下载和解析日志。`);
+          `[switchSubtitleTrack] ⚠️ 外部字幕条目为空，字幕将不显示。请检查文件下载和解析日志`);
+      } else {
+        const e0 = entries[0];
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[switchSubtitleTrack]   第1条: ${e0.startMs}ms→${e0.endMs}ms "${e0.text.length > 40 ? e0.text.substring(0, 40) + '...' : e0.text}"`);
       }
     } else {
       // 切换到内嵌字幕：清空外部字幕，调用 selectSubtitleTrack 激活 AVPlayer 内嵌轨道
@@ -765,8 +841,8 @@ export class VideoPlayerController {
       this.lastSrtText = '';
       const internalIdx = item.internalIndex ?? 0;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `切换到内嵌字幕轨道 ${internalIdx}，将调用 selectSubtitleTrack 激活`);
-      // 调用旧方法激活内嵌轨道（会触发 AVPlayer 的 selectTrack）
+        `[switchSubtitleTrack] 切换到内嵌字幕轨道 internalIndex=${internalIdx}，调用 selectSubtitleTrack 激活`);
+      // 调用旧方法激活内嵌轨道（会触发 AVPlayer/ijk 的 selectTrack）
       await this.selectSubtitleTrack(internalIdx);
     }
   }
@@ -851,11 +927,13 @@ export class VideoPlayerController {
    * 效果可感知时间 <= 下一帧 onTimeUpdate 间隔（≈ 250ms）。
    */
   adjustSubtitleDelay(deltaMs: number): void {
+    const before = this.subtitleDelayMs;
     this.subtitleDelayMs += deltaMs;
     // 重置上一条缓存文本，强制下一帧刷新字幕内容
     this.lastSrtText = '';
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `字幕延迟调整: delta=${deltaMs}ms → 当前偏移=${this.subtitleDelayMs}ms`);
+      `[adjustSubtitleDelay] delta=${deltaMs}ms: ${before}ms → ${this.subtitleDelayMs}ms` +
+      ` (srtEntries=${this.srtEntries.length} activeSubtitleIndex=${this.activeSubtitleIndex})`);
   }
 
   // ─────────────────────────────────────────────
