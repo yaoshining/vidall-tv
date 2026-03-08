@@ -68,11 +68,15 @@ function formatScanTime(ts: number): string {
 @ComponentV2
 struct PosterCard {
   @Require @Param item: MediaItem
+  @Local isHovered: boolean = false
   private getTitle(): string { return displayTitle(this.item); }
   private getPoster(): string { return posterSrc(this.item); }
   private hasPosterImg(): boolean { return hasPoster(this.item); }
   private getRating(): string { return ratingText(this.item); }
   private getResolution(): string { return resolutionLabel(this.item.width, this.item.height); }
+  private getCardBorderColor(): string { return this.isHovered ? 'rgba(255, 255, 255, 0.38)' : '#00FFFFFF'; }
+  private getCardOverlayColor(): string { return this.isHovered ? 'rgba(0, 0, 0, 0.14)' : '#00000000'; }
+  private getCardShadowColor(): string { return this.isHovered ? 'rgba(0, 0, 0, 0.36)' : 'rgba(0, 0, 0, 0.20)'; }
 
   build() {
     Column({ space: 4 }) {
@@ -82,7 +86,7 @@ struct PosterCard {
           Image(this.getPoster())
             .width(POSTER_WIDTH)
             .aspectRatio(PORTRAIT_ASPECT_RATIO)
-            .hoverEffect(HoverEffect.Scale)
+            .hoverEffect(HoverEffect.Highlight)
             .objectFit(ImageFit.Cover)
         } else {
           Column() {
@@ -127,11 +131,23 @@ struct PosterCard {
             .padding({ left: 4, right: 4, bottom: 4 })
             .position({ right: 2, bottom: 2 })
         }
+
+        // 亮色海报上增强 hover 可见性的遮罩层
+        Column()
+          .width(POSTER_WIDTH)
+          .aspectRatio(PORTRAIT_ASPECT_RATIO)
+          .backgroundColor(this.getCardOverlayColor())
+          .position({ left: 0, top: 0 })
+          .hitTestBehavior(HitTestMode.Transparent)
       }
       .borderRadius(6)
       .clip(true)
       .width(POSTER_WIDTH)
       .aspectRatio(PORTRAIT_ASPECT_RATIO)
+      .border({ width: 2, color: this.getCardBorderColor() })
+      .shadow({ radius: this.isHovered ? 14 : 8, color: this.getCardShadowColor(), offsetX: 0, offsetY: 2 })
+      .onHover((isHover: boolean) => { this.isHovered = isHover; })
+      .animation({ duration: 140, curve: Curve.EaseInOut })
 
       Text(this.getTitle())
         .fontSize(16).fontColor('#DDDDDD').maxLines(1)
@@ -153,6 +169,7 @@ struct SeriesCard {
   /** true = 最近添加/混合列表，显示季海报+季号；false = 电视剧栏，只显剧海报不显季 */
   @Param showSeasonPoster: boolean = false
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
+  @Local isHovered: boolean = false
 
   private getTitle(): string { return this.group.title; }
 
@@ -192,6 +209,9 @@ struct SeriesCard {
     }
     return this.group.seasonLabel ?? '';
   }
+  private getCardBorderColor(): string { return this.isHovered ? 'rgba(255, 255, 255, 0.38)' : '#00FFFFFF'; }
+  private getCardOverlayColor(): string { return this.isHovered ? 'rgba(0, 0, 0, 0.14)' : '#00000000'; }
+  private getCardShadowColor(): string { return this.isHovered ? 'rgba(0, 0, 0, 0.36)' : 'rgba(0, 0, 0, 0.20)'; }
 
   build() {
     Column({ space: 4 }) {
@@ -200,7 +220,7 @@ struct SeriesCard {
           Image(this.getPoster())
             .width(POSTER_WIDTH)
             .aspectRatio(PORTRAIT_ASPECT_RATIO)
-            .hoverEffect(HoverEffect.Scale)
+            .hoverEffect(HoverEffect.Highlight)
             .objectFit(ImageFit.Cover)
         } else {
           Column() {
@@ -253,11 +273,23 @@ struct SeriesCard {
             .padding({ left: 4, right: 4, bottom: 4 })
             .position({ right: 2, bottom: 2 })
         }
+
+        // 亮色海报上增强 hover 可见性的遮罩层
+        Column()
+          .width(POSTER_WIDTH)
+          .aspectRatio(PORTRAIT_ASPECT_RATIO)
+          .backgroundColor(this.getCardOverlayColor())
+          .position({ left: 0, top: 0 })
+          .hitTestBehavior(HitTestMode.Transparent)
       }
       .borderRadius(6)
       .clip(true)
       .width(POSTER_WIDTH)
       .aspectRatio(PORTRAIT_ASPECT_RATIO)
+      .border({ width: 2, color: this.getCardBorderColor() })
+      .shadow({ radius: this.isHovered ? 14 : 8, color: this.getCardShadowColor(), offsetX: 0, offsetY: 2 })
+      .onHover((isHover: boolean) => { this.isHovered = isHover; })
+      .animation({ duration: 140, curve: Curve.EaseInOut })
 
       Text(this.getTitle())
         .fontSize(16).fontColor('#DDDDDD').maxLines(1)
@@ -434,24 +466,37 @@ struct SectionRow {
 @ComponentV2
 struct PlaceholderWideCard {
   @Require @Param label: string
+  @Local isHovered: boolean = false
+  private getCardBorderColor(): string { return this.isHovered ? 'rgba(255, 255, 255, 0.34)' : '#333355'; }
+  private getCardBgColor(): string { return this.isHovered ? '#232338' : '#1A1A2E'; }
+  private getCardShadowColor(): string { return this.isHovered ? 'rgba(0, 0, 0, 0.30)' : 'rgba(0, 0, 0, 0.16)'; }
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column()
         .width(WIDE_WIDTH)
         .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-        .backgroundColor('#1A1A2E')
-        .hoverEffect(HoverEffect.Scale)
-        .border({ width: 1, color: '#333355', style: BorderStyle.Dashed })
+        .backgroundColor(this.getCardBgColor())
+        .border({ width: 2, color: this.getCardBorderColor(), style: BorderStyle.Dashed })
       Column() {
         Text('▶').fontSize(20).fontColor('#555577')
         Text(this.label).fontSize(11).fontColor('#555577').margin({ top: 4 })
       }
+
+      Column()
+        .width(WIDE_WIDTH)
+        .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+        .backgroundColor(this.isHovered ? 'rgba(0, 0, 0, 0.10)' : '#00000000')
+        .position({ left: 0, top: 0 })
+        .hitTestBehavior(HitTestMode.Transparent)
     }
     .clip(true)
     .borderRadius(6)
     .width(WIDE_WIDTH)
     .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+    .shadow({ radius: this.isHovered ? 12 : 6, color: this.getCardShadowColor(), offsetX: 0, offsetY: 2 })
+    .onHover((isHover: boolean) => { this.isHovered = isHover; })
+    .animation({ duration: 140, curve: Curve.EaseInOut })
   }
 }
 
