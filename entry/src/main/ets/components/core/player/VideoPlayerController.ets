@@ -11,6 +11,7 @@ import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
+import { DeviceCapabilityUtil } from "../../../utils/DeviceCapabilityUtil";
 
 /** 播放内核类型 */
 export type PlayerBackend = 'avplayer' | 'ijkplayer';
@@ -138,6 +139,8 @@ export class VideoPlayerController {
     this.activeSubtitleIndex = -1;
     this.audioTracks = [];
     this.activeAudioIndex = -1;
+    // 每次播放都从 AVPlayer 开始，确保"优先 AVPlayer"策略在同一 controller 复用时也生效
+    this.backend = 'avplayer';
 
     // ── 预置音轨：从数据库已读取，立即填充，无需等播放器 ready ──
     // 这样用户打开播放页就能立即看到音轨列表，不必等待 ijkplayer prepareAsync 完成
@@ -158,6 +161,30 @@ export class VideoPlayerController {
       this.activeAudioIndex = 0;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[initPlayer] 预置音轨已提前填充: ${tracks.length} 条`);
+
+      // ── 主动 backend 预判 ──────────────────────────────────────────────
+      // 若 presetAudioTracks 中存在 AVPlayer 明确不支持的音频编码
+      // （AC-3 / EAC-3 / TrueHD / DTS 等），直接选用 ijkplayer，
+      // 跳过 AVPlayer 的尝试→报错→回退流程，减少黑屏等待时间。
+      //
+      // 关于 Dolby Vision（DV）：
+      //   DV 是视频格式，底层编码为 HEVC/H.265，AVPlayer 可正常解码视频流。
+      //   但实际 DV 内容（蓝光/流媒体）几乎都携带 TrueHD / EAC-3 / AC-3 音频，
+      //   这些音频编码才是导致 AVPlayer 失败并回退到 ijkplayer 的真正原因，
+      //   与 DV 视频格式本身无关。
+      let hasUnsupportedAudio = false;
+      for (let i = 0; i < presets.length; i++) {
+        const mime = presets[i].mimeType;
+        if (mime && DeviceCapabilityUtil.isAvPlayerUnsupportedAudio(mime)) {
+          hasUnsupportedAudio = true;
+          break;
+        }
+      }
+      if (hasUnsupportedAudio) {
+        this.backend = 'ijkplayer';
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          '[initPlayer] 预置音轨含 AVPlayer 不支持的音频编码，直接使用 IjkPlayer');
+      }
     }
 
     // 根据 backend 创建对应适配器

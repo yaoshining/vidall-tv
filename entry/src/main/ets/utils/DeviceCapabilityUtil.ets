@@ -62,13 +62,37 @@ const AVPLAYER_UNSUPPORTED_AUDIO = new Set<string>([
   AUDIO_CODEC.TRUEHD,
 ]);
 
+/**
+ * AVPlayer 不支持的音频编码的 ffprobe 原始 codec_name（小写）。
+ * FfprobeUtil 返回的 FfprobeTrack.codecName 及 PresetAudioTrack.mimeType
+ * 均为 ffprobe 原始名称，与 MIME 类型（audio/ac3 等）不同，需单独维护。
+ *
+ * 注意：两套标识（MIME 类型 / ffprobe codec_name）之间无简单映射规则
+ * （如 'dts' → 'audio/vnd.dts'，'dts_hd_ma' → 'audio/vnd.dts.hd'），
+ * 因此保留两个独立的 Set，各自服务于不同的调用场景。
+ */
+const AVPLAYER_UNSUPPORTED_FFPROBE_CODECS = new Set<string>([
+  'ac3',
+  'eac3',
+  'truehd',
+  'dts',
+  'dts_hd_ma',
+  'dts-hd-ma',
+]);
+
 // ─────────────────────────────────────────────
 // 从文件名推断格式的规则
 // ─────────────────────────────────────────────
 
 const UNSUPPORTED_AUDIO_KEYWORDS: string[] = [
-  'DD.5.1', 'DD5.1', 'AC3', 'AC-3', 'Dolby', 'DTS', 'DTS-HD', 'DTSHD',
-  'TrueHD', 'TRUEHD', 'Atmos', 'DTS-MA', 'DTS-X',
+  // Dolby Digital / AC-3
+  'DD.5.1', 'DD5.1', 'AC3', 'AC-3',
+  // Dolby Digital Plus / EAC-3（注意：不含宽泛的 'Dolby'，以免误匹配 Dolby Vision 视频标签）
+  'EAC3', 'EAC-3', 'E-AC3', 'E-AC-3', 'DDP',
+  // DTS 系列
+  'DTS', 'DTS-HD', 'DTSHD', 'DTS-MA', 'DTS-X',
+  // Dolby TrueHD / Atmos
+  'TrueHD', 'TRUEHD', 'Atmos',
 ];
 
 /** 视频编码关键词条目 */
@@ -184,6 +208,26 @@ export class DeviceCapabilityUtil {
       note: supported ? 'AVPlayer 已知支持' : '未在已知列表中，实际支持情况未知'
     };
     return result;
+  }
+
+  /**
+   * 判断音频编码是否无法被 AVPlayer 播放。
+   *
+   * 同时接受两种格式：
+   *  - MIME 类型（AVPlayer getTrackInfos 返回），如 `"audio/eac3"`、`"audio/truehd"`
+   *  - ffprobe 原始 codec_name（FfprobeUtil / PresetAudioTrack.mimeType），如 `"eac3"`、`"truehd"`
+   *
+   * 注意：Dolby Vision（DV）是**视频**格式，不会出现在此判断中；
+   * DV 本身以 HEVC 为底层编码，AVPlayer 可解码视频部分；
+   * 但实际 DV 内容通常携带 TrueHD / EAC-3 / AC-3 音频，
+   * 正是这些音频编码导致 AVPlayer 报错并回退到 ijkplayer，而非 DV 视频本身。
+   *
+   * @param codecNameOrMime 音频编码标识，大小写不敏感
+   * @returns true 表示 AVPlayer 明确不支持，应主动选用 ijkplayer
+   */
+  static isAvPlayerUnsupportedAudio(codecNameOrMime: string): boolean {
+    const lower = codecNameOrMime.toLowerCase();
+    return AVPLAYER_UNSUPPORTED_AUDIO.has(lower) || AVPLAYER_UNSUPPORTED_FFPROBE_CODECS.has(lower);
   }
 
   static logAllCodecSupport(): void {
