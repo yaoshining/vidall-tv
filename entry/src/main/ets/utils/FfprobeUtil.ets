@@ -189,7 +189,14 @@ export class FfprobeUtil {
     commands.push('-i', url);
 
     console.info(`[FfprobeUtil] 开始探测: ${url}`);
-    console.info(`[FfprobeUtil] 命令: ${commands.join(' ')}`);
+    // 日志中屏蔽 Authorization 等敏感头，防止凭据明文入日志
+    const safeCommands = commands.map((c) => {
+      if (typeof c === 'string' && c.toLowerCase().includes('authorization')) {
+        return c.replace(/Authorization:\s*\S+/gi, 'Authorization: ***');
+      }
+      return c;
+    });
+    console.info(`[FfprobeUtil] 命令: ${safeCommands.join(' ')}`);
 
     return new Promise<FfprobeResult>((resolve) => {
       let outputJson = '';
@@ -460,15 +467,18 @@ export class FfprobeUtil {
       lang.startsWith('zh-');
 
     if (isChinese) {
+      // 使用单词边界匹配 'sc'/'tc'，避免 "Science"、"Action" 等词误命中
+      const scExact = /(?:^|[\s._\-[\]()])sc(?:$|[\s._\-[\]()])/.test(titleLower);
+      const tcExact = /(?:^|[\s._\-[\]()])tc(?:$|[\s._\-[\]()])/.test(titleLower);
       if (title.includes('简体') || titleLower.includes('chs') ||
-        titleLower.includes('zh-cn') || titleLower.includes('hans') || titleLower.includes('sc')) {
+        titleLower.includes('zh-cn') || titleLower.includes('hans') || scExact) {
         return '简体';
       }
       if (title.includes('繁体') && (title.includes('香港') || titleLower.includes('hk'))) {
         return '繁体(香港)';
       }
       if (title.includes('繁体') || titleLower.includes('cht') ||
-        titleLower.includes('zh-tw') || titleLower.includes('hant') || titleLower.includes('tc')) {
+        titleLower.includes('zh-tw') || titleLower.includes('hant') || tcExact) {
         return '繁体';
       }
 
@@ -523,19 +533,21 @@ export class FfprobeUtil {
     const langName = track.language
       ? FfprobeUtil.getLanguageDisplayName(track.language)
       : `字幕 ${index + 1}`;
-    const codecName = track.codecName && track.codecName.length > 0
-      ? track.codecName.toLowerCase()
-      : FfprobeUtil.getCodecDisplayName(track.codecName);
+    const codecDisplay = track.codecName
+      ? FfprobeUtil.getCodecDisplayName(track.codecName)
+      : '';
     const tier3 = FfprobeUtil.getSubtitleTier3Label(track, index);
 
-    // 三层展示：语言 - 编码 - 细分标签（如简体/繁体/subtitle3）
-    if (codecName && tier3) {
-      return `${langName} - ${codecName} - ${tier3}`;
+    if (codecDisplay) {
+      // 有编解码显示名称时：语言 (编码)，与 buildAudioTrackDisplayName 风格一致
+      // tier3 为语义标签（简体/繁体/香港）时追加，通用兜底（'未标注'/'轨道N'）时省略
+      const isSemanticTier3 = tier3.length > 0 && tier3 !== '未标注' && !tier3.startsWith('轨道');
+      if (isSemanticTier3) {
+        return `${langName} (${codecDisplay}) ${tier3}`;
+      }
+      return `${langName} (${codecDisplay})`;
     }
-    if (codecName) {
-      return `${langName} - ${codecName}`;
-    }
-    return `${langName} - ${tier3}`;
+    return langName;
   }
 }
 

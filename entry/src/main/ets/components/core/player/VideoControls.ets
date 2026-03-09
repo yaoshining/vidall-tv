@@ -124,8 +124,8 @@ struct VideoControls {
           })
         })
 
-        // 字幕延迟调整（仅有字幕时显示）
-        if (this.videoController.activeSubtitleIndex >= 0) {
+        // 字幕延迟调整（仅在外部 SRT 字幕激活时显示；内嵌轨由播放器原生渲染，延迟不适用）
+        if (this.videoController.activeSubtitleIndex >= 0 && this.videoController.hasSrtSubtitle) {
           ListItem() {
             Column({ space: 8 }) {
               Text('字幕延迟')
