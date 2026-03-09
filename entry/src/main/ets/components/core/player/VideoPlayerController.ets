@@ -884,8 +884,18 @@ export class VideoPlayerController {
     const fileName = lastSlash >= 0 ? videoUrl.substring(lastSlash + 1) : videoUrl;
     // 去掉查询参数
     const cleanFileName = fileName.split('?')[0];
-    const dotIdx = cleanFileName.lastIndexOf('.');
-    const baseName = dotIdx >= 0 ? cleanFileName.substring(0, dotIdx) : cleanFileName;
+    // URL 中的文件名可能是百分比编码（如中文路径 %E6%9D%83...），需要先解码再提取 baseName，
+    // 否则构造候选文件名后 encodeURIComponent 会二次编码（%E6 → %25E6），导致探测永远失败。
+    let decodedFileName = cleanFileName;
+    try {
+      decodedFileName = decodeURIComponent(cleanFileName);
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `解码视频文件名失败，使用原始值: ${cleanFileName}`);
+      decodedFileName = cleanFileName;
+    }
+    const dotIdx = decodedFileName.lastIndexOf('.');
+    const baseName = dotIdx >= 0 ? decodedFileName.substring(0, dotIdx) : decodedFileName;
 
     // 字幕扩展名
     const subtitleExts: string[] = ['srt', 'ass', 'ssa', 'vtt'];
