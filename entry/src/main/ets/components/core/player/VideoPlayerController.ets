@@ -826,17 +826,13 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[switchAudioTrack] 音轨已切换: ${audioTrack.displayName} (trackIndex=${audioTrack.trackIndex})`);
 
-      // 3. seek 到当前位置，强制音频解码器 flush 并从正确位置开始解码
-      //    这样恢复播放时新音轨与视频帧完全对齐
-      if (wasPlaying && seekBack > 0) {
+      // 3. 直接恢复播放，不做 seek flush。
+      //    原因：seek flush 会同时清空视频解码器的缓冲队列，导致 play() 时
+      //    视频解码器缓冲队列为空，渲染器输出损坏帧（花屏）。
+      //    ijkplayer 的 selectTrack 内部已完成音频解码器切换，无需额外 seek 来 flush。
+      if (wasPlaying) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[switchAudioTrack] seek flush 到 ${seekBack}ms`);
-        // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
-        this.isSeeking = true;
-        this.player.seek(seekBack);
-        // seekDone 回调里会调 play()，不需要在这里手动恢复
-      } else if (wasPlaying) {
-        // 时间为 0（片头），直接恢复播放
+          `[switchAudioTrack] 直接恢复播放（跳过 seek flush 避免花屏）`);
         await this.player.play();
       }
     } catch (e) {
