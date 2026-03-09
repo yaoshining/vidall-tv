@@ -395,8 +395,14 @@ export class DeviceCapabilityUtil {
    * 查询设备是否支持 H264/H265 硬件解码（供 IjkPlayerAdapter 使用）。
    * 结果缓存，整个 App 生命周期只查询一次。
    *
-   * 注意：鸿蒙 ArkTS 层暂无公开的 getMediaCapability API（该能力在 Native C 层），
-   * 当前保守返回 false（全部软解），待官方开放 ArkTS 接口后可补充实现。
+   * 策略说明（TV 平台实测驱动）：
+   *   - 鸿蒙 ArkTS 层无公开的 getMediaCapability API（该能力在 Native C 层）。
+   *   - 历史版本曾保守返回 false（全部软解），但实测表明 FFmpeg 软件 HEVC 解码在
+   *     长时间播放后会触发 Native Silent Crash（内存压力 / 解码器 Bug）。
+   *   - HarmonyOS TV 平台的 TV 设备普遍具备 H264 & HEVC 硬件解码能力（支持 HDR 内容是
+   *     TV 认证基线要求），因此默认启用硬件解码以规避软解崩溃。
+   *   - 若特定设备出现硬解崩溃，可通过 IjkPlayerAdapter.forceSoftDecode=true 回退软解。
+   *   - 待官方开放 ArkTS getMediaCapability API 后，可在此处补充动态查询替换本静态策略。
    */
   static async checkIjkHardwareDecodeSupport(): Promise<IjkHwDecodeSupport> {
     if (DeviceCapabilityUtil._ijkHwDecodeH264 !== undefined &&
@@ -408,10 +414,10 @@ export class DeviceCapabilityUtil {
       return cached;
     }
 
-    // 鸿蒙 ArkTS 层无公开 getMediaCapability，保守返回软解
-    // 如后续官方开放 API，在此处补充动态查询逻辑
-    const h264 = false;
-    const h265 = false;
+    // TV 平台默认启用硬件解码：规避软件 HEVC 解码器长时间运行 Native 崩溃问题。
+    // 如设备出现硬解崩溃，通过 forceSoftDecode=true 回退。
+    const h264 = true;
+    const h265 = true;
 
     DeviceCapabilityUtil._ijkHwDecodeH264 = h264;
     DeviceCapabilityUtil._ijkHwDecodeH265 = h265;
