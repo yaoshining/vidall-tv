@@ -156,6 +156,68 @@ export struct SeasonDetailPage {
     return base;
   }
 
+  private toChineseSeasonLabel(n: number): string {
+    if (n <= 0) { return '特别篇'; }
+    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
+      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+    if (n < chineseNums.length) {
+      return `第${chineseNums[n]}季`;
+    }
+    return `第${n}季`;
+  }
+
+  private buildEpisodeCode(seasonNumber: number, episodeNumber: number): string {
+    const sn = seasonNumber > 0 ? seasonNumber : 0;
+    const en = episodeNumber > 0 ? episodeNumber : 0;
+    return `S${sn}:E${en}`;
+  }
+
+  private getSeasonNameForPlayer(): string {
+    const n = this.getSeasonNumber();
+    const title = this.seasonTitle.trim();
+    if (title.length > 0 && !this.isGenericSeasonTitle(title, n)) {
+      return title;
+    }
+    return '';
+  }
+
+  private buildPlayerTitle(episode: MediaItem, episodeName: string): string {
+    const seriesTitle = this.getSeriesTitle().length > 0 ? this.getSeriesTitle() : (episode.title ?? episode.fileName);
+    const sn = episode.seasonNumber ?? this.getSeasonNumber();
+    const en = episode.episodeNumber ?? 0;
+    const seasonLabel = this.toChineseSeasonLabel(sn);
+    const seasonName = this.getSeasonNameForPlayer();
+    const epName = episodeName.trim();
+    const code = this.buildEpisodeCode(sn, en);
+    const seasonPart = seasonName.length > 0 ? `${seasonLabel} ${seasonName}` : seasonLabel;
+    return `${seriesTitle} ${seasonPart}-${code}-${epName}`;
+  }
+
+  private async resolveEpisodeName(db: FileSourceDatabase, episode: MediaItem): Promise<string> {
+    const seriesTitle = this.getSeriesTitle().trim();
+    const current = (episode.title ?? '').trim();
+    const fileName = (episode.fileName ?? '').trim();
+    const sn = episode.seasonNumber ?? this.getSeasonNumber();
+    const en = episode.episodeNumber ?? 0;
+
+    const seriesId = this.seriesEntity?.id;
+    if (seriesId !== undefined && en > 0) {
+      const epEntity = await db.getTvEpisode(seriesId, sn, en);
+      const dbName = (epEntity?.title ?? '').trim();
+      if (dbName.length > 0) {
+        return dbName;
+      }
+    }
+
+    if (current.length > 0 && current !== seriesTitle) {
+      return current;
+    }
+    if (en > 0) {
+      return `第${en}集`;
+    }
+    return fileName.length > 0 ? fileName : '未知集名';
+  }
+
   /** 判断季名是否是通用季名（即和 base 含义相同，不需要拼接显示） */
   private isGenericSeasonTitle(title: string, n: number): boolean {
     const t = title.trim().toLowerCase();
@@ -695,10 +757,11 @@ export struct SeasonDetailPage {
         }
       }
 
+      const episodeName = await this.resolveEpisodeName(db, episode);
       const param: PlayerPageParam = {
         url: encodeURI(fullUrl),
         httpHeader,
-        title: episode.title ?? episode.fileName,
+        title: this.buildPlayerTitle(episode, episodeName),
         videoId: episode.id,
         seriesProviderId: this.seriesEntity?.providerId ?? '',
         seasonNumber: episode.seasonNumber ?? 0,

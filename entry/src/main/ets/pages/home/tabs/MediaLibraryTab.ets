@@ -6,9 +6,12 @@ import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { FileSourceType } from "../../../db/models/FileSourceEntity"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
 import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
+import { FfprobeUtil } from "../../../utils/FfprobeUtil"
+import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -60,6 +63,11 @@ function formatScanTime(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number): string => n < 10 ? '0' + n : String(n);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+interface SourceRuntimeConfig {
+  type: FileSourceType;
+  configJson: string;
 }
 
 // ─────────────────────────────────────────────
@@ -687,6 +695,146 @@ export struct MediaLibraryTab {
     }
   }
 
+  /**
+   * 仅刷新视频音轨/字幕轨元数据（ffprobe），用于补齐字幕 title/语言信息。
+   *
+   * 说明：
+   * - 目前仅处理 WebDAV 文件源。
+   * - 不改 scrape_info/movie/tv_* 数据。
+   */
+  private async refreshSubtitleTrackMetadata(): Promise<void> {
+    if (this.isScanning) { return; }
+    this.isScanning = true;
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const videos = await db.getAllVideos();
+      if (videos.length === 0) {
+        promptAction.showToast({ message: '暂无视频可刷新' });
+        return;
+      }
+
+      const sources = await db.getAllFileSources();
+      const sourceMap = new Map<number, SourceRuntimeConfig>();
+      for (const s of sources) {
+        if (s.id !== undefined) {
+          const sourceConfig: SourceRuntimeConfig = {
+            type: s.type,
+            configJson: s.configJson
+          };
+          sourceMap.set(s.id, sourceConfig);
+        }
+      }
+
+      const clientMap = new Map<number, WebDAVClient>();
+      const getClient = (sourceId: number): WebDAVClient | null => {
+        const cached = clientMap.get(sourceId);
+        if (cached !== undefined) { return cached; }
+
+        const source = sourceMap.get(sourceId);
+        if (source === undefined || source.type !== FileSourceType.WEBDAV) {
+          return null;
+        }
+
+        const config = JSON.parse(source.configJson) as Record<string, string>;
+        const protocol = config['protocol'] ?? 'http';
+        const host = config['url'] ?? '';
+        const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
+        const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
+        const normalizedRoot = rootPath.length > 0
+          ? (rootPath.startsWith('/') ? rootPath : '/' + rootPath)
+          : '';
+        const baseUrl = `${protocol}://${host}:${port}${normalizedRoot}`;
+
+        const webdavConfig: WebDAVConfig = {
+          baseUrl,
+          username: config['username'] ?? '',
+          password: config['password'] ?? '',
+          timeout: 30000
+        };
+        const client = new WebDAVClient(webdavConfig);
+        clientMap.set(sourceId, client);
+        return client;
+      };
+
+      let refreshed = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const video of videos) {
+        try {
+          const client = getClient(video.sourceId);
+          if (client === null) {
+            skipped++;
+            continue;
+          }
+
+          const fullUrl = client.getFullUrl(video.filePath);
+          const authHeader = client.getAuthHeaderPublic();
+          const headers: Record<string, string> = authHeader ? { 'Authorization': authHeader } : {};
+          const probe = await FfprobeUtil.probe(encodeURI(fullUrl), headers, 15000);
+          if (!probe.success) {
+            failed++;
+            console.warn(`[MediaLibraryTab] 刷新轨道失败 file=${video.fileName} err=${probe.errorMessage ?? ''}`);
+            continue;
+          }
+
+          const mainVideo = probe.videoTracks.length > 0 ? probe.videoTracks[0] : undefined;
+          await db.upsertVideo({
+            sourceId: video.sourceId,
+            directoryPath: video.directoryPath,
+            filePath: video.filePath,
+            fileName: video.fileName,
+            fileSize: video.fileSize,
+            lastModified: video.lastModified,
+            contentType: video.contentType,
+            durationMs: probe.durationMs,
+            width: mainVideo?.width,
+            height: mainVideo?.height,
+            frameRate: mainVideo?.frameRate,
+            videoCodec: mainVideo?.codecName,
+            audioTracksJson: JSON.stringify(probe.audioTracks),
+            subtitleTracksJson: JSON.stringify(probe.subtitleTracks),
+            scannedAt: Date.now()
+          });
+          refreshed++;
+        } catch (e) {
+          failed++;
+          console.warn(`[MediaLibraryTab] 刷新轨道异常 file=${video.fileName} err=${JSON.stringify(e)}`);
+        }
+      }
+
+      await this.model.reload();
+      promptAction.showToast({
+        message: `字幕轨刷新完成：成功 ${refreshed}，跳过 ${skipped}，失败 ${failed}`
+      });
+    } catch (e) {
+      const err = e as Error;
+      console.error(`[MediaLibraryTab] 刷新字幕轨元数据异常: ${err.message}`);
+      promptAction.showToast({ message: '刷新字幕轨失败: ' + err.message });
+    } finally {
+      this.isScanning = false;
+    }
+  }
+
+  private showRefreshSubtitleTrackDialog(): void {
+    if (this.isScanning) { return; }
+    AlertDialog.show({
+      title: '刷新字幕轨信息',
+      message: '将重新探测媒体库视频的音轨/字幕轨信息（仅 WebDAV），可能耗时较长。是否继续？',
+      autoCancel: true,
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      primaryButton: {
+        value: '确认刷新',
+        action: () => {
+          this.refreshSubtitleTrackMetadata();
+        }
+      }
+    });
+  }
+
   // ── 类别统计 ─────────────────────────────────
   private getGenreMap(): Map<string, number> {
     const map = new Map<string, number>();
@@ -833,7 +981,16 @@ export struct MediaLibraryTab {
           .onClick(() => { this.refreshMetadata(); })
       }
       .justifyContent(FlexAlign.Center)
-      .margin({ bottom: 40 })
+
+      Row() {
+        Button(this.isScanning ? '刷新中...' : '刷新字幕轨信息')
+          .width(316).height(40).fontSize(14)
+          .enabled(!this.isScanning)
+          .buttonStyle(ButtonStyleMode.TEXTUAL)
+          .onClick(() => { this.showRefreshSubtitleTrackDialog(); })
+      }
+      .justifyContent(FlexAlign.Center)
+      .margin({ top: 12, bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
   }

@@ -10,6 +10,8 @@ export interface FfprobeTrack {
   codecName: string;       // e.g. "hevc", "eac3", "subrip", "ass"
   codecLongName: string;   // e.g. "H.265 / HEVC"
   language: string;        // ISO 639-2, e.g. "chi", "eng", ""
+  /** 字幕/音轨标题（来自 ffprobe stream.tags.title） */
+  title?: string;
   // 音频专属
   channels?: number;
   sampleRate?: number;
@@ -108,6 +110,7 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
     codecName: raw.codec_name ?? '',
     codecLongName: raw.codec_long_name ?? '',
     language: lang.toLowerCase() === 'und' ? '' : lang,
+    title: raw.tags?.title ?? raw.tags?.TITLE,
   };
 
   if (type === 'audio') {
@@ -273,7 +276,8 @@ export class FfprobeUtil {
       });
       subtitleTracks.forEach((t, i) => {
         console.info(
-          `[FfprobeUtil]   字幕轨[${i}] codec=${t.codecName} lang=${t.language || '(未知)'}`
+          `[FfprobeUtil]   字幕轨[${i}] codec=${t.codecName} lang=${t.language || '(未知)'}` +
+          ` title=${t.title ?? '(无)'}`
         );
       });
 
@@ -343,25 +347,154 @@ export class FfprobeUtil {
    */
   static getLanguageDisplayName(lang: string): string {
     if (!lang) { return ''; }
+    const normalized = lang.toLowerCase();
     const map: Record<string, string> = {
       'chi': '中文', 'zho': '中文', 'zh': '中文',
       'chs': '中文(简体)', 'cht': '中文(繁体)',
+      'zh-cn': '中文(简体)', 'zh-hans': '中文(简体)',
+      'zh-tw': '中文(繁体)', 'zh-hant': '中文(繁体)', 'zh-hk': '中文(繁体,香港)',
       'eng': '英语', 'en': '英语',
       'jpn': '日语', 'ja': '日语',
       'kor': '韩语', 'ko': '韩语',
       'fra': '法语', 'fre': '法语',
       'deu': '德语', 'ger': '德语',
+      'alb': '阿尔巴尼亚语', 'sqi': '阿尔巴尼亚语',
+      'arm': '亚美尼亚语', 'hye': '亚美尼亚语',
+      'baq': '巴斯克语', 'eus': '巴斯克语',
+      'bul': '保加利亚语',
+      'cat': '加泰罗尼亚语',
+      'ces': '捷克语', 'cze': '捷克语',
+      'hrv': '克罗地亚语',
+      'dan': '丹麦语',
+      'ell': '希腊语', 'gre': '希腊语',
+      'est': '爱沙尼亚语',
+      'fin': '芬兰语',
+      'fil': '菲律宾语', 'tgl': '他加禄语',
+      'nld': '荷兰语', 'dut': '荷兰语',
+      'swe': '瑞典语',
+      'nor': '挪威语',
+      'pol': '波兰语',
+      'ron': '罗马尼亚语', 'rum': '罗马尼亚语',
+      'hun': '匈牙利语',
+      'slk': '斯洛伐克语', 'slo': '斯洛伐克语',
+      'slv': '斯洛文尼亚语',
+      'srp': '塞尔维亚语',
+      'lav': '拉脱维亚语',
+      'lit': '立陶宛语',
+      'ukr': '乌克兰语',
+      'heb': '希伯来语',
+      'urd': '乌尔都语',
+      'hin': '印地语',
+      'tur': '土耳其语',
+      'tam': '泰米尔语',
+      'tel': '泰卢固语',
+      'ben': '孟加拉语',
+      'mar': '马拉地语',
+      'mal': '马拉雅拉姆语',
+      'kan': '卡纳达语',
+      'guj': '古吉拉特语',
+      'pan': '旁遮普语',
       'spa': '西班牙语',
       'por': '葡萄牙语',
+      'glg': '加利西亚语',
+      'isl': '冰岛语', 'ice': '冰岛语',
+      'gle': '爱尔兰语',
+      'cym': '威尔士语', 'wel': '威尔士语',
+      'mlt': '马耳他语',
+      'mkd': '马其顿语', 'mac': '马其顿语',
       'rus': '俄语',
+      'bel': '白俄罗斯语',
       'tha': '泰语',
       'vie': '越南语',
       'ara': '阿拉伯语',
+      'fas': '波斯语', 'per': '波斯语',
+      'pus': '普什图语',
+      'kur': '库尔德语',
       'ita': '意大利语',
+      'lat': '拉丁语',
       'ind': '印尼语',
-      'msa': '马来语',
+      'msa': '马来语', 'may': '马来语',
+      'mya': '缅甸语', 'bur': '缅甸语',
+      'khm': '高棉语',
+      'lao': '老挝语',
+      'mon': '蒙古语',
+      'kaz': '哈萨克语',
+      'uzb': '乌兹别克语',
+      'aze': '阿塞拜疆语',
+      'kat': '格鲁吉亚语', 'geo': '格鲁吉亚语',
+      'swa': '斯瓦希里语',
+      'amh': '阿姆哈拉语',
+      'som': '索马里语',
+      'yor': '约鲁巴语',
+      'ibo': '伊博语',
+      'hau': '豪萨语',
+      'zul': '祖鲁语',
+      'xho': '科萨语',
+      'afr': '南非荷兰语',
+      'und': '未定义'
     };
-    return map[lang.toLowerCase()] ?? lang.toUpperCase();
+
+    if (map[normalized]) {
+      return map[normalized];
+    }
+
+    // 兼容 zh-CN / zh-TW / en-US 这类带区域后缀的语言标记
+    const base = normalized.split('-')[0];
+    if (map[base]) {
+      return map[base];
+    }
+
+    return lang.toUpperCase();
+  }
+
+  /** 从字幕语言码/标题推断第三层标签（简体/繁体/香港/自定义标题） */
+  private static getSubtitleTier3Label(track: FfprobeTrack, index: number): string {
+    const lang = (track.language ?? '').toLowerCase();
+    const title = (track.title ?? '').trim();
+    const titleLower = title.toLowerCase();
+
+    // 优先识别中文简繁体信息
+    const isChinese =
+      lang === 'chi' || lang === 'zho' || lang === 'zh' ||
+      lang === 'chs' || lang === 'cht' ||
+      lang.startsWith('zh-');
+
+    if (isChinese) {
+      if (title.includes('简体') || titleLower.includes('chs') ||
+        titleLower.includes('zh-cn') || titleLower.includes('hans') || titleLower.includes('sc')) {
+        return '简体';
+      }
+      if (title.includes('繁体') && (title.includes('香港') || titleLower.includes('hk'))) {
+        return '繁体(香港)';
+      }
+      if (title.includes('繁体') || titleLower.includes('cht') ||
+        titleLower.includes('zh-tw') || titleLower.includes('hant') || titleLower.includes('tc')) {
+        return '繁体';
+      }
+
+      if (lang === 'chs' || lang === 'zh-cn') {
+        return '简体';
+      }
+      if (lang === 'cht' || lang === 'zh-tw') {
+        return '繁体';
+      }
+      if (lang === 'zh-hk') {
+        return '繁体(香港)';
+      }
+    }
+
+    // 非中文或中文未识别到脚本信息：回退到标题
+    if (title.length > 0) {
+      return title;
+    }
+
+    // 对中文字幕，优先给出语义化兜底，避免全部显示轨道编号
+    if (isChinese) {
+      return '未标注';
+    }
+
+    // 非中文无 title 时，保留最弱兜底信息
+    return `轨道${index + 1}`;
   }
 
   /**
@@ -390,11 +523,19 @@ export class FfprobeUtil {
     const langName = track.language
       ? FfprobeUtil.getLanguageDisplayName(track.language)
       : `字幕 ${index + 1}`;
-    const codecName = FfprobeUtil.getCodecDisplayName(track.codecName);
-    if (codecName) {
-      return `${langName} (${codecName})`;
+    const codecName = track.codecName && track.codecName.length > 0
+      ? track.codecName.toLowerCase()
+      : FfprobeUtil.getCodecDisplayName(track.codecName);
+    const tier3 = FfprobeUtil.getSubtitleTier3Label(track, index);
+
+    // 三层展示：语言 - 编码 - 细分标签（如简体/繁体/subtitle3）
+    if (codecName && tier3) {
+      return `${langName} - ${codecName} - ${tier3}`;
     }
-    return langName;
+    if (codecName) {
+      return `${langName} - ${codecName}`;
+    }
+    return `${langName} - ${tier3}`;
   }
 }
 

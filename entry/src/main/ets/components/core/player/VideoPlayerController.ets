@@ -11,6 +11,7 @@ import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
+import { FfprobeUtil } from "../../../utils/FfprobeUtil";
 
 /** 播放内核类型 */
 export type PlayerBackend = 'avplayer' | 'ijkplayer';
@@ -756,23 +757,8 @@ export class VideoPlayerController {
    * 将语言代码转换为友好的显示名称
    */
   private getLanguageName(languageCode: string): string {
-    const languageMap: Record<string, string> = {
-      // ISO 639-1
-      'zh': '中文', 'zh-CN': '简体中文', 'zh-TW': '繁体中文', 'zh-HK': '繁体中文(香港)',
-      'en': '英语', 'en-US': '英语(美国)', 'en-GB': '英语(英国)',
-      'ja': '日语', 'ko': '韩语', 'fr': '法语', 'de': '德语',
-      'es': '西班牙语', 'ru': '俄语', 'it': '意大利语', 'pt': '葡萄牙语',
-      'ar': '阿拉伯语', 'th': '泰语', 'vi': '越南语',
-      // ISO 639-2（字幕文件常用）
-      'chi': '中文', 'zho': '中文',
-      'chs': '简体中文', 'cht': '繁体中文',
-      'eng': '英语', 'jpn': '日语', 'kor': '韩语',
-      'fra': '法语', 'fre': '法语', 'deu': '德语', 'ger': '德语',
-      'spa': '西班牙语', 'rus': '俄语', 'ita': '意大利语',
-      'por': '葡萄牙语', 'ara': '阿拉伯语', 'tha': '泰语', 'vie': '越南语',
-      'und': '未定义'
-    };
-    return languageMap[languageCode] || languageCode || '字幕';
+    const displayName = FfprobeUtil.getLanguageDisplayName(languageCode);
+    return displayName.length > 0 ? displayName : (languageCode || '字幕');
   }
 
   // ─────────────────────────────────────────────
