@@ -24,7 +24,9 @@ const TAG = '[IjkPlayerAdapter]';
  * 1. XComponent 必须使用 libraryname='ijkplayer_napi'，不能用 controller 模式
  *    —— surfaceId 在此处无效，context 由 VideoPlayer UI 层通过 setContext() 传入
  * 2. 没有原生 timeUpdate 事件，需用定时器轮询 getCurrentPosition()
- * 3. 没有原生字幕 API（getTrackInfos 返回空），字幕完全依赖外部文件
+ * 3. 内嵌文字字幕（SRT/ASS 内嵌在 MKV 中）可通过解析 getMediaInfo().meta 的 type=timedtext
+ *    字段检测，并尝试通过 selectTrack(streamIndex) 激活；外部字幕文件通过 VideoPlayerController
+ *    的外部字幕探测机制处理。
  * 4. seek 参数为 string 类型
  * 5. play/pause/stop/release 均为同步方法，包装为 Promise
  *
@@ -76,7 +78,7 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onTimeUpdateCb?: (currentTime: number) => void;
   private _onErrorCb?: (error: Error) => void;
   private _onSeekDoneCb?: () => void;
-  // IjkPlayer 无内嵌字幕，此回调永不触发，仅满足接口
+  // 内嵌字幕（SRT/ASS in MKV）激活后由 IjkPlayer 的 timedtext 回调触发
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
 
   constructor() {
@@ -327,8 +329,10 @@ export class IjkPlayerAdapter implements IPlayer {
 
   async getTrackInfos(): Promise<TrackInfo[]> {
     // 此方法作为 fallback，在 FfprobeUtil 探测失败时被调用。
-    // IjkPlayer 的 getMediaInfo().audioDecoder 只描述当前激活的一条音轨，
-    // 因此此方法最多返回单条音轨，仅用于兜底显示。
+    // IjkPlayer 的 getMediaInfo() 提供以下信息：
+    //   audioDecoder：当前激活音轨的解码器（如 "avcodec, eac3"）
+    //   meta：所有流的元数据混合字符串，包含视频、音频、字幕的 key-value 对
+    // 从 meta 中检测 key:type,value:timedtext 可判断是否存在内嵌文字字幕轨道。
     if (!this._isPrepared) {
       const def: TrackInfo = { trackIndex: 0, trackType: 'audio', mimeType: 'audio/mp4a-latm', language: '' };
       return Promise.resolve([def]);
@@ -347,6 +351,14 @@ export class IjkPlayerAdapter implements IPlayer {
       'pcm_s16le': 'audio/raw',
     };
 
+    const subtitleCodecMimeMap: Record<string, string> = {
+      'subrip': 'text/x-subrip',
+      'srt': 'text/x-subrip',
+      'ass': 'text/x-ssa',
+      'ssa': 'text/x-ssa',
+      'webvtt': 'text/vtt',
+    };
+
     try {
       const info: object = this.ijk.getMediaInfo();
       const infoStr: string = JSON.stringify(info);
@@ -356,7 +368,6 @@ export class IjkPlayerAdapter implements IPlayer {
       const metaMatch = infoStr.match(/"meta"\s*:\s*"([^"]+)"/);
       const audioDecoderStr = adMatch ? adMatch[1] : '';
       const metaStr = metaMatch ? metaMatch[1] : '';
-      const langFromMeta = this.extractMetaValue(metaStr, 'language');
 
       // 解析 audioDecoder："avcodec, eac3" → ["eac3"]
       const decoderList: string[] = [];
@@ -375,19 +386,53 @@ export class IjkPlayerAdapter implements IPlayer {
       }
 
       const tracks: TrackInfo[] = [];
+      let audioCount = 0;
       for (let i = 0; i < decoderList.length; i++) {
         const codec = decoderList[i].toLowerCase();
         const item: TrackInfo = {
           trackIndex: i,
           trackType: 'audio',
           mimeType: codecMimeMap[codec] ?? `audio/${codec}`,
-          language: i === 0 ? langFromMeta : ''
+          // meta 中的 language 字段可能来自任意流（audio/subtitle 混合存储），
+          // 仅对第一条音轨做兜底赋值，多音轨场景需 FfprobeUtil 或 presetAudioTracks 提供准确信息。
+          language: i === 0 ? this.extractMetaValue(metaStr, 'language') : ''
         };
         tracks.push(item);
+        audioCount++;
+      }
+
+      // 检测 meta 中是否存在内嵌文字字幕轨道（type=timedtext）。
+      // meta 将所有流的 key-value 混合在一个字符串中；通过完整 key:type,value:timedtext
+      // 模式匹配流类型字段，避免误匹配其他包含该子串的元数据值。
+      // 流索引假设：视频固定占 stream 0，音频依次占 stream 1..N，字幕紧接其后从 N+1 开始。
+      // 此约定仅适用于典型 MKV（一条视频+若干音频+若干字幕），非标准排列时可能不准。
+      // 当前实现仅检测第一条字幕流，多条字幕情况下只激活第一条。
+      let subCount = 0;
+      if (metaStr.indexOf('key:type,value:timedtext') >= 0) {
+        const subtitleCodecRaw = this.extractMetaValue(metaStr, 'codec_name');
+        const subtitleLang = this.extractMetaValue(metaStr, 'language');
+        const subtitleMime = subtitleCodecMimeMap[subtitleCodecRaw] ?? 'text/plain';
+        if (subtitleMime === 'text/plain' && subtitleCodecRaw.length > 0) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `未映射的字幕编解码器: ${subtitleCodecRaw}，使用 text/plain 兜底`);
+        }
+        // stream index = 1（视频流固定占 stream 0，故音频从 1 开始）+ decoderList.length（音频流数）
+        const subtitleStreamIdx = 1 + decoderList.length;
+        const subtitleTrack: TrackInfo = {
+          trackIndex: subtitleStreamIdx,
+          trackType: 'subtitle',
+          mimeType: subtitleMime,
+          language: subtitleLang
+        };
+        tracks.push(subtitleTrack);
+        subCount++;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `检测到内嵌字幕轨道: streamIdx=${subtitleStreamIdx} codec=${subtitleCodecRaw} lang=${subtitleLang}`);
       }
 
       if (tracks.length > 0) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `getTrackInfos() fallback 返回 ${tracks.length} 个音轨`);
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `getTrackInfos() fallback 返回 ${audioCount} 个音轨, ${subCount} 个字幕轨`);
         return Promise.resolve(tracks);
       }
     } catch (e) {
@@ -442,7 +487,7 @@ export class IjkPlayerAdapter implements IPlayer {
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void {
     this._onSubtitleUpdateCb = callback;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      'onSubtitleUpdate 已注册（IjkPlayer 无内嵌字幕，此回调不会被主动触发）');
+      'onSubtitleUpdate 已注册（内嵌字幕轨道激活后可能触发）');
   }
 
   // ─── 内部实现 ───
