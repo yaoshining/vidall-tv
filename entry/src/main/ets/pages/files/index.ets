@@ -9,7 +9,7 @@ import { filePreview } from "@kit.PreviewKit";
 import { fileIo } from "@kit.CoreFileKit";
 import { ImagePreviewDialog } from "../../components/core/file/ImagePreview";
 import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
-import { PresetAudioTrack } from "../../components/core/player/VideoData";
+import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 
 const config: WebDAVConfig = {
@@ -108,66 +108,178 @@ export struct FileExplorerPage {
     })
   }
 
+  /** 安全截断 JSON 字符串用于日志展示，空/null/undefined 时返回对应标记 */
+  private jsonPreview(json: string | null | undefined, maxLen: number = 60): string {
+    if (json === null) { return 'NULL'; }
+    if (json === undefined) { return 'undefined'; }
+    if (json.length === 0) { return '(空)'; }
+    return json.length > maxLen ? `"${json.substring(0, maxLen)}..."` : `"${json}"`;
+  }
+
   private async playVideo(path: string, displayName: string) {
     const url = this.client.getFullUrl(path);
     const authHeader = this.client.getAuthHeaderPublic();
     const httpHeader: Record<string, string> = { 'Authorization': authHeader };
 
-    let presetAudioTracks: PresetAudioTrack[] = [];
+    console.info(`[playVideo] 开始 — path="${path}" displayName="${displayName}" url="${url}"`);
 
-    // ── 优先：从数据库读取已落库的音轨信息（刮削时已写入 audio_tracks_json）──
+    let presetAudioTracks: PresetAudioTrack[] = [];
+    let presetSubtitleTracks: PresetSubtitleTrack[] = [];
+    // DB 是否有确定性数据（NULL 表示未扫描，'[]' 表示已扫描但无轨道）
+    let dbHasAudioData = false;
+    let dbHasSubtitleData = false;
+
+    // ── 优先：从数据库读取已落库的音轨/字幕信息（扫描时已写入）──
     // path 是相对路径（如 /nas/电影/xxx.mkv），数据库里的 filePath 与其对应
     try {
+      console.info(`[playVideo] 查询 DB getVideoByPath: path="${path}"`);
       const videoEntity = await FileSourceDatabase.getInstance().getVideoByPath(path);
-      if (videoEntity && videoEntity.audioTracksJson && videoEntity.audioTracksJson.length > 0) {
-        const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
-        if (tracks.length > 0) {
-          for (let i = 0; i < tracks.length; i++) {
-            const t = tracks[i];
-            const item: PresetAudioTrack = {
-              trackIndex: t.index,
-              displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-              language: t.language,
-              mimeType: t.codecName
-            };
-            presetAudioTracks.push(item);
+      if (videoEntity) {
+        const audioJsonPreview = this.jsonPreview(videoEntity.audioTracksJson);
+        const subJsonPreview = this.jsonPreview(videoEntity.subtitleTracksJson);
+        console.info(
+          `[playVideo] DB 命中: videoId=${videoEntity.id ?? '?'}` +
+          ` audioTracksJson=${audioJsonPreview}` +
+          ` subtitleTracksJson=${subJsonPreview}`
+        );
+        // 音轨（audioTracksJson 不为 null 表示已经探测过，哪怕结果为空数组）
+        if (videoEntity.audioTracksJson !== null && videoEntity.audioTracksJson !== undefined) {
+          dbHasAudioData = true;
+          if (videoEntity.audioTracksJson.length > 0) {
+            const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
+            console.info(`[playVideo] DB 音轨 JSON 解析: 共 ${tracks.length} 条`);
+            for (let i = 0; i < tracks.length; i++) {
+              const t = tracks[i];
+              const item: PresetAudioTrack = {
+                trackIndex: t.index,
+                displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+                language: t.language,
+                mimeType: t.codecName
+              };
+              presetAudioTracks.push(item);
+              console.info(
+                `[playVideo]   音轨[${i}]: trackIndex=${t.index} codec=${t.codecName}` +
+                ` lang=${t.language || '(无)'} displayName="${item.displayName}"`
+              );
+            }
+          } else {
+            console.info(`[playVideo] DB 音轨 JSON 为空字符串，视为已扫描无音轨`);
           }
-          console.info(`[playVideo] 从数据库读取到 ${presetAudioTracks.length} 个音轨`);
+        } else {
+          console.info(`[playVideo] DB 音轨字段为 NULL/undefined，需 ffprobe 探测`);
         }
+        // 字幕轨（subtitleTracksJson 不为 null 表示已经探测过）
+        if (videoEntity.subtitleTracksJson !== null && videoEntity.subtitleTracksJson !== undefined) {
+          dbHasSubtitleData = true;
+          if (videoEntity.subtitleTracksJson.length > 0) {
+            const subTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
+            console.info(`[playVideo] DB 字幕轨 JSON 解析: 共 ${subTracks.length} 条`);
+            for (let i = 0; i < subTracks.length; i++) {
+              const t = subTracks[i];
+              const item: PresetSubtitleTrack = {
+                trackIndex: t.index,
+                displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
+                language: t.language,
+                codecName: t.codecName
+              };
+              presetSubtitleTracks.push(item);
+              console.info(
+                `[playVideo]   字幕轨[${i}]: trackIndex=${t.index} codec=${t.codecName}` +
+                ` lang=${t.language || '(无)'} displayName="${item.displayName}"`
+              );
+            }
+          } else {
+            console.info(`[playVideo] DB 字幕轨 JSON 为空字符串，视为已扫描无内嵌字幕`);
+          }
+        } else {
+          console.info(`[playVideo] DB 字幕轨字段为 NULL/undefined，需 ffprobe 探测`);
+        }
+      } else {
+        console.info(`[playVideo] DB 未命中（文件未扫描），path="${path}"`);
       }
     } catch (e) {
-      console.warn(`[playVideo] 数据库读取音轨失败，将 fallback 到 ffprobe: ${JSON.stringify(e)}`);
+      console.warn(`[playVideo] 数据库读取轨道失败，将 fallback 到 ffprobe: ${JSON.stringify(e)}`);
     }
 
-    // ── Fallback：数据库未命中（未扫描的文件）→ 实时 ffprobe 探测 ──
-    if (presetAudioTracks.length === 0) {
+    console.info(
+      `[playVideo] DB 阶段结束: dbHasAudioData=${dbHasAudioData} dbHasSubtitleData=${dbHasSubtitleData}` +
+      ` presetAudioTracks=${presetAudioTracks.length} presetSubtitleTracks=${presetSubtitleTracks.length}`
+    );
+
+    // ── Fallback：DB 无确定性数据时，实时 ffprobe 探测补全 ──
+    // 若 DB 已有记录（哪怕轨道数为 0），说明文件已被扫描，不重复探测。
+    // 若 DB 缺少任一类型的记录（NULL），则 ffprobe 一次性补全两种数据。
+    if (!dbHasAudioData || !dbHasSubtitleData) {
+      console.info(
+        `[playVideo] 触发 ffprobe fallback:` +
+        ` dbHasAudioData=${dbHasAudioData} dbHasSubtitleData=${dbHasSubtitleData}` +
+        ` encodedUrl="${encodeURI(url).substring(0, 80)}"`
+      );
       try {
         const probeResult = await FfprobeUtil.probe(encodeURI(url), httpHeader, 15000);
-        if (probeResult.success && probeResult.audioTracks.length > 0) {
-          for (let i = 0; i < probeResult.audioTracks.length; i++) {
-            const t = probeResult.audioTracks[i];
-            const item: PresetAudioTrack = {
-              trackIndex: t.index,
-              displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-              language: t.language,
-              mimeType: t.codecName
-            };
-            presetAudioTracks.push(item);
+        if (probeResult.success) {
+          console.info(
+            `[playVideo] ffprobe 成功: 音轨=${probeResult.audioTracks.length}` +
+            ` 字幕轨=${probeResult.subtitleTracks.length}` +
+            ` 格式=${probeResult.formatName ?? '?'} 时长=${probeResult.durationText}`
+          );
+          // 仅补全 DB 未记录的部分
+          if (!dbHasAudioData) {
+            for (let i = 0; i < probeResult.audioTracks.length; i++) {
+              const t = probeResult.audioTracks[i];
+              const item: PresetAudioTrack = {
+                trackIndex: t.index,
+                displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+                language: t.language,
+                mimeType: t.codecName
+              };
+              presetAudioTracks.push(item);
+              console.info(
+                `[playVideo]   ffprobe 音轨[${i}]: trackIndex=${t.index}` +
+                ` codec=${t.codecName} lang=${t.language || '(无)'} displayName="${item.displayName}"`
+              );
+            }
           }
-          console.info(`[playVideo] ffprobe 探测到 ${presetAudioTracks.length} 个音轨`);
+          if (!dbHasSubtitleData) {
+            for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
+              const t = probeResult.subtitleTracks[i];
+              const item: PresetSubtitleTrack = {
+                trackIndex: t.index,
+                displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
+                language: t.language,
+                codecName: t.codecName
+              };
+              presetSubtitleTracks.push(item);
+              console.info(
+                `[playVideo]   ffprobe 字幕轨[${i}]: trackIndex=${t.index}` +
+                ` codec=${t.codecName} lang=${t.language || '(无)'} displayName="${item.displayName}"`
+              );
+            }
+          }
+          console.info(
+            `[playVideo] ffprobe 补全完毕: 音轨=${presetAudioTracks.length} 字幕轨=${presetSubtitleTracks.length}`
+          );
         } else {
-          console.info(`[playVideo] ffprobe 探测失败或无音轨: ${probeResult.errorMessage ?? ''}`);
+          console.warn(`[playVideo] ffprobe 探测失败: ${probeResult.errorMessage ?? '(无错误信息)'}`);
         }
       } catch (e) {
         console.warn(`[playVideo] ffprobe 异常，忽略: ${JSON.stringify(e)}`);
       }
+    } else {
+      console.info(`[playVideo] DB 数据完整（音轨+字幕轨均已记录），跳过 ffprobe 探测`);
     }
+
+    console.info(
+      `[playVideo] 最终轨道: 音轨=${presetAudioTracks.length} 字幕轨=${presetSubtitleTracks.length}` +
+      ` → 推入播放页`
+    );
 
     const pageParam: PlayerPageParam = {
       url: encodeURI(url),
       httpHeader: httpHeader,
       title: displayName,
-      presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined
+      presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
+      presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
     };
 
     this.pageStack.pushPath({

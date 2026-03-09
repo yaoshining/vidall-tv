@@ -12,6 +12,23 @@ export interface PresetAudioTrack {
   mimeType?: string;
 }
 
+/**
+ * 预置字幕轨信息（用于 ijkplayer 字幕轨枚举）
+ *
+ * 由调用方（播放页）根据 ffprobe 探测结果或数据库记录手动注入，
+ * 供 VideoPlayerController.loadSubtitleTracks() 在 ijkplayer 后端下使用。
+ */
+export interface PresetSubtitleTrack {
+  /** ffprobe 流索引（IjkPlayer selectTrack() 参数） */
+  trackIndex: number;
+  /** 显示名称，如 "中文 (SRT)"、"英语 (ASS)" */
+  displayName: string;
+  /** ISO 639-2 语言代码，如 "chi"、"eng" */
+  language?: string;
+  /** 编解码器名称，如 "subrip"、"ass"、"hdmv_pgs_subtitle" */
+  codecName?: string;
+}
+
 export interface VideoData {
   type: VideoDataType;
   videoSrc: string;
@@ -37,4 +54,10 @@ export interface VideoData {
    * 由调用方（播放页）根据文件元数据手动填充。
    */
   presetAudioTracks?: PresetAudioTrack[];
+  /**
+   * 预置字幕轨列表（可选）。
+   * 当 backend='ijkplayer' 时，通过 ffprobe 或数据库预先填充，
+   * 供 VideoPlayerController 在 onReady 后直接展示字幕选项，无需等待 getTrackInfos()。
+   */
+  presetSubtitleTracks?: PresetSubtitleTrack[];
 }

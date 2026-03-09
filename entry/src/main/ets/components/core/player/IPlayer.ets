@@ -51,6 +51,11 @@ export interface IPlayer {
   getTrackInfos(): Promise<TrackInfo[]>;
   /** 选择指定轨道（字幕/音频），-1 表示关闭 */
   selectTrack(trackIndex: number): Promise<void>;
+  /**
+   * 设置字幕延迟偏移（对外部 SRT 字幕有效）。
+   * 正值表示字幕延迟显示，负值表示提前显示，单位 ms。
+   */
+  setSubtitleDelay(delayMs: number): void;
 
   // ─── 事件回调 ───
   onReady(callback: () => void): void;

@@ -188,6 +188,16 @@ export class AVPlayerAdapter implements IPlayer {
     }
   }
 
+  /**
+   * 设置字幕延迟偏移。
+   *
+   * AVPlayerAdapter 中此方法是空实现：字幕延迟由 VideoPlayerController
+   * 在 SRT 时间轴查找时应用（currentTime - subtitleDelayMs），无需底层支持。
+   */
+  setSubtitleDelay(_delayMs: number): void {
+    // no-op: 延迟偏移由上层 SRT 查找逻辑处理
+  }
+
   // ─── 事件回调注册 ───
 
   onReady(callback: () => void): void {

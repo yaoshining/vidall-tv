@@ -9,6 +9,8 @@ import image from '@ohos.multimedia.image'
 import effectKit from '@ohos.effectKit'
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { millisecondsToTime } from '../../utils/TimeUtil'
+import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
+import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -178,6 +180,84 @@ export struct SeriesDetailPage {
     const n = s.season_number ?? 0;
     if (n === 0) { return '特别篇'; }
     return `第 ${n} 季`;
+  }
+
+  private isGenericSeasonTitle(title: string, n: number): boolean {
+    const t = title.trim().toLowerCase();
+    if (/^season\s*\d+$/.test(t)) { return true; }
+    if (/^第\s*\d+\s*季$/.test(t)) { return true; }
+    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
+      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+    if (n >= 0 && n < chineseNums.length) {
+      if (t === `第${chineseNums[n]}季`) { return true; }
+    }
+    return false;
+  }
+
+  private toChineseSeasonLabel(n: number): string {
+    if (n <= 0) { return '特别篇'; }
+    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
+      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+    if (n < chineseNums.length) {
+      return `第${chineseNums[n]}季`;
+    }
+    return `第${n}季`;
+  }
+
+  private buildEpisodeCode(seasonNumber: number, episodeNumber: number): string {
+    const sn = seasonNumber > 0 ? seasonNumber : 0;
+    const en = episodeNumber > 0 ? episodeNumber : 0;
+    return `S${sn}:E${en}`;
+  }
+
+  private getSeasonNameForPlayer(seasonNumber: number): string {
+    for (const s of this.seasons) {
+      if ((s.season_number ?? 0) === seasonNumber) {
+        const name = (s.name ?? '').trim();
+        if (name.length === 0 || this.isGenericSeasonTitle(name, seasonNumber)) {
+          return '';
+        }
+        return name;
+      }
+    }
+    return '';
+  }
+
+  private buildPlayerTitle(episode: MediaItem, episodeName: string): string {
+    const seriesTitle = this.getTitle().length > 0 ? this.getTitle() : (episode.title ?? episode.fileName);
+    const sn = episode.seasonNumber ?? 0;
+    const en = episode.episodeNumber ?? 0;
+    const seasonLabel = this.toChineseSeasonLabel(sn);
+    const seasonName = this.getSeasonNameForPlayer(sn);
+    const epName = episodeName.trim();
+    const code = this.buildEpisodeCode(sn, en);
+    const seasonPart = seasonName.length > 0 ? `${seasonLabel} ${seasonName}` : seasonLabel;
+    return `${seriesTitle} ${seasonPart}-${code}-${epName}`;
+  }
+
+  private async resolveEpisodeName(db: FileSourceDatabase, episode: MediaItem): Promise<string> {
+    const seriesTitle = this.getTitle().trim();
+    const current = (episode.title ?? '').trim();
+    const fileName = (episode.fileName ?? '').trim();
+    const sn = episode.seasonNumber ?? 0;
+    const en = episode.episodeNumber ?? 0;
+
+    const seriesId = this.seriesEntity?.id;
+    if (seriesId !== undefined && en > 0) {
+      const epEntity = await db.getTvEpisode(seriesId, sn, en);
+      const dbName = (epEntity?.title ?? '').trim();
+      if (dbName.length > 0) {
+        return dbName;
+      }
+    }
+
+    if (current.length > 0 && current !== seriesTitle) {
+      return current;
+    }
+    if (en > 0) {
+      return `第${en}集`;
+    }
+    return fileName.length > 0 ? fileName : '未知集名';
   }
 
   private getCastProfileUrl(c: ScrapeCredit): string {
@@ -515,7 +595,8 @@ export struct SeriesDetailPage {
 
   /**
    * 点击集 → 导航到播放器
-   * 构造 WebDAV 完整 URL + Authorization 请求头后传入 PlayerPageParam
+   * 构造 WebDAV 完整 URL + Authorization 请求头后传入 PlayerPageParam，
+   * 同时从 DB / ffprobe 读取音轨和字幕轨元数据并注入，与文件浏览器行为一致。
    */
   private async playEpisode(episode: MediaItem): Promise<void> {
     try {
@@ -543,14 +624,97 @@ export struct SeriesDetailPage {
       const authHeader = client.getAuthHeaderPublic();
       const httpHeader: Record<string, string> = authHeader ? { 'Authorization': authHeader } : {};
 
+      // ── 音轨 / 字幕轨 ──────────────────────────
+      let presetAudioTracks: PresetAudioTrack[] = [];
+      let presetSubtitleTracks: PresetSubtitleTrack[] = [];
+      let dbHasAudioData = false;
+      let dbHasSubtitleData = false;
+
+      try {
+        const videoEntity = await db.getVideoByPath(episode.filePath);
+        if (videoEntity) {
+          if (videoEntity.audioTracksJson !== null && videoEntity.audioTracksJson !== undefined) {
+            dbHasAudioData = true;
+            if (videoEntity.audioTracksJson.length > 0) {
+              const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
+              for (let i = 0; i < tracks.length; i++) {
+                const t = tracks[i];
+                const item: PresetAudioTrack = {
+                  trackIndex: t.index,
+                  displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+                  language: t.language,
+                  mimeType: t.codecName
+                };
+                presetAudioTracks.push(item);
+              }
+            }
+          }
+          if (videoEntity.subtitleTracksJson !== null && videoEntity.subtitleTracksJson !== undefined) {
+            dbHasSubtitleData = true;
+            if (videoEntity.subtitleTracksJson.length > 0) {
+              const subTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
+              for (let i = 0; i < subTracks.length; i++) {
+                const t = subTracks[i];
+                const item: PresetSubtitleTrack = {
+                  trackIndex: t.index,
+                  displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
+                  language: t.language,
+                  codecName: t.codecName
+                };
+                presetSubtitleTracks.push(item);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[SeriesDetailPage] 数据库读取轨道失败，将 fallback 到 ffprobe: ' + JSON.stringify(e));
+      }
+
+      if (!dbHasAudioData || !dbHasSubtitleData) {
+        try {
+          const probeResult = await FfprobeUtil.probe(encodeURI(fullUrl), httpHeader, 15000);
+          if (probeResult.success) {
+            if (!dbHasAudioData) {
+              for (let i = 0; i < probeResult.audioTracks.length; i++) {
+                const t = probeResult.audioTracks[i];
+                const item: PresetAudioTrack = {
+                  trackIndex: t.index,
+                  displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+                  language: t.language,
+                  mimeType: t.codecName
+                };
+                presetAudioTracks.push(item);
+              }
+            }
+            if (!dbHasSubtitleData) {
+              for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
+                const t = probeResult.subtitleTracks[i];
+                const item: PresetSubtitleTrack = {
+                  trackIndex: t.index,
+                  displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
+                  language: t.language,
+                  codecName: t.codecName
+                };
+                presetSubtitleTracks.push(item);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[SeriesDetailPage] ffprobe 异常，忽略: ' + JSON.stringify(e));
+        }
+      }
+
+      const episodeName = await this.resolveEpisodeName(db, episode);
       const param: PlayerPageParam = {
         url: encodeURI(fullUrl),
         httpHeader,
-        title: episode.title ?? episode.fileName,
+        title: this.buildPlayerTitle(episode, episodeName),
         videoId: episode.id,
         seriesProviderId: this.seriesEntity?.providerId ?? '',
         seasonNumber: episode.seasonNumber ?? 0,
-        episodeNumber: episode.episodeNumber ?? 0
+        episodeNumber: episode.episodeNumber ?? 0,
+        presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
+        presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {

@@ -1,6 +1,6 @@
 import { VideoPlayer } from "../../components/core/player";
 import { VideoDataType } from "../../components/core/player/Constants";
-import { VideoData, PresetAudioTrack } from "../../components/core/player/VideoData";
+import { VideoData, PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import { VideoPlayerController } from "../../components/core/player/VideoPlayerController";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
@@ -15,6 +15,8 @@ export interface PlayerPageParam {
   title?: string;
   /** 预置音轨列表（可选），用于 EAC-3/AC-3 等 AVPlayer 无法探测的格式 */
   presetAudioTracks?: PresetAudioTrack[];
+  /** 预置字幕轨列表（可选），来自 ffprobe 探测结果，供 ijkplayer 后端字幕枚举 */
+  presetSubtitleTracks?: PresetSubtitleTrack[];
   /** 视频 DB id（用于进度持久化） */
   videoId?: number;
   /** TMDB 剧集 ID，电影为空字符串 */
@@ -163,6 +165,9 @@ export struct PlayerPage {
           this.videoData.name = pageParam.title
           if (pageParam.presetAudioTracks && pageParam.presetAudioTracks.length > 0) {
             this.videoData.presetAudioTracks = pageParam.presetAudioTracks
+          }
+          if (pageParam.presetSubtitleTracks && pageParam.presetSubtitleTracks.length > 0) {
+            this.videoData.presetSubtitleTracks = pageParam.presetSubtitleTracks
           }
         }
 

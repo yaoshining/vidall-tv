@@ -81,3 +81,9 @@ user-invocable: true
 - 变更清单：文件级说明。
 - 验证结果：已执行的检查与结论。
 - 风险与后续：兼容性、性能或交互待确认项。
+
+## ArkTS 编译错误复盘（新增）
+- 避免在类型声明中使用对象字面量：如 `Map<number, { a: string }>` 会触发 `arkts-no-obj-literals-as-types`。应先声明 `interface`/`class`，再使用 `Map<number, MyType>`。
+- 避免“无显式类型”的对象字面量直接入参：如 `map.set(k, { ... })` 可能触发 `arkts-no-untyped-obj-literals`。应先写 `const cfg: MyType = { ... }`，再传入。
+- 代码插入位置必须严格校验作用域：方法误插入到其他 `@ComponentV2 struct` 内，会导致大量“属性不存在”级联错误（例如在 `PosterCard` 内访问 `MediaLibraryTab` 的 `isScanning/model`）。
+- 每次大块 patch 后，优先做文件级编译错误检查（Problems / `get_errors`），先清作用域错误，再清类型错误，能显著降低排障时间。
