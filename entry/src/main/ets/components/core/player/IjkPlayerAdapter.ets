@@ -473,11 +473,13 @@ export class IjkPlayerAdapter implements IPlayer {
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'framedrop', '5');
 
     // ── 硬件解码决策 ──
-    // forceSoftDecode=true：A/B 测试用，强制软解，可验证硬解是否是崩溃根因
+    // forceSoftDecode=true：A/B 测试用，强制所有编解码器走软解，可验证硬解是否是崩溃根因
     // overlay-format 是 Android 专用参数，鸿蒙版不需要设置，设置反而会黑屏
     if (this.forceSoftDecode) {
       this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '0');
       this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '0');
+      // 所有编解码器强制软解时限制线程数，降低 4K HDR 帧缓冲内存峰值
+      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'vd-thread', '2');
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `[${this._sessionId}][init] ⚠️ forceSoftDecode=true，强制软解（H264 软解⚠️ H265 软解⚠️）`);
     } else {
@@ -488,8 +490,14 @@ export class IjkPlayerAdapter implements IPlayer {
         'mediacodec-all-videos', useH264Hw ? '1' : '0');
       this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
         'mediacodec-hevc', useH265Hw ? '1' : '0');
+      // H265 软解时限制线程数（=2），降低 4K HDR HEVC 软解的帧缓冲内存压力。
+      // H264 硬解不受此参数影响（硬解路径不走 FFmpeg 线程池）。
+      if (!useH265Hw) {
+        this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'vd-thread', '2');
+      }
+      const h265Label = useH265Hw ? '硬解✅' : `软解⚠️(vd-thread=2)`;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[${this._sessionId}][init] 硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${useH265Hw ? '硬解✅' : '软解⚠️'}`);
+        `[${this._sessionId}][init] 硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${h265Label}`);
     }
 
     // ── 网络超时（HTTP/WebDAV，单位 μs）──
