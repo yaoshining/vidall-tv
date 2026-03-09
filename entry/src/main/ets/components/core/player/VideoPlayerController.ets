@@ -139,8 +139,19 @@ export class VideoPlayerController {
     this.activeSubtitleIndex = -1;
     this.audioTracks = [];
     this.activeAudioIndex = -1;
-    // 每次播放都从 AVPlayer 开始，确保"优先 AVPlayer"策略在同一 controller 复用时也生效
-    this.backend = 'avplayer';
+    // ⚠️ 注意：此处【不】重置 this.backend。
+    //
+    // backend 由以下两种机制决定，均在 initPlayer 外部完成：
+    //   1. 初始值 'avplayer'（VideoPlayerController 默认值，每个 PlayerPage 对应一个新实例）
+    //   2. onUnsupportedFormat 回调：AVPlayer 报 5400106 时切换为 'ijkplayer'
+    //
+    // initPlayer 在两个 XComponent 的 onLoad 中均会被调用：
+    //   - AVPlayer XComponent onLoad → initPlayer (backend='avplayer')
+    //   - IjkPlayer XComponent onLoad → initPlayer (backend='ijkplayer')
+    //
+    // 若在此处重置为 'avplayer'，会导致 ijkplayer 分支无限循环：
+    //   onUnsupportedFormat → backend='ijkplayer' → ijkXComp.onLoad → initPlayer
+    //   → 重置为 'avplayer' → avpXComp.onLoad → initPlayer → 5400106 → 再触发 onUnsupportedFormat → ...
 
     // ── 预置音轨：从数据库已读取，立即填充，无需等播放器 ready ──
     // 这样用户打开播放页就能立即看到音轨列表，不必等待 ijkplayer prepareAsync 完成
@@ -162,7 +173,7 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[initPlayer] 预置音轨已提前填充: ${tracks.length} 条`);
 
-      // ── 主动 backend 预判 ──────────────────────────────────────────────
+      // ── 主动 backend 预判（仅在当前 backend 为 avplayer 时生效）────────────
       // 若 presetAudioTracks 中存在 AVPlayer 明确不支持的音频编码
       // （AC-3 / EAC-3 / TrueHD / DTS 等），直接选用 ijkplayer，
       // 跳过 AVPlayer 的尝试→报错→回退流程，减少黑屏等待时间。
@@ -172,18 +183,20 @@ export class VideoPlayerController {
       //   但实际 DV 内容（蓝光/流媒体）几乎都携带 TrueHD / EAC-3 / AC-3 音频，
       //   这些音频编码才是导致 AVPlayer 失败并回退到 ijkplayer 的真正原因，
       //   与 DV 视频格式本身无关。
-      let hasUnsupportedAudio = false;
-      for (let i = 0; i < presets.length; i++) {
-        const mime = presets[i].mimeType;
-        if (mime && DeviceCapabilityUtil.isAvPlayerUnsupportedAudio(mime)) {
-          hasUnsupportedAudio = true;
-          break;
+      if (this.backend === 'avplayer') {
+        let hasUnsupportedAudio = false;
+        for (let i = 0; i < presets.length; i++) {
+          const mime = presets[i].mimeType;
+          if (mime && DeviceCapabilityUtil.isAvPlayerUnsupportedAudio(mime)) {
+            hasUnsupportedAudio = true;
+            break;
+          }
         }
-      }
-      if (hasUnsupportedAudio) {
-        this.backend = 'ijkplayer';
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          '[initPlayer] 预置音轨含 AVPlayer 不支持的音频编码，直接使用 IjkPlayer');
+        if (hasUnsupportedAudio) {
+          this.backend = 'ijkplayer';
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            '[initPlayer] 预置音轨含 AVPlayer 不支持的音频编码，直接使用 IjkPlayer');
+        }
       }
     }
 
