@@ -64,6 +64,9 @@ export class IjkPlayerAdapter implements IPlayer {
   // ─── 软解强制开关（A/B 验证硬解是否是崩溃根因）───
   forceSoftDecode: boolean = false;
 
+  // ─── 缓冲进度日志节流（每 10% 打一次，避免高频日志噪声）───
+  private _lastLoggedBufferPct: number = -1;
+
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
   private _onPlayCb?: () => void;
@@ -134,6 +137,7 @@ export class IjkPlayerAdapter implements IPlayer {
     this._isPlaying = false;
     this._duration = 0;
     this._currentTime = 0;
+    this._lastLoggedBufferPct = -1;
 
     try {
       // 官方标准初始化顺序（参照 README_zh.md）：
@@ -160,8 +164,10 @@ export class IjkPlayerAdapter implements IPlayer {
       }
 
       // ── Step 2：setDebug ──
-      this.ijk.setDebug(true);
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [2/8] setDebug 完成`);
+      // 关闭 ffmpeg 帧级别 debug 日志（setDebug(true) 会使 ffmpeg 每帧、每 NAL unit 打印日志，
+      // HEVC 25fps 下每秒产生数百条日志，造成严重性能开销并可能引发长时间播放崩溃）
+      this.ijk.setDebug(false);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [2/8] setDebug(false) 完成`);
 
       // ── Step 3：native_setup ──
       this.ijk.native_setup();
@@ -568,8 +574,14 @@ export class IjkPlayerAdapter implements IPlayer {
         // 10000=OPEN_INPUT, 10001=FIND_STREAM_INFO, 10002=COMPONENT_OPEN
         // 10003=VIDEO_DECODED_START, 10004=VIDEO_RENDERING_START
         // 10005=AUDIO_RENDERING_START, 10006=VIDEO_ROTATION_CHANGED
-        // 10007=BUFFERING_DURATION, 10008=BUFFERING_BYTE_COUNT（缓冲字节数更新，正常心跳）
+        // 10007=BUFFERING_DURATION, 10008=BUFFERING_BYTE_COUNT（高频心跳，每秒多次，不记录）
         // 10009=VIDEO_SEEK_RENDERING_START
+        //
+        // 过滤高频事件（10008=BUFFERING_BYTE_COUNT）：该事件在缓冲期间每秒触发数次，
+        // 记录会造成日志洪水，无诊断价值。
+        if (what === 10008) {
+          return;
+        }
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[${this._sessionId}][onInfo] what=${what} extra=${extra}`);
       }
@@ -577,10 +589,15 @@ export class IjkPlayerAdapter implements IPlayer {
     this.ijk.setOnInfoListener(onInfoListener);
 
     // onBufferingUpdate
+    // 只在达到整10%节点时打日志，避免每1%更新都产生日志（高频噪声）
     const onBufferingUpdateListener: OnBufferingUpdateListener = {
       onBufferingUpdate: (percent: number) => {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[${this._sessionId}][onBufferingUpdate] ${percent}%`);
+        const bucket = Math.floor(percent / 10) * 10;
+        if (bucket !== this._lastLoggedBufferPct) {
+          this._lastLoggedBufferPct = bucket;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[${this._sessionId}][onBufferingUpdate] ${percent}%`);
+        }
       }
     };
     this.ijk.setOnBufferingUpdateListener(onBufferingUpdateListener);
