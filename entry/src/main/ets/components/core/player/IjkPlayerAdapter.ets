@@ -563,7 +563,13 @@ export class IjkPlayerAdapter implements IPlayer {
     // onInfo
     const onInfoListener: OnInfoListener = {
       onInfo: (what: number, extra: number) => {
+        // ijkplayer FFP_MSG (内部消息) what 常见值：
         // 700=BUFFERING_START, 701=BUFFERING_END, 703=NETWORK_BANDWIDTH
+        // 10000=OPEN_INPUT, 10001=FIND_STREAM_INFO, 10002=COMPONENT_OPEN
+        // 10003=VIDEO_DECODED_START, 10004=VIDEO_RENDERING_START
+        // 10005=AUDIO_RENDERING_START, 10006=VIDEO_ROTATION_CHANGED
+        // 10007=BUFFERING_DURATION, 10008=BUFFERING_BYTE_COUNT（缓冲字节数更新，正常心跳）
+        // 10009=VIDEO_SEEK_RENDERING_START
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[${this._sessionId}][onInfo] what=${what} extra=${extra}`);
       }
