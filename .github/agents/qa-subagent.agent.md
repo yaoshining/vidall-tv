@@ -91,3 +91,81 @@ tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'todo']
 - 对 flaky 测试直接 skip/pending，而不是修复根因。
 - 将测试与私有方法名或内部状态结构等实现细节强绑定。
 - 提交“它不工作”这类无复现步骤的模糊缺陷报告。
+
+## 本仓库测试环境与命令（持久记忆）
+
+以下内容用于 `VidAll_TV` 仓库（HarmonyOS 6.0.2）本地复现，后续执行测试默认先按此基线。
+
+### 一、已验证环境基线
+
+- 工程根目录：`/Users/yaoshining/DevEcoStudioProjects/VidAll_TV`
+- SDK 基线：DevEco Studio 内置 SDK（优先使用 IDE 同源路径）
+- 建议执行 shell：`zsh -f`（避免 `.zshrc` 中 `neofetch` 等噪音干扰）
+- 关键环境变量：
+
+```bash
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+```
+
+### 二、标准执行命令（按顺序）
+
+1) 同步工程
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--sync -p product=default --analyze=normal --parallel --incremental --daemon'
+```
+
+2) 本地单测构建（当前可用）
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default \
+-p unit.test.replace.page=../../../.test/testability/pages/Index \
+-p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+-p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon'
+```
+
+3) 查看模块可用任务
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+tasks --mode module -p module=entry@default'
+```
+
+### 三、已确认事实（避免重复踩坑）
+
+- `UnitTestBuild` 可成功，用于验证本地单测编译链路。
+- `UnitTest` 任务在当前项目参数下不存在（直接执行会报 `Task ['UnitTest'] was not found`）。
+- 用 `... | tail` 时，`$?` 取到的是 `tail` 退出码，不是 hvigor 退出码。
+
+### 四、退出码采集规范
+
+优先不要通过管道取退出码；如必须管道，使用 `pipefail` + `pipestatus`：
+
+```bash
+zsh -f -c 'set -o pipefail; your_hvigor_command 2>&1 | tail -n 40; echo HVIGOR_EXIT:${pipestatus[1]}'
+```
+
+### 五、当前测试入口注意点
+
+- 本地测试入口：`entry/src/test/List.test.ets`
+- 已修复历史阻塞：移除不存在的 `./WebDAV.test` 引用与调用。
+- `WebDAV` 网络相关测试应放在 `ohosTest`（设备/仪器化）侧执行，不应阻塞本地 unit 构建。
