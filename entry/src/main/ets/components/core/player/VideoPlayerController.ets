@@ -593,11 +593,15 @@ export class VideoPlayerController {
     try {
       // ── 已在 initPlayer 提前填充（presetAudioTracks 路径）──
       // initPlayer 时若有 presetAudioTracks 已立即写入 this.audioTracks，
-      // onPlayerReady 时只需触发首轨选择，不需要重新构建列表
+      // onPlayerReady 时只需确认默认选中首轨，无需调用 selectTrack。
+      // 原因：ijkplayer 默认就播放 stream 0，主动调用 selectTrack(0) 会触发解码器
+      // pipeline flush，导致 HEVC 软解 buffer 队列清空（inputBufferInfoQueue_ is empty）→ 花屏。
       if (this.audioTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，直接选择默认轨道`);
-        await this.switchAudioTrack(0);
+          `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，默认首轨已激活（跳过 selectTrack）`);
+        if (this.activeAudioIndex < 0) {
+          this.activeAudioIndex = 0;
+        }
         return;
       }
 
@@ -625,7 +629,11 @@ export class VideoPlayerController {
       this.audioTracks = tracks;
 
       if (this.audioTracks.length > 0) {
-        await this.switchAudioTrack(0);
+        // 不调用 switchAudioTrack(0)：播放器已默认激活 stream 0，
+        // 主动调用 selectTrack(0) 会不必要地 flush 解码器导致花屏
+        this.activeAudioIndex = 0;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[loadAudioTracks] 音轨列表已更新，默认选中首轨（activeAudioIndex=0，不触发 selectTrack）`);
       }
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -807,7 +815,13 @@ export class VideoPlayerController {
       return;
     }
 
-    // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
+    // 已在目标音轨，无需切换（避免 selectTrack 触发解码器 flush 导致花屏）
+    if (this.activeAudioIndex === trackIndex) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[switchAudioTrack] 已在目标音轨 ${trackIndex}（${this.audioTracks[trackIndex].displayName}），跳过`);
+      return;
+    }
+
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
 

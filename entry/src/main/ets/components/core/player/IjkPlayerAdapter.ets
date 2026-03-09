@@ -478,8 +478,8 @@ export class IjkPlayerAdapter implements IPlayer {
     if (this.forceSoftDecode) {
       this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '0');
       this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '0');
-      // 所有编解码器强制软解时限制线程数，降低 4K HDR 帧缓冲内存峰值
-      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'vd-thread', '2');
+      // 强制软解时使用单线程，避免多线程 buffer 竞争导致帧损坏
+      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'vd-thread', '1');
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `[${this._sessionId}][init] ⚠️ forceSoftDecode=true，强制软解（H264 软解⚠️ H265 软解⚠️）`);
     } else {
@@ -490,12 +490,14 @@ export class IjkPlayerAdapter implements IPlayer {
         'mediacodec-all-videos', useH264Hw ? '1' : '0');
       this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
         'mediacodec-hevc', useH265Hw ? '1' : '0');
-      // H265 软解时限制线程数（=2），降低 4K HDR HEVC 软解的帧缓冲内存压力。
-      // H264 硬解不受此参数影响（硬解路径不走 FFmpeg 线程池）。
+      // H265 软解时使用单线程（vd-thread=1）：
+      // vd-thread=2 会因两个解码线程竞争同一 buffer queue 而出现
+      // "info.buff_ or formatInfo nullptr"，4K HEVC Main 10 尤为明显。
+      // 单线程软解虽然帧率略低，但 buffer 分配稳定，不会产生花屏。
       if (!useH265Hw) {
-        this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'vd-thread', '2');
+        this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'vd-thread', '1');
       }
-      const h265Label = useH265Hw ? '硬解✅' : `软解⚠️(vd-thread=2)`;
+      const h265Label = useH265Hw ? '硬解✅' : `软解⚠️(vd-thread=1)`;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[${this._sessionId}][init] 硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${h265Label}`);
     }
