@@ -39,6 +39,9 @@ export class IjkPlayerAdapter implements IPlayer {
   private ijk: IjkMediaPlayer;
   private readonly XCOMPONENT_ID = 'ijkPlayerXComponent';
 
+  // ─── 会话标识（用于跨生命周期关联诊断日志）───
+  private readonly _sessionId: string;
+
   // ─── 状态 ───
   private _duration: number = 0;
   private _currentTime: number = 0;
@@ -54,6 +57,13 @@ export class IjkPlayerAdapter implements IPlayer {
   private _timeUpdateTimer?: number;
   private readonly TIME_UPDATE_INTERVAL = 250; // ms
 
+  // ─── 心跳定时器（每 30s 打印播放状态快照，用于崩溃前状态推断）───
+  private _heartbeatTimer?: number;
+  private readonly HEARTBEAT_INTERVAL = 30000; // ms
+
+  // ─── 软解强制开关（A/B 验证硬解是否是崩溃根因）───
+  forceSoftDecode: boolean = false;
+
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
   private _onPlayCb?: () => void;
@@ -67,10 +77,13 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
 
   constructor() {
+    // 生成会话 ID：时间戳 + 随机后缀，用于关联同一次播放会话的所有日志
+    this._sessionId = `${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffff).toString(16)}`;
     // 使用单例模式，与官方 README 示例一致
     // 注意：getInstance() 返回的实例在 setContext 时会设置 id = XCOMPONENT_ID
     this.ijk = IjkMediaPlayer.getInstance();
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, '构造完成（单例模式，等待 setPendingContext）');
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[${this._sessionId}][init] 构造完成（单例模式，等待 setPendingContext）`);
   }
 
   // ─── IPlayer 属性 ───
@@ -91,24 +104,32 @@ export class IjkPlayerAdapter implements IPlayer {
   }
 
   /**
-   * 保存 XComponent context，在下次 init() 调用时于 native_setup 后绑定。
+   * 保存 XComponent context，在下次 init() 调用时于 native_setup 之前绑定。
    * 由 VideoPlayerController.setIjkContext() 调用。
    *
-   * 正确时序：setContext 必须在 native_setup 之后、prepareAsync 之前调用。
+   * 正确时序（唯一正确顺序，与 @ohos/ijkplayer README 一致）：
+   *   setContext → setDebug → native_setup → setDataSource → setOption → setOnXxxListener → prepareAsync
+   * setContext 必须在 native_setup 之前调用，否则 XComponent Surface 无法绑定，视频黑屏。
    */
   setPendingContext(context: object, xComponentId: string): void {
     this._pendingContext = context;
     this._pendingXComponentId = xComponentId;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setPendingContext: xComponentId=${xComponentId}，等待 init() 中 native_setup 后绑定`);
+      `[${this._sessionId}][init] setPendingContext: xComponentId=${xComponentId}，等待 init() 中 setContext 绑定`);
   }
 
   // ─── 生命周期 ───
 
   async init(videoData: VideoData, surfaceId: string): Promise<void> {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `init 开始 — type=${videoData.type} src=${videoData.videoSrc.substring(0, 80)}`);
+      `[${this._sessionId}][init] 开始 — type=${videoData.type} src=${videoData.videoSrc.substring(0, 80)}`);
 
+    // ── 状态重置：每次 init() 视为新会话，清除上次播放遗留状态 ──
+    // 注意：IjkMediaPlayer 单例在每次 init() 前通过 native_setup() 重新初始化 Native 层，
+    // 此处仅重置 ArkTS 层包装器的状态标志，不影响单例的生命周期管理。
+    // _isReleased 重置为 false 是必要的，因为同一个适配器实例（如 avplayer→ijk 切换后）
+    // 可能被二次调用 init()，此时 _isReleased 应反映新会话状态。
+    this._isReleased = false;
     this._isPrepared = false;
     this._isPlaying = false;
     this._duration = 0;
@@ -130,27 +151,27 @@ export class IjkPlayerAdapter implements IPlayer {
       if (this._pendingContext && this._pendingXComponentId) {
         this.ijk.setContext(this._pendingContext, this._pendingXComponentId);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[1/8] setContext 完成，xComponentId=${this._pendingXComponentId}`);
+          `[${this._sessionId}][init] [1/8] setContext 完成，xComponentId=${this._pendingXComponentId}`);
         this._pendingContext = null;
         this._pendingXComponentId = '';
       } else {
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          '[1/8] ❌ pendingContext 为空！必须在 init() 前调用 setPendingContext()，视频将黑屏');
+          `[${this._sessionId}][init] [1/8] ❌ pendingContext 为空！必须在 init() 前调用 setPendingContext()，视频将黑屏`);
       }
 
       // ── Step 2：setDebug ──
       this.ijk.setDebug(true);
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[2/8] setDebug 完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [2/8] setDebug 完成`);
 
       // ── Step 3：native_setup ──
       this.ijk.native_setup();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[3/8] native_setup 完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [3/8] native_setup 完成`);
 
       // ── Step 4：setDataSource ──
       if (videoData.type === VideoDataType.URL) {
         this.ijk.setDataSource(videoData.videoSrc);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[4/8] setDataSource(URL): ${videoData.videoSrc.substring(0, 120)}`);
+          `[${this._sessionId}][init] [4/8] setDataSource(URL): ${videoData.videoSrc.substring(0, 120)}`);
         if (videoData.httpHeader) {
           const headerMap = new Map<string, string>();
           const keys = Object.keys(videoData.httpHeader);
@@ -160,60 +181,63 @@ export class IjkPlayerAdapter implements IPlayer {
           if (headerMap.size > 0) {
             this.ijk.setDataSourceHeader(headerMap);
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `[4/8] setDataSourceHeader: ${keys.join(', ')}`);
+              `[${this._sessionId}][init] [4/8] setDataSourceHeader: ${keys.join(', ')}`);
           }
         }
       } else {
         this.ijk.setDataSource(videoData.videoSrc);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[4/8] setDataSource(FILE): ${videoData.videoSrc}`);
+          `[${this._sessionId}][init] [4/8] setDataSource(FILE): ${videoData.videoSrc}`);
       }
 
       // ── Step 5：setOption ──
       await this.applyDefaultOptions();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[5/8] setOption 完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [5/8] setOption 完成`);
 
       // ── Step 6：setOnXxxListener ──
       this.bindListeners();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[6/8] 所有 Listener 注册完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [6/8] 所有 Listener 注册完成`);
 
       // ── Step 7：setMessageListener ──
       this.ijk.setMessageListener();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[7/8] setMessageListener 完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] [7/8] setMessageListener 完成`);
 
       // ── Step 8：prepareAsync ──
       this.ijk.prepareAsync();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[8/8] prepareAsync 已调用，等待 onPrepared 回调...');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][init] [8/8] prepareAsync 已调用，等待 onPrepared 回调...`);
 
     } catch (e) {
       const msg = JSON.stringify(e);
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `init 异常: ${msg}`);
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][init] 异常: ${msg}`);
       throw new Error(`IjkPlayerAdapter init failed: ${msg}`);
     }
   }
 
   play(): Promise<void> {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `play() 调用 — isPrepared=${this._isPrepared} isPlaying=${this._isPlaying}`);
+      `[${this._sessionId}][play] play() 调用 — isPrepared=${this._isPrepared} isPlaying=${this._isPlaying}`);
     if (!this._isPrepared) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'play() 忽略：尚未 prepared');
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][play] play() 忽略：尚未 prepared`);
       return Promise.resolve();
     }
     try {
       this.ijk.start();
       this._isPlaying = true;
       this.startTimeUpdateTimer();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'start() 调用成功');
+      this.startHeartbeatTimer();
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][play] start() 调用成功`);
       if (this._onPlayCb) { this._onPlayCb(); }
     } catch (e) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `start() 异常: ${JSON.stringify(e)}`);
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][play] start() 异常: ${JSON.stringify(e)}`);
     }
     return Promise.resolve();
   }
 
   pause(): Promise<void> {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `pause() 调用 — isPlaying=${this._isPlaying}`);
+      `[${this._sessionId}][pause] pause() 调用 — isPlaying=${this._isPlaying}`);
     if (!this._isPrepared || !this._isPlaying) {
       return Promise.resolve();
     }
@@ -221,10 +245,12 @@ export class IjkPlayerAdapter implements IPlayer {
       this.ijk.pause();
       this._isPlaying = false;
       this.stopTimeUpdateTimer();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'pause() 调用成功');
+      this.stopHeartbeatTimer();
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][pause] pause() 调用成功`);
       if (this._onPausedCb) { this._onPausedCb(); }
     } catch (e) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `pause() 异常: ${JSON.stringify(e)}`);
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][pause] pause() 异常: ${JSON.stringify(e)}`);
     }
     return Promise.resolve();
   }
@@ -239,22 +265,26 @@ export class IjkPlayerAdapter implements IPlayer {
 
   async release(): Promise<void> {
     if (this._isReleased) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'release() 重复调用，忽略');
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][release] release() 重复调用，忽略`);
       return;
     }
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'release() 开始');
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[${this._sessionId}][release] release() 开始 — currentTime=${this._currentTime}ms duration=${this._duration}ms`);
     this.stopTimeUpdateTimer();
+    this.stopHeartbeatTimer();
     try {
       this.ijk.stop();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'stop() 完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][release] stop() 完成`);
     } catch (e) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `stop() 异常（忽略）: ${JSON.stringify(e)}`);
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][release] stop() 异常（忽略）: ${JSON.stringify(e)}`);
     }
     try {
       this.ijk.release();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'release() 完成');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][release] release() 完成`);
     } catch (e) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `release() 异常（忽略）: ${JSON.stringify(e)}`);
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][release] release() 异常（忽略）: ${JSON.stringify(e)}`);
     }
     this._isReleased = true;
     this._isPrepared = false;
@@ -263,17 +293,19 @@ export class IjkPlayerAdapter implements IPlayer {
 
   seek(timeMs: number): void {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `seek(${timeMs}ms) 调用 — isPrepared=${this._isPrepared}`);
+      `[${this._sessionId}][seek] seek(${timeMs}ms) 调用 — isPrepared=${this._isPrepared}`);
     if (!this._isPrepared) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：尚未 prepared');
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `[${this._sessionId}][seek] seek() 忽略：尚未 prepared`);
       return;
     }
     try {
       // seekTo 参数为 string
       this.ijk.seekTo(timeMs.toString());
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `seekTo(${timeMs}) 已调用`);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][seek] seekTo(${timeMs}) 已调用`);
     } catch (e) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `seekTo 异常: ${JSON.stringify(e)}`);
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][seek] seekTo 异常: ${JSON.stringify(e)}`);
     }
   }
 
@@ -434,17 +466,25 @@ export class IjkPlayerAdapter implements IPlayer {
     // 跳帧（CPU 跟不上时保持音画同步，TV 端建议 1~5）
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'framedrop', '5');
 
-    // ── 硬件解码：查询设备能力后决定是否开启 ──
+    // ── 硬件解码决策 ──
+    // forceSoftDecode=true：A/B 测试用，强制软解，可验证硬解是否是崩溃根因
     // overlay-format 是 Android 专用参数，鸿蒙版不需要设置，设置反而会黑屏
-    const hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
-    const useH264Hw = hwSupport.h264;
-    const useH265Hw = hwSupport.h265;
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-all-videos', useH264Hw ? '1' : '0');
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-hevc', useH265Hw ? '1' : '0');
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${useH265Hw ? '硬解✅' : '软解⚠️'}`);
+    if (this.forceSoftDecode) {
+      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-all-videos', '0');
+      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'mediacodec-hevc', '0');
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][init] ⚠️ forceSoftDecode=true，强制软解（H264 软解⚠️ H265 软解⚠️）`);
+    } else {
+      const hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
+      const useH264Hw = hwSupport.h264;
+      const useH265Hw = hwSupport.h265;
+      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
+        'mediacodec-all-videos', useH264Hw ? '1' : '0');
+      this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
+        'mediacodec-hevc', useH265Hw ? '1' : '0');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][init] 硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${useH265Hw ? '硬解✅' : '软解⚠️'}`);
+    }
 
     // ── 网络超时（HTTP/WebDAV，单位 μs）──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, 'timeout', '10000000');
@@ -457,7 +497,7 @@ export class IjkPlayerAdapter implements IPlayer {
     this.ijk.setScreenOnWhilePlaying(true);
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      '播放参数已应用：精确寻帧，10s超时，start-on-prepared=0');
+      `[${this._sessionId}][init] 播放参数已应用：精确寻帧，10s超时，start-on-prepared=0`);
   }
 
   /**
@@ -471,7 +511,7 @@ export class IjkPlayerAdapter implements IPlayer {
         this._isPrepared = true;
         this._duration = this.ijk.getDuration();
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()}`);
+          `[${this._sessionId}][onPrepared] duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()}`);
         if (this._onReadyCb) { this._onReadyCb(); }
       }
     };
@@ -480,9 +520,11 @@ export class IjkPlayerAdapter implements IPlayer {
     // onCompletion
     const onCompletionListener: OnCompletionListener = {
       onCompletion: () => {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'onCompletion');
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[${this._sessionId}][onCompletion] 播放完成 — currentTime=${this._currentTime}ms`);
         this._isPlaying = false;
         this.stopTimeUpdateTimer();
+        this.stopHeartbeatTimer();
         if (this._onCompletedCb) { this._onCompletedCb(); }
       }
     };
@@ -491,10 +533,16 @@ export class IjkPlayerAdapter implements IPlayer {
     // onError
     const onErrorListener: OnErrorListener = {
       onError: (what: number, extra: number) => {
+        // ijkplayer/MediaPlayer what 常见值: 1=MEDIA_ERROR_UNKNOWN, 100=MEDIA_ERROR_SERVER_DIED
+        // extra 常见值: -10004=IO_ERROR, -1004=CONNECT_ERROR, -1007=MALFORMED, -110=ETIMEDOUT
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `onError — what=${what} extra=${extra} (what=100:MEDIA_ERROR_UNKNOWN, extra=-10004:IO_ERROR)`);
+          `[${this._sessionId}][onError] what=${what} extra=${extra} `
+          + `currentTime=${this._currentTime}ms duration=${this._duration}ms `
+          + `isPrepared=${this._isPrepared} isPlaying=${this._isPlaying} `
+          + `(what=1:UNKNOWN, what=100:SERVER_DIED; extra=-10004:IO, extra=-1004:CONN, extra=-110:TIMEOUT)`);
         this._isPlaying = false;
         this.stopTimeUpdateTimer();
+        this.stopHeartbeatTimer();
         if (this._onErrorCb) {
           this._onErrorCb(new Error(`IjkPlayer error: what=${what} extra=${extra}`));
         }
@@ -506,7 +554,7 @@ export class IjkPlayerAdapter implements IPlayer {
     const onSeekCompleteListener: OnSeekCompleteListener = {
       onSeekComplete: () => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onSeekComplete — currentPosition=${this.ijk.getCurrentPosition()}ms`);
+          `[${this._sessionId}][onSeekComplete] currentPosition=${this.ijk.getCurrentPosition()}ms`);
         if (this._onSeekDoneCb) { this._onSeekDoneCb(); }
       }
     };
@@ -516,7 +564,8 @@ export class IjkPlayerAdapter implements IPlayer {
     const onInfoListener: OnInfoListener = {
       onInfo: (what: number, extra: number) => {
         // 700=BUFFERING_START, 701=BUFFERING_END, 703=NETWORK_BANDWIDTH
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `onInfo — what=${what} extra=${extra}`);
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[${this._sessionId}][onInfo] what=${what} extra=${extra}`);
       }
     };
     this.ijk.setOnInfoListener(onInfoListener);
@@ -525,7 +574,7 @@ export class IjkPlayerAdapter implements IPlayer {
     const onBufferingUpdateListener: OnBufferingUpdateListener = {
       onBufferingUpdate: (percent: number) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onBufferingUpdate — ${percent}%`);
+          `[${this._sessionId}][onBufferingUpdate] ${percent}%`);
       }
     };
     this.ijk.setOnBufferingUpdateListener(onBufferingUpdateListener);
@@ -534,12 +583,13 @@ export class IjkPlayerAdapter implements IPlayer {
     const onVideoSizeChangedListener: OnVideoSizeChangedListener = {
       onVideoSizeChanged: (width: number, height: number, sarNum: number, sarDen: number) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onVideoSizeChanged — ${width}x${height} sar=${sarNum}/${sarDen}`);
+          `[${this._sessionId}][onVideoSizeChanged] ${width}x${height} sar=${sarNum}/${sarDen}`);
       }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
 
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, '所有监听器已注册');
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[${this._sessionId}][init] 所有监听器已注册`);
   }
 
   /**
@@ -551,7 +601,7 @@ export class IjkPlayerAdapter implements IPlayer {
       return; // 已在运行
     }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `启动 timeUpdate 定时器，间隔=${this.TIME_UPDATE_INTERVAL}ms`);
+      `[${this._sessionId}][timer] 启动 timeUpdate 定时器，间隔=${this.TIME_UPDATE_INTERVAL}ms`);
     this._timeUpdateTimer = setInterval(() => {
       if (!this._isPrepared || this._isReleased) {
         this.stopTimeUpdateTimer();
@@ -568,13 +618,50 @@ export class IjkPlayerAdapter implements IPlayer {
   }
 
   /**
-   * 停止定时器
+   * 停止 timeUpdate 定时器
    */
   private stopTimeUpdateTimer(): void {
     if (this._timeUpdateTimer !== undefined) {
       clearInterval(this._timeUpdateTimer);
       this._timeUpdateTimer = undefined;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'timeUpdate 定时器已停止');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][timer] timeUpdate 定时器已停止`);
+    }
+  }
+
+  /**
+   * 启动心跳定时器，每 30s 打印播放状态快照。
+   * 心跳日志用于崩溃后推断崩溃前状态（阶段、位置、时长）。
+   */
+  private startHeartbeatTimer(): void {
+    if (this._heartbeatTimer !== undefined) {
+      return; // 已在运行
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[${this._sessionId}][heartbeat] 启动心跳定时器，间隔=${this.HEARTBEAT_INTERVAL}ms`);
+    this._heartbeatTimer = setInterval(() => {
+      // 防御性检测：若已释放或未 prepared，静默退出（外部调用者负责清理定时器）
+      if (!this._isPrepared || this._isReleased) {
+        return;
+      }
+      const pos = this._currentTime;
+      const dur = this._duration;
+      const progressPct = dur > 0 ? Math.round(pos * 100 / dur) : 0;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][heartbeat] 播放中 — position=${pos}ms/${dur}ms (${progressPct}%) `
+        + `isPlaying=${this._isPlaying} isPrepared=${this._isPrepared} forceSoftDecode=${this.forceSoftDecode}`);
+    }, this.HEARTBEAT_INTERVAL);
+  }
+
+  /**
+   * 停止心跳定时器
+   */
+  private stopHeartbeatTimer(): void {
+    if (this._heartbeatTimer !== undefined) {
+      clearInterval(this._heartbeatTimer);
+      this._heartbeatTimer = undefined;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[${this._sessionId}][heartbeat] 心跳定时器已停止`);
     }
   }
 }

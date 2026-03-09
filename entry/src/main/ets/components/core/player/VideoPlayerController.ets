@@ -65,6 +65,13 @@ export class VideoPlayerController {
    */
   @Trace backend: PlayerBackend = 'avplayer';
 
+  /**
+   * 强制软解开关（仅对 ijkplayer 后端生效）。
+   * 设为 true 可在 A/B 测试中排查硬解是否是崩溃根因。
+   * 修改后须重新调用 initPlayer() / setIjkContext() 方可生效。
+   */
+  forceSoftDecode: boolean = false;
+
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
   @Trace name: ResourceStr = ''
@@ -157,8 +164,10 @@ export class VideoPlayerController {
     let adapter: IPlayer;
     if (this.backend === 'ijkplayer') {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
-      adapter = new IjkPlayerAdapter();
+        `initPlayer: 使用 IjkPlayerAdapter，forceSoftDecode=${this.forceSoftDecode}，等待 UI 层调用 setIjkContext()`);
+      const ijkAdapter = new IjkPlayerAdapter();
+      ijkAdapter.forceSoftDecode = this.forceSoftDecode;
+      adapter = ijkAdapter;
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
@@ -274,10 +283,11 @@ export class VideoPlayerController {
    * 供 VideoPlayer UI 层在 ijkplayer XComponent.onLoad 回调中调用。
    * 必须在 initPlayer() 之后调用，绑定 XComponent context 后触发真正的 init。
    *
-   * 时序说明：
+   * 时序说明（唯一正确顺序）：
    * 1. UI 层先注册 emitter.once(PREPARED)
    * 2. UI 层调 initPlayer()（创建 IjkPlayerAdapter 但不调 native_setup）
    * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
+   *    注意：setContext 必须在 native_setup 之前，这是 @ohos/ijkplayer 官方要求
    */
   async setIjkContext(context: object, xComponentId: string): Promise<void> {
     if (this.backend !== 'ijkplayer') {
@@ -291,9 +301,13 @@ export class VideoPlayerController {
       return;
     }
     const ijkAdapter = this.player as IjkPlayerAdapter;
+    // forceSoftDecode 在 initPlayer() 中已赋值一次；此处再次同步，是为了覆盖
+    // avplayer→ijkplayer 后端切换场景：切换时创建新适配器后外部可能修改了该值，
+    // setIjkContext() 是 init() 前最后一次赋值机会，以此为准。
+    ijkAdapter.forceSoftDecode = this.forceSoftDecode;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setIjkContext: 绑定 XComponent id=${xComponentId}，开始完整 init 流程...`);
-    // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 后立即调用 setContext
+      `setIjkContext: 绑定 XComponent id=${xComponentId}，forceSoftDecode=${this.forceSoftDecode}，开始完整 init 流程...`);
+    // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 之前调用 setContext
     ijkAdapter.setPendingContext(context, xComponentId);
     if (this.currentVideoData) {
       try {

@@ -7,6 +7,10 @@ import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
 import { emitter } from "@kit.BasicServicesKit";
+import { hilog } from "@kit.PerformanceAnalysisKit";
+import { CommonConstants } from "../../common/constants/CommonConstants";
+
+const TAG = '[PlayerPage]';
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -216,8 +220,14 @@ export struct PlayerPage {
   }
 
   aboutToDisappear(): void {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[aboutToDisappear] 播放页销毁 — backend=${this.videoPlayerController.backend} `
+      + `isPlaying=${this.videoPlayerController.isPlaying} `
+      + `currentTime=${this.videoPlayerController.currentTime}ms `
+      + `duration=${this.videoPlayerController.duration}ms`);
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
     this.videoPlayerController.saveProgressNow()
     this.videoPlayerController.release()
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[aboutToDisappear] release() 已触发');
   }
 }
