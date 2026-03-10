@@ -307,7 +307,7 @@ export class VideoPlayerController {
    * 时序说明：
    * 1. UI 层先注册 emitter.once(PREPARED)
    * 2. UI 层调 initPlayer()（创建 IjkPlayerAdapter 但不调 native_setup）
-   * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
+  * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
    */
   async setIjkContext(context: object, xComponentId: string): Promise<void> {
     if (this.backend !== 'ijkplayer') {
@@ -323,7 +323,7 @@ export class VideoPlayerController {
     const ijkAdapter = this.player as IjkPlayerAdapter;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `setIjkContext: 绑定 XComponent id=${xComponentId}，开始完整 init 流程...`);
-    // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 后立即调用 setContext
+    // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 前调用 setContext
     ijkAdapter.setPendingContext(context, xComponentId);
     if (this.currentVideoData) {
       try {

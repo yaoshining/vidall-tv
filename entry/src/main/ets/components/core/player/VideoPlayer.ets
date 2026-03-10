@@ -9,6 +9,8 @@ import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./Subtit
 export struct VideoPlayer {
   private xComponentController = new XComponentController()
   private surfaceId: string = ''
+  private initMode: string = ''
+  private ijkInitTimer?: number
   @Require @Param controller: VideoPlayerController
   @Require @Param data: VideoData
   @Local controlsOpened: boolean = false
@@ -19,7 +21,25 @@ export struct VideoPlayer {
   @Monitor('controller.backend')
   onBackendChange(): void {
     this.useIjkPlayer = this.controller.backend === 'ijkplayer'
+    // backend 切换后允许新分支重新初始化。
+    this.initMode = ''
     console.info(`[VideoPlayer] backend 变更 → useIjkPlayer=${this.useIjkPlayer}`)
+  }
+
+  private tryMarkInit(mode: string): boolean {
+    if (this.initMode === mode) {
+      console.warn(`[VideoPlayer] 忽略重复初始化: ${mode}`)
+      return false
+    }
+    this.initMode = mode
+    return true
+  }
+
+  private clearIjkInitTimer(): void {
+    if (this.ijkInitTimer !== undefined) {
+      clearTimeout(this.ijkInitTimer)
+      this.ijkInitTimer = undefined
+    }
   }
 
   controlsDialogController = new CustomDialogController({
@@ -262,6 +282,9 @@ export struct VideoPlayer {
           controller: this.xComponentController
         })
           .onLoad(() => {
+            if (!this.tryMarkInit('avplayer')) {
+              return
+            }
             this.surfaceId = this.xComponentController.getXComponentSurfaceId()
             // ⚠️ 先注册 PREPARED 监听再触发 init，避免快速回调时事件丢失
             emitter.once(PlayerEvents.PREPARED, () => {
@@ -302,6 +325,9 @@ export struct VideoPlayer {
             libraryname: 'ijkplayer_napi'
           })
             .onLoad((context: object) => {
+              if (!this.tryMarkInit('ijkplayer')) {
+                return
+              }
               // ⚠️ 必须先注册 PREPARED 监听，再触发 init！
               emitter.once(PlayerEvents.PREPARED, () => {
                 if (this.autoPlay) {
@@ -311,7 +337,8 @@ export struct VideoPlayer {
                 }
               })
               // ⚠️ 用 setTimeout 延迟，确保 XComponent Surface 的 native 层已完全 ready
-              setTimeout(() => {
+              this.clearIjkInitTimer()
+              this.ijkInitTimer = setTimeout(() => {
                 this.surfaceId = 'ijkPlayerXComponent'
                 this.controller.initPlayer(this.data, this.surfaceId).then(() => {
                   this.controller.setIjkContext(context, 'ijkPlayerXComponent')
@@ -359,5 +386,9 @@ export struct VideoPlayer {
       .hitTestBehavior(HitTestMode.Transparent)
     }
     .backgroundColor(Color.Black)
+  }
+
+  aboutToDisappear(): void {
+    this.clearIjkInitTimer()
   }
 }

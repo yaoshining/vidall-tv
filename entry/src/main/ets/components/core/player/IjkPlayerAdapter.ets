@@ -12,8 +12,10 @@ import type { OnInfoListener } from '@ohos/ijkplayer';
 import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
 import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
 import { DeviceCapabilityUtil } from '../../../utils/DeviceCapabilityUtil';
+import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 
 const TAG = '[IjkPlayerAdapter]';
+const ENABLE_IJK_INFO_CALLBACK = false;
 
 /**
  * IjkPlayer 播放内核适配器
@@ -38,6 +40,9 @@ const TAG = '[IjkPlayerAdapter]';
 export class IjkPlayerAdapter implements IPlayer {
   private ijk: IjkMediaPlayer;
   private readonly XCOMPONENT_ID = 'ijkPlayerXComponent';
+  private _sessionId: string = '';
+  private _seekRenderingInfoCount: number = 0;
+  private _lastHeartbeatWriteAt: number = 0;
 
   // ─── 状态 ───
   private _duration: number = 0;
@@ -52,7 +57,7 @@ export class IjkPlayerAdapter implements IPlayer {
 
   // ─── 定时器（轮询 currentTime） ───
   private _timeUpdateTimer?: number;
-  private readonly TIME_UPDATE_INTERVAL = 250; // ms
+  private readonly TIME_UPDATE_INTERVAL = 500; // ms
 
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
@@ -67,10 +72,18 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
 
   constructor() {
-    // 使用单例模式，与官方 README 示例一致
-    // 注意：getInstance() 返回的实例在 setContext 时会设置 id = XCOMPONENT_ID
-    this.ijk = IjkMediaPlayer.getInstance();
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, '构造完成（单例模式，等待 setPendingContext）');
+    // 使用多实例模式，避免单例跨页面状态残留导致的偶发异常。
+    this.ijk = new IjkMediaPlayer();
+    this._sessionId = `ijk-${Date.now()}`;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `构造完成（多实例模式）session=${this._sessionId}，等待 setPendingContext`);
+    this.writeBreadcrumb('constructed');
+  }
+
+  private writeBreadcrumb(stage: string, extra: string = ''): void {
+    const payload = `${Date.now()}|${this._sessionId}|${stage}|` +
+      `prepared=${this._isPrepared}|playing=${this._isPlaying}|time=${this._currentTime}|${extra}`;
+    AppPreferences.set(PrefKey.PLAYER_LAST_BREADCRUMB, payload).catch(() => {});
   }
 
   // ─── IPlayer 属性 ───
@@ -91,16 +104,16 @@ export class IjkPlayerAdapter implements IPlayer {
   }
 
   /**
-   * 保存 XComponent context，在下次 init() 调用时于 native_setup 后绑定。
+  * 保存 XComponent context，在下次 init() 调用时于 native_setup 前绑定。
    * 由 VideoPlayerController.setIjkContext() 调用。
    *
-   * 正确时序：setContext 必须在 native_setup 之后、prepareAsync 之前调用。
+  * 正确时序：setContext 必须在 native_setup 之前调用。
    */
   setPendingContext(context: object, xComponentId: string): void {
     this._pendingContext = context;
     this._pendingXComponentId = xComponentId;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setPendingContext: xComponentId=${xComponentId}，等待 init() 中 native_setup 后绑定`);
+    `setPendingContext: xComponentId=${xComponentId} session=${this._sessionId}`);
   }
 
   // ─── 生命周期 ───
@@ -113,6 +126,10 @@ export class IjkPlayerAdapter implements IPlayer {
     this._isPlaying = false;
     this._duration = 0;
     this._currentTime = 0;
+    this._isReleased = false;
+    this._seekRenderingInfoCount = 0;
+    this._lastHeartbeatWriteAt = 0;
+    this.writeBreadcrumb('init-start', `type=${videoData.type}`);
 
     try {
       // 官方标准初始化顺序（参照 README_zh.md）：
@@ -130,21 +147,24 @@ export class IjkPlayerAdapter implements IPlayer {
       if (this._pendingContext && this._pendingXComponentId) {
         this.ijk.setContext(this._pendingContext, this._pendingXComponentId);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[1/8] setContext 完成，xComponentId=${this._pendingXComponentId}`);
+          `[1/8] setContext 完成，xComponentId=${this._pendingXComponentId} session=${this._sessionId}`);
         this._pendingContext = null;
         this._pendingXComponentId = '';
       } else {
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          '[1/8] ❌ pendingContext 为空！必须在 init() 前调用 setPendingContext()，视频将黑屏');
+        const msg = '[1/8] pendingContext 为空，取消 init 以避免 native 异常';
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG, `${msg} session=${this._sessionId}`);
+        throw new Error(msg);
       }
 
       // ── Step 2：setDebug ──
-      this.ijk.setDebug(true);
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[2/8] setDebug 完成');
+      // 高频 native debug 日志会明显增加 IO 压力，稳定性优先默认关闭。
+      this.ijk.setDebug(false);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[2/8] setDebug(false) 完成');
 
       // ── Step 3：native_setup ──
       this.ijk.native_setup();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[3/8] native_setup 完成');
+      this.writeBreadcrumb('native-setup-done');
 
       // ── Step 4：setDataSource ──
       if (videoData.type === VideoDataType.URL) {
@@ -183,11 +203,14 @@ export class IjkPlayerAdapter implements IPlayer {
 
       // ── Step 8：prepareAsync ──
       this.ijk.prepareAsync();
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[8/8] prepareAsync 已调用，等待 onPrepared 回调...');
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[8/8] prepareAsync 已调用，等待 onPrepared 回调... session=${this._sessionId}`);
+      this.writeBreadcrumb('prepare-async-called');
 
     } catch (e) {
       const msg = JSON.stringify(e);
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `init 异常: ${msg}`);
+      this.writeBreadcrumb('init-error', msg);
       throw new Error(`IjkPlayerAdapter init failed: ${msg}`);
     }
   }
@@ -204,6 +227,7 @@ export class IjkPlayerAdapter implements IPlayer {
       this._isPlaying = true;
       this.startTimeUpdateTimer();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'start() 调用成功');
+      this.writeBreadcrumb('play-started');
       if (this._onPlayCb) { this._onPlayCb(); }
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `start() 异常: ${JSON.stringify(e)}`);
@@ -222,6 +246,7 @@ export class IjkPlayerAdapter implements IPlayer {
       this._isPlaying = false;
       this.stopTimeUpdateTimer();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'pause() 调用成功');
+      this.writeBreadcrumb('paused');
       if (this._onPausedCb) { this._onPausedCb(); }
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `pause() 异常: ${JSON.stringify(e)}`);
@@ -242,7 +267,8 @@ export class IjkPlayerAdapter implements IPlayer {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'release() 重复调用，忽略');
       return;
     }
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'release() 开始');
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `release() 开始 session=${this._sessionId}`);
+    this.writeBreadcrumb('release-start');
     this.stopTimeUpdateTimer();
     try {
       this.ijk.stop();
@@ -259,6 +285,9 @@ export class IjkPlayerAdapter implements IPlayer {
     this._isReleased = true;
     this._isPrepared = false;
     this._isPlaying = false;
+    this._pendingContext = null;
+    this._pendingXComponentId = '';
+    this.writeBreadcrumb('release-done');
   }
 
   seek(timeMs: number): void {
@@ -429,13 +458,15 @@ export class IjkPlayerAdapter implements IPlayer {
    * 鸿蒙版底层使用 XComponent Surface，overlay format 由框架自动管理。
    */
   private async applyDefaultOptions(): Promise<void> {
-    // ── 精确寻帧 ──
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'enable-accurate-seek', '1');
+    // ── seek 策略（稳定性优先）──
+    // 精确 seek 会增加 HEVC 片源的回退解码压力，先关闭以降低崩溃概率。
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'enable-accurate-seek', '0');
 
     // ── 缓冲控制 ──
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'max_cached_duration', '3000');
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'infbuf', '1');
-    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'min-frames', '100');
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'max_cached_duration', '1500');
+    // infbuf=1 可能导致长播时缓冲无上限增长，增加系统回收/强杀风险。
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'infbuf', '0');
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'min-frames', '30');
 
     // ⚠️ start-on-prepared=0：onPrepared 后不自动 start，由 onReady 回调驱动
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'start-on-prepared', '0');
@@ -446,17 +477,23 @@ export class IjkPlayerAdapter implements IPlayer {
     // 跳帧（CPU 跟不上时保持音画同步，TV 端建议 1~5）
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'framedrop', '5');
 
-    // ── 硬件解码：查询设备能力后决定是否开启 ──
-    // overlay-format 是 Android 专用参数，鸿蒙版不需要设置，设置反而会黑屏
+    // 不强制覆盖 codec 线程与 loop filter，避免在高码率 HEVC 下出现视频解码跟不上
+    // （表现为画面卡顿、音频继续播放导致音画不同步）。
+
+    // ── 硬件解码策略（稳定性优先）──
+    // 线上出现 HEVC/HDR（含 Mastering Display Metadata）播放时偶发强退，
+    // 崩溃点集中在 EGL 渲染链路。先统一关闭 mediacodec，优先保证稳定。
+    // 后续可在确认设备/片源组合稳定后再灰度恢复硬解。
     const hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
-    const useH264Hw = hwSupport.h264;
-    const useH265Hw = hwSupport.h265;
+    const useH264Hw = false;
+    const useH265Hw = false;
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-all-videos', useH264Hw ? '1' : '0');
+      'mediacodec-all-videos', '0');
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-hevc', useH265Hw ? '1' : '0');
+      'mediacodec-hevc', '0');
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `硬件解码决策: H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${useH265Hw ? '硬解✅' : '软解⚠️'}`);
+      `硬件解码决策(稳定优先): H264=${useH264Hw ? '硬解✅' : '软解⚠️'} ` +
+      `H265=${useH265Hw ? '硬解✅' : '软解⚠️'} 设备能力(H264=${hwSupport.h264}, H265=${hwSupport.h265})`);
 
     // ── 网络超时（HTTP/WebDAV，单位 μs）──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, 'timeout', '10000000');
@@ -483,7 +520,8 @@ export class IjkPlayerAdapter implements IPlayer {
         this._isPrepared = true;
         this._duration = this.ijk.getDuration();
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()}`);
+          `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()} session=${this._sessionId}`);
+        this.writeBreadcrumb('on-prepared', `duration=${this._duration}`);
         if (this._onReadyCb) { this._onReadyCb(); }
       }
     };
@@ -507,6 +545,7 @@ export class IjkPlayerAdapter implements IPlayer {
           `onError — what=${what} extra=${extra} (what=100:MEDIA_ERROR_UNKNOWN, extra=-10004:IO_ERROR)`);
         this._isPlaying = false;
         this.stopTimeUpdateTimer();
+        this.writeBreadcrumb('on-error', `what=${what},extra=${extra}`);
         if (this._onErrorCb) {
           this._onErrorCb(new Error(`IjkPlayer error: what=${what} extra=${extra}`));
         }
@@ -524,14 +563,28 @@ export class IjkPlayerAdapter implements IPlayer {
     };
     this.ijk.setOnSeekCompleteListener(onSeekCompleteListener);
 
-    // onInfo
-    const onInfoListener: OnInfoListener = {
-      onInfo: (what: number, extra: number) => {
-        // 700=BUFFERING_START, 701=BUFFERING_END, 703=NETWORK_BANDWIDTH
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `onInfo — what=${what} extra=${extra}`);
-      }
-    };
-    this.ijk.setOnInfoListener(onInfoListener);
+    // onInfo: 10008 在部分 HEVC 片源会形成高频事件风暴，默认不桥接到 JS 层。
+    if (ENABLE_IJK_INFO_CALLBACK) {
+      const onInfoListener: OnInfoListener = {
+        onInfo: (what: number, extra: number) => {
+          // 700=BUFFERING_START, 701=BUFFERING_END, 703=NETWORK_BANDWIDTH
+          // 10008(FFP_MSG_VIDEO_SEEK_RENDERING_START)在部分片源会高频出现，按次数抽样打印。
+          if (what === 10008) {
+            this._seekRenderingInfoCount++;
+            if (this._seekRenderingInfoCount % 30 === 0) {
+              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+                `onInfo(抽样) — what=${what} extra=${extra} count=${this._seekRenderingInfoCount}`);
+            }
+            return;
+          }
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG, `onInfo — what=${what} extra=${extra}`);
+        }
+      };
+      this.ijk.setOnInfoListener(onInfoListener);
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        '已禁用 onInfo 回调桥接（诊断模式）');
+    }
 
     // onBufferingUpdate
     const onBufferingUpdateListener: OnBufferingUpdateListener = {
@@ -569,12 +622,24 @@ export class IjkPlayerAdapter implements IPlayer {
         this.stopTimeUpdateTimer();
         return;
       }
-      const pos = this.ijk.getCurrentPosition();
-      if (pos !== this._currentTime) {
-        this._currentTime = pos;
-        if (this._onTimeUpdateCb) {
-          this._onTimeUpdateCb(pos);
+      try {
+        const pos = this.ijk.getCurrentPosition();
+        if (pos !== this._currentTime) {
+          this._currentTime = pos;
+          const now = Date.now();
+          if (now - this._lastHeartbeatWriteAt >= 30000) {
+            this._lastHeartbeatWriteAt = now;
+            this.writeBreadcrumb('play-heartbeat', `pos=${pos}`);
+          }
+          if (this._onTimeUpdateCb) {
+            this._onTimeUpdateCb(pos);
+          }
         }
+      } catch (e) {
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `timeUpdate 轮询异常，停止定时器: ${JSON.stringify(e)} session=${this._sessionId}`);
+        this.writeBreadcrumb('timeupdate-error', JSON.stringify(e));
+        this.stopTimeUpdateTimer();
       }
     }, this.TIME_UPDATE_INTERVAL);
   }

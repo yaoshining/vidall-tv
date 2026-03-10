@@ -23,6 +23,10 @@ export default class EntryAbility extends UIAbility {
       .then(async () => {
         hilog.info(DOMAIN, 'testTag', 'AppPreferences initialized successfully');
         await AppPreferences.set(PrefKey.TMDB_API_KEY, '8a4f81133468d801df27c9cdcb5c33af');
+        const lastBreadcrumb = await AppPreferences.get(PrefKey.PLAYER_LAST_BREADCRUMB, '');
+        if (lastBreadcrumb.length > 0) {
+          hilog.warn(DOMAIN, 'testTag', `LAST_PLAYER_BREADCRUMB=${lastBreadcrumb}`);
+        }
       })
       .catch((err: Error) => {
         hilog.error(DOMAIN, 'testTag', 'Failed to init AppPreferences: %{public}s', JSON.stringify(err));
