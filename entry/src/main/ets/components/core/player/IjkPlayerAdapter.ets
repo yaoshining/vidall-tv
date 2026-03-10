@@ -11,7 +11,7 @@ import type { OnSeekCompleteListener } from '@ohos/ijkplayer';
 import type { OnInfoListener } from '@ohos/ijkplayer';
 import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
 import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
-import { DeviceCapabilityUtil } from '../../../utils/DeviceCapabilityUtil';
+import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 
 const TAG = '[IjkPlayerAdapter]';
@@ -499,7 +499,8 @@ export class IjkPlayerAdapter implements IPlayer {
     // 线上出现 HEVC/HDR（含 Mastering Display Metadata）播放时偶发强退，
     // 崩溃点集中在 EGL 渲染链路。先统一关闭 mediacodec，优先保证稳定。
     // 后续可在确认设备/片源组合稳定后再灰度恢复硬解。
-    let hwSupport: { h264: boolean; h265: boolean } = { h264: false, h265: false };
+    const defaultHwSupport: IjkHwDecodeSupport = { h264: false, h265: false };
+    let hwSupport: IjkHwDecodeSupport = defaultHwSupport;
     try {
       hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
     } catch (e) {
