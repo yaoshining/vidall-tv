@@ -39,7 +39,6 @@ const ENABLE_IJK_INFO_CALLBACK = false;
  */
 export class IjkPlayerAdapter implements IPlayer {
   private ijk: IjkMediaPlayer;
-  private readonly XCOMPONENT_ID = 'ijkPlayerXComponent';
   private _sessionId: string = '';
   private _seekRenderingInfoCount: number = 0;
   private _lastHeartbeatWriteAt: number = 0;
@@ -81,9 +80,25 @@ export class IjkPlayerAdapter implements IPlayer {
   }
 
   private writeBreadcrumb(stage: string, extra: string = ''): void {
+    const safeExtra = this.sanitizeBreadcrumbExtra(extra);
     const payload = `${Date.now()}|${this._sessionId}|${stage}|` +
-      `prepared=${this._isPrepared}|playing=${this._isPlaying}|time=${this._currentTime}|${extra}`;
+      `prepared=${this._isPrepared}|playing=${this._isPlaying}|time=${this._currentTime}|${safeExtra}`;
     AppPreferences.set(PrefKey.PLAYER_LAST_BREADCRUMB, payload).catch(() => {});
+  }
+
+  private sanitizeBreadcrumbExtra(extra: string): string {
+    if (extra.length === 0) {
+      return '';
+    }
+    // 统一为单行并避免与分隔符冲突。
+    let normalized = extra
+      .replace(/\r\n|\r|\n/g, ' ')
+      .replace(/\|/g, '/');
+    const MAX_LEN = 180;
+    if (normalized.length > MAX_LEN) {
+      normalized = normalized.substring(0, MAX_LEN) + '...';
+    }
+    return normalized;
   }
 
   // ─── IPlayer 属性 ───
@@ -484,7 +499,13 @@ export class IjkPlayerAdapter implements IPlayer {
     // 线上出现 HEVC/HDR（含 Mastering Display Metadata）播放时偶发强退，
     // 崩溃点集中在 EGL 渲染链路。先统一关闭 mediacodec，优先保证稳定。
     // 后续可在确认设备/片源组合稳定后再灰度恢复硬解。
-    const hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
+    let hwSupport: { h264: boolean; h265: boolean } = { h264: false, h265: false };
+    try {
+      hwSupport = await DeviceCapabilityUtil.checkIjkHardwareDecodeSupport();
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `获取硬解能力失败，继续按软解策略运行: ${JSON.stringify(e)}`);
+    }
     const useH264Hw = false;
     const useH265Hw = false;
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
@@ -506,7 +527,7 @@ export class IjkPlayerAdapter implements IPlayer {
     this.ijk.setScreenOnWhilePlaying(true);
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      '播放参数已应用：精确寻帧，10s超时，start-on-prepared=0');
+      '播放参数已应用：非精确seek，10s超时，start-on-prepared=0');
   }
 
   /**

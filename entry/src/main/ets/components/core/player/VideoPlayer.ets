@@ -20,6 +20,7 @@ export struct VideoPlayer {
 
   @Monitor('controller.backend')
   onBackendChange(): void {
+    this.clearIjkInitTimer()
     this.useIjkPlayer = this.controller.backend === 'ijkplayer'
     // backend 切换后允许新分支重新初始化。
     this.initMode = ''
@@ -339,6 +340,10 @@ export struct VideoPlayer {
               // ⚠️ 用 setTimeout 延迟，确保 XComponent Surface 的 native 层已完全 ready
               this.clearIjkInitTimer()
               this.ijkInitTimer = setTimeout(() => {
+                this.ijkInitTimer = undefined
+                if (this.controller.backend !== 'ijkplayer' || this.initMode !== 'ijkplayer') {
+                  return
+                }
                 this.surfaceId = 'ijkPlayerXComponent'
                 this.controller.initPlayer(this.data, this.surfaceId).then(() => {
                   this.controller.setIjkContext(context, 'ijkPlayerXComponent')
