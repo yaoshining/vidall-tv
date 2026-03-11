@@ -509,6 +509,26 @@ export struct SeasonDetailPage {
     return '#662C2F33';
   }
 
+  private async refreshProgressState(): Promise<void> {
+    const seriesProviderId = this.seriesEntity?.providerId ?? '';
+    if (seriesProviderId.length === 0) {
+      return;
+    }
+    const db = FileSourceDatabase.getInstance();
+    const progressList = await db.getPlayProgressBySeriesContext(seriesProviderId, this.getSeasonNumber());
+    const newMap = new Map<number, PlayProgressEntity>();
+    for (const progress of progressList) {
+      newMap.set(progress.videoId, progress);
+    }
+    this.progressMap = newMap;
+  }
+
+  aboutToAppear(): void {
+    this.refreshProgressState().catch(() => {
+      console.warn('[SeasonDetailPage] aboutToAppear refresh failed');
+    });
+  }
+
   // ── 数据加载 ──────────────────────────────────
 
   private async loadData(seriesId: number, seasonNumber: number): Promise<void> {
@@ -600,14 +620,7 @@ export struct SeasonDetailPage {
       });
       this.seasonEpisodes = items;
 
-      // 加载播放进度
-      const pid = entity?.providerId ?? '';
-      if (pid.length > 0) {
-        const progressList = await db.getPlayProgressBySeries(pid);
-        const newMap = new Map<number, PlayProgressEntity>();
-        for (const p of progressList) { newMap.set(p.videoId, p); }
-        this.progressMap = newMap;
-      }
+      await this.refreshProgressState();
     } catch (e) {
       console.error('[SeasonDetailPage] loadData failed', JSON.stringify(e));
     } finally {

@@ -488,9 +488,9 @@ export class VideoPlayerController {
       updatedAt: Date.now()
     };
     FileSourceDatabase.getInstance().upsertPlayProgress(progress).catch((e: BusinessError) => {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `进度写入失败: code=${e.code} msg=${e.message}`);
-    });
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `进度写入失败: code=${e.code} msg=${e.message}`);
+      });
   }
 
   @Computed
