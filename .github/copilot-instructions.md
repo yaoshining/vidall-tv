@@ -18,6 +18,15 @@
 - ✅ 正确路径：`.plans/plan-videoPlayerStrategy.md`
 - ❌ 错误路径：`plan-videoPlayerStrategy.md`（直接放根目录）
 
+## Instructions 组织规则
+
+- 全局共享规则继续保留在 `.github/copilot-instructions.md`
+- 高频、可复用、可按文件范围收敛的经验，拆分到 `.github/instructions/*.instructions.md`
+- `.github/instructions/githubWorkflow.instructions.md`：放 Git 提交、推分支、创建 PR、命令行执行方式等工作流规则
+- `.github/instructions/arktsGuardrails.instructions.md`：放 ArkTS 编译约束、生命周期限制、Promise/catch 书写规范等代码护栏
+- `.github/instructions/agentOrganization.instructions.md`：放 `.github/agents/*.agent.md` 的维护规则、命名稳定性和低风险改动原则
+- 新增经验时优先追加到最贴近主题的 instructions 文件，避免继续把所有规则堆进一个总文件
+
 ## Git 提交规范（重要）
 
 **所有 Git 提交消息必须使用中文，包括 IDE 自动生成的提交消息。**
