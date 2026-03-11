@@ -98,8 +98,4 @@ export class PlayerEvents {
     eventId: 14,
     priority: emitter.EventPriority.HIGH
   };
-  static readonly PLAY_PROGRESS_SAVED: emitter.InnerEvent = {
-    eventId: 15,
-    priority: emitter.EventPriority.HIGH
-  };
 }

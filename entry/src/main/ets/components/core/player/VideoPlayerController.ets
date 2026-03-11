@@ -487,11 +487,7 @@ export class VideoPlayerController {
       durationMs: this.duration > 0 ? this.duration : ctx.durationMs,
       updatedAt: Date.now()
     };
-    FileSourceDatabase.getInstance().upsertPlayProgress(progress)
-      .then(() => {
-        emitter.emit(PlayerEvents.PLAY_PROGRESS_SAVED);
-      })
-      .catch((e: BusinessError) => {
+    FileSourceDatabase.getInstance().upsertPlayProgress(progress).catch((e: BusinessError) => {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `进度写入失败: code=${e.code} msg=${e.message}`);
       });

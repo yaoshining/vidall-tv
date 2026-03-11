@@ -8,8 +8,6 @@ import effectKit from '@ohos.effectKit'
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
-import { PlayerEvents } from '../../components/core/player/Constants'
-import { emitter } from '@kit.BasicServicesKit'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -139,7 +137,6 @@ export struct SeasonDetailPage {
   @Local hoveredHeroActionKey: string = ''
   @Local focusedEpisodeRowId: number = -1
   @Local hoveredEpisodeRowId: number = -1
-  private progressSyncBound: boolean = false
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -510,18 +507,6 @@ export struct SeasonDetailPage {
 
   private getEpisodeActionButtonBgColor(): string {
     return '#662C2F33';
-  }
-
-  private ensureProgressSyncListener(): void {
-    if (this.progressSyncBound) {
-      return;
-    }
-    this.progressSyncBound = true;
-    emitter.on(PlayerEvents.PLAY_PROGRESS_SAVED, () => {
-      this.refreshProgressState().catch(() => {
-        console.warn('[SeasonDetailPage] refreshProgressState failed');
-      });
-    });
   }
 
   private async refreshProgressState(): Promise<void> {
@@ -1364,7 +1349,6 @@ export struct SeasonDetailPage {
       const param = context.pathInfo.param as SeriesGroup;
       if (param !== undefined && param !== null) {
         this.group = param;
-        this.ensureProgressSyncListener();
         const tvSeriesId = param.tvSeriesId;
         const seasonNumber = param.seasonNumber;
         if (tvSeriesId !== undefined && seasonNumber !== undefined) {

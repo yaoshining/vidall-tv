@@ -11,8 +11,6 @@ import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
-import { PlayerEvents } from '../../components/core/player/Constants'
-import { emitter } from '@kit.BasicServicesKit'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -147,7 +145,6 @@ export struct SeriesDetailPage {
   /** ContinueWatchingCard 主按钮交互状态 */
   @Local focusedContinueActionKey: string = ''
   @Local hoveredContinueActionKey: string = ''
-  private progressSyncBound: boolean = false
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -321,18 +318,6 @@ export struct SeriesDetailPage {
     return g;
   }
 
-  private ensureProgressSyncListener(): void {
-    if (this.progressSyncBound) {
-      return;
-    }
-    this.progressSyncBound = true;
-    emitter.on(PlayerEvents.PLAY_PROGRESS_SAVED, () => {
-      this.refreshPlaybackState().catch(() => {
-        console.warn('[SeriesDetailPage] refreshPlaybackState failed');
-      });
-    });
-  }
-
   private isValidProgress(progress: PlayProgressEntity | null): boolean {
     if (progress === null) {
       return false;
@@ -354,12 +339,7 @@ export struct SeriesDetailPage {
     }
     this.progressMap = newMap;
 
-    let latestRecord: PlayProgressEntity | null = null;
-    for (const progress of progressList) {
-      if (latestRecord === null || progress.updatedAt > latestRecord.updatedAt) {
-        latestRecord = progress;
-      }
-    }
+    const latestRecord: PlayProgressEntity | null = progressList.length > 0 ? progressList[0] : null;
 
     this.lastProgress = latestRecord;
     this.hasActiveProgress = this.isValidProgress(latestRecord);
@@ -1468,7 +1448,6 @@ export struct SeriesDetailPage {
       const param = context.pathInfo.param as SeriesGroup;
       if (param !== undefined && param !== null) {
         this.group = param;
-        this.ensureProgressSyncListener();
         if (param.tvSeriesId !== undefined) {
           this.loadData(param.tvSeriesId);
         }
