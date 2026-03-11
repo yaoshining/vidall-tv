@@ -8,6 +8,8 @@ import effectKit from '@ohos.effectKit'
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { PlayerEvents } from '../../components/core/player/Constants'
+import { emitter } from '@kit.BasicServicesKit'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -137,6 +139,7 @@ export struct SeasonDetailPage {
   @Local hoveredHeroActionKey: string = ''
   @Local focusedEpisodeRowId: number = -1
   @Local hoveredEpisodeRowId: number = -1
+  private progressSyncBound: boolean = false
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -509,6 +512,38 @@ export struct SeasonDetailPage {
     return '#662C2F33';
   }
 
+  private ensureProgressSyncListener(): void {
+    if (this.progressSyncBound) {
+      return;
+    }
+    this.progressSyncBound = true;
+    emitter.on(PlayerEvents.PLAY_PROGRESS_SAVED, () => {
+      this.refreshProgressState().catch(() => {
+        console.warn('[SeasonDetailPage] refreshProgressState failed');
+      });
+    });
+  }
+
+  private async refreshProgressState(): Promise<void> {
+    const seriesProviderId = this.seriesEntity?.providerId ?? '';
+    if (seriesProviderId.length === 0) {
+      return;
+    }
+    const db = FileSourceDatabase.getInstance();
+    const progressList = await db.getPlayProgressBySeriesContext(seriesProviderId, this.getSeasonNumber());
+    const newMap = new Map<number, PlayProgressEntity>();
+    for (const progress of progressList) {
+      newMap.set(progress.videoId, progress);
+    }
+    this.progressMap = newMap;
+  }
+
+  aboutToAppear(): void {
+    this.refreshProgressState().catch(() => {
+      console.warn('[SeasonDetailPage] aboutToAppear refresh failed');
+    });
+  }
+
   // ── 数据加载 ──────────────────────────────────
 
   private async loadData(seriesId: number, seasonNumber: number): Promise<void> {
@@ -600,14 +635,7 @@ export struct SeasonDetailPage {
       });
       this.seasonEpisodes = items;
 
-      // 加载播放进度
-      const pid = entity?.providerId ?? '';
-      if (pid.length > 0) {
-        const progressList = await db.getPlayProgressBySeries(pid);
-        const newMap = new Map<number, PlayProgressEntity>();
-        for (const p of progressList) { newMap.set(p.videoId, p); }
-        this.progressMap = newMap;
-      }
+      await this.refreshProgressState();
     } catch (e) {
       console.error('[SeasonDetailPage] loadData failed', JSON.stringify(e));
     } finally {
@@ -1336,6 +1364,7 @@ export struct SeasonDetailPage {
       const param = context.pathInfo.param as SeriesGroup;
       if (param !== undefined && param !== null) {
         this.group = param;
+        this.ensureProgressSyncListener();
         const tvSeriesId = param.tvSeriesId;
         const seasonNumber = param.seasonNumber;
         if (tvSeriesId !== undefined && seasonNumber !== undefined) {

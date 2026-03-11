@@ -87,3 +87,5 @@ user-invocable: true
 - 避免“无显式类型”的对象字面量直接入参：如 `map.set(k, { ... })` 可能触发 `arkts-no-untyped-obj-literals`。应先写 `const cfg: MyType = { ... }`，再传入。
 - 代码插入位置必须严格校验作用域：方法误插入到其他 `@ComponentV2 struct` 内，会导致大量“属性不存在”级联错误（例如在 `PosterCard` 内访问 `MediaLibraryTab` 的 `isScanning/model`）。
 - 每次大块 patch 后，优先做文件级编译错误检查（Problems / `get_errors`），先清作用域错误，再清类型错误，能显著降低排障时间。
+- Promise 链上的 `.catch((e) => {})`、`.then((v) => {})` 回调参数同样可能触发 ArkTS 的 `arkts-no-any-unknown` 推断告警；若参数未使用，必须省略为 `.catch(() => {})`，若需要使用，先抽成显式类型的辅助方法而不是直接内联匿名参数。
+- `aboutToAppear`、`aboutToDisappear` 这类生命周期应定义为 `@ComponentV2 struct` 的方法，不要链在 `NavDestination()` 返回的属性对象上；`NavDestinationAttribute` 不支持这些生命周期方法，链式调用会直接编译失败。

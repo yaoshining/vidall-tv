@@ -11,6 +11,8 @@ import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { PlayerEvents } from '../../components/core/player/Constants'
+import { emitter } from '@kit.BasicServicesKit'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -136,11 +138,16 @@ export struct SeriesDetailPage {
   @Local lastProgress: PlayProgressEntity | null = null
   /** 最新播放集信息 */
   @Local lastEpisode: MediaItem | null = null
+  /** 最新播放集详情（用于缩略图/标题） */
+  @Local lastEpisodeEntity: TvEpisodeEntity | null = null
+  /** 是否存在有效续播进度 */
+  @Local hasActiveProgress: boolean = false
   /** 默认展示的第一集信息（S01E01 fallback），从 tv_episodes 加载 */
   @Local firstEpisode: TvEpisodeEntity | undefined = undefined
   /** ContinueWatchingCard 主按钮交互状态 */
   @Local focusedContinueActionKey: string = ''
   @Local hoveredContinueActionKey: string = ''
+  private progressSyncBound: boolean = false
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -314,6 +321,85 @@ export struct SeriesDetailPage {
     return g;
   }
 
+  private ensureProgressSyncListener(): void {
+    if (this.progressSyncBound) {
+      return;
+    }
+    this.progressSyncBound = true;
+    emitter.on(PlayerEvents.PLAY_PROGRESS_SAVED, () => {
+      this.refreshPlaybackState().catch(() => {
+        console.warn('[SeriesDetailPage] refreshPlaybackState failed');
+      });
+    });
+  }
+
+  private isValidProgress(progress: PlayProgressEntity | null): boolean {
+    if (progress === null) {
+      return false;
+    }
+    return progress.positionMs > 0 && progress.durationMs > 0;
+  }
+
+  private async refreshPlaybackState(): Promise<void> {
+    const seriesProviderId = this.seriesEntity?.providerId ?? '';
+    if (seriesProviderId.length === 0) {
+      return;
+    }
+
+    const db = FileSourceDatabase.getInstance();
+    const progressList = await db.getPlayProgressBySeries(seriesProviderId);
+    const newMap = new Map<number, PlayProgressEntity>();
+    for (const progress of progressList) {
+      newMap.set(progress.videoId, progress);
+    }
+    this.progressMap = newMap;
+
+    let latestRecord: PlayProgressEntity | null = null;
+    for (const progress of progressList) {
+      if (latestRecord === null || progress.updatedAt > latestRecord.updatedAt) {
+        latestRecord = progress;
+      }
+    }
+
+    this.lastProgress = latestRecord;
+    this.hasActiveProgress = this.isValidProgress(latestRecord);
+    this.lastEpisode = null;
+    this.lastEpisodeEntity = null;
+
+    if (latestRecord === null) {
+      return;
+    }
+
+    let allEpisodes = this.group?.episodes ?? [];
+    if (allEpisodes.length === 0) {
+      const seriesId = this.seriesEntity?.id;
+      if (seriesId !== undefined) {
+        allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
+      }
+    }
+
+    for (const episode of allEpisodes) {
+      if (episode.id === latestRecord.videoId) {
+        this.lastEpisode = episode;
+        break;
+      }
+    }
+
+    const seriesId = this.seriesEntity?.id;
+    if (seriesId !== undefined && latestRecord.episodeNumber > 0) {
+      const entity = await db.getTvEpisode(seriesId, latestRecord.seasonNumber, latestRecord.episodeNumber);
+      if (entity !== null) {
+        this.lastEpisodeEntity = entity;
+      }
+    }
+  }
+
+  aboutToAppear(): void {
+    this.refreshPlaybackState().catch(() => {
+      console.warn('[SeriesDetailPage] aboutToAppear refresh failed');
+    });
+  }
+
   // ── 数据加载 ──────────────────────────────────
 
   private async loadData(seriesId: number): Promise<void> {
@@ -421,30 +507,7 @@ export struct SeriesDetailPage {
         this.group = updated;
       }
 
-      // 加载播放进度（以 seriesProviderId 批量查询整部剧）
-      if (pid.length > 0) {
-        const progressList = await db.getPlayProgressBySeries(pid);
-        const newMap = new Map<number, PlayProgressEntity>();
-        for (const p of progressList) {
-          newMap.set(p.videoId, p);
-        }
-        this.progressMap = newMap;
-        // 取最近播放记录（updatedAt 最大）
-        let latest: PlayProgressEntity | null = null;
-        for (const p of progressList) {
-          if (latest === null || p.updatedAt > latest.updatedAt) { latest = p; }
-        }
-        this.lastProgress = latest;
-        // 找到对应集信息
-        if (latest !== null) {
-          for (const ep of allEpisodes) {
-            if (ep.id === latest.videoId) {
-              this.lastEpisode = ep;
-              break;
-            }
-          }
-        }
-      }
+      await this.refreshPlaybackState();
 
       // 默认高亮第一季
       if (this.seasons.length > 0) {
@@ -559,6 +622,13 @@ export struct SeriesDetailPage {
 
   /** 获取续播卡片图片 URL：优先 firstEpisode.stillUrl，其次 stillPath 构造，最后 fallback 海报 */
   private getResumeCardStillUrl(): string {
+    const lastEntity = this.lastEpisodeEntity;
+    if (lastEntity !== null) {
+      if (lastEntity.stillUrl !== undefined && lastEntity.stillUrl.length > 0) { return lastEntity.stillUrl; }
+      if (lastEntity.stillPath !== undefined && lastEntity.stillPath.length > 0) {
+        return tmdbImageUrl(lastEntity.stillPath, 'w342');
+      }
+    }
     const ep = this.firstEpisode;
     if (ep !== undefined) {
       if (ep.stillUrl !== undefined && ep.stillUrl.length > 0) { return ep.stillUrl; }
@@ -571,6 +641,12 @@ export struct SeriesDetailPage {
 
   /** 续播卡片季集号标签，如 "S01:E01" */
   private getResumeCardEpLabel(): string {
+    const last = this.lastEpisode;
+    if (last !== null) {
+      const sn = String(last.seasonNumber ?? 0).padStart(2, '0');
+      const en = String(last.episodeNumber ?? 0).padStart(2, '0');
+      return `S${sn}:E${en}`;
+    }
     const ep = this.firstEpisode;
     if (ep !== undefined) {
       const sn = String(ep.seasonNumber).padStart(2, '0');
@@ -582,6 +658,15 @@ export struct SeriesDetailPage {
 
   /** 续播卡片集标题 */
   private getResumeCardTitle(): string {
+    if (this.lastEpisodeEntity !== null && this.lastEpisodeEntity.title !== undefined && this.lastEpisodeEntity.title.length > 0) {
+      return this.lastEpisodeEntity.title;
+    }
+    if (this.lastEpisode !== null) {
+      const title = this.lastEpisode.title ?? this.lastEpisode.fileName;
+      if (title !== undefined && title.length > 0) {
+        return title;
+      }
+    }
     const ep = this.firstEpisode;
     if (ep !== undefined && ep.title !== undefined && ep.title.length > 0) { return ep.title; }
     return '第 1 集';
@@ -795,7 +880,7 @@ export struct SeriesDetailPage {
         }
 
         // 信息部分
-        if (this.lastProgress !== null && this.lastEpisode !== null) {
+        if (this.hasActiveProgress && this.lastProgress !== null && this.lastEpisode !== null) {
           // ── 有播放记录 ──────────────────────────────────
           Column({ space: 10 }) {
             // 集号标签 + 标题
@@ -904,6 +989,10 @@ export struct SeriesDetailPage {
                 }
               })
               .onClick(() => {
+                if (this.lastEpisode !== null) {
+                  this.playEpisode(this.lastEpisode);
+                  return;
+                }
                 const eps = this.group?.episodes ?? [];
                 if (eps.length > 0) { this.playEpisode(eps[0]); }
               })
@@ -1379,6 +1468,7 @@ export struct SeriesDetailPage {
       const param = context.pathInfo.param as SeriesGroup;
       if (param !== undefined && param !== null) {
         this.group = param;
+        this.ensureProgressSyncListener();
         if (param.tvSeriesId !== undefined) {
           this.loadData(param.tvSeriesId);
         }
