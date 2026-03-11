@@ -16,6 +16,8 @@ export class PrefKey {
    * 例：'["tmdb","douban"]'
    */
   static readonly SCRAPE_PROVIDER_ORDER = 'scrape_provider_order';
+  /** 播放器诊断面包屑（用于无 faultlog 场景定位最后阶段） */
+  static readonly PLAYER_LAST_BREADCRUMB = 'player_last_breadcrumb';
 }
 
 // ─────────────────────────────────────────────
