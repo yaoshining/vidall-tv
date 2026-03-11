@@ -36,6 +36,10 @@ export struct VideoPlayer {
     return true
   }
 
+  private resetInitMode(): void {
+    this.initMode = ''
+  }
+
   private clearIjkInitTimer(): void {
     if (this.ijkInitTimer !== undefined) {
       clearTimeout(this.ijkInitTimer)
@@ -342,11 +346,16 @@ export struct VideoPlayer {
               this.ijkInitTimer = setTimeout(() => {
                 this.ijkInitTimer = undefined
                 if (this.controller.backend !== 'ijkplayer' || this.initMode !== 'ijkplayer') {
+                  this.resetInitMode()
                   return
                 }
                 this.surfaceId = 'ijkPlayerXComponent'
                 this.controller.initPlayer(this.data, this.surfaceId).then(() => {
                   this.controller.setIjkContext(context, 'ijkPlayerXComponent')
+                }).catch((err: Error) => {
+                  console.error(`[VideoPlayer] ijk init 异常: ${err.message}`)
+                  this.resetInitMode()
+                  this.useIjkPlayer = false
                 })
               }, 100)
             })

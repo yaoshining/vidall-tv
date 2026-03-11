@@ -206,6 +206,11 @@ export class IjkPlayerAdapter implements IPlayer {
 
       // ── Step 5：setOption ──
       await this.applyDefaultOptions();
+      if (this._isReleased) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[5/8] init 已在 release 后中止 session=${this._sessionId}`);
+        return;
+      }
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[5/8] setOption 完成');
 
       // ── Step 6：setOnXxxListener ──
@@ -630,7 +635,7 @@ export class IjkPlayerAdapter implements IPlayer {
   }
 
   /**
-   * 启动定时器，每 250ms 轮询 getCurrentPosition()
+   * 启动定时器，每 500ms 轮询 getCurrentPosition()
    * IjkPlayer 没有 timeUpdate 事件，必须用轮询实现
    */
   private startTimeUpdateTimer(): void {
