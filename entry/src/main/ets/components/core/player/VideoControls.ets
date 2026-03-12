@@ -7,6 +7,7 @@ import { media } from "@kit.MediaKit"
 struct VideoControls {
   @Require @Param videoController: VideoPlayerController
   @Require @Param dialogController: CustomDialogController
+  @Require @Param openSettings: () => void
   closeTimer?: number
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
@@ -14,6 +15,7 @@ struct VideoControls {
   @Local showAudioMenu: boolean = false
   @Local audioButtonFocused: boolean = false
   @Local subtitleButtonFocused: boolean = false
+  @Local settingButtonFocused: boolean = false
   @Local sliderHovered: boolean = false
   @Local sliderFocused: boolean = false
   // ── 进度条 hover tooltip ──
@@ -291,6 +293,28 @@ struct VideoControls {
               clearTimeout(this.closeTimer)
             })
           }
+
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.gearshape'))
+              .fontColor([Color.White])
+              .fontSize(22)
+            Text('设置')
+              .fontSize(16)
+              .fontColor(Color.White)
+          }
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor(this.settingButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
+          .borderRadius(20)
+          .border({ width: this.settingButtonFocused ? 2 : 1, color: this.settingButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
+          .focusable(true)
+          .onFocus(() => { this.settingButtonFocused = true })
+          .onBlur(() => { this.settingButtonFocused = false })
+          .onClick(() => {
+            this.showSubtitleMenu = false
+            this.showAudioMenu = false
+            clearTimeout(this.closeTimer)
+            this.openSettings()
+          })
         }
         .width("40%")
         .margin({ right: 8 })
@@ -518,6 +542,7 @@ struct VideoControls {
 export struct VideoControlsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
+  @Require onOpenSettings: () => void
   @State opacityValue: number = 0;
 
   aboutToAppear(): void {
@@ -533,8 +558,117 @@ export struct VideoControlsDialog {
   build() {
     VideoControls({
       videoController: this.videoController,
-      dialogController: this.controller
+      dialogController: this.controller,
+      openSettings: this.onOpenSettings
     })
       .opacity(this.opacityValue)
+  }
+}
+
+@CustomDialog
+export struct PlayerSettingsDialog {
+  controller: CustomDialogController
+  @State selectedPlaybackRateIndex: number = 1
+  @State selectedScreenFitIndex: number = 0
+
+  @Builder
+  private SettingsChip(label: string, selected: boolean) {
+    Text(label)
+      .fontSize(17)
+      .fontColor(selected ? '#F3F7FF' : '#D7DCE7')
+      .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+      .backgroundColor(selected ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+      .borderRadius(18)
+      .border({ width: selected ? 2 : 1, color: selected ? '#fffefe' : '#00000045' })
+      .shadow({ radius: selected ? 8 : 0, color: selected ? '#33597FB8' : '#00000000' })
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.BottomStart }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor(Color.Transparent)
+
+      Scroll() {
+        Column({ space: 28 }) {
+          Column({ space: 12 }) {
+            Text('倍速播放')
+              .fontSize(20)
+              .fontColor('#EFF2FB')
+              .fontWeight(FontWeight.Medium)
+              .alignSelf(ItemAlign.Start)
+
+            Row({ space: 12 }) {
+              Row() {
+                this.SettingsChip('0.75x', this.selectedPlaybackRateIndex === 0)
+              }
+              .onClick(() => {
+                this.selectedPlaybackRateIndex = 0
+              })
+
+              Row() {
+                this.SettingsChip('1.0x', this.selectedPlaybackRateIndex === 1)
+              }
+              .onClick(() => {
+                this.selectedPlaybackRateIndex = 1
+              })
+            }
+            .justifyContent(FlexAlign.Start)
+            .width('100%')
+          }
+
+
+          Column({ space: 12 }) {
+            Text('画面比例')
+              .fontSize(20)
+              .fontColor('#EFF2FB')
+              .fontWeight(FontWeight.Medium)
+              .alignSelf(ItemAlign.Start)
+
+            Row({ space: 12 }) {
+              Row() {
+                this.SettingsChip('适应内容', this.selectedScreenFitIndex === 0)
+              }
+              .onClick(() => {
+                this.selectedScreenFitIndex = 0
+              })
+
+              Row() {
+                this.SettingsChip('铺满全屏', this.selectedScreenFitIndex === 1)
+              }
+              .onClick(() => {
+                this.selectedScreenFitIndex = 1
+              })
+            }
+            .justifyContent(FlexAlign.Start)
+            .width('100%')
+          }
+
+          Column({ space: 12 }) {
+            Text('字幕管理')
+              .fontSize(20)
+              .fontColor('#EFF2FB')
+              .fontWeight(FontWeight.Medium)
+              .alignSelf(ItemAlign.Start)
+
+            this.SettingsChip('选择字幕', false)
+          }
+        }
+        .padding({ left: 26, right: 26, top: 18, bottom: 28 })
+        .margin({
+          top: "10%"
+        })
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
+      }
+      .scrollBar(BarState.Off)
+      .width('100%')
+      .height('50%')
+      .backgroundColor('#090E1922')
+      .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
+    }
+    .width('100%')
+    .height('100%')
   }
 }
