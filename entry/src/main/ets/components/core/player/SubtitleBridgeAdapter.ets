@@ -10,24 +10,95 @@ import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
 
 const TAG = '[SubtitleBridgeAdapter]';
 
+function tryDecode(bytes: Uint8Array, encoding: string): string {
+  const decoder = new util.TextDecoder(encoding);
+  return decoder.decodeWithStream(bytes);
+}
+
+function scoreChineseReadability(text: string): number {
+  if (text.length === 0) {
+    return -999999;
+  }
+
+  let score = 0;
+  const sampleLen = Math.min(text.length, 4000);
+
+  // 常见中文停用字，命中越多通常越接近正确解码结果
+  const commonChars: string[] = [
+    '的', '了', '是', '我', '你', '他', '她', '不', '在', '有', '这', '這', '个', '個',
+    '人', '们', '們', '和', '就', '要', '到', '也', '都', '吗', '嗎', '呢', '啊', '吧',
+    '一', '二', '三', '四', '五', '季', '集', '王', '权', '權', '力', '游', '遊', '戏', '戲'
+  ];
+
+  for (let i = 0; i < commonChars.length; i++) {
+    const ch = commonChars[i];
+    let idx = text.indexOf(ch);
+    while (idx >= 0 && idx < sampleLen) {
+      score += 5;
+      idx = text.indexOf(ch, idx + 1);
+    }
+  }
+
+  for (let i = 0; i < sampleLen; i++) {
+    const code = text.charCodeAt(i);
+    // 中日韩统一表意文字
+    if (code >= 0x4E00 && code <= 0x9FFF) {
+      score += 1;
+      continue;
+    }
+    // 常见字幕标点
+    if (code === 0x3002 || code === 0xFF0C || code === 0x3001 || code === 0xFF1F ||
+      code === 0xFF01 || code === 0xFF1A || code === 0x2014 || code === 0x2026) {
+      score += 1;
+      continue;
+    }
+    // Unicode replacement char，强烈减分
+    if (code === 0xFFFD) {
+      score -= 30;
+      continue;
+    }
+    // 控制字符（保留换行与制表）
+    if ((code < 0x20 && code !== 0x0A && code !== 0x0D && code !== 0x09) || code === 0x7F) {
+      score -= 8;
+    }
+  }
+
+  return score;
+}
+
 /**
- * 将字幕文件的原始字节解码为字符串，自动识别 UTF-8（含 BOM）与 GBK 编码。
+ * 将字幕文件的原始字节解码为字符串，自动识别 UTF-8 / UTF-16 / GBK / Big5 编码。
  * 判断依据：
- *   1. 有 UTF-8 BOM（EF BB BF）→ UTF-8
- *   2. 检测第一个高字节序列是否符合 UTF-8 多字节规则 → UTF-8
- *   3. 否则视为 GBK（兼容 GB2312 / GB18030）
+ *   1. BOM 优先：UTF-8 / UTF-16LE / UTF-16BE
+ *   2. 无 BOM 时：启发式判断 UTF-8 合法性
+ *   3. 否则同时尝试 GBK 与 Big5，并以中文可读性评分选择更优结果
  */
 function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
   const bytes = new Uint8Array(arrayBuffer);
 
-  // 检测 UTF-8 BOM
-  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-    const decoder = new util.TextDecoder('utf-8', { ignoreBOM: true });
-    return decoder.decodeWithStream(new Uint8Array(arrayBuffer));
+  if (bytes.length === 0) {
+    return '';
   }
 
-  // 启发式检测：扫描前4KB，看是否存在合法的 UTF-8 多字节序列
-  // 若发现非法 UTF-8 序列则判定为 GBK
+  // UTF-8 BOM: EF BB BF
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    const decoder = new util.TextDecoder('utf-8', { ignoreBOM: true });
+    return decoder.decodeWithStream(bytes);
+  }
+
+  // UTF-16 LE BOM: FF FE
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    const decoder = new util.TextDecoder('utf-16le', { ignoreBOM: true });
+    return decoder.decodeWithStream(bytes);
+  }
+
+  // UTF-16 BE BOM: FE FF
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    const decoder = new util.TextDecoder('utf-16be', { ignoreBOM: true });
+    return decoder.decodeWithStream(bytes);
+  }
+
+  // 启发式检测：扫描前 4KB，判断是否为合法 UTF-8
   const sampleLen = Math.min(bytes.length, 4096);
   let isUtf8 = true;
   let i = 0;
@@ -42,7 +113,6 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
     else if ((b & 0xF0) === 0xE0) { extraBytes = 2; }
     else if ((b & 0xF8) === 0xF0) { extraBytes = 3; }
     else {
-      // 0x80-0xBF 开头 或 0xF8+ 开头，UTF-8 非法
       isUtf8 = false;
       break;
     }
@@ -52,14 +122,60 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
         break;
       }
     }
-    if (!isUtf8) { break; }
+    if (!isUtf8) {
+      break;
+    }
     i += 1 + extraBytes;
   }
 
-  const encoding = isUtf8 ? 'utf-8' : 'gbk';
-  hilog.info(0x0000, TAG, `[decodeSubtitleBytes] 检测编码=${encoding} sampleLen=${sampleLen}`);
-  const decoder = new util.TextDecoder(encoding);
-  return decoder.decodeWithStream(new Uint8Array(arrayBuffer));
+  if (isUtf8) {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[decodeSubtitleBytes] 检测编码=utf-8 sampleLen=${sampleLen}`);
+    return tryDecode(bytes, 'utf-8');
+  }
+
+  let gbkText = '';
+  let big5Text = '';
+  let gbkOk = false;
+  let big5Ok = false;
+
+  try {
+    gbkText = tryDecode(bytes, 'gbk');
+    gbkOk = true;
+  } catch (e) {}
+
+  // HarmonyOS TextDecoder 常见实现支持 big5；若不支持则自动跳过
+  try {
+    big5Text = tryDecode(bytes, 'big5');
+    big5Ok = true;
+  } catch (e) {}
+
+  if (gbkOk && big5Ok) {
+    const gbkScore = scoreChineseReadability(gbkText);
+    const big5Score = scoreChineseReadability(big5Text);
+    const preferBig5 = big5Score > gbkScore;
+    const selectedEncoding = preferBig5 ? 'big5' : 'gbk';
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[decodeSubtitleBytes] 候选编码 gbk=${gbkScore} big5=${big5Score} -> ${selectedEncoding}`);
+    return preferBig5 ? big5Text : gbkText;
+  }
+
+  if (big5Ok) {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      '[decodeSubtitleBytes] 仅 big5 可用，采用 big5');
+    return big5Text;
+  }
+
+  if (gbkOk) {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      '[decodeSubtitleBytes] 仅 gbk 可用，采用 gbk');
+    return gbkText;
+  }
+
+  // 兜底：尽量避免抛错影响播放流程
+  hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+    '[decodeSubtitleBytes] gbk/big5 均不可用，回退 utf-8');
+  return tryDecode(bytes, 'utf-8');
 }
 
 export interface SubtitleTrackItem {
