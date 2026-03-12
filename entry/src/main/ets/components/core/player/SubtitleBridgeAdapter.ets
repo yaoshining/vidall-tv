@@ -3,6 +3,7 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
+import { FfprobeUtil } from '../../../utils/FfprobeUtil';
 import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
@@ -284,10 +285,9 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       return;
     }
 
-    this.activeSubtitleIndex = allIndex;
-    this.currentSubtitleText = '';
-
     if (allIndex < 0) {
+      this.activeSubtitleIndex = -1;
+      this.currentSubtitleText = '';
       this.srtEntries = [];
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
@@ -298,6 +298,9 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     if (allIndex >= this.allSubtitleTracks.length) {
       return;
     }
+
+    this.activeSubtitleIndex = allIndex;
+    this.currentSubtitleText = '';
 
     const target = this.allSubtitleTracks[allIndex];
     if (target.kind === 'external') {
@@ -406,11 +409,14 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       `[外置字幕探测] 生成 ${candidates.length} 个候选字幕文件`);
 
     const headers: Record<string, string> = { 'User-Agent': 'VidALL/1.0.0' };
-    if (this.videoData.httpHeader) {
-      const keys = Object.keys(this.videoData.httpHeader);
+    const sourceHeaders = this.videoData.subtitleHeaders && Object.keys(this.videoData.subtitleHeaders).length > 0
+      ? this.videoData.subtitleHeaders
+      : this.videoData.httpHeader;
+    if (sourceHeaders) {
+      const keys = Object.keys(sourceHeaders);
       for (let i = 0; i < keys.length; i++) {
         const k = keys[i];
-        headers[k] = this.videoData.httpHeader[k];
+        headers[k] = sourceHeaders[k];
       }
     }
 
@@ -440,10 +446,13 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
         } else {
           entries = await this.fetchSrt(url, headers);
         }
+        const langLabel = this.extractLangLabel(candidate, baseName);
         const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
         const item: SubtitleTrackItem = {
           kind: 'external',
-          displayName: `字幕 [外部·${formatLabel}]`,
+          displayName: langLabel.length > 0
+            ? `${langLabel} [外部·${formatLabel}]`
+            : `字幕 [外部·${formatLabel}]`,
           url,
           srtEntries: entries
         };
@@ -475,9 +484,23 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           return;
         }
         const code = resp.responseCode;
-        resolve(code === 200 || code === 206 || code === 301 || code === 302);
+        resolve(code === 200 || code === 206);
       });
     });
+  }
+
+  protected extractLangLabel(candidate: string, baseName: string): string {
+    const dotIdx = candidate.lastIndexOf('.');
+    const withoutExt = dotIdx >= 0 ? candidate.substring(0, dotIdx) : candidate;
+    if (withoutExt === baseName) {
+      return '';
+    }
+    const prefix = baseName + '.';
+    if (withoutExt.startsWith(prefix)) {
+      const lang = withoutExt.substring(prefix.length);
+      return FfprobeUtil.getLanguageDisplayName(lang) || lang;
+    }
+    return withoutExt;
   }
 
   protected fetchSrt(url: string, headers: Record<string, string>): Promise<SrtEntry[]> {

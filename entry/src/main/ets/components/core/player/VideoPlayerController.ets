@@ -194,7 +194,10 @@ export class VideoPlayerController {
       this.currentTime = currentTime;
       this.progress = this.duration > 0 ? currentTime / this.duration : 0;
       this.subtitleAdapter.onTimeUpdate(currentTime);
-      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+      const subtitleState = this.subtitleAdapter.getState();
+      if (subtitleState.hasExternalActive) {
+        this.applySubtitleBridgeState(subtitleState);
+      }
       this.logSubtitleTimeline(currentTime);
     });
     adapter.onError((error: Error) => {
@@ -502,14 +505,18 @@ export class VideoPlayerController {
       trackKind = item.kind;
     }
 
-    const subtitleText = this.currentSubtitleText.length > 0
+    const subtitleTextRaw = this.currentSubtitleText.length > 0
       ? this.currentSubtitleText
       : '(空)';
+    const subtitleText = subtitleTextRaw.replace(/\r?\n/g, ' ');
+    const logText = subtitleText.length > 100
+      ? subtitleText.substring(0, 100) + '...'
+      : subtitleText;
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[字幕时间轴] t=${currentTimeMs}ms (${millisecondsToTime(currentTimeMs)})` +
       ` activeIndex=${activeIndex} kind=${trackKind}` +
-      ` track="${trackLabel}" delay=${this.subtitleDelayMs}ms text="${subtitleText}"`);
+      ` track="${trackLabel}" delay=${this.subtitleDelayMs}ms text="${logText}"`);
   }
 
   /** 是否正在使用外部 SRT 字幕（用于 UI 判断是否需要 ASS 逗号提取） */
@@ -528,6 +535,7 @@ export class VideoPlayerController {
       const err = e as BusinessError;
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `[loadSubtitleTracks] 字幕适配器初始化失败，回退无字幕模式: code=${err.code} msg=${err.message}`);
+      this.subtitleAdapter.release();
       this.subtitleAdapter = new NoSubtitleBridgeAdapter();
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     }
@@ -684,7 +692,6 @@ export class VideoPlayerController {
   async switchSubtitleTrack(allIndex: number): Promise<void> {
     await this.subtitleAdapter.switchTrack(allIndex);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
-    this.subtitleUpdateCounter++;
   }
 
   // ─────────────────────────────────────────────

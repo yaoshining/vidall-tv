@@ -75,7 +75,7 @@ export default function subtitleBridgeAdapterTest() {
       done();
     });
 
-    it('IjkSubtitleBridgeAdapter: 使用预置字幕轨并支持关闭字幕', 0, async (done: () => void) => {
+    it('IjkSubtitleBridgeAdapter: 当前策略下隐藏内嵌字幕轨', 0, async (done: () => void) => {
       const player = new MockPlayer();
       const adapter = new IjkSubtitleBridgeAdapter();
       const videoData: VideoData = {
@@ -88,8 +88,9 @@ export default function subtitleBridgeAdapterTest() {
 
       await adapter.init(player, videoData);
       let state = adapter.getState();
-      expect(state.allSubtitleTracks.length).assertEqual(1);
-      expect(player.selectedTrack).assertEqual(5);
+        expect(state.allSubtitleTracks.length).assertEqual(0);
+        expect(state.activeSubtitleIndex).assertEqual(-1);
+        expect(player.selectedTrack).assertEqual(-99);
 
       await adapter.switchTrack(-1);
       state = adapter.getState();
