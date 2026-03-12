@@ -4,40 +4,27 @@ import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from "@kit.PerformanceAnalysisKit";
 import { CommonConstants } from "../../../common/constants/CommonConstants";
 import { millisecondsToTime } from "../../../utils/TimeUtil";
-import { SrtEntry, SrtParser, AssFileParser } from "./SubtitleRenderer";
-import { http } from "@kit.NetworkKit";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeUtil } from "../../../utils/FfprobeUtil";
+import {
+  AvSubtitleBridgeAdapter,
+  IjkSubtitleBridgeAdapter,
+  ISubtitleBridgeAdapter,
+  NoSubtitleBridgeAdapter,
+  SubtitleBridgeState,
+  SubtitleTrackItem
+} from "./SubtitleBridgeAdapter";
+
+export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
 /** 播放内核类型 */
 export type PlayerBackend = 'avplayer' | 'ijkplayer';
 
 const TAG = '[VideoPlayerController]';
-
-// ─────────────────────────────────────────────
-// 统一字幕轨道描述
-// ─────────────────────────────────────────────
-
-/**
- * 统一字幕轨道条目，用于字幕菜单显示和切换
- * kind='internal'：AVPlayer 内嵌轨道（API 19 实际无回调，保留结构）
- * kind='external'：外部 SRT 文件（本实现的主要方式）
- */
-export interface SubtitleTrackItem {
-  kind: 'internal' | 'external';
-  /** 显示名称，如 "英语"、"简体中文 [外部]" */
-  displayName: string;
-  /** kind='internal' 时：subtitleTracks 数组里的 index */
-  internalIndex?: number;
-  /** kind='external' 时：已解析的 SRT 条目 */
-  srtEntries?: SrtEntry[];
-  /** kind='external' 时：字幕文件 URL */
-  url?: string;
-}
 
 // ─────────────────────────────────────────────
 // 音轨条目
@@ -94,16 +81,15 @@ export class VideoPlayerController {
   /** 音轨列表 */
   @Trace audioTracks: AudioTrackItem[] = [];
   @Trace activeAudioIndex: number = -1;
-  private srtEntries: SrtEntry[] = [];
-  private lastSrtText: string = '';
+  private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private currentVideoData?: VideoData;
   private timeToSeek = -1
   private subtitleClearTimer?: number
   private subtitleRemainingTime: number = 0
   private subtitlePauseTime: number = 0
-  /** SRT 诊断日志计数器（每隔 N 帧打一次，避免日志洪泛） */
-  private srtDiagCounter: number = 0;
-  private readonly SRT_DIAG_INTERVAL = 20; // 每 20 帧（约 5s）打一次诊断日志
+  /** 字幕时间轴诊断日志节流：每 1s 打印一次 */
+  private lastSubtitleTimelineLogMs: number = -1000;
+  private readonly SUBTITLE_TIMELINE_LOG_INTERVAL = 1000;
 
   /** 播放进度上下文（由调用方在 initPlayer 前设置） */
   progressContext: PlayProgressEntity | null = null;
@@ -133,12 +119,14 @@ export class VideoPlayerController {
     this.duration = 0;
     this.currentTime = 0;
     this.progress = 0;
-    this.srtEntries = [];
-    this.lastSrtText = '';
+    this.subtitleAdapter.release();
+    this.subtitleAdapter = new NoSubtitleBridgeAdapter();
     this.currentSubtitleText = '';
     this.subtitleUpdateCounter = 0;
     this.allSubtitleTracks = [];
     this.activeSubtitleIndex = -1;
+    this.currentSubtitleTrack = -1;
+    this.subtitleTracks = [];
     this.subtitleDelayMs = 0;
     this.audioTracks = [];
     this.activeAudioIndex = -1;
@@ -170,10 +158,12 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
       adapter = new IjkPlayerAdapter();
+      this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
       adapter = new AVPlayerAdapter();
+      this.subtitleAdapter = new AvSubtitleBridgeAdapter();
     }
 
     // 注册所有 IPlayer 事件回调
@@ -203,34 +193,12 @@ export class VideoPlayerController {
     adapter.onTimeUpdate((currentTime: number) => {
       this.currentTime = currentTime;
       this.progress = this.duration > 0 ? currentTime / this.duration : 0;
-      // SRT 时间轴驱动字幕（应用字幕延迟偏移）
-      if (this.srtEntries.length > 0) {
-        // subtitleDelayMs 的含义：
-        //   > 0：用户感觉字幕偏慢，需要"往后推"。公式：adjustedTime = currentTime - delayMs
-        //       相当于在视频 currentTime 时，回溯 delayMs 之前的字幕内容，
-        //       使原本应在 startMs 出现的字幕推迟到 startMs + delayMs 才显示。
-        //   < 0：用户感觉字幕偏快，需要"往前提"。公式同上，减去负数 = 加上绝对值，
-        //       使原本应在 startMs 出现的字幕提前到 startMs + delayMs（负数）显示。
-        const adjustedTime = currentTime - this.subtitleDelayMs;
-        const text = SrtParser.findAt(this.srtEntries, adjustedTime);
-        if (text !== this.lastSrtText) {
-          this.lastSrtText = text;
-          this.currentSubtitleText = text;
-          this.subtitleUpdateCounter++;
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[SRT] 字幕切换: currentTime=${currentTime}ms adjustedTime=${adjustedTime}ms` +
-            ` delay=${this.subtitleDelayMs}ms text="${text.length > 40 ? text.substring(0, 40) + '...' : text}"`);
-        }
-        // 每 SRT_DIAG_INTERVAL 帧打一次诊断日志，便于定位字幕不显示问题
-        this.srtDiagCounter++;
-        if (this.srtDiagCounter >= this.SRT_DIAG_INTERVAL) {
-          this.srtDiagCounter = 0;
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[SRT诊断] currentTime=${currentTime}ms adjustedTime=${adjustedTime}ms` +
-            ` delay=${this.subtitleDelayMs}ms srtEntries=${this.srtEntries.length}` +
-            ` currentText="${this.currentSubtitleText.length > 40 ? this.currentSubtitleText.substring(0, 40) + '...' : this.currentSubtitleText}"`);
-        }
+      this.subtitleAdapter.onTimeUpdate(currentTime);
+      const subtitleState = this.subtitleAdapter.getState();
+      if (subtitleState.hasExternalActive) {
+        this.applySubtitleBridgeState(subtitleState);
       }
+      this.logSubtitleTimeline(currentTime);
     });
     adapter.onError((error: Error) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
@@ -261,9 +229,11 @@ export class VideoPlayerController {
     });
     adapter.onSubtitleUpdate((info) => {
       // 外部字幕激活时屏蔽内嵌回调
-      if (this.srtEntries.length > 0) {
+      if (this.subtitleAdapter.getState().hasExternalActive) {
         return;
       }
+      this.subtitleAdapter.onSubtitleUpdate(info);
+      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `内嵌字幕回调: text="${info.text?.substring(0, 80)}" duration=${info.duration}ms`);
       if (this.subtitleClearTimer) {
@@ -371,8 +341,7 @@ export class VideoPlayerController {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;
     }
-    this.srtEntries = [];
-    this.lastSrtText = '';
+    this.subtitleAdapter.release();
     this.currentSubtitleText = '';
     if (this.player) {
       await this.player.release().catch(() => {});
@@ -384,6 +353,8 @@ export class VideoPlayerController {
     if (!this.player) { return; }
     await this.pause();
     this.currentTime = time;
+    this.subtitleAdapter.onSeekSync();
+    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     if (!this.isSeeking) {
       this.isSeeking = true;
       this.player.seek(time);
@@ -503,121 +474,70 @@ export class VideoPlayerController {
     return millisecondsToTime(this.currentTime)
   }
 
+  private applySubtitleBridgeState(state: SubtitleBridgeState): void {
+    const prevText = this.currentSubtitleText;
+    this.subtitleTracks = state.subtitleTracks;
+    this.allSubtitleTracks = state.allSubtitleTracks;
+    this.activeSubtitleIndex = state.activeSubtitleIndex;
+    this.currentSubtitleTrack = state.currentSubtitleTrack;
+    this.currentSubtitleText = state.currentSubtitleText;
+    this.subtitleDelayMs = state.subtitleDelayMs;
+    if (prevText !== this.currentSubtitleText) {
+      this.subtitleUpdateCounter++;
+    }
+  }
+
+  /**
+   * 按视频播放时间输出当前字幕轨与字幕内容，便于排查“有轨道但无显示”问题。
+   */
+  private logSubtitleTimeline(currentTimeMs: number): void {
+    if (currentTimeMs - this.lastSubtitleTimelineLogMs < this.SUBTITLE_TIMELINE_LOG_INTERVAL) {
+      return;
+    }
+    this.lastSubtitleTimelineLogMs = currentTimeMs;
+
+    const activeIndex = this.activeSubtitleIndex;
+    let trackLabel = '关闭字幕';
+    let trackKind = 'none';
+    if (activeIndex >= 0 && activeIndex < this.allSubtitleTracks.length) {
+      const item = this.allSubtitleTracks[activeIndex];
+      trackLabel = item.displayName;
+      trackKind = item.kind;
+    }
+
+    const subtitleTextRaw = this.currentSubtitleText.length > 0
+      ? this.currentSubtitleText
+      : '(空)';
+    const subtitleText = subtitleTextRaw.replace(/\r?\n/g, ' ');
+    const logText = subtitleText.length > 100
+      ? subtitleText.substring(0, 100) + '...'
+      : subtitleText;
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[字幕时间轴] t=${currentTimeMs}ms (${millisecondsToTime(currentTimeMs)})` +
+      ` activeIndex=${activeIndex} kind=${trackKind}` +
+      ` track="${trackLabel}" delay=${this.subtitleDelayMs}ms text="${logText}"`);
+  }
+
   /** 是否正在使用外部 SRT 字幕（用于 UI 判断是否需要 ASS 逗号提取） */
   get hasSrtSubtitle(): boolean {
-    return this.srtEntries.length > 0;
+    return this.subtitleAdapter.getState().hasExternalActive;
   }
 
   private async loadSubtitleTracks(): Promise<void> {
     if (!this.player) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[loadSubtitleTracks] player 未初始化，跳过');
       return;
     }
-
-    const presetCount = this.currentVideoData?.presetSubtitleTracks?.length ?? 0;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[loadSubtitleTracks] 开始 — backend=${this.backend}` +
-      ` presetSubtitleTracks=${presetCount}` +
-      ` videoSrc=${this.currentVideoData?.videoSrc?.substring(0, 80) ?? '(null)'}`);
-
-    const tracks: SubtitleTrackItem[] = [];
-
-    if (this.backend === 'ijkplayer' &&
-      this.currentVideoData?.presetSubtitleTracks &&
-      this.currentVideoData.presetSubtitleTracks.length > 0) {
-      // ── ijkplayer 后端：使用预置字幕轨（来自 ffprobe 探测结果）──
-      // IjkPlayer 不提供 getTrackInfos() 字幕，通过调用方预先注入的 presetSubtitleTracks 展示
-      const presets = this.currentVideoData.presetSubtitleTracks;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] ▶ 走预置字幕路径，共 ${presets.length} 条`);
-      for (const p of presets) {
-        const item: SubtitleTrackItem = {
-          kind: 'internal',
-          displayName: p.displayName,
-          internalIndex: p.trackIndex
-        };
-        tracks.push(item);
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadSubtitleTracks]   预置字幕轨[${tracks.length - 1}]:` +
-          ` trackIndex=${p.trackIndex} displayName="${p.displayName}"` +
-          ` language=${p.language ?? '(无)'} codec=${p.codecName ?? '(无)'}`);
-      }
-    } else {
-      // ── AVPlayer 后端（或 ijkplayer 无预置数据）：通过 getTrackInfos() 获取内嵌字幕 ──
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] ▶ 走 getTrackInfos() 路径` +
-        `（原因：backend=${this.backend}, presetCount=${presetCount}）`);
-      try {
-        const allTracks = await this.player.getTrackInfos();
-        this.subtitleTracks = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadSubtitleTracks] getTrackInfos() 返回总轨道 ${allTracks.length} 条，` +
-          `其中字幕轨 ${this.subtitleTracks.length} 条`);
-        this.subtitleTracks.forEach((t: TrackInfo, i: number) => {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[loadSubtitleTracks]   内嵌字幕[${i}]:` +
-            ` trackIndex=${t.trackIndex} mime=${t.mimeType ?? '(无)'} lang=${t.language ?? '(无)'}`);
-        });
-      } catch (e) {
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadSubtitleTracks] getTrackInfos() 异常: ${JSON.stringify(e)}`);
-      }
-
-      // 构建内嵌轨道条目
-      for (let i = 0; i < this.subtitleTracks.length; i++) {
-        const t = this.subtitleTracks[i];
-        const item: SubtitleTrackItem = {
-          kind: 'internal',
-          displayName: this.getSubtitleTrackName(i),
-          internalIndex: t.trackIndex
-        };
-        tracks.push(item);
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadSubtitleTracks]   构建内嵌条目[${i}]: "${item.displayName}" internalIndex=${item.internalIndex}`);
-      }
-    }
-
-    this.allSubtitleTracks = tracks;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[loadSubtitleTracks] 内嵌/预置字幕条目构建完毕，共 ${tracks.length} 条，开始探测外部字幕...`);
-
-    // 探测外部字幕
-    if (this.currentVideoData && this.currentVideoData.type === VideoDataType.URL) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] 开始探测外部字幕，videoSrc=${this.currentVideoData.videoSrc.substring(0, 80)}`);
-      const externalItems = await this.findExternalSubtitles(
-        this.currentVideoData.videoSrc,
-        this.currentVideoData.httpHeader
-      );
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] 外部字幕探测结束，找到 ${externalItems.length} 个`);
-      if (externalItems.length > 0) {
-        const updated: SubtitleTrackItem[] = [];
-        for (const t of this.allSubtitleTracks) { updated.push(t); }
-        for (const ext of externalItems) { updated.push(ext); }
-        this.allSubtitleTracks = updated;
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[loadSubtitleTracks] 合并后 allSubtitleTracks 共 ${updated.length} 条 (内嵌+外部)`);
-        const firstExtIdx = updated.findIndex((t: SubtitleTrackItem) => t.kind === 'external');
-        if (firstExtIdx >= 0) {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[loadSubtitleTracks] 自动激活第一个外部字幕 allIndex=${firstExtIdx}，名称="${updated[firstExtIdx].displayName}"`);
-          await this.switchSubtitleTrack(firstExtIdx);
-          return;
-        }
-      }
-    } else {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] 跳过外部字幕探测（非 URL 类型 或 currentVideoData 为空）`);
-    }
-
-    if (this.allSubtitleTracks.length > 0) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] 自动激活第一条内嵌字幕 allIndex=0，名称="${this.allSubtitleTracks[0].displayName}"`);
-      await this.switchSubtitleTrack(0);
-    } else {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] 无任何字幕资源（内嵌 + 外部均为空），字幕功能不可用`);
+    try {
+      await this.subtitleAdapter.init(this.player, this.currentVideoData);
+      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[loadSubtitleTracks] 字幕适配器初始化失败，回退无字幕模式: code=${err.code} msg=${err.message}`);
+      this.subtitleAdapter.release();
+      this.subtitleAdapter = new NoSubtitleBridgeAdapter();
+      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     }
   }
 
@@ -770,67 +690,13 @@ export class VideoPlayerController {
    * allIndex = -1 表示关闭字幕
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[switchSubtitleTrack] 请求切换: allIndex=${allIndex}` +
-      ` (当前 activeSubtitleIndex=${this.activeSubtitleIndex}` +
-      ` allSubtitleTracks.length=${this.allSubtitleTracks.length}` +
-      ` srtEntries.length=${this.srtEntries.length}` +
-      ` subtitleDelayMs=${this.subtitleDelayMs}ms)`);
-
-    this.activeSubtitleIndex = allIndex;
-    this.currentSubtitleText = '';
-    this.subtitleUpdateCounter++;
-
-    if (allIndex < 0) {
-      // 关闭字幕：清空 SRT，关闭内嵌
-      this.srtEntries = [];
-      this.lastSrtText = '';
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchSubtitleTrack] 关闭字幕，清空 srtEntries，调用 selectSubtitleTrack(-1)`);
-      await this.selectSubtitleTrack(-1);
-      return;
+    if (this.subtitleClearTimer !== undefined) {
+      clearTimeout(this.subtitleClearTimer);
+      this.subtitleClearTimer = undefined;
     }
-
-    if (allIndex >= this.allSubtitleTracks.length) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchSubtitleTrack] allIndex=${allIndex} 越界 (长度=${this.allSubtitleTracks.length})，跳过`);
-      return;
-    }
-
-    const item = this.allSubtitleTracks[allIndex];
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[switchSubtitleTrack] 目标字幕条目: kind="${item.kind}" displayName="${item.displayName}"` +
-      ` internalIndex=${item.internalIndex ?? '(无)'} url=${item.url ?? '(无)'}` +
-      ` srtEntries=${item.srtEntries?.length ?? 0}`);
-
-    if (item.kind === 'external') {
-      // 切换到外部 SRT/ASS
-      const entries = item.srtEntries ?? [];
-      this.srtEntries = entries;
-      this.lastSrtText = '';
-      this.currentSubtitleTrack = -1;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchSubtitleTrack] ✓ 切换到外部字幕: "${item.displayName}"` +
-        ` 共 ${entries.length} 条 url="${item.url ?? ''}"` +
-        ` subtitleDelayMs=${this.subtitleDelayMs}ms`);
-      if (entries.length === 0) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `[switchSubtitleTrack] ⚠️ 外部字幕条目为空，字幕将不显示。请检查文件下载和解析日志`);
-      } else {
-        const e0 = entries[0];
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[switchSubtitleTrack]   第1条: ${e0.startMs}ms→${e0.endMs}ms "${e0.text.length > 40 ? e0.text.substring(0, 40) + '...' : e0.text}"`);
-      }
-    } else {
-      // 切换到内嵌字幕：清空外部字幕，调用 selectSubtitleTrack 激活 AVPlayer 内嵌轨道
-      this.srtEntries = [];
-      this.lastSrtText = '';
-      const internalIdx = item.internalIndex ?? 0;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchSubtitleTrack] 切换到内嵌字幕轨道 internalIndex=${internalIdx}，调用 selectSubtitleTrack 激活`);
-      // 调用旧方法激活内嵌轨道（会触发 AVPlayer/ijk 的 selectTrack）
-      await this.selectSubtitleTrack(internalIdx);
-    }
+    this.subtitleRemainingTime = 0;
+    await this.subtitleAdapter.switchTrack(allIndex);
+    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
   }
 
   // ─────────────────────────────────────────────
@@ -913,263 +779,9 @@ export class VideoPlayerController {
    * 效果可感知时间 <= 下一帧 onTimeUpdate 间隔（≈ 250ms）。
    */
   adjustSubtitleDelay(deltaMs: number): void {
-    const before = this.subtitleDelayMs;
-    this.subtitleDelayMs += deltaMs;
-    // 重置上一条缓存文本，强制下一帧刷新字幕内容
-    this.lastSrtText = '';
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[adjustSubtitleDelay] delta=${deltaMs}ms: ${before}ms → ${this.subtitleDelayMs}ms` +
-      ` (srtEntries=${this.srtEntries.length} activeSubtitleIndex=${this.activeSubtitleIndex})`);
+    this.subtitleAdapter.adjustDelay(deltaMs);
+    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
   }
 
-  // ─────────────────────────────────────────────
-  // 外部字幕自动探测
-  // ─────────────────────────────────────────────
-
-  /**
-   * 根据视频 URL 自动探测同名字幕文件
-   *
-   * 候选文件名规则（视频名为 movie.mkv）：
-   *   movie.srt / movie.ass / movie.ssa / movie.vtt
-   *   movie.chi.srt / movie.chs.srt / movie.cht.srt / movie.eng.srt ...
-   *   movie.zh.srt / movie.zh-CN.srt / movie.en.srt ...
-   *
-   * 每个候选发 HEAD 请求，200/206 视为存在，然后 GET 下载解析。
-   */
-  private async findExternalSubtitles(
-    videoUrl: string,
-    headers?: Record<string, string>
-  ): Promise<SubtitleTrackItem[]> {
-    // 提取视频文件名（不含扩展名）和目录 URL
-    const lastSlash = videoUrl.lastIndexOf('/');
-    const dirUrl = lastSlash >= 0 ? videoUrl.substring(0, lastSlash + 1) : videoUrl + '/';
-    const fileName = lastSlash >= 0 ? videoUrl.substring(lastSlash + 1) : videoUrl;
-    // 去掉查询参数
-    const cleanFileName = fileName.split('?')[0];
-    const dotIdx = cleanFileName.lastIndexOf('.');
-    const baseName = dotIdx >= 0 ? cleanFileName.substring(0, dotIdx) : cleanFileName;
-
-    // 字幕扩展名
-    const subtitleExts: string[] = ['srt', 'ass', 'ssa', 'vtt'];
-    // 常见语言标签（用于 movie.lang.srt 格式）
-    const langTags: string[] = [
-      'chi', 'chs', 'cht', 'zho',
-      'eng',
-      'jpn', 'kor', 'fra', 'deu', 'spa', 'rus',
-      'zh', 'zh-CN', 'zh-TW', 'en', 'ja', 'ko'
-    ];
-
-    // 构建候选列表（先无语言标签，再带语言标签）
-    const candidates: string[] = [];
-    for (const ext of subtitleExts) {
-      candidates.push(`${baseName}.${ext}`);
-    }
-    for (const lang of langTags) {
-      for (const ext of subtitleExts) {
-        candidates.push(`${baseName}.${lang}.${ext}`);
-      }
-    }
-
-    const reqHeaders: Record<string, string> = { 'User-Agent': 'VidALL/1.0.0' };
-    if (headers) {
-      const keys = Object.keys(headers);
-      for (const k of keys) {
-        reqHeaders[k] = headers[k];
-      }
-    }
-
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `开始探测外部字幕，基础名: ${baseName}，候选数: ${candidates.length}`);
-
-    const found: SubtitleTrackItem[] = [];
-
-    for (const candidate of candidates) {
-      const url = dirUrl + encodeURIComponent(candidate);
-      const exists = await this.probeUrl(url, reqHeaders);
-      if (!exists) {
-        continue;
-      }
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `发现外部字幕: ${candidate}`);
-      // 判断字幕格式
-      const lowerCand = candidate.toLowerCase();
-      const isSrt = lowerCand.endsWith('.srt');
-      const isAss = lowerCand.endsWith('.ass') || lowerCand.endsWith('.ssa');
-      const isVtt = lowerCand.endsWith('.vtt');
-
-      if (!isSrt && !isAss && !isVtt) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `暂不支持的字幕格式，跳过: ${candidate}`);
-        continue;
-      }
-
-      // 下载并解析
-      try {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `开始下载字幕: ${url}`);
-        let entries: SrtEntry[] = [];
-        if (isSrt || isVtt) {
-          entries = await this.fetchSrt(url, reqHeaders);
-        } else {
-          // .ass / .ssa
-          entries = await this.fetchAss(url, reqHeaders);
-        }
-
-        const langLabel = this.extractLangLabel(candidate, baseName);
-        const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
-        const displayName = langLabel.length > 0
-          ? `${langLabel} [外部·${formatLabel}]`
-          : `字幕 [外部·${formatLabel}]`;
-        const item: SubtitleTrackItem = {
-          kind: 'external',
-          displayName,
-          url,
-          srtEntries: entries
-        };
-        found.push(item);
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `外部字幕解析完成: ${displayName}，共 ${entries.length} 条`);
-      } catch (e) {
-        const err = e as BusinessError;
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `外部字幕下载/解析失败: ${candidate} — code=${err.code} msg=${err.message}`);
-      }
-    }
-
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `外部字幕探测完毕，找到 ${found.length} 个`);
-    return found;
-  }
-
-  /** HEAD 请求探测 URL 是否存在，200/206/301/302 视为存在 */
-  private probeUrl(url: string, headers: Record<string, string>): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      const req = http.createHttp();
-      req.request(url, {
-        method: http.RequestMethod.HEAD,
-        header: headers,
-        connectTimeout: 5000,
-        readTimeout: 5000
-      }, (err: BusinessError, resp: http.HttpResponse) => {
-        req.destroy();
-        if (err) {
-          resolve(false);
-          return;
-        }
-        const code = resp.responseCode;
-        resolve(code === 200 || code === 206 || code === 301 || code === 302);
-      });
-    });
-  }
-
-  /** GET 下载并解析 SRT/VTT 文件 */
-  private fetchSrt(url: string, headers: Record<string, string>): Promise<SrtEntry[]> {
-    return new Promise<SrtEntry[]>((resolve, reject) => {
-      const req = http.createHttp();
-      req.request(url, {
-        method: http.RequestMethod.GET,
-        header: headers,
-        connectTimeout: 10000,
-        readTimeout: 15000,
-        expectDataType: http.HttpDataType.STRING
-      }, (err: BusinessError, resp: http.HttpResponse) => {
-        req.destroy();
-        if (err) {
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-            `SRT 下载失败: code=${err.code} msg=${err.message} url=${url}`);
-          reject(err);
-          return;
-        }
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `SRT HTTP 响应: ${resp.responseCode}, resultType=${typeof resp.result}`);
-        if (resp.responseCode !== 200) {
-          reject(new Error(`HTTP ${resp.responseCode}`) as BusinessError);
-          return;
-        }
-        const body = resp.result as string;
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `SRT 下载完成，内容大小: ${body.length} 字节，前50字符: ${body.substring(0, 50)}`);
-        if (body.length === 0) {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'SRT 文件内容为空');
-          resolve([]);
-          return;
-        }
-        const entries = SrtParser.parse(body);
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `SRT 解析完成，共 ${entries.length} 条`);
-        if (entries.length > 0) {
-          const e0 = entries[0];
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `SRT 第1条: ${e0.startMs}ms→${e0.endMs}ms: ${e0.text.substring(0, 40)}`);
-        }
-        resolve(entries);
-      });
-    });
-  }
-
-  /** GET 下载并解析 ASS/SSA 文件 */
-  private fetchAss(url: string, headers: Record<string, string>): Promise<SrtEntry[]> {
-    return new Promise<SrtEntry[]>((resolve, reject) => {
-      const req = http.createHttp();
-      req.request(url, {
-        method: http.RequestMethod.GET,
-        header: headers,
-        connectTimeout: 10000,
-        readTimeout: 15000,
-        expectDataType: http.HttpDataType.STRING
-      }, (err: BusinessError, resp: http.HttpResponse) => {
-        req.destroy();
-        if (err) {
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-            `ASS 下载失败: code=${err.code} msg=${err.message} url=${url}`);
-          reject(err);
-          return;
-        }
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `ASS HTTP 响应: ${resp.responseCode}, resultType=${typeof resp.result}`);
-        if (resp.responseCode !== 200) {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `ASS 下载 HTTP 状态异常: ${resp.responseCode}`);
-          reject(new Error(`HTTP ${resp.responseCode}`) as BusinessError);
-          return;
-        }
-        const body = resp.result as string;
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `ASS 下载完成，内容大小: ${body.length} 字节，前50字符: ${body.substring(0, 50)}`);
-        if (body.length === 0) {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'ASS 文件内容为空');
-          resolve([]);
-          return;
-        }
-        const entries = AssFileParser.parse(body);
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `ASS 解析完成，共 ${entries.length} 条`);
-        if (entries.length > 0) {
-          const e0 = entries[0];
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `ASS 第1条: ${e0.startMs}ms→${e0.endMs}ms: ${e0.text.substring(0, 40)}`);
-        }
-        resolve(entries);
-      });
-    });
-  }
-
-  /**
-   * 从候选文件名中提取语言标签，用于显示名
-   * movie.chi.srt → "chi"  →  getLanguageName("chi")
-   * movie.srt     → ""
-   */
-  private extractLangLabel(candidate: string, baseName: string): string {
-    // 去扩展名
-    const dotIdx = candidate.lastIndexOf('.');
-    const withoutExt = dotIdx >= 0 ? candidate.substring(0, dotIdx) : candidate;
-    // 如果和 baseName 一样，说明没有语言标签
-    if (withoutExt === baseName) {
-      return '';
-    }
-    // 去掉 baseName. 前缀，剩下的就是语言标签
-    const prefix = baseName + '.';
-    if (withoutExt.startsWith(prefix)) {
-      const lang = withoutExt.substring(prefix.length);
-      return this.getLanguageName(lang);
-    }
-    return withoutExt;
-  }
 }
 
