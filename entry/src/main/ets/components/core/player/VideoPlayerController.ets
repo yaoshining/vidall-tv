@@ -690,6 +690,11 @@ export class VideoPlayerController {
    * allIndex = -1 表示关闭字幕
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
+    if (this.subtitleClearTimer !== undefined) {
+      clearTimeout(this.subtitleClearTimer);
+      this.subtitleClearTimer = undefined;
+    }
+    this.subtitleRemainingTime = 0;
     await this.subtitleAdapter.switchTrack(allIndex);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
   }

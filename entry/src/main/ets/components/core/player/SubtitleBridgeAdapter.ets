@@ -10,10 +10,44 @@ import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
 
 const TAG = '[SubtitleBridgeAdapter]';
+const MAX_SUBTITLE_PROBE_CANDIDATES = 12;
+const SUBTITLE_PROBE_BATCH_SIZE = 4;
 
 function tryDecode(bytes: Uint8Array, encoding: string): string {
   const decoder = new util.TextDecoder(encoding);
   return decoder.decodeWithStream(bytes);
+}
+
+function sanitizeUrlForLog(url: string): string {
+  const queryIndex = url.indexOf('?');
+  const noQueryUrl = queryIndex >= 0 ? url.substring(0, queryIndex) : url;
+  const schemeIndex = noQueryUrl.indexOf('://');
+  if (schemeIndex < 0) {
+    return queryIndex >= 0 ? `${noQueryUrl}?***` : noQueryUrl;
+  }
+
+  const pathIndex = noQueryUrl.indexOf('/', schemeIndex + 3);
+  if (pathIndex < 0) {
+    return queryIndex >= 0 ? `${noQueryUrl}?***` : noQueryUrl;
+  }
+
+  const origin = noQueryUrl.substring(0, pathIndex);
+  const lastSlash = noQueryUrl.lastIndexOf('/');
+  if (lastSlash < pathIndex) {
+    return queryIndex >= 0 ? `${origin}/...?***` : `${origin}/...`;
+  }
+
+  const tail = noQueryUrl.substring(lastSlash + 1);
+  if (tail.length === 0) {
+    return queryIndex >= 0 ? `${origin}/.../?***` : `${origin}/.../`;
+  }
+  return queryIndex >= 0 ? `${origin}/.../${tail}?***` : `${origin}/.../${tail}`;
+}
+
+function createHttpBusinessError(statusCode: number, url: string): BusinessError {
+  const httpError = new Error(`HTTP ${statusCode} for subtitle request: ${sanitizeUrlForLog(url)}`) as BusinessError;
+  httpError.code = statusCode;
+  return httpError;
 }
 
 function scoreChineseReadability(text: string): number {
@@ -381,9 +415,9 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     const baseName = dotIdx >= 0 ? decodedFileName.substring(0, dotIdx) : decodedFileName;
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[外置字幕探测] videoUrl=${videoUrl}`);
+      `[外置字幕探测] video=${sanitizeUrlForLog(videoUrl)}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[外置字幕探测] dirUrl=${dirUrl} fileName=${fileName} baseName=${baseName}`);
+      `[外置字幕探测] dir=${sanitizeUrlForLog(dirUrl)} fileName=${cleanFileName} baseName=${baseName}`);
 
     const subtitleExts: string[] = ['srt', 'ass', 'ssa', 'vtt'];
     const langTags: string[] = [
@@ -407,6 +441,13 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[外置字幕探测] 生成 ${candidates.length} 个候选字幕文件`);
+    const limitedCandidates: string[] = candidates.length > MAX_SUBTITLE_PROBE_CANDIDATES
+      ? candidates.slice(0, MAX_SUBTITLE_PROBE_CANDIDATES)
+      : candidates;
+    if (limitedCandidates.length < candidates.length) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[外置字幕探测] 候选过多，按优先级仅探测前 ${limitedCandidates.length} 个`);
+    }
 
     const headers: Record<string, string> = { 'User-Agent': 'VidALL/1.0.0' };
     const sourceHeaders = this.videoData.subtitleHeaders && Object.keys(this.videoData.subtitleHeaders).length > 0
@@ -421,46 +462,57 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
 
     const found: SubtitleTrackItem[] = [];
-    for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i];
-      const url = dirUrl + encodeURIComponent(candidate);
-      const exists = await this.probeUrl(url, headers);
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[外置字幕探测] candidate=${candidate} url=${url} exists=${exists}`);
-      if (!exists) {
-        continue;
+    for (let start = 0; start < limitedCandidates.length; start += SUBTITLE_PROBE_BATCH_SIZE) {
+      const end = Math.min(start + SUBTITLE_PROBE_BATCH_SIZE, limitedCandidates.length);
+      const batchPromises: Array<Promise<boolean>> = [];
+      for (let i = start; i < end; i++) {
+        const probeCandidate = limitedCandidates[i];
+        const probeTarget = dirUrl + encodeURIComponent(probeCandidate);
+        batchPromises.push(this.probeUrl(probeTarget, headers));
       }
 
-      const lower = candidate.toLowerCase();
-      const isSrt = lower.endsWith('.srt');
-      const isAss = lower.endsWith('.ass') || lower.endsWith('.ssa');
-      const isVtt = lower.endsWith('.vtt');
-      if (!isSrt && !isAss && !isVtt) {
-        continue;
-      }
-
-      try {
-        let entries: SrtEntry[] = [];
-        if (isAss) {
-          entries = await this.fetchAss(url, headers);
-        } else {
-          entries = await this.fetchSrt(url, headers);
+      const batchResults = await Promise.all(batchPromises);
+      for (let i = start; i < end; i++) {
+        const candidate = limitedCandidates[i];
+        const url = dirUrl + encodeURIComponent(candidate);
+        const exists = batchResults[i - start];
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[外置字幕探测] candidate=${candidate} url=${sanitizeUrlForLog(url)} exists=${exists}`);
+        if (!exists) {
+          continue;
         }
-        const langLabel = this.extractLangLabel(candidate, baseName);
-        const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
-        const item: SubtitleTrackItem = {
-          kind: 'external',
-          displayName: langLabel.length > 0
-            ? `${langLabel} [外部·${formatLabel}]`
-            : `字幕 [外部·${formatLabel}]`,
-          url,
-          srtEntries: entries
-        };
-        found.push(item);
-      } catch (e) {
-        const err = e as BusinessError;
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `外部字幕处理失败: code=${err.code} msg=${err.message}`);
+
+        const lower = candidate.toLowerCase();
+        const isSrt = lower.endsWith('.srt');
+        const isAss = lower.endsWith('.ass') || lower.endsWith('.ssa');
+        const isVtt = lower.endsWith('.vtt');
+        if (!isSrt && !isAss && !isVtt) {
+          continue;
+        }
+
+        try {
+          let entries: SrtEntry[] = [];
+          if (isAss) {
+            entries = await this.fetchAss(url, headers);
+          } else {
+            entries = await this.fetchSrt(url, headers);
+          }
+          const langLabel = this.extractLangLabel(candidate, baseName);
+          const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
+          const item: SubtitleTrackItem = {
+            kind: 'external',
+            displayName: langLabel.length > 0
+              ? `${langLabel} [外部·${formatLabel}]`
+              : `字幕 [外部·${formatLabel}]`,
+            url,
+            srtEntries: entries
+          };
+          found.push(item);
+        } catch (e) {
+          const err = e as BusinessError;
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `外部字幕处理失败: code=${err.code} msg=${err.message}`);
+        }
       }
     }
 
@@ -518,8 +570,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           reject(err);
           return;
         }
-        if (resp.responseCode !== 200) {
-          reject(new Error(`HTTP ${resp.responseCode}`));
+        if (resp.responseCode !== 200 && resp.responseCode !== 206) {
+          reject(createHttpBusinessError(resp.responseCode, url));
           return;
         }
         const body = decodeSubtitleBytes(resp.result as ArrayBuffer);
@@ -543,8 +595,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           reject(err);
           return;
         }
-        if (resp.responseCode !== 200) {
-          reject(new Error(`HTTP ${resp.responseCode}`));
+        if (resp.responseCode !== 200 && resp.responseCode !== 206) {
+          reject(createHttpBusinessError(resp.responseCode, url));
           return;
         }
         const body = decodeSubtitleBytes(resp.result as ArrayBuffer);
