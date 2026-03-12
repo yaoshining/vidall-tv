@@ -87,7 +87,7 @@ export struct VideoPlayer {
     builder: PlayerSettingsDialog({}),
     customStyle: true,
     backgroundColor: Color.Transparent,
-    maskColor: Color.Transparent,
+    maskColor: '#0000004D',
     width: '100%',
     height: '100%',
     cornerRadius: 0,
