@@ -1,6 +1,7 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import util from '@ohos.util';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
@@ -8,6 +9,58 @@ import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
 
 const TAG = '[SubtitleBridgeAdapter]';
+
+/**
+ * 将字幕文件的原始字节解码为字符串，自动识别 UTF-8（含 BOM）与 GBK 编码。
+ * 判断依据：
+ *   1. 有 UTF-8 BOM（EF BB BF）→ UTF-8
+ *   2. 检测第一个高字节序列是否符合 UTF-8 多字节规则 → UTF-8
+ *   3. 否则视为 GBK（兼容 GB2312 / GB18030）
+ */
+function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(arrayBuffer);
+
+  // 检测 UTF-8 BOM
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    const decoder = new util.TextDecoder('utf-8', { ignoreBOM: true });
+    return decoder.decodeWithStream(new Uint8Array(arrayBuffer));
+  }
+
+  // 启发式检测：扫描前4KB，看是否存在合法的 UTF-8 多字节序列
+  // 若发现非法 UTF-8 序列则判定为 GBK
+  const sampleLen = Math.min(bytes.length, 4096);
+  let isUtf8 = true;
+  let i = 0;
+  while (i < sampleLen) {
+    const b = bytes[i];
+    if (b < 0x80) {
+      i++;
+      continue;
+    }
+    let extraBytes = 0;
+    if ((b & 0xE0) === 0xC0) { extraBytes = 1; }
+    else if ((b & 0xF0) === 0xE0) { extraBytes = 2; }
+    else if ((b & 0xF8) === 0xF0) { extraBytes = 3; }
+    else {
+      // 0x80-0xBF 开头 或 0xF8+ 开头，UTF-8 非法
+      isUtf8 = false;
+      break;
+    }
+    for (let j = 1; j <= extraBytes; j++) {
+      if (i + j >= sampleLen || (bytes[i + j] & 0xC0) !== 0x80) {
+        isUtf8 = false;
+        break;
+      }
+    }
+    if (!isUtf8) { break; }
+    i += 1 + extraBytes;
+  }
+
+  const encoding = isUtf8 ? 'utf-8' : 'gbk';
+  hilog.info(0x0000, TAG, `[decodeSubtitleBytes] 检测编码=${encoding} sampleLen=${sampleLen}`);
+  const decoder = new util.TextDecoder(encoding);
+  return decoder.decodeWithStream(new Uint8Array(arrayBuffer));
+}
 
 export interface SubtitleTrackItem {
   kind: 'internal' | 'external';
@@ -196,8 +249,22 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     const dirUrl = lastSlash >= 0 ? videoUrl.substring(0, lastSlash + 1) : videoUrl + '/';
     const fileName = lastSlash >= 0 ? videoUrl.substring(lastSlash + 1) : videoUrl;
     const cleanFileName = fileName.split('?')[0];
-    const dotIdx = cleanFileName.lastIndexOf('.');
-    const baseName = dotIdx >= 0 ? cleanFileName.substring(0, dotIdx) : cleanFileName;
+    // 视频URL中的文件名可能已经是URL编码形式（如 %E6%9D%83...）
+    // 必须先解码还原为真实文件名，再重新 encodeURIComponent 拼接候选路径
+    // 否则 encodeURIComponent 会对 % 再次编码，产生双重编码（%25E6%259D%2583...）
+    let decodedFileName = cleanFileName;
+    try {
+      decodedFileName = decodeURIComponent(cleanFileName);
+    } catch (e) {
+      decodedFileName = cleanFileName;
+    }
+    const dotIdx = decodedFileName.lastIndexOf('.');
+    const baseName = dotIdx >= 0 ? decodedFileName.substring(0, dotIdx) : decodedFileName;
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[外置字幕探测] videoUrl=${videoUrl}`);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[外置字幕探测] dirUrl=${dirUrl} fileName=${fileName} baseName=${baseName}`);
 
     const subtitleExts: string[] = ['srt', 'ass', 'ssa', 'vtt'];
     const langTags: string[] = [
@@ -219,6 +286,9 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       }
     }
 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[外置字幕探测] 生成 ${candidates.length} 个候选字幕文件`);
+
     const headers: Record<string, string> = { 'User-Agent': 'VidALL/1.0.0' };
     if (this.videoData.httpHeader) {
       const keys = Object.keys(this.videoData.httpHeader);
@@ -233,6 +303,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       const candidate = candidates[i];
       const url = dirUrl + encodeURIComponent(candidate);
       const exists = await this.probeUrl(url, headers);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[外置字幕探测] candidate=${candidate} url=${url} exists=${exists}`);
       if (!exists) {
         continue;
       }
@@ -267,6 +339,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       }
     }
 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[外置字幕探测完成] 找到 ${found.length} 个外置字幕`);
     return found;
   }
 
@@ -298,7 +372,7 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
         header: headers,
         connectTimeout: 10000,
         readTimeout: 15000,
-        expectDataType: http.HttpDataType.STRING
+        expectDataType: http.HttpDataType.ARRAY_BUFFER
       }, (err: BusinessError, resp: http.HttpResponse) => {
         req.destroy();
         if (err) {
@@ -309,7 +383,7 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           reject(new Error(`HTTP ${resp.responseCode}`));
           return;
         }
-        const body = resp.result as string;
+        const body = decodeSubtitleBytes(resp.result as ArrayBuffer);
         resolve(SrtParser.parse(body));
       });
     });
@@ -323,7 +397,7 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
         header: headers,
         connectTimeout: 10000,
         readTimeout: 15000,
-        expectDataType: http.HttpDataType.STRING
+        expectDataType: http.HttpDataType.ARRAY_BUFFER
       }, (err: BusinessError, resp: http.HttpResponse) => {
         req.destroy();
         if (err) {
@@ -334,7 +408,7 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           reject(new Error(`HTTP ${resp.responseCode}`));
           return;
         }
-        const body = resp.result as string;
+        const body = decodeSubtitleBytes(resp.result as ArrayBuffer);
         resolve(AssFileParser.parse(body));
       });
     });
@@ -343,22 +417,10 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
 export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
-    const items: SubtitleTrackItem[] = [];
-    if (!this.videoData || !this.videoData.presetSubtitleTracks) {
-      return items;
-    }
-
-    const presets = this.videoData.presetSubtitleTracks;
-    for (let i = 0; i < presets.length; i++) {
-      const p = presets[i];
-      const item: SubtitleTrackItem = {
-        kind: 'internal',
-        displayName: p.displayName,
-        internalIndex: p.trackIndex
-      };
-      items.push(item);
-    }
-    return items;
+    // 隐藏内嵌字幕以避免长时间的字幕提取等待
+    // 扫描时仍然会保存所有轨道信息到数据库（供未来优化使用）
+    // 运行时只通过 loadExternalTracks() 加载外置字幕
+    return [];
   }
 }
 
