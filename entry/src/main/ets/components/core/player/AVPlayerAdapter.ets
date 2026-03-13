@@ -240,6 +240,10 @@ export class AVPlayerAdapter implements IPlayer {
     this._onSubtitleUpdateCb = callback;
   }
 
+  onBuffering(_callback: (isBuffering: boolean) => void): void {
+    // AVPlayer 现阶段仍由控制器基于现有 ready/play 事件维护 loading，不在适配器层追加映射。
+  }
+
   // ─── 内部实现 ───
 
   /**

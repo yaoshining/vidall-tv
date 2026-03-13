@@ -1,0 +1,6 @@
+{
+  "name": "libvidall_core_player_napi.so",
+  "types": "./index.d.ts",
+  "version": "0.0.1",
+  "description": "VidAll TV native player skeleton types"
+}

@@ -1,9 +1,10 @@
 import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
-import { VideoPlayerController } from "./VideoPlayerController"
+import { VideoPlayerController, type PlayerBackend } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
+import { millisecondsToTime } from "../../../utils/TimeUtil"
 
 @ComponentV2
 export struct VideoPlayer {
@@ -15,16 +16,16 @@ export struct VideoPlayer {
   @Require @Param data: VideoData
   @Local controlsOpened: boolean = false
   @Param autoPlay: boolean = false
-  /** 镜像 controller.backend，用于驱动 if/else XComponent 分支重建 */
-  @Local useIjkPlayer: boolean = false
+  /** 镜像 controller.backend，用于驱动多后端分支重建 */
+  @Local backendMode: PlayerBackend = 'avplayer'
 
   @Monitor('controller.backend')
   onBackendChange(): void {
     this.clearIjkInitTimer()
-    this.useIjkPlayer = this.controller.backend === 'ijkplayer'
+    this.backendMode = this.controller.backend
     // backend 切换后允许新分支重新初始化。
     this.initMode = ''
-    console.info(`[VideoPlayer] backend 变更 → useIjkPlayer=${this.useIjkPlayer}`)
+    console.info(`[VideoPlayer] backend 变更 → ${this.backendMode}`)
   }
 
   private tryMarkInit(mode: string): boolean {
@@ -291,6 +292,14 @@ export struct VideoPlayer {
     }
   }
 
+  private mergeSubtitleLineText(line: SubtitleSegment[]): string {
+    let merged = ''
+    for (let i = 0; i < line.length; i++) {
+      merged += line[i].text
+    }
+    return merged
+  }
+
   /**
    * 字幕渲染器 - 纯 UI 渲染
    */
@@ -299,28 +308,18 @@ export struct VideoPlayer {
     if (this.parsedSubtitle && this.parsedSubtitle.lines.length > 0) {
       Column({ space: 6 }) {
         ForEach(this.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
-          Row({ space: 2 }) {
-            ForEach(line, (segment: SubtitleSegment, segmentIndex: number) => {
-              Text(segment.text)
-                // .fontSize(segment.fontSize || 20)
-                .fontSize(30)
-                .lineHeight(34)
-                .fontColor(segment.fontColor || Color.White)
-                .fontWeight(segment.bold ? FontWeight.Bold : FontWeight.Normal)
-                .fontStyle(segment.italic ? FontStyle.Italic : FontStyle.Normal)
-                .decoration({
-                  type: segment.underline ? TextDecorationType.Underline : TextDecorationType.None,
-                  color: segment.fontColor || Color.White
-                })
-                .textShadow({
-                  radius: 3,
-                  offsetX: 3,
-                  offsetY: 3,
-                  color: Color.Black
-                })
-            }, (segment: SubtitleSegment, index: number) => `segment-${lineIndex}-${index}-${this.controller.subtitleUpdateCounter}`)
-          }
-          .justifyContent(FlexAlign.Center)
+          Text(this.mergeSubtitleLineText(line))
+            .fontSize(30)
+            .lineHeight(34)
+            .fontColor(Color.White)
+            .fontWeight(FontWeight.Normal)
+            .textAlign(TextAlign.Center)
+            .textShadow({
+              radius: 3,
+              offsetX: 3,
+              offsetY: 3,
+              color: Color.Black
+            })
         }, (line: SubtitleSegment[], index: number) => `line-${index}-${this.controller.subtitleUpdateCounter}`)
       }
       .padding({ left: 20, right: 20, top: 8, bottom: 8 })
@@ -329,8 +328,8 @@ export struct VideoPlayer {
 
   build() {
     Stack() {
-      // AVPlayer 内核：使用 XComponentController 获取 surfaceId
-      if (!this.useIjkPlayer) {
+      if (this.backendMode === 'avplayer') {
+        // AVPlayer 内核：使用 XComponentController 获取 surfaceId
         XComponent({
           id: 'playerXComponent',
           type: XComponentType.SURFACE,
@@ -369,7 +368,7 @@ export struct VideoPlayer {
           .height("100%")
           .renderFit(RenderFit.RESIZE_CONTAIN)
           .backgroundColor(Color.Black)
-      } else {
+      } else if (this.backendMode === 'ijkplayer') {
         // IjkPlayer 内核：必须用 libraryname 模式，不能用 XComponentController
         // ⚠️ libraryname 模式的 XComponent 原生层会抢占触摸事件，onClick/gesture 无效，
         //    需要在上方叠加透明触摸层来拦截交互。
@@ -405,7 +404,7 @@ export struct VideoPlayer {
                 }).catch((err: Error) => {
                   console.error(`[VideoPlayer] ijk init 异常: ${err.message}`)
                   this.resetInitMode()
-                  this.useIjkPlayer = false
+                  this.backendMode = 'avplayer'
                 })
               }, 100)
             })
@@ -436,6 +435,90 @@ export struct VideoPlayer {
         }
         .width("100%")
         .height("100%")
+      } else if (this.backendMode === 'native') {
+        Stack() {
+          XComponent({
+            id: 'nativePlayerXComponent',
+            type: XComponentType.SURFACE,
+            libraryname: 'vidall_core_player_napi'
+          })
+            .onLoad((context: object) => {
+              if (!this.tryMarkInit('native')) {
+                return
+              }
+              emitter.once(PlayerEvents.PREPARED, () => {
+                if (this.autoPlay) {
+                  this.controller.play()
+                } else {
+                  this.controlsDialogController.open()
+                }
+              })
+              this.clearIjkInitTimer()
+              this.ijkInitTimer = setTimeout(() => {
+                this.ijkInitTimer = undefined
+                if (this.controller.backend !== 'native' || this.initMode !== 'native') {
+                  this.resetInitMode()
+                  return
+                }
+                this.surfaceId = 'nativePlayerXComponent'
+                this.controller.initPlayer(this.data, this.surfaceId).then(() => {
+                  this.controller.setNativeContext(context, 'nativePlayerXComponent')
+                }).catch((err: Error) => {
+                  console.error(`[VideoPlayer] native init 异常: ${err.message}`)
+                  this.resetInitMode()
+                  this.backendMode = 'avplayer'
+                })
+              }, 100)
+            })
+            .width("100%")
+            .height("100%")
+            .renderFit(RenderFit.RESIZE_CONTAIN)
+            .backgroundColor(Color.Black)
+
+          Stack()
+            .width("100%")
+            .height("100%")
+            .backgroundColor(Color.Transparent)
+            .onClick(async () => {
+              await this.controller.pause()
+              this.controlsDialogController.open()
+            })
+            .gesture(
+              SwipeGesture()
+                .onAction((event: SwipeGestureEvent) => {
+                  if (!this.controlsOpened) {
+                    this.controlsDialogController.open()
+                  } else {
+                    console.log('swipe direction: ' + JSON.stringify(event))
+                  }
+                })
+            )
+        }
+        .width("100%")
+        .height("100%")
+      } else {
+        Column({ space: 12 }) {
+          Text('FFmpeg 实验后端已下线')
+            .fontSize(24)
+            .fontColor(Color.White)
+            .fontWeight(FontWeight.Medium)
+          Text('当前版本已恢复到 AVPlayer / IjkPlayer 主播放方案。')
+            .fontSize(16)
+            .fontColor('#B3FFFFFF')
+          Text('FFmpeg 相关代码已保留，但不再进入主路径。')
+            .fontSize(14)
+            .fontColor('#80FFFFFF')
+        }
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .width("100%")
+        .height("100%")
+        .backgroundColor(Color.Black)
+        .onAppear(() => {
+          this.resetInitMode()
+          this.controller.backend = 'ijkplayer'
+          this.backendMode = 'ijkplayer'
+        })
       }
 
       // 字幕显示层 - 使用字幕渲染器支持多种格式
@@ -452,7 +535,17 @@ export struct VideoPlayer {
     .backgroundColor(Color.Black)
   }
 
+  aboutToAppear(): void {
+    this.backendMode = this.controller.backend
+    this.initMode = ''
+    emitter.on(PlayerEvents.COMPLETED, () => {
+      this.clearIjkInitTimer()
+      this.controlsDialogController.open()
+    })
+  }
+
   aboutToDisappear(): void {
     this.clearIjkInitTimer()
+    emitter.off(PlayerEvents.COMPLETED.eventId)
   }
 }

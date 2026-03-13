@@ -125,6 +125,7 @@ export struct FileExplorerPage {
 
     let presetAudioTracks: PresetAudioTrack[] = [];
     let presetSubtitleTracks: PresetSubtitleTrack[] = [];
+    let durationHintMs: number = 0;
     // DB 是否有确定性数据（NULL 表示未扫描，'[]' 表示已扫描但无轨道）
     let dbHasAudioData = false;
     let dbHasSubtitleData = false;
@@ -142,6 +143,9 @@ export struct FileExplorerPage {
           ` audioTracksJson=${audioJsonPreview}` +
           ` subtitleTracksJson=${subJsonPreview}`
         );
+        if (videoEntity.durationMs !== undefined && videoEntity.durationMs !== null && videoEntity.durationMs > 0) {
+          durationHintMs = videoEntity.durationMs;
+        }
         // 音轨（audioTracksJson 不为 null 表示已经探测过，哪怕结果为空数组）
         if (videoEntity.audioTracksJson !== null && videoEntity.audioTracksJson !== undefined) {
           dbHasAudioData = true;
@@ -207,12 +211,13 @@ export struct FileExplorerPage {
     );
 
     // ── Fallback：DB 无确定性数据时，实时 ffprobe 探测补全 ──
-    // 若 DB 已有记录（哪怕轨道数为 0），说明文件已被扫描，不重复探测。
-    // 若 DB 缺少任一类型的记录（NULL），则 ffprobe 一次性补全两种数据。
-    if (!dbHasAudioData || !dbHasSubtitleData) {
+    // 若 DB 已有记录（哪怕轨道数为 0），通常可跳过探测。
+    // 但若缺少时长提示（durationHintMs<=0），仍需 ffprobe 补齐时长，供 native 骨架进度条/seek 上限使用。
+    if (!dbHasAudioData || !dbHasSubtitleData || durationHintMs <= 0) {
       console.info(
         `[playVideo] 触发 ffprobe fallback:` +
         ` dbHasAudioData=${dbHasAudioData} dbHasSubtitleData=${dbHasSubtitleData}` +
+        ` durationHintMs=${durationHintMs}` +
         ` encodedUrl="${encodeURI(url).substring(0, 80)}"`
       );
       try {
@@ -223,6 +228,9 @@ export struct FileExplorerPage {
             ` 字幕轨=${probeResult.subtitleTracks.length}` +
             ` 格式=${probeResult.formatName ?? '?'} 时长=${probeResult.durationText}`
           );
+          if (durationHintMs <= 0 && probeResult.durationMs > 0) {
+            durationHintMs = probeResult.durationMs;
+          }
           // 仅补全 DB 未记录的部分
           if (!dbHasAudioData) {
             for (let i = 0; i < probeResult.audioTracks.length; i++) {
@@ -278,6 +286,7 @@ export struct FileExplorerPage {
       url: encodeURI(url),
       httpHeader: httpHeader,
       title: displayName,
+      durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
       presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
       presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
     };

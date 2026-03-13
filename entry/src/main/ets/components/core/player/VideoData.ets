@@ -32,6 +32,8 @@ export interface PresetSubtitleTrack {
 export interface VideoData {
   type: VideoDataType;
   videoSrc: string;
+  /** 视频时长提示（毫秒），用于 native 骨架在早期阶段提供进度条/seek 上限 */
+  durationHintMs?: number;
   httpHeader?: Record<string, string>;
   name?: ResourceStr;
   description?: ResourceStr;
@@ -60,4 +62,18 @@ export interface VideoData {
    * 供 VideoPlayerController 在 onReady 后直接展示字幕选项，无需等待 getTrackInfos()。
    */
   presetSubtitleTracks?: PresetSubtitleTrack[];
+
+  /**
+   * ffmpeg 软解目标声道数（可选）。
+   * - 1: 单声道
+   * - 2: 立体声
+   * - 6: 5.1
+   * - 8: 7.1
+   */
+  ffmpegDecodeChannels?: number;
+
+  /**
+   * 音频探测摘要（可选），用于调试/日志展示。
+   */
+  audioProbeSummary?: string;
 }

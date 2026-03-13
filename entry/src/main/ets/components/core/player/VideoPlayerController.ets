@@ -7,9 +7,11 @@ import { millisecondsToTime } from "../../../utils/TimeUtil";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
+import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeUtil } from "../../../utils/FfprobeUtil";
+import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
 import {
   AvSubtitleBridgeAdapter,
   IjkSubtitleBridgeAdapter,
@@ -22,9 +24,79 @@ import {
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
 /** 播放内核类型 */
-export type PlayerBackend = 'avplayer' | 'ijkplayer';
+export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
 
 const TAG = '[VideoPlayerController]';
+const GENERIC_SYSTEM_ERROR = 'system error';
+const DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED = false;
+const NATIVE_READY_GUARD_MS = 3500;
+const ENABLE_SESSION_DIAG_LOG = false;
+const FFMPEG_PREVIEW_RENDER_FPS = 8;
+const FFMPEG_PREVIEW_CHUNK_SECONDS = 0.8;
+const FFMPEG_PREVIEW_LOW_WATERMARK_FRAMES = 5;
+const FFMPEG_PREVIEW_MAX_QUEUE_FRAMES = 18;
+const FFMPEG_PREVIEW_DECODE_TIMEOUT_MS = 4000;
+const FFMPEG_PREVIEW_MAX_WIDTH = 640;
+const FFMPEG_PREVIEW_JPEG_QUALITY = 8;
+const FFMPEG_PREVIEW_LEAD_SECONDS = 0.1;
+const FFMPEG_PREVIEW_SYNC_OFFSET_MS = 80;
+const FFMPEG_PREVIEW_MAX_LAG_DROP_MS = 240;
+const FFMPEG_PREVIEW_STALL_STEP_MAX_MS = 1200;
+const FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS = 400;
+const FFMPEG_PREVIEW_EXTRACT_STUCK_MS = 1500;
+const FFMPEG_PREVIEW_EXTRACT_HARD_TIMEOUT_MS = 6500;
+const FFMPEG_PREVIEW_SINGLE_FRAME_INTERVAL_MS = 180;
+const FFMPEG_PREVIEW_FORCE_RESTART_INTERVAL_MS = 2200;
+const FFMPEG_PREVIEW_FORCE_RESTART_LAG_MS = 1800;
+const FFMPEG_PREVIEW_FORCE_RESTART_SAME_TICKS = 10;
+const FFMPEG_PREVIEW_EMPTY_QUEUE_CATCHUP_INTERVAL_MS = 600;
+const ENABLE_FFMPEG_PREVIEW_DIAG_LOG = true;
+const FFMPEG_PREVIEW_DIAG_LOG_INTERVAL_MS = 1000;
+
+interface FfmpegQueuedFrame {
+  uri: string;
+  ptsMs: number;
+}
+
+interface AudioRoutingDecision {
+  preferredBackend: PlayerBackend;
+  fallback: UnsupportedFormatFallback;
+  preferredChannels: number;
+  summary: string;
+  detectedCodec: string;
+  detectedChannels: number;
+  hardSupported: boolean;
+}
+
+interface PresetAudioHint {
+  codecName: string;
+  channels: number;
+}
+
+interface NativeXComponentFallbackContext {
+}
+
+const SYSTEM_HARD_PREFERRED_CODECS: string[] = [
+  'aac', 'mp3', 'opus', 'flac', 'pcm', 'vorbis'
+];
+
+// 这些格式在当前 TV 机型上更容易触发 AVPlayer 不支持，先走软解兜底更稳。
+const SYSTEM_SOFT_FALLBACK_CODECS: string[] = [
+  'ac3(dolby digital)',
+  'eac3(dolby digital plus/atmos)',
+  'truehd(dolby truehd/atmos)',
+  'dts/dts-hd',
+  'mlp',
+  'audio vivid'
+];
+
+// 声道能力提示用于日志和后续 UI 展示，不代表设备一定能成功输出该布局。
+const SUPPORTED_CHANNEL_LAYOUT_HINTS: string[] = [
+  'mono(1.0)',
+  'stereo(2.0)',
+  '5.1(6ch, best effort)',
+  '7.1(8ch, best effort)'
+];
 
 // ─────────────────────────────────────────────
 // 音轨条目
@@ -44,17 +116,25 @@ export interface AudioTrackItem {
   mimeType?: string;
 }
 
+export type UnsupportedFormatFallback = 'ijkplayer' | 'native';
+
 @ObservedV2
 export class VideoPlayerController {
   /**
    * 播放内核选择，默认 'avplayer'。
    * 切换为 'ijkplayer' 后，VideoPlayer UI 层需要使用 libraryname='ijkplayer_napi'
    * 的 XComponent，并在 onLoad 回调中调用 controller.setIjkContext(context, id)。
+    * 切换为 'native' 后，使用原生 so 播放器骨架适配器（当前阶段仅框架接入）。
+    * 'ffmpeg' 后端已停止主路径接入，仅保留代码供后续参考。
    */
-  @Trace backend: PlayerBackend = 'avplayer';
+  @Trace backend: PlayerBackend = 'native';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
+  /** AVPlayer 遇到不支持格式时，自动回退的后端类型 */
+  @Trace unsupportedFormatFallback: UnsupportedFormatFallback = 'native';
+  /** 是否已由外部显式设置回退策略（为 true 时不再自动覆盖） */
+  private unsupportedFallbackLockedByUser: boolean = false;
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
   @Trace duration = 0
@@ -64,6 +144,11 @@ export class VideoPlayerController {
   @Trace currentTime = 0
   @Trace currentBufferTime = 0
   @Trace isLoading = false
+  @Trace lastErrorMessage: string = ''
+  /** 音频能力探测文案（用于 UI 展示） */
+  @Trace audioCapabilityText: string = ''
+  /** ffmpeg 模式首帧预览图（file:// URI） */
+  @Trace ffmpegPreviewUri: string = ''
   @Trace progress = 0
   /** 内嵌字幕轨道列表（来自 getTrackInfos） */
   @Trace subtitleTracks: TrackInfo[] = []
@@ -95,17 +180,128 @@ export class VideoPlayerController {
   progressContext: PlayProgressEntity | null = null;
   /** 10s 防抖进度写入定时器 */
   private progressTimer?: number;
+  /** 播放会话编号：每次 initPlayer 自增，用于忽略旧实例回调 */
+  private playbackSessionId: number = 0;
+  /** 时间回退诊断：记录最近一次 timeUpdate 值 */
+  private lastTimeUpdateMs: number = -1;
+  /** duration 未就绪时 seek 的诊断日志节流 */
+  private lastSeekDurationUnknownLogMs: number = 0;
+  /** native seek 诊断开关（默认关闭） */
+  private nativeSeekDiagLogEnabled: boolean = DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED;
+  /** native 初始化就绪保护定时器：超时后自动回退到 ijkplayer */
+  private nativeReadyGuardTimer?: number;
+  /** native 自动回退到 ijkplayer 时，待恢复的播放进度 */
+  private pendingBackendResumeTimeMs: number = -1;
+  /** native 自动回退后，是否在 seek 完成后自动续播 */
+  private pendingBackendResumePlay: boolean = false;
+  /** 一次性控制：本次 seek 完成后不自动恢复播放 */
+  private suppressPlayAfterSeekOnce: boolean = false;
+  /** ffmpeg 动态预览：当前是否正在抽帧 */
+  private ffmpegPreviewExtracting: boolean = false;
+  /** ffmpeg 连续预览：渲染定时器 */
+  private ffmpegRenderTimer?: number;
+  /** ffmpeg 连续预览：待渲染帧队列 */
+  private ffmpegFrameQueue: FfmpegQueuedFrame[] = [];
+  /** ffmpeg 连续预览：当前解码到的媒体时间（毫秒） */
+  private ffmpegDecodedUntilMs: number = 0;
+  /** ffmpeg 连续预览：流水号，用于隔离旧解码回调 */
+  private ffmpegPipelineToken: number = 0;
+  /** ffmpeg 连续预览：上一帧渲染时刻（系统时间） */
+  private ffmpegLastRenderTickAtMs: number = 0;
+  /** ffmpeg 连续预览：最近一次观测到的播放时间 */
+  private ffmpegLastObservedPlaybackMs: number = -1;
+  /** ffmpeg 连续预览：播放时钟停滞时的兜底推进量 */
+  private ffmpegStallAdvanceMs: number = 0;
+  /** ffmpeg 连续预览：下次允许解码的最早时间（系统时间） */
+  private ffmpegNextDecodeAllowedAtMs: number = 0;
+  /** ffmpeg 连续预览：诊断日志节流 */
+  private ffmpegLastDiagLogAtMs: number = 0;
+  /** ffmpeg 连续预览：最近一次渲染到 UI 的帧 URI */
+  private ffmpegLastRenderedUri: string = '';
+  /** ffmpeg 连续预览：最近一次渲染帧的 pts */
+  private ffmpegLastRenderedPtsMs: number = -1;
+  /** ffmpeg 连续预览：同一帧连续命中次数 */
+  private ffmpegSameFrameTicks: number = 0;
+  /** ffmpeg 连续预览：当前 chunk 解码启动时刻 */
+  private ffmpegExtractStartAtMs: number = 0;
+  /** ffmpeg 连续预览：解码卡住时的单帧追帧是否进行中 */
+  private ffmpegCatchupExtracting: boolean = false;
+  /** ffmpeg 连续预览：上次强制重启解码时间（系统时间） */
+  private ffmpegLastForceRestartAtMs: number = 0;
+  /** ffmpeg 连续预览：空队列追帧节流时间（系统时间） */
+  private ffmpegLastEmptyQueueCatchupAtMs: number = 0;
+  /** ffmpeg 连续预览：远程 chunk 不稳定时切到单帧模式 */
+  private ffmpegSingleFrameMode: boolean = false;
 
   /**
    * 初始化播放器。
    * - backend='avplayer'：直接用 surfaceId 初始化，与之前行为一致。
    * - backend='ijkplayer'：创建 IjkPlayerAdapter，surfaceId 暂时忽略，
    *   需要 VideoPlayer UI 层在 XComponent.onLoad 里调用 setIjkContext()。
+    * - backend='native'：创建 VidAllPlayerAdapter，等待 UI 层在 XComponent.onLoad 里绑定 context。
+    * - backend='ffmpeg'：已禁用主路径接入，收到后自动回退 ijkplayer。
    */
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
+    this.playbackSessionId += 1;
+    const currentSessionId = this.playbackSessionId;
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
     this.surfaceId = surfaceId;
+    this.lastTimeUpdateMs = -1;
+    this.ffmpegPreviewExtracting = false;
+    this.stopFfmpegRenderTimer();
+    this.ffmpegFrameQueue = [];
+    this.ffmpegDecodedUntilMs = 0;
+    this.ffmpegPipelineToken += 1;
+    this.ffmpegLastRenderTickAtMs = 0;
+    this.ffmpegLastObservedPlaybackMs = -1;
+    this.ffmpegStallAdvanceMs = 0;
+    this.ffmpegNextDecodeAllowedAtMs = 0;
+    this.ffmpegLastDiagLogAtMs = 0;
+    this.ffmpegLastRenderedUri = '';
+    this.ffmpegLastRenderedPtsMs = -1;
+    this.ffmpegSameFrameTicks = 0;
+    this.ffmpegExtractStartAtMs = 0;
+    this.ffmpegCatchupExtracting = false;
+    this.ffmpegLastForceRestartAtMs = 0;
+    this.ffmpegLastEmptyQueueCatchupAtMs = 0;
+    this.ffmpegSingleFrameMode = false;
+    this.clearNativeReadyGuardTimer();
+    const shouldPreserveBackendResume = this.backend === 'ijkplayer' && this.pendingBackendResumeTimeMs >= 0;
+    if (!shouldPreserveBackendResume) {
+      this.pendingBackendResumeTimeMs = -1;
+      this.pendingBackendResumePlay = false;
+    }
+    this.suppressPlayAfterSeekOnce = false;
+    if (ENABLE_SESSION_DIAG_LOG) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[session=${currentSessionId}] initPlayer start backend=${this.backend}`);
+    }
+
+    // 先重置可展示状态，避免复用上次播放残留。
+    this.audioCapabilityText = '';
+    this.ffmpegPreviewUri = '';
+
+    // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
+    if (!this.unsupportedFallbackLockedByUser) {
+      const decision = await this.resolveAudioRoutingDecision(videoData);
+      this.unsupportedFormatFallback = decision.fallback;
+      videoData.ffmpegDecodeChannels = decision.preferredChannels;
+      videoData.audioProbeSummary = decision.summary;
+      if (this.backend === 'avplayer' || this.backend === 'ffmpeg') {
+        this.backend = decision.preferredBackend;
+      }
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
+        `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
+      this.logAudioCapabilityReport(decision);
+    }
+
+    if (this.backend === 'ffmpeg') {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'ffmpeg 播放后端已从主路径下线，自动回退到 ijkplayer');
+      this.backend = 'ijkplayer';
+    }
 
     // 释放旧 player
     if (this.player) {
@@ -119,6 +315,7 @@ export class VideoPlayerController {
     this.duration = 0;
     this.currentTime = 0;
     this.progress = 0;
+    this.lastErrorMessage = '';
     this.subtitleAdapter.release();
     this.subtitleAdapter = new NoSubtitleBridgeAdapter();
     this.currentSubtitleText = '';
@@ -159,6 +356,14 @@ export class VideoPlayerController {
         'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
       adapter = new IjkPlayerAdapter();
       this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
+    } else if (this.backend === 'native') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: 使用 VidAll Player Adapter，等待 UI 层调用 setNativeContext()');
+      const nativeAdapter = new VidAllPlayerAdapter();
+      nativeAdapter.setSeekDiagEnabled(this.nativeSeekDiagLogEnabled);
+      adapter = nativeAdapter;
+      // native 骨架阶段先复用 IJK 字幕桥：隐藏内嵌轨，仅启用外置字幕时间轴。
+      this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
@@ -167,33 +372,106 @@ export class VideoPlayerController {
     }
 
     // 注册所有 IPlayer 事件回调
-    adapter.onReady(() => this.onPlayerReady());
+    adapter.onReady(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[session=${currentSessionId}] 忽略过期 onReady`);
+        return;
+      }
+      this.onPlayerReady();
+    });
     adapter.onPlay(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[session=${currentSessionId}] 忽略过期 onPlay`);
+        return;
+      }
       this.isPlaying = true;
       this.isLoading = false;
+      // 成功播放后清理历史错误，避免底部长期显示旧报错。
+      this.lastErrorMessage = '';
+      if (ENABLE_SESSION_DIAG_LOG) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[session=${currentSessionId}] onPlay`);
+      }
       this.resumeSubtitleTimer();
       this.startProgressTimer();
+      if (this.backend === 'ffmpeg') {
+        this.startFfmpegRenderTimer();
+        this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
+      }
       emitter.emit(PlayerEvents.PLAYING);
     });
     adapter.onPaused(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
       this.isPlaying = false;
       this.pauseSubtitleTimer();
       this.stopProgressTimer();
       this.saveProgressNow();
+      if (this.backend === 'ffmpeg') {
+        this.stopFfmpegRenderTimer();
+      }
     });
     adapter.onCompleted(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
       this.isPlaying = false;
+      this.isLoading = false;
+      if (this.duration > 0) {
+        this.currentTime = this.duration;
+        this.progress = 1;
+      }
       this.stopProgressTimer();
       this.saveProgressNow();
+      if (this.backend === 'ffmpeg') {
+        this.stopFfmpegRenderTimer();
+      }
+      emitter.emit(PlayerEvents.COMPLETED);
     });
     adapter.onStopped(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
       this.isPlaying = false;
       this.stopProgressTimer();
+      if (this.backend === 'ffmpeg') {
+        this.stopFfmpegRenderTimer();
+      }
     });
     adapter.onTimeUpdate((currentTime: number) => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
+      const backwardDelta = this.lastTimeUpdateMs - currentTime;
+      const shouldWarnRollback = this.lastTimeUpdateMs >= 0 &&
+        !this.isSeeking &&
+        this.lastTimeUpdateMs > 1000 &&
+        currentTime > 0 &&
+        backwardDelta > 1000;
+      if (shouldWarnRollback) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[session=${currentSessionId}] timeUpdate 回退: prev=${this.lastTimeUpdateMs} now=${currentTime}`);
+      }
+      this.lastTimeUpdateMs = currentTime;
       this.currentTime = currentTime;
+      if (this.lastErrorMessage.length > 0 && this.isPlaying) {
+        this.lastErrorMessage = '';
+      }
+      const playerDuration = this.player?.duration ?? 0;
+      if (playerDuration > 0) {
+        this.duration = playerDuration;
+      }
       this.progress = this.duration > 0 ? currentTime / this.duration : 0;
+      if (this.backend === 'ffmpeg' && this.isPlaying) {
+        this.scheduleFfmpegDecodeIfNeeded(currentTime);
+      }
       this.subtitleAdapter.onTimeUpdate(currentTime);
+      if (this.backend === 'native' && this.isPlaying && currentTime > 0) {
+        this.clearNativeReadyGuardTimer();
+      }
       const subtitleState = this.subtitleAdapter.getState();
       if (subtitleState.hasExternalActive) {
         this.applySubtitleBridgeState(subtitleState);
@@ -201,33 +479,60 @@ export class VideoPlayerController {
       this.logSubtitleTimeline(currentTime);
     });
     adapter.onError((error: Error) => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
       this.isLoading = false;
+      this.lastErrorMessage = this.normalizePlayerError(error.message);
+    });
+    adapter.onBuffering((isBuffering: boolean) => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
+      this.isLoading = isBuffering;
+      if (!isBuffering && this.lastErrorMessage.length > 0) {
+        this.lastErrorMessage = '';
+      }
     });
     adapter.onUnsupportedFormat(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
+      const targetBackend: PlayerBackend = this.unsupportedFormatFallback;
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'AVPlayer 不支持当前格式，自动切换到 IjkPlayer...');
+        `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
       // 先把 player 引用清空，防止后续调用
       const oldPlayer = this.player;
       this.player = undefined;
-      // 切换 backend（@Trace），触发 VideoPlayer UI 重建 → ijkPlayer XComponent.onLoad 触发
-      this.backend = 'ijkplayer';
+      // 切换 backend（@Trace），触发 VideoPlayer UI 重建。
+      this.backend = targetBackend;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'backend 已切换为 ijkplayer，等待 UI 层 XComponent 重建...');
+        `backend 已切换为 ${targetBackend}，等待 UI 层重建...`);
       // 异步释放旧 player（不等待，不影响切换流程）
       oldPlayer?.release().catch(() => {});
     });
     adapter.onSeekDone(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
       if (this.timeToSeek >= 0) {
         adapter.seek(this.timeToSeek);
         this.timeToSeek = -1;
       } else {
-        this.player?.play().catch(() => {});
+        if (this.suppressPlayAfterSeekOnce) {
+          this.suppressPlayAfterSeekOnce = false;
+        } else {
+          this.player?.play().catch(() => {});
+        }
       }
       this.isSeeking = false;
     });
     adapter.onSubtitleUpdate((info) => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
       // 外部字幕激活时屏蔽内嵌回调
       if (this.subtitleAdapter.getState().hasExternalActive) {
         return;
@@ -259,6 +564,9 @@ export class VideoPlayerController {
       // VideoPlayer.ets 的 onLoad 回调会调用 setIjkContext() 来完成真正的 init
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
+    } else if (this.backend === 'native') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'VidAll Player Adapter 已创建，等待 UI 层 setNativeContext() 绑定 XComponent...');
     } else {
       try {
         await adapter.init(videoData, surfaceId);
@@ -268,6 +576,459 @@ export class VideoPlayerController {
           `init 失败: code=${err.code} msg=${err.message}`);
       }
     }
+  }
+
+  private prepareFfmpegPreview(videoData: VideoData): void {
+    this.ffmpegFrameQueue = [];
+    this.ffmpegDecodedUntilMs = 0;
+    this.ffmpegPreviewExtracting = false;
+    this.ffmpegLastRenderTickAtMs = 0;
+    this.ffmpegLastObservedPlaybackMs = -1;
+    this.ffmpegStallAdvanceMs = 0;
+    this.ffmpegNextDecodeAllowedAtMs = 0;
+    this.ffmpegLastDiagLogAtMs = 0;
+    this.ffmpegLastRenderedUri = '';
+    this.ffmpegLastRenderedPtsMs = -1;
+    this.ffmpegSameFrameTicks = 0;
+    this.ffmpegExtractStartAtMs = 0;
+    this.ffmpegCatchupExtracting = false;
+    this.ffmpegLastForceRestartAtMs = 0;
+    this.ffmpegLastEmptyQueueCatchupAtMs = 0;
+    this.ffmpegSingleFrameMode = false;
+    const token = ++this.ffmpegPipelineToken;
+    this.decodeFfmpegFrameChunk(videoData, 100, token);
+  }
+
+  private startFfmpegRenderTimer(): void {
+    if (this.ffmpegRenderTimer !== undefined) {
+      return;
+    }
+    const renderIntervalMs = Math.max(60, Math.floor(1000 / FFMPEG_PREVIEW_RENDER_FPS));
+    this.ffmpegLastRenderTickAtMs = Date.now();
+    this.ffmpegLastObservedPlaybackMs = this.currentTime;
+    this.ffmpegStallAdvanceMs = 0;
+    this.ffmpegRenderTimer = setInterval(() => {
+      const now = Date.now();
+      const tickDeltaMs = Math.max(0, now - this.ffmpegLastRenderTickAtMs);
+      this.ffmpegLastRenderTickAtMs = now;
+
+      if (this.currentTime > this.ffmpegLastObservedPlaybackMs + 5) {
+        this.ffmpegLastObservedPlaybackMs = this.currentTime;
+        this.ffmpegStallAdvanceMs = 0;
+      } else if (this.isPlaying) {
+        const stalled = this.ffmpegStallAdvanceMs + tickDeltaMs;
+        this.ffmpegStallAdvanceMs = Math.min(FFMPEG_PREVIEW_STALL_STEP_MAX_MS, stalled);
+      }
+
+      const targetPtsMs = Math.max(0,
+        this.currentTime + FFMPEG_PREVIEW_SYNC_OFFSET_MS + this.ffmpegStallAdvanceMs);
+
+      // 丢弃明显落后的旧帧，避免“停一下再跳一下”。
+      while (this.ffmpegFrameQueue.length > 1 &&
+        targetPtsMs - this.ffmpegFrameQueue[0].ptsMs > FFMPEG_PREVIEW_MAX_LAG_DROP_MS) {
+        this.ffmpegFrameQueue.shift();
+      }
+
+      // 选择不超过目标时钟的最新帧进行渲染。
+      while (this.ffmpegFrameQueue.length > 1 && this.ffmpegFrameQueue[1].ptsMs <= targetPtsMs) {
+        this.ffmpegFrameQueue.shift();
+      }
+
+      // 队列只剩 1 帧且严重落后时，主动淘汰以触发空队列追帧。
+      if (this.ffmpegFrameQueue.length === 1 &&
+        targetPtsMs - this.ffmpegFrameQueue[0].ptsMs > FFMPEG_PREVIEW_MAX_LAG_DROP_MS * 2) {
+        this.ffmpegFrameQueue.shift();
+      }
+
+      if (this.ffmpegFrameQueue.length > 0) {
+        const currentFrame = this.ffmpegFrameQueue[0];
+        if (currentFrame.uri === this.ffmpegLastRenderedUri) {
+          this.ffmpegSameFrameTicks += 1;
+        } else {
+          this.ffmpegSameFrameTicks = 0;
+          this.ffmpegLastRenderedUri = currentFrame.uri;
+        }
+        this.ffmpegLastRenderedPtsMs = currentFrame.ptsMs;
+        this.ffmpegPreviewUri = currentFrame.uri;
+      }
+      this.logFfmpegPreviewTick(targetPtsMs);
+      this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
+      this.tryCatchupFrameWhileExtracting(targetPtsMs);
+      this.tryCatchupFrameWhenQueueEmpty(targetPtsMs);
+    }, renderIntervalMs);
+  }
+
+  private stopFfmpegRenderTimer(): void {
+    if (this.ffmpegRenderTimer !== undefined) {
+      clearInterval(this.ffmpegRenderTimer);
+      this.ffmpegRenderTimer = undefined;
+    }
+    this.ffmpegLastRenderTickAtMs = 0;
+    this.ffmpegLastObservedPlaybackMs = -1;
+    this.ffmpegStallAdvanceMs = 0;
+    this.ffmpegNextDecodeAllowedAtMs = 0;
+    this.ffmpegLastDiagLogAtMs = 0;
+    this.ffmpegLastRenderedUri = '';
+    this.ffmpegLastRenderedPtsMs = -1;
+    this.ffmpegSameFrameTicks = 0;
+    this.ffmpegExtractStartAtMs = 0;
+    this.ffmpegCatchupExtracting = false;
+    this.ffmpegLastForceRestartAtMs = 0;
+    this.ffmpegLastEmptyQueueCatchupAtMs = 0;
+    this.ffmpegSingleFrameMode = false;
+  }
+
+  private scheduleFfmpegDecodeIfNeeded(currentTimeMs: number): void {
+    const restartVideoData = this.currentVideoData;
+    if (!restartVideoData) {
+      return;
+    }
+    if (this.ffmpegPreviewExtracting) {
+      return;
+    }
+    if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_LOW_WATERMARK_FRAMES) {
+      return;
+    }
+    if (Date.now() < this.ffmpegNextDecodeAllowedAtMs) {
+      return;
+    }
+
+    const leadMs = Math.floor(FFMPEG_PREVIEW_LEAD_SECONDS * 1000);
+    const expectedStartMs = Math.max(currentTimeMs + leadMs, this.ffmpegDecodedUntilMs);
+    const token = this.ffmpegPipelineToken;
+    if (this.ffmpegSingleFrameMode) {
+      this.ffmpegNextDecodeAllowedAtMs = Date.now() + FFMPEG_PREVIEW_SINGLE_FRAME_INTERVAL_MS;
+      this.decodeFfmpegSingleFrameFallback(restartVideoData, expectedStartMs, token);
+      return;
+    }
+    this.decodeFfmpegFrameChunk(restartVideoData, expectedStartMs, token);
+  }
+
+  private decodeFfmpegFrameChunk(videoData: VideoData, startTimeMs: number, token: number): void {
+    this.ffmpegPreviewExtracting = true;
+    this.ffmpegExtractStartAtMs = Date.now();
+    const startSeconds = Math.max(0, startTimeMs) / 1000;
+    const prefixPath = `/data/storage/el2/base/cache/vidall_ffmpeg_seq_${token}_${Date.now()}`;
+    FfmpegVideoFrameUtil.extractFrameSequenceToJpeg(
+      videoData.videoSrc,
+      prefixPath,
+      videoData.httpHeader,
+      startSeconds,
+      FFMPEG_PREVIEW_CHUNK_SECONDS,
+      FFMPEG_PREVIEW_RENDER_FPS,
+      FFMPEG_PREVIEW_DECODE_TIMEOUT_MS,
+      { quality: FFMPEG_PREVIEW_JPEG_QUALITY, maxWidth: FFMPEG_PREVIEW_MAX_WIDTH }
+    ).then((result) => {
+      if (token !== this.ffmpegPipelineToken) {
+        this.ffmpegPreviewExtracting = false;
+        this.ffmpegExtractStartAtMs = 0;
+        return;
+      }
+      if (result.success && result.outputPaths.length > 0) {
+        const frameCount = Math.min(result.outputPaths.length, result.frameTimesMs.length);
+        this.ffmpegSingleFrameMode = false;
+        for (let i = 0; i < frameCount; i++) {
+          if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_MAX_QUEUE_FRAMES) {
+            break;
+          }
+          const queued: FfmpegQueuedFrame = {
+            uri: 'file://' + result.outputPaths[i],
+            ptsMs: result.frameTimesMs[i]
+          };
+          this.ffmpegFrameQueue.push(queued);
+        }
+        const chunkMs = Math.floor(FFMPEG_PREVIEW_CHUNK_SECONDS * 1000);
+        this.ffmpegDecodedUntilMs = Math.max(this.ffmpegDecodedUntilMs, startTimeMs + chunkMs);
+        this.ffmpegNextDecodeAllowedAtMs = 0;
+        if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+          const firstPts = result.frameTimesMs.length > 0 ? result.frameTimesMs[0] : -1;
+          const lastPts = result.frameTimesMs.length > 0
+            ? result.frameTimesMs[result.frameTimesMs.length - 1]
+            : -1;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[ffmpeg-preview] chunk ok token=${token} start=${startTimeMs}ms ` +
+            `frames=${frameCount} queue=${this.ffmpegFrameQueue.length} firstPts=${firstPts} lastPts=${lastPts} ` +
+            `decodedUntil=${this.ffmpegDecodedUntilMs}`);
+        }
+        if (this.ffmpegPreviewUri.length === 0 && this.ffmpegFrameQueue.length > 0) {
+          this.ffmpegPreviewUri = this.ffmpegFrameQueue[0].uri;
+        }
+        this.ffmpegPreviewExtracting = false;
+        this.ffmpegExtractStartAtMs = 0;
+        if (this.isPlaying) {
+          this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
+        }
+      } else {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `ffmpeg 连续帧解码失败: ${result.errorMessage ?? 'unknown'}, start=${startTimeMs}, ` +
+          `queue=${this.ffmpegFrameQueue.length}, decodedUntil=${this.ffmpegDecodedUntilMs}`);
+        this.decodeFfmpegSingleFrameFallback(videoData, startTimeMs, token);
+        return;
+      }
+    }).catch(() => {
+      if (token !== this.ffmpegPipelineToken) {
+        this.ffmpegPreviewExtracting = false;
+        this.ffmpegExtractStartAtMs = 0;
+        return;
+      }
+      this.decodeFfmpegSingleFrameFallback(videoData, startTimeMs, token);
+    });
+  }
+
+  private decodeFfmpegSingleFrameFallback(videoData: VideoData, startTimeMs: number, token: number): void {
+    const outputPath = `/data/storage/el2/base/cache/vidall_ffmpeg_fallback_${token}_${Date.now()}.jpg`;
+    const seekSeconds = Math.max(0, startTimeMs) / 1000;
+
+    FfmpegVideoFrameUtil.extractFrameToJpeg(
+      videoData.videoSrc,
+      outputPath,
+      videoData.httpHeader,
+      seekSeconds,
+      FFMPEG_PREVIEW_DECODE_TIMEOUT_MS,
+      { quality: FFMPEG_PREVIEW_JPEG_QUALITY, maxWidth: FFMPEG_PREVIEW_MAX_WIDTH }
+    ).then((single) => {
+      if (token !== this.ffmpegPipelineToken) {
+        this.ffmpegPreviewExtracting = false;
+        return;
+      }
+
+      if (single.success) {
+        const queued: FfmpegQueuedFrame = {
+          uri: 'file://' + single.outputPath,
+          ptsMs: startTimeMs
+        };
+        if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_MAX_QUEUE_FRAMES) {
+          this.ffmpegFrameQueue.shift();
+        }
+        this.ffmpegFrameQueue.push(queued);
+        this.ffmpegDecodedUntilMs = Math.max(this.ffmpegDecodedUntilMs, startTimeMs + 300);
+        this.ffmpegNextDecodeAllowedAtMs = 0;
+        if (this.ffmpegPreviewUri.length === 0) {
+          this.ffmpegPreviewUri = queued.uri;
+        }
+        if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[ffmpeg-preview] single fallback ok token=${token} pts=${startTimeMs} queue=${this.ffmpegFrameQueue.length}`);
+        }
+      } else {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `ffmpeg 单帧兜底失败: ${single.errorMessage ?? 'unknown'}`);
+        this.ffmpegNextDecodeAllowedAtMs = Date.now() + FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS;
+      }
+
+      this.ffmpegPreviewExtracting = false;
+      this.ffmpegExtractStartAtMs = 0;
+      if (this.isPlaying) {
+        this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
+      }
+    }).catch(() => {
+      if (token !== this.ffmpegPipelineToken) {
+        this.ffmpegPreviewExtracting = false;
+        return;
+      }
+      this.ffmpegNextDecodeAllowedAtMs = Date.now() + FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS;
+      this.ffmpegPreviewExtracting = false;
+      this.ffmpegExtractStartAtMs = 0;
+    });
+  }
+
+  private tryCatchupFrameWhileExtracting(targetPtsMs: number): void {
+    if (!this.isPlaying) {
+      return;
+    }
+    const videoData = this.currentVideoData;
+    if (!videoData) {
+      return;
+    }
+    if (!this.ffmpegPreviewExtracting) {
+      return;
+    }
+    if (this.ffmpegCatchupExtracting) {
+      return;
+    }
+    if (this.ffmpegExtractStartAtMs <= 0) {
+      return;
+    }
+    const extractingElapsedMs = Date.now() - this.ffmpegExtractStartAtMs;
+    if (!this.ffmpegSingleFrameMode && this.ffmpegFrameQueue.length === 0 &&
+      extractingElapsedMs >= FFMPEG_PREVIEW_EXTRACT_STUCK_MS) {
+      this.ffmpegSingleFrameMode = true;
+      this.ffmpegPipelineToken += 1;
+      this.ffmpegPreviewExtracting = false;
+      this.ffmpegExtractStartAtMs = 0;
+      this.ffmpegCatchupExtracting = false;
+      this.ffmpegNextDecodeAllowedAtMs = 0;
+      const singleModeToken = this.ffmpegPipelineToken;
+      if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[ffmpeg-preview] switch to single-frame mode elapsed=${extractingElapsedMs} ` +
+          `target=${targetPtsMs} token=${singleModeToken}`);
+      }
+      this.decodeFfmpegSingleFrameFallback(videoData, Math.max(0, targetPtsMs), singleModeToken);
+      return;
+    }
+    if (extractingElapsedMs > FFMPEG_PREVIEW_EXTRACT_HARD_TIMEOUT_MS) {
+      // 单次提帧任务超时过久，切断旧流水线并直接追当前时钟，避免长期卡在同一帧。
+      this.ffmpegSingleFrameMode = true;
+      this.ffmpegPipelineToken += 1;
+      this.ffmpegPreviewExtracting = false;
+      this.ffmpegExtractStartAtMs = 0;
+      this.ffmpegCatchupExtracting = false;
+      this.ffmpegNextDecodeAllowedAtMs = 0;
+      this.ffmpegLastForceRestartAtMs = Date.now();
+      const rescueToken = this.ffmpegPipelineToken;
+      if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[ffmpeg-preview] extracting hard-timeout rescue elapsed=${extractingElapsedMs} ` +
+          `target=${targetPtsMs} token=${rescueToken}`);
+      }
+      this.decodeFfmpegSingleFrameFallback(videoData, Math.max(0, targetPtsMs), rescueToken);
+      return;
+    }
+    if (extractingElapsedMs < FFMPEG_PREVIEW_EXTRACT_STUCK_MS) {
+      return;
+    }
+
+    this.ffmpegCatchupExtracting = true;
+    const token = this.ffmpegPipelineToken;
+    const seekMs = Math.max(0, targetPtsMs);
+    const outputPath = `/data/storage/el2/base/cache/vidall_ffmpeg_catchup_${token}_${Date.now()}.jpg`;
+
+    FfmpegVideoFrameUtil.extractFrameToJpeg(
+      videoData.videoSrc,
+      outputPath,
+      videoData.httpHeader,
+      seekMs / 1000,
+      FFMPEG_PREVIEW_DECODE_TIMEOUT_MS,
+      { quality: FFMPEG_PREVIEW_JPEG_QUALITY, maxWidth: FFMPEG_PREVIEW_MAX_WIDTH }
+    ).then((single) => {
+      this.ffmpegCatchupExtracting = false;
+      if (token !== this.ffmpegPipelineToken) {
+        return;
+      }
+      if (!single.success) {
+        return;
+      }
+
+      const queued: FfmpegQueuedFrame = {
+        uri: 'file://' + single.outputPath,
+        ptsMs: seekMs
+      };
+      if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_MAX_QUEUE_FRAMES) {
+        this.ffmpegFrameQueue.shift();
+      }
+      this.ffmpegFrameQueue.push(queued);
+      this.ffmpegDecodedUntilMs = Math.max(this.ffmpegDecodedUntilMs, seekMs);
+      if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[ffmpeg-preview] catchup frame ok token=${token} pts=${seekMs} queue=${this.ffmpegFrameQueue.length}`);
+      }
+    }).catch(() => {
+      this.ffmpegCatchupExtracting = false;
+    });
+  }
+
+  private maybeForceRestartDecode(targetPtsMs: number): void {
+    // 当前阶段禁用激进重启，避免重复打断导致解码任务饥饿。
+    void targetPtsMs;
+    return;
+    // 历史强制重启逻辑已停用，暂保留注释以便后续回溯。
+    // if (!this.isPlaying) {
+    //   return;
+    // }
+    // if (!this.currentVideoData) {
+    //   return;
+    // }
+    // if (!this.ffmpegPreviewExtracting) {
+    //   return;
+    // }
+    // if (this.ffmpegExtractStartAtMs <= 0) {
+    //   return;
+    // }
+    // if (this.ffmpegLastRenderedPtsMs < 0) {
+    //   return;
+    // }
+    // if (this.ffmpegSameFrameTicks < FFMPEG_PREVIEW_FORCE_RESTART_SAME_TICKS) {
+    //   return;
+    // }
+    // const lagMs = targetPtsMs - this.ffmpegLastRenderedPtsMs;
+    // if (lagMs < FFMPEG_PREVIEW_FORCE_RESTART_LAG_MS) {
+    //   return;
+    // }
+    // const now = Date.now();
+    // if (now - this.ffmpegLastForceRestartAtMs < FFMPEG_PREVIEW_FORCE_RESTART_INTERVAL_MS) {
+    //   return;
+    // }
+    // this.ffmpegLastForceRestartAtMs = now;
+    // this.ffmpegPipelineToken += 1;
+    // this.ffmpegPreviewExtracting = false;
+    // this.ffmpegExtractStartAtMs = 0;
+    // this.ffmpegCatchupExtracting = false;
+    // this.ffmpegFrameQueue = [];
+    // const leadMs = Math.floor(FFMPEG_PREVIEW_LEAD_SECONDS * 1000);
+    // const restartStartMs = Math.max(0, this.currentTime + leadMs);
+    // this.ffmpegDecodedUntilMs = restartStartMs;
+    // if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+    //   hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+    //     `[ffmpeg-preview] force restart decode lag=${lagMs} sameTicks=${this.ffmpegSameFrameTicks} ` +
+    //     `target=${targetPtsMs} rendered=${this.ffmpegLastRenderedPtsMs} restartStart=${restartStartMs}`);
+    // }
+    // this.decodeFfmpegFrameChunk(this.currentVideoData, restartStartMs, this.ffmpegPipelineToken);
+  }
+
+  private tryCatchupFrameWhenQueueEmpty(targetPtsMs: number): void {
+    if (!this.isPlaying) {
+      return;
+    }
+    const videoData = this.currentVideoData;
+    if (!videoData) {
+      return;
+    }
+    if (this.ffmpegFrameQueue.length > 0) {
+      return;
+    }
+    if (this.ffmpegPreviewExtracting || this.ffmpegCatchupExtracting) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.ffmpegLastEmptyQueueCatchupAtMs < FFMPEG_PREVIEW_EMPTY_QUEUE_CATCHUP_INTERVAL_MS) {
+      return;
+    }
+    this.ffmpegLastEmptyQueueCatchupAtMs = now;
+
+    if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[ffmpeg-preview] empty queue catchup trigger target=${targetPtsMs} t=${this.currentTime}`);
+    }
+
+    this.decodeFfmpegSingleFrameFallback(videoData, Math.max(0, targetPtsMs), this.ffmpegPipelineToken);
+  }
+
+  private logFfmpegPreviewTick(targetPtsMs: number): void {
+    if (!ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.ffmpegLastDiagLogAtMs < FFMPEG_PREVIEW_DIAG_LOG_INTERVAL_MS) {
+      return;
+    }
+    this.ffmpegLastDiagLogAtMs = now;
+
+    let headPts = -1;
+    let nextPts = -1;
+    if (this.ffmpegFrameQueue.length > 0) {
+      headPts = this.ffmpegFrameQueue[0].ptsMs;
+    }
+    if (this.ffmpegFrameQueue.length > 1) {
+      nextPts = this.ffmpegFrameQueue[1].ptsMs;
+    }
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[ffmpeg-preview] tick t=${this.currentTime} target=${targetPtsMs} ` +
+      `queue=${this.ffmpegFrameQueue.length} headPts=${headPts} nextPts=${nextPts} ` +
+      `renderPts=${this.ffmpegLastRenderedPtsMs} sameTicks=${this.ffmpegSameFrameTicks} ` +
+      `decodedUntil=${this.ffmpegDecodedUntilMs} extracting=${this.ffmpegPreviewExtracting} ` +
+      `stallAdvance=${this.ffmpegStallAdvanceMs} singleMode=${this.ffmpegSingleFrameMode}`);
   }
 
   /**
@@ -306,21 +1067,455 @@ export class VideoPlayerController {
     }
   }
 
+  /**
+   * 供 VideoPlayer UI 层在 native so XComponent.onLoad 回调中调用。
+   * 当前阶段仅完成原生播放器骨架绑定，真实解码/渲染链路后续接入。
+   */
+  async setNativeContext(context: object, xComponentId: string): Promise<void> {
+    if (this.backend !== 'native') {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'setNativeContext() 被调用但 backend 不是 native，忽略');
+      return;
+    }
+    if (!this.player) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        'setNativeContext() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
+      return;
+    }
+    const nativeAdapter = this.player as VidAllPlayerAdapter;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
+    this.startNativeReadyGuard(this.playbackSessionId);
+    if (this.currentVideoData) {
+      try {
+        let safeContext: object = context;
+        if (safeContext === null || safeContext === undefined) {
+          const fallbackContext: NativeXComponentFallbackContext = {};
+          safeContext = fallbackContext as object;
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `setNativeContext: onLoad context 为空，使用空对象兜底 id=${xComponentId}`);
+        }
+        await nativeAdapter.initWithContext(this.currentVideoData, this.surfaceId, safeContext, xComponentId);
+      } catch (e) {
+        const err = e as BusinessError;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `setNativeContext init 失败: ${err.message}`);
+        this.fallbackNativeToIjk('native 初始化失败，已自动回退到 IJK 播放');
+      }
+    }
+  }
+
+  setNativeSeekDiagLogEnabled(enabled: boolean): void {
+    this.nativeSeekDiagLogEnabled = enabled;
+  }
+
+  /**
+   * 设置 AVPlayer 遇到格式不支持时的回退后端。
+   *
+    * 默认先尝试 native，若 native 不可用会自动继续回退到 ijkplayer。
+   */
+  setUnsupportedFormatFallback(fallback: UnsupportedFormatFallback): void {
+    this.unsupportedFormatFallback = fallback;
+    this.unsupportedFallbackLockedByUser = true;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `unsupportedFormatFallback 已更新为 ${fallback}`);
+  }
+
+  /** 清除外部锁定，恢复根据音轨自动选择回退策略。 */
+  resetUnsupportedFormatFallbackAutoPolicy(): void {
+    this.unsupportedFallbackLockedByUser = false;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      'unsupportedFormatFallback 已恢复自动策略');
+  }
+
+  /**
+   * 依据预置音轨信息判断是否优先回退 ffmpeg。
+   * 命中 AC-3/E-AC-3/DTS/TrueHD 时返回 true。
+   */
+  private shouldPreferFfmpegFallback(videoData: VideoData): boolean {
+    const tracks = videoData.presetAudioTracks;
+    if (!tracks || tracks.length === 0) {
+      return false;
+    }
+
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      const mime = (track.mimeType ?? '').toLowerCase();
+      const name = track.displayName.toLowerCase();
+      if (
+        mime.includes('ac-3') ||
+        mime.includes('eac3') ||
+        mime.includes('dts') ||
+        mime.includes('truehd') ||
+        name.includes('ac-3') ||
+        name.includes('e-ac-3') ||
+        name.includes('eac3') ||
+        name.includes('dts') ||
+        name.includes('truehd')
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async resolveAudioRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
+    const defaultDecision: AudioRoutingDecision = {
+      preferredBackend: 'avplayer',
+      fallback: 'native',
+      preferredChannels: 2,
+      summary: 'default: 未探测到音轨细节',
+      detectedCodec: 'unknown',
+      detectedChannels: 2,
+      hardSupported: true
+    };
+
+    const presetHint = this.readPresetAudioHint(videoData);
+    let codecName = presetHint.codecName;
+    let channels = presetHint.channels;
+
+    try {
+      // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
+      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
+      if (probe.success && probe.audioTracks.length > 0) {
+        const first = probe.audioTracks[0];
+        codecName = first.codecName;
+        channels = first.channels ?? channels;
+      }
+    } catch (_) {
+      // 探测失败时使用预置音轨提示继续决策。
+    }
+
+    const normalizedCodec = (codecName ?? '').toLowerCase();
+    const safeChannels = this.normalizeTargetChannels(channels);
+    const hardSupported = this.isLikelySystemHardDecodeSupported(normalizedCodec);
+
+    const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
+      `channels=${safeChannels}, hardSupported=${hardSupported}`;
+
+    const decision: AudioRoutingDecision = {
+      // 当前 ffmpeg 视频链路尚不可用，临时统一回退到 ijkplayer。
+      preferredBackend: hardSupported ? 'avplayer' : 'ijkplayer',
+      fallback: 'native',
+      preferredChannels: safeChannels,
+      summary,
+      detectedCodec: normalizedCodec.length > 0 ? normalizedCodec : 'unknown',
+      detectedChannels: safeChannels,
+      hardSupported
+    };
+    return decision;
+  }
+
+  private logAudioCapabilityReport(decision: AudioRoutingDecision): void {
+    // 结构化日志：后续可直接平移到 UI 能力面板，减少二次拼装成本。
+    const channelTag = this.getChannelTag(decision.detectedChannels);
+    const currentDecodePlan = decision.preferredBackend === 'avplayer'
+      ? `system-harddecode-${channelTag}`
+      : `${decision.preferredBackend}-fallback-${channelTag}`;
+
+    const message =
+      '[AudioCapability] ' +
+      `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}(${channelTag}), ` +
+      `hardSupported=${decision.hardSupported}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
+      `decodePlan=${currentDecodePlan}; ` +
+      `systemHardPreferred=[${SYSTEM_HARD_PREFERRED_CODECS.join(', ')}]; ` +
+      `systemSoftFallback=[${SYSTEM_SOFT_FALLBACK_CODECS.join(', ')}]; ` +
+      `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
+
+    this.audioCapabilityText =
+      `音频能力: 检测=${decision.detectedCodec} ${channelTag} | ` +
+      `硬解=${decision.hardSupported ? '是' : '否'} | ` +
+      `当前路由=${decision.preferredBackend} | ` +
+      `软解兜底=${decision.fallback}`;
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, message);
+  }
+
+  private getChannelTag(channels: number): string {
+    if (channels >= 8) {
+      return '7.1';
+    }
+    if (channels >= 6) {
+      return '5.1';
+    }
+    if (channels <= 1) {
+      return '1.0';
+    }
+    return '2.0';
+  }
+
+  private readPresetAudioHint(videoData: VideoData): PresetAudioHint {
+    const tracks = videoData.presetAudioTracks;
+    if (!tracks || tracks.length === 0) {
+      const emptyHint: PresetAudioHint = { codecName: '', channels: 2 };
+      return emptyHint;
+    }
+    const first = tracks[0];
+    const mime = (first.mimeType ?? '').toLowerCase();
+    const display = first.displayName.toLowerCase();
+
+    let channels = 2;
+    if (display.includes('7.1')) {
+      channels = 8;
+    } else if (display.includes('5.1')) {
+      channels = 6;
+    } else if (display.includes('mono')) {
+      channels = 1;
+    }
+
+    const codecName = mime.length > 0 ? mime : display;
+    const hint: PresetAudioHint = { codecName, channels };
+    return hint;
+  }
+
+  private normalizeTargetChannels(channels?: number): number {
+    if (!channels) {
+      return 2;
+    }
+    if (channels <= 1) {
+      return 1;
+    }
+    if (channels >= 8) {
+      return 8;
+    }
+    if (channels >= 6) {
+      return 6;
+    }
+    return 2;
+  }
+
+  private isLikelySystemHardDecodeSupported(codec: string): boolean {
+    if (codec.length === 0) {
+      return true;
+    }
+
+    // 经验规则：命中下列关键字时优先软解，避免先硬解再失败切换带来的卡顿。
+    const softOnlyKeywords: string[] = [
+      'ac3', 'eac3', 'dts', 'truehd', 'mlp', 'vivid', 'atmos'
+    ];
+    for (let i = 0; i < softOnlyKeywords.length; i++) {
+      if (codec.includes(softOnlyKeywords[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
-    this.duration = this.player?.duration ?? 0;
+    this.clearNativeReadyGuardTimer();
+    const playerDuration = this.player?.duration ?? 0;
+    this.duration = playerDuration > 0
+      ? playerDuration
+      : (this.currentVideoData?.durationHintMs ?? 0);
     this.currentTime = this.player?.currentTime ?? 0;
     this.isReady = true;
+    this.isLoading = false;
+    const resumeTimeMs = this.pendingBackendResumeTimeMs;
+    const shouldResumePlay = this.pendingBackendResumePlay;
+    if (resumeTimeMs >= 0) {
+      this.pendingBackendResumeTimeMs = -1;
+      this.pendingBackendResumePlay = false;
+    }
     emitter.emit(PlayerEvents.PREPARED);
     await this.loadSubtitleTracks();
     await this.loadAudioTracks();
+    if (resumeTimeMs > 0 && this.player) {
+      const safeResumeTimeMs = this.duration > 0 && resumeTimeMs > this.duration
+        ? this.duration
+        : resumeTimeMs;
+      this.currentTime = safeResumeTimeMs;
+      this.progress = this.duration > 0 ? safeResumeTimeMs / this.duration : 0;
+      this.subtitleAdapter.onSeekSync();
+      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+      this.isSeeking = true;
+      this.suppressPlayAfterSeekOnce = !shouldResumePlay;
+      this.player.seek(safeResumeTimeMs);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `后端切换续播定位: backend=${this.backend} time=${safeResumeTimeMs}`);
+      return;
+    }
+    if (shouldResumePlay && !this.isPlaying) {
+      await this.play();
+    }
+  }
+
+  private clearNativeReadyGuardTimer(): void {
+    if (this.nativeReadyGuardTimer !== undefined) {
+      clearTimeout(this.nativeReadyGuardTimer);
+      this.nativeReadyGuardTimer = undefined;
+    }
+  }
+
+  private startNativeReadyGuard(sessionId: number): void {
+    this.clearNativeReadyGuardTimer();
+    this.nativeReadyGuardTimer = setTimeout(() => {
+      this.nativeReadyGuardTimer = undefined;
+      if (sessionId !== this.playbackSessionId) {
+        return;
+      }
+      if (this.backend !== 'native') {
+        return;
+      }
+      if (!this.isReady) {
+        this.fallbackNativeToIjk('native 初始化超时，已自动回退到 IJK 播放');
+        return;
+      }
+      if (!this.isPlaying) {
+        return;
+      }
+      const currentDuration = this.player?.duration ?? this.duration;
+      const currentPosition = this.player?.currentTime ?? this.currentTime;
+      if (currentDuration <= 0 && currentPosition <= 100) {
+        this.fallbackNativeToIjk('native 未输出可播时间轴，已自动回退到 IJK 播放');
+      }
+    }, NATIVE_READY_GUARD_MS);
+  }
+
+  private fallbackNativeToIjk(reason: string): void {
+    if (this.backend !== 'native') {
+      return;
+    }
+    const fallbackPosition = this.player?.currentTime ?? this.currentTime;
+    const safeFallbackPosition = fallbackPosition > 0 ? fallbackPosition : 0;
+    const shouldResumePlay = this.isPlaying;
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG, reason);
+    this.lastErrorMessage = reason;
+    this.isLoading = true;
+    this.clearNativeReadyGuardTimer();
+    this.pendingBackendResumeTimeMs = safeFallbackPosition;
+    this.pendingBackendResumePlay = shouldResumePlay;
+    this.currentTime = safeFallbackPosition;
+    this.progress = this.duration > 0 ? safeFallbackPosition / this.duration : 0;
+    const oldPlayer = this.player;
+    this.player = undefined;
+    this.backend = 'ijkplayer';
+    oldPlayer?.release().catch(() => {});
   }
 
   async play(): Promise<void> {
     await this.player?.play().catch((err: BusinessError) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `play 失败: code=${err.code} msg=${err.message}`);
+      this.lastErrorMessage = this.normalizePlayerError(err.message);
     });
+    this.duration = this.player?.duration ?? this.duration;
+  }
+
+  private normalizePlayerError(message: string): string {
+    const msg = (message ?? '').trim();
+    if (msg.length === 0) {
+      return '播放器内部错误，请重试';
+    }
+    const nativeArgumentError = this.resolveNativeArgumentErrorHint(msg);
+    if (nativeArgumentError.length > 0) {
+      return nativeArgumentError;
+    }
+    const nativeStateCode = this.extractNativeStateCode(msg);
+    if (nativeStateCode > 0) {
+      return this.resolveNativeStateErrorHint(nativeStateCode);
+    }
+    if (msg.includes('[NAPI/')) {
+      const hintText = this.extractNativeHint(msg);
+      if (hintText.length > 0) {
+        return `原生播放器调用失败：${hintText}`;
+      }
+      return '原生播放器调用失败，请重试';
+    }
+    if (msg.toLowerCase() === GENERIC_SYSTEM_ERROR) {
+      return '播放器内部错误，请重试';
+    }
+    return msg;
+  }
+
+  private resolveNativeArgumentErrorHint(message: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes('invalid player handle')) {
+      return '播放器实例已失效，请退出后重试';
+    }
+    if (lower.includes('player handle overflow')) {
+      return '播放器实例异常，请重启应用后重试';
+    }
+    if (lower.includes('requires (handle')) {
+      return '播放器调用参数缺失，请重试';
+    }
+    if (lower.includes('must be int32')) {
+      return '播放器调用参数类型错误，请重试';
+    }
+    if (lower.includes('must be int64')) {
+      return '播放器调用参数范围错误，请重试';
+    }
+    if (lower.includes('must be string')) {
+      return '播放器调用字符串参数错误，请重试';
+    }
+    if (lower.includes('must be object')) {
+      return '播放器渲染上下文参数错误，请重试';
+    }
+    if (lower.includes('must be function') || lower.includes('failed to create callback references')) {
+      return '播放器回调注册失败，请重试';
+    }
+    if (lower.includes('failed to read args')) {
+      return '播放器调用参数读取失败，请重试';
+    }
+    return '';
+  }
+
+  private extractNativeStateCode(message: string): number {
+    if (!message.startsWith('[')) {
+      return -1;
+    }
+    const end = message.indexOf(']');
+    if (end <= 1) {
+      return -1;
+    }
+    const codeText = message.substring(1, end).trim();
+    if (codeText.length === 0) {
+      return -1;
+    }
+    const parsed = Number(codeText);
+    if (!Number.isFinite(parsed)) {
+      return -1;
+    }
+    return Math.trunc(parsed);
+  }
+
+  private extractNativeHint(message: string): string {
+    const hintKey = 'hint=';
+    const hintIndex = message.indexOf(hintKey);
+    if (hintIndex < 0) {
+      return '';
+    }
+    const hintText = message.substring(hintIndex + hintKey.length).trim();
+    if (hintText.length === 0) {
+      return '';
+    }
+    return hintText;
+  }
+
+  private resolveNativeStateErrorHint(code: number): string {
+    if (code === 1001) {
+      return '播放器初始化失败：未设置播放地址';
+    }
+    if (code === 1002) {
+      return '播放器初始化失败：未绑定渲染组件';
+    }
+    if (code === 1003) {
+      return '播放器尚未就绪，暂时无法播放';
+    }
+    if (code === 1004) {
+      return '播放器尚未就绪，暂时无法切换轨道';
+    }
+    if (code === 1005) {
+      return '播放器尚未就绪，暂时无法暂停';
+    }
+    if (code === 1006) {
+      return '播放器尚未就绪，暂时无法跳转进度';
+    }
+    if (code === 1007) {
+      return '轨道切换参数无效，请刷新后重试';
+    }
+    return `播放器状态异常（错误码 ${code}）`;
   }
 
   async pause(): Promise<void> {
@@ -335,8 +1530,17 @@ export class VideoPlayerController {
   }
 
   async release(): Promise<void> {
+    this.clearNativeReadyGuardTimer();
     this.stopProgressTimer();
     this.saveProgressNow();
+    if (this.backend === 'ffmpeg') {
+      this.stopFfmpegRenderTimer();
+      this.ffmpegFrameQueue = [];
+      this.ffmpegPreviewExtracting = false;
+      this.ffmpegDecodedUntilMs = 0;
+      this.ffmpegPipelineToken += 1;
+      this.ffmpegSingleFrameMode = false;
+    }
     if (this.subtitleClearTimer) {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;
@@ -351,15 +1555,44 @@ export class VideoPlayerController {
 
   async seek(time: number): Promise<void> {
     if (!this.player) { return; }
+    let safeTime = time < 0 ? 0 : time;
+    if (this.duration > 0 && safeTime > this.duration) {
+      safeTime = this.duration;
+    } else if (this.nativeSeekDiagLogEnabled && this.duration <= 0 && safeTime > 0) {
+      const now = Date.now();
+      if (now - this.lastSeekDurationUnknownLogMs >= 3000) {
+        this.lastSeekDurationUnknownLogMs = now;
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[seek] duration 未就绪，暂不做上限裁剪 target=${safeTime}`);
+      }
+    }
+    if (this.backend === 'ffmpeg') {
+      this.ffmpegFrameQueue = [];
+      this.ffmpegDecodedUntilMs = safeTime;
+      this.ffmpegPipelineToken += 1;
+      this.ffmpegPreviewExtracting = false;
+      this.ffmpegLastRenderTickAtMs = 0;
+      this.ffmpegLastObservedPlaybackMs = safeTime;
+      this.ffmpegStallAdvanceMs = 0;
+      this.ffmpegNextDecodeAllowedAtMs = 0;
+      const seekVideoData = this.currentVideoData;
+      if (seekVideoData) {
+        if (this.ffmpegSingleFrameMode) {
+          this.decodeFfmpegSingleFrameFallback(seekVideoData, safeTime, this.ffmpegPipelineToken);
+        } else {
+          this.decodeFfmpegFrameChunk(seekVideoData, safeTime, this.ffmpegPipelineToken);
+        }
+      }
+    }
     await this.pause();
-    this.currentTime = time;
+    this.currentTime = safeTime;
     this.subtitleAdapter.onSeekSync();
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     if (!this.isSeeking) {
       this.isSeeking = true;
-      this.player.seek(time);
+      this.player.seek(safeTime);
     } else {
-      this.timeToSeek = time;
+      this.timeToSeek = safeTime;
     }
   }
 
@@ -552,7 +1785,11 @@ export class VideoPlayerController {
       if (this.audioTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，直接选择默认轨道`);
-        await this.switchAudioTrack(0);
+        if (this.backend === 'ffmpeg') {
+          this.activeAudioIndex = 0;
+        } else {
+          await this.switchAudioTrack(0);
+        }
         return;
       }
 
@@ -580,7 +1817,11 @@ export class VideoPlayerController {
       this.audioTracks = tracks;
 
       if (this.audioTracks.length > 0) {
-        await this.switchAudioTrack(0);
+        if (this.backend === 'ffmpeg') {
+          this.activeAudioIndex = 0;
+        } else {
+          await this.switchAudioTrack(0);
+        }
       }
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -639,6 +1880,13 @@ export class VideoPlayerController {
         `[selectSubtitleTrack] player 未初始化，无法切换到轨道 ${trackIndex}`);
       return;
     }
+    if (trackIndex < -1) {
+      const errorMessage = `字幕轨道索引非法: ${trackIndex}`;
+      this.lastErrorMessage = errorMessage;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[selectSubtitleTrack] ${errorMessage}`);
+      return;
+    }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[selectSubtitleTrack] 调用 player.selectTrack(${trackIndex})，backend=${this.backend}`);
     try {
@@ -650,6 +1898,7 @@ export class VideoPlayerController {
           : `[selectSubtitleTrack] ✓ 内嵌字幕轨道 ${trackIndex} 已激活 (currentSubtitleTrack=${this.currentSubtitleTrack})`);
     } catch (e) {
       const err = e as BusinessError;
+      this.lastErrorMessage = this.normalizePlayerError(err.message ?? '字幕切换失败');
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `[selectSubtitleTrack] ✗ 失败: trackIndex=${trackIndex} code=${err.code} msg=${err.message}`);
     }
@@ -718,6 +1967,14 @@ export class VideoPlayerController {
       return;
     }
 
+    // ffmpeg 当前阶段固定首音轨软解，不执行 pause/seek/play 切轨流程，避免重入导致时间回跳。
+    if (this.backend === 'ffmpeg') {
+      this.activeAudioIndex = trackIndex;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[switchAudioTrack] ffmpeg 后端仅更新 UI 选中项: index=${trackIndex}`);
+      return;
+    }
+
     // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
@@ -732,6 +1989,12 @@ export class VideoPlayerController {
 
       // 2. 切换音轨
       const audioTrack = this.audioTracks[trackIndex];
+      if (audioTrack.trackIndex < -1) {
+        const errorMessage = `音轨参数非法: uiIndex=${trackIndex}, trackIndex=${audioTrack.trackIndex}`;
+        this.lastErrorMessage = errorMessage;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG, errorMessage);
+        return;
+      }
       await this.player.selectTrack(audioTrack.trackIndex);
       this.activeAudioIndex = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -752,6 +2015,7 @@ export class VideoPlayerController {
       }
     } catch (e) {
       const err = e as BusinessError;
+      this.lastErrorMessage = this.normalizePlayerError(err.message ?? '音轨切换失败');
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `切换音轨失败: code=${err.code} msg=${err.message}`);
       // 切换失败时尝试恢复播放
