@@ -1,4 +1,4 @@
-import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
+import { FFAbortController, FFmpeg } from './NativeFfmpegCompat';
 
 export interface FfmpegAudioDecodeResult {
   success: boolean;

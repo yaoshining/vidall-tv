@@ -2,15 +2,315 @@
 #include <chrono>
 #include <unordered_map>
 #include <vector>
+#include <cstdio>
 
 #include "napi/native_api.h"
 
 extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavcodec/codec_desc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/dict.h>
+#include <libavutil/error.h>
+#include <libavutil/time.h>
 }
 
 namespace {
+
+static void ThrowTypeError(napi_env env, const char *message);
+static bool ReadUtf8String(napi_env env, napi_value value, std::string &output);
+
+struct ProbeInterruptContext {
+  int64_t startTimeUs = 0;
+  int64_t timeoutUs = 0;
+};
+
+static int ProbeInterruptCallback(void *opaque) {
+  if (opaque == nullptr) {
+    return 0;
+  }
+  ProbeInterruptContext *context = static_cast<ProbeInterruptContext *>(opaque);
+  if (context->timeoutUs <= 0) {
+    return 0;
+  }
+  const int64_t nowUs = av_gettime_relative();
+  if (nowUs - context->startTimeUs >= context->timeoutUs) {
+    return 1;
+  }
+  return 0;
+}
+
+static std::string JsonEscape(const std::string &value) {
+  std::string escaped;
+  escaped.reserve(value.size() + 8);
+  for (char ch : value) {
+    switch (ch) {
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '"':
+        escaped += "\\\"";
+        break;
+      case '\b':
+        escaped += "\\b";
+        break;
+      case '\f':
+        escaped += "\\f";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '\t':
+        escaped += "\\t";
+        break;
+      default:
+        if (static_cast<unsigned char>(ch) < 0x20) {
+          char buffer[7] = { 0 };
+          std::snprintf(buffer, sizeof(buffer), "\\u%04x", ch & 0xff);
+          escaped += buffer;
+        } else {
+          escaped += ch;
+        }
+        break;
+    }
+  }
+  return escaped;
+}
+
+static void AppendJsonStringField(std::string &json, const char *key, const std::string &value, bool &firstField) {
+  if (!firstField) {
+    json += ",";
+  }
+  firstField = false;
+  json += "\"";
+  json += key;
+  json += "\":\"";
+  json += JsonEscape(value);
+  json += "\"";
+}
+
+static void AppendJsonIntField(std::string &json, const char *key, int64_t value, bool &firstField) {
+  if (!firstField) {
+    json += ",";
+  }
+  firstField = false;
+  json += "\"";
+  json += key;
+  json += "\":";
+  json += std::to_string(value);
+}
+
+static std::string FfmpegErrorToString(int errnum) {
+  char buffer[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+  av_make_error_string(buffer, sizeof(buffer), errnum);
+  return std::string(buffer);
+}
+
+static std::string CodecTypeToString(AVMediaType mediaType) {
+  switch (mediaType) {
+    case AVMEDIA_TYPE_VIDEO:
+      return "video";
+    case AVMEDIA_TYPE_AUDIO:
+      return "audio";
+    case AVMEDIA_TYPE_SUBTITLE:
+      return "subtitle";
+    default:
+      return "unknown";
+  }
+}
+
+static std::string RationalToString(AVRational value) {
+  return std::to_string(value.num) + "/" + std::to_string(value.den);
+}
+
+static std::string ReadMetadataValue(AVDictionary *metadata, const char *key) {
+  AVDictionaryEntry *entry = av_dict_get(metadata, key, nullptr, 0);
+  if (entry == nullptr || entry->value == nullptr) {
+    return "";
+  }
+  return std::string(entry->value);
+}
+
+static std::string DescribeChannelLayout(const AVCodecParameters *codecpar) {
+  if (codecpar == nullptr) {
+    return "";
+  }
+  char buffer[128] = { 0 };
+  if (av_channel_layout_describe(&codecpar->ch_layout, buffer, sizeof(buffer)) < 0) {
+    return "";
+  }
+  return std::string(buffer);
+}
+
+static std::string BuildProbeJson(AVFormatContext *formatContext) {
+  std::string json = "{\"streams\":[";
+  bool firstStream = true;
+  for (unsigned int index = 0; index < formatContext->nb_streams; ++index) {
+    AVStream *stream = formatContext->streams[index];
+    if (stream == nullptr || stream->codecpar == nullptr) {
+      continue;
+    }
+
+    if (!firstStream) {
+      json += ",";
+    }
+    firstStream = false;
+
+    const AVCodecParameters *codecpar = stream->codecpar;
+    const AVCodecDescriptor *descriptor = avcodec_descriptor_get(codecpar->codec_id);
+    const std::string codecName = std::string(avcodec_get_name(codecpar->codec_id));
+    const std::string codecLongName = descriptor != nullptr && descriptor->long_name != nullptr
+      ? std::string(descriptor->long_name)
+      : codecName;
+    const std::string language = ReadMetadataValue(stream->metadata, "language");
+    const std::string title = ReadMetadataValue(stream->metadata, "title");
+
+    json += "{";
+    bool firstField = true;
+    AppendJsonIntField(json, "index", static_cast<int64_t>(stream->index), firstField);
+    AppendJsonStringField(json, "codec_type", CodecTypeToString(codecpar->codec_type), firstField);
+    AppendJsonStringField(json, "codec_name", codecName, firstField);
+    AppendJsonStringField(json, "codec_long_name", codecLongName, firstField);
+
+    if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+      AppendJsonIntField(json, "width", codecpar->width, firstField);
+      AppendJsonIntField(json, "height", codecpar->height, firstField);
+      AppendJsonStringField(json, "r_frame_rate", RationalToString(stream->r_frame_rate), firstField);
+      AppendJsonStringField(json, "avg_frame_rate", RationalToString(stream->avg_frame_rate), firstField);
+      if (codecpar->bit_rate > 0) {
+        AppendJsonStringField(json, "bit_rate", std::to_string(codecpar->bit_rate), firstField);
+      }
+    } else if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+      if (codecpar->sample_rate > 0) {
+        AppendJsonStringField(json, "sample_rate", std::to_string(codecpar->sample_rate), firstField);
+      }
+      if (codecpar->ch_layout.nb_channels > 0) {
+        AppendJsonIntField(json, "channels", codecpar->ch_layout.nb_channels, firstField);
+      }
+      const std::string channelLayout = DescribeChannelLayout(codecpar);
+      if (!channelLayout.empty()) {
+        AppendJsonStringField(json, "channel_layout", channelLayout, firstField);
+      }
+      if (codecpar->bit_rate > 0) {
+        AppendJsonStringField(json, "bit_rate", std::to_string(codecpar->bit_rate), firstField);
+      }
+    }
+
+    if (!language.empty() || !title.empty()) {
+      if (!firstField) {
+        json += ",";
+      }
+      json += "\"tags\":{";
+      bool firstTagField = true;
+      if (!language.empty()) {
+        AppendJsonStringField(json, "language", language, firstTagField);
+      }
+      if (!title.empty()) {
+        AppendJsonStringField(json, "title", title, firstTagField);
+      }
+      json += "}";
+      firstField = false;
+    }
+    json += "}";
+  }
+
+  json += "],\"format\":{";
+  bool firstFormatField = true;
+  if (formatContext->duration != AV_NOPTS_VALUE && formatContext->duration > 0) {
+    const double durationSeconds = static_cast<double>(formatContext->duration) / static_cast<double>(AV_TIME_BASE);
+    AppendJsonStringField(json, "duration", std::to_string(durationSeconds), firstFormatField);
+  }
+  if (formatContext->bit_rate > 0) {
+    AppendJsonStringField(json, "bit_rate", std::to_string(formatContext->bit_rate), firstFormatField);
+  }
+  if (formatContext->iformat != nullptr && formatContext->iformat->name != nullptr) {
+    AppendJsonStringField(json, "format_name", std::string(formatContext->iformat->name), firstFormatField);
+  }
+  json += "}}";
+  return json;
+}
+
+static napi_value Ffprobe(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value args[3] = { nullptr, nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "ffprobe failed to read args");
+    return nullptr;
+  }
+  if (argc < 3) {
+    ThrowTypeError(env, "ffprobe requires (url, headerLines, timeoutMs)");
+    return nullptr;
+  }
+
+  std::string url;
+  std::string headerLines;
+  int64_t timeoutMs = 0;
+  if (!ReadUtf8String(env, args[0], url)) {
+    ThrowTypeError(env, "ffprobe url must be string");
+    return nullptr;
+  }
+  if (!ReadUtf8String(env, args[1], headerLines)) {
+    ThrowTypeError(env, "ffprobe headerLines must be string");
+    return nullptr;
+  }
+  if (napi_get_value_int64(env, args[2], &timeoutMs) != napi_ok) {
+    ThrowTypeError(env, "ffprobe timeoutMs must be int64");
+    return nullptr;
+  }
+
+  avformat_network_init();
+
+  ProbeInterruptContext interruptContext;
+  interruptContext.startTimeUs = av_gettime_relative();
+  interruptContext.timeoutUs = timeoutMs > 0 ? timeoutMs * 1000 : 0;
+
+  AVFormatContext *formatContext = avformat_alloc_context();
+  if (formatContext == nullptr) {
+    napi_throw_error(env, nullptr, "ffprobe failed: cannot allocate format context");
+    return nullptr;
+  }
+  formatContext->interrupt_callback.callback = ProbeInterruptCallback;
+  formatContext->interrupt_callback.opaque = &interruptContext;
+
+  AVDictionary *options = nullptr;
+  if (!headerLines.empty()) {
+    av_dict_set(&options, "headers", headerLines.c_str(), 0);
+  }
+
+  int openResult = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
+  av_dict_free(&options);
+  if (openResult < 0) {
+    std::string message = "ffprobe open input failed: " + FfmpegErrorToString(openResult);
+    if (formatContext != nullptr) {
+      avformat_close_input(&formatContext);
+    }
+    napi_throw_error(env, nullptr, message.c_str());
+    return nullptr;
+  }
+
+  int findInfoResult = avformat_find_stream_info(formatContext, nullptr);
+  if (findInfoResult < 0) {
+    std::string message = "ffprobe find stream info failed: " + FfmpegErrorToString(findInfoResult);
+    avformat_close_input(&formatContext);
+    napi_throw_error(env, nullptr, message.c_str());
+    return nullptr;
+  }
+
+  const std::string json = BuildProbeJson(formatContext);
+  avformat_close_input(&formatContext);
+
+  napi_value result = nullptr;
+  if (napi_create_string_utf8(env, json.c_str(), NAPI_AUTO_LENGTH, &result) != napi_ok) {
+    ThrowTypeError(env, "ffprobe failed to create json result");
+    return nullptr;
+  }
+  return result;
+}
 
 struct NativePlayerSkeletonState {
   std::string url;
@@ -847,6 +1147,7 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "getCurrentTime", nullptr, GetCurrentTime, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "ffprobe", nullptr, Ffprobe, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "ffmpegSelfCheck", nullptr, FfmpegSelfCheck, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {

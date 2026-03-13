@@ -1,4 +1,5 @@
-import { FFmpeg, FFAbortController } from '@sj/ffmpeg';
+import { BusinessError } from '@kit.BasicServicesKit';
+import VidAllCorePlayerNapi from 'libvidall_core_player_napi.so';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -158,8 +159,6 @@ export class FfprobeUtil {
     headers?: Record<string, string>,
     timeoutMs: number = 20000
   ): Promise<FfprobeResult> {
-    // 构建 HTTP headers 字符串（ffprobe -headers 格式）
-    // e.g. "Authorization: Basic xxx\r\nUser-Agent: VidAll\r\n"
     let headersStr = '';
     if (headers) {
       const keys = Object.keys(headers);
@@ -168,11 +167,6 @@ export class FfprobeUtil {
       }
     }
 
-    // 构建 ffprobe 命令
-    // -v quiet       不输出 log
-    // -of json       JSON 输出
-    // -show_streams  显示所有流
-    // -show_format   显示格式信息（包含时长、总码率）
     const commands: string[] = [
       'ffprobe',
       '-v', 'quiet',
@@ -181,7 +175,6 @@ export class FfprobeUtil {
       '-show_format',
     ];
 
-    // 有 headers 时注入（-headers 选项需放在 -i 之前）
     if (headersStr.length > 0) {
       commands.push('-headers', headersStr);
     }
@@ -189,59 +182,24 @@ export class FfprobeUtil {
     commands.push('-i', url);
 
     console.info(`[FfprobeUtil] 开始探测: ${url}`);
-    // 日志中屏蔽 Authorization 等敏感头，防止凭据明文入日志
     const safeCommands = commands.map((c) => {
-      if (typeof c === 'string' && c.toLowerCase().includes('authorization')) {
-        return c.replace(/Authorization:\s*\S+/gi, 'Authorization: ***');
+      if (typeof c === 'string' && c.toLowerCase().includes('authorization:')) {
+        return c.replace(/Authorization:[^\r\n]*/gi, 'Authorization: ***');
       }
       return c;
     });
     console.info(`[FfprobeUtil] 命令: ${safeCommands.join(' ')}`);
 
-    return new Promise<FfprobeResult>((resolve) => {
-      let outputJson = '';
-      let settled = false;
-
-      const abortController = new FFAbortController();
-      const timeoutId = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          abortController.abort(new Error('ffprobe timeout'));
-          console.error(`[FfprobeUtil] 超时（>${timeoutMs}ms）`);
-          resolve(FfprobeUtil.buildErrorResult(url, `超时（>${timeoutMs}ms）`));
-        }
-      }, timeoutMs);
-
-      FFmpeg.execute(commands, {
-        outputCallback: (msg: string) => {
-          outputJson += msg;
-        },
-        signal: abortController.signal
-      }).then(() => {
-        if (settled) { return; }
-        settled = true;
-        clearTimeout(timeoutId);
-        console.info(`[FfprobeUtil] 探测完成，输出长度=${outputJson.length}`);
-        const result = FfprobeUtil.parseOutput(url, outputJson);
-        resolve(result);
-      }).catch((err: Error) => {
-        if (settled) { return; }
-        settled = true;
-        clearTimeout(timeoutId);
-        // ffprobe 即使探测成功也可能以非零退出（如不支持的协议），
-        // 此时 outputJson 可能已经有内容，先尝试解析
-        if (outputJson.length > 10) {
-          console.warn(`[FfprobeUtil] execute 抛出错误但有输出，尝试解析: ${err.message}`);
-          const result = FfprobeUtil.parseOutput(url, outputJson);
-          if (result.success) {
-            resolve(result);
-            return;
-          }
-        }
-        console.error(`[FfprobeUtil] 探测失败: ${err.message}`);
-        resolve(FfprobeUtil.buildErrorResult(url, err.message));
-      });
-    });
+    try {
+      const outputJson = VidAllCorePlayerNapi.ffprobe(url, headersStr, timeoutMs);
+      console.info(`[FfprobeUtil] 探测完成，输出长度=${outputJson.length}`);
+      return FfprobeUtil.parseOutput(url, outputJson);
+    } catch (e) {
+      const err = e as BusinessError;
+      const message = err.message ? err.message : JSON.stringify(err);
+      console.error(`[FfprobeUtil] 探测失败: ${message}`);
+      return FfprobeUtil.buildErrorResult(url, message);
+    }
   }
 
   private static parseOutput(url: string, outputJson: string): FfprobeResult {

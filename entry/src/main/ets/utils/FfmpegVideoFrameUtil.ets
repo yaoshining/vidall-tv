@@ -1,4 +1,4 @@
-import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
+import { FFAbortController, FFmpeg } from './NativeFfmpegCompat';
 import { fileIo } from '@kit.CoreFileKit';
 
 export interface FfmpegFrameExtractResult {
