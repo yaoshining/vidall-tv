@@ -1,4 +1,4 @@
-import { VideoControlsDialog } from "./VideoControls"
+import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
 import { VideoPlayerController } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
@@ -49,7 +49,11 @@ export struct VideoPlayer {
 
   controlsDialogController = new CustomDialogController({
     builder: VideoControlsDialog({
-      videoController: this.controller
+      videoController: this.controller,
+      onOpenSettings: () => {
+        this.controlsDialogController.close()
+        this.settingsDialogController.open()
+      }
     }),
     customStyle: true,
     backgroundColor: Color.Transparent,
@@ -70,6 +74,52 @@ export struct VideoPlayer {
         }
       }
       this.controlsDialogController.close()
+    },
+    openAnimation: {
+      duration: 0
+    },
+    closeAnimation: {
+      duration: 0
+    }
+  })
+
+  settingsDialogController = new CustomDialogController({
+    builder: PlayerSettingsDialog({
+      videoController: this.controller,
+      onOpenSubtitleSelector: () => {
+        this.settingsDialogController.close()
+        this.subtitleSelectorDialogController.open()
+      }
+    }),
+    customStyle: true,
+    backgroundColor: Color.Transparent,
+    maskColor: '#0000004D',
+    width: '100%',
+    height: '100%',
+    cornerRadius: 0,
+    onWillDismiss: () => {
+      this.settingsDialogController.close()
+    },
+    openAnimation: {
+      duration: 0
+    },
+    closeAnimation: {
+      duration: 0
+    }
+  })
+
+  subtitleSelectorDialogController = new CustomDialogController({
+    builder: SubtitleSelectorDrawerDialog({
+      videoController: this.controller
+    }),
+    customStyle: true,
+    backgroundColor: Color.Transparent,
+    maskColor: Color.Transparent,
+    width: '100%',
+    height: '100%',
+    cornerRadius: 0,
+    onWillDismiss: () => {
+      this.subtitleSelectorDialogController.close()
     },
     openAnimation: {
       duration: 0
