@@ -5,6 +5,11 @@
 
 #include "napi/native_api.h"
 
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+}
+
 namespace {
 
 struct NativePlayerSkeletonState {
@@ -70,6 +75,14 @@ static napi_value CreateInt32(napi_env env, int32_t value) {
 static napi_value CreateInt64(napi_env env, int64_t value) {
   napi_value result = nullptr;
   if (napi_create_int64(env, value, &result) != napi_ok) {
+    return nullptr;
+  }
+  return result;
+}
+
+static napi_value CreateUint32(napi_env env, uint32_t value) {
+  napi_value result = nullptr;
+  if (napi_create_uint32(env, value, &result) != napi_ok) {
     return nullptr;
   }
   return result;
@@ -770,6 +783,51 @@ static napi_value GetDuration(napi_env env, napi_callback_info info) {
   return ReturnInt64OrThrow(env, state->durationMs, "getDuration failed to create return value");
 }
 
+static napi_value FfmpegSelfCheck(napi_env env, napi_callback_info info) {
+  (void)info;
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to create result object");
+    return nullptr;
+  }
+
+  const char *versionInfo = av_version_info();
+  const uint32_t avformatVersion = avformat_version();
+  const uint32_t avutilVersion = avutil_version();
+
+  napi_value versionValue = nullptr;
+  if (napi_create_string_utf8(env, versionInfo, NAPI_AUTO_LENGTH, &versionValue) != napi_ok) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to create avVersionInfo");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "avVersionInfo", versionValue) != napi_ok) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to set avVersionInfo");
+    return nullptr;
+  }
+
+  napi_value avformatVersionValue = CreateUint32(env, avformatVersion);
+  if (avformatVersionValue == nullptr) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to create avformatVersion");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "avformatVersion", avformatVersionValue) != napi_ok) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to set avformatVersion");
+    return nullptr;
+  }
+
+  napi_value avutilVersionValue = CreateUint32(env, avutilVersion);
+  if (avutilVersionValue == nullptr) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to create avutilVersion");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "avutilVersion", avutilVersionValue) != napi_ok) {
+    ThrowTypeError(env, "ffmpegSelfCheck failed to set avutilVersion");
+    return nullptr;
+  }
+
+  return result;
+}
+
 } // namespace
 
 EXTERN_C_START
@@ -788,7 +846,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getCurrentTime", nullptr, GetCurrentTime, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "ffmpegSelfCheck", nullptr, FfmpegSelfCheck, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");
