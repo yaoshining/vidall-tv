@@ -1,4 +1,4 @@
-import { VideoControlsDialog, PlayerSettingsDialog } from "./VideoControls"
+import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
 import { VideoPlayerController } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
@@ -84,7 +84,13 @@ export struct VideoPlayer {
   })
 
   settingsDialogController = new CustomDialogController({
-    builder: PlayerSettingsDialog({}),
+    builder: PlayerSettingsDialog({
+      videoController: this.controller,
+      onOpenSubtitleSelector: () => {
+        this.settingsDialogController.close()
+        this.subtitleSelectorDialogController.open()
+      }
+    }),
     customStyle: true,
     backgroundColor: Color.Transparent,
     maskColor: '#0000004D',
@@ -93,6 +99,27 @@ export struct VideoPlayer {
     cornerRadius: 0,
     onWillDismiss: () => {
       this.settingsDialogController.close()
+    },
+    openAnimation: {
+      duration: 0
+    },
+    closeAnimation: {
+      duration: 0
+    }
+  })
+
+  subtitleSelectorDialogController = new CustomDialogController({
+    builder: SubtitleSelectorDrawerDialog({
+      videoController: this.controller
+    }),
+    customStyle: true,
+    backgroundColor: Color.Transparent,
+    maskColor: Color.Transparent,
+    width: '100%',
+    height: '100%',
+    cornerRadius: 0,
+    onWillDismiss: () => {
+      this.subtitleSelectorDialogController.close()
     },
     openAnimation: {
       duration: 0
