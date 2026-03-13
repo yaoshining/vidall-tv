@@ -11,7 +11,7 @@ export const selectTrack: (handle: number, trackIndex: number) => void;
 export const release: (handle: number) => void;
 export const getCurrentTime: (handle: number) => number;
 export const getDuration: (handle: number) => number;
-export const ffprobe: (url: string, headerLines: string, timeoutMs: number) => string;
+export const ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
 export const ffmpegSelfCheck: () => {
   avVersionInfo: string;
   avformatVersion: number;

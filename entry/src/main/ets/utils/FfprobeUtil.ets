@@ -148,6 +148,31 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
  * const result = await FfprobeUtil.probe(url, { Authorization: 'Basic xxx' });
  */
 export class FfprobeUtil {
+  private static readonly MAX_CONCURRENT_PROBES: number = 2;
+  private static activeProbeCount: number = 0;
+  private static pendingProbeResolvers: Array<() => void> = [];
+
+  private static async acquireProbeSlot(): Promise<void> {
+    if (FfprobeUtil.activeProbeCount < FfprobeUtil.MAX_CONCURRENT_PROBES) {
+      FfprobeUtil.activeProbeCount += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      FfprobeUtil.pendingProbeResolvers.push(resolve);
+    });
+    FfprobeUtil.activeProbeCount += 1;
+  }
+
+  private static releaseProbeSlot(): void {
+    if (FfprobeUtil.activeProbeCount > 0) {
+      FfprobeUtil.activeProbeCount -= 1;
+    }
+    const nextResolver = FfprobeUtil.pendingProbeResolvers.shift();
+    if (nextResolver) {
+      nextResolver();
+    }
+  }
+
   /**
    * 探测视频文件的完整媒体信息
    * @param url       视频 URL（支持 http/https/本地路径）
@@ -190,8 +215,9 @@ export class FfprobeUtil {
     });
     console.info(`[FfprobeUtil] 命令: ${safeCommands.join(' ')}`);
 
+    await FfprobeUtil.acquireProbeSlot();
     try {
-      const outputJson = VidAllCorePlayerNapi.ffprobe(url, headersStr, timeoutMs);
+      const outputJson = await VidAllCorePlayerNapi.ffprobe(url, headersStr, timeoutMs);
       console.info(`[FfprobeUtil] 探测完成，输出长度=${outputJson.length}`);
       return FfprobeUtil.parseOutput(url, outputJson);
     } catch (e) {
@@ -199,6 +225,8 @@ export class FfprobeUtil {
       const message = err.message ? err.message : JSON.stringify(err);
       console.error(`[FfprobeUtil] 探测失败: ${message}`);
       return FfprobeUtil.buildErrorResult(url, message);
+    } finally {
+      FfprobeUtil.releaseProbeSlot();
     }
   }
 

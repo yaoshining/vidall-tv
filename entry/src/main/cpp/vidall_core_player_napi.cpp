@@ -27,6 +27,16 @@ struct ProbeInterruptContext {
   int64_t timeoutUs = 0;
 };
 
+struct FfprobeAsyncContext {
+  napi_async_work work = nullptr;
+  napi_deferred deferred = nullptr;
+  std::string url;
+  std::string headerLines;
+  int64_t timeoutMs = 0;
+  std::string jsonResult;
+  std::string errorMessage;
+};
+
 static int ProbeInterruptCallback(void *opaque) {
   if (opaque == nullptr) {
     return 0;
@@ -235,6 +245,94 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
   return json;
 }
 
+static bool RunFfprobe(
+  const std::string &url,
+  const std::string &headerLines,
+  int64_t timeoutMs,
+  std::string &jsonResult,
+  std::string &errorMessage
+) {
+  avformat_network_init();
+
+  ProbeInterruptContext interruptContext;
+  interruptContext.startTimeUs = av_gettime_relative();
+  interruptContext.timeoutUs = timeoutMs > 0 ? timeoutMs * 1000 : 0;
+
+  AVFormatContext *formatContext = avformat_alloc_context();
+  if (formatContext == nullptr) {
+    errorMessage = "ffprobe failed: cannot allocate format context";
+    return false;
+  }
+
+  formatContext->interrupt_callback.callback = ProbeInterruptCallback;
+  formatContext->interrupt_callback.opaque = &interruptContext;
+
+  AVDictionary *options = nullptr;
+  if (!headerLines.empty()) {
+    av_dict_set(&options, "headers", headerLines.c_str(), 0);
+  }
+
+  int openResult = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
+  av_dict_free(&options);
+  if (openResult < 0) {
+    errorMessage = "ffprobe open input failed: " + FfmpegErrorToString(openResult);
+    if (formatContext != nullptr) {
+      avformat_close_input(&formatContext);
+    }
+    return false;
+  }
+
+  int findInfoResult = avformat_find_stream_info(formatContext, nullptr);
+  if (findInfoResult < 0) {
+    errorMessage = "ffprobe find stream info failed: " + FfmpegErrorToString(findInfoResult);
+    avformat_close_input(&formatContext);
+    return false;
+  }
+
+  jsonResult = BuildProbeJson(formatContext);
+  avformat_close_input(&formatContext);
+  return true;
+}
+
+static void ExecuteFfprobeAsync(napi_env env, void *data) {
+  (void)env;
+  FfprobeAsyncContext *context = static_cast<FfprobeAsyncContext *>(data);
+  if (context == nullptr) {
+    return;
+  }
+  RunFfprobe(context->url, context->headerLines, context->timeoutMs, context->jsonResult, context->errorMessage);
+}
+
+static void CompleteFfprobeAsync(napi_env env, napi_status status, void *data) {
+  FfprobeAsyncContext *context = static_cast<FfprobeAsyncContext *>(data);
+  if (context == nullptr) {
+    return;
+  }
+
+  napi_value settleValue = nullptr;
+  if (status == napi_ok && context->errorMessage.empty()) {
+    if (napi_create_string_utf8(env, context->jsonResult.c_str(), NAPI_AUTO_LENGTH, &settleValue) == napi_ok) {
+      napi_resolve_deferred(env, context->deferred, settleValue);
+    } else {
+      context->errorMessage = "ffprobe failed to create result string";
+    }
+  }
+
+  if (!context->errorMessage.empty()) {
+    napi_value messageValue = nullptr;
+    napi_value errorValue = nullptr;
+    if (napi_create_string_utf8(env, context->errorMessage.c_str(), NAPI_AUTO_LENGTH, &messageValue) == napi_ok &&
+      napi_create_error(env, nullptr, messageValue, &errorValue) == napi_ok) {
+      napi_reject_deferred(env, context->deferred, errorValue);
+    }
+  }
+
+  if (context->work != nullptr) {
+    napi_delete_async_work(env, context->work);
+  }
+  delete context;
+}
+
 static napi_value Ffprobe(napi_env env, napi_callback_info info) {
   size_t argc = 3;
   napi_value args[3] = { nullptr, nullptr, nullptr };
@@ -263,53 +361,39 @@ static napi_value Ffprobe(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  avformat_network_init();
+  FfprobeAsyncContext *context = new FfprobeAsyncContext();
+  context->url = url;
+  context->headerLines = headerLines;
+  context->timeoutMs = timeoutMs;
 
-  ProbeInterruptContext interruptContext;
-  interruptContext.startTimeUs = av_gettime_relative();
-  interruptContext.timeoutUs = timeoutMs > 0 ? timeoutMs * 1000 : 0;
-
-  AVFormatContext *formatContext = avformat_alloc_context();
-  if (formatContext == nullptr) {
-    napi_throw_error(env, nullptr, "ffprobe failed: cannot allocate format context");
-    return nullptr;
-  }
-  formatContext->interrupt_callback.callback = ProbeInterruptCallback;
-  formatContext->interrupt_callback.opaque = &interruptContext;
-
-  AVDictionary *options = nullptr;
-  if (!headerLines.empty()) {
-    av_dict_set(&options, "headers", headerLines.c_str(), 0);
-  }
-
-  int openResult = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
-  av_dict_free(&options);
-  if (openResult < 0) {
-    std::string message = "ffprobe open input failed: " + FfmpegErrorToString(openResult);
-    if (formatContext != nullptr) {
-      avformat_close_input(&formatContext);
-    }
-    napi_throw_error(env, nullptr, message.c_str());
+  napi_value promise = nullptr;
+  if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "ffprobe failed to create promise");
     return nullptr;
   }
 
-  int findInfoResult = avformat_find_stream_info(formatContext, nullptr);
-  if (findInfoResult < 0) {
-    std::string message = "ffprobe find stream info failed: " + FfmpegErrorToString(findInfoResult);
-    avformat_close_input(&formatContext);
-    napi_throw_error(env, nullptr, message.c_str());
+  napi_value resourceName = nullptr;
+  if (napi_create_string_utf8(env, "ffprobeAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "ffprobe failed to create resource name");
     return nullptr;
   }
 
-  const std::string json = BuildProbeJson(formatContext);
-  avformat_close_input(&formatContext);
-
-  napi_value result = nullptr;
-  if (napi_create_string_utf8(env, json.c_str(), NAPI_AUTO_LENGTH, &result) != napi_ok) {
-    ThrowTypeError(env, "ffprobe failed to create json result");
+  if (napi_create_async_work(env, nullptr, resourceName, ExecuteFfprobeAsync, CompleteFfprobeAsync, context, &context->work) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "ffprobe failed to create async work");
     return nullptr;
   }
-  return result;
+
+  if (napi_queue_async_work(env, context->work) != napi_ok) {
+    napi_delete_async_work(env, context->work);
+    delete context;
+    ThrowTypeError(env, "ffprobe failed to queue async work");
+    return nullptr;
+  }
+
+  return promise;
 }
 
 struct NativePlayerSkeletonState {
