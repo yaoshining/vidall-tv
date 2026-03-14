@@ -742,7 +742,8 @@ export struct SeasonDetailPage {
 
       if (!dbHasAudioData || !dbHasSubtitleData || durationHintMs <= 0) {
         try {
-          const probeResult = await FfprobeUtil.probe(encodeURI(fullUrl), httpHeader, 15000);
+          // getFullUrl() 已完成编码，这里禁止再次 encodeURI，避免 % -> %25。
+          const probeResult = await FfprobeUtil.probe(fullUrl, httpHeader, 15000);
           if (probeResult.success) {
             if (durationHintMs <= 0 && probeResult.durationMs > 0) {
               durationHintMs = probeResult.durationMs;
@@ -779,7 +780,8 @@ export struct SeasonDetailPage {
 
       const episodeName = await this.resolveEpisodeName(db, episode);
       const param: PlayerPageParam = {
-        url: encodeURI(fullUrl),
+        // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
+        url: fullUrl,
         httpHeader,
         title: this.buildPlayerTitle(episode, episodeName),
         durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,

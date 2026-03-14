@@ -210,29 +210,36 @@ export struct FileExplorerPage {
       ` presetAudioTracks=${presetAudioTracks.length} presetSubtitleTracks=${presetSubtitleTracks.length}`
     );
 
-    // ── Fallback：DB 无确定性数据时，实时 ffprobe 探测补全 ──
-    // 若 DB 已有记录（哪怕轨道数为 0），通常可跳过探测。
-    // 但若缺少时长提示（durationHintMs<=0），仍需 ffprobe 补齐时长，供 native 骨架进度条/seek 上限使用。
-    if (!dbHasAudioData || !dbHasSubtitleData || durationHintMs <= 0) {
+    // 文件浏览器直开策略：默认实时 ffprobe（DB 仅兜底）
+    // 说明：文件浏览器路径可能是“未入库/旧入库”状态，优先以实时探测结果构建播放参数。
+    const useRealtimeProbeByDefault = true;
+    if (useRealtimeProbeByDefault || !dbHasAudioData || !dbHasSubtitleData || durationHintMs <= 0) {
       console.info(
         `[playVideo] 触发 ffprobe fallback:` +
         ` dbHasAudioData=${dbHasAudioData} dbHasSubtitleData=${dbHasSubtitleData}` +
         ` durationHintMs=${durationHintMs}` +
-        ` encodedUrl="${encodeURI(url).substring(0, 80)}"`
+        ` url="${url.substring(0, 80)}"`
       );
       try {
-        const probeResult = await FfprobeUtil.probe(encodeURI(url), httpHeader, 15000);
+        // getFullUrl() 已完成路径编码，这里禁止再次 encodeURI，避免 % -> %25 的二次编码。
+        const probeResult = await FfprobeUtil.probe(url, httpHeader, 15000);
         if (probeResult.success) {
           console.info(
             `[playVideo] ffprobe 成功: 音轨=${probeResult.audioTracks.length}` +
             ` 字幕轨=${probeResult.subtitleTracks.length}` +
             ` 格式=${probeResult.formatName ?? '?'} 时长=${probeResult.durationText}`
           );
-          if (durationHintMs <= 0 && probeResult.durationMs > 0) {
-            durationHintMs = probeResult.durationMs;
-          }
-          // 仅补全 DB 未记录的部分
-          if (!dbHasAudioData) {
+          const probeHasUsefulData =
+            probeResult.durationMs > 0 ||
+            probeResult.audioTracks.length > 0 ||
+            probeResult.subtitleTracks.length > 0;
+          if (probeHasUsefulData) {
+            if (probeResult.durationMs > 0) {
+              durationHintMs = probeResult.durationMs;
+            }
+            // 实时策略下，probe 成功后以 probe 结果覆盖轨道列表。
+            presetAudioTracks = [];
+            presetSubtitleTracks = [];
             for (let i = 0; i < probeResult.audioTracks.length; i++) {
               const t = probeResult.audioTracks[i];
               const item: PresetAudioTrack = {
@@ -247,8 +254,6 @@ export struct FileExplorerPage {
                 ` codec=${t.codecName} lang=${t.language || '(无)'} displayName="${item.displayName}"`
               );
             }
-          }
-          if (!dbHasSubtitleData) {
             for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
               const t = probeResult.subtitleTracks[i];
               const item: PresetSubtitleTrack = {
@@ -263,6 +268,8 @@ export struct FileExplorerPage {
                 ` codec=${t.codecName} lang=${t.language || '(无)'} displayName="${item.displayName}"`
               );
             }
+          } else {
+            console.warn('[playVideo] ffprobe 成功但未返回有效轨道/时长，保留 DB 结果作为兜底');
           }
           console.info(
             `[playVideo] ffprobe 补全完毕: 音轨=${presetAudioTracks.length} 字幕轨=${presetSubtitleTracks.length}`
@@ -283,7 +290,8 @@ export struct FileExplorerPage {
     );
 
     const pageParam: PlayerPageParam = {
-      url: encodeURI(url),
+      // getFullUrl() 已编码，禁止二次 encodeURI。
+      url: url,
       httpHeader: httpHeader,
       title: displayName,
       durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,

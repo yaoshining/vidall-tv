@@ -48,6 +48,15 @@ export struct VideoPlayer {
     }
   }
 
+  private isPlaybackCompletedState(): boolean {
+    const duration = this.controller.duration
+    const current = this.controller.currentTime
+    if (duration <= 0) {
+      return false
+    }
+    return current >= duration
+  }
+
   controlsDialogController = new CustomDialogController({
     builder: VideoControlsDialog({
       videoController: this.controller,
@@ -70,7 +79,8 @@ export struct VideoPlayer {
     },
     onWillDismiss: (action) => {
       if (action.reason === DismissReason.PRESS_BACK) {
-        if (!this.controller.isPlaying) {
+        // 仅暂停态关闭控件后恢复播放；播放结束态关闭控件不自动续播。
+        if (!this.controller.isPlaying && !this.isPlaybackCompletedState()) {
           this.controller.play()
         }
       }
