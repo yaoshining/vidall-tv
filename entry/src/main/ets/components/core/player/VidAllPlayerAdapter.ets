@@ -26,6 +26,8 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _currentTime: number = 0;
   private _isPlaying: boolean = false;
   private _isPrepared: boolean = false;
+  /** onReady 幂等门禁：防止 C++ setCallbacks 重注册等场景下重复触发控制层 onReady */
+  private _readyFired: boolean = false;
   private _videoData?: VideoData;
   private _surfaceId: string = '';
   private _pendingContext: object | null = null;
@@ -132,27 +134,46 @@ export class VidAllPlayerAdapter implements IPlayer {
       VidAllCorePlayerNapi.setCallbacks(
         currentHandle,
         () => {
+          // 幂等门禁：C++ setCallbacks 重注册后会补发一次 onPrepared，确保控制层 onReady 只触发一次。
+          if (this._readyFired) {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `onPrepared: 重复触发已忽略 handle=${currentHandle}`);
+            return;
+          }
+          this._readyFired = true;
           this._isPrepared = true;
-          const nativeDuration = this.tryNativeWithFallback('getDuration', () =>
+          // getDuration/getCurrentTime 失败属非致命情况，使用 silentNativeFallback：
+          // 不触发 _onErrorCb，避免上层误判为播放错误而进行后端切换。
+          const nativeDuration = this.silentNativeFallback('getDuration', () =>
             VidAllCorePlayerNapi.getDuration(currentHandle), 0);
           if (nativeDuration > 0) {
             this._duration = nativeDuration;
           } else if (videoData.durationHintMs !== undefined && videoData.durationHintMs > 0) {
             this._duration = videoData.durationHintMs;
           }
-          this._currentTime = this.tryNativeWithFallback('getCurrentTime', () =>
+          this._currentTime = this.silentNativeFallback('getCurrentTime', () =>
             VidAllCorePlayerNapi.getCurrentTime(currentHandle), 0);
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `VidAll Player onPrepared: handle=${currentHandle} duration=${this._duration}`);
+            `onPrepared: handle=${currentHandle} duration=${this._duration} position=${this._currentTime}`);
           this._onReadyCb?.();
         },
         (code: number, msg: string) => {
+          // 状态门禁：_playerHandle <= 0 表示已 release，忽略延迟到达的旧实例回调，
+          // 防止新会话状态被旧错误污染。
+          if (this._playerHandle <= 0) {
+            return;
+          }
           const hint = this.resolveNativeErrorHint(code);
           const errorMessage = `[${code}] ${msg} (hint=${hint})`;
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG, `VidAll Player onError: ${errorMessage}`);
+          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+            `onError: handle=${currentHandle} code=${code} hint=${hint}`);
           this._onErrorCb?.(new Error(errorMessage));
         },
         (posMs: number) => {
+          // 状态门禁：同 onError。
+          if (this._playerHandle <= 0) {
+            return;
+          }
           this._currentTime = posMs;
           this._onTimeUpdateCb?.(posMs);
         },
@@ -407,6 +428,7 @@ export class VidAllPlayerAdapter implements IPlayer {
   private async releaseInternal(emitStopped: boolean): Promise<void> {
     this._isPlaying = false;
     this._isPrepared = false;
+    this._readyFired = false;
     this._videoData = undefined;
     this._duration = 0;
     this._currentTime = 0;
@@ -439,15 +461,32 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._timeUpdateTimer = setInterval(() => {
       try {
         if (this._playerHandle > 0) {
-          this._currentTime = this.callNativeWithValue('getCurrentTime', () =>
-            VidAllCorePlayerNapi.getCurrentTime(this._playerHandle));
-          const nativeDuration = this.callNativeWithValue('getDuration', () =>
-            VidAllCorePlayerNapi.getDuration(this._playerHandle));
-          if (nativeDuration > 0) {
-            this._duration = nativeDuration;
+          // 定时轮询中 getCurrentTime/getDuration 的瞬时失败属非致命，
+          // 使用内联 try/catch 代替 callNativeWithValue：不触发 _onErrorCb，
+          // 避免瞬时读取失败造成播放器意外回退。
+          try {
+            this._currentTime = VidAllCorePlayerNapi.getCurrentTime(this._playerHandle);
+          } catch (readErr) {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `timeUpdate: getCurrentTime 失败，保持上次值 pos=${this._currentTime}`);
+          }
+          try {
+            const nativeDuration = VidAllCorePlayerNapi.getDuration(this._playerHandle);
+            if (nativeDuration > 0) {
+              this._duration = nativeDuration;
+            }
+          } catch (durErr) {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `timeUpdate: getDuration 失败，保持上次值 dur=${this._duration}`);
           }
         }
-        this._onTimeUpdateCb?.(this._currentTime);
+        // 仅当定时器仍然有效时才触发 timeUpdate：
+        // C++ GetCurrentTime 内部调用 AdvancePlaybackClockIfNeeded，若达到 duration 会
+        // 同步触发 EmitTimeUpdate + EmitCompleted，完成回调中会 clearInterval 并置 undefined。
+        // 此检查防止同一轮 tick 内 onTimeUpdate 和 onCompleted 各被双重触发。
+        if (this._timeUpdateTimer !== undefined) {
+          this._onTimeUpdateCb?.(this._currentTime);
+        }
         if (this._isPlaying && this._duration > 0 && this._currentTime >= this._duration) {
           this._isPlaying = false;
           if (this._timeUpdateTimer !== undefined) {
@@ -458,7 +497,7 @@ export class VidAllPlayerAdapter implements IPlayer {
         }
       } catch (_) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          'timeUpdate 轮询已停止：native getter 调用失败');
+          'timeUpdate 轮询已停止：意外异常');
         if (this._timeUpdateTimer !== undefined) {
           clearInterval(this._timeUpdateTimer);
           this._timeUpdateTimer = undefined;
@@ -494,6 +533,22 @@ export class VidAllPlayerAdapter implements IPlayer {
     } catch (e) {
       const err = this.wrapNativeError(action, e as BusinessError);
       this._onErrorCb?.(err);
+      return fallback;
+    }
+  }
+
+  /**
+   * 非致命路径专用：native 调用失败时只记录日志，不触发 _onErrorCb。
+   * 适用于 ready 流程中 getDuration/getCurrentTime 等读取操作——
+   * 这类失败不代表播放器进入错误态，不应触发上层后端切换。
+   */
+  private silentNativeFallback<T>(action: string, fn: () => T, fallback: T): T {
+    try {
+      return fn();
+    } catch (e) {
+      const err = this.wrapNativeError(action, e as BusinessError);
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[silent] ${action} 非致命失败: ${err.message}`);
       return fallback;
     }
   }
