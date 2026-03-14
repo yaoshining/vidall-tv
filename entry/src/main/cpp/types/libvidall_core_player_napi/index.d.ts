@@ -23,5 +23,6 @@ export const setCallbacks: (
   onError: (code: number, msg: string) => void,
   onTimeUpdate: (posMs: number) => void,
   onCompleted: () => void,
-  onBufferingChange: (isBuffering: boolean) => void
+  onBufferingChange: (isBuffering: boolean) => void,
+  onSeekDone: () => void
 ) => void;

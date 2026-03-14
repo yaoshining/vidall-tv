@@ -47,7 +47,11 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _onUnsupportedFormatCb?: () => void;
   private _onSeekDoneCb?: () => void;
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
-    private _onBufferingCb?: (isBuffering: boolean) => void;
+  private _onBufferingCb?: (isBuffering: boolean) => void;
+  /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
+  private _seekPending: boolean = false;
+  /** seek 完成超时兜底：原生未在 600ms 内回调时自动触发 onSeekDone */
+  private _seekDoneTimeoutTimer?: number;
 
   get duration(): number {
     return this._duration;
@@ -189,6 +193,19 @@ export class VidAllPlayerAdapter implements IPlayer {
         },
         (isBuffering: boolean) => {
           this._onBufferingCb?.(isBuffering);
+        },
+        () => {
+          // 原生 seekDone 确认回调：seek 定位完成后由 C++ EmitSeekDone 触发。
+          // 使用 _seekPending 门禁防止重复触发（sync + timeout 双路同时存在时最多触发一次）。
+          if (!this._seekPending) {
+            return;
+          }
+          this._seekPending = false;
+          if (this._seekDoneTimeoutTimer !== undefined) {
+            clearTimeout(this._seekDoneTimeoutTimer);
+            this._seekDoneTimeoutTimer = undefined;
+          }
+          this._onSeekDoneCb?.();
         }
       );
     });
@@ -269,13 +286,37 @@ export class VidAllPlayerAdapter implements IPlayer {
     }
     this._currentTime = targetTimeMs;
     if (this._playerHandle > 0) {
+      // 清理上一次未完成的 seek 超时兜底，设置新的等待
+      if (this._seekDoneTimeoutTimer !== undefined) {
+        clearTimeout(this._seekDoneTimeoutTimer);
+        this._seekDoneTimeoutTimer = undefined;
+      }
+      this._seekPending = true;
       this.callNativeVoid('seek', () => {
+        // C++ Seek 执行完毕后会同步调用 EmitSeekDone，
+        // 其触发的 JS seekDone 回调会清除 _seekPending 并火 _onSeekDoneCb。
         VidAllCorePlayerNapi.seek(this._playerHandle, targetTimeMs);
       });
-      this._currentTime = this.callNativeWithValue('getCurrentTime', () =>
-        VidAllCorePlayerNapi.getCurrentTime(this._playerHandle));
+      // 若 C++ 在骨架阶段已同步触发 seekDone，_seekPending 此时为 false，无需超时兜底。
+      // 若未触发（未来异步解码器场景），以 600ms 超时作为保底。
+      if (this._seekPending) {
+        this._seekDoneTimeoutTimer = setTimeout(() => {
+          this._seekDoneTimeoutTimer = undefined;
+          if (this._seekPending) {
+            this._seekPending = false;
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `seek 超时兜底触发 target=${targetTimeMs}`);
+            this._onSeekDoneCb?.();
+          }
+        }, 600);
+      }
+      // 读取 seek 后的确认位置（非致命读，失败时保留乐观值）
+      this._currentTime = this.silentNativeFallback('getCurrentTimeAfterSeek', () =>
+        VidAllCorePlayerNapi.getCurrentTime(this._playerHandle), targetTimeMs);
+    } else {
+      // 无 native handle：直接同步触发完成（兜底路径）
+      this._onSeekDoneCb?.();
     }
-    this._onSeekDoneCb?.();
   }
 
   async forward(milliseconds: number): Promise<void> {
@@ -435,6 +476,11 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._surfaceId = '';
     this._pendingContext = null;
     this._pendingXComponentId = '';
+    this._seekPending = false;
+    if (this._seekDoneTimeoutTimer !== undefined) {
+      clearTimeout(this._seekDoneTimeoutTimer);
+      this._seekDoneTimeoutTimer = undefined;
+    }
     if (this._timeUpdateTimer !== undefined) {
       clearInterval(this._timeUpdateTimer);
       this._timeUpdateTimer = undefined;

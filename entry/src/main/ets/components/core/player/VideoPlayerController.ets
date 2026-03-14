@@ -335,6 +335,8 @@ export class VideoPlayerController {
     this.duration = 0;
     this.currentTime = 0;
     this.progress = 0;
+    this.isSeeking = false;
+    this.timeToSeek = -1;
     this.lastErrorMessage = '';
     this.subtitleAdapter.release();
     this.subtitleAdapter = new NoSubtitleBridgeAdapter();
@@ -1668,7 +1670,15 @@ export class VideoPlayerController {
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     if (!this.isSeeking) {
       this.isSeeking = true;
-      this.player.seek(safeTime);
+      try {
+        this.player.seek(safeTime);
+      } catch (seekErr) {
+        // seek 调用失败（如 native 地底抛异常）：重置 isSeeking 防止永久卡住。
+        // onError 回调已在 callNativeVoid 里触发，此处仅做状态修复。
+        this.isSeeking = false;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `seek 调用异常: ${(seekErr as BusinessError).message ?? 'unknown'}`);
+      }
     } else {
       this.timeToSeek = safeTime;
     }

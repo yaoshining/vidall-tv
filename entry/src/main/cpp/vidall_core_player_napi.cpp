@@ -412,7 +412,8 @@ struct NativePlayerSkeletonState {
   napi_ref onErrorRef = nullptr;
   napi_ref onTimeUpdateRef = nullptr;
   napi_ref onCompletedRef = nullptr;
-    napi_ref onBufferingChangeRef = nullptr;
+  napi_ref onBufferingChangeRef = nullptr;
+  napi_ref onSeekDoneRef = nullptr;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -628,16 +629,23 @@ static void EmitCompleted(const NativePlayerSkeletonState &state) {
   }
 }
 
-  static void EmitBufferingChange(const NativePlayerSkeletonState &state, bool isBuffering) {
-    if (state.onBufferingChangeRef == nullptr || state.callbackEnv == nullptr) {
-      return;
-    }
-    napi_value argv[1] = { nullptr };
-    if (napi_get_boolean(state.callbackEnv, isBuffering, &argv[0]) != napi_ok) {
-      return;
-    }
-    CallJsFunction(state.callbackEnv, state.onBufferingChangeRef, 1, argv);
+static void EmitBufferingChange(const NativePlayerSkeletonState &state, bool isBuffering) {
+  if (state.onBufferingChangeRef == nullptr || state.callbackEnv == nullptr) {
+    return;
   }
+  napi_value argv[1] = { nullptr };
+  if (napi_get_boolean(state.callbackEnv, isBuffering, &argv[0]) != napi_ok) {
+    return;
+  }
+  CallJsFunction(state.callbackEnv, state.onBufferingChangeRef, 1, argv);
+}
+
+static void EmitSeekDone(const NativePlayerSkeletonState &state) {
+  if (state.onSeekDoneRef == nullptr || state.callbackEnv == nullptr) {
+    return;
+  }
+  CallJsFunction(state.callbackEnv, state.onSeekDoneRef, 0, nullptr);
+}
 
 static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbackEnv) {
   napi_env deleteEnv = state.callbackEnv != nullptr ? state.callbackEnv : fallbackEnv;
@@ -645,7 +653,8 @@ static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbac
   DeleteRefIfPresent(deleteEnv, state.onErrorRef);
   DeleteRefIfPresent(deleteEnv, state.onTimeUpdateRef);
   DeleteRefIfPresent(deleteEnv, state.onCompletedRef);
-    DeleteRefIfPresent(deleteEnv, state.onBufferingChangeRef);
+  DeleteRefIfPresent(deleteEnv, state.onBufferingChangeRef);
+  DeleteRefIfPresent(deleteEnv, state.onSeekDoneRef);
 }
 
 static bool EnsurePreparedOrEmitError(
@@ -891,19 +900,20 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
 }
 
 static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
-  size_t argc = 6;
-  napi_value args[6] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+  size_t argc = 7;
+  napi_value args[7] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
     ThrowTypeError(env, "setCallbacks failed to read args");
     return nullptr;
   }
   if (argc < 5) {
     ThrowTypeError(env,
-      "setCallbacks requires (handle, onPrepared, onError, onTimeUpdate, onCompleted[, onBufferingChange])");
+      "setCallbacks requires (handle, onPrepared, onError, onTimeUpdate, onCompleted[, onBufferingChange[, onSeekDone]])");
     return nullptr;
   }
   int32_t handle = 0;
-    const bool hasBufferingArg = (argc >= 6);
+  const bool hasBufferingArg = (argc >= 6);
+  const bool hasSeekDoneArg = (argc >= 7);
   if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
     ThrowTypeError(env, "setCallbacks handle must be int32");
     return nullptr;
@@ -925,11 +935,16 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
   if (!EnsureFunctionArg(env, args[4], "setCallbacks onCompleted must be function")) {
     return nullptr;
   }
-    if (hasBufferingArg) {
-      if (!EnsureFunctionArg(env, args[5], "setCallbacks onBufferingChange must be function")) {
-        return nullptr;
-      }
+  if (hasBufferingArg) {
+    if (!EnsureFunctionArg(env, args[5], "setCallbacks onBufferingChange must be function")) {
+      return nullptr;
     }
+  }
+  if (hasSeekDoneArg) {
+    if (!EnsureFunctionArg(env, args[6], "setCallbacks onSeekDone must be function")) {
+      return nullptr;
+    }
+  }
 
   // Release old refs before overwriting
   ClearCallbackRefs(state, env);
@@ -953,13 +968,20 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
     ThrowTypeError(env, "setCallbacks failed to create onCompleted callback reference");
     return nullptr;
   }
-    if (hasBufferingArg) {
-      if (napi_create_reference(env, args[5], 1, &state.onBufferingChangeRef) != napi_ok) {
-        ClearCallbackRefs(state, env);
-        ThrowTypeError(env, "setCallbacks failed to create onBufferingChange callback reference");
-        return nullptr;
-      }
+  if (hasBufferingArg) {
+    if (napi_create_reference(env, args[5], 1, &state.onBufferingChangeRef) != napi_ok) {
+      ClearCallbackRefs(state, env);
+      ThrowTypeError(env, "setCallbacks failed to create onBufferingChange callback reference");
+      return nullptr;
     }
+  }
+  if (hasSeekDoneArg) {
+    if (napi_create_reference(env, args[6], 1, &state.onSeekDoneRef) != napi_ok) {
+      ClearCallbackRefs(state, env);
+      ThrowTypeError(env, "setCallbacks failed to create onSeekDone callback reference");
+      return nullptr;
+    }
+  }
   state.callbackEnv = env;
 
   // 若回调在 prepared 之后才注册，主动补发一次状态，避免上层错过时序。
@@ -1073,6 +1095,9 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
     state.lastRealtimeMs = NowRealtimeMs();
   }
   EmitTimeUpdate(state);
+  // Emit seekDone after confirming position; adapter uses this to fire onSeekDone
+  // instead of relying on the synchronous call return.
+  EmitSeekDone(state);
   return ReturnUndefinedOrThrow(env, "seek failed to create return value");
 }
 
