@@ -66,11 +66,22 @@ interface AudioRoutingDecision {
   detectedCodec: string;
   detectedChannels: number;
   hardSupported: boolean;
+  precheckProbeFailed: boolean;
+  precheckProbeError: string;
 }
 
 interface PresetAudioHint {
   codecName: string;
   channels: number;
+}
+
+interface FallbackLogRecord {
+  fallbackReason: string;
+  fallbackFrom: PlayerBackend;
+  fallbackTo: PlayerBackend;
+  videoId: number;
+  filePath: string;
+  detailMessage: string;
 }
 
 interface NativeXComponentFallbackContext {
@@ -284,12 +295,21 @@ export class VideoPlayerController {
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
+      const backendBeforeAutoRouting = this.backend;
       const decision = await this.resolveAudioRoutingDecision(videoData);
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
       if (this.backend === 'avplayer' || this.backend === 'ffmpeg') {
         this.backend = decision.preferredBackend;
+      }
+      if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
+        this.logFallbackEvent(
+          'precheck_probe_failed',
+          backendBeforeAutoRouting,
+          this.backend,
+          decision.precheckProbeError
+        );
       }
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
@@ -483,6 +503,10 @@ export class VideoPlayerController {
         return;
       }
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
+      if (this.backend === 'native') {
+        this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
+        return;
+      }
       this.isLoading = false;
       this.lastErrorMessage = this.normalizePlayerError(error.message);
     });
@@ -500,6 +524,7 @@ export class VideoPlayerController {
         return;
       }
       const targetBackend: PlayerBackend = this.unsupportedFormatFallback;
+      this.logFallbackEvent('avplayer_unsupported_format', 'avplayer', targetBackend);
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
@@ -1100,7 +1125,7 @@ export class VideoPlayerController {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `setNativeContext init 失败: ${err.message}`);
-        this.fallbackNativeToIjk('native 初始化失败，已自动回退到 IJK 播放');
+        this.fallbackNativeToIjk('native_init_error', 'native 初始化失败，已自动回退到 IJK 播放', err.message);
       }
     }
   }
@@ -1167,12 +1192,16 @@ export class VideoPlayerController {
       summary: 'default: 未探测到音轨细节',
       detectedCodec: 'unknown',
       detectedChannels: 2,
-      hardSupported: true
+      hardSupported: true,
+      precheckProbeFailed: false,
+      precheckProbeError: ''
     };
 
     const presetHint = this.readPresetAudioHint(videoData);
     let codecName = presetHint.codecName;
     let channels = presetHint.channels;
+    let precheckProbeFailed = false;
+    let precheckProbeError = '';
 
     try {
       // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
@@ -1182,7 +1211,9 @@ export class VideoPlayerController {
         codecName = first.codecName;
         channels = first.channels ?? channels;
       }
-    } catch (_) {
+    } catch (e) {
+      precheckProbeFailed = true;
+      precheckProbeError = this.safeErrorMessage(e);
       // 探测失败时使用预置音轨提示继续决策。
     }
 
@@ -1191,17 +1222,25 @@ export class VideoPlayerController {
     const hardSupported = this.isLikelySystemHardDecodeSupported(normalizedCodec);
 
     const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
-      `channels=${safeChannels}, hardSupported=${hardSupported}`;
+      `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${precheckProbeFailed}`;
+
+    let preferredBackend: PlayerBackend = hardSupported ? 'avplayer' : 'ijkplayer';
+    if (precheckProbeFailed && normalizedCodec.length === 0) {
+      // 前置探测失败且无可用音轨提示时，保守走软解后端，避免 AVPlayer 首次进入不可恢复错误态。
+      preferredBackend = 'ijkplayer';
+    }
 
     const decision: AudioRoutingDecision = {
       // 当前 ffmpeg 视频链路尚不可用，临时统一回退到 ijkplayer。
-      preferredBackend: hardSupported ? 'avplayer' : 'ijkplayer',
+      preferredBackend,
       fallback: 'native',
       preferredChannels: safeChannels,
       summary,
       detectedCodec: normalizedCodec.length > 0 ? normalizedCodec : 'unknown',
       detectedChannels: safeChannels,
-      hardSupported
+      hardSupported,
+      precheckProbeFailed,
+      precheckProbeError
     };
     return decision;
   }
@@ -1359,7 +1398,7 @@ export class VideoPlayerController {
         return;
       }
       if (!this.isReady) {
-        this.fallbackNativeToIjk('native 初始化超时，已自动回退到 IJK 播放');
+        this.fallbackNativeToIjk('native_ready_timeout', 'native 初始化超时，已自动回退到 IJK 播放');
         return;
       }
       if (!this.isPlaying) {
@@ -1368,20 +1407,21 @@ export class VideoPlayerController {
       const currentDuration = this.player?.duration ?? this.duration;
       const currentPosition = this.player?.currentTime ?? this.currentTime;
       if (currentDuration <= 0 && currentPosition <= 100) {
-        this.fallbackNativeToIjk('native 未输出可播时间轴，已自动回退到 IJK 播放');
+        this.fallbackNativeToIjk('native_no_timeline_output', 'native 未输出可播时间轴，已自动回退到 IJK 播放');
       }
     }, NATIVE_READY_GUARD_MS);
   }
 
-  private fallbackNativeToIjk(reason: string): void {
+  private fallbackNativeToIjk(fallbackReason: string, userMessage: string, detailMessage: string = ''): void {
     if (this.backend !== 'native') {
       return;
     }
     const fallbackPosition = this.player?.currentTime ?? this.currentTime;
     const safeFallbackPosition = fallbackPosition > 0 ? fallbackPosition : 0;
     const shouldResumePlay = this.isPlaying;
-    hilog.warn(CommonConstants.LOG_DOMAIN, TAG, reason);
-    this.lastErrorMessage = reason;
+    this.logFallbackEvent(fallbackReason, 'native', 'ijkplayer', detailMessage);
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG, userMessage);
+    this.lastErrorMessage = userMessage;
     this.isLoading = true;
     this.clearNativeReadyGuardTimer();
     this.pendingBackendResumeTimeMs = safeFallbackPosition;
@@ -1392,6 +1432,44 @@ export class VideoPlayerController {
     this.player = undefined;
     this.backend = 'ijkplayer';
     oldPlayer?.release().catch(() => {});
+  }
+
+  private logFallbackEvent(
+    fallbackReason: string,
+    fallbackFrom: PlayerBackend,
+    fallbackTo: PlayerBackend,
+    detailMessage: string = ''
+  ): void {
+    const structured: FallbackLogRecord = {
+      fallbackReason,
+      fallbackFrom,
+      fallbackTo,
+      videoId: this.progressContext?.videoId ?? -1,
+      filePath: this.sanitizeLogFilePath(this.currentVideoData?.videoSrc ?? ''),
+      detailMessage
+    };
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+      `[fallback] ${JSON.stringify(structured)}`);
+  }
+
+  private sanitizeLogFilePath(filePath: string): string {
+    if (filePath.length === 0) {
+      return '';
+    }
+    let sanitized = filePath;
+    sanitized = sanitized.replace(/\?.*$/, '');
+    sanitized = sanitized.replace(/\/\/([^\/@]+)@/, '//***@');
+    sanitized = sanitized.replace(/(authorization=)[^&]*/ig, '$1***');
+    sanitized = sanitized.replace(/(token=)[^&]*/ig, '$1***');
+    return sanitized;
+  }
+
+  private safeErrorMessage(e: Object): string {
+    const err = e as BusinessError;
+    if (typeof err.message === 'string' && err.message.length > 0) {
+      return err.message;
+    }
+    return JSON.stringify(err);
   }
 
   async play(): Promise<void> {
