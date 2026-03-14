@@ -86,7 +86,9 @@ export class WebDAVClient {
    */
   public getFullUrl(path: string): string {
     let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-    let fullPath = basePath + (path.startsWith('/') ? path : '/' + path);
+    const normalizedPath = this.decodeXmlEntities(path);
+    let fullPath = basePath + (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath);
+    fullPath = this.encodeURIPath(fullPath);
 
     return `${this.isHttps ? 'https' : 'http'}://${this.host}:${this.port}${fullPath}`;
   }
@@ -1315,11 +1317,20 @@ export class WebDAVClient {
     for (let i = 0; i < patterns.length; i++) {
       const match = xml.match(patterns[i]);
       if (match) {
-        return match[1].trim();
+        return this.decodeXmlEntities(match[1].trim());
       }
     }
 
     return '';
+  }
+
+  private decodeXmlEntities(text: string): string {
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
   }
 
 

@@ -21,6 +21,7 @@ export interface VideoFileInfo {
   fileSize?: number;
   lastModified?: string;
   contentType?: string;
+  wasProcessed?: boolean;
 }
 
 export interface SourceScanStat {
@@ -34,6 +35,8 @@ export interface SourceScanStat {
 export interface ScanResult {
   totalDirectories: number;
   totalVideos: number;
+  processedVideos: number;
+  skippedVideos: number;
   perSourceStats: SourceScanStat[];
   elapsedMs: number;
   videos: VideoFileInfo[];
@@ -41,9 +44,10 @@ export interface ScanResult {
 
 export interface ScanOptions {
   maxDepth: number;
+  incremental: boolean;
 }
 
-const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5 };
+const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, incremental: false };
 
 // ─────────────────────────────────────────────
 // 视频扩展名白名单
@@ -124,7 +128,7 @@ export class WebDAVAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results, processingTasks);
+    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.incremental, results, processingTasks);
     // 等待所有 ffprobe + 视频入库任务完成，确保 scan() 返回时 DB 已有数据
     if (processingTasks.length > 0) {
       console.info(`[VideoScanner][WebDAV] 等待 ${processingTasks.length} 个视频处理任务完成...`);
@@ -139,6 +143,7 @@ export class WebDAVAdapter implements ISourceAdapter {
     currentPath: string,
     depth: number,
     maxDepth: number,
+    incremental: boolean,
     results: VideoFileInfo[],
     processingTasks: Promise<void>[]
   ): Promise<void> {
@@ -165,7 +170,7 @@ export class WebDAVAdapter implements ISourceAdapter {
           console.info(`[VideoScanner][MAX_DEPTH] 已达最大深度 ${maxDepth}，跳过子目录: ${relativePath}`);
           continue;
         }
-        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, results, processingTasks);
+        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, incremental, results, processingTasks);
       } else {
         const fileName = resource.displayName || this.extractFileName(decodedHref);
         if (isVideoFile(fileName, resource.contentType)) {
@@ -178,7 +183,8 @@ export class WebDAVAdapter implements ISourceAdapter {
             fileName: fileName,
             fileSize: resource.size,
             lastModified: resource.lastModified,
-            contentType: resource.contentType
+            contentType: resource.contentType,
+            wasProcessed: true
           };
 
           console.info(
@@ -189,6 +195,19 @@ export class WebDAVAdapter implements ISourceAdapter {
           );
 
           results.push(info);
+
+          const existingVideo = incremental
+            ? await FileSourceDatabase.getInstance().getVideoByPath(relativePath)
+            : null;
+          if (incremental && this.canSkipIncrementalProcessing(existingVideo, info)) {
+            info.wasProcessed = false;
+            await FileSourceDatabase.getInstance().markVideoUpdatedByPath(relativePath);
+            console.info(
+              `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
+              `lastModified=${info.lastModified ?? '未知'}`
+            );
+            continue;
+          }
 
           // ── 落库 + 刮削：加入跟踪列表，确保 scan() 返回前所有视频已入库 ──
           const authHeader = this.client.getAuthHeaderPublic();
@@ -268,8 +287,12 @@ export class WebDAVAdapter implements ISourceAdapter {
 
             if (parsed.mediaType === 'movie') {
               // ── 电影 ──────────────────────────────────────────
-              capturedScrapeClient.autoScrapeMovie(fileName).then(async (movie) => {
-                if (!movie) { console.warn(`[VideoScanner][SCRAPE] 电影刮削无结果 ${fileName}`); return; }
+              try {
+                const movie = await capturedScrapeClient.autoScrapeMovie(fileName);
+                if (!movie) {
+                  console.warn(`[VideoScanner][SCRAPE] 电影刮削无结果 ${fileName}`);
+                  return;
+                }
                 console.info(`[VideoScanner][SCRAPE] 电影刮削结果 title="${movie.title}" posterUrl=${movie.posterUrl ? movie.posterUrl.substring(0, 40) : 'null'} rating=${movie.rating ?? 'null'}`);
                 const db = FileSourceDatabase.getInstance();
                 let movieId: number;
@@ -277,7 +300,6 @@ export class WebDAVAdapter implements ISourceAdapter {
                 if (existingMovie && existingMovie.id !== undefined) {
                   movieId = existingMovie.id;
                   console.info(`[VideoScanner][SCRAPE] 电影复用已有记录 movieId=${movieId} title="${movie.title}" 已有posterUrl=${existingMovie.posterUrl ? 'Y' : 'null'}`);
-                  // 复用时也更新海报等字段（避免旧记录没有 posterUrl）
                   if (!existingMovie.posterUrl && movie.posterUrl) {
                     const updateEntity: MovieEntity = {
                       id: existingMovie.id,
@@ -318,19 +340,23 @@ export class WebDAVAdapter implements ISourceAdapter {
                 };
                 await db.upsertScrapeInfo(scrapeInfo);
                 console.info(`[VideoScanner][SCRAPE] scrape_info 落库 videoId=${videoId} movieId=${movieId}`);
-              }).catch((e: Error) => {
-                console.warn(`[VideoScanner][SCRAPE] 电影刮削异常 ${fileName}: ${e.message}`);
-              });
+              } catch (e) {
+                const err = e as Error;
+                console.warn(`[VideoScanner][SCRAPE] 电影刮削异常 ${fileName}: ${err.message}`);
+              }
             } else {
               // ── 电视剧 ────────────────────────────────────────
-              capturedScrapeClient.autoScrapeTvEpisode(fileName).then(async (result) => {
-                if (!result.series) { console.warn(`[VideoScanner][SCRAPE] 剧集刮削无结果 ${fileName}`); return; }
+              try {
+                const result = await capturedScrapeClient.autoScrapeTvEpisode(fileName);
+                if (!result.series) {
+                  console.warn(`[VideoScanner][SCRAPE] 剧集刮削无结果 ${fileName}`);
+                  return;
+                }
                 const db = FileSourceDatabase.getInstance();
-                const series: TvSeriesScrapeResult = result.series!;
+                const series: TvSeriesScrapeResult = result.series;
                 const season = result.season;
                 const episode = result.episode;
 
-                // tv_series：先查库，有则复用
                 let seriesId: number;
                 const existingSeries = await db.getTvSeriesByProviderId(series.provider, series.providerId);
                 if (existingSeries && existingSeries.id !== undefined) {
@@ -353,7 +379,6 @@ export class WebDAVAdapter implements ISourceAdapter {
                   console.info(`[VideoScanner][SCRAPE] 剧集入库 seriesId=${seriesId} title="${series.title}"`);
                 }
 
-                // tv_season
                 let seasonId: number | undefined;
                 if (season) {
                   const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
@@ -372,7 +397,6 @@ export class WebDAVAdapter implements ISourceAdapter {
                   }
                 }
 
-                // tv_episode
                 let episodeId: number | undefined;
                 if (episode) {
                   const existingEp = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
@@ -403,9 +427,10 @@ export class WebDAVAdapter implements ISourceAdapter {
                 };
                 await db.upsertScrapeInfo(scrapeInfo);
                 console.info(`[VideoScanner][SCRAPE] tv scrape_info 落库 videoId=${videoId} S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'}`);
-              }).catch((e: Error) => {
-                console.warn(`[VideoScanner][SCRAPE] 剧集刮削异常 ${fileName}: ${e.message}`);
-              });
+              } catch (e) {
+                const err = e as Error;
+                console.warn(`[VideoScanner][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
+              }
             }
           }).catch((e: Error) => {
             console.warn(`[VideoScanner][PROCESS] 视频处理异常 ${fileName}: ${e.message}`);
@@ -422,6 +447,16 @@ export class WebDAVAdapter implements ISourceAdapter {
     } catch {
       return href;
     }
+  }
+
+  private canSkipIncrementalProcessing(existingVideo: VideoEntity | null, currentInfo: VideoFileInfo): boolean {
+    if (!existingVideo) {
+      return false;
+    }
+    if (!existingVideo.lastModified || !currentInfo.lastModified) {
+      return false;
+    }
+    return existingVideo.lastModified === currentInfo.lastModified;
   }
 
   private toRelativePath(fullPath: string): string {
@@ -490,15 +525,19 @@ export class VideoScannerUtil {
    */
   static async scan(context: Context, scrapeClient?: ScrapeClient, options?: Partial<ScanOptions>): Promise<ScanResult> {
     const scanOptions: ScanOptions = {
-      maxDepth: (options?.maxDepth !== undefined) ? options.maxDepth : DEFAULT_SCAN_OPTIONS.maxDepth
+      maxDepth: (options?.maxDepth !== undefined) ? options.maxDepth : DEFAULT_SCAN_OPTIONS.maxDepth,
+      incremental: (options?.incremental !== undefined) ? options.incremental : DEFAULT_SCAN_OPTIONS.incremental
     };
 
     const startTime = Date.now();
     console.info(`[VideoScanner] ======== 开始视频扫描 ========`);
-    console.info(`[VideoScanner] 扫描参数: maxDepth=${scanOptions.maxDepth}, 刮削=${scrapeClient ? '开启' : '关闭'}`);
+    console.info(
+      `[VideoScanner] 扫描参数: maxDepth=${scanOptions.maxDepth}, 增量=${scanOptions.incremental ? '是' : '否'}, 刮削=${scrapeClient ? '开启' : '关闭'}`
+    );
 
     const db = FileSourceDatabase.getInstance(context);
     await db.init();
+    await db.resetVideoUpdatedFlags();
 
     const fileSources = await db.getAllFileSources();
     console.info(`[VideoScanner] 共找到 ${fileSources.length} 个文件源`);
@@ -573,10 +612,14 @@ export class VideoScannerUtil {
     }
 
     const elapsedMs = Date.now() - startTime;
+    const processedVideos = allVideos.filter((video: VideoFileInfo) => video.wasProcessed !== false).length;
+    const skippedVideos = allVideos.length - processedVideos;
     console.info(`[VideoScanner] ======== 扫描完成 ========`);
     console.info(`[VideoScanner][STATS] 总耗时: ${elapsedMs} ms`);
     console.info(`[VideoScanner][STATS] 扫描目录总数: ${totalDirectories}`);
     console.info(`[VideoScanner][STATS] 发现视频总数（去重后）: ${allVideos.length}`);
+    console.info(`[VideoScanner][STATS] 本轮处理视频数: ${processedVideos}`);
+    console.info(`[VideoScanner][STATS] 本轮跳过未变化视频数: ${skippedVideos}`);
     for (const stat of perSourceStats) {
       console.info(
         `[VideoScanner][STATS] 文件源="${stat.sourceName}" (${stat.sourceType}) | ` +
@@ -588,6 +631,8 @@ export class VideoScannerUtil {
     return {
       totalDirectories,
       totalVideos: allVideos.length,
+      processedVideos,
+      skippedVideos,
       perSourceStats,
       elapsedMs,
       videos: allVideos
