@@ -6,6 +6,7 @@ import { CommonConstants } from '../../../common/constants/CommonConstants';
 import VidAllCorePlayerNapi from 'libvidall_core_player_napi.so';
 
 const TAG = '[VidAllPlayerAdapter]';
+const METRICS_TAG = 'VidAll_Metrics';
 const TIME_UPDATE_INTERVAL_MS = 500;
 
 interface NativeXComponentFallbackContext {
@@ -51,8 +52,8 @@ export class VidAllPlayerAdapter implements IPlayer {
   /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
   private _seekPending: boolean = false;
   /** seek 完成超时兜底：原生未在 600ms 内回调时自动触发 onSeekDone */
-  private _seekDoneTimeoutTimer?: number;
-
+  private _seekDoneTimeoutTimer?: number;  /** 指标埋点：seek 调用时刻（用于计算 seek 完成耗时） */
+  private _metricsSeekStartMs: number = 0;
   get duration(): number {
     return this._duration;
   }
@@ -205,6 +206,9 @@ export class VidAllPlayerAdapter implements IPlayer {
             clearTimeout(this._seekDoneTimeoutTimer);
             this._seekDoneTimeoutTimer = undefined;
           }
+          const seekDoneElapsed = Date.now() - this._metricsSeekStartMs;
+          hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+            `{"event":"seek_result","backend":"native","result":"done","elapsed_ms":${seekDoneElapsed}}`);
           this._onSeekDoneCb?.();
         }
       );
@@ -273,6 +277,7 @@ export class VidAllPlayerAdapter implements IPlayer {
   }
 
   seek(timeMs: number): void {
+    this._metricsSeekStartMs = Date.now();
     let targetTimeMs = timeMs < 0 ? 0 : timeMs;
     if (this._duration > 0 && targetTimeMs > this._duration) {
       targetTimeMs = this._duration;
@@ -304,8 +309,11 @@ export class VidAllPlayerAdapter implements IPlayer {
           this._seekDoneTimeoutTimer = undefined;
           if (this._seekPending) {
             this._seekPending = false;
+            const seekTimeoutElapsed = Date.now() - this._metricsSeekStartMs;
             hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-              `seek 超时兜底触发 target=${targetTimeMs}`);
+              `seek 超时底底触发 target=${targetTimeMs}`);
+            hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+              `{"event":"seek_result","backend":"native","result":"timeout","elapsed_ms":${seekTimeoutElapsed}}`);
             this._onSeekDoneCb?.();
           }
         }, 600);

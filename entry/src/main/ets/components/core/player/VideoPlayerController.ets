@@ -27,6 +27,7 @@ export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
 
 const TAG = '[VideoPlayerController]';
+const METRICS_TAG = 'VidAll_Metrics';
 const GENERIC_SYSTEM_ERROR = 'system error';
 const DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED = false;
 const NATIVE_READY_GUARD_MS = 3500;
@@ -193,6 +194,10 @@ export class VideoPlayerController {
   private progressTimer?: number;
   /** 播放会话编号：每次 initPlayer 自增，用于忽略旧实例回调 */
   private playbackSessionId: number = 0;
+  /** 指标埋点：initPlayer 开始时间（用于计算首帧耗时） */
+  private metricsLoadStartMs: number = 0;
+  /** 指标埋点：seek 开始时间（用于计算 seek 完成耗时） */
+  private metricsSeekStartMs: number = 0;
   /** 时间回退诊断：记录最近一次 timeUpdate 值 */
   private lastTimeUpdateMs: number = -1;
   /** duration 未就绪时 seek 的诊断日志节流 */
@@ -255,6 +260,7 @@ export class VideoPlayerController {
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     this.playbackSessionId += 1;
     const currentSessionId = this.playbackSessionId;
+    this.metricsLoadStartMs = Date.now();
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
     this.surfaceId = surfaceId;
@@ -322,6 +328,10 @@ export class VideoPlayerController {
         'ffmpeg 播放后端已从主路径下线，自动回退到 ijkplayer');
       this.backend = 'ijkplayer';
     }
+
+    // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
+    hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+      `{"event":"play_start","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"file":"${this.extractFileName(videoData.videoSrc ?? '')}","ts":${this.metricsLoadStartMs}}`);
 
     // 释放旧 player
     if (this.player) {
@@ -505,6 +515,10 @@ export class VideoPlayerController {
         return;
       }
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
+      // 指标埋点：play_result=error
+      const metricsElapsedOnError = Date.now() - this.metricsLoadStartMs;
+      hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+        `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"error","error_code":"${error.message.substring(0, 80)}","elapsed_ms":${metricsElapsedOnError}}`);
       if (this.backend === 'native') {
         this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
         return;
@@ -543,6 +557,12 @@ export class VideoPlayerController {
     adapter.onSeekDone(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
+      }
+      // 指标埋点：seek_result（非 native 后端在此记录；native 在 VidAllPlayerAdapter 内分别记录 done/timeout）
+      if (this.backend !== 'native') {
+        const seekElapsed = Date.now() - this.metricsSeekStartMs;
+        hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+          `{"event":"seek_result","backend":"${this.backend}","result":"done","elapsed_ms":${seekElapsed}}`);
       }
       if (this.timeToSeek >= 0) {
         adapter.seek(this.timeToSeek);
@@ -1353,6 +1373,12 @@ export class VideoPlayerController {
     this.currentTime = this.player?.currentTime ?? 0;
     this.isReady = true;
     this.isLoading = false;
+    // 指标埋点：首帧到达 + play_result=success
+    const firstFrameElapsed = Date.now() - this.metricsLoadStartMs;
+    hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+      `{"event":"first_frame","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"elapsed_ms":${firstFrameElapsed}}`);
+    hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+      `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"success","elapsed_ms":${firstFrameElapsed}}`);
     const resumeTimeMs = this.pendingBackendResumeTimeMs;
     const shouldResumePlay = this.pendingBackendResumePlay;
     if (resumeTimeMs >= 0) {
@@ -1452,6 +1478,18 @@ export class VideoPlayerController {
     };
     hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
       `[fallback] ${JSON.stringify(structured)}`);
+    // 指标埋点：play_result=fallback（便于 VidAll_Metrics 过滤统计兜底触发率）
+    hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+      `{"event":"play_result","backend":"${fallbackFrom}","video_id":${structured.videoId},"result":"fallback","fallback_from":"${fallbackFrom}","fallback_to":"${fallbackTo}","reason":"${fallbackReason}"}`);
+  }
+
+  private extractFileName(filePath: string): string {
+    if (filePath.length === 0) {
+      return '';
+    }
+    const clean = filePath.replace(/\?.*$/, '');
+    const lastSlash = clean.lastIndexOf('/');
+    return lastSlash >= 0 ? clean.substring(lastSlash + 1) : clean;
   }
 
   private sanitizeLogFilePath(filePath: string): string {
@@ -1635,6 +1673,7 @@ export class VideoPlayerController {
 
   async seek(time: number): Promise<void> {
     if (!this.player) { return; }
+    this.metricsSeekStartMs = Date.now();
     let safeTime = time < 0 ? 0 : time;
     if (this.duration > 0 && safeTime > this.duration) {
       safeTime = this.duration;
