@@ -169,6 +169,13 @@ export class WebDAVClient {
   }
 
   /**
+   * 日志输出前脱敏敏感请求头，避免凭据明文泄露。
+   */
+  private sanitizeRequestForLog(request: string): string {
+    return request.replace(/(Authorization\s*:\s*)[^\r\n]*/ig, '$1Basic ***');
+  }
+
+  /**
    * 使用 Socket 发送请求 - 支持 HTTP（TCP）和 HTTPS（http 模块）
    */
   private async sendRawHttpRequest(
@@ -415,9 +422,10 @@ export class WebDAVClient {
             headers['Host'] = (p === 80) ? h : `${h}:${p}`;
           }
           const request = this.buildHttpRequestString(method, path, headers, body);
+          const sanitizedRequestLog = this.sanitizeRequestForLog(request);
 
           console.info('=== REQUEST ===');
-          console.info(request);
+          console.info(sanitizedRequestLog);
           console.info('=== END ===');
 
           const sendBuffer = buffer.from(request, 'utf-8');
@@ -570,7 +578,7 @@ export class WebDAVClient {
         .then(() => {
           console.info('WebDAV TLS: connected, building request...');
           const request = this.buildHttpRequestString(method, path, headers, body);
-          console.info('WebDAV TLS request:\n' + request);
+          console.info('WebDAV TLS request:\n' + this.sanitizeRequestForLog(request));
           const buf = buffer.from(request, 'utf-8');
           // 强制用 string 发送（某些版本 ArrayBuffer 发送后服务器收不到完整数据）
           return tls.send(request);
@@ -975,7 +983,7 @@ export class WebDAVClient {
           request += `\r\n`;
 
           console.info('=== DOWNLOAD REQUEST ===');
-          console.info(request);
+          console.info(this.sanitizeRequestForLog(request));
           console.info('=== END REQUEST ===');
 
           const sendBuffer = buffer.from(request, 'utf-8');
@@ -1772,7 +1780,7 @@ export class WebDAVClient {
           request += `\r\n`;
 
           console.info('=== REDIRECT DOWNLOAD REQUEST ===');
-          console.info(request);
+          console.info(this.sanitizeRequestForLog(request));
           console.info('=== END REQUEST ===');
 
           const sendBuffer = buffer.from(request, 'utf-8');
