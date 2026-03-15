@@ -13,6 +13,7 @@
 #include <native_window/external_window.h>
 #include <multimedia/player_framework/avplayer.h>
 #include <multimedia/player_framework/native_avformat.h>
+#include <hilog/log.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -680,6 +681,21 @@ static int32_t g_nextHandle = 1;
 // A4：保护 g_players 跨线程访问（XC 表面回调来自 UI 线程，AV 回调来自媒体线程）
 static std::mutex g_playersMutex;
 
+// 修复 #48-A5：pending window 缓存
+// 根因：RegisterCallback 在 SetXComponent（onLoad 回调）中调用时 surface 已创建完毕，
+// OnSurfaceCreated 不会补发，nativeWindow 永远 nullptr。
+// 正确做法：在 Init() 中注册，此时 surface 尚未创建；若 OnSurfaceCreated 先于
+// SetXComponent 触发，缓存到 g_pendingWindows 待关联。
+struct PendingWindowInfo {
+  OH_NativeXComponent *nativeXC = nullptr;
+  OHNativeWindow *nativeWindow = nullptr;
+};
+// xcId → (nativeXC*, nativeWindow*)，供 SetXComponent 延迟关联
+static std::unordered_map<std::string, PendingWindowInfo> g_pendingWindows;
+// Init() 期间从 OH_NATIVE_XCOMPONENT_OBJ 取到的 nativeXC，
+// SetXComponent 用它判断是否需要重复注册（同一个 XComponent 无需重复注册）
+static OH_NativeXComponent *g_pendingXC = nullptr;
+
 #ifndef VIDALL_MAX_PLAYER_COUNT
 #define VIDALL_MAX_PLAYER_COUNT 100000UL
 #endif
@@ -1193,11 +1209,17 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
     return;
   }
   const std::string xcId(idBuf);
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "OnXCSurfaceCreated: xcId=%s window=%p", xcId.c_str(), window);
+
   std::lock_guard<std::mutex> lock(g_playersMutex); // A4: 保护 g_players 跨线程遍历
+  bool found = false;
   for (auto &pair : g_players) {
     if (pair.second.xComponentId == xcId) {
       pair.second.nativeWindow = static_cast<OHNativeWindow *>(window);
       pair.second.surfaceReady = true;
+      found = true;
       // A5修复: 若 avPlayer 已创建，立即绑定 surface
       if (pair.second.avPlayer != nullptr) {
         OH_AVPlayer_SetVideoSurface(pair.second.avPlayer, pair.second.nativeWindow);
@@ -1209,6 +1231,15 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
       }
       break;
     }
+  }
+
+  if (!found) {
+    // SetXComponent 还未被调用（Init 注册回调时序早于 ArkTS onLoad），
+    // 缓存 window，等 SetXComponent 来关联。
+    g_pendingWindows[xcId] = { component, static_cast<OHNativeWindow *>(window) };
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "OnXCSurfaceCreated: player 未就绪，缓存 window 待 SetXComponent 关联 xcId=%s",
+                 xcId.c_str());
   }
 }
 
@@ -1299,8 +1330,25 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
   ResetRuntimeState(*state);
 
   // 注册 XComponent 回调，OnSurfaceCreated 触发后写入 nativeWindow。
-  if (nativeXC != nullptr) {
+  // 修复 #48-A5: 若 Init() 已对同一 nativeXC 注册过（g_pendingXC），跳过重复注册；
+  // 不同 nativeXC（多 XComponent 场景或切换）则重新注册。
+  if (nativeXC != nullptr && nativeXC != g_pendingXC) {
     OH_NativeXComponent_RegisterCallback(nativeXC, &s_xcCallback);
+  }
+
+  // 修复 #48-A5: 检查 OnSurfaceCreated 是否已先行触发并缓存了 window
+  // （Init 中注册回调时序早于 ArkTS onLoad/SetXComponent）
+  {
+    std::lock_guard<std::mutex> pendingLock(g_playersMutex);
+    auto pendingIt = g_pendingWindows.find(xComponentId);
+    if (pendingIt != g_pendingWindows.end()) {
+      state->nativeWindow = pendingIt->second.nativeWindow;
+      state->surfaceReady = true;
+      g_pendingWindows.erase(pendingIt);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "SetXComponent: 从 pending 恢复 nativeWindow=%p xcId=%s",
+                   state->nativeWindow, xComponentId.c_str());
+    }
   }
 
   EmitTimeUpdate(*state);
@@ -2170,9 +2218,6 @@ static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
   return result;
 }
 
-} // namespace
-
-EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -2199,9 +2244,37 @@ static napi_value Init(napi_env env, napi_value exports) {
     ThrowTypeError(env, "failed to define native module properties");
     return nullptr;
   }
+
+  // 修复 #48-A5: 在模块挂载期注册 XComponent 回调
+  // 当 XComponent 使用 libraryname: 'vidall_core_player_napi' 时，HarmonyOS 在
+  // surface 创建前调用 Init() 并将 OH_NATIVE_XCOMPONENT_OBJ 注入 exports。
+  // 在此处注册回调，OnSurfaceCreated 就会在 surface 创建时正确触发，
+  // 而不是等到 ArkTS onLoad 回调中的 SetXComponent() 时才注册（彼时 surface 已创建，
+  // 不会补发 OnSurfaceCreated，导致 nativeWindow 永远是 nullptr）。
+  napi_value xcExport = nullptr;
+  napi_status xcStatus = napi_get_named_property(env, exports, OH_NATIVE_XCOMPONENT_OBJ, &xcExport);
+  if (xcStatus == napi_ok && xcExport != nullptr) {
+    OH_NativeXComponent *nativeXC = nullptr;
+    napi_unwrap(env, xcExport, reinterpret_cast<void **>(&nativeXC));
+    if (nativeXC != nullptr) {
+      OH_NativeXComponent_RegisterCallback(nativeXC, &s_xcCallback);
+      g_pendingXC = nativeXC;
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "Init: 已在 XComponent 挂载期注册回调，等待 OnSurfaceCreated (nativeXC=%p)",
+                   nativeXC);
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "Init: OH_NATIVE_XCOMPONENT_OBJ 存在但 napi_unwrap 返回 nullptr");
+    }
+  } else {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "Init: 未检测到 OH_NATIVE_XCOMPONENT_OBJ（非 XComponent 绑定加载，属正常）");
+  }
+
   return exports;
 }
-EXTERN_C_END
+
+} // namespace
 
 static napi_module vidallCorePlayerModule = {
   .nm_version = 1,

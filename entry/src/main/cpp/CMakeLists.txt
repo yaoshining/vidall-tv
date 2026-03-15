@@ -121,5 +121,6 @@ endif()
 
 target_link_libraries(vidall_core_player_napi PUBLIC
     libace_napi.z.so
+    libhilog_ndk.z.so
     ffmpeg
 )
