@@ -43,6 +43,11 @@ extern "C" {
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
+// GL_RED 是 GLES 3.0 引入的单通道格式，GLES 2.0 头中无此宏；
+// 函数指针已在运行时从 libGLESv2 加载，此处仅补充常量定义。
+#ifndef GL_RED
+#  define GL_RED 0x1903
+#endif
 
 // B4：OH_AudioRenderer（PCM 送显）
 #include <ohaudio/native_audiostreambuilder.h>
@@ -1554,6 +1559,9 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
     if (ctx->seekRequested.exchange(false)) {
       const int64_t targetMs = ctx->seekTargetMs.load();
       const int64_t targetUs = targetMs * 1000LL;  // AV_TIME_BASE = 1e6
+      // Fix #48-B6-2：seek 前先 unref pkt，防止 fmtCtx 持有上次 av_read_frame 残留数据
+      // 导致 seek 后首次 av_read_frame 触发 FFmpeg 内部状态机断言 (SIGABRT)。
+      av_packet_unref(pkt);
       // B5-QA fix：检查 av_seek_frame 返回值；失败时跳过 flush/reset/seekDone，
       //            避免在无效位置继续解码并产生误导性回调。
       int seekRet = av_seek_frame(ctx->fmtCtx, -1, targetUs, AVSEEK_FLAG_BACKWARD);
@@ -1562,8 +1570,8 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
         av_strerror(seekRet, errBuf, sizeof(errBuf));
         OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
                      "DemuxThread: av_seek_frame failed: %s", errBuf);
-        continue;
-      }
+        // seek 失败不 continue：让后续 av_read_frame 继续在原位置读包，避免卡死。
+      } else {
       // 清空所有 packet/frame 队列（旧数据）
       FlushFfmpegQueues(ctx);
       // 刷新解码器内部缓冲区
@@ -1589,7 +1597,8 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
           napi_call_threadsafe_function(st->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
         }
       }
-    }
+      } // end else (seekRet >= 0)
+    } // end if (seekRequested)
 
     int ret = av_read_frame(ctx->fmtCtx, pkt);
     if (ret == AVERROR_EOF) {
@@ -2273,6 +2282,27 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "RenderThreadFunc: render loop started");
 
+  // Fix #48-B6-1a：设置 Viewport 为 EGL surface 实际尺寸（全屏渲染）
+  // GLES 默认 viewport 为 (0,0,0,0)，不调此函数所有绘制结果均被裁剪到空区域导致黑屏。
+  {
+    EGLint surfW = 0, surfH = 0;
+    eglQuerySurface(ctx->eglDisplay, ctx->eglSurface, EGL_WIDTH, &surfW);
+    eglQuerySurface(ctx->eglDisplay, ctx->eglSurface, EGL_HEIGHT, &surfH);
+    if (surfW > 0 && surfH > 0) {
+      ctx->gl.Viewport(0, 0, surfW, surfH);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "RenderThreadFunc: Viewport set to %{public}d x %{public}d", surfW, surfH);
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "RenderThreadFunc: eglQuerySurface failed, surfW=%{public}d surfH=%{public}d",
+                   surfW, surfH);
+    }
+    // 初始清屏，确保第一帧前屏幕不显示随机内容
+    ctx->gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    ctx->gl.Clear(GL_COLOR_BUFFER_BIT);
+    eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+  }
+
   // B5：时间上报节流（每 200ms 通过 tsfOnTimeUpdate 上报一次播放位置）
   auto lastEmitTime = std::chrono::steady_clock::now() - std::chrono::seconds(1);
 
@@ -2330,25 +2360,25 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       }
     }
 
-    // 5. 上传 YUV420P → 3 张 GL_LUMINANCE 纹理
+    // 5. 上传 YUV420P → 3 张 GL_RED 纹理（Fix #48-B6-1b：GL_LUMINANCE 在 GLES 3.0 已废弃）
     const int w = frame->width;
     const int h = frame->height;
     ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     ctx->gl.ActiveTexture(GL_TEXTURE0);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0,
-                 GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0,
+                 GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
 
     ctx->gl.ActiveTexture(GL_TEXTURE1);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
-                 GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w / 2, h / 2, 0,
+                 GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
 
     ctx->gl.ActiveTexture(GL_TEXTURE2);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureV);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
-                 GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w / 2, h / 2, 0,
+                 GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
 
     // 6. 用 YUV program 绘制全屏 quad（triangle strip，4 顶点）
     ctx->gl.UseProgram(ctx->yuvProgram);
