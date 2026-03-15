@@ -45,12 +45,12 @@ extern "C" {
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 // GL_RED 是 GLES 3.0 引入的单通道格式，GLES 2.0 头中无此宏；
-// 函数指针已在运行时从 libGLESv2 加载，此处仅补充常量定义。
+// 当前已改用 GL_LUMINANCE（GLES 2 合法格式），此宏仅供历史参考，未实际使用。
 #ifndef GL_RED
 #  define GL_RED 0x1903
 #endif
 // GL_R8 是 GLES 3.0 引入的单通道有大小内部格式；GLES 2.0 头文件不含此宏。
-// 首帧 glTexImage2D 用 GL_R8 作为 internalformat，可避免驱动因格式歧义重复分配。
+// 已改回 GL_LUMINANCE 绕过 GLES 3 context 的纹理 OOM 问题；此宏预留备用，当前未使用。
 #ifndef GL_R8
 #  define GL_R8 0x8229
 #endif
@@ -2144,10 +2144,10 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  eglGetError(), nativeWindow);
     return false;
   }
-  // 修复 #48-B6: 升级至 GLES 3——GL_RED 作为 internalformat 在 GLES 2.0 中非法，
-  // 会导致 glTexImage2D 静默失败（GL_INVALID_ENUM）进而全黑。
-  // 设备实际运行 OpenGL ES 3.2，此处声明 version=3 即可激活 GLES 3 上下文。
-  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+  // 修复 #48-B6: 退回 GLES 2 context——GLES 3 context 在 EGL_RENDERABLE_TYPE=ES2_BIT 的
+  // config 下触发 GPU 纹理内存 OOM（0x505），改用 GL_LUMINANCE（GLES 2 合法单通道格式）
+  // 配合 GLES 2 context 可绕过该限制。
+  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
   ctx->eglContext =
       eglCreateContext(ctx->eglDisplay, config, EGL_NO_CONTEXT, ctxAttribs);
   if (ctx->eglContext == EGL_NO_CONTEXT) {
@@ -2453,7 +2453,7 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       }
     }
 
-    // 5. 上传 YUV420P → 3 张 GL_RED 纹理（Fix #48-B6-1b：GL_LUMINANCE 在 GLES 3.0 已废弃）
+    // 5. 上传 YUV420P → 3 张 GL_LUMINANCE 纹理（GLES 2 合法单通道格式，绕过 GLES 3 OOM）
     const int w = frame->width;
     const int h = frame->height;
 
@@ -2479,10 +2479,9 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     ctx->gl.ActiveTexture(GL_TEXTURE0);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0,
-                     GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
-        // 诊断: #48-B6 验证 GL_R8/GL_RED 在 GLES 3 context 下是否合法（应 GL_NO_ERROR）
-        // 仅在首帧或尺寸变更时打印，避免日志刷屏
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0,
+                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
+        // 诊断: 仅在首帧或尺寸变更时检查 GL 错误，避免日志刷屏
         {
             GLenum glErr = ctx->gl.GetError();
             if (glErr != GL_NO_ERROR) {
@@ -2493,27 +2492,27 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
         }
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
-                        GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
+                        GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
     }
 
     ctx->gl.ActiveTexture(GL_TEXTURE1);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
-                     GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
+                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
-                        GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
+                        GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
     }
 
     ctx->gl.ActiveTexture(GL_TEXTURE2);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureV);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
-                     GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
+                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
-                        GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+                        GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
     }
 
     if (!ctx->texturesInitialized || sizeChanged) {
