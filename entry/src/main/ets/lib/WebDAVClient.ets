@@ -1408,8 +1408,9 @@ export class WebDAVClient {
         throw new Error(`HTTP ${response.statusCode}: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('List error:', JSON.stringify(error));
-      throw new Error(error);
+      const errMsg = (error as Error).message ?? String(error);
+      console.error('List error:', errMsg);
+      throw new Error(errMsg);
     }
   }
 

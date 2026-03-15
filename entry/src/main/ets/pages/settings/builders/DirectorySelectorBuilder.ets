@@ -91,8 +91,9 @@ struct DirectorySelectorBuilderComponent {
       // 加载根目录
       await this.loadCurrentDirectory()
     } catch (error) {
-      console.error('DirectorySelector: Failed to initialize', JSON.stringify(error))
-      this.errorMessage = '初始化失败：' + JSON.stringify(error)
+      const errMsg = (error as Error).message ?? String(error);
+      console.error('DirectorySelector: Failed to initialize', errMsg)
+      this.errorMessage = '初始化失败：' + errMsg
     }
   }
 
@@ -117,7 +118,7 @@ struct DirectorySelectorBuilderComponent {
 
       console.info(`DirectorySelector: Loaded ${this.selectedMap.size} selected paths`)
     } catch (error) {
-      console.error('DirectorySelector: Failed to load selected directories', JSON.stringify(error))
+      console.error('DirectorySelector: Failed to load selected directories', (error as Error).message ?? String(error))
       // 不阻断流程，继续执行
     }
   }
@@ -151,8 +152,11 @@ struct DirectorySelectorBuilderComponent {
         this.errorMessage = '此目录下没有文件夹'
       }
     } catch (error) {
-      console.error('DirectorySelector: Failed to load directory', JSON.stringify(error))
-      this.errorMessage = '加载失败，请检查网络连接'
+      const errMsg = (error as Error).message ?? String(error);
+      console.error('DirectorySelector: Failed to load directory', errMsg)
+      // 截断 raw CURL 部分，只显示可读的前缀（如 "TLS 证书验证失败：..."）
+      const displayIdx = errMsg.indexOf(' [CURL:');
+      this.errorMessage = displayIdx > 0 ? errMsg.substring(0, displayIdx) : errMsg;
     } finally {
       this.isLoading = false
     }
@@ -289,11 +293,12 @@ struct DirectorySelectorBuilderComponent {
       // 返回文件源列表
       this.controller.popType()
     } catch (error) {
-      console.error('DirectorySelector: Failed to save', JSON.stringify(error))
+      const errMsg = (error as Error).message ?? String(error);
+      console.error('DirectorySelector: Failed to save', errMsg)
 
       AlertDialog.show({
         title: '保存失败',
-        message: '保存目录选择失败：' + JSON.stringify(error),
+        message: '保存目录选择失败：' + errMsg,
         primaryButton: {
           value: '确定',
           action: () => {}
