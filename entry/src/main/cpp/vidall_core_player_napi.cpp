@@ -14,6 +14,7 @@
 
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
+#include <native_buffer/native_buffer.h>
 #include <native_window/external_window.h>
 #include <multimedia/player_framework/avplayer.h>
 #include <multimedia/player_framework/native_avformat.h>
@@ -2121,6 +2122,9 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
       EGL_GREEN_SIZE, 8,
       EGL_BLUE_SIZE,  8,
       EGL_ALPHA_SIZE, 8,
+      EGL_DEPTH_SIZE, 0,
+      EGL_STENCIL_SIZE, 0,
+      EGL_SAMPLE_BUFFERS, 0,
       EGL_NONE
   };
   EGLConfig config = nullptr;
@@ -2138,10 +2142,34 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
   if (nativeVisualId == 0) {
     nativeVisualId = 3;  // fallback: NATIVEBUFFER_PIXEL_FMT_RGBA_8888 = 3 in OpenHarmony
   }
-  OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, SET_FORMAT, nativeVisualId);
+  const int32_t targetBufferW = 1920;
+  const int32_t targetBufferH = 1080;
+  const uint64_t usage = static_cast<uint64_t>(NATIVEBUFFER_USAGE_HW_RENDER | NATIVEBUFFER_USAGE_HW_TEXTURE);
+  const int32_t rcFormat = OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, SET_FORMAT, nativeVisualId);
+  const int32_t rcGeometry = OH_NativeWindow_NativeWindowHandleOpt(
+      nativeWindow, SET_BUFFER_GEOMETRY, targetBufferW, targetBufferH);
+  const int32_t rcUsage = OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, SET_USAGE, usage);
+  const int32_t rcSwapInterval = OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, SET_SWAP_INTERVAL, 0);
+  int32_t bufferH = 0;
+  int32_t bufferW = 0;
+  int32_t bufferFormat = 0;
+  uint64_t bufferUsage = 0;
+  int32_t bufferSwapInterval = -1;
+  const int32_t rcGetGeometry = OH_NativeWindow_NativeWindowHandleOpt(
+      nativeWindow, GET_BUFFER_GEOMETRY, &bufferH, &bufferW);
+  const int32_t rcGetFormat = OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, GET_FORMAT, &bufferFormat);
+  const int32_t rcGetUsage = OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, GET_USAGE, &bufferUsage);
+  const int32_t rcGetSwapInterval = OH_NativeWindow_NativeWindowHandleOpt(
+      nativeWindow, GET_SWAP_INTERVAL, &bufferSwapInterval);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "FfmpegInitEGL: set NativeWindow format=%{public}d window=%{public}p",
-               nativeVisualId, nativeWindow);
+               "FfmpegInitEGL: window=%{public}p format=%{public}d rcFormat=%{public}d target=%{public}d x %{public}d rcGeometry=%{public}d rcUsage=%{public}d rcSwapInterval=%{public}d",
+               nativeWindow, nativeVisualId, rcFormat, targetBufferW, targetBufferH,
+               rcGeometry, rcUsage, rcSwapInterval);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitEGL: queried geometry=%{public}d x %{public}d rcGetGeometry=%{public}d format=%{public}d rcGetFormat=%{public}d usage=%{public}llu rcGetUsage=%{public}d swapInterval=%{public}d rcGetSwapInterval=%{public}d",
+               bufferW, bufferH, rcGetGeometry, bufferFormat, rcGetFormat,
+               static_cast<unsigned long long>(bufferUsage), rcGetUsage,
+               bufferSwapInterval, rcGetSwapInterval);
 
   // 清除历史 EGL 错误，确保后续 eglGetError 干净
   (void)eglGetError();
@@ -2177,9 +2205,20 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  "FfmpegInitEGL: eglCreateContext failed err=0x%{public}x", eglGetError());
     return false;
   }
+  EGLint cfgBufferSize = 0;
+  EGLint cfgAlphaSize = 0;
+  EGLint cfgDepthSize = 0;
+  EGLint cfgStencilSize = 0;
+  eglGetConfigAttrib(ctx->eglDisplay, config, EGL_BUFFER_SIZE, &cfgBufferSize);
+  eglGetConfigAttrib(ctx->eglDisplay, config, EGL_ALPHA_SIZE, &cfgAlphaSize);
+  eglGetConfigAttrib(ctx->eglDisplay, config, EGL_DEPTH_SIZE, &cfgDepthSize);
+  eglGetConfigAttrib(ctx->eglDisplay, config, EGL_STENCIL_SIZE, &cfgStencilSize);
   // 修复 #48-B6: %{public}d 让 EGL 版本号在 HarmonyOS hilog 中可见
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "FfmpegInitEGL: OK EGL %{public}d.%{public}d", major, minor);
+                "FfmpegInitEGL: OK EGL %{public}d.%{public}d", major, minor);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitEGL: config nativeVisualId=%{public}d bufferSize=%{public}d alpha=%{public}d depth=%{public}d stencil=%{public}d",
+               nativeVisualId, cfgBufferSize, cfgAlphaSize, cfgDepthSize, cfgStencilSize);
   return true;
 }
 
@@ -2352,6 +2391,13 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "RenderThreadFunc: eglMakeCurrent OK, GL context current ctx=%{public}p",
                static_cast<void*>(eglGetCurrentContext()));
+  {
+    const EGLBoolean swapIntervalOk = eglSwapInterval(ctx->eglDisplay, 0);
+    const EGLint swapIntervalErr = eglGetError();
+    OH_LOG_Print(LOG_APP, swapIntervalOk == EGL_TRUE ? LOG_INFO : LOG_WARN, 0xFF00, "VidAll",
+                 "RenderThreadFunc: eglSwapInterval(0) ok=%{public}d err=0x%{public}x",
+                 swapIntervalOk == EGL_TRUE ? 1 : 0, swapIntervalErr);
+  }
 
   // B3：加载 GL 函数指针（HarmonyOS 需要通过 eglGetProcAddress 动态加载）
   if (!LoadGLFunctions(ctx->gl)) {
@@ -2410,7 +2456,11 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     // 初始清屏，确保第一帧前屏幕不显示随机内容
     ctx->gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     ctx->gl.Clear(GL_COLOR_BUFFER_BIT);
-    eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+    const EGLBoolean probeSwapOk = eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+    const EGLint probeSwapErr = eglGetError();
+    OH_LOG_Print(LOG_APP, probeSwapOk == EGL_TRUE ? LOG_INFO : LOG_ERROR, 0xFF00, "VidAll",
+                 "RenderThreadFunc: probe eglSwapBuffers ok=%{public}d err=0x%{public}x",
+                 probeSwapOk == EGL_TRUE ? 1 : 0, probeSwapErr);
   }
 
   // B5：时间上报节流（每 200ms 通过 tsfOnTimeUpdate 上报一次播放位置）
