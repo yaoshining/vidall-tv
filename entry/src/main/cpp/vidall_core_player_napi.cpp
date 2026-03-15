@@ -10,6 +10,7 @@
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
 #include <native_window/external_window.h>
+#include <multimedia/player_framework/avplayer.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -648,6 +649,8 @@ struct NativePlayerSkeletonState {
   std::string headersJson;
   std::string xComponentId;
   OHNativeWindow *nativeWindow = nullptr;  // 渲染目标 Surface，生命周期归 XComponent，不 retain/release
+  OH_AVPlayer *avPlayer = nullptr;          // OH_AVPlayer 实例，由 Prepare 创建，Release 销毁
+  bool surfaceReady = false;               // OnSurfaceCreated 已触发
   bool prepared = false;
   bool playing = false;
   int32_t selectedTrackIndex = -1;
@@ -1082,6 +1085,69 @@ static napi_value SetHeaders(napi_env env, napi_callback_info info) {
   return ReturnUndefinedOrThrow(env, "setHeaders failed to create return value");
 }
 
+// ---------------------------------------------------------------------------
+// OH_NativeXComponent 静态回调（供所有 player 共用一套函数指针）
+// ---------------------------------------------------------------------------
+
+static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
+  char idBuf[OH_XCOMPONENT_ID_LEN_MAX + 1] = {0};
+  uint64_t idSize = sizeof(idBuf);
+  if (OH_NativeXComponent_GetXComponentId(component, idBuf, &idSize) !=
+      OH_NATIVEXCOMPONENT_RESULT_SUCCESS) {
+    return;
+  }
+  const std::string xcId(idBuf);
+  for (auto &pair : g_players) {
+    if (pair.second.xComponentId == xcId) {
+      pair.second.nativeWindow = static_cast<OHNativeWindow *>(window);
+      pair.second.surfaceReady = true;
+      // 若 avPlayer 已创建且 url 已设置，立即绑定 surface（Prepare 先于 surface ready 的情形）
+      if (pair.second.avPlayer != nullptr && !pair.second.url.empty()) {
+        OH_AVPlayer_SetVideoSurface(pair.second.avPlayer, pair.second.nativeWindow);
+      }
+      break;
+    }
+  }
+}
+
+static void OnXCSurfaceChanged(OH_NativeXComponent *component, void *window) {
+  (void)component;
+  (void)window;
+  // A3 阶段暂不处理 surface 尺寸变化
+}
+
+static void OnXCSurfaceDestroyed(OH_NativeXComponent *component, void *window) {
+  (void)window;
+  char idBuf[OH_XCOMPONENT_ID_LEN_MAX + 1] = {0};
+  uint64_t idSize = sizeof(idBuf);
+  if (OH_NativeXComponent_GetXComponentId(component, idBuf, &idSize) !=
+      OH_NATIVEXCOMPONENT_RESULT_SUCCESS) {
+    return;
+  }
+  const std::string xcId(idBuf);
+  for (auto &pair : g_players) {
+    if (pair.second.xComponentId == xcId) {
+      pair.second.nativeWindow = nullptr;
+      pair.second.surfaceReady = false;
+      break;
+    }
+  }
+}
+
+static void OnXCDispatchTouchEvent(OH_NativeXComponent *component, void *window) {
+  (void)component;
+  (void)window;
+  // 播放器不处理触摸事件
+}
+
+// 所有 OH_NativeXComponent 实例共用一套函数指针，回调内部通过 xComponentId 区分
+static OH_NativeXComponent_Callback s_xcCallback = {
+  .OnSurfaceCreated = OnXCSurfaceCreated,
+  .OnSurfaceChanged = OnXCSurfaceChanged,
+  .OnSurfaceDestroyed = OnXCSurfaceDestroyed,
+  .DispatchTouchEvent = OnXCDispatchTouchEvent,
+};
+
 static napi_value SetXComponent(napi_env env, napi_callback_info info) {
   size_t argc = 3;
   napi_value args[3] = { nullptr, nullptr, nullptr };
@@ -1113,16 +1179,27 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
   state->xComponentId = xComponentId;
 
   // 从 context 中提取 OH_NativeXComponent*。
-  // 注：SDK 无同步 GetNativeWindow API（旧路径 window 仅在 OnSurfaceCreated 回调中可得；
-  //     新路径 OH_ArkUI_XComponent_GetNativeWindow 接受 SurfaceHolder*，非此处 unwrap 所得类型）。
-  // nativeWindow 将由 A3 阶段的 surface-created 回调写入；此处只做合法性检查，不 crash。
+  // nativeWindow 由 OnSurfaceCreated 回调写入；此处仅注册回调，不直接获取 window。
   OH_NativeXComponent *nativeXC = nullptr;
   napi_unwrap(env, args[1], reinterpret_cast<void **>(&nativeXC));
-  // nativeXC 有效则 state->nativeWindow 由后续回调赋值，否则降级为 nullptr（骨架兼容）
+
+  // 切换渲染目标：先停止现有 avPlayer（surface 将失效），重置骨架态，再注册新回调。
+  if (state->avPlayer != nullptr) {
+    OH_AVPlayer_Stop(state->avPlayer);
+    OH_AVPlayer_Release(state->avPlayer);
+    state->avPlayer = nullptr;
+  }
   state->nativeWindow = nullptr;
+  state->surfaceReady = false;
 
   // 切换渲染目标后重置骨架态，避免旧 prepared/时间轴状态延续到新 surface。
   ResetRuntimeState(*state);
+
+  // 注册 XComponent 回调，OnSurfaceCreated 触发后写入 nativeWindow。
+  if (nativeXC != nullptr) {
+    OH_NativeXComponent_RegisterCallback(nativeXC, &s_xcCallback);
+  }
+
   EmitTimeUpdate(*state);
   return ReturnUndefinedOrThrow(env, "setXComponent failed to create return value");
 }
@@ -1151,9 +1228,35 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     EmitError(state, ERR_PREPARE_EMPTY_XCOMPONENT, "prepare failed: xComponentId is empty");
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
   }
-    EmitBufferingChange(state, true);
+
+  // A3：创建 OH_AVPlayer 实例（每次 prepare 前确保实例存在）
+  if (state.avPlayer == nullptr) {
+    state.avPlayer = OH_AVPlayer_Create();
+    if (state.avPlayer == nullptr) {
+      EmitError(state, ERR_PREPARE_EMPTY_URL, "prepare failed: OH_AVPlayer_Create returned nullptr");
+      return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+    }
+  }
+
+  // 设置播放源 URL
+  OH_AVErrCode avRet = OH_AVPlayer_SetURLSource(state.avPlayer, state.url.c_str());
+  if (avRet != AV_ERR_OK) {
+    EmitError(state, ERR_PREPARE_EMPTY_URL, "prepare failed: OH_AVPlayer_SetURLSource failed");
+    return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+  }
+
+  // 绑定渲染 Surface（若 surface 已就绪）；否则等 OnSurfaceCreated 回调触发后再绑定
+  if (state.nativeWindow != nullptr) {
+    OH_AVPlayer_SetVideoSurface(state.avPlayer, state.nativeWindow);
+  }
+
+  // 触发异步 prepare（结果由 A4 的 OH_AVPlayer_SetPlayerCallback 回调处理）
+  // A3 阶段同时保留骨架同步回调，使上层 JS 逻辑不因 A3 而中断
+  OH_AVPlayer_Prepare(state.avPlayer);
+
+  EmitBufferingChange(state, true);
   state.prepared = true;
-  // Fire onPrepared synchronously on the current JS thread (skeleton behaviour)
+  // Fire onPrepared synchronously on the current JS thread (skeleton behaviour；A4 改为异步回调)
   if (state.onPreparedRef != nullptr && state.callbackEnv != nullptr) {
     if (!CallJsFunction(state.callbackEnv, state.onPreparedRef, 0, nullptr)) {
       return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
@@ -1161,7 +1264,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   }
   // Push initial timeline tick after prepared so controller/subtitle bridge can sync immediately.
   EmitTimeUpdate(state);
-    EmitBufferingChange(state, false);
+  EmitBufferingChange(state, false);
   return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
 }
 
@@ -1284,6 +1387,10 @@ static napi_value Play(napi_env env, napi_callback_info info) {
   }
   state.playing = true;
   state.lastRealtimeMs = NowRealtimeMs();
+  // A3：驱动 OH_AVPlayer 真实播放
+  if (state.avPlayer != nullptr) {
+    OH_AVPlayer_Play(state.avPlayer);
+  }
   EmitTimeUpdate(state);
   return ReturnUndefinedOrThrow(env, "play failed to create return value");
 }
@@ -1313,6 +1420,10 @@ static napi_value Pause(napi_env env, napi_callback_info info) {
   AdvancePlaybackClockIfNeeded(state);
   state.playing = false;
   state.lastRealtimeMs = 0;
+  // A3：驱动 OH_AVPlayer 真实暂停
+  if (state.avPlayer != nullptr) {
+    OH_AVPlayer_Pause(state.avPlayer);
+  }
   EmitTimeUpdate(state);
   return ReturnUndefinedOrThrow(env, "pause failed to create return value");
 }
@@ -1359,6 +1470,10 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
   state.currentTimeMs = positionMs;
   if (state.playing) {
     state.lastRealtimeMs = NowRealtimeMs();
+  }
+  // A3：驱动 OH_AVPlayer 真实 seek（PREVIOUS_SYNC 模式，适合直播与点播）
+  if (state.avPlayer != nullptr) {
+    OH_AVPlayer_Seek(state.avPlayer, static_cast<int32_t>(positionMs), AV_SEEK_PREVIOUS_SYNC);
   }
   EmitTimeUpdate(state);
   // Emit seekDone after confirming position; adapter uses this to fire onSeekDone
@@ -1421,11 +1536,18 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     return ReturnUndefinedOrThrow(env, "release failed to create return value");
   }
   NativePlayerSkeletonState &state = iter->second;
+  // A3：先停止并释放 OH_AVPlayer，再清理其他状态
+  if (state.avPlayer != nullptr) {
+    OH_AVPlayer_Stop(state.avPlayer);
+    OH_AVPlayer_Release(state.avPlayer);
+    state.avPlayer = nullptr;
+  }
   ResetRuntimeState(state);
   state.url.clear();
   state.headersJson.clear();
   state.xComponentId.clear();
   state.nativeWindow = nullptr;  // 只清引用，生命周期归 XComponent，不调用 release
+  state.surfaceReady = false;
   ClearCallbackRefs(state, env);
   state.callbackEnv = nullptr;
   g_players.erase(iter);
