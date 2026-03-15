@@ -8,6 +8,8 @@
 #include <cstring>
 
 #include "napi/native_api.h"
+#include <ace/xcomponent/native_interface_xcomponent.h>
+#include <native_window/external_window.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -645,6 +647,7 @@ struct NativePlayerSkeletonState {
   std::string url;
   std::string headersJson;
   std::string xComponentId;
+  OHNativeWindow *nativeWindow = nullptr;  // 渲染目标 Surface，生命周期归 XComponent，不 retain/release
   bool prepared = false;
   bool playing = false;
   int32_t selectedTrackIndex = -1;
@@ -1108,6 +1111,20 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
     return nullptr;
   }
   state->xComponentId = xComponentId;
+
+  // 从 context 中提取 OHNativeWindow*，失败时降级兼容（不 crash）
+  OH_NativeXComponent *nativeXC = nullptr;
+  if (napi_unwrap(env, args[1], reinterpret_cast<void **>(&nativeXC)) == napi_ok
+      && nativeXC != nullptr) {
+    OHNativeWindow *nativeWindow = nullptr;
+    int32_t ret = OH_NativeXComponent_GetNativeWindow(nativeXC, &nativeWindow);
+    if (ret == 0 && nativeWindow != nullptr) {
+      state->nativeWindow = nativeWindow;
+    }
+    // ret != 0 或 nativeWindow == nullptr：骨架降级兼容，nativeWindow 保持 nullptr
+  }
+  // napi_unwrap 失败（如单测环境）：nativeWindow 保持 nullptr，不影响骨架流程
+
   // 切换渲染目标后重置骨架态，避免旧 prepared/时间轴状态延续到新 surface。
   ResetRuntimeState(*state);
   EmitTimeUpdate(*state);
@@ -1412,6 +1429,7 @@ static napi_value Release(napi_env env, napi_callback_info info) {
   state.url.clear();
   state.headersJson.clear();
   state.xComponentId.clear();
+  state.nativeWindow = nullptr;  // 只清引用，生命周期归 XComponent，不调用 release
   ClearCallbackRefs(state, env);
   state.callbackEnv = nullptr;
   g_players.erase(iter);
