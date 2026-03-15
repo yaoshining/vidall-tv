@@ -22,24 +22,26 @@ export const webdavRequest: (
   url: string,
   headerLines: string,
   body: string,
-  timeoutMs: number
-) => {
+  timeoutMs: number,
+  tlsPolicy?: string
+) => Promise<{
   statusCode: number;
   body: string;
   error: string;
-};
+}>;
 export const downloadToFile: (
   method: string,
   url: string,
   headerLines: string,
   body: string,
   timeoutMs: number,
-  outputPath: string
-) => {
+  outputPath: string,
+  tlsPolicy?: string
+) => Promise<{
   statusCode: number;
   downloadedBytes: number;
   error: string;
-};
+}>;
 export const getNativeCapabilities: () => {
   ffmpegEnabled: boolean;
   libcurlEnabled: boolean;

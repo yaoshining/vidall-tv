@@ -326,13 +326,14 @@ export class WebDAVClient {
   /**
    * 通过 native libcurl 发送 WebDAV 请求（仅在 libcurlEnabled 时调用）。
    * 失败时由上层 sendRawHttpRequest 捕获并回退到 socket 实现。
+   * webdavRequest NAPI 为异步 Promise，必须 await，禁止同步调用。
    */
-  private sendViaNative(
+  private async sendViaNative(
     method: string,
     encodedPath: string,
     headers: Record<string, string>,
     body?: string
-  ): HttpResponse {
+  ): Promise<HttpResponse> {
     const isStd = (this.isHttps && this.port === 443) || (!this.isHttps && this.port === 80);
     const portStr = isStd ? '' : `:${this.port}`;
     const scheme = this.isHttps ? 'https' : 'http';
@@ -346,7 +347,7 @@ export class WebDAVClient {
     }
     const headerLines = parts.join('\r\n');
 
-    const result = getVidAllCorePlayerNapi().webdavRequest(
+    const result = await getVidAllCorePlayerNapi().webdavRequest(
       method, fullUrl, headerLines, body ?? '', this.timeout, this.tlsCertPolicy
     );
 
@@ -382,14 +383,14 @@ export class WebDAVClient {
     return parts.join('\r\n');
   }
 
-  private downloadViaNative(
+  private async downloadViaNative(
     encodedPath: string,
     localFilePath: string,
     headers: Record<string, string>
-  ): WebDavDownloadResult {
+  ): Promise<WebDavDownloadResult> {
     const fullUrl = this.buildNativeUrl(encodedPath);
     const headerLines = this.buildHeaderLines(headers);
-    const result = getVidAllCorePlayerNapi().downloadToFile(
+    const result = await getVidAllCorePlayerNapi().downloadToFile(
       'GET', fullUrl, headerLines, '', this.timeout * 2, localFilePath, this.tlsCertPolicy
     );
     if (result.error && this.isTlsError(result.error)) {
@@ -419,7 +420,7 @@ export class WebDAVClient {
     // ── native libcurl 优先路径 ────────────────────────────────────────────
     if (this.checkNativeCurlEnabled()) {
       try {
-        return this.sendViaNative(method, path, headers, body);
+        return await this.sendViaNative(method, path, headers, body);
       } catch (e) {
         const nativeErr = (e as Error).message;
         if (!this.allowLegacyTransportFallback) {
@@ -881,7 +882,7 @@ export class WebDAVClient {
 
     if (this.checkNativeCurlEnabled()) {
       try {
-        const nativeResult = this.downloadViaNative(fullPath, localFilePath, downloadHeaders);
+        const nativeResult = await this.downloadViaNative(fullPath, localFilePath, downloadHeaders);
         if (nativeResult.error.length > 0) {
           throw new Error(`native curl download failed: ${nativeResult.error}`);
         }

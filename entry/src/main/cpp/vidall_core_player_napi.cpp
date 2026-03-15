@@ -1490,6 +1490,87 @@ static napi_value FfmpegSelfCheck(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// ── WebdavRequest async implementation ──────────────────────────────────────
+// WebdavRequest 必须异步：libcurl 的 TLS 握手 + 网络 IO 耗时较长（可能 >5s），
+// 若在 JS 主线程同步执行会直接触发 ANR。参照 Ffprobe 的异步模式实现。
+
+struct WebdavRequestAsyncContext {
+  napi_async_work work = nullptr;
+  napi_deferred deferred = nullptr;
+  std::string method;
+  std::string url;
+  std::string headerLines;
+  std::string body;
+  int64_t timeoutMs = 0;
+  bool allowSelfSigned = false;
+  CurlRequestResult requestResult;
+};
+
+static void ExecuteWebdavRequestAsync(napi_env env, void *data) {
+  (void)env;
+  WebdavRequestAsyncContext *context = static_cast<WebdavRequestAsyncContext *>(data);
+  if (context == nullptr) {
+    return;
+  }
+  context->requestResult = RunCurlRequest(
+    context->method, context->url, context->headerLines,
+    context->body, context->timeoutMs, context->allowSelfSigned
+  );
+}
+
+static void CompleteWebdavRequestAsync(napi_env env, napi_status status, void *data) {
+  WebdavRequestAsyncContext *context = static_cast<WebdavRequestAsyncContext *>(data);
+  if (context == nullptr) {
+    return;
+  }
+
+  if (status != napi_ok) {
+    napi_value msg = nullptr;
+    napi_value err = nullptr;
+    napi_create_string_utf8(env, "webdavRequest async work cancelled", NAPI_AUTO_LENGTH, &msg);
+    napi_create_error(env, nullptr, msg, &err);
+    napi_reject_deferred(env, context->deferred, err);
+    if (context->work != nullptr) {
+      napi_delete_async_work(env, context->work);
+    }
+    delete context;
+    return;
+  }
+
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    napi_value msg = nullptr;
+    napi_value err = nullptr;
+    napi_create_string_utf8(env, "webdavRequest failed to create result object", NAPI_AUTO_LENGTH, &msg);
+    napi_create_error(env, nullptr, msg, &err);
+    napi_reject_deferred(env, context->deferred, err);
+    if (context->work != nullptr) {
+      napi_delete_async_work(env, context->work);
+    }
+    delete context;
+    return;
+  }
+
+  napi_value statusCodeValue = nullptr;
+  napi_create_int64(env, context->requestResult.statusCode, &statusCodeValue);
+  napi_set_named_property(env, result, "statusCode", statusCodeValue);
+
+  napi_value bodyValue = nullptr;
+  napi_create_string_utf8(env, context->requestResult.body.c_str(), NAPI_AUTO_LENGTH, &bodyValue);
+  napi_set_named_property(env, result, "body", bodyValue);
+
+  napi_value errorValue = nullptr;
+  napi_create_string_utf8(env, context->requestResult.error.c_str(), NAPI_AUTO_LENGTH, &errorValue);
+  napi_set_named_property(env, result, "error", errorValue);
+
+  napi_resolve_deferred(env, context->deferred, result);
+
+  if (context->work != nullptr) {
+    napi_delete_async_work(env, context->work);
+  }
+  delete context;
+}
+
 static napi_value WebdavRequest(napi_env env, napi_callback_info info) {
   size_t argc = 6;
   napi_value args[6] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
@@ -1502,82 +1583,153 @@ static napi_value WebdavRequest(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  std::string method;
-  std::string url;
-  std::string headerLines;
-  std::string body;
-  int64_t timeoutMs = 0;
+  WebdavRequestAsyncContext *context = new WebdavRequestAsyncContext();
 
-  if (!ReadUtf8String(env, args[0], method)) {
+  if (!ReadUtf8String(env, args[0], context->method)) {
+    delete context;
     ThrowTypeError(env, "webdavRequest method must be string");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[1], url)) {
+  if (!ReadUtf8String(env, args[1], context->url)) {
+    delete context;
     ThrowTypeError(env, "webdavRequest url must be string");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[2], headerLines)) {
+  if (!ReadUtf8String(env, args[2], context->headerLines)) {
+    delete context;
     ThrowTypeError(env, "webdavRequest headerLines must be string");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[3], body)) {
+  if (!ReadUtf8String(env, args[3], context->body)) {
+    delete context;
     ThrowTypeError(env, "webdavRequest body must be string");
     return nullptr;
   }
-  if (napi_get_value_int64(env, args[4], &timeoutMs) != napi_ok) {
+  if (napi_get_value_int64(env, args[4], &context->timeoutMs) != napi_ok) {
+    delete context;
     ThrowTypeError(env, "webdavRequest timeoutMs must be int64");
     return nullptr;
   }
 
   // 可选第 6 个参数：tlsPolicy（字符串，默认 "strict"）。
   // "allow_self_signed" 启用自签名证书受控模式（仅供调试/内网场景，禁止作为生产默认）。
-  bool allowSelfSigned = false;
   if (argc >= 6 && args[5] != nullptr) {
     std::string tlsPolicy;
     if (ReadUtf8String(env, args[5], tlsPolicy)) {
-      allowSelfSigned = (tlsPolicy == "allow_self_signed");
+      context->allowSelfSigned = (tlsPolicy == "allow_self_signed");
     }
   }
 
-  CurlRequestResult requestResult = RunCurlRequest(method, url, headerLines, body, timeoutMs, allowSelfSigned);
+  napi_value promise = nullptr;
+  if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "webdavRequest failed to create promise");
+    return nullptr;
+  }
+
+  napi_value resourceName = nullptr;
+  if (napi_create_string_utf8(env, "webdavRequestAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "webdavRequest failed to create resource name");
+    return nullptr;
+  }
+
+  if (napi_create_async_work(env, nullptr, resourceName,
+      ExecuteWebdavRequestAsync, CompleteWebdavRequestAsync, context, &context->work) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "webdavRequest failed to create async work");
+    return nullptr;
+  }
+
+  if (napi_queue_async_work(env, context->work) != napi_ok) {
+    napi_delete_async_work(env, context->work);
+    delete context;
+    ThrowTypeError(env, "webdavRequest failed to queue async work");
+    return nullptr;
+  }
+
+  return promise;
+}
+
+// ── DownloadToFile async implementation ─────────────────────────────────────
+// 同 webdavRequest，libcurl 下载也需要异步，避免阻塞 JS 主线程。
+
+struct DownloadToFileAsyncContext {
+  napi_async_work work = nullptr;
+  napi_deferred deferred = nullptr;
+  std::string method;
+  std::string url;
+  std::string headerLines;
+  std::string body;
+  int64_t timeoutMs = 0;
+  std::string outputPath;
+  bool allowSelfSigned = false;
+  CurlDownloadResult downloadResult;
+};
+
+static void ExecuteDownloadToFileAsync(napi_env env, void *data) {
+  (void)env;
+  DownloadToFileAsyncContext *context = static_cast<DownloadToFileAsyncContext *>(data);
+  if (context == nullptr) {
+    return;
+  }
+  context->downloadResult = RunCurlDownloadToFile(
+    context->method, context->url, context->headerLines,
+    context->body, context->timeoutMs, context->outputPath, context->allowSelfSigned
+  );
+}
+
+static void CompleteDownloadToFileAsync(napi_env env, napi_status status, void *data) {
+  DownloadToFileAsyncContext *context = static_cast<DownloadToFileAsyncContext *>(data);
+  if (context == nullptr) {
+    return;
+  }
+
+  if (status != napi_ok) {
+    napi_value msg = nullptr;
+    napi_value err = nullptr;
+    napi_create_string_utf8(env, "downloadToFile async work cancelled", NAPI_AUTO_LENGTH, &msg);
+    napi_create_error(env, nullptr, msg, &err);
+    napi_reject_deferred(env, context->deferred, err);
+    if (context->work != nullptr) {
+      napi_delete_async_work(env, context->work);
+    }
+    delete context;
+    return;
+  }
 
   napi_value result = nullptr;
   if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
-    ThrowTypeError(env, "webdavRequest failed to create result object");
-    return nullptr;
+    napi_value msg = nullptr;
+    napi_value err = nullptr;
+    napi_create_string_utf8(env, "downloadToFile failed to create result object", NAPI_AUTO_LENGTH, &msg);
+    napi_create_error(env, nullptr, msg, &err);
+    napi_reject_deferred(env, context->deferred, err);
+    if (context->work != nullptr) {
+      napi_delete_async_work(env, context->work);
+    }
+    delete context;
+    return;
   }
 
   napi_value statusCodeValue = nullptr;
-  if (napi_create_int64(env, requestResult.statusCode, &statusCodeValue) != napi_ok) {
-    ThrowTypeError(env, "webdavRequest failed to create statusCode");
-    return nullptr;
-  }
-  if (napi_set_named_property(env, result, "statusCode", statusCodeValue) != napi_ok) {
-    ThrowTypeError(env, "webdavRequest failed to set statusCode");
-    return nullptr;
-  }
+  napi_create_int64(env, context->downloadResult.statusCode, &statusCodeValue);
+  napi_set_named_property(env, result, "statusCode", statusCodeValue);
 
-  napi_value bodyValue = nullptr;
-  if (napi_create_string_utf8(env, requestResult.body.c_str(), NAPI_AUTO_LENGTH, &bodyValue) != napi_ok) {
-    ThrowTypeError(env, "webdavRequest failed to create body");
-    return nullptr;
-  }
-  if (napi_set_named_property(env, result, "body", bodyValue) != napi_ok) {
-    ThrowTypeError(env, "webdavRequest failed to set body");
-    return nullptr;
-  }
+  napi_value downloadedBytesValue = nullptr;
+  napi_create_int64(env, context->downloadResult.downloadedBytes, &downloadedBytesValue);
+  napi_set_named_property(env, result, "downloadedBytes", downloadedBytesValue);
 
   napi_value errorValue = nullptr;
-  if (napi_create_string_utf8(env, requestResult.error.c_str(), NAPI_AUTO_LENGTH, &errorValue) != napi_ok) {
-    ThrowTypeError(env, "webdavRequest failed to create error");
-    return nullptr;
-  }
-  if (napi_set_named_property(env, result, "error", errorValue) != napi_ok) {
-    ThrowTypeError(env, "webdavRequest failed to set error");
-    return nullptr;
-  }
+  napi_create_string_utf8(env, context->downloadResult.error.c_str(), NAPI_AUTO_LENGTH, &errorValue);
+  napi_set_named_property(env, result, "error", errorValue);
 
-  return result;
+  napi_resolve_deferred(env, context->deferred, result);
+
+  if (context->work != nullptr) {
+    napi_delete_async_work(env, context->work);
+  }
+  delete context;
 }
 
 static napi_value DownloadToFile(napi_env env, napi_callback_info info) {
@@ -1592,87 +1744,77 @@ static napi_value DownloadToFile(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  std::string method;
-  std::string url;
-  std::string headerLines;
-  std::string body;
-  std::string outputPath;
-  int64_t timeoutMs = 0;
+  DownloadToFileAsyncContext *context = new DownloadToFileAsyncContext();
 
-  if (!ReadUtf8String(env, args[0], method)) {
+  if (!ReadUtf8String(env, args[0], context->method)) {
+    delete context;
     ThrowTypeError(env, "downloadToFile method must be string");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[1], url)) {
+  if (!ReadUtf8String(env, args[1], context->url)) {
+    delete context;
     ThrowTypeError(env, "downloadToFile url must be string");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[2], headerLines)) {
+  if (!ReadUtf8String(env, args[2], context->headerLines)) {
+    delete context;
     ThrowTypeError(env, "downloadToFile headerLines must be string");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[3], body)) {
+  if (!ReadUtf8String(env, args[3], context->body)) {
+    delete context;
     ThrowTypeError(env, "downloadToFile body must be string");
     return nullptr;
   }
-  if (napi_get_value_int64(env, args[4], &timeoutMs) != napi_ok) {
+  if (napi_get_value_int64(env, args[4], &context->timeoutMs) != napi_ok) {
+    delete context;
     ThrowTypeError(env, "downloadToFile timeoutMs must be int64");
     return nullptr;
   }
-  if (!ReadUtf8String(env, args[5], outputPath)) {
+  if (!ReadUtf8String(env, args[5], context->outputPath)) {
+    delete context;
     ThrowTypeError(env, "downloadToFile outputPath must be string");
     return nullptr;
   }
 
   // 可选第 7 个参数：tlsPolicy（字符串，默认 "strict"）。
   // "allow_self_signed" 为受控启用，禁止作为生产默认行为。
-  bool allowSelfSigned = false;
   if (argc >= 7 && args[6] != nullptr) {
     std::string tlsPolicy;
     if (ReadUtf8String(env, args[6], tlsPolicy)) {
-      allowSelfSigned = (tlsPolicy == "allow_self_signed");
+      context->allowSelfSigned = (tlsPolicy == "allow_self_signed");
     }
   }
 
-  CurlDownloadResult runResult = RunCurlDownloadToFile(method, url, headerLines, body, timeoutMs, outputPath, allowSelfSigned);
-
-  napi_value result = nullptr;
-  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
-    ThrowTypeError(env, "downloadToFile failed to create result object");
+  napi_value promise = nullptr;
+  if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "downloadToFile failed to create promise");
     return nullptr;
   }
 
-  napi_value statusCodeValue = nullptr;
-  if (napi_create_int64(env, runResult.statusCode, &statusCodeValue) != napi_ok) {
-    ThrowTypeError(env, "downloadToFile failed to create statusCode");
-    return nullptr;
-  }
-  if (napi_set_named_property(env, result, "statusCode", statusCodeValue) != napi_ok) {
-    ThrowTypeError(env, "downloadToFile failed to set statusCode");
+  napi_value resourceName = nullptr;
+  if (napi_create_string_utf8(env, "downloadToFileAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "downloadToFile failed to create resource name");
     return nullptr;
   }
 
-  napi_value downloadedBytesValue = nullptr;
-  if (napi_create_int64(env, runResult.downloadedBytes, &downloadedBytesValue) != napi_ok) {
-    ThrowTypeError(env, "downloadToFile failed to create downloadedBytes");
-    return nullptr;
-  }
-  if (napi_set_named_property(env, result, "downloadedBytes", downloadedBytesValue) != napi_ok) {
-    ThrowTypeError(env, "downloadToFile failed to set downloadedBytes");
+  if (napi_create_async_work(env, nullptr, resourceName,
+      ExecuteDownloadToFileAsync, CompleteDownloadToFileAsync, context, &context->work) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "downloadToFile failed to create async work");
     return nullptr;
   }
 
-  napi_value errorValue = nullptr;
-  if (napi_create_string_utf8(env, runResult.error.c_str(), NAPI_AUTO_LENGTH, &errorValue) != napi_ok) {
-    ThrowTypeError(env, "downloadToFile failed to create error");
-    return nullptr;
-  }
-  if (napi_set_named_property(env, result, "error", errorValue) != napi_ok) {
-    ThrowTypeError(env, "downloadToFile failed to set error");
+  if (napi_queue_async_work(env, context->work) != napi_ok) {
+    napi_delete_async_work(env, context->work);
+    delete context;
+    ThrowTypeError(env, "downloadToFile failed to queue async work");
     return nullptr;
   }
 
-  return result;
+  return promise;
 }
 
 static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
