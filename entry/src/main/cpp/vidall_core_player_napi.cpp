@@ -2056,6 +2056,22 @@ static void FfmpegCleanupGLResources(FfmpegContext *ctx) {
 static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   FfmpegContext *ctx = state->ffmpegCtx.get();
 
+  // 0. 释放 OH_AVPlayer，解除其对 NativeWindow 的 EGL surface 绑定。
+  //    必须在 FfmpegInitEGL 之前执行，否则 eglCreateWindowSurface 因 Window 已被占用而失败。
+  //    RenderThreadFunc 运行在独立线程（非 OH_AVPlayer 回调线程），调用 Release 安全。
+  OH_AVPlayer *avToRelease = nullptr;
+  {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    avToRelease = state->avPlayer;
+    state->avPlayer = nullptr;
+  }
+  if (avToRelease != nullptr) {
+    OH_AVPlayer_Stop(avToRelease);
+    OH_AVPlayer_Release(avToRelease);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "RenderThreadFunc: released OH_AVPlayer to free NativeWindow EGL binding");
+  }
+
   // 1. EGL 初始化（创建 display/surface/context）
   if (!FfmpegInitEGL(ctx, state->nativeWindow)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
@@ -3016,10 +3032,16 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
   napi_unwrap(env, args[1], reinterpret_cast<void **>(&nativeXC));
 
   // 切换渲染目标：先停止现有 avPlayer（surface 将失效），重置骨架态，再注册新回调。
-  if (state->avPlayer != nullptr) {
-    OH_AVPlayer_Stop(state->avPlayer);
-    OH_AVPlayer_Release(state->avPlayer);
+  // 用 stateMutex 保护，防止与 RenderThreadFunc 并发双释放。
+  OH_AVPlayer *avToRelease = nullptr;
+  {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    avToRelease = state->avPlayer;
     state->avPlayer = nullptr;
+  }
+  if (avToRelease != nullptr) {
+    OH_AVPlayer_Stop(avToRelease);
+    OH_AVPlayer_Release(avToRelease);
   }
   state->nativeWindow = nullptr;
   state->surfaceReady = false;
@@ -3551,10 +3573,17 @@ static napi_value Release(napi_env env, napi_callback_info info) {
   //   2. ClearCallbackRefs（含 ReleaseTsfIfPresent napi_tsfn_abort）：此时媒体线程已无回调，
   //      abort 可安全丢弃 OH_AVPlayer_Release 前已入队但尚未在 JS 线程执行的 TSF 调用
   //   3. 再 erase state：上两步完成后状态指针不再被任何线程访问
-  if (state.avPlayer != nullptr) {
-    OH_AVPlayer_Stop(state.avPlayer);
-    OH_AVPlayer_Release(state.avPlayer); // 阻塞直到媒体线程所有回调执行完毕
+  // 取出 avPlayer（stateMutex 保护，防止与 RenderThreadFunc 并发双释放）。
+  // OH_AVPlayer_Release 必须在锁外调用，避免媒体线程回调尝试加锁时死锁。
+  OH_AVPlayer *avToRelease = nullptr;
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    avToRelease = state.avPlayer;
     state.avPlayer = nullptr;
+  }
+  if (avToRelease != nullptr) {
+    OH_AVPlayer_Stop(avToRelease);
+    OH_AVPlayer_Release(avToRelease); // 阻塞直到媒体线程所有回调执行完毕
   }
   // B1：OH_AVPlayer_Release 完成后（媒体线程回调已全部结束），安全停止 demux 线程
   StopFfmpegDemux(&state);
