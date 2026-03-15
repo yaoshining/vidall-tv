@@ -7,6 +7,10 @@
 #include <cerrno>
 #include <cstring>
 #include <mutex>
+#include <thread>
+#include <queue>
+#include <condition_variable>
+#include <atomic>
 
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
@@ -647,6 +651,34 @@ static napi_value Ffprobe(napi_env env, napi_callback_info info) {
   return promise;
 }
 
+// ---------------------------------------------------------------------------
+// B1：FFmpeg 自研解码路径 — packet 队列 + demux 线程
+// ---------------------------------------------------------------------------
+
+// 线程安全的 AVPacket 队列（视频/音频各一个）
+struct AVPacketQueue {
+  std::queue<AVPacket *> packets;
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool abort = false;
+  int maxSize = 64;
+};
+
+// FFmpeg 上下文：格式探测 + demux 线程 + 双队列
+struct FfmpegContext {
+  AVFormatContext *fmtCtx = nullptr;
+  int videoStreamIdx = -1;
+  int audioStreamIdx = -1;
+  AVPacketQueue videoQueue;
+  AVPacketQueue audioQueue;
+  std::thread demuxThread;
+  std::atomic<bool> demuxRunning{false};
+  // 中断标志：StopFfmpegDemux 设为 true，让阻塞的 av_read_frame 尽快返回
+  std::atomic<bool> interruptFlag{false};
+  // HTTP headers（"Key: Value\r\n" 格式，供 avformat_open_input 使用）
+  std::string httpHeaders;
+};
+
 struct NativePlayerSkeletonState {
   std::string url;
   std::string headersJson;
@@ -680,6 +712,9 @@ struct NativePlayerSkeletonState {
   // PR#49 修复（问题6）：per-player mutex，保护 state 字段的跨线程读写
   // 注意：std::mutex 不可拷贝/移动；unordered_map 通过节点指针操作，不需要拷贝值
   std::mutex stateMutex;
+  // B1：FFmpeg 自研路径标志与上下文
+  bool useFfmpegPath = false;  // OH_AVPlayer 报错后设为 true，切换到 FFmpeg 路径
+  std::unique_ptr<FfmpegContext> ffmpegCtx;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -1148,7 +1183,301 @@ struct ErrorData {
 };
 
 // ---------------------------------------------------------------------------
-// A4：OH_AVPlayer 状态 / 错误回调（媒体线程调用，userData = NativePlayerSkeletonState*）
+// B1：FFmpeg demux 路径辅助函数
+// ---------------------------------------------------------------------------
+
+// av_read_frame 中断回调：interruptFlag 置 true 时让 FFmpeg 立即退出阻塞 IO
+static int FfmpegInterruptCallback(void *opaque) {
+  if (opaque == nullptr) {
+    return 0;
+  }
+  const auto *flag = static_cast<std::atomic<bool> *>(opaque);
+  return flag->load() ? 1 : 0;
+}
+
+// 将 headersJson（JSON 对象字符串）转换为 FFmpeg 所需的 "Key: Value\r\n" 格式。
+// 仅做轻量级手写解析，满足 WebDAV 鉴权场景（Authorization 等单层键值对）。
+// 复杂嵌套/转义场景不在 B1 范围内。
+static std::string BuildFfmpegHeadersFromJson(const std::string &headersJson) {
+  if (headersJson.empty() || headersJson.front() != '{') {
+    return {};
+  }
+  std::string result;
+  const std::string &src = headersJson;
+  const size_t len = src.size();
+  size_t i = 1; // 跳过 '{'
+  while (i < len) {
+    // 跳过空白
+    while (i < len && (src[i] == ' ' || src[i] == '\t' || src[i] == '\n' || src[i] == '\r')) {
+      ++i;
+    }
+    if (i >= len || src[i] == '}') {
+      break;
+    }
+    // 解析 key（期望 "key"）
+    if (src[i] != '"') {
+      break;
+    }
+    ++i; // skip opening quote
+    std::string key;
+    while (i < len && src[i] != '"') {
+      if (src[i] == '\\' && i + 1 < len) {
+        ++i; // skip escape
+      }
+      key += src[i++];
+    }
+    if (i < len) {
+      ++i; // skip closing quote
+    }
+    // 跳到 ':'
+    while (i < len && src[i] != ':') {
+      ++i;
+    }
+    if (i < len) {
+      ++i; // skip ':'
+    }
+    // 跳过空白
+    while (i < len && (src[i] == ' ' || src[i] == '\t')) {
+      ++i;
+    }
+    // 解析 value（期望 "value"）
+    if (i >= len || src[i] != '"') {
+      break;
+    }
+    ++i;
+    std::string value;
+    while (i < len && src[i] != '"') {
+      if (src[i] == '\\' && i + 1 < len) {
+        ++i;
+      }
+      value += src[i++];
+    }
+    if (i < len) {
+      ++i;
+    }
+    if (!key.empty()) {
+      result += key + ": " + value + "\r\n";
+    }
+    // 跳到 ',' 或 '}'
+    while (i < len && src[i] != ',' && src[i] != '}') {
+      ++i;
+    }
+    if (i < len && src[i] == ',') {
+      ++i;
+    }
+  }
+  return result;
+}
+
+// 打开 FFmpeg 格式上下文（含 HTTP Authorization 头与超时配置）
+static int FfmpegOpenInput(FfmpegContext *ctx, const std::string &url) {
+  if (ctx == nullptr) {
+    return AVERROR(EINVAL);
+  }
+  avformat_network_init();
+
+  ctx->fmtCtx = avformat_alloc_context();
+  if (ctx->fmtCtx == nullptr) {
+    return AVERROR(ENOMEM);
+  }
+  // 注册中断回调，以便 StopFfmpegDemux 能及时中断阻塞 IO
+  ctx->fmtCtx->interrupt_callback.callback = FfmpegInterruptCallback;
+  ctx->fmtCtx->interrupt_callback.opaque = &ctx->interruptFlag;
+
+  AVDictionary *opts = nullptr;
+  av_dict_set(&opts, "timeout", "10000000", 0);       // 10s open timeout（微秒）
+  av_dict_set(&opts, "reconnect", "1", 0);
+  av_dict_set(&opts, "reconnect_streamed", "1", 0);
+  if (!ctx->httpHeaders.empty()) {
+    av_dict_set(&opts, "headers", ctx->httpHeaders.c_str(), 0);
+  }
+
+  int ret = avformat_open_input(&ctx->fmtCtx, url.c_str(), nullptr, &opts);
+  av_dict_free(&opts);
+  if (ret < 0) {
+    avformat_free_context(ctx->fmtCtx);
+    ctx->fmtCtx = nullptr;
+    return ret;
+  }
+
+  ret = avformat_find_stream_info(ctx->fmtCtx, nullptr);
+  if (ret < 0) {
+    avformat_close_input(&ctx->fmtCtx);
+    return ret;
+  }
+
+  ctx->videoStreamIdx = av_find_best_stream(ctx->fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+  ctx->audioStreamIdx = av_find_best_stream(ctx->fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegOpenInput: url=%s videoIdx=%d audioIdx=%d",
+               url.c_str(), ctx->videoStreamIdx, ctx->audioStreamIdx);
+  return 0;
+}
+
+// demux 线程主循环：持续读帧，分发至视频/音频队列
+static void DemuxThreadFunc(FfmpegContext *ctx) {
+  if (ctx == nullptr || ctx->fmtCtx == nullptr) {
+    return;
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "DemuxThread: started");
+
+  AVPacket *pkt = av_packet_alloc();
+  if (pkt == nullptr) {
+    ctx->demuxRunning.store(false);
+    return;
+  }
+
+  while (ctx->demuxRunning.load()) {
+    int ret = av_read_frame(ctx->fmtCtx, pkt);
+    if (ret == AVERROR_EOF) {
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "DemuxThread: EOF reached");
+      break;
+    }
+    if (ret == AVERROR(EAGAIN)) {
+      // 暂时无数据，短暂休眠后重试
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      continue;
+    }
+    if (ret < 0) {
+      char errbuf[128] = {0};
+      av_strerror(ret, errbuf, sizeof(errbuf));
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "DemuxThread: av_read_frame error: %s", errbuf);
+      break;
+    }
+
+    if (pkt->stream_index == ctx->videoStreamIdx && ctx->videoStreamIdx >= 0) {
+      AVPacket *pktCopy = av_packet_alloc();
+      if (pktCopy != nullptr && av_packet_ref(pktCopy, pkt) == 0) {
+        std::unique_lock<std::mutex> lock(ctx->videoQueue.mtx);
+        ctx->videoQueue.cv.wait(lock, [&] {
+          return static_cast<int>(ctx->videoQueue.packets.size()) < ctx->videoQueue.maxSize
+              || ctx->videoQueue.abort;
+        });
+        if (!ctx->videoQueue.abort) {
+          ctx->videoQueue.packets.push(pktCopy);
+        } else {
+          av_packet_free(&pktCopy);
+        }
+        lock.unlock();
+        ctx->videoQueue.cv.notify_all();
+      } else if (pktCopy != nullptr) {
+        av_packet_free(&pktCopy);
+      }
+    } else if (pkt->stream_index == ctx->audioStreamIdx && ctx->audioStreamIdx >= 0) {
+      AVPacket *pktCopy = av_packet_alloc();
+      if (pktCopy != nullptr && av_packet_ref(pktCopy, pkt) == 0) {
+        std::unique_lock<std::mutex> lock(ctx->audioQueue.mtx);
+        ctx->audioQueue.cv.wait(lock, [&] {
+          return static_cast<int>(ctx->audioQueue.packets.size()) < ctx->audioQueue.maxSize
+              || ctx->audioQueue.abort;
+        });
+        if (!ctx->audioQueue.abort) {
+          ctx->audioQueue.packets.push(pktCopy);
+        } else {
+          av_packet_free(&pktCopy);
+        }
+        lock.unlock();
+        ctx->audioQueue.cv.notify_all();
+      } else if (pktCopy != nullptr) {
+        av_packet_free(&pktCopy);
+      }
+    }
+    av_packet_unref(pkt);
+  }
+
+  av_packet_free(&pkt);
+  ctx->demuxRunning.store(false);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "DemuxThread: exited");
+}
+
+// 启动 FFmpeg demux 线程（在 OH_AVPlayer 报错后从媒体线程调用）
+static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string &url) {
+  if (state == nullptr || url.empty()) {
+    return;
+  }
+  // 已经在运行则跳过
+  if (state->ffmpegCtx != nullptr && state->ffmpegCtx->demuxRunning.load()) {
+    return;
+  }
+
+  auto ctx = std::make_unique<FfmpegContext>();
+  ctx->httpHeaders = BuildFfmpegHeadersFromJson(state->headersJson);
+
+  const int ret = FfmpegOpenInput(ctx.get(), url);
+  if (ret < 0) {
+    char errbuf[128] = {0};
+    av_strerror(ret, errbuf, sizeof(errbuf));
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "StartFfmpegDemux: FfmpegOpenInput failed: %s", errbuf);
+    return;
+  }
+
+  ctx->demuxRunning.store(true);
+  ctx->demuxThread = std::thread(DemuxThreadFunc, ctx.get());
+  state->ffmpegCtx = std::move(ctx);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StartFfmpegDemux: demux thread launched for url=%s", url.c_str());
+}
+
+// 停止 demux 线程并释放所有 FFmpeg 资源
+static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // 1. 通知中断：让阻塞的 av_read_frame / avformat_open_input 尽快返回
+  ctx->interruptFlag.store(true);
+  ctx->demuxRunning.store(false);
+
+  // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待）
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
+    ctx->videoQueue.abort = true;
+  }
+  ctx->videoQueue.cv.notify_all();
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    ctx->audioQueue.abort = true;
+  }
+  ctx->audioQueue.cv.notify_all();
+
+  // 3. 等待 demux 线程退出
+  if (ctx->demuxThread.joinable()) {
+    ctx->demuxThread.join();
+  }
+
+  // 4. 释放队列中残留 packet
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
+    while (!ctx->videoQueue.packets.empty()) {
+      AVPacket *p = ctx->videoQueue.packets.front();
+      ctx->videoQueue.packets.pop();
+      av_packet_free(&p);
+    }
+  }
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    while (!ctx->audioQueue.packets.empty()) {
+      AVPacket *p = ctx->audioQueue.packets.front();
+      ctx->audioQueue.packets.pop();
+      av_packet_free(&p);
+    }
+  }
+
+  // 5. 关闭格式上下文
+  if (ctx->fmtCtx != nullptr) {
+    avformat_close_input(&ctx->fmtCtx);
+  }
+
+  state->ffmpegCtx.reset();
+  state->useFfmpegPath = false;
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StopFfmpegDemux: demux stopped and cleaned");
+}
+
+
 // 使用新式带 userData 的回调 API：OH_AVPlayer_SetOnInfoCallback / SetOnErrorCallback
 // 注意：不在此处持有 g_playersMutex，避免与 Release() → OH_AVPlayer_Release 产生死锁；
 //      生命周期安全由 Release() 中"先 OH_AVPlayer_Release 再 ReleaseTsfIfPresent"序列保证。
@@ -1245,6 +1574,25 @@ static void OnAVPlayerErrorCB(OH_AVPlayer *player, int32_t errorCode,
   if (state == nullptr) {
     return;
   }
+
+  OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+               "OnAVPlayerErrorCB: errorCode=%d msg=%s useFfmpegPath=%d",
+               errorCode, errorMsg ? errorMsg : "(null)", state->useFfmpegPath ? 1 : 0);
+
+  // B1：OH_AVPlayer 报错时（IO 失败 / 编解码不支持）切换到 FFmpeg 自研路径。
+  // AV_ERR_UNSUPPORT (= 4) 表示格式/编解码器不支持；通用错误也尝试 FFmpeg 路径。
+  // 条件：尚未启动 FFmpeg 路径 && URL 不为空
+  if (!state->useFfmpegPath && !state->url.empty()) {
+    state->useFfmpegPath = true;
+    const std::string urlCopy = state->url; // OnAVPlayerErrorCB 来自媒体线程，避免持有 state 太久
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "OnAVPlayerErrorCB: switching to FFmpeg demux path for url=%s", urlCopy.c_str());
+    // StartFfmpegDemux 内部会 avformat_open_input（可能阻塞），
+    // 在媒体线程直接调用会影响 OH_AVPlayer 回调链路。
+    // B1 阶段直接在此线程启动（open 有 10s 超时保障），B2 阶段可改为独立 dispatch 线程。
+    StartFfmpegDemux(state, urlCopy);
+  }
+
   if (state->tsfOnError != nullptr) {
     // PR#49（问题5）：携带 code+msg，由 tsfOnError call_js_cb 负责 delete
     auto *errData = new ErrorData{
@@ -1881,6 +2229,8 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     OH_AVPlayer_Release(state.avPlayer); // 阻塞直到媒体线程所有回调执行完毕
     state.avPlayer = nullptr;
   }
+  // B1：OH_AVPlayer_Release 完成后（媒体线程回调已全部结束），安全停止 demux 线程
+  StopFfmpegDemux(&state);
   ResetRuntimeState(state);
   state.url.clear();
   state.headersJson.clear();

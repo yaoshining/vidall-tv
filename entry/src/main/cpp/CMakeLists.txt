@@ -37,6 +37,19 @@ target_include_directories(vidall_core_player_napi PRIVATE
 )
 
 # ---------------------------------------------------------------------------
+# B1：FFmpeg demux/decode 路径编译开关
+# 默认 ON；可通过 cmake -DVIDALL_ENABLE_FFMPEG=OFF 关闭（仅保留 OH_AVPlayer 路径）。
+# ---------------------------------------------------------------------------
+option(VIDALL_ENABLE_FFMPEG "Enable FFmpeg demux/decode path" ON)
+if(VIDALL_ENABLE_FFMPEG)
+    target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_ENABLE_FFMPEG=1)
+    message(STATUS "VIDALL_ENABLE_FFMPEG=ON — FFmpeg demux path enabled")
+else()
+    target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_ENABLE_FFMPEG=0)
+    message(STATUS "VIDALL_ENABLE_FFMPEG=OFF — FFmpeg demux path disabled")
+endif()
+
+# ---------------------------------------------------------------------------
 # libcurl 集成（HTTPS WebDAV 支持）
 #
 # 使用方式：
