@@ -809,6 +809,8 @@ struct FfmpegContext {
   // B5：音频时钟（主时钟）
   std::atomic<int64_t> audioPtsSamples{0};  // 已渲染的音频样本数（stereo stereo 计数，swr 输出 48kHz）
   int audioSampleRate{0};                    // swr 输出采样率（48000），FfmpegInitSwr 后固定
+  std::atomic<int64_t> audioClockBaseMs{0};  // seek 后的主时钟基准，timeUpdate = base + playedSamples/sampleRate
+  std::atomic<bool> playbackPaused{false};   // FFmpeg 路径的真实暂停态：音频回调/视频渲染均需读取
 
   // B5：seek 请求（Seek() NAPI 写入，DemuxThreadFunc 消费）
   std::atomic<bool> seekRequested{false};
@@ -1536,9 +1538,12 @@ static int FfmpegOpenInput(FfmpegContext *ctx, const std::string &url) {
 // ---------------------------------------------------------------------------
 
 static double AudioClock(const FfmpegContext *ctx) {
-  if (ctx->audioSampleRate <= 0) return 0.0;
-  return static_cast<double>(ctx->audioPtsSamples.load(std::memory_order_relaxed))
-         / static_cast<double>(ctx->audioSampleRate);
+  const double baseSeconds =
+      static_cast<double>(ctx->audioClockBaseMs.load(std::memory_order_relaxed)) / 1000.0;
+  if (ctx->audioSampleRate <= 0) return baseSeconds;
+  return baseSeconds +
+         static_cast<double>(ctx->audioPtsSamples.load(std::memory_order_relaxed)) /
+         static_cast<double>(ctx->audioSampleRate);
 }
 
 // ---------------------------------------------------------------------------
@@ -1629,7 +1634,14 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
         if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
         if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
       }
-      // 重置音频时钟（seek 后从新位置重新计时）
+      // seek 后重置 renderer 缓冲与音频时钟：新时钟 = 目标位置 + 之后已渲染样本
+      if (ctx->audioRenderer != nullptr) {
+        const OH_AudioStream_Result flushResult = OH_AudioRenderer_Flush(ctx->audioRenderer);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "DemuxThread: OH_AudioRenderer_Flush result=%{public}d",
+                     static_cast<int32_t>(flushResult));
+      }
+      ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
       ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
@@ -1641,6 +1653,12 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
         if (st != nullptr) {
           std::lock_guard<std::mutex> lk(st->stateMutex);
           st->currentTimeMs = targetMs;
+        }
+      }
+      {
+        NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
+        if (st != nullptr && st->tsfOnTimeUpdate != nullptr) {
+          napi_call_threadsafe_function(st->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
         }
       }
       {
@@ -2488,6 +2506,11 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   auto lastEmitTime = std::chrono::steady_clock::now() - std::chrono::seconds(1);
 
   while (ctx->renderRunning.load()) {
+    if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(16));
+      continue;
+    }
+
     // 4. 从 videoFrameQueue 消费一帧（最多等 16ms）
     AVFrame *frame = nullptr;
     {
@@ -2784,6 +2807,11 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
     return AUDIO_DATA_CALLBACK_RESULT_VALID;
   }
 
+  if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+    memset(audioData, 0, static_cast<size_t>(audioDataSize));
+    return AUDIO_DATA_CALLBACK_RESULT_VALID;
+  }
+
   auto *dst = static_cast<int16_t *>(audioData);
   // stereo S16：每帧 = 2 声道 × 2 字节 = 4 字节
   const int samplesNeeded = audioDataSize / static_cast<int>(2 * sizeof(int16_t));
@@ -2935,6 +2963,9 @@ static void StartFfmpegAudio(NativePlayerSkeletonState *state) {
     return;
   }
 
+  ctx->playbackPaused.store(false, std::memory_order_relaxed);
+  ctx->audioClockBaseMs.store(0, std::memory_order_relaxed);
+  ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
   const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "StartFfmpegAudio: OH_AudioRenderer_Start result=%d", result);
@@ -3895,6 +3926,21 @@ static napi_value Play(napi_env env, napi_callback_info info) {
     state.playing = true;
     state.lastRealtimeMs = NowRealtimeMs();
   }
+  if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
+    state.ffmpegCtx->playbackPaused.store(false, std::memory_order_relaxed);
+    if (state.ffmpegCtx->audioRenderer != nullptr) {
+      const OH_AudioStream_Result result = OH_AudioRenderer_Start(state.ffmpegCtx->audioRenderer);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "Play: FFmpeg path OH_AudioRenderer_Start result=%{public}d",
+                   static_cast<int32_t>(result));
+    }
+    {
+      std::lock_guard<std::mutex> lock(state.stateMutex);
+      state.currentTimeMs = static_cast<int64_t>(AudioClock(state.ffmpegCtx.get()) * 1000.0);
+    }
+    EmitTimeUpdate(state);
+    return ReturnUndefinedOrThrow(env, "play failed to create return value");
+  }
   // A3：驱动 OH_AVPlayer 真实播放
   if (state.avPlayer != nullptr) {
     OH_AVPlayer_Play(state.avPlayer);
@@ -3928,9 +3974,24 @@ static napi_value Pause(napi_env env, napi_callback_info info) {
       // 幂等处理：已暂停时忽略重复 pause。
       return ReturnUndefinedOrThrow(env, "pause failed to create return value");
     }
-    AdvancePlaybackClockIfNeeded(state);
+    if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
+      state.currentTimeMs = static_cast<int64_t>(AudioClock(state.ffmpegCtx.get()) * 1000.0);
+    } else {
+      AdvancePlaybackClockIfNeeded(state);
+    }
     state.playing = false;
     state.lastRealtimeMs = 0;
+  }
+  if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
+    state.ffmpegCtx->playbackPaused.store(true, std::memory_order_relaxed);
+    if (state.ffmpegCtx->audioRenderer != nullptr) {
+      const OH_AudioStream_Result result = OH_AudioRenderer_Pause(state.ffmpegCtx->audioRenderer);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "Pause: FFmpeg path OH_AudioRenderer_Pause result=%{public}d",
+                   static_cast<int32_t>(result));
+    }
+    EmitTimeUpdate(state);
+    return ReturnUndefinedOrThrow(env, "pause failed to create return value");
   }
   // A3：驱动 OH_AVPlayer 真实暂停
   if (state.avPlayer != nullptr) {
@@ -3986,8 +4047,11 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
       }
       state.currentTimeMs = positionMs;
     }
+    state.ffmpegCtx->audioClockBaseMs.store(positionMs, std::memory_order_relaxed);
+    state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->seekTargetMs.store(positionMs);
     state.ffmpegCtx->seekRequested.store(true);
+    EmitTimeUpdate(state);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                  "Seek: FFmpeg path seek requested to %lld ms",
                  static_cast<long long>(positionMs));
