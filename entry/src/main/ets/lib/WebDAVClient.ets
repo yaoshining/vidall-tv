@@ -10,6 +10,12 @@ interface WebDavRequestResult {
   error: string;
 }
 
+interface WebDavDownloadResult {
+  statusCode: number;
+  downloadedBytes: number;
+  error: string;
+}
+
 interface NativeCapabilities {
   ffmpegEnabled: boolean;
   libcurlEnabled: boolean;
@@ -24,6 +30,14 @@ interface WebDavNapiBridge {
     body: string,
     timeoutMs: number
   ) => WebDavRequestResult;
+  downloadToFile: (
+    method: string,
+    url: string,
+    headerLines: string,
+    body: string,
+    timeoutMs: number,
+    outputPath: string
+  ) => WebDavDownloadResult;
   getNativeCapabilities: () => NativeCapabilities;
 }
 
@@ -265,6 +279,35 @@ export class WebDAVClient {
     resp.statusCode = result.statusCode;
     resp.body = result.body;
     return resp;
+  }
+
+  private buildNativeUrl(encodedPath: string): string {
+    const isStd = (this.isHttps && this.port === 443) || (!this.isHttps && this.port === 80);
+    const portStr = isStd ? '' : `:${this.port}`;
+    const scheme = this.isHttps ? 'https' : 'http';
+    return `${scheme}://${this.host}${portStr}${encodedPath}`;
+  }
+
+  private buildHeaderLines(headers: Record<string, string>): string {
+    const keys = Object.keys(headers);
+    const parts: string[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const item: string = `${keys[i]}: ${headers[keys[i]]}`;
+      parts.push(item);
+    }
+    return parts.join('\r\n');
+  }
+
+  private downloadViaNative(
+    encodedPath: string,
+    localFilePath: string,
+    headers: Record<string, string>
+  ): WebDavDownloadResult {
+    const fullUrl = this.buildNativeUrl(encodedPath);
+    const headerLines = this.buildHeaderLines(headers);
+    return getVidAllCorePlayerNapi().downloadToFile(
+      'GET', fullUrl, headerLines, '', this.timeout * 2, localFilePath
+    );
   }
 
   /**
@@ -716,11 +759,41 @@ export class WebDAVClient {
       throw error;
     }
 
+    let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+    let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
+    fullPath = this.encodeURIPath(fullPath);
+
+    const downloadHeaders: Record<string, string> = {
+      'User-Agent': 'WebDAV-Client/1.0',
+      'Accept': '*/*'
+    };
+    const authHeader = this.getAuthHeader();
+    if (authHeader) {
+      downloadHeaders['Authorization'] = authHeader;
+    }
+
+    if (this.checkNativeCurlEnabled()) {
+      try {
+        const nativeResult = this.downloadViaNative(fullPath, localFilePath, downloadHeaders);
+        if (nativeResult.error.length > 0) {
+          throw new Error(`native curl download failed: ${nativeResult.error}`);
+        }
+        if (nativeResult.statusCode < 200 || nativeResult.statusCode >= 300) {
+          throw new Error(`native curl download HTTP ${nativeResult.statusCode}`);
+        }
+        if (nativeResult.downloadedBytes <= 0) {
+          throw new Error('native curl download received 0 bytes');
+        }
+        callback?.onProgress?.(nativeResult.downloadedBytes, nativeResult.downloadedBytes);
+        callback?.onComplete?.(localFilePath);
+        return;
+      } catch (e) {
+        console.warn(`WebDAV native download fallback: ${(e as Error).message}`);
+      }
+    }
+
     // HTTPS 协议直接使用 http 模块（支持 TLS），不走明文 TCP
     if (this.isHttps) {
-      let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-      let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
-      fullPath = this.encodeURIPath(fullPath);
       console.info(`WebDAV Stream Download (HTTPS): ${fullPath}`);
       return this.downloadWithHttpModule(this.host, this.port, fullPath, localFilePath, callback, redirectCount);
     }
@@ -1274,7 +1347,7 @@ export class WebDAVClient {
       }
 
       try {
-        const response = await this.sendRawHttpPlainRequest('PROPFIND', encodedBasePath, propfindHeaders, propfindBody);
+        const response = await this.sendRawHttpRequest('PROPFIND', encodedBasePath, propfindHeaders, propfindBody);
         console.info('PROPFIND response status:', response.statusCode);
 
         if (response.statusCode === 401) {

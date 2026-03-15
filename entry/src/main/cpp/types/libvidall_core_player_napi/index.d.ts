@@ -28,6 +28,18 @@ export const webdavRequest: (
   body: string;
   error: string;
 };
+export const downloadToFile: (
+  method: string,
+  url: string,
+  headerLines: string,
+  body: string,
+  timeoutMs: number,
+  outputPath: string
+) => {
+  statusCode: number;
+  downloadedBytes: number;
+  error: string;
+};
 export const getNativeCapabilities: () => {
   ffmpegEnabled: boolean;
   libcurlEnabled: boolean;
