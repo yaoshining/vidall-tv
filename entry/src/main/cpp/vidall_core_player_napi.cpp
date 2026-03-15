@@ -908,6 +908,10 @@ struct NativePlayerSkeletonState {
   int64_t ffmpegDurationMs = 0;
   // B3：nativeWindow 尚未就绪时（OnXCSurfaceCreated 还未触发）延迟启动渲染线程的标志
   bool pendingFfmpegRender = false;
+  // B6：AVPlayer 报错切 FFmpeg 时，先异步释放 AVPlayer 对 NativeWindow 的占用，再启动 FFmpeg。
+  std::thread ffmpegFallbackThread;
+  bool ffmpegFallbackInProgress = false;
+  bool cancelPendingFfmpegFallback = false;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -1245,6 +1249,23 @@ static void ResetRuntimeState(NativePlayerSkeletonState &state) {
   state.currentTimeMs = 0;
   state.durationMs = 0;
   state.lastRealtimeMs = 0;
+}
+
+static void JoinFfmpegFallbackThread(NativePlayerSkeletonState &state) {
+  std::thread threadToJoin;
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    if (state.ffmpegFallbackThread.joinable()) {
+      std::swap(threadToJoin, state.ffmpegFallbackThread);
+    }
+  }
+  if (threadToJoin.joinable()) {
+    if (threadToJoin.get_id() == std::this_thread::get_id()) {
+      threadToJoin.detach();
+    } else {
+      threadToJoin.join();
+    }
+  }
 }
 
 static napi_value CreatePlayer(napi_env env, napi_callback_info info) {
@@ -3317,14 +3338,56 @@ static void OnAVPlayerErrorCB(OH_AVPlayer *player, int32_t errorCode,
   // AV_ERR_UNSUPPORT (= 4) 表示格式/编解码器不支持；通用错误也尝试 FFmpeg 路径。
   // 条件：尚未启动 FFmpeg 路径 && URL 不为空
   if (!state->useFfmpegPath && !state->url.empty()) {
-    state->useFfmpegPath = true;
-    const std::string urlCopy = state->url; // OnAVPlayerErrorCB 来自媒体线程，避免持有 state 太久
+    const std::string urlCopy = state->url;
+    {
+      std::lock_guard<std::mutex> lk(state->stateMutex);
+      if (state->useFfmpegPath || state->ffmpegFallbackInProgress) {
+        return;
+      }
+      state->useFfmpegPath = true;
+      state->cancelPendingFfmpegFallback = false;
+      state->ffmpegFallbackInProgress = true;
+    }
+    JoinFfmpegFallbackThread(*state);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "OnAVPlayerErrorCB: switching to FFmpeg demux path for url=%s", urlCopy.c_str());
-    // StartFfmpegDemux 内部会 avformat_open_input（可能阻塞），
-    // 在媒体线程直接调用会影响 OH_AVPlayer 回调链路。
-    // B1 阶段直接在此线程启动（open 有 10s 超时保障），B2 阶段可改为独立 dispatch 线程。
-    StartFfmpegDemux(state, urlCopy);
+                 "OnAVPlayerErrorCB: scheduling AVPlayer->FFmpeg handoff for url=%s", urlCopy.c_str());
+    state->ffmpegFallbackThread = std::thread([state, urlCopy]() {
+      OH_AVPlayer *avToRelease = nullptr;
+      {
+        std::lock_guard<std::mutex> lk(state->stateMutex);
+        avToRelease = state->avPlayer;
+        state->avPlayer = nullptr;
+      }
+      if (avToRelease != nullptr) {
+        const OH_AVErrCode stopRc = OH_AVPlayer_Stop(avToRelease);
+        const OH_AVErrCode detachRc = OH_AVPlayer_SetVideoSurface(avToRelease, nullptr);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "FFmpegFallbackThread: stopRc=%{public}d detachRc=%{public}d, releasing AVPlayer before EGL handoff",
+                     static_cast<int32_t>(stopRc), static_cast<int32_t>(detachRc));
+        const OH_AVErrCode releaseRc = OH_AVPlayer_Release(avToRelease);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "FFmpegFallbackThread: releaseRc=%{public}d", static_cast<int32_t>(releaseRc));
+      } else {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "FFmpegFallbackThread: avPlayer already null, skip release");
+      }
+
+      bool cancelled = false;
+      {
+        std::lock_guard<std::mutex> lk(state->stateMutex);
+        cancelled = state->cancelPendingFfmpegFallback;
+        state->ffmpegFallbackInProgress = false;
+      }
+      if (cancelled) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "FFmpegFallbackThread: cancelled before StartFfmpegDemux");
+        return;
+      }
+
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "FFmpegFallbackThread: AVPlayer released, start FFmpeg demux for url=%s", urlCopy.c_str());
+      StartFfmpegDemux(state, urlCopy);
+    });
     // B6修复：FFmpeg 路径已接管，抑制 tsfOnError，防止 ArkTS fallbackNativeToIjk()
     // 抢占 XComponent surface，导致 FFmpeg EGL 初始化失败。
     // FFmpeg 准备好后会通过 tsfOnPrepared 通知 ArkTS；
@@ -3480,9 +3543,11 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
   OH_AVPlayer *avToRelease = nullptr;
   {
     std::lock_guard<std::mutex> lk(state->stateMutex);
+    state->cancelPendingFfmpegFallback = true;
     avToRelease = state->avPlayer;
     state->avPlayer = nullptr;
   }
+  JoinFfmpegFallbackThread(*state);
   if (avToRelease != nullptr) {
     OH_AVPlayer_Stop(avToRelease);
     OH_AVPlayer_Release(avToRelease);
@@ -4022,9 +4087,11 @@ static napi_value Release(napi_env env, napi_callback_info info) {
   OH_AVPlayer *avToRelease = nullptr;
   {
     std::lock_guard<std::mutex> lk(state.stateMutex);
+    state.cancelPendingFfmpegFallback = true;
     avToRelease = state.avPlayer;
     state.avPlayer = nullptr;
   }
+  JoinFfmpegFallbackThread(state);
   if (avToRelease != nullptr) {
     OH_AVPlayer_Stop(avToRelease);
     OH_AVPlayer_Release(avToRelease); // 阻塞直到媒体线程所有回调执行完毕
