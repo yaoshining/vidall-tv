@@ -2134,7 +2134,10 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  eglGetError(), nativeWindow);
     return false;
   }
-  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+  // 修复 #48-B6: 升级至 GLES 3——GL_RED 作为 internalformat 在 GLES 2.0 中非法，
+  // 会导致 glTexImage2D 静默失败（GL_INVALID_ENUM）进而全黑。
+  // 设备实际运行 OpenGL ES 3.2，此处声明 version=3 即可激活 GLES 3 上下文。
+  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
   ctx->eglContext =
       eglCreateContext(ctx->eglDisplay, config, EGL_NO_CONTEXT, ctxAttribs);
   if (ctx->eglContext == EGL_NO_CONTEXT) {
@@ -2463,6 +2466,15 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
     ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0,
                  GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
+    // 诊断: #48-B6 验证 GL_RED 在 GLES 3 context 下是否合法（应 GL_NO_ERROR）
+    {
+        GLenum glErr = ctx->gl.GetError();
+        if (glErr != GL_NO_ERROR) {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                         "RenderThread: glTexImage2D Y error=0x%{public}x"
+                         " w=%{public}d h=%{public}d", glErr, w, h);
+        }
+    }
 
     ctx->gl.ActiveTexture(GL_TEXTURE1);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
