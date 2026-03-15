@@ -1683,6 +1683,388 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// B3：GLSL shader 字符串（YUV420P → RGB，mediump float）
+// ---------------------------------------------------------------------------
+
+static const char *kVertexShaderSrc = R"(
+attribute vec4 a_position;
+attribute vec2 a_texCoord;
+varying vec2 v_texCoord;
+void main() {
+    gl_Position = a_position;
+    v_texCoord = a_texCoord;
+}
+)";
+
+static const char *kFragmentShaderSrc = R"(
+precision mediump float;
+uniform sampler2D u_textureY;
+uniform sampler2D u_textureU;
+uniform sampler2D u_textureV;
+varying vec2 v_texCoord;
+void main() {
+    float y = texture2D(u_textureY, v_texCoord).r;
+    float u = texture2D(u_textureU, v_texCoord).r - 0.5;
+    float v = texture2D(u_textureV, v_texCoord).r - 0.5;
+    float r = y + 1.402 * v;
+    float g = y - 0.344136 * u - 0.714136 * v;
+    float b = y + 1.772 * u;
+    gl_FragColor = vec4(r, g, b, 1.0);
+}
+)";
+
+// ---------------------------------------------------------------------------
+// B3：EGL 初始化（在渲染线程内调用，nativeWindow 提供 EGLNativeWindowType）
+// ---------------------------------------------------------------------------
+
+static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
+  ctx->eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  if (ctx->eglDisplay == EGL_NO_DISPLAY) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitEGL: eglGetDisplay failed");
+    return false;
+  }
+  EGLint major = 0, minor = 0;
+  if (!eglInitialize(ctx->eglDisplay, &major, &minor)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitEGL: eglInitialize failed err=0x%x", eglGetError());
+    return false;
+  }
+  EGLint attribs[] = {
+      EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+      EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+      EGL_RED_SIZE,   8,
+      EGL_GREEN_SIZE, 8,
+      EGL_BLUE_SIZE,  8,
+      EGL_NONE
+  };
+  EGLConfig config = nullptr;
+  EGLint numConfigs = 0;
+  if (!eglChooseConfig(ctx->eglDisplay, attribs, &config, 1, &numConfigs) ||
+      numConfigs == 0) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitEGL: eglChooseConfig failed err=0x%x", eglGetError());
+    return false;
+  }
+  ctx->eglSurface = eglCreateWindowSurface(
+      ctx->eglDisplay, config,
+      reinterpret_cast<EGLNativeWindowType>(nativeWindow), nullptr);
+  if (ctx->eglSurface == EGL_NO_SURFACE) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitEGL: eglCreateWindowSurface failed err=0x%x", eglGetError());
+    return false;
+  }
+  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+  ctx->eglContext =
+      eglCreateContext(ctx->eglDisplay, config, EGL_NO_CONTEXT, ctxAttribs);
+  if (ctx->eglContext == EGL_NO_CONTEXT) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitEGL: eglCreateContext failed err=0x%x", eglGetError());
+    return false;
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitEGL: OK EGL %d.%d", major, minor);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// B3：shader 编译辅助
+// ---------------------------------------------------------------------------
+
+static GLuint CompileShader(GLenum type, const char *src) {
+  const GLuint shader = glCreateShader(type);
+  if (shader == 0) {
+    return 0;
+  }
+  glShaderSource(shader, 1, &src, nullptr);
+  glCompileShader(shader);
+  GLint status = 0;
+  glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+  if (status == GL_FALSE) {
+    GLint len = 0;
+    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
+    if (len > 1) {
+      std::string log(static_cast<size_t>(len), '\0');
+      glGetShaderInfoLog(shader, len, nullptr, &log[0]);
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                   "CompileShader: type=%u err: %s", type, log.c_str());
+    }
+    glDeleteShader(shader);
+    return 0;
+  }
+  return shader;
+}
+
+// ---------------------------------------------------------------------------
+// B3：GL 资源初始化（在渲染线程 makeCurrent 后调用）
+// ---------------------------------------------------------------------------
+
+static bool FfmpegInitGLResources(FfmpegContext *ctx) {
+  // 1. 编译 & 链接 YUV→RGB program
+  const GLuint vs = CompileShader(GL_VERTEX_SHADER, kVertexShaderSrc);
+  const GLuint fs = CompileShader(GL_FRAGMENT_SHADER, kFragmentShaderSrc);
+  if (vs == 0 || fs == 0) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitGLResources: shader compile failed");
+    if (vs != 0) { glDeleteShader(vs); }
+    if (fs != 0) { glDeleteShader(fs); }
+    return false;
+  }
+  ctx->yuvProgram = glCreateProgram();
+  glAttachShader(ctx->yuvProgram, vs);
+  glAttachShader(ctx->yuvProgram, fs);
+  glBindAttribLocation(ctx->yuvProgram, 0, "a_position");
+  glBindAttribLocation(ctx->yuvProgram, 1, "a_texCoord");
+  glLinkProgram(ctx->yuvProgram);
+  glDeleteShader(vs);
+  glDeleteShader(fs);
+  GLint linked = 0;
+  glGetProgramiv(ctx->yuvProgram, GL_LINK_STATUS, &linked);
+  if (linked == GL_FALSE) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitGLResources: program link failed");
+    glDeleteProgram(ctx->yuvProgram);
+    ctx->yuvProgram = 0;
+    return false;
+  }
+
+  // 2. 绑定 sampler uniform（GL_TEXTURE0=Y, GL_TEXTURE1=U, GL_TEXTURE2=V）
+  glUseProgram(ctx->yuvProgram);
+  glUniform1i(glGetUniformLocation(ctx->yuvProgram, "u_textureY"), 0);
+  glUniform1i(glGetUniformLocation(ctx->yuvProgram, "u_textureU"), 1);
+  glUniform1i(glGetUniformLocation(ctx->yuvProgram, "u_textureV"), 2);
+
+  // 3. 创建 Y/U/V 三张 GL_LUMINANCE 纹理（实际尺寸由第一帧决定）
+  glGenTextures(1, &ctx->textureY);
+  glGenTextures(1, &ctx->textureU);
+  glGenTextures(1, &ctx->textureV);
+  const GLuint textures[3] = {ctx->textureY, ctx->textureU, ctx->textureV};
+  for (const GLuint tex : textures) {
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  }
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  // 4. 全屏四边形 VBO（triangle strip，x/y 为 NDC，s/t 为 UV）
+  // 顺序：左下、右下、左上、右上（匹配 UV 坐标 y 从下往上）
+  const float quadVertices[] = {
+      -1.0f, -1.0f,  0.0f, 1.0f,
+       1.0f, -1.0f,  1.0f, 1.0f,
+      -1.0f,  1.0f,  0.0f, 0.0f,
+       1.0f,  1.0f,  1.0f, 0.0f,
+  };
+  glGenBuffers(1, &ctx->quadVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
+  glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(quadVertices)),
+               quadVertices, GL_STATIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitGLResources: OK prog=%u Y=%u U=%u V=%u vbo=%u",
+               ctx->yuvProgram, ctx->textureY, ctx->textureU, ctx->textureV,
+               ctx->quadVBO);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// B3：GL 资源释放（在渲染线程内、eglMakeCurrent 有效时调用）
+// ---------------------------------------------------------------------------
+
+static void FfmpegCleanupGLResources(FfmpegContext *ctx) {
+  if (ctx->quadVBO != 0) {
+    glDeleteBuffers(1, &ctx->quadVBO);
+    ctx->quadVBO = 0;
+  }
+  if (ctx->textureY != 0) {
+    glDeleteTextures(1, &ctx->textureY);
+    ctx->textureY = 0;
+  }
+  if (ctx->textureU != 0) {
+    glDeleteTextures(1, &ctx->textureU);
+    ctx->textureU = 0;
+  }
+  if (ctx->textureV != 0) {
+    glDeleteTextures(1, &ctx->textureV);
+    ctx->textureV = 0;
+  }
+  if (ctx->yuvProgram != 0) {
+    glDeleteProgram(ctx->yuvProgram);
+    ctx->yuvProgram = 0;
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegCleanupGLResources: done");
+}
+
+// ---------------------------------------------------------------------------
+// B3：渲染线程（消费 videoFrameQueue，上传 YUV 纹理，eglSwapBuffers）
+// ---------------------------------------------------------------------------
+
+static void RenderThreadFunc(NativePlayerSkeletonState *state) {
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // 1. EGL 初始化（创建 display/surface/context）
+  if (!FfmpegInitEGL(ctx, state->nativeWindow)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "RenderThreadFunc: FfmpegInitEGL failed, exit");
+    ctx->renderRunning.store(false);
+    return;
+  }
+
+  // 2. 将 EGL context 绑定到当前线程
+  if (!eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface,
+                      ctx->eglSurface, ctx->eglContext)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "RenderThreadFunc: eglMakeCurrent failed err=0x%x", eglGetError());
+    ctx->renderRunning.store(false);
+    return;
+  }
+
+  // 3. 初始化 GL 资源（shader/纹理/VBO）
+  if (!FfmpegInitGLResources(ctx)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "RenderThreadFunc: FfmpegInitGLResources failed, exit");
+    ctx->renderRunning.store(false);
+    return;
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "RenderThreadFunc: render loop started");
+
+  while (ctx->renderRunning.load()) {
+    // 4. 从 videoFrameQueue 消费一帧（最多等 16ms）
+    AVFrame *frame = nullptr;
+    {
+      std::unique_lock<std::mutex> lock(ctx->videoFrameQueue.mtx);
+      ctx->videoFrameQueue.cv.wait_for(lock, std::chrono::milliseconds(16), [&] {
+        return !ctx->videoFrameQueue.frames.empty() ||
+               ctx->videoFrameQueue.abort;
+      });
+      if (!ctx->videoFrameQueue.frames.empty()) {
+        frame = ctx->videoFrameQueue.frames.front();
+        ctx->videoFrameQueue.frames.pop();
+      }
+    }
+    // 通知解码线程队列有空位
+    ctx->videoFrameQueue.cv.notify_all();
+
+    if (frame == nullptr) {
+      continue;
+    }
+
+    // 5. 上传 YUV420P → 3 张 GL_LUMINANCE 纹理
+    const int w = frame->width;
+    const int h = frame->height;
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, ctx->textureY);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0,
+                 GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, ctx->textureU);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
+                 GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, ctx->textureV);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
+                 GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
+
+    // 6. 用 YUV program 绘制全屏 quad（triangle strip，4 顶点）
+    glUseProgram(ctx->yuvProgram);
+    glBindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
+    const GLsizei stride = static_cast<GLsizei>(4 * sizeof(float));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride,
+                          reinterpret_cast<const void *>(0));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride,
+                          reinterpret_cast<const void *>(2 * sizeof(float)));
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // 7. 提交帧到屏幕
+    eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+
+    // 8. 释放当前帧
+    av_frame_free(&frame);
+  }
+
+  // 清理 GL 资源（makeCurrent 仍有效）
+  FfmpegCleanupGLResources(ctx);
+
+  // 清理 EGL
+  eglMakeCurrent(ctx->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                 EGL_NO_CONTEXT);
+  eglDestroySurface(ctx->eglDisplay, ctx->eglSurface);
+  ctx->eglSurface = EGL_NO_SURFACE;
+  eglDestroyContext(ctx->eglDisplay, ctx->eglContext);
+  ctx->eglContext = EGL_NO_CONTEXT;
+  eglTerminate(ctx->eglDisplay);
+  ctx->eglDisplay = EGL_NO_DISPLAY;
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "RenderThreadFunc: render thread exited");
+}
+
+// ---------------------------------------------------------------------------
+// B3：启动 / 停止渲染线程
+// ---------------------------------------------------------------------------
+
+static void StartFfmpegRender(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+  if (ctx->videoCodecCtx == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegRender: no video stream, skip");
+    return;
+  }
+  if (state->nativeWindow == nullptr) {
+    // Surface 尚未就绪，延迟到 OnXCSurfaceCreated 触发后再启动
+    state->pendingFfmpegRender = true;
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegRender: nativeWindow not ready, pendingFfmpegRender=true");
+    return;
+  }
+  state->pendingFfmpegRender = false;
+  ctx->renderRunning.store(true);
+  ctx->renderThread = std::thread(RenderThreadFunc, state);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StartFfmpegRender: render thread started");
+}
+
+static void StopFfmpegRender(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+  state->pendingFfmpegRender = false;
+  if (!ctx->renderRunning.load()) {
+    return;
+  }
+  ctx->renderRunning.store(false);
+  // 唤醒可能阻塞在 videoFrameQueue.cv.wait_for 的渲染线程
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoFrameQueue.mtx);
+    ctx->videoFrameQueue.abort = true;
+  }
+  ctx->videoFrameQueue.cv.notify_all();
+  if (ctx->renderThread.joinable()) {
+    ctx->renderThread.join();
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StopFfmpegRender: render thread stopped");
+}
+
+// ---------------------------------------------------------------------------
 // B4：SwrContext 初始化（源格式 → stereo S16LE 48kHz）
 // ---------------------------------------------------------------------------
 
@@ -1972,6 +2354,9 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
 
   // B4：解码器就绪后启动 OH_AudioRenderer（消费 audioFrameQueue）
   StartFfmpegAudio(state);
+
+  // B3：启动 OpenGL ES YUV 渲染线程（消费 videoFrameQueue）
+  StartFfmpegRender(state);
 }
 
 static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
@@ -2085,6 +2470,9 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
     return;
   }
   FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // B3：先停止渲染线程（消费 videoFrameQueue），避免访问已释放帧数据
+  StopFfmpegRender(state);
 
   // B4：先停止音频渲染器（消费者），再停止解码线程（生产者），避免 callback 访问已释放队列
   StopFfmpegAudio(state);
@@ -2290,6 +2678,10 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
       pair.second.nativeWindow = static_cast<OHNativeWindow *>(window);
       pair.second.surfaceReady = true;
       found = true;
+      // B3：若 FFmpeg 渲染线程在等待 nativeWindow，现在 Surface 就绪，补发启动
+      if (pair.second.useFfmpegPath && pair.second.pendingFfmpegRender) {
+        StartFfmpegRender(&pair.second);
+      }
       // A5修复: 若 avPlayer 已创建，立即绑定 surface
       if (pair.second.avPlayer != nullptr) {
         OH_AVPlayer_SetVideoSurface(pair.second.avPlayer, pair.second.nativeWindow);
