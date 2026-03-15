@@ -783,9 +783,7 @@ struct FfmpegContext {
 
   // B3：OpenGL ES 资源（在渲染线程 makeCurrent 后初始化）
   GLuint yuvProgram = 0;   // YUV→RGB GLSL program
-  GLuint textureY = 0;     // Y 分量纹理（GL_R8，width×height）
-  GLuint textureU = 0;     // U 分量纹理（GL_R8，width/2×height/2）
-  GLuint textureV = 0;     // V 分量纹理（GL_R8，width/2×height/2）
+  GLuint rgbaTexture = 0;  // RGBA 纹理（sws_scale CPU 侧 YUV→RGBA 后上传，GL_RGBA/GL_UNSIGNED_BYTE）
   GLuint quadVBO = 0;      // 全屏四边形顶点缓冲
 
   // Fix #48-B6: 首帧后置 true，后续帧用 TexSubImage2D 避免每帧重分配 GPU 纹理存储
@@ -801,7 +799,7 @@ struct FfmpegContext {
   OH_AudioRenderer *audioRenderer = nullptr;
   OH_AudioStreamBuilder *audioBuilder = nullptr;
   SwrContext *swrCtx = nullptr;          // libswresample 重采样上下文（源格式 → stereo S16 48kHz）
-  SwsContext *swsCtx = nullptr;          // libswscale 像素格式转换（yuv420p10le/etc → yuv420p，B6 HDR/DV 修复）
+  SwsContext *swsCtx = nullptr;          // libswscale：所有格式 → RGBA（CPU 侧 YUV→RGB 转换，B6 HDR/DV 修复）
   int lastSwsSrcFmt = -1;  // 上次 swsCtx 对应的源像素格式（格式或尺寸变化时重建）
   int lastSwsSrcW   = -1;  // 上次 swsCtx 对应的源宽度
   std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
@@ -1825,10 +1823,10 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
       }
 
       // 将帧移入 videoFrameQueue（背压等待，防止解码过快撑爆内存）
-      // ── B6：格式转换 + 超 1920 降采样 ──
-      // 1. HDR/DV 内容解码输出 yuv420p10le（10-bit），必须转换到 yuv420p（8-bit）
-      // 2. 4K 内容（3840×2160）纹理分配在设备上触发 GL_OUT_OF_MEMORY（0x505），
-      //    宽度超过 1920 时通过 sws_scale 同步降采样到 1920×H（保持宽高比）。
+      // ── B6：格式转换 + 超 1920 降采样 + CPU 侧 YUV→RGBA 转换 ──
+      // 1. 所有格式统一通过 sws_scale 转换为 AV_PIX_FMT_RGBA（包括 yuv420p10le/yuv420p）
+      // 2. 4K 内容（3840×2160）宽度超过 1920 时同步降采样（保持宽高比）
+      // 3. 使用 GL_RGBA/GL_UNSIGNED_BYTE 上传单张纹理，规避设备驱动对 GL_R8/GL_LUMINANCE 的 OOM bug
       static const int MAX_RENDER_W = 1920;
       // 计算目标渲染分辨率（降采样到 1920 时保持宽高比，行/列对齐到偶数）
       int dstW = frame->width;
@@ -1836,9 +1834,10 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
       if (dstW > MAX_RENDER_W) {
         dstH = dstH * MAX_RENDER_W / dstW;
         dstW = MAX_RENDER_W;
-        dstH = (dstH + 1) & ~1;  // 偶数对齐（YUV420P 要求）
+        dstH = (dstH + 1) & ~1;  // 偶数对齐
       }
-      bool needConvert = (frame->format != AV_PIX_FMT_YUV420P) || (dstW != frame->width);
+      // 始终转换到 RGBA：yuv420p 也需要转换（CPU 侧 YUV→RGB），消除 GL 侧单通道 OOM
+      bool needConvert = true;
       AVFrame *renderFrame = frame;
       AVFrame *convertedFrame = nullptr;
       if (needConvert) {
@@ -1852,19 +1851,19 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
           }
           ctx->swsCtx = sws_getContext(
               frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
-              dstW, dstH, AV_PIX_FMT_YUV420P,
+              dstW, dstH, AV_PIX_FMT_RGBA,
               SWS_BILINEAR, nullptr, nullptr, nullptr);
           ctx->lastSwsSrcFmt = frame->format;
           ctx->lastSwsSrcW   = frame->width;
           OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                        "VideoDecodeThread: SwsContext created %{public}dx%{public}d srcFmt=%{public}d"
-                       " -> %{public}dx%{public}d yuv420p",
+                       " -> %{public}dx%{public}d RGBA",
                        frame->width, frame->height, frame->format, dstW, dstH);
         }
         if (ctx->swsCtx != nullptr) {
           convertedFrame = av_frame_alloc();
           if (convertedFrame != nullptr) {
-            convertedFrame->format = AV_PIX_FMT_YUV420P;
+            convertedFrame->format = AV_PIX_FMT_RGBA;
             convertedFrame->width  = dstW;
             convertedFrame->height = dstH;
             if (av_frame_get_buffer(convertedFrame, 32) == 0) {
@@ -2007,11 +2006,12 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// B3：GLSL shader 字符串（YUV420P → RGB，mediump float）
+// B3：GLSL shader 字符串（直接采样 RGBA 纹理，GPU 侧无需 YUV→RGB 转换）
 // ---------------------------------------------------------------------------
+// sws_scale 在 CPU 侧已完成 yuv420p → RGBA 转换，shader 只需 passthrough 采样。
+// 使用 GL_RGBA/GL_UNSIGNED_BYTE 是所有 GLES 版本中最兼容的格式，
+// 彻底规避 GL_R8/GL_LUMINANCE 在部分 HarmonyOS 驱动上的 OOM(0x505) bug。
 
-// 修复 #48-B6: 显式字符串拼接替代 R"()"，避免部分 HarmonyOS GLES 驱动对
-// raw string 开头换行符解析异常；同时增加 #version 100 声明。
 static const char *kVertexShaderSrc =
     "#version 100\n"
     "attribute vec4 a_position;\n"
@@ -2025,18 +2025,10 @@ static const char *kVertexShaderSrc =
 static const char *kFragmentShaderSrc =
     "#version 100\n"
     "precision mediump float;\n"
-    "uniform sampler2D u_textureY;\n"
-    "uniform sampler2D u_textureU;\n"
-    "uniform sampler2D u_textureV;\n"
+    "uniform sampler2D u_texture;\n"
     "varying vec2 v_texCoord;\n"
     "void main() {\n"
-    "    float y = texture2D(u_textureY, v_texCoord).r;\n"
-    "    float u = texture2D(u_textureU, v_texCoord).r - 0.5;\n"
-    "    float v = texture2D(u_textureV, v_texCoord).r - 0.5;\n"
-    "    float r = y + 1.402 * v;\n"
-    "    float g = y - 0.344136 * u - 0.714136 * v;\n"
-    "    float b = y + 1.772 * u;\n"
-    "    gl_FragColor = vec4(r, g, b, 1.0);\n"
+    "    gl_FragColor = texture2D(u_texture, v_texCoord);\n"
     "}\n";
 
 // ---------------------------------------------------------------------------
@@ -2259,24 +2251,17 @@ static bool FfmpegInitGLResources(FfmpegContext *ctx) {
     return false;
   }
 
-  // 2. 绑定 sampler uniform（GL_TEXTURE0=Y, GL_TEXTURE1=U, GL_TEXTURE2=V）
+  // 2. 绑定 sampler uniform（GL_TEXTURE0 = RGBA 纹理）
   ctx->gl.UseProgram(ctx->yuvProgram);
-  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureY"), 0);
-  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureU"), 1);
-  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureV"), 2);
+  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_texture"), 0);
 
-  // 3. 创建 Y/U/V 三张 GL_R8 纹理（GLES 3 标准单通道格式，实际尺寸由第一帧决定）
-  ctx->gl.GenTextures(1, &ctx->textureY);
-  ctx->gl.GenTextures(1, &ctx->textureU);
-  ctx->gl.GenTextures(1, &ctx->textureV);
-  const GLuint textures[3] = {ctx->textureY, ctx->textureU, ctx->textureV};
-  for (const GLuint tex : textures) {
-    ctx->gl.BindTexture(GL_TEXTURE_2D, tex);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  }
+  // 3. 创建单张 GL_RGBA 纹理（sws_scale 已在 CPU 侧完成 YUV→RGBA 转换）
+  ctx->gl.GenTextures(1, &ctx->rgbaTexture);
+  ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->rgbaTexture);
+  ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   ctx->gl.BindTexture(GL_TEXTURE_2D, 0);
 
   // 4. 全屏四边形 VBO（triangle strip，x/y 为 NDC，s/t 为 UV）
@@ -2295,9 +2280,8 @@ static bool FfmpegInitGLResources(FfmpegContext *ctx) {
 
   // 修复 #48-B6: %{public}u 让资源 ID 在 hilog 中可见
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "FfmpegInitGLResources: OK prog=%{public}u Y=%{public}u U=%{public}u V=%{public}u vbo=%{public}u",
-               ctx->yuvProgram, ctx->textureY, ctx->textureU, ctx->textureV,
-               ctx->quadVBO);
+               "FfmpegInitGLResources: OK prog=%{public}u rgba=%{public}u vbo=%{public}u",
+               ctx->yuvProgram, ctx->rgbaTexture, ctx->quadVBO);
   return true;
 }
 
@@ -2310,17 +2294,9 @@ static void FfmpegCleanupGLResources(FfmpegContext *ctx) {
     ctx->gl.DeleteBuffers(1, &ctx->quadVBO);
     ctx->quadVBO = 0;
   }
-  if (ctx->textureY != 0) {
-    ctx->gl.DeleteTextures(1, &ctx->textureY);
-    ctx->textureY = 0;
-  }
-  if (ctx->textureU != 0) {
-    ctx->gl.DeleteTextures(1, &ctx->textureU);
-    ctx->textureU = 0;
-  }
-  if (ctx->textureV != 0) {
-    ctx->gl.DeleteTextures(1, &ctx->textureV);
-    ctx->textureV = 0;
+  if (ctx->rgbaTexture != 0) {
+    ctx->gl.DeleteTextures(1, &ctx->rgbaTexture);
+    ctx->rgbaTexture = 0;
   }
   if (ctx->yuvProgram != 0) {
     ctx->gl.DeleteProgram(ctx->yuvProgram);
@@ -2485,63 +2461,40 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     const int w = frame->width;
     const int h = frame->height;
 
-    // B6 诊断日志：第一帧打印格式与 linesize，用于确认 sws_scale 是否生效
+    // B6 诊断日志：第一帧打印格式与 linesize（fmt=2 表示 AV_PIX_FMT_RGBA，ls0=width*4）
     {
       static bool firstFrameLogged = false;
       if (!firstFrameLogged) {
         firstFrameLogged = true;
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                     "RenderThread: first frame w=%{public}d h=%{public}d fmt=%{public}d "
-                     "ls0=%{public}d ls1=%{public}d",
-                     frame->width, frame->height, frame->format,
-                     frame->linesize[0], frame->linesize[1]);
+                     "RenderThread: first frame w=%{public}d h=%{public}d fmt=%{public}d ls0=%{public}d",
+                     frame->width, frame->height, frame->format, frame->linesize[0]);
       }
     }
 
-    ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 4);  // GL_RGBA 每像素 4 字节，默认对齐 4 即可
 
     // Fix #48-B6: 首帧（或分辨率切换时）用 glTexImage2D 分配纹理存储；
-    // 后续帧改用 glTexSubImage2D 直接更新数据，避免每帧重新分配导致 GL_OUT_OF_MEMORY。
-    // 格式：GL_R8（internalFormat）+ GL_RED（format）—— GLES 3 标准单通道格式。
+    // 后续帧改用 glTexSubImage2D 直接更新数据，避免每帧重新分配。
+    // 格式：GL_RGBA（internalFormat）+ GL_RGBA（format）—— 最兼容格式，规避 GL_R8/GL_LUMINANCE OOM。
     const bool sizeChanged = (w != ctx->textureW || h != ctx->textureH);
 
     ctx->gl.ActiveTexture(GL_TEXTURE0);
-    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->rgbaTexture);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0,
-                     GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
-        // 诊断: 仅在首帧或尺寸变更时检查 GL 错误，避免日志刷屏
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, frame->data[0]);
+        // 诊断: 仅在首帧或尺寸变更时检查 GL 错误
         {
             GLenum glErr = ctx->gl.GetError();
-            if (glErr != GL_NO_ERROR) {
-                OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                             "RenderThread: glTexImage2D Y error=0x%{public}x"
-                             " w=%{public}d h=%{public}d", glErr, w, h);
-            }
+            OH_LOG_Print(glErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
+                         LOG_APP, 0xFF00, "VidAll",
+                         "RenderThread: glTexImage2D RGBA err=0x%{public}x w=%{public}d h=%{public}d",
+                         glErr, w, h);
         }
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
-                        GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
-    }
-
-    ctx->gl.ActiveTexture(GL_TEXTURE1);
-    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
-    if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
-                     GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
-    } else {
-        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
-                        GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
-    }
-
-    ctx->gl.ActiveTexture(GL_TEXTURE2);
-    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureV);
-    if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
-                     GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
-    } else {
-        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
-                        GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+                        GL_RGBA, GL_UNSIGNED_BYTE, frame->data[0]);
     }
 
     if (!ctx->texturesInitialized || sizeChanged) {
@@ -2550,7 +2503,7 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
         ctx->textureH = h;
     }
 
-    // 6. 用 YUV program 绘制全屏 quad（triangle strip，4 顶点）
+    // 6. 用 RGBA passthrough program 绘制全屏 quad（triangle strip，4 顶点）
     ctx->gl.UseProgram(ctx->yuvProgram);
     ctx->gl.BindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
     const GLsizei stride = static_cast<GLsizei>(4 * sizeof(float));
