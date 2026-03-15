@@ -42,17 +42,19 @@ extern "C" {
 
 // B3：EGL + OpenGL ES 2.0（YUV 渲染管线）
 #include <EGL/egl.h>
+#include <EGL/eglext.h>  // EGL_OPENGL_ES3_BIT_KHR
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
-// GL_RED 是 GLES 3.0 引入的单通道格式，GLES 2.0 头中无此宏；
-// 当前已改用 GL_LUMINANCE（GLES 2 合法格式），此宏仅供历史参考，未实际使用。
+// GL_RED / GL_R8 在 GLES 2.0 头文件中未定义，GLES 3.0 引入；此处补充宏定义供 GLES 3 context 使用。
 #ifndef GL_RED
 #  define GL_RED 0x1903
 #endif
-// GL_R8 是 GLES 3.0 引入的单通道有大小内部格式；GLES 2.0 头文件不含此宏。
-// 已改回 GL_LUMINANCE 绕过 GLES 3 context 的纹理 OOM 问题；此宏预留备用，当前未使用。
 #ifndef GL_R8
 #  define GL_R8 0x8229
+#endif
+// EGL_OPENGL_ES3_BIT 在部分旧版 EGL 头中仅以 KHR 扩展名存在；补充宏定义确保可用。
+#ifndef EGL_OPENGL_ES3_BIT
+#  define EGL_OPENGL_ES3_BIT EGL_OPENGL_ES3_BIT_KHR
 #endif
 
 // B4：OH_AudioRenderer（PCM 送显）
@@ -2115,13 +2117,16 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  "FfmpegInitEGL: eglBindAPI failed err=0x%{public}x", eglGetError());
     return false;
   }
+  // 修复 #48-B6: config 必须使用 EGL_OPENGL_ES3_BIT，与 GLES 3 context 匹配。
+  // 若用 EGL_OPENGL_ES2_BIT 选 config 再创建 GLES 3 context，驱动会限制 GPU 纹理内存池，
+  // 导致即使 1920×1080 的 GL_R8 纹理也返回 GL_OUT_OF_MEMORY（0x505）。
   EGLint attribs[] = {
       EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
-      EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+      EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
       EGL_RED_SIZE,   8,
       EGL_GREEN_SIZE, 8,
       EGL_BLUE_SIZE,  8,
-      EGL_ALPHA_SIZE, 8,   // 完整 RGBA，帮助选到与 NativeWindow 格式匹配的 config
+      EGL_ALPHA_SIZE, 8,
       EGL_NONE
   };
   EGLConfig config = nullptr;
