@@ -687,6 +687,52 @@ struct AVFrameQueue {
 // 前向声明，供 FfmpegContext 持有反向指针（FFmpeg ctx 由 state 独占拥有，生命周期安全）
 struct NativePlayerSkeletonState;
 
+// B3：GL 函数指针（通过 eglGetProcAddress 加载，适配 HarmonyOS GLES dispatch 机制）
+struct GlFunctions {
+    // Shader
+    GLuint (*CreateShader)(GLenum) = nullptr;
+    void (*ShaderSource)(GLuint, GLsizei, const GLchar**, const GLint*) = nullptr;
+    void (*CompileShader)(GLuint) = nullptr;
+    void (*GetShaderiv)(GLuint, GLenum, GLint*) = nullptr;
+    void (*GetShaderInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*) = nullptr;
+    void (*DeleteShader)(GLuint) = nullptr;
+    // Program
+    GLuint (*CreateProgram)() = nullptr;
+    void (*AttachShader)(GLuint, GLuint) = nullptr;
+    void (*BindAttribLocation)(GLuint, GLuint, const GLchar*) = nullptr;
+    void (*LinkProgram)(GLuint) = nullptr;
+    void (*DeleteProgram)(GLuint) = nullptr;
+    void (*GetProgramiv)(GLuint, GLenum, GLint*) = nullptr;
+    void (*UseProgram)(GLuint) = nullptr;
+    GLint (*GetUniformLocation)(GLuint, const GLchar*) = nullptr;
+    void (*Uniform1i)(GLint, GLint) = nullptr;
+    // Texture
+    void (*GenTextures)(GLsizei, GLuint*) = nullptr;
+    void (*BindTexture)(GLenum, GLuint) = nullptr;
+    void (*TexParameteri)(GLenum, GLenum, GLint) = nullptr;
+    void (*TexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*) = nullptr;
+    void (*TexSubImage2D)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*) = nullptr;
+    void (*ActiveTexture)(GLenum) = nullptr;
+    void (*DeleteTextures)(GLsizei, const GLuint*) = nullptr;
+    // Buffer
+    void (*GenBuffers)(GLsizei, GLuint*) = nullptr;
+    void (*BindBuffer)(GLenum, GLuint) = nullptr;
+    void (*BufferData)(GLenum, GLsizeiptr, const void*, GLenum) = nullptr;
+    void (*DeleteBuffers)(GLsizei, const GLuint*) = nullptr;
+    // Draw
+    void (*VertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*) = nullptr;
+    void (*EnableVertexAttribArray)(GLuint) = nullptr;
+    void (*DisableVertexAttribArray)(GLuint) = nullptr;
+    void (*DrawArrays)(GLenum, GLint, GLsizei) = nullptr;
+    // State
+    void (*Viewport)(GLint, GLint, GLsizei, GLsizei) = nullptr;
+    void (*ClearColor)(GLfloat, GLfloat, GLfloat, GLfloat) = nullptr;
+    void (*Clear)(GLbitfield) = nullptr;
+    void (*PixelStorei)(GLenum, GLint) = nullptr;
+    GLenum (*GetError)() = nullptr;
+    const GLubyte* (*GetString)(GLenum) = nullptr;
+};
+
 // FFmpeg 上下文：格式探测 + demux 线程 + 双队列
 struct FfmpegContext {
   AVFormatContext *fmtCtx = nullptr;
@@ -718,6 +764,9 @@ struct FfmpegContext {
   EGLDisplay eglDisplay = EGL_NO_DISPLAY;
   EGLSurface eglSurface = EGL_NO_SURFACE;
   EGLContext eglContext = EGL_NO_CONTEXT;
+
+  // B3：通过 eglGetProcAddress 加载的 GL 函数指针（适配 HarmonyOS GLES dispatch 机制）
+  GlFunctions gl;
 
   // B3：OpenGL ES 资源（在渲染线程 makeCurrent 后初始化）
   GLuint yuvProgram = 0;   // YUV→RGB GLSL program
@@ -1867,6 +1916,60 @@ static const char *kFragmentShaderSrc =
     "}\n";
 
 // ---------------------------------------------------------------------------
+// B3：通过 eglGetProcAddress 加载 GL 函数指针（适配 HarmonyOS GLES dispatch 机制）
+// ---------------------------------------------------------------------------
+
+static bool LoadGLFunctions(GlFunctions &gl) {
+#define LOAD(field, name) \
+    gl.field = reinterpret_cast<decltype(gl.field)>(eglGetProcAddress(name)); \
+    if (!gl.field) { \
+        OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", \
+                     "LoadGLFunctions: eglGetProcAddress(%{public}s) returned null", name); \
+        return false; \
+    }
+    LOAD(CreateShader,            "glCreateShader")
+    LOAD(ShaderSource,            "glShaderSource")
+    LOAD(CompileShader,           "glCompileShader")
+    LOAD(GetShaderiv,             "glGetShaderiv")
+    LOAD(GetShaderInfoLog,        "glGetShaderInfoLog")
+    LOAD(DeleteShader,            "glDeleteShader")
+    LOAD(CreateProgram,           "glCreateProgram")
+    LOAD(AttachShader,            "glAttachShader")
+    LOAD(BindAttribLocation,      "glBindAttribLocation")
+    LOAD(LinkProgram,             "glLinkProgram")
+    LOAD(DeleteProgram,           "glDeleteProgram")
+    LOAD(GetProgramiv,            "glGetProgramiv")
+    LOAD(UseProgram,              "glUseProgram")
+    LOAD(GetUniformLocation,      "glGetUniformLocation")
+    LOAD(Uniform1i,               "glUniform1i")
+    LOAD(GenTextures,             "glGenTextures")
+    LOAD(BindTexture,             "glBindTexture")
+    LOAD(TexParameteri,           "glTexParameteri")
+    LOAD(TexImage2D,              "glTexImage2D")
+    LOAD(TexSubImage2D,           "glTexSubImage2D")
+    LOAD(ActiveTexture,           "glActiveTexture")
+    LOAD(DeleteTextures,          "glDeleteTextures")
+    LOAD(GenBuffers,              "glGenBuffers")
+    LOAD(BindBuffer,              "glBindBuffer")
+    LOAD(BufferData,              "glBufferData")
+    LOAD(DeleteBuffers,           "glDeleteBuffers")
+    LOAD(VertexAttribPointer,     "glVertexAttribPointer")
+    LOAD(EnableVertexAttribArray, "glEnableVertexAttribArray")
+    LOAD(DisableVertexAttribArray,"glDisableVertexAttribArray")
+    LOAD(DrawArrays,              "glDrawArrays")
+    LOAD(Viewport,                "glViewport")
+    LOAD(ClearColor,              "glClearColor")
+    LOAD(Clear,                   "glClear")
+    LOAD(PixelStorei,             "glPixelStorei")
+    LOAD(GetError,                "glGetError")
+    LOAD(GetString,               "glGetString")
+#undef LOAD
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "LoadGLFunctions: all %{public}d GL functions loaded", 36);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // B3：EGL 初始化（在渲染线程内调用，nativeWindow 提供 EGLNativeWindowType）
 // ---------------------------------------------------------------------------
 
@@ -1960,25 +2063,25 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
 // B3：shader 编译辅助
 // ---------------------------------------------------------------------------
 
-static GLuint CompileShader(GLenum type, const char *src) {
-  const GLuint shader = glCreateShader(type);
+static GLuint CompileShader(const GlFunctions &gl, GLenum type, const char *src) {
+  const GLuint shader = gl.CreateShader(type);
   if (shader == 0) {
     // 修复 #48-B6: glCreateShader 返回 0 说明 GL context 尚未生效
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "CompileShader: glCreateShader returned 0 (no GL context?) type=%{public}u",
+                 "CompileShader: CreateShader returned 0 type=%{public}u",
                  type);
     return 0;
   }
-  glShaderSource(shader, 1, &src, nullptr);
-  glCompileShader(shader);
+  gl.ShaderSource(shader, 1, &src, nullptr);
+  gl.CompileShader(shader);
   GLint status = 0;
-  glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+  gl.GetShaderiv(shader, GL_COMPILE_STATUS, &status);
   if (status == GL_FALSE) {
     GLint len = 0;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
+    gl.GetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
     if (len > 1) {
       std::string log(static_cast<size_t>(len), '\0');
-      glGetShaderInfoLog(shader, len, nullptr, &log[0]);
+      gl.GetShaderInfoLog(shader, len, nullptr, &log[0]);
       // 修复 #48-B6: %{public}s 才能在 HarmonyOS hilog 中显示字符串内容（%s 为私有格式）
       OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                    "CompileShader: type=%{public}u compile error: %{public}s",
@@ -1987,7 +2090,7 @@ static GLuint CompileShader(GLenum type, const char *src) {
       OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                    "CompileShader: type=%{public}u compile error (no info log)", type);
     }
-    glDeleteShader(shader);
+    gl.DeleteShader(shader);
     return 0;
   }
   return shader;
@@ -1999,52 +2102,52 @@ static GLuint CompileShader(GLenum type, const char *src) {
 
 static bool FfmpegInitGLResources(FfmpegContext *ctx) {
   // 1. 编译 & 链接 YUV→RGB program
-  const GLuint vs = CompileShader(GL_VERTEX_SHADER, kVertexShaderSrc);
-  const GLuint fs = CompileShader(GL_FRAGMENT_SHADER, kFragmentShaderSrc);
+  const GLuint vs = CompileShader(ctx->gl, GL_VERTEX_SHADER, kVertexShaderSrc);
+  const GLuint fs = CompileShader(ctx->gl, GL_FRAGMENT_SHADER, kFragmentShaderSrc);
   if (vs == 0 || fs == 0) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "FfmpegInitGLResources: shader compile failed");
-    if (vs != 0) { glDeleteShader(vs); }
-    if (fs != 0) { glDeleteShader(fs); }
+    if (vs != 0) { ctx->gl.DeleteShader(vs); }
+    if (fs != 0) { ctx->gl.DeleteShader(fs); }
     return false;
   }
-  ctx->yuvProgram = glCreateProgram();
-  glAttachShader(ctx->yuvProgram, vs);
-  glAttachShader(ctx->yuvProgram, fs);
-  glBindAttribLocation(ctx->yuvProgram, 0, "a_position");
-  glBindAttribLocation(ctx->yuvProgram, 1, "a_texCoord");
-  glLinkProgram(ctx->yuvProgram);
-  glDeleteShader(vs);
-  glDeleteShader(fs);
+  ctx->yuvProgram = ctx->gl.CreateProgram();
+  ctx->gl.AttachShader(ctx->yuvProgram, vs);
+  ctx->gl.AttachShader(ctx->yuvProgram, fs);
+  ctx->gl.BindAttribLocation(ctx->yuvProgram, 0, "a_position");
+  ctx->gl.BindAttribLocation(ctx->yuvProgram, 1, "a_texCoord");
+  ctx->gl.LinkProgram(ctx->yuvProgram);
+  ctx->gl.DeleteShader(vs);
+  ctx->gl.DeleteShader(fs);
   GLint linked = 0;
-  glGetProgramiv(ctx->yuvProgram, GL_LINK_STATUS, &linked);
+  ctx->gl.GetProgramiv(ctx->yuvProgram, GL_LINK_STATUS, &linked);
   if (linked == GL_FALSE) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "FfmpegInitGLResources: program link failed");
-    glDeleteProgram(ctx->yuvProgram);
+    ctx->gl.DeleteProgram(ctx->yuvProgram);
     ctx->yuvProgram = 0;
     return false;
   }
 
   // 2. 绑定 sampler uniform（GL_TEXTURE0=Y, GL_TEXTURE1=U, GL_TEXTURE2=V）
-  glUseProgram(ctx->yuvProgram);
-  glUniform1i(glGetUniformLocation(ctx->yuvProgram, "u_textureY"), 0);
-  glUniform1i(glGetUniformLocation(ctx->yuvProgram, "u_textureU"), 1);
-  glUniform1i(glGetUniformLocation(ctx->yuvProgram, "u_textureV"), 2);
+  ctx->gl.UseProgram(ctx->yuvProgram);
+  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureY"), 0);
+  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureU"), 1);
+  ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureV"), 2);
 
   // 3. 创建 Y/U/V 三张 GL_LUMINANCE 纹理（实际尺寸由第一帧决定）
-  glGenTextures(1, &ctx->textureY);
-  glGenTextures(1, &ctx->textureU);
-  glGenTextures(1, &ctx->textureV);
+  ctx->gl.GenTextures(1, &ctx->textureY);
+  ctx->gl.GenTextures(1, &ctx->textureU);
+  ctx->gl.GenTextures(1, &ctx->textureV);
   const GLuint textures[3] = {ctx->textureY, ctx->textureU, ctx->textureV};
   for (const GLuint tex : textures) {
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, tex);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    ctx->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   }
-  glBindTexture(GL_TEXTURE_2D, 0);
+  ctx->gl.BindTexture(GL_TEXTURE_2D, 0);
 
   // 4. 全屏四边形 VBO（triangle strip，x/y 为 NDC，s/t 为 UV）
   // 顺序：左下、右下、左上、右上（匹配 UV 坐标 y 从下往上）
@@ -2054,11 +2157,11 @@ static bool FfmpegInitGLResources(FfmpegContext *ctx) {
       -1.0f,  1.0f,  0.0f, 0.0f,
        1.0f,  1.0f,  1.0f, 0.0f,
   };
-  glGenBuffers(1, &ctx->quadVBO);
-  glBindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
-  glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(quadVertices)),
+  ctx->gl.GenBuffers(1, &ctx->quadVBO);
+  ctx->gl.BindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
+  ctx->gl.BufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(quadVertices)),
                quadVertices, GL_STATIC_DRAW);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  ctx->gl.BindBuffer(GL_ARRAY_BUFFER, 0);
 
   // 修复 #48-B6: %{public}u 让资源 ID 在 hilog 中可见
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -2074,23 +2177,23 @@ static bool FfmpegInitGLResources(FfmpegContext *ctx) {
 
 static void FfmpegCleanupGLResources(FfmpegContext *ctx) {
   if (ctx->quadVBO != 0) {
-    glDeleteBuffers(1, &ctx->quadVBO);
+    ctx->gl.DeleteBuffers(1, &ctx->quadVBO);
     ctx->quadVBO = 0;
   }
   if (ctx->textureY != 0) {
-    glDeleteTextures(1, &ctx->textureY);
+    ctx->gl.DeleteTextures(1, &ctx->textureY);
     ctx->textureY = 0;
   }
   if (ctx->textureU != 0) {
-    glDeleteTextures(1, &ctx->textureU);
+    ctx->gl.DeleteTextures(1, &ctx->textureU);
     ctx->textureU = 0;
   }
   if (ctx->textureV != 0) {
-    glDeleteTextures(1, &ctx->textureV);
+    ctx->gl.DeleteTextures(1, &ctx->textureV);
     ctx->textureV = 0;
   }
   if (ctx->yuvProgram != 0) {
-    glDeleteProgram(ctx->yuvProgram);
+    ctx->gl.DeleteProgram(ctx->yuvProgram);
     ctx->yuvProgram = 0;
   }
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -2142,16 +2245,21 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
                "RenderThreadFunc: eglMakeCurrent OK, GL context current ctx=%{public}p",
                static_cast<void*>(eglGetCurrentContext()));
 
-  // GL context 验证诊断
+  // B3：加载 GL 函数指针（HarmonyOS 需要通过 eglGetProcAddress 动态加载）
+  if (!LoadGLFunctions(ctx->gl)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "RenderThreadFunc: LoadGLFunctions failed, exit");
+    ctx->renderRunning.store(false);
+    return;
+  }
+
+  // GL context 验证诊断（使用已加载的函数指针）
   {
-    const GLubyte *glVer = glGetString(GL_VERSION);
-    const GLubyte *glRenderer = glGetString(GL_RENDERER);
-    GLenum glErr = glGetError();
+    const GLubyte *glVer = ctx->gl.GetString(GL_VERSION);
+    GLenum glErr = ctx->gl.GetError();
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "RenderThreadFunc: GL_VERSION=%{public}s GL_RENDERER=%{public}s glGetError=0x%{public}x",
-                 glVer ? (const char*)glVer : "null",
-                 glRenderer ? (const char*)glRenderer : "null",
-                 glErr);
+                 "RenderThreadFunc: GL_VERSION=%{public}s glGetError=0x%{public}x",
+                 glVer ? (const char*)glVer : "null", glErr);
   }
 
   // 3. 初始化 GL 资源（shader/纹理/VBO）
@@ -2225,37 +2333,37 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     // 5. 上传 YUV420P → 3 张 GL_LUMINANCE 纹理
     const int w = frame->width;
     const int h = frame->height;
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, ctx->textureY);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0,
+    ctx->gl.ActiveTexture(GL_TEXTURE0);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0,
                  GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, ctx->textureU);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
+    ctx->gl.ActiveTexture(GL_TEXTURE1);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
                  GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
 
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, ctx->textureV);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
+    ctx->gl.ActiveTexture(GL_TEXTURE2);
+    ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureV);
+    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
                  GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
 
     // 6. 用 YUV program 绘制全屏 quad（triangle strip，4 顶点）
-    glUseProgram(ctx->yuvProgram);
-    glBindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
+    ctx->gl.UseProgram(ctx->yuvProgram);
+    ctx->gl.BindBuffer(GL_ARRAY_BUFFER, ctx->quadVBO);
     const GLsizei stride = static_cast<GLsizei>(4 * sizeof(float));
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride,
+    ctx->gl.EnableVertexAttribArray(0);
+    ctx->gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride,
                           reinterpret_cast<const void *>(0));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride,
+    ctx->gl.EnableVertexAttribArray(1);
+    ctx->gl.VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride,
                           reinterpret_cast<const void *>(2 * sizeof(float)));
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    ctx->gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    ctx->gl.DisableVertexAttribArray(0);
+    ctx->gl.DisableVertexAttribArray(1);
+    ctx->gl.BindBuffer(GL_ARRAY_BUFFER, 0);
 
     // 7. 提交帧到屏幕
     eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
