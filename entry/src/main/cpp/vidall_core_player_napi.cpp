@@ -748,6 +748,37 @@ struct FfmpegContext {
   // B5-QA fix：改为 atomic ptr，消除 StopFfmpegDemux(主线程) 写 nullptr 与
   //            DemuxThreadFunc(demux 线程) 读+解引用之间的 data race（UB）。
   std::atomic<NativePlayerSkeletonState *> ownerState{nullptr};
+
+  // B6 安全析构兜底：正常路径由 StopFfmpegDemux 先 join 所有线程再 reset()。
+  // 若存在异常路径导致析构器直接被调用（如 unique_ptr 提前 reset），先广播所有
+  // abort/interrupt 标志，再按 Render→Decode→Demux 顺序 join，线程会迅速响应标志退出。
+  // 禁止 detach：detach 后线程仍会访问已释放的 FfmpegContext 成员，导致 UAF。
+  ~FfmpegContext() {
+    interruptFlag.store(true, std::memory_order_release);
+    demuxRunning.store(false, std::memory_order_release);
+    decodeRunning.store(false, std::memory_order_release);
+    renderRunning.store(false, std::memory_order_release);
+    ownerState.store(nullptr, std::memory_order_release);
+
+    // 唤醒所有阻塞在 cv.wait 的线程，使其检查 abort 标志后退出
+    { std::lock_guard<std::mutex> lk(videoFrameQueue.mtx); videoFrameQueue.abort = true; }
+    videoFrameQueue.cv.notify_all();
+    { std::lock_guard<std::mutex> lk(audioFrameQueue.mtx); audioFrameQueue.abort = true; }
+    audioFrameQueue.cv.notify_all();
+    { std::lock_guard<std::mutex> lk(videoQueue.mtx); videoQueue.abort = true; }
+    videoQueue.cv.notify_all();
+    { std::lock_guard<std::mutex> lk(audioQueue.mtx); audioQueue.abort = true; }
+    audioQueue.cv.notify_all();
+
+    // join 顺序：render（依赖 videoFrameQueue）→ decode（依赖 packet 队列）→ demux（生产者）
+    if (renderThread.joinable())      renderThread.join();
+    if (videoDecodeThread.joinable()) videoDecodeThread.join();
+    if (audioDecodeThread.joinable()) audioDecodeThread.join();
+    if (demuxThread.joinable())       demuxThread.join();
+
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+        "FfmpegContext: safety destructor joined remaining threads");
+  }
 };
 
 struct NativePlayerSkeletonState {
