@@ -6,11 +6,13 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <mutex>
 
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
 #include <native_window/external_window.h>
 #include <multimedia/player_framework/avplayer.h>
+#include <multimedia/player_framework/native_avformat.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -665,10 +667,17 @@ struct NativePlayerSkeletonState {
   napi_ref onCompletedRef = nullptr;
   napi_ref onBufferingChangeRef = nullptr;
   napi_ref onSeekDoneRef = nullptr;
+  // A4：threadsafe function handles（媒体线程 → JS 线程回调）
+  napi_threadsafe_function tsfOnPrepared = nullptr;
+  napi_threadsafe_function tsfOnCompleted = nullptr;
+  napi_threadsafe_function tsfOnTimeUpdate = nullptr;
+  napi_threadsafe_function tsfOnError = nullptr;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
 static int32_t g_nextHandle = 1;
+// A4：保护 g_players 跨线程访问（XC 表面回调来自 UI 线程，AV 回调来自媒体线程）
+static std::mutex g_playersMutex;
 
 #ifndef VIDALL_MAX_PLAYER_COUNT
 #define VIDALL_MAX_PLAYER_COUNT 100000UL
@@ -879,6 +888,14 @@ static void DeleteRefIfPresent(napi_env env, napi_ref &ref) {
   ref = nullptr;
 }
 
+// A4：中止并释放 threadsafe function（napi_tsfn_abort 丢弃所有待处理回调，防止 Release 后悬挂访问）
+static void ReleaseTsfIfPresent(napi_threadsafe_function &tsf) {
+  if (tsf != nullptr) {
+    napi_release_threadsafe_function(tsf, napi_tsfn_abort);
+    tsf = nullptr;
+  }
+}
+
 static void EmitCompleted(const NativePlayerSkeletonState &state) {
   if (state.onCompletedRef == nullptr || state.callbackEnv == nullptr) {
     return;
@@ -914,6 +931,11 @@ static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbac
   DeleteRefIfPresent(deleteEnv, state.onCompletedRef);
   DeleteRefIfPresent(deleteEnv, state.onBufferingChangeRef);
   DeleteRefIfPresent(deleteEnv, state.onSeekDoneRef);
+  // A4：释放 threadsafe functions（abort 确保已入队的回调不再执行，防止 Release 后悬挂访问）
+  ReleaseTsfIfPresent(state.tsfOnPrepared);
+  ReleaseTsfIfPresent(state.tsfOnCompleted);
+  ReleaseTsfIfPresent(state.tsfOnTimeUpdate);
+  ReleaseTsfIfPresent(state.tsfOnError);
 }
 
 static bool EnsurePreparedOrEmitError(
@@ -1089,6 +1111,78 @@ static napi_value SetHeaders(napi_env env, napi_callback_info info) {
 // OH_NativeXComponent 静态回调（供所有 player 共用一套函数指针）
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// A4：OH_AVPlayer 状态 / 错误回调（媒体线程调用，userData = NativePlayerSkeletonState*）
+// 使用新式带 userData 的回调 API：OH_AVPlayer_SetOnInfoCallback / SetOnErrorCallback
+// 注意：不在此处持有 g_playersMutex，避免与 Release() → OH_AVPlayer_Release 产生死锁；
+//      生命周期安全由 Release() 中"先 OH_AVPlayer_Release 再 ReleaseTsfIfPresent"序列保证。
+// ---------------------------------------------------------------------------
+
+static void OnAVPlayerInfoCB(OH_AVPlayer *player, AVPlayerOnInfoType type,
+                              OH_AVFormat *infoBody, void *userData) {
+  (void)player; // 通过 state->avPlayer 访问，此处不直接使用
+  NativePlayerSkeletonState *state = static_cast<NativePlayerSkeletonState *>(userData);
+  if (state == nullptr || infoBody == nullptr) {
+    return;
+  }
+  switch (type) {
+    case AV_INFO_TYPE_STATE_CHANGE: {
+      int32_t avStateVal = 0;
+      if (!OH_AVFormat_GetIntValue(infoBody, OH_PLAYER_STATE, &avStateVal)) {
+        break;
+      }
+      AVPlayerState avState = static_cast<AVPlayerState>(avStateVal);
+      if (avState == AV_PREPARED) {
+        // 获取时长（GetDuration 返回 int32_t 毫秒）
+        int32_t durationMs = 0;
+        OH_AVPlayer_GetDuration(state->avPlayer, &durationMs);
+        state->durationMs = static_cast<int64_t>(durationMs);
+        state->prepared = true;
+        if (state->tsfOnPrepared != nullptr) {
+          napi_call_threadsafe_function(state->tsfOnPrepared, nullptr, napi_tsfn_nonblocking);
+        }
+      } else if (avState == AV_COMPLETED) {
+        state->playing = false;
+        if (state->tsfOnCompleted != nullptr) {
+          napi_call_threadsafe_function(state->tsfOnCompleted, nullptr, napi_tsfn_nonblocking);
+        }
+      } else if (avState == AV_PLAYING) {
+        state->playing = true;
+      } else if (avState == AV_PAUSED) {
+        state->playing = false;
+      }
+      break;
+    }
+    case AV_INFO_TYPE_POSITION_UPDATE: {
+      int32_t posMs = 0;
+      if (OH_AVFormat_GetIntValue(infoBody, OH_PLAYER_CURRENT_POSITION, &posMs)) {
+        state->currentTimeMs = static_cast<int64_t>(posMs);
+      }
+      if (state->tsfOnTimeUpdate != nullptr) {
+        napi_call_threadsafe_function(state->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void OnAVPlayerErrorCB(OH_AVPlayer *player, int32_t errorCode,
+                               const char *errorMsg, void *userData) {
+  (void)player;
+  (void)errorCode;
+  NativePlayerSkeletonState *state = static_cast<NativePlayerSkeletonState *>(userData);
+  if (state == nullptr) {
+    return;
+  }
+  if (state->tsfOnError != nullptr) {
+    // 堆分配错误信息字符串，由 tsfOnError call_js_cb 负责 delete
+    auto *msg = new std::string(errorMsg ? errorMsg : "AVPlayer error");
+    napi_call_threadsafe_function(state->tsfOnError, msg, napi_tsfn_nonblocking);
+  }
+}
+
 static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
   char idBuf[OH_XCOMPONENT_ID_LEN_MAX + 1] = {0};
   uint64_t idSize = sizeof(idBuf);
@@ -1097,6 +1191,7 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
     return;
   }
   const std::string xcId(idBuf);
+  std::lock_guard<std::mutex> lock(g_playersMutex); // A4: 保护 g_players 跨线程遍历
   for (auto &pair : g_players) {
     if (pair.second.xComponentId == xcId) {
       pair.second.nativeWindow = static_cast<OHNativeWindow *>(window);
@@ -1125,6 +1220,7 @@ static void OnXCSurfaceDestroyed(OH_NativeXComponent *component, void *window) {
     return;
   }
   const std::string xcId(idBuf);
+  std::lock_guard<std::mutex> lock(g_playersMutex); // A4: 保护 g_players 跨线程遍历
   for (auto &pair : g_players) {
     if (pair.second.xComponentId == xcId) {
       pair.second.nativeWindow = nullptr;
@@ -1250,21 +1346,17 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     OH_AVPlayer_SetVideoSurface(state.avPlayer, state.nativeWindow);
   }
 
-  // 触发异步 prepare（结果由 A4 的 OH_AVPlayer_SetPlayerCallback 回调处理）
-  // A3 阶段同时保留骨架同步回调，使上层 JS 逻辑不因 A3 而中断
+  // A4：注册媒体状态回调（在 Prepare 调用前注册）
+  // 使用新式带 userData 的 API（SDK API 12+），不持有 g_playersMutex 以避免与 Release 死锁
+  OH_AVPlayer_SetOnInfoCallback(state.avPlayer, OnAVPlayerInfoCB, &state);
+  OH_AVPlayer_SetOnErrorCallback(state.avPlayer, OnAVPlayerErrorCB, &state);
+
+  // 异步 prepare：SDK 中无 PrepareAsync，OH_AVPlayer_Prepare 本身为非阻塞；
+  // prepared 标志与 onPrepared 回调均由 OnAVPlayerInfoCB 在 AV_PREPARED 状态时通过 TSF 触发
   OH_AVPlayer_Prepare(state.avPlayer);
 
+  // 在 JS 线程发出"开始缓冲"通知；prepared / onPrepared / EmitTimeUpdate 改由异步回调完成
   EmitBufferingChange(state, true);
-  state.prepared = true;
-  // Fire onPrepared synchronously on the current JS thread (skeleton behaviour；A4 改为异步回调)
-  if (state.onPreparedRef != nullptr && state.callbackEnv != nullptr) {
-    if (!CallJsFunction(state.callbackEnv, state.onPreparedRef, 0, nullptr)) {
-      return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
-    }
-  }
-  // Push initial timeline tick after prepared so controller/subtitle bridge can sync immediately.
-  EmitTimeUpdate(state);
-  EmitBufferingChange(state, false);
   return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
 }
 
@@ -1352,6 +1444,67 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
     }
   }
   state.callbackEnv = env;
+
+  // A4：为每个回调额外创建 threadsafe function，供媒体线程异步回调 ArkTS
+  // call_js_cb 均为无捕获 lambda（可隐式转换为函数指针），在 JS 线程上执行
+  {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnPrepared", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[1], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+      },
+      &state.tsfOnPrepared);
+  }
+  {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnCompleted", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[4], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+      },
+      &state.tsfOnCompleted);
+  }
+  {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnTimeUpdate", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[3], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        // ctx = NativePlayerSkeletonState*，读取当前播放位置
+        auto *st = static_cast<NativePlayerSkeletonState *>(ctx);
+        napi_value timeValue;
+        napi_create_int64(tsfEnv, st->currentTimeMs, &timeValue);
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 1, &timeValue, nullptr);
+      },
+      &state.tsfOnTimeUpdate);
+  }
+  {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnError", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[2], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        // data = heap std::string* 错误信息，由 OnAVPlayerErrorCB 分配，此处负责 delete
+        std::string *msg = static_cast<std::string *>(data);
+        napi_value errorStr;
+        napi_create_string_utf8(tsfEnv,
+          msg ? msg->c_str() : "AVPlayer error", NAPI_AUTO_LENGTH, &errorStr);
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 1, &errorStr, nullptr);
+        delete msg;
+      },
+      &state.tsfOnError);
+  }
 
   // 若回调在 prepared 之后才注册，主动补发一次状态，避免上层错过时序。
   if (state.prepared) {
@@ -1536,10 +1689,14 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     return ReturnUndefinedOrThrow(env, "release failed to create return value");
   }
   NativePlayerSkeletonState &state = iter->second;
-  // A3：先停止并释放 OH_AVPlayer，再清理其他状态
+  // A4 顺序说明：
+  //   1. OH_AVPlayer_Release：等待所有媒体线程回调执行完毕（含 OnAVPlayerInfoCB / OnAVPlayerErrorCB）
+  //   2. ClearCallbackRefs（含 ReleaseTsfIfPresent napi_tsfn_abort）：此时媒体线程已无回调，
+  //      abort 可安全丢弃 OH_AVPlayer_Release 前已入队但尚未在 JS 线程执行的 TSF 调用
+  //   3. 再 erase state：上两步完成后状态指针不再被任何线程访问
   if (state.avPlayer != nullptr) {
     OH_AVPlayer_Stop(state.avPlayer);
-    OH_AVPlayer_Release(state.avPlayer);
+    OH_AVPlayer_Release(state.avPlayer); // 阻塞直到媒体线程所有回调执行完毕
     state.avPlayer = nullptr;
   }
   ResetRuntimeState(state);
@@ -1548,7 +1705,7 @@ static napi_value Release(napi_env env, napi_callback_info info) {
   state.xComponentId.clear();
   state.nativeWindow = nullptr;  // 只清引用，生命周期归 XComponent，不调用 release
   state.surfaceReady = false;
-  ClearCallbackRefs(state, env);
+  ClearCallbackRefs(state, env); // 内部含 ReleaseTsfIfPresent(napi_tsfn_abort)
   state.callbackEnv = nullptr;
   g_players.erase(iter);
   return ReturnUndefinedOrThrow(env, "release failed to create return value");
