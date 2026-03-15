@@ -811,6 +811,7 @@ struct FfmpegContext {
   int audioSampleRate{0};                    // swr 输出采样率（48000），FfmpegInitSwr 后固定
   std::atomic<int64_t> audioClockBaseMs{0};  // seek 后的主时钟基准，timeUpdate = base + playedSamples/sampleRate
   std::atomic<bool> playbackPaused{false};   // FFmpeg 路径的真实暂停态：音频回调/视频渲染均需读取
+  std::atomic<int32_t> videoSyncGraceFrames{0}; // seek/启动后前若干帧绕过 AV sync，先让画面稳定出帧
 
   // B5：seek 请求（Seek() NAPI 写入，DemuxThreadFunc 消费）
   std::atomic<bool> seekRequested{false};
@@ -1643,6 +1644,7 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
       }
       ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
       ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
+      ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
       // 发出 seekDone TSF 通知 ArkTS
@@ -1913,6 +1915,7 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
                         frame->linesize, 0, frame->height,
                         convertedFrame->data, convertedFrame->linesize);
               convertedFrame->pts     = frame->pts;
+              convertedFrame->best_effort_timestamp = frame->best_effort_timestamp;
               convertedFrame->pkt_dts = frame->pkt_dts;
               renderFrame = convertedFrame;
             } else {
@@ -2533,27 +2536,46 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
 
     // B5：AV 同步：以音频时钟为主时钟，决定等待或丢帧
     if (ctx->videoStreamIdx >= 0 && ctx->audioSampleRate > 0) {
-      const double videoPts = (frame->pts != AV_NOPTS_VALUE)
-          ? frame->pts * av_q2d(ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base)
-          : 0.0;
-      const double audioClock = AudioClock(ctx);
-      const double diff = videoPts - audioClock;
+      const int64_t frameTs = (frame->best_effort_timestamp != AV_NOPTS_VALUE)
+          ? frame->best_effort_timestamp
+          : frame->pts;
+      const bool bypassSync = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0
+          || frameTs == AV_NOPTS_VALUE;
+      if (!bypassSync) {
+        const double videoPts = frameTs * av_q2d(ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base);
+        const double audioClock = AudioClock(ctx);
+        const double diff = videoPts - audioClock;
 
-      if (diff > 0.1) {
-        // 视频超前音频 100ms 以上：等待音频跟上，最多等 200ms（B5-QA: 500→200 降低 AV sync 延迟）
-        const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 200.0));
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
-      } else if (diff < -0.5) {
-        // 视频落后音频 500ms 以上：丢弃此帧（追帧）
-        av_frame_free(&frame);
-        continue;
+        if (diff > 0.2) {
+          // 视频略超前：短暂等待音频，避免单帧 sleep 过长造成肉眼卡顿
+          const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 50.0));
+          std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+        } else if (diff < -2.0) {
+          static int droppedLateFrames = 0;
+          droppedLateFrames++;
+          if (droppedLateFrames == 1 || (droppedLateFrames % 30) == 0) {
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                         "RenderThread: drop late frame diffMs=%{public}d videoPtsMs=%{public}d audioClockMs=%{public}d count=%{public}d",
+                         static_cast<int>(diff * 1000.0),
+                         static_cast<int>(videoPts * 1000.0),
+                         static_cast<int>(audioClock * 1000.0),
+                         droppedLateFrames);
+          }
+          av_frame_free(&frame);
+          continue;
+        } else {
+          static int droppedLateFrames = 0;
+          droppedLateFrames = 0;
+        }
+      } else if (ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0) {
+        ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
       }
 
       // B5：每 200ms 上报一次播放位置给 ArkTS（以音频时钟为准）
       const auto now = std::chrono::steady_clock::now();
       if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEmitTime).count() >= 200) {
         lastEmitTime = now;
-        const int64_t posMs = static_cast<int64_t>(audioClock * 1000.0);
+        const int64_t posMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
         {
           std::lock_guard<std::mutex> lk(state->stateMutex);
           state->currentTimeMs = posMs;
@@ -2972,6 +2994,7 @@ static void StartFfmpegAudio(NativePlayerSkeletonState *state) {
   ctx->playbackPaused.store(false, std::memory_order_relaxed);
   ctx->audioClockBaseMs.store(0, std::memory_order_relaxed);
   ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
+  ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
   const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "StartFfmpegAudio: OH_AudioRenderer_Start result=%d", result);
