@@ -3,7 +3,7 @@ import { VideoData } from './VideoData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
-import VidAllCorePlayerNapi from 'libvidall_core_player_napi.so';
+import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 
 const TAG = '[VidAllPlayerAdapter]';
 const METRICS_TAG = 'VidAll_Metrics';
@@ -11,6 +11,40 @@ const TIME_UPDATE_INTERVAL_MS = 500;
 
 interface NativeXComponentFallbackContext {
 }
+
+interface VidAllCorePlayerNapiBridge {
+  createPlayer: () => number;
+  setSource: (handle: number, url: string) => void;
+  setDurationHint: (handle: number, durationMs: number) => void;
+  setHeaders: (handle: number, headersJson: string) => void;
+  setXComponent: (handle: number, context: Object, xComponentId: string) => void;
+  prepare: (handle: number) => void;
+  play: (handle: number) => void;
+  pause: (handle: number) => void;
+  seek: (handle: number, positionMs: number) => void;
+  selectTrack: (handle: number, trackIndex: number) => void;
+  release: (handle: number) => void;
+  getCurrentTime: (handle: number) => number;
+  getDuration: (handle: number) => number;
+  setCallbacks: (
+    handle: number,
+    onPrepared: () => void,
+    onError: (code: number, msg: string) => void,
+    onTimeUpdate: (posMs: number) => void,
+    onCompleted: () => void,
+    onBufferingChange: (isBuffering: boolean) => void,
+    onSeekDone: () => void
+  ) => void;
+}
+
+interface VidAllCorePlayerNapiBridgeModule {
+  default?: VidAllCorePlayerNapiBridge;
+}
+
+const VidAllCorePlayerNapi: VidAllCorePlayerNapiBridge =
+  (VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule).default !== undefined
+    ? ((VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule).default as VidAllCorePlayerNapiBridge)
+    : (VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridge);
 
 /**
  * VidAll Player 原生骨架适配器。
@@ -127,7 +161,7 @@ export class VidAllPlayerAdapter implements IPlayer {
       });
     }
     this.callNativeVoid('setXComponent', () => {
-      VidAllCorePlayerNapi.setXComponent(this._playerHandle, this._pendingContext, this._pendingXComponentId);
+      VidAllCorePlayerNapi.setXComponent(this._playerHandle, this._pendingContext as Object, this._pendingXComponentId);
     });
 
     // 注册三个 C++ 回调，必须在 prepare() 之前调用

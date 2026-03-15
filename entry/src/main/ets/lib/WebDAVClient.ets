@@ -2,7 +2,39 @@ import socket from '@ohos.net.socket';
 import buffer from '@ohos.buffer';
 import fs from '@ohos.file.fs';
 import http from '@ohos.net.http';
-import VidAllCorePlayerNapi from 'libvidall_core_player_napi.so';
+import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
+
+interface WebDavRequestResult {
+  statusCode: number;
+  body: string;
+  error: string;
+}
+
+interface NativeCapabilities {
+  ffmpegEnabled: boolean;
+  libcurlEnabled: boolean;
+  libcurlVersion: string;
+}
+
+interface WebDavNapiBridge {
+  webdavRequest: (
+    method: string,
+    url: string,
+    headerLines: string,
+    body: string,
+    timeoutMs: number
+  ) => WebDavRequestResult;
+  getNativeCapabilities: () => NativeCapabilities;
+}
+
+interface WebDavNapiBridgeModule {
+  default?: WebDavNapiBridge;
+}
+
+const VidAllCorePlayerNapi: WebDavNapiBridge =
+  (VidAllCorePlayerNapiModule as WebDavNapiBridgeModule).default !== undefined
+    ? ((VidAllCorePlayerNapiModule as WebDavNapiBridgeModule).default as WebDavNapiBridge)
+    : (VidAllCorePlayerNapiModule as WebDavNapiBridge);
 
 export interface WebDAVConfig {
   baseUrl: string;

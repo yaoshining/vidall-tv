@@ -1,5 +1,18 @@
 import { BusinessError } from '@kit.BasicServicesKit';
-import VidAllCorePlayerNapi from 'libvidall_core_player_napi.so';
+import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
+
+interface FfprobeNapiBridge {
+  ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
+}
+
+interface FfprobeNapiBridgeModule {
+  default?: FfprobeNapiBridge;
+}
+
+const VidAllCorePlayerNapi: FfprobeNapiBridge =
+  (VidAllCorePlayerNapiModule as FfprobeNapiBridgeModule).default !== undefined
+    ? ((VidAllCorePlayerNapiModule as FfprobeNapiBridgeModule).default as FfprobeNapiBridge)
+    : (VidAllCorePlayerNapiModule as FfprobeNapiBridge);
 
 // ─────────────────────────────────────────────
 // 数据结构
