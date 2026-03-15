@@ -653,6 +653,7 @@ static napi_value Ffprobe(napi_env env, napi_callback_info info) {
 
 // ---------------------------------------------------------------------------
 // B1：FFmpeg 自研解码路径 — packet 队列 + demux 线程
+// B2：视频/音频解码线程 + 帧队列
 // ---------------------------------------------------------------------------
 
 // 线程安全的 AVPacket 队列（视频/音频各一个）
@@ -662,6 +663,15 @@ struct AVPacketQueue {
   std::condition_variable cv;
   bool abort = false;
   int maxSize = 64;
+};
+
+// B2：线程安全的 AVFrame 队列（解码输出，供渲染/音频线程消费）
+struct AVFrameQueue {
+  std::queue<AVFrame *> frames;
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool abort = false;
+  int maxSize = 4;  // 视频帧不需要太大，以控制内存压力
 };
 
 // FFmpeg 上下文：格式探测 + demux 线程 + 双队列
@@ -677,6 +687,19 @@ struct FfmpegContext {
   std::atomic<bool> interruptFlag{false};
   // HTTP headers（"Key: Value\r\n" 格式，供 avformat_open_input 使用）
   std::string httpHeaders;
+
+  // B2：解码器上下文
+  AVCodecContext *videoCodecCtx = nullptr;
+  AVCodecContext *audioCodecCtx = nullptr;
+
+  // B2：解码线程
+  std::thread videoDecodeThread;
+  std::thread audioDecodeThread;
+  std::atomic<bool> decodeRunning{false};
+
+  // B2：解码帧输出队列
+  AVFrameQueue videoFrameQueue;
+  AVFrameQueue audioFrameQueue;
 };
 
 struct NativePlayerSkeletonState {
@@ -715,6 +738,11 @@ struct NativePlayerSkeletonState {
   // B1：FFmpeg 自研路径标志与上下文
   bool useFfmpegPath = false;  // OH_AVPlayer 报错后设为 true，切换到 FFmpeg 路径
   std::unique_ptr<FfmpegContext> ffmpegCtx;
+  // B2：媒体信息（解码器初始化后填充，供 onPrepared 回调使用）
+  int32_t ffmpegWidth = 0;
+  int32_t ffmpegHeight = 0;
+  double ffmpegFps = 0.0;
+  int64_t ffmpegDurationMs = 0;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -1393,6 +1421,350 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
 }
 
 // 启动 FFmpeg demux 线程（在 OH_AVPlayer 报错后从媒体线程调用）
+static void StartFfmpegDecode(NativePlayerSkeletonState *state);
+static void StopFfmpegDecode(NativePlayerSkeletonState *state);
+
+// ---------------------------------------------------------------------------
+// B2：解码器初始化
+// ---------------------------------------------------------------------------
+
+static int FfmpegInitCodecs(FfmpegContext *ctx) {
+  // 视频解码器
+  if (ctx->videoStreamIdx >= 0) {
+    AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
+    const AVCodec *codec = avcodec_find_decoder(vs->codecpar->codec_id);
+    if (!codec) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                   "FfmpegInitCodecs: no video decoder for codec_id=%d", vs->codecpar->codec_id);
+      return AVERROR_DECODER_NOT_FOUND;
+    }
+    ctx->videoCodecCtx = avcodec_alloc_context3(codec);
+    if (!ctx->videoCodecCtx) {
+      return AVERROR(ENOMEM);
+    }
+    int ret = avcodec_parameters_to_context(ctx->videoCodecCtx, vs->codecpar);
+    if (ret < 0) {
+      avcodec_free_context(&ctx->videoCodecCtx);
+      return ret;
+    }
+    // 多线程解码（frame-level），TV 端多核可充分利用
+    ctx->videoCodecCtx->thread_count = 2;
+    ctx->videoCodecCtx->thread_type = FF_THREAD_FRAME;
+    ret = avcodec_open2(ctx->videoCodecCtx, codec, nullptr);
+    if (ret < 0) {
+      avcodec_free_context(&ctx->videoCodecCtx);
+      return ret;
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "FfmpegInitCodecs: video decoder opened: %s %dx%d",
+                 codec->name, ctx->videoCodecCtx->width, ctx->videoCodecCtx->height);
+  }
+
+  // 音频解码器
+  if (ctx->audioStreamIdx >= 0) {
+    AVStream *as = ctx->fmtCtx->streams[ctx->audioStreamIdx];
+    const AVCodec *codec = avcodec_find_decoder(as->codecpar->codec_id);
+    if (!codec) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                   "FfmpegInitCodecs: no audio decoder for codec_id=%d", as->codecpar->codec_id);
+      return AVERROR_DECODER_NOT_FOUND;
+    }
+    ctx->audioCodecCtx = avcodec_alloc_context3(codec);
+    if (!ctx->audioCodecCtx) {
+      return AVERROR(ENOMEM);
+    }
+    int ret = avcodec_parameters_to_context(ctx->audioCodecCtx, as->codecpar);
+    if (ret < 0) {
+      avcodec_free_context(&ctx->audioCodecCtx);
+      return ret;
+    }
+    ret = avcodec_open2(ctx->audioCodecCtx, codec, nullptr);
+    if (ret < 0) {
+      avcodec_free_context(&ctx->audioCodecCtx);
+      return ret;
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "FfmpegInitCodecs: audio decoder opened: %s ch=%d sr=%d",
+                 codec->name, ctx->audioCodecCtx->ch_layout.nb_channels,
+                 ctx->audioCodecCtx->sample_rate);
+  }
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// B2：视频解码线程
+// ---------------------------------------------------------------------------
+
+static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VideoDecodeThread: started");
+  AVFrame *frame = av_frame_alloc();
+  if (!frame) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "VideoDecodeThread: av_frame_alloc failed");
+    return;
+  }
+
+  while (ctx->decodeRunning.load()) {
+    // 从 videoQueue 取 packet（背压等待）
+    AVPacket *pkt = nullptr;
+    {
+      std::unique_lock<std::mutex> lock(ctx->videoQueue.mtx);
+      ctx->videoQueue.cv.wait(lock, [&] {
+        return !ctx->videoQueue.packets.empty() || ctx->videoQueue.abort || !ctx->decodeRunning.load();
+      });
+      if (!ctx->decodeRunning.load() || ctx->videoQueue.abort) {
+        break;
+      }
+      pkt = ctx->videoQueue.packets.front();
+      ctx->videoQueue.packets.pop();
+    }
+    ctx->videoQueue.cv.notify_all();  // 唤醒 demux 线程（队列有空位）
+
+    // 发送到解码器
+    int ret = avcodec_send_packet(ctx->videoCodecCtx, pkt);
+    av_packet_free(&pkt);
+    if (ret < 0) {
+      if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+        char errbuf[64] = {0};
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "VideoDecodeThread: send_packet error: %s", errbuf);
+      }
+      continue;
+    }
+
+    // 接收所有可用解码帧
+    while (ctx->decodeRunning.load()) {
+      ret = avcodec_receive_frame(ctx->videoCodecCtx, frame);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        break;
+      }
+      if (ret < 0) {
+        break;
+      }
+
+      // 将帧移入 videoFrameQueue（背压等待，防止解码过快撑爆内存）
+      AVFrame *frameCopy = av_frame_alloc();
+      if (frameCopy) {
+        av_frame_move_ref(frameCopy, frame);
+        std::unique_lock<std::mutex> lock(ctx->videoFrameQueue.mtx);
+        ctx->videoFrameQueue.cv.wait(lock, [&] {
+          return static_cast<int>(ctx->videoFrameQueue.frames.size()) < ctx->videoFrameQueue.maxSize
+              || ctx->videoFrameQueue.abort
+              || !ctx->decodeRunning.load();
+        });
+        if (!ctx->videoFrameQueue.abort && ctx->decodeRunning.load()) {
+          ctx->videoFrameQueue.frames.push(frameCopy);
+          lock.unlock();
+          ctx->videoFrameQueue.cv.notify_all();
+        } else {
+          lock.unlock();
+          av_frame_free(&frameCopy);
+        }
+      }
+    }
+  }
+
+  av_frame_free(&frame);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VideoDecodeThread: exited");
+}
+
+// ---------------------------------------------------------------------------
+// B2：音频解码线程
+// ---------------------------------------------------------------------------
+
+static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "AudioDecodeThread: started");
+  AVFrame *frame = av_frame_alloc();
+  if (!frame) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "AudioDecodeThread: av_frame_alloc failed");
+    return;
+  }
+
+  while (ctx->decodeRunning.load()) {
+    // 从 audioQueue 取 packet
+    AVPacket *pkt = nullptr;
+    {
+      std::unique_lock<std::mutex> lock(ctx->audioQueue.mtx);
+      ctx->audioQueue.cv.wait(lock, [&] {
+        return !ctx->audioQueue.packets.empty() || ctx->audioQueue.abort || !ctx->decodeRunning.load();
+      });
+      if (!ctx->decodeRunning.load() || ctx->audioQueue.abort) {
+        break;
+      }
+      pkt = ctx->audioQueue.packets.front();
+      ctx->audioQueue.packets.pop();
+    }
+    ctx->audioQueue.cv.notify_all();
+
+    // 发送到解码器
+    int ret = avcodec_send_packet(ctx->audioCodecCtx, pkt);
+    av_packet_free(&pkt);
+    if (ret < 0) {
+      if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+        char errbuf[64] = {0};
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "AudioDecodeThread: send_packet error: %s", errbuf);
+      }
+      continue;
+    }
+
+    // 接收所有可用解码帧（PCM，格式转换在 B4 做）
+    while (ctx->decodeRunning.load()) {
+      ret = avcodec_receive_frame(ctx->audioCodecCtx, frame);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        break;
+      }
+      if (ret < 0) {
+        break;
+      }
+
+      AVFrame *frameCopy = av_frame_alloc();
+      if (frameCopy) {
+        av_frame_move_ref(frameCopy, frame);
+        std::unique_lock<std::mutex> lock(ctx->audioFrameQueue.mtx);
+        ctx->audioFrameQueue.cv.wait(lock, [&] {
+          return static_cast<int>(ctx->audioFrameQueue.frames.size()) < ctx->audioFrameQueue.maxSize
+              || ctx->audioFrameQueue.abort
+              || !ctx->decodeRunning.load();
+        });
+        if (!ctx->audioFrameQueue.abort && ctx->decodeRunning.load()) {
+          ctx->audioFrameQueue.frames.push(frameCopy);
+          lock.unlock();
+          ctx->audioFrameQueue.cv.notify_all();
+        } else {
+          lock.unlock();
+          av_frame_free(&frameCopy);
+        }
+      }
+    }
+  }
+
+  av_frame_free(&frame);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "AudioDecodeThread: exited");
+}
+
+// ---------------------------------------------------------------------------
+// B2：启动/停止解码线程
+// ---------------------------------------------------------------------------
+
+static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // 初始化解码器
+  const int ret = FfmpegInitCodecs(ctx);
+  if (ret < 0) {
+    char errbuf[128] = {0};
+    av_strerror(ret, errbuf, sizeof(errbuf));
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "StartFfmpegDecode: FfmpegInitCodecs failed: %s", errbuf);
+    return;
+  }
+
+  // 记录媒体信息（供 ArkTS onPrepared 读取）
+  if (ctx->videoStreamIdx >= 0 && ctx->videoCodecCtx != nullptr) {
+    state->ffmpegWidth = ctx->videoCodecCtx->width;
+    state->ffmpegHeight = ctx->videoCodecCtx->height;
+    AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
+    const AVRational fr = vs->avg_frame_rate;
+    state->ffmpegFps = (fr.den > 0) ? static_cast<double>(fr.num) / fr.den : 0.0;
+  }
+  if (ctx->fmtCtx->duration != AV_NOPTS_VALUE) {
+    state->ffmpegDurationMs = ctx->fmtCtx->duration / (AV_TIME_BASE / 1000);
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StartFfmpegDecode: %dx%d fps=%.2f durationMs=%lld",
+               state->ffmpegWidth, state->ffmpegHeight,
+               state->ffmpegFps, static_cast<long long>(state->ffmpegDurationMs));
+
+  // 启动解码线程
+  ctx->decodeRunning.store(true);
+  if (ctx->videoCodecCtx != nullptr) {
+    ctx->videoDecodeThread = std::thread(VideoDecodeThreadFunc, ctx);
+  }
+  if (ctx->audioCodecCtx != nullptr) {
+    ctx->audioDecodeThread = std::thread(AudioDecodeThreadFunc, ctx);
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StartFfmpegDecode: decode threads launched");
+}
+
+static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // 1. 通知解码线程退出
+  ctx->decodeRunning.store(false);
+
+  // 2. Abort 帧队列（唤醒可能阻塞在背压等待的解码线程）
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoFrameQueue.mtx);
+    ctx->videoFrameQueue.abort = true;
+  }
+  ctx->videoFrameQueue.cv.notify_all();
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioFrameQueue.mtx);
+    ctx->audioFrameQueue.abort = true;
+  }
+  ctx->audioFrameQueue.cv.notify_all();
+
+  // 3. Abort packet 队列（唤醒可能阻塞在取 packet 的解码线程）
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
+    ctx->videoQueue.abort = true;
+  }
+  ctx->videoQueue.cv.notify_all();
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    ctx->audioQueue.abort = true;
+  }
+  ctx->audioQueue.cv.notify_all();
+
+  // 4. Join 解码线程
+  if (ctx->videoDecodeThread.joinable()) {
+    ctx->videoDecodeThread.join();
+  }
+  if (ctx->audioDecodeThread.joinable()) {
+    ctx->audioDecodeThread.join();
+  }
+
+  // 5. 释放帧队列中残留帧
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoFrameQueue.mtx);
+    while (!ctx->videoFrameQueue.frames.empty()) {
+      AVFrame *f = ctx->videoFrameQueue.frames.front();
+      ctx->videoFrameQueue.frames.pop();
+      av_frame_free(&f);
+    }
+  }
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioFrameQueue.mtx);
+    while (!ctx->audioFrameQueue.frames.empty()) {
+      AVFrame *f = ctx->audioFrameQueue.frames.front();
+      ctx->audioFrameQueue.frames.pop();
+      av_frame_free(&f);
+    }
+  }
+
+  // 6. 释放解码器上下文
+  if (ctx->videoCodecCtx != nullptr) {
+    avcodec_free_context(&ctx->videoCodecCtx);
+  }
+  if (ctx->audioCodecCtx != nullptr) {
+    avcodec_free_context(&ctx->audioCodecCtx);
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StopFfmpegDecode: decode stopped and cleaned");
+}
+
+// ---------------------------------------------------------------------------
+// B1：demux 线程启动/停止（B2 在其中调用解码线程）
+// ---------------------------------------------------------------------------
+
 static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string &url) {
   if (state == nullptr || url.empty()) {
     return;
@@ -1419,6 +1791,9 @@ static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string
   state->ffmpegCtx = std::move(ctx);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "StartFfmpegDemux: demux thread launched for url=%s", url.c_str());
+
+  // B2：demux 就绪后立即初始化解码器并启动解码线程
+  StartFfmpegDecode(state);
 }
 
 // 停止 demux 线程并释放所有 FFmpeg 资源
@@ -1427,6 +1802,9 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
     return;
   }
   FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // B2：先停止解码线程（依赖 packet 队列），再停止 demux
+  StopFfmpegDecode(state);
 
   // 1. 通知中断：让阻塞的 av_read_frame / avformat_open_input 尽快返回
   ctx->interruptFlag.store(true);
