@@ -4,6 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
+import buffer from '@ohos.buffer';
 
 const TAG = '[VidAllPlayerAdapter]';
 const METRICS_TAG = 'VidAll_Metrics';
@@ -146,8 +147,11 @@ export class VidAllPlayerAdapter implements IPlayer {
     }
 
     this._playerHandle = this.callNativeWithValue('createPlayer', () => VidAllCorePlayerNapi.createPlayer());
+    // OH_AVPlayer_SetURLSource 不支持自定义 HTTP 头；将 Basic Auth 凭据嵌入 URL userinfo
+    // （RFC 3986：http://user:pass@host/path），FFmpeg 底层会自动提取并发送 Authorization 头。
+    const urlForNative = this.buildUrlWithAuth(videoData.videoSrc, videoData.httpHeader);
     this.callNativeVoid('setSource', () => {
-      VidAllCorePlayerNapi.setSource(this._playerHandle, videoData.videoSrc);
+      VidAllCorePlayerNapi.setSource(this._playerHandle, urlForNative);
     });
     const headersJson = this.buildHeadersJson(videoData.httpHeader);
     if (headersJson.length > 0) {
@@ -442,6 +446,93 @@ export class VidAllPlayerAdapter implements IPlayer {
       safeHeaders[key] = headers[key];
     }
     return JSON.stringify(safeHeaders);
+  }
+
+  /**
+   * 将 HTTP Basic Auth 凭据嵌入 URL userinfo（http://user:pass@host/path）。
+   *
+   * 背景：OH_AVPlayer_SetURLSource 不支持自定义 HTTP 头；NDK avplayer.h 中也无
+   * OH_AVPlayer_SetMediaSource 或等效的 header API。底层 FFmpeg 可识别 URL userinfo
+   * 并自动生成 Authorization: Basic 头，从而通过 WebDAV 服务器的 401 鉴权。
+   *
+   * 实现：从 headers['Authorization'] 中提取 "Basic <base64>" 部分，
+   * 用 @ohos.buffer 解码得到 "user:password"，拼入 URL scheme 之后。
+   * user 和 password 各自做 encodeURIComponent 防止特殊字符破坏 URL 解析。
+   *
+   * 若 Authorization 头不存在或格式不符，原样返回 url。
+   */
+  private buildUrlWithAuth(url: string, headers?: Record<string, string>): string {
+    if (!headers) {
+      return url;
+    }
+    // 大小写不敏感地查找 Authorization 头
+    let authValue: string = '';
+    const keys = Object.keys(headers);
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === 'authorization') {
+        authValue = headers[keys[i]];
+        break;
+      }
+    }
+    if (authValue.length === 0) {
+      return url;
+    }
+    // 解析 "Basic <base64credentials>"
+    const spaceIdx = authValue.indexOf(' ');
+    if (spaceIdx < 0) {
+      return url;
+    }
+    const scheme = authValue.substring(0, spaceIdx).toLowerCase();
+    if (scheme !== 'basic') {
+      // 非 Basic Auth，不处理（Digest/Bearer 等无法通过 userinfo 传递）
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `buildUrlWithAuth: 非 Basic Auth (${scheme})，跳过 userinfo 嵌入`);
+      return url;
+    }
+    const base64Creds = authValue.substring(spaceIdx + 1).trim();
+    let creds: string;
+    try {
+      // buffer.from(str, 'base64').toString('utf-8') 与 CryptoUtil 相同用法
+      creds = buffer.from(base64Creds, 'base64').toString('utf-8');
+    } catch {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        'buildUrlWithAuth: base64 decode 失败，跳过 userinfo 嵌入');
+      return url;
+    }
+    if (creds.length === 0) {
+      return url;
+    }
+    // 拆分 user:password（密码本身可能含 ':'）
+    const colonIdx = creds.indexOf(':');
+    let user: string;
+    let pass: string;
+    if (colonIdx < 0) {
+      user = creds;
+      pass = '';
+    } else {
+      user = creds.substring(0, colonIdx);
+      pass = creds.substring(colonIdx + 1);
+    }
+    const encodedUser = encodeURIComponent(user);
+    const encodedPass = encodeURIComponent(pass);
+    const userInfo = pass.length > 0 ? `${encodedUser}:${encodedPass}` : encodedUser;
+    // 找到 scheme:// 位置并在 // 之后插入 userInfo@
+    const sepIdx = url.indexOf('://');
+    if (sepIdx < 0) {
+      return url;
+    }
+    // 检查 authority 段（scheme:// 到第一个 / 之间）是否已含 userinfo（@ 符号），
+    // 若已含则跳过注入，避免生成双重 @ 的非法 URL（幂等保护）。
+    const afterProto = sepIdx + 3;
+    const slashIdx = url.indexOf('/', afterProto);
+    const authority = slashIdx >= 0 ? url.substring(afterProto, slashIdx) : url.substring(afterProto);
+    if (authority.includes('@')) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'buildUrlWithAuth: URL 已含 userinfo，跳过注入');
+      return url;
+    }
+    const result = `${url.substring(0, sepIdx + 3)}${userInfo}@${url.substring(sepIdx + 3)}`;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'buildUrlWithAuth: 已将 Basic Auth 凭据嵌入 URL userinfo');
+    return result;
   }
 
   async selectTrack(trackIndex: number): Promise<void> {

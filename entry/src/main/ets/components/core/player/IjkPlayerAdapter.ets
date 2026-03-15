@@ -651,6 +651,16 @@ export class IjkPlayerAdapter implements IPlayer {
         return;
       }
       try {
+        // 修复: onPrepared 时 getDuration() 可能返回 0（部分流媒体格式 duration 延迟就绪），
+        // 在每次轮询 tick 中补偿获取，确保 VideoPlayerController.onTimeUpdate 能读到有效值。
+        if (this._duration <= 0) {
+          const lateDuration = this.ijk.getDuration();
+          if (lateDuration > 0) {
+            this._duration = lateDuration;
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `[timeUpdate] duration 延迟就绪: ${this._duration}ms session=${this._sessionId}`);
+          }
+        }
         const pos = this.ijk.getCurrentPosition();
         if (pos !== this._currentTime) {
           this._currentTime = pos;
