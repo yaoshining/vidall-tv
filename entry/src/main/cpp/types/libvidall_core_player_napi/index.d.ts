@@ -17,6 +17,22 @@ export const ffmpegSelfCheck: () => {
   avformatVersion: number;
   avutilVersion: number;
 };
+export const webdavRequest: (
+  method: string,
+  url: string,
+  headerLines: string,
+  body: string,
+  timeoutMs: number
+) => {
+  statusCode: number;
+  body: string;
+  error: string;
+};
+export const getNativeCapabilities: () => {
+  ffmpegEnabled: boolean;
+  libcurlEnabled: boolean;
+  libcurlVersion: string;
+};
 export const setCallbacks: (
   handle: number,
   onPrepared: () => void,

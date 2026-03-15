@@ -2,6 +2,7 @@ import socket from '@ohos.net.socket';
 import buffer from '@ohos.buffer';
 import fs from '@ohos.file.fs';
 import http from '@ohos.net.http';
+import VidAllCorePlayerNapi from 'libvidall_core_player_napi.so';
 
 export interface WebDAVConfig {
   baseUrl: string;
@@ -53,6 +54,8 @@ export class WebDAVClient {
   private username: string;
   private password: string;
   private timeout: number;
+  // 缓存 native libcurl 可用性（null = 未检测）
+  private _nativeCurlEnabled: boolean | null = null;
 
   constructor(config: WebDAVConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -175,8 +178,59 @@ export class WebDAVClient {
     return request.replace(/(Authorization\s*:\s*)[^\r\n]*/ig, '$1Basic ***');
   }
 
+  /** 懒检测 native libcurl 是否可用 */
+  private checkNativeCurlEnabled(): boolean {
+    if (this._nativeCurlEnabled === null) {
+      try {
+        const caps = VidAllCorePlayerNapi.getNativeCapabilities();
+        this._nativeCurlEnabled = caps.libcurlEnabled;
+      } catch (e) {
+        this._nativeCurlEnabled = false;
+      }
+    }
+    return this._nativeCurlEnabled;
+  }
+
   /**
-   * 使用 Socket 发送请求 - 支持 HTTP（TCP）和 HTTPS（http 模块）
+   * 通过 native libcurl 发送 WebDAV 请求（仅在 libcurlEnabled 时调用）。
+   * 失败时由上层 sendRawHttpRequest 捕获并回退到 socket 实现。
+   */
+  private sendViaNative(
+    method: string,
+    encodedPath: string,
+    headers: Record<string, string>,
+    body?: string
+  ): HttpResponse {
+    const isStd = (this.isHttps && this.port === 443) || (!this.isHttps && this.port === 80);
+    const portStr = isStd ? '' : `:${this.port}`;
+    const scheme = this.isHttps ? 'https' : 'http';
+    const fullUrl = `${scheme}://${this.host}${portStr}${encodedPath}`;
+
+    const keys = Object.keys(headers);
+    const parts: string[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const item: string = `${keys[i]}: ${headers[keys[i]]}`;
+      parts.push(item);
+    }
+    const headerLines = parts.join('\r\n');
+
+    const result = VidAllCorePlayerNapi.webdavRequest(
+      method, fullUrl, headerLines, body ?? '', this.timeout
+    );
+
+    if (result.error) {
+      throw new Error(`native curl: ${result.error}`);
+    }
+
+    const resp = new HttpResponse();
+    resp.statusCode = result.statusCode;
+    resp.body = result.body;
+    return resp;
+  }
+
+  /**
+   * 使用 Socket 发送请求 - 支持 HTTP（TCP）和 HTTPS（http 模块）。
+   * 若 native libcurl 可用则优先走 native，失败自动回退到 socket/http 实现。
    */
   private async sendRawHttpRequest(
     method: string,
@@ -184,6 +238,15 @@ export class WebDAVClient {
     headers: Record<string, string>,
     body?: string
   ): Promise<HttpResponse> {
+    // ── native libcurl 优先路径 ────────────────────────────────────────────
+    if (this.checkNativeCurlEnabled()) {
+      try {
+        return this.sendViaNative(method, path, headers, body);
+      } catch (e) {
+        console.warn(`WebDAV native fallback: ${(e as Error).message}`);
+      }
+    }
+    // ── 回退：现有 socket / http 实现 ──────────────────────────────────────
     if (this.isHttps) {
       return this.sendHttpsRequestViaHttpModule(method, path, headers, body);
     }

@@ -24,6 +24,8 @@ target_include_directories(vidall_core_player_napi PUBLIC
 # ---------------------------------------------------------------------------
 set(FFMPEG_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH})
 set(FFMPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(CURL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH})
+set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/curl/include)
 
 add_library(ffmpeg SHARED IMPORTED)
 set_target_properties(ffmpeg PROPERTIES
@@ -33,6 +35,26 @@ set_target_properties(ffmpeg PROPERTIES
 target_include_directories(vidall_core_player_napi PRIVATE
     ${FFMPEG_INCLUDE_DIR}
 )
+
+# ---------------------------------------------------------------------------
+# 可选 libcurl（阶段性接入骨架）
+# 若存在 entry/libs/<abi>/libcurl.so，则自动启用并定义 VIDALL_HAS_LIBCURL=1
+# ---------------------------------------------------------------------------
+if(EXISTS ${CURL_LIB_DIR}/libcurl.so)
+  add_library(curl SHARED IMPORTED)
+  set_target_properties(curl PROPERTIES
+    IMPORTED_LOCATION ${CURL_LIB_DIR}/libcurl.so
+  )
+  target_include_directories(vidall_core_player_napi PRIVATE
+    ${CURL_INCLUDE_DIR}
+  )
+  target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBCURL=1)
+  target_link_libraries(vidall_core_player_napi PUBLIC
+    curl
+  )
+else()
+  target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBCURL=0)
+endif()
 
 target_link_libraries(vidall_core_player_napi PUBLIC
     libace_napi.z.so

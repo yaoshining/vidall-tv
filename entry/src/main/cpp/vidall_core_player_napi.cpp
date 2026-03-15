@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdio>
+#include <memory>
 
 #include "napi/native_api.h"
 
@@ -16,6 +17,14 @@ extern "C" {
 #include <libavutil/error.h>
 #include <libavutil/time.h>
 }
+
+#if !defined(VIDALL_HAS_LIBCURL)
+#define VIDALL_HAS_LIBCURL 0
+#endif
+
+#if VIDALL_HAS_LIBCURL
+#include <curl/curl.h>
+#endif
 
 namespace {
 
@@ -119,6 +128,111 @@ static std::string FfmpegErrorToString(int errnum) {
   char buffer[AV_ERROR_MAX_STRING_SIZE] = { 0 };
   av_make_error_string(buffer, sizeof(buffer), errnum);
   return std::string(buffer);
+}
+
+struct CurlRequestResult {
+  long statusCode = 0;
+  std::string body;
+  std::string error;
+};
+
+#if VIDALL_HAS_LIBCURL
+static size_t CurlWriteToString(void *contents, size_t size, size_t nmemb, void *userp) {
+  size_t totalSize = size * nmemb;
+  if (userp == nullptr || contents == nullptr || totalSize == 0) {
+    return 0;
+  }
+  std::string *output = static_cast<std::string *>(userp);
+  output->append(static_cast<const char *>(contents), totalSize);
+  return totalSize;
+}
+
+static std::vector<std::string> SplitHeaderLines(const std::string &headerLines) {
+  std::vector<std::string> result;
+  if (headerLines.empty()) {
+    return result;
+  }
+  size_t start = 0;
+  while (start < headerLines.size()) {
+    size_t end = headerLines.find("\r\n", start);
+    if (end == std::string::npos) {
+      end = headerLines.size();
+    }
+    if (end > start) {
+      result.push_back(headerLines.substr(start, end - start));
+    }
+    if (end >= headerLines.size()) {
+      break;
+    }
+    start = end + 2;
+  }
+  return result;
+}
+#endif
+
+static CurlRequestResult RunCurlRequest(
+  const std::string &method,
+  const std::string &url,
+  const std::string &headerLines,
+  const std::string &body,
+  int64_t timeoutMs
+) {
+  CurlRequestResult result;
+#if !VIDALL_HAS_LIBCURL
+  (void)method;
+  (void)url;
+  (void)headerLines;
+  (void)body;
+  (void)timeoutMs;
+  result.error = "libcurl disabled";
+  return result;
+#else
+  CURL *curl = curl_easy_init();
+  if (curl == nullptr) {
+    result.error = "curl_easy_init failed";
+    return result;
+  }
+
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
+  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+  curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToString);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
+
+  if (timeoutMs > 0) {
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeoutMs));
+  }
+
+  if (!body.empty()) {
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+  }
+
+  struct curl_slist *headers = nullptr;
+  std::vector<std::string> headerItems = SplitHeaderLines(headerLines);
+  for (size_t i = 0; i < headerItems.size(); ++i) {
+    headers = curl_slist_append(headers, headerItems[i].c_str());
+  }
+  if (headers != nullptr) {
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  }
+
+  CURLcode code = curl_easy_perform(curl);
+  if (code != CURLE_OK) {
+    result.error = std::string("curl request failed: ") + curl_easy_strerror(code);
+  } else {
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.statusCode);
+  }
+
+  if (headers != nullptr) {
+    curl_slist_free_all(headers);
+  }
+  curl_easy_cleanup(curl);
+  return result;
+#endif
 }
 
 static std::string CodecTypeToString(AVMediaType mediaType) {
@@ -468,6 +582,14 @@ static napi_value CreateInt64(napi_env env, int64_t value) {
 static napi_value CreateUint32(napi_env env, uint32_t value) {
   napi_value result = nullptr;
   if (napi_create_uint32(env, value, &result) != napi_ok) {
+    return nullptr;
+  }
+  return result;
+}
+
+static napi_value CreateBoolean(napi_env env, bool value) {
+  napi_value result = nullptr;
+  if (napi_get_boolean(env, value, &result) != napi_ok) {
     return nullptr;
   }
   return result;
@@ -1237,6 +1359,133 @@ static napi_value FfmpegSelfCheck(napi_env env, napi_callback_info info) {
   return result;
 }
 
+static napi_value WebdavRequest(napi_env env, napi_callback_info info) {
+  size_t argc = 5;
+  napi_value args[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to read args");
+    return nullptr;
+  }
+  if (argc < 5) {
+    ThrowTypeError(env, "webdavRequest requires (method, url, headerLines, body, timeoutMs)");
+    return nullptr;
+  }
+
+  std::string method;
+  std::string url;
+  std::string headerLines;
+  std::string body;
+  int64_t timeoutMs = 0;
+
+  if (!ReadUtf8String(env, args[0], method)) {
+    ThrowTypeError(env, "webdavRequest method must be string");
+    return nullptr;
+  }
+  if (!ReadUtf8String(env, args[1], url)) {
+    ThrowTypeError(env, "webdavRequest url must be string");
+    return nullptr;
+  }
+  if (!ReadUtf8String(env, args[2], headerLines)) {
+    ThrowTypeError(env, "webdavRequest headerLines must be string");
+    return nullptr;
+  }
+  if (!ReadUtf8String(env, args[3], body)) {
+    ThrowTypeError(env, "webdavRequest body must be string");
+    return nullptr;
+  }
+  if (napi_get_value_int64(env, args[4], &timeoutMs) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest timeoutMs must be int64");
+    return nullptr;
+  }
+
+  CurlRequestResult requestResult = RunCurlRequest(method, url, headerLines, body, timeoutMs);
+
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    ThrowTypeError(env, "webdavRequest failed to create result object");
+    return nullptr;
+  }
+
+  napi_value statusCodeValue = nullptr;
+  if (napi_create_int64(env, requestResult.statusCode, &statusCodeValue) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to create statusCode");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "statusCode", statusCodeValue) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to set statusCode");
+    return nullptr;
+  }
+
+  napi_value bodyValue = nullptr;
+  if (napi_create_string_utf8(env, requestResult.body.c_str(), NAPI_AUTO_LENGTH, &bodyValue) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to create body");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "body", bodyValue) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to set body");
+    return nullptr;
+  }
+
+  napi_value errorValue = nullptr;
+  if (napi_create_string_utf8(env, requestResult.error.c_str(), NAPI_AUTO_LENGTH, &errorValue) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to create error");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "error", errorValue) != napi_ok) {
+    ThrowTypeError(env, "webdavRequest failed to set error");
+    return nullptr;
+  }
+
+  return result;
+}
+
+static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
+  (void)info;
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    ThrowTypeError(env, "getNativeCapabilities failed to create result object");
+    return nullptr;
+  }
+
+  napi_value ffmpegEnabled = CreateBoolean(env, true);
+  if (ffmpegEnabled == nullptr) {
+    ThrowTypeError(env, "getNativeCapabilities failed to create ffmpegEnabled");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "ffmpegEnabled", ffmpegEnabled) != napi_ok) {
+    ThrowTypeError(env, "getNativeCapabilities failed to set ffmpegEnabled");
+    return nullptr;
+  }
+
+  const bool libcurlEnabledValue = (VIDALL_HAS_LIBCURL == 1);
+  napi_value libcurlEnabled = CreateBoolean(env, libcurlEnabledValue);
+  if (libcurlEnabled == nullptr) {
+    ThrowTypeError(env, "getNativeCapabilities failed to create libcurlEnabled");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "libcurlEnabled", libcurlEnabled) != napi_ok) {
+    ThrowTypeError(env, "getNativeCapabilities failed to set libcurlEnabled");
+    return nullptr;
+  }
+
+#if VIDALL_HAS_LIBCURL
+  const char *libcurlVersion = curl_version();
+#else
+  const char *libcurlVersion = "disabled";
+#endif
+  napi_value libcurlVersionValue = nullptr;
+  if (napi_create_string_utf8(env, libcurlVersion, NAPI_AUTO_LENGTH, &libcurlVersionValue) != napi_ok) {
+    ThrowTypeError(env, "getNativeCapabilities failed to create libcurlVersion");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "libcurlVersion", libcurlVersionValue) != napi_ok) {
+    ThrowTypeError(env, "getNativeCapabilities failed to set libcurlVersion");
+    return nullptr;
+  }
+
+  return result;
+}
+
 } // namespace
 
 EXTERN_C_START
@@ -1257,7 +1506,9 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "ffprobe", nullptr, Ffprobe, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "ffmpegSelfCheck", nullptr, FfmpegSelfCheck, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "ffmpegSelfCheck", nullptr, FfmpegSelfCheck, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "webdavRequest", nullptr, WebdavRequest, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");
