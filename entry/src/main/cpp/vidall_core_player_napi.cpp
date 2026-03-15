@@ -29,6 +29,7 @@ extern "C" {
 #include <libavutil/error.h>
 #include <libavutil/time.h>
 #include <libswresample/swresample.h>  // B4：PCM 格式转换（fltp/s16/etc → s16 for OH_AudioRenderer）
+#include <libswscale/swscale.h>        // B6：视频像素格式转换（yuv420p10le/etc → yuv420p，修复 HDR/DV 黑屏）
 }
 
 #if !defined(VIDALL_HAS_LIBCURL)
@@ -788,6 +789,7 @@ struct FfmpegContext {
   OH_AudioRenderer *audioRenderer = nullptr;
   OH_AudioStreamBuilder *audioBuilder = nullptr;
   SwrContext *swrCtx = nullptr;          // libswresample 重采样上下文（源格式 → stereo S16 48kHz）
+  SwsContext *swsCtx = nullptr;          // libswscale 像素格式转换（yuv420p10le/etc → yuv420p，B6 HDR/DV 修复）
   std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
 
   // B5：音频时钟（主时钟）
@@ -837,6 +839,11 @@ struct FfmpegContext {
 
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
         "FfmpegContext: safety destructor joined remaining threads");
+    // 释放 SwsContext（视频格式转换，B6 HDR/DV 修复）
+    if (swsCtx != nullptr) {
+      sws_freeContext(swsCtx);
+      swsCtx = nullptr;
+    }
   }
 };
 
@@ -1802,9 +1809,52 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
       }
 
       // 将帧移入 videoFrameQueue（背压等待，防止解码过快撑爆内存）
+      // ── B6：强制转换到 YUV420P（8-bit），渲染管线只处理 yuv420p ──
+      // HDR/DV 内容解码输出 yuv420p10le（10-bit），GL 侧以 GL_UNSIGNED_BYTE 上传，
+      // 若不转换则纹理数据完全错误 → 黑屏。此处懒创建/复用 SwsContext。
+      AVFrame *renderFrame = frame;
+      AVFrame *convertedFrame = nullptr;
+      if (frame->format != AV_PIX_FMT_YUV420P) {
+        // 输入格式变化时重建 SwsContext（首次 or 格式切换）
+        if (ctx->swsCtx == nullptr) {
+          ctx->swsCtx = sws_getContext(
+              frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+              frame->width, frame->height, AV_PIX_FMT_YUV420P,
+              SWS_BILINEAR, nullptr, nullptr, nullptr);
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                       "VideoDecodeThread: SwsContext created srcFmt=%{public}d -> yuv420p",
+                       frame->format);
+        }
+        if (ctx->swsCtx != nullptr) {
+          convertedFrame = av_frame_alloc();
+          if (convertedFrame != nullptr) {
+            convertedFrame->format = AV_PIX_FMT_YUV420P;
+            convertedFrame->width  = frame->width;
+            convertedFrame->height = frame->height;
+            if (av_frame_get_buffer(convertedFrame, 32) == 0) {
+              sws_scale(ctx->swsCtx,
+                        reinterpret_cast<const uint8_t * const *>(frame->data),
+                        frame->linesize, 0, frame->height,
+                        convertedFrame->data, convertedFrame->linesize);
+              convertedFrame->pts     = frame->pts;
+              convertedFrame->pkt_dts = frame->pkt_dts;
+              renderFrame = convertedFrame;
+            } else {
+              av_frame_free(&convertedFrame);
+              convertedFrame = nullptr;
+              // fallback：直接用原始帧（可能渲染异常，但不崩溃）
+              OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                           "VideoDecodeThread: av_frame_get_buffer failed, fallback to raw frame");
+            }
+          }
+        }
+      }
+      // ── 结束格式转换 ──
+
       AVFrame *frameCopy = av_frame_alloc();
       if (frameCopy) {
-        av_frame_move_ref(frameCopy, frame);
+        // 使用 renderFrame（可能是转换后的 convertedFrame，也可能是原始 frame）
+        av_frame_move_ref(frameCopy, renderFrame);
         std::unique_lock<std::mutex> lock(ctx->videoFrameQueue.mtx);
         ctx->videoFrameQueue.cv.wait(lock, [&] {
           return static_cast<int>(ctx->videoFrameQueue.frames.size()) < ctx->videoFrameQueue.maxSize
@@ -1820,7 +1870,13 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
           av_frame_free(&frameCopy);
         }
       }
-    }
+      // 释放 convertedFrame shell（move_ref 已转走数据引用，此处 free 空帧，安全）
+      if (convertedFrame != nullptr) {
+        av_frame_free(&convertedFrame);
+      }
+      // 清理原始 frame 数据引用（convertedFrame 转换时 frame 仍持有原始数据）
+      av_frame_unref(frame);
+    }  // end inner while (receive_frame loop)
   }
 
   av_frame_free(&frame);
@@ -2387,6 +2443,20 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     // 5. 上传 YUV420P → 3 张 GL_RED 纹理（Fix #48-B6-1b：GL_LUMINANCE 在 GLES 3.0 已废弃）
     const int w = frame->width;
     const int h = frame->height;
+
+    // B6 诊断日志：第一帧打印格式与 linesize，用于确认 sws_scale 是否生效
+    {
+      static bool firstFrameLogged = false;
+      if (!firstFrameLogged) {
+        firstFrameLogged = true;
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "RenderThread: first frame w=%{public}d h=%{public}d fmt=%{public}d "
+                     "ls0=%{public}d ls1=%{public}d",
+                     frame->width, frame->height, frame->format,
+                     frame->linesize[0], frame->linesize[1]);
+      }
+    }
+
     ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     ctx->gl.ActiveTexture(GL_TEXTURE0);
@@ -2874,6 +2944,11 @@ static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
   }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StopFfmpegDecode: decode stopped and cleaned");
+  // 释放 SwsContext（视频格式转换，B6 HDR/DV 修复）；decode 线程已 join，访问安全
+  if (ctx->swsCtx != nullptr) {
+    sws_freeContext(ctx->swsCtx);
+    ctx->swsCtx = nullptr;
+  }
 }
 
 // ---------------------------------------------------------------------------
