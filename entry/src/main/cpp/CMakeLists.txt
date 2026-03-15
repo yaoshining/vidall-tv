@@ -47,8 +47,8 @@ if(VIDALL_ENABLE_FFMPEG)
     # B3：OpenGL ES YUV 渲染管线需要 EGL 上下文与 GLES2 库
     # B4：OH_AudioRenderer PCM 送显需要 libohaudio
     target_link_libraries(vidall_core_player_napi PRIVATE
-        EGL          # EGL 上下文（创建 window surface / context）
-        GLESv2       # OpenGL ES 2.0（shader / texture / draw）
+        libEGL.so      # EGL 上下文（创建 window surface / context）
+        libGLESv2.so   # OpenGL ES 2.0（shader / texture / draw）
         libohaudio.so  # B4：OH_AudioRenderer（PCM 音频送显）
     )
 else()

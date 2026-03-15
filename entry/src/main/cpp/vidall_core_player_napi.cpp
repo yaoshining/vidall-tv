@@ -2142,6 +2142,18 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
                "RenderThreadFunc: eglMakeCurrent OK, GL context current ctx=%{public}p",
                static_cast<void*>(eglGetCurrentContext()));
 
+  // GL context 验证诊断
+  {
+    const GLubyte *glVer = glGetString(GL_VERSION);
+    const GLubyte *glRenderer = glGetString(GL_RENDERER);
+    GLenum glErr = glGetError();
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "RenderThreadFunc: GL_VERSION=%{public}s GL_RENDERER=%{public}s glGetError=0x%{public}x",
+                 glVer ? (const char*)glVer : "null",
+                 glRenderer ? (const char*)glRenderer : "null",
+                 glErr);
+  }
+
   // 3. 初始化 GL 资源（shader/纹理/VBO）
   if (!FfmpegInitGLResources(ctx)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
