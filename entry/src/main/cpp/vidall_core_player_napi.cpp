@@ -781,9 +781,9 @@ struct FfmpegContext {
 
   // B3：OpenGL ES 资源（在渲染线程 makeCurrent 后初始化）
   GLuint yuvProgram = 0;   // YUV→RGB GLSL program
-  GLuint textureY = 0;     // Y 分量纹理（GL_LUMINANCE，width×height）
-  GLuint textureU = 0;     // U 分量纹理（GL_LUMINANCE，width/2×height/2）
-  GLuint textureV = 0;     // V 分量纹理（GL_LUMINANCE，width/2×height/2）
+  GLuint textureY = 0;     // Y 分量纹理（GL_R8，width×height）
+  GLuint textureU = 0;     // U 分量纹理（GL_R8，width/2×height/2）
+  GLuint textureV = 0;     // V 分量纹理（GL_R8，width/2×height/2）
   GLuint quadVBO = 0;      // 全屏四边形顶点缓冲
 
   // Fix #48-B6: 首帧后置 true，后续帧用 TexSubImage2D 避免每帧重分配 GPU 纹理存储
@@ -2167,10 +2167,10 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  eglGetError(), nativeWindow);
     return false;
   }
-  // 修复 #48-B6: 退回 GLES 2 context——GLES 3 context 在 EGL_RENDERABLE_TYPE=ES2_BIT 的
-  // config 下触发 GPU 纹理内存 OOM（0x505），改用 GL_LUMINANCE（GLES 2 合法单通道格式）
-  // 配合 GLES 2 context 可绕过该限制。
-  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+  // 修复 #48-B6: 设备驱动始终返回 GLES 3.2 context（GL_VERSION=OpenGL ES 3.2），
+  // GL_LUMINANCE 在 GLES 3 中已废弃，即使 1920×1080 也触发 OOM（0x505）。
+  // 改用 GLES 3 context + GL_R8（GLES 3 标准单通道格式），配合 sws_scale 1920 降采样。
+  EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
   ctx->eglContext =
       eglCreateContext(ctx->eglDisplay, config, EGL_NO_CONTEXT, ctxAttribs);
   if (ctx->eglContext == EGL_NO_CONTEXT) {
@@ -2260,7 +2260,7 @@ static bool FfmpegInitGLResources(FfmpegContext *ctx) {
   ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureU"), 1);
   ctx->gl.Uniform1i(ctx->gl.GetUniformLocation(ctx->yuvProgram, "u_textureV"), 2);
 
-  // 3. 创建 Y/U/V 三张 GL_LUMINANCE 纹理（实际尺寸由第一帧决定）
+  // 3. 创建 Y/U/V 三张 GL_R8 纹理（GLES 3 标准单通道格式，实际尺寸由第一帧决定）
   ctx->gl.GenTextures(1, &ctx->textureY);
   ctx->gl.GenTextures(1, &ctx->textureU);
   ctx->gl.GenTextures(1, &ctx->textureV);
@@ -2476,7 +2476,7 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       }
     }
 
-    // 5. 上传 YUV420P → 3 张 GL_LUMINANCE 纹理（GLES 2 合法单通道格式，绕过 GLES 3 OOM）
+    // 5. 上传 YUV420P → 3 张 GL_R8 纹理（GLES 3 标准单通道格式，shader 用 .r 分量采样）
     const int w = frame->width;
     const int h = frame->height;
 
@@ -2497,13 +2497,14 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
 
     // Fix #48-B6: 首帧（或分辨率切换时）用 glTexImage2D 分配纹理存储；
     // 后续帧改用 glTexSubImage2D 直接更新数据，避免每帧重新分配导致 GL_OUT_OF_MEMORY。
+    // 格式：GL_R8（internalFormat）+ GL_RED（format）—— GLES 3 标准单通道格式。
     const bool sizeChanged = (w != ctx->textureW || h != ctx->textureH);
 
     ctx->gl.ActiveTexture(GL_TEXTURE0);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0,
-                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
         // 诊断: 仅在首帧或尺寸变更时检查 GL 错误，避免日志刷屏
         {
             GLenum glErr = ctx->gl.GetError();
@@ -2515,27 +2516,27 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
         }
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
-                        GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[0]);
+                        GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
     }
 
     ctx->gl.ActiveTexture(GL_TEXTURE1);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
-                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
-                        GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[1]);
+                        GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
     }
 
     ctx->gl.ActiveTexture(GL_TEXTURE2);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureV);
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w / 2, h / 2, 0,
-                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
     } else {
         ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
-                        GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[2]);
+                        GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
     }
 
     if (!ctx->texturesInitialized || sizeChanged) {
