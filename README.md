@@ -8,7 +8,7 @@
 
 | 功能 | 说明 |
 |---|---|
-| 🎬 视频播放 | AVPlayer 主链 + IJKPlayer 兜底，支持 mp4/mkv 等主流格式 |
+| 🎬 视频播放 | AVPlayer 主链 + Native 实验后端 + IJKPlayer 兜底，支持 mp4/mkv 等主流格式 |
 | 🌐 WebDAV 文件源 | 基于 libcurl 的 HTTPS WebDAV，支持 PikPak、群晖、Alist 等 |
 | 🔍 视频扫描 | 递归扫描配置目录，自动去重，支持深度限制 |
 | 🎭 元数据刮削 | 接入 TMDB API，自动匹配海报、简介、类型、年份 |
@@ -30,6 +30,7 @@
 │           C++ Native 层                     │
 │  vidall_core_player_napi.cpp                │
 │  ├── AVPlayer 控制（XComponent 渲染）       │
+│  ├── Native backend（OH_AVPlayer/FFmpeg/EGL）│
 │  ├── ffprobe  媒体信息探测                  │
 │  ├── webdavRequest  libcurl HTTPS 请求      │
 │  └── downloadToFile  libcurl 文件下载       │
@@ -43,6 +44,7 @@
 ```
 VideoPlayerController (ArkTS)
   ├── AVPlayerAdapter      ← HarmonyOS 原生，主链
+  ├── VidAllPlayerAdapter  ← Native 实验后端（AVPlayer 接管 + FFmpeg/EGL 回退）
   └── IjkPlayerAdapter     ← IJKPlayer，兜底
 ```
 
@@ -113,6 +115,7 @@ VidAll_TV/
 │           ├── components/core/player/  # 播放器核心
 │           │   ├── VideoPlayerController.ets
 │           │   ├── AVPlayerAdapter.ets
+│           │   ├── VidAllPlayerAdapter.ets
 │           │   └── IjkPlayerAdapter.ets
 │           ├── db/                      # 数据库（RelationalStore）
 │           │   └── FileSourceDatabase.ets
@@ -173,7 +176,8 @@ hdc shell hilog | grep VidAll_TLS_Audit
 
 | 问题 | 原因 | 状态 |
 |---|---|---|
-| AC-3/DTS 音频无法播放 | AVPlayer 不内置 AC-3 解码器 | 规划引入 FFmpeg NAPI |
+| Native 4K/10bit 片源偶发卡顿 | 当前为 FFmpeg 软解 + CPU `sws_scale` 路径，吞吐接近设备上限 | 后续转 #50 硬解主路径 |
+| AC-3/DTS 音频无法播放 | AVPlayer 不内置 AC-3 解码器；Native/FFmpeg 路径已接通基础送显 | 持续完善中 |
 | SMB/NFS 文件源 | 尚未实现 | Phase 2 |
 | AVMetadataExtractor 不支持远程 URL | API 20 起才有 `setUrlSource` | 待 SDK 升级 |
 | 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |

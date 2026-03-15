@@ -565,7 +565,7 @@ export class VidAllPlayerAdapter implements IPlayer {
       VidAllCorePlayerNapi.selectTrack(this._playerHandle, trackIndex);
     });
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `selectTrack 骨架调用完成: trackIndex=${trackIndex}`);
+      `selectTrack 原生调用完成: trackIndex=${trackIndex}`);
   }
 
   setSubtitleDelay(_delayMs: number): void {

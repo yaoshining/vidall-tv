@@ -950,6 +950,8 @@ static constexpr int32_t ERR_SELECT_TRACK_NOT_PREPARED = 1004;
 static constexpr int32_t ERR_PAUSE_NOT_PREPARED = 1005;
 static constexpr int32_t ERR_SEEK_NOT_PREPARED = 1006;
 static constexpr int32_t ERR_SELECT_TRACK_INVALID_INDEX = 1007;
+static constexpr int32_t ERR_SELECT_TRACK_UNSUPPORTED = 1008;
+static constexpr int32_t ERR_SELECT_TRACK_FAILED = 1009;
 
 static void ThrowTypeError(napi_env env, const char *message) {
   napi_throw_type_error(env, nullptr, message);
@@ -4206,8 +4208,53 @@ static napi_value SelectTrack(napi_env env, napi_callback_info info) {
     EmitError(state, ERR_SELECT_TRACK_INVALID_INDEX, "selectTrack failed: trackIndex must be >= -1");
     return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
   }
-  // Skeleton stage: cache selected track index only.
-  state.selectedTrackIndex = trackIndex;
+
+  if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
+    EmitError(state, ERR_SELECT_TRACK_UNSUPPORTED,
+              "selectTrack failed: FFmpeg path does not support native track switching yet");
+    return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+  }
+
+  OH_AVPlayer *avPlayer = nullptr;
+  bool wasPlaying = false;
+  int32_t previousTrackIndex = -1;
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    avPlayer = state.avPlayer;
+    wasPlaying = state.playing;
+    previousTrackIndex = state.selectedTrackIndex;
+  }
+  if (avPlayer == nullptr) {
+    EmitError(state, ERR_SELECT_TRACK_UNSUPPORTED, "selectTrack failed: avPlayer is unavailable");
+    return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+  }
+
+  if (wasPlaying) {
+    OH_AVPlayer_Pause(avPlayer);
+  }
+
+  OH_AVErrCode rc = AV_ERR_OK;
+  if (trackIndex >= 0) {
+    rc = OH_AVPlayer_SelectTrack(avPlayer, trackIndex);
+  } else if (previousTrackIndex >= 0) {
+    rc = OH_AVPlayer_DeselectTrack(avPlayer, previousTrackIndex);
+  }
+
+  if (rc != AV_ERR_OK) {
+    if (wasPlaying) {
+      OH_AVPlayer_Play(avPlayer);
+    }
+    EmitError(state, ERR_SELECT_TRACK_FAILED, "selectTrack failed: OH_AVPlayer_SelectTrack/DeselectTrack returned error");
+    return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+  }
+
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    state.selectedTrackIndex = trackIndex;
+  }
+  if (wasPlaying) {
+    OH_AVPlayer_Play(avPlayer);
+  }
   return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
 }
 
