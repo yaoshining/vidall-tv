@@ -780,6 +780,8 @@ struct NativePlayerSkeletonState {
   // PR#49 修复：新增 buffering=false 和 seekDone TSF，供媒体线程异步触发
   napi_threadsafe_function tsfOnBufferingFalse = nullptr;
   napi_threadsafe_function tsfOnSeekDone = nullptr;
+  // B6修复：FFmpeg 接管时通知 ArkTS 重置 native 就绪守卫计时器，防止 3.5s 误 fallback
+  napi_threadsafe_function tsfOnFfmpegSwitching = nullptr;
   // PR#49 修复（问题6）：per-player mutex，保护 state 字段的跨线程读写
   // 注意：std::mutex 不可拷贝/移动；unordered_map 通过节点指针操作，不需要拷贝值
   std::mutex stateMutex;
@@ -1076,6 +1078,8 @@ static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbac
   // PR#49：新增两个 TSF
   ReleaseTsfIfPresent(state.tsfOnBufferingFalse);
   ReleaseTsfIfPresent(state.tsfOnSeekDone);
+  // B6修复：释放 FFmpeg 接管通知 TSF
+  ReleaseTsfIfPresent(state.tsfOnFfmpegSwitching);
 }
 
 static bool EnsurePreparedOrEmitError(
@@ -2836,6 +2840,11 @@ static void OnAVPlayerErrorCB(OH_AVPlayer *player, int32_t errorCode,
     // FFmpeg 自身失败时，StartFfmpegDemux 内部负责触发 tsfOnError。
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                  "OnAVPlayerErrorCB: FFmpeg path taken over, suppressing tsfOnError/tsfOnBufferingFalse");
+    // B6修复：通知 ArkTS FFmpeg 已接管，让上层重置守卫计时器至 15s，
+    // 避免 3.5s 超时误触 fallbackNativeToIjk 导致 surface 被 IJK 抢占。
+    if (state->tsfOnFfmpegSwitching != nullptr) {
+      napi_call_threadsafe_function(state->tsfOnFfmpegSwitching, nullptr, napi_tsfn_nonblocking);
+    }
     return;
   }
 
@@ -3080,20 +3089,21 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
 }
 
 static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
-  size_t argc = 7;
-  napi_value args[7] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+  size_t argc = 8;
+  napi_value args[8] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
     ThrowTypeError(env, "setCallbacks failed to read args");
     return nullptr;
   }
   if (argc < 5) {
     ThrowTypeError(env,
-      "setCallbacks requires (handle, onPrepared, onError, onTimeUpdate, onCompleted[, onBufferingChange[, onSeekDone]])");
+      "setCallbacks requires (handle, onPrepared, onError, onTimeUpdate, onCompleted[, onBufferingChange[, onSeekDone[, onFfmpegSwitching]]])");
     return nullptr;
   }
   int32_t handle = 0;
   const bool hasBufferingArg = (argc >= 6);
   const bool hasSeekDoneArg = (argc >= 7);
+  const bool hasFfmpegSwitchingArg = (argc >= 8);
   if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
     ThrowTypeError(env, "setCallbacks handle must be int32");
     return nullptr;
@@ -3265,6 +3275,24 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
       },
       &state.tsfOnSeekDone);
+  }
+  // B6修复：注册 tsfOnFfmpegSwitching（可选，args[7]）
+  // FFmpeg 接管后通知 ArkTS 重置守卫计时器至 15s，防止 3.5s 超时误触 fallback。
+  if (hasFfmpegSwitchingArg) {
+    napi_valuetype argType = napi_undefined;
+    napi_typeof(env, args[7], &argType);
+    if (argType == napi_function) {
+      napi_value resName;
+      napi_create_string_utf8(env, "tsfOnFfmpegSwitching", NAPI_AUTO_LENGTH, &resName);
+      napi_create_threadsafe_function(
+        env, args[7], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+        [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+          napi_value undef;
+          napi_get_undefined(tsfEnv, &undef);
+          napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+        },
+        &state.tsfOnFfmpegSwitching);
+    }
   }
 
   // 若回调在 prepared 之后才注册，主动补发一次状态，避免上层错过时序。

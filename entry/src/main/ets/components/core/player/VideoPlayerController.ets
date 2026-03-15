@@ -393,6 +393,16 @@ export class VideoPlayerController {
         'initPlayer: 使用 VidAll Player Adapter，等待 UI 层调用 setNativeContext()');
       const nativeAdapter = new VidAllPlayerAdapter();
       nativeAdapter.setSeekDiagEnabled(this.nativeSeekDiagLogEnabled);
+      // B6修复：注册 FFmpeg 接管通知，FFmpeg 开始接管后将守卫计时器从 3.5s 延长到 15s，
+      // 防止 avformat_open_input 期间（最长 10s）提前触发 fallbackNativeToIjk。
+      const capturedSessionId = currentSessionId;
+      nativeAdapter.setFfmpegSwitchingCallback(() => {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[session=${capturedSessionId}] FFmpeg 接管信号收到，重置就绪守卫计时器为 15s`);
+        if (capturedSessionId === this.playbackSessionId) {
+          this.startNativeReadyGuard(capturedSessionId, 15000);
+        }
+      });
       adapter = nativeAdapter;
       // native 骨架阶段先复用 IJK 字幕桥：隐藏内嵌轨，仅启用外置字幕时间轴。
       this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
@@ -1415,7 +1425,7 @@ export class VideoPlayerController {
     }
   }
 
-  private startNativeReadyGuard(sessionId: number): void {
+  private startNativeReadyGuard(sessionId: number, guardMs: number = NATIVE_READY_GUARD_MS): void {
     this.clearNativeReadyGuardTimer();
     this.nativeReadyGuardTimer = setTimeout(() => {
       this.nativeReadyGuardTimer = undefined;
@@ -1437,7 +1447,7 @@ export class VideoPlayerController {
       if (currentDuration <= 0 && currentPosition <= 100) {
         this.fallbackNativeToIjk('native_no_timeline_output', 'native 未输出可播时间轴，已自动回退到 IJK 播放');
       }
-    }, NATIVE_READY_GUARD_MS);
+    }, guardMs);
   }
 
   private fallbackNativeToIjk(fallbackReason: string, userMessage: string, detailMessage: string = ''): void {

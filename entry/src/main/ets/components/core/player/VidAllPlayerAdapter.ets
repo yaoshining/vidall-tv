@@ -34,7 +34,8 @@ interface VidAllCorePlayerNapiBridge {
     onTimeUpdate: (posMs: number) => void,
     onCompleted: () => void,
     onBufferingChange: (isBuffering: boolean) => void,
-    onSeekDone: () => void
+    onSeekDone: () => void,
+    onFfmpegSwitching: () => void
   ) => void;
 }
 
@@ -85,6 +86,8 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _onSeekDoneCb?: () => void;
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
   private _onBufferingCb?: (isBuffering: boolean) => void;
+  /** B6修复：FFmpeg 接管时通知上层重置 native 就绪守卫计时器 */
+  private _onFfmpegSwitchingCb?: () => void;
   /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
   private _seekPending: boolean = false;
   /** seek 完成超时兜底：原生未在 600ms 内回调时自动触发 onSeekDone */
@@ -107,6 +110,11 @@ export class VidAllPlayerAdapter implements IPlayer {
 
   setSeekDiagEnabled(enabled: boolean): void {
     this._enableSeekDiagLog = enabled;
+  }
+
+  /** B6修复：注册 FFmpeg 接管通知回调，由上层 VideoPlayerController 调用以重置守卫计时器 */
+  setFfmpegSwitchingCallback(cb: () => void): void {
+    this._onFfmpegSwitchingCb = cb;
   }
 
   async initWithContext(videoData: VideoData, surfaceId: string, context: object, xComponentId: string): Promise<void> {
@@ -249,6 +257,13 @@ export class VidAllPlayerAdapter implements IPlayer {
           hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
             `{"event":"seek_result","backend":"native","result":"done","elapsed_ms":${seekDoneElapsed}}`);
           this._onSeekDoneCb?.();
+        },
+        () => {
+          // B6修复：FFmpeg 接管信号，通知上层重置 native 就绪守卫计时器至 15s，
+          // 避免 avformat_open_input（3-10s）期间 3.5s 守卫误触 fallbackNativeToIjk。
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `onFfmpegSwitching: handle=${currentHandle}, FFmpeg 接管，通知重置守卫计时器`);
+          this._onFfmpegSwitchingCb?.();
         }
       );
     });
