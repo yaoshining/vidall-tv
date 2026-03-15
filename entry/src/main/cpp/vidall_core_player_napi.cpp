@@ -745,7 +745,9 @@ struct FfmpegContext {
   std::atomic<int64_t> seekTargetMs{-1};
 
   // B5：反向指针，供 DemuxThreadFunc 发出 seekDone TSF；生命周期安全（state 独占拥有 ffmpegCtx）
-  NativePlayerSkeletonState *ownerState{nullptr};
+  // B5-QA fix：改为 atomic ptr，消除 StopFfmpegDemux(主线程) 写 nullptr 与
+  //            DemuxThreadFunc(demux 线程) 读+解引用之间的 data race（UB）。
+  std::atomic<NativePlayerSkeletonState *> ownerState{nullptr};
 };
 
 struct NativePlayerSkeletonState {
@@ -1468,7 +1470,16 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
     if (ctx->seekRequested.exchange(false)) {
       const int64_t targetMs = ctx->seekTargetMs.load();
       const int64_t targetUs = targetMs * 1000LL;  // AV_TIME_BASE = 1e6
-      av_seek_frame(ctx->fmtCtx, -1, targetUs, AVSEEK_FLAG_BACKWARD);
+      // B5-QA fix：检查 av_seek_frame 返回值；失败时跳过 flush/reset/seekDone，
+      //            避免在无效位置继续解码并产生误导性回调。
+      int seekRet = av_seek_frame(ctx->fmtCtx, -1, targetUs, AVSEEK_FLAG_BACKWARD);
+      if (seekRet < 0) {
+        char errBuf[AV_ERROR_MAX_STRING_SIZE];
+        av_strerror(seekRet, errBuf, sizeof(errBuf));
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "DemuxThread: av_seek_frame failed: %s", errBuf);
+        continue;
+      }
       // 清空所有 packet/frame 队列（旧数据）
       FlushFfmpegQueues(ctx);
       // 刷新解码器内部缓冲区
@@ -1479,13 +1490,20 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
       // 发出 seekDone TSF 通知 ArkTS
-      if (ctx->ownerState != nullptr) {
-        NativePlayerSkeletonState *st = ctx->ownerState;
-        std::lock_guard<std::mutex> lk(st->stateMutex);
-        st->currentTimeMs = targetMs;
+      // B5-QA fix：通过 atomic load(acquire) 读取 ownerState，消除与主线程写 nullptr 的竞态；
+      //            两次独立 load 分别保护"写 currentTimeMs"和"调用 TSF"两个临界区。
+      {
+        NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
+        if (st != nullptr) {
+          std::lock_guard<std::mutex> lk(st->stateMutex);
+          st->currentTimeMs = targetMs;
+        }
       }
-      if (ctx->ownerState != nullptr && ctx->ownerState->tsfOnSeekDone != nullptr) {
-        napi_call_threadsafe_function(ctx->ownerState->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
+      {
+        NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
+        if (st != nullptr && st->tsfOnSeekDone != nullptr) {
+          napi_call_threadsafe_function(st->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
+        }
       }
     }
 
@@ -2064,8 +2082,8 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       const double diff = videoPts - audioClock;
 
       if (diff > 0.1) {
-        // 视频超前音频 100ms 以上：等待音频跟上，最多等 500ms
-        const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 500.0));
+        // 视频超前音频 100ms 以上：等待音频跟上，最多等 200ms（B5-QA: 500→200 降低 AV sync 延迟）
+        const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 200.0));
         std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
       } else if (diff < -0.5) {
         // 视频落后音频 500ms 以上：丢弃此帧（追帧）
@@ -2638,7 +2656,9 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
   ctx->interruptFlag.store(true);
   ctx->demuxRunning.store(false);
   // B5：清除 ownerState 反向指针，防止 join 后悬挂访问（demux 线程循环已由 demuxRunning=false 终止）
-  ctx->ownerState = nullptr;
+  // B5-QA fix：atomic store(release) 保证主线程写 nullptr 对 demux 线程的 load(acquire) 可见，
+  //            消除与 DemuxThreadFunc 读+解引用之间的 data race。
+  ctx->ownerState.store(nullptr, std::memory_order_release);
 
   // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待）
   {
