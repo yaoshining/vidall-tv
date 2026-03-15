@@ -1883,6 +1883,13 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  "FfmpegInitEGL: eglInitialize failed err=0x%{public}x", eglGetError());
     return false;
   }
+  // 修复 #48-B6: HarmonyOS 必须显式绑定 EGL client API，否则 eglMakeCurrent 后
+  // GL dispatch table 不挂载，所有 GL 函数（含 glCreateShader）均走 no-op 返回 0
+  if (!eglBindAPI(EGL_OPENGL_ES_API)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitEGL: eglBindAPI failed err=0x%{public}x", eglGetError());
+    return false;
+  }
   EGLint attribs[] = {
       EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
@@ -2122,6 +2129,8 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   }
 
   // 2. 将 EGL context 绑定到当前线程
+  // 修复 #48-B6: 线程级显式 bind API，确保此线程的 GL dispatch table 正确挂载
+  eglBindAPI(EGL_OPENGL_ES_API);
   if (!eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface,
                       ctx->eglSurface, ctx->eglContext)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
@@ -2130,7 +2139,8 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     return;
   }
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "RenderThreadFunc: eglMakeCurrent OK, GL context current");
+               "RenderThreadFunc: eglMakeCurrent OK, GL context current ctx=%{public}p",
+               static_cast<void*>(eglGetCurrentContext()));
 
   // 3. 初始化 GL 资源（shader/纹理/VBO）
   if (!FfmpegInitGLResources(ctx)) {
