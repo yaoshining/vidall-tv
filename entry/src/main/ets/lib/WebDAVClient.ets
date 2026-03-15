@@ -1321,12 +1321,7 @@ export class WebDAVClient {
       console.info('Testing path:', basePath);
       const encodedBasePath = this.encodeURIPath(basePath);
 
-      if (this.isHttps) {
-        // HTTPS：用 http 模块发 OPTIONS 请求（RequestMethod 枚举支持），快速探测连通性和认证
-        return await this.testConnectionHttps(encodedBasePath);
-      }
-
-      // HTTP：用 PROPFIND（TCPSocket）
+      // HTTP/HTTPS 统一走 PROPFIND（内部已是 native libcurl 优先 + fallback）
       const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
   <D:prop>
@@ -1366,6 +1361,12 @@ export class WebDAVClient {
         return { success: true, message: '连接成功' };
       } catch (error) {
         console.error('Connection test failed:', JSON.stringify(error));
+
+        // HTTPS 在 PROPFIND 探测失败时，再回退 OPTIONS 判断是否是网络/证书层问题
+        if (this.isHttps) {
+          return await this.testConnectionHttps(encodedBasePath);
+        }
+
         return { success: false, message: '无法连接到服务器，请检查服务器地址和网络连接' };
       }
     } catch (error) {
@@ -1375,7 +1376,7 @@ export class WebDAVClient {
   }
 
   /**
-   * HTTPS 连接测试：先用 OPTIONS，再用 POST+Override 探测 WebDAV 支持
+   * HTTPS 回退连通性测试：当 PROPFIND 探测失败时，用 OPTIONS 判断基础网络/鉴权状态
    */
   private async testConnectionHttps(encodedBasePath: string): Promise<TestConnectionResult> {
     const isStandardPort = this.port === 443;
