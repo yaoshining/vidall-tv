@@ -15,6 +15,9 @@ description: "GitHub 工作流指令。用于 git add、git commit、git push、
 ## 提交与 PR 操作
 
 - 提交前先确认只包含当前任务相关文件，不要误带工作区中无关的未跟踪文件
+- 每个阶段性任务必须在独立分支上开发，禁止多个阶段任务混用同一开发分支
+- 阶段性任务开始时先创建并切换分支（建议命名：`feat/issue-<编号>-<阶段简述>`）
+- 每次有阶段性进展（可验证的小里程碑）必须执行一次 `git commit` 并 `git push` 到对应远端分支
 - 能分步执行时，不要把 `git add`、`git commit`、`git push`、`gh pr create` 拼成一条超长命令
 - 创建 PR 时优先分 3 步执行：先 `git push`，再准备标题/正文，最后 `gh pr create`
 - 若 PR 正文较长，优先使用 `gh pr create --body-file <file>`，不要内联超长正文

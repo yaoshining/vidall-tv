@@ -693,12 +693,16 @@ export struct SeasonDetailPage {
       // ── 音轨 / 字幕轨 ──────────────────────────
       let presetAudioTracks: PresetAudioTrack[] = [];
       let presetSubtitleTracks: PresetSubtitleTrack[] = [];
+      let durationHintMs: number = episode.durationMs ?? 0;
       let dbHasAudioData = false;
       let dbHasSubtitleData = false;
 
       try {
         const videoEntity = await db.getVideoByPath(episode.filePath);
         if (videoEntity) {
+          if (videoEntity.durationMs !== undefined && videoEntity.durationMs !== null && videoEntity.durationMs > 0) {
+            durationHintMs = videoEntity.durationMs;
+          }
           if (videoEntity.audioTracksJson !== null && videoEntity.audioTracksJson !== undefined) {
             dbHasAudioData = true;
             if (videoEntity.audioTracksJson.length > 0) {
@@ -736,10 +740,14 @@ export struct SeasonDetailPage {
         console.warn('[SeasonDetailPage] 数据库读取轨道失败，将 fallback 到 ffprobe: ' + JSON.stringify(e));
       }
 
-      if (!dbHasAudioData || !dbHasSubtitleData) {
+      if (!dbHasAudioData || !dbHasSubtitleData || durationHintMs <= 0) {
         try {
-          const probeResult = await FfprobeUtil.probe(encodeURI(fullUrl), httpHeader, 15000);
+          // getFullUrl() 已完成编码，这里禁止再次 encodeURI，避免 % -> %25。
+          const probeResult = await FfprobeUtil.probe(fullUrl, httpHeader, 15000);
           if (probeResult.success) {
+            if (durationHintMs <= 0 && probeResult.durationMs > 0) {
+              durationHintMs = probeResult.durationMs;
+            }
             if (!dbHasAudioData) {
               for (let i = 0; i < probeResult.audioTracks.length; i++) {
                 const t = probeResult.audioTracks[i];
@@ -772,9 +780,11 @@ export struct SeasonDetailPage {
 
       const episodeName = await this.resolveEpisodeName(db, episode);
       const param: PlayerPageParam = {
-        url: encodeURI(fullUrl),
+        // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
+        url: fullUrl,
         httpHeader,
         title: this.buildPlayerTitle(episode, episodeName),
+        durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
         videoId: episode.id,
         seriesProviderId: this.seriesEntity?.providerId ?? '',
         seasonNumber: episode.seasonNumber ?? 0,

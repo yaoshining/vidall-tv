@@ -7,6 +7,7 @@ import { media } from "@kit.MediaKit"
 struct VideoControls {
   @Require @Param videoController: VideoPlayerController
   @Require @Param dialogController: CustomDialogController
+  @Require @Param openSettings: () => void
   closeTimer?: number
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
@@ -14,6 +15,7 @@ struct VideoControls {
   @Local showAudioMenu: boolean = false
   @Local audioButtonFocused: boolean = false
   @Local subtitleButtonFocused: boolean = false
+  @Local settingButtonFocused: boolean = false
   @Local sliderHovered: boolean = false
   @Local sliderFocused: boolean = false
   // ── 进度条 hover tooltip ──
@@ -291,6 +293,28 @@ struct VideoControls {
               clearTimeout(this.closeTimer)
             })
           }
+
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.gearshape'))
+              .fontColor([Color.White])
+              .fontSize(22)
+            Text('设置')
+              .fontSize(16)
+              .fontColor(Color.White)
+          }
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor(this.settingButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
+          .borderRadius(20)
+          .border({ width: this.settingButtonFocused ? 2 : 1, color: this.settingButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
+          .focusable(true)
+          .onFocus(() => { this.settingButtonFocused = true })
+          .onBlur(() => { this.settingButtonFocused = false })
+          .onClick(() => {
+            this.showSubtitleMenu = false
+            this.showAudioMenu = false
+            clearTimeout(this.closeTimer)
+            this.openSettings()
+          })
         }
         .width("40%")
         .margin({ right: 8 })
@@ -518,6 +542,7 @@ struct VideoControls {
 export struct VideoControlsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
+  @Require onOpenSettings: () => void
   @State opacityValue: number = 0;
 
   aboutToAppear(): void {
@@ -533,8 +558,409 @@ export struct VideoControlsDialog {
   build() {
     VideoControls({
       videoController: this.videoController,
-      dialogController: this.controller
+      dialogController: this.controller,
+      openSettings: this.onOpenSettings
     })
       .opacity(this.opacityValue)
+  }
+}
+
+@CustomDialog
+export struct PlayerSettingsDialog {
+  controller: CustomDialogController
+  @Require videoController: VideoPlayerController
+  @Require onOpenSubtitleSelector: () => void
+  @State selectedPlaybackRateIndex: number = 1
+  @State selectedScreenFitIndex: number = 0
+
+  @Builder
+  private SettingsChip(label: string, selected: boolean) {
+    Text(label)
+      .fontSize(26)
+      .fontColor(selected ? '#F3F7FF' : '#D7DCE7')
+      .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+      .backgroundColor(selected ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+      .borderRadius("50%")
+      .border({ width: selected ? 2 : 1, color: selected ? '#fffefe' : '#45ffffff' })
+      .shadow({ radius: selected ? 8 : 0, color: selected ? '#33597FB8' : '#00ffffff' })
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.BottomStart }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor(Color.Transparent)
+
+      Scroll() {
+        Column({ space: 28 }) {
+          Column({ space: 12 }) {
+            Text('倍速播放')
+              .fontSize(32)
+              .fontColor('#EFF2FB')
+              .fontWeight(FontWeight.Medium)
+              .alignSelf(ItemAlign.Start)
+
+            Row({ space: 12 }) {
+              Row() {
+                this.SettingsChip('0.75x', this.selectedPlaybackRateIndex === 0)
+              }
+              .onClick(() => {
+                this.selectedPlaybackRateIndex = 0
+              })
+
+              Row() {
+                this.SettingsChip('1.0x', this.selectedPlaybackRateIndex === 1)
+              }
+              .onClick(() => {
+                this.selectedPlaybackRateIndex = 1
+              })
+            }
+            .justifyContent(FlexAlign.Start)
+            .width('100%')
+          }
+
+
+          Column({ space: 12 }) {
+            Text('画面比例')
+              .fontSize(32)
+              .fontColor('#EFF2FB')
+              .fontWeight(FontWeight.Medium)
+              .alignSelf(ItemAlign.Start)
+
+            Row({ space: 12 }) {
+              Row() {
+                this.SettingsChip('适应内容', this.selectedScreenFitIndex === 0)
+              }
+              .onClick(() => {
+                this.selectedScreenFitIndex = 0
+              })
+
+              Row() {
+                this.SettingsChip('铺满全屏', this.selectedScreenFitIndex === 1)
+              }
+              .onClick(() => {
+                this.selectedScreenFitIndex = 1
+              })
+            }
+            .justifyContent(FlexAlign.Start)
+            .width('100%')
+          }
+
+          Column({ space: 12 }) {
+            Text('字幕管理')
+              .fontSize(32)
+              .fontColor('#EFF2FB')
+              .fontWeight(FontWeight.Medium)
+              .alignSelf(ItemAlign.Start)
+
+            Row() {
+              this.SettingsChip('选择字幕', this.videoController.activeSubtitleIndex >= 0)
+            }
+            .onClick(() => {
+              this.onOpenSubtitleSelector()
+            })
+          }
+        }
+        .padding({ left: 26, right: 26, top: 18, bottom: 28 })
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
+      }
+      .scrollBar(BarState.Off)
+      .width('100%')
+      .height('50%')
+      .backgroundColor('#090E1922')
+      .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
+    }
+    .width('100%')
+    .height('100%')
+  }
+}
+
+@CustomDialog
+export struct SubtitleSelectorDrawerDialog {
+  controller: CustomDialogController
+  @Require videoController: VideoPlayerController
+  @State panelOffsetX: number = 72
+  @State panelOpacity: number = 0
+
+  aboutToAppear(): void {
+    this.panelOffsetX = 72
+    this.panelOpacity = 0
+    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
+      this.panelOffsetX = 0
+      this.panelOpacity = 1
+    })
+  }
+
+  private getCurrentSubtitleName(): string {
+    const activeIdx = this.videoController.activeSubtitleIndex
+    if (activeIdx < 0) {
+      return '已关闭字幕'
+    }
+    if (activeIdx < this.videoController.allSubtitleTracks.length) {
+      return this.videoController.allSubtitleTracks[activeIdx].displayName
+    }
+    return '未选择字幕'
+  }
+
+  private getExternalSubtitleDownloadCount(trackIndex: number): string {
+    let externalOrder = 0
+    for (let i = 0; i <= trackIndex && i < this.videoController.allSubtitleTracks.length; i++) {
+      if (this.videoController.allSubtitleTracks[i].kind === 'external') {
+        externalOrder++
+      }
+    }
+
+    if (externalOrder === 1) {
+      return '12.4k'
+    }
+    if (externalOrder === 2) {
+      return '3.1k'
+    }
+    return '1.2k'
+  }
+
+  private getLanguageTag(name: string): string {
+    const lower = name.toLowerCase()
+    if (lower.includes('中文') || lower.includes('chs') || lower.includes('cht') || lower.includes('chinese')) {
+      return '中文'
+    }
+    if (lower.includes('日文') || lower.includes('jpn') || lower.includes('japanese') || lower.includes('日本')) {
+      return '日文'
+    }
+    if (lower.includes('英文') || lower.includes('eng') || lower.includes('english')) {
+      return 'EN'
+    }
+    return 'EN'
+  }
+
+  private getLanguageBadgeTextColor(tag: string): string {
+    if (tag === '中文') {
+      return '#93C5FD'
+    }
+    if (tag === '日文') {
+      return '#FCD34D'
+    }
+    return '#93C5FD'
+  }
+
+  private getLanguageBadgeFillColor(tag: string): string {
+    if (tag === '中文') {
+      return 'rgba(29, 78, 216, 0.25)'
+    }
+    if (tag === '日文') {
+      return 'rgba(120, 53, 15, 0.25)'
+    }
+    return 'rgba(29, 78, 216, 0.31)'
+  }
+
+  private getAvailableSubtitleCount(): number {
+    const base = this.videoController.allSubtitleTracks.length - (this.videoController.activeSubtitleIndex >= 0 ? 1 : 0)
+    return base + 1
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopEnd }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor(Color.Transparent)
+        .onClick(() => {
+          this.controller.close()
+        })
+
+      Column({ space: 16 }) {
+        Row() {
+          Text('字幕')
+            .fontSize(34)
+            .fontColor('#F3F6FB')
+            .fontWeight(FontWeight.Bold)
+        }
+        .height(48)
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+
+        Text('当前字幕')
+          .fontSize(17)
+          .fontColor('#97A9CD')
+
+        Row({ space: 12 }) {
+          if (this.videoController.activeSubtitleIndex >= 0) {
+            Row() {
+              Text(this.getLanguageTag(this.getCurrentSubtitleName()))
+                .fontSize(13)
+                .fontWeight(600)
+                .fontColor(this.getLanguageBadgeTextColor(this.getLanguageTag(this.getCurrentSubtitleName())))
+            }
+            .height(26)
+            .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .borderRadius(13)
+            .backgroundColor(this.getLanguageBadgeFillColor(this.getLanguageTag(this.getCurrentSubtitleName())))
+          }
+
+          Text(this.getCurrentSubtitleName())
+            .fontSize(18)
+            .fontColor('#FBFDFF')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+
+          if (this.videoController.activeSubtitleIndex >= 0) {
+            Text('✓')
+              .fontSize(20)
+              .fontColor('#4ADE80')
+          }
+        }
+        .width('100%')
+        .height(68)
+        .padding({ left: 16, right: 16 })
+        .justifyContent(FlexAlign.SpaceBetween)
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor('rgba(255, 255, 255, 0.12)')
+        .borderRadius(16)
+        .border({
+          width: this.videoController.activeSubtitleIndex >= 0 ? 2 : 1,
+          color: this.videoController.activeSubtitleIndex >= 0 ? '#FFFEFE' : 'rgba(255, 255, 255, 0.19)'
+        })
+
+        Row({ space: 12 }) {
+          Row() {
+            Text('关闭字幕')
+              .fontSize(18)
+              .fontColor('#DDE4EE')
+          }
+          .height(48)
+          .padding({ left: 18, right: 18 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('rgba(255, 255, 255, 0.07)')
+          .borderRadius(24)
+          .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
+          .onClick(() => {
+            this.videoController.switchSubtitleTrack(-1)
+          })
+
+          Row() {
+            Text('⏱ 时间调整')
+              .fontSize(18)
+              .fontColor('#DDE4EE')
+          }
+          .height(48)
+          .padding({ left: 18, right: 18 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('rgba(255, 255, 255, 0.07)')
+          .borderRadius(24)
+          .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
+        }
+        .width('100%')
+
+        Divider()
+          .strokeWidth(1)
+          .color('rgba(255, 255, 255, 0.15)')
+
+        Column({ space: 8 }) {
+          Text(`其他可用字幕 (${this.getAvailableSubtitleCount()})`)
+            .fontSize(17)
+            .fontColor('#97A9CD')
+
+          Scroll() {
+            Column({ space: 8 }) {
+              ForEach(this.videoController.allSubtitleTracks, (item: SubtitleTrackItem, index: number) => {
+                if (index !== this.videoController.activeSubtitleIndex) {
+                  Row({ space: 10 }) {
+                    Row() {
+                      Text(this.getLanguageTag(item.displayName))
+                        .fontSize(13)
+                        .fontWeight(600)
+                        .fontColor(this.getLanguageBadgeTextColor(this.getLanguageTag(item.displayName)))
+                    }
+                    .height(24)
+                    .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+                    .justifyContent(FlexAlign.Center)
+                    .alignItems(VerticalAlign.Center)
+                    .borderRadius(12)
+                    .backgroundColor(this.getLanguageBadgeFillColor(this.getLanguageTag(item.displayName)))
+
+                    Text(item.displayName)
+                      .fontSize(17)
+                      .fontColor('#EAF0F7')
+                      .maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .layoutWeight(1)
+
+                    if (item.kind === 'external') {
+                      Text(`↓ ${this.getExternalSubtitleDownloadCount(index)}`)
+                        .fontSize(13)
+                        .fontColor('#97A9CD')
+                    }
+                  }
+                  .width('100%')
+                  .height(62)
+                  .padding({ top: 12, bottom: 12, left: 14, right: 14 })
+                  .alignItems(VerticalAlign.Center)
+                  .backgroundColor('rgba(255, 255, 255, 0.05)')
+                  .borderRadius(14)
+                  .onClick(() => {
+                    this.videoController.switchSubtitleTrack(index)
+                  })
+                }
+              })
+
+              Row({ space: 10 }) {
+                Text('无字幕')
+                  .fontSize(17)
+                  .fontColor('#97A9CD')
+              }
+              .width('100%')
+              .height(50)
+              .padding({ top: 12, bottom: 12, left: 14, right: 14 })
+              .alignItems(VerticalAlign.Center)
+              .backgroundColor('rgba(255, 255, 255, 0.03)')
+              .borderRadius(14)
+              .onClick(() => {
+                this.videoController.switchSubtitleTrack(-1)
+              })
+            }
+            .width('100%')
+          }
+          .align(Alignment.Top)
+          .scrollBar(BarState.Off)
+          .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
+          .width('100%')
+          .layoutWeight(1)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Row({ space: 8 }) {
+          Text('搜索更多字幕')
+            .fontSize(18)
+            .fontColor('#B0C4DE')
+          Text('→')
+            .fontSize(18)
+            .fontColor('#B0C4DE')
+        }
+        .width('100%')
+        .height(52)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor('rgba(255, 255, 255, 0.03)')
+        .borderRadius(26)
+        .border({ width: 1, color: 'rgba(255, 255, 255, 0.15)' })
+      }
+      .width('33.33%')
+      .height('100%')
+      .padding(32)
+      .backgroundColor('rgba(5, 10, 20, 0.91)')
+      .offset({ x: this.panelOffsetX })
+      .opacity(this.panelOpacity)
+    }
+    .width('100%')
+    .height('100%')
   }
 }

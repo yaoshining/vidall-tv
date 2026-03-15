@@ -1,6 +1,8 @@
 import { describe, it, expect } from '@ohos/hypium';
+import buffer from '@ohos.buffer';
 import {
   AvSubtitleBridgeAdapter,
+  decodeSubtitlePayload,
   IjkSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter
 } from '../main/ets/components/core/player/SubtitleBridgeAdapter';
@@ -45,6 +47,7 @@ class MockPlayer implements IPlayer {
   onCompleted(_callback: () => void): void {}
   onStopped(_callback: () => void): void {}
   onTimeUpdate(_callback: (currentTime: number) => void): void {}
+  onBuffering(_callback: (isBuffering: boolean) => void): void {}
   onError(_callback: (error: Error) => void): void {}
   onUnsupportedFormat(_callback: () => void): void {}
   onSeekDone(_callback: () => void): void {}
@@ -116,6 +119,52 @@ export default function subtitleBridgeAdapterTest() {
       expect(state.allSubtitleTracks.length).assertEqual(0);
       expect(state.currentSubtitleText).assertEqual('');
       expect(state.subtitleDelayMs).assertEqual(0);
+      done();
+    });
+
+    it('decodeSubtitlePayload: ArrayBuffer UTF-8 中文字幕可正确解码', 0, (done: () => void) => {
+      const source = '因为彼此 我们都受尽了折磨';
+      const utf8 = buffer.from(source, 'utf-8');
+      const arrayBuffer = utf8.buffer.slice(utf8.byteOffset, utf8.byteOffset + utf8.length) as ArrayBuffer;
+
+      const decoded = decodeSubtitlePayload(arrayBuffer);
+
+      expect(decoded).assertEqual(source);
+      done();
+    });
+
+    it('decodeSubtitlePayload: 错误转成字符串的 UTF-8 中文字幕可恢复', 0, (done: () => void) => {
+      const source = '因为彼此 我们都受尽了折磨';
+      const utf8 = buffer.from(source, 'utf-8');
+      let mojibake = '';
+      for (let i = 0; i < utf8.length; i++) {
+        mojibake += String.fromCharCode(utf8[i]);
+      }
+
+      const decoded = decodeSubtitlePayload(mojibake);
+
+      expect(decoded).assertEqual(source);
+      done();
+    });
+
+    it('decodeSubtitlePayload: Uint8Array 带偏移时仍能正确解码 UTF-8 中文字幕', 0, (done: () => void) => {
+      const source = '因为彼此 我们都受尽了折磨';
+      const utf8 = buffer.from(source, 'utf-8');
+      const merged = new Uint8Array(utf8.length + 8);
+      for (let i = 0; i < 4; i++) {
+        merged[i] = 0xFF;
+      }
+      for (let i = 0; i < utf8.length; i++) {
+        merged[4 + i] = utf8[i];
+      }
+      for (let i = utf8.length + 4; i < merged.length; i++) {
+        merged[i] = 0xEE;
+      }
+
+      const view = merged.subarray(4, 4 + utf8.length);
+      const decoded = decodeSubtitlePayload(view);
+
+      expect(decoded).assertEqual(source);
       done();
     });
   });

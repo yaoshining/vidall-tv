@@ -72,4 +72,6 @@ export interface IPlayer {
   onUnsupportedFormat(callback: () => void): void;
   onSeekDone(callback: () => void): void;
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void;
+  /** 缓冲状态变化回调：true=开始缓冲/加载，false=缓冲结束可播。不支持的后端可留空桩。 */
+  onBuffering(callback: (isBuffering: boolean) => void): void;
 }

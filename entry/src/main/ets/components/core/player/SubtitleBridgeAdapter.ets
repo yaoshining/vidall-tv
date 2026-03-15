@@ -18,6 +18,31 @@ function tryDecode(bytes: Uint8Array, encoding: string): string {
   return decoder.decodeWithStream(bytes);
 }
 
+function buildByteArrayFromString(text: string): Uint8Array | null {
+  if (text.length === 0) {
+    return new Uint8Array(0);
+  }
+
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0xFF) {
+      return null;
+    }
+    bytes[i] = code;
+  }
+  return bytes;
+}
+
+function toExactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const offset = bytes.byteOffset;
+  const length = bytes.byteLength;
+  if (offset === 0 && length === bytes.buffer.byteLength) {
+    return bytes.buffer as ArrayBuffer;
+  }
+  return bytes.buffer.slice(offset, offset + length) as ArrayBuffer;
+}
+
 function sanitizeUrlForLog(url: string): string {
   const queryIndex = url.indexOf('?');
   const noQueryUrl = queryIndex >= 0 ? url.substring(0, queryIndex) : url;
@@ -95,6 +120,39 @@ function scoreChineseReadability(text: string): number {
     // 控制字符（保留换行与制表）
     if ((code < 0x20 && code !== 0x0A && code !== 0x0D && code !== 0x09) || code === 0x7F) {
       score -= 8;
+    }
+  }
+
+  return score;
+}
+
+function scoreSubtitleTextReadability(text: string): number {
+  if (text.length === 0) {
+    return -999999;
+  }
+
+  let score = scoreChineseReadability(text);
+  const sampleLen = Math.min(text.length, 4000);
+  const mojibakeMarkers: string[] = ['Ã', 'Â', 'â', 'ð', '¤', '¦'];
+
+  for (let i = 0; i < sampleLen; i++) {
+    const code = text.charCodeAt(i);
+    if ((code >= 0x20 && code <= 0x7E) || code === 0x0A || code === 0x0D || code === 0x09) {
+      score += 1;
+      continue;
+    }
+    if (code >= 0x80 && code <= 0x9F) {
+      score -= 10;
+      continue;
+    }
+  }
+
+  for (let i = 0; i < mojibakeMarkers.length; i++) {
+    const marker = mojibakeMarkers[i];
+    let idx = text.indexOf(marker);
+    while (idx >= 0 && idx < sampleLen) {
+      score -= 4;
+      idx = text.indexOf(marker, idx + 1);
     }
   }
 
@@ -188,6 +246,12 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
   if (gbkOk && big5Ok) {
     const gbkScore = scoreChineseReadability(gbkText);
     const big5Score = scoreChineseReadability(big5Text);
+    const bestScore = gbkScore > big5Score ? gbkScore : big5Score;
+    if (bestScore < 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[decodeSubtitleBytes] gbk/big5 评分均低于 0 (gbk=${gbkScore}, big5=${big5Score})，回退 utf-8`);
+      return tryDecode(bytes, 'utf-8');
+    }
     const preferBig5 = big5Score > gbkScore;
     const selectedEncoding = preferBig5 ? 'big5' : 'gbk';
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -211,6 +275,39 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
   hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
     '[decodeSubtitleBytes] gbk/big5 均不可用，回退 utf-8');
   return tryDecode(bytes, 'utf-8');
+}
+
+export function decodeSubtitlePayload(payload: Object | string | ArrayBuffer): string {
+  if (typeof payload === 'string') {
+    const originalText = payload;
+    const rawBytes = buildByteArrayFromString(originalText);
+    if (rawBytes === null) {
+      return originalText;
+    }
+
+    const recoveredText = decodeSubtitleBytes(rawBytes.buffer as ArrayBuffer);
+    const originalScore = scoreSubtitleTextReadability(originalText);
+    const recoveredScore = scoreSubtitleTextReadability(recoveredText);
+    if (recoveredScore > originalScore) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[decodeSubtitlePayload] 字符串恢复成功 originalScore=${originalScore} recoveredScore=${recoveredScore}`);
+      return recoveredText;
+    }
+    return originalText;
+  }
+
+  if (payload instanceof ArrayBuffer) {
+    return decodeSubtitleBytes(payload);
+  }
+
+  if (payload instanceof Uint8Array) {
+    const exactBuffer = toExactArrayBuffer(payload);
+    return decodeSubtitleBytes(exactBuffer);
+  }
+
+  hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+    `[decodeSubtitlePayload] 未识别的响应类型=${typeof payload}`);
+  return '';
 }
 
 export interface SubtitleTrackItem {
@@ -574,7 +671,7 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           reject(createHttpBusinessError(resp.responseCode, url));
           return;
         }
-        const body = decodeSubtitleBytes(resp.result as ArrayBuffer);
+        const body = decodeSubtitlePayload(resp.result);
         resolve(SrtParser.parse(body));
       });
     });
@@ -599,7 +696,7 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
           reject(createHttpBusinessError(resp.responseCode, url));
           return;
         }
-        const body = decodeSubtitleBytes(resp.result as ArrayBuffer);
+        const body = decodeSubtitlePayload(resp.result);
         resolve(AssFileParser.parse(body));
       });
     });

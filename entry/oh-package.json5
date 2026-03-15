@@ -6,7 +6,7 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "@sj/ffmpeg": "^2.0.2"
+    "libvidall_core_player_napi.so": "file:./src/main/cpp/types/libvidall_core_player_napi"
   }
 }
 

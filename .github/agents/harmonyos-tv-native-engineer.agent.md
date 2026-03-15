@@ -89,3 +89,89 @@ user-invocable: true
 - 每次大块 patch 后，优先做文件级编译错误检查（Problems / `get_errors`），先清作用域错误，再清类型错误，能显著降低排障时间。
 - Promise 链上的 `.catch((e) => {})`、`.then((v) => {})` 回调参数同样可能触发 ArkTS 的 `arkts-no-any-unknown` 推断告警；若参数未使用，必须省略为 `.catch(() => {})`，若需要使用，先抽成显式类型的辅助方法而不是直接内联匿名参数。
 - `aboutToAppear`、`aboutToDisappear` 这类生命周期应定义为 `@ComponentV2 struct` 的方法，不要链在 `NavDestination()` 返回的属性对象上；`NavDestinationAttribute` 不支持这些生命周期方法，链式调用会直接编译失败。
+
+## 本仓库编译验证命令基线（持久记忆）
+
+以下内容用于 `VidAll_TV` 仓库（HarmonyOS 6.0.2）本地编译与验证。若用户明确要求“直接编译并修错”，优先按本节执行。
+
+### 一、环境基线
+
+- 工程根目录：`/Users/yaoshining/DevEcoStudioProjects/VidAll_TV`
+- SDK 基线：DevEco Studio 内置 SDK（优先使用 IDE 同源路径）
+- 建议 shell：`zsh -f`（避免 `.zshrc` 噪音干扰）
+
+关键环境变量：
+
+```bash
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+```
+
+### 二、标准命令（按顺序）
+
+1) 同步工程
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--sync -p product=default --analyze=normal --parallel --incremental --daemon'
+```
+
+2) 构建 HAP（优先用于“编译并修错”）
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default -p product=default assembleHap \
+--analyze=normal --parallel --incremental --daemon'
+```
+
+3) 本地单测构建（当前已验证可用）
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default \
+-p unit.test.replace.page=../../../.test/testability/pages/Index \
+-p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+-p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon'
+```
+
+4) 查看模块任务（任务不存在时先执行）
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+tasks --mode module -p module=entry@default'
+```
+
+### 三、已确认事实
+
+- `UnitTestBuild` 可成功，用于验证本地单测编译链路。
+- `UnitTest` 任务在当前参数下不存在（会报 `Task ['UnitTest'] was not found`）。
+- 用 `... | tail` 时，`$?` 是 `tail` 退出码，不是 hvigor 退出码。
+
+### 四、退出码采集规范
+
+优先不要通过管道取退出码；如必须管道，使用 `pipefail` + `pipestatus`：
+
+```bash
+zsh -f -c 'set -o pipefail; your_hvigor_command 2>&1 | tail -n 40; echo HVIGOR_EXIT:${pipestatus[1]}'
+```

@@ -1,7 +1,11 @@
 import { VideoPlayer } from "../../components/core/player";
 import { VideoDataType } from "../../components/core/player/Constants";
 import { VideoData, PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
-import { VideoPlayerController } from "../../components/core/player/VideoPlayerController";
+import {
+  VideoPlayerController,
+  type PlayerBackend,
+  type UnsupportedFormatFallback
+} from "../../components/core/player/VideoPlayerController";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { millisecondsToTime } from "../../utils/TimeUtil";
@@ -13,6 +17,8 @@ export interface PlayerPageParam {
   url?: string;
   httpHeader?: Record<string, string>;
   title?: string;
+  /** 视频时长提示（毫秒），用于 native 骨架阶段提供进度上限 */
+  durationHintMs?: number;
   /** 预置音轨列表（可选），用于 EAC-3/AC-3 等 AVPlayer 无法探测的格式 */
   presetAudioTracks?: PresetAudioTrack[];
   /** 预置字幕轨列表（可选），来自 ffprobe 探测结果，供 ijkplayer 后端字幕枚举 */
@@ -25,6 +31,10 @@ export interface PlayerPageParam {
   seasonNumber?: number;
   /** 集号，电影为 0 */
   episodeNumber?: number;
+  /** 可选：强制指定播放后端（当前建议 avplayer / ijkplayer / native） */
+  preferredBackend?: PlayerBackend;
+  /** 可选：AVPlayer 不支持格式时的自动回退后端 */
+  unsupportedFormatFallback?: UnsupportedFormatFallback;
 }
 
 @ComponentV2
@@ -38,6 +48,15 @@ export struct PlayerPage {
   @Local savedPositionMs: number = 0
   @Local totalDurationMs: number = 0
   private pendingSeekMs: number = -1
+
+  private getBackendDebugText(): string {
+    const backendText = `backend=${this.videoPlayerController.backend}`;
+    const reason = this.videoPlayerController.lastErrorMessage;
+    if (reason.length === 0) {
+      return backendText;
+    }
+    return `${backendText} | ${reason}`;
+  }
 
   static PAGE_NAME = 'player'
 
@@ -137,6 +156,18 @@ export struct PlayerPage {
         }
 
         this.ResumeDialog()
+
+        Text(this.getBackendDebugText())
+          .fontSize(12)
+          .fontColor('#E6FFFFFF')
+          .backgroundColor('#66000000')
+          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          .borderRadius(4)
+          .alignRules({
+            top: { anchor: '__container__', align: VerticalAlign.Top },
+            left: { anchor: '__container__', align: HorizontalAlign.Start }
+          })
+          .margin({ top: 20, left: 20 })
       }
       .height('100%')
       .width('100%')
@@ -149,6 +180,15 @@ export struct PlayerPage {
 
       let pageParam = context.pathInfo.param as PlayerPageParam
       if (pageParam) {
+        if (pageParam.preferredBackend) {
+          this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
+            ? 'ijkplayer'
+            : pageParam.preferredBackend;
+        }
+        if (pageParam.unsupportedFormatFallback) {
+          this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
+        }
+
         if (pageParam.url) {
           this.videoData = {
             type: VideoDataType.URL,
@@ -163,6 +203,9 @@ export struct PlayerPage {
         if (this.videoData) {
           this.videoData.httpHeader = pageParam.httpHeader
           this.videoData.name = pageParam.title
+          if (pageParam.durationHintMs !== undefined && pageParam.durationHintMs > 0) {
+            this.videoData.durationHintMs = pageParam.durationHintMs
+          }
           if (pageParam.presetAudioTracks && pageParam.presetAudioTracks.length > 0) {
             this.videoData.presetAudioTracks = pageParam.presetAudioTracks
           }

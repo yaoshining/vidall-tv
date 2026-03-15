@@ -550,6 +550,14 @@ export struct MediaLibraryTab {
   }
 
   private async startScan(): Promise<void> {
+    await this.runScan(false);
+  }
+
+  private async startIncrementalScan(): Promise<void> {
+    await this.runScan(true);
+  }
+
+  private async runScan(incremental: boolean): Promise<void> {
     if (this.isScanning) { return; }
     this.isScanning = true;
     try {
@@ -563,17 +571,20 @@ export struct MediaLibraryTab {
         });
       }
 
-      const result = await VideoScannerUtil.scan(context, scrapeClient);
-      console.info(`[MediaLibraryTab] 扫描完成，共 ${result.totalVideos} 个视频，耗时 ${result.elapsedMs}ms`);
+      const result = await VideoScannerUtil.scan(context, scrapeClient, { incremental });
+      console.info(
+        `[MediaLibraryTab] ${incremental ? '增量扫描' : '扫描'}完成，共 ${result.totalVideos} 个视频，` +
+        `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，耗时 ${result.elapsedMs}ms`
+      );
       await this.model.reload();
       promptAction.showToast({
-        message: `扫描完成，共 ${result.totalVideos} 个视频`
+        message: `${incremental ? '增量扫描' : '扫描'}完成：处理 ${result.processedVideos}，跳过 ${result.skippedVideos}`
       });
     } catch (e) {
       const err = e as Error;
-      console.error(`[MediaLibraryTab] 扫描异常: ${err.message}`);
+      console.error(`[MediaLibraryTab] ${incremental ? '增量扫描' : '扫描'}异常: ${err.message}`);
       promptAction.showToast({
-        message: '扫描失败: ' + err.message
+        message: `${incremental ? '增量扫描' : '扫描'}失败: ` + err.message
       });
     } finally {
       this.isScanning = false;
@@ -794,7 +805,8 @@ export struct MediaLibraryTab {
           baseUrl,
           username: config['username'] ?? '',
           password: config['password'] ?? '',
-          timeout: 30000
+          timeout: 30000,
+          tlsCertPolicy: config['tlsCertPolicy'] === 'strict' ? 'strict' : 'allow_self_signed'
         };
         const client = new WebDAVClient(webdavConfig);
         clientMap.set(sourceId, client);
@@ -1019,17 +1031,23 @@ export struct MediaLibraryTab {
           .buttonStyle(ButtonStyleMode.EMPHASIZED)
           .onClick(() => { this.startScan(); })
 
+        Button(this.isScanning ? '扫描中...' : '非全量更新')
+          .width(150).height(40).fontSize(14)
+          .enabled(!this.isScanning)
+          .buttonStyle(ButtonStyleMode.TEXTUAL)
+          .onClick(() => { this.startIncrementalScan(); })
+      }
+      .justifyContent(FlexAlign.Center)
+
+      Row({ space: 16 }) {
         Button(this.isScanning ? '刷新中...' : '刷新元数据')
           .width(150).height(40).fontSize(14)
           .enabled(!this.isScanning)
           .buttonStyle(ButtonStyleMode.TEXTUAL)
           .onClick(() => { this.refreshMetadata(); })
-      }
-      .justifyContent(FlexAlign.Center)
 
-      Row() {
         Button(this.isScanning ? '刷新中...' : '刷新字幕轨信息')
-          .width(316).height(40).fontSize(14)
+          .width(150).height(40).fontSize(14)
           .enabled(!this.isScanning)
           .buttonStyle(ButtonStyleMode.TEXTUAL)
           .onClick(() => { this.showRefreshSubtitleTrackDialog(); })

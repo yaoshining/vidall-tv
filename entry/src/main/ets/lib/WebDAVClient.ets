@@ -2,12 +2,142 @@ import socket from '@ohos.net.socket';
 import buffer from '@ohos.buffer';
 import fs from '@ohos.file.fs';
 import http from '@ohos.net.http';
+import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
+
+interface WebDavRequestResult {
+  statusCode: number;
+  body: string;
+  error: string;
+}
+
+interface WebDavDownloadResult {
+  statusCode: number;
+  downloadedBytes: number;
+  error: string;
+}
+
+interface NativeCapabilities {
+  ffmpegEnabled: boolean;
+  libcurlEnabled: boolean;
+  libcurlVersion: string;
+}
+
+interface WebDavNapiBridge {
+  webdavRequest: (
+    method: string,
+    url: string,
+    headerLines: string,
+    body: string,
+    timeoutMs: number,
+    tlsPolicy: string
+  ) => WebDavRequestResult;
+  downloadToFile: (
+    method: string,
+    url: string,
+    headerLines: string,
+    body: string,
+    timeoutMs: number,
+    outputPath: string,
+    tlsPolicy: string
+  ) => WebDavDownloadResult;
+  getNativeCapabilities: () => NativeCapabilities;
+}
+
+interface WebDavNapiBridgeModule {
+  default?: WebDavNapiBridge;
+}
+
+function getVidAllCorePlayerNapi(): WebDavNapiBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as WebDavNapiBridgeModule | WebDavNapiBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as WebDavNapiBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as WebDavNapiBridge;
+  }
+  return bridgeModule as WebDavNapiBridge;
+}
+
+// ─── 模块级纯工具函数（可单元测试）───────────────────────────────────────────
+
+/**
+ * 将 CURL TLS 错误码转换为用户友好的中文提示。
+ * 返回 null 表示不是可识别的 TLS 错误。
+ */
+export function classifyTlsError(errorMsg: string): string | null {
+  if (!errorMsg.startsWith('[CURL:')) {
+    return null;
+  }
+  const bracketEnd = errorMsg.indexOf(']');
+  if (bracketEnd < 0) {
+    return null;
+  }
+  const codeStr = errorMsg.substring(6, bracketEnd);
+  const code = parseInt(codeStr);
+  if (code !== code) {
+    return null;
+  }
+  if (code === 35) {
+    return 'TLS 连接失败：握手错误，请检查服务器 TLS 配置';
+  }
+  if (code === 60) {
+    return 'TLS 证书验证失败：证书可能已过期、域名不匹配或颁发机构不受信任';
+  }
+  if (code === 58) {
+    return 'TLS 客户端证书错误';
+  }
+  if (code === 59) {
+    return 'TLS 加密套件协商失败';
+  }
+  if (code === 77) {
+    return 'TLS CA 证书文件异常';
+  }
+  if (code === 91) {
+    return 'TLS 证书状态无效（OCSP 验证失败）';
+  }
+  return 'TLS 错误（CURL 错误码：' + code + '）';
+}
+
+/** 判断错误消息是否为 TLS 相关错误 */
+export function isTlsError(errorMsg: string): boolean {
+  return errorMsg.startsWith('[CURL:35]') ||
+         errorMsg.startsWith('[CURL:58]') ||
+         errorMsg.startsWith('[CURL:59]') ||
+         errorMsg.startsWith('[CURL:60]') ||
+         errorMsg.startsWith('[CURL:77]') ||
+         errorMsg.startsWith('[CURL:91]') ||
+         errorMsg.startsWith('TLS ') ||
+         errorMsg.includes('[CURL:35]') ||
+         errorMsg.includes('[CURL:60]');
+}
+
+/**
+ * 将 tlsCertPolicy 配置值归一化。
+ * 默认 allow_self_signed（家庭网络优先易用性）；仅显式传 'strict' 时才严格校验。
+ */
+export function normalizeTlsCertPolicy(policy?: string): string {
+  return policy === 'strict' ? 'strict' : 'allow_self_signed';
+}
+
+/** 对审计日志中的 URL 进行脱敏处理（去除 Basic Auth 凭据） */
+export function sanitizeUrlForAudit(rawUrl: string): string {
+  return rawUrl.replace(/:\/\/([^:@]+):([^@]+)@/, '://***:***@');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface WebDAVConfig {
   baseUrl: string;
   username?: string;
   password?: string;
   timeout?: number;
+  /**
+   * TLS 证书校验策略，默认 'allow_self_signed'（面向家庭用户优先保证易用性）。
+   * - 'allow_self_signed': 默认，跳过 TLS 证书校验，兼容代理、自签名证书等家庭网络场景。
+   * - 'strict': 严格校验系统 CA，拒绝过期、域名不匹配和不受信任证书。
+   */
+  tlsCertPolicy?: 'strict' | 'allow_self_signed';
 }
 
 export interface WebDAVResource {
@@ -53,12 +183,22 @@ export class WebDAVClient {
   private username: string;
   private password: string;
   private timeout: number;
+  // 阶段3收口：默认不再自动回退到旧 socket 链路，仅在排障时手动放开。
+  private readonly allowLegacyTransportFallback: boolean = false;
+  // 阶段3收口：默认禁止 HTTPS 失败后降级到明文 HTTP。
+  private readonly allowInsecureHttpDowngrade: boolean = false;
+  // TLS 证书校验策略（生产默认严格校验）
+  private readonly tlsCertPolicy: string;
+  // 缓存 native libcurl 可用性（null = 未检测）
+  private _nativeCurlEnabled: boolean | null = null;
 
   constructor(config: WebDAVConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.username = config.username || '';
     this.password = config.password || '';
     this.timeout = config.timeout || 30000;
+    // 默认放开 TLS 验证以兼容家庭网络（代理、自签名证书）；仅显式传 'strict' 时才严格校验。
+    this.tlsCertPolicy = normalizeTlsCertPolicy(config.tlsCertPolicy);
 
     const urlPattern = /^(https?):\/\/([^:\/]+)(?::(\d+))?(\/.*)?$/;
     const match = this.baseUrl.match(urlPattern);
@@ -86,7 +226,9 @@ export class WebDAVClient {
    */
   public getFullUrl(path: string): string {
     let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-    let fullPath = basePath + (path.startsWith('/') ? path : '/' + path);
+    const normalizedPath = this.decodeXmlEntities(path);
+    let fullPath = basePath + (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath);
+    fullPath = this.encodeURIPath(fullPath);
 
     return `${this.isHttps ? 'https' : 'http'}://${this.host}:${this.port}${fullPath}`;
   }
@@ -167,7 +309,133 @@ export class WebDAVClient {
   }
 
   /**
-   * 使用 Socket 发送请求 - 支持 HTTP（TCP）和 HTTPS（http 模块）
+   * 日志输出前脱敏敏感请求头，避免凭据明文泄露。
+   */
+  private sanitizeRequestForLog(request: string): string {
+    return request.replace(/(Authorization\s*:\s*)[^\r\n]*/ig, '$1Basic ***');
+  }
+
+  /** 懒检测 native libcurl 是否可用 */
+  private checkNativeCurlEnabled(): boolean {
+    if (this._nativeCurlEnabled === null) {
+      try {
+        const caps = getVidAllCorePlayerNapi().getNativeCapabilities();
+        this._nativeCurlEnabled = caps.libcurlEnabled;
+      } catch (e) {
+        this._nativeCurlEnabled = false;
+      }
+    }
+    return this._nativeCurlEnabled;
+  }
+
+  /**
+   * 将 curl 错误码转换为用户友好的中文提示（委托模块级 classifyTlsError）。
+   */
+  private classifyTlsError(errorMsg: string): string | null {
+    return classifyTlsError(errorMsg);
+  }
+
+  /** 判断错误消息是否为 TLS 相关错误（委托模块级 isTlsError） */
+  private isTlsError(errorMsg: string): boolean {
+    return isTlsError(errorMsg);
+  }
+
+  /**
+   * 记录 TLS 审计日志（脱敏 URL，保留错误信息以供排障）。
+   * TAG：VidAll_TLS_Audit，可通过 hilog | grep VidAll_TLS_Audit 提取。
+   */
+  private logTlsAudit(op: string, rawUrl: string, errorMsg: string): void {
+    const sanitizedUrl = sanitizeUrlForAudit(rawUrl);
+    console.error(`[VidAll_TLS_Audit] op=${op} url=${sanitizedUrl} error=${errorMsg}`);
+  }
+
+  /**
+   * 通过 native libcurl 发送 WebDAV 请求（仅在 libcurlEnabled 时调用）。
+   * 失败时由上层 sendRawHttpRequest 捕获并回退到 socket 实现。
+   * webdavRequest NAPI 为异步 Promise，必须 await，禁止同步调用。
+   */
+  private async sendViaNative(
+    method: string,
+    encodedPath: string,
+    headers: Record<string, string>,
+    body?: string
+  ): Promise<HttpResponse> {
+    const isStd = (this.isHttps && this.port === 443) || (!this.isHttps && this.port === 80);
+    const portStr = isStd ? '' : `:${this.port}`;
+    const scheme = this.isHttps ? 'https' : 'http';
+    const fullUrl = `${scheme}://${this.host}${portStr}${encodedPath}`;
+
+    const keys = Object.keys(headers);
+    const parts: string[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const item: string = `${keys[i]}: ${headers[keys[i]]}`;
+      parts.push(item);
+    }
+    const headerLines = parts.join('\r\n');
+
+    const result = await getVidAllCorePlayerNapi().webdavRequest(
+      method, fullUrl, headerLines, body ?? '', this.timeout, this.tlsCertPolicy
+    );
+
+    if (result.error) {
+      if (this.isTlsError(result.error)) {
+        this.logTlsAudit(method, fullUrl, result.error);
+        const userMsg = this.classifyTlsError(result.error);
+        throw new Error(userMsg !== null ? userMsg + ' [' + result.error + ']' : result.error);
+      }
+      throw new Error('native curl: ' + result.error);
+    }
+
+    const resp = new HttpResponse();
+    resp.statusCode = result.statusCode;
+    resp.body = result.body;
+    return resp;
+  }
+
+  private buildNativeUrl(encodedPath: string): string {
+    const isStd = (this.isHttps && this.port === 443) || (!this.isHttps && this.port === 80);
+    const portStr = isStd ? '' : `:${this.port}`;
+    const scheme = this.isHttps ? 'https' : 'http';
+    return `${scheme}://${this.host}${portStr}${encodedPath}`;
+  }
+
+  private buildHeaderLines(headers: Record<string, string>): string {
+    const keys = Object.keys(headers);
+    const parts: string[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const item: string = `${keys[i]}: ${headers[keys[i]]}`;
+      parts.push(item);
+    }
+    return parts.join('\r\n');
+  }
+
+  private async downloadViaNative(
+    encodedPath: string,
+    localFilePath: string,
+    headers: Record<string, string>
+  ): Promise<WebDavDownloadResult> {
+    const fullUrl = this.buildNativeUrl(encodedPath);
+    const headerLines = this.buildHeaderLines(headers);
+    const result = await getVidAllCorePlayerNapi().downloadToFile(
+      'GET', fullUrl, headerLines, '', this.timeout * 2, localFilePath, this.tlsCertPolicy
+    );
+    if (result.error && this.isTlsError(result.error)) {
+      this.logTlsAudit('GET_DOWNLOAD', fullUrl, result.error);
+      const userMsg = this.classifyTlsError(result.error);
+      const finalMsg = userMsg !== null ? userMsg + ' [' + result.error + ']' : result.error;
+      const enhanced: WebDavDownloadResult = {
+        statusCode: result.statusCode,
+        downloadedBytes: result.downloadedBytes,
+        error: finalMsg
+      };
+      return enhanced;
+    }
+    return result;
+  }
+
+  /**
+   * 使用 Socket 发送请求 - 支持 HTTP（TCP）和 HTTPS（http 模块）。
+   * 若 native libcurl 可用则优先走 native，失败自动回退到 socket/http 实现。
    */
   private async sendRawHttpRequest(
     method: string,
@@ -175,6 +443,22 @@ export class WebDAVClient {
     headers: Record<string, string>,
     body?: string
   ): Promise<HttpResponse> {
+    // ── native libcurl 优先路径 ────────────────────────────────────────────
+    if (this.checkNativeCurlEnabled()) {
+      try {
+        return await this.sendViaNative(method, path, headers, body);
+      } catch (e) {
+        const nativeErr = (e as Error).message;
+        if (!this.allowLegacyTransportFallback) {
+          throw new Error(`native transport failed: ${nativeErr}`);
+        }
+        console.warn(`WebDAV native fallback enabled: ${nativeErr}`);
+      }
+    }
+    if (!this.allowLegacyTransportFallback) {
+      throw new Error('legacy transport fallback disabled');
+    }
+    // ── 回退：现有 socket / http 实现 ──────────────────────────────────────
     if (this.isHttps) {
       return this.sendHttpsRequestViaHttpModule(method, path, headers, body);
     }
@@ -221,6 +505,10 @@ export class WebDAVClient {
       return result;
     } catch (e) {
       console.warn(`WebDAV HTTPS Level2 (TLS) error: ${(e as Error).message}, trying HTTP fallback...`);
+    }
+
+    if (!this.allowInsecureHttpDowngrade) {
+      throw new Error('HTTPS fallback exhausted and insecure HTTP downgrade is disabled');
     }
 
     // ── Level 3: HTTP 明文降级（443→80，其他端口保持） ───────────────────────
@@ -413,9 +701,10 @@ export class WebDAVClient {
             headers['Host'] = (p === 80) ? h : `${h}:${p}`;
           }
           const request = this.buildHttpRequestString(method, path, headers, body);
+          const sanitizedRequestLog = this.sanitizeRequestForLog(request);
 
           console.info('=== REQUEST ===');
-          console.info(request);
+          console.info(sanitizedRequestLog);
           console.info('=== END ===');
 
           const sendBuffer = buffer.from(request, 'utf-8');
@@ -568,7 +857,7 @@ export class WebDAVClient {
         .then(() => {
           console.info('WebDAV TLS: connected, building request...');
           const request = this.buildHttpRequestString(method, path, headers, body);
-          console.info('WebDAV TLS request:\n' + request);
+          console.info('WebDAV TLS request:\n' + this.sanitizeRequestForLog(request));
           const buf = buffer.from(request, 'utf-8');
           // 强制用 string 发送（某些版本 ArrayBuffer 发送后服务器收不到完整数据）
           return tls.send(request);
@@ -604,11 +893,41 @@ export class WebDAVClient {
       throw error;
     }
 
+    let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+    let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
+    fullPath = this.encodeURIPath(fullPath);
+
+    const downloadHeaders: Record<string, string> = {
+      'User-Agent': 'WebDAV-Client/1.0',
+      'Accept': '*/*'
+    };
+    const authHeader = this.getAuthHeader();
+    if (authHeader) {
+      downloadHeaders['Authorization'] = authHeader;
+    }
+
+    if (this.checkNativeCurlEnabled()) {
+      try {
+        const nativeResult = await this.downloadViaNative(fullPath, localFilePath, downloadHeaders);
+        if (nativeResult.error.length > 0) {
+          throw new Error(`native curl download failed: ${nativeResult.error}`);
+        }
+        if (nativeResult.statusCode < 200 || nativeResult.statusCode >= 300) {
+          throw new Error(`native curl download HTTP ${nativeResult.statusCode}`);
+        }
+        if (nativeResult.downloadedBytes <= 0) {
+          throw new Error('native curl download received 0 bytes');
+        }
+        callback?.onProgress?.(nativeResult.downloadedBytes, nativeResult.downloadedBytes);
+        callback?.onComplete?.(localFilePath);
+        return;
+      } catch (e) {
+        console.warn(`WebDAV native download fallback: ${(e as Error).message}`);
+      }
+    }
+
     // HTTPS 协议直接使用 http 模块（支持 TLS），不走明文 TCP
     if (this.isHttps) {
-      let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-      let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
-      fullPath = this.encodeURIPath(fullPath);
       console.info(`WebDAV Stream Download (HTTPS): ${fullPath}`);
       return this.downloadWithHttpModule(this.host, this.port, fullPath, localFilePath, callback, redirectCount);
     }
@@ -973,7 +1292,7 @@ export class WebDAVClient {
           request += `\r\n`;
 
           console.info('=== DOWNLOAD REQUEST ===');
-          console.info(request);
+          console.info(this.sanitizeRequestForLog(request));
           console.info('=== END REQUEST ===');
 
           const sendBuffer = buffer.from(request, 'utf-8');
@@ -1115,8 +1434,9 @@ export class WebDAVClient {
         throw new Error(`HTTP ${response.statusCode}: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('List error:', JSON.stringify(error));
-      throw new Error(error);
+      const errMsg = (error as Error).message ?? String(error);
+      console.error('List error:', errMsg);
+      throw new Error(errMsg);
     }
   }
 
@@ -1136,12 +1456,7 @@ export class WebDAVClient {
       console.info('Testing path:', basePath);
       const encodedBasePath = this.encodeURIPath(basePath);
 
-      if (this.isHttps) {
-        // HTTPS：用 http 模块发 OPTIONS 请求（RequestMethod 枚举支持），快速探测连通性和认证
-        return await this.testConnectionHttps(encodedBasePath);
-      }
-
-      // HTTP：用 PROPFIND（TCPSocket）
+      // HTTP/HTTPS 统一走 PROPFIND（内部已是 native libcurl 优先 + fallback）
       const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
   <D:prop>
@@ -1162,7 +1477,7 @@ export class WebDAVClient {
       }
 
       try {
-        const response = await this.sendRawHttpPlainRequest('PROPFIND', encodedBasePath, propfindHeaders, propfindBody);
+        const response = await this.sendRawHttpRequest('PROPFIND', encodedBasePath, propfindHeaders, propfindBody);
         console.info('PROPFIND response status:', response.statusCode);
 
         if (response.statusCode === 401) {
@@ -1180,7 +1495,19 @@ export class WebDAVClient {
         console.info('WebDAV connection test successful');
         return { success: true, message: '连接成功' };
       } catch (error) {
+        const errMsg = (error as Error).message ?? '';
         console.error('Connection test failed:', JSON.stringify(error));
+
+        // TLS 错误直接返回结构化提示，审计日志已在 sendViaNative 中记录
+        if (this.isTlsError(errMsg)) {
+          return { success: false, message: errMsg };
+        }
+
+        // HTTPS 在 PROPFIND 探测失败时，再回退 OPTIONS 判断是否是网络/证书层问题
+        if (this.isHttps) {
+          return await this.testConnectionHttps(encodedBasePath);
+        }
+
         return { success: false, message: '无法连接到服务器，请检查服务器地址和网络连接' };
       }
     } catch (error) {
@@ -1190,7 +1517,7 @@ export class WebDAVClient {
   }
 
   /**
-   * HTTPS 连接测试：先用 OPTIONS，再用 POST+Override 探测 WebDAV 支持
+   * HTTPS 回退连通性测试：当 PROPFIND 探测失败时，用 OPTIONS 判断基础网络/鉴权状态
    */
   private async testConnectionHttps(encodedBasePath: string): Promise<TestConnectionResult> {
     const isStandardPort = this.port === 443;
@@ -1315,11 +1642,20 @@ export class WebDAVClient {
     for (let i = 0; i < patterns.length; i++) {
       const match = xml.match(patterns[i]);
       if (match) {
-        return match[1].trim();
+        return this.decodeXmlEntities(match[1].trim());
       }
     }
 
     return '';
+  }
+
+  private decodeXmlEntities(text: string): string {
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
   }
 
 
@@ -1761,7 +2097,7 @@ export class WebDAVClient {
           request += `\r\n`;
 
           console.info('=== REDIRECT DOWNLOAD REQUEST ===');
-          console.info(request);
+          console.info(this.sanitizeRequestForLog(request));
           console.info('=== END REQUEST ===');
 
           const sendBuffer = buffer.from(request, 'utf-8');

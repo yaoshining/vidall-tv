@@ -98,6 +98,12 @@ export class FileSourceDatabase {
         console.info(`FileSourceDatabase: user_version 已更新为 ${FileSourceDatabase.DB_VERSION}`);
       }
 
+      // 防御性 schema 兼容：补齐 videos 扫描更新标记列
+      await this.ensureVideosSchema(this.rdbStore);
+
+      // 防御性修复：清理历史重复 scrape_info，并确保 provider + provider_id 唯一
+      await this.ensureScrapeInfoUniqueness(this.rdbStore);
+
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
     } catch (error) {
@@ -157,6 +163,7 @@ export class FileSourceDatabase {
         video_codec TEXT,
         audio_tracks_json TEXT,
         subtitle_tracks_json TEXT,
+        updated_in_last_scan INTEGER NOT NULL DEFAULT 0,
         scanned_at INTEGER NOT NULL,
         FOREIGN KEY(source_id) REFERENCES ${FileSourceDatabase.TABLE_FILE_SOURCES}(id)
       )
@@ -626,8 +633,8 @@ export class FileSourceDatabase {
         INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_VIDEOS}
           (source_id, directory_path, file_path, file_name, file_size, last_modified,
            content_type, duration_ms, width, height, frame_rate, video_codec,
-           audio_tracks_json, subtitle_tracks_json, scanned_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           audio_tracks_json, subtitle_tracks_json, updated_in_last_scan, scanned_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `;
       const args: relationalStore.ValueType[] = [
         entity.sourceId, entity.directoryPath, entity.filePath, entity.fileName,
@@ -640,6 +647,7 @@ export class FileSourceDatabase {
         entity.videoCodec ?? null,
         entity.audioTracksJson ?? null,
         entity.subtitleTracksJson ?? null,
+        1,
         entity.scannedAt
       ];
       await this.rdbStore.executeSql(sql, args);
@@ -717,6 +725,36 @@ export class FileSourceDatabase {
     }
   }
 
+  /** 扫描前重置更新标记，扫描中命中的视频会在 upsert 时置为 1 */
+  async resetVideoUpdatedFlags(): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      await this.rdbStore.executeSql(
+        `UPDATE ${FileSourceDatabase.TABLE_VIDEOS} SET updated_in_last_scan = 0`
+      );
+      console.info('[FileSourceDatabase] resetVideoUpdatedFlags 完成');
+    } catch (error) {
+      console.warn(`[FileSourceDatabase] resetVideoUpdatedFlags 失败: ${JSON.stringify(error)}`);
+    }
+  }
+
+  /** 将已存在的视频标记为本轮扫描命中，用于增量扫描跳过未变化文件时置位 */
+  async markVideoUpdatedByPath(filePath: string): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      await this.rdbStore.executeSql(
+        `UPDATE ${FileSourceDatabase.TABLE_VIDEOS} SET updated_in_last_scan = 1 WHERE file_path = ?`,
+        [filePath]
+      );
+    } catch (error) {
+      console.warn(`[FileSourceDatabase] markVideoUpdatedByPath 失败 path=${filePath}: ${JSON.stringify(error)}`);
+    }
+  }
+
   private parseVideoEntity(rs: relationalStore.ResultSet): VideoEntity {
     const get = (col: string): number => rs.getLong(rs.getColumnIndex(col));
     const str = (col: string): string | undefined => {
@@ -747,6 +785,7 @@ export class FileSourceDatabase {
       videoCodec: str('video_codec'),
       audioTracksJson: str('audio_tracks_json'),
       subtitleTracksJson: str('subtitle_tracks_json'),
+      updatedInLastScan: num('updated_in_last_scan'),
       scannedAt: get('scanned_at')
     };
   }
@@ -1087,6 +1126,21 @@ export class FileSourceDatabase {
   }
 
   // ─────────────────────────────────────────────
+  // schema 防御性补齐
+  // ─────────────────────────────────────────────
+
+  /** 确保 videos 表存在扫描更新标记列 */
+  private async ensureVideosSchema(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
+      await rdbStore.executeSql(
+        `ALTER TABLE ${FileSourceDatabase.TABLE_VIDEOS} ADD COLUMN updated_in_last_scan INTEGER NOT NULL DEFAULT 0`
+      );
+    } catch {
+      // 列已存在时忽略
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // scrape_info 桥表
   // ─────────────────────────────────────────────
 
@@ -1111,6 +1165,52 @@ export class FileSourceDatabase {
     }
     // 同时确保新表（movies/tv_series/tv_seasons/tv_episodes）存在
     await this.createMediaTablesV3(rdbStore);
+  }
+
+  /**
+   * 清理 scrape_info 历史重复数据，并确保 provider + provider_id 联合唯一索引存在。
+   * 同一 provider/provider_id 仅保留最新一条（以 id 最大作为最新）。
+   */
+  private async ensureScrapeInfoUniqueness(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
+      const beforeRs = await rdbStore.querySql(
+        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
+      );
+      let before = 0;
+      if (beforeRs.goToFirstRow()) {
+        before = beforeRs.getLong(beforeRs.getColumnIndex('cnt'));
+      }
+      beforeRs.close();
+
+      await rdbStore.executeSql(`
+        DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
+        WHERE id NOT IN (
+          SELECT keep_id FROM (
+            SELECT MAX(id) AS keep_id
+            FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
+            GROUP BY provider, provider_id
+          )
+        )
+      `);
+
+      await rdbStore.executeSql(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_scrape_info_provider_pid_uq
+        ON ${FileSourceDatabase.TABLE_SCRAPE_INFO}(provider, provider_id)
+      `);
+
+      const afterRs = await rdbStore.querySql(
+        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
+      );
+      let after = 0;
+      if (afterRs.goToFirstRow()) {
+        after = afterRs.getLong(afterRs.getColumnIndex('cnt'));
+      }
+      afterRs.close();
+
+      console.info(`[DB][scrape_info] 去重完成 before=${before} after=${after} removed=${before - after}`);
+    } catch (e) {
+      console.warn(`[DB][scrape_info] 去重/唯一索引修复失败: ${JSON.stringify(e)}`);
+    }
   }
 
   async getScrapeInfoByVideoId(videoId: number): Promise<ScrapeInfoEntity | null> {
@@ -1145,7 +1245,7 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
     // 诊断日志
     console.info(`[DB][upsertScrapeInfo] videoId=${e.videoId} type=${e.mediaType} movieId=${e.movieId ?? 'null'} tvSeriesId=${e.tvSeriesId ?? 'null'} episodeId=${e.episodeId ?? 'null'} title="${e.title}"`);
-    // 使用 INSERT OR REPLACE 避免 UNIQUE(video_id) 并发冲突
+    // 使用 INSERT OR REPLACE，配合 UNIQUE(video_id) 与 UNIQUE(provider,provider_id) 做幂等写入
     const sql = `
       INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_SCRAPE_INFO}
         (video_id, provider, provider_id, media_type, title, original_title,
@@ -1346,9 +1446,9 @@ export class FileSourceDatabase {
         return v;
       };
       const total = await q(`SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_VIDEOS}`);
-      const movies = await q(`SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE media_type = 'movie'`);
+      const movies = await q(`SELECT COUNT(DISTINCT movie_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE movie_id IS NOT NULL`);
       const tv = await q(`SELECT COUNT(DISTINCT tv_series_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE tv_series_id IS NOT NULL`);
-      const scraped = await q(`SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`);
+      const scraped = await q(`SELECT COUNT(DISTINCT video_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`);
       return { total, movies, tv, other: total - scraped };
     } catch { return { total: 0, movies: 0, tv: 0, other: 0 }; }
   }

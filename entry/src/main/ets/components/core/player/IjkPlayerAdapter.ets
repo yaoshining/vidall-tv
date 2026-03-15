@@ -467,6 +467,7 @@ export class IjkPlayerAdapter implements IPlayer {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       'onSubtitleUpdate 已注册（IjkPlayer 无内嵌字幕，此回调不会被主动触发）');
   }
+  onBuffering(_callback: (isBuffering: boolean) => void): void { /* no-op */ }
 
   // ─── 内部实现 ───
 

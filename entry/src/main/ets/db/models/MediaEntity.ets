@@ -29,6 +29,8 @@ export interface VideoEntity {
   videoCodec?: string;
   audioTracksJson?: string;
   subtitleTracksJson?: string;
+  /** 本轮扫描是否被更新（1=已更新,0=未更新） */
+  updatedInLastScan?: number;
   scannedAt: number;
 }
 
