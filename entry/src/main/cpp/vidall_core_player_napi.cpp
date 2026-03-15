@@ -28,6 +28,7 @@ extern "C" {
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
 #include <libavutil/time.h>
+#include <libswresample/swresample.h>  // B4：PCM 格式转换（fltp/s16/etc → s16 for OH_AudioRenderer）
 }
 
 #if !defined(VIDALL_HAS_LIBCURL)
@@ -37,6 +38,15 @@ extern "C" {
 #if VIDALL_HAS_LIBCURL
 #include <curl/curl.h>
 #endif
+
+// B3：EGL + OpenGL ES 2.0（YUV 渲染管线）
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+
+// B4：OH_AudioRenderer（PCM 送显）
+#include <ohaudio/native_audiostreambuilder.h>
+#include <ohaudio/native_audiorenderer.h>
 
 namespace {
 
@@ -700,6 +710,28 @@ struct FfmpegContext {
   // B2：解码帧输出队列
   AVFrameQueue videoFrameQueue;
   AVFrameQueue audioFrameQueue;
+
+  // B3：EGL 上下文（只在渲染线程内操作）
+  EGLDisplay eglDisplay = EGL_NO_DISPLAY;
+  EGLSurface eglSurface = EGL_NO_SURFACE;
+  EGLContext eglContext = EGL_NO_CONTEXT;
+
+  // B3：OpenGL ES 资源（在渲染线程 makeCurrent 后初始化）
+  GLuint yuvProgram = 0;   // YUV→RGB GLSL program
+  GLuint textureY = 0;     // Y 分量纹理（GL_LUMINANCE，width×height）
+  GLuint textureU = 0;     // U 分量纹理（GL_LUMINANCE，width/2×height/2）
+  GLuint textureV = 0;     // V 分量纹理（GL_LUMINANCE，width/2×height/2）
+  GLuint quadVBO = 0;      // 全屏四边形顶点缓冲
+
+  // B3：渲染线程
+  std::thread renderThread;
+  std::atomic<bool> renderRunning{false};
+
+  // B4：音频渲染（OH_AudioRenderer，回调模型，由音频系统线程驱动）
+  OH_AudioRenderer *audioRenderer = nullptr;
+  OH_AudioStreamBuilder *audioBuilder = nullptr;
+  SwrContext *swrCtx = nullptr;          // libswresample 重采样上下文（源格式 → stereo S16 48kHz）
+  std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
 };
 
 struct NativePlayerSkeletonState {
@@ -743,6 +775,8 @@ struct NativePlayerSkeletonState {
   int32_t ffmpegHeight = 0;
   double ffmpegFps = 0.0;
   int64_t ffmpegDurationMs = 0;
+  // B3：nativeWindow 尚未就绪时（OnXCSurfaceCreated 还未触发）延迟启动渲染线程的标志
+  bool pendingFfmpegRender = false;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -1648,6 +1682,252 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
 // B2：启动/停止解码线程
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// B4：SwrContext 初始化（源格式 → stereo S16LE 48kHz）
+// ---------------------------------------------------------------------------
+
+static bool FfmpegInitSwr(FfmpegContext *ctx) {
+  AVCodecContext *aCtx = ctx->audioCodecCtx;
+  if (aCtx == nullptr) {
+    return false;
+  }
+
+  // 目标格式：stereo S16LE 48000Hz（匹配 OH_AudioRenderer 配置）
+  AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
+  const int ret = swr_alloc_set_opts2(
+      &ctx->swrCtx,
+      &outLayout,          AV_SAMPLE_FMT_S16, 48000,
+      &aCtx->ch_layout,    aCtx->sample_fmt,  aCtx->sample_rate,
+      0, nullptr);
+  if (ret < 0 || ctx->swrCtx == nullptr) {
+    char errbuf[128] = {0};
+    av_strerror(ret, errbuf, sizeof(errbuf));
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitSwr: swr_alloc_set_opts2 failed: %s", errbuf);
+    return false;
+  }
+
+  const int initRet = swr_init(ctx->swrCtx);
+  if (initRet < 0) {
+    char errbuf[128] = {0};
+    av_strerror(initRet, errbuf, sizeof(errbuf));
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitSwr: swr_init failed: %s", errbuf);
+    swr_free(&ctx->swrCtx);
+    return false;
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitSwr: OK src(fmt=%d rate=%d ch=%d) → stereo S16 48kHz",
+               static_cast<int>(aCtx->sample_fmt), aCtx->sample_rate,
+               aCtx->ch_layout.nb_channels);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// B4：OH_AudioRenderer 写数据回调（由音频系统线程驱动，非阻塞消费 audioFrameQueue）
+// ---------------------------------------------------------------------------
+
+static OH_AudioData_Callback_Result AudioWriteDataCallback(
+    OH_AudioRenderer * /*renderer*/, void *userData,
+    void *audioData, int32_t audioDataSize) {
+  auto *ctx = static_cast<FfmpegContext *>(userData);
+  if (ctx == nullptr || ctx->swrCtx == nullptr || audioData == nullptr || audioDataSize <= 0) {
+    if (audioData != nullptr && audioDataSize > 0) {
+      memset(audioData, 0, static_cast<size_t>(audioDataSize));
+    }
+    return AUDIO_DATA_CALLBACK_RESULT_VALID;
+  }
+
+  auto *dst = static_cast<int16_t *>(audioData);
+  // stereo S16：每帧 = 2 声道 × 2 字节 = 4 字节
+  const int samplesNeeded = audioDataSize / static_cast<int>(2 * sizeof(int16_t));
+  int samplesFilled = 0;
+
+  // ── 步骤 1：先消费上一次 swr_convert 的溢出缓冲 ──────────────────────────
+  if (!ctx->pcmLeftover.empty()) {
+    // pcmLeftover 存储 interleaved stereo s16：每个 "样本" 占 2 个 int16_t（L+R）
+    const int leftoverSamples = static_cast<int>(ctx->pcmLeftover.size()) / 2;
+    const int toCopy = std::min(leftoverSamples, samplesNeeded);
+    memcpy(dst, ctx->pcmLeftover.data(),
+           static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
+    samplesFilled += toCopy;
+    if (toCopy < leftoverSamples) {
+      ctx->pcmLeftover.erase(ctx->pcmLeftover.begin(),
+                             ctx->pcmLeftover.begin() + toCopy * 2);
+    } else {
+      ctx->pcmLeftover.clear();
+    }
+  }
+
+  // ── 步骤 2：从 audioFrameQueue 拉帧，swr_convert → 填充 dst ──────────────
+  while (samplesFilled < samplesNeeded) {
+    AVFrame *frame = nullptr;
+    {
+      std::unique_lock<std::mutex> lock(ctx->audioFrameQueue.mtx);
+      if (!ctx->audioFrameQueue.frames.empty()) {
+        frame = ctx->audioFrameQueue.frames.front();
+        ctx->audioFrameQueue.frames.pop();
+      }
+    }
+    if (frame != nullptr) {
+      // 通知解码线程队列有空位
+      ctx->audioFrameQueue.cv.notify_all();
+    } else {
+      // 无可用帧：填充静音，避免 underrun 杂音
+      memset(dst + samplesFilled * 2, 0,
+             static_cast<size_t>(samplesNeeded - samplesFilled) * 2 * sizeof(int16_t));
+      samplesFilled = samplesNeeded;
+      break;
+    }
+
+    // swr_convert 输出缓冲：预留 frame->nb_samples + resampler 延迟余量
+    const int maxOut = frame->nb_samples + 256;
+    std::vector<int16_t> tempBuf(static_cast<size_t>(maxOut * 2));
+    uint8_t *outPtr = reinterpret_cast<uint8_t *>(tempBuf.data());
+    // frame->data 是 uint8_t*[AV_NUM_DATA_POINTERS]，swr_convert 要求 const uint8_t** 输入
+    // 通过临时数组规避 C++ 对 T** → const T** 的类型安全限制
+    const uint8_t *inData[AV_NUM_DATA_POINTERS] = {};
+    for (int i = 0; i < AV_NUM_DATA_POINTERS; i++) {
+      inData[i] = frame->data[i];
+    }
+    const int converted = swr_convert(ctx->swrCtx,
+        &outPtr, maxOut,
+        inData, frame->nb_samples);
+    av_frame_free(&frame);
+
+    if (converted <= 0) {
+      continue;
+    }
+
+    const int canFill = samplesNeeded - samplesFilled;
+    const int toCopy = std::min(converted, canFill);
+    memcpy(dst + samplesFilled * 2, tempBuf.data(),
+           static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
+    samplesFilled += toCopy;
+
+    if (converted > toCopy) {
+      // 多余样本存入溢出缓冲，下次 callback 优先消费
+      ctx->pcmLeftover.insert(ctx->pcmLeftover.end(),
+                              tempBuf.begin() + toCopy * 2,
+                              tempBuf.begin() + converted * 2);
+    }
+  }
+
+  return AUDIO_DATA_CALLBACK_RESULT_VALID;
+}
+
+// ---------------------------------------------------------------------------
+// B4：OH_AudioRenderer 初始化（stereo S16LE 48kHz，MOVIE 用途）
+// ---------------------------------------------------------------------------
+
+static bool FfmpegInitAudioRenderer(FfmpegContext *ctx) {
+  OH_AudioStream_Result result =
+      OH_AudioStreamBuilder_Create(&ctx->audioBuilder, AUDIOSTREAM_TYPE_RENDERER);
+  if (result != AUDIOSTREAM_SUCCESS || ctx->audioBuilder == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: Create builder failed: %d", result);
+    return false;
+  }
+
+  OH_AudioStreamBuilder_SetSamplingRate(ctx->audioBuilder, 48000);
+  OH_AudioStreamBuilder_SetChannelCount(ctx->audioBuilder, 2);
+  OH_AudioStreamBuilder_SetSampleFormat(ctx->audioBuilder, AUDIOSTREAM_SAMPLE_S16LE);
+  OH_AudioStreamBuilder_SetEncodingType(ctx->audioBuilder, AUDIOSTREAM_ENCODING_TYPE_RAW);
+  // AUDIOSTREAM_USAGE_MOVIE：视频媒体播放场景，会触发正确的音频焦点策略
+  OH_AudioStreamBuilder_SetRendererInfo(ctx->audioBuilder, AUDIOSTREAM_USAGE_MOVIE);
+
+  // 注册写数据回调：音频系统在需要 PCM 数据时调用 AudioWriteDataCallback
+  result = OH_AudioStreamBuilder_SetRendererWriteDataCallback(
+      ctx->audioBuilder, AudioWriteDataCallback, ctx);
+  if (result != AUDIOSTREAM_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: SetRendererWriteDataCallback failed: %d", result);
+    OH_AudioStreamBuilder_Destroy(ctx->audioBuilder);
+    ctx->audioBuilder = nullptr;
+    return false;
+  }
+
+  result = OH_AudioStreamBuilder_GenerateRenderer(ctx->audioBuilder, &ctx->audioRenderer);
+  if (result != AUDIOSTREAM_SUCCESS || ctx->audioRenderer == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: GenerateRenderer failed: %d", result);
+    OH_AudioStreamBuilder_Destroy(ctx->audioBuilder);
+    ctx->audioBuilder = nullptr;
+    return false;
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitAudioRenderer: renderer created (stereo S16LE 48kHz MOVIE)");
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// B4：启动/停止音频渲染器
+// ---------------------------------------------------------------------------
+
+static void StartFfmpegAudio(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+  if (ctx->audioCodecCtx == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegAudio: no audio stream, skip");
+    return;
+  }
+
+  if (!FfmpegInitSwr(ctx)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "StartFfmpegAudio: FfmpegInitSwr failed");
+    return;
+  }
+
+  if (!FfmpegInitAudioRenderer(ctx)) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "StartFfmpegAudio: FfmpegInitAudioRenderer failed");
+    swr_free(&ctx->swrCtx);
+    return;
+  }
+
+  const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StartFfmpegAudio: OH_AudioRenderer_Start result=%d", result);
+}
+
+static void StopFfmpegAudio(NativePlayerSkeletonState *state) {
+  if (state == nullptr || state->ffmpegCtx == nullptr) {
+    return;
+  }
+  FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // 1. 停止并释放 renderer（调用后音频系统不再调用 callback，消费者安全关闭）
+  if (ctx->audioRenderer != nullptr) {
+    OH_AudioRenderer_Stop(ctx->audioRenderer);
+    OH_AudioRenderer_Release(ctx->audioRenderer);
+    ctx->audioRenderer = nullptr;
+  }
+
+  // 2. 销毁 builder
+  if (ctx->audioBuilder != nullptr) {
+    OH_AudioStreamBuilder_Destroy(ctx->audioBuilder);
+    ctx->audioBuilder = nullptr;
+  }
+
+  // 3. 释放 SwrContext
+  if (ctx->swrCtx != nullptr) {
+    swr_free(&ctx->swrCtx);
+  }
+
+  // 4. 清空溢出缓冲
+  ctx->pcmLeftover.clear();
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StopFfmpegAudio: renderer stopped and released");
+}
+
+// B4 函数已在上方完整定义，此处无需重复前向声明
+
 static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   if (state == nullptr || state->ffmpegCtx == nullptr) {
     return;
@@ -1689,6 +1969,9 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
     ctx->audioDecodeThread = std::thread(AudioDecodeThreadFunc, ctx);
   }
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StartFfmpegDecode: decode threads launched");
+
+  // B4：解码器就绪后启动 OH_AudioRenderer（消费 audioFrameQueue）
+  StartFfmpegAudio(state);
 }
 
 static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
@@ -1802,6 +2085,9 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
     return;
   }
   FfmpegContext *ctx = state->ffmpegCtx.get();
+
+  // B4：先停止音频渲染器（消费者），再停止解码线程（生产者），避免 callback 访问已释放队列
+  StopFfmpegAudio(state);
 
   // B2：先停止解码线程（依赖 packet 队列），再停止 demux
   StopFfmpegDecode(state);
