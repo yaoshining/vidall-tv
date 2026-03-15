@@ -1782,17 +1782,20 @@ static int FfmpegInitCodecs(FfmpegContext *ctx) {
       avcodec_free_context(&ctx->videoCodecCtx);
       return ret;
     }
-    // 多线程解码（frame-level），TV 端多核可充分利用
-    ctx->videoCodecCtx->thread_count = 2;
+    // 多线程解码（frame-level），4K/10bit 软解场景优先提高吞吐
+    const unsigned int hwThreads = std::thread::hardware_concurrency();
+    const int decodeThreads = static_cast<int>(std::min<unsigned int>(hwThreads > 0 ? hwThreads : 4, 8));
+    ctx->videoCodecCtx->thread_count = std::max(4, decodeThreads);
     ctx->videoCodecCtx->thread_type = FF_THREAD_FRAME;
     ret = avcodec_open2(ctx->videoCodecCtx, codec, nullptr);
     if (ret < 0) {
       avcodec_free_context(&ctx->videoCodecCtx);
       return ret;
     }
-    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "FfmpegInitCodecs: video decoder opened: %s %dx%d",
-                 codec->name, ctx->videoCodecCtx->width, ctx->videoCodecCtx->height);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "FfmpegInitCodecs: video decoder opened: %s %dx%d threads=%d",
+                 codec->name, ctx->videoCodecCtx->width, ctx->videoCodecCtx->height,
+                 ctx->videoCodecCtx->thread_count);
   }
 
   // 音频解码器
@@ -1917,13 +1920,19 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
       // 1. 所有格式统一通过 sws_scale 转换为 AV_PIX_FMT_RGBA（包括 yuv420p10le/yuv420p）
       // 2. 4K 内容（3840×2160）宽度超过 1920 时同步降采样（保持宽高比）
       // 3. 使用 GL_RGBA/GL_UNSIGNED_BYTE 上传单张纹理，规避设备驱动对 GL_R8/GL_LUMINANCE 的 OOM bug
-      static const int MAX_RENDER_W = 1920;
+      static const int DEFAULT_MAX_RENDER_W = 1920;
+      static const int HEAVY_4K_MAX_RENDER_W = 1280;
       // 计算目标渲染分辨率（降采样到 1920 时保持宽高比，行/列对齐到偶数）
       int dstW = frame->width;
       int dstH = frame->height;
-      if (dstW > MAX_RENDER_W) {
-        dstH = dstH * MAX_RENDER_W / dstW;
-        dstW = MAX_RENDER_W;
+      int maxRenderW = DEFAULT_MAX_RENDER_W;
+      if (frame->width >= 3840 &&
+          (frame->format == AV_PIX_FMT_YUV420P10LE || frame->format == AV_PIX_FMT_P010LE)) {
+        maxRenderW = HEAVY_4K_MAX_RENDER_W;
+      }
+      if (dstW > maxRenderW) {
+        dstH = dstH * maxRenderW / dstW;
+        dstW = maxRenderW;
         dstH = (dstH + 1) & ~1;  // 偶数对齐
       }
       // 始终转换到 RGBA：yuv420p 也需要转换（CPU 侧 YUV→RGB），消除 GL 侧单通道 OOM
@@ -1943,13 +1952,13 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
               frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
               dstW, dstH, AV_PIX_FMT_RGBA,
               SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
-          ctx->lastSwsSrcFmt = frame->format;
-          ctx->lastSwsSrcW   = frame->width;
-          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                       "VideoDecodeThread: SwsContext created %{public}dx%{public}d srcFmt=%{public}d"
-                       " -> %{public}dx%{public}d RGBA",
-                       frame->width, frame->height, frame->format, dstW, dstH);
-        }
+            ctx->lastSwsSrcFmt = frame->format;
+            ctx->lastSwsSrcW   = frame->width;
+            OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                        "VideoDecodeThread: SwsContext created %{public}dx%{public}d srcFmt=%{public}d"
+                        " -> %{public}dx%{public}d RGBA maxRenderW=%{public}d",
+                        frame->width, frame->height, frame->format, dstW, dstH, maxRenderW);
+          }
         if (ctx->swsCtx != nullptr) {
           convertedFrame = av_frame_alloc();
           if (convertedFrame != nullptr) {
