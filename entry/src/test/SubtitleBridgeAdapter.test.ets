@@ -47,6 +47,7 @@ class MockPlayer implements IPlayer {
   onCompleted(_callback: () => void): void {}
   onStopped(_callback: () => void): void {}
   onTimeUpdate(_callback: (currentTime: number) => void): void {}
+  onBuffering(_callback: (isBuffering: boolean) => void): void {}
   onError(_callback: (error: Error) => void): void {}
   onUnsupportedFormat(_callback: () => void): void {}
   onSeekDone(_callback: () => void): void {}
@@ -124,7 +125,7 @@ export default function subtitleBridgeAdapterTest() {
     it('decodeSubtitlePayload: ArrayBuffer UTF-8 中文字幕可正确解码', 0, (done: () => void) => {
       const source = '因为彼此 我们都受尽了折磨';
       const utf8 = buffer.from(source, 'utf-8');
-      const arrayBuffer = utf8.buffer.slice(utf8.byteOffset, utf8.byteOffset + utf8.byteLength) as ArrayBuffer;
+      const arrayBuffer = utf8.buffer.slice(utf8.byteOffset, utf8.byteOffset + utf8.length) as ArrayBuffer;
 
       const decoded = decodeSubtitlePayload(arrayBuffer);
 
@@ -153,7 +154,9 @@ export default function subtitleBridgeAdapterTest() {
       for (let i = 0; i < 4; i++) {
         merged[i] = 0xFF;
       }
-      merged.set(utf8, 4);
+      for (let i = 0; i < utf8.length; i++) {
+        merged[4 + i] = utf8[i];
+      }
       for (let i = utf8.length + 4; i < merged.length; i++) {
         merged[i] = 0xEE;
       }
