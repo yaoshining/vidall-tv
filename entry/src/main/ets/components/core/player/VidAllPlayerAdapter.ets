@@ -35,7 +35,8 @@ interface VidAllCorePlayerNapiBridge {
     onCompleted: () => void,
     onBufferingChange: (isBuffering: boolean) => void,
     onSeekDone: () => void,
-    onFfmpegSwitching: () => void
+    onFfmpegSwitching: () => void,
+    onSubtitleUpdate: (info: SubtitleInfo) => void
   ) => void;
 }
 
@@ -264,6 +265,12 @@ export class VidAllPlayerAdapter implements IPlayer {
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `onFfmpegSwitching: handle=${currentHandle}, FFmpeg 接管，通知重置守卫计时器`);
           this._onFfmpegSwitchingCb?.();
+        },
+        (info: SubtitleInfo) => {
+          if (this._playerHandle <= 0) {
+            return;
+          }
+          this._onSubtitleUpdateCb?.(info);
         }
       );
     });

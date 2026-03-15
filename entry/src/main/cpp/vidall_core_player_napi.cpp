@@ -889,6 +889,7 @@ struct NativePlayerSkeletonState {
   napi_ref onCompletedRef = nullptr;
   napi_ref onBufferingChangeRef = nullptr;
   napi_ref onSeekDoneRef = nullptr;
+  napi_ref onSubtitleUpdateRef = nullptr;
   // A4：threadsafe function handles（媒体线程 → JS 线程回调）
   napi_threadsafe_function tsfOnPrepared = nullptr;
   napi_threadsafe_function tsfOnCompleted = nullptr;
@@ -897,6 +898,7 @@ struct NativePlayerSkeletonState {
   // PR#49 修复：新增 buffering=false 和 seekDone TSF，供媒体线程异步触发
   napi_threadsafe_function tsfOnBufferingFalse = nullptr;
   napi_threadsafe_function tsfOnSeekDone = nullptr;
+  napi_threadsafe_function tsfOnSubtitleUpdate = nullptr;
   // B6修复：FFmpeg 接管时通知 ArkTS 重置 native 就绪守卫计时器，防止 3.5s 误 fallback
   napi_threadsafe_function tsfOnFfmpegSwitching = nullptr;
   // PR#49 修复（问题6）：per-player mutex，保护 state 字段的跨线程读写
@@ -1193,6 +1195,7 @@ static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbac
   DeleteRefIfPresent(deleteEnv, state.onCompletedRef);
   DeleteRefIfPresent(deleteEnv, state.onBufferingChangeRef);
   DeleteRefIfPresent(deleteEnv, state.onSeekDoneRef);
+  DeleteRefIfPresent(deleteEnv, state.onSubtitleUpdateRef);
   // A4：释放 threadsafe functions（abort 确保已入队的回调不再执行，防止 Release 后悬挂访问）
   ReleaseTsfIfPresent(state.tsfOnPrepared);
   ReleaseTsfIfPresent(state.tsfOnCompleted);
@@ -1201,6 +1204,7 @@ static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbac
   // PR#49：新增两个 TSF
   ReleaseTsfIfPresent(state.tsfOnBufferingFalse);
   ReleaseTsfIfPresent(state.tsfOnSeekDone);
+  ReleaseTsfIfPresent(state.tsfOnSubtitleUpdate);
   // B6修复：释放 FFmpeg 接管通知 TSF
   ReleaseTsfIfPresent(state.tsfOnFfmpegSwitching);
 }
@@ -1402,6 +1406,12 @@ static napi_value SetHeaders(napi_env env, napi_callback_info info) {
 struct ErrorData {
   int32_t code;
   std::string *msg;  // heap-allocated，由 tsfOnError call_js_cb 负责 delete
+};
+
+struct SubtitleData {
+  int64_t durationMs{0};
+  int64_t startTimeMs{0};
+  std::string *text{nullptr};
 };
 
 // ---------------------------------------------------------------------------
@@ -3436,6 +3446,32 @@ static void OnAVPlayerInfoCB(OH_AVPlayer *player, AVPlayerOnInfoType type,
       }
       break;
     }
+    case AV_INFO_TYPE_SUBTITLE_UPDATE: {
+      if (state->tsfOnSubtitleUpdate == nullptr) {
+        break;
+      }
+      auto *subtitleData = new SubtitleData();
+      const char *text = nullptr;
+      int64_t startTimeMs = 0;
+      int64_t durationMs = 0;
+      int32_t startTimeInt = 0;
+      int32_t durationInt = 0;
+      if (OH_AVFormat_GetStringValue(infoBody, "text", &text) && text != nullptr) {
+        subtitleData->text = new std::string(text);
+      }
+      if (OH_AVFormat_GetLongValue(infoBody, "startTime", &startTimeMs)) {
+        subtitleData->startTimeMs = startTimeMs;
+      } else if (OH_AVFormat_GetIntValue(infoBody, "startTime", &startTimeInt)) {
+        subtitleData->startTimeMs = static_cast<int64_t>(startTimeInt);
+      }
+      if (OH_AVFormat_GetLongValue(infoBody, "duration", &durationMs)) {
+        subtitleData->durationMs = durationMs;
+      } else if (OH_AVFormat_GetIntValue(infoBody, "duration", &durationInt)) {
+        subtitleData->durationMs = static_cast<int64_t>(durationInt);
+      }
+      napi_call_threadsafe_function(state->tsfOnSubtitleUpdate, subtitleData, napi_tsfn_nonblocking);
+      break;
+    }
     default:
       break;
   }
@@ -3770,21 +3806,22 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
 }
 
 static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
-  size_t argc = 8;
-  napi_value args[8] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+  size_t argc = 9;
+  napi_value args[9] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
     ThrowTypeError(env, "setCallbacks failed to read args");
     return nullptr;
   }
   if (argc < 5) {
     ThrowTypeError(env,
-      "setCallbacks requires (handle, onPrepared, onError, onTimeUpdate, onCompleted[, onBufferingChange[, onSeekDone[, onFfmpegSwitching]]])");
+      "setCallbacks requires (handle, onPrepared, onError, onTimeUpdate, onCompleted[, onBufferingChange[, onSeekDone[, onFfmpegSwitching[, onSubtitleUpdate]]]])");
     return nullptr;
   }
   int32_t handle = 0;
   const bool hasBufferingArg = (argc >= 6);
   const bool hasSeekDoneArg = (argc >= 7);
   const bool hasFfmpegSwitchingArg = (argc >= 8);
+  const bool hasSubtitleUpdateArg = (argc >= 9);
   if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
     ThrowTypeError(env, "setCallbacks handle must be int32");
     return nullptr;
@@ -3813,6 +3850,11 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
   }
   if (hasSeekDoneArg) {
     if (!EnsureFunctionArg(env, args[6], "setCallbacks onSeekDone must be function")) {
+      return nullptr;
+    }
+  }
+  if (hasSubtitleUpdateArg) {
+    if (!EnsureFunctionArg(env, args[8], "setCallbacks onSubtitleUpdate must be function")) {
       return nullptr;
     }
   }
@@ -3850,6 +3892,13 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
     if (napi_create_reference(env, args[6], 1, &state.onSeekDoneRef) != napi_ok) {
       ClearCallbackRefs(state, env);
       ThrowTypeError(env, "setCallbacks failed to create onSeekDone callback reference");
+      return nullptr;
+    }
+  }
+  if (hasSubtitleUpdateArg) {
+    if (napi_create_reference(env, args[8], 1, &state.onSubtitleUpdateRef) != napi_ok) {
+      ClearCallbackRefs(state, env);
+      ThrowTypeError(env, "setCallbacks failed to create onSubtitleUpdate callback reference");
       return nullptr;
     }
   }
@@ -3956,6 +4005,38 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
       },
       &state.tsfOnSeekDone);
+  }
+  if (hasSubtitleUpdateArg) {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnSubtitleUpdate", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[8], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        auto *subtitleData = static_cast<SubtitleData *>(data);
+        napi_value infoObj = nullptr;
+        napi_create_object(tsfEnv, &infoObj);
+        if (subtitleData != nullptr) {
+          napi_value durationVal = nullptr;
+          napi_create_int64(tsfEnv, subtitleData->durationMs, &durationVal);
+          napi_set_named_property(tsfEnv, infoObj, "duration", durationVal);
+          napi_value startTimeVal = nullptr;
+          napi_create_int64(tsfEnv, subtitleData->startTimeMs, &startTimeVal);
+          napi_set_named_property(tsfEnv, infoObj, "startTime", startTimeVal);
+          napi_value textVal = nullptr;
+          napi_create_string_utf8(tsfEnv,
+            (subtitleData->text != nullptr) ? subtitleData->text->c_str() : "",
+            NAPI_AUTO_LENGTH, &textVal);
+          napi_set_named_property(tsfEnv, infoObj, "text", textVal);
+        }
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 1, &infoObj, nullptr);
+        if (subtitleData != nullptr) {
+          delete subtitleData->text;
+          delete subtitleData;
+        }
+      },
+      &state.tsfOnSubtitleUpdate);
   }
   // B6修复：注册 tsfOnFfmpegSwitching（可选，args[7]）
   // FFmpeg 接管后通知 ArkTS 重置守卫计时器至 15s，防止 3.5s 超时误触 fallback。
