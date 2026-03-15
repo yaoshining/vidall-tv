@@ -2816,6 +2816,7 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
   // stereo S16：每帧 = 2 声道 × 2 字节 = 4 字节
   const int samplesNeeded = audioDataSize / static_cast<int>(2 * sizeof(int16_t));
   int samplesFilled = 0;
+  int mediaSamplesFilled = 0;
 
   // ── 步骤 1：先消费上一次 swr_convert 的溢出缓冲 ──────────────────────────
   if (!ctx->pcmLeftover.empty()) {
@@ -2825,6 +2826,7 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
     memcpy(dst, ctx->pcmLeftover.data(),
            static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
     samplesFilled += toCopy;
+    mediaSamplesFilled += toCopy;
     if (toCopy < leftoverSamples) {
       ctx->pcmLeftover.erase(ctx->pcmLeftover.begin(),
                              ctx->pcmLeftover.begin() + toCopy * 2);
@@ -2878,6 +2880,7 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
     memcpy(dst + samplesFilled * 2, tempBuf.data(),
            static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
     samplesFilled += toCopy;
+    mediaSamplesFilled += toCopy;
 
     if (converted > toCopy) {
       // 多余样本存入溢出缓冲，下次 callback 优先消费
@@ -2887,8 +2890,11 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
     }
   }
 
-  // B5：更新音频时钟（本次 callback 共输出 samplesNeeded 个样本）
-  ctx->audioPtsSamples.fetch_add(static_cast<int64_t>(samplesNeeded), std::memory_order_relaxed);
+  // B5：音频时钟只累计真实媒体样本，不把 underrun 填充的静音计入主时钟。
+  // 否则启动/seek 后音频时钟会虚假快进，RenderThread 会把视频帧误判为“严重落后”并大量丢帧。
+  if (mediaSamplesFilled > 0) {
+    ctx->audioPtsSamples.fetch_add(static_cast<int64_t>(mediaSamplesFilled), std::memory_order_relaxed);
+  }
 
   return AUDIO_DATA_CALLBACK_RESULT_VALID;
 }
