@@ -684,6 +684,9 @@ struct AVFrameQueue {
   int maxSize = 4;  // 视频帧不需要太大，以控制内存压力
 };
 
+// 前向声明，供 FfmpegContext 持有反向指针（FFmpeg ctx 由 state 独占拥有，生命周期安全）
+struct NativePlayerSkeletonState;
+
 // FFmpeg 上下文：格式探测 + demux 线程 + 双队列
 struct FfmpegContext {
   AVFormatContext *fmtCtx = nullptr;
@@ -732,6 +735,17 @@ struct FfmpegContext {
   OH_AudioStreamBuilder *audioBuilder = nullptr;
   SwrContext *swrCtx = nullptr;          // libswresample 重采样上下文（源格式 → stereo S16 48kHz）
   std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
+
+  // B5：音频时钟（主时钟）
+  std::atomic<int64_t> audioPtsSamples{0};  // 已渲染的音频样本数（stereo stereo 计数，swr 输出 48kHz）
+  int audioSampleRate{0};                    // swr 输出采样率（48000），FfmpegInitSwr 后固定
+
+  // B5：seek 请求（Seek() NAPI 写入，DemuxThreadFunc 消费）
+  std::atomic<bool> seekRequested{false};
+  std::atomic<int64_t> seekTargetMs{-1};
+
+  // B5：反向指针，供 DemuxThreadFunc 发出 seekDone TSF；生命周期安全（state 独占拥有 ffmpegCtx）
+  NativePlayerSkeletonState *ownerState{nullptr};
 };
 
 struct NativePlayerSkeletonState {
@@ -1377,6 +1391,65 @@ static int FfmpegOpenInput(FfmpegContext *ctx, const std::string &url) {
   return 0;
 }
 
+// ---------------------------------------------------------------------------
+// B5：音频时钟辅助（主时钟，单位：秒）
+// ---------------------------------------------------------------------------
+
+static double AudioClock(const FfmpegContext *ctx) {
+  if (ctx->audioSampleRate <= 0) return 0.0;
+  return static_cast<double>(ctx->audioPtsSamples.load(std::memory_order_relaxed))
+         / static_cast<double>(ctx->audioSampleRate);
+}
+
+// ---------------------------------------------------------------------------
+// B5：清空所有 packet/frame 队列（seek 时调用，清除过期数据）
+// ---------------------------------------------------------------------------
+
+static void FlushFfmpegQueues(FfmpegContext *ctx) {
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
+    while (!ctx->videoQueue.packets.empty()) {
+      AVPacket *p = ctx->videoQueue.packets.front();
+      ctx->videoQueue.packets.pop();
+      av_packet_free(&p);
+    }
+  }
+  ctx->videoQueue.cv.notify_all();
+
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    while (!ctx->audioQueue.packets.empty()) {
+      AVPacket *p = ctx->audioQueue.packets.front();
+      ctx->audioQueue.packets.pop();
+      av_packet_free(&p);
+    }
+  }
+  ctx->audioQueue.cv.notify_all();
+
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoFrameQueue.mtx);
+    while (!ctx->videoFrameQueue.frames.empty()) {
+      AVFrame *f = ctx->videoFrameQueue.frames.front();
+      ctx->videoFrameQueue.frames.pop();
+      av_frame_free(&f);
+    }
+  }
+  ctx->videoFrameQueue.cv.notify_all();
+
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioFrameQueue.mtx);
+    while (!ctx->audioFrameQueue.frames.empty()) {
+      AVFrame *f = ctx->audioFrameQueue.frames.front();
+      ctx->audioFrameQueue.frames.pop();
+      av_frame_free(&f);
+    }
+  }
+  ctx->audioFrameQueue.cv.notify_all();
+
+  // 清空 swr 溢出缓冲（避免 seek 后播放旧数据）
+  ctx->pcmLeftover.clear();
+}
+
 // demux 线程主循环：持续读帧，分发至视频/音频队列
 static void DemuxThreadFunc(FfmpegContext *ctx) {
   if (ctx == nullptr || ctx->fmtCtx == nullptr) {
@@ -1391,6 +1464,31 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
   }
 
   while (ctx->demuxRunning.load()) {
+    // B5：检查 seek 请求（由 Seek() NAPI 设置，在 demux 线程消费以保证 avformat 线程安全）
+    if (ctx->seekRequested.exchange(false)) {
+      const int64_t targetMs = ctx->seekTargetMs.load();
+      const int64_t targetUs = targetMs * 1000LL;  // AV_TIME_BASE = 1e6
+      av_seek_frame(ctx->fmtCtx, -1, targetUs, AVSEEK_FLAG_BACKWARD);
+      // 清空所有 packet/frame 队列（旧数据）
+      FlushFfmpegQueues(ctx);
+      // 刷新解码器内部缓冲区
+      if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
+      if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
+      // 重置音频时钟（seek 后从新位置重新计时）
+      ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
+      // 发出 seekDone TSF 通知 ArkTS
+      if (ctx->ownerState != nullptr) {
+        NativePlayerSkeletonState *st = ctx->ownerState;
+        std::lock_guard<std::mutex> lk(st->stateMutex);
+        st->currentTimeMs = targetMs;
+      }
+      if (ctx->ownerState != nullptr && ctx->ownerState->tsfOnSeekDone != nullptr) {
+        napi_call_threadsafe_function(ctx->ownerState->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
+      }
+    }
+
     int ret = av_read_frame(ctx->fmtCtx, pkt);
     if (ret == AVERROR_EOF) {
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "DemuxThread: EOF reached");
@@ -1933,6 +2031,9 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "RenderThreadFunc: render loop started");
 
+  // B5：时间上报节流（每 200ms 通过 tsfOnTimeUpdate 上报一次播放位置）
+  auto lastEmitTime = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+
   while (ctx->renderRunning.load()) {
     // 4. 从 videoFrameQueue 消费一帧（最多等 16ms）
     AVFrame *frame = nullptr;
@@ -1952,6 +2053,39 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
 
     if (frame == nullptr) {
       continue;
+    }
+
+    // B5：AV 同步：以音频时钟为主时钟，决定等待或丢帧
+    if (ctx->videoStreamIdx >= 0 && ctx->audioSampleRate > 0) {
+      const double videoPts = (frame->pts != AV_NOPTS_VALUE)
+          ? frame->pts * av_q2d(ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base)
+          : 0.0;
+      const double audioClock = AudioClock(ctx);
+      const double diff = videoPts - audioClock;
+
+      if (diff > 0.1) {
+        // 视频超前音频 100ms 以上：等待音频跟上，最多等 500ms
+        const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 500.0));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+      } else if (diff < -0.5) {
+        // 视频落后音频 500ms 以上：丢弃此帧（追帧）
+        av_frame_free(&frame);
+        continue;
+      }
+
+      // B5：每 200ms 上报一次播放位置给 ArkTS（以音频时钟为准）
+      const auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEmitTime).count() >= 200) {
+        lastEmitTime = now;
+        const int64_t posMs = static_cast<int64_t>(audioClock * 1000.0);
+        {
+          std::lock_guard<std::mutex> lk(state->stateMutex);
+          state->currentTimeMs = posMs;
+        }
+        if (state->tsfOnTimeUpdate != nullptr) {
+          napi_call_threadsafe_function(state->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
+        }
+      }
     }
 
     // 5. 上传 YUV420P → 3 张 GL_LUMINANCE 纹理
@@ -2103,6 +2237,8 @@ static bool FfmpegInitSwr(FfmpegContext *ctx) {
                "FfmpegInitSwr: OK src(fmt=%d rate=%d ch=%d) → stereo S16 48kHz",
                static_cast<int>(aCtx->sample_fmt), aCtx->sample_rate,
                aCtx->ch_layout.nb_channels);
+  // B5：记录 swr 输出采样率，供音频时钟计算（48kHz 固定）
+  ctx->audioSampleRate = 48000;
   return true;
 }
 
@@ -2196,11 +2332,11 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
     }
   }
 
+  // B5：更新音频时钟（本次 callback 共输出 samplesNeeded 个样本）
+  ctx->audioPtsSamples.fetch_add(static_cast<int64_t>(samplesNeeded), std::memory_order_relaxed);
+
   return AUDIO_DATA_CALLBACK_RESULT_VALID;
 }
-
-// ---------------------------------------------------------------------------
-// B4：OH_AudioRenderer 初始化（stereo S16LE 48kHz，MOVIE 用途）
 // ---------------------------------------------------------------------------
 
 static bool FfmpegInitAudioRenderer(FfmpegContext *ctx) {
@@ -2342,6 +2478,13 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
                state->ffmpegWidth, state->ffmpegHeight,
                state->ffmpegFps, static_cast<long long>(state->ffmpegDurationMs));
 
+  // B5：设置 durationMs 并标记 prepared，确保 ArkTS getDuration() 返回正确值
+  {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    state->durationMs = state->ffmpegDurationMs;
+    state->prepared = true;
+  }
+
   // 启动解码线程
   ctx->decodeRunning.store(true);
   if (ctx->videoCodecCtx != nullptr) {
@@ -2357,6 +2500,14 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
 
   // B3：启动 OpenGL ES YUV 渲染线程（消费 videoFrameQueue）
   StartFfmpegRender(state);
+
+  // B5：触发 onPrepared 回调（通知 ArkTS 播放器已就绪，duration 已设置）
+  if (state->tsfOnPrepared != nullptr) {
+    napi_call_threadsafe_function(state->tsfOnPrepared, nullptr, napi_tsfn_nonblocking);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegDecode: tsfOnPrepared triggered, durationMs=%lld",
+                 static_cast<long long>(state->durationMs));
+  }
 }
 
 static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
@@ -2454,6 +2605,9 @@ static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string
     return;
   }
 
+  // B5：设置反向指针，供 DemuxThreadFunc 发出 seekDone TSF
+  ctx->ownerState = state;
+
   ctx->demuxRunning.store(true);
   ctx->demuxThread = std::thread(DemuxThreadFunc, ctx.get());
   state->ffmpegCtx = std::move(ctx);
@@ -2483,6 +2637,8 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
   // 1. 通知中断：让阻塞的 av_read_frame / avformat_open_input 尽快返回
   ctx->interruptFlag.store(true);
   ctx->demuxRunning.store(false);
+  // B5：清除 ownerState 反向指针，防止 join 后悬挂访问（demux 线程循环已由 demuxRunning=false 终止）
+  ctx->ownerState = nullptr;
 
   // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待）
   {
@@ -3192,6 +3348,24 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
   if (positionMs < 0) {
     positionMs = 0;
   }
+
+  // B5：FFmpeg 路径：通过原子标志异步触发 demux 线程执行 av_seek_frame
+  if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
+    {
+      std::lock_guard<std::mutex> lock(state.stateMutex);
+      if (state.durationMs > 0 && positionMs > state.durationMs) {
+        positionMs = state.durationMs;
+      }
+      state.currentTimeMs = positionMs;
+    }
+    state.ffmpegCtx->seekTargetMs.store(positionMs);
+    state.ffmpegCtx->seekRequested.store(true);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "Seek: FFmpeg path seek requested to %lld ms",
+                 static_cast<long long>(positionMs));
+    return ReturnUndefinedOrThrow(env, "seek failed to create return value");
+  }
+
   {
     // PR#49（问题6）：保护 currentTimeMs/durationMs/lastRealtimeMs 读写；OH_AVPlayer_Seek 在锁外
     std::lock_guard<std::mutex> lock(state.stateMutex);
