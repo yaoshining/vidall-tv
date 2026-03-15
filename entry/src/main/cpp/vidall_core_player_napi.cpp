@@ -800,6 +800,8 @@ struct FfmpegContext {
   OH_AudioStreamBuilder *audioBuilder = nullptr;
   SwrContext *swrCtx = nullptr;          // libswresample 重采样上下文（源格式 → stereo S16 48kHz）
   SwsContext *swsCtx = nullptr;          // libswscale 像素格式转换（yuv420p10le/etc → yuv420p，B6 HDR/DV 修复）
+  int lastSwsSrcFmt = -1;  // 上次 swsCtx 对应的源像素格式（格式或尺寸变化时重建）
+  int lastSwsSrcW   = -1;  // 上次 swsCtx 对应的源宽度
   std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
 
   // B5：音频时钟（主时钟）
@@ -853,6 +855,8 @@ struct FfmpegContext {
     if (swsCtx != nullptr) {
       sws_freeContext(swsCtx);
       swsCtx = nullptr;
+      lastSwsSrcFmt = -1;
+      lastSwsSrcW   = -1;
     }
   }
 };
@@ -1819,28 +1823,48 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
       }
 
       // 将帧移入 videoFrameQueue（背压等待，防止解码过快撑爆内存）
-      // ── B6：强制转换到 YUV420P（8-bit），渲染管线只处理 yuv420p ──
-      // HDR/DV 内容解码输出 yuv420p10le（10-bit），GL 侧以 GL_UNSIGNED_BYTE 上传，
-      // 若不转换则纹理数据完全错误 → 黑屏。此处懒创建/复用 SwsContext。
+      // ── B6：格式转换 + 超 1920 降采样 ──
+      // 1. HDR/DV 内容解码输出 yuv420p10le（10-bit），必须转换到 yuv420p（8-bit）
+      // 2. 4K 内容（3840×2160）纹理分配在设备上触发 GL_OUT_OF_MEMORY（0x505），
+      //    宽度超过 1920 时通过 sws_scale 同步降采样到 1920×H（保持宽高比）。
+      static const int MAX_RENDER_W = 1920;
+      // 计算目标渲染分辨率（降采样到 1920 时保持宽高比，行/列对齐到偶数）
+      int dstW = frame->width;
+      int dstH = frame->height;
+      if (dstW > MAX_RENDER_W) {
+        dstH = dstH * MAX_RENDER_W / dstW;
+        dstW = MAX_RENDER_W;
+        dstH = (dstH + 1) & ~1;  // 偶数对齐（YUV420P 要求）
+      }
+      bool needConvert = (frame->format != AV_PIX_FMT_YUV420P) || (dstW != frame->width);
       AVFrame *renderFrame = frame;
       AVFrame *convertedFrame = nullptr;
-      if (frame->format != AV_PIX_FMT_YUV420P) {
-        // 输入格式变化时重建 SwsContext（首次 or 格式切换）
-        if (ctx->swsCtx == nullptr) {
+      if (needConvert) {
+        // 格式或源宽度变化时重建 SwsContext
+        if (ctx->swsCtx == nullptr
+            || ctx->lastSwsSrcFmt != frame->format
+            || ctx->lastSwsSrcW   != frame->width) {
+          if (ctx->swsCtx != nullptr) {
+            sws_freeContext(ctx->swsCtx);
+            ctx->swsCtx = nullptr;
+          }
           ctx->swsCtx = sws_getContext(
               frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
-              frame->width, frame->height, AV_PIX_FMT_YUV420P,
+              dstW, dstH, AV_PIX_FMT_YUV420P,
               SWS_BILINEAR, nullptr, nullptr, nullptr);
+          ctx->lastSwsSrcFmt = frame->format;
+          ctx->lastSwsSrcW   = frame->width;
           OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                       "VideoDecodeThread: SwsContext created srcFmt=%{public}d -> yuv420p",
-                       frame->format);
+                       "VideoDecodeThread: SwsContext created %{public}dx%{public}d srcFmt=%{public}d"
+                       " -> %{public}dx%{public}d yuv420p",
+                       frame->width, frame->height, frame->format, dstW, dstH);
         }
         if (ctx->swsCtx != nullptr) {
           convertedFrame = av_frame_alloc();
           if (convertedFrame != nullptr) {
             convertedFrame->format = AV_PIX_FMT_YUV420P;
-            convertedFrame->width  = frame->width;
-            convertedFrame->height = frame->height;
+            convertedFrame->width  = dstW;
+            convertedFrame->height = dstH;
             if (av_frame_get_buffer(convertedFrame, 32) == 0) {
               sws_scale(ctx->swsCtx,
                         reinterpret_cast<const uint8_t * const *>(frame->data),
@@ -1852,14 +1876,13 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
             } else {
               av_frame_free(&convertedFrame);
               convertedFrame = nullptr;
-              // fallback：直接用原始帧（可能渲染异常，但不崩溃）
               OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
                            "VideoDecodeThread: av_frame_get_buffer failed, fallback to raw frame");
             }
           }
         }
       }
-      // ── 结束格式转换 ──
+      // ── 结束格式转换与降采样 ──
 
       AVFrame *frameCopy = av_frame_alloc();
       if (frameCopy) {
@@ -2995,6 +3018,8 @@ static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
   if (ctx->swsCtx != nullptr) {
     sws_freeContext(ctx->swsCtx);
     ctx->swsCtx = nullptr;
+    ctx->lastSwsSrcFmt = -1;
+    ctx->lastSwsSrcW   = -1;
   }
 }
 
