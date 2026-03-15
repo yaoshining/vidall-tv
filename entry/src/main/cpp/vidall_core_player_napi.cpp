@@ -807,10 +807,11 @@ struct FfmpegContext {
   std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
 
   // B5：音频时钟（主时钟）
-  std::atomic<int64_t> audioPtsSamples{0};  // 已渲染的音频样本数（stereo stereo 计数，swr 输出 48kHz）
-  int audioSampleRate{0};                    // swr 输出采样率（48000），FfmpegInitSwr 后固定
-  std::atomic<int64_t> audioClockBaseMs{0};  // seek 后的主时钟基准，timeUpdate = base + playedSamples/sampleRate
-  std::atomic<bool> playbackPaused{false};   // FFmpeg 路径的真实暂停态：音频回调/视频渲染均需读取
+  std::atomic<int64_t> audioPtsSamples{0};        // 仅保留为诊断计数，不再直接作为主时钟
+  int audioSampleRate{0};                         // swr 输出采样率（48000），FfmpegInitSwr 后固定
+  std::atomic<int64_t> audioClockBaseMs{0};       // 当前播放锚点对应的媒体时间
+  std::atomic<int64_t> audioClockStartRealtimeMs{0}; // 当前播放锚点对应的 steady_clock 时间；暂停时为 0
+  std::atomic<bool> playbackPaused{false};        // FFmpeg 路径的真实暂停态：音频回调/视频渲染均需读取
   std::atomic<int32_t> videoSyncGraceFrames{0}; // seek/启动后前若干帧绕过 AV sync，先让画面稳定出帧
 
   // B5：seek 请求（Seek() NAPI 写入，DemuxThreadFunc 消费）
@@ -1539,12 +1540,17 @@ static int FfmpegOpenInput(FfmpegContext *ctx, const std::string &url) {
 // ---------------------------------------------------------------------------
 
 static double AudioClock(const FfmpegContext *ctx) {
-  const double baseSeconds =
-      static_cast<double>(ctx->audioClockBaseMs.load(std::memory_order_relaxed)) / 1000.0;
-  if (ctx->audioSampleRate <= 0) return baseSeconds;
-  return baseSeconds +
-         static_cast<double>(ctx->audioPtsSamples.load(std::memory_order_relaxed)) /
-         static_cast<double>(ctx->audioSampleRate);
+  const int64_t baseMs = ctx->audioClockBaseMs.load(std::memory_order_relaxed);
+  if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+    return static_cast<double>(baseMs) / 1000.0;
+  }
+  const int64_t startRealtimeMs = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
+  if (startRealtimeMs <= 0) {
+    return static_cast<double>(baseMs) / 1000.0;
+  }
+  const int64_t nowMs = NowRealtimeMs();
+  const int64_t deltaMs = std::max<int64_t>(0, nowMs - startRealtimeMs);
+  return static_cast<double>(baseMs + deltaMs) / 1000.0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1643,6 +1649,7 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
                      static_cast<int32_t>(flushResult));
       }
       ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
+      ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
       ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
       ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -2993,6 +3000,7 @@ static void StartFfmpegAudio(NativePlayerSkeletonState *state) {
 
   ctx->playbackPaused.store(false, std::memory_order_relaxed);
   ctx->audioClockBaseMs.store(0, std::memory_order_relaxed);
+  ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
   ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
   ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
   const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
@@ -3957,6 +3965,7 @@ static napi_value Play(napi_env env, napi_callback_info info) {
   }
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
     state.ffmpegCtx->playbackPaused.store(false, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
     if (state.ffmpegCtx->audioRenderer != nullptr) {
       const OH_AudioStream_Result result = OH_AudioRenderer_Start(state.ffmpegCtx->audioRenderer);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -4012,6 +4021,9 @@ static napi_value Pause(napi_env env, napi_callback_info info) {
     state.lastRealtimeMs = 0;
   }
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
+    const int64_t pausedClockMs = static_cast<int64_t>(AudioClock(state.ffmpegCtx.get()) * 1000.0);
+    state.ffmpegCtx->audioClockBaseMs.store(pausedClockMs, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->playbackPaused.store(true, std::memory_order_relaxed);
     if (state.ffmpegCtx->audioRenderer != nullptr) {
       const OH_AudioStream_Result result = OH_AudioRenderer_Pause(state.ffmpegCtx->audioRenderer);
@@ -4077,6 +4089,7 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
       state.currentTimeMs = positionMs;
     }
     state.ffmpegCtx->audioClockBaseMs.store(positionMs, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
     state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->seekTargetMs.store(positionMs);
     state.ffmpegCtx->seekRequested.store(true);
