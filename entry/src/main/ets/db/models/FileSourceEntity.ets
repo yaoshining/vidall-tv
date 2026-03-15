@@ -22,6 +22,11 @@ export interface WebDAVSourceConfig {
   protocol: 'http' | 'https';
   port: number;
   rootPath: string;
+  /**
+   * TLS 证书校验策略（持久化字段，默认 'strict'）。
+   * 'allow_self_signed' 仅在内网自签名证书场景下受控启用，不得作为生产默认值。
+   */
+  tlsCertPolicy?: 'strict' | 'allow_self_signed';
 }
 
 /**

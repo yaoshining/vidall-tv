@@ -28,7 +28,8 @@ interface WebDavNapiBridge {
     url: string,
     headerLines: string,
     body: string,
-    timeoutMs: number
+    timeoutMs: number,
+    tlsPolicy: string
   ) => WebDavRequestResult;
   downloadToFile: (
     method: string,
@@ -36,7 +37,8 @@ interface WebDavNapiBridge {
     headerLines: string,
     body: string,
     timeoutMs: number,
-    outputPath: string
+    outputPath: string,
+    tlsPolicy: string
   ) => WebDavDownloadResult;
   getNativeCapabilities: () => NativeCapabilities;
 }
@@ -62,6 +64,13 @@ export interface WebDAVConfig {
   username?: string;
   password?: string;
   timeout?: number;
+  /**
+   * TLS 证书校验策略（生产环境默认 'strict'，不允许以关闭校验作为默认行为）。
+   * - 'strict': 默认，严格校验系统 CA，拒绝过期、域名不匹配和不受信任证书。
+   * - 'allow_self_signed': 受控启用，跳过 TLS 校验，仅限内网调试场景，
+   *   任何生产部署必须经过明确评审，不得静默传播。
+   */
+  tlsCertPolicy?: 'strict' | 'allow_self_signed';
 }
 
 export interface WebDAVResource {
@@ -111,6 +120,8 @@ export class WebDAVClient {
   private readonly allowLegacyTransportFallback: boolean = false;
   // 阶段3收口：默认禁止 HTTPS 失败后降级到明文 HTTP。
   private readonly allowInsecureHttpDowngrade: boolean = false;
+  // TLS 证书校验策略（生产默认严格校验）
+  private readonly tlsCertPolicy: string;
   // 缓存 native libcurl 可用性（null = 未检测）
   private _nativeCurlEnabled: boolean | null = null;
 
@@ -119,6 +130,8 @@ export class WebDAVClient {
     this.username = config.username || '';
     this.password = config.password || '';
     this.timeout = config.timeout || 30000;
+    // 生产默认严格校验；'allow_self_signed' 仅可在内网调试场景下受控启用。
+    this.tlsCertPolicy = config.tlsCertPolicy === 'allow_self_signed' ? 'allow_self_signed' : 'strict';
 
     const urlPattern = /^(https?):\/\/([^:\/]+)(?::(\d+))?(\/.*)?$/;
     const match = this.baseUrl.match(urlPattern);
@@ -249,6 +262,68 @@ export class WebDAVClient {
   }
 
   /**
+   * 将 curl 错误码（来自 [CURL:{code}] 前缀）转换为用户友好的中文提示。
+   * 返回 null 表示不是可识别的 TLS 错误。
+   */
+  private classifyTlsError(errorMsg: string): string | null {
+    if (!errorMsg.startsWith('[CURL:')) {
+      return null;
+    }
+    const bracketEnd = errorMsg.indexOf(']');
+    if (bracketEnd < 0) {
+      return null;
+    }
+    // '[CURL:' has length 6
+    const codeStr = errorMsg.substring(6, bracketEnd);
+    const code = parseInt(codeStr);
+    if (code !== code) {
+      // NaN check（isNaN 替代，兼容严格模式）
+      return null;
+    }
+    if (code === 35) {
+      return 'TLS 连接失败：握手错误，请检查服务器 TLS 配置';
+    }
+    if (code === 60) {
+      return 'TLS 证书验证失败：证书可能已过期、域名不匹配或颁发机构不受信任。如使用自签名证书，请配置 tlsCertPolicy: allow_self_signed';
+    }
+    if (code === 58) {
+      return 'TLS 客户端证书错误';
+    }
+    if (code === 59) {
+      return 'TLS 加密套件协商失败';
+    }
+    if (code === 77) {
+      return 'TLS CA 证书文件异常';
+    }
+    if (code === 91) {
+      return 'TLS 证书状态无效（OCSP 验证失败）';
+    }
+    return 'TLS 错误（CURL 错误码：' + code + '）';
+  }
+
+  /** 判断错误消息是否为 TLS 相关错误 */
+  private isTlsError(errorMsg: string): boolean {
+    return errorMsg.startsWith('[CURL:35]') ||
+           errorMsg.startsWith('[CURL:58]') ||
+           errorMsg.startsWith('[CURL:59]') ||
+           errorMsg.startsWith('[CURL:60]') ||
+           errorMsg.startsWith('[CURL:77]') ||
+           errorMsg.startsWith('[CURL:91]') ||
+           errorMsg.startsWith('TLS ') ||
+           errorMsg.includes('[CURL:35]') ||
+           errorMsg.includes('[CURL:60]');
+  }
+
+  /**
+   * 记录 TLS 审计日志（脱敏 URL，保留错误信息以供排障）。
+   * TAG：VidAll_TLS_Audit，可通过 hilog | grep VidAll_TLS_Audit 提取。
+   */
+  private logTlsAudit(op: string, rawUrl: string, errorMsg: string): void {
+    const sanitizedUrl = rawUrl.replace(/:\/\/([^:@]+):([^@]+)@/, '://***:***@');
+    console.error(`[VidAll_TLS_Audit] op=${op} url=${sanitizedUrl} error=${errorMsg}`);
+  }
+
+  /**
    * 通过 native libcurl 发送 WebDAV 请求（仅在 libcurlEnabled 时调用）。
    * 失败时由上层 sendRawHttpRequest 捕获并回退到 socket 实现。
    */
@@ -272,11 +347,16 @@ export class WebDAVClient {
     const headerLines = parts.join('\r\n');
 
     const result = getVidAllCorePlayerNapi().webdavRequest(
-      method, fullUrl, headerLines, body ?? '', this.timeout
+      method, fullUrl, headerLines, body ?? '', this.timeout, this.tlsCertPolicy
     );
 
     if (result.error) {
-      throw new Error(`native curl: ${result.error}`);
+      if (this.isTlsError(result.error)) {
+        this.logTlsAudit(method, fullUrl, result.error);
+        const userMsg = this.classifyTlsError(result.error);
+        throw new Error(userMsg !== null ? userMsg + ' [' + result.error + ']' : result.error);
+      }
+      throw new Error('native curl: ' + result.error);
     }
 
     const resp = new HttpResponse();
@@ -309,9 +389,21 @@ export class WebDAVClient {
   ): WebDavDownloadResult {
     const fullUrl = this.buildNativeUrl(encodedPath);
     const headerLines = this.buildHeaderLines(headers);
-    return getVidAllCorePlayerNapi().downloadToFile(
-      'GET', fullUrl, headerLines, '', this.timeout * 2, localFilePath
+    const result = getVidAllCorePlayerNapi().downloadToFile(
+      'GET', fullUrl, headerLines, '', this.timeout * 2, localFilePath, this.tlsCertPolicy
     );
+    if (result.error && this.isTlsError(result.error)) {
+      this.logTlsAudit('GET_DOWNLOAD', fullUrl, result.error);
+      const userMsg = this.classifyTlsError(result.error);
+      const finalMsg = userMsg !== null ? userMsg + ' [' + result.error + ']' : result.error;
+      const enhanced: WebDavDownloadResult = {
+        statusCode: result.statusCode,
+        downloadedBytes: result.downloadedBytes,
+        error: finalMsg
+      };
+      return enhanced;
+    }
+    return result;
   }
 
   /**
@@ -1375,7 +1467,13 @@ export class WebDAVClient {
         console.info('WebDAV connection test successful');
         return { success: true, message: '连接成功' };
       } catch (error) {
+        const errMsg = (error as Error).message ?? '';
         console.error('Connection test failed:', JSON.stringify(error));
+
+        // TLS 错误直接返回结构化提示，审计日志已在 sendViaNative 中记录
+        if (this.isTlsError(errMsg)) {
+          return { success: false, message: errMsg };
+        }
 
         // HTTPS 在 PROPFIND 探测失败时，再回退 OPTIONS 判断是否是网络/证书层问题
         if (this.isHttps) {

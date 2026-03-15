@@ -805,7 +805,8 @@ export struct MediaLibraryTab {
           baseUrl,
           username: config['username'] ?? '',
           password: config['password'] ?? '',
-          timeout: 30000
+          timeout: 30000,
+          tlsCertPolicy: config['tlsCertPolicy'] === 'allow_self_signed' ? 'allow_self_signed' : 'strict'
         };
         const client = new WebDAVClient(webdavConfig);
         clientMap.set(sourceId, client);

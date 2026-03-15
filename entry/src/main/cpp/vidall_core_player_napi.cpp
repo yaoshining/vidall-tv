@@ -145,6 +145,19 @@ struct CurlDownloadResult {
 };
 
 #if VIDALL_HAS_LIBCURL
+/**
+ * 将 CURLcode 格式化为带错误码前缀的结构化错误字符串，便于上层解析。
+ * 格式：[CURL:{code}] {curl_easy_strerror 描述}
+ * 例：[CURL:60] SSL peer certificate or SSH remote key was not OK
+ */
+static std::string FormatCurlError(CURLcode code) {
+  std::string prefix = "[CURL:";
+  prefix += std::to_string(static_cast<int>(code));
+  prefix += "] ";
+  prefix += curl_easy_strerror(code);
+  return prefix;
+}
+
 static size_t CurlWriteToString(void *contents, size_t size, size_t nmemb, void *userp) {
   size_t totalSize = size * nmemb;
   if (userp == nullptr || contents == nullptr || totalSize == 0) {
@@ -202,7 +215,8 @@ static CurlRequestResult RunCurlRequest(
   const std::string &url,
   const std::string &headerLines,
   const std::string &body,
-  int64_t timeoutMs
+  int64_t timeoutMs,
+  bool allowSelfSigned = false
 ) {
   CurlRequestResult result;
 #if !VIDALL_HAS_LIBCURL
@@ -224,8 +238,10 @@ static CurlRequestResult RunCurlRequest(
   curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+  // 生产环境默认严格校验：SSL_VERIFYPEER=1, SSL_VERIFYHOST=2。
+  // 仅当 allowSelfSigned=true（受控启用）时关闭校验，不允许作为全局默认行为。
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, allowSelfSigned ? 0L : 1L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, allowSelfSigned ? 0L : 2L);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToString);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
 
@@ -249,7 +265,7 @@ static CurlRequestResult RunCurlRequest(
 
   CURLcode code = curl_easy_perform(curl);
   if (code != CURLE_OK) {
-    result.error = std::string("curl request failed: ") + curl_easy_strerror(code);
+    result.error = FormatCurlError(code);
   } else {
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.statusCode);
   }
@@ -268,7 +284,8 @@ static CurlDownloadResult RunCurlDownloadToFile(
   const std::string &headerLines,
   const std::string &body,
   int64_t timeoutMs,
-  const std::string &outputPath
+  const std::string &outputPath,
+  bool allowSelfSigned = false
 ) {
   CurlDownloadResult result;
 #if !VIDALL_HAS_LIBCURL
@@ -301,8 +318,9 @@ static CurlDownloadResult RunCurlDownloadToFile(
   curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+  // 生产环境默认严格校验；allowSelfSigned=true 时为受控启用，不允许作为默认行为。
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, allowSelfSigned ? 0L : 1L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, allowSelfSigned ? 0L : 2L);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToFile);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &writerContext);
 
@@ -326,7 +344,7 @@ static CurlDownloadResult RunCurlDownloadToFile(
 
   CURLcode code = curl_easy_perform(curl);
   if (code != CURLE_OK) {
-    result.error = std::string("curl download failed: ") + curl_easy_strerror(code);
+    result.error = FormatCurlError(code);
   } else {
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.statusCode);
     result.downloadedBytes = writerContext.bytesWritten;
@@ -1473,14 +1491,14 @@ static napi_value FfmpegSelfCheck(napi_env env, napi_callback_info info) {
 }
 
 static napi_value WebdavRequest(napi_env env, napi_callback_info info) {
-  size_t argc = 5;
-  napi_value args[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+  size_t argc = 6;
+  napi_value args[6] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
     ThrowTypeError(env, "webdavRequest failed to read args");
     return nullptr;
   }
   if (argc < 5) {
-    ThrowTypeError(env, "webdavRequest requires (method, url, headerLines, body, timeoutMs)");
+    ThrowTypeError(env, "webdavRequest requires (method, url, headerLines, body, timeoutMs[, tlsPolicy])");
     return nullptr;
   }
 
@@ -1511,7 +1529,17 @@ static napi_value WebdavRequest(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  CurlRequestResult requestResult = RunCurlRequest(method, url, headerLines, body, timeoutMs);
+  // 可选第 6 个参数：tlsPolicy（字符串，默认 "strict"）。
+  // "allow_self_signed" 启用自签名证书受控模式（仅供调试/内网场景，禁止作为生产默认）。
+  bool allowSelfSigned = false;
+  if (argc >= 6 && args[5] != nullptr) {
+    std::string tlsPolicy;
+    if (ReadUtf8String(env, args[5], tlsPolicy)) {
+      allowSelfSigned = (tlsPolicy == "allow_self_signed");
+    }
+  }
+
+  CurlRequestResult requestResult = RunCurlRequest(method, url, headerLines, body, timeoutMs, allowSelfSigned);
 
   napi_value result = nullptr;
   if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
@@ -1553,14 +1581,14 @@ static napi_value WebdavRequest(napi_env env, napi_callback_info info) {
 }
 
 static napi_value DownloadToFile(napi_env env, napi_callback_info info) {
-  size_t argc = 6;
-  napi_value args[6] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+  size_t argc = 7;
+  napi_value args[7] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
     ThrowTypeError(env, "downloadToFile failed to read args");
     return nullptr;
   }
   if (argc < 6) {
-    ThrowTypeError(env, "downloadToFile requires (method, url, headerLines, body, timeoutMs, outputPath)");
+    ThrowTypeError(env, "downloadToFile requires (method, url, headerLines, body, timeoutMs, outputPath[, tlsPolicy])");
     return nullptr;
   }
 
@@ -1596,7 +1624,17 @@ static napi_value DownloadToFile(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  CurlDownloadResult runResult = RunCurlDownloadToFile(method, url, headerLines, body, timeoutMs, outputPath);
+  // 可选第 7 个参数：tlsPolicy（字符串，默认 "strict"）。
+  // "allow_self_signed" 为受控启用，禁止作为生产默认行为。
+  bool allowSelfSigned = false;
+  if (argc >= 7 && args[6] != nullptr) {
+    std::string tlsPolicy;
+    if (ReadUtf8String(env, args[6], tlsPolicy)) {
+      allowSelfSigned = (tlsPolicy == "allow_self_signed");
+    }
+  }
+
+  CurlDownloadResult runResult = RunCurlDownloadToFile(method, url, headerLines, body, timeoutMs, outputPath, allowSelfSigned);
 
   napi_value result = nullptr;
   if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
