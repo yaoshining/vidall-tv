@@ -2487,8 +2487,8 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
         // 诊断: 仅在首帧或尺寸变更时检查 GL 错误
         {
             GLenum glErr = ctx->gl.GetError();
-            OH_LOG_Print(glErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
-                         LOG_APP, 0xFF00, "VidAll",
+            OH_LOG_Print(LOG_APP, glErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
+                         0xFF00, "VidAll",
                          "RenderThread: glTexImage2D RGBA err=0x%{public}x w=%{public}d h=%{public}d",
                          glErr, w, h);
         }
