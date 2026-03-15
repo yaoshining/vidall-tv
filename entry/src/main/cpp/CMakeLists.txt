@@ -71,10 +71,12 @@ endif()
 # ---------------------------------------------------------------------------
 # OH_AVPlayer 系统 C API（libaudio_renderer / OH_AVPlayer）
 #
-# libnative_window.so  — OHNativeWindow* 操作（Surface/XComponent 侧）
-# libavplayer.so       — OH_AVPlayer C API（媒体播放核心）
-# libace_xcomponent.z.so — OH_NativeXComponent_GetNativeWindow()
-#                          （libace_napi.z.so 已提供 NAPI 侧，此库补充 Native 侧）
+# libnative_window.so — OHNativeWindow* 操作（Surface/XComponent 侧）
+# libavplayer.so      — OH_AVPlayer C API（媒体播放核心）
+# libace_ndk.z.so     — OH_NativeXComponent_GetNativeWindow() 及 XComponent Native C API
+#                       （注意：NDK sysroot 中不存在 libace_xcomponent.z.so，
+#                         XComponent Native 接口由 libace_ndk.z.so 统一提供；
+#                         libace_napi.z.so 已提供 NAPI 侧，此库补充 Native C 侧）
 #
 # 以上三库均为 HarmonyOS 系统库，链接器通过 NDK sysroot 自动寻址，
 # 无需将 .so 文件放入 libs/ 目录，也无需 add_library(IMPORTED)。
@@ -83,7 +85,7 @@ endif()
 #   默认 ON。若只需要 FFmpeg 路径而不启用 OH_AVPlayer，可显式关闭：
 #     cmake -DVIDALL_ENABLE_OH_AVPLAYER=OFF ...
 # ---------------------------------------------------------------------------
-option(VIDALL_ENABLE_OH_AVPLAYER "Enable OH_AVPlayer system C API (libnative_window + libavplayer + libace_xcomponent)" ON)
+option(VIDALL_ENABLE_OH_AVPLAYER "Enable OH_AVPlayer system C API (libnative_window + libavplayer + libace_ndk)" ON)
 
 if(VIDALL_ENABLE_OH_AVPLAYER)
   # XComponent Native 头文件路径
@@ -109,7 +111,7 @@ if(VIDALL_ENABLE_OH_AVPLAYER)
   target_link_libraries(vidall_core_player_napi PUBLIC
     libnative_window.so
     libavplayer.so
-    libace_xcomponent.z.so
+    libace_ndk.z.so
   )
 else()
   message(STATUS "VIDALL_ENABLE_OH_AVPLAYER=OFF — OH_AVPlayer C API disabled")
