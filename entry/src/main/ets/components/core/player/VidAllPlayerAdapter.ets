@@ -521,9 +521,17 @@ export class VidAllPlayerAdapter implements IPlayer {
     if (sepIdx < 0) {
       return url;
     }
+    // 检查 authority 段（scheme:// 到第一个 / 之间）是否已含 userinfo（@ 符号），
+    // 若已含则跳过注入，避免生成双重 @ 的非法 URL（幂等保护）。
+    const afterProto = sepIdx + 3;
+    const slashIdx = url.indexOf('/', afterProto);
+    const authority = slashIdx >= 0 ? url.substring(afterProto, slashIdx) : url.substring(afterProto);
+    if (authority.includes('@')) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'buildUrlWithAuth: URL 已含 userinfo，跳过注入');
+      return url;
+    }
     const result = `${url.substring(0, sepIdx + 3)}${userInfo}@${url.substring(sepIdx + 3)}`;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `buildUrlWithAuth: 已将 Basic Auth 凭据嵌入 URL userinfo（user=${encodedUser}）`);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'buildUrlWithAuth: 已将 Basic Auth 凭据嵌入 URL userinfo');
     return result;
   }
 

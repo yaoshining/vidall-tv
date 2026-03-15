@@ -674,6 +674,12 @@ struct NativePlayerSkeletonState {
   napi_threadsafe_function tsfOnCompleted = nullptr;
   napi_threadsafe_function tsfOnTimeUpdate = nullptr;
   napi_threadsafe_function tsfOnError = nullptr;
+  // PR#49 修复：新增 buffering=false 和 seekDone TSF，供媒体线程异步触发
+  napi_threadsafe_function tsfOnBufferingFalse = nullptr;
+  napi_threadsafe_function tsfOnSeekDone = nullptr;
+  // PR#49 修复（问题6）：per-player mutex，保护 state 字段的跨线程读写
+  // 注意：std::mutex 不可拷贝/移动；unordered_map 通过节点指针操作，不需要拷贝值
+  std::mutex stateMutex;
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -718,6 +724,7 @@ static void ThrowRangeError(napi_env env, const char *message) {
 }
 
 static NativePlayerSkeletonState *FindPlayerOrThrow(napi_env env, int32_t handle) {
+  std::lock_guard<std::mutex> lock(g_playersMutex); // PR#49（问题3）：保护 g_players 跨线程访问
   auto iter = g_players.find(handle);
   if (iter == g_players.end()) {
     ThrowRangeError(env, "invalid player handle");
@@ -953,6 +960,9 @@ static void ClearCallbackRefs(NativePlayerSkeletonState &state, napi_env fallbac
   ReleaseTsfIfPresent(state.tsfOnCompleted);
   ReleaseTsfIfPresent(state.tsfOnTimeUpdate);
   ReleaseTsfIfPresent(state.tsfOnError);
+  // PR#49：新增两个 TSF
+  ReleaseTsfIfPresent(state.tsfOnBufferingFalse);
+  ReleaseTsfIfPresent(state.tsfOnSeekDone);
 }
 
 static bool EnsurePreparedOrEmitError(
@@ -1009,6 +1019,7 @@ static void ResetRuntimeState(NativePlayerSkeletonState &state) {
 
 static napi_value CreatePlayer(napi_env env, napi_callback_info info) {
   (void)info;
+  std::lock_guard<std::mutex> lock(g_playersMutex); // PR#49（问题3）：保护 g_players 写操作
   if (g_players.size() >= MAX_PLAYER_COUNT) {
     ThrowRangeError(env, "player count limit reached");
     return nullptr;
@@ -1018,7 +1029,8 @@ static napi_value CreatePlayer(napi_env env, napi_callback_info info) {
     return nullptr;
   }
   const int32_t handle = g_nextHandle++;
-  g_players[handle] = NativePlayerSkeletonState();
+  // 使用 operator[] 原地默认构造（NativePlayerSkeletonState 含 std::mutex，不可拷贝/移动赋值）
+  (void)g_players[handle];
   napi_value handleValue = ReturnInt32OrThrow(env, handle, "createPlayer failed to create return handle");
   if (handleValue == nullptr) {
     g_players.erase(handle);
@@ -1129,6 +1141,12 @@ static napi_value SetHeaders(napi_env env, napi_callback_info info) {
 // OH_NativeXComponent 静态回调（供所有 player 共用一套函数指针）
 // ---------------------------------------------------------------------------
 
+// PR#49 修复（问题5）：OnAVPlayerErrorCB 携带 code+msg 两个字段，TSF data 指针
+struct ErrorData {
+  int32_t code;
+  std::string *msg;  // heap-allocated，由 tsfOnError call_js_cb 负责 delete
+};
+
 // ---------------------------------------------------------------------------
 // A4：OH_AVPlayer 状态 / 错误回调（媒体线程调用，userData = NativePlayerSkeletonState*）
 // 使用新式带 userData 的回调 API：OH_AVPlayer_SetOnInfoCallback / SetOnErrorCallback
@@ -1154,30 +1172,64 @@ static void OnAVPlayerInfoCB(OH_AVPlayer *player, AVPlayerOnInfoType type,
         // 获取时长（GetDuration 返回 int32_t 毫秒）
         int32_t durationMs = 0;
         OH_AVPlayer_GetDuration(state->avPlayer, &durationMs);
-        state->durationMs = static_cast<int64_t>(durationMs);
-        state->prepared = true;
+        {
+          // PR#49（问题6）：锁保护 state 字段写；TSF 调用在锁外，避免死锁
+          std::lock_guard<std::mutex> lock(state->stateMutex);
+          state->durationMs = static_cast<int64_t>(durationMs);
+          state->prepared = true;
+        }
         if (state->tsfOnPrepared != nullptr) {
           napi_call_threadsafe_function(state->tsfOnPrepared, nullptr, napi_tsfn_nonblocking);
         }
+        // PR#49（问题4）：buffering=false 随 tsfOnPrepared 的 call_js_cb 一并发出（见 SetCallbacks）
       } else if (avState == AV_COMPLETED) {
-        state->playing = false;
+        {
+          std::lock_guard<std::mutex> lock(state->stateMutex);
+          state->playing = false;
+        }
         if (state->tsfOnCompleted != nullptr) {
           napi_call_threadsafe_function(state->tsfOnCompleted, nullptr, napi_tsfn_nonblocking);
         }
+        // PR#49（问题4）：buffering=false 随 tsfOnCompleted 的 call_js_cb 一并发出（见 SetCallbacks）
       } else if (avState == AV_PLAYING) {
-        state->playing = true;
+        {
+          std::lock_guard<std::mutex> lock(state->stateMutex);
+          state->playing = true;
+        }
+        // PR#49（问题4）：播放开始时发出 buffering=false
+        if (state->tsfOnBufferingFalse != nullptr) {
+          napi_call_threadsafe_function(state->tsfOnBufferingFalse, nullptr, napi_tsfn_nonblocking);
+        }
       } else if (avState == AV_PAUSED) {
-        state->playing = false;
+        {
+          std::lock_guard<std::mutex> lock(state->stateMutex);
+          state->playing = false;
+        }
+        // PR#49（问题4）：暂停时 buffering 应结束
+        if (state->tsfOnBufferingFalse != nullptr) {
+          napi_call_threadsafe_function(state->tsfOnBufferingFalse, nullptr, napi_tsfn_nonblocking);
+        }
       }
       break;
     }
     case AV_INFO_TYPE_POSITION_UPDATE: {
       int32_t posMs = 0;
       if (OH_AVFormat_GetIntValue(infoBody, OH_PLAYER_CURRENT_POSITION, &posMs)) {
+        std::lock_guard<std::mutex> lock(state->stateMutex); // PR#49（问题6）
         state->currentTimeMs = static_cast<int64_t>(posMs);
       }
       if (state->tsfOnTimeUpdate != nullptr) {
         napi_call_threadsafe_function(state->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
+      }
+      break;
+    }
+    case AV_INFO_TYPE_SEEKDONE: {
+      // PR#49（问题7）：OH_AVPlayer_Seek 是异步的，seekDone 应在此回调触发，而非 Seek() 返回时
+      if (state->tsfOnTimeUpdate != nullptr) {
+        napi_call_threadsafe_function(state->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
+      }
+      if (state->tsfOnSeekDone != nullptr) {
+        napi_call_threadsafe_function(state->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
       }
       break;
     }
@@ -1189,15 +1241,21 @@ static void OnAVPlayerInfoCB(OH_AVPlayer *player, AVPlayerOnInfoType type,
 static void OnAVPlayerErrorCB(OH_AVPlayer *player, int32_t errorCode,
                                const char *errorMsg, void *userData) {
   (void)player;
-  (void)errorCode;
   NativePlayerSkeletonState *state = static_cast<NativePlayerSkeletonState *>(userData);
   if (state == nullptr) {
     return;
   }
   if (state->tsfOnError != nullptr) {
-    // 堆分配错误信息字符串，由 tsfOnError call_js_cb 负责 delete
-    auto *msg = new std::string(errorMsg ? errorMsg : "AVPlayer error");
-    napi_call_threadsafe_function(state->tsfOnError, msg, napi_tsfn_nonblocking);
+    // PR#49（问题5）：携带 code+msg，由 tsfOnError call_js_cb 负责 delete
+    auto *errData = new ErrorData{
+      errorCode,
+      new std::string(errorMsg ? errorMsg : "AVPlayer error")
+    };
+    napi_call_threadsafe_function(state->tsfOnError, errData, napi_tsfn_nonblocking);
+  }
+  // PR#49（问题4）：error 路径同样需要结束 buffering 状态
+  if (state->tsfOnBufferingFalse != nullptr) {
+    napi_call_threadsafe_function(state->tsfOnBufferingFalse, nullptr, napi_tsfn_nonblocking);
   }
 }
 
@@ -1266,6 +1324,8 @@ static void OnXCSurfaceDestroyed(OH_NativeXComponent *component, void *window) {
       break;
     }
   }
+  // PR#49（问题9）：清除悬空的 pending window 缓存，避免 surface 销毁后 use-after-free
+  g_pendingWindows.erase(xcId);
 }
 
 static void OnXCDispatchTouchEvent(OH_NativeXComponent *component, void *window) {
@@ -1514,9 +1574,12 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
     napi_create_threadsafe_function(
       env, args[1], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        // PR#49（问题4）：prepared 时同步发出 buffering=false，确保 UI 退出加载态
+        auto *st = static_cast<NativePlayerSkeletonState *>(ctx);
         napi_value undef;
         napi_get_undefined(tsfEnv, &undef);
         napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+        EmitBufferingChange(*st, false);
       },
       &state.tsfOnPrepared);
   }
@@ -1526,9 +1589,12 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
     napi_create_threadsafe_function(
       env, args[4], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        // PR#49（问题4）：completed 时同步发出 buffering=false
+        auto *st = static_cast<NativePlayerSkeletonState *>(ctx);
         napi_value undef;
         napi_get_undefined(tsfEnv, &undef);
         napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+        EmitBufferingChange(*st, false);
       },
       &state.tsfOnCompleted);
   }
@@ -1554,17 +1620,53 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
     napi_create_threadsafe_function(
       env, args[2], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
-        // data = heap std::string* 错误信息，由 OnAVPlayerErrorCB 分配，此处负责 delete
-        std::string *msg = static_cast<std::string *>(data);
-        napi_value errorStr;
+        // PR#49（问题5）：data = heap ErrorData*，携带 code+msg，此处负责 delete
+        auto *errData = static_cast<ErrorData *>(data);
+        napi_value codeVal = nullptr;
+        napi_create_int32(tsfEnv, errData ? errData->code : -1, &codeVal);
+        napi_value msgVal = nullptr;
         napi_create_string_utf8(tsfEnv,
-          msg ? msg->c_str() : "AVPlayer error", NAPI_AUTO_LENGTH, &errorStr);
+          (errData && errData->msg) ? errData->msg->c_str() : "AVPlayer error",
+          NAPI_AUTO_LENGTH, &msgVal);
+        napi_value argv[2] = { codeVal, msgVal };
         napi_value undef;
         napi_get_undefined(tsfEnv, &undef);
-        napi_call_function(tsfEnv, undef, jsCb, 1, &errorStr, nullptr);
-        delete msg;
+        napi_call_function(tsfEnv, undef, jsCb, 2, argv, nullptr);
+        if (errData) {
+          delete errData->msg;
+          delete errData;
+        }
       },
       &state.tsfOnError);
+  }
+  // PR#49（问题4/7）：为 AV_PLAYING/AV_PAUSED/error 创建 buffering=false TSF；
+  //                    为 AV_INFO_TYPE_SEEKDONE 创建 seekDone TSF
+  if (hasBufferingArg) {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnBufferingFalse", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[5], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        // 直接调用 onBufferingChange(false)；不使用 ctx，由 jsCb（args[5]）接收
+        napi_value boolFalse = nullptr;
+        napi_get_boolean(tsfEnv, false, &boolFalse);
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 1, &boolFalse, nullptr);
+      },
+      &state.tsfOnBufferingFalse);
+  }
+  if (hasSeekDoneArg) {
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnSeekDone", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[6], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+      },
+      &state.tsfOnSeekDone);
   }
 
   // 若回调在 prepared 之后才注册，主动补发一次状态，避免上层错过时序。
@@ -1595,12 +1697,16 @@ static napi_value Play(napi_env env, napi_callback_info info) {
   )) {
     return ReturnUndefinedOrThrow(env, "play failed to create return value");
   }
-  if (state.playing) {
-    // 幂等处理：已在播放态时忽略重复 play。
-    return ReturnUndefinedOrThrow(env, "play failed to create return value");
+  {
+    // PR#49（问题6）：保护 playing/lastRealtimeMs 写操作；OH_AVPlayer_Play 在锁外调用
+    std::lock_guard<std::mutex> lock(state.stateMutex);
+    if (state.playing) {
+      // 幂等处理：已在播放态时忽略重复 play。
+      return ReturnUndefinedOrThrow(env, "play failed to create return value");
+    }
+    state.playing = true;
+    state.lastRealtimeMs = NowRealtimeMs();
   }
-  state.playing = true;
-  state.lastRealtimeMs = NowRealtimeMs();
   // A3：驱动 OH_AVPlayer 真实播放
   if (state.avPlayer != nullptr) {
     OH_AVPlayer_Play(state.avPlayer);
@@ -1627,13 +1733,17 @@ static napi_value Pause(napi_env env, napi_callback_info info) {
   )) {
     return ReturnUndefinedOrThrow(env, "pause failed to create return value");
   }
-  if (!state.playing) {
-    // 幂等处理：已暂停时忽略重复 pause。
-    return ReturnUndefinedOrThrow(env, "pause failed to create return value");
+  {
+    // PR#49（问题6）：保护 playing/lastRealtimeMs/currentTimeMs 写操作；OH_AVPlayer_Pause 在锁外
+    std::lock_guard<std::mutex> lock(state.stateMutex);
+    if (!state.playing) {
+      // 幂等处理：已暂停时忽略重复 pause。
+      return ReturnUndefinedOrThrow(env, "pause failed to create return value");
+    }
+    AdvancePlaybackClockIfNeeded(state);
+    state.playing = false;
+    state.lastRealtimeMs = 0;
   }
-  AdvancePlaybackClockIfNeeded(state);
-  state.playing = false;
-  state.lastRealtimeMs = 0;
   // A3：驱动 OH_AVPlayer 真实暂停
   if (state.avPlayer != nullptr) {
     OH_AVPlayer_Pause(state.avPlayer);
@@ -1678,21 +1788,23 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
   if (positionMs < 0) {
     positionMs = 0;
   }
-  if (state.durationMs > 0 && positionMs > state.durationMs) {
-    positionMs = state.durationMs;
-  }
-  state.currentTimeMs = positionMs;
-  if (state.playing) {
-    state.lastRealtimeMs = NowRealtimeMs();
+  {
+    // PR#49（问题6）：保护 currentTimeMs/durationMs/lastRealtimeMs 读写；OH_AVPlayer_Seek 在锁外
+    std::lock_guard<std::mutex> lock(state.stateMutex);
+    if (state.durationMs > 0 && positionMs > state.durationMs) {
+      positionMs = state.durationMs;
+    }
+    state.currentTimeMs = positionMs;
+    if (state.playing) {
+      state.lastRealtimeMs = NowRealtimeMs();
+    }
   }
   // A3：驱动 OH_AVPlayer 真实 seek（PREVIOUS_SYNC 模式，适合直播与点播）
   if (state.avPlayer != nullptr) {
     OH_AVPlayer_Seek(state.avPlayer, static_cast<int32_t>(positionMs), AV_SEEK_PREVIOUS_SYNC);
   }
   EmitTimeUpdate(state);
-  // Emit seekDone after confirming position; adapter uses this to fire onSeekDone
-  // instead of relying on the synchronous call return.
-  EmitSeekDone(state);
+  // PR#49（问题7）：EmitSeekDone 移至 AV_INFO_TYPE_SEEKDONE 回调（异步完成后触发），此处不再调用
   return ReturnUndefinedOrThrow(env, "seek failed to create return value");
 }
 
@@ -1744,12 +1856,21 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     ThrowTypeError(env, "release requires (handle)");
     return nullptr;
   }
-  auto iter = g_players.find(handle);
-  if (iter == g_players.end()) {
-    // 幂等处理：重复 release 直接视为成功。
-    return ReturnUndefinedOrThrow(env, "release failed to create return value");
+  // PR#49（问题3）：分两段持锁：
+  //   ① 持锁找到 state 指针后立即释放，避免 OH_AVPlayer_Release（阻塞）期间持有 g_playersMutex
+  //   ② OH_AVPlayer 操作全部在无锁下完成
+  //   ③ 最后再持锁 erase（JS 线程单线程，两段锁之间不会有其他 JS 代码修改 map 结构）
+  NativePlayerSkeletonState *statePtr = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(g_playersMutex);
+    auto iter = g_players.find(handle);
+    if (iter == g_players.end()) {
+      // 幂等处理：重复 release 直接视为成功。
+      return ReturnUndefinedOrThrow(env, "release failed to create return value");
+    }
+    statePtr = &iter->second;
   }
-  NativePlayerSkeletonState &state = iter->second;
+  NativePlayerSkeletonState &state = *statePtr;
   // A4 顺序说明：
   //   1. OH_AVPlayer_Release：等待所有媒体线程回调执行完毕（含 OnAVPlayerInfoCB / OnAVPlayerErrorCB）
   //   2. ClearCallbackRefs（含 ReleaseTsfIfPresent napi_tsfn_abort）：此时媒体线程已无回调，
@@ -1768,7 +1889,10 @@ static napi_value Release(napi_env env, napi_callback_info info) {
   state.surfaceReady = false;
   ClearCallbackRefs(state, env); // 内部含 ReleaseTsfIfPresent(napi_tsfn_abort)
   state.callbackEnv = nullptr;
-  g_players.erase(iter);
+  {
+    std::lock_guard<std::mutex> lock(g_playersMutex); // PR#49（问题3）：持锁 erase
+    g_players.erase(handle);
+  }
   return ReturnUndefinedOrThrow(env, "release failed to create return value");
 }
 

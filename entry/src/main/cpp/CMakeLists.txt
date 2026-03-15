@@ -93,11 +93,11 @@ if(VIDALL_ENABLE_OH_AVPLAYER)
   # 若变量未定义，需在 local.properties / CMakePresets 中手动指定 OHOS_SDK_NATIVE_ROOT。
   if(DEFINED OHOS_SDK_NATIVE_ROOT)
     target_include_directories(vidall_core_player_napi PRIVATE
-      ${OHOS_SDK_NATIVE_ROOT}/sysroot/usr/include/ace/xcomponent
+      ${OHOS_SDK_NATIVE_ROOT}/sysroot/usr/include
     )
   elseif(DEFINED CMAKE_SYSROOT)
     target_include_directories(vidall_core_player_napi PRIVATE
-      ${CMAKE_SYSROOT}/usr/include/ace/xcomponent
+      ${CMAKE_SYSROOT}/usr/include
     )
   else()
     message(WARNING
