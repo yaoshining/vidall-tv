@@ -20,10 +20,10 @@ target_include_directories(vidall_core_player_napi PUBLIC
 # ---------------------------------------------------------------------------
 # 预编译 FFmpeg 共享库
 # so 文件放在: entry/libs/<abi>/libffmpeg.so
-# 头文件放在: entry/src/main/cpp/include/ (如有)
+# 头文件放在: entry/src/main/cpp/third_party/ffmpeg/include/
 # ---------------------------------------------------------------------------
 set(FFMPEG_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH})
-set(FFMPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(FFMPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg/include)
 set(CURL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH})
 set(CURL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/curl/include)
 
