@@ -1837,32 +1837,34 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
 // B3：GLSL shader 字符串（YUV420P → RGB，mediump float）
 // ---------------------------------------------------------------------------
 
-static const char *kVertexShaderSrc = R"(
-attribute vec4 a_position;
-attribute vec2 a_texCoord;
-varying vec2 v_texCoord;
-void main() {
-    gl_Position = a_position;
-    v_texCoord = a_texCoord;
-}
-)";
+// 修复 #48-B6: 显式字符串拼接替代 R"()"，避免部分 HarmonyOS GLES 驱动对
+// raw string 开头换行符解析异常；同时增加 #version 100 声明。
+static const char *kVertexShaderSrc =
+    "#version 100\n"
+    "attribute vec4 a_position;\n"
+    "attribute vec2 a_texCoord;\n"
+    "varying vec2 v_texCoord;\n"
+    "void main() {\n"
+    "    gl_Position = a_position;\n"
+    "    v_texCoord = a_texCoord;\n"
+    "}\n";
 
-static const char *kFragmentShaderSrc = R"(
-precision mediump float;
-uniform sampler2D u_textureY;
-uniform sampler2D u_textureU;
-uniform sampler2D u_textureV;
-varying vec2 v_texCoord;
-void main() {
-    float y = texture2D(u_textureY, v_texCoord).r;
-    float u = texture2D(u_textureU, v_texCoord).r - 0.5;
-    float v = texture2D(u_textureV, v_texCoord).r - 0.5;
-    float r = y + 1.402 * v;
-    float g = y - 0.344136 * u - 0.714136 * v;
-    float b = y + 1.772 * u;
-    gl_FragColor = vec4(r, g, b, 1.0);
-}
-)";
+static const char *kFragmentShaderSrc =
+    "#version 100\n"
+    "precision mediump float;\n"
+    "uniform sampler2D u_textureY;\n"
+    "uniform sampler2D u_textureU;\n"
+    "uniform sampler2D u_textureV;\n"
+    "varying vec2 v_texCoord;\n"
+    "void main() {\n"
+    "    float y = texture2D(u_textureY, v_texCoord).r;\n"
+    "    float u = texture2D(u_textureU, v_texCoord).r - 0.5;\n"
+    "    float v = texture2D(u_textureV, v_texCoord).r - 0.5;\n"
+    "    float r = y + 1.402 * v;\n"
+    "    float g = y - 0.344136 * u - 0.714136 * v;\n"
+    "    float b = y + 1.772 * u;\n"
+    "    gl_FragColor = vec4(r, g, b, 1.0);\n"
+    "}\n";
 
 // ---------------------------------------------------------------------------
 // B3：EGL 初始化（在渲染线程内调用，nativeWindow 提供 EGLNativeWindowType）
@@ -1941,8 +1943,9 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  "FfmpegInitEGL: eglCreateContext failed err=0x%{public}x", eglGetError());
     return false;
   }
+  // 修复 #48-B6: %{public}d 让 EGL 版本号在 HarmonyOS hilog 中可见
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "FfmpegInitEGL: OK EGL %d.%d", major, minor);
+               "FfmpegInitEGL: OK EGL %{public}d.%{public}d", major, minor);
   return true;
 }
 
@@ -1953,6 +1956,10 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
 static GLuint CompileShader(GLenum type, const char *src) {
   const GLuint shader = glCreateShader(type);
   if (shader == 0) {
+    // 修复 #48-B6: glCreateShader 返回 0 说明 GL context 尚未生效
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "CompileShader: glCreateShader returned 0 (no GL context?) type=%{public}u",
+                 type);
     return 0;
   }
   glShaderSource(shader, 1, &src, nullptr);
@@ -1965,8 +1972,13 @@ static GLuint CompileShader(GLenum type, const char *src) {
     if (len > 1) {
       std::string log(static_cast<size_t>(len), '\0');
       glGetShaderInfoLog(shader, len, nullptr, &log[0]);
+      // 修复 #48-B6: %{public}s 才能在 HarmonyOS hilog 中显示字符串内容（%s 为私有格式）
       OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                   "CompileShader: type=%u err: %s", type, log.c_str());
+                   "CompileShader: type=%{public}u compile error: %{public}s",
+                   type, log.c_str());
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                   "CompileShader: type=%{public}u compile error (no info log)", type);
     }
     glDeleteShader(shader);
     return 0;
@@ -2041,8 +2053,9 @@ static bool FfmpegInitGLResources(FfmpegContext *ctx) {
                quadVertices, GL_STATIC_DRAW);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+  // 修复 #48-B6: %{public}u 让资源 ID 在 hilog 中可见
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "FfmpegInitGLResources: OK prog=%u Y=%u U=%u V=%u vbo=%u",
+               "FfmpegInitGLResources: OK prog=%{public}u Y=%{public}u U=%{public}u V=%{public}u vbo=%{public}u",
                ctx->yuvProgram, ctx->textureY, ctx->textureU, ctx->textureV,
                ctx->quadVBO);
   return true;
