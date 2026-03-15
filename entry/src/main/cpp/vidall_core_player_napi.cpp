@@ -744,6 +744,7 @@ struct GlFunctions {
     void (*PixelStorei)(GLenum, GLint) = nullptr;
     GLenum (*GetError)() = nullptr;
     const GLubyte* (*GetString)(GLenum) = nullptr;
+    void (*GetIntegerv)(GLenum, GLint*) = nullptr;
 };
 
 // FFmpeg 上下文：格式探测 + demux 线程 + 双队列
@@ -2079,9 +2080,10 @@ static bool LoadGLFunctions(GlFunctions &gl) {
     LOAD(PixelStorei,             "glPixelStorei")
     LOAD(GetError,                "glGetError")
     LOAD(GetString,               "glGetString")
+    LOAD(GetIntegerv,             "glGetIntegerv")
 #undef LOAD
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "LoadGLFunctions: all %{public}d GL functions loaded", 36);
+                 "LoadGLFunctions: all %{public}d GL functions loaded", 37);
     return true;
 }
 
@@ -2362,10 +2364,21 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   // GL context 验证诊断（使用已加载的函数指针）
   {
     const GLubyte *glVer = ctx->gl.GetString(GL_VERSION);
+    const GLubyte *glVendor = ctx->gl.GetString(GL_VENDOR);
+    const GLubyte *glRenderer = ctx->gl.GetString(GL_RENDERER);
+    const GLubyte *glslVer = ctx->gl.GetString(GL_SHADING_LANGUAGE_VERSION);
+    GLint maxTextureSize = 0;
+    ctx->gl.GetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
     GLenum glErr = ctx->gl.GetError();
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                  "RenderThreadFunc: GL_VERSION=%{public}s glGetError=0x%{public}x",
                  glVer ? (const char*)glVer : "null", glErr);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "RenderThreadFunc: GL_VENDOR=%{public}s GL_RENDERER=%{public}s GLSL=%{public}s maxTex=%{public}d",
+                 glVendor ? (const char*)glVendor : "null",
+                 glRenderer ? (const char*)glRenderer : "null",
+                 glslVer ? (const char*)glslVer : "null",
+                 maxTextureSize);
   }
 
   // 3. 初始化 GL 资源（shader/纹理/VBO）
@@ -2457,11 +2470,11 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       }
     }
 
-    // 5. 上传 YUV420P → 3 张 GL_R8 纹理（GLES 3 标准单通道格式，shader 用 .r 分量采样）
+    // 5. 上传 RGBA 帧到单张 GL 纹理
     const int w = frame->width;
     const int h = frame->height;
 
-    // B6 诊断日志：第一帧打印格式与 linesize（fmt=2 表示 AV_PIX_FMT_RGBA，ls0=width*4）
+    // B6 诊断日志：第一帧打印格式与 linesize
     {
       static bool firstFrameLogged = false;
       if (!firstFrameLogged) {
@@ -2472,35 +2485,62 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       }
     }
 
-    ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 4);  // GL_RGBA 每像素 4 字节，默认对齐 4 即可
+    int drainedErrors = 0;
+    for (;;) {
+      const GLenum staleErr = ctx->gl.GetError();
+      if (staleErr == GL_NO_ERROR) {
+        break;
+      }
+      drainedErrors++;
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "RenderThread: drained stale gl error=0x%{public}x", staleErr);
+    }
 
-    // Fix #48-B6: 首帧（或分辨率切换时）用 glTexImage2D 分配纹理存储；
-    // 后续帧改用 glTexSubImage2D 直接更新数据，避免每帧重新分配。
-    // 格式：GL_RGBA（internalFormat）+ GL_RGBA（format）—— 最兼容格式，规避 GL_R8/GL_LUMINANCE OOM。
+    ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    // Fix #48-B6-2: 首帧/尺寸变化先用 glTexImage2D(nullptr) 分配，再用 glTexSubImage2D 上传。
     const bool sizeChanged = (w != ctx->textureW || h != ctx->textureH);
 
     ctx->gl.ActiveTexture(GL_TEXTURE0);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->rgbaTexture);
+    bool uploadOk = true;
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
-                     GL_RGBA, GL_UNSIGNED_BYTE, frame->data[0]);
-        // 诊断: 仅在首帧或尺寸变更时检查 GL 错误
-        {
-            GLenum glErr = ctx->gl.GetError();
-            OH_LOG_Print(LOG_APP, glErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
-                         0xFF00, "VidAll",
-                         "RenderThread: glTexImage2D RGBA err=0x%{public}x w=%{public}d h=%{public}d",
-                         glErr, w, h);
-        }
-    } else {
-        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
-                        GL_RGBA, GL_UNSIGNED_BYTE, frame->data[0]);
+      ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+      const GLenum allocErr = ctx->gl.GetError();
+      OH_LOG_Print(LOG_APP, allocErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
+                   0xFF00, "VidAll",
+                   "RenderThread: glTexImage2D alloc err=0x%{public}x w=%{public}d h=%{public}d drained=%{public}d",
+                   allocErr, w, h, drainedErrors);
+      if (allocErr != GL_NO_ERROR) {
+        uploadOk = false;
+      }
+    }
+
+    if (uploadOk) {
+      ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
+                            GL_RGBA, GL_UNSIGNED_BYTE, frame->data[0]);
+      const GLenum uploadErr = ctx->gl.GetError();
+      if (!ctx->texturesInitialized || sizeChanged || uploadErr != GL_NO_ERROR) {
+        OH_LOG_Print(LOG_APP, uploadErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
+                     0xFF00, "VidAll",
+                     "RenderThread: glTexSubImage2D upload err=0x%{public}x w=%{public}d h=%{public}d ls0=%{public}d",
+                     uploadErr, w, h, frame->linesize[0]);
+      }
+      if (uploadErr != GL_NO_ERROR) {
+        uploadOk = false;
+      }
+    }
+
+    if (!uploadOk) {
+      av_frame_free(&frame);
+      continue;
     }
 
     if (!ctx->texturesInitialized || sizeChanged) {
-        ctx->texturesInitialized = true;
-        ctx->textureW = w;
-        ctx->textureH = h;
+      ctx->texturesInitialized = true;
+      ctx->textureW = w;
+      ctx->textureH = h;
     }
 
     // 6. 用 RGBA passthrough program 绘制全屏 quad（triangle strip，4 顶点）
@@ -2514,12 +2554,33 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     ctx->gl.VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride,
                           reinterpret_cast<const void *>(2 * sizeof(float)));
     ctx->gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    {
+      static bool firstDrawLogged = false;
+      const GLenum drawErr = ctx->gl.GetError();
+      if (!firstDrawLogged || drawErr != GL_NO_ERROR) {
+        firstDrawLogged = true;
+        OH_LOG_Print(LOG_APP, drawErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
+                     0xFF00, "VidAll",
+                     "RenderThread: glDrawArrays err=0x%{public}x", drawErr);
+      }
+    }
     ctx->gl.DisableVertexAttribArray(0);
     ctx->gl.DisableVertexAttribArray(1);
     ctx->gl.BindBuffer(GL_ARRAY_BUFFER, 0);
 
     // 7. 提交帧到屏幕
-    eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+    {
+      static bool firstSwapLogged = false;
+      const EGLBoolean swapOk = eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
+      const EGLint swapErr = eglGetError();
+      if (!firstSwapLogged || swapOk != EGL_TRUE) {
+        firstSwapLogged = true;
+        OH_LOG_Print(LOG_APP, swapOk == EGL_TRUE ? LOG_INFO : LOG_ERROR,
+                     0xFF00, "VidAll",
+                     "RenderThread: eglSwapBuffers ok=%{public}d err=0x%{public}x",
+                     swapOk == EGL_TRUE ? 1 : 0, swapErr);
+      }
+    }
 
     // 8. 释放当前帧
     av_frame_free(&frame);
