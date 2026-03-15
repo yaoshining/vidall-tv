@@ -2620,6 +2620,17 @@ static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string
     av_strerror(ret, errbuf, sizeof(errbuf));
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "StartFfmpegDemux: FfmpegOpenInput failed: %s", errbuf);
+    // B6修复：FFmpeg 也失败时，这才是真正的播放失败，上报 tsfOnError 给 ArkTS
+    if (state->tsfOnError != nullptr) {
+      auto *errData = new ErrorData{
+        ret,
+        new std::string(std::string("FFmpeg open failed: ") + errbuf)
+      };
+      napi_call_threadsafe_function(state->tsfOnError, errData, napi_tsfn_nonblocking);
+    }
+    if (state->tsfOnBufferingFalse != nullptr) {
+      napi_call_threadsafe_function(state->tsfOnBufferingFalse, nullptr, napi_tsfn_nonblocking);
+    }
     return;
   }
 
@@ -2819,6 +2830,13 @@ static void OnAVPlayerErrorCB(OH_AVPlayer *player, int32_t errorCode,
     // 在媒体线程直接调用会影响 OH_AVPlayer 回调链路。
     // B1 阶段直接在此线程启动（open 有 10s 超时保障），B2 阶段可改为独立 dispatch 线程。
     StartFfmpegDemux(state, urlCopy);
+    // B6修复：FFmpeg 路径已接管，抑制 tsfOnError，防止 ArkTS fallbackNativeToIjk()
+    // 抢占 XComponent surface，导致 FFmpeg EGL 初始化失败。
+    // FFmpeg 准备好后会通过 tsfOnPrepared 通知 ArkTS；
+    // FFmpeg 自身失败时，StartFfmpegDemux 内部负责触发 tsfOnError。
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "OnAVPlayerErrorCB: FFmpeg path taken over, suppressing tsfOnError/tsfOnBufferingFalse");
+    return;
   }
 
   if (state->tsfOnError != nullptr) {
