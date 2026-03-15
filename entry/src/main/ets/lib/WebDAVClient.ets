@@ -31,10 +31,17 @@ interface WebDavNapiBridgeModule {
   default?: WebDavNapiBridge;
 }
 
-const VidAllCorePlayerNapi: WebDavNapiBridge =
-  (VidAllCorePlayerNapiModule as WebDavNapiBridgeModule).default !== undefined
-    ? ((VidAllCorePlayerNapiModule as WebDavNapiBridgeModule).default as WebDavNapiBridge)
-    : (VidAllCorePlayerNapiModule as WebDavNapiBridge);
+function getVidAllCorePlayerNapi(): WebDavNapiBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as WebDavNapiBridgeModule | WebDavNapiBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as WebDavNapiBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as WebDavNapiBridge;
+  }
+  return bridgeModule as WebDavNapiBridge;
+}
 
 export interface WebDAVConfig {
   baseUrl: string;
@@ -214,7 +221,7 @@ export class WebDAVClient {
   private checkNativeCurlEnabled(): boolean {
     if (this._nativeCurlEnabled === null) {
       try {
-        const caps = VidAllCorePlayerNapi.getNativeCapabilities();
+        const caps = getVidAllCorePlayerNapi().getNativeCapabilities();
         this._nativeCurlEnabled = caps.libcurlEnabled;
       } catch (e) {
         this._nativeCurlEnabled = false;
@@ -246,7 +253,7 @@ export class WebDAVClient {
     }
     const headerLines = parts.join('\r\n');
 
-    const result = VidAllCorePlayerNapi.webdavRequest(
+    const result = getVidAllCorePlayerNapi().webdavRequest(
       method, fullUrl, headerLines, body ?? '', this.timeout
     );
 

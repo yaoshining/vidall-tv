@@ -9,10 +9,17 @@ interface FfprobeNapiBridgeModule {
   default?: FfprobeNapiBridge;
 }
 
-const VidAllCorePlayerNapi: FfprobeNapiBridge =
-  (VidAllCorePlayerNapiModule as FfprobeNapiBridgeModule).default !== undefined
-    ? ((VidAllCorePlayerNapiModule as FfprobeNapiBridgeModule).default as FfprobeNapiBridge)
-    : (VidAllCorePlayerNapiModule as FfprobeNapiBridge);
+function getVidAllCorePlayerNapi(): FfprobeNapiBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as FfprobeNapiBridgeModule | FfprobeNapiBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as FfprobeNapiBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as FfprobeNapiBridge;
+  }
+  return bridgeModule as FfprobeNapiBridge;
+}
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -230,7 +237,7 @@ export class FfprobeUtil {
 
     await FfprobeUtil.acquireProbeSlot();
     try {
-      const outputJson = await VidAllCorePlayerNapi.ffprobe(url, headersStr, timeoutMs);
+      const outputJson = await getVidAllCorePlayerNapi().ffprobe(url, headersStr, timeoutMs);
       console.info(`[FfprobeUtil] 探测完成，输出长度=${outputJson.length}`);
       return FfprobeUtil.parseOutput(url, outputJson);
     } catch (e) {

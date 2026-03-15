@@ -41,10 +41,11 @@ interface VidAllCorePlayerNapiBridgeModule {
   default?: VidAllCorePlayerNapiBridge;
 }
 
+const playerBridgeModule = VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule | VidAllCorePlayerNapiBridge | undefined;
 const VidAllCorePlayerNapi: VidAllCorePlayerNapiBridge =
-  (VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule).default !== undefined
-    ? ((VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule).default as VidAllCorePlayerNapiBridge)
-    : (VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridge);
+  playerBridgeModule !== undefined && (playerBridgeModule as VidAllCorePlayerNapiBridgeModule).default !== undefined
+    ? ((playerBridgeModule as VidAllCorePlayerNapiBridgeModule).default as VidAllCorePlayerNapiBridge)
+    : (playerBridgeModule as VidAllCorePlayerNapiBridge);
 
 /**
  * VidAll Player 原生骨架适配器。
