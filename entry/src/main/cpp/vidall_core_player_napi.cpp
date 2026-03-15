@@ -49,6 +49,11 @@ extern "C" {
 #ifndef GL_RED
 #  define GL_RED 0x1903
 #endif
+// GL_R8 是 GLES 3.0 引入的单通道有大小内部格式；GLES 2.0 头文件不含此宏。
+// 首帧 glTexImage2D 用 GL_R8 作为 internalformat，可避免驱动因格式歧义重复分配。
+#ifndef GL_R8
+#  define GL_R8 0x8229
+#endif
 
 // B4：OH_AudioRenderer（PCM 送显）
 #include <ohaudio/native_audiostreambuilder.h>
@@ -780,6 +785,11 @@ struct FfmpegContext {
   GLuint textureU = 0;     // U 分量纹理（GL_LUMINANCE，width/2×height/2）
   GLuint textureV = 0;     // V 分量纹理（GL_LUMINANCE，width/2×height/2）
   GLuint quadVBO = 0;      // 全屏四边形顶点缓冲
+
+  // Fix #48-B6: 首帧后置 true，后续帧用 TexSubImage2D 避免每帧重分配 GPU 纹理存储
+  bool texturesInitialized = false;
+  int  textureW = 0;       // 当前已分配纹理宽（用于 sizeChanged 校验）
+  int  textureH = 0;       // 当前已分配纹理高
 
   // B3：渲染线程
   std::thread renderThread;
@@ -2462,29 +2472,55 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
 
     ctx->gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
+    // Fix #48-B6: 首帧（或分辨率切换时）用 glTexImage2D 分配纹理存储；
+    // 后续帧改用 glTexSubImage2D 直接更新数据，避免每帧重新分配导致 GL_OUT_OF_MEMORY。
+    const bool sizeChanged = (w != ctx->textureW || h != ctx->textureH);
+
     ctx->gl.ActiveTexture(GL_TEXTURE0);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureY);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0,
-                 GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
-    // 诊断: #48-B6 验证 GL_RED 在 GLES 3 context 下是否合法（应 GL_NO_ERROR）
-    {
-        GLenum glErr = ctx->gl.GetError();
-        if (glErr != GL_NO_ERROR) {
-            OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                         "RenderThread: glTexImage2D Y error=0x%{public}x"
-                         " w=%{public}d h=%{public}d", glErr, w, h);
+    if (!ctx->texturesInitialized || sizeChanged) {
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
+        // 诊断: #48-B6 验证 GL_R8/GL_RED 在 GLES 3 context 下是否合法（应 GL_NO_ERROR）
+        // 仅在首帧或尺寸变更时打印，避免日志刷屏
+        {
+            GLenum glErr = ctx->gl.GetError();
+            if (glErr != GL_NO_ERROR) {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                             "RenderThread: glTexImage2D Y error=0x%{public}x"
+                             " w=%{public}d h=%{public}d", glErr, w, h);
+            }
         }
+    } else {
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h,
+                        GL_RED, GL_UNSIGNED_BYTE, frame->data[0]);
     }
 
     ctx->gl.ActiveTexture(GL_TEXTURE1);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureU);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w / 2, h / 2, 0,
-                 GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
+    if (!ctx->texturesInitialized || sizeChanged) {
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
+    } else {
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
+                        GL_RED, GL_UNSIGNED_BYTE, frame->data[1]);
+    }
 
     ctx->gl.ActiveTexture(GL_TEXTURE2);
     ctx->gl.BindTexture(GL_TEXTURE_2D, ctx->textureV);
-    ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RED, w / 2, h / 2, 0,
-                 GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+    if (!ctx->texturesInitialized || sizeChanged) {
+        ctx->gl.TexImage2D(GL_TEXTURE_2D, 0, GL_R8, w / 2, h / 2, 0,
+                     GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+    } else {
+        ctx->gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2,
+                        GL_RED, GL_UNSIGNED_BYTE, frame->data[2]);
+    }
+
+    if (!ctx->texturesInitialized || sizeChanged) {
+        ctx->texturesInitialized = true;
+        ctx->textureW = w;
+        ctx->textureH = h;
+    }
 
     // 6. 用 YUV program 绘制全屏 quad（triangle strip，4 顶点）
     ctx->gl.UseProgram(ctx->yuvProgram);
