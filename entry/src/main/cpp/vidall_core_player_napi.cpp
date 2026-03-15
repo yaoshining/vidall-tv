@@ -1553,6 +1553,19 @@ static double AudioClock(const FfmpegContext *ctx) {
   return static_cast<double>(baseMs + deltaMs) / 1000.0;
 }
 
+static double VideoFramePtsSeconds(const FfmpegContext *ctx, const AVFrame *frame) {
+  if (ctx == nullptr || frame == nullptr || ctx->videoStreamIdx < 0 || ctx->fmtCtx == nullptr) {
+    return 0.0;
+  }
+  const int64_t frameTs = (frame->best_effort_timestamp != AV_NOPTS_VALUE)
+      ? frame->best_effort_timestamp
+      : frame->pts;
+  if (frameTs == AV_NOPTS_VALUE) {
+    return 0.0;
+  }
+  return frameTs * av_q2d(ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base);
+}
+
 // ---------------------------------------------------------------------------
 // B5：清空所有 packet/frame 队列（seek 时调用，清除过期数据）
 // ---------------------------------------------------------------------------
@@ -1872,6 +1885,33 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
         break;
       }
 
+      if (ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) <= 0
+          && !ctx->playbackPaused.load(std::memory_order_relaxed)) {
+        const double videoPts = VideoFramePtsSeconds(ctx, frame);
+        const double audioClock = AudioClock(ctx);
+        const double diff = videoPts - audioClock;
+        if (videoPts > 0.0 && diff < -0.8) {
+          static int droppedDecodeFrames = 0;
+          droppedDecodeFrames++;
+          if (droppedDecodeFrames == 1 || (droppedDecodeFrames % 30) == 0) {
+            int packetBacklog = 0;
+            {
+              std::lock_guard<std::mutex> lock(ctx->videoQueue.mtx);
+              packetBacklog = static_cast<int>(ctx->videoQueue.packets.size());
+            }
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                         "VideoDecodeThread: skip late frame diffMs=%{public}d videoPtsMs=%{public}d audioClockMs=%{public}d packetBacklog=%{public}d count=%{public}d",
+                         static_cast<int>(diff * 1000.0),
+                         static_cast<int>(videoPts * 1000.0),
+                         static_cast<int>(audioClock * 1000.0),
+                         packetBacklog,
+                         droppedDecodeFrames);
+          }
+          av_frame_unref(frame);
+          continue;
+        }
+      }
+
       // 将帧移入 videoFrameQueue（背压等待，防止解码过快撑爆内存）
       // ── B6：格式转换 + 超 1920 降采样 + CPU 侧 YUV→RGBA 转换 ──
       // 1. 所有格式统一通过 sws_scale 转换为 AV_PIX_FMT_RGBA（包括 yuv420p10le/yuv420p）
@@ -1902,7 +1942,7 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
           ctx->swsCtx = sws_getContext(
               frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
               dstW, dstH, AV_PIX_FMT_RGBA,
-              SWS_BILINEAR, nullptr, nullptr, nullptr);
+              SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
           ctx->lastSwsSrcFmt = frame->format;
           ctx->lastSwsSrcW   = frame->width;
           OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -2549,7 +2589,7 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
       const bool bypassSync = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0
           || frameTs == AV_NOPTS_VALUE;
       if (!bypassSync) {
-        const double videoPts = frameTs * av_q2d(ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base);
+        const double videoPts = VideoFramePtsSeconds(ctx, frame);
         const double audioClock = AudioClock(ctx);
         const double diff = videoPts - audioClock;
 
