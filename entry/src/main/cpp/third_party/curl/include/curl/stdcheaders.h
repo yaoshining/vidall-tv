@@ -25,6 +25,8 @@
  ***************************************************************************/
 
 #include <sys/types.h>
+#include <stdio.h>    /* FILE */
+#include <strings.h>  /* strcasecmp, strncasecmp */
 
 size_t fread(void *, size_t, size_t, FILE *);
 size_t fwrite(const void *, size_t, size_t, FILE *);

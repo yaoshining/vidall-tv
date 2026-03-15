@@ -37,10 +37,23 @@ target_include_directories(vidall_core_player_napi PRIVATE
 )
 
 # ---------------------------------------------------------------------------
-# 可选 libcurl（阶段性接入骨架）
-# 若存在 entry/libs/<abi>/libcurl.so，则自动启用并定义 VIDALL_HAS_LIBCURL=1
+# libcurl 集成（HTTPS WebDAV 支持）
+#
+# 使用方式：
+#   默认 ON。若目标环境无 libcurl.so，可显式关闭：
+#     cmake -DVIDALL_ENABLE_LIBCURL=OFF ...
+#   CI 中建议固定传参，避免构建结果随环境漂移。
 # ---------------------------------------------------------------------------
-if(EXISTS ${CURL_LIB_DIR}/libcurl.so)
+option(VIDALL_ENABLE_LIBCURL "Enable libcurl for HTTPS WebDAV support" ON)
+
+if(VIDALL_ENABLE_LIBCURL)
+  if(NOT EXISTS ${CURL_LIB_DIR}/libcurl.so)
+    message(FATAL_ERROR
+      "VIDALL_ENABLE_LIBCURL=ON but libcurl.so not found at:\n"
+      "  ${CURL_LIB_DIR}/libcurl.so\n"
+      "Place the library or pass -DVIDALL_ENABLE_LIBCURL=OFF to disable."
+    )
+  endif()
   add_library(curl SHARED IMPORTED)
   set_target_properties(curl PROPERTIES
     IMPORTED_LOCATION ${CURL_LIB_DIR}/libcurl.so
@@ -49,10 +62,9 @@ if(EXISTS ${CURL_LIB_DIR}/libcurl.so)
     ${CURL_INCLUDE_DIR}
   )
   target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBCURL=1)
-  target_link_libraries(vidall_core_player_napi PUBLIC
-    curl
-  )
+  target_link_libraries(vidall_core_player_napi PUBLIC curl)
 else()
+  message(STATUS "VIDALL_ENABLE_LIBCURL=OFF — HTTPS WebDAV support disabled")
   target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBCURL=0)
 endif()
 
