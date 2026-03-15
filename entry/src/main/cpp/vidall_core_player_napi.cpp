@@ -1112,18 +1112,14 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
   }
   state->xComponentId = xComponentId;
 
-  // 从 context 中提取 OHNativeWindow*，失败时降级兼容（不 crash）
+  // 从 context 中提取 OH_NativeXComponent*。
+  // 注：SDK 无同步 GetNativeWindow API（旧路径 window 仅在 OnSurfaceCreated 回调中可得；
+  //     新路径 OH_ArkUI_XComponent_GetNativeWindow 接受 SurfaceHolder*，非此处 unwrap 所得类型）。
+  // nativeWindow 将由 A3 阶段的 surface-created 回调写入；此处只做合法性检查，不 crash。
   OH_NativeXComponent *nativeXC = nullptr;
-  if (napi_unwrap(env, args[1], reinterpret_cast<void **>(&nativeXC)) == napi_ok
-      && nativeXC != nullptr) {
-    OHNativeWindow *nativeWindow = nullptr;
-    int32_t ret = OH_NativeXComponent_GetNativeWindow(nativeXC, &nativeWindow);
-    if (ret == 0 && nativeWindow != nullptr) {
-      state->nativeWindow = nativeWindow;
-    }
-    // ret != 0 或 nativeWindow == nullptr：骨架降级兼容，nativeWindow 保持 nullptr
-  }
-  // napi_unwrap 失败（如单测环境）：nativeWindow 保持 nullptr，不影响骨架流程
+  napi_unwrap(env, args[1], reinterpret_cast<void **>(&nativeXC));
+  // nativeXC 有效则 state->nativeWindow 由后续回调赋值，否则降级为 nullptr（骨架兼容）
+  state->nativeWindow = nullptr;
 
   // 切换渲染目标后重置骨架态，避免旧 prepared/时间轴状态延续到新 surface。
   ResetRuntimeState(*state);
