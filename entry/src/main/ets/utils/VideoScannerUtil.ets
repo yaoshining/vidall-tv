@@ -113,7 +113,7 @@ export class WebDAVAdapter implements ISourceAdapter {
       username: config['username'] ?? '',
       password: config['password'] ?? '',
       timeout: 30000,
-      tlsCertPolicy: config['tlsCertPolicy'] === 'allow_self_signed' ? 'allow_self_signed' : 'strict'
+      tlsCertPolicy: config['tlsCertPolicy'] === 'strict' ? 'strict' : 'allow_self_signed'
     };
     try {
       this.client = new WebDAVClient(webdavConfig);

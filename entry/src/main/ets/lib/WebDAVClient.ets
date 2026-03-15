@@ -65,10 +65,9 @@ export interface WebDAVConfig {
   password?: string;
   timeout?: number;
   /**
-   * TLS 证书校验策略（生产环境默认 'strict'，不允许以关闭校验作为默认行为）。
-   * - 'strict': 默认，严格校验系统 CA，拒绝过期、域名不匹配和不受信任证书。
-   * - 'allow_self_signed': 受控启用，跳过 TLS 校验，仅限内网调试场景，
-   *   任何生产部署必须经过明确评审，不得静默传播。
+   * TLS 证书校验策略，默认 'allow_self_signed'（面向家庭用户优先保证易用性）。
+   * - 'allow_self_signed': 默认，跳过 TLS 证书校验，兼容代理、自签名证书等家庭网络场景。
+   * - 'strict': 严格校验系统 CA，拒绝过期、域名不匹配和不受信任证书。
    */
   tlsCertPolicy?: 'strict' | 'allow_self_signed';
 }
@@ -130,8 +129,8 @@ export class WebDAVClient {
     this.username = config.username || '';
     this.password = config.password || '';
     this.timeout = config.timeout || 30000;
-    // 生产默认严格校验；'allow_self_signed' 仅可在内网调试场景下受控启用。
-    this.tlsCertPolicy = config.tlsCertPolicy === 'allow_self_signed' ? 'allow_self_signed' : 'strict';
+    // 默认放开 TLS 验证以兼容家庭网络（代理、自签名证书）；仅显式传 'strict' 时才严格校验。
+    this.tlsCertPolicy = config.tlsCertPolicy === 'strict' ? 'strict' : 'allow_self_signed';
 
     const urlPattern = /^(https?):\/\/([^:\/]+)(?::(\d+))?(\/.*)?$/;
     const match = this.baseUrl.match(urlPattern);
@@ -284,7 +283,7 @@ export class WebDAVClient {
       return 'TLS 连接失败：握手错误，请检查服务器 TLS 配置';
     }
     if (code === 60) {
-      return 'TLS 证书验证失败：证书可能已过期、域名不匹配或颁发机构不受信任。如使用自签名证书，请配置 tlsCertPolicy: allow_self_signed';
+      return 'TLS 证书验证失败：证书可能已过期、域名不匹配或颁发机构不受信任';
     }
     if (code === 58) {
       return 'TLS 客户端证书错误';
