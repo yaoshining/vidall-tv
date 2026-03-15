@@ -653,6 +653,7 @@ struct NativePlayerSkeletonState {
   OHNativeWindow *nativeWindow = nullptr;  // 渲染目标 Surface，生命周期归 XComponent，不 retain/release
   OH_AVPlayer *avPlayer = nullptr;          // OH_AVPlayer 实例，由 Prepare 创建，Release 销毁
   bool surfaceReady = false;               // OnSurfaceCreated 已触发
+  bool pendingPrepare = false;             // A5修复: surface未就绪时暂缓 Prepare，待 OnSurfaceCreated 后补发
   bool prepared = false;
   bool playing = false;
   int32_t selectedTrackIndex = -1;
@@ -983,6 +984,7 @@ static void AdvancePlaybackClockIfNeeded(NativePlayerSkeletonState &state) {
 static void ResetRuntimeState(NativePlayerSkeletonState &state) {
   state.prepared = false;
   state.playing = false;
+  state.pendingPrepare = false;  // A5修复: 切换 surface 时清除延迟标志
   state.selectedTrackIndex = -1;
   state.currentTimeMs = 0;
   state.durationMs = 0;
@@ -1196,9 +1198,14 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
     if (pair.second.xComponentId == xcId) {
       pair.second.nativeWindow = static_cast<OHNativeWindow *>(window);
       pair.second.surfaceReady = true;
-      // 若 avPlayer 已创建且 url 已设置，立即绑定 surface（Prepare 先于 surface ready 的情形）
-      if (pair.second.avPlayer != nullptr && !pair.second.url.empty()) {
+      // A5修复: 若 avPlayer 已创建，立即绑定 surface
+      if (pair.second.avPlayer != nullptr) {
         OH_AVPlayer_SetVideoSurface(pair.second.avPlayer, pair.second.nativeWindow);
+        // 若 Prepare() 因 surface 未就绪而延迟，现在补发 Prepare
+        if (pair.second.pendingPrepare) {
+          pair.second.pendingPrepare = false;
+          OH_AVPlayer_Prepare(pair.second.avPlayer);
+        }
       }
       break;
     }
@@ -1341,9 +1348,12 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
   }
 
-  // 绑定渲染 Surface（若 surface 已就绪）；否则等 OnSurfaceCreated 回调触发后再绑定
+  // 绑定渲染 Surface：必须在 OH_AVPlayer_Prepare 之前调用
+  // A5修复: 若 surface 未就绪，设置 pendingPrepare 标志，等 OnSurfaceCreated 回调后再 Prepare
   if (state.nativeWindow != nullptr) {
     OH_AVPlayer_SetVideoSurface(state.avPlayer, state.nativeWindow);
+  } else {
+    state.pendingPrepare = true;
   }
 
   // A4：注册媒体状态回调（在 Prepare 调用前注册）
@@ -1351,9 +1361,12 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   OH_AVPlayer_SetOnInfoCallback(state.avPlayer, OnAVPlayerInfoCB, &state);
   OH_AVPlayer_SetOnErrorCallback(state.avPlayer, OnAVPlayerErrorCB, &state);
 
-  // 异步 prepare：SDK 中无 PrepareAsync，OH_AVPlayer_Prepare 本身为非阻塞；
-  // prepared 标志与 onPrepared 回调均由 OnAVPlayerInfoCB 在 AV_PREPARED 状态时通过 TSF 触发
-  OH_AVPlayer_Prepare(state.avPlayer);
+  // 若 surface 已就绪，直接 Prepare；否则由 OnSurfaceCreated 补发
+  if (!state.pendingPrepare) {
+    // 异步 prepare：SDK 中无 PrepareAsync，OH_AVPlayer_Prepare 本身为非阻塞；
+    // prepared 标志与 onPrepared 回调均由 OnAVPlayerInfoCB 在 AV_PREPARED 状态时通过 TSF 触发
+    OH_AVPlayer_Prepare(state.avPlayer);
+  }
 
   // 在 JS 线程发出"开始缓冲"通知；prepared / onPrepared / EmitTimeUpdate 改由异步回调完成
   EmitBufferingChange(state, true);
