@@ -1878,7 +1878,7 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
   EGLint major = 0, minor = 0;
   if (!eglInitialize(ctx->eglDisplay, &major, &minor)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "FfmpegInitEGL: eglInitialize failed err=0x%x", eglGetError());
+                 "FfmpegInitEGL: eglInitialize failed err=0x%{public}x", eglGetError());
     return false;
   }
   EGLint attribs[] = {
@@ -1894,15 +1894,32 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
   if (!eglChooseConfig(ctx->eglDisplay, attribs, &config, 1, &numConfigs) ||
       numConfigs == 0) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "FfmpegInitEGL: eglChooseConfig failed err=0x%x", eglGetError());
+                 "FfmpegInitEGL: eglChooseConfig failed err=0x%{public}x", eglGetError());
     return false;
   }
-  ctx->eglSurface = eglCreateWindowSurface(
-      ctx->eglDisplay, config,
-      reinterpret_cast<EGLNativeWindowType>(nativeWindow), nullptr);
+  // 修复1: 打印 nativeWindow 指针，并清除历史 EGL 错误，确保后续 eglGetError 干净
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "FfmpegInitEGL: calling eglCreateWindowSurface window=%{public}p", nativeWindow);
+  (void)eglGetError(); // 清除待处理的 EGL 错误
+  // 修复3: eglCreateWindowSurface 失败时重试 3 次（间隔 100ms），
+  //        防御 OH_AVPlayer 异步清理尚未完成导致 Window 仍被占用的情况。
+  ctx->eglSurface = EGL_NO_SURFACE;
+  for (int attempt = 0; attempt < 3 && ctx->eglSurface == EGL_NO_SURFACE; attempt++) {
+    if (attempt > 0) {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "FfmpegInitEGL: retry eglCreateWindowSurface attempt=%{public}d", attempt + 1);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      (void)eglGetError(); // 重试前清除错误
+    }
+    ctx->eglSurface = eglCreateWindowSurface(
+        ctx->eglDisplay, config,
+        reinterpret_cast<EGLNativeWindowType>(nativeWindow), nullptr);
+  }
   if (ctx->eglSurface == EGL_NO_SURFACE) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "FfmpegInitEGL: eglCreateWindowSurface failed err=0x%x", eglGetError());
+                 "FfmpegInitEGL: eglCreateWindowSurface failed after 3 attempts"
+                 " err=0x%{public}x window=%{public}p",
+                 eglGetError(), nativeWindow);
     return false;
   }
   EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
@@ -1910,7 +1927,7 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
       eglCreateContext(ctx->eglDisplay, config, EGL_NO_CONTEXT, ctxAttribs);
   if (ctx->eglContext == EGL_NO_CONTEXT) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "FfmpegInitEGL: eglCreateContext failed err=0x%x", eglGetError());
+                 "FfmpegInitEGL: eglCreateContext failed err=0x%{public}x", eglGetError());
     return false;
   }
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -2056,24 +2073,35 @@ static void FfmpegCleanupGLResources(FfmpegContext *ctx) {
 static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   FfmpegContext *ctx = state->ffmpegCtx.get();
 
-  // 0. 释放 OH_AVPlayer，解除其对 NativeWindow 的 EGL surface 绑定。
-  //    必须在 FfmpegInitEGL 之前执行，否则 eglCreateWindowSurface 因 Window 已被占用而失败。
-  //    RenderThreadFunc 运行在独立线程（非 OH_AVPlayer 回调线程），调用 Release 安全。
+  // 0. 修复2: 在 OH_AVPlayer_Release 之前，于锁内同时取出 nativeWindow 到局部变量。
+  //    OH_AVPlayer_Release 可能触发 OnXCSurfaceDestroyed，其在 g_playersMutex 保护下
+  //    把 state->nativeWindow 置 null，若直接使用 state->nativeWindow 会产生竞态。
+  //    用 localWindow 持有指针即可规避。
+  OHNativeWindow *localWindow = nullptr;
   OH_AVPlayer *avToRelease = nullptr;
   {
     std::lock_guard<std::mutex> lk(state->stateMutex);
-    avToRelease = state->avPlayer;
+    localWindow   = state->nativeWindow; // 在锁内同时取出，保证一致性
+    avToRelease   = state->avPlayer;
     state->avPlayer = nullptr;
   }
-  if (avToRelease != nullptr) {
-    OH_AVPlayer_Stop(avToRelease);
-    OH_AVPlayer_Release(avToRelease);
-    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "RenderThreadFunc: released OH_AVPlayer to free NativeWindow EGL binding");
+
+  if (localWindow == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "RenderThreadFunc: nativeWindow is null, cannot init EGL, abort");
+    ctx->renderRunning.store(false);
+    return;
   }
 
-  // 1. EGL 初始化（创建 display/surface/context）
-  if (!FfmpegInitEGL(ctx, state->nativeWindow)) {
+  if (avToRelease != nullptr) {
+    OH_AVPlayer_Stop(avToRelease);
+    OH_AVPlayer_Release(avToRelease); // 阻塞；可能触发 OnXCSurfaceDestroyed 置 null state->nativeWindow
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "RenderThreadFunc: released OH_AVPlayer (localWindow=%{public}p)", localWindow);
+  }
+
+  // 1. EGL 初始化（使用局部保存的 localWindow，不受 OH_AVPlayer_Release 回调影响）
+  if (!FfmpegInitEGL(ctx, localWindow)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "RenderThreadFunc: FfmpegInitEGL failed, exit");
     ctx->renderRunning.store(false);
@@ -2084,7 +2112,7 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   if (!eglMakeCurrent(ctx->eglDisplay, ctx->eglSurface,
                       ctx->eglSurface, ctx->eglContext)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "RenderThreadFunc: eglMakeCurrent failed err=0x%x", eglGetError());
+                 "RenderThreadFunc: eglMakeCurrent failed err=0x%{public}x", eglGetError());
     ctx->renderRunning.store(false);
     return;
   }
