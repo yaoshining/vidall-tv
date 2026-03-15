@@ -803,6 +803,11 @@ struct FfmpegContext {
   //            DemuxThreadFunc(demux 线程) 读+解引用之间的 data race（UB）。
   std::atomic<NativePlayerSkeletonState *> ownerState{nullptr};
 
+  // B6：seek 与 decode 线程之间的 codec 操作互斥锁
+  // avcodec_flush_buffers / avcodec_send_packet / avcodec_receive_frame 不是线程安全的，
+  // 必须通过此 mutex 串行化访问同一个 AVCodecContext。
+  std::mutex codecMutex;
+
   // B6 安全析构兜底：正常路径由 StopFfmpegDemux 先 join 所有线程再 reset()。
   // 若存在异常路径导致析构器直接被调用（如 unique_ptr 提前 reset），先广播所有
   // abort/interrupt 标志，再按 Render→Decode→Demux 顺序 join，线程会迅速响应标志退出。
@@ -1574,9 +1579,12 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
       } else {
       // 清空所有 packet/frame 队列（旧数据）
       FlushFfmpegQueues(ctx);
-      // 刷新解码器内部缓冲区
-      if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
-      if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
+      // 刷新解码器内部缓冲区（hold codecMutex 防止与 decode 线程并发）
+      {
+        std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+        if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
+        if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
+      }
       // 重置音频时钟（seek 后从新位置重新计时）
       ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
@@ -1763,7 +1771,11 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
     ctx->videoQueue.cv.notify_all();  // 唤醒 demux 线程（队列有空位）
 
     // 发送到解码器
-    int ret = avcodec_send_packet(ctx->videoCodecCtx, pkt);
+    int ret;
+    {
+      std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+      ret = avcodec_send_packet(ctx->videoCodecCtx, pkt);
+    }
     av_packet_free(&pkt);
     if (ret < 0) {
       if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
@@ -1777,11 +1789,15 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
 
     // 接收所有可用解码帧
     while (ctx->decodeRunning.load()) {
-      ret = avcodec_receive_frame(ctx->videoCodecCtx, frame);
-      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+      int receiveRet;
+      {
+        std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+        receiveRet = avcodec_receive_frame(ctx->videoCodecCtx, frame);
+      }
+      if (receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF) {
         break;
       }
-      if (ret < 0) {
+      if (receiveRet < 0) {
         break;
       }
 
@@ -1840,7 +1856,11 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
     ctx->audioQueue.cv.notify_all();
 
     // 发送到解码器
-    int ret = avcodec_send_packet(ctx->audioCodecCtx, pkt);
+    int ret;
+    {
+      std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+      ret = avcodec_send_packet(ctx->audioCodecCtx, pkt);
+    }
     av_packet_free(&pkt);
     if (ret < 0) {
       if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
@@ -1854,11 +1874,15 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
 
     // 接收所有可用解码帧（PCM，格式转换在 B4 做）
     while (ctx->decodeRunning.load()) {
-      ret = avcodec_receive_frame(ctx->audioCodecCtx, frame);
-      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+      int receiveRet;
+      {
+        std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+        receiveRet = avcodec_receive_frame(ctx->audioCodecCtx, frame);
+      }
+      if (receiveRet == AVERROR(EAGAIN) || receiveRet == AVERROR_EOF) {
         break;
       }
-      if (ret < 0) {
+      if (receiveRet < 0) {
         break;
       }
 
