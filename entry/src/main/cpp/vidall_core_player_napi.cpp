@@ -1887,6 +1887,7 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
       EGL_RED_SIZE,   8,
       EGL_GREEN_SIZE, 8,
       EGL_BLUE_SIZE,  8,
+      EGL_ALPHA_SIZE, 8,   // 完整 RGBA，帮助选到与 NativeWindow 格式匹配的 config
       EGL_NONE
   };
   EGLConfig config = nullptr;
@@ -1897,10 +1898,20 @@ static bool FfmpegInitEGL(FfmpegContext *ctx, OHNativeWindow *nativeWindow) {
                  "FfmpegInitEGL: eglChooseConfig failed err=0x%{public}x", eglGetError());
     return false;
   }
-  // 修复1: 打印 nativeWindow 指针，并清除历史 EGL 错误，确保后续 eglGetError 干净
+  // 修复4 (#48-B6): HarmonyOS 必须在 eglCreateWindowSurface 前设置 NativeWindow buffer 格式
+  //   与 EGL Config 匹配，否则返回 EGL_BAD_MATCH (0x3009)。
+  EGLint nativeVisualId = 0;
+  eglGetConfigAttrib(ctx->eglDisplay, config, EGL_NATIVE_VISUAL_ID, &nativeVisualId);
+  if (nativeVisualId == 0) {
+    nativeVisualId = 3;  // fallback: NATIVEBUFFER_PIXEL_FMT_RGBA_8888 = 3 in OpenHarmony
+  }
+  OH_NativeWindow_NativeWindowHandleOpt(nativeWindow, SET_FORMAT, nativeVisualId);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "FfmpegInitEGL: calling eglCreateWindowSurface window=%{public}p", nativeWindow);
-  (void)eglGetError(); // 清除待处理的 EGL 错误
+               "FfmpegInitEGL: set NativeWindow format=%{public}d window=%{public}p",
+               nativeVisualId, nativeWindow);
+
+  // 清除历史 EGL 错误，确保后续 eglGetError 干净
+  (void)eglGetError();
   // 修复3: eglCreateWindowSurface 失败时重试 3 次（间隔 100ms），
   //        防御 OH_AVPlayer 异步清理尚未完成导致 Window 仍被占用的情况。
   ctx->eglSurface = EGL_NO_SURFACE;
