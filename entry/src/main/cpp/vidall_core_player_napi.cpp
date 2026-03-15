@@ -2097,31 +2097,20 @@ static void FfmpegCleanupGLResources(FfmpegContext *ctx) {
 static void RenderThreadFunc(NativePlayerSkeletonState *state) {
   FfmpegContext *ctx = state->ffmpegCtx.get();
 
-  // 0. 修复2: 在 OH_AVPlayer_Release 之前，于锁内同时取出 nativeWindow 到局部变量。
-  //    OH_AVPlayer_Release 可能触发 OnXCSurfaceDestroyed，其在 g_playersMutex 保护下
-  //    把 state->nativeWindow 置 null，若直接使用 state->nativeWindow 会产生竞态。
-  //    用 localWindow 持有指针即可规避。
+  // 0. 在锁内读取 nativeWindow 到局部变量，避免与 OnXCSurfaceDestroyed 的竞态。
+  //    注意：不在此处释放 avPlayer —— OH_AVPlayer code=9 从未创建 EGL 资源，
+  //    且 Release() 会在播放器销毁时正确清理。
   OHNativeWindow *localWindow = nullptr;
-  OH_AVPlayer *avToRelease = nullptr;
   {
     std::lock_guard<std::mutex> lk(state->stateMutex);
-    localWindow   = state->nativeWindow; // 在锁内同时取出，保证一致性
-    avToRelease   = state->avPlayer;
-    state->avPlayer = nullptr;
+    localWindow = state->nativeWindow;
   }
 
   if (localWindow == nullptr) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "RenderThreadFunc: nativeWindow is null, cannot init EGL, abort");
+                 "RenderThreadFunc: nativeWindow is null, abort");
     ctx->renderRunning.store(false);
     return;
-  }
-
-  if (avToRelease != nullptr) {
-    OH_AVPlayer_Stop(avToRelease);
-    OH_AVPlayer_Release(avToRelease); // 阻塞；可能触发 OnXCSurfaceDestroyed 置 null state->nativeWindow
-    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "RenderThreadFunc: released OH_AVPlayer (localWindow=%{public}p)", localWindow);
   }
 
   // 1. EGL 初始化（使用局部保存的 localWindow，不受 OH_AVPlayer_Release 回调影响）
@@ -2140,6 +2129,8 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
     ctx->renderRunning.store(false);
     return;
   }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "RenderThreadFunc: eglMakeCurrent OK, GL context current");
 
   // 3. 初始化 GL 资源（shader/纹理/VBO）
   if (!FfmpegInitGLResources(ctx)) {
