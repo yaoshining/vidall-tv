@@ -107,6 +107,10 @@ export class WebDAVClient {
   private username: string;
   private password: string;
   private timeout: number;
+  // 阶段3收口：默认不再自动回退到旧 socket 链路，仅在排障时手动放开。
+  private readonly allowLegacyTransportFallback: boolean = false;
+  // 阶段3收口：默认禁止 HTTPS 失败后降级到明文 HTTP。
+  private readonly allowInsecureHttpDowngrade: boolean = false;
   // 缓存 native libcurl 可用性（null = 未检测）
   private _nativeCurlEnabled: boolean | null = null;
 
@@ -325,8 +329,15 @@ export class WebDAVClient {
       try {
         return this.sendViaNative(method, path, headers, body);
       } catch (e) {
-        console.warn(`WebDAV native fallback: ${(e as Error).message}`);
+        const nativeErr = (e as Error).message;
+        if (!this.allowLegacyTransportFallback) {
+          throw new Error(`native transport failed: ${nativeErr}`);
+        }
+        console.warn(`WebDAV native fallback enabled: ${nativeErr}`);
       }
+    }
+    if (!this.allowLegacyTransportFallback) {
+      throw new Error('legacy transport fallback disabled');
     }
     // ── 回退：现有 socket / http 实现 ──────────────────────────────────────
     if (this.isHttps) {
@@ -375,6 +386,10 @@ export class WebDAVClient {
       return result;
     } catch (e) {
       console.warn(`WebDAV HTTPS Level2 (TLS) error: ${(e as Error).message}, trying HTTP fallback...`);
+    }
+
+    if (!this.allowInsecureHttpDowngrade) {
+      throw new Error('HTTPS fallback exhausted and insecure HTTP downgrade is disabled');
     }
 
     // ── Level 3: HTTP 明文降级（443→80，其他端口保持） ───────────────────────
