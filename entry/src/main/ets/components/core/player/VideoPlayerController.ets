@@ -10,8 +10,8 @@ import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
 import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
-import { FfprobeUtil } from "../../../utils/FfprobeUtil";
-import { DeviceCapabilityUtil } from "../../../utils/DeviceCapabilityUtil";
+import { FfprobeResult, FfprobeTrack, FfprobeUtil } from "../../../utils/FfprobeUtil";
+import { DeviceCapabilityUtil, NativeVideoDecoderCapability } from "../../../utils/DeviceCapabilityUtil";
 import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
 import {
   AvSubtitleBridgeAdapter,
@@ -76,6 +76,45 @@ interface AudioRoutingDecision {
   decoderIsHardware: boolean;
   precheckProbeFailed: boolean;
   precheckProbeError: string;
+}
+
+type NativeVideoPlan = 'system_default' | 'native_hw_preferred' | 'native_ffmpeg_only';
+type NativeFallbackLevel1 = 'native_ffmpeg';
+type NativeFallbackLevel2 = 'ijkplayer';
+type NativeErrorEscalationPolicy = 'controller_wide_for_now';
+type NativeErrorEscalationAction = 'fallback_to_ijkplayer';
+
+interface PlaybackPreflightSnapshot {
+  probeSucceeded: boolean;
+  probeError: string;
+  probeResult?: FfprobeResult;
+  primaryVideoTrack?: FfprobeTrack;
+  primaryAudioTrack?: FfprobeTrack;
+  videoCodecName: string;
+  videoCodecMime: string;
+  nativeVideoCapability: NativeVideoDecoderCapability;
+}
+
+interface PlaybackFallbackPlan {
+  avplayerUnsupportedFallback: UnsupportedFormatFallback;
+  nativeLevel1Fallback: NativeFallbackLevel1;
+  nativeLevel2Fallback: NativeFallbackLevel2;
+  nativeErrorEscalationPolicy: NativeErrorEscalationPolicy;
+  surfaceProbeIncluded: boolean;
+}
+
+interface PlaybackPlanDecision {
+  selectedBackend: PlayerBackend;
+  nativeVideoPlan: NativeVideoPlan;
+  fallbackPlan: PlaybackFallbackPlan;
+  decisionReason: string;
+  diagnostics: string;
+}
+
+interface NativeErrorEscalationDirective {
+  action: NativeErrorEscalationAction;
+  reason: string;
+  diagnostics: string;
 }
 
 interface PresetAudioHint {
@@ -170,6 +209,8 @@ export class VideoPlayerController {
   @Trace lastErrorMessage: string = ''
   /** 音频能力探测文案（用于 UI 展示） */
   @Trace audioCapabilityText: string = ''
+  /** 播放预检 / 播放计划摘要（用于日志与后续 UI/调试展示） */
+  @Trace playbackPlanSummary: string = ''
   /** ffmpeg 模式首帧预览图（file:// URI） */
   @Trace ffmpegPreviewUri: string = ''
   @Trace progress = 0
@@ -265,6 +306,7 @@ export class VideoPlayerController {
   private ffmpegLastEmptyQueueCatchupAtMs: number = 0;
   /** ffmpeg 连续预览：远程 chunk 不稳定时切到单帧模式 */
   private ffmpegSingleFrameMode: boolean = false;
+  private latestPlaybackPlan?: PlaybackPlanDecision;
 
   /**
    * 初始化播放器。
@@ -314,12 +356,14 @@ export class VideoPlayerController {
 
     // 先重置可展示状态，避免复用上次播放残留。
     this.audioCapabilityText = '';
+    this.playbackPlanSummary = '';
     this.ffmpegPreviewUri = '';
+    const preflight = await this.collectPlaybackPreflightSnapshot(videoData);
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
       const backendBeforeAutoRouting = this.backend;
-      const decision = await this.resolveAudioRoutingDecision(videoData);
+      const decision = await this.resolveAudioRoutingDecision(videoData, preflight);
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
@@ -345,6 +389,14 @@ export class VideoPlayerController {
         'ffmpeg 播放后端已从主路径下线，自动回退到 ijkplayer');
       this.backend = 'ijkplayer';
     }
+
+    const playbackPlan = this.buildPlaybackPlanDecision(preflight);
+    this.latestPlaybackPlan = playbackPlan;
+    this.playbackPlanSummary =
+      `播放计划: backend=${playbackPlan.selectedBackend} | ` +
+      `nativePlan=${playbackPlan.nativeVideoPlan} | ` +
+      `fallback=${playbackPlan.fallbackPlan.nativeLevel1Fallback}->${playbackPlan.fallbackPlan.nativeLevel2Fallback}`;
+    this.logPlaybackPlan(playbackPlan);
 
     // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
@@ -551,7 +603,10 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
         `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"error","error_code":"${error.message.substring(0, 80)}","elapsed_ms":${metricsElapsedOnError}}`);
       if (this.backend === 'native') {
-        this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
+        const directive = this.resolveNativeErrorEscalationDirective(error.message);
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[native-error-policy] action=${directive.action}, reason=${directive.reason}, diagnostics=${directive.diagnostics}`);
+        this.fallbackNativeToIjk(directive.reason, 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
         return;
       }
       this.isLoading = false;
@@ -1387,7 +1442,48 @@ export class VideoPlayerController {
     return false;
   }
 
-  private async resolveAudioRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
+  private async collectPlaybackPreflightSnapshot(videoData: VideoData): Promise<PlaybackPreflightSnapshot> {
+    let probeResult: FfprobeResult | undefined = undefined;
+    let probeSucceeded = false;
+    let probeError = '';
+
+    try {
+      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
+      if (probe.success) {
+        probeResult = probe;
+        probeSucceeded = true;
+      } else {
+        probeError = probe.errorMessage ?? 'ffprobe failed';
+      }
+    } catch (e) {
+      probeError = this.safeErrorMessage(e);
+    }
+
+    const primaryVideoTrack = probeResult?.videoTracks.length ? probeResult.videoTracks[0] : undefined;
+    const primaryAudioTrack = probeResult?.audioTracks.length ? probeResult.audioTracks[0] : undefined;
+    const videoCodecName = (primaryVideoTrack?.codecName ?? '').toLowerCase();
+    const videoCodecMime = DeviceCapabilityUtil.normalizeVideoCodecToMime(videoCodecName);
+    const nativeVideoCapability = videoCodecName.length > 0
+      ? DeviceCapabilityUtil.queryNativeVideoDecoderCapability(videoCodecName)
+      : this.buildEmptyNativeVideoCapability('video codec unavailable');
+
+    const snapshot: PlaybackPreflightSnapshot = {
+      probeSucceeded,
+      probeError,
+      probeResult,
+      primaryVideoTrack,
+      primaryAudioTrack,
+      videoCodecName,
+      videoCodecMime,
+      nativeVideoCapability
+    };
+    return snapshot;
+  }
+
+  private async resolveAudioRoutingDecision(
+    videoData: VideoData,
+    preflight?: PlaybackPreflightSnapshot
+  ): Promise<AudioRoutingDecision> {
     const defaultDecision: AudioRoutingDecision = {
       preferredBackend: 'avplayer',
       fallback: 'native',
@@ -1408,21 +1504,13 @@ export class VideoPlayerController {
     const presetHint = this.readPresetAudioHint(videoData);
     let codecName = presetHint.codecName;
     let channels = presetHint.channels;
-    let precheckProbeFailed = false;
-    let precheckProbeError = '';
+    const precheckProbeFailed = preflight !== undefined && !preflight.probeSucceeded;
+    const precheckProbeError = preflight?.probeError ?? '';
 
-    try {
-      // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
-      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
-      if (probe.success && probe.audioTracks.length > 0) {
-        const first = probe.audioTracks[0];
-        codecName = first.codecName;
-        channels = first.channels ?? channels;
-      }
-    } catch (e) {
-      precheckProbeFailed = true;
-      precheckProbeError = this.safeErrorMessage(e);
-      // 探测失败时使用预置音轨提示继续决策。
+    const probedAudioTrack = preflight?.primaryAudioTrack;
+    if (probedAudioTrack !== undefined) {
+      codecName = probedAudioTrack.codecName;
+      channels = probedAudioTrack.channels ?? channels;
     }
 
     const normalizedCodec = (codecName ?? '').toLowerCase();
@@ -1457,6 +1545,77 @@ export class VideoPlayerController {
       precheckProbeError
     };
     return decision;
+  }
+
+  private buildPlaybackPlanDecision(preflight: PlaybackPreflightSnapshot): PlaybackPlanDecision {
+    const selectedBackend = this.backend;
+    let nativeVideoPlan: NativeVideoPlan = 'system_default';
+    let decisionReason = '未命中 native 硬解预检条件，保持 system_default 骨架';
+
+    if (preflight.videoCodecName.length === 0) {
+      decisionReason = preflight.probeSucceeded
+        ? 'ffprobe 未识别视频主轨 codec，native 暂保持 system_default'
+        : 'ffprobe 失败，native 暂保持 system_default';
+    } else if (this.isHwCandidateCodec(preflight.videoCodecMime)) {
+      if (preflight.nativeVideoCapability.capabilityKnown &&
+        preflight.nativeVideoCapability.supported &&
+        preflight.nativeVideoCapability.isHardware) {
+        nativeVideoPlan = 'native_hw_preferred';
+        decisionReason = `${preflight.videoCodecMime} 命中硬解主路径候选，设备存在原生硬解能力`;
+      } else {
+        nativeVideoPlan = 'native_ffmpeg_only';
+        decisionReason = `${preflight.videoCodecMime} 虽为硬解主路径候选，但设备无可用原生硬解能力`;
+      }
+    } else {
+      nativeVideoPlan = 'native_ffmpeg_only';
+      decisionReason = `${preflight.videoCodecName} 不在 H.264/H.265 硬解 MVP 范围内，native 仅保留 FFmpeg 子路径`;
+    }
+
+    const diagnosticsParts: string[] = [
+      `probeSucceeded=${preflight.probeSucceeded}`,
+      `probeError=${preflight.probeError.length > 0 ? preflight.probeError : 'none'}`,
+      `videoCodec=${preflight.videoCodecName.length > 0 ? preflight.videoCodecName : 'unknown'}`,
+      `videoMime=${preflight.videoCodecMime.length > 0 ? preflight.videoCodecMime : 'unknown'}`,
+      `videoTracks=${preflight.probeResult?.videoTracks.length ?? 0}`,
+      `audioTracks=${preflight.probeResult?.audioTracks.length ?? 0}`,
+      `format=${preflight.probeResult?.formatName ?? 'unknown'}`,
+      `capabilityKnown=${preflight.nativeVideoCapability.capabilityKnown}`,
+      `nativeSupported=${preflight.nativeVideoCapability.supported}`,
+      `nativeIsHardware=${preflight.nativeVideoCapability.isHardware}`,
+      `decoder=${preflight.nativeVideoCapability.decoderName.length > 0
+        ? preflight.nativeVideoCapability.decoderName
+        : 'unknown'}`
+    ];
+
+    const fallbackPlan: PlaybackFallbackPlan = {
+      avplayerUnsupportedFallback: this.unsupportedFormatFallback,
+      nativeLevel1Fallback: 'native_ffmpeg',
+      nativeLevel2Fallback: 'ijkplayer',
+      nativeErrorEscalationPolicy: 'controller_wide_for_now',
+      surfaceProbeIncluded: false
+    };
+
+    const decision: PlaybackPlanDecision = {
+      selectedBackend,
+      nativeVideoPlan,
+      fallbackPlan,
+      decisionReason,
+      diagnostics: diagnosticsParts.join(', ')
+    };
+    return decision;
+  }
+
+  private logPlaybackPlan(plan: PlaybackPlanDecision): void {
+    const message =
+      '[PlaybackPlan] ' +
+      `selectedBackend=${plan.selectedBackend}, ` +
+      `nativeVideoPlan=${plan.nativeVideoPlan}, ` +
+      `avplayerFallback=${plan.fallbackPlan.avplayerUnsupportedFallback}, ` +
+      `nativeFallback=${plan.fallbackPlan.nativeLevel1Fallback}->${plan.fallbackPlan.nativeLevel2Fallback}, ` +
+      `nativeErrorPolicy=${plan.fallbackPlan.nativeErrorEscalationPolicy}, ` +
+      `surfaceProbeIncluded=${plan.fallbackPlan.surfaceProbeIncluded}, ` +
+      `reason=${plan.decisionReason}, diagnostics=${plan.diagnostics}`;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, message);
   }
 
   private logAudioCapabilityReport(decision: AudioRoutingDecision): void {
@@ -1535,6 +1694,31 @@ export class VideoPlayerController {
       return 6;
     }
     return 2;
+  }
+
+  private isHwCandidateCodec(videoMime: string): boolean {
+    return videoMime === 'video/avc' || videoMime === 'video/hevc';
+  }
+
+  private buildEmptyNativeVideoCapability(errorMessage: string): NativeVideoDecoderCapability {
+    const capability: NativeVideoDecoderCapability = {
+      capabilityKnown: false,
+      supported: false,
+      isHardware: false,
+      maxWidth: 0,
+      maxHeight: 0,
+      minWidth: 0,
+      minHeight: 0,
+      maxFrameRate: 0,
+      minFrameRate: 0,
+      widthAlignment: 0,
+      heightAlignment: 0,
+      maxInstances: 0,
+      decoderName: '',
+      mimeType: '',
+      errorMessage
+    };
+    return capability;
   }
 
   private isLikelySystemHardDecodeSupported(codec: string): boolean {
@@ -1660,6 +1844,18 @@ export class VideoPlayerController {
     this.player = undefined;
     this.backend = 'ijkplayer';
     oldPlayer?.release().catch(() => {});
+  }
+
+  private resolveNativeErrorEscalationDirective(message: string): NativeErrorEscalationDirective {
+    const diagnostics = this.latestPlaybackPlan !== undefined
+      ? `${this.latestPlaybackPlan.nativeVideoPlan}; ${this.latestPlaybackPlan.diagnostics}; raw=${message}`
+      : `no-playback-plan; raw=${message}`;
+    const directive: NativeErrorEscalationDirective = {
+      action: 'fallback_to_ijkplayer',
+      reason: 'native_error_callback_wide_escalation',
+      diagnostics
+    };
+    return directive;
   }
 
   private logFallbackEvent(
