@@ -1,4 +1,5 @@
 export const createPlayer: () => number;
+export const setPreferredDecodePath: (handle: number, path: string) => void;
 export const setSource: (handle: number, url: string) => void;
 export const setDurationHint: (handle: number, durationMs: number) => void;
 export const setHeaders: (handle: number, headersJson: string) => void;

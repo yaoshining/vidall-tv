@@ -878,6 +878,21 @@ struct FfmpegContext {
   }
 };
 
+enum class NativePreferredDecodePath {
+  HARDWARE_PREFERRED = 0,
+  FFMPEG_ONLY = 1
+};
+
+static const char *PreferredDecodePathToString(NativePreferredDecodePath path) {
+  switch (path) {
+    case NativePreferredDecodePath::FFMPEG_ONLY:
+      return "ffmpeg_only";
+    case NativePreferredDecodePath::HARDWARE_PREFERRED:
+    default:
+      return "hardware_preferred";
+  }
+}
+
 struct NativePlayerSkeletonState {
   std::string url;
   std::string headersJson;
@@ -915,6 +930,7 @@ struct NativePlayerSkeletonState {
   // PR#49 修复（问题6）：per-player mutex，保护 state 字段的跨线程读写
   // 注意：std::mutex 不可拷贝/移动；unordered_map 通过节点指针操作，不需要拷贝值
   std::mutex stateMutex;
+  NativePreferredDecodePath preferredDecodePath = NativePreferredDecodePath::HARDWARE_PREFERRED;
   // B1：FFmpeg 自研路径标志与上下文
   bool useFfmpegPath = false;  // OH_AVPlayer 报错后设为 true，切换到 FFmpeg 路径
   std::unique_ptr<FfmpegContext> ffmpegCtx;
@@ -1282,6 +1298,21 @@ static void ResetRuntimeState(NativePlayerSkeletonState &state) {
   state.lastRealtimeMs = 0;
 }
 
+static bool ParsePreferredDecodePath(
+  const std::string &rawPath,
+  NativePreferredDecodePath &preferredDecodePath
+) {
+  if (rawPath == "ffmpeg_only") {
+    preferredDecodePath = NativePreferredDecodePath::FFMPEG_ONLY;
+    return true;
+  }
+  if (rawPath == "hardware_preferred") {
+    preferredDecodePath = NativePreferredDecodePath::HARDWARE_PREFERRED;
+    return true;
+  }
+  return false;
+}
+
 static void JoinFfmpegFallbackThread(NativePlayerSkeletonState &state) {
   std::thread threadToJoin;
   {
@@ -1352,6 +1383,46 @@ static napi_value SetSource(napi_env env, napi_callback_info info) {
   ResetRuntimeState(*state);
   EmitTimeUpdate(*state);
   return ReturnUndefinedOrThrow(env, "setSource failed to create return value");
+}
+
+static napi_value SetPreferredDecodePath(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2] = { nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "setPreferredDecodePath failed to read args");
+    return nullptr;
+  }
+  if (argc < 2) {
+    ThrowTypeError(env, "setPreferredDecodePath requires (handle, path)");
+    return nullptr;
+  }
+  int32_t handle = 0;
+  if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
+    ThrowTypeError(env, "setPreferredDecodePath handle must be int32");
+    return nullptr;
+  }
+  NativePlayerSkeletonState *state = FindPlayerOrThrow(env, handle);
+  if (state == nullptr) {
+    return nullptr;
+  }
+  std::string rawPath;
+  if (!ReadUtf8String(env, args[1], rawPath)) {
+    ThrowTypeError(env, "setPreferredDecodePath path must be string");
+    return nullptr;
+  }
+  NativePreferredDecodePath preferredDecodePath = NativePreferredDecodePath::HARDWARE_PREFERRED;
+  if (!ParsePreferredDecodePath(rawPath, preferredDecodePath)) {
+    ThrowTypeError(env, "setPreferredDecodePath path must be 'hardware_preferred' or 'ffmpeg_only'");
+    return nullptr;
+  }
+  {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    state->preferredDecodePath = preferredDecodePath;
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "SetPreferredDecodePath: handle=%d preferred=%s",
+               handle, PreferredDecodePathToString(preferredDecodePath));
+  return ReturnUndefinedOrThrow(env, "setPreferredDecodePath failed to create return value");
 }
 
 static napi_value SetDurationHint(napi_env env, napi_callback_info info) {
@@ -3804,6 +3875,33 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
   }
 
+  NativePreferredDecodePath preferredDecodePath = NativePreferredDecodePath::HARDWARE_PREFERRED;
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    preferredDecodePath = state.preferredDecodePath;
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "Prepare: preferredDecodePath=%s url=%s xComponentId=%s",
+               PreferredDecodePathToString(preferredDecodePath),
+               state.url.c_str(),
+               state.xComponentId.c_str());
+
+  if (preferredDecodePath == NativePreferredDecodePath::FFMPEG_ONLY) {
+    {
+      std::lock_guard<std::mutex> lk(state.stateMutex);
+      state.useFfmpegPath = true;
+      state.pendingPrepare = false;
+    }
+    EmitBufferingChange(state, true);
+    StartFfmpegDemux(&state, state.url);
+    return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+  }
+
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    state.useFfmpegPath = false;
+  }
+
   // A3：创建 OH_AVPlayer 实例（每次 prepare 前确保实例存在）
   if (state.avPlayer == nullptr) {
     state.avPlayer = OH_AVPlayer_Create();
@@ -5466,6 +5564,7 @@ static napi_value ProbeVideoDecoderSurface(napi_env env, napi_callback_info info
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "setPreferredDecodePath", nullptr, SetPreferredDecodePath, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setSource", nullptr, SetSource, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setDurationHint", nullptr, SetDurationHint, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setHeaders", nullptr, SetHeaders, nullptr, nullptr, nullptr, napi_default, nullptr },

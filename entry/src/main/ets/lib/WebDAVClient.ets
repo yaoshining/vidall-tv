@@ -446,7 +446,13 @@ export class WebDAVClient {
   ): Promise<HttpResponse> {
     // ── native libcurl 优先路径 ────────────────────────────────────────────
     const nativeCurlEnabled = this.checkNativeCurlEnabled();
-    const shouldTryNativeFirst = nativeCurlEnabled || this.isHttps;
+    const shouldTryNativeFirst = nativeCurlEnabled;
+    if (this.isHttps && !nativeCurlEnabled) {
+      if (!this.allowLegacyTransportFallback) {
+        throw new Error('native transport unavailable and legacy fallback disabled');
+      }
+      console.warn('WebDAV native transport unavailable before request, fallback to legacy transport');
+    }
     if (shouldTryNativeFirst) {
       try {
         const response = await this.sendViaNative(method, path, headers, body);
@@ -462,6 +468,9 @@ export class WebDAVClient {
           nativeErr.includes('is not a function');
         if (nativeUnavailable) {
           this._nativeCurlEnabled = false;
+          if (!this.allowLegacyTransportFallback) {
+            throw new Error(`native transport unavailable: ${nativeErr}`);
+          }
           console.warn(`WebDAV native transport unavailable, fallback to legacy transport: ${nativeErr}`);
         } else if (!this.allowLegacyTransportFallback) {
           throw new Error(`native transport failed: ${nativeErr}`);
@@ -470,7 +479,7 @@ export class WebDAVClient {
         }
       }
     }
-    if (shouldTryNativeFirst && !this._nativeCurlEnabled) {
+    if (shouldTryNativeFirst && !this._nativeCurlEnabled && this.allowLegacyTransportFallback) {
       console.warn('WebDAV native transport unavailable, fallback to legacy transport');
     }
     // ── 回退：现有 socket / http 实现 ──────────────────────────────────────

@@ -236,7 +236,9 @@ export struct PlayerPage {
           .borderRadius(4)
           .padding({ left: 10, right: 10, top: 4, bottom: 4 })
           .onClick(() => {
-            this.runNativeSurfaceProbe()
+            void this.runNativeSurfaceProbe().catch(() => {
+              this.videoPlayerController.lastErrorMessage = 'surface probe 执行失败';
+            })
           })
       }
     }

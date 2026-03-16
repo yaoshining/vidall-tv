@@ -7,11 +7,17 @@ import { millisecondsToTime } from "../../../utils/TimeUtil";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
-import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
+import {
+  NativeBackendFatalError,
+  NativeDecodeExpectation,
+  NativeDecodePathState,
+  NativeDecodePathStatus,
+  VidAllPlayerAdapter
+} from "./VidAllPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
-import { FfprobeUtil } from "../../../utils/FfprobeUtil";
-import { DeviceCapabilityUtil } from "../../../utils/DeviceCapabilityUtil";
+import { FfprobeResult, FfprobeTrack, FfprobeUtil } from "../../../utils/FfprobeUtil";
+import { DeviceCapabilityUtil, NativeVideoDecoderCapability } from "../../../utils/DeviceCapabilityUtil";
 import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
 import {
   AvSubtitleBridgeAdapter,
@@ -76,6 +82,45 @@ interface AudioRoutingDecision {
   decoderIsHardware: boolean;
   precheckProbeFailed: boolean;
   precheckProbeError: string;
+}
+
+type NativeVideoPlan = 'system_default' | 'native_hw_preferred' | 'native_ffmpeg_only';
+type NativeFallbackLevel1 = 'native_ffmpeg';
+type NativeFallbackLevel2 = 'ijkplayer';
+type NativeErrorEscalationPolicy = 'backend_fatal_only';
+type NativeErrorEscalationAction = 'fallback_to_ijkplayer';
+
+interface PlaybackPreflightSnapshot {
+  probeSucceeded: boolean;
+  probeError: string;
+  probeResult?: FfprobeResult;
+  primaryVideoTrack?: FfprobeTrack;
+  primaryAudioTrack?: FfprobeTrack;
+  videoCodecName: string;
+  videoCodecMime: string;
+  nativeVideoCapability: NativeVideoDecoderCapability;
+}
+
+interface PlaybackFallbackPlan {
+  avplayerUnsupportedFallback: UnsupportedFormatFallback;
+  nativeLevel1Fallback: NativeFallbackLevel1;
+  nativeLevel2Fallback: NativeFallbackLevel2;
+  nativeErrorEscalationPolicy: NativeErrorEscalationPolicy;
+  surfaceProbeIncluded: boolean;
+}
+
+interface PlaybackPlanDecision {
+  selectedBackend: PlayerBackend;
+  nativeVideoPlan: NativeVideoPlan;
+  fallbackPlan: PlaybackFallbackPlan;
+  decisionReason: string;
+  diagnostics: string;
+}
+
+interface NativeErrorEscalationDirective {
+  action: NativeErrorEscalationAction;
+  reason: string;
+  diagnostics: string;
 }
 
 interface PresetAudioHint {
@@ -170,8 +215,16 @@ export class VideoPlayerController {
   @Trace lastErrorMessage: string = ''
   /** 音频能力探测文案（用于 UI 展示） */
   @Trace audioCapabilityText: string = ''
+  /** 播放预检 / 播放计划摘要（用于日志与后续 UI/调试展示） */
+  @Trace playbackPlanSummary: string = ''
   /** ffmpeg 模式首帧预览图（file:// URI） */
   @Trace ffmpegPreviewUri: string = ''
+  /** native backend 内部当前 decode path（hardware / ffmpeg） */
+  @Trace nativeDecodePath: 'hardware' | 'ffmpeg' = 'hardware'
+  /** native backend 当前会话在 prepare 阶段确定的期望 decode path */
+  @Trace nativeDecodeExpectedPath: NativeDecodeExpectation = 'hardware_preferred'
+  /** native backend 内部 decode path 状态（显式表达切换阶段） */
+  @Trace nativeDecodePathState: NativeDecodePathState = 'hardware_preferred'
   @Trace progress = 0
   /** 内嵌字幕轨道列表（来自 getTrackInfos） */
   @Trace subtitleTracks: TrackInfo[] = []
@@ -265,6 +318,9 @@ export class VideoPlayerController {
   private ffmpegLastEmptyQueueCatchupAtMs: number = 0;
   /** ffmpeg 连续预览：远程 chunk 不稳定时切到单帧模式 */
   private ffmpegSingleFrameMode: boolean = false;
+  private latestPlaybackPlan?: PlaybackPlanDecision;
+  private latestPreflightSnapshot?: PlaybackPreflightSnapshot;
+  private latestAudioRoutingDecision?: AudioRoutingDecision;
 
   /**
    * 初始化播放器。
@@ -300,6 +356,9 @@ export class VideoPlayerController {
     this.ffmpegLastForceRestartAtMs = 0;
     this.ffmpegLastEmptyQueueCatchupAtMs = 0;
     this.ffmpegSingleFrameMode = false;
+    this.nativeDecodePath = 'hardware';
+    this.nativeDecodeExpectedPath = 'hardware_preferred';
+    this.nativeDecodePathState = 'hardware_preferred';
     this.clearNativeReadyGuardTimer();
     const shouldPreserveBackendResume = this.backend === 'ijkplayer' && this.pendingBackendResumeTimeMs >= 0;
     if (!shouldPreserveBackendResume) {
@@ -314,12 +373,18 @@ export class VideoPlayerController {
 
     // 先重置可展示状态，避免复用上次播放残留。
     this.audioCapabilityText = '';
+    this.playbackPlanSummary = '';
     this.ffmpegPreviewUri = '';
+    this.latestPreflightSnapshot = undefined;
+    this.latestAudioRoutingDecision = undefined;
+    const preflight = await this.collectPlaybackPreflightSnapshot(videoData);
+    this.latestPreflightSnapshot = preflight;
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
       const backendBeforeAutoRouting = this.backend;
-      const decision = await this.resolveAudioRoutingDecision(videoData);
+      const decision = await this.resolveAudioRoutingDecision(videoData, preflight);
+      this.latestAudioRoutingDecision = decision;
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
@@ -337,13 +402,23 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
         `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
-      this.logAudioCapabilityReport(decision);
     }
 
     if (this.backend === 'ffmpeg') {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         'ffmpeg 播放后端已从主路径下线，自动回退到 ijkplayer');
       this.backend = 'ijkplayer';
+    }
+
+    const playbackPlan = this.buildPlaybackPlanDecision(preflight);
+    this.latestPlaybackPlan = playbackPlan;
+    this.playbackPlanSummary =
+      `播放计划: backend=${playbackPlan.selectedBackend} | ` +
+      `nativePlan=${playbackPlan.nativeVideoPlan} | ` +
+      `fallback=${playbackPlan.fallbackPlan.nativeLevel1Fallback}->${playbackPlan.fallbackPlan.nativeLevel2Fallback}`;
+    this.logPlaybackPlan(playbackPlan);
+    if (this.latestAudioRoutingDecision !== undefined) {
+      this.logAudioCapabilityReport(this.latestAudioRoutingDecision);
     }
 
     // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
@@ -410,16 +485,30 @@ export class VideoPlayerController {
         'initPlayer: 使用 VidAll Player Adapter，等待 UI 层调用 setNativeContext()');
       const nativeAdapter = new VidAllPlayerAdapter();
       nativeAdapter.setSeekDiagEnabled(this.nativeSeekDiagLogEnabled);
-      // B6修复：注册 FFmpeg 接管通知，FFmpeg 开始接管后将守卫计时器从 3.5s 延长到 15s，
-      // 防止 avformat_open_input 期间（最长 10s）提前触发 fallbackNativeToIjk。
+      nativeAdapter.setPrepareDecodePlan(
+        playbackPlan.nativeVideoPlan,
+        playbackPlan.decisionReason,
+        playbackPlan.diagnostics
+      );
       const capturedSessionId = currentSessionId;
-      nativeAdapter.setFfmpegSwitchingCallback(() => {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[session=${capturedSessionId}] FFmpeg 接管信号收到，重置就绪守卫计时器为 15s`);
-        if (capturedSessionId === this.playbackSessionId) {
-          this.startNativeReadyGuard(capturedSessionId, 15000);
-          void this.switchNativeSubtitleAdapterToExternalOnly(capturedSessionId);
+      nativeAdapter.setNativeDecodePathChangedCallback((status: NativeDecodePathStatus) => {
+        if (capturedSessionId !== this.playbackSessionId) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[session=${capturedSessionId}] 忽略过期 native decode path 更新: ${status.state}`);
+          return;
         }
+        this.handleNativeDecodePathChanged(capturedSessionId, status);
+      });
+      nativeAdapter.setNativeBackendFatalErrorCallback((fatalError: NativeBackendFatalError) => {
+        if (capturedSessionId !== this.playbackSessionId) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[session=${capturedSessionId}] 忽略过期 native backend fatal: ${fatalError.message}`);
+          return;
+        }
+        const directive = this.resolveNativeErrorEscalationDirective(fatalError);
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[native-error-policy] action=${directive.action}, reason=${directive.reason}, diagnostics=${directive.diagnostics}`);
+        this.fallbackNativeToIjk(directive.reason, 'native backend 致命错误，已自动回退到 IJK 播放', fatalError.message);
       });
       adapter = nativeAdapter;
       this.nativeSubtitleMode = 'av';
@@ -551,7 +640,9 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
         `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"error","error_code":"${error.message.substring(0, 80)}","elapsed_ms":${metricsElapsedOnError}}`);
       if (this.backend === 'native') {
-        this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
+        // native 内部 Level 1 fallback（hardware -> ffmpeg）已通过专用 runtime callback 收口。
+        // 这里不再做 controller 宽升级，避免把可恢复错误一刀切回退到 ijkplayer。
+        this.lastErrorMessage = this.normalizePlayerError(error.message);
         return;
       }
       this.isLoading = false;
@@ -1170,9 +1261,10 @@ export class VideoPlayerController {
     const nativeAdapter = this.player as VidAllPlayerAdapter;
     this.cachedNativeContext = context;
     this.cachedNativeXComponentId = xComponentId;
+    const nativeReadyGuardMs = this.latestPlaybackPlan?.nativeVideoPlan === 'native_ffmpeg_only' ? 15000 : NATIVE_READY_GUARD_MS;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
-    this.startNativeReadyGuard(this.playbackSessionId);
+      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init... guardMs=${nativeReadyGuardMs}`);
+    this.startNativeReadyGuard(this.playbackSessionId, nativeReadyGuardMs);
     if (this.currentVideoData) {
       try {
         let safeContext: object = context;
@@ -1387,7 +1479,48 @@ export class VideoPlayerController {
     return false;
   }
 
-  private async resolveAudioRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
+  private async collectPlaybackPreflightSnapshot(videoData: VideoData): Promise<PlaybackPreflightSnapshot> {
+    let probeResult: FfprobeResult | undefined = undefined;
+    let probeSucceeded = false;
+    let probeError = '';
+
+    try {
+      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
+      if (probe.success) {
+        probeResult = probe;
+        probeSucceeded = true;
+      } else {
+        probeError = probe.errorMessage ?? 'ffprobe failed';
+      }
+    } catch (e) {
+      probeError = this.safeErrorMessage(e);
+    }
+
+    const primaryVideoTrack = probeResult?.videoTracks.length ? probeResult.videoTracks[0] : undefined;
+    const primaryAudioTrack = probeResult?.audioTracks.length ? probeResult.audioTracks[0] : undefined;
+    const videoCodecName = (primaryVideoTrack?.codecName ?? '').toLowerCase();
+    const videoCodecMime = DeviceCapabilityUtil.normalizeVideoCodecToMime(videoCodecName);
+    const nativeVideoCapability = videoCodecName.length > 0
+      ? DeviceCapabilityUtil.queryNativeVideoDecoderCapability(videoCodecName)
+      : this.buildEmptyNativeVideoCapability('video codec unavailable');
+
+    const snapshot: PlaybackPreflightSnapshot = {
+      probeSucceeded,
+      probeError,
+      probeResult,
+      primaryVideoTrack,
+      primaryAudioTrack,
+      videoCodecName,
+      videoCodecMime,
+      nativeVideoCapability
+    };
+    return snapshot;
+  }
+
+  private async resolveAudioRoutingDecision(
+    videoData: VideoData,
+    preflight?: PlaybackPreflightSnapshot
+  ): Promise<AudioRoutingDecision> {
     const defaultDecision: AudioRoutingDecision = {
       preferredBackend: 'avplayer',
       fallback: 'native',
@@ -1408,21 +1541,13 @@ export class VideoPlayerController {
     const presetHint = this.readPresetAudioHint(videoData);
     let codecName = presetHint.codecName;
     let channels = presetHint.channels;
-    let precheckProbeFailed = false;
-    let precheckProbeError = '';
+    const precheckProbeFailed = preflight !== undefined && !preflight.probeSucceeded;
+    const precheckProbeError = preflight?.probeError ?? '';
 
-    try {
-      // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
-      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
-      if (probe.success && probe.audioTracks.length > 0) {
-        const first = probe.audioTracks[0];
-        codecName = first.codecName;
-        channels = first.channels ?? channels;
-      }
-    } catch (e) {
-      precheckProbeFailed = true;
-      precheckProbeError = this.safeErrorMessage(e);
-      // 探测失败时使用预置音轨提示继续决策。
+    const probedAudioTrack = preflight?.primaryAudioTrack;
+    if (probedAudioTrack !== undefined) {
+      codecName = probedAudioTrack.codecName;
+      channels = probedAudioTrack.channels ?? channels;
     }
 
     const normalizedCodec = (codecName ?? '').toLowerCase();
@@ -1459,12 +1584,86 @@ export class VideoPlayerController {
     return decision;
   }
 
+  private buildPlaybackPlanDecision(preflight: PlaybackPreflightSnapshot): PlaybackPlanDecision {
+    const selectedBackend = this.backend;
+    let nativeVideoPlan: NativeVideoPlan = 'system_default';
+    let decisionReason = '未命中 native 硬解预检条件，保持 system_default 骨架';
+
+    if (preflight.videoCodecName.length === 0) {
+      decisionReason = preflight.probeSucceeded
+        ? 'ffprobe 未识别视频主轨 codec，native 暂保持 system_default'
+        : 'ffprobe 失败，native 暂保持 system_default';
+    } else if (this.isHwCandidateCodec(preflight.videoCodecMime)) {
+      if (preflight.nativeVideoCapability.capabilityKnown &&
+        preflight.nativeVideoCapability.supported &&
+        preflight.nativeVideoCapability.isHardware) {
+        nativeVideoPlan = 'native_hw_preferred';
+        decisionReason = `${preflight.videoCodecMime} 命中硬解主路径候选，设备存在原生硬解能力`;
+      } else {
+        nativeVideoPlan = 'native_ffmpeg_only';
+        decisionReason = `${preflight.videoCodecMime} 虽为硬解主路径候选，但设备无可用原生硬解能力`;
+      }
+    } else {
+      nativeVideoPlan = 'native_ffmpeg_only';
+      decisionReason = `${preflight.videoCodecName} 不在 H.264/H.265 硬解 MVP 范围内，native 仅保留 FFmpeg 子路径`;
+    }
+
+    const diagnosticsParts: string[] = [
+      `probeSucceeded=${preflight.probeSucceeded}`,
+      `probeError=${preflight.probeError.length > 0 ? preflight.probeError : 'none'}`,
+      `videoCodec=${preflight.videoCodecName.length > 0 ? preflight.videoCodecName : 'unknown'}`,
+      `videoMime=${preflight.videoCodecMime.length > 0 ? preflight.videoCodecMime : 'unknown'}`,
+      `videoTracks=${preflight.probeResult?.videoTracks.length ?? 0}`,
+      `audioTracks=${preflight.probeResult?.audioTracks.length ?? 0}`,
+      `format=${preflight.probeResult?.formatName ?? 'unknown'}`,
+      `capabilityKnown=${preflight.nativeVideoCapability.capabilityKnown}`,
+      `nativeSupported=${preflight.nativeVideoCapability.supported}`,
+      `nativeIsHardware=${preflight.nativeVideoCapability.isHardware}`,
+      `decoder=${preflight.nativeVideoCapability.decoderName.length > 0
+        ? preflight.nativeVideoCapability.decoderName
+        : 'unknown'}`
+    ];
+
+    const fallbackPlan: PlaybackFallbackPlan = {
+      avplayerUnsupportedFallback: this.unsupportedFormatFallback,
+      nativeLevel1Fallback: 'native_ffmpeg',
+      nativeLevel2Fallback: 'ijkplayer',
+      nativeErrorEscalationPolicy: 'backend_fatal_only',
+      surfaceProbeIncluded: false
+    };
+
+    const decision: PlaybackPlanDecision = {
+      selectedBackend,
+      nativeVideoPlan,
+      fallbackPlan,
+      decisionReason,
+      diagnostics: diagnosticsParts.join(', ')
+    };
+    return decision;
+  }
+
+  private logPlaybackPlan(plan: PlaybackPlanDecision): void {
+    const message =
+      '[PlaybackPlan] ' +
+      `selectedBackend=${plan.selectedBackend}, ` +
+      `nativeVideoPlan=${plan.nativeVideoPlan}, ` +
+      `avplayerFallback=${plan.fallbackPlan.avplayerUnsupportedFallback}, ` +
+      `nativeFallback=${plan.fallbackPlan.nativeLevel1Fallback}->${plan.fallbackPlan.nativeLevel2Fallback}, ` +
+      `nativeErrorPolicy=${plan.fallbackPlan.nativeErrorEscalationPolicy}, ` +
+      `surfaceProbeIncluded=${plan.fallbackPlan.surfaceProbeIncluded}, ` +
+      `reason=${plan.decisionReason}, diagnostics=${plan.diagnostics}`;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, message);
+  }
+
   private logAudioCapabilityReport(decision: AudioRoutingDecision): void {
     // 结构化日志：后续可直接平移到 UI 能力面板，减少二次拼装成本。
     const channelTag = this.getChannelTag(decision.detectedChannels);
     const currentDecodePlan = decision.preferredBackend === 'avplayer'
       ? `system-harddecode-${channelTag}`
       : `${decision.preferredBackend}-fallback-${channelTag}`;
+    const videoCodecLabel = this.getCurrentVideoCodecLabel();
+    const videoCapabilityLabel = this.getCurrentVideoCapabilityLabel();
+    const videoDecodeLabel = this.getCurrentVideoDecodeLabel();
 
     const message =
       '[AudioCapability] ' +
@@ -1472,16 +1671,64 @@ export class VideoPlayerController {
       `systemSupported=${decision.systemSupported}, capabilityKnown=${decision.capabilityKnown}, ` +
       `decoder=${decision.decoderName.length > 0 ? decision.decoderName : 'unknown'}, ` +
       `decoderIsHardware=${decision.decoderIsHardware}, capabilityMime=${decision.capabilityMime.length > 0 ? decision.capabilityMime : 'unknown'}, ` +
-      `maxChannels=${decision.maxSupportedChannels}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
-      `decodePlan=${currentDecodePlan}; channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
+      `maxChannels=${decision.maxSupportedChannels}, route=${this.backend}, fallback=${decision.fallback}, ` +
+      `decodePlan=${currentDecodePlan}, videoCodec=${videoCodecLabel}, videoCapability=${videoCapabilityLabel}, videoDecode=${videoDecodeLabel}; ` +
+      `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
 
     this.audioCapabilityText =
       `音频能力: 检测=${decision.detectedCodec} ${channelTag} | ` +
       `系统支持=${decision.systemSupported ? '是' : '否'} | ` +
-      `当前路由=${decision.preferredBackend} | ` +
-      `软解兜底=${decision.fallback}`;
+      `当前路由=${this.backend} | ` +
+      `软解兜底=${decision.fallback} | ` +
+      `视频信息=${videoCodecLabel}（${videoCapabilityLabel}） | 当前实际=${videoDecodeLabel}`;
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, message);
+  }
+
+  private getCurrentVideoCodecLabel(): string {
+    const codecMime = this.latestPreflightSnapshot?.videoCodecMime ?? '';
+    if (codecMime === 'video/avc') {
+      return 'H264';
+    }
+    if (codecMime === 'video/hevc') {
+      return 'H265';
+    }
+
+    const codecName = (this.latestPreflightSnapshot?.videoCodecName ?? '').toUpperCase();
+    if (codecName.length > 0) {
+      return codecName;
+    }
+    return '未知编码';
+  }
+
+  private getCurrentVideoCapabilityLabel(): string {
+    const capability = this.latestPreflightSnapshot?.nativeVideoCapability;
+    if (capability === undefined) {
+      return '能力未知';
+    }
+    if (capability.supported && capability.isHardware) {
+      return '具备硬解能力';
+    }
+    if (capability.supported) {
+      return '仅软解支持';
+    }
+    return '不支持';
+  }
+
+  private getCurrentVideoDecodeLabel(): string {
+    if (this.backend === 'native') {
+      if (this.nativeDecodePathState === 'ffmpeg_switching') {
+        return '硬解→软解切换中';
+      }
+      return this.nativeDecodePath === 'ffmpeg' ? '软解' : '硬解';
+    }
+    if (this.backend === 'ijkplayer') {
+      return '软解';
+    }
+    if (this.backend === 'ffmpeg') {
+      return '软解';
+    }
+    return '系统解码';
   }
 
   private getChannelTag(channels: number): string {
@@ -1535,6 +1782,31 @@ export class VideoPlayerController {
       return 6;
     }
     return 2;
+  }
+
+  private isHwCandidateCodec(videoMime: string): boolean {
+    return videoMime === 'video/avc' || videoMime === 'video/hevc';
+  }
+
+  private buildEmptyNativeVideoCapability(errorMessage: string): NativeVideoDecoderCapability {
+    const capability: NativeVideoDecoderCapability = {
+      capabilityKnown: false,
+      supported: false,
+      isHardware: false,
+      maxWidth: 0,
+      maxHeight: 0,
+      minWidth: 0,
+      minHeight: 0,
+      maxFrameRate: 0,
+      minFrameRate: 0,
+      widthAlignment: 0,
+      heightAlignment: 0,
+      maxInstances: 0,
+      decoderName: '',
+      mimeType: '',
+      errorMessage
+    };
+    return capability;
   }
 
   private isLikelySystemHardDecodeSupported(codec: string): boolean {
@@ -1660,6 +1932,40 @@ export class VideoPlayerController {
     this.player = undefined;
     this.backend = 'ijkplayer';
     oldPlayer?.release().catch(() => {});
+  }
+
+  private handleNativeDecodePathChanged(sessionId: number, status: NativeDecodePathStatus): void {
+    this.nativeDecodeExpectedPath = status.expectedPath;
+    this.nativeDecodePath = status.path;
+    this.nativeDecodePathState = status.state;
+    if (this.latestAudioRoutingDecision !== undefined) {
+      this.logAudioCapabilityReport(this.latestAudioRoutingDecision);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[session=${sessionId}] [native-decode-path] expected=${status.expectedPath}, path=${status.path}, ` +
+      `state=${status.state}, reason=${status.reason}`);
+    if (status.state === 'ffmpeg_switching') {
+      // Level 1 fallback：仅 native 内部 hardware -> ffmpeg，不切 backend。
+      // FFmpeg 接管可能需要更长准备时间，因此把 native ready guard 延长到 15s。
+      this.startNativeReadyGuard(sessionId, 15000);
+      void this.switchNativeSubtitleAdapterToExternalOnly(sessionId);
+    }
+  }
+
+  private resolveNativeErrorEscalationDirective(fatalError: NativeBackendFatalError): NativeErrorEscalationDirective {
+    const diagnostics = this.latestPlaybackPlan !== undefined
+      ? `${this.latestPlaybackPlan.nativeVideoPlan}; ${this.latestPlaybackPlan.diagnostics}; ` +
+        `path=${fatalError.path}; state=${fatalError.state}; source=${fatalError.source}; raw=${fatalError.message}`
+      : `no-playback-plan; path=${fatalError.path}; state=${fatalError.state}; source=${fatalError.source}; raw=${fatalError.message}`;
+    const reason = fatalError.path === 'ffmpeg'
+      ? 'native_ffmpeg_backend_fatal'
+      : 'native_hardware_backend_fatal';
+    const directive: NativeErrorEscalationDirective = {
+      action: 'fallback_to_ijkplayer',
+      reason,
+      diagnostics
+    };
+    return directive;
   }
 
   private logFallbackEvent(
