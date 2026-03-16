@@ -30,6 +30,7 @@ export interface FfprobeTrack {
   type: 'video' | 'audio' | 'subtitle' | 'unknown';
   codecName: string;       // e.g. "hevc", "eac3", "subrip", "ass"
   codecLongName: string;   // e.g. "H.265 / HEVC"
+  profile?: string;
   language: string;        // ISO 639-2, e.g. "chi", "eng", ""
   /** 字幕/音轨标题（来自 ffprobe stream.tags.title） */
   title?: string;
@@ -41,6 +42,8 @@ export interface FfprobeTrack {
   width?: number;
   height?: number;
   frameRate?: number;      // 实际帧率
+  pixelFormat?: string;
+  bitDepth?: number;
   bitrate?: number;
 }
 
@@ -62,10 +65,13 @@ interface RawStream {
   codec_type?: string;
   codec_name?: string;
   codec_long_name?: string;
+  profile?: string;
   width?: number;
   height?: number;
   r_frame_rate?: string;   // e.g. "24000/1001"
   avg_frame_rate?: string;
+  pix_fmt?: string;
+  bits_per_raw_sample?: string;
   sample_rate?: string;
   channels?: number;
   channel_layout?: string;
@@ -116,6 +122,35 @@ function parseFrameRate(rateStr: string): number {
   return Math.round(fps * 1000) / 1000;
 }
 
+function parseBitDepth(raw: RawStream): number | undefined {
+  const rawSampleBits = raw.bits_per_raw_sample ? parseInt(raw.bits_per_raw_sample) : 0;
+  if (!Number.isNaN(rawSampleBits) && rawSampleBits > 0) {
+    return rawSampleBits;
+  }
+
+  const pixelFormat = (raw.pix_fmt ?? '').toLowerCase();
+  if (pixelFormat.length === 0) {
+    return undefined;
+  }
+  if (pixelFormat.includes('p16')) {
+    return 16;
+  }
+  if (pixelFormat.includes('p14')) {
+    return 14;
+  }
+  if (pixelFormat.includes('p12')) {
+    return 12;
+  }
+  if (pixelFormat.includes('p10')) {
+    return 10;
+  }
+  const profile = (raw.profile ?? '').toLowerCase();
+  if (profile.includes('main 10')) {
+    return 10;
+  }
+  return 8;
+}
+
 function parseRawStream(raw: RawStream): FfprobeTrack {
   const codecType = raw.codec_type ?? '';
   let type: 'video' | 'audio' | 'subtitle' | 'unknown' = 'unknown';
@@ -130,6 +165,7 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
     type,
     codecName: raw.codec_name ?? '',
     codecLongName: raw.codec_long_name ?? '',
+    profile: raw.profile,
     language: lang.toLowerCase() === 'und' ? '' : lang,
     title: raw.tags?.title ?? raw.tags?.TITLE,
   };
@@ -146,6 +182,8 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
       ? raw.r_frame_rate
       : (raw.avg_frame_rate ?? '');
     track.frameRate = parseFrameRate(fpsStr);
+    track.pixelFormat = raw.pix_fmt;
+    track.bitDepth = parseBitDepth(raw);
     track.bitrate = raw.bit_rate ? parseInt(raw.bit_rate) : undefined;
   }
 
@@ -280,6 +318,13 @@ export class FfprobeUtil {
         `视频轨=${videoTracks.length} 音轨=${audioTracks.length} 字幕轨=${subtitleTracks.length} | ` +
         `格式=${formatName ?? '?'}`
       );
+      videoTracks.forEach((t, i) => {
+        console.info(
+          `[FfprobeUtil]   视频轨[${i}] codec=${t.codecName} ` +
+          `${t.width ?? '?'}x${t.height ?? '?'} ${t.bitDepth ?? '?'}bit ` +
+          `pixfmt=${t.pixelFormat ?? '?'} profile=${t.profile ?? '?'} fps=${t.frameRate ?? 0}`
+        );
+      });
       audioTracks.forEach((t, i) => {
         console.info(
           `[FfprobeUtil]   音轨[${i}] codec=${t.codecName} ` +
@@ -556,4 +601,3 @@ export class FfprobeUtil {
     return langName;
   }
 }
-

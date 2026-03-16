@@ -1661,7 +1661,7 @@ export class VideoPlayerController {
     const currentDecodePlan = decision.preferredBackend === 'avplayer'
       ? `system-harddecode-${channelTag}`
       : `${decision.preferredBackend}-fallback-${channelTag}`;
-    const videoCodecLabel = this.getCurrentVideoCodecLabel();
+    const videoFormatLabel = this.getCurrentVideoFormatLabel();
     const videoCapabilityLabel = this.getCurrentVideoCapabilityLabel();
     const videoDecodeLabel = this.getCurrentVideoDecodeLabel();
 
@@ -1672,7 +1672,7 @@ export class VideoPlayerController {
       `decoder=${decision.decoderName.length > 0 ? decision.decoderName : 'unknown'}, ` +
       `decoderIsHardware=${decision.decoderIsHardware}, capabilityMime=${decision.capabilityMime.length > 0 ? decision.capabilityMime : 'unknown'}, ` +
       `maxChannels=${decision.maxSupportedChannels}, route=${this.backend}, fallback=${decision.fallback}, ` +
-      `decodePlan=${currentDecodePlan}, videoCodec=${videoCodecLabel}, videoCapability=${videoCapabilityLabel}, videoDecode=${videoDecodeLabel}; ` +
+      `decodePlan=${currentDecodePlan}, videoFormat=${videoFormatLabel}, videoCapability=${videoCapabilityLabel}, videoDecode=${videoDecodeLabel}; ` +
       `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
 
     this.audioCapabilityText =
@@ -1680,9 +1680,31 @@ export class VideoPlayerController {
       `系统支持=${decision.systemSupported ? '是' : '否'} | ` +
       `当前路由=${this.backend} | ` +
       `软解兜底=${decision.fallback} | ` +
-      `视频信息=${videoCodecLabel}（${videoCapabilityLabel}） | 当前实际=${videoDecodeLabel}`;
+      `视频信息=${videoFormatLabel}（${videoCapabilityLabel}） | 当前实际=${videoDecodeLabel}`;
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, message);
+  }
+
+  private getCurrentVideoFormatLabel(): string {
+    const parts: string[] = [];
+    const resolutionLabel = this.getCurrentVideoResolutionLabel();
+    if (resolutionLabel.length > 0) {
+      parts.push(resolutionLabel);
+    }
+    const bitDepthLabel = this.getCurrentVideoBitDepthLabel();
+    if (bitDepthLabel.length > 0) {
+      parts.push(bitDepthLabel);
+    }
+    parts.push(this.getCurrentVideoCodecLabel());
+    const profileLabel = this.getCurrentVideoProfileLabel();
+    if (profileLabel.length > 0) {
+      parts.push(profileLabel);
+    }
+    const pixelFormatLabel = this.getCurrentVideoPixelFormatLabel();
+    if (pixelFormatLabel.length > 0) {
+      parts.push(pixelFormatLabel);
+    }
+    return parts.join(' / ');
   }
 
   private getCurrentVideoCodecLabel(): string {
@@ -1699,6 +1721,38 @@ export class VideoPlayerController {
       return codecName;
     }
     return '未知编码';
+  }
+
+  private getCurrentVideoResolutionLabel(): string {
+    const videoTrack = this.latestPreflightSnapshot?.primaryVideoTrack;
+    const width = videoTrack?.width ?? 0;
+    const height = videoTrack?.height ?? 0;
+    if (width <= 0 || height <= 0) {
+      return '';
+    }
+    const resolution = `${width}x${height}`;
+    if (width >= 3840 && height >= 2160) {
+      return `${resolution}(4K)`;
+    }
+    return resolution;
+  }
+
+  private getCurrentVideoBitDepthLabel(): string {
+    const bitDepth = this.latestPreflightSnapshot?.primaryVideoTrack?.bitDepth;
+    if (bitDepth === undefined || bitDepth <= 0) {
+      return '位深未知';
+    }
+    return `${bitDepth}bit`;
+  }
+
+  private getCurrentVideoProfileLabel(): string {
+    const profile = this.latestPreflightSnapshot?.primaryVideoTrack?.profile ?? '';
+    return profile.length > 0 ? profile : '';
+  }
+
+  private getCurrentVideoPixelFormatLabel(): string {
+    const pixelFormat = this.latestPreflightSnapshot?.primaryVideoTrack?.pixelFormat ?? '';
+    return pixelFormat.length > 0 ? pixelFormat : '';
   }
 
   private getCurrentVideoCapabilityLabel(): string {

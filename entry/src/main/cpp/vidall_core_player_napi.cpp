@@ -32,6 +32,7 @@ extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 #include <libswresample/swresample.h>  // B4：PCM 格式转换（fltp/s16/etc → s16 for OH_AudioRenderer）
 #include <libswscale/swscale.h>        // B6：视频像素格式转换（yuv420p10le/etc → yuv420p，修复 HDR/DV 黑屏）
@@ -423,6 +424,49 @@ static std::string RationalToString(AVRational value) {
   return std::to_string(value.num) + "/" + std::to_string(value.den);
 }
 
+static std::string DescribeVideoProfile(const AVCodecParameters *codecpar) {
+  if (codecpar == nullptr || codecpar->codec_type != AVMEDIA_TYPE_VIDEO || codecpar->profile < 0) {
+    return "";
+  }
+  const char *profileName = avcodec_profile_name(codecpar->codec_id, codecpar->profile);
+  if (profileName == nullptr) {
+    return "";
+  }
+  return std::string(profileName);
+}
+
+static std::string DescribeVideoPixelFormat(const AVCodecParameters *codecpar) {
+  if (codecpar == nullptr || codecpar->codec_type != AVMEDIA_TYPE_VIDEO || codecpar->format < 0) {
+    return "";
+  }
+  const char *pixelFormatName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(codecpar->format));
+  if (pixelFormatName == nullptr) {
+    return "";
+  }
+  return std::string(pixelFormatName);
+}
+
+static int32_t ResolveVideoBitDepth(const AVCodecParameters *codecpar) {
+  if (codecpar == nullptr || codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
+    return 0;
+  }
+  if (codecpar->bits_per_raw_sample > 0) {
+    return codecpar->bits_per_raw_sample;
+  }
+  if (codecpar->format < 0) {
+    return 0;
+  }
+  const AVPixFmtDescriptor *descriptor = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(codecpar->format));
+  if (descriptor == nullptr) {
+    return 0;
+  }
+  int32_t maxDepth = 0;
+  for (int32_t componentIndex = 0; componentIndex < descriptor->nb_components; ++componentIndex) {
+    maxDepth = std::max(maxDepth, descriptor->comp[componentIndex].depth);
+  }
+  return maxDepth;
+}
+
 static std::string ReadMetadataValue(AVDictionary *metadata, const char *key) {
   AVDictionaryEntry *entry = av_dict_get(metadata, key, nullptr, 0);
   if (entry == nullptr || entry->value == nullptr) {
@@ -473,10 +517,22 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
     AppendJsonStringField(json, "codec_long_name", codecLongName, firstField);
 
     if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+      const std::string videoProfile = DescribeVideoProfile(codecpar);
+      const std::string pixelFormat = DescribeVideoPixelFormat(codecpar);
+      const int32_t bitDepth = ResolveVideoBitDepth(codecpar);
       AppendJsonIntField(json, "width", codecpar->width, firstField);
       AppendJsonIntField(json, "height", codecpar->height, firstField);
       AppendJsonStringField(json, "r_frame_rate", RationalToString(stream->r_frame_rate), firstField);
       AppendJsonStringField(json, "avg_frame_rate", RationalToString(stream->avg_frame_rate), firstField);
+      if (!videoProfile.empty()) {
+        AppendJsonStringField(json, "profile", videoProfile, firstField);
+      }
+      if (!pixelFormat.empty()) {
+        AppendJsonStringField(json, "pix_fmt", pixelFormat, firstField);
+      }
+      if (bitDepth > 0) {
+        AppendJsonStringField(json, "bits_per_raw_sample", std::to_string(bitDepth), firstField);
+      }
       if (codecpar->bit_rate > 0) {
         AppendJsonStringField(json, "bit_rate", std::to_string(codecpar->bit_rate), firstField);
       }
@@ -1766,9 +1822,11 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
                        static_cast<int32_t>(flushResult));
         }
         ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
-        ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+        ctx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
         ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
         ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
+        ctx->droppedDecodeFrames = 0;
+        ctx->droppedLateFrames = 0;
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                      "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
         // 发出 seekDone TSF 通知 ArkTS
@@ -3069,6 +3127,9 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
   // B5：音频时钟只累计真实媒体样本，不把 underrun 填充的静音计入主时钟。
   // 否则启动/seek 后音频时钟会虚假快进，RenderThread 会把视频帧误判为“严重落后”并大量丢帧。
   if (mediaSamplesFilled > 0) {
+    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) <= 0) {
+      ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+    }
     ctx->audioPtsSamples.fetch_add(static_cast<int64_t>(mediaSamplesFilled), std::memory_order_relaxed);
   }
 
@@ -3147,7 +3208,7 @@ static void StartFfmpegAudio(NativePlayerSkeletonState *state) {
 
   ctx->playbackPaused.store(false, std::memory_order_relaxed);
   ctx->audioClockBaseMs.store(0, std::memory_order_relaxed);
-  ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+  ctx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
   ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
   ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
   const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
@@ -4360,7 +4421,7 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
       state.currentTimeMs = positionMs;
     }
     state.ffmpegCtx->audioClockBaseMs.store(positionMs, std::memory_order_relaxed);
-    state.ffmpegCtx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->seekTargetMs.store(positionMs);
     state.ffmpegCtx->seekRequested.store(true);
