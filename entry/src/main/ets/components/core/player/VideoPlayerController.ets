@@ -319,6 +319,8 @@ export class VideoPlayerController {
   /** ffmpeg 连续预览：远程 chunk 不稳定时切到单帧模式 */
   private ffmpegSingleFrameMode: boolean = false;
   private latestPlaybackPlan?: PlaybackPlanDecision;
+  private latestPreflightSnapshot?: PlaybackPreflightSnapshot;
+  private latestAudioRoutingDecision?: AudioRoutingDecision;
 
   /**
    * 初始化播放器。
@@ -373,12 +375,16 @@ export class VideoPlayerController {
     this.audioCapabilityText = '';
     this.playbackPlanSummary = '';
     this.ffmpegPreviewUri = '';
+    this.latestPreflightSnapshot = undefined;
+    this.latestAudioRoutingDecision = undefined;
     const preflight = await this.collectPlaybackPreflightSnapshot(videoData);
+    this.latestPreflightSnapshot = preflight;
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
       const backendBeforeAutoRouting = this.backend;
       const decision = await this.resolveAudioRoutingDecision(videoData, preflight);
+      this.latestAudioRoutingDecision = decision;
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
@@ -396,7 +402,6 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
         `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
-      this.logAudioCapabilityReport(decision);
     }
 
     if (this.backend === 'ffmpeg') {
@@ -412,6 +417,9 @@ export class VideoPlayerController {
       `nativePlan=${playbackPlan.nativeVideoPlan} | ` +
       `fallback=${playbackPlan.fallbackPlan.nativeLevel1Fallback}->${playbackPlan.fallbackPlan.nativeLevel2Fallback}`;
     this.logPlaybackPlan(playbackPlan);
+    if (this.latestAudioRoutingDecision !== undefined) {
+      this.logAudioCapabilityReport(this.latestAudioRoutingDecision);
+    }
 
     // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
@@ -1653,6 +1661,9 @@ export class VideoPlayerController {
     const currentDecodePlan = decision.preferredBackend === 'avplayer'
       ? `system-harddecode-${channelTag}`
       : `${decision.preferredBackend}-fallback-${channelTag}`;
+    const videoCodecLabel = this.getCurrentVideoCodecLabel();
+    const videoCapabilityLabel = this.getCurrentVideoCapabilityLabel();
+    const videoDecodeLabel = this.getCurrentVideoDecodeLabel();
 
     const message =
       '[AudioCapability] ' +
@@ -1661,15 +1672,68 @@ export class VideoPlayerController {
       `decoder=${decision.decoderName.length > 0 ? decision.decoderName : 'unknown'}, ` +
       `decoderIsHardware=${decision.decoderIsHardware}, capabilityMime=${decision.capabilityMime.length > 0 ? decision.capabilityMime : 'unknown'}, ` +
       `maxChannels=${decision.maxSupportedChannels}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
-      `decodePlan=${currentDecodePlan}; channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
+      `decodePlan=${currentDecodePlan}, videoCodec=${videoCodecLabel}, videoCapability=${videoCapabilityLabel}, videoDecode=${videoDecodeLabel}; ` +
+      `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
 
     this.audioCapabilityText =
       `音频能力: 检测=${decision.detectedCodec} ${channelTag} | ` +
       `系统支持=${decision.systemSupported ? '是' : '否'} | ` +
       `当前路由=${decision.preferredBackend} | ` +
-      `软解兜底=${decision.fallback}`;
+      `软解兜底=${decision.fallback} | ` +
+      `视频信息=${videoCodecLabel}（${videoCapabilityLabel}） | 当前实际=${videoDecodeLabel}`;
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, message);
+  }
+
+  private getCurrentVideoCodecLabel(): string {
+    const codecMime = this.latestPreflightSnapshot?.videoCodecMime ?? '';
+    if (codecMime === 'video/avc') {
+      return 'H264';
+    }
+    if (codecMime === 'video/hevc') {
+      return 'H265';
+    }
+
+    const codecName = (this.latestPreflightSnapshot?.videoCodecName ?? '').toUpperCase();
+    if (codecName.length > 0) {
+      return codecName;
+    }
+    return '未知编码';
+  }
+
+  private getCurrentVideoCapabilityLabel(): string {
+    const capability = this.latestPreflightSnapshot?.nativeVideoCapability;
+    if (capability === undefined) {
+      return '能力未知';
+    }
+    if (capability.supported && capability.isHardware) {
+      return '具备硬解能力';
+    }
+    if (capability.supported) {
+      return '具备解码能力';
+    }
+    return '不具备硬解能力';
+  }
+
+  private getCurrentVideoDecodeLabel(): string {
+    if (this.backend === 'native') {
+      if (this.nativeDecodePathState === 'ffmpeg_switching') {
+        return '硬解→软解切换中';
+      }
+      return this.nativeDecodePath === 'ffmpeg' ? '软解' : '硬解';
+    }
+    if (this.backend === 'ijkplayer') {
+      return '软解';
+    }
+
+    const nativePlan = this.latestPlaybackPlan?.nativeVideoPlan;
+    if (nativePlan === 'native_ffmpeg_only') {
+      return '软解';
+    }
+    if (nativePlan === 'native_hw_preferred') {
+      return '硬解';
+    }
+    return '系统解码';
   }
 
   private getChannelTag(channels: number): string {
@@ -1879,6 +1943,9 @@ export class VideoPlayerController {
     this.nativeDecodeExpectedPath = status.expectedPath;
     this.nativeDecodePath = status.path;
     this.nativeDecodePathState = status.state;
+    if (this.latestAudioRoutingDecision !== undefined) {
+      this.logAudioCapabilityReport(this.latestAudioRoutingDecision);
+    }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[session=${sessionId}] [native-decode-path] expected=${status.expectedPath}, path=${status.path}, ` +
       `state=${status.state}, reason=${status.reason}`);
