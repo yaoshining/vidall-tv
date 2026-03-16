@@ -60,6 +60,25 @@ interface VideoDecoderSurfaceProbeResult {
   errorMessage: string;
 }
 
+export type NativeDecodePath = 'hardware' | 'ffmpeg';
+export type NativeDecodePathState = 'hardware_active' | 'ffmpeg_switching' | 'ffmpeg_active';
+export type NativeBackendFatalErrorSource = 'runtime_callback' | 'napi_bridge';
+
+export interface NativeDecodePathStatus {
+  path: NativeDecodePath;
+  state: NativeDecodePathState;
+  reason: string;
+}
+
+export interface NativeBackendFatalError {
+  source: NativeBackendFatalErrorSource;
+  code: number;
+  message: string;
+  diagnostics: string;
+  path: NativeDecodePath;
+  state: NativeDecodePathState;
+}
+
 const playerBridgeModule = VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule | VidAllCorePlayerNapiBridge | undefined;
 const VidAllCorePlayerNapi: VidAllCorePlayerNapiBridge =
   playerBridgeModule !== undefined && (playerBridgeModule as VidAllCorePlayerNapiBridgeModule).default !== undefined
@@ -91,6 +110,11 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _playerHandle: number = 0;
   private _lastDurationUnknownSeekLogMs: number = 0;
   private _enableSeekDiagLog: boolean = false;
+  private _decodePathStatus: NativeDecodePathStatus = {
+    path: 'hardware',
+    state: 'hardware_active',
+    reason: 'init'
+  };
 
   private _onReadyCb?: () => void;
   private _onPlayCb?: () => void;
@@ -103,9 +127,10 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _onSeekDoneCb?: () => void;
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
   private _onBufferingCb?: (isBuffering: boolean) => void;
+  private _onNativeDecodePathChangedCb?: (status: NativeDecodePathStatus) => void;
+  private _onNativeBackendFatalErrorCb?: (error: NativeBackendFatalError) => void;
   /** B6修复：FFmpeg 接管时通知上层重置 native 就绪守卫计时器 */
   private _onFfmpegSwitchingCb?: () => void;
-  private _usingFfmpegPath: boolean = false;
   private _probedTrackInfos?: TrackInfo[];
   private _probeTrackInfosPromise?: Promise<TrackInfo[]>;
   /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
@@ -122,7 +147,15 @@ export class VidAllPlayerAdapter implements IPlayer {
   }
 
   isUsingFfmpegPath(): boolean {
-    return this._usingFfmpegPath;
+    return this._decodePathStatus.path === 'ffmpeg';
+  }
+
+  getDecodePathStatus(): NativeDecodePathStatus {
+    return {
+      path: this._decodePathStatus.path,
+      state: this._decodePathStatus.state,
+      reason: this._decodePathStatus.reason
+    };
   }
 
   setPendingContext(context: object, xComponentId: string): void {
@@ -134,6 +167,14 @@ export class VidAllPlayerAdapter implements IPlayer {
 
   setSeekDiagEnabled(enabled: boolean): void {
     this._enableSeekDiagLog = enabled;
+  }
+
+  setNativeDecodePathChangedCallback(cb: (status: NativeDecodePathStatus) => void): void {
+    this._onNativeDecodePathChangedCb = cb;
+  }
+
+  setNativeBackendFatalErrorCallback(cb: (error: NativeBackendFatalError) => void): void {
+    this._onNativeBackendFatalErrorCb = cb;
   }
 
   /** B6修复：注册 FFmpeg 接管通知回调，由上层 VideoPlayerController 调用以重置守卫计时器 */
@@ -172,7 +213,11 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._pendingXComponentId = pendingXComponentId;
     this._videoData = videoData;
     this._surfaceId = surfaceId;
-    this._usingFfmpegPath = false;
+    this._decodePathStatus = {
+      path: 'hardware',
+      state: 'hardware_active',
+      reason: 'init'
+    };
     this._probedTrackInfos = undefined;
     this._probeTrackInfosPromise = undefined;
     this._duration = 0;
@@ -245,6 +290,9 @@ export class VidAllPlayerAdapter implements IPlayer {
           }
           this._currentTime = this.silentNativeFallback('getCurrentTime', () =>
             VidAllCorePlayerNapi.getCurrentTime(currentHandle), 0);
+          if (this._decodePathStatus.state === 'ffmpeg_switching') {
+            this.updateDecodePathStatus('ffmpeg', 'ffmpeg_active', 'ffmpeg_prepared');
+          }
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `onPrepared: handle=${currentHandle} duration=${this._duration} position=${this._currentTime}`);
           this._onReadyCb?.();
@@ -259,7 +307,8 @@ export class VidAllPlayerAdapter implements IPlayer {
           const errorMessage = `[${code}] ${msg} (hint=${hint})`;
           hilog.error(CommonConstants.LOG_DOMAIN, TAG,
             `onError: handle=${currentHandle} code=${code} hint=${hint}`);
-          this._onErrorCb?.(new Error(errorMessage));
+          this.emitNativeBackendFatalError('runtime_callback', code, errorMessage);
+          this.emitGeneralErrorIfNeeded(new Error(errorMessage));
         },
         (posMs: number) => {
           // 状态门禁：同 onError。
@@ -303,7 +352,7 @@ export class VidAllPlayerAdapter implements IPlayer {
           // 避免 avformat_open_input（3-10s）期间 3.5s 守卫误触 fallbackNativeToIjk。
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `onFfmpegSwitching: handle=${currentHandle}, FFmpeg 接管，通知重置守卫计时器`);
-          this._usingFfmpegPath = true;
+          this.updateDecodePathStatus('ffmpeg', 'ffmpeg_switching', 'avplayer_error_handoff');
           this._onFfmpegSwitchingCb?.();
         },
         (info: SubtitleInfo) => {
@@ -437,7 +486,7 @@ export class VidAllPlayerAdapter implements IPlayer {
   }
 
   async getTrackInfos(): Promise<TrackInfo[]> {
-    if (!this._usingFfmpegPath) {
+    if (!this.isUsingFfmpegPath()) {
       const probedTracks = await this.probeAvPlayerTrackInfos();
       if (probedTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -768,7 +817,7 @@ export class VidAllPlayerAdapter implements IPlayer {
       this._onErrorCb?.(err);
       throw err;
     }
-    if (this._usingFfmpegPath) {
+    if (this.isUsingFfmpegPath()) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `selectTrack(${trackIndex}) 已跳过：native/FFmpeg 子路径暂不支持运行时切轨`);
       return;
@@ -837,7 +886,11 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._isPrepared = false;
     this._readyFired = false;
     this._videoData = undefined;
-    this._usingFfmpegPath = false;
+    this._decodePathStatus = {
+      path: 'hardware',
+      state: 'hardware_active',
+      reason: 'released'
+    };
     this._probedTrackInfos = undefined;
     this._probeTrackInfosPromise = undefined;
     this._duration = 0;
@@ -926,8 +979,10 @@ export class VidAllPlayerAdapter implements IPlayer {
     try {
       fn();
     } catch (e) {
-      const err = this.wrapNativeError(action, e as BusinessError);
-      this._onErrorCb?.(err);
+      const nativeError = e as BusinessError;
+      const err = this.wrapNativeError(action, nativeError);
+      this.emitNativeBackendFatalError('napi_bridge', this.resolveBusinessErrorCode(nativeError), err.message);
+      this.emitGeneralErrorIfNeeded(err);
       throw err;
     }
   }
@@ -936,8 +991,10 @@ export class VidAllPlayerAdapter implements IPlayer {
     try {
       return fn();
     } catch (e) {
-      const err = this.wrapNativeError(action, e as BusinessError);
-      this._onErrorCb?.(err);
+      const nativeError = e as BusinessError;
+      const err = this.wrapNativeError(action, nativeError);
+      this.emitNativeBackendFatalError('napi_bridge', this.resolveBusinessErrorCode(nativeError), err.message);
+      this.emitGeneralErrorIfNeeded(err);
       throw err;
     }
   }
@@ -946,8 +1003,10 @@ export class VidAllPlayerAdapter implements IPlayer {
     try {
       return fn();
     } catch (e) {
-      const err = this.wrapNativeError(action, e as BusinessError);
-      this._onErrorCb?.(err);
+      const nativeError = e as BusinessError;
+      const err = this.wrapNativeError(action, nativeError);
+      this.emitNativeBackendFatalError('napi_bridge', this.resolveBusinessErrorCode(nativeError), err.message);
+      this.emitGeneralErrorIfNeeded(err);
       return fallback;
     }
   }
@@ -968,13 +1027,63 @@ export class VidAllPlayerAdapter implements IPlayer {
     }
   }
 
+  private updateDecodePathStatus(path: NativeDecodePath, state: NativeDecodePathState, reason: string): void {
+    const changed = this._decodePathStatus.path !== path ||
+      this._decodePathStatus.state !== state ||
+      this._decodePathStatus.reason !== reason;
+    this._decodePathStatus = {
+      path,
+      state,
+      reason
+    };
+    if (!changed) {
+      return;
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[native-decode-path] path=${path} state=${state} reason=${reason}`);
+    this._onNativeDecodePathChangedCb?.({
+      path,
+      state,
+      reason
+    });
+  }
+
+  private emitNativeBackendFatalError(
+    source: NativeBackendFatalErrorSource,
+    code: number,
+    message: string
+  ): void {
+    const fatalError: NativeBackendFatalError = {
+      source,
+      code,
+      message,
+      diagnostics: `path=${this._decodePathStatus.path}; state=${this._decodePathStatus.state}`,
+      path: this._decodePathStatus.path,
+      state: this._decodePathStatus.state
+    };
+    hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+      `[native-backend-fatal] source=${source} code=${code} path=${fatalError.path} state=${fatalError.state} message=${message}`);
+    this._onNativeBackendFatalErrorCb?.(fatalError);
+  }
+
+  private emitGeneralErrorIfNeeded(error: Error): void {
+    if (this._onNativeBackendFatalErrorCb !== undefined) {
+      return;
+    }
+    this._onErrorCb?.(error);
+  }
+
   private wrapNativeError(action: string, nativeError: BusinessError): Error {
-    const code = nativeError.code;
+    const code = this.resolveBusinessErrorCode(nativeError);
     const message = nativeError.message ?? 'unknown native error';
     const hint = this.resolveNativeErrorHint(code);
     const error = new Error(`[NAPI/${action}] code=${code} msg=${message} hint=${hint}`);
     hilog.error(CommonConstants.LOG_DOMAIN, TAG, error.message);
     return error;
+  }
+
+  private resolveBusinessErrorCode(nativeError: BusinessError): number {
+    return typeof nativeError.code === 'number' ? nativeError.code : -1;
   }
 
   private resolveNativeErrorHint(code: number): string {
