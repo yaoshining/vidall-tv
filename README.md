@@ -172,12 +172,26 @@ hdc shell hilog | grep VidAll_TLS_Audit
 
 ---
 
+## Native 后端当前状态
+
+当前播放器默认仍以 `AVPlayer` 为主链，`native` 后端用于承接更可控的播放路径与格式兼容验证。
+
+- `native + AVPlayer` 路径已完成 XComponent 接管，支持真实出画、`pause / play / seek` 与时间轴回调
+- `native + FFmpeg` 路径已完成 demux、解码、OpenGL ES 渲染、`OH_AudioRenderer` 送显与基础字幕桥接
+- Native 内嵌字幕已实现：可枚举、可切换、可显示
+- `native + FFmpeg` 当前仍是**软解视频 + CPU `sws_scale` 转换 + GLES 贴图**，4K/10bit 片源吞吐仍偏紧
+- `native + FFmpeg` 运行时音轨切换已拆分到 `#55`，不再阻塞 `#48` 收口
+- 下一阶段主线为 `#50`：在保留 FFmpeg 容器与状态机控制的前提下，引入**硬解视频主路径 + 软解回退**
+
+---
+
 ## 已知限制
 
 | 问题 | 原因 | 状态 |
 |---|---|---|
 | Native 4K/10bit 片源偶发卡顿 | 当前为 FFmpeg 软解 + CPU `sws_scale` 路径，吞吐接近设备上限 | 后续转 #50 硬解主路径 |
-| AC-3/DTS 音频无法播放 | AVPlayer 不内置 AC-3 解码器；Native/FFmpeg 路径已接通基础送显 | 持续完善中 |
+| AVPlayer 无法直接播放 AC-3/DTS | AVPlayer 不内置 AC-3/DTS 解码器；需走 Native/FFmpeg 路径兜底 | Native/FFmpeg 基础链路已打通，持续完善中 |
+| Native/FFmpeg 运行时音轨切换未完成 | 当前 FFmpeg 子路径仍以固定默认音轨运行为主，完整切轨能力已拆到 `#55` | 规划中 |
 | SMB/NFS 文件源 | 尚未实现 | Phase 2 |
 | AVMetadataExtractor 不支持远程 URL | API 20 起才有 `setUrlSource` | 待 SDK 升级 |
 | 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |
