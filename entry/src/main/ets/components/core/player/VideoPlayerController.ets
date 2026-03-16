@@ -9,6 +9,7 @@ import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
 import {
   NativeBackendFatalError,
+  NativeDecodeExpectation,
   NativeDecodePathState,
   NativeDecodePathStatus,
   VidAllPlayerAdapter
@@ -220,8 +221,10 @@ export class VideoPlayerController {
   @Trace ffmpegPreviewUri: string = ''
   /** native backend 内部当前 decode path（hardware / ffmpeg） */
   @Trace nativeDecodePath: 'hardware' | 'ffmpeg' = 'hardware'
+  /** native backend 当前会话在 prepare 阶段确定的期望 decode path */
+  @Trace nativeDecodeExpectedPath: NativeDecodeExpectation = 'hardware_preferred'
   /** native backend 内部 decode path 状态（显式表达切换阶段） */
-  @Trace nativeDecodePathState: NativeDecodePathState = 'hardware_active'
+  @Trace nativeDecodePathState: NativeDecodePathState = 'hardware_preferred'
   @Trace progress = 0
   /** 内嵌字幕轨道列表（来自 getTrackInfos） */
   @Trace subtitleTracks: TrackInfo[] = []
@@ -352,7 +355,8 @@ export class VideoPlayerController {
     this.ffmpegLastEmptyQueueCatchupAtMs = 0;
     this.ffmpegSingleFrameMode = false;
     this.nativeDecodePath = 'hardware';
-    this.nativeDecodePathState = 'hardware_active';
+    this.nativeDecodeExpectedPath = 'hardware_preferred';
+    this.nativeDecodePathState = 'hardware_preferred';
     this.clearNativeReadyGuardTimer();
     const shouldPreserveBackendResume = this.backend === 'ijkplayer' && this.pendingBackendResumeTimeMs >= 0;
     if (!shouldPreserveBackendResume) {
@@ -473,6 +477,11 @@ export class VideoPlayerController {
         'initPlayer: 使用 VidAll Player Adapter，等待 UI 层调用 setNativeContext()');
       const nativeAdapter = new VidAllPlayerAdapter();
       nativeAdapter.setSeekDiagEnabled(this.nativeSeekDiagLogEnabled);
+      nativeAdapter.setPrepareDecodePlan(
+        playbackPlan.nativeVideoPlan,
+        playbackPlan.decisionReason,
+        playbackPlan.diagnostics
+      );
       const capturedSessionId = currentSessionId;
       nativeAdapter.setNativeDecodePathChangedCallback((status: NativeDecodePathStatus) => {
         if (capturedSessionId !== this.playbackSessionId) {
@@ -1244,9 +1253,10 @@ export class VideoPlayerController {
     const nativeAdapter = this.player as VidAllPlayerAdapter;
     this.cachedNativeContext = context;
     this.cachedNativeXComponentId = xComponentId;
+    const nativeReadyGuardMs = this.latestPlaybackPlan?.nativeVideoPlan === 'native_ffmpeg_only' ? 15000 : NATIVE_READY_GUARD_MS;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
-    this.startNativeReadyGuard(this.playbackSessionId);
+      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init... guardMs=${nativeReadyGuardMs}`);
+    this.startNativeReadyGuard(this.playbackSessionId, nativeReadyGuardMs);
     if (this.currentVideoData) {
       try {
         let safeContext: object = context;
@@ -1866,10 +1876,12 @@ export class VideoPlayerController {
   }
 
   private handleNativeDecodePathChanged(sessionId: number, status: NativeDecodePathStatus): void {
+    this.nativeDecodeExpectedPath = status.expectedPath;
     this.nativeDecodePath = status.path;
     this.nativeDecodePathState = status.state;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[session=${sessionId}] [native-decode-path] path=${status.path}, state=${status.state}, reason=${status.reason}`);
+      `[session=${sessionId}] [native-decode-path] expected=${status.expectedPath}, path=${status.path}, ` +
+      `state=${status.state}, reason=${status.reason}`);
     if (status.state === 'ffmpeg_switching') {
       // Level 1 fallback：仅 native 内部 hardware -> ffmpeg，不切 backend。
       // FFmpeg 接管可能需要更长准备时间，因此把 native ready guard 延长到 15s。

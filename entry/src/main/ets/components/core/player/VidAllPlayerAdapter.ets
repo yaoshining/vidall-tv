@@ -20,6 +20,7 @@ interface NativeXComponentFallbackContext {
 interface VidAllCorePlayerNapiBridge {
   probeVideoDecoderSurface: (handle: number, codecOrMime: string) => VideoDecoderSurfaceProbeResult;
   createPlayer: () => number;
+  setPreferredDecodePath: (handle: number, path: string) => void;
   setSource: (handle: number, url: string) => void;
   setDurationHint: (handle: number, durationMs: number) => void;
   setHeaders: (handle: number, headersJson: string) => void;
@@ -61,10 +62,27 @@ interface VideoDecoderSurfaceProbeResult {
 }
 
 export type NativeDecodePath = 'hardware' | 'ffmpeg';
-export type NativeDecodePathState = 'hardware_active' | 'ffmpeg_switching' | 'ffmpeg_active';
+export type NativeDecodeExpectation = 'hardware_preferred' | 'ffmpeg_only';
+export type NativeDecodePathState =
+  'hardware_preferred' |
+  'hardware_active' |
+  'ffmpeg_only' |
+  'ffmpeg_switching' |
+  'ffmpeg_active';
 export type NativeBackendFatalErrorSource = 'runtime_callback' | 'napi_bridge';
+type NativePrepareDecodePlan = 'system_default' | 'native_hw_preferred' | 'native_ffmpeg_only';
+
+interface NativePrepareDecodeSelection {
+  plan: NativePrepareDecodePlan;
+  expectedPath: NativeDecodeExpectation;
+  initialPath: NativeDecodePath;
+  initialState: NativeDecodePathState;
+  reason: string;
+  diagnostics: string;
+}
 
 export interface NativeDecodePathStatus {
+  expectedPath: NativeDecodeExpectation;
   path: NativeDecodePath;
   state: NativeDecodePathState;
   reason: string;
@@ -110,9 +128,18 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _playerHandle: number = 0;
   private _lastDurationUnknownSeekLogMs: number = 0;
   private _enableSeekDiagLog: boolean = false;
+  private _prepareDecodeSelection: NativePrepareDecodeSelection = {
+    plan: 'system_default',
+    expectedPath: 'hardware_preferred',
+    initialPath: 'hardware',
+    initialState: 'hardware_preferred',
+    reason: 'default_prepare_plan',
+    diagnostics: 'plan=system_default'
+  };
   private _decodePathStatus: NativeDecodePathStatus = {
+    expectedPath: 'hardware_preferred',
     path: 'hardware',
-    state: 'hardware_active',
+    state: 'hardware_preferred',
     reason: 'init'
   };
 
@@ -152,6 +179,7 @@ export class VidAllPlayerAdapter implements IPlayer {
 
   getDecodePathStatus(): NativeDecodePathStatus {
     return {
+      expectedPath: this._decodePathStatus.expectedPath,
       path: this._decodePathStatus.path,
       state: this._decodePathStatus.state,
       reason: this._decodePathStatus.reason
@@ -180,6 +208,14 @@ export class VidAllPlayerAdapter implements IPlayer {
   /** B6修复：注册 FFmpeg 接管通知回调，由上层 VideoPlayerController 调用以重置守卫计时器 */
   setFfmpegSwitchingCallback(cb: () => void): void {
     this._onFfmpegSwitchingCb = cb;
+  }
+
+  setPrepareDecodePlan(plan: NativePrepareDecodePlan, reason: string, diagnostics: string): void {
+    this._prepareDecodeSelection = this.buildPrepareDecodeSelection(plan, reason, diagnostics);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[native-prepare-plan] set plan=${this._prepareDecodeSelection.plan} expected=${this._prepareDecodeSelection.expectedPath} ` +
+      `initialPath=${this._prepareDecodeSelection.initialPath} initialState=${this._prepareDecodeSelection.initialState} ` +
+      `reason=${this._prepareDecodeSelection.reason} diagnostics=${this._prepareDecodeSelection.diagnostics}`);
   }
 
   async initWithContext(videoData: VideoData, surfaceId: string, context: object, xComponentId: string): Promise<void> {
@@ -214,8 +250,9 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._videoData = videoData;
     this._surfaceId = surfaceId;
     this._decodePathStatus = {
-      path: 'hardware',
-      state: 'hardware_active',
+      expectedPath: this._prepareDecodeSelection.expectedPath,
+      path: this._prepareDecodeSelection.initialPath,
+      state: this._prepareDecodeSelection.initialState,
       reason: 'init'
     };
     this._probedTrackInfos = undefined;
@@ -240,6 +277,20 @@ export class VidAllPlayerAdapter implements IPlayer {
     }
 
     this._playerHandle = this.callNativeWithValue('createPlayer', () => VidAllCorePlayerNapi.createPlayer());
+    const prepareSelection = this._prepareDecodeSelection;
+    this.callNativeVoid('setPreferredDecodePath', () => {
+      VidAllCorePlayerNapi.setPreferredDecodePath(this._playerHandle, prepareSelection.expectedPath);
+    });
+    this.updateDecodePathStatus(
+      prepareSelection.initialPath,
+      prepareSelection.initialState,
+      `prepare_selected:${prepareSelection.reason}`
+    );
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[native-prepare-plan] handle=${this._playerHandle} plan=${prepareSelection.plan} ` +
+      `expected=${prepareSelection.expectedPath} initialPath=${prepareSelection.initialPath} ` +
+      `initialState=${prepareSelection.initialState} reason=${prepareSelection.reason} ` +
+      `diagnostics=${prepareSelection.diagnostics}`);
     // OH_AVPlayer_SetURLSource 不支持自定义 HTTP 头；将 Basic Auth 凭据嵌入 URL userinfo
     // （RFC 3986：http://user:pass@host/path），FFmpeg 底层会自动提取并发送 Authorization 头。
     const urlForNative = this.buildUrlWithAuth(videoData.videoSrc, videoData.httpHeader);
@@ -292,9 +343,15 @@ export class VidAllPlayerAdapter implements IPlayer {
             VidAllCorePlayerNapi.getCurrentTime(currentHandle), 0);
           if (this._decodePathStatus.state === 'ffmpeg_switching') {
             this.updateDecodePathStatus('ffmpeg', 'ffmpeg_active', 'ffmpeg_prepared');
+          } else if (this._decodePathStatus.state === 'ffmpeg_only') {
+            this.updateDecodePathStatus('ffmpeg', 'ffmpeg_active', 'ffmpeg_only_prepared');
+          } else if (this._decodePathStatus.state === 'hardware_preferred') {
+            this.updateDecodePathStatus('hardware', 'hardware_active', 'hardware_prepared');
           }
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `onPrepared: handle=${currentHandle} duration=${this._duration} position=${this._currentTime}`);
+            `onPrepared: handle=${currentHandle} expected=${this._decodePathStatus.expectedPath} ` +
+            `path=${this._decodePathStatus.path} state=${this._decodePathStatus.state} ` +
+            `duration=${this._duration} position=${this._currentTime}`);
           this._onReadyCb?.();
         },
         (code: number, msg: string) => {
@@ -887,8 +944,9 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._readyFired = false;
     this._videoData = undefined;
     this._decodePathStatus = {
-      path: 'hardware',
-      state: 'hardware_active',
+      expectedPath: this._prepareDecodeSelection.expectedPath,
+      path: this._prepareDecodeSelection.initialPath,
+      state: this._prepareDecodeSelection.initialState,
       reason: 'released'
     };
     this._probedTrackInfos = undefined;
@@ -1028,10 +1086,12 @@ export class VidAllPlayerAdapter implements IPlayer {
   }
 
   private updateDecodePathStatus(path: NativeDecodePath, state: NativeDecodePathState, reason: string): void {
-    const changed = this._decodePathStatus.path !== path ||
+    const changed = this._decodePathStatus.expectedPath !== this._prepareDecodeSelection.expectedPath ||
+      this._decodePathStatus.path !== path ||
       this._decodePathStatus.state !== state ||
       this._decodePathStatus.reason !== reason;
     this._decodePathStatus = {
+      expectedPath: this._prepareDecodeSelection.expectedPath,
       path,
       state,
       reason
@@ -1040,8 +1100,9 @@ export class VidAllPlayerAdapter implements IPlayer {
       return;
     }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[native-decode-path] path=${path} state=${state} reason=${reason}`);
+      `[native-decode-path] expected=${this._decodePathStatus.expectedPath} path=${path} state=${state} reason=${reason}`);
     this._onNativeDecodePathChangedCb?.({
+      expectedPath: this._decodePathStatus.expectedPath,
       path,
       state,
       reason
@@ -1057,13 +1118,39 @@ export class VidAllPlayerAdapter implements IPlayer {
       source,
       code,
       message,
-      diagnostics: `path=${this._decodePathStatus.path}; state=${this._decodePathStatus.state}`,
+      diagnostics: `expected=${this._decodePathStatus.expectedPath}; path=${this._decodePathStatus.path}; state=${this._decodePathStatus.state}`,
       path: this._decodePathStatus.path,
       state: this._decodePathStatus.state
     };
     hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-      `[native-backend-fatal] source=${source} code=${code} path=${fatalError.path} state=${fatalError.state} message=${message}`);
+      `[native-backend-fatal] source=${source} code=${code} expected=${this._decodePathStatus.expectedPath} ` +
+      `path=${fatalError.path} state=${fatalError.state} message=${message}`);
     this._onNativeBackendFatalErrorCb?.(fatalError);
+  }
+
+  private buildPrepareDecodeSelection(
+    plan: NativePrepareDecodePlan,
+    reason: string,
+    diagnostics: string
+  ): NativePrepareDecodeSelection {
+    if (plan === 'native_ffmpeg_only') {
+      return {
+        plan,
+        expectedPath: 'ffmpeg_only',
+        initialPath: 'ffmpeg',
+        initialState: 'ffmpeg_only',
+        reason,
+        diagnostics
+      };
+    }
+    return {
+      plan,
+      expectedPath: 'hardware_preferred',
+      initialPath: 'hardware',
+      initialState: 'hardware_preferred',
+      reason,
+      diagnostics
+    };
   }
 
   private emitGeneralErrorIfNeeded(error: Error): void {
