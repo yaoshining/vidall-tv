@@ -819,6 +819,11 @@ struct FfmpegContext {
   std::atomic<int64_t> audioClockStartRealtimeMs{0}; // 当前播放锚点对应的 steady_clock 时间；暂停时为 0
   std::atomic<bool> playbackPaused{false};        // FFmpeg 路径的真实暂停态：音频回调/视频渲染均需读取
   std::atomic<int32_t> videoSyncGraceFrames{0}; // seek/启动后前若干帧绕过 AV sync，先让画面稳定出帧
+  int droppedDecodeFrames = 0;                    // 诊断：当前会话累计丢弃的解码帧
+  int droppedLateFrames = 0;                      // 诊断：当前会话累计丢弃的渲染晚到帧
+  bool firstFrameLogged = false;                  // 诊断：每个会话仅打印一次首帧日志
+  bool firstDrawLogged = false;                   // 诊断：每个会话仅打印一次首个 glDrawArrays 日志
+  bool firstSwapLogged = false;                   // 诊断：每个会话仅打印一次首个 eglSwapBuffers 日志
 
   // B5：seek 请求（Seek() NAPI 写入，DemuxThreadFunc 消费）
   std::atomic<bool> seekRequested{false};
@@ -1674,49 +1679,49 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
                      "DemuxThread: av_seek_frame failed: %s", errBuf);
         // seek 失败不 continue：让后续 av_read_frame 继续在原位置读包，避免卡死。
       } else {
-      // 清空所有 packet/frame 队列（旧数据）
-      FlushFfmpegQueues(ctx);
-      // 刷新解码器内部缓冲区（hold codecMutex 防止与 decode 线程并发）
-      {
-        std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
-        if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
-        if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
-      }
-      // seek 后重置 renderer 缓冲与音频时钟：新时钟 = 目标位置 + 之后已渲染样本
-      if (ctx->audioRenderer != nullptr) {
-        const OH_AudioStream_Result flushResult = OH_AudioRenderer_Flush(ctx->audioRenderer);
+        // 清空所有 packet/frame 队列（旧数据）
+        FlushFfmpegQueues(ctx);
+        // 刷新解码器内部缓冲区（hold codecMutex 防止与 decode 线程并发）
+        {
+          std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+          if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
+          if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
+        }
+        // seek 后重置 renderer 缓冲与音频时钟：新时钟 = 目标位置 + 之后已渲染样本
+        if (ctx->audioRenderer != nullptr) {
+          const OH_AudioStream_Result flushResult = OH_AudioRenderer_Flush(ctx->audioRenderer);
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                       "DemuxThread: OH_AudioRenderer_Flush result=%{public}d",
+                       static_cast<int32_t>(flushResult));
+        }
+        ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
+        ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+        ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
+        ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                     "DemuxThread: OH_AudioRenderer_Flush result=%{public}d",
-                     static_cast<int32_t>(flushResult));
-      }
-      ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
-      ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
-      ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
-      ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
-      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                   "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
-      // 发出 seekDone TSF 通知 ArkTS
-      // B5-QA fix：通过 atomic load(acquire) 读取 ownerState，消除与主线程写 nullptr 的竞态；
-      //            两次独立 load 分别保护"写 currentTimeMs"和"调用 TSF"两个临界区。
-      {
-        NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
-        if (st != nullptr) {
-          std::lock_guard<std::mutex> lk(st->stateMutex);
-          st->currentTimeMs = targetMs;
+                     "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
+        // 发出 seekDone TSF 通知 ArkTS
+        // B5-QA fix：通过 atomic load(acquire) 读取 ownerState，消除与主线程写 nullptr 的竞态；
+        //            两次独立 load 分别保护"写 currentTimeMs"和"调用 TSF"两个临界区。
+        {
+          NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
+          if (st != nullptr) {
+            std::lock_guard<std::mutex> lk(st->stateMutex);
+            st->currentTimeMs = targetMs;
+          }
         }
-      }
-      {
-        NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
-        if (st != nullptr && st->tsfOnTimeUpdate != nullptr) {
-          napi_call_threadsafe_function(st->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
+        {
+          NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
+          if (st != nullptr && st->tsfOnTimeUpdate != nullptr) {
+            napi_call_threadsafe_function(st->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
+          }
         }
-      }
-      {
-        NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
-        if (st != nullptr && st->tsfOnSeekDone != nullptr) {
-          napi_call_threadsafe_function(st->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
+        {
+          NativePlayerSkeletonState *st = ctx->ownerState.load(std::memory_order_acquire);
+          if (st != nullptr && st->tsfOnSeekDone != nullptr) {
+            napi_call_threadsafe_function(st->tsfOnSeekDone, nullptr, napi_tsfn_nonblocking);
+          }
         }
-      }
       } // end else (seekRet >= 0)
     } // end if (seekRequested)
 
@@ -1820,7 +1825,7 @@ static int FfmpegInitCodecs(FfmpegContext *ctx) {
       avcodec_free_context(&ctx->videoCodecCtx);
       return ret;
     }
-      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                  "FfmpegInitCodecs: video decoder opened: %s %dx%d threads=%d",
                  codec->name, ctx->videoCodecCtx->width, ctx->videoCodecCtx->height,
                  ctx->videoCodecCtx->thread_count);
@@ -1922,9 +1927,8 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
         const double audioClock = AudioClock(ctx);
         const double diff = videoPts - audioClock;
         if (videoPts > 0.0 && diff < -0.8) {
-          static int droppedDecodeFrames = 0;
-          droppedDecodeFrames++;
-          if (droppedDecodeFrames == 1 || (droppedDecodeFrames % 30) == 0) {
+          ctx->droppedDecodeFrames++;
+          if (ctx->droppedDecodeFrames == 1 || (ctx->droppedDecodeFrames % 30) == 0) {
             int packetBacklog = 0;
             {
               std::lock_guard<std::mutex> lock(ctx->videoQueue.mtx);
@@ -1936,7 +1940,7 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
                          static_cast<int>(videoPts * 1000.0),
                          static_cast<int>(audioClock * 1000.0),
                          packetBacklog,
-                         droppedDecodeFrames);
+                         ctx->droppedDecodeFrames);
           }
           av_frame_unref(frame);
           continue;
@@ -2635,21 +2639,19 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
           const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 50.0));
           std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
         } else if (diff < -2.0) {
-          static int droppedLateFrames = 0;
-          droppedLateFrames++;
-          if (droppedLateFrames == 1 || (droppedLateFrames % 30) == 0) {
+          ctx->droppedLateFrames++;
+          if (ctx->droppedLateFrames == 1 || (ctx->droppedLateFrames % 30) == 0) {
             OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
                          "RenderThread: drop late frame diffMs=%{public}d videoPtsMs=%{public}d audioClockMs=%{public}d count=%{public}d",
                          static_cast<int>(diff * 1000.0),
                          static_cast<int>(videoPts * 1000.0),
                          static_cast<int>(audioClock * 1000.0),
-                         droppedLateFrames);
+                         ctx->droppedLateFrames);
           }
           av_frame_free(&frame);
           continue;
         } else {
-          static int droppedLateFrames = 0;
-          droppedLateFrames = 0;
+          ctx->droppedLateFrames = 0;
         }
       } else if (ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0) {
         ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
@@ -2676,9 +2678,8 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
 
     // B6 诊断日志：第一帧打印格式与 linesize
     {
-      static bool firstFrameLogged = false;
-      if (!firstFrameLogged) {
-        firstFrameLogged = true;
+      if (!ctx->firstFrameLogged) {
+        ctx->firstFrameLogged = true;
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                      "RenderThread: first frame w=%{public}d h=%{public}d fmt=%{public}d ls0=%{public}d",
                      frame->width, frame->height, frame->format, frame->linesize[0]);
@@ -2755,10 +2756,9 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
                           reinterpret_cast<const void *>(2 * sizeof(float)));
     ctx->gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     {
-      static bool firstDrawLogged = false;
       const GLenum drawErr = ctx->gl.GetError();
-      if (!firstDrawLogged || drawErr != GL_NO_ERROR) {
-        firstDrawLogged = true;
+      if (!ctx->firstDrawLogged || drawErr != GL_NO_ERROR) {
+        ctx->firstDrawLogged = true;
         OH_LOG_Print(LOG_APP, drawErr == GL_NO_ERROR ? LOG_INFO : LOG_ERROR,
                      0xFF00, "VidAll",
                      "RenderThread: glDrawArrays err=0x%{public}x", drawErr);
@@ -2770,11 +2770,10 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
 
     // 7. 提交帧到屏幕
     {
-      static bool firstSwapLogged = false;
       const EGLBoolean swapOk = eglSwapBuffers(ctx->eglDisplay, ctx->eglSurface);
       const EGLint swapErr = eglGetError();
-      if (!firstSwapLogged || swapOk != EGL_TRUE) {
-        firstSwapLogged = true;
+      if (!ctx->firstSwapLogged || swapOk != EGL_TRUE) {
+        ctx->firstSwapLogged = true;
         OH_LOG_Print(LOG_APP, swapOk == EGL_TRUE ? LOG_INFO : LOG_ERROR,
                      0xFF00, "VidAll",
                      "RenderThread: eglSwapBuffers ok=%{public}d err=0x%{public}x",
@@ -3894,6 +3893,11 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
       return nullptr;
     }
   }
+  if (hasFfmpegSwitchingArg) {
+    if (!EnsureFunctionArg(env, args[7], "setCallbacks onFfmpegSwitching must be function")) {
+      return nullptr;
+    }
+  }
   if (hasSubtitleUpdateArg) {
     if (!EnsureFunctionArg(env, args[8], "setCallbacks onSubtitleUpdate must be function")) {
       return nullptr;
@@ -4082,20 +4086,16 @@ static napi_value SetCallbacks(napi_env env, napi_callback_info info) {
   // B6修复：注册 tsfOnFfmpegSwitching（可选，args[7]）
   // FFmpeg 接管后通知 ArkTS 重置守卫计时器至 15s，防止 3.5s 超时误触 fallback。
   if (hasFfmpegSwitchingArg) {
-    napi_valuetype argType = napi_undefined;
-    napi_typeof(env, args[7], &argType);
-    if (argType == napi_function) {
-      napi_value resName;
-      napi_create_string_utf8(env, "tsfOnFfmpegSwitching", NAPI_AUTO_LENGTH, &resName);
-      napi_create_threadsafe_function(
-        env, args[7], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
-        [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
-          napi_value undef;
-          napi_get_undefined(tsfEnv, &undef);
-          napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
-        },
-        &state.tsfOnFfmpegSwitching);
-    }
+    napi_value resName;
+    napi_create_string_utf8(env, "tsfOnFfmpegSwitching", NAPI_AUTO_LENGTH, &resName);
+    napi_create_threadsafe_function(
+      env, args[7], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
+      [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
+        napi_value undef;
+        napi_get_undefined(tsfEnv, &undef);
+        napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
+      },
+      &state.tsfOnFfmpegSwitching);
   }
 
   // 若回调在 prepared 之后才注册，主动补发一次状态，避免上层错过时序。

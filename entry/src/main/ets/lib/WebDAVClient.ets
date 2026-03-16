@@ -470,10 +470,8 @@ export class WebDAVClient {
         }
       }
     }
-    if (!this._nativeCurlEnabled) {
+    if (shouldTryNativeFirst && !this._nativeCurlEnabled) {
       console.warn('WebDAV native transport unavailable, fallback to legacy transport');
-    } else if (!this.allowLegacyTransportFallback) {
-      throw new Error('legacy transport fallback disabled');
     }
     // ── 回退：现有 socket / http 实现 ──────────────────────────────────────
     if (this.isHttps) {

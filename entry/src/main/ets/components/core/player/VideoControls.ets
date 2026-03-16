@@ -956,6 +956,9 @@ export struct SubtitleSelectorDrawerDialog {
               .backgroundColor('rgba(255, 255, 255, 0.03)')
               .borderRadius(14)
               .onClick(() => {
+                if (!this.videoController.canSwitchSubtitleTrack(-1)) {
+                  return
+                }
                 this.videoController.switchSubtitleTrack(-1)
               })
             }

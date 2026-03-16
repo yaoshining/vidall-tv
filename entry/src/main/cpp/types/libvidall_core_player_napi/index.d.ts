@@ -124,5 +124,7 @@ export const setCallbacks: (
   onTimeUpdate: (posMs: number) => void,
   onCompleted: () => void,
   onBufferingChange: (isBuffering: boolean) => void,
-  onSeekDone: () => void
+  onSeekDone: () => void,
+  onFfmpegSwitching: () => void,
+  onSubtitleUpdate: (info: { duration: number; startTime: number; text: string }) => void
 ) => void;

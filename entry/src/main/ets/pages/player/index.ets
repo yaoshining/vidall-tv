@@ -378,14 +378,14 @@ export struct PlayerPage {
         this.videoPlayerController.saveProgressNow();
       });
 
-        let pageParam = context.pathInfo.param as PlayerPageParam
-        if (pageParam) {
-          if (pageParam.preferredBackend) {
-            this.videoPlayerController.setPreferredBackend(
-              pageParam.preferredBackend,
-              pageParam.strictPreferredBackend === true
-            );
-          }
+      let pageParam = context.pathInfo.param as PlayerPageParam
+      if (pageParam) {
+        if (pageParam.preferredBackend) {
+          this.videoPlayerController.setPreferredBackend(
+            pageParam.preferredBackend,
+            pageParam.strictPreferredBackend === true
+          );
+        }
         if (pageParam.unsupportedFormatFallback) {
           this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
         }

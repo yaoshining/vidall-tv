@@ -309,7 +309,7 @@ export class DeviceCapabilityUtil {
       return 'video/hevc';
     }
     if (normalized === 'av1' || normalized === 'av01') {
-      return 'video/av1';
+      return VIDEO_CODEC.AV1;
     }
     if (normalized === 'vp9') {
       return 'video/x-vnd.on2.vp9';
@@ -325,7 +325,7 @@ export class DeviceCapabilityUtil {
       return 'video/mpeg2';
     }
     if (normalized === 'vc1' || normalized === 'wvc1') {
-      return 'video/vc1';
+      return VIDEO_CODEC.VC1;
     }
     return '';
   }
