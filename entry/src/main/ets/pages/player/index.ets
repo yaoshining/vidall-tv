@@ -10,6 +10,7 @@ import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
+import { DeviceCapabilityUtil } from "../../utils/DeviceCapabilityUtil";
 import { emitter } from "@kit.BasicServicesKit";
 
 export interface PlayerPageParam {
@@ -61,6 +62,58 @@ export struct PlayerPage {
     return `${backendText} | ${reason}`;
   }
 
+  private getAudioCapabilityDebugText(): string {
+    const text = this.videoPlayerController.audioCapabilityText;
+    return text.length > 0 ? text : '音频能力: 暂无';
+  }
+
+  private getPresetAudioDebugText(): string {
+    const tracks = this.videoData?.presetAudioTracks;
+    if (!tracks || tracks.length === 0) {
+      return '预置音轨: 0';
+    }
+    const first = tracks[0];
+    const format = first.mimeType && first.mimeType.length > 0 ? first.mimeType : first.displayName;
+    return `预置音轨: ${tracks.length} | 首轨=${format}`;
+  }
+
+  private getRuntimeTrackDebugText(): string {
+    const audioCount = this.videoPlayerController.audioTracks.length;
+    const subtitleCount = this.videoPlayerController.allSubtitleTracks.length;
+    return `运行时轨道: audio=${audioCount} subtitle=${subtitleCount}`;
+  }
+
+  private getActiveAudioDebugText(): string {
+    const index = this.videoPlayerController.activeAudioIndex;
+    const tracks = this.videoPlayerController.audioTracks;
+    if (index < 0 || index >= tracks.length) {
+      return '当前音轨: 未选中';
+    }
+    const current = tracks[index];
+    return `当前音轨: ${current.displayName}`;
+  }
+
+  private getVideoCapabilityDebugText(codec: string, label: string): string {
+    const summary = DeviceCapabilityUtil.buildNativeVideoCapabilitySummary(codec);
+    if (!summary.supported) {
+      return `${label}: 不支持`;
+    }
+    const capabilityText = summary.isHardware ? '硬解' : '仅软解';
+    const detail = summary.message.replace(`视频能力: ${summary.codecLabel} | `, '');
+    return `${label}: ${capabilityText} | ${detail}`;
+  }
+
+  private dumpNativeVideoCapabilityMatrix(): void {
+    DeviceCapabilityUtil.logNativeVideoDecoderCapabilityMatrix();
+  }
+
+  private async runNativeSurfaceProbe(): Promise<void> {
+    const summaries = await this.videoPlayerController.runExclusiveNativeVideoDecoderSurfaceProbes(['h264', 'h265']);
+    for (let i = 0; i < summaries.length; i++) {
+      console.info(`[PlayerPage] surfaceProbe ${summaries[i]}`);
+    }
+  }
+
   private switchBackend(targetBackend: PlayerBackend): void {
     this.videoPlayerController.setPreferredBackend(targetBackend, true);
   }
@@ -82,6 +135,55 @@ export struct PlayerPage {
       Text(this.getBackendDebugText())
         .fontSize(12)
         .fontColor('#E6FFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getAudioCapabilityDebugText())
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getPresetAudioDebugText())
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getRuntimeTrackDebugText())
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getActiveAudioDebugText())
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getVideoCapabilityDebugText('h264', 'H264'))
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getVideoCapabilityDebugText('h265', 'H265'))
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Text(this.getVideoCapabilityDebugText('av1', 'AV1'))
+        .fontSize(11)
+        .fontColor('#CCFFFFFF')
         .backgroundColor('#66000000')
         .padding({ left: 8, right: 8, top: 4, bottom: 4 })
         .borderRadius(4)
@@ -115,6 +217,26 @@ export struct PlayerPage {
           .padding({ left: 10, right: 10, top: 4, bottom: 4 })
           .onClick(() => {
             this.switchBackend('ijkplayer')
+          })
+
+        Button('Probe')
+          .fontSize(11)
+          .fontColor(Color.White)
+          .backgroundColor('#5C3FB5')
+          .borderRadius(4)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .onClick(() => {
+            this.dumpNativeVideoCapabilityMatrix()
+          })
+
+        Button('Surface')
+          .fontSize(11)
+          .fontColor(Color.White)
+          .backgroundColor('#9C4A1A')
+          .borderRadius(4)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .onClick(() => {
+            this.runNativeSurfaceProbe()
           })
       }
     }
@@ -228,6 +350,24 @@ export struct PlayerPage {
             left: { anchor: '__container__', align: HorizontalAlign.Start }
           })
           .margin({ top: 20, left: 20 })
+
+        XComponent({
+          id: 'nativeProbeXComponent',
+          type: XComponentType.SURFACE,
+          libraryname: 'vidall_core_player_napi'
+        })
+          .onLoad((context: object) => {
+            this.videoPlayerController.setNativeProbeContext(context, 'nativeProbeXComponent')
+          })
+          .width(8)
+          .height(8)
+          .opacity(0.01)
+          .backgroundColor(Color.Transparent)
+          .alignRules({
+            bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+            right: { anchor: '__container__', align: HorizontalAlign.End }
+          })
+          .margin({ bottom: 4, right: 4 })
       }
       .height('100%')
       .width('100%')

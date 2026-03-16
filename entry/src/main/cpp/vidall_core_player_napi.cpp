@@ -21,6 +21,7 @@
 #include <multimedia/player_framework/avplayer.h>
 #include <multimedia/player_framework/native_avcapability.h>
 #include <multimedia/player_framework/native_avformat.h>
+#include <multimedia/player_framework/native_avcodec_videodecoder.h>
 #include <hilog/log.h>
 
 extern "C" {
@@ -941,6 +942,8 @@ struct PendingWindowInfo {
 };
 // xcId → (nativeXC*, nativeWindow*)，供 SetXComponent 延迟关联
 static std::unordered_map<std::string, PendingWindowInfo> g_pendingWindows;
+// xcId → 当前仍然存活的 surface window。即使 player release，只要 XComponent 未销毁就可复用。
+static std::unordered_map<std::string, PendingWindowInfo> g_liveWindows;
 // Init() 期间从 OH_NATIVE_XCOMPONENT_OBJ 取到的 nativeXC，
 // SetXComponent 用它判断是否需要重复注册（同一个 XComponent 无需重复注册）
 static OH_NativeXComponent *g_pendingXC = nullptr;
@@ -3611,6 +3614,7 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
                "OnXCSurfaceCreated: xcId=%s window=%p", xcId.c_str(), window);
 
   std::lock_guard<std::mutex> lock(g_playersMutex); // A4: 保护 g_players 跨线程遍历
+  g_liveWindows[xcId] = { component, static_cast<OHNativeWindow *>(window) };
   bool found = false;
   for (auto &pair : g_players) {
     if (pair.second.xComponentId == xcId) {
@@ -3669,6 +3673,7 @@ static void OnXCSurfaceDestroyed(OH_NativeXComponent *component, void *window) {
   }
   // PR#49（问题9）：清除悬空的 pending window 缓存，避免 surface 销毁后 use-after-free
   g_pendingWindows.erase(xcId);
+  g_liveWindows.erase(xcId);
 }
 
 static void OnXCDispatchTouchEvent(OH_NativeXComponent *component, void *window) {
@@ -3759,6 +3764,15 @@ static napi_value SetXComponent(napi_env env, napi_callback_info info) {
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "SetXComponent: 从 pending 恢复 nativeWindow=%p xcId=%s",
                    state->nativeWindow, xComponentId.c_str());
+    } else {
+      auto liveIt = g_liveWindows.find(xComponentId);
+      if (liveIt != g_liveWindows.end()) {
+        state->nativeWindow = liveIt->second.nativeWindow;
+        state->surfaceReady = state->nativeWindow != nullptr;
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "SetXComponent: 从 live cache 恢复 nativeWindow=%p xcId=%s",
+                     state->nativeWindow, xComponentId.c_str());
+      }
     }
   }
 
@@ -4883,6 +4897,35 @@ struct AudioDecoderCapabilityResult {
   std::string errorMessage;
 };
 
+struct VideoDecoderCapabilityResult {
+  bool capabilityKnown = false;
+  bool supported = false;
+  bool isHardware = false;
+  int32_t minWidth = 0;
+  int32_t maxWidth = 0;
+  int32_t minHeight = 0;
+  int32_t maxHeight = 0;
+  int32_t minFrameRate = 0;
+  int32_t maxFrameRate = 0;
+  int32_t widthAlignment = 0;
+  int32_t heightAlignment = 0;
+  int32_t maxInstances = 0;
+  std::string decoderName;
+  std::string mimeType;
+  std::string errorMessage;
+};
+
+struct VideoDecoderSurfaceProbeResult {
+  bool success = false;
+  std::string stage;
+  bool capabilityKnown = false;
+  bool isHardware = false;
+  std::string decoderName;
+  std::string mimeType;
+  std::string stateSummary;
+  std::string errorMessage;
+};
+
 static std::string ToLowerString(const std::string &value) {
   std::string result = value;
   std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch) {
@@ -4945,6 +4988,51 @@ static std::vector<std::string> BuildAudioMimeCandidates(const std::string &code
   return candidates;
 }
 
+static std::vector<std::string> BuildVideoMimeCandidates(const std::string &codecOrMime) {
+  const std::string normalized = ToLowerString(codecOrMime);
+  if (normalized.empty()) {
+    return {};
+  }
+
+  std::vector<std::string> candidates;
+  auto pushUnique = [&candidates](const std::string &candidate) {
+    if (candidate.empty()) {
+      return;
+    }
+    if (std::find(candidates.begin(), candidates.end(), candidate) == candidates.end()) {
+      candidates.push_back(candidate);
+    }
+  };
+
+  if (normalized.rfind("video/", 0) == 0) {
+    pushUnique(normalized);
+  }
+
+  if (normalized == "h264" || normalized == "h.264" || normalized == "avc" || normalized == "x264") {
+    pushUnique("video/avc");
+  } else if (normalized == "h265" || normalized == "h.265" || normalized == "hevc" || normalized == "x265") {
+    pushUnique("video/hevc");
+  } else if (normalized == "av1" || normalized == "av01") {
+    pushUnique("video/av1");
+    pushUnique("video/av01");
+  } else if (normalized == "vp9") {
+    pushUnique("video/x-vnd.on2.vp9");
+  } else if (normalized == "vp8") {
+    pushUnique("video/x-vnd.on2.vp8");
+  } else if (normalized == "mpeg4" || normalized == "mp4v" || normalized == "mp4v-es" ||
+             normalized == "divx" || normalized == "xvid") {
+    pushUnique("video/mp4v-es");
+    pushUnique("video/divx");
+  } else if (normalized == "mpeg2") {
+    pushUnique("video/mpeg2");
+  } else if (normalized == "vc1" || normalized == "wvc1") {
+    pushUnique("video/vc1");
+    pushUnique("video/wvc1");
+  }
+
+  return candidates;
+}
+
 static AudioDecoderCapabilityResult QueryAudioDecoderCapabilityInternal(const std::string &codecOrMime) {
   AudioDecoderCapabilityResult result;
   const std::vector<std::string> mimeCandidates = BuildAudioMimeCandidates(codecOrMime);
@@ -4992,6 +5080,204 @@ static AudioDecoderCapabilityResult QueryAudioDecoderCapabilityInternal(const st
   }
 
   result.errorMessage = "decoder not found";
+  return result;
+}
+
+static VideoDecoderCapabilityResult QueryVideoDecoderCapabilityInternal(const std::string &codecOrMime) {
+  VideoDecoderCapabilityResult result;
+  const std::vector<std::string> mimeCandidates = BuildVideoMimeCandidates(codecOrMime);
+  if (mimeCandidates.empty()) {
+    result.errorMessage = "unsupported codec mapping";
+    return result;
+  }
+
+  result.capabilityKnown = true;
+  result.mimeType = mimeCandidates.front();
+
+  for (const std::string &mime : mimeCandidates) {
+    OH_AVCapability *capability = OH_AVCodec_GetCapabilityByCategory(mime.c_str(), false, HARDWARE);
+    bool isHardware = true;
+    if (capability == nullptr) {
+      capability = OH_AVCodec_GetCapabilityByCategory(mime.c_str(), false, SOFTWARE);
+      isHardware = false;
+    }
+    if (capability == nullptr) {
+      capability = OH_AVCodec_GetCapability(mime.c_str(), false);
+      if (capability != nullptr) {
+        isHardware = OH_AVCapability_IsHardware(capability);
+      }
+    }
+    if (capability == nullptr) {
+      continue;
+    }
+
+    result.supported = true;
+    result.isHardware = isHardware;
+    result.mimeType = mime;
+
+    const char *decoderName = OH_AVCapability_GetName(capability);
+    if (decoderName != nullptr) {
+      result.decoderName = decoderName;
+    }
+
+    result.maxInstances = OH_AVCapability_GetMaxSupportedInstances(capability);
+
+    OH_AVRange widthRange;
+    widthRange.minVal = 0;
+    widthRange.maxVal = 0;
+    if (OH_AVCapability_GetVideoWidthRange(capability, &widthRange) == AV_ERR_OK) {
+      result.minWidth = widthRange.minVal;
+      result.maxWidth = widthRange.maxVal;
+    }
+
+    OH_AVRange heightRange;
+    heightRange.minVal = 0;
+    heightRange.maxVal = 0;
+    if (OH_AVCapability_GetVideoHeightRange(capability, &heightRange) == AV_ERR_OK) {
+      result.minHeight = heightRange.minVal;
+      result.maxHeight = heightRange.maxVal;
+    }
+
+    OH_AVRange frameRateRange;
+    frameRateRange.minVal = 0;
+    frameRateRange.maxVal = 0;
+    if (OH_AVCapability_GetVideoFrameRateRange(capability, &frameRateRange) == AV_ERR_OK) {
+      result.minFrameRate = frameRateRange.minVal;
+      result.maxFrameRate = frameRateRange.maxVal;
+    }
+
+    int32_t widthAlignment = 0;
+    if (OH_AVCapability_GetVideoWidthAlignment(capability, &widthAlignment) == AV_ERR_OK) {
+      result.widthAlignment = widthAlignment;
+    }
+
+    int32_t heightAlignment = 0;
+    if (OH_AVCapability_GetVideoHeightAlignment(capability, &heightAlignment) == AV_ERR_OK) {
+      result.heightAlignment = heightAlignment;
+    }
+    return result;
+  }
+
+  result.errorMessage = "decoder not found";
+  return result;
+}
+
+static VideoDecoderSurfaceProbeResult ProbeVideoDecoderSurfaceInternal(
+  NativePlayerSkeletonState &state,
+  const std::string &codecOrMime
+) {
+  VideoDecoderSurfaceProbeResult result;
+  result.stage = "lookup";
+
+  OHNativeWindow *localWindow = nullptr;
+  bool hasAvPlayer = false;
+  bool hasFfmpegCtx = false;
+  bool prepared = false;
+  bool playing = false;
+  bool useFfmpegPath = false;
+  {
+    std::lock_guard<std::mutex> lk(state.stateMutex);
+    localWindow = state.nativeWindow;
+    hasAvPlayer = state.avPlayer != nullptr;
+    hasFfmpegCtx = state.ffmpegCtx != nullptr;
+    prepared = state.prepared;
+    playing = state.playing;
+    useFfmpegPath = state.useFfmpegPath;
+  }
+  result.stateSummary =
+    std::string("window=") + (localWindow != nullptr ? "ready" : "null") +
+    ", prepared=" + (prepared ? "true" : "false") +
+    ", playing=" + (playing ? "true" : "false") +
+    ", avPlayer=" + (hasAvPlayer ? "true" : "false") +
+    ", ffmpegCtx=" + (hasFfmpegCtx ? "true" : "false") +
+    ", useFfmpegPath=" + (useFfmpegPath ? "true" : "false");
+  if (localWindow == nullptr) {
+    result.errorMessage = "nativeWindow unavailable";
+    result.stage = "surface";
+    return result;
+  }
+
+  const VideoDecoderCapabilityResult capability = QueryVideoDecoderCapabilityInternal(codecOrMime);
+  result.capabilityKnown = capability.capabilityKnown;
+  result.isHardware = capability.isHardware;
+  result.decoderName = capability.decoderName;
+  result.mimeType = capability.mimeType;
+  if (!capability.capabilityKnown) {
+    result.errorMessage = capability.errorMessage.empty() ? "capability unknown" : capability.errorMessage;
+    return result;
+  }
+  if (!capability.supported) {
+    result.errorMessage = "decoder not supported";
+    return result;
+  }
+  if (!capability.isHardware) {
+    result.errorMessage = "hardware decoder unavailable";
+    return result;
+  }
+  if (capability.mimeType.empty()) {
+    result.errorMessage = "empty mime type";
+    return result;
+  }
+
+  OH_AVCodec *decoder = nullptr;
+  OH_AVFormat *format = nullptr;
+  OH_AVErrCode rc = AV_ERR_OK;
+  if (!capability.decoderName.empty()) {
+    decoder = OH_VideoDecoder_CreateByName(capability.decoderName.c_str());
+  }
+  if (decoder == nullptr) {
+    decoder = OH_VideoDecoder_CreateByMime(capability.mimeType.c_str());
+  }
+  if (decoder == nullptr) {
+    result.stage = "create";
+    result.errorMessage = "create decoder failed";
+    return result;
+  }
+
+  result.stage = "configure";
+  format = OH_AVFormat_CreateVideoFormat(capability.mimeType.c_str(), 1920, 1080);
+  if (format == nullptr) {
+    result.errorMessage = "create video format failed";
+    OH_VideoDecoder_Destroy(decoder);
+    return result;
+  }
+  OH_AVFormat_SetIntValue(format, OH_MD_KEY_WIDTH, 1920);
+  OH_AVFormat_SetIntValue(format, OH_MD_KEY_HEIGHT, 1080);
+  OH_AVFormat_SetIntValue(format, OH_MD_KEY_VIDEO_ENABLE_LOW_LATENCY, 1);
+
+  rc = OH_VideoDecoder_Configure(decoder, format);
+  if (rc != AV_ERR_OK) {
+    result.errorMessage = "configure failed: " + std::to_string(static_cast<int32_t>(rc));
+    OH_AVFormat_Destroy(format);
+    OH_VideoDecoder_Destroy(decoder);
+    return result;
+  }
+
+  result.stage = "setSurface";
+  rc = OH_VideoDecoder_SetSurface(decoder, localWindow);
+  if (rc != AV_ERR_OK) {
+    result.errorMessage = "set surface failed: " + std::to_string(static_cast<int32_t>(rc));
+    if (rc == AV_ERR_INVALID_STATE && (hasAvPlayer || hasFfmpegCtx || prepared || playing)) {
+      result.errorMessage += " (surface may be occupied by current playback pipeline)";
+    }
+    OH_AVFormat_Destroy(format);
+    OH_VideoDecoder_Destroy(decoder);
+    return result;
+  }
+
+  result.stage = "prepare";
+  rc = OH_VideoDecoder_Prepare(decoder);
+  if (rc != AV_ERR_OK) {
+    result.errorMessage = "prepare failed: " + std::to_string(static_cast<int32_t>(rc));
+    OH_AVFormat_Destroy(format);
+    OH_VideoDecoder_Destroy(decoder);
+    return result;
+  }
+
+  result.success = true;
+  result.stage = "done";
+  OH_AVFormat_Destroy(format);
+  OH_VideoDecoder_Destroy(decoder);
   return result;
 }
 
@@ -5046,6 +5332,137 @@ static napi_value QueryAudioDecoderCapability(napi_env env, napi_callback_info i
   return result;
 }
 
+static napi_value QueryVideoDecoderCapability(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1] = { nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "queryVideoDecoderCapability failed to read args");
+    return nullptr;
+  }
+  if (argc < 1) {
+    ThrowTypeError(env, "queryVideoDecoderCapability requires (codecOrMime)");
+    return nullptr;
+  }
+
+  std::string codecOrMime;
+  if (!ReadUtf8String(env, args[0], codecOrMime)) {
+    ThrowTypeError(env, "queryVideoDecoderCapability codecOrMime must be string");
+    return nullptr;
+  }
+
+  const VideoDecoderCapabilityResult capability = QueryVideoDecoderCapabilityInternal(codecOrMime);
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    ThrowTypeError(env, "queryVideoDecoderCapability failed to create result object");
+    return nullptr;
+  }
+
+  napi_value capabilityKnown = CreateBoolean(env, capability.capabilityKnown);
+  napi_value supported = CreateBoolean(env, capability.supported);
+  napi_value isHardware = CreateBoolean(env, capability.isHardware);
+  napi_value minWidth = CreateInt32(env, capability.minWidth);
+  napi_value maxWidth = CreateInt32(env, capability.maxWidth);
+  napi_value minHeight = CreateInt32(env, capability.minHeight);
+  napi_value maxHeight = CreateInt32(env, capability.maxHeight);
+  napi_value minFrameRate = CreateInt32(env, capability.minFrameRate);
+  napi_value maxFrameRate = CreateInt32(env, capability.maxFrameRate);
+  napi_value widthAlignment = CreateInt32(env, capability.widthAlignment);
+  napi_value heightAlignment = CreateInt32(env, capability.heightAlignment);
+  napi_value maxInstances = CreateInt32(env, capability.maxInstances);
+  napi_value decoderName = CreateString(env, capability.decoderName.c_str());
+  napi_value mimeType = CreateString(env, capability.mimeType.c_str());
+  napi_value errorMessage = CreateString(env, capability.errorMessage.c_str());
+  if (capabilityKnown == nullptr || supported == nullptr || isHardware == nullptr ||
+      minWidth == nullptr || maxWidth == nullptr || minHeight == nullptr || maxHeight == nullptr ||
+      minFrameRate == nullptr || maxFrameRate == nullptr || widthAlignment == nullptr ||
+      heightAlignment == nullptr || maxInstances == nullptr || decoderName == nullptr ||
+      mimeType == nullptr || errorMessage == nullptr) {
+    ThrowTypeError(env, "queryVideoDecoderCapability failed to create result fields");
+    return nullptr;
+  }
+
+  if (napi_set_named_property(env, result, "capabilityKnown", capabilityKnown) != napi_ok ||
+      napi_set_named_property(env, result, "supported", supported) != napi_ok ||
+      napi_set_named_property(env, result, "isHardware", isHardware) != napi_ok ||
+      napi_set_named_property(env, result, "minWidth", minWidth) != napi_ok ||
+      napi_set_named_property(env, result, "maxWidth", maxWidth) != napi_ok ||
+      napi_set_named_property(env, result, "minHeight", minHeight) != napi_ok ||
+      napi_set_named_property(env, result, "maxHeight", maxHeight) != napi_ok ||
+      napi_set_named_property(env, result, "minFrameRate", minFrameRate) != napi_ok ||
+      napi_set_named_property(env, result, "maxFrameRate", maxFrameRate) != napi_ok ||
+      napi_set_named_property(env, result, "widthAlignment", widthAlignment) != napi_ok ||
+      napi_set_named_property(env, result, "heightAlignment", heightAlignment) != napi_ok ||
+      napi_set_named_property(env, result, "maxInstances", maxInstances) != napi_ok ||
+      napi_set_named_property(env, result, "decoderName", decoderName) != napi_ok ||
+      napi_set_named_property(env, result, "mimeType", mimeType) != napi_ok ||
+      napi_set_named_property(env, result, "errorMessage", errorMessage) != napi_ok) {
+    ThrowTypeError(env, "queryVideoDecoderCapability failed to set result fields");
+    return nullptr;
+  }
+  return result;
+}
+
+static napi_value ProbeVideoDecoderSurface(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2] = { nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "probeVideoDecoderSurface failed to read args");
+    return nullptr;
+  }
+  if (argc < 2) {
+    ThrowTypeError(env, "probeVideoDecoderSurface requires (handle, codecOrMime)");
+    return nullptr;
+  }
+
+  int32_t handle = 0;
+  if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
+    ThrowTypeError(env, "probeVideoDecoderSurface handle must be int32");
+    return nullptr;
+  }
+  std::string codecOrMime;
+  if (!ReadUtf8String(env, args[1], codecOrMime)) {
+    ThrowTypeError(env, "probeVideoDecoderSurface codecOrMime must be string");
+    return nullptr;
+  }
+
+  NativePlayerSkeletonState *statePtr = FindPlayerOrThrow(env, handle);
+  if (statePtr == nullptr) {
+    return nullptr;
+  }
+  const VideoDecoderSurfaceProbeResult probe = ProbeVideoDecoderSurfaceInternal(*statePtr, codecOrMime);
+
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    ThrowTypeError(env, "probeVideoDecoderSurface failed to create result object");
+    return nullptr;
+  }
+  napi_value success = CreateBoolean(env, probe.success);
+  napi_value stage = CreateString(env, probe.stage.c_str());
+  napi_value capabilityKnown = CreateBoolean(env, probe.capabilityKnown);
+  napi_value isHardware = CreateBoolean(env, probe.isHardware);
+  napi_value decoderName = CreateString(env, probe.decoderName.c_str());
+  napi_value mimeType = CreateString(env, probe.mimeType.c_str());
+  napi_value stateSummary = CreateString(env, probe.stateSummary.c_str());
+  napi_value errorMessage = CreateString(env, probe.errorMessage.c_str());
+  if (success == nullptr || stage == nullptr || capabilityKnown == nullptr || isHardware == nullptr ||
+      decoderName == nullptr || mimeType == nullptr || stateSummary == nullptr || errorMessage == nullptr) {
+    ThrowTypeError(env, "probeVideoDecoderSurface failed to create result fields");
+    return nullptr;
+  }
+  if (napi_set_named_property(env, result, "success", success) != napi_ok ||
+      napi_set_named_property(env, result, "stage", stage) != napi_ok ||
+      napi_set_named_property(env, result, "capabilityKnown", capabilityKnown) != napi_ok ||
+      napi_set_named_property(env, result, "isHardware", isHardware) != napi_ok ||
+      napi_set_named_property(env, result, "decoderName", decoderName) != napi_ok ||
+      napi_set_named_property(env, result, "mimeType", mimeType) != napi_ok ||
+      napi_set_named_property(env, result, "stateSummary", stateSummary) != napi_ok ||
+      napi_set_named_property(env, result, "errorMessage", errorMessage) != napi_ok) {
+    ThrowTypeError(env, "probeVideoDecoderSurface failed to set result fields");
+    return nullptr;
+  }
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -5067,7 +5484,9 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "webdavRequest", nullptr, WebdavRequest, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "downloadToFile", nullptr, DownloadToFile, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "queryVideoDecoderCapability", nullptr, QueryVideoDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "probeVideoDecoderSurface", nullptr, ProbeVideoDecoderSurface, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

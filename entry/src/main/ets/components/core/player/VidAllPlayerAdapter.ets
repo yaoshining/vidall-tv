@@ -18,6 +18,7 @@ interface NativeXComponentFallbackContext {
 }
 
 interface VidAllCorePlayerNapiBridge {
+  probeVideoDecoderSurface: (handle: number, codecOrMime: string) => VideoDecoderSurfaceProbeResult;
   createPlayer: () => number;
   setSource: (handle: number, url: string) => void;
   setDurationHint: (handle: number, durationMs: number) => void;
@@ -46,6 +47,17 @@ interface VidAllCorePlayerNapiBridge {
 
 interface VidAllCorePlayerNapiBridgeModule {
   default?: VidAllCorePlayerNapiBridge;
+}
+
+interface VideoDecoderSurfaceProbeResult {
+  success: boolean;
+  stage: string;
+  capabilityKnown: boolean;
+  isHardware: boolean;
+  decoderName: string;
+  mimeType: string;
+  stateSummary: string;
+  errorMessage: string;
 }
 
 const playerBridgeModule = VidAllCorePlayerNapiModule as VidAllCorePlayerNapiBridgeModule | VidAllCorePlayerNapiBridge | undefined;
@@ -133,6 +145,19 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._pendingContext = context;
     this._pendingXComponentId = xComponentId;
     await this.init(videoData, surfaceId);
+  }
+
+  async initSurfaceProbeContext(context: object, xComponentId: string): Promise<void> {
+    this._pendingContext = context;
+    this._pendingXComponentId = xComponentId;
+    await this.releaseInternal(false);
+    this._pendingContext = context;
+    this._pendingXComponentId = xComponentId;
+    this._surfaceId = xComponentId;
+    this._playerHandle = this.callNativeWithValue('createPlayer', () => VidAllCorePlayerNapi.createPlayer());
+    this.callNativeVoid('setXComponent', () => {
+      VidAllCorePlayerNapi.setXComponent(this._playerHandle, this._pendingContext as Object, this._pendingXComponentId);
+    });
   }
 
   async init(videoData: VideoData, surfaceId: string): Promise<void> {
@@ -753,6 +778,11 @@ export class VidAllPlayerAdapter implements IPlayer {
     });
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `selectTrack 原生调用完成: trackIndex=${trackIndex}`);
+  }
+
+  probeVideoDecoderSurface(codecOrMime: string): VideoDecoderSurfaceProbeResult {
+    return this.callNativeWithValue('probeVideoDecoderSurface', () =>
+      VidAllCorePlayerNapi.probeVideoDecoderSurface(this._playerHandle, codecOrMime));
   }
 
   setSubtitleDelay(_delayMs: number): void {

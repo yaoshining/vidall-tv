@@ -135,6 +135,7 @@ if(VIDALL_ENABLE_OH_AVPLAYER)
     libnative_media_core.so  # A4：OH_AVFormat_GetIntValue（avplayer new-style info callback）
     libnative_media_codecbase.so
     libnative_media_acodec.so
+    libnative_media_vdec.so
   )
 else()
   message(STATUS "VIDALL_ENABLE_OH_AVPLAYER=OFF — OH_AVPlayer C API disabled")

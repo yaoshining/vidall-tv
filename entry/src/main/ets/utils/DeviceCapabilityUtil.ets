@@ -4,6 +4,7 @@ import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 
 interface NativeCapabilityBridge {
   queryAudioDecoderCapability: (codecOrMime: string) => NativeAudioDecoderCapability;
+  queryVideoDecoderCapability: (codecOrMime: string) => NativeVideoDecoderCapability;
 }
 
 interface NativeCapabilityBridgeModule {
@@ -176,6 +177,33 @@ export interface NativeAudioDecoderCapability {
   errorMessage: string;
 }
 
+export interface NativeVideoDecoderCapability {
+  capabilityKnown: boolean;
+  supported: boolean;
+  isHardware: boolean;
+  maxWidth: number;
+  maxHeight: number;
+  minWidth: number;
+  minHeight: number;
+  maxFrameRate: number;
+  minFrameRate: number;
+  widthAlignment: number;
+  heightAlignment: number;
+  maxInstances: number;
+  decoderName: string;
+  mimeType: string;
+  errorMessage: string;
+}
+
+export interface NativeVideoCapabilitySummary {
+  codecLabel: string;
+  mimeType: string;
+  supported: boolean;
+  isHardware: boolean;
+  decoderName: string;
+  message: string;
+}
+
 // ─────────────────────────────────────────────
 // 工具类
 // ─────────────────────────────────────────────
@@ -184,6 +212,8 @@ export class DeviceCapabilityUtil {
   private static readonly TAG = '[DeviceCapability]';
   private static readonly nativeAudioCapabilityCache: Map<string, NativeAudioDecoderCapability> =
     new Map<string, NativeAudioDecoderCapability>();
+  private static readonly nativeVideoCapabilityCache: Map<string, NativeVideoDecoderCapability> =
+    new Map<string, NativeVideoDecoderCapability>();
 
   // ── 1. 静态规则查询 ──────────────────────────────────────────────
 
@@ -264,6 +294,42 @@ export class DeviceCapabilityUtil {
     return '';
   }
 
+  static normalizeVideoCodecToMime(codecOrMime: string): string {
+    const normalized = (codecOrMime ?? '').trim().toLowerCase();
+    if (normalized.length === 0) {
+      return '';
+    }
+    if (normalized.startsWith('video/')) {
+      return normalized;
+    }
+    if (normalized === 'h264' || normalized === 'h.264' || normalized === 'avc' || normalized === 'x264') {
+      return 'video/avc';
+    }
+    if (normalized === 'h265' || normalized === 'h.265' || normalized === 'hevc' || normalized === 'x265') {
+      return 'video/hevc';
+    }
+    if (normalized === 'av1' || normalized === 'av01') {
+      return 'video/av1';
+    }
+    if (normalized === 'vp9') {
+      return 'video/x-vnd.on2.vp9';
+    }
+    if (normalized === 'vp8') {
+      return 'video/x-vnd.on2.vp8';
+    }
+    if (normalized === 'mpeg4' || normalized === 'mp4v' || normalized === 'mp4v-es' ||
+      normalized === 'divx' || normalized === 'xvid') {
+      return 'video/mp4v-es';
+    }
+    if (normalized === 'mpeg2' || normalized === 'mpeg-2') {
+      return 'video/mpeg2';
+    }
+    if (normalized === 'vc1' || normalized === 'wvc1') {
+      return 'video/vc1';
+    }
+    return '';
+  }
+
   static queryNativeAudioDecoderCapability(codecOrMime: string): NativeAudioDecoderCapability {
     const normalizedKey = (codecOrMime ?? '').trim().toLowerCase();
     if (normalizedKey.length === 0) {
@@ -314,6 +380,125 @@ export class DeviceCapabilityUtil {
 
     DeviceCapabilityUtil.nativeAudioCapabilityCache.set(normalizedKey, result);
     return result;
+  }
+
+  static queryNativeVideoDecoderCapability(codecOrMime: string): NativeVideoDecoderCapability {
+    const normalizedKey = (codecOrMime ?? '').trim().toLowerCase();
+    if (normalizedKey.length === 0) {
+      const emptyResult: NativeVideoDecoderCapability = {
+        capabilityKnown: false,
+        supported: false,
+        isHardware: false,
+        maxWidth: 0,
+        maxHeight: 0,
+        minWidth: 0,
+        minHeight: 0,
+        maxFrameRate: 0,
+        minFrameRate: 0,
+        widthAlignment: 0,
+        heightAlignment: 0,
+        maxInstances: 0,
+        decoderName: '',
+        mimeType: '',
+        errorMessage: 'empty codec'
+      };
+      return emptyResult;
+    }
+
+    const cached = DeviceCapabilityUtil.nativeVideoCapabilityCache.get(normalizedKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    let result: NativeVideoDecoderCapability;
+    try {
+      const bridge = getNativeCapabilityBridge();
+      const nativeResult = bridge.queryVideoDecoderCapability(normalizedKey);
+      const typedResult: NativeVideoDecoderCapability = {
+        capabilityKnown: nativeResult.capabilityKnown,
+        supported: nativeResult.supported,
+        isHardware: nativeResult.isHardware,
+        maxWidth: nativeResult.maxWidth,
+        maxHeight: nativeResult.maxHeight,
+        minWidth: nativeResult.minWidth,
+        minHeight: nativeResult.minHeight,
+        maxFrameRate: nativeResult.maxFrameRate,
+        minFrameRate: nativeResult.minFrameRate,
+        widthAlignment: nativeResult.widthAlignment,
+        heightAlignment: nativeResult.heightAlignment,
+        maxInstances: nativeResult.maxInstances,
+        decoderName: nativeResult.decoderName,
+        mimeType: nativeResult.mimeType,
+        errorMessage: nativeResult.errorMessage
+      };
+      result = typedResult;
+    } catch (e) {
+      const err = e as BusinessError;
+      const fallback: NativeVideoDecoderCapability = {
+        capabilityKnown: false,
+        supported: false,
+        isHardware: false,
+        maxWidth: 0,
+        maxHeight: 0,
+        minWidth: 0,
+        minHeight: 0,
+        maxFrameRate: 0,
+        minFrameRate: 0,
+        widthAlignment: 0,
+        heightAlignment: 0,
+        maxInstances: 0,
+        decoderName: '',
+        mimeType: DeviceCapabilityUtil.normalizeVideoCodecToMime(normalizedKey),
+        errorMessage: err.message ?? JSON.stringify(err)
+      };
+      result = fallback;
+    }
+
+    DeviceCapabilityUtil.nativeVideoCapabilityCache.set(normalizedKey, result);
+    return result;
+  }
+
+  static buildNativeVideoCapabilitySummary(codecOrMime: string): NativeVideoCapabilitySummary {
+    const capability = DeviceCapabilityUtil.queryNativeVideoDecoderCapability(codecOrMime);
+    const normalizedMime = DeviceCapabilityUtil.normalizeVideoCodecToMime(codecOrMime);
+    const codecLabel = normalizedMime.length > 0
+      ? normalizedMime
+      : ((codecOrMime ?? '').trim().toLowerCase() || 'unknown');
+    let message = `视频能力: ${codecLabel} | `;
+    if (!capability.capabilityKnown) {
+      message += `未知 (${capability.errorMessage.length > 0 ? capability.errorMessage : '未建立映射'})`;
+    } else if (!capability.supported) {
+      message += '不支持';
+    } else {
+      message += capability.isHardware ? '硬解支持' : '仅软解支持';
+      if (capability.maxWidth > 0 && capability.maxHeight > 0) {
+        message += ` | 最大=${capability.maxWidth}x${capability.maxHeight}`;
+      }
+      if (capability.maxFrameRate > 0) {
+        message += ` | 最大帧率=${capability.maxFrameRate}`;
+      }
+      if (capability.decoderName.length > 0) {
+        message += ` | decoder=${capability.decoderName}`;
+      }
+    }
+    const summary: NativeVideoCapabilitySummary = {
+      codecLabel,
+      mimeType: capability.mimeType.length > 0 ? capability.mimeType : normalizedMime,
+      supported: capability.supported,
+      isHardware: capability.isHardware,
+      decoderName: capability.decoderName,
+      message
+    };
+    return summary;
+  }
+
+  static logNativeVideoDecoderCapabilityMatrix(): void {
+    console.info(`${DeviceCapabilityUtil.TAG} ===== Native 视频解码能力矩阵 =====`);
+    for (const entry of ALL_VIDEO_CODECS) {
+      const summary = DeviceCapabilityUtil.buildNativeVideoCapabilitySummary(entry.mime);
+      console.info(`${DeviceCapabilityUtil.TAG}   ${entry.key}: ${summary.message}`);
+    }
+    console.info(`${DeviceCapabilityUtil.TAG} ==================================`);
   }
 
   static logAllCodecSupport(): void {

@@ -88,6 +88,35 @@ export const queryAudioDecoderCapability: (codecOrMime: string) => {
   errorMessage: string;
 };
 
+export const queryVideoDecoderCapability: (codecOrMime: string) => {
+  capabilityKnown: boolean;
+  supported: boolean;
+  isHardware: boolean;
+  maxWidth: number;
+  maxHeight: number;
+  minWidth: number;
+  minHeight: number;
+  maxFrameRate: number;
+  minFrameRate: number;
+  widthAlignment: number;
+  heightAlignment: number;
+  maxInstances: number;
+  decoderName: string;
+  mimeType: string;
+  errorMessage: string;
+};
+
+export const probeVideoDecoderSurface: (handle: number, codecOrMime: string) => {
+  success: boolean;
+  stage: string;
+  capabilityKnown: boolean;
+  isHardware: boolean;
+  decoderName: string;
+  mimeType: string;
+  stateSummary: string;
+  errorMessage: string;
+};
+
 export const setCallbacks: (
   handle: number,
   onPrepared: () => void,

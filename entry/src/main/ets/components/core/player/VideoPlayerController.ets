@@ -192,6 +192,11 @@ export class VideoPlayerController {
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private nativeSubtitleMode: 'av' | 'external-only' = 'av';
   private currentVideoData?: VideoData;
+  private cachedNativeContext: object | null = null;
+  private cachedNativeXComponentId: string = '';
+  private cachedNativeProbeContext: object | null = null;
+  private cachedNativeProbeXComponentId: string = '';
+  private nativeSurfaceProbeRunning: boolean = false;
   private timeToSeek = -1
   private subtitleClearTimer?: number
   private subtitleRemainingTime: number = 0
@@ -1163,6 +1168,8 @@ export class VideoPlayerController {
       return;
     }
     const nativeAdapter = this.player as VidAllPlayerAdapter;
+    this.cachedNativeContext = context;
+    this.cachedNativeXComponentId = xComponentId;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
     this.startNativeReadyGuard(this.playbackSessionId);
@@ -1183,6 +1190,128 @@ export class VideoPlayerController {
         this.fallbackNativeToIjk('native_init_error', 'native 初始化失败，已自动回退到 IJK 播放', err.message);
       }
     }
+  }
+
+  setNativeProbeContext(context: object, xComponentId: string): void {
+    this.cachedNativeProbeContext = context;
+    this.cachedNativeProbeXComponentId = xComponentId;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `setNativeProbeContext: 已缓存 probe XComponent id=${xComponentId}`);
+  }
+
+  async runExclusiveNativeVideoDecoderSurfaceProbes(codecOrMimes: string[]): Promise<string[]> {
+    const summaries: string[] = [];
+    if (this.nativeSurfaceProbeRunning) {
+      const busySummary = 'surface probe 正在执行中';
+      this.lastErrorMessage = busySummary;
+      summaries.push(busySummary);
+      return summaries;
+    }
+    if (this.backend !== 'native') {
+      const summary = 'surface probe 仅支持 native 后端';
+      this.lastErrorMessage = summary;
+      summaries.push(summary);
+      return summaries;
+    }
+    if (!this.currentVideoData) {
+      const summary = 'surface probe 缺少当前视频数据';
+      this.lastErrorMessage = summary;
+      summaries.push(summary);
+      return summaries;
+    }
+    if (this.cachedNativeProbeContext !== null && this.cachedNativeProbeXComponentId.length > 0) {
+      const probeContext = this.cachedNativeProbeContext;
+      const probeXComponentId = this.cachedNativeProbeXComponentId;
+      const tempAdapter = new VidAllPlayerAdapter();
+      this.nativeSurfaceProbeRunning = true;
+      try {
+        await tempAdapter.initSurfaceProbeContext(probeContext, probeXComponentId);
+        for (let i = 0; i < codecOrMimes.length; i++) {
+          const codec = codecOrMimes[i];
+          try {
+            const result = tempAdapter.probeVideoDecoderSurface(codec);
+            const decoder = result.decoderName.length > 0 ? result.decoderName : 'unknown';
+            const summary = result.success
+              ? `${codec}: 专用 probe surface 成功 (${decoder})`
+              : `${codec}: 专用 probe surface 失败 stage=${result.stage} err=${result.errorMessage} state=${result.stateSummary}`;
+            summaries.push(summary);
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe-dedicated] ${summary}`);
+          } catch (e) {
+            const message = this.safeErrorMessage(e);
+            const summary = `${codec}: 专用 probe surface 异常 ${message}`;
+            summaries.push(summary);
+            hilog.error(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe-dedicated] ${summary}`);
+          }
+        }
+      } finally {
+        await tempAdapter.release().catch(() => {});
+        this.nativeSurfaceProbeRunning = false;
+      }
+      this.lastErrorMessage = summaries.length > 0 ? summaries[summaries.length - 1] : 'surface probe 已完成';
+      return summaries;
+    }
+    if (this.cachedNativeContext === null || this.cachedNativeXComponentId.length === 0) {
+      const summary = 'surface probe 缺少 XComponent 上下文';
+      this.lastErrorMessage = summary;
+      summaries.push(summary);
+      return summaries;
+    }
+
+    const resumePositionMs = this.currentTime;
+    const shouldResumePlaying = this.isPlaying;
+    const probeVideoData = this.currentVideoData;
+    const probeSurfaceId = this.surfaceId;
+    const probeContext = this.cachedNativeContext;
+    const probeXComponentId = this.cachedNativeXComponentId;
+    const tempAdapter = new VidAllPlayerAdapter();
+    this.nativeSurfaceProbeRunning = true;
+    this.isLoading = true;
+    this.stopProgressTimer();
+    this.pauseSubtitleTimer();
+    this.saveProgressNow();
+
+    try {
+      this.subtitleAdapter.release();
+      if (this.player) {
+        await this.player.release().catch(() => {});
+        this.player = undefined;
+      }
+      await tempAdapter.initSurfaceProbeContext(probeContext, probeXComponentId);
+      for (let i = 0; i < codecOrMimes.length; i++) {
+        const codec = codecOrMimes[i];
+        try {
+          const result = tempAdapter.probeVideoDecoderSurface(codec);
+          const decoder = result.decoderName.length > 0 ? result.decoderName : 'unknown';
+          const summary = result.success
+            ? `${codec}: 独占 surface probe 成功 (${decoder})`
+            : `${codec}: 独占 surface probe 失败 stage=${result.stage} err=${result.errorMessage} state=${result.stateSummary}`;
+          summaries.push(summary);
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe-exclusive] ${summary}`);
+        } catch (e) {
+          const message = this.safeErrorMessage(e);
+          const summary = `${codec}: 独占 surface probe 异常 ${message}`;
+          summaries.push(summary);
+          hilog.error(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe-exclusive] ${summary}`);
+        }
+      }
+    } finally {
+      await tempAdapter.release().catch(() => {});
+      try {
+        this.pendingBackendResumeTimeMs = resumePositionMs > 0 ? resumePositionMs : -1;
+        this.pendingBackendResumePlay = shouldResumePlaying;
+        await this.initPlayer(probeVideoData, probeSurfaceId);
+        await this.setNativeContext(probeContext, probeXComponentId);
+      } catch (e) {
+        const restoreSummary = `surface probe 恢复播放失败: ${this.safeErrorMessage(e)}`;
+        summaries.push(restoreSummary);
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe-exclusive] ${restoreSummary}`);
+      }
+      this.nativeSurfaceProbeRunning = false;
+      this.isLoading = false;
+    }
+
+    this.lastErrorMessage = summaries.length > 0 ? summaries[summaries.length - 1] : 'surface probe 已完成';
+    return summaries;
   }
 
   setNativeSeekDiagLogEnabled(enabled: boolean): void {
@@ -2284,6 +2413,28 @@ export class VideoPlayerController {
       return '';
     }
     return '当前为 native/FFmpeg 子路径：音轨切换与内嵌字幕切换暂不支持';
+  }
+
+  runNativeVideoDecoderSurfaceProbe(codecOrMime: string): string {
+    if (!(this.player instanceof VidAllPlayerAdapter)) {
+      return `${codecOrMime}: 当前不是 native 后端`;
+    }
+    try {
+      const result = this.player.probeVideoDecoderSurface(codecOrMime);
+      const decoder = result.decoderName.length > 0 ? result.decoderName : 'unknown';
+      const summary = result.success
+        ? `${codecOrMime}: surface probe 成功 (${decoder})`
+        : `${codecOrMime}: surface probe 失败 stage=${result.stage} err=${result.errorMessage} state=${result.stateSummary}`;
+      this.lastErrorMessage = summary;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe] ${summary}`);
+      return summary;
+    } catch (e) {
+      const message = this.safeErrorMessage(e);
+      const summary = `${codecOrMime}: surface probe 异常 ${message}`;
+      this.lastErrorMessage = summary;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, `[surface-probe] ${summary}`);
+      return summary;
+    }
   }
 
   private isNativeFfmpegPathActive(): boolean {
