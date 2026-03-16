@@ -109,6 +109,10 @@ export class VidAllPlayerAdapter implements IPlayer {
     return this._currentTime;
   }
 
+  isUsingFfmpegPath(): boolean {
+    return this._usingFfmpegPath;
+  }
+
   setPendingContext(context: object, xComponentId: string): void {
     this._pendingContext = context;
     this._pendingXComponentId = xComponentId;
@@ -738,6 +742,11 @@ export class VidAllPlayerAdapter implements IPlayer {
       const err = new Error(`轨道索引非法: ${trackIndex}`);
       this._onErrorCb?.(err);
       throw err;
+    }
+    if (this._usingFfmpegPath) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `selectTrack(${trackIndex}) 已跳过：native/FFmpeg 子路径暂不支持运行时切轨`);
+      return;
     }
     this.callNativeVoid('selectTrack', () => {
       VidAllCorePlayerNapi.selectTrack(this._playerHandle, trackIndex);

@@ -8,10 +8,15 @@ import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
+import { VidAllPlayerAdapter } from './VidAllPlayerAdapter';
 
 const TAG = '[SubtitleBridgeAdapter]';
 const MAX_SUBTITLE_PROBE_CANDIDATES = 12;
 const SUBTITLE_PROBE_BATCH_SIZE = 4;
+
+function isNativeFfmpegTrackSelectionUnavailable(player: IPlayer | undefined): boolean {
+  return player instanceof VidAllPlayerAdapter && player.isUsingFfmpegPath();
+}
 
 function tryDecode(bytes: Uint8Array, encoding: string): string {
   const decoder = new util.TextDecoder(encoding);
@@ -422,7 +427,9 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       this.srtEntries = [];
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
-      await this.player.selectTrack(-1);
+      if (!isNativeFfmpegTrackSelectionUnavailable(this.player)) {
+        await this.player.selectTrack(-1);
+      }
       return;
     }
 
@@ -430,19 +437,28 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       return;
     }
 
-    this.activeSubtitleIndex = allIndex;
-    this.currentSubtitleText = '';
-
     const target = this.allSubtitleTracks[allIndex];
     if (target.kind === 'external') {
+      this.activeSubtitleIndex = allIndex;
+      this.currentSubtitleText = '';
       const entries = target.srtEntries ?? [];
       this.srtEntries = entries;
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
-      await this.player.selectTrack(-1);
+      if (!isNativeFfmpegTrackSelectionUnavailable(this.player)) {
+        await this.player.selectTrack(-1);
+      }
       return;
     }
 
+    if (isNativeFfmpegTrackSelectionUnavailable(this.player)) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[switchTrack] native/FFmpeg 子路径暂不支持内嵌字幕切换，忽略 allIndex=${allIndex}`);
+      return;
+    }
+
+    this.activeSubtitleIndex = allIndex;
+    this.currentSubtitleText = '';
     this.srtEntries = [];
     this.lastSrtText = '';
     const internalIndex = target.internalIndex ?? -1;

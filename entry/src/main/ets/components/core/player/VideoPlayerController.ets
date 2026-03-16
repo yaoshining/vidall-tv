@@ -2002,8 +2002,10 @@ export class VideoPlayerController {
       if (this.audioTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，直接选择默认轨道`);
-        if (this.backend === 'ffmpeg') {
+        if (this.backend === 'ffmpeg' || this.isNativeFfmpegPathActive()) {
           this.activeAudioIndex = 0;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            '[loadAudioTracks] FFmpeg 路径维持当前默认音轨，不触发原生 selectTrack');
         } else {
           await this.switchAudioTrack(0);
         }
@@ -2034,8 +2036,10 @@ export class VideoPlayerController {
       this.audioTracks = tracks;
 
       if (this.audioTracks.length > 0) {
-        if (this.backend === 'ffmpeg') {
+        if (this.backend === 'ffmpeg' || this.isNativeFfmpegPathActive()) {
           this.activeAudioIndex = 0;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            '[loadAudioTracks] FFmpeg 路径维持当前默认音轨，不触发原生 selectTrack');
         } else {
           await this.switchAudioTrack(0);
         }
@@ -2192,6 +2196,15 @@ export class VideoPlayerController {
       return;
     }
 
+    if (this.isNativeFfmpegPathActive()) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[switchAudioTrack] native/FFmpeg 子路径暂不支持运行时切换音轨，忽略 index=${trackIndex}`);
+      if (this.activeAudioIndex < 0) {
+        this.activeAudioIndex = 0;
+      }
+      return;
+    }
+
     // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
@@ -2240,6 +2253,43 @@ export class VideoPlayerController {
         await this.player.play().catch(() => {});
       }
     }
+  }
+
+  isNativeRuntimeTrackSwitchUnsupported(): boolean {
+    return this.isNativeFfmpegPathActive();
+  }
+
+  canSwitchAudioTrack(trackIndex: number): boolean {
+    if (!this.isNativeFfmpegPathActive()) {
+      return true;
+    }
+    return trackIndex === this.activeAudioIndex;
+  }
+
+  canSwitchSubtitleTrack(allIndex: number): boolean {
+    if (!this.isNativeFfmpegPathActive()) {
+      return true;
+    }
+    if (allIndex < 0) {
+      return true;
+    }
+    if (allIndex >= this.allSubtitleTracks.length) {
+      return false;
+    }
+    return this.allSubtitleTracks[allIndex].kind === 'external';
+  }
+
+  getRuntimeTrackSwitchHint(): string {
+    if (!this.isNativeFfmpegPathActive()) {
+      return '';
+    }
+    return '当前为 native/FFmpeg 子路径：音轨切换与内嵌字幕切换暂不支持';
+  }
+
+  private isNativeFfmpegPathActive(): boolean {
+    return this.backend === 'native' &&
+      this.player instanceof VidAllPlayerAdapter &&
+      this.player.isUsingFfmpegPath();
   }
 
   // ─────────────────────────────────────────────

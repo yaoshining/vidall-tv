@@ -68,13 +68,20 @@ struct VideoControls {
   @Builder
   SubtitleMenu() {
     Column() {
+      if (this.videoController.isNativeRuntimeTrackSwitchUnsupported()) {
+        Text(this.videoController.getRuntimeTrackSwitchHint())
+          .fontSize(12)
+          .fontColor('#97A9CD')
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 8, bottom: 6 })
+      }
       List() {
         // 关闭字幕
         ListItem() {
           Row() {
             Text('关闭字幕')
               .fontSize(16)
-              .fontColor(Color.White)
+              .fontColor(this.videoController.canSwitchSubtitleTrack(-1) ? Color.White : '#7F8EA8')
             if (this.videoController.activeSubtitleIndex === -1) {
               SymbolGlyph($r('sys.symbol.checkmark'))
                 .fontColor([Color.White])
@@ -87,6 +94,9 @@ struct VideoControls {
           .padding({ left: 20, right: 20 })
         }
         .onClick(() => {
+          if (!this.videoController.canSwitchSubtitleTrack(-1)) {
+            return
+          }
           this.videoController.switchSubtitleTrack(-1)
           this.showSubtitleMenu = false
           this.enableAutoHide()
@@ -99,7 +109,7 @@ struct VideoControls {
               Column({ space: 2 }) {
                 Text(item.displayName)
                   .fontSize(16)
-                  .fontColor(Color.White)
+                  .fontColor(this.videoController.canSwitchSubtitleTrack(index) ? Color.White : '#7F8EA8')
                 if (item.kind === 'external') {
                   Text('外部文件')
                     .fontSize(11)
@@ -120,6 +130,9 @@ struct VideoControls {
             .padding({ left: 20, right: 20 })
           }
           .onClick(() => {
+            if (!this.videoController.canSwitchSubtitleTrack(index)) {
+              return
+            }
             this.videoController.switchSubtitleTrack(index)
             this.showSubtitleMenu = false
             this.enableAutoHide()
@@ -197,13 +210,20 @@ struct VideoControls {
   @Builder
   AudioMenu() {
     Column() {
+      if (this.videoController.isNativeRuntimeTrackSwitchUnsupported()) {
+        Text(this.videoController.getRuntimeTrackSwitchHint())
+          .fontSize(12)
+          .fontColor('#97A9CD')
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 8, bottom: 6 })
+      }
       List() {
         ForEach(this.videoController.audioTracks, (item: AudioTrackItem, index: number) => {
           ListItem() {
             Row() {
               Text(item.displayName)
                 .fontSize(16)
-                .fontColor(Color.White)
+                .fontColor(this.videoController.canSwitchAudioTrack(index) ? Color.White : '#7F8EA8')
               if (this.videoController.activeAudioIndex === index) {
                 SymbolGlyph($r('sys.symbol.checkmark'))
                   .fontColor([Color.White])
@@ -216,6 +236,9 @@ struct VideoControls {
             .padding({ left: 20, right: 20 })
           }
           .onClick(() => {
+            if (!this.videoController.canSwitchAudioTrack(index)) {
+              return
+            }
             this.videoController.switchAudioTrack(index)
             this.showAudioMenu = false
             // forceStart=true：切换后不管当前 isPlaying 状态（switchAudioTrack 内部会 pause）
@@ -830,7 +853,7 @@ export struct SubtitleSelectorDrawerDialog {
           Row() {
             Text('关闭字幕')
               .fontSize(18)
-              .fontColor('#DDE4EE')
+              .fontColor(this.videoController.canSwitchSubtitleTrack(-1) ? '#DDE4EE' : '#7F8EA8')
           }
           .height(48)
           .padding({ left: 18, right: 18 })
@@ -840,6 +863,9 @@ export struct SubtitleSelectorDrawerDialog {
           .borderRadius(24)
           .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
           .onClick(() => {
+            if (!this.videoController.canSwitchSubtitleTrack(-1)) {
+              return
+            }
             this.videoController.switchSubtitleTrack(-1)
           })
 
@@ -863,6 +889,11 @@ export struct SubtitleSelectorDrawerDialog {
           .color('rgba(255, 255, 255, 0.15)')
 
         Column({ space: 8 }) {
+          if (this.videoController.isNativeRuntimeTrackSwitchUnsupported()) {
+            Text(this.videoController.getRuntimeTrackSwitchHint())
+              .fontSize(14)
+              .fontColor('#97A9CD')
+          }
           Text(`其他可用字幕 (${this.getAvailableSubtitleCount()})`)
             .fontSize(17)
             .fontColor('#97A9CD')
@@ -887,7 +918,7 @@ export struct SubtitleSelectorDrawerDialog {
 
                     Text(item.displayName)
                       .fontSize(17)
-                      .fontColor('#EAF0F7')
+                      .fontColor(this.videoController.canSwitchSubtitleTrack(index) ? '#EAF0F7' : '#7F8EA8')
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .layoutWeight(1)
@@ -905,6 +936,9 @@ export struct SubtitleSelectorDrawerDialog {
                   .backgroundColor('rgba(255, 255, 255, 0.05)')
                   .borderRadius(14)
                   .onClick(() => {
+                    if (!this.videoController.canSwitchSubtitleTrack(index)) {
+                      return
+                    }
                     this.videoController.switchSubtitleTrack(index)
                   })
                 }
