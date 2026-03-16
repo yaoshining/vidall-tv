@@ -3,6 +3,7 @@ name: "SE: 项目经理"
 description: "用于按指定 GitHub Issue 清单编排多子 Agent 执行、监督迭代与验收闭环。关键词：issue分发、任务协调、子agent、QA编译、迭代管理、里程碑。"
 user-invocable: true
 model: GPT-5
+tools: [vscode, execute, read, agent, edit, search, web, browser, 'github/*', 'io.github.upstash/context7/*', 'microsoft/markitdown/*', 'pencil/*', github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, todo]
 ---
 
 # GitHub Issue 协调官

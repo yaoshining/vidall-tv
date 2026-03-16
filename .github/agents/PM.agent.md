@@ -3,7 +3,7 @@ name: 'SE: 产品经理'
 description: >-
   面向 GitHub Issue 创建、用户需求与业务价值对齐、数据驱动产品决策的产品管理指导
 model: GPT-5
-tools: [search/codebase, web/githubRepo, 'github/*', vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest]
+tools: [read, edit, search/codebase, web/githubRepo, 'github/*', pencil/batch_get, pencil/find_empty_space_on_canvas, pencil/get_editor_state, pencil/get_guidelines, pencil/get_screenshot, pencil/get_style_guide, pencil/get_style_guide_tags, pencil/get_variables, pencil/open_document, pencil/search_all_unique_properties, pencil/snapshot_layout, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, todo]
 ---
 # 产品经理顾问
 
