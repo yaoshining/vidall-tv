@@ -37,6 +37,11 @@ struct VideoControls {
     return `${mm}:${ss}`
   }
 
+  /** tooltip 宽度（vp）：时长 ≥ 1 小时时使用 136 以容纳 hh:mm:ss，否则 100 */
+  private tooltipWidthVp(): number {
+    return this.videoController.duration >= 3600000 ? 136 : 100
+  }
+
   @Builder
   SliderTooltip() {
     Text(this.formatTime(this.hoverTimeMs))
@@ -44,16 +49,17 @@ struct VideoControls {
       .fontColor(Color.White)
       .fontWeight(FontWeight.Medium)
       .textAlign(TextAlign.Center)
+      .maxLines(1)
       .padding({ left: 14, right: 14, top: 7, bottom: 7 })
       .backgroundColor('#CC000000')
       .borderRadius(8)
-      .width(100)
+      .width(this.tooltipWidthVp())
       .position({ x: this.getTooltipOffsetX(), y: 0 })
   }
 
   /** 计算 tooltip 左边距：按当前时间比例居中对齐，并限制不超出两端 */
   private getTooltipOffsetX(): number {
-    const TOOLTIP_W = 100   // 与 SliderTooltip 的 .width(100) 保持一致
+    const TOOLTIP_W = this.tooltipWidthVp()
     if (this.sliderWidth <= 0 || this.videoController.duration <= 0) {
       return 0
     }
