@@ -704,8 +704,9 @@ export class VidAllPlayerAdapter implements IPlayer {
             preferredBufferDuration: 3,
             preferredHdr: true
           };
+          const sanitizedUrl = this.sanitizeProbeUrlForLog(encodedUrl);
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `probeTrackInfos 使用编码 URL 探测轨道: ${encodedUrl}`);
+            `probeTrackInfos 使用编码 URL 探测轨道: ${sanitizedUrl}`);
           try {
             player.setMediaSource(mediaSource, playbackStrategy);
           } catch (e) {
@@ -774,6 +775,11 @@ export class VidAllPlayerAdapter implements IPlayer {
       safeHeaders[key] = headers[key];
     }
     return JSON.stringify(safeHeaders);
+  }
+
+  private sanitizeProbeUrlForLog(rawUrl: string): string {
+    const withoutCredential = rawUrl.replace(/\/\/([^\/@]+)@/, '//***@');
+    return withoutCredential.replace(/[?#].*$/, '');
   }
 
   /**

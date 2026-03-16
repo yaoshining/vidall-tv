@@ -38,22 +38,21 @@ target_include_directories(vidall_core_player_napi PRIVATE
 
 # ---------------------------------------------------------------------------
 # B1：FFmpeg demux/decode 路径编译开关
-# 默认 ON；可通过 cmake -DVIDALL_ENABLE_FFMPEG=OFF 关闭（仅保留 OH_AVPlayer 路径）。
+# 默认 ON；当前 OFF 仅关闭编译期标记，不承诺完全裁剪 EGL/GLES/OH_Audio 依赖。
+# 为避免 OFF 配置下出现未解析符号，系统图形/音频库仍保持链接。
 # ---------------------------------------------------------------------------
 option(VIDALL_ENABLE_FFMPEG "Enable FFmpeg demux/decode path" ON)
+target_link_libraries(vidall_core_player_napi PRIVATE
+    libEGL.so
+    libGLESv2.so
+    libohaudio.so
+)
 if(VIDALL_ENABLE_FFMPEG)
     target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_ENABLE_FFMPEG=1)
     message(STATUS "VIDALL_ENABLE_FFMPEG=ON — FFmpeg demux path enabled")
-    # B3：OpenGL ES YUV 渲染管线需要 EGL 上下文与 GLES2 库
-    # B4：OH_AudioRenderer PCM 送显需要 libohaudio
-    target_link_libraries(vidall_core_player_napi PRIVATE
-        libEGL.so      # EGL 上下文（创建 window surface / context）
-        libGLESv2.so   # OpenGL ES 2.0（shader / texture / draw）
-        libohaudio.so  # B4：OH_AudioRenderer（PCM 音频送显）
-    )
 else()
     target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_ENABLE_FFMPEG=0)
-    message(STATUS "VIDALL_ENABLE_FFMPEG=OFF — FFmpeg demux path disabled")
+    message(STATUS "VIDALL_ENABLE_FFMPEG=OFF — FFmpeg demux path compile flag disabled, runtime dependencies still linked")
 endif()
 
 # ---------------------------------------------------------------------------

@@ -1671,14 +1671,14 @@ export class VideoPlayerController {
       `systemSupported=${decision.systemSupported}, capabilityKnown=${decision.capabilityKnown}, ` +
       `decoder=${decision.decoderName.length > 0 ? decision.decoderName : 'unknown'}, ` +
       `decoderIsHardware=${decision.decoderIsHardware}, capabilityMime=${decision.capabilityMime.length > 0 ? decision.capabilityMime : 'unknown'}, ` +
-      `maxChannels=${decision.maxSupportedChannels}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
+      `maxChannels=${decision.maxSupportedChannels}, route=${this.backend}, fallback=${decision.fallback}, ` +
       `decodePlan=${currentDecodePlan}, videoCodec=${videoCodecLabel}, videoCapability=${videoCapabilityLabel}, videoDecode=${videoDecodeLabel}; ` +
       `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
 
     this.audioCapabilityText =
       `音频能力: 检测=${decision.detectedCodec} ${channelTag} | ` +
       `系统支持=${decision.systemSupported ? '是' : '否'} | ` +
-      `当前路由=${decision.preferredBackend} | ` +
+      `当前路由=${this.backend} | ` +
       `软解兜底=${decision.fallback} | ` +
       `视频信息=${videoCodecLabel}（${videoCapabilityLabel}） | 当前实际=${videoDecodeLabel}`;
 
@@ -1710,9 +1710,9 @@ export class VideoPlayerController {
       return '具备硬解能力';
     }
     if (capability.supported) {
-      return '具备解码能力';
+      return '仅软解支持';
     }
-    return '不具备硬解能力';
+    return '不支持';
   }
 
   private getCurrentVideoDecodeLabel(): string {
@@ -1725,13 +1725,8 @@ export class VideoPlayerController {
     if (this.backend === 'ijkplayer') {
       return '软解';
     }
-
-    const nativePlan = this.latestPlaybackPlan?.nativeVideoPlan;
-    if (nativePlan === 'native_ffmpeg_only') {
+    if (this.backend === 'ffmpeg') {
       return '软解';
-    }
-    if (nativePlan === 'native_hw_preferred') {
-      return '硬解';
     }
     return '系统解码';
   }
