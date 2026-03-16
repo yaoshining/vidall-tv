@@ -6,6 +6,8 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <cctype>
+#include <algorithm>
 #include <mutex>
 #include <thread>
 #include <queue>
@@ -17,6 +19,7 @@
 #include <native_buffer/native_buffer.h>
 #include <native_window/external_window.h>
 #include <multimedia/player_framework/avplayer.h>
+#include <multimedia/player_framework/native_avcapability.h>
 #include <multimedia/player_framework/native_avformat.h>
 #include <hilog/log.h>
 
@@ -63,6 +66,8 @@ extern "C" {
 #include <ohaudio/native_audiorenderer.h>
 
 namespace {
+
+constexpr bool kEnableNativeSubtitleDiagLog = false;
 
 static void ThrowTypeError(napi_env env, const char *message);
 static bool ReadUtf8String(napi_env env, napi_value value, std::string &output);
@@ -992,6 +997,14 @@ static napi_value CreateInt64(napi_env env, int64_t value) {
 static napi_value CreateUint32(napi_env env, uint32_t value) {
   napi_value result = nullptr;
   if (napi_create_uint32(env, value, &result) != napi_ok) {
+    return nullptr;
+  }
+  return result;
+}
+
+static napi_value CreateString(napi_env env, const char *value) {
+  napi_value result = nullptr;
+  if (napi_create_string_utf8(env, value, NAPI_AUTO_LENGTH, &result) != napi_ok) {
     return nullptr;
   }
   return result;
@@ -3456,18 +3469,32 @@ static void OnAVPlayerInfoCB(OH_AVPlayer *player, AVPlayerOnInfoType type,
       int64_t durationMs = 0;
       int32_t startTimeInt = 0;
       int32_t durationInt = 0;
-      if (OH_AVFormat_GetStringValue(infoBody, "text", &text) && text != nullptr) {
+      if ((OH_AVFormat_GetStringValue(infoBody, "subtitle_text", &text) ||
+           OH_AVFormat_GetStringValue(infoBody, "text", &text)) && text != nullptr) {
         subtitleData->text = new std::string(text);
       }
-      if (OH_AVFormat_GetLongValue(infoBody, "startTime", &startTimeMs)) {
+      if (OH_AVFormat_GetLongValue(infoBody, "subtitle_pts", &startTimeMs) ||
+          OH_AVFormat_GetLongValue(infoBody, "startTime", &startTimeMs)) {
         subtitleData->startTimeMs = startTimeMs;
-      } else if (OH_AVFormat_GetIntValue(infoBody, "startTime", &startTimeInt)) {
+      } else if (OH_AVFormat_GetIntValue(infoBody, "subtitle_pts", &startTimeInt) ||
+                 OH_AVFormat_GetIntValue(infoBody, "startTime", &startTimeInt)) {
         subtitleData->startTimeMs = static_cast<int64_t>(startTimeInt);
       }
-      if (OH_AVFormat_GetLongValue(infoBody, "duration", &durationMs)) {
+      if (OH_AVFormat_GetLongValue(infoBody, "subtitle_duration", &durationMs) ||
+          OH_AVFormat_GetLongValue(infoBody, "duration", &durationMs)) {
         subtitleData->durationMs = durationMs;
-      } else if (OH_AVFormat_GetIntValue(infoBody, "duration", &durationInt)) {
+      } else if (OH_AVFormat_GetIntValue(infoBody, "subtitle_duration", &durationInt) ||
+                 OH_AVFormat_GetIntValue(infoBody, "duration", &durationInt)) {
         subtitleData->durationMs = static_cast<int64_t>(durationInt);
+      }
+      if (kEnableNativeSubtitleDiagLog) {
+        const char *dumpInfo = OH_AVFormat_DumpInfo(infoBody);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "SubtitleUpdate: text=%{public}s start=%{public}lld duration=%{public}lld dump=%{public}s",
+                     subtitleData->text != nullptr ? subtitleData->text->c_str() : "(null)",
+                     static_cast<long long>(subtitleData->startTimeMs),
+                     static_cast<long long>(subtitleData->durationMs),
+                     dumpInfo != nullptr ? dumpInfo : "(null)");
       }
       napi_call_threadsafe_function(state->tsfOnSubtitleUpdate, subtitleData, napi_tsfn_nonblocking);
       break;
@@ -4313,19 +4340,23 @@ static napi_value SelectTrack(napi_env env, napi_callback_info info) {
   if (wasPlaying) {
     OH_AVPlayer_Pause(avPlayer);
   }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "SelectTrack: previous=%{public}d target=%{public}d wasPlaying=%{public}d",
+               previousTrackIndex, trackIndex, wasPlaying ? 1 : 0);
 
   OH_AVErrCode rc = AV_ERR_OK;
   if (trackIndex >= 0) {
     rc = OH_AVPlayer_SelectTrack(avPlayer, trackIndex);
-  } else if (previousTrackIndex >= 0) {
-    rc = OH_AVPlayer_DeselectTrack(avPlayer, previousTrackIndex);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "SelectTrack: select target=%{public}d rc=%{public}d",
+                 trackIndex, static_cast<int32_t>(rc));
   }
 
   if (rc != AV_ERR_OK) {
     if (wasPlaying) {
       OH_AVPlayer_Play(avPlayer);
     }
-    EmitError(state, ERR_SELECT_TRACK_FAILED, "selectTrack failed: OH_AVPlayer_SelectTrack/DeselectTrack returned error");
+    EmitError(state, ERR_SELECT_TRACK_FAILED, "selectTrack failed: OH_AVPlayer_SelectTrack returned error");
     return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
   }
 
@@ -4842,6 +4873,179 @@ static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
   return result;
 }
 
+struct AudioDecoderCapabilityResult {
+  bool capabilityKnown = false;
+  bool supported = false;
+  bool isHardware = false;
+  int32_t maxChannels = 0;
+  std::string decoderName;
+  std::string mimeType;
+  std::string errorMessage;
+};
+
+static std::string ToLowerString(const std::string &value) {
+  std::string result = value;
+  std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return result;
+}
+
+static std::vector<std::string> BuildAudioMimeCandidates(const std::string &codecOrMime) {
+  const std::string normalized = ToLowerString(codecOrMime);
+  if (normalized.empty()) {
+    return {};
+  }
+
+  std::vector<std::string> candidates;
+  auto pushUnique = [&candidates](const std::string &candidate) {
+    if (candidate.empty()) {
+      return;
+    }
+    if (std::find(candidates.begin(), candidates.end(), candidate) == candidates.end()) {
+      candidates.push_back(candidate);
+    }
+  };
+
+  if (normalized.rfind("audio/", 0) == 0) {
+    pushUnique(normalized);
+  }
+
+  if (normalized == "aac" || normalized == "mp4a" || normalized == "mp4a-latm") {
+    pushUnique("audio/mp4a-latm");
+  } else if (normalized == "mp3" || normalized == "mpeg" || normalized == "mpga") {
+    pushUnique("audio/mpeg");
+  } else if (normalized == "flac") {
+    pushUnique("audio/flac");
+  } else if (normalized == "vorbis") {
+    pushUnique("audio/vorbis");
+  } else if (normalized == "opus") {
+    pushUnique("audio/opus");
+  } else if (normalized == "pcm" || normalized == "pcm_s16le" || normalized == "pcm_s24le" ||
+             normalized == "pcm_s32le" || normalized == "audio/raw") {
+    pushUnique("audio/raw");
+  } else if (normalized == "ac3" || normalized == "ac-3") {
+    pushUnique("audio/ac3");
+  } else if (normalized == "eac3" || normalized == "e-ac-3") {
+    pushUnique("audio/eac3");
+  } else if (normalized == "dts") {
+    pushUnique("audio/vnd.dts");
+  } else if (normalized == "dtshd" || normalized == "dts-hd" || normalized == "dts_hd") {
+    pushUnique("audio/vnd.dts.hd");
+  } else if (normalized == "truehd" || normalized == "true-hd") {
+    pushUnique("audio/truehd");
+  } else if (normalized == "ape") {
+    pushUnique("audio/ape");
+  } else if (normalized == "alac") {
+    pushUnique("audio/alac");
+  } else if (normalized == "vivid" || normalized == "audio vivid") {
+    pushUnique("audio/audio-vivid");
+  }
+
+  return candidates;
+}
+
+static AudioDecoderCapabilityResult QueryAudioDecoderCapabilityInternal(const std::string &codecOrMime) {
+  AudioDecoderCapabilityResult result;
+  const std::vector<std::string> mimeCandidates = BuildAudioMimeCandidates(codecOrMime);
+  if (mimeCandidates.empty()) {
+    result.errorMessage = "unsupported codec mapping";
+    return result;
+  }
+
+  result.capabilityKnown = true;
+  result.mimeType = mimeCandidates.front();
+
+  for (const std::string &mime : mimeCandidates) {
+    OH_AVCapability *capability = OH_AVCodec_GetCapabilityByCategory(mime.c_str(), false, HARDWARE);
+    bool isHardware = true;
+    if (capability == nullptr) {
+      capability = OH_AVCodec_GetCapabilityByCategory(mime.c_str(), false, SOFTWARE);
+      isHardware = false;
+    }
+    if (capability == nullptr) {
+      capability = OH_AVCodec_GetCapability(mime.c_str(), false);
+      if (capability != nullptr) {
+        isHardware = OH_AVCapability_IsHardware(capability);
+      }
+    }
+    if (capability == nullptr) {
+      continue;
+    }
+
+    result.supported = true;
+    result.isHardware = isHardware;
+    result.mimeType = mime;
+
+    const char *decoderName = OH_AVCapability_GetName(capability);
+    if (decoderName != nullptr) {
+      result.decoderName = decoderName;
+    }
+
+    OH_AVRange channelRange;
+    channelRange.minVal = 0;
+    channelRange.maxVal = 0;
+    if (OH_AVCapability_GetAudioChannelCountRange(capability, &channelRange) == AV_ERR_OK) {
+      result.maxChannels = channelRange.maxVal;
+    }
+    return result;
+  }
+
+  result.errorMessage = "decoder not found";
+  return result;
+}
+
+static napi_value QueryAudioDecoderCapability(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1] = { nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "queryAudioDecoderCapability failed to read args");
+    return nullptr;
+  }
+  if (argc < 1) {
+    ThrowTypeError(env, "queryAudioDecoderCapability requires (codecOrMime)");
+    return nullptr;
+  }
+
+  std::string codecOrMime;
+  if (!ReadUtf8String(env, args[0], codecOrMime)) {
+    ThrowTypeError(env, "queryAudioDecoderCapability codecOrMime must be string");
+    return nullptr;
+  }
+
+  const AudioDecoderCapabilityResult capability = QueryAudioDecoderCapabilityInternal(codecOrMime);
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok || result == nullptr) {
+    ThrowTypeError(env, "queryAudioDecoderCapability failed to create result object");
+    return nullptr;
+  }
+
+  napi_value capabilityKnown = CreateBoolean(env, capability.capabilityKnown);
+  napi_value supported = CreateBoolean(env, capability.supported);
+  napi_value isHardware = CreateBoolean(env, capability.isHardware);
+  napi_value maxChannels = CreateInt32(env, capability.maxChannels);
+  napi_value decoderName = CreateString(env, capability.decoderName.c_str());
+  napi_value mimeType = CreateString(env, capability.mimeType.c_str());
+  napi_value errorMessage = CreateString(env, capability.errorMessage.c_str());
+  if (capabilityKnown == nullptr || supported == nullptr || isHardware == nullptr ||
+      maxChannels == nullptr || decoderName == nullptr || mimeType == nullptr || errorMessage == nullptr) {
+    ThrowTypeError(env, "queryAudioDecoderCapability failed to create result fields");
+    return nullptr;
+  }
+
+  if (napi_set_named_property(env, result, "capabilityKnown", capabilityKnown) != napi_ok ||
+      napi_set_named_property(env, result, "supported", supported) != napi_ok ||
+      napi_set_named_property(env, result, "isHardware", isHardware) != napi_ok ||
+      napi_set_named_property(env, result, "maxChannels", maxChannels) != napi_ok ||
+      napi_set_named_property(env, result, "decoderName", decoderName) != napi_ok ||
+      napi_set_named_property(env, result, "mimeType", mimeType) != napi_ok ||
+      napi_set_named_property(env, result, "errorMessage", errorMessage) != napi_ok) {
+    ThrowTypeError(env, "queryAudioDecoderCapability failed to set result fields");
+    return nullptr;
+  }
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -4862,7 +5066,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "ffmpegSelfCheck", nullptr, FfmpegSelfCheck, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "webdavRequest", nullptr, WebdavRequest, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "downloadToFile", nullptr, DownloadToFile, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

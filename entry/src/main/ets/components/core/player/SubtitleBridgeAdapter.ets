@@ -724,8 +724,11 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     this.subtitleTracks = subtitleTracks;
     for (let i = 0; i < subtitleTracks.length; i++) {
       const track = subtitleTracks[i];
-      const displayName = track.language && track.language.length > 0
-        ? `字幕 ${i + 1} (${track.language})`
+      const languageName = track.language && track.language.length > 0
+        ? FfprobeUtil.getLanguageDisplayName(track.language)
+        : '';
+      const displayName = languageName.length > 0
+        ? `字幕 ${i + 1} (${languageName})`
         : `字幕 ${i + 1}`;
       const item: SubtitleTrackItem = {
         kind: 'internal',
@@ -735,6 +738,17 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       items.push(item);
     }
     return items;
+  }
+}
+
+export class NativeAvSubtitleBridgeAdapter extends AvSubtitleBridgeAdapter {
+  protected findPreferredTrackIndex(): number {
+    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
+      if (this.allSubtitleTracks[i].kind === 'external') {
+        return i;
+      }
+    }
+    return -1;
   }
 }
 

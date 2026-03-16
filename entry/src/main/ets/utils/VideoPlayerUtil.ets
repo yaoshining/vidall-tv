@@ -71,7 +71,7 @@ function classifyError(code: number, message: string): string {
   return 'PREPARE_ERROR';
 }
 
-function encodeUrlPath(url: string): string {
+export function encodeUrlPath(url: string): string {
   const protocolEnd = url.indexOf('://');
   if (protocolEnd < 0) {
     return url;
@@ -283,4 +283,3 @@ export class VideoPlayerUtil {
     });
   }
 }
-

@@ -322,6 +322,7 @@ export class WebDAVClient {
         const caps = getVidAllCorePlayerNapi().getNativeCapabilities();
         this._nativeCurlEnabled = caps.libcurlEnabled;
       } catch (e) {
+        console.warn(`WebDAV native capability probe failed, will optimistic-try native curl: ${JSON.stringify(e)}`);
         this._nativeCurlEnabled = false;
       }
     }
@@ -444,18 +445,34 @@ export class WebDAVClient {
     body?: string
   ): Promise<HttpResponse> {
     // ── native libcurl 优先路径 ────────────────────────────────────────────
-    if (this.checkNativeCurlEnabled()) {
+    const nativeCurlEnabled = this.checkNativeCurlEnabled();
+    const shouldTryNativeFirst = nativeCurlEnabled || this.isHttps;
+    if (shouldTryNativeFirst) {
       try {
-        return await this.sendViaNative(method, path, headers, body);
+        const response = await this.sendViaNative(method, path, headers, body);
+        this._nativeCurlEnabled = true;
+        return response;
       } catch (e) {
         const nativeErr = (e as Error).message;
-        if (!this.allowLegacyTransportFallback) {
+        const nativeUnavailable = nativeErr.includes('libcurl disabled') ||
+          nativeErr.includes('未加载') ||
+          nativeErr.includes('not loaded') ||
+          nativeErr.includes('getNativeCapabilities') ||
+          nativeErr.includes('webdavRequest') ||
+          nativeErr.includes('is not a function');
+        if (nativeUnavailable) {
+          this._nativeCurlEnabled = false;
+          console.warn(`WebDAV native transport unavailable, fallback to legacy transport: ${nativeErr}`);
+        } else if (!this.allowLegacyTransportFallback) {
           throw new Error(`native transport failed: ${nativeErr}`);
+        } else {
+          console.warn(`WebDAV native fallback enabled: ${nativeErr}`);
         }
-        console.warn(`WebDAV native fallback enabled: ${nativeErr}`);
       }
     }
-    if (!this.allowLegacyTransportFallback) {
+    if (!this._nativeCurlEnabled) {
+      console.warn('WebDAV native transport unavailable, fallback to legacy transport');
+    } else if (!this.allowLegacyTransportFallback) {
       throw new Error('legacy transport fallback disabled');
     }
     // ── 回退：现有 socket / http 实现 ──────────────────────────────────────
@@ -2395,5 +2412,3 @@ export class WebDAVClient {
     });
   }
 }
-
-

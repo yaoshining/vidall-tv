@@ -11,11 +11,13 @@ import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeUtil } from "../../../utils/FfprobeUtil";
+import { DeviceCapabilityUtil } from "../../../utils/DeviceCapabilityUtil";
 import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
 import {
   AvSubtitleBridgeAdapter,
   IjkSubtitleBridgeAdapter,
   ISubtitleBridgeAdapter,
+  NativeAvSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter,
   SubtitleBridgeState,
   SubtitleTrackItem
@@ -66,7 +68,12 @@ interface AudioRoutingDecision {
   summary: string;
   detectedCodec: string;
   detectedChannels: number;
-  hardSupported: boolean;
+  systemSupported: boolean;
+  capabilityKnown: boolean;
+  capabilityMime: string;
+  maxSupportedChannels: number;
+  decoderName: string;
+  decoderIsHardware: boolean;
   precheckProbeFailed: boolean;
   precheckProbeError: string;
 }
@@ -139,7 +146,7 @@ export class VideoPlayerController {
     * 切换为 'native' 后，使用原生 so 播放器骨架适配器（当前阶段仅框架接入）。
     * 'ffmpeg' 后端已停止主路径接入，仅保留代码供后续参考。
    */
-  @Trace backend: PlayerBackend = 'native';
+  @Trace backend: PlayerBackend = 'avplayer';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
@@ -147,6 +154,10 @@ export class VideoPlayerController {
   @Trace unsupportedFormatFallback: UnsupportedFormatFallback = 'native';
   /** 是否已由外部显式设置回退策略（为 true 时不再自动覆盖） */
   private unsupportedFallbackLockedByUser: boolean = false;
+  /** 是否已由外部显式锁定 preferred backend（用于调试/对照测试时禁止自动音频路由改写 backend）。 */
+  private backendLockedByUser: boolean = false;
+  /** 是否严格锁定当前 backend（锁定后禁止运行时自动 fallback 到其他后端）。 */
+  private strictBackendLockedByUser: boolean = false;
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
   @Trace duration = 0
@@ -179,6 +190,7 @@ export class VideoPlayerController {
   @Trace audioTracks: AudioTrackItem[] = [];
   @Trace activeAudioIndex: number = -1;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
+  private nativeSubtitleMode: 'av' | 'external-only' = 'av';
   private currentVideoData?: VideoData;
   private timeToSeek = -1
   private subtitleClearTimer?: number
@@ -306,7 +318,7 @@ export class VideoPlayerController {
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
-      if (this.backend === 'avplayer' || this.backend === 'ffmpeg') {
+      if (!this.backendLockedByUser && (this.backend === 'avplayer' || this.backend === 'ffmpeg')) {
         this.backend = decision.preferredBackend;
       }
       if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
@@ -401,11 +413,15 @@ export class VideoPlayerController {
           `[session=${capturedSessionId}] FFmpeg 接管信号收到，重置就绪守卫计时器为 15s`);
         if (capturedSessionId === this.playbackSessionId) {
           this.startNativeReadyGuard(capturedSessionId, 15000);
+          void this.switchNativeSubtitleAdapterToExternalOnly(capturedSessionId);
         }
       });
       adapter = nativeAdapter;
-      // native 骨架阶段先复用 IJK 字幕桥：隐藏内嵌轨，仅启用外置字幕时间轴。
-      this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
+      this.nativeSubtitleMode = 'av';
+      // native 的 AVPlayer 子路径已支持内嵌字幕枚举、切换与 subtitleUpdate 事件桥接。
+      // 若后续切到 FFmpeg 子路径，再动态降级为仅外置字幕桥，避免出现无法生效的内嵌轨选项。
+      // native 初始化阶段不自动激活第一条内嵌字幕，避免 prepared 边界时机触发切轨回退。
+      this.subtitleAdapter = new NativeAvSubtitleBridgeAdapter();
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
@@ -547,6 +563,13 @@ export class VideoPlayerController {
     });
     adapter.onUnsupportedFormat(() => {
       if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
+      if (this.strictBackendLockedByUser) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          '[strict-backend] 已阻止 avplayer unsupportedFormat 自动切换');
+        this.isLoading = false;
+        this.lastErrorMessage = 'AVPlayer 不支持当前格式（strict backend 已阻止自动切换）';
         return;
       }
       const targetBackend: PlayerBackend = this.unsupportedFormatFallback;
@@ -1185,6 +1208,25 @@ export class VideoPlayerController {
       'unsupportedFormatFallback 已恢复自动策略');
   }
 
+  setPreferredBackend(backend: PlayerBackend, strictLock: boolean = false): void {
+    this.backend = backend === 'ffmpeg' ? 'ijkplayer' : backend;
+    this.backendLockedByUser = true;
+    this.strictBackendLockedByUser = strictLock;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `preferredBackend 已锁定为 ${this.backend}, strict=${strictLock ? 1 : 0}`);
+  }
+
+  resetPreferredBackendAutoPolicy(): void {
+    this.backendLockedByUser = false;
+    this.strictBackendLockedByUser = false;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      'preferredBackend 已恢复自动策略');
+  }
+
+  isStrictPreferredBackendLocked(): boolean {
+    return this.strictBackendLockedByUser;
+  }
+
   /**
    * 依据预置音轨信息判断是否优先回退 ffmpeg。
    * 命中 AC-3/E-AC-3/DTS/TrueHD 时返回 true。
@@ -1224,7 +1266,12 @@ export class VideoPlayerController {
       summary: 'default: 未探测到音轨细节',
       detectedCodec: 'unknown',
       detectedChannels: 2,
-      hardSupported: true,
+      systemSupported: true,
+      capabilityKnown: false,
+      capabilityMime: '',
+      maxSupportedChannels: 0,
+      decoderName: '',
+      decoderIsHardware: false,
       precheckProbeFailed: false,
       precheckProbeError: ''
     };
@@ -1251,26 +1298,32 @@ export class VideoPlayerController {
 
     const normalizedCodec = (codecName ?? '').toLowerCase();
     const safeChannels = this.normalizeTargetChannels(channels);
-    const hardSupported = this.isLikelySystemHardDecodeSupported(normalizedCodec);
+    const capability = DeviceCapabilityUtil.queryNativeAudioDecoderCapability(normalizedCodec);
+    const channelSupported = capability.maxChannels <= 0 || safeChannels <= capability.maxChannels;
+    const systemSupported = capability.supported && channelSupported;
 
     const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
-      `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${precheckProbeFailed}`;
+      `channels=${safeChannels}, systemSupported=${systemSupported}, capabilityKnown=${capability.capabilityKnown}, ` +
+      `decoder=${capability.decoderName.length > 0 ? capability.decoderName : 'unknown'}, ` +
+      `maxChannels=${capability.maxChannels}, precheckProbeFailed=${precheckProbeFailed}`;
 
-    let preferredBackend: PlayerBackend = hardSupported ? 'avplayer' : 'ijkplayer';
-    if (precheckProbeFailed && normalizedCodec.length === 0) {
-      // 前置探测失败且无可用音轨提示时，保守走软解后端，避免 AVPlayer 首次进入不可恢复错误态。
-      preferredBackend = 'ijkplayer';
-    }
+    // 默认优先 AVPlayer；是否真正需要软解回退，应以实际 prepare/播放结果为准，
+    // 不能仅凭首音轨 codec 或前置探测结果就提前切走主播放链路。
+    const preferredBackend: PlayerBackend = 'avplayer';
 
     const decision: AudioRoutingDecision = {
-      // 当前 ffmpeg 视频链路尚不可用，临时统一回退到 ijkplayer。
       preferredBackend,
       fallback: 'native',
       preferredChannels: safeChannels,
       summary,
       detectedCodec: normalizedCodec.length > 0 ? normalizedCodec : 'unknown',
       detectedChannels: safeChannels,
-      hardSupported,
+      systemSupported,
+      capabilityKnown: capability.capabilityKnown,
+      capabilityMime: capability.mimeType,
+      maxSupportedChannels: capability.maxChannels,
+      decoderName: capability.decoderName,
+      decoderIsHardware: capability.isHardware,
       precheckProbeFailed,
       precheckProbeError
     };
@@ -1287,15 +1340,15 @@ export class VideoPlayerController {
     const message =
       '[AudioCapability] ' +
       `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}(${channelTag}), ` +
-      `hardSupported=${decision.hardSupported}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
-      `decodePlan=${currentDecodePlan}; ` +
-      `systemHardPreferred=[${SYSTEM_HARD_PREFERRED_CODECS.join(', ')}]; ` +
-      `systemSoftFallback=[${SYSTEM_SOFT_FALLBACK_CODECS.join(', ')}]; ` +
-      `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
+      `systemSupported=${decision.systemSupported}, capabilityKnown=${decision.capabilityKnown}, ` +
+      `decoder=${decision.decoderName.length > 0 ? decision.decoderName : 'unknown'}, ` +
+      `decoderIsHardware=${decision.decoderIsHardware}, capabilityMime=${decision.capabilityMime.length > 0 ? decision.capabilityMime : 'unknown'}, ` +
+      `maxChannels=${decision.maxSupportedChannels}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
+      `decodePlan=${currentDecodePlan}; channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
 
     this.audioCapabilityText =
       `音频能力: 检测=${decision.detectedCodec} ${channelTag} | ` +
-      `硬解=${decision.hardSupported ? '是' : '否'} | ` +
+      `系统支持=${decision.systemSupported ? '是' : '否'} | ` +
       `当前路由=${decision.preferredBackend} | ` +
       `软解兜底=${decision.fallback}`;
 
@@ -1452,6 +1505,14 @@ export class VideoPlayerController {
 
   private fallbackNativeToIjk(fallbackReason: string, userMessage: string, detailMessage: string = ''): void {
     if (this.backend !== 'native') {
+      return;
+    }
+    if (this.strictBackendLockedByUser) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[strict-backend] 已阻止 native -> ijkplayer 自动回退: reason=${fallbackReason}, detail=${detailMessage}`);
+      this.lastErrorMessage = `${userMessage}（strict backend 已阻止自动切换）`;
+      this.isLoading = false;
+      this.clearNativeReadyGuardTimer();
       return;
     }
     const fallbackPosition = this.player?.currentTime ?? this.currentTime;
@@ -1857,6 +1918,25 @@ export class VideoPlayerController {
     }
   }
 
+  private async switchNativeSubtitleAdapterToExternalOnly(sessionId: number): Promise<void> {
+    if (sessionId !== this.playbackSessionId || this.backend !== 'native') {
+      return;
+    }
+    if (this.nativeSubtitleMode === 'external-only') {
+      return;
+    }
+    this.nativeSubtitleMode = 'external-only';
+    this.subtitleAdapter.release();
+    this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[session=${sessionId}] native 已切到 FFmpeg 子路径，字幕桥降级为仅外置字幕`);
+    if (this.isReady && this.player) {
+      await this.loadSubtitleTracks();
+      return;
+    }
+    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+  }
+
   /**
    * 按视频播放时间输出当前字幕轨与字幕内容，便于排查“有轨道但无显示”问题。
    */
@@ -2185,4 +2265,3 @@ export class VideoPlayerController {
   }
 
 }
-

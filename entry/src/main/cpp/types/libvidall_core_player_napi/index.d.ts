@@ -78,6 +78,16 @@ export const getNativeCapabilities: () => {
   libcurlVersion: string;
 };
 
+export const queryAudioDecoderCapability: (codecOrMime: string) => {
+  capabilityKnown: boolean;
+  supported: boolean;
+  isHardware: boolean;
+  maxChannels: number;
+  decoderName: string;
+  mimeType: string;
+  errorMessage: string;
+};
+
 export const setCallbacks: (
   handle: number,
   onPrepared: () => void,

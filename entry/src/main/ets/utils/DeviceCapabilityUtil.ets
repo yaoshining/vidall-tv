@@ -1,5 +1,26 @@
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
+
+interface NativeCapabilityBridge {
+  queryAudioDecoderCapability: (codecOrMime: string) => NativeAudioDecoderCapability;
+}
+
+interface NativeCapabilityBridgeModule {
+  default?: NativeCapabilityBridge;
+}
+
+function getNativeCapabilityBridge(): NativeCapabilityBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as NativeCapabilityBridgeModule | NativeCapabilityBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as NativeCapabilityBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as NativeCapabilityBridge;
+  }
+  return bridgeModule as NativeCapabilityBridge;
+}
 
 // ─────────────────────────────────────────────
 // 常量定义（ArkTS 不支持 as const，用 namespace 替代）
@@ -145,12 +166,24 @@ export interface IjkHwDecodeSupport {
   h265: boolean;
 }
 
+export interface NativeAudioDecoderCapability {
+  capabilityKnown: boolean;
+  supported: boolean;
+  isHardware: boolean;
+  maxChannels: number;
+  decoderName: string;
+  mimeType: string;
+  errorMessage: string;
+}
+
 // ─────────────────────────────────────────────
 // 工具类
 // ─────────────────────────────────────────────
 
 export class DeviceCapabilityUtil {
   private static readonly TAG = '[DeviceCapability]';
+  private static readonly nativeAudioCapabilityCache: Map<string, NativeAudioDecoderCapability> =
+    new Map<string, NativeAudioDecoderCapability>();
 
   // ── 1. 静态规则查询 ──────────────────────────────────────────────
 
@@ -183,6 +216,103 @@ export class DeviceCapabilityUtil {
       supported,
       note: supported ? 'AVPlayer 已知支持' : '未在已知列表中，实际支持情况未知'
     };
+    return result;
+  }
+
+  static normalizeAudioCodecToMime(codecOrMime: string): string {
+    const normalized = (codecOrMime ?? '').trim().toLowerCase();
+    if (normalized.length === 0) {
+      return '';
+    }
+    if (normalized.startsWith('audio/')) {
+      return normalized;
+    }
+    if (normalized === 'aac' || normalized === 'mp4a' || normalized === 'mp4a-latm') {
+      return AUDIO_CODEC.AAC;
+    }
+    if (normalized === 'mp3' || normalized === 'mpeg' || normalized === 'mpga') {
+      return AUDIO_CODEC.MP3;
+    }
+    if (normalized === 'flac') {
+      return AUDIO_CODEC.FLAC;
+    }
+    if (normalized === 'vorbis') {
+      return AUDIO_CODEC.VORBIS;
+    }
+    if (normalized === 'opus') {
+      return AUDIO_CODEC.OPUS;
+    }
+    if (normalized === 'pcm' || normalized === 'pcm_s16le' || normalized === 'pcm_s24le' ||
+      normalized === 'pcm_s32le') {
+      return AUDIO_CODEC.PCM;
+    }
+    if (normalized === 'ac3' || normalized === 'ac-3') {
+      return AUDIO_CODEC.AC3;
+    }
+    if (normalized === 'eac3' || normalized === 'e-ac-3') {
+      return AUDIO_CODEC.EAC3;
+    }
+    if (normalized === 'dts') {
+      return AUDIO_CODEC.DTS;
+    }
+    if (normalized === 'dtshd' || normalized === 'dts-hd' || normalized === 'dts_hd') {
+      return AUDIO_CODEC.DTSHD;
+    }
+    if (normalized === 'truehd' || normalized === 'true-hd') {
+      return AUDIO_CODEC.TRUEHD;
+    }
+    return '';
+  }
+
+  static queryNativeAudioDecoderCapability(codecOrMime: string): NativeAudioDecoderCapability {
+    const normalizedKey = (codecOrMime ?? '').trim().toLowerCase();
+    if (normalizedKey.length === 0) {
+      const emptyResult: NativeAudioDecoderCapability = {
+        capabilityKnown: false,
+        supported: false,
+        isHardware: false,
+        maxChannels: 0,
+        decoderName: '',
+        mimeType: '',
+        errorMessage: 'empty codec'
+      };
+      return emptyResult;
+    }
+
+    const cached = DeviceCapabilityUtil.nativeAudioCapabilityCache.get(normalizedKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    let result: NativeAudioDecoderCapability;
+    try {
+      const bridge = getNativeCapabilityBridge();
+      const nativeResult = bridge.queryAudioDecoderCapability(normalizedKey);
+      const typedResult: NativeAudioDecoderCapability = {
+        capabilityKnown: nativeResult.capabilityKnown,
+        supported: nativeResult.supported,
+        isHardware: nativeResult.isHardware,
+        maxChannels: nativeResult.maxChannels,
+        decoderName: nativeResult.decoderName,
+        mimeType: nativeResult.mimeType,
+        errorMessage: nativeResult.errorMessage
+      };
+      result = typedResult;
+    } catch (e) {
+      const err = e as BusinessError;
+      const fallback: NativeAudioDecoderCapability = {
+        capabilityKnown: false,
+        supported: false,
+        isHardware: false,
+        maxChannels: 0,
+        decoderName: '',
+        mimeType: DeviceCapabilityUtil.normalizeAudioCodecToMime(normalizedKey),
+        errorMessage: err.message ?? JSON.stringify(err)
+      };
+      result = fallback;
+    }
+
+    DeviceCapabilityUtil.nativeAudioCapabilityCache.set(normalizedKey, result);
     return result;
   }
 

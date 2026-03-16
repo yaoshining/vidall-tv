@@ -33,6 +33,8 @@ export interface PlayerPageParam {
   episodeNumber?: number;
   /** 可选：强制指定播放后端（当前建议 avplayer / ijkplayer / native） */
   preferredBackend?: PlayerBackend;
+  /** 可选：严格锁定 preferredBackend，禁止运行时自动切换到其他后端（用于调试/对照验证） */
+  strictPreferredBackend?: boolean;
   /** 可选：AVPlayer 不支持格式时的自动回退后端 */
   unsupportedFormatFallback?: UnsupportedFormatFallback;
 }
@@ -50,12 +52,73 @@ export struct PlayerPage {
   private pendingSeekMs: number = -1
 
   private getBackendDebugText(): string {
-    const backendText = `backend=${this.videoPlayerController.backend}`;
+    const strictText = this.videoPlayerController.isStrictPreferredBackendLocked() ? ' [strict]' : '';
+    const backendText = `backend=${this.videoPlayerController.backend}${strictText}`;
     const reason = this.videoPlayerController.lastErrorMessage;
     if (reason.length === 0) {
       return backendText;
     }
     return `${backendText} | ${reason}`;
+  }
+
+  private switchBackend(targetBackend: PlayerBackend): void {
+    this.videoPlayerController.setPreferredBackend(targetBackend, true);
+  }
+
+  private isCurrentBackend(targetBackend: PlayerBackend): boolean {
+    return this.videoPlayerController.backend === targetBackend;
+  }
+
+  private getBackendButtonColor(targetBackend: PlayerBackend): string {
+    if (this.isCurrentBackend(targetBackend)) {
+      return '#1B78F2';
+    }
+    return '#333333';
+  }
+
+  @Builder
+  BackendDebugPanel() {
+    Column({ space: 8 }) {
+      Text(this.getBackendDebugText())
+        .fontSize(12)
+        .fontColor('#E6FFFFFF')
+        .backgroundColor('#66000000')
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(4)
+
+      Row({ space: 8 }) {
+        Button('AV')
+          .fontSize(11)
+          .fontColor(Color.White)
+          .backgroundColor(this.getBackendButtonColor('avplayer'))
+          .borderRadius(4)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .onClick(() => {
+            this.switchBackend('avplayer')
+          })
+
+        Button('Native')
+          .fontSize(11)
+          .fontColor(Color.White)
+          .backgroundColor(this.getBackendButtonColor('native'))
+          .borderRadius(4)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .onClick(() => {
+            this.switchBackend('native')
+          })
+
+        Button('IJK')
+          .fontSize(11)
+          .fontColor(Color.White)
+          .backgroundColor(this.getBackendButtonColor('ijkplayer'))
+          .borderRadius(4)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .onClick(() => {
+            this.switchBackend('ijkplayer')
+          })
+      }
+    }
+    .alignItems(HorizontalAlign.Start)
   }
 
   static PAGE_NAME = 'player'
@@ -157,12 +220,9 @@ export struct PlayerPage {
 
         this.ResumeDialog()
 
-        Text(this.getBackendDebugText())
-          .fontSize(12)
-          .fontColor('#E6FFFFFF')
-          .backgroundColor('#66000000')
-          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-          .borderRadius(4)
+        Column() {
+          this.BackendDebugPanel()
+        }
           .alignRules({
             top: { anchor: '__container__', align: VerticalAlign.Top },
             left: { anchor: '__container__', align: HorizontalAlign.Start }
@@ -178,13 +238,14 @@ export struct PlayerPage {
         this.videoPlayerController.saveProgressNow();
       });
 
-      let pageParam = context.pathInfo.param as PlayerPageParam
-      if (pageParam) {
-        if (pageParam.preferredBackend) {
-          this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
-            ? 'ijkplayer'
-            : pageParam.preferredBackend;
-        }
+        let pageParam = context.pathInfo.param as PlayerPageParam
+        if (pageParam) {
+          if (pageParam.preferredBackend) {
+            this.videoPlayerController.setPreferredBackend(
+              pageParam.preferredBackend,
+              pageParam.strictPreferredBackend === true
+            );
+          }
         if (pageParam.unsupportedFormatFallback) {
           this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
         }

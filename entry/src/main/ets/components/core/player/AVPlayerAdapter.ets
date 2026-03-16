@@ -8,6 +8,8 @@ import { AVPlayerState, VideoDataType } from './Constants';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 
 const TAG = '[AVPlayerAdapter]';
+const ENABLE_AVPLAYER_TRACK_DIAG_LOG = false;
+const ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG = false;
 
 /**
  * AVPlayer 播放内核适配器
@@ -156,6 +158,15 @@ export class AVPlayerAdapter implements IPlayer {
         };
         result.push(info);
       }
+      if (ENABLE_AVPLAYER_TRACK_DIAG_LOG) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `getTrackInfos 返回轨道数: ${result.length}`);
+        for (let i = 0; i < result.length; i++) {
+          const track = result[i];
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `getTrackInfos 轨道[${i}]: index=${track.trackIndex} type=${track.trackType}` +
+            ` mime=${track.mimeType ?? ''} lang=${track.language ?? ''}`);
+        }
+      }
       return result;
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -173,6 +184,8 @@ export class AVPlayerAdapter implements IPlayer {
     }
     const wasPlaying = this.avPlayer.state === AVPlayerState.PLAYING;
     try {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `selectTrack(${trackIndex}) 开始: wasPlaying=${wasPlaying ? 1 : 0}`);
       if (wasPlaying) { await this.avPlayer.pause(); }
       await this.avPlayer.selectTrack(trackIndex);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, `selectTrack(${trackIndex}) 成功`);
@@ -327,6 +340,10 @@ export class AVPlayerAdapter implements IPlayer {
     // subtitleUpdate
     try {
       player.on('subtitleUpdate', (info: media.SubtitleInfo) => {
+        if (ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `subtitleUpdate: text="${info.text?.substring(0, 80) ?? ''}" start=${info.startTime ?? 0} duration=${info.duration ?? 0}`);
+        }
         if (this._onSubtitleUpdateCb) {
           const si: SubtitleInfo = {
             text: info.text,
@@ -336,7 +353,9 @@ export class AVPlayerAdapter implements IPlayer {
           this._onSubtitleUpdateCb(si);
         }
       });
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '内嵌字幕监听已注册');
+      if (ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, '内嵌字幕监听已注册');
+      }
     } catch (e) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `subtitleUpdate 注册失败（可能当前 API 不支持）: ${JSON.stringify(e)}`);

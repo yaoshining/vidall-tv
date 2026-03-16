@@ -1,10 +1,14 @@
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
 import { VideoData } from './VideoData';
+import { media } from '@kit.MediaKit';
+import fs from '@ohos.file.fs';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 import buffer from '@ohos.buffer';
+import { AVPlayerState, VideoDataType } from './Constants';
+import { encodeUrlPath } from '../../../utils/VideoPlayerUtil';
 
 const TAG = '[VidAllPlayerAdapter]';
 const METRICS_TAG = 'VidAll_Metrics';
@@ -89,6 +93,9 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _onBufferingCb?: (isBuffering: boolean) => void;
   /** B6修复：FFmpeg 接管时通知上层重置 native 就绪守卫计时器 */
   private _onFfmpegSwitchingCb?: () => void;
+  private _usingFfmpegPath: boolean = false;
+  private _probedTrackInfos?: TrackInfo[];
+  private _probeTrackInfosPromise?: Promise<TrackInfo[]>;
   /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
   private _seekPending: boolean = false;
   /** seek 完成超时兜底：原生未在 600ms 内回调时自动触发 onSeekDone */
@@ -136,6 +143,9 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._pendingXComponentId = pendingXComponentId;
     this._videoData = videoData;
     this._surfaceId = surfaceId;
+    this._usingFfmpegPath = false;
+    this._probedTrackInfos = undefined;
+    this._probeTrackInfosPromise = undefined;
     this._duration = 0;
     this._currentTime = 0;
     this._isPlaying = false;
@@ -264,6 +274,7 @@ export class VidAllPlayerAdapter implements IPlayer {
           // 避免 avformat_open_input（3-10s）期间 3.5s 守卫误触 fallbackNativeToIjk。
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `onFfmpegSwitching: handle=${currentHandle}, FFmpeg 接管，通知重置守卫计时器`);
+          this._usingFfmpegPath = true;
           this._onFfmpegSwitchingCb?.();
         },
         (info: SubtitleInfo) => {
@@ -397,6 +408,22 @@ export class VidAllPlayerAdapter implements IPlayer {
   }
 
   async getTrackInfos(): Promise<TrackInfo[]> {
+    if (!this._usingFfmpegPath) {
+      const probedTracks = await this.probeAvPlayerTrackInfos();
+      if (probedTracks.length > 0) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `getTrackInfos 探测真实 AVPlayer 轨道: total=${probedTracks.length}`);
+        for (let i = 0; i < probedTracks.length; i++) {
+          const track = probedTracks[i];
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `getTrackInfos 探测轨道[${i}]: index=${track.trackIndex} type=${track.trackType}` +
+            ` mime=${track.mimeType ?? ''} lang=${track.language ?? ''}`);
+        }
+        return probedTracks;
+      }
+      throw new Error('native AVPlayer 轨道探测失败，已禁止回退到 preset 轨道');
+    }
+
     const tracks: TrackInfo[] = [];
     const videoData = this._videoData;
     if (!videoData) {
@@ -430,8 +457,152 @@ export class VidAllPlayerAdapter implements IPlayer {
     }
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `getTrackInfos 骨架返回预置轨道: total=${tracks.length}`);
+      `getTrackInfos 回退预置轨道: total=${tracks.length}`);
     return tracks;
+  }
+
+  private async probeAvPlayerTrackInfos(): Promise<TrackInfo[]> {
+    if (this._probedTrackInfos !== undefined) {
+      return this._probedTrackInfos;
+    }
+    if (this._probeTrackInfosPromise !== undefined) {
+      return this._probeTrackInfosPromise;
+    }
+    this._probeTrackInfosPromise = this.doProbeAvPlayerTrackInfos();
+    try {
+      const tracks = await this._probeTrackInfosPromise;
+      this._probedTrackInfos = tracks;
+      return tracks;
+    } finally {
+      this._probeTrackInfosPromise = undefined;
+    }
+  }
+
+  private async doProbeAvPlayerTrackInfos(): Promise<TrackInfo[]> {
+    const videoData = this._videoData;
+    if (!videoData) {
+      return [];
+    }
+
+    let player: media.AVPlayer;
+    try {
+      player = await media.createAVPlayer();
+    } catch (e) {
+      const err = e as BusinessError;
+      throw new Error(`probeTrackInfos createAVPlayer 失败: code=${err.code} msg=${err.message}`);
+    }
+
+    let file: fs.File | undefined = undefined;
+    try {
+      const tracks = await new Promise<TrackInfo[]>((resolve, reject) => {
+        let settled = false;
+        const finishResolve = (value: TrackInfo[]): void => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve(value);
+        };
+        const finishReject = (error: Error): void => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          reject(error);
+        };
+
+        const timeoutId = setTimeout(() => {
+          finishReject(new Error('probeTrackInfos timeout after 5000ms'));
+        }, 5000);
+
+        player.on('error', (err: BusinessError) => {
+          clearTimeout(timeoutId);
+          finishReject(new Error(`probeTrackInfos error: ${err.code} ${err.message}`));
+        });
+
+        player.on('stateChange', (state: media.AVPlayerState) => {
+          if (state === AVPlayerState.INITIALIZED) {
+            player.prepare().catch((e: BusinessError) => {
+              clearTimeout(timeoutId);
+              finishReject(new Error(`probeTrackInfos prepare failed: ${e.code} ${e.message}`));
+            });
+          } else if (state === AVPlayerState.PREPARED) {
+            player.getTrackDescription().then((descs: media.MediaDescription[]) => {
+              clearTimeout(timeoutId);
+              const result: TrackInfo[] = [];
+              for (let i = 0; i < descs.length; i++) {
+                const desc = descs[i];
+                const rawType = desc[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] as number;
+                let trackType: 'video' | 'audio' | 'subtitle' = 'video';
+                if (rawType === media.MediaType.MEDIA_TYPE_AUD) {
+                  trackType = 'audio';
+                } else if (rawType === media.MediaType.MEDIA_TYPE_SUBTITLE) {
+                  trackType = 'subtitle';
+                } else if (rawType === media.MediaType.MEDIA_TYPE_VID) {
+                  trackType = 'video';
+                }
+                const info: TrackInfo = {
+                  trackIndex: desc[media.MediaDescriptionKey.MD_KEY_TRACK_INDEX] as number,
+                  trackType,
+                  mimeType: desc[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] as string | undefined,
+                  language: desc[media.MediaDescriptionKey.MD_KEY_LANGUAGE] as string | undefined
+                };
+                result.push(info);
+              }
+              finishResolve(result);
+            }).catch((e: BusinessError) => {
+              clearTimeout(timeoutId);
+              finishReject(new Error(`probeTrackInfos getTrackDescription failed: ${e.code} ${e.message}`));
+            });
+          } else if (state === AVPlayerState.ERROR) {
+            clearTimeout(timeoutId);
+            finishReject(new Error('probeTrackInfos stateChange entered error'));
+          }
+        });
+
+        if (videoData.type === VideoDataType.URL) {
+          const encodedUrl = encodeUrlPath(videoData.videoSrc);
+          const mediaSource = media.createMediaSourceWithUrl(encodedUrl, videoData.httpHeader);
+          const playbackStrategy: media.PlaybackStrategy = {
+            preferredWidth: 1,
+            preferredHeight: 2,
+            preferredBufferDuration: 3,
+            preferredHdr: true
+          };
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `probeTrackInfos 使用编码 URL 探测轨道: ${encodedUrl}`);
+          try {
+            player.setMediaSource(mediaSource, playbackStrategy);
+          } catch (e) {
+            const err = e as BusinessError;
+            clearTimeout(timeoutId);
+            finishReject(new Error(`probeTrackInfos setMediaSource failed: ${err.code} ${err.message}`));
+          }
+        } else if (videoData.type === VideoDataType.FILE_URI) {
+          file = fs.openSync(videoData.videoSrc, fs.OpenMode.READ_ONLY);
+          player.fdSrc = { fd: file.fd };
+        } else {
+          clearTimeout(timeoutId);
+          finishReject(new Error('probeTrackInfos unsupported videoData type'));
+        }
+      });
+      return tracks;
+    } catch (e) {
+      const err = e as Error;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG, err.message);
+      throw err;
+    } finally {
+      if (file !== undefined) {
+        try {
+          fs.closeSync(file);
+        } catch (_) {
+        }
+      }
+      try {
+        await player.release();
+      } catch (_) {
+      }
+    }
   }
 
   private mapSubtitleCodecToMime(codecName?: string): string | undefined {
@@ -627,6 +798,9 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._isPrepared = false;
     this._readyFired = false;
     this._videoData = undefined;
+    this._usingFfmpegPath = false;
+    this._probedTrackInfos = undefined;
+    this._probeTrackInfosPromise = undefined;
     this._duration = 0;
     this._currentTime = 0;
     this._surfaceId = '';

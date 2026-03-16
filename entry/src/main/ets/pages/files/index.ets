@@ -311,7 +311,7 @@ export struct FileExplorerPage {
   }
 
   private changePath(newPath: string = '/') {
-    this.client.listDirectory(encodeURIComponent(newPath)).then(files => {
+    this.client.listDirectory(newPath).then(files => {
       files.shift()
       this.fileExplorerController.currentPath = newPath
       this.fileExplorerController.resources = files
