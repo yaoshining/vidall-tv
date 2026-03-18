@@ -4948,7 +4948,12 @@ static napi_value Play(napi_env env, napi_callback_info info) {
     if (state.ffmpegCtx->audioRenderer != nullptr) {
       {
         std::lock_guard<std::mutex> audioRenderLk(state.ffmpegCtx->audioRenderStateMutex);
-        ResetAudioClockAnchorLocked(state.ffmpegCtx.get());
+        // 不调 ResetAudioClockAnchorLocked：暂停状态下 GetTimestamp 返回旧 T_paused，
+        // Resume 后 renderedSinceTs = (now - T_paused) * sampleRate 会包含整个暂停时长，
+        // 导致 candidateMs 跳跃到错误位置（video 超前 audio 数十秒）。
+        // 直接设 -1，让 Resume 后首次有效 GetTimestamp 建立新锚点（<20ms 内）。
+        state.ffmpegCtx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+        state.ffmpegCtx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
       }
       const OH_AudioStream_Result result = OH_AudioRenderer_Start(state.ffmpegCtx->audioRenderer);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
