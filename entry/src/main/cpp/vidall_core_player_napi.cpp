@@ -1628,6 +1628,7 @@ static bool StartFfmpegAudio(NativePlayerSkeletonState *state, int64_t clockBase
 static void StopFfmpegAudio(NativePlayerSkeletonState *state);
 static void FlushFfmpegAudioBuffers(FfmpegContext *ctx);
 static double AudioClock(FfmpegContext *ctx);
+static bool FfmpegInitSwr(FfmpegContext *ctx);
 
 // av_read_frame 中断回调：interruptFlag 置 true 时让 FFmpeg 立即退出阻塞 IO
 static int FfmpegInterruptCallback(void *opaque) {
@@ -1861,13 +1862,44 @@ static void ProcessPendingAudioTrackSwitch(FfmpegContext *ctx, int32_t trackInde
     return;
   }
 
-  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "SelectTrackAsync: previous=%{public}d target=%{public}d wasPlaying=%{public}d currentTimeMs=%{public}lld",
-               previousTrackIndex, trackIndex, wasPlaying ? 1 : 0, static_cast<long long>(currentTimeMs));
+  // 快速路径：AudioRenderer 始终以相同格式创建（48kHz/stereo/S16LE），
+  // 切轨时不需要销毁+重建，只需 Pause+Flush+复用，将切换窗口从 ~450ms 压缩到 ~50ms。
+  ctx->audioRendererSwitching.store(true, std::memory_order_release);
+  OH_AudioRenderer *existingRenderer = nullptr;
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioRenderStateMutex);
+    existingRenderer = ctx->audioRenderer;
+  }
+  const bool fastPath = (existingRenderer != nullptr);
 
-  StopFfmpegAudio(state);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "SelectTrackAsync: previous=%{public}d target=%{public}d wasPlaying=%{public}d "
+               "currentTimeMs=%{public}lld fastPath=%{public}d",
+               previousTrackIndex, trackIndex, wasPlaying ? 1 : 0,
+               static_cast<long long>(currentTimeMs), fastPath ? 1 : 0);
+
+  if (fastPath) {
+    // Pause renderer：OS 停止调用 AudioWriteDataCallback
+    OH_AudioRenderer_Pause(existingRenderer);
+    // 释放 swrCtx（切轨后需为新 codec 重建）
+    {
+      std::lock_guard<std::mutex> lk(ctx->audioRenderStateMutex);
+      swr_free(&ctx->swrCtx);
+      ctx->pcmLeftover.clear();
+    }
+    // 等待已进入的回调退出（由于 audioRendererSwitching=true，它们会立即填静音并返回）
+    {
+      std::unique_lock<std::mutex> lk(ctx->audioCallbackStateMutex);
+      ctx->audioCallbackStateCv.wait_for(lk, std::chrono::milliseconds(50), [ctx] {
+        return ctx->audioCallbackActiveCount.load(std::memory_order_acquire) == 0;
+      });
+    }
+  } else {
+    StopFfmpegAudio(state);  // 无现有渲染器，走全量停止
+  }
+
   StopFfmpegAudioDecodeThread(ctx);
-  FlushFfmpegAudioBuffers(ctx);
+  FlushFfmpegAudioBuffers(ctx);  // 清空 packet/frame 队列（pcmLeftover 已在 fastPath 中清空）
 
   // 音频解码线程已在上面停掉，视频解码线程不访问 audioCodecCtx，
   // 不能持有 codecMutex 来做 ReopenFfmpegAudioCodec：avcodec_open2 可能耗时较长，
@@ -1881,6 +1913,17 @@ static void ProcessPendingAudioTrackSwitch(FfmpegContext *ctx, int32_t trackInde
     ctx->audioStreamIdx.store(previousAudioStreamIdx, std::memory_order_relaxed);
     if (ReopenFfmpegAudioCodec(ctx) >= 0) {
       StartFfmpegAudioDecodeThread(ctx);
+      if (fastPath) {
+        // codec 回退到旧轨，快速路径放弃：释放渲染器，走全量重建
+        {
+          std::lock_guard<std::mutex> lk(ctx->audioRenderStateMutex);
+          ctx->audioRenderer = nullptr;
+        }
+        OH_AudioRenderer_Stop(existingRenderer);
+        OH_AudioRenderer_Release(existingRenderer);
+        OH_AudioStreamBuilder_Destroy(ctx->audioBuilder);
+        ctx->audioBuilder = nullptr;
+      }
       (void)StartFfmpegAudio(state, currentTimeMs, false);
     }
   }
@@ -1890,10 +1933,50 @@ static void ProcessPendingAudioTrackSwitch(FfmpegContext *ctx, int32_t trackInde
     return;
   }
   StartFfmpegAudioDecodeThread(ctx);
-  if (!StartFfmpegAudio(state, currentTimeMs, wasPlaying)) {
-    EmitAsyncError(state, ERR_SELECT_TRACK_FAILED,
-      "selectTrack failed: FFmpeg audio renderer restart failed");
-    return;
+
+  if (fastPath) {
+    // 快速路径：Flush OS 缓冲 + 重置时钟 + 复用渲染器
+    if (!FfmpegInitSwr(ctx)) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                   "SelectTrackAsync: FfmpegInitSwr failed in fast path, falling back");
+      // swr 失败，降级为全量重建
+      {
+        std::lock_guard<std::mutex> lk(ctx->audioRenderStateMutex);
+        ctx->audioRenderer = nullptr;
+      }
+      OH_AudioRenderer_Stop(existingRenderer);
+      OH_AudioRenderer_Release(existingRenderer);
+      OH_AudioStreamBuilder_Destroy(ctx->audioBuilder);
+      ctx->audioBuilder = nullptr;
+      if (!StartFfmpegAudio(state, currentTimeMs, wasPlaying)) {
+        EmitAsyncError(state, ERR_SELECT_TRACK_FAILED,
+          "selectTrack failed: FFmpeg audio renderer restart failed (fallback)");
+        return;
+      }
+    } else {
+      OH_AudioRenderer_Flush(existingRenderer);  // 清空 OS 硬件缓冲区内的旧轨音频
+      ctx->playbackPaused.store(!wasPlaying, std::memory_order_relaxed);
+      ctx->audioClockBaseMs.store(currentTimeMs, std::memory_order_relaxed);
+      ctx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+      ctx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
+      ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(currentTimeMs, std::memory_order_relaxed);
+      ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
+      ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
+      if (wasPlaying) {
+        const OH_AudioStream_Result startResult = OH_AudioRenderer_Start(existingRenderer);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "SelectTrackAsync: fast path Start result=%{public}d baseMs=%{public}lld",
+                     startResult, static_cast<long long>(currentTimeMs));
+      }
+      ctx->audioRendererSwitching.store(false, std::memory_order_release);
+    }
+  } else {
+    if (!StartFfmpegAudio(state, currentTimeMs, wasPlaying)) {
+      EmitAsyncError(state, ERR_SELECT_TRACK_FAILED,
+        "selectTrack failed: FFmpeg audio renderer restart failed");
+      return;
+    }
   }
   {
     std::lock_guard<std::mutex> lk(state->stateMutex);
