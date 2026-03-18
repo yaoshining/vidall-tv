@@ -98,4 +98,8 @@ export class PlayerEvents {
     eventId: 14,
     priority: emitter.EventPriority.HIGH
   };
+  static readonly NATIVE_AUDIO_OFFSET_CHANGED: emitter.InnerEvent = {
+    eventId: 15,
+    priority: emitter.EventPriority.HIGH
+  };
 }

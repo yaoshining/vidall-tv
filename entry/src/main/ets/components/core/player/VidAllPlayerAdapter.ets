@@ -13,6 +13,7 @@ import { encodeUrlPath } from '../../../utils/VideoPlayerUtil';
 const TAG = '[VidAllPlayerAdapter]';
 const METRICS_TAG = 'VidAll_Metrics';
 const TIME_UPDATE_INTERVAL_MS = 500;
+const DEFAULT_NATIVE_AUDIO_HARDWARE_OFFSET_MS = 120;
 
 interface NativeXComponentFallbackContext {
 }
@@ -21,6 +22,7 @@ interface VidAllCorePlayerNapiBridge {
   probeVideoDecoderSurface: (handle: number, codecOrMime: string) => VideoDecoderSurfaceProbeResult;
   createPlayer: () => number;
   setPreferredDecodePath: (handle: number, path: string) => void;
+  setAudioHardwareSafetyOffset: (handle: number, offsetMs: number) => void;
   setSource: (handle: number, url: string) => void;
   setDurationHint: (handle: number, durationMs: number) => void;
   setHeaders: (handle: number, headersJson: string) => void;
@@ -136,6 +138,7 @@ export class VidAllPlayerAdapter implements IPlayer {
     reason: 'default_prepare_plan',
     diagnostics: 'plan=system_default'
   };
+  private _audioHardwareSafetyOffsetMs: number = DEFAULT_NATIVE_AUDIO_HARDWARE_OFFSET_MS;
   private _decodePathStatus: NativeDecodePathStatus = {
     expectedPath: 'hardware_preferred',
     path: 'hardware',
@@ -162,7 +165,7 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _probeTrackInfosPromise?: Promise<TrackInfo[]>;
   /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
   private _seekPending: boolean = false;
-  /** seek 完成超时兜底：原生未在 600ms 内回调时自动触发 onSeekDone */
+  /** seek 完成超时诊断：仅记录日志，不再伪造 onSeekDone，避免打乱真实 seek 状态机 */
   private _seekDoneTimeoutTimer?: number;  /** 指标埋点：seek 调用时刻（用于计算 seek 完成耗时） */
   private _metricsSeekStartMs: number = 0;
   get duration(): number {
@@ -216,6 +219,30 @@ export class VidAllPlayerAdapter implements IPlayer {
       `[native-prepare-plan] set plan=${this._prepareDecodeSelection.plan} expected=${this._prepareDecodeSelection.expectedPath} ` +
       `initialPath=${this._prepareDecodeSelection.initialPath} initialState=${this._prepareDecodeSelection.initialState} ` +
       `reason=${this._prepareDecodeSelection.reason} diagnostics=${this._prepareDecodeSelection.diagnostics}`);
+  }
+
+  setAudioHardwareSafetyOffsetMs(offsetMs: number): void {
+    if (offsetMs > 1500) {
+      this._audioHardwareSafetyOffsetMs = 1500;
+      return;
+    }
+    if (offsetMs < -1500) {
+      this._audioHardwareSafetyOffsetMs = -1500;
+      return;
+    }
+    this._audioHardwareSafetyOffsetMs = offsetMs;
+  }
+
+  applyAudioHardwareSafetyOffsetMs(offsetMs: number): void {
+    this.setAudioHardwareSafetyOffsetMs(offsetMs);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `applyAudioHardwareSafetyOffsetMs: handle=${this._playerHandle} offset=${this._audioHardwareSafetyOffsetMs}`);
+    if (this._playerHandle <= 0) {
+      return;
+    }
+    this.callNativeVoid('setAudioHardwareSafetyOffset', () => {
+      VidAllCorePlayerNapi.setAudioHardwareSafetyOffset(this._playerHandle, this._audioHardwareSafetyOffsetMs);
+    });
   }
 
   async initWithContext(videoData: VideoData, surfaceId: string, context: object, xComponentId: string): Promise<void> {
@@ -281,6 +308,11 @@ export class VidAllPlayerAdapter implements IPlayer {
     this.callNativeVoid('setPreferredDecodePath', () => {
       VidAllCorePlayerNapi.setPreferredDecodePath(this._playerHandle, prepareSelection.expectedPath);
     });
+    this.callNativeVoid('setAudioHardwareSafetyOffset', () => {
+      VidAllCorePlayerNapi.setAudioHardwareSafetyOffset(this._playerHandle, this._audioHardwareSafetyOffsetMs);
+    });
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `init: handle=${this._playerHandle} native 音频补偿=${this._audioHardwareSafetyOffsetMs}ms`);
     this.updateDecodePathStatus(
       prepareSelection.initialPath,
       prepareSelection.initialState,
@@ -464,7 +496,7 @@ export class VidAllPlayerAdapter implements IPlayer {
       clearInterval(this._timeUpdateTimer);
       this._timeUpdateTimer = undefined;
     }
-    if (this._playerHandle > 0) {
+    if (this._playerHandle > 0 && !this.isUsingFfmpegPath()) {
       this._currentTime = this.callNativeWithValue('getCurrentTime', () =>
         VidAllCorePlayerNapi.getCurrentTime(this._playerHandle));
     }
@@ -509,19 +541,17 @@ export class VidAllPlayerAdapter implements IPlayer {
         // 其触发的 JS seekDone 回调会清除 _seekPending 并火 _onSeekDoneCb。
         VidAllCorePlayerNapi.seek(this._playerHandle, targetTimeMs);
       });
-      // 若 C++ 在骨架阶段已同步触发 seekDone，_seekPending 此时为 false，无需超时兜底。
-      // 若未触发（未来异步解码器场景），以 600ms 超时作为保底。
+      // 若 C++ 在骨架阶段已同步触发 seekDone，_seekPending 此时为 false，无需超时诊断。
+      // FFmpeg 路径下 seek 可能明显超过 600ms；这里只做日志与指标记录，不伪造完成回调。
       if (this._seekPending) {
         this._seekDoneTimeoutTimer = setTimeout(() => {
           this._seekDoneTimeoutTimer = undefined;
           if (this._seekPending) {
-            this._seekPending = false;
             const seekTimeoutElapsed = Date.now() - this._metricsSeekStartMs;
             hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-              `seek 超时底底触发 target=${targetTimeMs}`);
+              `seek 超时诊断: target=${targetTimeMs}，继续等待原生 seekDone`);
             hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
               `{"event":"seek_result","backend":"native","result":"timeout","elapsed_ms":${seekTimeoutElapsed}}`);
-            this._onSeekDoneCb?.();
           }
         }, 600);
       }
@@ -879,11 +909,6 @@ export class VidAllPlayerAdapter implements IPlayer {
       const err = new Error(`轨道索引非法: ${trackIndex}`);
       this._onErrorCb?.(err);
       throw err;
-    }
-    if (this.isUsingFfmpegPath()) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `selectTrack(${trackIndex}) 已跳过：native/FFmpeg 子路径暂不支持运行时切轨`);
-      return;
     }
     this.callNativeVoid('selectTrack', () => {
       VidAllCorePlayerNapi.selectTrack(this._playerHandle, trackIndex);

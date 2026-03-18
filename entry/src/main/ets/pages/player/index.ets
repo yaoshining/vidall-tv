@@ -379,6 +379,9 @@ export struct PlayerPage {
       emitter.on(PlayerEvents.APP_BACKGROUND, () => {
         this.videoPlayerController.saveProgressNow();
       });
+      emitter.on(PlayerEvents.NATIVE_AUDIO_OFFSET_CHANGED, () => {
+        this.videoPlayerController.refreshNativeAudioHardwareOffsetFromPreferences().catch(() => {});
+      });
 
       let pageParam = context.pathInfo.param as PlayerPageParam
       if (pageParam) {
@@ -468,6 +471,7 @@ export struct PlayerPage {
 
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
+    emitter.off(PlayerEvents.NATIVE_AUDIO_OFFSET_CHANGED.eventId)
     this.videoPlayerController.saveProgressNow()
     this.videoPlayerController.release()
   }
