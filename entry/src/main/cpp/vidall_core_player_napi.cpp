@@ -2131,6 +2131,15 @@ static double AudioClock(FfmpegContext *ctx) {
     candidateMs = mediaFedUpperBoundMs;
   }
   if (anchorJustInitialized) {
+    // Pause/Resume 时 lastReportedMs = pausedClockMs（Pause handler 设置）。
+    // anchorJustInitialized 首次调用 candidateMs = baseMs - hwOffset = pausedClockMs - 900ms，
+    // 直接覆写会导致时钟倒退 900ms，触发"画面滞后声音"。
+    // 修复：此处同样应用单调保护，保持时钟不回退。
+    // - Pause/Resume：max(pausedClockMs - 900, pausedClockMs) = pausedClockMs，时钟不变
+    // - Seek：lastReportedMs 已由 DemuxThread 重置为 seekTarget，max(seekTarget, seekTarget) = seekTarget ✓
+    // - 初始播放：lastReportedMs = 0，max(0, 0) = 0 ✓
+    const int64_t lastMs = ctx->audioClockLastReportedMs.load(std::memory_order_relaxed);
+    if (candidateMs < lastMs) candidateMs = lastMs;
     ctx->audioClockLastReportedMs.store(candidateMs, std::memory_order_relaxed);
     return static_cast<double>(candidateMs) / 1000.0;
   }
