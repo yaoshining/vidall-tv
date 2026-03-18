@@ -70,6 +70,7 @@ extern "C" {
 namespace {
 
 constexpr bool kEnableNativeSubtitleDiagLog = false;
+constexpr int64_t kDefaultAudioHardwareSafetyOffsetMs = 120;
 
 static void ThrowTypeError(napi_env env, const char *message);
 static bool ReadUtf8String(napi_env env, napi_value value, std::string &output);
@@ -814,7 +815,7 @@ struct GlFunctions {
 struct FfmpegContext {
   AVFormatContext *fmtCtx = nullptr;
   int videoStreamIdx = -1;
-  int audioStreamIdx = -1;
+  std::atomic<int32_t> audioStreamIdx{-1};
   AVPacketQueue videoQueue;
   AVPacketQueue audioQueue;
   std::thread demuxThread;
@@ -867,16 +868,28 @@ struct FfmpegContext {
   int lastSwsSrcFmt = -1;  // 上次 swsCtx 对应的源像素格式（格式或尺寸变化时重建）
   int lastSwsSrcW   = -1;  // 上次 swsCtx 对应的源宽度
   std::vector<int16_t> pcmLeftover;      // swr_convert 溢出缓冲：跨 callback 的剩余 PCM 数据
+  std::mutex audioCallbackStateMutex;
+  std::condition_variable audioCallbackStateCv;
+  std::atomic<int32_t> audioCallbackActiveCount{0};
+  std::atomic<bool> audioRendererSwitching{false};
+  std::mutex audioRenderStateMutex;
 
   // B5：音频时钟（主时钟）
-  std::atomic<int64_t> audioPtsSamples{0};        // 仅保留为诊断计数，不再直接作为主时钟
+  std::atomic<int64_t> audioPtsSamples{0};        // 已喂给 renderer 的真实媒体样本数，供音频主时钟估算
   int audioSampleRate{0};                         // swr 输出采样率（48000），FfmpegInitSwr 后固定
   std::atomic<int64_t> audioClockBaseMs{0};       // 当前播放锚点对应的媒体时间
+  std::atomic<int64_t> audioClockFloorMs{0};      // AudioClock 减去 hwOffset 后的下界：切音轨时=liveClockMs，seek时=目标位置，初始=0
+  std::atomic<int64_t> audioClockAnchorFramePosition{-1}; // 当前锚点对应的 renderer 累计 framePosition；-1 表示尚未建立有效锚点
+  std::atomic<int64_t> audioClockAnchorFramesWritten{-1}; // 当前锚点对应的累计 written；-1 表示尚未建立有效锚点
   std::atomic<int64_t> audioClockStartRealtimeMs{0}; // 当前播放锚点对应的 steady_clock 时间；暂停时为 0
+  std::atomic<int64_t> audioClockLastReportedMs{0};  // 单调保护：避免 renderer timestamp 抖动导致时间倒退
+  std::atomic<int64_t> audioClockLastDiagRealtimeMs{0}; // 低频同步诊断日志节流
+  std::atomic<int64_t> audioHardwareSafetyOffsetMs{kDefaultAudioHardwareSafetyOffsetMs}; // 当前实例音频硬件补偿
   std::atomic<bool> playbackPaused{false};        // FFmpeg 路径的真实暂停态：音频回调/视频渲染均需读取
   std::atomic<int32_t> videoSyncGraceFrames{0}; // seek/启动后前若干帧绕过 AV sync，先让画面稳定出帧
   int droppedDecodeFrames = 0;                    // 诊断：当前会话累计丢弃的解码帧
   int droppedLateFrames = 0;                      // 诊断：当前会话累计丢弃的渲染晚到帧
+  std::atomic<int64_t> lastRenderedVideoPtsMs{-1}; // 渲染线程最后实际渲染帧的视频 PTS（ms）；-1 表示尚未渲染任何帧
   bool firstFrameLogged = false;                  // 诊断：每个会话仅打印一次首帧日志
   bool firstDrawLogged = false;                   // 诊断：每个会话仅打印一次首个 glDrawArrays 日志
   bool firstSwapLogged = false;                   // 诊断：每个会话仅打印一次首个 eglSwapBuffers 日志
@@ -884,6 +897,8 @@ struct FfmpegContext {
   // B5：seek 请求（Seek() NAPI 写入，DemuxThreadFunc 消费）
   std::atomic<bool> seekRequested{false};
   std::atomic<int64_t> seekTargetMs{-1};
+  std::atomic<bool> selectTrackRequested{false};
+  std::atomic<int32_t> selectTrackTargetIndex{-1};
 
   // B5：反向指针，供 DemuxThreadFunc 发出 seekDone TSF；生命周期安全（state 独占拥有 ffmpegCtx）
   // B5-QA fix：改为 atomic ptr，消除 StopFfmpegDemux(主线程) 写 nullptr 与
@@ -987,6 +1002,7 @@ struct NativePlayerSkeletonState {
   // 注意：std::mutex 不可拷贝/移动；unordered_map 通过节点指针操作，不需要拷贝值
   std::mutex stateMutex;
   NativePreferredDecodePath preferredDecodePath = NativePreferredDecodePath::HARDWARE_PREFERRED;
+  std::atomic<int64_t> audioHardwareSafetyOffsetMs{kDefaultAudioHardwareSafetyOffsetMs};
   // B1：FFmpeg 自研路径标志与上下文
   bool useFfmpegPath = false;  // OH_AVPlayer 报错后设为 true，切换到 FFmpeg 路径
   std::unique_ptr<FfmpegContext> ffmpegCtx;
@@ -1320,6 +1336,12 @@ static int64_t NowRealtimeMs() {
   return static_cast<int64_t>(ms.count());
 }
 
+static int64_t NowRealtimeNs() {
+  auto now = std::chrono::steady_clock::now();
+  auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+  return static_cast<int64_t>(ns.count());
+}
+
 static void AdvancePlaybackClockIfNeeded(NativePlayerSkeletonState &state) {
   if (!state.playing) {
     return;
@@ -1481,6 +1503,39 @@ static napi_value SetPreferredDecodePath(napi_env env, napi_callback_info info) 
   return ReturnUndefinedOrThrow(env, "setPreferredDecodePath failed to create return value");
 }
 
+static napi_value SetAudioHardwareSafetyOffset(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2] = { nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "setAudioHardwareSafetyOffset failed to read args");
+    return nullptr;
+  }
+  if (argc < 2) {
+    ThrowTypeError(env, "setAudioHardwareSafetyOffset requires (handle, offsetMs)");
+    return nullptr;
+  }
+  int32_t handle = 0;
+  int32_t offsetMs = 0;
+  if (napi_get_value_int32(env, args[0], &handle) != napi_ok ||
+      napi_get_value_int32(env, args[1], &offsetMs) != napi_ok) {
+    ThrowTypeError(env, "setAudioHardwareSafetyOffset requires int32 handle and int32 offsetMs");
+    return nullptr;
+  }
+  NativePlayerSkeletonState *state = FindPlayerOrThrow(env, handle);
+  if (state == nullptr) {
+    return nullptr;
+  }
+  const int32_t normalizedOffsetMs = std::max<int32_t>(-1500, std::min<int32_t>(offsetMs, 1500));
+  state->audioHardwareSafetyOffsetMs.store(normalizedOffsetMs, std::memory_order_relaxed);
+  if (state->ffmpegCtx != nullptr) {
+    state->ffmpegCtx->audioHardwareSafetyOffsetMs.store(normalizedOffsetMs, std::memory_order_relaxed);
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "SetAudioHardwareSafetyOffset: handle=%d offsetMs=%d hasFfmpegCtx=%d",
+               handle, normalizedOffsetMs, state->ffmpegCtx != nullptr ? 1 : 0);
+  return ReturnUndefinedOrThrow(env, "setAudioHardwareSafetyOffset failed to create return value");
+}
+
 static napi_value SetDurationHint(napi_env env, napi_callback_info info) {
   size_t argc = 2;
   napi_value args[2] = { nullptr, nullptr };
@@ -1565,6 +1620,14 @@ struct SubtitleData {
 // ---------------------------------------------------------------------------
 // B1：FFmpeg demux 路径辅助函数
 // ---------------------------------------------------------------------------
+
+static int ReopenFfmpegAudioCodec(FfmpegContext *ctx);
+static void StopFfmpegAudioDecodeThread(FfmpegContext *ctx);
+static void StartFfmpegAudioDecodeThread(FfmpegContext *ctx);
+static bool StartFfmpegAudio(NativePlayerSkeletonState *state, int64_t clockBaseMs, bool startRenderer);
+static void StopFfmpegAudio(NativePlayerSkeletonState *state);
+static void FlushFfmpegAudioBuffers(FfmpegContext *ctx);
+static double AudioClock(FfmpegContext *ctx);
 
 // av_read_frame 中断回调：interruptFlag 置 true 时让 FFmpeg 立即退出阻塞 IO
 static int FfmpegInterruptCallback(void *opaque) {
@@ -1687,11 +1750,13 @@ static int FfmpegOpenInput(FfmpegContext *ctx, const std::string &url) {
   }
 
   ctx->videoStreamIdx = av_find_best_stream(ctx->fmtCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-  ctx->audioStreamIdx = av_find_best_stream(ctx->fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+  ctx->audioStreamIdx.store(
+      av_find_best_stream(ctx->fmtCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0),
+      std::memory_order_relaxed);
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "FfmpegOpenInput: url=%s videoIdx=%d audioIdx=%d",
-               url.c_str(), ctx->videoStreamIdx, ctx->audioStreamIdx);
+               url.c_str(), ctx->videoStreamIdx, ctx->audioStreamIdx.load(std::memory_order_relaxed));
   return 0;
 }
 
@@ -1699,18 +1764,294 @@ static int FfmpegOpenInput(FfmpegContext *ctx, const std::string &url) {
 // B5：音频时钟辅助（主时钟，单位：秒）
 // ---------------------------------------------------------------------------
 
-static double AudioClock(const FfmpegContext *ctx) {
+static void ResetAudioClockAnchorLocked(FfmpegContext *ctx) {
+  if (ctx == nullptr || ctx->audioRenderer == nullptr) {
+    return;
+  }
+  int64_t framePosition = 0;
+  int64_t timestampNs = 0;
+  int64_t framesWritten = 0;
+  const OH_AudioStream_Result tsRet =
+      OH_AudioRenderer_GetTimestamp(ctx->audioRenderer, CLOCK_MONOTONIC, &framePosition, &timestampNs);
+  const OH_AudioStream_Result writtenRet =
+      OH_AudioRenderer_GetFramesWritten(ctx->audioRenderer, &framesWritten);
+  if (tsRet == AUDIOSTREAM_SUCCESS) {
+    ctx->audioClockAnchorFramePosition.store(std::max<int64_t>(0, framePosition), std::memory_order_relaxed);
+  } else {
+    ctx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+  }
+  if (writtenRet == AUDIOSTREAM_SUCCESS) {
+    ctx->audioClockAnchorFramesWritten.store(std::max<int64_t>(0, framesWritten), std::memory_order_relaxed);
+  } else {
+    ctx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
+  }
+}
+
+static void EmitAsyncError(NativePlayerSkeletonState *state, int32_t code, const char *message) {
+  if (state == nullptr || state->tsfOnError == nullptr) {
+    return;
+  }
+  auto *errData = new ErrorData{
+    code,
+    new std::string(message != nullptr ? message : "native async error")
+  };
+  napi_call_threadsafe_function(state->tsfOnError, errData, napi_tsfn_nonblocking);
+}
+
+static void ProcessPendingAudioTrackSwitch(FfmpegContext *ctx, int32_t trackIndex) {
+  if (ctx == nullptr || ctx->fmtCtx == nullptr) {
+    return;
+  }
+  NativePlayerSkeletonState *state = ctx->ownerState.load(std::memory_order_acquire);
+  if (state == nullptr) {
+    return;
+  }
+  if (trackIndex < 0 || trackIndex >= static_cast<int32_t>(ctx->fmtCtx->nb_streams)) {
+    EmitAsyncError(state, ERR_SELECT_TRACK_INVALID_INDEX,
+      "selectTrack failed: FFmpeg audio stream index is out of range");
+    return;
+  }
+  AVStream *targetStream = ctx->fmtCtx->streams[trackIndex];
+  if (targetStream == nullptr || targetStream->codecpar == nullptr ||
+      targetStream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+    EmitAsyncError(state, ERR_SELECT_TRACK_INVALID_INDEX,
+      "selectTrack failed: target stream is not audio");
+    return;
+  }
+
+  int64_t currentTimeMs = 0;
+  bool wasPlaying = false;
+  int32_t previousTrackIndex = -1;
+  {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    currentTimeMs = state->currentTimeMs;
+    wasPlaying = state->playing;
+    previousTrackIndex = state->selectedTrackIndex;
+  }
+  if (wasPlaying) {
+    const int64_t hwOffsetMs = ctx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+    const int64_t liveClockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
+    const int64_t videoPosMsAtSwitch = ctx->lastRenderedVideoPtsMs.load(std::memory_order_relaxed);
+    // 选择参考时间：
+    //   正常情况：使用 AudioClock（用户正在听到的媒体位置），保持音频内容连续，无跳跃。
+    //   异常情况：若 AudioClock 比视频帧 PTS 落后 5 秒以上（通常发生在 session 刚开始、
+    //             AudioClock 尚未建立有效值时），回退到视频 PTS，防止 baseMs=0 引发画面冻结。
+    int64_t refMs;
+    if (videoPosMsAtSwitch >= 0 && liveClockMs < videoPosMsAtSwitch - 5000) {
+      refMs = videoPosMsAtSwitch;  // AudioClock 严重落后，用视频 PTS 兜底
+    } else if (liveClockMs > 0) {
+      refMs = liveClockMs;         // 正常路径：用 AudioClock 保持音频连续
+    } else {
+      refMs = (videoPosMsAtSwitch >= 0) ? videoPosMsAtSwitch : currentTimeMs;
+    }
+    currentTimeMs = refMs + hwOffsetMs;
+  }
+  // audioClockFloorMs：切音轨时将 AudioClock 的下界设为 refMs（= liveClockMs 或 videoPts）；
+  // AudioClock 减去 hwOffset 后 max(floor, ...) 使时钟从 liveClockMs 开始而非 liveClockMs+hwOffset，
+  // 避免切轨后视频需要快进 hwOffset(~900ms) 追赶音频时钟。
+  {
+    const int64_t hwOffset = ctx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+    const int64_t floorMs = wasPlaying ? (currentTimeMs - hwOffset) : currentTimeMs;
+    ctx->audioClockFloorMs.store(floorMs, std::memory_order_relaxed);
+  }
+  const int previousAudioStreamIdx = ctx->audioStreamIdx.load(std::memory_order_relaxed);
+  if (previousAudioStreamIdx == trackIndex) {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    state->selectedTrackIndex = trackIndex;
+    return;
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "SelectTrackAsync: previous=%{public}d target=%{public}d wasPlaying=%{public}d currentTimeMs=%{public}lld",
+               previousTrackIndex, trackIndex, wasPlaying ? 1 : 0, static_cast<long long>(currentTimeMs));
+
+  StopFfmpegAudio(state);
+  StopFfmpegAudioDecodeThread(ctx);
+  FlushFfmpegAudioBuffers(ctx);
+
+  // 音频解码线程已在上面停掉，视频解码线程不访问 audioCodecCtx，
+  // 不能持有 codecMutex 来做 ReopenFfmpegAudioCodec：avcodec_open2 可能耗时较长，
+  // 持锁会阻塞视频解码线程 → 视频帧队列耗尽 → 画面冻结。
+  bool reopenOk = false;
+  ctx->audioStreamIdx.store(trackIndex, std::memory_order_relaxed);
+  int reopenRet = ReopenFfmpegAudioCodec(ctx);
+  if (reopenRet >= 0) {
+    reopenOk = true;
+  } else {
+    ctx->audioStreamIdx.store(previousAudioStreamIdx, std::memory_order_relaxed);
+    if (ReopenFfmpegAudioCodec(ctx) >= 0) {
+      StartFfmpegAudioDecodeThread(ctx);
+      (void)StartFfmpegAudio(state, currentTimeMs, false);
+    }
+  }
+  if (!reopenOk) {
+    EmitAsyncError(state, ERR_SELECT_TRACK_FAILED,
+      "selectTrack failed: FFmpeg audio decoder reopen failed");
+    return;
+  }
+  StartFfmpegAudioDecodeThread(ctx);
+  if (!StartFfmpegAudio(state, currentTimeMs, wasPlaying)) {
+    EmitAsyncError(state, ERR_SELECT_TRACK_FAILED,
+      "selectTrack failed: FFmpeg audio renderer restart failed");
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lk(state->stateMutex);
+    state->selectedTrackIndex = trackIndex;
+    state->currentTimeMs = currentTimeMs;
+  }
+}
+
+static double AudioClock(FfmpegContext *ctx) {
   const int64_t baseMs = ctx->audioClockBaseMs.load(std::memory_order_relaxed);
   if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
     return static_cast<double>(baseMs) / 1000.0;
   }
-  const int64_t startRealtimeMs = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
-  if (startRealtimeMs <= 0) {
-    return static_cast<double>(baseMs) / 1000.0;
+
+  int64_t candidateMs = baseMs;
+  int64_t mediaFedUpperBoundMs = baseMs;
+  bool hasRendererTimestamp = false;
+  bool anchorJustInitialized = false;
+  if (ctx->audioSampleRate > 0) {
+    const int64_t fedSamples = ctx->audioPtsSamples.load(std::memory_order_relaxed);
+    if (fedSamples > 0) {
+      mediaFedUpperBoundMs =
+          baseMs + (fedSamples * 1000LL) / static_cast<int64_t>(ctx->audioSampleRate);
+    }
   }
-  const int64_t nowMs = NowRealtimeMs();
-  const int64_t deltaMs = std::max<int64_t>(0, nowMs - startRealtimeMs);
-  return static_cast<double>(baseMs + deltaMs) / 1000.0;
+  if (!ctx->audioRendererSwitching.load(std::memory_order_acquire) &&
+      ctx->audioRenderer != nullptr && ctx->audioSampleRate > 0) {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
+    if (ctx->audioRenderer != nullptr) {
+      int64_t framePosition = 0;
+      int64_t timestampNs = 0;
+      const OH_AudioStream_Result tsRet =
+          OH_AudioRenderer_GetTimestamp(ctx->audioRenderer, CLOCK_MONOTONIC, &framePosition, &timestampNs);
+      if (tsRet == AUDIOSTREAM_SUCCESS) {
+        hasRendererTimestamp = true;
+        const int64_t nowNs = NowRealtimeNs();
+        const int64_t nowMs = nowNs / 1000000LL;
+        const int64_t elapsedNsSinceTs = std::max<int64_t>(0, nowNs - timestampNs);
+        const int64_t renderedSinceTs =
+            (elapsedNsSinceTs * static_cast<int64_t>(ctx->audioSampleRate)) / 1000000000LL;
+        int64_t anchorFramePosition =
+            ctx->audioClockAnchorFramePosition.load(std::memory_order_relaxed);
+        int64_t anchorFramesWritten =
+            ctx->audioClockAnchorFramesWritten.load(std::memory_order_relaxed);
+        if (anchorFramePosition < 0) {
+          anchorFramePosition = std::max<int64_t>(0, framePosition);
+          ctx->audioClockAnchorFramePosition.store(anchorFramePosition, std::memory_order_relaxed);
+          anchorJustInitialized = true;
+        }
+        int64_t framesWritten = 0;
+        const OH_AudioStream_Result writtenRet =
+            OH_AudioRenderer_GetFramesWritten(ctx->audioRenderer, &framesWritten);
+        if (writtenRet == AUDIOSTREAM_SUCCESS && anchorFramesWritten < 0) {
+          anchorFramesWritten = std::max<int64_t>(0, framesWritten);
+          ctx->audioClockAnchorFramesWritten.store(anchorFramesWritten, std::memory_order_relaxed);
+          anchorJustInitialized = true;
+        } else if (anchorFramesWritten < 0) {
+          anchorFramesWritten = 0;
+        }
+        const int64_t effectivePlayedFrames =
+            std::max<int64_t>(0, framePosition - anchorFramePosition) + renderedSinceTs;
+        const int64_t playedMs =
+            (effectivePlayedFrames * 1000LL) / static_cast<int64_t>(ctx->audioSampleRate);
+        candidateMs = baseMs + playedMs;
+
+        int64_t pendingMs = 0;
+        if (writtenRet == AUDIOSTREAM_SUCCESS && !anchorJustInitialized) {
+          const int64_t effectiveWrittenFrames =
+              std::max<int64_t>(0, framesWritten - anchorFramesWritten);
+          const int64_t pendingFrames =
+              std::max<int64_t>(0, effectiveWrittenFrames - effectivePlayedFrames);
+          if (pendingFrames > 0) {
+            pendingMs = (pendingFrames * 1000LL) / static_cast<int64_t>(ctx->audioSampleRate);
+            const int64_t cappedPendingMs = std::min<int64_t>(pendingMs, 1500);
+            candidateMs = std::max<int64_t>(baseMs, candidateMs - cappedPendingMs);
+          }
+        }
+  const int64_t hardwareOffsetMs = ctx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+        // 使用 audioClockFloorMs 而非 baseMs 作为 hwOffset 减法后的下界：
+        // - 切音轨时 floor = liveClockMs（而非 liveClockMs+hwOffset），使时钟从视频同步点开始
+        // - seek/初始启动时 floor = seekTarget/0，与旧行为等价
+        const int64_t clockFloor = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
+        candidateMs = std::max<int64_t>(clockFloor, candidateMs - hardwareOffsetMs);
+        int64_t lastDiagRealtimeMs = ctx->audioClockLastDiagRealtimeMs.load(std::memory_order_relaxed);
+        if (nowMs - lastDiagRealtimeMs >= 1000 &&
+            ctx->audioClockLastDiagRealtimeMs.compare_exchange_strong(
+                lastDiagRealtimeMs, nowMs, std::memory_order_relaxed, std::memory_order_relaxed)) {
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                       "[AVSyncDiag] baseMs=%{public}lld framePos=%{public}lld renderedSinceTs=%{public}lld written=%{public}lld pendingMs=%{public}lld hwOffsetMs=%{public}lld candidateMs=%{public}lld",
+                       static_cast<long long>(baseMs),
+                       static_cast<long long>(framePosition),
+                       static_cast<long long>(renderedSinceTs),
+                       static_cast<long long>(framesWritten),
+                       static_cast<long long>(pendingMs),
+                       static_cast<long long>(hardwareOffsetMs),
+                       static_cast<long long>(candidateMs));
+        }
+      }
+    }
+  }
+  if (candidateMs <= baseMs && !hasRendererTimestamp) {
+    // 切音轨窗口（audioRendererSwitching=true）期间：HW 时间戳不可用，startRealtimeMs 也已清零。
+    // 此时 candidateMs 会卡在 baseMs（= liveClockMs+hwOffset），导致视频以为落后900ms而快进。
+    // 修复：用 audioClockFloorMs（= liveClockMs）代替 baseMs，让 AudioClock 在切轨期间
+    // 停在视频当前位置，而不是跳到 baseMs（liveClockMs+hwOffset）。
+    if (ctx->audioRendererSwitching.load(std::memory_order_acquire)) {
+      const int64_t floorMs = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
+      if (floorMs > 0) {
+        candidateMs = floorMs; // 切轨期间 hold 在 liveClockMs，单调保护会确保不回退
+      }
+    } else {
+      const int64_t startRealtimeMs = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
+      if (startRealtimeMs > 0) {
+        const int64_t nowMs = NowRealtimeMs();
+        const int64_t deltaMs = std::max<int64_t>(0, nowMs - startRealtimeMs);
+        candidateMs = baseMs + deltaMs;
+      }
+    }
+  }
+  // Post-seek/flush warmup：candidateMs <= floor 表明 hardware pipeline 仍在预热阶段。
+  // 用 "floor - hwOffset + elapsed" 公式（与 HW 稳态等价）平滑推进 AudioClock，
+  // 避免视频在 seek 后冻结 600-1500ms 等待 hardware framePos 爬过 hwOffset。
+  // audioRendererSwitching=true 时（切音轨窗口）由 Round2 fix 处理，此处跳过。
+  {
+    const int64_t floorMs2 = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
+    if (candidateMs <= floorMs2 && !ctx->audioRendererSwitching.load(std::memory_order_acquire)) {
+      const int64_t startRt = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
+      if (startRt > 0) {
+        const int64_t hwOff = ctx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+        const int64_t elapsed = std::max<int64_t>(0, NowRealtimeMs() - startRt);
+        // anchor = floor - hwOff；经过 hwOff ms 后 wall-clock 才到达 floor，
+        // 与"音频样本进入 pipeline → 经 hwOff ms 到达扬声器"的物理行为对齐。
+        const int64_t wallMs = std::max(floorMs2, floorMs2 - hwOff + elapsed);
+        if (wallMs > candidateMs) {
+          candidateMs = wallMs;
+        }
+      }
+    }
+  }
+  // 只在已有真实音频数据时才应用 mediaFedUpperBound 上限；
+  // audioPtsSamples==0 时跳过此 cap，防止切音轨/seek 初期管线尚未就绪时 cap 把时钟永久锁死。
+  if (ctx->audioPtsSamples.load(std::memory_order_relaxed) > 0 &&
+      candidateMs > mediaFedUpperBoundMs) {
+    candidateMs = mediaFedUpperBoundMs;
+  }
+  if (anchorJustInitialized) {
+    ctx->audioClockLastReportedMs.store(candidateMs, std::memory_order_relaxed);
+    return static_cast<double>(candidateMs) / 1000.0;
+  }
+  int64_t lastReportedMs = ctx->audioClockLastReportedMs.load(std::memory_order_relaxed);
+  while (candidateMs > lastReportedMs &&
+         !ctx->audioClockLastReportedMs.compare_exchange_weak(
+             lastReportedMs, candidateMs, std::memory_order_relaxed, std::memory_order_relaxed)) {
+  }
+  if (candidateMs < lastReportedMs) {
+    candidateMs = lastReportedMs;
+  }
+  return static_cast<double>(candidateMs) / 1000.0;
 }
 
 static double VideoFramePtsSeconds(const FfmpegContext *ctx, const AVFrame *frame) {
@@ -1771,8 +2112,36 @@ static void FlushFfmpegQueues(FfmpegContext *ctx) {
   }
   ctx->audioFrameQueue.cv.notify_all();
 
-  // 清空 swr 溢出缓冲（避免 seek 后播放旧数据）
-  ctx->pcmLeftover.clear();
+  {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
+    ctx->pcmLeftover.clear();
+  }
+}
+
+static void FlushFfmpegAudioBuffers(FfmpegContext *ctx) {
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    while (!ctx->audioQueue.packets.empty()) {
+      AVPacket *p = ctx->audioQueue.packets.front();
+      ctx->audioQueue.packets.pop();
+      av_packet_free(&p);
+    }
+  }
+  ctx->audioQueue.cv.notify_all();
+
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioFrameQueue.mtx);
+    while (!ctx->audioFrameQueue.frames.empty()) {
+      AVFrame *f = ctx->audioFrameQueue.frames.front();
+      ctx->audioFrameQueue.frames.pop();
+      av_frame_free(&f);
+    }
+  }
+  ctx->audioFrameQueue.cv.notify_all();
+  {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
+    ctx->pcmLeftover.clear();
+  }
 }
 
 // demux 线程主循环：持续读帧，分发至视频/音频队列
@@ -1789,6 +2158,10 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
   }
 
   while (ctx->demuxRunning.load()) {
+    if (ctx->selectTrackRequested.exchange(false, std::memory_order_acq_rel)) {
+      const int32_t trackIndex = ctx->selectTrackTargetIndex.load(std::memory_order_relaxed);
+      ProcessPendingAudioTrackSwitch(ctx, trackIndex);
+    }
     // B5：检查 seek 请求（由 Seek() NAPI 设置，在 demux 线程消费以保证 avformat 线程安全）
     if (ctx->seekRequested.exchange(false)) {
       const int64_t targetMs = ctx->seekTargetMs.load();
@@ -1806,6 +2179,7 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
                      "DemuxThread: av_seek_frame failed: %s", errBuf);
         // seek 失败不 continue：让后续 av_read_frame 继续在原位置读包，避免卡死。
       } else {
+        ctx->audioRendererSwitching.store(true, std::memory_order_release);
         // 清空所有 packet/frame 队列（旧数据）
         FlushFfmpegQueues(ctx);
         // 刷新解码器内部缓冲区（hold codecMutex 防止与 decode 线程并发）
@@ -1816,17 +2190,25 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
         }
         // seek 后重置 renderer 缓冲与音频时钟：新时钟 = 目标位置 + 之后已渲染样本
         if (ctx->audioRenderer != nullptr) {
+          std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
           const OH_AudioStream_Result flushResult = OH_AudioRenderer_Flush(ctx->audioRenderer);
+          ctx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+          ctx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
           OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                        "DemuxThread: OH_AudioRenderer_Flush result=%{public}d",
                        static_cast<int32_t>(flushResult));
         }
         ctx->audioClockBaseMs.store(targetMs, std::memory_order_relaxed);
+        ctx->audioClockFloorMs.store(targetMs, std::memory_order_relaxed);  // seek：floor = 目标位置（与 baseMs 相同）
+        // seek 后清零 startRealtimeMs；音频 callback 在首批真实样本写入时再设，
+        // 避免 demux 读取耗时（100-300ms）被计入 wall-clock 导致 AudioClock 超前。
         ctx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+        ctx->audioClockLastReportedMs.store(targetMs, std::memory_order_relaxed);
         ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
         ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
         ctx->droppedDecodeFrames = 0;
         ctx->droppedLateFrames = 0;
+        ctx->audioRendererSwitching.store(false, std::memory_order_release);
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                      "DemuxThread: seeked to %lld ms", static_cast<long long>(targetMs));
         // 发出 seekDone TSF 通知 ArkTS
@@ -1890,7 +2272,9 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
       } else if (pktCopy != nullptr) {
         av_packet_free(&pktCopy);
       }
-    } else if (pkt->stream_index == ctx->audioStreamIdx && ctx->audioStreamIdx >= 0) {
+    } else {
+      const int audioStreamIdx = ctx->audioStreamIdx.load(std::memory_order_relaxed);
+      if (pkt->stream_index == audioStreamIdx && audioStreamIdx >= 0) {
       AVPacket *pktCopy = av_packet_alloc();
       if (pktCopy != nullptr && av_packet_ref(pktCopy, pkt) == 0) {
         std::unique_lock<std::mutex> lock(ctx->audioQueue.mtx);
@@ -1907,6 +2291,7 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
         ctx->audioQueue.cv.notify_all();
       } else if (pktCopy != nullptr) {
         av_packet_free(&pktCopy);
+      }
       }
     }
     av_packet_unref(pkt);
@@ -1961,8 +2346,9 @@ static int FfmpegInitCodecs(FfmpegContext *ctx) {
   }
 
   // 音频解码器
-  if (ctx->audioStreamIdx >= 0) {
-    AVStream *as = ctx->fmtCtx->streams[ctx->audioStreamIdx];
+  const int audioStreamIdx = ctx->audioStreamIdx.load(std::memory_order_relaxed);
+  if (audioStreamIdx >= 0) {
+    AVStream *as = ctx->fmtCtx->streams[audioStreamIdx];
     const AVCodec *codec = avcodec_find_decoder(as->codecpar->codec_id);
     if (!codec) {
       OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
@@ -1988,6 +2374,50 @@ static int FfmpegInitCodecs(FfmpegContext *ctx) {
                  codec->name, ctx->audioCodecCtx->ch_layout.nb_channels,
                  ctx->audioCodecCtx->sample_rate);
   }
+  return 0;
+}
+
+static int ReopenFfmpegAudioCodec(FfmpegContext *ctx) {
+  if (ctx == nullptr || ctx->fmtCtx == nullptr) {
+    return AVERROR(EINVAL);
+  }
+  const int audioStreamIdx = ctx->audioStreamIdx.load(std::memory_order_relaxed);
+  if (audioStreamIdx < 0 || audioStreamIdx >= static_cast<int>(ctx->fmtCtx->nb_streams)) {
+    return AVERROR_STREAM_NOT_FOUND;
+  }
+  AVStream *audioStream = ctx->fmtCtx->streams[audioStreamIdx];
+  if (audioStream == nullptr || audioStream->codecpar == nullptr ||
+      audioStream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+    return AVERROR(EINVAL);
+  }
+
+  const AVCodec *codec = avcodec_find_decoder(audioStream->codecpar->codec_id);
+  if (codec == nullptr) {
+    return AVERROR_DECODER_NOT_FOUND;
+  }
+  AVCodecContext *nextAudioCodecCtx = avcodec_alloc_context3(codec);
+  if (nextAudioCodecCtx == nullptr) {
+    return AVERROR(ENOMEM);
+  }
+
+  int ret = avcodec_parameters_to_context(nextAudioCodecCtx, audioStream->codecpar);
+  if (ret < 0) {
+    avcodec_free_context(&nextAudioCodecCtx);
+    return ret;
+  }
+  ret = avcodec_open2(nextAudioCodecCtx, codec, nullptr);
+  if (ret < 0) {
+    avcodec_free_context(&nextAudioCodecCtx);
+    return ret;
+  }
+
+  if (ctx->audioCodecCtx != nullptr) {
+    avcodec_free_context(&ctx->audioCodecCtx);
+  }
+  ctx->audioCodecCtx = nextAudioCodecCtx;
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "ReopenFfmpegAudioCodec: stream=%{public}d codec=%{public}s",
+               audioStreamIdx, codec->name);
   return 0;
 }
 
@@ -2055,7 +2485,7 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
         const double videoPts = VideoFramePtsSeconds(ctx, frame);
         const double audioClock = AudioClock(ctx);
         const double diff = videoPts - audioClock;
-        if (videoPts > 0.0 && diff < -0.8) {
+        if (videoPts > 0.0 && diff < -3.0) {
           ctx->droppedDecodeFrames++;
           if (ctx->droppedDecodeFrames == 1 || (ctx->droppedDecodeFrames % 30) == 0) {
             int packetBacklog = 0;
@@ -2064,7 +2494,7 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
               packetBacklog = static_cast<int>(ctx->videoQueue.packets.size());
             }
             OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
-                         "VideoDecodeThread: skip late frame diffMs=%{public}d videoPtsMs=%{public}d audioClockMs=%{public}d packetBacklog=%{public}d count=%{public}d",
+                         "VideoDecodeThread: skip severely late frame diffMs=%{public}d videoPtsMs=%{public}d audioClockMs=%{public}d packetBacklog=%{public}d count=%{public}d",
                          static_cast<int>(diff * 1000.0),
                          static_cast<int>(videoPts * 1000.0),
                          static_cast<int>(audioClock * 1000.0),
@@ -2074,6 +2504,7 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
           av_frame_unref(frame);
           continue;
         }
+        ctx->droppedDecodeFrames = 0;
       }
 
       // 将帧移入 videoFrameQueue（背压等待，防止解码过快撑爆内存）
@@ -2260,6 +2691,46 @@ static void AudioDecodeThreadFunc(FfmpegContext *ctx) {
 
   av_frame_free(&frame);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "AudioDecodeThread: exited");
+}
+
+static void StopFfmpegAudioDecodeThread(FfmpegContext *ctx) {
+  if (ctx == nullptr) {
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioFrameQueue.mtx);
+    ctx->audioFrameQueue.abort = true;
+  }
+  ctx->audioFrameQueue.cv.notify_all();
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    ctx->audioQueue.abort = true;
+  }
+  ctx->audioQueue.cv.notify_all();
+  if (ctx->audioDecodeThread.joinable()) {
+    ctx->audioDecodeThread.join();
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StopFfmpegAudioDecodeThread: audio decode thread stopped");
+}
+
+static void StartFfmpegAudioDecodeThread(FfmpegContext *ctx) {
+  if (ctx == nullptr || ctx->audioCodecCtx == nullptr || !ctx->decodeRunning.load()) {
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioFrameQueue.mtx);
+    ctx->audioFrameQueue.abort = false;
+  }
+  {
+    std::lock_guard<std::mutex> lk(ctx->audioQueue.mtx);
+    ctx->audioQueue.abort = false;
+  }
+  if (!ctx->audioDecodeThread.joinable()) {
+    ctx->audioDecodeThread = std::thread(AudioDecodeThreadFunc, ctx);
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StartFfmpegAudioDecodeThread: audio decode thread restarted");
 }
 
 // ---------------------------------------------------------------------------
@@ -2760,13 +3231,23 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
           || frameTs == AV_NOPTS_VALUE;
       if (!bypassSync) {
         const double videoPts = VideoFramePtsSeconds(ctx, frame);
-        const double audioClock = AudioClock(ctx);
-        const double diff = videoPts - audioClock;
+        double audioClock = AudioClock(ctx);
+        double diff = videoPts - audioClock;
 
-        if (diff > 0.2) {
-          // 视频略超前：短暂等待音频，避免单帧 sleep 过长造成肉眼卡顿
-          const int sleepMs = static_cast<int>(std::min(diff * 1000.0, 50.0));
-          std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+        if (diff > 0.09) {
+          // 视频略微超前时允许保留小幅领先，避免每帧都进入等待分支造成“画面一顿一顿像在等声音”。
+          // videoSyncGraceFrames > 0 时（seek/切音轨刚完成）立即退出等待，防止画面冻结。
+          while (diff > 0.08 &&
+                 ctx->renderRunning.load(std::memory_order_relaxed) &&
+                 !ctx->videoFrameQueue.abort &&
+                 !ctx->playbackPaused.load(std::memory_order_relaxed) &&
+                 ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) == 0) {
+            const double sleepMsDouble = std::max(3.0, std::min((diff - 0.05) * 1000.0, 12.0));
+            const int sleepMs = static_cast<int>(sleepMsDouble);
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+            audioClock = AudioClock(ctx);
+            diff = videoPts - audioClock;
+          }
         } else if (diff < -2.0) {
           ctx->droppedLateFrames++;
           if (ctx->droppedLateFrames == 1 || (ctx->droppedLateFrames % 30) == 0) {
@@ -2798,6 +3279,15 @@ static void RenderThreadFunc(NativePlayerSkeletonState *state) {
         if (state->tsfOnTimeUpdate != nullptr) {
           napi_call_threadsafe_function(state->tsfOnTimeUpdate, nullptr, napi_tsfn_nonblocking);
         }
+      }
+    }
+
+    // 记录最后渲染帧的视频 PTS，供切音轨时用于对齐 baseMs（避免依赖尚未稳定的 AudioClock）
+    {
+      const double videoPtsForSwitch = VideoFramePtsSeconds(ctx, frame);
+      if (videoPtsForSwitch >= 0.0) {
+        ctx->lastRenderedVideoPtsMs.store(static_cast<int64_t>(videoPtsForSwitch * 1000.0),
+                                         std::memory_order_relaxed);
       }
     }
 
@@ -2991,6 +3481,7 @@ static bool FfmpegInitSwr(FfmpegContext *ctx) {
   if (aCtx == nullptr) {
     return false;
   }
+  std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
 
   // 目标格式：stereo S16LE 48000Hz（匹配 OH_AudioRenderer 配置）
   AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
@@ -3034,93 +3525,105 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
     OH_AudioRenderer * /*renderer*/, void *userData,
     void *audioData, int32_t audioDataSize) {
   auto *ctx = static_cast<FfmpegContext *>(userData);
-  if (ctx == nullptr || ctx->swrCtx == nullptr || audioData == nullptr || audioDataSize <= 0) {
+  if (ctx == nullptr || audioData == nullptr || audioDataSize <= 0) {
     if (audioData != nullptr && audioDataSize > 0) {
       memset(audioData, 0, static_cast<size_t>(audioDataSize));
     }
     return AUDIO_DATA_CALLBACK_RESULT_VALID;
   }
-
-  if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
-    memset(audioData, 0, static_cast<size_t>(audioDataSize));
-    return AUDIO_DATA_CALLBACK_RESULT_VALID;
-  }
-
-  auto *dst = static_cast<int16_t *>(audioData);
-  // stereo S16：每帧 = 2 声道 × 2 字节 = 4 字节
-  const int samplesNeeded = audioDataSize / static_cast<int>(2 * sizeof(int16_t));
-  int samplesFilled = 0;
-  int mediaSamplesFilled = 0;
-
-  // ── 步骤 1：先消费上一次 swr_convert 的溢出缓冲 ──────────────────────────
-  if (!ctx->pcmLeftover.empty()) {
-    // pcmLeftover 存储 interleaved stereo s16：每个 "样本" 占 2 个 int16_t（L+R）
-    const int leftoverSamples = static_cast<int>(ctx->pcmLeftover.size()) / 2;
-    const int toCopy = std::min(leftoverSamples, samplesNeeded);
-    memcpy(dst, ctx->pcmLeftover.data(),
-           static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
-    samplesFilled += toCopy;
-    mediaSamplesFilled += toCopy;
-    if (toCopy < leftoverSamples) {
-      ctx->pcmLeftover.erase(ctx->pcmLeftover.begin(),
-                             ctx->pcmLeftover.begin() + toCopy * 2);
-    } else {
-      ctx->pcmLeftover.clear();
-    }
-  }
-
-  // ── 步骤 2：从 audioFrameQueue 拉帧，swr_convert → 填充 dst ──────────────
-  while (samplesFilled < samplesNeeded) {
-    AVFrame *frame = nullptr;
-    {
-      std::unique_lock<std::mutex> lock(ctx->audioFrameQueue.mtx);
-      if (!ctx->audioFrameQueue.frames.empty()) {
-        frame = ctx->audioFrameQueue.frames.front();
-        ctx->audioFrameQueue.frames.pop();
+  ctx->audioCallbackActiveCount.fetch_add(1, std::memory_order_acq_rel);
+  struct AudioCallbackScopeGuard {
+    FfmpegContext *ctx;
+    ~AudioCallbackScopeGuard() {
+      if (ctx == nullptr) {
+        return;
+      }
+      const int32_t remaining =
+          ctx->audioCallbackActiveCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+      if (remaining <= 0) {
+        std::lock_guard<std::mutex> lk(ctx->audioCallbackStateMutex);
+        ctx->audioCallbackStateCv.notify_all();
       }
     }
-    if (frame != nullptr) {
-      // 通知解码线程队列有空位
-      ctx->audioFrameQueue.cv.notify_all();
-    } else {
-      // 无可用帧：填充静音，避免 underrun 杂音
-      memset(dst + samplesFilled * 2, 0,
-             static_cast<size_t>(samplesNeeded - samplesFilled) * 2 * sizeof(int16_t));
-      samplesFilled = samplesNeeded;
-      break;
+  } callbackScopeGuard { ctx };
+  int mediaSamplesFilled = 0;
+  {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
+    if (ctx->audioRendererSwitching.load(std::memory_order_acquire) || ctx->swrCtx == nullptr) {
+      memset(audioData, 0, static_cast<size_t>(audioDataSize));
+      return AUDIO_DATA_CALLBACK_RESULT_VALID;
     }
 
-    // swr_convert 输出缓冲：预留 frame->nb_samples + resampler 延迟余量
-    const int maxOut = frame->nb_samples + 256;
-    std::vector<int16_t> tempBuf(static_cast<size_t>(maxOut * 2));
-    uint8_t *outPtr = reinterpret_cast<uint8_t *>(tempBuf.data());
-    // frame->data 是 uint8_t*[AV_NUM_DATA_POINTERS]，swr_convert 要求 const uint8_t** 输入
-    // 通过临时数组规避 C++ 对 T** → const T** 的类型安全限制
-    const uint8_t *inData[AV_NUM_DATA_POINTERS] = {};
-    for (int i = 0; i < AV_NUM_DATA_POINTERS; i++) {
-      inData[i] = frame->data[i];
-    }
-    const int converted = swr_convert(ctx->swrCtx,
-        &outPtr, maxOut,
-        inData, frame->nb_samples);
-    av_frame_free(&frame);
-
-    if (converted <= 0) {
-      continue;
+    if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+      memset(audioData, 0, static_cast<size_t>(audioDataSize));
+      return AUDIO_DATA_CALLBACK_RESULT_VALID;
     }
 
-    const int canFill = samplesNeeded - samplesFilled;
-    const int toCopy = std::min(converted, canFill);
-    memcpy(dst + samplesFilled * 2, tempBuf.data(),
-           static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
-    samplesFilled += toCopy;
-    mediaSamplesFilled += toCopy;
+    auto *dst = static_cast<int16_t *>(audioData);
+    const int samplesNeeded = audioDataSize / static_cast<int>(2 * sizeof(int16_t));
+    int samplesFilled = 0;
 
-    if (converted > toCopy) {
-      // 多余样本存入溢出缓冲，下次 callback 优先消费
-      ctx->pcmLeftover.insert(ctx->pcmLeftover.end(),
-                              tempBuf.begin() + toCopy * 2,
-                              tempBuf.begin() + converted * 2);
+    if (!ctx->pcmLeftover.empty()) {
+      const int leftoverSamples = static_cast<int>(ctx->pcmLeftover.size()) / 2;
+      const int toCopy = std::min(leftoverSamples, samplesNeeded);
+      memcpy(dst, ctx->pcmLeftover.data(),
+             static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
+      samplesFilled += toCopy;
+      mediaSamplesFilled += toCopy;
+      if (toCopy < leftoverSamples) {
+        ctx->pcmLeftover.erase(ctx->pcmLeftover.begin(),
+                               ctx->pcmLeftover.begin() + toCopy * 2);
+      } else {
+        ctx->pcmLeftover.clear();
+      }
+    }
+
+    while (samplesFilled < samplesNeeded) {
+      AVFrame *frame = nullptr;
+      {
+        std::unique_lock<std::mutex> lock(ctx->audioFrameQueue.mtx);
+        if (!ctx->audioFrameQueue.frames.empty()) {
+          frame = ctx->audioFrameQueue.frames.front();
+          ctx->audioFrameQueue.frames.pop();
+        }
+      }
+      if (frame != nullptr) {
+        ctx->audioFrameQueue.cv.notify_all();
+      } else {
+        memset(dst + samplesFilled * 2, 0,
+               static_cast<size_t>(samplesNeeded - samplesFilled) * 2 * sizeof(int16_t));
+        samplesFilled = samplesNeeded;
+        break;
+      }
+
+      const int maxOut = frame->nb_samples + 256;
+      std::vector<int16_t> tempBuf(static_cast<size_t>(maxOut * 2));
+      uint8_t *outPtr = reinterpret_cast<uint8_t *>(tempBuf.data());
+      const uint8_t *inData[AV_NUM_DATA_POINTERS] = {};
+      for (int i = 0; i < AV_NUM_DATA_POINTERS; i++) {
+        inData[i] = frame->data[i];
+      }
+      const int converted = swr_convert(ctx->swrCtx,
+          &outPtr, maxOut,
+          inData, frame->nb_samples);
+      av_frame_free(&frame);
+
+      if (converted <= 0) {
+        continue;
+      }
+
+      const int canFill = samplesNeeded - samplesFilled;
+      const int toCopy = std::min(converted, canFill);
+      memcpy(dst + samplesFilled * 2, tempBuf.data(),
+             static_cast<size_t>(toCopy) * 2 * sizeof(int16_t));
+      samplesFilled += toCopy;
+      mediaSamplesFilled += toCopy;
+
+      if (converted > toCopy) {
+        ctx->pcmLeftover.insert(ctx->pcmLeftover.end(),
+                                tempBuf.begin() + toCopy * 2,
+                                tempBuf.begin() + converted * 2);
+      }
     }
   }
 
@@ -3152,6 +3655,22 @@ static bool FfmpegInitAudioRenderer(FfmpegContext *ctx) {
   OH_AudioStreamBuilder_SetEncodingType(ctx->audioBuilder, AUDIOSTREAM_ENCODING_TYPE_RAW);
   // AUDIOSTREAM_USAGE_MOVIE：视频媒体播放场景，会触发正确的音频焦点策略
   OH_AudioStreamBuilder_SetRendererInfo(ctx->audioBuilder, AUDIOSTREAM_USAGE_MOVIE);
+  result = OH_AudioStreamBuilder_SetLatencyMode(ctx->audioBuilder, AUDIOSTREAM_LATENCY_MODE_FAST);
+  if (result != AUDIOSTREAM_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: SetLatencyMode FAST failed: %d", result);
+  } else {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: SetLatencyMode FAST ok");
+  }
+  result = OH_AudioStreamBuilder_SetFrameSizeInCallback(ctx->audioBuilder, 480);
+  if (result != AUDIOSTREAM_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: SetFrameSizeInCallback(480) failed: %d", result);
+  } else {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "FfmpegInitAudioRenderer: SetFrameSizeInCallback(480) ok");
+  }
 
   // 注册写数据回调：音频系统在需要 PCM 数据时调用 AudioWriteDataCallback
   result = OH_AudioStreamBuilder_SetRendererWriteDataCallback(
@@ -3182,38 +3701,51 @@ static bool FfmpegInitAudioRenderer(FfmpegContext *ctx) {
 // B4：启动/停止音频渲染器
 // ---------------------------------------------------------------------------
 
-static void StartFfmpegAudio(NativePlayerSkeletonState *state) {
+static bool StartFfmpegAudio(NativePlayerSkeletonState *state, int64_t clockBaseMs = 0, bool startRenderer = true) {
   if (state == nullptr || state->ffmpegCtx == nullptr) {
-    return;
+    return false;
   }
   FfmpegContext *ctx = state->ffmpegCtx.get();
   if (ctx->audioCodecCtx == nullptr) {
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                  "StartFfmpegAudio: no audio stream, skip");
-    return;
+    return false;
   }
 
   if (!FfmpegInitSwr(ctx)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "StartFfmpegAudio: FfmpegInitSwr failed");
-    return;
+    return false;
   }
 
   if (!FfmpegInitAudioRenderer(ctx)) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "StartFfmpegAudio: FfmpegInitAudioRenderer failed");
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
     swr_free(&ctx->swrCtx);
-    return;
+    return false;
   }
 
-  ctx->playbackPaused.store(false, std::memory_order_relaxed);
-  ctx->audioClockBaseMs.store(0, std::memory_order_relaxed);
-  ctx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+  ctx->playbackPaused.store(!startRenderer, std::memory_order_relaxed);
+  ctx->audioClockBaseMs.store(clockBaseMs, std::memory_order_relaxed);
+  ctx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+  ctx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
+  // 立即启动 wall-clock fallback，防止 render 线程在锚点未建立期间死等
+  ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+  ctx->audioClockLastReportedMs.store(clockBaseMs, std::memory_order_relaxed);
   ctx->audioPtsSamples.store(0, std::memory_order_relaxed);
   ctx->videoSyncGraceFrames.store(90, std::memory_order_relaxed);
-  const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
-  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "StartFfmpegAudio: OH_AudioRenderer_Start result=%d", result);
+  if (startRenderer) {
+    const OH_AudioStream_Result result = OH_AudioRenderer_Start(ctx->audioRenderer);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegAudio: OH_AudioRenderer_Start result=%d", result);
+  } else {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegAudio: renderer prepared in paused state baseMs=%{public}lld",
+                 static_cast<long long>(clockBaseMs));
+  }
+  ctx->audioRendererSwitching.store(false, std::memory_order_release);
+  return true;
 }
 
 static void StopFfmpegAudio(NativePlayerSkeletonState *state) {
@@ -3221,13 +3753,36 @@ static void StopFfmpegAudio(NativePlayerSkeletonState *state) {
     return;
   }
   FfmpegContext *ctx = state->ffmpegCtx.get();
+  ctx->audioRendererSwitching.store(true, std::memory_order_release);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StopFfmpegAudio: begin");
 
   // 1. 停止并释放 renderer（调用后音频系统不再调用 callback，消费者安全关闭）
-  if (ctx->audioRenderer != nullptr) {
-    OH_AudioRenderer_Stop(ctx->audioRenderer);
-    OH_AudioRenderer_Release(ctx->audioRenderer);
+  OH_AudioRenderer *rendererToRelease = nullptr;
+  {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
+    rendererToRelease = ctx->audioRenderer;
     ctx->audioRenderer = nullptr;
   }
+  if (rendererToRelease != nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StopFfmpegAudio: stopping renderer");
+    OH_AudioRenderer_Stop(rendererToRelease);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StopFfmpegAudio: releasing renderer");
+    OH_AudioRenderer_Release(rendererToRelease);
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StopFfmpegAudio: waiting callbacks");
+  {
+    std::unique_lock<std::mutex> lk(ctx->audioCallbackStateMutex);
+    ctx->audioCallbackStateCv.wait(lk, [ctx] {
+      return ctx->audioCallbackActiveCount.load(std::memory_order_acquire) == 0;
+    });
+  }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "StopFfmpegAudio: callbacks drained");
 
   // 2. 销毁 builder
   if (ctx->audioBuilder != nullptr) {
@@ -3237,11 +3792,15 @@ static void StopFfmpegAudio(NativePlayerSkeletonState *state) {
 
   // 3. 释放 SwrContext
   if (ctx->swrCtx != nullptr) {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
     swr_free(&ctx->swrCtx);
   }
 
   // 4. 清空溢出缓冲
-  ctx->pcmLeftover.clear();
+  {
+    std::lock_guard<std::mutex> audioRenderLk(ctx->audioRenderStateMutex);
+    ctx->pcmLeftover.clear();
+  }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "StopFfmpegAudio: renderer stopped and released");
@@ -3299,7 +3858,7 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StartFfmpegDecode: decode threads launched");
 
   // B4：解码器就绪后启动 OH_AudioRenderer（消费 audioFrameQueue）
-  StartFfmpegAudio(state);
+  (void)StartFfmpegAudio(state);
 
   // B3：启动 OpenGL ES YUV 渲染线程（消费 videoFrameQueue）
   StartFfmpegRender(state);
@@ -3404,6 +3963,9 @@ static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string
   }
 
   auto ctx = std::make_unique<FfmpegContext>();
+  const int64_t inheritedAudioHardwareOffsetMs =
+      state->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+  ctx->audioHardwareSafetyOffsetMs.store(inheritedAudioHardwareOffsetMs, std::memory_order_relaxed);
   ctx->httpHeaders = BuildFfmpegHeadersFromJson(state->headersJson);
 
   const int ret = FfmpegOpenInput(ctx.get(), url);
@@ -3433,7 +3995,8 @@ static void StartFfmpegDemux(NativePlayerSkeletonState *state, const std::string
   ctx->demuxThread = std::thread(DemuxThreadFunc, ctx.get());
   state->ffmpegCtx = std::move(ctx);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-               "StartFfmpegDemux: demux thread launched for url=%s", url.c_str());
+               "StartFfmpegDemux: demux thread launched for url=%s audioOffsetMs=%{public}lld",
+               url.c_str(), static_cast<long long>(inheritedAudioHardwareOffsetMs));
 
   // B2：demux 就绪后立即初始化解码器并启动解码线程
   StartFfmpegDecode(state);
@@ -4297,8 +4860,13 @@ static napi_value Play(napi_env env, napi_callback_info info) {
   }
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
     state.ffmpegCtx->playbackPaused.store(false, std::memory_order_relaxed);
-    state.ffmpegCtx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+    state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
     if (state.ffmpegCtx->audioRenderer != nullptr) {
+      {
+        std::lock_guard<std::mutex> audioRenderLk(state.ffmpegCtx->audioRenderStateMutex);
+        ResetAudioClockAnchorLocked(state.ffmpegCtx.get());
+      }
       const OH_AudioStream_Result result = OH_AudioRenderer_Start(state.ffmpegCtx->audioRenderer);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "Play: FFmpeg path OH_AudioRenderer_Start result=%{public}d",
@@ -4355,7 +4923,11 @@ static napi_value Pause(napi_env env, napi_callback_info info) {
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
     const int64_t pausedClockMs = static_cast<int64_t>(AudioClock(state.ffmpegCtx.get()) * 1000.0);
     state.ffmpegCtx->audioClockBaseMs.store(pausedClockMs, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
     state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockLastReportedMs.store(pausedClockMs, std::memory_order_relaxed);
+    state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->playbackPaused.store(true, std::memory_order_relaxed);
     if (state.ffmpegCtx->audioRenderer != nullptr) {
       const OH_AudioStream_Result result = OH_AudioRenderer_Pause(state.ffmpegCtx->audioRenderer);
@@ -4421,7 +4993,11 @@ static napi_value Seek(napi_env env, napi_callback_info info) {
       state.currentTimeMs = positionMs;
     }
     state.ffmpegCtx->audioClockBaseMs.store(positionMs, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockFloorMs.store(positionMs, std::memory_order_relaxed);  // seek：floor = 目标位置
+    state.ffmpegCtx->audioClockAnchorFramePosition.store(-1, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockAnchorFramesWritten.store(-1, std::memory_order_relaxed);
     state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+    state.ffmpegCtx->audioClockLastReportedMs.store(positionMs, std::memory_order_relaxed);
     state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->seekTargetMs.store(positionMs);
     state.ffmpegCtx->seekRequested.store(true);
@@ -4491,8 +5067,42 @@ static napi_value SelectTrack(napi_env env, napi_callback_info info) {
   }
 
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
-    EmitError(state, ERR_SELECT_TRACK_UNSUPPORTED,
-              "selectTrack failed: FFmpeg path does not support native track switching yet");
+    FfmpegContext *ctx = state.ffmpegCtx.get();
+    if (ctx == nullptr || ctx->fmtCtx == nullptr) {
+      EmitError(state, ERR_SELECT_TRACK_UNSUPPORTED,
+                "selectTrack failed: FFmpeg path is unavailable");
+      return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+    }
+    if (trackIndex < 0 || trackIndex >= static_cast<int32_t>(ctx->fmtCtx->nb_streams)) {
+      EmitError(state, ERR_SELECT_TRACK_INVALID_INDEX,
+                "selectTrack failed: FFmpeg audio stream index is out of range");
+      return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+    }
+    AVStream *targetStream = ctx->fmtCtx->streams[trackIndex];
+    if (targetStream == nullptr || targetStream->codecpar == nullptr ||
+        targetStream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+      EmitError(state, ERR_SELECT_TRACK_INVALID_INDEX,
+                "selectTrack failed: target stream is not audio");
+      return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+    }
+
+    int32_t previousTrackIndex = -1;
+    {
+      std::lock_guard<std::mutex> lk(state.stateMutex);
+      previousTrackIndex = state.selectedTrackIndex;
+    }
+    const int previousAudioStreamIdx = ctx->audioStreamIdx.load(std::memory_order_relaxed);
+    if (previousAudioStreamIdx == trackIndex) {
+      std::lock_guard<std::mutex> lk(state.stateMutex);
+      state.selectedTrackIndex = trackIndex;
+      return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
+    }
+
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "SelectTrack: FFmpeg audio switch requested previous=%{public}d target=%{public}d",
+                 previousTrackIndex, trackIndex);
+    ctx->selectTrackTargetIndex.store(trackIndex, std::memory_order_relaxed);
+    ctx->selectTrackRequested.store(true, std::memory_order_release);
     return ReturnUndefinedOrThrow(env, "selectTrack failed to create return value");
   }
 
@@ -5626,6 +6236,7 @@ static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setPreferredDecodePath", nullptr, SetPreferredDecodePath, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "setAudioHardwareSafetyOffset", nullptr, SetAudioHardwareSafetyOffset, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setSource", nullptr, SetSource, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setDurationHint", nullptr, SetDurationHint, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setHeaders", nullptr, SetHeaders, nullptr, nullptr, nullptr, napi_default, nullptr },
