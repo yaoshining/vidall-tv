@@ -2036,8 +2036,16 @@ static double AudioClock(FfmpegContext *ctx) {
         } else if (anchorFramesWritten < 0) {
           anchorFramesWritten = 0;
         }
+        // framesAdvanced > 0 时才加 renderedSinceTs：
+        // 若 framesAdvanced = 0（anchor 刚初始化，或 GetTimestamp 返回的是 Pause 前的
+        // stale framePosition），renderedSinceTs = (now - T_stale) * sampleRate 可能包含
+        // 整个暂停时长，导致 candidateMs 虚假跳跃，引起概率性音画不同步。
+        // 当 framesAdvanced = 0 时直接令 effectivePlayedFrames = 0，
+        // 等待硬件真正输出新帧后再用渐进推进，monotonicity 保护不回退。
+        const int64_t framesAdvanced =
+            std::max<int64_t>(0, framePosition - anchorFramePosition);
         const int64_t effectivePlayedFrames =
-            std::max<int64_t>(0, framePosition - anchorFramePosition) + renderedSinceTs;
+            framesAdvanced > 0 ? framesAdvanced + renderedSinceTs : 0LL;
         const int64_t playedMs =
             (effectivePlayedFrames * 1000LL) / static_cast<int64_t>(ctx->audioSampleRate);
         candidateMs = baseMs + playedMs;
