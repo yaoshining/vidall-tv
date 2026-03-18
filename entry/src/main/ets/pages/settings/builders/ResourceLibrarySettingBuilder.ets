@@ -2,11 +2,14 @@ import { SettingListItem } from "../SettingListItem";
 import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences";
+import { PlayerEvents } from "../../../components/core/player/Constants";
+import { emitter } from "@kit.BasicServicesKit";
 import promptAction from '@ohos.promptAction';
 
 @ComponentV2
 struct ResourceLibrarySettingBuilderComponent {
   @Local tmdbApiKey: string = '';
+  @Local nativeAudioOffsetText: string = '';
   @Local isLoading: boolean = false;
 
   aboutToAppear(): void {
@@ -16,6 +19,8 @@ struct ResourceLibrarySettingBuilderComponent {
   private async loadSettings(): Promise<void> {
     try {
       this.tmdbApiKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+      const nativeOffsetMs = await AppPreferences.getNumber(PrefKey.PLAYER_NATIVE_AUDIO_HARDWARE_OFFSET_MS, 120);
+      this.nativeAudioOffsetText = `${nativeOffsetMs}`;
     } catch (error) {
       console.error('[ResourceLibrarySettingBuilder] 加载设置失败:', JSON.stringify(error));
     }
@@ -55,6 +60,33 @@ struct ResourceLibrarySettingBuilderComponent {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private async saveNativeAudioOffset(value: string): Promise<void> {
+    this.isLoading = true;
+    try {
+      const parsed = Number.parseInt(value.trim(), 10);
+      const normalized = Number.isFinite(parsed)
+        ? Math.max(-1500, Math.min(parsed, 1500))
+        : 120;
+      await AppPreferences.set(PrefKey.PLAYER_NATIVE_AUDIO_HARDWARE_OFFSET_MS, normalized);
+      this.nativeAudioOffsetText = `${normalized}`;
+      emitter.emit(PlayerEvents.NATIVE_AUDIO_OFFSET_CHANGED);
+      promptAction.showToast({
+        message: `当前设备音频补偿已保存: ${normalized}ms`
+      });
+    } catch (error) {
+      console.error('[ResourceLibrarySettingBuilder] 保存 native 音频补偿失败:', JSON.stringify(error));
+      promptAction.showToast({
+        message: '保存失败'
+      });
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  private resetNativeAudioOffset(): void {
+    this.saveNativeAudioOffset('120');
   }
 
   build() {
@@ -149,6 +181,65 @@ struct ResourceLibrarySettingBuilderComponent {
           isLink: true
         })
       }
+
+      SettingListItemGroup({
+        title: "播放调校（当前设备）"
+      }) {
+        Column() {
+          Row() {
+            Text('Native 音频补偿')
+              .fontSize(16)
+              .fontColor('#E0E0E0')
+              .layoutWeight(1)
+            Text(`${this.nativeAudioOffsetText.length > 0 ? this.nativeAudioOffsetText : '120'} ms`)
+              .fontSize(14)
+              .fontColor('#FFD700')
+          }
+          .width('100%')
+          .height(48)
+          .padding({ left: 16, right: 16 })
+
+            TextInput({ text: this.nativeAudioOffsetText, placeholder: '输入补偿毫秒，支持负数，默认 120' })
+              .type(InputType.Normal)
+              .height(40)
+              .fontSize(14)
+              .margin({ left: 16, right: 16, bottom: 8 })
+              .enabled(!this.isLoading)
+              .onChange((value: string) => {
+                this.nativeAudioOffsetText = value;
+              })
+              .onSubmit(() => {
+                this.saveNativeAudioOffset(this.nativeAudioOffsetText);
+              })
+
+          Text('值越大，画面越会“等声音”；声音领先画面时，请把值调小，必要时可用负数。')
+            .fontSize(12)
+            .fontColor('#999999')
+            .margin({ left: 16, right: 16, bottom: 8 })
+
+          Button('保存当前设备补偿')
+            .width('90%')
+            .height(36)
+            .fontSize(14)
+            .margin({ left: 16, right: 16, bottom: 8 })
+            .enabled(!this.isLoading && this.nativeAudioOffsetText.length > 0)
+            .onClick(() => {
+              this.saveNativeAudioOffset(this.nativeAudioOffsetText);
+            })
+
+          Button('恢复默认补偿 120ms')
+            .width('90%')
+            .height(36)
+            .fontSize(14)
+            .margin({ left: 16, right: 16, bottom: 8 })
+            .buttonStyle(ButtonStyleMode.TEXTUAL)
+            .enabled(!this.isLoading)
+            .onClick(() => {
+              this.resetNativeAudioOffset();
+            })
+        }
+        .backgroundColor('#1E1E1E')
+      }
     }
   }
 }
@@ -157,4 +248,3 @@ struct ResourceLibrarySettingBuilderComponent {
 export function ResourceLibrarySettingBuilder() {
   ResourceLibrarySettingBuilderComponent()
 }
-

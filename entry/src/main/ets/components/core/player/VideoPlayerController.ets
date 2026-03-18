@@ -19,6 +19,7 @@ import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeResult, FfprobeTrack, FfprobeUtil } from "../../../utils/FfprobeUtil";
 import { DeviceCapabilityUtil, NativeVideoDecoderCapability } from "../../../utils/DeviceCapabilityUtil";
 import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
+import { AppPreferences, PrefKey } from "../../../utils/AppPreferences";
 import {
   AvSubtitleBridgeAdapter,
   IjkSubtitleBridgeAdapter,
@@ -38,6 +39,8 @@ const TAG = '[VideoPlayerController]';
 const METRICS_TAG = 'VidAll_Metrics';
 const GENERIC_SYSTEM_ERROR = 'system error';
 const DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED = false;
+const DEFAULT_NATIVE_AUDIO_HARDWARE_OFFSET_MS = 120;
+const SOURCE_NATIVE_AUDIO_HARDWARE_OFFSET_OVERRIDE_MS = Number.NaN;
 const NATIVE_READY_GUARD_MS = 3500;
 const ENABLE_SESSION_DIAG_LOG = false;
 const FFMPEG_PREVIEW_RENDER_FPS = 8;
@@ -282,6 +285,10 @@ export class VideoPlayerController {
   private pendingBackendResumePlay: boolean = false;
   /** 一次性控制：本次 seek 完成后不自动恢复播放 */
   private suppressPlayAfterSeekOnce: boolean = false;
+  /** 当前 seek 期望命中的目标时间，用于在 seek 中忽略明显异常的 timeUpdate。 */
+  private pendingSeekTargetMs: number = -1;
+  /** 当前 seek 是否由音轨切换触发，用于走独立的收尾逻辑。 */
+  private pendingAudioTrackSwitchSeek: boolean = false;
   /** ffmpeg 动态预览：当前是否正在抽帧 */
   private ffmpegPreviewExtracting: boolean = false;
   /** ffmpeg 连续预览：渲染定时器 */
@@ -321,6 +328,7 @@ export class VideoPlayerController {
   private latestPlaybackPlan?: PlaybackPlanDecision;
   private latestPreflightSnapshot?: PlaybackPreflightSnapshot;
   private latestAudioRoutingDecision?: AudioRoutingDecision;
+  private nativeAudioHardwareOffsetMs: number = DEFAULT_NATIVE_AUDIO_HARDWARE_OFFSET_MS;
 
   /**
    * 初始化播放器。
@@ -366,6 +374,8 @@ export class VideoPlayerController {
       this.pendingBackendResumePlay = false;
     }
     this.suppressPlayAfterSeekOnce = false;
+    this.pendingSeekTargetMs = -1;
+    this.pendingAudioTrackSwitchSeek = false;
     if (ENABLE_SESSION_DIAG_LOG) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[session=${currentSessionId}] initPlayer start backend=${this.backend}`);
@@ -379,6 +389,7 @@ export class VideoPlayerController {
     this.latestAudioRoutingDecision = undefined;
     const preflight = await this.collectPlaybackPreflightSnapshot(videoData);
     this.latestPreflightSnapshot = preflight;
+    this.nativeAudioHardwareOffsetMs = await this.loadNativeAudioHardwareOffsetMs();
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
@@ -485,6 +496,7 @@ export class VideoPlayerController {
         'initPlayer: 使用 VidAll Player Adapter，等待 UI 层调用 setNativeContext()');
       const nativeAdapter = new VidAllPlayerAdapter();
       nativeAdapter.setSeekDiagEnabled(this.nativeSeekDiagLogEnabled);
+      nativeAdapter.setAudioHardwareSafetyOffsetMs(this.nativeAudioHardwareOffsetMs);
       nativeAdapter.setPrepareDecodePlan(
         playbackPlan.nativeVideoPlan,
         playbackPlan.decisionReason,
@@ -597,6 +609,14 @@ export class VideoPlayerController {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
+      if (this.isSeeking && this.pendingSeekTargetMs >= 0) {
+        const seekDrift = Math.abs(currentTime - this.pendingSeekTargetMs);
+        if (seekDrift > 3000) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[seek-guard] 忽略异常 timeUpdate: target=${this.pendingSeekTargetMs} current=${currentTime}`);
+          return;
+        }
+      }
       const backwardDelta = this.lastTimeUpdateMs - currentTime;
       const shouldWarnRollback = this.lastTimeUpdateMs >= 0 &&
         !this.isSeeking &&
@@ -606,6 +626,9 @@ export class VideoPlayerController {
       if (shouldWarnRollback) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `[session=${currentSessionId}] timeUpdate 回退: prev=${this.lastTimeUpdateMs} now=${currentTime}`);
+        if (this.backend === 'native') {
+          currentTime = this.lastTimeUpdateMs;
+        }
       }
       this.lastTimeUpdateMs = currentTime;
       this.currentTime = currentTime;
@@ -694,16 +717,19 @@ export class VideoPlayerController {
           `{"event":"seek_result","backend":"${this.backend}","result":"done","elapsed_ms":${seekElapsed}}`);
       }
       if (this.timeToSeek >= 0) {
+        this.pendingSeekTargetMs = this.timeToSeek;
         adapter.seek(this.timeToSeek);
         this.timeToSeek = -1;
       } else {
-        if (this.suppressPlayAfterSeekOnce) {
-          this.suppressPlayAfterSeekOnce = false;
-        } else {
+        const shouldResumeAfterSeek = !this.suppressPlayAfterSeekOnce;
+        this.suppressPlayAfterSeekOnce = false;
+        this.pendingSeekTargetMs = -1;
+        this.pendingAudioTrackSwitchSeek = false;
+        this.isSeeking = false;
+        if (shouldResumeAfterSeek) {
           this.player?.play().catch(() => {});
         }
       }
-      this.isSeeking = false;
     });
     adapter.onSubtitleUpdate((info) => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -2231,6 +2257,40 @@ export class VideoPlayerController {
     }
   }
 
+  private normalizeNativeAudioHardwareOffsetMs(offsetMs: number): number {
+    if (offsetMs > 1500) {
+      return 1500;
+    }
+    if (offsetMs < -1500) {
+      return -1500;
+    }
+    return offsetMs;
+  }
+
+  private async loadNativeAudioHardwareOffsetMs(): Promise<number> {
+    const storedOffsetMs = await AppPreferences.getNumber(
+      PrefKey.PLAYER_NATIVE_AUDIO_HARDWARE_OFFSET_MS,
+      DEFAULT_NATIVE_AUDIO_HARDWARE_OFFSET_MS
+    );
+    const normalizedStoredOffsetMs = this.normalizeNativeAudioHardwareOffsetMs(storedOffsetMs);
+    if (Number.isFinite(SOURCE_NATIVE_AUDIO_HARDWARE_OFFSET_OVERRIDE_MS)) {
+      const overrideOffsetMs = this.normalizeNativeAudioHardwareOffsetMs(
+        SOURCE_NATIVE_AUDIO_HARDWARE_OFFSET_OVERRIDE_MS
+      );
+      return overrideOffsetMs;
+    }
+    return normalizedStoredOffsetMs;
+  }
+
+  async refreshNativeAudioHardwareOffsetFromPreferences(): Promise<void> {
+    const offsetMs = await this.loadNativeAudioHardwareOffsetMs();
+    this.nativeAudioHardwareOffsetMs = offsetMs;
+    if (this.backend !== 'native' || !(this.player instanceof VidAllPlayerAdapter)) {
+      return;
+    }
+    this.player.applyAudioHardwareSafetyOffsetMs(offsetMs);
+  }
+
   async seek(time: number): Promise<void> {
     if (!this.player) { return; }
     this.metricsSeekStartMs = Date.now();
@@ -2263,10 +2323,12 @@ export class VideoPlayerController {
         }
       }
     }
-    await this.pause();
-    this.currentTime = safeTime;
+    this.pendingSeekTargetMs = safeTime;
+    this.pendingAudioTrackSwitchSeek = false;
+    this.isSeeking = true;
     this.subtitleAdapter.onSeekSync();
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    await this.pause();
     if (!this.isSeeking) {
       this.isSeeking = true;
       try {
@@ -2279,7 +2341,13 @@ export class VideoPlayerController {
           `seek 调用异常: ${(seekErr as BusinessError).message ?? 'unknown'}`);
       }
     } else {
-      this.timeToSeek = safeTime;
+      try {
+        this.player.seek(safeTime);
+      } catch (seekErr) {
+        this.isSeeking = false;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `seek 调用异常: ${(seekErr as BusinessError).message ?? 'unknown'}`);
+      }
     }
   }
 
@@ -2523,7 +2591,6 @@ export class VideoPlayerController {
         tracks.push(item);
       }
       this.audioTracks = tracks;
-
       if (this.audioTracks.length > 0) {
         if (this.backend === 'ffmpeg' || this.isNativeFfmpegPathActive()) {
           this.activeAudioIndex = 0;
@@ -2685,20 +2752,32 @@ export class VideoPlayerController {
       return;
     }
 
-    if (this.isNativeFfmpegPathActive()) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchAudioTrack] native/FFmpeg 子路径暂不支持运行时切换音轨，忽略 index=${trackIndex}`);
-      if (this.activeAudioIndex < 0) {
-        this.activeAudioIndex = 0;
-      }
-      return;
-    }
-
-    // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
     const wasPlaying = this.isPlaying;
-    const seekBack = this.currentTime;
 
     try {
+      const audioTrack = this.audioTracks[trackIndex];
+      if (audioTrack.trackIndex < -1) {
+        const errorMessage = `音轨参数非法: uiIndex=${trackIndex}, trackIndex=${audioTrack.trackIndex}`;
+        this.lastErrorMessage = errorMessage;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG, errorMessage);
+        return;
+      }
+
+      if (this.isNativeFfmpegPathActive()) {
+        this.pendingAudioTrackSwitchSeek = false;
+        this.pendingSeekTargetMs = -1;
+        this.isSeeking = false;
+        await this.player.selectTrack(audioTrack.trackIndex);
+        this.activeAudioIndex = trackIndex;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[switchAudioTrack] native/ffmpeg 异步切轨请求已提交: ${audioTrack.displayName} ` +
+          `(trackIndex=${audioTrack.trackIndex})`);
+        return;
+      }
+
+      // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
+      const seekBack = this.currentTime;
+
       // 1. 暂停视频（避免音轨切换期间画面继续走而音轨还在旧轨）
       if (wasPlaying) {
         await this.player.pause();
@@ -2707,13 +2786,6 @@ export class VideoPlayerController {
       }
 
       // 2. 切换音轨
-      const audioTrack = this.audioTracks[trackIndex];
-      if (audioTrack.trackIndex < -1) {
-        const errorMessage = `音轨参数非法: uiIndex=${trackIndex}, trackIndex=${audioTrack.trackIndex}`;
-        this.lastErrorMessage = errorMessage;
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG, errorMessage);
-        return;
-      }
       await this.player.selectTrack(audioTrack.trackIndex);
       this.activeAudioIndex = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -2722,17 +2794,26 @@ export class VideoPlayerController {
       // 3. seek 到当前位置，强制音频解码器 flush 并从正确位置开始解码
       //    这样恢复播放时新音轨与视频帧完全对齐
       if (wasPlaying && seekBack > 0) {
+        this.isSeeking = true;
+        this.pendingSeekTargetMs = seekBack;
+        this.pendingAudioTrackSwitchSeek = true;
+        this.suppressPlayAfterSeekOnce = false;
+        this.currentTime = seekBack;
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[switchAudioTrack] seek flush 到 ${seekBack}ms`);
-        // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
-        this.isSeeking = true;
         this.player.seek(seekBack);
-        // seekDone 回调里会调 play()，不需要在这里手动恢复
       } else if (wasPlaying) {
         // 时间为 0（片头），直接恢复播放
         await this.player.play();
+      } else {
+        this.pendingAudioTrackSwitchSeek = false;
+        this.pendingSeekTargetMs = -1;
+        this.isSeeking = false;
       }
     } catch (e) {
+      this.pendingAudioTrackSwitchSeek = false;
+      this.pendingSeekTargetMs = -1;
+      this.isSeeking = false;
       const err = e as BusinessError;
       this.lastErrorMessage = this.normalizePlayerError(err.message ?? '音轨切换失败');
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -2748,11 +2829,12 @@ export class VideoPlayerController {
     return this.isNativeFfmpegPathActive();
   }
 
+  isNativeFfmpegSeekManaged(): boolean {
+    return this.isNativeFfmpegPathActive();
+  }
+
   canSwitchAudioTrack(trackIndex: number): boolean {
-    if (!this.isNativeFfmpegPathActive()) {
-      return true;
-    }
-    return trackIndex === this.activeAudioIndex;
+    return trackIndex >= 0 && trackIndex < this.audioTracks.length;
   }
 
   canSwitchSubtitleTrack(allIndex: number): boolean {
@@ -2772,7 +2854,7 @@ export class VideoPlayerController {
     if (!this.isNativeFfmpegPathActive()) {
       return '';
     }
-    return '当前为 native/FFmpeg 子路径：音轨切换与内嵌字幕切换暂不支持';
+    return '当前为 native/FFmpeg 子路径：音轨切换已支持，内嵌字幕切换仍暂不支持';
   }
 
   runNativeVideoDecoderSurfaceProbe(codecOrMime: string): string {

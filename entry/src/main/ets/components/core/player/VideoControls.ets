@@ -71,6 +71,12 @@ struct VideoControls {
     return raw
   }
 
+  private dispatchAudioTrackSwitch(index: number): void {
+    setTimeout(() => {
+      this.videoController.switchAudioTrack(index)
+    }, 0)
+  }
+
   @Builder
   SubtitleMenu() {
     Column() {
@@ -245,7 +251,7 @@ struct VideoControls {
             if (!this.videoController.canSwitchAudioTrack(index)) {
               return
             }
-            this.videoController.switchAudioTrack(index)
+            this.dispatchAudioTrackSwitch(index)
             this.showAudioMenu = false
             // forceStart=true：切换后不管当前 isPlaying 状态（switchAudioTrack 内部会 pause）
             // 都强制启动自动隐藏定时器，seekDone 恢复播放后控件会正常隐藏
@@ -414,16 +420,22 @@ struct VideoControls {
                   clearTimeout(this.closeTimer)
                   this.videoController.pause()
                   this.videoController.currentTime = value
-                  this.videoController.seek(value)
+                  if (!this.videoController.isNativeFfmpegSeekManaged()) {
+                    this.videoController.seek(value)
+                  }
                 }
                 if (mode === SliderChangeMode.Moving) {
                   this.videoController.currentTime = value
                 }
                 if (mode === SliderChangeMode.End) {
                   this.videoController.seek(value)
-                  this.videoController.play().then(() => {
+                  if (this.videoController.isNativeFfmpegSeekManaged()) {
                     this.enableAutoHide(true)
-                  })
+                  } else {
+                    this.videoController.play().then(() => {
+                      this.enableAutoHide(true)
+                    })
+                  }
                 }
               })
               .onHover((isHover: boolean, event: HoverEvent) => {

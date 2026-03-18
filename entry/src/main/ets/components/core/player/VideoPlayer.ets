@@ -80,7 +80,9 @@ export struct VideoPlayer {
     onWillDismiss: (action) => {
       if (action.reason === DismissReason.PRESS_BACK) {
         // 仅暂停态关闭控件后恢复播放；播放结束态关闭控件不自动续播。
-        if (!this.controller.isPlaying && !this.isPlaybackCompletedState()) {
+        if (!this.controller.isPlaying &&
+          !this.controller.isSeeking &&
+          !this.isPlaybackCompletedState()) {
           this.controller.play()
         }
       }
