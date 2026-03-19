@@ -2967,7 +2967,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     if (diffMs < -100) {
       // 帧已明显落后，丢弃
       OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
-      OH_LOG_Print(LOG_APP, LOG_DEBUG, 0xFF00, "VidAll",
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "[HwVideoDecode] RenderThread: drop late frame ptsMs=%{public}lld clockMs=%{public}lld",
                    static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs));
       continue;
@@ -2981,7 +2981,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
 
     // 渲染到 Surface
     OH_VideoDecoder_RenderOutputBuffer(ctx->hwVideoDecoder, entry.index);
-    OH_LOG_Print(LOG_APP, LOG_DEBUG, 0xFF00, "VidAll",
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                  "[HwVideoDecode] RenderThread: render ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld",
                  static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
                  static_cast<long long>(diffMs));
@@ -3007,13 +3007,26 @@ static bool InitHwVideoDecoder(FfmpegContext *ctx, const char *mime, OHNativeWin
     height = par->height > 0 ? par->height : 1080;
   }
 
+  // 1. RegisterCallback 必须在 Configure 之前（官方要求：Create→Register→Configure→SetSurface→Prepare→Start）
+  OH_AVCodecCallback cb{};
+  cb.onError = OnHwVideoError;
+  cb.onStreamChanged = OnHwVideoFormatChanged;
+  cb.onNeedInputBuffer = OnHwVideoNeedInputBuffer;
+  cb.onNewOutputBuffer = OnHwVideoNewOutputBuffer;
+  int32_t rc = OH_VideoDecoder_RegisterCallback(decoder, cb, ctx);
+  if (rc != AV_ERR_OK) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: RegisterCallback failed rc=%{public}d", rc);
+    OH_VideoDecoder_Destroy(decoder);
+    return false;
+  }
+
+  // 2. Configure（Surface 输出模式下不设 OH_MD_KEY_PIXEL_FORMAT，由 Surface 决定格式）
   OH_AVFormat *format = OH_AVFormat_Create();
   OH_AVFormat_SetIntValue(format, OH_MD_KEY_WIDTH, width);
   OH_AVFormat_SetIntValue(format, OH_MD_KEY_HEIGHT, height);
-  OH_AVFormat_SetIntValue(format, OH_MD_KEY_PIXEL_FORMAT,
-                          static_cast<int32_t>(AV_PIXEL_FORMAT_NV12));
 
-  int32_t rc = OH_VideoDecoder_Configure(decoder, format);
+  rc = OH_VideoDecoder_Configure(decoder, format);
   OH_AVFormat_Destroy(format);
   if (rc != AV_ERR_OK) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
@@ -3022,25 +3035,11 @@ static bool InitHwVideoDecoder(FfmpegContext *ctx, const char *mime, OHNativeWin
     return false;
   }
 
-  // 绑定 NativeWindow（Surface 输出）
+  // 3. 绑定 NativeWindow（Surface 输出）
   rc = OH_VideoDecoder_SetSurface(decoder, window);
   if (rc != AV_ERR_OK) {
     OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
                  "[HwVideoDecode] InitHwVideoDecoder: SetSurface failed rc=%{public}d", rc);
-    OH_VideoDecoder_Destroy(decoder);
-    return false;
-  }
-
-  // 注册回调
-  OH_AVCodecCallback cb{};
-  cb.onError = OnHwVideoError;
-  cb.onStreamChanged = OnHwVideoFormatChanged;
-  cb.onNeedInputBuffer = OnHwVideoNeedInputBuffer;
-  cb.onNewOutputBuffer = OnHwVideoNewOutputBuffer;
-  rc = OH_VideoDecoder_RegisterCallback(decoder, cb, ctx);
-  if (rc != AV_ERR_OK) {
-    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
-                 "[HwVideoDecode] InitHwVideoDecoder: RegisterCallback failed rc=%{public}d", rc);
     OH_VideoDecoder_Destroy(decoder);
     return false;
   }
