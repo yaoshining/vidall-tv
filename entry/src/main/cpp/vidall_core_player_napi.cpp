@@ -3095,17 +3095,19 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     // [PtsGap-Align] Content PTS 不连续点对齐（Dolby Vision / Blu-ray seamless branching）
     // 问题：音频时钟基于 sample 计数，不感知音频 PTS gap；视频 PTS 跳变后 diff 瞬间飙升到 1200ms+。
     //   diff>0 → 视频超前时钟 → sleep 最多 150ms/帧 → 视频以 ~5fps 慢速前进 → 用户感知「声音滞后」
-    // 识别条件：!inGrace（稳态播放中）&& diff > kPtsGapThresholdMs（远超背压上限 252ms，必为 gap）
-    //   背压后正常 diff 上限 = MAX_HW_QUEUE(6) × 42ms = 252ms，gap 阈值设 600ms 留 2.4× 余量。
+    // 识别条件：diff > kPtsGapThresholdMs（远超背压上限 252ms + DriftCorrect 负漂移，必为 content gap）
+    //   背压后正常 diff 上限 = MAX_HW_QUEUE(6) × 42ms = 252ms；DriftCorrect 后 diff 趋近 0（负向修正）。
+    //   在 grace 期间，diff 由 DriftCorrect 保持在 -80ms ~ 0ms 范围，不会达到 +600ms（除非真有 PTS gap）。
+    //   因此可以安全移除 !inGrace 条件：grace 期间发生的 content PTS gap（seamless branching / 章节边界）
+    //   同样应立即对齐，否则会进入 LargeSync sleep，引起声音滞后。
     // 修复：与 ClockGate-Align 完全相同——推进 audioClockBaseMs 对齐到 video PTS，diff 瞬间归零。
     //   double-counting 分析：对齐时音频已写入部分 post-gap 样本(ptsSampMs已增大)，
     //   fetch_add(diffMs) 后 base 升高 diffMs，clock = newBase + ptsSampMs - pending - hwOffset ≈ ptsMs。
     //   后续 post-gap 样本继续累积，clock 以 1.0x 推进，与 video PTS 保持同步。
-    // 回归安全：gateJustOpened 时此处尚未计算 inGrace（inGrace 在下方计算），但 gateJustOpened 时
-    //   diff < 0 由 ClockGate-Align 处理，diff 被置为 0，不会误触此处。
+    // 回归安全：gateJustOpened 时 diff < 0 由 ClockGate-Align 处理，diff 被置为 0，不会误触此处。
     static constexpr int64_t kPtsGapThresholdMs = 600;
     const bool inGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0;
-    if (!inGrace && diffMs > kPtsGapThresholdMs) {
+    if (diffMs > kPtsGapThresholdMs) {  // grace 期间 content PTS gap 同样需要对齐，移除 !inGrace 限制
       ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
       ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
       ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
