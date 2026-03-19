@@ -2961,7 +2961,8 @@ static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
 static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: started");
   int64_t renderCount = 0;
-  int64_t lastRenderRealtimeMs = 0;  // 用于最小帧间隔限速，防止 burst → diff 骤增 → 冻帧的反馈环
+  int64_t lastRenderRealtimeMs = 0;
+  int64_t lastPtsMs = -1;  // 用于计算 PTS 间隔，防止视频以固定30fps渲染超过内容实际帧率
   while (ctx->hwVideoRunning.load()) {
     // [Fix-Pause] pause 期间不消耗帧，让 HW 解码器自然因 output buffer 耗尽而暂停。
     // 这样 resume 后 ptsMs 仍在 pause 前的位置，避免 diff 虚高（曾导致 2-3 秒冻帧）。
@@ -3036,12 +3037,16 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     if (inGrace) {
       ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
     }
-    // 渲染前限速：最小帧间隔 33ms（≈30fps 上限），防止 diff<0 时帧突发堆积
+    // 最小帧间隔：按内容实际 PTS 间隔驱动，而非固定 30fps(33ms)。
+    // 24fps 内容 PTS 间隔 ≈ 42ms，用 33ms 限速会让视频以 1.27x 实时速度超速 → diff 持续累积 → LargeSync振荡
+    // ptsDelta > 200ms 说明是 seek/PTS跳变，回退到默认 42ms 防止被跳变值误导
+    const int64_t ptsDelta = (lastPtsMs >= 0 && entry.ptsMs > lastPtsMs && (entry.ptsMs - lastPtsMs) <= 200)
+                             ? (entry.ptsMs - lastPtsMs)
+                             : 42;  // 默认按 24fps
     if (lastRenderRealtimeMs > 0) {
       const int64_t sinceLastMs = NowRealtimeMs() - lastRenderRealtimeMs;
-      const int64_t minIntervalMs = 33;  // ~30fps 限速
-      if (sinceLastMs < minIntervalMs) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(minIntervalMs - sinceLastMs));
+      if (sinceLastMs < ptsDelta) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ptsDelta - sinceLastMs));
       }
     }
     // AV sync 等待：视频帧超前时钟时 sleep，上限 50ms/帧（保持 decoder output queue 持续消耗）。
@@ -3062,6 +3067,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     // 渲染到 Surface
     OH_VideoDecoder_RenderOutputBuffer(ctx->hwVideoDecoder, entry.index);
     lastRenderRealtimeMs = NowRealtimeMs();
+    lastPtsMs = entry.ptsMs;
     renderCount++;
     // [AVSync-Summary] 每300帧输出一次AV同步摘要，用于诊断声音滞后（过滤关键词: AVSync-Summary）
     if (renderCount % 300 == 1 || renderCount <= 5) {
