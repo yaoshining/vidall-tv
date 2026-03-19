@@ -4541,10 +4541,10 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   // 启动解码线程
   ctx->decodeRunning.store(true);
   if (ctx->useHwVideoDecoder) {
-    // HW path：视频由 OH_VideoDecoder 处理，启动 Feed + Render 线程
-    // 提前设置 wall-clock 锚点，防止 RenderThread 在 StartFfmpegAudio 完成前看到 clockMs=0，
-    // 导致每帧强制 sleep 50ms（以为视频大幅超前）。StartFfmpegAudio 会再次覆盖此值，两次时间差极小。
-    ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+    // HW path：视频由 OH_VideoDecoder 处理，启动 Feed + Render 线程。
+    // 注意：不预设 audioClockStartRealtimeMs。HW RenderThread 的时钟门控会在第一帧到达 seekFloor
+    // 附近时开门并设置锚点，确保时钟从首帧开始精准同步，避免预设导致初始帧 clockMs 虚高、
+    // 所有初始帧 diff<0 无等待、以解码速度连续输出造成画面撕裂和声音滞后。
     ctx->hwVideoRunning.store(true);
     ctx->hwVideoFeedThread   = std::thread(HwVideoFeedThreadFunc, ctx);
     ctx->hwVideoRenderThread = std::thread(HwVideoRenderThreadFunc, ctx);
@@ -4640,12 +4640,16 @@ static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
     }
   }
 
-  // 6. 释放解码器上下文
-  if (ctx->videoCodecCtx != nullptr) {
-    avcodec_free_context(&ctx->videoCodecCtx);
-  }
-  if (ctx->audioCodecCtx != nullptr) {
-    avcodec_free_context(&ctx->audioCodecCtx);
+  // 6. 释放解码器上下文（持 codecMutex 防止与任何残留的 flush/send/receive 操作并发，
+  //    虽然正常路径下 DemuxThread 和 DecodeThread 已 join，此处作为 defense-in-depth）
+  {
+    std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+    if (ctx->videoCodecCtx != nullptr) {
+      avcodec_free_context(&ctx->videoCodecCtx);
+    }
+    if (ctx->audioCodecCtx != nullptr) {
+      avcodec_free_context(&ctx->audioCodecCtx);
+    }
   }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StopFfmpegDecode: decode stopped and cleaned");
@@ -4724,18 +4728,14 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
   // B4：先停止音频渲染器（消费者），再停止解码线程（生产者），避免 callback 访问已释放队列
   StopFfmpegAudio(state);
 
-  // B2：先停止解码线程（依赖 packet 队列），再停止 demux
-  StopFfmpegDecode(state);
-
-  // 1. 通知中断：让阻塞的 av_read_frame / avformat_open_input 尽快返回
+  // 1. 通知 DemuxThread 中断退出（必须在 StopFfmpegDecode 之前完成，否则：
+  //    DemuxThread 在 seek 时持有 codecMutex 调用 avcodec_flush_buffers，
+  //    StopFfmpegDecode 释放 videoCodecCtx 后 DemuxThread 继续访问已释放内存 → SIGSEGV）
   ctx->interruptFlag.store(true);
   ctx->demuxRunning.store(false);
-  // B5：清除 ownerState 反向指针，防止 join 后悬挂访问（demux 线程循环已由 demuxRunning=false 终止）
-  // B5-QA fix：atomic store(release) 保证主线程写 nullptr 对 demux 线程的 load(acquire) 可见，
-  //            消除与 DemuxThreadFunc 读+解引用之间的 data race。
   ctx->ownerState.store(nullptr, std::memory_order_release);
 
-  // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待）
+  // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待、seek cv 等待）
   {
     std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
     ctx->videoQueue.abort = true;
@@ -4747,10 +4747,14 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
   }
   ctx->audioQueue.cv.notify_all();
 
-  // 3. 等待 demux 线程退出
+  // 3. 必须先 join DemuxThread，确保 avcodec_flush_buffers 已退出，
+  //    才能安全调用 StopFfmpegDecode 释放 videoCodecCtx / audioCodecCtx。
   if (ctx->demuxThread.joinable()) {
     ctx->demuxThread.join();
   }
+
+  // B2：在 DemuxThread 已退出后再停止解码线程，此时 videoCodecCtx 无其他访问者
+  StopFfmpegDecode(state);
 
   // 4. 释放队列中残留 packet
   {
