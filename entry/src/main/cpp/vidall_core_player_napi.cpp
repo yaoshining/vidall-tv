@@ -2998,6 +2998,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     // Seek 时钟门控：audioClockStartRealtimeMs=0 表示 seek 后时钟尚未开启，
     // 需要等 HW 解码器解完 keyframe pre-roll 到 seekTarget 附近再开门，
     // 防止时钟过早推进导致所有帧因"太迟"被丢弃（永久冻帧）。
+    bool gateJustOpened = false;
     if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) == 0) {
       const int64_t seekFloor = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
       if (entry.ptsMs < seekFloor - 200) {
@@ -3011,6 +3012,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       // 到达 seek target 附近：开门，设置 wall-clock 锚点，后续走正常 AV sync
       const int64_t nowMs = NowRealtimeMs();
       ctx->audioClockStartRealtimeMs.store(nowMs, std::memory_order_relaxed);
+      gateJustOpened = true;
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "[AVSync] ClockGate OPEN: ptsMs=%{public}lld floor=%{public}lld nowMs=%{public}lld grace=%{public}d",
                    static_cast<long long>(entry.ptsMs),
@@ -3021,8 +3023,24 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
 
     // AV Sync：调用 AudioClock() 推进并读取当前音频时钟
     // 注意：HW 路径中没有其他线程调 AudioClock()，必须在这里调，否则 audioClockLastReportedMs 永远为 0
-    const int64_t clockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
-    const int64_t diffMs = entry.ptsMs - clockMs;
+    int64_t clockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
+    int64_t diffMs = entry.ptsMs - clockMs;
+
+    // [ClockGate-Align] 开门瞬间对齐：音频预缓冲导致 clockMs 超前 video PTS，形成固定负 diff。
+    // 通过下调 audioClockBaseMs 使时钟对齐到首帧 PTS，消除 -165ms 等固定偏差。
+    // 同时重置单调保护锁（lastReportedMs）和 floor，允许时钟从 entry.ptsMs 开始递增。
+    // HW 路径中只有本线程调 AudioClock()，无竞争风险。
+    if (gateJustOpened && diffMs < 0) {
+      ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
+      ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] ClockGate align: ptsMs=%{public}lld oldClockMs=%{public}lld adjustment=%{public}lld",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
+      clockMs = entry.ptsMs;
+      diffMs = 0;
+    }
 
     // seek/startup 后前 N 帧使用 grace 模式：保护帧不被 drop，但仍做超前等待（防止撕裂/声音滞后）
     const bool inGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0;
@@ -3049,12 +3067,14 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
         std::this_thread::sleep_for(std::chrono::milliseconds(ptsDelta - sinceLastMs));
       }
     }
-    // AV sync 等待：视频帧超前时钟时 sleep，上限 50ms/帧（保持 decoder output queue 持续消耗）。
-    // diff 缓慢收敛：sleep=50ms → 每帧 realtime=83ms，clock 推进 83ms，PTS 推进 42ms → diff 每帧 -41ms
-    // 收敛时间：diff=1000ms → 约 25 帧 × 83ms ≈ 2s；diff=4000ms → 约 98 帧 ≈ 8s
-    // 不设 skip-wait：PTS 跳变（如流内 GOP 边界）时 clock 正常递增，跳过等待会使 diff 持续扩大
+    // AV sync 等待：视频帧超前时钟时 sleep，保持 decoder output queue 持续消耗。
+    // 普通情况上限 50ms/帧；LargeSync（diff>500ms）时上限提升到 150ms/帧，加速收敛：
+    //   diff=660ms  → 老: 14帧×92ms≈1.3s ; 新: 5帧×192ms≈1.0s（+33%）
+    //   diff=1500ms → 老: 30帧×92ms≈2.8s ; 新: 10帧×192ms≈2.0s（+30%）
+    // 不设 skip-wait：PTS 跳变时 clock 正常递增，跳过等待会使 diff 持续扩大
     if (diffMs > 10) {
-      const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
+      const int64_t sleepCap = (diffMs > 500) ? (int64_t)150 : (int64_t)50;
+      const int64_t sleepMs = std::min(diffMs - 5, sleepCap);
       std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
       if (diffMs > 500) {
         OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
