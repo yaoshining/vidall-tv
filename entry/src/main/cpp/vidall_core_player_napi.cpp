@@ -2962,6 +2962,13 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: started");
   int64_t renderCount = 0;
   while (ctx->hwVideoRunning.load()) {
+    // [Fix-Pause] pause 期间不消耗帧，让 HW 解码器自然因 output buffer 耗尽而暂停。
+    // 这样 resume 后 ptsMs 仍在 pause 前的位置，避免 diff 虚高（曾导致 2-3 秒冻帧）。
+    if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
+
     FfmpegContext::HwOutputEntry entry{};
     {
       std::unique_lock<std::mutex> lk(ctx->hwOutputMtx);
@@ -3029,9 +3036,19 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
     }
     // 无论是否 grace，帧超前时钟均须等待，防止以解码速度输出帧导致画面撕裂 + AV 失同步
+    // 使用循环分段 sleep：每次最多 50ms，sleep 后重新读取 clock 以提前终止等待
     if (diffMs > 10) {
-      const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
-      std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+      int64_t remaining = diffMs - 5;
+      while (remaining > 5 && ctx->hwVideoRunning.load(std::memory_order_relaxed) &&
+             !ctx->hwVideoFlushPending.load(std::memory_order_relaxed) &&
+             !ctx->playbackPaused.load(std::memory_order_relaxed)) {
+        const int64_t chunk = std::min(remaining, (int64_t)50);
+        std::this_thread::sleep_for(std::chrono::milliseconds(chunk));
+        remaining -= chunk;
+        // 重新读取时钟：若音频已追上，提前结束等待
+        const int64_t updatedClock = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
+        if (entry.ptsMs - updatedClock <= 10) break;
+      }
     }
 
     // 渲染到 Surface
@@ -5573,8 +5590,26 @@ static napi_value Play(napi_env env, napi_callback_info info) {
   }
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
     state.ffmpegCtx->playbackPaused.store(false, std::memory_order_relaxed);
+    // [Fix-Resume-Clock] Resume 后对齐时钟锚点：以 lastReportedMs（pause 时最后报告的 clockMs）
+    // 为基准重建 base，确保 gate 重开后 diff ≈ hwOffset（≤ 1 帧），而非虚高的 2-3 秒。
+    // Pause() 已将 baseMs = pausedClockMs；此处用 lastReportedMs + hwOffset 覆盖，
+    // 使 candidateMs = (lastRep + hwOffset) + 0 - hwOffset = lastRep，clock 从 pause 位置续跑。
+    {
+      const int64_t lastRep = state.ffmpegCtx->audioClockLastReportedMs.load(std::memory_order_relaxed);
+      const int64_t hwOff   = state.ffmpegCtx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+      if (lastRep > 0) {
+        state.ffmpegCtx->audioClockBaseMs.store(lastRep + hwOff, std::memory_order_relaxed);
+        state.ffmpegCtx->audioClockFloorMs.store(lastRep, std::memory_order_relaxed);
+        state.ffmpegCtx->audioClockLastReportedMs.store(lastRep, std::memory_order_relaxed);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "Play: FFmpeg resume clock aligned lastRep=%{public}lld hwOff=%{public}lld newBase=%{public}lld",
+                     static_cast<long long>(lastRep), static_cast<long long>(hwOff),
+                     static_cast<long long>(lastRep + hwOff));
+      }
+    }
     state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
+    state.ffmpegCtx->videoSyncGraceFrames.store(5, std::memory_order_relaxed);  // 小 grace：resume 后几帧保护
     if (state.ffmpegCtx->audioRenderer != nullptr) {
       {
         std::lock_guard<std::mutex> audioRenderLk(state.ffmpegCtx->audioRenderStateMutex);
