@@ -1803,7 +1803,14 @@ export class VideoPlayerController {
       if (this.nativeDecodePathState === 'ffmpeg_switching') {
         return '硬解→软解切换中';
       }
-      return this.nativeDecodePath === 'ffmpeg' ? '软解' : '硬解';
+      if (this.nativeDecodePath === 'ffmpeg') {
+        // FFmpeg 路径且预期走硬解（hardware_preferred）→ 混合路径（HW视频+FFmpeg音频）
+        if (this.nativeDecodeExpectedPath === 'hardware_preferred') {
+          return '混合（视频硬解+音频软解）';
+        }
+        return '软解';
+      }
+      return '硬解';
     }
     if (this.backend === 'ijkplayer') {
       return '软解';

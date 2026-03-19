@@ -3099,20 +3099,33 @@ static void FlushHwVideoDecoder(FfmpegContext *ctx) {
 
   ctx->hwVideoFlushPending.store(true, std::memory_order_release);
 
-  // 清空 hwInputPool
+  // Flush BSF：清除内部残留的 NALU 分包状态，否则 seek 后会把旧 Annex-B 残片混入新数据
+  if (ctx->hwBsfCtx != nullptr) {
+    av_bsf_flush(ctx->hwBsfCtx);
+  }
+
+  // 清空 hwInputPool（Flush 会重新触发 onNeedInputBuffer 补充 inputPool）
   {
     std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
     while (!ctx->hwInputPool.empty()) ctx->hwInputPool.pop();
   }
+  ctx->hwInputCv.notify_all();  // 唤醒 FeedThread 感知 pool 已清空
 
-  // Flush decoder（会重新触发 onNeedInputBuffer 填充 inputPool）
-  OH_VideoDecoder_Flush(ctx->hwVideoDecoder);
+  // Flush decoder
+  OH_AVErrCode flushRet = OH_VideoDecoder_Flush(ctx->hwVideoDecoder);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] FlushHwVideoDecoder: OH_VideoDecoder_Flush ret=%{public}d", static_cast<int>(flushRet));
 
   // 清空 hwOutputQueue
   {
     std::lock_guard<std::mutex> lk(ctx->hwOutputMtx);
     while (!ctx->hwOutputQueue.empty()) ctx->hwOutputQueue.pop();
   }
+
+  // OH_VideoDecoder_Flush 后必须重新 Start，否则解码器不再触发 onNeedInputBuffer
+  OH_AVErrCode startRet = OH_VideoDecoder_Start(ctx->hwVideoDecoder);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] FlushHwVideoDecoder: OH_VideoDecoder_Start ret=%{public}d", static_cast<int>(startRet));
 
   ctx->hwVideoFlushPending.store(false, std::memory_order_release);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] FlushHwVideoDecoder: done");
