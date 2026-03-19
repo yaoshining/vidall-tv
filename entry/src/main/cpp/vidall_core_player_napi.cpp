@@ -3006,6 +3006,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
   int64_t renderCount = 0;
   int64_t lastRenderRealtimeMs = 0;
   int64_t lastPtsMs = -1;  // 用于计算 PTS 间隔，防止视频以固定30fps渲染超过内容实际帧率
+  int64_t consecutiveEmptyPops = 0;  // 连续空 pop 计数，用于检测 decode stall
   while (ctx->hwVideoRunning.load()) {
     // [Fix-Pause] pause 期间不消耗帧，让 HW 解码器自然因 output buffer 耗尽而暂停。
     // 这样 resume 后 ptsMs 仍在 pause 前的位置，避免 diff 虚高（曾导致 2-3 秒冻帧）。
@@ -3021,7 +3022,25 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
         return !ctx->hwOutputQueue.empty() || !ctx->hwVideoRunning.load();
       });
       if (!ctx->hwVideoRunning.load() && ctx->hwOutputQueue.empty()) break;
-      if (ctx->hwOutputQueue.empty()) continue;
+      if (ctx->hwOutputQueue.empty()) {
+        // [DecodeStall] 连续 500ms（10 × 50ms）无新帧 → 内容 PTS gap 后解码器正在重建
+        // 此时 AudioClock 持续推进但 video 冻结，积累形成大负 diff（可达 -883ms），
+        // 恢复时需要连续多次 DriftCorrect 或让视频跳过大量内容。
+        // 修复：在 500ms stall 后关闭 ClockGate。解码器恢复出帧时，ClockGate-Align
+        // 一次性将 clock 对齐到 video PTS（等同于 seek 后重同步），无需连续 DriftCorrect。
+        // 条件：gate 已开（!= 0）且 非 grace 期（不打断 seek 后的正常恢复阶段）。
+        consecutiveEmptyPops++;
+        if (consecutiveEmptyPops == 10
+            && ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) != 0
+            && ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) == 0) {
+          ctx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+          ctx->videoSyncGraceFrames.store(5, std::memory_order_relaxed);
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                       "[AVSync] DecodeStall: 500ms no frame, closing ClockGate for re-align on recovery");
+        }
+        continue;
+      }
+      consecutiveEmptyPops = 0;  // 成功拿到帧，重置计数
       entry = ctx->hwOutputQueue.front();
       ctx->hwOutputQueue.pop();
       // lk 在此析构 → 先释放锁（unlock），再 notify（见下方）
