@@ -3036,10 +3036,7 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     if (inGrace) {
       ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
     }
-    // 无论是否 grace，帧超前时钟均须等待，防止以解码速度输出帧导致画面撕裂 + AV 失同步
-    // 最小帧间隔限速（33ms ≈ 30fps 上限）：防止 diff<0 时帧突发堆积使 diff 骤升 → 长时冻帧
-    // AV sync sleep 上限 50ms：保证 render 线程持续消耗帧，decoder output queue 不会堆满
-    // 两者共同打断「burst→diff 骤增→长睡眠→decoder 饥饿→burst」反馈环
+    // 渲染前限速：最小帧间隔 33ms（≈30fps 上限），防止 diff<0 时帧突发堆积
     if (lastRenderRealtimeMs > 0) {
       const int64_t sinceLastMs = NowRealtimeMs() - lastRenderRealtimeMs;
       const int64_t minIntervalMs = 33;  // ~30fps 限速
@@ -3047,18 +3044,19 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
         std::this_thread::sleep_for(std::chrono::milliseconds(minIntervalMs - sinceLastMs));
       }
     }
-    if (diffMs > 10 && diffMs <= 500) {
-      // diff 正常范围（10-500ms）：sleep 让视频等音频，保证 AV 同步
+    // AV sync 等待：视频帧超前时钟时 sleep，上限 50ms/帧（保持 decoder output queue 持续消耗）。
+    // diff 缓慢收敛：sleep=50ms → 每帧 realtime=83ms，clock 推进 83ms，PTS 推进 42ms → diff 每帧 -41ms
+    // 收敛时间：diff=1000ms → 约 25 帧 × 83ms ≈ 2s；diff=4000ms → 约 98 帧 ≈ 8s
+    // 不设 skip-wait：PTS 跳变（如流内 GOP 边界）时 clock 正常递增，跳过等待会使 diff 持续扩大
+    if (diffMs > 10) {
       const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
       std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
-    } else if (diffMs > 500) {
-      // diff 骤升（>500ms）通常是音频 OH_AudioRenderer pendingMs 瞬时积累导致的 clock 骤降，
-      // 并非真实 AV 失步。此时跳过额外 sleep，依靠 33ms 帧间隔控速，让音频自然消耗 buffer 追赶。
-      // 长时等待会使 decoder output queue 堆满，反而加剧卡顿。
-      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
-                   "[AVSync] LargeDiff skip-wait ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld",
-                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
-                   static_cast<long long>(diffMs));
+      if (diffMs > 500) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "[AVSync] LargeSync ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld",
+                     static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                     static_cast<long long>(diffMs));
+      }
     }
 
     // 渲染到 Surface
