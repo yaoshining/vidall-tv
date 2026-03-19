@@ -2175,19 +2175,21 @@ static double AudioClock(FfmpegContext *ctx) {
     }
   }
   // Post-seek/flush warmup：candidateMs <= floor 表明 hardware pipeline 仍在预热阶段。
-  // 用 "floor - hwOffset + elapsed" 公式（与 HW 稳态等价）平滑推进 AudioClock，
-  // 避免视频在 seek 后冻结 600-1500ms 等待 hardware framePos 爬过 hwOffset。
+  // 用纯 wall-clock 推进 AudioClock，避免视频在 seek/启动后因 hwOffset 偏移冻帧数百毫秒。
+  // 以前公式 "floor - hwOff + elapsed" 当 hwOff 较大（如 900ms）时会导致：
+  //   1. 前 hwOff ms 内 wallMs=floor → 时钟冻结，视频 20fps（每帧 sleep 50ms）
+  //   2. 此后 wallMs 始终比 lastReportedMs 低 hwOff → 单调保护永远占主导 → 时钟持续卡住
+  // 改为 "floor + elapsed"（纯 wall-clock），时钟从 floor 以 1ms/ms 推进，
+  // 视频以正常帧率播放。hwOffset 的 AV 补偿仅在 HW candidateMs > floor 时由稳态公式承担。
   // audioRendererSwitching=true 时（切音轨窗口）由 Round2 fix 处理，此处跳过。
   {
     const int64_t floorMs2 = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
     if (candidateMs <= floorMs2 && !ctx->audioRendererSwitching.load(std::memory_order_acquire)) {
       const int64_t startRt = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
       if (startRt > 0) {
-        const int64_t hwOff = ctx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
         const int64_t elapsed = std::max<int64_t>(0, NowRealtimeMs() - startRt);
-        // anchor = floor - hwOff；经过 hwOff ms 后 wall-clock 才到达 floor，
-        // 与"音频样本进入 pipeline → 经 hwOff ms 到达扬声器"的物理行为对齐。
-        const int64_t wallMs = std::max(floorMs2, floorMs2 - hwOff + elapsed);
+        // 纯 wall-clock：clock = floor + elapsed（不减 hwOff），视频正常帧率播放
+        const int64_t wallMs = floorMs2 + elapsed;
         if (wallMs > candidateMs) {
           candidateMs = wallMs;
         }
