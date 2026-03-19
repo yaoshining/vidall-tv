@@ -2960,6 +2960,7 @@ static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
 // Render 线程：从 hwOutputQueue 取帧，AV Sync 后调用 RenderOutputBuffer / FreeOutputBuffer
 static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: started");
+  int64_t renderCount = 0;
   while (ctx->hwVideoRunning.load()) {
     FfmpegContext::HwOutputEntry entry{};
     {
@@ -2999,7 +3000,14 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
         continue;
       }
       // 到达 seek target 附近：开门，设置 wall-clock 锚点，后续走正常 AV sync
-      ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+      const int64_t nowMs = NowRealtimeMs();
+      ctx->audioClockStartRealtimeMs.store(nowMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] ClockGate OPEN: ptsMs=%{public}lld floor=%{public}lld nowMs=%{public}lld grace=%{public}d",
+                   static_cast<long long>(entry.ptsMs),
+                   static_cast<long long>(ctx->audioClockFloorMs.load(std::memory_order_relaxed)),
+                   static_cast<long long>(nowMs),
+                   static_cast<int>(ctx->videoSyncGraceFrames.load(std::memory_order_relaxed)));
     }
 
     // AV Sync：调用 AudioClock() 推进并读取当前音频时钟
@@ -3007,30 +3015,54 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     const int64_t clockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
     const int64_t diffMs = entry.ptsMs - clockMs;
 
-    // seek/startup 后前 N 帧使用 grace 模式：绕过 AV sync，让画面先稳定出帧
+    // seek/startup 后前 N 帧使用 grace 模式：保护帧不被 drop，但仍做超前等待（防止撕裂/声音滞后）
     const bool inGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0;
-    if (inGrace) {
-      ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
-    } else if (diffMs < -200) {
-      // 帧明显落后（非 grace 期），丢弃
+    if (!inGrace && diffMs < -200) {
+      // 帧明显落后（非 grace 期），丢弃；grace 期间不 drop，让画面先稳定出帧
       OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "[HwVideoDecode] RenderThread: drop late frame ptsMs=%{public}lld clockMs=%{public}lld",
                    static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs));
       continue;
-    } else if (diffMs > 10) {
-      // 超前：等待
+    }
+    if (inGrace) {
+      ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
+    }
+    // 无论是否 grace，帧超前时钟均须等待，防止以解码速度输出帧导致画面撕裂 + AV 失同步
+    if (diffMs > 10) {
       const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
       std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
     }
 
     // 渲染到 Surface
     OH_VideoDecoder_RenderOutputBuffer(ctx->hwVideoDecoder, entry.index);
-    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "[HwVideoDecode] RenderThread: render ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld grace=%{public}d",
-                 static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
-                 static_cast<long long>(diffMs),
-                 static_cast<int>(inGrace));
+    renderCount++;
+    // [AVSync-Summary] 每300帧输出一次AV同步摘要，用于诊断声音滞后（过滤关键词: AVSync-Summary）
+    if (renderCount % 300 == 1 || renderCount <= 5) {
+      const int64_t ptsSamples = ctx->audioPtsSamples.load(std::memory_order_relaxed);
+      const int64_t startRt = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
+      const int64_t baseMs2 = ctx->audioClockBaseMs.load(std::memory_order_relaxed);
+      const int64_t sampleRate = ctx->audioSampleRate > 0 ? ctx->audioSampleRate : 48000;
+      const int64_t ptsSamplesMs = ptsSamples * 1000LL / sampleRate;
+      const int64_t elapsedMs = startRt > 0 ? (NowRealtimeMs() - startRt) : 0;
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync-Summary] frame#%{public}lld ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld "
+                   "baseMs=%{public}lld ptsSampMs=%{public}lld elapsed=%{public}lld grace=%{public}d",
+                   static_cast<long long>(renderCount),
+                   static_cast<long long>(entry.ptsMs),
+                   static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs),
+                   static_cast<long long>(baseMs2),
+                   static_cast<long long>(ptsSamplesMs),
+                   static_cast<long long>(elapsedMs),
+                   static_cast<int>(inGrace));
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] RenderThread: render ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld grace=%{public}d",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs),
+                   static_cast<int>(inGrace));
+    }
   }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: exited");
