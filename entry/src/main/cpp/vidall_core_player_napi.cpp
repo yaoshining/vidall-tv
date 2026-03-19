@@ -2985,22 +2985,41 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       continue;
     }
 
+    // Seek 时钟门控：audioClockStartRealtimeMs=0 表示 seek 后时钟尚未开启，
+    // 需要等 HW 解码器解完 keyframe pre-roll 到 seekTarget 附近再开门，
+    // 防止时钟过早推进导致所有帧因"太迟"被丢弃（永久冻帧）。
+    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) == 0) {
+      const int64_t seekFloor = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
+      if (entry.ptsMs < seekFloor - 200) {
+        // Pre-roll 帧（远早于 seek target），快速丢弃，不占用 grace counter
+        OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "[HwVideoDecode] RenderThread: drop preroll ptsMs=%{public}lld floor=%{public}lld",
+                     static_cast<long long>(entry.ptsMs), static_cast<long long>(seekFloor));
+        continue;
+      }
+      // 到达 seek target 附近：开门，设置 wall-clock 锚点，后续走正常 AV sync
+      ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
+    }
+
     // AV Sync：调用 AudioClock() 推进并读取当前音频时钟
     // 注意：HW 路径中没有其他线程调 AudioClock()，必须在这里调，否则 audioClockLastReportedMs 永远为 0
     const int64_t clockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
     const int64_t diffMs = entry.ptsMs - clockMs;
 
-    if (diffMs < -100) {
-      // 帧已明显落后，丢弃
+    // seek/startup 后前 N 帧使用 grace 模式：绕过 AV sync，让画面先稳定出帧
+    const bool inGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0;
+    if (inGrace) {
+      ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
+    } else if (diffMs < -200) {
+      // 帧明显落后（非 grace 期），丢弃
       OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "[HwVideoDecode] RenderThread: drop late frame ptsMs=%{public}lld clockMs=%{public}lld",
                    static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs));
       continue;
-    }
-
-    // 超前：等待
-    if (diffMs > 10) {
+    } else if (diffMs > 10) {
+      // 超前：等待
       const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
       std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
     }
@@ -3008,9 +3027,10 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
     // 渲染到 Surface
     OH_VideoDecoder_RenderOutputBuffer(ctx->hwVideoDecoder, entry.index);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-                 "[HwVideoDecode] RenderThread: render ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld",
+                 "[HwVideoDecode] RenderThread: render ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld grace=%{public}d",
                  static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
-                 static_cast<long long>(diffMs));
+                 static_cast<long long>(diffMs),
+                 static_cast<int>(inGrace));
   }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: exited");
@@ -4218,7 +4238,11 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
   // B5：音频时钟只累计真实媒体样本，不把 underrun 填充的静音计入主时钟。
   // 否则启动/seek 后音频时钟会虚假快进，RenderThread 会把视频帧误判为“严重落后”并大量丢帧。
   if (mediaSamplesFilled > 0) {
-    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) <= 0) {
+    // HW video path: startRealtimeMs is gated by HwVideoRenderThread (set when first frame near
+    // seek target is rendered). Blocking it here prevents premature clock advance during
+    // keyframe pre-roll, which caused permanent seek freeze (all frames dropped as "too late").
+    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) <= 0 &&
+        !ctx->useHwVideoDecoder) {
       ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
     }
     ctx->audioPtsSamples.fetch_add(static_cast<int64_t>(mediaSamplesFilled), std::memory_order_relaxed);
