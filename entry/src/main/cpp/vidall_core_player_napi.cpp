@@ -3116,6 +3116,33 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       clockMs = entry.ptsMs;
       diffMs = 0;
     }
+    // [DriftCorrect] 音频时钟长期负漂移修正（clock 持续超前 video PTS）
+    // 根因：音频以略高于 1.0x 速率写入（预缓冲），ptsSampMs 积累速率略快于 video PTS。
+    //   OH_AudioRenderer 的 pendingMs 仅反映硬件固定延迟（~139ms），不含软件预缓冲，
+    //   导致 clock = base + ptsSampMs - pending - hwOffset 系统性偏高约 10ms/s。
+    // 现象：frame#301 diff=-26ms → frame#601 diff=-176ms（15s 内积累 -150ms 漂移）
+    //   用户感知：视频落后音频约 176ms → 唇形不同步
+    // 修复：等效于反向 ClockGate-Align ——
+    //   diff < -kDriftCorrThresholdMs 时将 audioClockBaseMs 向下调 |diffMs|，使 clock 对齐到 video PTS。
+    //   diff 归零后无需 sleep/drop，视频立即渲染，用户无感知。
+    // 修正频率：-10ms/s 漂移 + 80ms 阈值 → 每 ~8s 触发一次，每次约 80ms 瞬时修正，完全无感知。
+    // 安全约束：
+    //   !inGrace    → seek 后 grace=90 期间不触发（时钟刚建立，diff 不稳定）
+    //   !gateJustOpened → 与 ClockGate-Align 不重复触发
+    //   diff < kDriftCorrThresholdMs（负值）→ 仅在 clock 持续超前时触发，不影响正常负 diff（-20~-60ms 波动）
+    static constexpr int64_t kDriftCorrThresholdMs = -80;
+    if (!inGrace && !gateJustOpened && diffMs < kDriftCorrThresholdMs) {
+      ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
+      ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] DriftCorrect: ptsMs=%{public}lld oldClockMs=%{public}lld drift=%{public}lld",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
+      clockMs = entry.ptsMs;
+      diffMs = 0;
+    }
+
     if (!inGrace && diffMs < -200) {
       // 帧明显落后（非 grace 期），丢弃；grace 期间不 drop，让画面先稳定出帧
       OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
