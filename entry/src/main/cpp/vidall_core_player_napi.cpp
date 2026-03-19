@@ -2961,6 +2961,7 @@ static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
 static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: started");
   int64_t renderCount = 0;
+  int64_t lastRenderRealtimeMs = 0;  // 用于最小帧间隔限速，防止 burst → diff 骤增 → 冻帧的反馈环
   while (ctx->hwVideoRunning.load()) {
     // [Fix-Pause] pause 期间不消耗帧，让 HW 解码器自然因 output buffer 耗尽而暂停。
     // 这样 resume 后 ptsMs 仍在 pause 前的位置，避免 diff 虚高（曾导致 2-3 秒冻帧）。
@@ -3036,23 +3037,24 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
     }
     // 无论是否 grace，帧超前时钟均须等待，防止以解码速度输出帧导致画面撕裂 + AV 失同步
-    // 使用循环分段 sleep：每次最多 50ms，sleep 后重新读取 clock 以提前终止等待
-    if (diffMs > 10) {
-      int64_t remaining = diffMs - 5;
-      while (remaining > 5 && ctx->hwVideoRunning.load(std::memory_order_relaxed) &&
-             !ctx->hwVideoFlushPending.load(std::memory_order_relaxed) &&
-             !ctx->playbackPaused.load(std::memory_order_relaxed)) {
-        const int64_t chunk = std::min(remaining, (int64_t)50);
-        std::this_thread::sleep_for(std::chrono::milliseconds(chunk));
-        remaining -= chunk;
-        // 重新读取时钟：若音频已追上，提前结束等待
-        const int64_t updatedClock = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
-        if (entry.ptsMs - updatedClock <= 10) break;
+    // 最小帧间隔限速（33ms ≈ 30fps 上限）：防止 diff<0 时帧突发堆积使 diff 骤升 → 长时冻帧
+    // AV sync sleep 上限 50ms：保证 render 线程持续消耗帧，decoder output queue 不会堆满
+    // 两者共同打断「burst→diff 骤增→长睡眠→decoder 饥饿→burst」反馈环
+    if (lastRenderRealtimeMs > 0) {
+      const int64_t sinceLastMs = NowRealtimeMs() - lastRenderRealtimeMs;
+      const int64_t minIntervalMs = 33;  // ~30fps 限速
+      if (sinceLastMs < minIntervalMs) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(minIntervalMs - sinceLastMs));
       }
+    }
+    if (diffMs > 10) {
+      const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
     }
 
     // 渲染到 Surface
     OH_VideoDecoder_RenderOutputBuffer(ctx->hwVideoDecoder, entry.index);
+    lastRenderRealtimeMs = NowRealtimeMs();
     renderCount++;
     // [AVSync-Summary] 每300帧输出一次AV同步摘要，用于诊断声音滞后（过滤关键词: AVSync-Summary）
     if (renderCount % 300 == 1 || renderCount <= 5) {
