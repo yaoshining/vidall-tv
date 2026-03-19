@@ -2841,8 +2841,8 @@ static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
       pkt = ctx->videoQueue.packets.front();
       ctx->videoQueue.packets.pop();
     }
-
-    // 等待解码器提供可用输入 buffer
+    // 消费后通知 DemuxThread 有空位（防止 queue full 死锁）
+    ctx->videoQueue.cv.notify_all();
     FfmpegContext::HwInputEntry entry{};
     {
       std::unique_lock<std::mutex> lk(ctx->hwInputMtx);
