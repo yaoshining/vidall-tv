@@ -3047,9 +3047,18 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
         std::this_thread::sleep_for(std::chrono::milliseconds(minIntervalMs - sinceLastMs));
       }
     }
-    if (diffMs > 10) {
+    if (diffMs > 10 && diffMs <= 500) {
+      // diff 正常范围（10-500ms）：sleep 让视频等音频，保证 AV 同步
       const int64_t sleepMs = std::min(diffMs - 5, (int64_t)50);
       std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+    } else if (diffMs > 500) {
+      // diff 骤升（>500ms）通常是音频 OH_AudioRenderer pendingMs 瞬时积累导致的 clock 骤降，
+      // 并非真实 AV 失步。此时跳过额外 sleep，依靠 33ms 帧间隔控速，让音频自然消耗 buffer 追赶。
+      // 长时等待会使 decoder output queue 堆满，反而加剧卡顿。
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "[AVSync] LargeDiff skip-wait ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
     }
 
     // 渲染到 Surface
