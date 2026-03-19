@@ -26,6 +26,7 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/bsf.h>
 #include <libavcodec/codec_desc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
@@ -868,6 +869,7 @@ struct FfmpegContext {
 
   // HW-B：OH_VideoDecoder + FFmpeg 音频混合路径
   OH_AVCodec *hwVideoDecoder{nullptr};
+  AVBSFContext *hwBsfCtx{nullptr};  // MKV→Annex-B 转换 BSF
   bool useHwVideoDecoder{false};
   std::atomic<bool> hwVideoRunning{false};
   std::atomic<bool> hwVideoFlushPending{false};
@@ -999,6 +1001,10 @@ struct FfmpegContext {
       OH_VideoDecoder_Stop(hwVideoDecoder);
       OH_VideoDecoder_Destroy(hwVideoDecoder);
       hwVideoDecoder = nullptr;
+    }
+    if (hwBsfCtx != nullptr) {
+      av_bsf_free(&hwBsfCtx);
+      hwBsfCtx = nullptr;
     }
 
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
@@ -2798,6 +2804,9 @@ static void OnHwVideoFormatChanged(OH_AVCodec *, OH_AVFormat *format, void *user
 // 解码器准备好输入 buffer 时回调 → 放入 hwInputPool 供 FeedThread 使用
 static void OnHwVideoNeedInputBuffer(OH_AVCodec *, uint32_t index, OH_AVBuffer *buffer, void *userData) {
   FfmpegContext *ctx = static_cast<FfmpegContext *>(userData);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] onNeedInputBuffer index=%{public}u bufCap=%{public}d",
+               index, OH_AVBuffer_GetCapacity(buffer));
   {
     std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
     ctx->hwInputPool.push({index, buffer});
@@ -2819,11 +2828,70 @@ static void OnHwVideoNewOutputBuffer(OH_AVCodec *, uint32_t index, OH_AVBuffer *
   ctx->hwOutputCv.notify_one();
 }
 
-// Feed 线程：从 videoQueue 取 AVPacket，塞入 OH_VideoDecoder 输入 buffer
+// Feed 线程：从 videoQueue 取 AVPacket，经 BSF 转换后塞入 OH_VideoDecoder 输入 buffer
 static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoFeedThread: started");
+
+  // 辅助 lambda：等待一个 hwInputPool entry
+  auto getInputEntry = [&](FfmpegContext::HwInputEntry &entry, bool &running) -> bool {
+    std::unique_lock<std::mutex> lk(ctx->hwInputMtx);
+    ctx->hwInputCv.wait_for(lk, std::chrono::milliseconds(200), [&] {
+      return !ctx->hwInputPool.empty() || !ctx->hwVideoRunning.load();
+    });
+    if (!ctx->hwVideoRunning.load()) { running = false; return false; }
+    if (ctx->hwInputPool.empty()) { return false; }
+    entry = ctx->hwInputPool.front();
+    ctx->hwInputPool.pop();
+    return true;
+  };
+
+  // 辅助 lambda：将一个 AVPacket 推入 HW 解码器
+  auto pushPktToDecoder = [&](AVPacket *pkt) -> bool {
+    bool running = true;
+    FfmpegContext::HwInputEntry entry{};
+    if (!getInputEntry(entry, running)) {
+      if (!running) return false;
+      // 等待超时：打印诊断日志（每 10 次静默一次）
+      static int timeoutCount = 0;
+      if (++timeoutCount % 10 == 1) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "[HwVideoDecode] FeedThread: hwInputPool timeout #%{public}d (decoder not calling onNeedInputBuffer?)",
+                     timeoutCount);
+      }
+      return true; // 丢弃这个 packet，继续
+    }
+
+    const uint8_t *bufPtr = OH_AVBuffer_GetAddr(entry.buffer);
+    const int32_t capacity = OH_AVBuffer_GetCapacity(entry.buffer);
+    if (bufPtr == nullptr || capacity < pkt->size) {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "[HwVideoDecode] FeedThread: buffer too small cap=%{public}d pktSize=%{public}d",
+                   capacity, pkt->size);
+      std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
+      ctx->hwInputPool.push(entry);
+      ctx->hwInputCv.notify_one();
+      return true;
+    }
+    std::memcpy(const_cast<uint8_t *>(bufPtr), pkt->data, static_cast<size_t>(pkt->size));
+
+    const AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
+    const int64_t ptsUs = (pkt->pts != AV_NOPTS_VALUE)
+        ? av_rescale_q(pkt->pts, vs->time_base, {1, 1000000}) : 0;
+
+    OH_AVCodecBufferAttr attr{};
+    attr.pts = ptsUs;
+    attr.size = pkt->size;
+    attr.offset = 0;
+    attr.flags = (pkt->flags & AV_PKT_FLAG_KEY) ? AVCODEC_BUFFER_FLAGS_SYNC_FRAME : 0;
+    OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
+    OH_VideoDecoder_PushInputBuffer(ctx->hwVideoDecoder, entry.index);
+    return true;
+  };
+
+  AVPacket *filteredPkt = av_packet_alloc();
+  static int feedCount = 0;
+
   while (ctx->hwVideoRunning.load()) {
-    // 等待 flushPending 解除
     if (ctx->hwVideoFlushPending.load()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
       continue;
@@ -2841,91 +2909,49 @@ static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
       pkt = ctx->videoQueue.packets.front();
       ctx->videoQueue.packets.pop();
     }
-    // 消费后通知 DemuxThread 有空位（防止 queue full 死锁）
     ctx->videoQueue.cv.notify_all();
-    FfmpegContext::HwInputEntry entry{};
-    {
-      std::unique_lock<std::mutex> lk(ctx->hwInputMtx);
-      ctx->hwInputCv.wait_for(lk, std::chrono::milliseconds(100), [&] {
-        return !ctx->hwInputPool.empty() || !ctx->hwVideoRunning.load();
-      });
-      if (!ctx->hwVideoRunning.load()) {
-        av_packet_free(&pkt);
-        break;
-      }
-      if (ctx->hwInputPool.empty()) {
-        // 超时：暂放回 videoQueue（简化处理）
-        {
-          std::lock_guard<std::mutex> lk2(ctx->videoQueue.mtx);
-          ctx->videoQueue.packets.push(pkt);
-        }
-        ctx->videoQueue.cv.notify_one();
-        continue;
-      }
-      entry = ctx->hwInputPool.front();
-      ctx->hwInputPool.pop();
-    }
 
-    // 处理 flushPending：跳过这帧并归还 buffer 给解码器
-    if (ctx->hwVideoFlushPending.load()) {
-      OH_AVCodecBufferAttr attr{};
-      attr.pts = 0;
-      attr.size = 0;
-      attr.offset = 0;
-      attr.flags = AVCODEC_BUFFER_FLAGS_EOS;
-      OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
-      av_packet_free(&pkt);
-      continue;
+    if (++feedCount <= 5 || feedCount % 100 == 0) {
+      const AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
+      const int64_t ptsMs = (pkt && pkt->pts != AV_NOPTS_VALUE)
+          ? av_rescale_q(pkt->pts, vs->time_base, {1, 1000}) : -1;
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] FeedThread: got pkt #%{public}d ptsMs=%{public}lld size=%{public}d poolSize=%{public}zu",
+                   feedCount, static_cast<long long>(ptsMs), pkt ? pkt->size : 0,
+                   ctx->hwInputPool.size());
     }
 
     // EOS packet
     if (pkt == nullptr || pkt->size <= 0) {
-      OH_AVCodecBufferAttr attr{};
-      attr.pts = 0;
-      attr.size = 0;
-      attr.offset = 0;
-      attr.flags = AVCODEC_BUFFER_FLAGS_EOS;
-      OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
-      OH_VideoDecoder_PushInputBuffer(ctx->hwVideoDecoder, entry.index);
+      bool running = true;
+      FfmpegContext::HwInputEntry entry{};
+      if (getInputEntry(entry, running)) {
+        OH_AVCodecBufferAttr attr{};
+        attr.flags = AVCODEC_BUFFER_FLAGS_EOS;
+        OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
+        OH_VideoDecoder_PushInputBuffer(ctx->hwVideoDecoder, entry.index);
+      }
       if (pkt) av_packet_free(&pkt);
       break;
     }
 
-    // 将 packet 数据复制到 HW buffer
-    const uint8_t *bufPtr = OH_AVBuffer_GetAddr(entry.buffer);
-    const int32_t capacity = OH_AVBuffer_GetCapacity(entry.buffer);
-    if (bufPtr == nullptr || capacity < pkt->size) {
-      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
-                   "[HwVideoDecode] FeedThread: buffer too small cap=%{public}d pktSize=%{public}d",
-                   capacity, pkt->size);
+    if (ctx->hwBsfCtx != nullptr) {
+      // 通过 BSF 将 MPEG-4/HVCC 格式转换为 Annex-B
+      int ret = av_bsf_send_packet(ctx->hwBsfCtx, pkt);
       av_packet_free(&pkt);
-      // 把 entry 还回 pool
-      {
-        std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
-        ctx->hwInputPool.push(entry);
+      if (ret < 0) continue;
+      while (av_bsf_receive_packet(ctx->hwBsfCtx, filteredPkt) == 0) {
+        pushPktToDecoder(filteredPkt);
+        av_packet_unref(filteredPkt);
+        if (!ctx->hwVideoRunning.load()) break;
       }
-      ctx->hwInputCv.notify_one();
-      continue;
+    } else {
+      pushPktToDecoder(pkt);
+      av_packet_free(&pkt);
     }
-    std::memcpy(const_cast<uint8_t *>(bufPtr), pkt->data, static_cast<size_t>(pkt->size));
-
-    // 设置 PTS（微秒）
-    const AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
-    const int64_t ptsUs = (pkt->pts != AV_NOPTS_VALUE)
-        ? av_rescale_q(pkt->pts, vs->time_base, {1, 1000000})
-        : 0;
-
-    OH_AVCodecBufferAttr attr{};
-    attr.pts = ptsUs;
-    attr.size = pkt->size;
-    attr.offset = 0;
-    attr.flags = (pkt->flags & AV_PKT_FLAG_KEY) ? AVCODEC_BUFFER_FLAGS_SYNC_FRAME : 0;
-    OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
-
-    av_packet_free(&pkt);
-    OH_VideoDecoder_PushInputBuffer(ctx->hwVideoDecoder, entry.index);
   }
 
+  if (filteredPkt) av_packet_free(&filteredPkt);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoFeedThread: exited");
 }
 
@@ -3110,6 +3136,10 @@ static void DestroyHwVideoDecoder(FfmpegContext *ctx) {
     OH_VideoDecoder_Stop(ctx->hwVideoDecoder);
     OH_VideoDecoder_Destroy(ctx->hwVideoDecoder);
     ctx->hwVideoDecoder = nullptr;
+  }
+  if (ctx->hwBsfCtx != nullptr) {
+    av_bsf_free(&ctx->hwBsfCtx);
+    ctx->hwBsfCtx = nullptr;
   }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] DestroyHwVideoDecoder: done");
@@ -4331,6 +4361,32 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "StartFfmpegDecode: HW video decoder init %{public}s mime=%{public}s",
                    ctx->useHwVideoDecoder ? "OK" : "FAILED", mime);
+
+      // 初始化 Annex-B BSF（MKV 存储 HEVC/H264 为 MPEG-4 格式，HW 解码器需要 Annex-B）
+      if (ctx->useHwVideoDecoder) {
+        const char *bsfName = (codecId == AV_CODEC_ID_HEVC) ? "hevc_mp4toannexb" : "h264_mp4toannexb";
+        const AVBitStreamFilter *bsf = av_bsf_get_by_name(bsfName);
+        if (bsf != nullptr) {
+          int bsfRet = av_bsf_alloc(bsf, &ctx->hwBsfCtx);
+          if (bsfRet == 0) {
+            AVCodecParameters *par = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar;
+            avcodec_parameters_copy(ctx->hwBsfCtx->par_in, par);
+            ctx->hwBsfCtx->time_base_in = ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base;
+            bsfRet = av_bsf_init(ctx->hwBsfCtx);
+          }
+          if (bsfRet == 0) {
+            OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                         "StartFfmpegDecode: BSF %{public}s initialized OK", bsfName);
+          } else {
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                         "StartFfmpegDecode: BSF %{public}s init failed ret=%{public}d", bsfName, bsfRet);
+            if (ctx->hwBsfCtx) { av_bsf_free(&ctx->hwBsfCtx); ctx->hwBsfCtx = nullptr; }
+          }
+        } else {
+          OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                       "StartFfmpegDecode: BSF %{public}s not found", bsfName);
+        }
+      }
     }
   }
 
