@@ -2817,14 +2817,57 @@ static void OnHwVideoNeedInputBuffer(OH_AVCodec *, uint32_t index, OH_AVBuffer *
 }
 
 // 解码完成，输出 buffer 就绪 → 放入 hwOutputQueue 供 RenderThread 消费
+//
+// [Backpressure] 背压限流：队列满时阻塞本 callback（decoder 内部输出线程），
+// 防止 GOP 边界批量输出无限积压 hwOutputQueue，进而触发周期性 LargeSync。
+//
+// 容量 MAX_HW_QUEUE = 6：6 × 42ms ≈ 252ms < LargeSync 阈值(500ms)，
+// 同时比最小值 4 帧多 2 帧余量，对抗渲染线程调度抖动（单帧循环最长 ~192ms）。
+//
+// Surface 模式说明：Surface 模式下 index 是 BufferQueue 里的合成帧句柄，
+// 不是 decoder 内部 YUV 槽位；BufferQueue 深度 ≥ 16，decoder 解码核心不受
+// output 槽反压影响，设 6 帧不会造成 decoder 内部 deadlock。
+//
+// 安全网设计：
+//   · wait_for(500ms) 而非无限 wait：渲染线程崩溃时 callback 不会永久挂起。
+//   · hwVideoFlushPending 作为 唤醒条件 + 推入双重门控：
+//     flush 期间（notify_all 已唤醒 wait）不向 queue 推入，封堵竞争窗口——
+//     Flush() 执行前 producer 可能已被 notify_all 唤醒并想推入旧 index，
+//     若不拦截，flushPending=false 后 RenderThread 会用过期 index 调
+//     RenderOutputBuffer，导致解码器进入错误状态。
+//     提前 return 而未 Free 的 index 由 OH_VideoDecoder_Flush() 统一回收，
+//     无需手动 FreeOutputBuffer。
 static void OnHwVideoNewOutputBuffer(OH_AVCodec *, uint32_t index, OH_AVBuffer *buffer, void *userData) {
   FfmpegContext *ctx = static_cast<FfmpegContext *>(userData);
   OH_AVCodecBufferAttr attr{};
   OH_AVBuffer_GetBufferAttr(buffer, &attr);
   const int64_t ptsMs = attr.pts / 1000;
   const bool isEos = (attr.flags & AVCODEC_BUFFER_FLAGS_EOS) != 0;
+
+  static constexpr size_t MAX_HW_QUEUE = 6;
   {
-    std::lock_guard<std::mutex> lk(ctx->hwOutputMtx);
+    std::unique_lock<std::mutex> lk(ctx->hwOutputMtx);
+
+    // 背压等待：EOS / stop / flush 三种情况立即放行，避免死锁
+    const bool ready = ctx->hwOutputCv.wait_for(lk, std::chrono::milliseconds(500), [&] {
+      return ctx->hwOutputQueue.size() < MAX_HW_QUEUE
+             || !ctx->hwVideoRunning.load(std::memory_order_relaxed)
+             || ctx->hwVideoFlushPending.load(std::memory_order_relaxed)
+             || isEos;
+    });
+    if (!ready) {
+      // 超时（500ms）：渲染线程可能阻塞，打印诊断日志后继续入队（宁可瞬时积压也不丢帧，LargeSync 可自愈）
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "[HwVideoDecode] OnNewOutputBuffer: backpressure timeout "
+                   "queueSize=%{public}zu ptsMs=%{public}lld",
+                   ctx->hwOutputQueue.size(), static_cast<long long>(ptsMs));
+    }
+
+    // flush 期间：不推入 queue，防止过期 index 残留；OH_VideoDecoder_Flush 负责回收此 buffer
+    if (ctx->hwVideoFlushPending.load(std::memory_order_relaxed) && !isEos) return;
+    // stop 期间：同样不推入
+    if (!ctx->hwVideoRunning.load(std::memory_order_relaxed) && !isEos) return;
+
     ctx->hwOutputQueue.push({index, ptsMs, isEos});
   }
   ctx->hwOutputCv.notify_one();
@@ -2981,7 +3024,14 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       if (ctx->hwOutputQueue.empty()) continue;
       entry = ctx->hwOutputQueue.front();
       ctx->hwOutputQueue.pop();
+      // lk 在此析构 → 先释放锁（unlock），再 notify（见下方）
+      // unlock-then-notify 模式：producer 被唤醒时锁已空闲，无需再等一次 lock，
+      // 避免虚假的 lock/unlock 往返，略微降低 CPU 争用。
     }
+    // [Backpressure] pop 后立即通知 producer 有空位。
+    // 此处统一 notify，覆盖后续所有 continue 路径（pre-roll drop / flushPending /
+    // late frame drop / 正常渲染），无需在各分支里重复 notify_one()。
+    ctx->hwOutputCv.notify_one();
 
     if (entry.isEos) {
       OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
