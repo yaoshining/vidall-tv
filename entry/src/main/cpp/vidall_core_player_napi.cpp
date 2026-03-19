@@ -2982,12 +2982,9 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       continue;
     }
 
-    // AV Sync
-    const int64_t audioClock = ctx->audioClockBaseMs.load(std::memory_order_relaxed)
-        + ctx->audioClockLastReportedMs.load(std::memory_order_relaxed)
-        - ctx->audioClockBaseMs.load(std::memory_order_relaxed);
-    // 简化：直接使用 audioClockLastReportedMs 作为当前时钟
-    const int64_t clockMs = ctx->audioClockLastReportedMs.load(std::memory_order_relaxed);
+    // AV Sync：调用 AudioClock() 推进并读取当前音频时钟
+    // 注意：HW 路径中没有其他线程调 AudioClock()，必须在这里调，否则 audioClockLastReportedMs 永远为 0
+    const int64_t clockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
     const int64_t diffMs = entry.ptsMs - clockMs;
 
     if (diffMs < -100) {
@@ -3068,6 +3065,24 @@ static bool InitHwVideoDecoder(FfmpegContext *ctx, const char *mime, OHNativeWin
                  "[HwVideoDecode] InitHwVideoDecoder: SetSurface failed rc=%{public}d", rc);
     OH_VideoDecoder_Destroy(decoder);
     return false;
+  }
+
+  // HDR 色彩空间：根据视频流 color_trc 设置 NativeWindow 色彩空间，使显示器启用 HDR 渲染
+  // DV Profile 8 / HDR10 → PQ (SMPTE2084, color_trc=16)；HLG → color_trc=18
+  if (ctx->videoStreamIdx >= 0 && ctx->fmtCtx != nullptr) {
+    AVCodecParameters *par = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar;
+    OH_NativeBuffer_ColorSpace csTarget = OH_COLORSPACE_NONE;
+    if (par->color_trc == AVCOL_TRC_SMPTEST2084) {           // PQ / HDR10 / DolbyVision BL
+      csTarget = OH_COLORSPACE_BT2020_PQ_LIMIT;
+    } else if (par->color_trc == AVCOL_TRC_ARIB_STD_B67) {  // HLG
+      csTarget = OH_COLORSPACE_BT2020_HLG_LIMIT;
+    }
+    if (csTarget != OH_COLORSPACE_NONE) {
+      const int32_t csRc = OH_NativeWindow_SetColorSpace(window, csTarget);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] InitHwVideoDecoder: SetColorSpace colorSpace=%{public}d rc=%{public}d",
+                   static_cast<int32_t>(csTarget), csRc);
+    }
   }
 
   rc = OH_VideoDecoder_Prepare(decoder);
