@@ -3092,8 +3092,30 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       diffMs = 0;
     }
 
-    // seek/startup 后前 N 帧使用 grace 模式：保护帧不被 drop，但仍做超前等待（防止撕裂/声音滞后）
+    // [PtsGap-Align] Content PTS 不连续点对齐（Dolby Vision / Blu-ray seamless branching）
+    // 问题：音频时钟基于 sample 计数，不感知音频 PTS gap；视频 PTS 跳变后 diff 瞬间飙升到 1200ms+。
+    //   diff>0 → 视频超前时钟 → sleep 最多 150ms/帧 → 视频以 ~5fps 慢速前进 → 用户感知「声音滞后」
+    // 识别条件：!inGrace（稳态播放中）&& diff > kPtsGapThresholdMs（远超背压上限 252ms，必为 gap）
+    //   背压后正常 diff 上限 = MAX_HW_QUEUE(6) × 42ms = 252ms，gap 阈值设 600ms 留 2.4× 余量。
+    // 修复：与 ClockGate-Align 完全相同——推进 audioClockBaseMs 对齐到 video PTS，diff 瞬间归零。
+    //   double-counting 分析：对齐时音频已写入部分 post-gap 样本(ptsSampMs已增大)，
+    //   fetch_add(diffMs) 后 base 升高 diffMs，clock = newBase + ptsSampMs - pending - hwOffset ≈ ptsMs。
+    //   后续 post-gap 样本继续累积，clock 以 1.0x 推进，与 video PTS 保持同步。
+    // 回归安全：gateJustOpened 时此处尚未计算 inGrace（inGrace 在下方计算），但 gateJustOpened 时
+    //   diff < 0 由 ClockGate-Align 处理，diff 被置为 0，不会误触此处。
+    static constexpr int64_t kPtsGapThresholdMs = 600;
     const bool inGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0;
+    if (!inGrace && diffMs > kPtsGapThresholdMs) {
+      ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
+      ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] PtsGapAlign: ptsMs=%{public}lld oldClockMs=%{public}lld gap=%{public}lld, advancing clock",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
+      clockMs = entry.ptsMs;
+      diffMs = 0;
+    }
     if (!inGrace && diffMs < -200) {
       // 帧明显落后（非 grace 期），丢弃；grace 期间不 drop，让画面先稳定出帧
       OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
