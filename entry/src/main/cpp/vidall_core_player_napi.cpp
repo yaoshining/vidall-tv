@@ -6064,6 +6064,24 @@ static VideoDecoderCapabilityResult QueryVideoDecoderCapabilityInternal(const st
     return result;
   }
 
+  // Fallback: capability API gave no result, try direct decoder creation.
+  // On some HarmonyOS devices, OH_AVCodec_GetCapabilityByCategory returns null for HEVC
+  // even though the decoder is actually available via OH_VideoDecoder_CreateByMime.
+  for (const std::string &mime : mimeCandidates) {
+    OH_AVCodec *testDecoder = OH_VideoDecoder_CreateByMime(mime.c_str());
+    if (testDecoder != nullptr) {
+      OH_VideoDecoder_Destroy(testDecoder);
+      result.supported = true;
+      result.mimeType = mime;
+      result.decoderName = "";  // name unknown via creation probe
+      // isHardware cannot be determined; caller should treat as "unknown"
+      result.isHardware = false;
+      result.errorMessage = "";
+      OH_LOG_INFO(LOG_APP, "QueryVideoDecoderCapabilityInternal: capability API failed but creation probe succeeded for mime=%{public}s, marking supported=true isHardware=false", mime.c_str());
+      return result;
+    }
+  }
+
   result.errorMessage = "decoder not found";
   return result;
 }

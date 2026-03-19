@@ -1621,10 +1621,10 @@ export class VideoPlayerController {
         : 'ffprobe 失败，native 暂保持 system_default';
     } else if (this.isHwCandidateCodec(preflight.videoCodecMime)) {
       if (preflight.nativeVideoCapability.capabilityKnown &&
-        preflight.nativeVideoCapability.supported &&
-        preflight.nativeVideoCapability.isHardware) {
+        preflight.nativeVideoCapability.supported) {
         nativeVideoPlan = 'native_hw_preferred';
-        decisionReason = `${preflight.videoCodecMime} 命中硬解主路径候选，设备存在原生硬解能力`;
+        const hwNote = preflight.nativeVideoCapability.isHardware ? '已确认硬解' : '创建探针确认可用，isHardware待验证';
+        decisionReason = `${preflight.videoCodecMime} 命中硬解主路径候选，${hwNote}`;
       } else {
         nativeVideoPlan = 'native_ffmpeg_only';
         decisionReason = `${preflight.videoCodecMime} 虽为硬解主路径候选，但设备无可用原生硬解能力`;
