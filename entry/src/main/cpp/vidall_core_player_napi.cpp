@@ -2976,9 +2976,10 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
       break;
     }
 
-    // flush 期间：丢弃所有帧
+    // flush 期间：不调用 FreeOutputBuffer —— Flush 后 buffer index 已失效，
+    // 调用 FreeOutputBuffer 会让解码器进入错误状态导致 onNewOutputBuffer 永久停止。
+    // OH_VideoDecoder_Flush 会自动回收所有 pending buffer，无需手动释放。
     if (ctx->hwVideoFlushPending.load()) {
-      OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
       continue;
     }
 
@@ -3126,21 +3127,42 @@ static void FlushHwVideoDecoder(FfmpegContext *ctx) {
   }
   ctx->hwInputCv.notify_all();  // 唤醒 FeedThread 感知 pool 已清空
 
+  // 先将 hwOutputQueue 里的帧正式归还给解码器，再调 Flush。
+  // 若直接 Flush 而不 Free，RenderThread 可能用失效 index 调 FreeOutputBuffer，
+  // 导致解码器进入错误状态并永久停止输出（seek 后黑屏/冻帧根因）。
+  {
+    std::lock_guard<std::mutex> lk(ctx->hwOutputMtx);
+    while (!ctx->hwOutputQueue.empty()) {
+      const auto &e = ctx->hwOutputQueue.front();
+      if (!e.isEos) {
+        OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, e.index);
+      }
+      ctx->hwOutputQueue.pop();
+    }
+  }
+  ctx->hwOutputCv.notify_all();
+
   // Flush decoder
   OH_AVErrCode flushRet = OH_VideoDecoder_Flush(ctx->hwVideoDecoder);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "[HwVideoDecode] FlushHwVideoDecoder: OH_VideoDecoder_Flush ret=%{public}d", static_cast<int>(flushRet));
 
-  // 清空 hwOutputQueue
-  {
-    std::lock_guard<std::mutex> lk(ctx->hwOutputMtx);
-    while (!ctx->hwOutputQueue.empty()) ctx->hwOutputQueue.pop();
-  }
-
   // OH_VideoDecoder_Flush 后必须重新 Start，否则解码器不再触发 onNeedInputBuffer
   OH_AVErrCode startRet = OH_VideoDecoder_Start(ctx->hwVideoDecoder);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                "[HwVideoDecode] FlushHwVideoDecoder: OH_VideoDecoder_Start ret=%{public}d", static_cast<int>(startRet));
+
+  // Start 后等待解码器调用 onNeedInputBuffer，确保 FeedThread 有可用 slot 再接收第一个 keyframe。
+  // 若 keyframe 在 onNeedInputBuffer 触发前被 FeedThread 因超时丢弃，解码器将永远没有参考帧输出。
+  {
+    std::unique_lock<std::mutex> lk(ctx->hwInputMtx);
+    const bool ready = ctx->hwInputCv.wait_for(lk, std::chrono::milliseconds(1500), [&] {
+      return !ctx->hwInputPool.empty() || !ctx->hwVideoRunning.load();
+    });
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "[HwVideoDecode] FlushHwVideoDecoder: post-Start ready=%d poolSize=%{public}zu",
+                 ready ? 1 : 0, ctx->hwInputPool.size());
+  }
 
   ctx->hwVideoFlushPending.store(false, std::memory_order_release);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] FlushHwVideoDecoder: done");
@@ -4462,6 +4484,9 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   ctx->decodeRunning.store(true);
   if (ctx->useHwVideoDecoder) {
     // HW path：视频由 OH_VideoDecoder 处理，启动 Feed + Render 线程
+    // 提前设置 wall-clock 锚点，防止 RenderThread 在 StartFfmpegAudio 完成前看到 clockMs=0，
+    // 导致每帧强制 sleep 50ms（以为视频大幅超前）。StartFfmpegAudio 会再次覆盖此值，两次时间差极小。
+    ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
     ctx->hwVideoRunning.store(true);
     ctx->hwVideoFeedThread   = std::thread(HwVideoFeedThreadFunc, ctx);
     ctx->hwVideoRenderThread = std::thread(HwVideoRenderThreadFunc, ctx);
