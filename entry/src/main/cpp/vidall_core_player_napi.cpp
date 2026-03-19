@@ -3136,6 +3136,16 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
                    static_cast<long long>(diffMs));
       clockMs = entry.ptsMs;
       diffMs = 0;
+      // PtsGapAlign 后，E-AC3 解码器可能批量写入积压帧（burst write），使 ptsSampMs 在 2ms 内
+      // 激增 300-400ms，导致连续多次 DriftCorrect 触发（双重修正 -112ms + -358ms）。
+      // 设置 grace=10（≈420ms @ 24fps），在音频突发写入期间抑制 DriftCorrect，等待时钟稳定。
+      // grace 期间 drop-frame 同样被抑制，确保帧不被误丢（视频短暂落后音频约 200-400ms，无感知）。
+      {
+        const int currentGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed);
+        if (currentGrace < 10) {
+          ctx->videoSyncGraceFrames.store(10, std::memory_order_relaxed);
+        }
+      }
     }
     // [DriftCorrect] 音频时钟长期负漂移修正（clock 持续超前 video PTS）
     // 根因：音频以略高于 1.0x 速率写入（预缓冲），ptsSampMs 积累速率略快于 video PTS。
