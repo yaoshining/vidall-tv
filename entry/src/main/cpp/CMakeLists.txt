@@ -123,5 +123,6 @@ target_link_libraries(vidall_core_player_napi PUBLIC
     libace_napi.z.so
     libhilog_ndk.z.so
     libnative_media_codecbase.so
+    libvideo_processing.so   # VPE：AI 画质增强（Detail Enhancer）API 12+
     ffmpeg
 )

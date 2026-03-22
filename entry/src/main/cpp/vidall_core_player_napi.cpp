@@ -15,6 +15,8 @@
 #include <multimedia/player_framework/native_avformat.h>
 #include <multimedia/player_framework/native_avcapability.h>
 #include <multimedia/player_framework/native_avcodec_base.h>
+#include <multimedia/video_processing_engine/video_processing.h>
+#include <multimedia/video_processing_engine/video_processing_types.h>
 #include <hilog/log.h>
 
 extern "C" {
@@ -2511,6 +2513,175 @@ static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// ============================================================
+// VPE (Video Processing Engine) — AI 画质增强 (Detail Enhancer)
+// API 12+，不支持的设备返回空字符串而不是报错
+// ============================================================
+
+static OH_VideoProcessing*    g_vpeProcessor  = nullptr;
+static OHNativeWindow*        g_vpeInputWindow  = nullptr;
+static OHNativeWindow*        g_vpeDisplayWindow = nullptr;
+static VideoProcessing_Callback* g_vpeCallback  = nullptr;
+static std::mutex g_vpeMutex;
+
+static void VpeOnError(OH_VideoProcessing* /*vp*/, VideoProcessing_ErrorCode error, void* /*userData*/) {
+  OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE onError: %{public}d", static_cast<int>(error));
+}
+
+static void VpeOnState(OH_VideoProcessing* /*vp*/, VideoProcessing_State state, void* /*userData*/) {
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VPE onState: %{public}s",
+    state == VIDEO_PROCESSING_STATE_RUNNING ? "RUNNING" : "STOPPED");
+}
+
+// 销毁现有 VPE 实例（调用方持锁）
+static void DestroyVpeInstanceLocked() {
+  if (g_vpeProcessor) {
+    OH_VideoProcessing_Stop(g_vpeProcessor);
+    OH_VideoProcessing_Destroy(g_vpeProcessor);
+    g_vpeProcessor = nullptr;
+  }
+  if (g_vpeInputWindow) {
+    OH_NativeWindow_DestroyNativeWindow(g_vpeInputWindow);
+    g_vpeInputWindow = nullptr;
+  }
+  if (g_vpeDisplayWindow) {
+    OH_NativeWindow_DestroyNativeWindow(g_vpeDisplayWindow);
+    g_vpeDisplayWindow = nullptr;
+  }
+  if (g_vpeCallback) {
+    OH_VideoProcessingCallback_Destroy(g_vpeCallback);
+    g_vpeCallback = nullptr;
+  }
+  OH_VideoProcessing_DeinitializeEnvironment();
+}
+
+// isVpeDetailEnhancerSupported() → boolean
+static napi_value IsVpeDetailEnhancerSupported(napi_env env, napi_callback_info /*info*/) {
+  bool supported = false;
+  if (OH_VideoProcessing_InitializeEnvironment() == VIDEO_PROCESSING_SUCCESS) {
+    OH_VideoProcessing* probe = nullptr;
+    if (OH_VideoProcessing_Create(&probe, VIDEO_PROCESSING_TYPE_DETAIL_ENHANCER) == VIDEO_PROCESSING_SUCCESS) {
+      supported = true;
+      OH_VideoProcessing_Destroy(probe);
+    }
+    OH_VideoProcessing_DeinitializeEnvironment();
+  }
+  napi_value result;
+  napi_get_boolean(env, supported, &result);
+  return result;
+}
+
+// createVpeDetailEnhancer(displaySurfaceId: string, qualityLevel: number) → string
+// 成功返回 VPE 输入 surfaceId；失败/不支持返回空字符串（不抛异常）
+static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+
+  auto returnEmpty = [&]() -> napi_value {
+    napi_value empty;
+    napi_create_string_utf8(env, "", 0, &empty);
+    return empty;
+  };
+
+  if (argc < 2) return returnEmpty();
+
+  char surfaceIdBuf[32] = {0};
+  size_t strLen = 0;
+  napi_get_value_string_utf8(env, argv[0], surfaceIdBuf, sizeof(surfaceIdBuf), &strLen);
+  if (strLen == 0) return returnEmpty();
+
+  int32_t qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
+  napi_get_value_int32(env, argv[1], &qualityLevel);
+  // 边界保护：确保 level 在有效范围内
+  if (qualityLevel < VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_NONE ||
+      qualityLevel > VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_HIGH) {
+    qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
+  }
+
+  std::lock_guard<std::mutex> lock(g_vpeMutex);
+  DestroyVpeInstanceLocked(); // 清理旧实例
+
+  if (OH_VideoProcessing_InitializeEnvironment() != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: InitializeEnvironment failed");
+    return returnEmpty();
+  }
+
+  if (OH_VideoProcessing_Create(&g_vpeProcessor, VIDEO_PROCESSING_TYPE_DETAIL_ENHANCER) != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: Create failed (not supported on this device)");
+    OH_VideoProcessing_DeinitializeEnvironment();
+    return returnEmpty();
+  }
+
+  // 设置质量等级
+  OH_AVFormat* param = OH_AVFormat_Create();
+  OH_AVFormat_SetIntValue(param, VIDEO_DETAIL_ENHANCER_PARAMETER_KEY_QUALITY_LEVEL, qualityLevel);
+  OH_VideoProcessing_SetParameter(g_vpeProcessor, param); // 失败不致命，使用默认
+  OH_AVFormat_Destroy(param);
+
+  // 注册回调（必须在 Start 前）
+  OH_VideoProcessingCallback_Create(&g_vpeCallback);
+  OH_VideoProcessingCallback_BindOnError(g_vpeCallback, VpeOnError);
+  OH_VideoProcessingCallback_BindOnState(g_vpeCallback, VpeOnState);
+  OH_VideoProcessing_RegisterCallback(g_vpeProcessor, g_vpeCallback, nullptr);
+
+  // 从 surfaceId 字符串恢复 uint64_t
+  uint64_t displaySurfaceId = strtoull(surfaceIdBuf, nullptr, 10);
+  if (OH_NativeWindow_CreateNativeWindowFromSurfaceId(displaySurfaceId, &g_vpeDisplayWindow) != 0) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: CreateNativeWindowFromSurfaceId failed for id=%{public}s", surfaceIdBuf);
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
+
+  // 绑定输出（VPE → 显示）
+  if (OH_VideoProcessing_SetSurface(g_vpeProcessor, g_vpeDisplayWindow) != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: SetSurface (output) failed");
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
+
+  // 获取输入 Surface（解码器 → VPE）
+  if (OH_VideoProcessing_GetSurface(g_vpeProcessor, &g_vpeInputWindow) != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: GetSurface (input) failed");
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
+
+  // 启动 VPE
+  if (OH_VideoProcessing_Start(g_vpeProcessor) != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: Start failed");
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
+
+  // 获取输入 Surface 的 surfaceId，回传给 ArkTS
+  uint64_t inputSurfaceId = 0;
+  if (OH_NativeWindow_GetSurfaceId(g_vpeInputWindow, &inputSurfaceId) != 0) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: GetSurfaceId (input) failed");
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
+
+  char inputIdBuf[32];
+  snprintf(inputIdBuf, sizeof(inputIdBuf), "%llu", static_cast<unsigned long long>(inputSurfaceId));
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VPE: Created OK — inputSurfaceId=%{public}s quality=%{public}d",
+    inputIdBuf, qualityLevel);
+
+  napi_value result;
+  napi_create_string_utf8(env, inputIdBuf, NAPI_AUTO_LENGTH, &result);
+  return result;
+}
+
+// destroyVpeDetailEnhancer() → void
+static napi_value DestroyVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
+  std::lock_guard<std::mutex> lock(g_vpeMutex);
+  DestroyVpeInstanceLocked();
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VPE: Destroyed");
+  napi_value undef;
+  napi_get_undefined(env, &undef);
+  return undef;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -2533,7 +2704,10 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "downloadToFile", nullptr, DownloadToFile, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "queryVideoDecoderCapability", nullptr, QueryVideoDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "isVpeDetailEnhancerSupported", nullptr, IsVpeDetailEnhancerSupported, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

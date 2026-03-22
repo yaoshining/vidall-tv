@@ -20,6 +20,7 @@ import {
   SubtitleBridgeState,
   SubtitleTrackItem
 } from "./SubtitleBridgeAdapter";
+import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -141,6 +142,11 @@ export class VideoPlayerController {
    * 'native'/'ffmpeg' 后端已停止主路径接入，仅保留代码供参考；正常播放不应出现这两个值。
    */
   @Trace backend: PlayerBackend = 'avplayer';
+
+  /** AI 画质增强开关（仅 avplayer 路径有效；ijkplayer 路径因渲染方式不同暂不支持） */
+  @Trace aiEnhanceEnabled: boolean = false;
+  /** AI 画质增强质量档位 */
+  @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
@@ -610,17 +616,52 @@ export class VideoPlayerController {
     if (this.backend === 'ijkplayer') {
       // IjkPlayer 需要先由 UI 层绑定 XComponent context，
       // VideoPlayer.ets 的 onLoad 回调会调用 setIjkContext() 来完成真正的 init
+      // 注意：VPE AI 画质增强不适用于 ijkplayer 路径（ijkplayer 使用 XComponent native hook 渲染）
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
     } else {
+      // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE
+      const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
       try {
-        await adapter.init(videoData, surfaceId);
+        await adapter.init(videoData, effectiveSurfaceId);
       } catch (e) {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `init 失败: code=${err.code} msg=${err.message}`);
       }
     }
+  }
+
+  // ─── VPE AI 画质增强 ──────────────────────────────────────────
+
+  /**
+   * 开启 AI 画质增强（需在下次 initPlayer 后生效）。
+   * 若设备不支持，将自动静默降级，不影响正常播放。
+   */
+  setAiEnhance(quality: VpeQualityLevel = 'medium'): void {
+    this.aiEnhanceEnabled = true;
+    this.aiEnhanceQuality = quality;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `AI 画质增强已开启: quality=${quality}`);
+  }
+
+  /** 关闭 AI 画质增强（需在下次 initPlayer 后生效） */
+  disableAiEnhance(): void {
+    this.aiEnhanceEnabled = false;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'AI 画质增强已关闭');
+  }
+
+  /**
+   * 尝试创建 VPE 增强实例，返回有效的 surfaceId。
+   * - 增强成功：返回 VPE 输入 surfaceId（替代 XComponent surfaceId 传给播放器）
+   * - 增强失败或不支持：返回原始 displaySurfaceId（透明降级）
+   */
+  private tryCreateVpeEnhancer(displaySurfaceId: string): string {
+    if (!this.aiEnhanceEnabled || this.backend !== 'avplayer') {
+      return displaySurfaceId;
+    }
+    const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, this.aiEnhanceQuality);
+    return vpeSurfaceId.length > 0 ? vpeSurfaceId : displaySurfaceId;
   }
 
   private prepareFfmpegPreview(videoData: VideoData): void {
@@ -1675,6 +1716,8 @@ export class VideoPlayerController {
       await this.player.release().catch(() => {});
       this.player = undefined;
     }
+    // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
+    VpeEnhancerUtil.destroyEnhancer();
   }
 
   async seek(time: number): Promise<void> {

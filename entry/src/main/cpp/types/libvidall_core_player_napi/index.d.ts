@@ -101,6 +101,27 @@ export const queryAudioDecoderCapability: (codecOrMime: string) => {
   errorMessage: string;
 };
 
+/**
+ * 查询当前设备是否支持 VPE AI 画质增强（Detail Enhancer）。
+ * 不支持时安全返回 false，不抛异常。
+ */
+export const isVpeDetailEnhancerSupported: () => boolean;
+
+/**
+ * 创建 VPE AI 画质增强实例。
+ * @param displaySurfaceId XComponent 的 surfaceId（显示输出目标）
+ * @param qualityLevel 质量等级：1=LOW 2=MEDIUM 3=HIGH（默认 2）
+ * @returns VPE 输入 surfaceId（传给播放器替代 displaySurfaceId）；
+ *          失败或不支持时返回空字符串（调用方需 fallback 到原 surfaceId）
+ */
+export const createVpeDetailEnhancer: (displaySurfaceId: string, qualityLevel: number) => string;
+
+/**
+ * 销毁 VPE AI 画质增强实例并释放资源。
+ * 安全幂等：未创建时调用无副作用。
+ */
+export const destroyVpeDetailEnhancer: () => void;
+
 export const setCallbacks: (
   handle: number,
   onPrepared: () => void,
