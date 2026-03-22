@@ -584,6 +584,11 @@ export struct PlayerSettingsDialog {
   @Require onOpenSubtitleSelector: () => void
   @State selectedPlaybackRateIndex: number = 1
   @State selectedScreenFitIndex: number = 0
+  @State private aiEnhanceOn: boolean = true
+
+  aboutToAppear(): void {
+    this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
+  }
 
   @Builder
   private SettingsChip(label: string, selected: boolean) {
@@ -672,6 +677,36 @@ export struct PlayerSettingsDialog {
             .onClick(() => {
               this.onOpenSubtitleSelector()
             })
+          }
+
+          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine')) {
+            Column({ space: 12 }) {
+              Text('画质增强')
+                .fontSize(32)
+                .fontColor('#EFF2FB')
+                .fontWeight(FontWeight.Medium)
+                .alignSelf(ItemAlign.Start)
+
+              Row({ space: 12 }) {
+                Row() {
+                  this.SettingsChip('开启', this.aiEnhanceOn)
+                }
+                .onClick(() => {
+                  this.aiEnhanceOn = true;
+                  this.videoController.setAiEnhance('medium');
+                })
+
+                Row() {
+                  this.SettingsChip('关闭', !this.aiEnhanceOn)
+                }
+                .onClick(() => {
+                  this.aiEnhanceOn = false;
+                  this.videoController.disableAiEnhance();
+                })
+              }
+              .justifyContent(FlexAlign.Start)
+              .width('100%')
+            }
           }
         }
         .padding({ left: 26, right: 26, top: 18, bottom: 28 })

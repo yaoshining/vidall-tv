@@ -43,6 +43,9 @@ export class VpeEnhancerUtil {
    * 查询设备是否支持 VPE Detail Enhancer（有缓存，仅首次调用走 native）
    */
   static isSupported(): boolean {
+    if (!canIUse('SystemCapability.Multimedia.VideoProcessingEngine')) {
+      return false;
+    }
     if (VpeEnhancerUtil._supportChecked) {
       return VpeEnhancerUtil._supported;
     }

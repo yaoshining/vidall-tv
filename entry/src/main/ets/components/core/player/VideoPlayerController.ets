@@ -144,7 +144,7 @@ export class VideoPlayerController {
   @Trace backend: PlayerBackend = 'avplayer';
 
   /** AI 画质增强开关（仅 avplayer 路径有效；ijkplayer 路径因渲染方式不同暂不支持） */
-  @Trace aiEnhanceEnabled: boolean = false;
+  @Trace aiEnhanceEnabled: boolean = true;
   /** AI 画质增强质量档位 */
   @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
 
