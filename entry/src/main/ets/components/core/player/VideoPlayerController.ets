@@ -1250,9 +1250,11 @@ export class VideoPlayerController {
     const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
       `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${precheckProbeFailed}`;
 
-    let preferredBackend: PlayerBackend = hardSupported ? 'avplayer' : 'ijkplayer';
+    // 策略：始终优先 avplayer，让系统自行尝试播放（含 TrueHD/DTS/AC3 等非标音频）。
+    // avplayer 报 onUnsupportedFormat 时会自动 fallback 到 ijkplayer（见 unsupportedFormatFallback='ijkplayer'）。
+    // 仅在探测完全失败且没有任何音轨提示时，保守走 ijkplayer 避免 avplayer 进入不可恢复错误态。
+    let preferredBackend: PlayerBackend = 'avplayer';
     if (precheckProbeFailed && normalizedCodec.length === 0) {
-      // 前置探测失败且无可用音轨提示时，保守走软解后端，避免 AVPlayer 首次进入不可恢复错误态。
       preferredBackend = 'ijkplayer';
     }
 
