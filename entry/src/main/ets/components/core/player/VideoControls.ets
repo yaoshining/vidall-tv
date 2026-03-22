@@ -689,7 +689,23 @@ export struct PlayerSettingsDialog {
 
               Row({ space: 12 }) {
                 Row() {
-                  this.SettingsChip('开启', this.aiEnhanceOn)
+                  this.SettingsChip('关闭', !this.aiEnhanceOn)
+                }
+                .onClick(() => {
+                  this.aiEnhanceOn = false;
+                  this.videoController.disableAiEnhance();
+                })
+
+                Row() {
+                  this.SettingsChip('低', this.aiEnhanceOn && this.videoController.aiEnhanceQuality === 'low')
+                }
+                .onClick(() => {
+                  this.aiEnhanceOn = true;
+                  this.videoController.setAiEnhance('low');
+                })
+
+                Row() {
+                  this.SettingsChip('中', this.aiEnhanceOn && this.videoController.aiEnhanceQuality === 'medium')
                 }
                 .onClick(() => {
                   this.aiEnhanceOn = true;
@@ -697,11 +713,11 @@ export struct PlayerSettingsDialog {
                 })
 
                 Row() {
-                  this.SettingsChip('关闭', !this.aiEnhanceOn)
+                  this.SettingsChip('高', this.aiEnhanceOn && this.videoController.aiEnhanceQuality === 'high')
                 }
                 .onClick(() => {
-                  this.aiEnhanceOn = false;
-                  this.videoController.disableAiEnhance();
+                  this.aiEnhanceOn = true;
+                  this.videoController.setAiEnhance('high');
                 })
               }
               .justifyContent(FlexAlign.Start)
