@@ -69,6 +69,8 @@ interface AudioRoutingDecision {
   hardSupported: boolean;
   precheckProbeFailed: boolean;
   precheckProbeError: string;
+  /** 视频编码名称（如 'hevc', 'h264'），由 ffprobe 探测，未探测到为空字符串 */
+  videoCodecName: string;
 }
 
 interface PresetAudioHint {
@@ -306,6 +308,7 @@ export class VideoPlayerController {
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
+      videoData.videoCodec = decision.videoCodecName;
       if (this.backend === 'avplayer' || this.backend === 'ffmpeg') {
         this.backend = decision.preferredBackend;
       }
@@ -1216,7 +1219,8 @@ export class VideoPlayerController {
       detectedChannels: 2,
       hardSupported: true,
       precheckProbeFailed: false,
-      precheckProbeError: ''
+      precheckProbeError: '',
+      videoCodecName: ''
     };
 
     const presetHint = this.readPresetAudioHint(videoData);
@@ -1224,6 +1228,7 @@ export class VideoPlayerController {
     let channels = presetHint.channels;
     let precheckProbeFailed = false;
     let precheckProbeError = '';
+    let videoCodecName = '';
 
     try {
       // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
@@ -1232,6 +1237,10 @@ export class VideoPlayerController {
         const first = probe.audioTracks[0];
         codecName = first.codecName;
         channels = first.channels ?? channels;
+      }
+      // 同时捕获视频编码，供 IjkPlayerAdapter 决策硬解策略（HEVC 硬解+HDR/DV 会花屏）
+      if (probe.success && probe.videoTracks.length > 0) {
+        videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
       }
     } catch (e) {
       precheckProbeFailed = true;
@@ -1262,7 +1271,8 @@ export class VideoPlayerController {
       detectedChannels: safeChannels,
       hardSupported,
       precheckProbeFailed,
-      precheckProbeError
+      precheckProbeError,
+      videoCodecName
     };
     return decision;
   }

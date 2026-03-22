@@ -76,4 +76,10 @@ export interface VideoData {
    * 音频探测摘要（可选），用于调试/日志展示。
    */
   audioProbeSummary?: string;
+
+  /**
+   * 视频编码名称（可选），由 ffprobe 探测填充，如 'hevc', 'h264'。
+   * 用于 IjkPlayerAdapter 决策是否开启硬解（HEVC 硬解在 HDR/DV 内容下会花屏）。
+   */
+  videoCodec?: string;
 }
