@@ -301,8 +301,6 @@ export class VideoPlayerController {
     this.ffmpegPreviewUri = '';
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[路由决策] 入口: backend=${this.backend}, lockedByUser=${this.unsupportedFallbackLockedByUser}`);
     if (!this.unsupportedFallbackLockedByUser) {
       const backendBeforeAutoRouting = this.backend;
       const decision = await this.resolveAudioRoutingDecision(videoData);
@@ -313,11 +311,6 @@ export class VideoPlayerController {
       if (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native') {
         this.backend = decision.preferredBackend;
       }
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[路由决策] 应用结果: before=${backendBeforeAutoRouting} → after=${this.backend} ` +
-        `(preferredBackend=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
-        `audioCodec=${decision.detectedCodec}, hardSupported=${decision.hardSupported}, ` +
-        `videoCodec=${decision.videoCodecName}, precheckFailed=${decision.precheckProbeFailed})`);
       if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
         this.logFallbackEvent(
           'precheck_probe_failed',
@@ -330,9 +323,6 @@ export class VideoPlayerController {
         `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
         `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
       this.logAudioCapabilityReport(decision);
-    } else {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[路由决策] 已跳过自动路由（lockedByUser=true），保持 backend=${this.backend}`);
     }
 
     if (this.backend === 'ffmpeg') {
@@ -1256,9 +1246,6 @@ export class VideoPlayerController {
     const normalizedCodec = (codecName ?? '').toLowerCase();
     const safeChannels = this.normalizeTargetChannels(channels);
     const hardSupported = this.isLikelySystemHardDecodeSupported(normalizedCodec);
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[路由决策] ffprobe: audioCodec=${normalizedCodec || '(空)'} channels=${safeChannels} ` +
-      `videoCodec=${videoCodecName || '(空)'} hardSupported=${hardSupported} precheckFailed=${precheckProbeFailed}`);
 
     const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
       `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${precheckProbeFailed}`;
