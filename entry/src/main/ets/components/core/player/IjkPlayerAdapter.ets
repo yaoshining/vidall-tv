@@ -513,12 +513,12 @@ export class IjkPlayerAdapter implements IPlayer {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `获取硬解能力失败，继续按软解策略运行: ${JSON.stringify(e)}`);
     }
-    const useH264Hw = false;
-    const useH265Hw = false;
+    const useH264Hw = hwSupport.h264;
+    const useH265Hw = hwSupport.h265;
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-all-videos', '0');
+      'mediacodec-all-videos', useH264Hw ? '1' : '0');
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-hevc', '0');
+      'mediacodec-hevc', useH265Hw ? '1' : '0');
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `硬件解码决策(稳定优先): H264=${useH264Hw ? '硬解✅' : '软解⚠️'} ` +
       `H265=${useH265Hw ? '硬解✅' : '软解⚠️'} 设备能力(H264=${hwSupport.h264}, H265=${hwSupport.h265})`);

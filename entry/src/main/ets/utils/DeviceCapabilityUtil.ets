@@ -1,5 +1,6 @@
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import VidAllCapNapi from 'libvidall_core_player_napi.so';
 
 // ─────────────────────────────────────────────
 // 常量定义（ArkTS 不支持 as const，用 namespace 替代）
@@ -364,10 +365,18 @@ export class DeviceCapabilityUtil {
       return cached;
     }
 
-    // 鸿蒙 ArkTS 层无公开 getMediaCapability，保守返回软解
-    // 如后续官方开放 API，在此处补充动态查询逻辑
-    const h264 = false;
-    const h265 = false;
+    // 通过 NAPI 查询设备实际硬件解码能力
+    let h264 = false;
+    let h265 = false;
+    try {
+      const r264 = VidAllCapNapi.queryVideoDecoderCapability('video/avc');
+      const r265 = VidAllCapNapi.queryVideoDecoderCapability('video/hevc');
+      h264 = r264.supported && r264.isHardware;
+      h265 = r265.supported && r265.isHardware;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`${DeviceCapabilityUtil.TAG} NAPI 查询硬件解码失败，回退软解: ${err.message ?? JSON.stringify(e)}`);
+    }
 
     DeviceCapabilityUtil._ijkHwDecodeH264 = h264;
     DeviceCapabilityUtil._ijkHwDecodeH265 = h265;

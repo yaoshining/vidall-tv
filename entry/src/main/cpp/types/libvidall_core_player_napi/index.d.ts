@@ -78,6 +78,29 @@ export const getNativeCapabilities: () => {
   libcurlVersion: string;
 };
 
+/** 查询设备对指定视频编码的硬件解码能力 */
+export const queryVideoDecoderCapability: (codecOrMime: string) => {
+  capabilityKnown: boolean;
+  supported: boolean;
+  isHardware: boolean;
+  maxWidth: number;
+  maxHeight: number;
+  decoderName: string;
+  mimeType: string;
+  errorMessage: string;
+};
+
+/** 查询设备对指定音频编码的硬件解码能力 */
+export const queryAudioDecoderCapability: (codecOrMime: string) => {
+  capabilityKnown: boolean;
+  supported: boolean;
+  isHardware: boolean;
+  maxChannels: number;
+  decoderName: string;
+  mimeType: string;
+  errorMessage: string;
+};
+
 export const setCallbacks: (
   handle: number,
   onPrepared: () => void,
