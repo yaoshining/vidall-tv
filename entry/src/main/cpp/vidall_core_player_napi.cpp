@@ -3010,7 +3010,18 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
   while (ctx->hwVideoRunning.load()) {
     // [Fix-Pause] pause 期间不消耗帧，让 HW 解码器自然因 output buffer 耗尽而暂停。
     // 这样 resume 后 ptsMs 仍在 pause 前的位置，避免 diff 虚高（曾导致 2-3 秒冻帧）。
-    if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+    //
+    // [Fix-SeekWhilePaused] 例外：若时钟门仍处于关闭状态（audioClockStartRealtimeMs=0，
+    // 即 seek 触发后 DemuxThread 已重置时钟但首帧尚未到达 seekFloor），必须继续消费帧。
+    // 根因：VideoPlayerController.seek() 在调用 player.seek() 之前先调 pause()，导致
+    // playbackPaused=true；解码器重启后立刻输出 pre-roll 帧，若 RenderThread 完全停止
+    // 消费，hwOutputQueue 和 Surface BufferQueue 同时被占满，解码器无法申请新 output slot，
+    // onNeedInputBuffer 永久停止，FeedThread 全程超时——形成死锁，seekDone 无法到达。
+    // 修复：seek 期间（hasSeekPending=true）允许帧流经，pre-roll gate 会对 ptsMs <
+    // seekFloor 的帧快速调 FreeOutputBuffer，不会渲染，不会改变用户可见的画面位置。
+    const bool isPaused = ctx->playbackPaused.load(std::memory_order_relaxed);
+    const bool hasSeekPending = (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) == 0);
+    if (isPaused && !hasSeekPending) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
@@ -3076,6 +3087,16 @@ static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                      "[HwVideoDecode] RenderThread: drop preroll ptsMs=%{public}lld floor=%{public}lld",
                      static_cast<long long>(entry.ptsMs), static_cast<long long>(seekFloor));
+        continue;
+      }
+      // [Fix-SeekWhilePaused] seek 期间 paused：已到达 seekFloor 但 play() 尚未到达。
+      // 先丢弃此帧（FreeOutputBuffer），不开门；等到 playbackPaused=false 后再正常开门。
+      // 这样可以避免在 pause 状态下错误地打开时钟门并触发渲染，同时继续排空 hwOutputQueue。
+      if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+        OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "[HwVideoDecode] RenderThread: seek@floor but paused, free ptsMs=%{public}lld",
+                     static_cast<long long>(entry.ptsMs));
         continue;
       }
       // 到达 seek target 附近：开门，设置 wall-clock 锚点，后续走正常 AV sync
