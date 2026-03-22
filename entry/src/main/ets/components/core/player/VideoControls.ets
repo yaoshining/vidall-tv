@@ -222,7 +222,7 @@ struct VideoControls {
             .padding({ left: 20, right: 20 })
           }
           .onClick(() => {
-            this.videoController.switchAudioTrack(index)
+            this.dispatchAudioTrackSwitch(index)
             this.showAudioMenu = false
             // forceStart=true：切换后不管当前 isPlaying 状态（switchAudioTrack 内部会 pause）
             // 都强制启动自动隐藏定时器，seekDone 恢复播放后控件会正常隐藏
@@ -523,6 +523,12 @@ struct VideoControls {
       return audioTrack.displayName;
     }
     return '音轨';
+  }
+
+  private dispatchAudioTrackSwitch(index: number): void {
+    setTimeout(() => {
+      this.videoController.switchAudioTrack(index)
+    }, 0)
   }
 
   private enableAutoHide(forceStart: boolean = false): void {

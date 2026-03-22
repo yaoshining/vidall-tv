@@ -9,6 +9,9 @@ import { CommonConstants } from '../../../common/constants/CommonConstants';
 
 const TAG = '[AVPlayerAdapter]';
 
+const ENABLE_AVPLAYER_TRACK_DIAG_LOG = false;
+const ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG = false;
+
 /**
  * AVPlayer 播放内核适配器
  *
@@ -155,6 +158,15 @@ export class AVPlayerAdapter implements IPlayer {
           language: desc[media.MediaDescriptionKey.MD_KEY_LANGUAGE] as string | undefined
         };
         result.push(info);
+      }
+      if (ENABLE_AVPLAYER_TRACK_DIAG_LOG) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `getTrackInfos 返回轨道数: ${result.length}`);
+        for (let i = 0; i < result.length; i++) {
+          const track = result[i];
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `getTrackInfos 轨道[${i}]: index=${track.trackIndex} type=${track.trackType}` +
+            ` mime=${track.mimeType ?? ''} lang=${track.language ?? ''}`);
+        }
       }
       return result;
     } catch (e) {
@@ -327,6 +339,10 @@ export class AVPlayerAdapter implements IPlayer {
     // subtitleUpdate
     try {
       player.on('subtitleUpdate', (info: media.SubtitleInfo) => {
+        if (ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `subtitleUpdate: text="${info.text?.substring(0, 80) ?? ''}" start=${info.startTime ?? 0} duration=${info.duration ?? 0}`);
+        }
         if (this._onSubtitleUpdateCb) {
           const si: SubtitleInfo = {
             text: info.text,
