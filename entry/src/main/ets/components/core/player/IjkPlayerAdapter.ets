@@ -514,7 +514,8 @@ export class IjkPlayerAdapter implements IPlayer {
         `获取硬解能力失败，继续按软解策略运行: ${JSON.stringify(e)}`);
     }
     const useH264Hw = hwSupport.h264;
-    const useH265Hw = hwSupport.h265;
+    // HEVC 硬解在 HDR/Dolby Vision 内容下会导致花屏（白点/绿色块），强制软解
+    const useH265Hw = false;
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
       'mediacodec-all-videos', useH264Hw ? '1' : '0');
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
