@@ -13,6 +13,8 @@
 #include <native_window/external_window.h>
 #include <multimedia/player_framework/avplayer.h>
 #include <multimedia/player_framework/native_avformat.h>
+#include <multimedia/player_framework/native_avcapability.h>
+#include <multimedia/player_framework/native_avcodec_base.h>
 #include <hilog/log.h>
 
 extern "C" {
@@ -2295,6 +2297,173 @@ static napi_value DownloadToFile(napi_env env, napi_callback_info info) {
   return promise;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 设备解码能力查询（供 ijkplayer 硬解决策使用）
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct VideoCapResult {
+  bool capabilityKnown = false;
+  bool supported = false;
+  bool isHardware = false;
+  int maxWidth = 0;
+  int maxHeight = 0;
+  std::string decoderName;
+  std::string mimeType;
+  std::string errorMessage;
+};
+
+struct AudioCapResult {
+  bool capabilityKnown = false;
+  bool supported = false;
+  bool isHardware = false;
+  int maxChannels = 0;
+  std::string decoderName;
+  std::string mimeType;
+  std::string errorMessage;
+};
+
+static std::string BuildVideoMime(const std::string &codecOrMime) {
+  if (codecOrMime == "h264" || codecOrMime == "avc" || codecOrMime == "video/avc") return "video/avc";
+  if (codecOrMime == "h265" || codecOrMime == "hevc" || codecOrMime == "video/hevc") return "video/hevc";
+  if (codecOrMime == "vp9"  || codecOrMime == "video/x-vnd.on2.vp9") return "video/x-vnd.on2.vp9";
+  return codecOrMime;
+}
+
+static std::string BuildAudioMime(const std::string &codecOrMime) {
+  if (codecOrMime == "aac"  || codecOrMime == "audio/mp4a-latm") return "audio/mp4a-latm";
+  if (codecOrMime == "opus" || codecOrMime == "audio/opus") return "audio/opus";
+  if (codecOrMime == "flac" || codecOrMime == "audio/flac") return "audio/flac";
+  if (codecOrMime == "mp3"  || codecOrMime == "audio/mpeg") return "audio/mpeg";
+  return codecOrMime;
+}
+
+static napi_value MakeStringField(napi_env env, const std::string &s) {
+  napi_value v = nullptr;
+  napi_create_string_utf8(env, s.c_str(), NAPI_AUTO_LENGTH, &v);
+  return v;
+}
+
+static VideoCapResult QueryVideoCapInternal(const std::string &codecOrMime) {
+  VideoCapResult r;
+  r.mimeType = BuildVideoMime(codecOrMime);
+  r.capabilityKnown = true;
+
+  // 先查硬件解码器
+  OH_AVCapability *cap = OH_AVCodec_GetCapabilityByCategory(r.mimeType.c_str(), false, HARDWARE);
+  bool isHw = true;
+  if (cap == nullptr) {
+    // 回退到任意解码器
+    cap = OH_AVCodec_GetCapability(r.mimeType.c_str(), false);
+    isHw = (cap != nullptr) && OH_AVCapability_IsHardware(cap);
+  }
+  if (cap == nullptr) {
+    r.errorMessage = "decoder not found";
+    return r;
+  }
+
+  r.supported = true;
+  r.isHardware = isHw;
+  const char *name = OH_AVCapability_GetName(cap);
+  if (name) r.decoderName = name;
+  OH_AVRange wr = {0, 0}, hr = {0, 0};
+  OH_AVCapability_GetVideoWidthRange(cap, &wr);
+  OH_AVCapability_GetVideoHeightRange(cap, &hr);
+  r.maxWidth  = wr.maxVal;
+  r.maxHeight = hr.maxVal;
+  return r;
+}
+
+static AudioCapResult QueryAudioCapInternal(const std::string &codecOrMime) {
+  AudioCapResult r;
+  r.mimeType = BuildAudioMime(codecOrMime);
+  r.capabilityKnown = true;
+
+  OH_AVCapability *cap = OH_AVCodec_GetCapabilityByCategory(r.mimeType.c_str(), false, HARDWARE);
+  bool isHw = true;
+  if (cap == nullptr) {
+    cap = OH_AVCodec_GetCapability(r.mimeType.c_str(), false);
+    isHw = (cap != nullptr) && OH_AVCapability_IsHardware(cap);
+  }
+  if (cap == nullptr) {
+    r.errorMessage = "decoder not found";
+    return r;
+  }
+
+  r.supported = true;
+  r.isHardware = isHw;
+  const char *name = OH_AVCapability_GetName(cap);
+  if (name) r.decoderName = name;
+  OH_AVRange ch = {0, 0};
+  OH_AVCapability_GetAudioChannelCountRange(cap, &ch);
+  r.maxChannels = ch.maxVal;
+  return r;
+}
+
+static napi_value QueryVideoDecoderCapability(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
+    ThrowTypeError(env, "queryVideoDecoderCapability requires (codecOrMime)");
+    return nullptr;
+  }
+  char buf[128] = {0};
+  size_t len = 0;
+  if (napi_get_value_string_utf8(env, args[0], buf, sizeof(buf), &len) != napi_ok) {
+    ThrowTypeError(env, "queryVideoDecoderCapability codecOrMime must be string");
+    return nullptr;
+  }
+
+  VideoCapResult cap = QueryVideoCapInternal(std::string(buf, len));
+
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok) {
+    ThrowTypeError(env, "queryVideoDecoderCapability failed to create result");
+    return nullptr;
+  }
+  auto set = [&](const char *k, napi_value v) { napi_set_named_property(env, result, k, v); };
+  set("capabilityKnown", CreateBoolean(env, cap.capabilityKnown));
+  set("supported",       CreateBoolean(env, cap.supported));
+  set("isHardware",      CreateBoolean(env, cap.isHardware));
+  set("maxWidth",        CreateInt32(env, cap.maxWidth));
+  set("maxHeight",       CreateInt32(env, cap.maxHeight));
+  set("decoderName",     MakeStringField(env, cap.decoderName));
+  set("mimeType",        MakeStringField(env, cap.mimeType));
+  set("errorMessage",    MakeStringField(env, cap.errorMessage));
+  return result;
+}
+
+static napi_value QueryAudioDecoderCapability(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
+    ThrowTypeError(env, "queryAudioDecoderCapability requires (codecOrMime)");
+    return nullptr;
+  }
+  char buf[128] = {0};
+  size_t len = 0;
+  if (napi_get_value_string_utf8(env, args[0], buf, sizeof(buf), &len) != napi_ok) {
+    ThrowTypeError(env, "queryAudioDecoderCapability codecOrMime must be string");
+    return nullptr;
+  }
+
+  AudioCapResult cap = QueryAudioCapInternal(std::string(buf, len));
+
+  napi_value result = nullptr;
+  if (napi_create_object(env, &result) != napi_ok) {
+    ThrowTypeError(env, "queryAudioDecoderCapability failed to create result");
+    return nullptr;
+  }
+  auto set = [&](const char *k, napi_value v) { napi_set_named_property(env, result, k, v); };
+  set("capabilityKnown", CreateBoolean(env, cap.capabilityKnown));
+  set("supported",       CreateBoolean(env, cap.supported));
+  set("isHardware",      CreateBoolean(env, cap.isHardware));
+  set("maxChannels",     CreateInt32(env, cap.maxChannels));
+  set("decoderName",     MakeStringField(env, cap.decoderName));
+  set("mimeType",        MakeStringField(env, cap.mimeType));
+  set("errorMessage",    MakeStringField(env, cap.errorMessage));
+  return result;
+}
+
 static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
   (void)info;
   napi_value result = nullptr;
@@ -2362,7 +2531,9 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "ffmpegSelfCheck", nullptr, FfmpegSelfCheck, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "webdavRequest", nullptr, WebdavRequest, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "downloadToFile", nullptr, DownloadToFile, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "queryVideoDecoderCapability", nullptr, QueryVideoDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

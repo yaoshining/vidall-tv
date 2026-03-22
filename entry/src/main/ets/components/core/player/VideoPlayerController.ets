@@ -69,6 +69,8 @@ interface AudioRoutingDecision {
   hardSupported: boolean;
   precheckProbeFailed: boolean;
   precheckProbeError: string;
+  /** 视频编码名称（如 'hevc', 'h264'），由 ffprobe 探测，未探测到为空字符串 */
+  videoCodecName: string;
 }
 
 interface PresetAudioHint {
@@ -136,15 +138,14 @@ export class VideoPlayerController {
    * 播放内核选择，默认 'avplayer'。
    * 切换为 'ijkplayer' 后，VideoPlayer UI 层需要使用 libraryname='ijkplayer_napi'
    * 的 XComponent，并在 onLoad 回调中调用 controller.setIjkContext(context, id)。
-    * 切换为 'native' 后，使用原生 so 播放器骨架适配器（当前阶段仅框架接入）。
-    * 'ffmpeg' 后端已停止主路径接入，仅保留代码供后续参考。
+   * 'native'/'ffmpeg' 后端已停止主路径接入，仅保留代码供参考；正常播放不应出现这两个值。
    */
-  @Trace backend: PlayerBackend = 'native';
+  @Trace backend: PlayerBackend = 'avplayer';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
   /** AVPlayer 遇到不支持格式时，自动回退的后端类型 */
-  @Trace unsupportedFormatFallback: UnsupportedFormatFallback = 'native';
+  @Trace unsupportedFormatFallback: UnsupportedFormatFallback = 'ijkplayer';
   /** 是否已由外部显式设置回退策略（为 true 时不再自动覆盖） */
   private unsupportedFallbackLockedByUser: boolean = false;
   @Trace name: ResourceStr = ''
@@ -300,15 +301,23 @@ export class VideoPlayerController {
     this.ffmpegPreviewUri = '';
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[路由决策] 入口: backend=${this.backend}, lockedByUser=${this.unsupportedFallbackLockedByUser}`);
     if (!this.unsupportedFallbackLockedByUser) {
       const backendBeforeAutoRouting = this.backend;
       const decision = await this.resolveAudioRoutingDecision(videoData);
       this.unsupportedFormatFallback = decision.fallback;
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
-      if (this.backend === 'avplayer' || this.backend === 'ffmpeg') {
+      videoData.videoCodec = decision.videoCodecName;
+      if (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native') {
         this.backend = decision.preferredBackend;
       }
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[路由决策] 应用结果: before=${backendBeforeAutoRouting} → after=${this.backend} ` +
+        `(preferredBackend=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
+        `audioCodec=${decision.detectedCodec}, hardSupported=${decision.hardSupported}, ` +
+        `videoCodec=${decision.videoCodecName}, precheckFailed=${decision.precheckProbeFailed})`);
       if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
         this.logFallbackEvent(
           'precheck_probe_failed',
@@ -321,11 +330,21 @@ export class VideoPlayerController {
         `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
         `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
       this.logAudioCapabilityReport(decision);
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[路由决策] 已跳过自动路由（lockedByUser=true），保持 backend=${this.backend}`);
     }
 
     if (this.backend === 'ffmpeg') {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         'ffmpeg 播放后端已从主路径下线，自动回退到 ijkplayer');
+      this.backend = 'ijkplayer';
+    }
+
+    // native 后端已停止主路径接入，强制回退到 ijkplayer
+    if (this.backend === 'native') {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'native 播放后端已从主路径下线，自动回退到 ijkplayer');
       this.backend = 'ijkplayer';
     }
 
@@ -387,14 +406,6 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
       adapter = new IjkPlayerAdapter();
-      this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
-    } else if (this.backend === 'native') {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: 使用 VidAll Player Adapter，等待 UI 层调用 setNativeContext()');
-      const nativeAdapter = new VidAllPlayerAdapter();
-      nativeAdapter.setSeekDiagEnabled(this.nativeSeekDiagLogEnabled);
-      adapter = nativeAdapter;
-      // native 骨架阶段先复用 IJK 字幕桥：隐藏内嵌轨，仅启用外置字幕时间轴。
       this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -611,9 +622,6 @@ export class VideoPlayerController {
       // VideoPlayer.ets 的 onLoad 回调会调用 setIjkContext() 来完成真正的 init
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
-    } else if (this.backend === 'native') {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'VidAll Player Adapter 已创建，等待 UI 层 setNativeContext() 绑定 XComponent...');
     } else {
       try {
         await adapter.init(videoData, surfaceId);
@@ -1209,14 +1217,15 @@ export class VideoPlayerController {
   private async resolveAudioRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
     const defaultDecision: AudioRoutingDecision = {
       preferredBackend: 'avplayer',
-      fallback: 'native',
+      fallback: 'ijkplayer',
       preferredChannels: 2,
       summary: 'default: 未探测到音轨细节',
       detectedCodec: 'unknown',
       detectedChannels: 2,
       hardSupported: true,
       precheckProbeFailed: false,
-      precheckProbeError: ''
+      precheckProbeError: '',
+      videoCodecName: ''
     };
 
     const presetHint = this.readPresetAudioHint(videoData);
@@ -1224,6 +1233,7 @@ export class VideoPlayerController {
     let channels = presetHint.channels;
     let precheckProbeFailed = false;
     let precheckProbeError = '';
+    let videoCodecName = '';
 
     try {
       // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
@@ -1232,6 +1242,10 @@ export class VideoPlayerController {
         const first = probe.audioTracks[0];
         codecName = first.codecName;
         channels = first.channels ?? channels;
+      }
+      // 同时捕获视频编码，供 IjkPlayerAdapter 决策硬解策略（HEVC 硬解+HDR/DV 会花屏）
+      if (probe.success && probe.videoTracks.length > 0) {
+        videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
       }
     } catch (e) {
       precheckProbeFailed = true;
@@ -1242,27 +1256,32 @@ export class VideoPlayerController {
     const normalizedCodec = (codecName ?? '').toLowerCase();
     const safeChannels = this.normalizeTargetChannels(channels);
     const hardSupported = this.isLikelySystemHardDecodeSupported(normalizedCodec);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[路由决策] ffprobe: audioCodec=${normalizedCodec || '(空)'} channels=${safeChannels} ` +
+      `videoCodec=${videoCodecName || '(空)'} hardSupported=${hardSupported} precheckFailed=${precheckProbeFailed}`);
 
     const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
       `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${precheckProbeFailed}`;
 
-    let preferredBackend: PlayerBackend = hardSupported ? 'avplayer' : 'ijkplayer';
+    // 策略：始终优先 avplayer，让系统自行尝试播放（含 TrueHD/DTS/AC3 等非标音频）。
+    // avplayer 报 onUnsupportedFormat 时会自动 fallback 到 ijkplayer（见 unsupportedFormatFallback='ijkplayer'）。
+    // 仅在探测完全失败且没有任何音轨提示时，保守走 ijkplayer 避免 avplayer 进入不可恢复错误态。
+    let preferredBackend: PlayerBackend = 'avplayer';
     if (precheckProbeFailed && normalizedCodec.length === 0) {
-      // 前置探测失败且无可用音轨提示时，保守走软解后端，避免 AVPlayer 首次进入不可恢复错误态。
       preferredBackend = 'ijkplayer';
     }
 
     const decision: AudioRoutingDecision = {
-      // 当前 ffmpeg 视频链路尚不可用，临时统一回退到 ijkplayer。
       preferredBackend,
-      fallback: 'native',
+      fallback: 'ijkplayer',
       preferredChannels: safeChannels,
       summary,
       detectedCodec: normalizedCodec.length > 0 ? normalizedCodec : 'unknown',
       detectedChannels: safeChannels,
       hardSupported,
       precheckProbeFailed,
-      precheckProbeError
+      precheckProbeError,
+      videoCodecName
     };
     return decision;
   }

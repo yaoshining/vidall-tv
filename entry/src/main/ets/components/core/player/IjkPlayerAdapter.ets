@@ -49,6 +49,8 @@ export class IjkPlayerAdapter implements IPlayer {
   private _isPrepared: boolean = false;
   private _isPlaying: boolean = false;
   private _isReleased: boolean = false;
+  /** 当前视频的编码类型（由 VideoData.videoCodec 传入，如 'hevc', 'h264'） */
+  private _videoCodec: string = '';
 
   // ─── XComponent context（必须在 native_setup 之前调用 setContext）───
   private _pendingContext: object | null = null;
@@ -144,6 +146,7 @@ export class IjkPlayerAdapter implements IPlayer {
     this._isReleased = false;
     this._seekRenderingInfoCount = 0;
     this._lastHeartbeatWriteAt = 0;
+    this._videoCodec = (videoData.videoCodec ?? '').toLowerCase();
     this.writeBreadcrumb('init-start', `type=${videoData.type}`);
 
     try {
@@ -513,15 +516,28 @@ export class IjkPlayerAdapter implements IPlayer {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `获取硬解能力失败，继续按软解策略运行: ${JSON.stringify(e)}`);
     }
-    const useH264Hw = false;
+
+    // 判断是否是 HEVC 内容
+    // HEVC 硬解在 HDR/Dolby Vision 内容（如 4K DV MKV）下会导致花屏（白点/绿色块），强制软解。
+    // mediacodec-all-videos=1 会同时开启 H264+H265 硬解，无法单独关闭 HEVC，
+    // 因此 HEVC 内容必须把 all-videos 也设为 0。
+    const isHevc = this._videoCodec.includes('hevc') ||
+      this._videoCodec.includes('h265') ||
+      this._videoCodec.includes('265');
+
+    const useH264Hw = !isHevc && hwSupport.h264;
+    // HEVC 硬解始终关闭（花屏根因），H265 能力留着但不使用
     const useH265Hw = false;
+
+    // all-videos=1 会把 H264+H265 一起开：只有明确 H264 内容时才开；HEVC 内容两个都关。
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-all-videos', '0');
+      'mediacodec-all-videos', useH264Hw ? '1' : '0');
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER,
-      'mediacodec-hevc', '0');
+      'mediacodec-hevc', useH265Hw ? '1' : '0');
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `硬件解码决策(稳定优先): H264=${useH264Hw ? '硬解✅' : '软解⚠️'} ` +
-      `H265=${useH265Hw ? '硬解✅' : '软解⚠️'} 设备能力(H264=${hwSupport.h264}, H265=${hwSupport.h265})`);
+      `硬件解码决策: videoCodec=${this._videoCodec || '未知'} isHevc=${isHevc} ` +
+      `H264=${useH264Hw ? '硬解✅' : '软解⚠️'} H265=${useH265Hw ? '硬解✅' : '软解⚠️'} ` +
+      `设备能力(H264=${hwSupport.h264}, H265=${hwSupport.h265})`);
 
     // ── 网络超时（HTTP/WebDAV，单位 μs）──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, 'timeout', '10000000');
