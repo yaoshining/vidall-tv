@@ -1621,10 +1621,10 @@ export class VideoPlayerController {
         : 'ffprobe 失败，native 暂保持 system_default';
     } else if (this.isHwCandidateCodec(preflight.videoCodecMime)) {
       if (preflight.nativeVideoCapability.capabilityKnown &&
-        preflight.nativeVideoCapability.supported &&
-        preflight.nativeVideoCapability.isHardware) {
+        preflight.nativeVideoCapability.supported) {
         nativeVideoPlan = 'native_hw_preferred';
-        decisionReason = `${preflight.videoCodecMime} 命中硬解主路径候选，设备存在原生硬解能力`;
+        const hwNote = preflight.nativeVideoCapability.isHardware ? '已确认硬解' : '创建探针确认可用，isHardware待验证';
+        decisionReason = `${preflight.videoCodecMime} 命中硬解主路径候选，${hwNote}`;
       } else {
         nativeVideoPlan = 'native_ffmpeg_only';
         decisionReason = `${preflight.videoCodecMime} 虽为硬解主路径候选，但设备无可用原生硬解能力`;
@@ -1639,6 +1639,9 @@ export class VideoPlayerController {
       `probeError=${preflight.probeError.length > 0 ? preflight.probeError : 'none'}`,
       `videoCodec=${preflight.videoCodecName.length > 0 ? preflight.videoCodecName : 'unknown'}`,
       `videoMime=${preflight.videoCodecMime.length > 0 ? preflight.videoCodecMime : 'unknown'}`,
+      `hdrType=${preflight.primaryVideoTrack?.hdrType ?? 'unknown'}`,
+      `dvProfile=${preflight.primaryVideoTrack?.dvProfile ?? 'none'}`,
+      `colorTransfer=${preflight.primaryVideoTrack?.colorTransfer ?? 'unspec'}`,
       `videoTracks=${preflight.probeResult?.videoTracks.length ?? 0}`,
       `audioTracks=${preflight.probeResult?.audioTracks.length ?? 0}`,
       `format=${preflight.probeResult?.formatName ?? 'unknown'}`,
@@ -1800,7 +1803,14 @@ export class VideoPlayerController {
       if (this.nativeDecodePathState === 'ffmpeg_switching') {
         return '硬解→软解切换中';
       }
-      return this.nativeDecodePath === 'ffmpeg' ? '软解' : '硬解';
+      if (this.nativeDecodePath === 'ffmpeg') {
+        // FFmpeg 路径且预期走硬解（hardware_preferred）→ 混合路径（HW视频+FFmpeg音频）
+        if (this.nativeDecodeExpectedPath === 'hardware_preferred') {
+          return '混合（视频硬解+音频软解）';
+        }
+        return '软解';
+      }
+      return '硬解';
     }
     if (this.backend === 'ijkplayer') {
       return '软解';

@@ -25,6 +25,8 @@ function getVidAllCorePlayerNapi(): FfprobeNapiBridge {
 // 数据结构
 // ─────────────────────────────────────────────
 
+export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
+
 export interface FfprobeTrack {
   index: number;
   type: 'video' | 'audio' | 'subtitle' | 'unknown';
@@ -45,6 +47,15 @@ export interface FfprobeTrack {
   pixelFormat?: string;
   bitDepth?: number;
   bitrate?: number;
+  // HDR / Dolby Vision 专属（仅视频轨）
+  colorPrimaries?: number;   // AVCOL_PRI_BT2020 = 9
+  colorTransfer?: number;    // AVCOL_TRC_SMPTE2084(PQ)=16, AVCOL_TRC_ARIB_STD_B67(HLG)=18
+  colorSpace?: number;       // AVCOL_SPC_BT2020_NCL=9
+  colorRange?: number;       // AVCOL_RANGE_MPEG=1 limited, AVCOL_RANGE_JPEG=2 full
+  dvProfile?: number;        // Dolby Vision profile (from DOVI side data)
+  dvLevel?: number;
+  dvBlSignalCompatibilityId?: number;  // 0=no BL compat, 1=HDR10 compat, 2=SDR compat
+  hdrType?: HdrType;         // 综合判断结果
 }
 
 export interface FfprobeResult {
@@ -77,6 +88,15 @@ interface RawStream {
   channel_layout?: string;
   bit_rate?: string;
   tags?: RawStreamTags;
+  // HDR color metadata
+  color_primaries?: number;
+  color_transfer?: number;
+  color_space?: number;
+  color_range?: number;
+  // Dolby Vision
+  dv_profile?: number;
+  dv_level?: number;
+  dv_bl_signal_compatibility_id?: number;
 }
 
 interface RawStreamTags {
@@ -151,6 +171,36 @@ function parseBitDepth(raw: RawStream): number | undefined {
   return 8;
 }
 
+/**
+ * 根据颜色元数据和 Dolby Vision side data 判断 HDR 类型。
+ *
+ * 判断优先级：
+ * 1. 有 dv_profile → DOLBY_VISION（无论 BL compatibility）
+ * 2. profile 字符串中包含 "Dolby Vision" → DOLBY_VISION
+ * 3. color_transfer=16（SMPTE2084/PQ）→ HDR10
+ * 4. color_transfer=18（ARIB STD-B67/HLG）→ HLG
+ * 5. 其他 → SDR
+ */
+function detectHdrType(raw: RawStream): HdrType {
+  // Dolby Vision DOVI side data
+  if (raw.dv_profile !== undefined && raw.dv_profile > 0) {
+    return 'DOLBY_VISION';
+  }
+  // profile 字符串含 "Dolby Vision"（部分容器只暴露 profile 不输出 side data）
+  const profileLower = (raw.profile ?? '').toLowerCase();
+  if (profileLower.includes('dolby vision')) {
+    return 'DOLBY_VISION';
+  }
+  // color_transfer: 16 = SMPTE2084(PQ), 18 = ARIB STD-B67(HLG)
+  if (raw.color_transfer === 16) {
+    return 'HDR10';
+  }
+  if (raw.color_transfer === 18) {
+    return 'HLG';
+  }
+  return 'SDR';
+}
+
 function parseRawStream(raw: RawStream): FfprobeTrack {
   const codecType = raw.codec_type ?? '';
   let type: 'video' | 'audio' | 'subtitle' | 'unknown' = 'unknown';
@@ -185,6 +235,15 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
     track.pixelFormat = raw.pix_fmt;
     track.bitDepth = parseBitDepth(raw);
     track.bitrate = raw.bit_rate ? parseInt(raw.bit_rate) : undefined;
+    // HDR / Dolby Vision 字段
+    track.colorPrimaries = raw.color_primaries;
+    track.colorTransfer = raw.color_transfer;
+    track.colorSpace = raw.color_space;
+    track.colorRange = raw.color_range;
+    track.dvProfile = raw.dv_profile;
+    track.dvLevel = raw.dv_level;
+    track.dvBlSignalCompatibilityId = raw.dv_bl_signal_compatibility_id;
+    track.hdrType = detectHdrType(raw);
   }
 
   return track;
@@ -324,6 +383,26 @@ export class FfprobeUtil {
           `${t.width ?? '?'}x${t.height ?? '?'} ${t.bitDepth ?? '?'}bit ` +
           `pixfmt=${t.pixelFormat ?? '?'} profile=${t.profile ?? '?'} fps=${t.frameRate ?? 0}`
         );
+        // HDR / DV 诊断日志
+        const hdr = t.hdrType ?? 'SDR';
+        if (hdr !== 'SDR') {
+          let hdrDetail = `[FfprobeUtil]   [HDR识别] hdrType=${hdr}`;
+          hdrDetail += ` color_primaries=${t.colorPrimaries ?? '?'}`;
+          hdrDetail += ` color_transfer=${t.colorTransfer ?? '?'}`;
+          hdrDetail += ` color_space=${t.colorSpace ?? '?'}`;
+          if (hdr === 'DOLBY_VISION') {
+            hdrDetail += ` dv_profile=${t.dvProfile ?? '?'}`;
+            hdrDetail += ` dv_level=${t.dvLevel ?? '?'}`;
+            hdrDetail += ` dv_bl_compat=${t.dvBlSignalCompatibilityId ?? '?'}`;
+          }
+          console.info(hdrDetail);
+        } else {
+          console.info(
+            `[FfprobeUtil]   [HDR识别] hdrType=SDR ` +
+            `color_primaries=${t.colorPrimaries ?? 'unspec'} ` +
+            `color_transfer=${t.colorTransfer ?? 'unspec'}`
+          );
+        }
       });
       audioTracks.forEach((t, i) => {
         console.info(

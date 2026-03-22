@@ -26,12 +26,14 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/bsf.h>
 #include <libavcodec/codec_desc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
+#include <libavutil/dovi_meta.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 #include <libswresample/swresample.h>  // B4：PCM 格式转换（fltp/s16/etc → s16 for OH_AudioRenderer）
@@ -537,6 +539,37 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
       if (codecpar->bit_rate > 0) {
         AppendJsonStringField(json, "bit_rate", std::to_string(codecpar->bit_rate), firstField);
       }
+      // HDR color metadata：BT.2020 primaries = 9, SMPTE2084(PQ) transfer = 16, HLG = 18
+      if (codecpar->color_primaries != AVCOL_PRI_UNSPECIFIED) {
+        AppendJsonIntField(json, "color_primaries", static_cast<int64_t>(codecpar->color_primaries), firstField);
+      }
+      if (codecpar->color_trc != AVCOL_TRC_UNSPECIFIED) {
+        AppendJsonIntField(json, "color_transfer", static_cast<int64_t>(codecpar->color_trc), firstField);
+      }
+      if (codecpar->color_space != AVCOL_SPC_UNSPECIFIED) {
+        AppendJsonIntField(json, "color_space", static_cast<int64_t>(codecpar->color_space), firstField);
+      }
+      if (codecpar->color_range != AVCOL_RANGE_UNSPECIFIED) {
+        AppendJsonIntField(json, "color_range", static_cast<int64_t>(codecpar->color_range), firstField);
+      }
+      // Dolby Vision：从 codecpar coded_side_data 读取 AVDOVIDecoderConfigurationRecord
+      {
+        const AVDOVIDecoderConfigurationRecord *dovi = nullptr;
+        for (int sdIdx = 0; sdIdx < codecpar->nb_coded_side_data; ++sdIdx) {
+          const AVPacketSideData &sd = codecpar->coded_side_data[sdIdx];
+          if (sd.type == AV_PKT_DATA_DOVI_CONF &&
+              sd.size >= static_cast<size_t>(sizeof(AVDOVIDecoderConfigurationRecord))) {
+            dovi = reinterpret_cast<const AVDOVIDecoderConfigurationRecord *>(sd.data);
+            break;
+          }
+        }
+        if (dovi != nullptr) {
+          AppendJsonIntField(json, "dv_profile", static_cast<int64_t>(dovi->dv_profile), firstField);
+          AppendJsonIntField(json, "dv_level", static_cast<int64_t>(dovi->dv_level), firstField);
+          AppendJsonIntField(json, "dv_bl_signal_compatibility_id",
+            static_cast<int64_t>(dovi->dv_bl_signal_compatibility_id), firstField);
+        }
+      }
     } else if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (codecpar->sample_rate > 0) {
         AppendJsonStringField(json, "sample_rate", std::to_string(codecpar->sample_rate), firstField);
@@ -834,6 +867,26 @@ struct FfmpegContext {
   std::thread audioDecodeThread;
   std::atomic<bool> decodeRunning{false};
 
+  // HW-B：OH_VideoDecoder + FFmpeg 音频混合路径
+  OH_AVCodec *hwVideoDecoder{nullptr};
+  AVBSFContext *hwBsfCtx{nullptr};  // MKV→Annex-B 转换 BSF
+  bool useHwVideoDecoder{false};
+  std::atomic<bool> hwVideoRunning{false};
+  std::atomic<bool> hwVideoFlushPending{false};
+  std::thread hwVideoFeedThread;
+  std::thread hwVideoRenderThread;
+
+  struct HwInputEntry { uint32_t index; OH_AVBuffer *buffer; };
+  struct HwOutputEntry { uint32_t index; int64_t ptsMs; bool isEos; };
+
+  std::queue<HwInputEntry> hwInputPool;
+  std::mutex hwInputMtx;
+  std::condition_variable hwInputCv;
+
+  std::queue<HwOutputEntry> hwOutputQueue;
+  std::mutex hwOutputMtx;
+  std::condition_variable hwOutputCv;
+
   // B2：解码帧输出队列
   AVFrameQueue videoFrameQueue;
   AVFrameQueue audioFrameQueue;
@@ -919,6 +972,7 @@ struct FfmpegContext {
     demuxRunning.store(false, std::memory_order_release);
     decodeRunning.store(false, std::memory_order_release);
     renderRunning.store(false, std::memory_order_release);
+    hwVideoRunning.store(false, std::memory_order_release);
     ownerState.store(nullptr, std::memory_order_release);
 
     // 唤醒所有阻塞在 cv.wait 的线程，使其检查 abort 标志后退出
@@ -930,12 +984,28 @@ struct FfmpegContext {
     videoQueue.cv.notify_all();
     { std::lock_guard<std::mutex> lk(audioQueue.mtx); audioQueue.abort = true; }
     audioQueue.cv.notify_all();
+    hwInputCv.notify_all();
+    hwOutputCv.notify_all();
 
     // join 顺序：render（依赖 videoFrameQueue）→ decode（依赖 packet 队列）→ demux（生产者）
-    if (renderThread.joinable())      renderThread.join();
-    if (videoDecodeThread.joinable()) videoDecodeThread.join();
-    if (audioDecodeThread.joinable()) audioDecodeThread.join();
-    if (demuxThread.joinable())       demuxThread.join();
+    // HW path 线程也在此 join
+    if (hwVideoRenderThread.joinable()) hwVideoRenderThread.join();
+    if (hwVideoFeedThread.joinable())   hwVideoFeedThread.join();
+    if (renderThread.joinable())        renderThread.join();
+    if (videoDecodeThread.joinable())   videoDecodeThread.join();
+    if (audioDecodeThread.joinable())   audioDecodeThread.join();
+    if (demuxThread.joinable())         demuxThread.join();
+
+    // 释放 OH_VideoDecoder（HW path）
+    if (hwVideoDecoder != nullptr) {
+      OH_VideoDecoder_Stop(hwVideoDecoder);
+      OH_VideoDecoder_Destroy(hwVideoDecoder);
+      hwVideoDecoder = nullptr;
+    }
+    if (hwBsfCtx != nullptr) {
+      av_bsf_free(&hwBsfCtx);
+      hwBsfCtx = nullptr;
+    }
 
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
         "FfmpegContext: safety destructor joined remaining threads");
@@ -2105,19 +2175,21 @@ static double AudioClock(FfmpegContext *ctx) {
     }
   }
   // Post-seek/flush warmup：candidateMs <= floor 表明 hardware pipeline 仍在预热阶段。
-  // 用 "floor - hwOffset + elapsed" 公式（与 HW 稳态等价）平滑推进 AudioClock，
-  // 避免视频在 seek 后冻结 600-1500ms 等待 hardware framePos 爬过 hwOffset。
+  // 用纯 wall-clock 推进 AudioClock，避免视频在 seek/启动后因 hwOffset 偏移冻帧数百毫秒。
+  // 以前公式 "floor - hwOff + elapsed" 当 hwOff 较大（如 900ms）时会导致：
+  //   1. 前 hwOff ms 内 wallMs=floor → 时钟冻结，视频 20fps（每帧 sleep 50ms）
+  //   2. 此后 wallMs 始终比 lastReportedMs 低 hwOff → 单调保护永远占主导 → 时钟持续卡住
+  // 改为 "floor + elapsed"（纯 wall-clock），时钟从 floor 以 1ms/ms 推进，
+  // 视频以正常帧率播放。hwOffset 的 AV 补偿仅在 HW candidateMs > floor 时由稳态公式承担。
   // audioRendererSwitching=true 时（切音轨窗口）由 Round2 fix 处理，此处跳过。
   {
     const int64_t floorMs2 = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
     if (candidateMs <= floorMs2 && !ctx->audioRendererSwitching.load(std::memory_order_acquire)) {
       const int64_t startRt = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
       if (startRt > 0) {
-        const int64_t hwOff = ctx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
         const int64_t elapsed = std::max<int64_t>(0, NowRealtimeMs() - startRt);
-        // anchor = floor - hwOff；经过 hwOff ms 后 wall-clock 才到达 floor，
-        // 与"音频样本进入 pipeline → 经 hwOff ms 到达扬声器"的物理行为对齐。
-        const int64_t wallMs = std::max(floorMs2, floorMs2 - hwOff + elapsed);
+        // 纯 wall-clock：clock = floor + elapsed（不减 hwOff），视频正常帧率播放
+        const int64_t wallMs = floorMs2 + elapsed;
         if (wallMs > candidateMs) {
           candidateMs = wallMs;
         }
@@ -2244,6 +2316,9 @@ static void FlushFfmpegAudioBuffers(FfmpegContext *ctx) {
   }
 }
 
+// 前向声明：HW 路径 flush（实现在 VideoDecodeThreadFunc 之后）
+static void FlushHwVideoDecoder(FfmpegContext *ctx);
+
 // demux 线程主循环：持续读帧，分发至视频/音频队列
 static void DemuxThreadFunc(FfmpegContext *ctx) {
   if (ctx == nullptr || ctx->fmtCtx == nullptr) {
@@ -2287,6 +2362,10 @@ static void DemuxThreadFunc(FfmpegContext *ctx) {
           std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
           if (ctx->videoCodecCtx != nullptr) avcodec_flush_buffers(ctx->videoCodecCtx);
           if (ctx->audioCodecCtx != nullptr) avcodec_flush_buffers(ctx->audioCodecCtx);
+        }
+        // HW path：刷新 OH_VideoDecoder
+        if (ctx->useHwVideoDecoder && ctx->hwVideoDecoder != nullptr) {
+          FlushHwVideoDecoder(ctx);
         }
         // seek 后重置 renderer 缓冲与音频时钟：新时钟 = 目标位置 + 之后已渲染样本
         if (ctx->audioRenderer != nullptr) {
@@ -2411,8 +2490,8 @@ static void StopFfmpegDecode(NativePlayerSkeletonState *state);
 // ---------------------------------------------------------------------------
 
 static int FfmpegInitCodecs(FfmpegContext *ctx) {
-  // 视频解码器
-  if (ctx->videoStreamIdx >= 0) {
+  // 视频解码器：HW path 下跳过 FFmpeg 视频软解器初始化
+  if (ctx->videoStreamIdx >= 0 && !ctx->useHwVideoDecoder) {
     AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
     const AVCodec *codec = avcodec_find_decoder(vs->codecpar->codec_id);
     if (!codec) {
@@ -2707,6 +2786,670 @@ static void VideoDecodeThreadFunc(FfmpegContext *ctx) {
 
   av_frame_free(&frame);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VideoDecodeThread: exited");
+}
+
+// ---------------------------------------------------------------------------
+// HW-B：OH_VideoDecoder + FFmpeg 音频混合路径
+// ---------------------------------------------------------------------------
+
+static void OnHwVideoError(OH_AVCodec *, int32_t err, void *userData) {
+  (void)userData;
+  OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "[HwVideoDecode] onError err=%{public}d", err);
+}
+
+static void OnHwVideoFormatChanged(OH_AVCodec *, OH_AVFormat *format, void *userData) {
+  (void)format;
+  (void)userData;
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] onStreamChanged");
+}
+
+// 解码器准备好输入 buffer 时回调 → 放入 hwInputPool 供 FeedThread 使用
+static void OnHwVideoNeedInputBuffer(OH_AVCodec *, uint32_t index, OH_AVBuffer *buffer, void *userData) {
+  FfmpegContext *ctx = static_cast<FfmpegContext *>(userData);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] onNeedInputBuffer index=%{public}u bufCap=%{public}d",
+               index, OH_AVBuffer_GetCapacity(buffer));
+  {
+    std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
+    ctx->hwInputPool.push({index, buffer});
+  }
+  ctx->hwInputCv.notify_one();
+}
+
+// 解码完成，输出 buffer 就绪 → 放入 hwOutputQueue 供 RenderThread 消费
+//
+// [Backpressure] 背压限流：队列满时阻塞本 callback（decoder 内部输出线程），
+// 防止 GOP 边界批量输出无限积压 hwOutputQueue，进而触发周期性 LargeSync。
+//
+// 容量 MAX_HW_QUEUE = 6：6 × 42ms ≈ 252ms < LargeSync 阈值(500ms)，
+// 同时比最小值 4 帧多 2 帧余量，对抗渲染线程调度抖动（单帧循环最长 ~192ms）。
+//
+// Surface 模式说明：Surface 模式下 index 是 BufferQueue 里的合成帧句柄，
+// 不是 decoder 内部 YUV 槽位；BufferQueue 深度 ≥ 16，decoder 解码核心不受
+// output 槽反压影响，设 6 帧不会造成 decoder 内部 deadlock。
+//
+// 安全网设计：
+//   · wait_for(500ms) 而非无限 wait：渲染线程崩溃时 callback 不会永久挂起。
+//   · hwVideoFlushPending 作为 唤醒条件 + 推入双重门控：
+//     flush 期间（notify_all 已唤醒 wait）不向 queue 推入，封堵竞争窗口——
+//     Flush() 执行前 producer 可能已被 notify_all 唤醒并想推入旧 index，
+//     若不拦截，flushPending=false 后 RenderThread 会用过期 index 调
+//     RenderOutputBuffer，导致解码器进入错误状态。
+//     提前 return 而未 Free 的 index 由 OH_VideoDecoder_Flush() 统一回收，
+//     无需手动 FreeOutputBuffer。
+static void OnHwVideoNewOutputBuffer(OH_AVCodec *, uint32_t index, OH_AVBuffer *buffer, void *userData) {
+  FfmpegContext *ctx = static_cast<FfmpegContext *>(userData);
+  OH_AVCodecBufferAttr attr{};
+  OH_AVBuffer_GetBufferAttr(buffer, &attr);
+  const int64_t ptsMs = attr.pts / 1000;
+  const bool isEos = (attr.flags & AVCODEC_BUFFER_FLAGS_EOS) != 0;
+
+  static constexpr size_t MAX_HW_QUEUE = 6;
+  {
+    std::unique_lock<std::mutex> lk(ctx->hwOutputMtx);
+
+    // 背压等待：EOS / stop / flush 三种情况立即放行，避免死锁
+    const bool ready = ctx->hwOutputCv.wait_for(lk, std::chrono::milliseconds(500), [&] {
+      return ctx->hwOutputQueue.size() < MAX_HW_QUEUE
+             || !ctx->hwVideoRunning.load(std::memory_order_relaxed)
+             || ctx->hwVideoFlushPending.load(std::memory_order_relaxed)
+             || isEos;
+    });
+    if (!ready) {
+      // 超时（500ms）：渲染线程可能阻塞，打印诊断日志后继续入队（宁可瞬时积压也不丢帧，LargeSync 可自愈）
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "[HwVideoDecode] OnNewOutputBuffer: backpressure timeout "
+                   "queueSize=%{public}zu ptsMs=%{public}lld",
+                   ctx->hwOutputQueue.size(), static_cast<long long>(ptsMs));
+    }
+
+    // flush 期间：不推入 queue，防止过期 index 残留；OH_VideoDecoder_Flush 负责回收此 buffer
+    if (ctx->hwVideoFlushPending.load(std::memory_order_relaxed) && !isEos) return;
+    // stop 期间：同样不推入
+    if (!ctx->hwVideoRunning.load(std::memory_order_relaxed) && !isEos) return;
+
+    ctx->hwOutputQueue.push({index, ptsMs, isEos});
+  }
+  ctx->hwOutputCv.notify_one();
+}
+
+// Feed 线程：从 videoQueue 取 AVPacket，经 BSF 转换后塞入 OH_VideoDecoder 输入 buffer
+static void HwVideoFeedThreadFunc(FfmpegContext *ctx) {
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoFeedThread: started");
+
+  // 辅助 lambda：等待一个 hwInputPool entry
+  auto getInputEntry = [&](FfmpegContext::HwInputEntry &entry, bool &running) -> bool {
+    std::unique_lock<std::mutex> lk(ctx->hwInputMtx);
+    ctx->hwInputCv.wait_for(lk, std::chrono::milliseconds(200), [&] {
+      return !ctx->hwInputPool.empty() || !ctx->hwVideoRunning.load();
+    });
+    if (!ctx->hwVideoRunning.load()) { running = false; return false; }
+    if (ctx->hwInputPool.empty()) { return false; }
+    entry = ctx->hwInputPool.front();
+    ctx->hwInputPool.pop();
+    return true;
+  };
+
+  // 辅助 lambda：将一个 AVPacket 推入 HW 解码器
+  auto pushPktToDecoder = [&](AVPacket *pkt) -> bool {
+    bool running = true;
+    FfmpegContext::HwInputEntry entry{};
+    if (!getInputEntry(entry, running)) {
+      if (!running) return false;
+      // 等待超时：打印诊断日志（每 10 次静默一次）
+      static int timeoutCount = 0;
+      if (++timeoutCount % 10 == 1) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "[HwVideoDecode] FeedThread: hwInputPool timeout #%{public}d (decoder not calling onNeedInputBuffer?)",
+                     timeoutCount);
+      }
+      return true; // 丢弃这个 packet，继续
+    }
+
+    const uint8_t *bufPtr = OH_AVBuffer_GetAddr(entry.buffer);
+    const int32_t capacity = OH_AVBuffer_GetCapacity(entry.buffer);
+    if (bufPtr == nullptr || capacity < pkt->size) {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                   "[HwVideoDecode] FeedThread: buffer too small cap=%{public}d pktSize=%{public}d",
+                   capacity, pkt->size);
+      std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
+      ctx->hwInputPool.push(entry);
+      ctx->hwInputCv.notify_one();
+      return true;
+    }
+    std::memcpy(const_cast<uint8_t *>(bufPtr), pkt->data, static_cast<size_t>(pkt->size));
+
+    const AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
+    const int64_t ptsUs = (pkt->pts != AV_NOPTS_VALUE)
+        ? av_rescale_q(pkt->pts, vs->time_base, {1, 1000000}) : 0;
+
+    OH_AVCodecBufferAttr attr{};
+    attr.pts = ptsUs;
+    attr.size = pkt->size;
+    attr.offset = 0;
+    attr.flags = (pkt->flags & AV_PKT_FLAG_KEY) ? AVCODEC_BUFFER_FLAGS_SYNC_FRAME : 0;
+    OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
+    OH_VideoDecoder_PushInputBuffer(ctx->hwVideoDecoder, entry.index);
+    return true;
+  };
+
+  AVPacket *filteredPkt = av_packet_alloc();
+  static int feedCount = 0;
+
+  while (ctx->hwVideoRunning.load()) {
+    if (ctx->hwVideoFlushPending.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      continue;
+    }
+
+    // 从 videoQueue 取 packet
+    AVPacket *pkt = nullptr;
+    {
+      std::unique_lock<std::mutex> lk(ctx->videoQueue.mtx);
+      ctx->videoQueue.cv.wait_for(lk, std::chrono::milliseconds(50), [&] {
+        return !ctx->videoQueue.packets.empty() || ctx->videoQueue.abort || !ctx->hwVideoRunning.load();
+      });
+      if (!ctx->hwVideoRunning.load() || ctx->videoQueue.abort) break;
+      if (ctx->videoQueue.packets.empty()) continue;
+      pkt = ctx->videoQueue.packets.front();
+      ctx->videoQueue.packets.pop();
+    }
+    ctx->videoQueue.cv.notify_all();
+
+    if (++feedCount <= 5 || feedCount % 100 == 0) {
+      const AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
+      const int64_t ptsMs = (pkt && pkt->pts != AV_NOPTS_VALUE)
+          ? av_rescale_q(pkt->pts, vs->time_base, {1, 1000}) : -1;
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] FeedThread: got pkt #%{public}d ptsMs=%{public}lld size=%{public}d poolSize=%{public}zu",
+                   feedCount, static_cast<long long>(ptsMs), pkt ? pkt->size : 0,
+                   ctx->hwInputPool.size());
+    }
+
+    // EOS packet
+    if (pkt == nullptr || pkt->size <= 0) {
+      bool running = true;
+      FfmpegContext::HwInputEntry entry{};
+      if (getInputEntry(entry, running)) {
+        OH_AVCodecBufferAttr attr{};
+        attr.flags = AVCODEC_BUFFER_FLAGS_EOS;
+        OH_AVBuffer_SetBufferAttr(entry.buffer, &attr);
+        OH_VideoDecoder_PushInputBuffer(ctx->hwVideoDecoder, entry.index);
+      }
+      if (pkt) av_packet_free(&pkt);
+      break;
+    }
+
+    if (ctx->hwBsfCtx != nullptr) {
+      // 通过 BSF 将 MPEG-4/HVCC 格式转换为 Annex-B
+      int ret = av_bsf_send_packet(ctx->hwBsfCtx, pkt);
+      av_packet_free(&pkt);
+      if (ret < 0) continue;
+      while (av_bsf_receive_packet(ctx->hwBsfCtx, filteredPkt) == 0) {
+        pushPktToDecoder(filteredPkt);
+        av_packet_unref(filteredPkt);
+        if (!ctx->hwVideoRunning.load()) break;
+      }
+    } else {
+      pushPktToDecoder(pkt);
+      av_packet_free(&pkt);
+    }
+  }
+
+  if (filteredPkt) av_packet_free(&filteredPkt);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoFeedThread: exited");
+}
+
+// Render 线程：从 hwOutputQueue 取帧，AV Sync 后调用 RenderOutputBuffer / FreeOutputBuffer
+static void HwVideoRenderThreadFunc(FfmpegContext *ctx) {
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: started");
+  int64_t renderCount = 0;
+  int64_t lastRenderRealtimeMs = 0;
+  int64_t lastPtsMs = -1;  // 用于计算 PTS 间隔，防止视频以固定30fps渲染超过内容实际帧率
+  int64_t consecutiveEmptyPops = 0;  // 连续空 pop 计数，用于检测 decode stall
+  while (ctx->hwVideoRunning.load()) {
+    // [Fix-Pause] pause 期间不消耗帧，让 HW 解码器自然因 output buffer 耗尽而暂停。
+    // 这样 resume 后 ptsMs 仍在 pause 前的位置，避免 diff 虚高（曾导致 2-3 秒冻帧）。
+    //
+    // [Fix-SeekWhilePaused] 例外：若时钟门仍处于关闭状态（audioClockStartRealtimeMs=0，
+    // 即 seek 触发后 DemuxThread 已重置时钟但首帧尚未到达 seekFloor），必须继续消费帧。
+    // 根因：VideoPlayerController.seek() 在调用 player.seek() 之前先调 pause()，导致
+    // playbackPaused=true；解码器重启后立刻输出 pre-roll 帧，若 RenderThread 完全停止
+    // 消费，hwOutputQueue 和 Surface BufferQueue 同时被占满，解码器无法申请新 output slot，
+    // onNeedInputBuffer 永久停止，FeedThread 全程超时——形成死锁，seekDone 无法到达。
+    // 修复：seek 期间（hasSeekPending=true）允许帧流经，pre-roll gate 会对 ptsMs <
+    // seekFloor 的帧快速调 FreeOutputBuffer，不会渲染，不会改变用户可见的画面位置。
+    const bool isPaused = ctx->playbackPaused.load(std::memory_order_relaxed);
+    const bool hasSeekPending = (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) == 0);
+    if (isPaused && !hasSeekPending) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
+
+    FfmpegContext::HwOutputEntry entry{};
+    {
+      std::unique_lock<std::mutex> lk(ctx->hwOutputMtx);
+      ctx->hwOutputCv.wait_for(lk, std::chrono::milliseconds(50), [&] {
+        return !ctx->hwOutputQueue.empty() || !ctx->hwVideoRunning.load();
+      });
+      if (!ctx->hwVideoRunning.load() && ctx->hwOutputQueue.empty()) break;
+      if (ctx->hwOutputQueue.empty()) {
+        // [DecodeStall] 连续 500ms（10 × 50ms）无新帧 → 内容 PTS gap 后解码器正在重建
+        // 此时 AudioClock 持续推进但 video 冻结，积累形成大负 diff（可达 -883ms），
+        // 恢复时需要连续多次 DriftCorrect 或让视频跳过大量内容。
+        // 修复：在 500ms stall 后关闭 ClockGate。解码器恢复出帧时，ClockGate-Align
+        // 一次性将 clock 对齐到 video PTS（等同于 seek 后重同步），无需连续 DriftCorrect。
+        // 条件：gate 已开（!= 0）且 非 grace 期（不打断 seek 后的正常恢复阶段）。
+        consecutiveEmptyPops++;
+        if (consecutiveEmptyPops == 10
+            && ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) != 0
+            && ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) == 0) {
+          ctx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
+          ctx->videoSyncGraceFrames.store(5, std::memory_order_relaxed);
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                       "[AVSync] DecodeStall: 500ms no frame, closing ClockGate for re-align on recovery");
+        }
+        continue;
+      }
+      consecutiveEmptyPops = 0;  // 成功拿到帧，重置计数
+      entry = ctx->hwOutputQueue.front();
+      ctx->hwOutputQueue.pop();
+      // lk 在此析构 → 先释放锁（unlock），再 notify（见下方）
+      // unlock-then-notify 模式：producer 被唤醒时锁已空闲，无需再等一次 lock，
+      // 避免虚假的 lock/unlock 往返，略微降低 CPU 争用。
+    }
+    // [Backpressure] pop 后立即通知 producer 有空位。
+    // 此处统一 notify，覆盖后续所有 continue 路径（pre-roll drop / flushPending /
+    // late frame drop / 正常渲染），无需在各分支里重复 notify_one()。
+    ctx->hwOutputCv.notify_one();
+
+    if (entry.isEos) {
+      OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
+      break;
+    }
+
+    // flush 期间：不调用 FreeOutputBuffer —— Flush 后 buffer index 已失效，
+    // 调用 FreeOutputBuffer 会让解码器进入错误状态导致 onNewOutputBuffer 永久停止。
+    // OH_VideoDecoder_Flush 会自动回收所有 pending buffer，无需手动释放。
+    if (ctx->hwVideoFlushPending.load()) {
+      continue;
+    }
+
+    // Seek 时钟门控：audioClockStartRealtimeMs=0 表示 seek 后时钟尚未开启，
+    // 需要等 HW 解码器解完 keyframe pre-roll 到 seekTarget 附近再开门，
+    // 防止时钟过早推进导致所有帧因"太迟"被丢弃（永久冻帧）。
+    bool gateJustOpened = false;
+    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) == 0) {
+      const int64_t seekFloor = ctx->audioClockFloorMs.load(std::memory_order_relaxed);
+      if (entry.ptsMs < seekFloor - 200) {
+        // Pre-roll 帧（远早于 seek target），快速丢弃，不占用 grace counter
+        OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "[HwVideoDecode] RenderThread: drop preroll ptsMs=%{public}lld floor=%{public}lld",
+                     static_cast<long long>(entry.ptsMs), static_cast<long long>(seekFloor));
+        continue;
+      }
+      // [Fix-SeekWhilePaused] seek 期间 paused：已到达 seekFloor 但 play() 尚未到达。
+      // 先丢弃此帧（FreeOutputBuffer），不开门；等到 playbackPaused=false 后再正常开门。
+      // 这样可以避免在 pause 状态下错误地打开时钟门并触发渲染，同时继续排空 hwOutputQueue。
+      if (ctx->playbackPaused.load(std::memory_order_relaxed)) {
+        OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "[HwVideoDecode] RenderThread: seek@floor but paused, free ptsMs=%{public}lld",
+                     static_cast<long long>(entry.ptsMs));
+        continue;
+      }
+      // 到达 seek target 附近：开门，设置 wall-clock 锚点，后续走正常 AV sync
+      const int64_t nowMs = NowRealtimeMs();
+      ctx->audioClockStartRealtimeMs.store(nowMs, std::memory_order_relaxed);
+      gateJustOpened = true;
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] ClockGate OPEN: ptsMs=%{public}lld floor=%{public}lld nowMs=%{public}lld grace=%{public}d",
+                   static_cast<long long>(entry.ptsMs),
+                   static_cast<long long>(ctx->audioClockFloorMs.load(std::memory_order_relaxed)),
+                   static_cast<long long>(nowMs),
+                   static_cast<int>(ctx->videoSyncGraceFrames.load(std::memory_order_relaxed)));
+    }
+
+    // AV Sync：调用 AudioClock() 推进并读取当前音频时钟
+    // 注意：HW 路径中没有其他线程调 AudioClock()，必须在这里调，否则 audioClockLastReportedMs 永远为 0
+    int64_t clockMs = static_cast<int64_t>(AudioClock(ctx) * 1000.0);
+    int64_t diffMs = entry.ptsMs - clockMs;
+
+    // [ClockGate-Align] 开门瞬间对齐：音频预缓冲导致 clockMs 超前 video PTS，形成固定负 diff。
+    // 通过下调 audioClockBaseMs 使时钟对齐到首帧 PTS，消除 -165ms 等固定偏差。
+    // 同时重置单调保护锁（lastReportedMs）和 floor，允许时钟从 entry.ptsMs 开始递增。
+    // HW 路径中只有本线程调 AudioClock()，无竞争风险。
+    if (gateJustOpened && diffMs < 0) {
+      ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
+      ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] ClockGate align: ptsMs=%{public}lld oldClockMs=%{public}lld adjustment=%{public}lld",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
+      clockMs = entry.ptsMs;
+      diffMs = 0;
+    }
+
+    // [PtsGap-Align] Content PTS 不连续点对齐（Dolby Vision / Blu-ray seamless branching）
+    // 问题：音频时钟基于 sample 计数，不感知音频 PTS gap；视频 PTS 跳变后 diff 瞬间飙升到 1200ms+。
+    //   diff>0 → 视频超前时钟 → sleep 最多 150ms/帧 → 视频以 ~5fps 慢速前进 → 用户感知「声音滞后」
+    // 识别条件：diff > kPtsGapThresholdMs（远超背压上限 252ms + DriftCorrect 负漂移，必为 content gap）
+    //   背压后正常 diff 上限 = MAX_HW_QUEUE(6) × 42ms = 252ms；DriftCorrect 后 diff 趋近 0（负向修正）。
+    //   在 grace 期间，diff 由 DriftCorrect 保持在 -80ms ~ 0ms 范围，不会达到 +600ms（除非真有 PTS gap）。
+    //   因此可以安全移除 !inGrace 条件：grace 期间发生的 content PTS gap（seamless branching / 章节边界）
+    //   同样应立即对齐，否则会进入 LargeSync sleep，引起声音滞后。
+    // 修复：与 ClockGate-Align 完全相同——推进 audioClockBaseMs 对齐到 video PTS，diff 瞬间归零。
+    //   double-counting 分析：对齐时音频已写入部分 post-gap 样本(ptsSampMs已增大)，
+    //   fetch_add(diffMs) 后 base 升高 diffMs，clock = newBase + ptsSampMs - pending - hwOffset ≈ ptsMs。
+    //   后续 post-gap 样本继续累积，clock 以 1.0x 推进，与 video PTS 保持同步。
+    // 回归安全：gateJustOpened 时 diff < 0 由 ClockGate-Align 处理，diff 被置为 0，不会误触此处。
+    static constexpr int64_t kPtsGapThresholdMs = 600;
+    const bool inGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed) > 0;
+    if (diffMs > kPtsGapThresholdMs) {  // grace 期间 content PTS gap 同样需要对齐，移除 !inGrace 限制
+      ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
+      ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] PtsGapAlign: ptsMs=%{public}lld oldClockMs=%{public}lld gap=%{public}lld, advancing clock",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
+      clockMs = entry.ptsMs;
+      diffMs = 0;
+      // PtsGapAlign 后，E-AC3 解码器可能批量写入积压帧（burst write），使 ptsSampMs 在 2ms 内
+      // 激增 300-400ms，导致连续多次 DriftCorrect 触发（双重修正 -112ms + -358ms）。
+      // 设置 grace=10（≈420ms @ 24fps），在音频突发写入期间抑制 DriftCorrect，等待时钟稳定。
+      // grace 期间 drop-frame 同样被抑制，确保帧不被误丢（视频短暂落后音频约 200-400ms，无感知）。
+      {
+        const int currentGrace = ctx->videoSyncGraceFrames.load(std::memory_order_relaxed);
+        if (currentGrace < 10) {
+          ctx->videoSyncGraceFrames.store(10, std::memory_order_relaxed);
+        }
+      }
+    }
+    // [DriftCorrect] 音频时钟长期负漂移修正（clock 持续超前 video PTS）
+    // 根因：音频以略高于 1.0x 速率写入（预缓冲），ptsSampMs 积累速率略快于 video PTS。
+    //   OH_AudioRenderer 的 pendingMs 仅反映硬件固定延迟（~139ms），不含软件预缓冲，
+    //   导致 clock = base + ptsSampMs - pending - hwOffset 系统性偏高约 10ms/s。
+    // 现象：frame#301 diff=-26ms → frame#601 diff=-176ms（15s 内积累 -150ms 漂移）
+    //   用户感知：视频落后音频约 176ms → 唇形不同步
+    // 修复：等效于反向 ClockGate-Align ——
+    //   diff < -kDriftCorrThresholdMs 时将 audioClockBaseMs 向下调 |diffMs|，使 clock 对齐到 video PTS。
+    //   diff 归零后无需 sleep/drop，视频立即渲染，用户无感知。
+    // 修正频率：-10ms/s 漂移 + 80ms 阈值 → 每 ~8s 触发一次，每次约 80ms 瞬时修正，完全无感知。
+    // 安全约束：
+    //   !inGrace    → seek 后 grace=90 期间不触发（时钟刚建立，diff 不稳定）
+    //   !gateJustOpened → 与 ClockGate-Align 不重复触发
+    //   diff < kDriftCorrThresholdMs（负值）→ 仅在 clock 持续超前时触发，不影响正常负 diff（-20~-60ms 波动）
+    static constexpr int64_t kDriftCorrThresholdMs = -80;
+    if (!inGrace && !gateJustOpened && diffMs < kDriftCorrThresholdMs) {
+      ctx->audioClockBaseMs.fetch_add(diffMs, std::memory_order_relaxed);
+      ctx->audioClockLastReportedMs.store(entry.ptsMs, std::memory_order_relaxed);
+      ctx->audioClockFloorMs.store(entry.ptsMs, std::memory_order_relaxed);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync] DriftCorrect: ptsMs=%{public}lld oldClockMs=%{public}lld drift=%{public}lld",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs));
+      clockMs = entry.ptsMs;
+      diffMs = 0;
+    }
+
+    if (!inGrace && diffMs < -200) {
+      // 帧明显落后（非 grace 期），丢弃；grace 期间不 drop，让画面先稳定出帧
+      OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, entry.index);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] RenderThread: drop late frame ptsMs=%{public}lld clockMs=%{public}lld",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs));
+      continue;
+    }
+    if (inGrace) {
+      ctx->videoSyncGraceFrames.fetch_sub(1, std::memory_order_relaxed);
+    }
+    // 最小帧间隔：按内容实际 PTS 间隔驱动，而非固定 30fps(33ms)。
+    // 24fps 内容 PTS 间隔 ≈ 42ms，用 33ms 限速会让视频以 1.27x 实时速度超速 → diff 持续累积 → LargeSync振荡
+    // ptsDelta > 200ms 说明是 seek/PTS跳变，回退到默认 42ms 防止被跳变值误导
+    const int64_t ptsDelta = (lastPtsMs >= 0 && entry.ptsMs > lastPtsMs && (entry.ptsMs - lastPtsMs) <= 200)
+                             ? (entry.ptsMs - lastPtsMs)
+                             : 42;  // 默认按 24fps
+    if (lastRenderRealtimeMs > 0) {
+      const int64_t sinceLastMs = NowRealtimeMs() - lastRenderRealtimeMs;
+      if (sinceLastMs < ptsDelta) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ptsDelta - sinceLastMs));
+      }
+    }
+    // AV sync 等待：视频帧超前时钟时 sleep，保持 decoder output queue 持续消耗。
+    // 普通情况上限 50ms/帧；LargeSync（diff>500ms）时上限提升到 150ms/帧，加速收敛：
+    //   diff=660ms  → 老: 14帧×92ms≈1.3s ; 新: 5帧×192ms≈1.0s（+33%）
+    //   diff=1500ms → 老: 30帧×92ms≈2.8s ; 新: 10帧×192ms≈2.0s（+30%）
+    // 不设 skip-wait：PTS 跳变时 clock 正常递增，跳过等待会使 diff 持续扩大
+    if (diffMs > 10) {
+      const int64_t sleepCap = (diffMs > 500) ? (int64_t)150 : (int64_t)50;
+      const int64_t sleepMs = std::min(diffMs - 5, sleepCap);
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+      if (diffMs > 500) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                     "[AVSync] LargeSync ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld",
+                     static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                     static_cast<long long>(diffMs));
+      }
+    }
+
+    // 渲染到 Surface
+    OH_VideoDecoder_RenderOutputBuffer(ctx->hwVideoDecoder, entry.index);
+    lastRenderRealtimeMs = NowRealtimeMs();
+    lastPtsMs = entry.ptsMs;
+    renderCount++;
+    // [AVSync-Summary] 每300帧输出一次AV同步摘要，用于诊断声音滞后（过滤关键词: AVSync-Summary）
+    if (renderCount % 300 == 1 || renderCount <= 5) {
+      const int64_t ptsSamples = ctx->audioPtsSamples.load(std::memory_order_relaxed);
+      const int64_t startRt = ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed);
+      const int64_t baseMs2 = ctx->audioClockBaseMs.load(std::memory_order_relaxed);
+      const int64_t sampleRate = ctx->audioSampleRate > 0 ? ctx->audioSampleRate : 48000;
+      const int64_t ptsSamplesMs = ptsSamples * 1000LL / sampleRate;
+      const int64_t elapsedMs = startRt > 0 ? (NowRealtimeMs() - startRt) : 0;
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[AVSync-Summary] frame#%{public}lld ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld "
+                   "baseMs=%{public}lld ptsSampMs=%{public}lld elapsed=%{public}lld grace=%{public}d",
+                   static_cast<long long>(renderCount),
+                   static_cast<long long>(entry.ptsMs),
+                   static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs),
+                   static_cast<long long>(baseMs2),
+                   static_cast<long long>(ptsSamplesMs),
+                   static_cast<long long>(elapsedMs),
+                   static_cast<int>(inGrace));
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] RenderThread: render ptsMs=%{public}lld clockMs=%{public}lld diff=%{public}lld grace=%{public}d",
+                   static_cast<long long>(entry.ptsMs), static_cast<long long>(clockMs),
+                   static_cast<long long>(diffMs),
+                   static_cast<int>(inGrace));
+    }
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] HwVideoRenderThread: exited");
+}
+
+// 初始化 OH_VideoDecoder，绑定 Surface，成功返回 true
+static bool InitHwVideoDecoder(FfmpegContext *ctx, const char *mime, OHNativeWindow *window) {
+  OH_AVCodec *decoder = OH_VideoDecoder_CreateByMime(mime);
+  if (decoder == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: CreateByMime failed mime=%{public}s", mime);
+    return false;
+  }
+
+  // 从 FFmpeg 流信息获取宽高
+  int32_t width = 1920, height = 1080;
+  if (ctx->videoStreamIdx >= 0 && ctx->fmtCtx != nullptr) {
+    AVCodecParameters *par = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar;
+    width = par->width > 0 ? par->width : 1920;
+    height = par->height > 0 ? par->height : 1080;
+  }
+
+  // 1. RegisterCallback 必须在 Configure 之前（官方要求：Create→Register→Configure→SetSurface→Prepare→Start）
+  OH_AVCodecCallback cb{};
+  cb.onError = OnHwVideoError;
+  cb.onStreamChanged = OnHwVideoFormatChanged;
+  cb.onNeedInputBuffer = OnHwVideoNeedInputBuffer;
+  cb.onNewOutputBuffer = OnHwVideoNewOutputBuffer;
+  int32_t rc = OH_VideoDecoder_RegisterCallback(decoder, cb, ctx);
+  if (rc != AV_ERR_OK) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: RegisterCallback failed rc=%{public}d", rc);
+    OH_VideoDecoder_Destroy(decoder);
+    return false;
+  }
+
+  // 2. Configure（Surface 输出模式下不设 OH_MD_KEY_PIXEL_FORMAT，由 Surface 决定格式）
+  OH_AVFormat *format = OH_AVFormat_Create();
+  OH_AVFormat_SetIntValue(format, OH_MD_KEY_WIDTH, width);
+  OH_AVFormat_SetIntValue(format, OH_MD_KEY_HEIGHT, height);
+
+  rc = OH_VideoDecoder_Configure(decoder, format);
+  OH_AVFormat_Destroy(format);
+  if (rc != AV_ERR_OK) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: Configure failed rc=%{public}d", rc);
+    OH_VideoDecoder_Destroy(decoder);
+    return false;
+  }
+
+  // 3. 绑定 NativeWindow（Surface 输出）
+  rc = OH_VideoDecoder_SetSurface(decoder, window);
+  if (rc != AV_ERR_OK) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: SetSurface failed rc=%{public}d", rc);
+    OH_VideoDecoder_Destroy(decoder);
+    return false;
+  }
+
+  // HDR 色彩空间：根据视频流 color_trc 设置 NativeWindow 色彩空间，使显示器启用 HDR 渲染
+  // DV Profile 8 / HDR10 → PQ (SMPTE2084, color_trc=16)；HLG → color_trc=18
+  if (ctx->videoStreamIdx >= 0 && ctx->fmtCtx != nullptr) {
+    AVCodecParameters *par = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar;
+    OH_NativeBuffer_ColorSpace csTarget = OH_COLORSPACE_NONE;
+    if (par->color_trc == AVCOL_TRC_SMPTEST2084) {           // PQ / HDR10 / DolbyVision BL
+      csTarget = OH_COLORSPACE_BT2020_PQ_LIMIT;
+    } else if (par->color_trc == AVCOL_TRC_ARIB_STD_B67) {  // HLG
+      csTarget = OH_COLORSPACE_BT2020_HLG_LIMIT;
+    }
+    if (csTarget != OH_COLORSPACE_NONE) {
+      const int32_t csRc = OH_NativeWindow_SetColorSpace(window, csTarget);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "[HwVideoDecode] InitHwVideoDecoder: SetColorSpace colorSpace=%{public}d rc=%{public}d",
+                   static_cast<int32_t>(csTarget), csRc);
+    }
+  }
+
+  rc = OH_VideoDecoder_Prepare(decoder);
+  if (rc != AV_ERR_OK) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: Prepare failed rc=%{public}d", rc);
+    OH_VideoDecoder_Destroy(decoder);
+    return false;
+  }
+
+  rc = OH_VideoDecoder_Start(decoder);
+  if (rc != AV_ERR_OK) {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll",
+                 "[HwVideoDecode] InitHwVideoDecoder: Start failed rc=%{public}d", rc);
+    OH_VideoDecoder_Destroy(decoder);
+    return false;
+  }
+
+  ctx->hwVideoDecoder = decoder;
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] InitHwVideoDecoder: OK mime=%{public}s %{public}dx%{public}d",
+               mime, width, height);
+  return true;
+}
+
+// Seek 时刷新 HW 解码器
+static void FlushHwVideoDecoder(FfmpegContext *ctx) {
+  if (ctx->hwVideoDecoder == nullptr) return;
+
+  ctx->hwVideoFlushPending.store(true, std::memory_order_release);
+
+  // Flush BSF：清除内部残留的 NALU 分包状态，否则 seek 后会把旧 Annex-B 残片混入新数据
+  if (ctx->hwBsfCtx != nullptr) {
+    av_bsf_flush(ctx->hwBsfCtx);
+  }
+
+  // 清空 hwInputPool（Flush 会重新触发 onNeedInputBuffer 补充 inputPool）
+  {
+    std::lock_guard<std::mutex> lk(ctx->hwInputMtx);
+    while (!ctx->hwInputPool.empty()) ctx->hwInputPool.pop();
+  }
+  ctx->hwInputCv.notify_all();  // 唤醒 FeedThread 感知 pool 已清空
+
+  // 先将 hwOutputQueue 里的帧正式归还给解码器，再调 Flush。
+  // 若直接 Flush 而不 Free，RenderThread 可能用失效 index 调 FreeOutputBuffer，
+  // 导致解码器进入错误状态并永久停止输出（seek 后黑屏/冻帧根因）。
+  {
+    std::lock_guard<std::mutex> lk(ctx->hwOutputMtx);
+    while (!ctx->hwOutputQueue.empty()) {
+      const auto &e = ctx->hwOutputQueue.front();
+      if (!e.isEos) {
+        OH_VideoDecoder_FreeOutputBuffer(ctx->hwVideoDecoder, e.index);
+      }
+      ctx->hwOutputQueue.pop();
+    }
+  }
+  ctx->hwOutputCv.notify_all();
+
+  // Flush decoder
+  OH_AVErrCode flushRet = OH_VideoDecoder_Flush(ctx->hwVideoDecoder);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] FlushHwVideoDecoder: OH_VideoDecoder_Flush ret=%{public}d", static_cast<int>(flushRet));
+
+  // OH_VideoDecoder_Flush 后必须重新 Start，否则解码器不再触发 onNeedInputBuffer
+  OH_AVErrCode startRet = OH_VideoDecoder_Start(ctx->hwVideoDecoder);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+               "[HwVideoDecode] FlushHwVideoDecoder: OH_VideoDecoder_Start ret=%{public}d", static_cast<int>(startRet));
+
+  // Start 后等待解码器调用 onNeedInputBuffer，确保 FeedThread 有可用 slot 再接收第一个 keyframe。
+  // 若 keyframe 在 onNeedInputBuffer 触发前被 FeedThread 因超时丢弃，解码器将永远没有参考帧输出。
+  {
+    std::unique_lock<std::mutex> lk(ctx->hwInputMtx);
+    const bool ready = ctx->hwInputCv.wait_for(lk, std::chrono::milliseconds(1500), [&] {
+      return !ctx->hwInputPool.empty() || !ctx->hwVideoRunning.load();
+    });
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "[HwVideoDecode] FlushHwVideoDecoder: post-Start ready=%d poolSize=%{public}zu",
+                 ready ? 1 : 0, ctx->hwInputPool.size());
+  }
+
+  ctx->hwVideoFlushPending.store(false, std::memory_order_release);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] FlushHwVideoDecoder: done");
+}
+
+// 停止并销毁 HW 解码器（由 StopFfmpegDecode 调用）
+static void DestroyHwVideoDecoder(FfmpegContext *ctx) {
+  ctx->hwVideoRunning.store(false, std::memory_order_release);
+  {
+    std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
+    ctx->videoQueue.abort = true;
+  }
+  ctx->videoQueue.cv.notify_all();
+  ctx->hwInputCv.notify_all();
+  ctx->hwOutputCv.notify_all();
+
+  if (ctx->hwVideoRenderThread.joinable()) ctx->hwVideoRenderThread.join();
+  if (ctx->hwVideoFeedThread.joinable())   ctx->hwVideoFeedThread.join();
+
+  if (ctx->hwVideoDecoder != nullptr) {
+    OH_VideoDecoder_Stop(ctx->hwVideoDecoder);
+    OH_VideoDecoder_Destroy(ctx->hwVideoDecoder);
+    ctx->hwVideoDecoder = nullptr;
+  }
+  if (ctx->hwBsfCtx != nullptr) {
+    av_bsf_free(&ctx->hwBsfCtx);
+    ctx->hwBsfCtx = nullptr;
+  }
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[HwVideoDecode] DestroyHwVideoDecoder: done");
 }
 
 // ---------------------------------------------------------------------------
@@ -3730,7 +4473,11 @@ static OH_AudioData_Callback_Result AudioWriteDataCallback(
   // B5：音频时钟只累计真实媒体样本，不把 underrun 填充的静音计入主时钟。
   // 否则启动/seek 后音频时钟会虚假快进，RenderThread 会把视频帧误判为“严重落后”并大量丢帧。
   if (mediaSamplesFilled > 0) {
-    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) <= 0) {
+    // HW video path: startRealtimeMs is gated by HwVideoRenderThread (set when first frame near
+    // seek target is rendered). Blocking it here prevents premature clock advance during
+    // keyframe pre-roll, which caused permanent seek freeze (all frames dropped as "too late").
+    if (ctx->audioClockStartRealtimeMs.load(std::memory_order_relaxed) <= 0 &&
+        !ctx->useHwVideoDecoder) {
       ctx->audioClockStartRealtimeMs.store(NowRealtimeMs(), std::memory_order_relaxed);
     }
     ctx->audioPtsSamples.fetch_add(static_cast<int64_t>(mediaSamplesFilled), std::memory_order_relaxed);
@@ -3914,7 +4661,47 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   }
   FfmpegContext *ctx = state->ffmpegCtx.get();
 
-  // 初始化解码器
+  // HW-B：若为 HARDWARE_PREFERRED 且 HEVC 片源，先尝试初始化 OH_VideoDecoder
+  if (state->preferredDecodePath == NativePreferredDecodePath::HARDWARE_PREFERRED
+      && state->nativeWindow != nullptr
+      && ctx->videoStreamIdx >= 0 && ctx->fmtCtx != nullptr) {
+    const AVCodecID codecId = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar->codec_id;
+    if (codecId == AV_CODEC_ID_HEVC || codecId == AV_CODEC_ID_H264) {
+      const char *mime = (codecId == AV_CODEC_ID_HEVC) ? "video/hevc" : "video/avc";
+      ctx->useHwVideoDecoder = InitHwVideoDecoder(ctx, mime, state->nativeWindow);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                   "StartFfmpegDecode: HW video decoder init %{public}s mime=%{public}s",
+                   ctx->useHwVideoDecoder ? "OK" : "FAILED", mime);
+
+      // 初始化 Annex-B BSF（MKV 存储 HEVC/H264 为 MPEG-4 格式，HW 解码器需要 Annex-B）
+      if (ctx->useHwVideoDecoder) {
+        const char *bsfName = (codecId == AV_CODEC_ID_HEVC) ? "hevc_mp4toannexb" : "h264_mp4toannexb";
+        const AVBitStreamFilter *bsf = av_bsf_get_by_name(bsfName);
+        if (bsf != nullptr) {
+          int bsfRet = av_bsf_alloc(bsf, &ctx->hwBsfCtx);
+          if (bsfRet == 0) {
+            AVCodecParameters *par = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar;
+            avcodec_parameters_copy(ctx->hwBsfCtx->par_in, par);
+            ctx->hwBsfCtx->time_base_in = ctx->fmtCtx->streams[ctx->videoStreamIdx]->time_base;
+            bsfRet = av_bsf_init(ctx->hwBsfCtx);
+          }
+          if (bsfRet == 0) {
+            OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                         "StartFfmpegDecode: BSF %{public}s initialized OK", bsfName);
+          } else {
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                         "StartFfmpegDecode: BSF %{public}s init failed ret=%{public}d", bsfName, bsfRet);
+            if (ctx->hwBsfCtx) { av_bsf_free(&ctx->hwBsfCtx); ctx->hwBsfCtx = nullptr; }
+          }
+        } else {
+          OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+                       "StartFfmpegDecode: BSF %{public}s not found", bsfName);
+        }
+      }
+    }
+  }
+
+  // 初始化解码器（HW path 下跳过视频软解器）
   const int ret = FfmpegInitCodecs(ctx);
   if (ret < 0) {
     char errbuf[128] = {0};
@@ -3925,9 +4712,16 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   }
 
   // 记录媒体信息（供 ArkTS onPrepared 读取）
-  if (ctx->videoStreamIdx >= 0 && ctx->videoCodecCtx != nullptr) {
-    state->ffmpegWidth = ctx->videoCodecCtx->width;
-    state->ffmpegHeight = ctx->videoCodecCtx->height;
+  if (ctx->videoStreamIdx >= 0 && ctx->fmtCtx != nullptr) {
+    if (ctx->videoCodecCtx != nullptr) {
+      state->ffmpegWidth = ctx->videoCodecCtx->width;
+      state->ffmpegHeight = ctx->videoCodecCtx->height;
+    } else if (ctx->useHwVideoDecoder) {
+      // HW path：从 codecpar 获取分辨率
+      AVCodecParameters *par = ctx->fmtCtx->streams[ctx->videoStreamIdx]->codecpar;
+      state->ffmpegWidth = par->width;
+      state->ffmpegHeight = par->height;
+    }
     AVStream *vs = ctx->fmtCtx->streams[ctx->videoStreamIdx];
     const AVRational fr = vs->avg_frame_rate;
     state->ffmpegFps = (fr.den > 0) ? static_cast<double>(fr.num) / fr.den : 0.0;
@@ -3949,7 +4743,17 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
 
   // 启动解码线程
   ctx->decodeRunning.store(true);
-  if (ctx->videoCodecCtx != nullptr) {
+  if (ctx->useHwVideoDecoder) {
+    // HW path：视频由 OH_VideoDecoder 处理，启动 Feed + Render 线程。
+    // 注意：不预设 audioClockStartRealtimeMs。HW RenderThread 的时钟门控会在第一帧到达 seekFloor
+    // 附近时开门并设置锚点，确保时钟从首帧开始精准同步，避免预设导致初始帧 clockMs 虚高、
+    // 所有初始帧 diff<0 无等待、以解码速度连续输出造成画面撕裂和声音滞后。
+    ctx->hwVideoRunning.store(true);
+    ctx->hwVideoFeedThread   = std::thread(HwVideoFeedThreadFunc, ctx);
+    ctx->hwVideoRenderThread = std::thread(HwVideoRenderThreadFunc, ctx);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                 "StartFfmpegDecode: HW video threads launched");
+  } else if (ctx->videoCodecCtx != nullptr) {
     ctx->videoDecodeThread = std::thread(VideoDecodeThreadFunc, ctx);
   }
   if (ctx->audioCodecCtx != nullptr) {
@@ -3960,8 +4764,10 @@ static void StartFfmpegDecode(NativePlayerSkeletonState *state) {
   // B4：解码器就绪后启动 OH_AudioRenderer（消费 audioFrameQueue）
   (void)StartFfmpegAudio(state);
 
-  // B3：启动 OpenGL ES YUV 渲染线程（消费 videoFrameQueue）
-  StartFfmpegRender(state);
+  // B3：启动 OpenGL ES YUV 渲染线程（SW path 时消费 videoFrameQueue；HW path 时跳过）
+  if (!ctx->useHwVideoDecoder) {
+    StartFfmpegRender(state);
+  }
 
   // B5：触发 onPrepared 回调（通知 ArkTS 播放器已就绪，duration 已设置）
   if (state->tsfOnPrepared != nullptr) {
@@ -4005,12 +4811,18 @@ static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
   }
   ctx->audioQueue.cv.notify_all();
 
-  // 4. Join 解码线程
+  // 4. Join 解码线程（HW path 下不启动 videoDecodeThread，也无需 join）
   if (ctx->videoDecodeThread.joinable()) {
     ctx->videoDecodeThread.join();
   }
   if (ctx->audioDecodeThread.joinable()) {
     ctx->audioDecodeThread.join();
+  }
+
+  // 4b. HW path：停止并销毁 OH_VideoDecoder 及其工作线程
+  if (ctx->useHwVideoDecoder) {
+    DestroyHwVideoDecoder(ctx);
+    ctx->useHwVideoDecoder = false;
   }
 
   // 5. 释放帧队列中残留帧
@@ -4031,12 +4843,16 @@ static void StopFfmpegDecode(NativePlayerSkeletonState *state) {
     }
   }
 
-  // 6. 释放解码器上下文
-  if (ctx->videoCodecCtx != nullptr) {
-    avcodec_free_context(&ctx->videoCodecCtx);
-  }
-  if (ctx->audioCodecCtx != nullptr) {
-    avcodec_free_context(&ctx->audioCodecCtx);
+  // 6. 释放解码器上下文（持 codecMutex 防止与任何残留的 flush/send/receive 操作并发，
+  //    虽然正常路径下 DemuxThread 和 DecodeThread 已 join，此处作为 defense-in-depth）
+  {
+    std::lock_guard<std::mutex> codecLk(ctx->codecMutex);
+    if (ctx->videoCodecCtx != nullptr) {
+      avcodec_free_context(&ctx->videoCodecCtx);
+    }
+    if (ctx->audioCodecCtx != nullptr) {
+      avcodec_free_context(&ctx->audioCodecCtx);
+    }
   }
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "StopFfmpegDecode: decode stopped and cleaned");
@@ -4115,18 +4931,14 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
   // B4：先停止音频渲染器（消费者），再停止解码线程（生产者），避免 callback 访问已释放队列
   StopFfmpegAudio(state);
 
-  // B2：先停止解码线程（依赖 packet 队列），再停止 demux
-  StopFfmpegDecode(state);
-
-  // 1. 通知中断：让阻塞的 av_read_frame / avformat_open_input 尽快返回
+  // 1. 通知 DemuxThread 中断退出（必须在 StopFfmpegDecode 之前完成，否则：
+  //    DemuxThread 在 seek 时持有 codecMutex 调用 avcodec_flush_buffers，
+  //    StopFfmpegDecode 释放 videoCodecCtx 后 DemuxThread 继续访问已释放内存 → SIGSEGV）
   ctx->interruptFlag.store(true);
   ctx->demuxRunning.store(false);
-  // B5：清除 ownerState 反向指针，防止 join 后悬挂访问（demux 线程循环已由 demuxRunning=false 终止）
-  // B5-QA fix：atomic store(release) 保证主线程写 nullptr 对 demux 线程的 load(acquire) 可见，
-  //            消除与 DemuxThreadFunc 读+解引用之间的 data race。
   ctx->ownerState.store(nullptr, std::memory_order_release);
 
-  // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待）
+  // 2. 唤醒可能阻塞在 cv.wait 的 demux 线程（队列满等待、seek cv 等待）
   {
     std::lock_guard<std::mutex> lk(ctx->videoQueue.mtx);
     ctx->videoQueue.abort = true;
@@ -4138,10 +4950,14 @@ static void StopFfmpegDemux(NativePlayerSkeletonState *state) {
   }
   ctx->audioQueue.cv.notify_all();
 
-  // 3. 等待 demux 线程退出
+  // 3. 必须先 join DemuxThread，确保 avcodec_flush_buffers 已退出，
+  //    才能安全调用 StopFfmpegDecode 释放 videoCodecCtx / audioCodecCtx。
   if (ctx->demuxThread.joinable()) {
     ctx->demuxThread.join();
   }
+
+  // B2：在 DemuxThread 已退出后再停止解码线程，此时 videoCodecCtx 无其他访问者
+  StopFfmpegDecode(state);
 
   // 4. 释放队列中残留 packet
   {
@@ -4960,8 +5776,26 @@ static napi_value Play(napi_env env, napi_callback_info info) {
   }
   if (state.useFfmpegPath && state.ffmpegCtx != nullptr) {
     state.ffmpegCtx->playbackPaused.store(false, std::memory_order_relaxed);
+    // [Fix-Resume-Clock] Resume 后对齐时钟锚点：以 lastReportedMs（pause 时最后报告的 clockMs）
+    // 为基准重建 base，确保 gate 重开后 diff ≈ hwOffset（≤ 1 帧），而非虚高的 2-3 秒。
+    // Pause() 已将 baseMs = pausedClockMs；此处用 lastReportedMs + hwOffset 覆盖，
+    // 使 candidateMs = (lastRep + hwOffset) + 0 - hwOffset = lastRep，clock 从 pause 位置续跑。
+    {
+      const int64_t lastRep = state.ffmpegCtx->audioClockLastReportedMs.load(std::memory_order_relaxed);
+      const int64_t hwOff   = state.ffmpegCtx->audioHardwareSafetyOffsetMs.load(std::memory_order_relaxed);
+      if (lastRep > 0) {
+        state.ffmpegCtx->audioClockBaseMs.store(lastRep + hwOff, std::memory_order_relaxed);
+        state.ffmpegCtx->audioClockFloorMs.store(lastRep, std::memory_order_relaxed);
+        state.ffmpegCtx->audioClockLastReportedMs.store(lastRep, std::memory_order_relaxed);
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+                     "Play: FFmpeg resume clock aligned lastRep=%{public}lld hwOff=%{public}lld newBase=%{public}lld",
+                     static_cast<long long>(lastRep), static_cast<long long>(hwOff),
+                     static_cast<long long>(lastRep + hwOff));
+      }
+    }
     state.ffmpegCtx->audioClockStartRealtimeMs.store(0, std::memory_order_relaxed);
     state.ffmpegCtx->audioPtsSamples.store(0, std::memory_order_relaxed);
+    state.ffmpegCtx->videoSyncGraceFrames.store(5, std::memory_order_relaxed);  // 小 grace：resume 后几帧保护
     if (state.ffmpegCtx->audioRenderer != nullptr) {
       {
         std::lock_guard<std::mutex> audioRenderLk(state.ffmpegCtx->audioRenderStateMutex);
@@ -6030,6 +6864,24 @@ static VideoDecoderCapabilityResult QueryVideoDecoderCapabilityInternal(const st
       result.heightAlignment = heightAlignment;
     }
     return result;
+  }
+
+  // Fallback: capability API gave no result, try direct decoder creation.
+  // On some HarmonyOS devices, OH_AVCodec_GetCapabilityByCategory returns null for HEVC
+  // even though the decoder is actually available via OH_VideoDecoder_CreateByMime.
+  for (const std::string &mime : mimeCandidates) {
+    OH_AVCodec *testDecoder = OH_VideoDecoder_CreateByMime(mime.c_str());
+    if (testDecoder != nullptr) {
+      OH_VideoDecoder_Destroy(testDecoder);
+      result.supported = true;
+      result.mimeType = mime;
+      result.decoderName = "";  // name unknown via creation probe
+      // isHardware cannot be determined; caller should treat as "unknown"
+      result.isHardware = false;
+      result.errorMessage = "";
+      OH_LOG_INFO(LOG_APP, "QueryVideoDecoderCapabilityInternal: capability API failed but creation probe succeeded for mime=%{public}s, marking supported=true isHardware=false", mime.c_str());
+      return result;
+    }
   }
 
   result.errorMessage = "decoder not found";

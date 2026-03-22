@@ -163,8 +163,10 @@ export class VidAllPlayerAdapter implements IPlayer {
   private _onFfmpegSwitchingCb?: () => void;
   private _probedTrackInfos?: TrackInfo[];
   private _probeTrackInfosPromise?: Promise<TrackInfo[]>;
-  /** seek 完成确认门禁：true 表示有一次 seek 正在等待原生 seekDone 确认 */
-  private _seekPending: boolean = false;
+  /** seek 完成确认计数：记录当前正在等待 seekDone 的 seek 调用次数。
+   *  用计数替代布尔，解决连续双 seek 时 seekDone1 消耗门禁导致 seekDone2 被丢弃的问题：
+   *  每次 seek() 调用 +1，每次 seekDone 到来 -1，归零时才触发 _onSeekDoneCb。 */
+  private _seekPendingCount: number = 0;
   /** seek 完成超时诊断：仅记录日志，不再伪造 onSeekDone，避免打乱真实 seek 状态机 */
   private _seekDoneTimeoutTimer?: number;  /** 指标埋点：seek 调用时刻（用于计算 seek 完成耗时） */
   private _metricsSeekStartMs: number = 0;
@@ -421,20 +423,26 @@ export class VidAllPlayerAdapter implements IPlayer {
           this._onBufferingCb?.(isBuffering);
         },
         () => {
-          // 原生 seekDone 确认回调：seek 定位完成后由 C++ EmitSeekDone 触发。
-          // 使用 _seekPending 门禁防止重复触发（sync + timeout 双路同时存在时最多触发一次）。
-          if (!this._seekPending) {
+          // 原生 seekDone 确认回调：seek 定位完成后由 C++ EmitSeekDone / TSF 触发。
+          // 用计数替代布尔：每次 seek() 调用令 _seekPendingCount++，每次 seekDone 到来 --，
+          // 归零时才触发 _onSeekDoneCb。
+          // 根因修复：双 seek（续播场景）时，seekDone1 消耗布尔门禁使其变 false，
+          // seekDone2 被 "if (!_seekPending) return" 丢弃，play() 永远未被调用 → 永久卡住。
+          if (this._seekPendingCount <= 0) {
             return;
           }
-          this._seekPending = false;
-          if (this._seekDoneTimeoutTimer !== undefined) {
-            clearTimeout(this._seekDoneTimeoutTimer);
-            this._seekDoneTimeoutTimer = undefined;
-          }
+          this._seekPendingCount--;
           const seekDoneElapsed = Date.now() - this._metricsSeekStartMs;
           hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
             `{"event":"seek_result","backend":"native","result":"done","elapsed_ms":${seekDoneElapsed}}`);
-          this._onSeekDoneCb?.();
+          if (this._seekPendingCount === 0) {
+            // 所有 pending seek 均已完成，清除超时计时器并触发上层回调
+            if (this._seekDoneTimeoutTimer !== undefined) {
+              clearTimeout(this._seekDoneTimeoutTimer);
+              this._seekDoneTimeoutTimer = undefined;
+            }
+            this._onSeekDoneCb?.();
+          }
         },
         () => {
           // B6修复：FFmpeg 接管信号，通知上层重置 native 就绪守卫计时器至 15s，
@@ -535,18 +543,19 @@ export class VidAllPlayerAdapter implements IPlayer {
         clearTimeout(this._seekDoneTimeoutTimer);
         this._seekDoneTimeoutTimer = undefined;
       }
-      this._seekPending = true;
+      this._seekPendingCount++;
       this.callNativeVoid('seek', () => {
-        // C++ Seek 执行完毕后会同步调用 EmitSeekDone，
-        // 其触发的 JS seekDone 回调会清除 _seekPending 并火 _onSeekDoneCb。
+        // C++ FFmpeg 路径的 seekDone 由 DemuxThread 异步通过 TSF 触发（非同步），
+        // 因此 callNativeVoid 返回后 _seekPendingCount 通常仍 > 0，会设置超时诊断。
+        // 骨架阶段同步 seekDone 路径：TSF 在此内部同步触发，callNativeVoid 返回后 count 归零。
         VidAllCorePlayerNapi.seek(this._playerHandle, targetTimeMs);
       });
-      // 若 C++ 在骨架阶段已同步触发 seekDone，_seekPending 此时为 false，无需超时诊断。
+      // 若 C++ 在骨架阶段已同步触发 seekDone（count 归零），无需超时诊断。
       // FFmpeg 路径下 seek 可能明显超过 600ms；这里只做日志与指标记录，不伪造完成回调。
-      if (this._seekPending) {
+      if (this._seekPendingCount > 0) {
         this._seekDoneTimeoutTimer = setTimeout(() => {
           this._seekDoneTimeoutTimer = undefined;
-          if (this._seekPending) {
+          if (this._seekPendingCount > 0) {
             const seekTimeoutElapsed = Date.now() - this._metricsSeekStartMs;
             hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
               `seek 超时诊断: target=${targetTimeMs}，继续等待原生 seekDone`);
@@ -987,7 +996,7 @@ export class VidAllPlayerAdapter implements IPlayer {
     this._surfaceId = '';
     this._pendingContext = null;
     this._pendingXComponentId = '';
-    this._seekPending = false;
+    this._seekPendingCount = 0;
     if (this._seekDoneTimeoutTimer !== undefined) {
       clearTimeout(this._seekDoneTimeoutTimer);
       this._seekDoneTimeoutTimer = undefined;
