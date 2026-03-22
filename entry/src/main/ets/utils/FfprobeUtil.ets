@@ -1,6 +1,8 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 
+export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
+
 interface FfprobeNapiBridge {
   ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
 }
@@ -42,6 +44,18 @@ export interface FfprobeTrack {
   height?: number;
   frameRate?: number;      // 实际帧率
   bitrate?: number;
+  profile?: string;
+  pixelFormat?: string;
+  bitDepth?: number;
+  // HDR / Dolby Vision 专属（仅视频轨）
+  colorPrimaries?: number;   // AVCOL_PRI_BT2020 = 9
+  colorTransfer?: number;    // AVCOL_TRC_SMPTE2084(PQ)=16, AVCOL_TRC_ARIB_STD_B67(HLG)=18
+  colorSpace?: number;       // AVCOL_SPC_BT2020_NCL=9
+  colorRange?: number;       // AVCOL_RANGE_MPEG=1 limited, AVCOL_RANGE_JPEG=2 full
+  dvProfile?: number;        // Dolby Vision profile (from DOVI side data)
+  dvLevel?: number;
+  dvBlSignalCompatibilityId?: number;  // 0=no BL compat, 1=HDR10 compat, 2=SDR compat
+  hdrType?: HdrType;         // 综合判断结果
 }
 
 export interface FfprobeResult {
@@ -71,6 +85,18 @@ interface RawStream {
   channel_layout?: string;
   bit_rate?: string;
   tags?: RawStreamTags;
+  profile?: string;
+  pix_fmt?: string;
+  bits_per_raw_sample?: string;
+  // HDR color metadata
+  color_primaries?: number;
+  color_transfer?: number;
+  color_space?: number;
+  color_range?: number;
+  // Dolby Vision
+  dv_profile?: number;
+  dv_level?: number;
+  dv_bl_signal_compatibility_id?: number;
 }
 
 interface RawStreamTags {
@@ -116,6 +142,61 @@ function parseFrameRate(rateStr: string): number {
   return Math.round(fps * 1000) / 1000;
 }
 
+function parseBitDepth(raw: RawStream): number | undefined {
+  const rawSampleBits = raw.bits_per_raw_sample ? parseInt(raw.bits_per_raw_sample) : 0;
+  if (!Number.isNaN(rawSampleBits) && rawSampleBits > 0) {
+    return rawSampleBits;
+  }
+  const pixelFormat = (raw.pix_fmt ?? '').toLowerCase();
+  if (pixelFormat.length === 0) {
+    return undefined;
+  }
+  if (pixelFormat.includes('p16')) {
+    return 16;
+  }
+  if (pixelFormat.includes('p14')) {
+    return 14;
+  }
+  if (pixelFormat.includes('p12')) {
+    return 12;
+  }
+  if (pixelFormat.includes('p10')) {
+    return 10;
+  }
+  const profile = (raw.profile ?? '').toLowerCase();
+  if (profile.includes('main 10')) {
+    return 10;
+  }
+  return 8;
+}
+
+/**
+ * 根据颜色元数据和 Dolby Vision side data 判断 HDR 类型。
+ *
+ * 判断优先级：
+ * 1. 有 dv_profile → DOLBY_VISION
+ * 2. profile 字符串中包含 "Dolby Vision" → DOLBY_VISION
+ * 3. color_transfer=16（SMPTE2084/PQ）→ HDR10
+ * 4. color_transfer=18（ARIB STD-B67/HLG）→ HLG
+ * 5. 否则 → SDR
+ */
+function parseHdrType(raw: RawStream): HdrType {
+  if (raw.dv_profile !== undefined && raw.dv_profile > 0) {
+    return 'DOLBY_VISION';
+  }
+  const profile = (raw.profile ?? '').toLowerCase();
+  if (profile.includes('dolby vision') || profile.includes('dv')) {
+    return 'DOLBY_VISION';
+  }
+  if (raw.color_transfer === 16) {
+    return 'HDR10';
+  }
+  if (raw.color_transfer === 18) {
+    return 'HLG';
+  }
+  return 'SDR';
+}
+
 function parseRawStream(raw: RawStream): FfprobeTrack {
   const codecType = raw.codec_type ?? '';
   let type: 'video' | 'audio' | 'subtitle' | 'unknown' = 'unknown';
@@ -147,6 +228,17 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
       : (raw.avg_frame_rate ?? '');
     track.frameRate = parseFrameRate(fpsStr);
     track.bitrate = raw.bit_rate ? parseInt(raw.bit_rate) : undefined;
+    track.profile = raw.profile;
+    track.pixelFormat = raw.pix_fmt;
+    track.bitDepth = parseBitDepth(raw);
+    track.colorPrimaries = raw.color_primaries;
+    track.colorTransfer = raw.color_transfer;
+    track.colorSpace = raw.color_space;
+    track.colorRange = raw.color_range;
+    track.dvProfile = raw.dv_profile;
+    track.dvLevel = raw.dv_level;
+    track.dvBlSignalCompatibilityId = raw.dv_bl_signal_compatibility_id;
+    track.hdrType = parseHdrType(raw);
   }
 
   return track;
