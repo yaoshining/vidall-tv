@@ -1,5 +1,6 @@
 import { debounce } from "@ibestservices/ibest-ui"
 import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem } from "./VideoPlayerController"
+import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 
@@ -585,9 +586,11 @@ export struct PlayerSettingsDialog {
   @State selectedPlaybackRateIndex: number = 1
   @State selectedScreenFitIndex: number = 0
   @State private aiEnhanceOn: boolean = true
+  @State private aiEnhanceQuality: VpeQualityLevel = 'low'
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
+    this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
   }
 
   @Builder
@@ -697,26 +700,29 @@ export struct PlayerSettingsDialog {
                 })
 
                 Row() {
-                  this.SettingsChip('低', this.aiEnhanceOn && this.videoController.aiEnhanceQuality === 'low')
+                  this.SettingsChip('低', this.aiEnhanceOn && this.aiEnhanceQuality === 'low')
                 }
                 .onClick(() => {
                   this.aiEnhanceOn = true;
+                  this.aiEnhanceQuality = 'low';
                   this.videoController.setAiEnhance('low');
                 })
 
                 Row() {
-                  this.SettingsChip('中', this.aiEnhanceOn && this.videoController.aiEnhanceQuality === 'medium')
+                  this.SettingsChip('中', this.aiEnhanceOn && this.aiEnhanceQuality === 'medium')
                 }
                 .onClick(() => {
                   this.aiEnhanceOn = true;
+                  this.aiEnhanceQuality = 'medium';
                   this.videoController.setAiEnhance('medium');
                 })
 
                 Row() {
-                  this.SettingsChip('高', this.aiEnhanceOn && this.videoController.aiEnhanceQuality === 'high')
+                  this.SettingsChip('高', this.aiEnhanceOn && this.aiEnhanceQuality === 'high')
                 }
                 .onClick(() => {
                   this.aiEnhanceOn = true;
+                  this.aiEnhanceQuality = 'high';
                   this.videoController.setAiEnhance('high');
                 })
               }

@@ -122,6 +122,18 @@ export class AVPlayerAdapter implements IPlayer {
     }
   }
 
+  /**
+   * 动态更新渲染目标 Surface（用于 VPE 质量切换）。
+   * AVPlayer 在 prepared/playing/paused 状态下允许修改 surfaceId。
+   */
+  updateSurfaceId(newSurfaceId: string): void {
+    this._surfaceId = newSurfaceId;
+    if (this.avPlayer) {
+      this.avPlayer.surfaceId = newSurfaceId;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `surfaceId 已更新: ${newSurfaceId}`);
+    }
+  }
+
   seek(timeMs: number): void {
     this.avPlayer?.seek(timeMs);
   }

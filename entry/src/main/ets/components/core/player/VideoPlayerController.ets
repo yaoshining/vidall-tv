@@ -635,20 +635,35 @@ export class VideoPlayerController {
   // ─── VPE AI 画质增强 ──────────────────────────────────────────
 
   /**
-   * 开启 AI 画质增强（需在下次 initPlayer 后生效）。
+   * 开启 AI 画质增强（立即对当前 AVPlayer 生效）。
    * 若设备不支持，将自动静默降级，不影响正常播放。
    */
   setAiEnhance(quality: VpeQualityLevel = 'medium'): void {
     this.aiEnhanceEnabled = true;
     this.aiEnhanceQuality = quality;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `AI 画质增强已开启: quality=${quality}`);
+    this.reapplyVpe();
   }
 
-  /** 关闭 AI 画质增强（需在下次 initPlayer 后生效） */
+  /** 关闭 AI 画质增强（立即对当前 AVPlayer 生效） */
   disableAiEnhance(): void {
     this.aiEnhanceEnabled = false;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'AI 画质增强已关闭');
+    this.reapplyVpe();
+  }
+
+  /**
+   * 重建 VPE 管线并将新 surfaceId 热更新到 AVPlayer。
+   * - 先销毁旧 VPE，再按当前 aiEnhanceEnabled/aiEnhanceQuality 决定是否创建新 VPE
+   * - 最后通过 AVPlayerAdapter.updateSurfaceId() 重定向 AVPlayer 的渲染目标
+   * - 仅对 avplayer 后端生效；player 未初始化时静默跳过
+   */
+  private reapplyVpe(): void {
+    if (this.backend !== 'avplayer' || !this.player) {
+      return;
+    }
+    VpeEnhancerUtil.destroyEnhancer();
+    const effectiveSurfaceId = this.tryCreateVpeEnhancer(this.surfaceId);
+    const avAdapter = this.player as AVPlayerAdapter;
+    avAdapter.updateSurfaceId(effectiveSurfaceId);
   }
 
   /**
