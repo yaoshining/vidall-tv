@@ -1,5 +1,7 @@
 import { debounce } from "@ibestservices/ibest-ui"
 import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem } from "./VideoPlayerController"
+import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
+import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 
@@ -584,6 +586,13 @@ export struct PlayerSettingsDialog {
   @Require onOpenSubtitleSelector: () => void
   @State selectedPlaybackRateIndex: number = 1
   @State selectedScreenFitIndex: number = 0
+  @State private aiEnhanceOn: boolean = true
+  @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
+
+  aboutToAppear(): void {
+    this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
+    this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
+  }
 
   @Builder
   private SettingsChip(label: string, selected: boolean) {
@@ -672,6 +681,76 @@ export struct PlayerSettingsDialog {
             .onClick(() => {
               this.onOpenSubtitleSelector()
             })
+          }
+
+          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine')) {
+            Column({ space: 12 }) {
+              Text('画质增强')
+                .fontSize(32)
+                .fontColor('#EFF2FB')
+                .fontWeight(FontWeight.Medium)
+                .alignSelf(ItemAlign.Start)
+
+              Row({ space: 12 }) {
+                // 直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
+                Text('关闭')
+                  .fontSize(26)
+                  .fontColor(!this.aiEnhanceOn ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(!this.aiEnhanceOn ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: !this.aiEnhanceOn ? 2 : 1, color: !this.aiEnhanceOn ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击关闭');
+                    this.aiEnhanceOn = false;
+                    this.videoController.disableAiEnhance();
+                  })
+
+                Text('低')
+                  .fontSize(26)
+                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击低');
+                    this.aiEnhanceOn = true;
+                    this.aiEnhanceQuality = 'low';
+                    this.videoController.setAiEnhance('low');
+                  })
+
+                Text('中')
+                  .fontSize(26)
+                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击中');
+                    this.aiEnhanceOn = true;
+                    this.aiEnhanceQuality = 'medium';
+                    this.videoController.setAiEnhance('medium');
+                  })
+
+                Text('高')
+                  .fontSize(26)
+                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击高');
+                    this.aiEnhanceOn = true;
+                    this.aiEnhanceQuality = 'high';
+                    this.videoController.setAiEnhance('high');
+                  })
+              }
+              .justifyContent(FlexAlign.Start)
+              .width('100%')
+            }
           }
         }
         .padding({ left: 26, right: 26, top: 18, bottom: 28 })

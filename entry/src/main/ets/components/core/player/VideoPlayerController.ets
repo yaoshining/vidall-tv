@@ -20,6 +20,7 @@ import {
   SubtitleBridgeState,
   SubtitleTrackItem
 } from "./SubtitleBridgeAdapter";
+import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -141,6 +142,11 @@ export class VideoPlayerController {
    * 'native'/'ffmpeg' 后端已停止主路径接入，仅保留代码供参考；正常播放不应出现这两个值。
    */
   @Trace backend: PlayerBackend = 'avplayer';
+
+  /** AI 画质增强开关（仅 avplayer 路径有效；ijkplayer 路径因渲染方式不同暂不支持） */
+  @Trace aiEnhanceEnabled: boolean = true;
+  /** AI 画质增强质量档位 */
+  @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
@@ -610,17 +616,67 @@ export class VideoPlayerController {
     if (this.backend === 'ijkplayer') {
       // IjkPlayer 需要先由 UI 层绑定 XComponent context，
       // VideoPlayer.ets 的 onLoad 回调会调用 setIjkContext() 来完成真正的 init
+      // 注意：VPE AI 画质增强不适用于 ijkplayer 路径（ijkplayer 使用 XComponent native hook 渲染）
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
     } else {
+      // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE
+      const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
       try {
-        await adapter.init(videoData, surfaceId);
+        await adapter.init(videoData, effectiveSurfaceId);
       } catch (e) {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `init 失败: code=${err.code} msg=${err.message}`);
       }
     }
+  }
+
+  // ─── VPE AI 画质增强 ──────────────────────────────────────────
+
+  /**
+   * 开启/切换 AI 画质增强。
+   * - VPE 已运行：直接更新质量参数（不重建管线，不影响播放）
+   * - VPE 未运行（首次启用）：下次 initPlayer 时才会创建（当前播放不影响）
+   */
+  setAiEnhance(quality: VpeQualityLevel = 'low'): void {
+    this.aiEnhanceEnabled = true;
+    this.aiEnhanceQuality = quality;
+    if (VpeEnhancerUtil.isRunning) {
+      VpeEnhancerUtil.updateQuality(quality);
+    }
+    // VPE 未运行时无需操作，下次播放时 initPlayer 会按 aiEnhanceEnabled/Quality 创建
+  }
+
+  /**
+   * 关闭 AI 画质增强。
+   * 切换为透传模式（NONE 质量），保持 VPE 管线完整，不摧毁 Surface，不冻结画面。
+   */
+  disableAiEnhance(): void {
+    this.aiEnhanceEnabled = false;
+    VpeEnhancerUtil.setPassthrough();
+  }
+
+  /**
+   * 尝试创建 VPE 增强实例，返回有效的 surfaceId。
+   * - 增强成功：返回 VPE 输入 surfaceId（替代 XComponent surfaceId 传给播放器）
+   * - 增强失败或不支持：返回原始 displaySurfaceId（透明降级）
+   */
+  private tryCreateVpeEnhancer(displaySurfaceId: string): string {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[VPE] tryCreate: enabled=${this.aiEnhanceEnabled} backend=${this.backend} quality=${this.aiEnhanceQuality}`);
+    if (!this.aiEnhanceEnabled || this.backend !== 'avplayer') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[VPE] 跳过创建: enabled=${this.aiEnhanceEnabled} backend=${this.backend}`);
+      return displaySurfaceId;
+    }
+    const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, this.aiEnhanceQuality);
+    if (vpeSurfaceId.length > 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[VPE] 管线建立: vpeSurfaceId=${vpeSurfaceId}`);
+      return vpeSurfaceId;
+    }
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[VPE] 创建失败，回退到原始 surfaceId');
+    return displaySurfaceId;
   }
 
   private prepareFfmpegPreview(videoData: VideoData): void {
@@ -1675,6 +1731,8 @@ export class VideoPlayerController {
       await this.player.release().catch(() => {});
       this.player = undefined;
     }
+    // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
+    VpeEnhancerUtil.destroyEnhancer();
   }
 
   async seek(time: number): Promise<void> {
