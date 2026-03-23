@@ -1,6 +1,7 @@
 import { debounce } from "@ibestservices/ibest-ui"
 import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem } from "./VideoPlayerController"
 import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
+import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 
@@ -695,6 +696,7 @@ export struct PlayerSettingsDialog {
                   this.SettingsChip('关闭', !this.aiEnhanceOn)
                 }
                 .onClick(() => {
+                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击关闭');
                   this.aiEnhanceOn = false;
                   this.videoController.disableAiEnhance();
                 })
@@ -703,6 +705,7 @@ export struct PlayerSettingsDialog {
                   this.SettingsChip('低', this.aiEnhanceOn && this.aiEnhanceQuality === 'low')
                 }
                 .onClick(() => {
+                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击低');
                   this.aiEnhanceOn = true;
                   this.aiEnhanceQuality = 'low';
                   this.videoController.setAiEnhance('low');
@@ -712,6 +715,7 @@ export struct PlayerSettingsDialog {
                   this.SettingsChip('中', this.aiEnhanceOn && this.aiEnhanceQuality === 'medium')
                 }
                 .onClick(() => {
+                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击中');
                   this.aiEnhanceOn = true;
                   this.aiEnhanceQuality = 'medium';
                   this.videoController.setAiEnhance('medium');
@@ -721,6 +725,7 @@ export struct PlayerSettingsDialog {
                   this.SettingsChip('高', this.aiEnhanceOn && this.aiEnhanceQuality === 'high')
                 }
                 .onClick(() => {
+                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击高');
                   this.aiEnhanceOn = true;
                   this.aiEnhanceQuality = 'high';
                   this.videoController.setAiEnhance('high');

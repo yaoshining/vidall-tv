@@ -88,7 +88,42 @@ export class VpeEnhancerUtil {
   }
 
   /**
-   * 销毁 VPE 实例并释放资源。幂等，未创建时调用无副作用。
+   * 动态更新质量档位（不重建管线，避免 Surface 断开导致画面冻结）。
+   * 仅在 VPE 正在运行时生效；未运行时静默忽略。
+   */
+  static updateQuality(quality: VpeQualityLevel): void {
+    if (!VpeEnhancerUtil._isRunning) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'VPE updateQuality ignored: not running');
+      return;
+    }
+    const level = qualityToLevel(quality);
+    try {
+      VidAllNapi.updateVpeQuality(level);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `VPE 质量已更新: ${quality}(${level})`);
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * 关闭画质增强（设为 NONE/透传模式，保持管线完整避免画面冻结）。
+   * VPE 仍运行但不做任何处理，仅做 Surface 转发。
+   */
+  static setPassthrough(): void {
+    if (!VpeEnhancerUtil._isRunning) {
+      return;
+    }
+    try {
+      VidAllNapi.updateVpeQuality(0); // NONE = 透传
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'VPE 已切换为透传模式（关闭增强）');
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * 销毁 VPE 实例并释放资源。仅在播放器完全释放时调用。
+   * ⚠️ 不要在播放中途调用：会摧毁 AVPlayer 正在使用的输入 Surface，导致画面冻结。
    */
   static destroyEnhancer(): void {
     if (!VpeEnhancerUtil._isRunning) {

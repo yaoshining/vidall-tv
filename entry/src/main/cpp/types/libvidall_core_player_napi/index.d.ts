@@ -122,6 +122,13 @@ export const createVpeDetailEnhancer: (displaySurfaceId: string, qualityLevel: n
  */
 export const destroyVpeDetailEnhancer: () => void;
 
+/**
+ * 动态更新正在运行的 VPE 质量参数（无需重建管线）。
+ * @param qualityLevel 0=NONE(透传) 1=LOW 2=MEDIUM 3=HIGH
+ * 仅在 VPE 已创建时有效；未创建时静默忽略。
+ */
+export const updateVpeQuality: (qualityLevel: number) => void;
+
 export const setCallbacks: (
   handle: number,
   onPrepared: () => void,

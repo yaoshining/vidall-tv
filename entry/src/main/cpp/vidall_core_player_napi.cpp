@@ -2682,6 +2682,42 @@ static napi_value DestroyVpeDetailEnhancer(napi_env env, napi_callback_info /*in
   return undef;
 }
 
+// updateVpeQuality(level: number): void
+// 动态更新已运行中的 VPE 质量参数（无需重建管线，避免 Surface 断开）
+// level: 0=NONE(透传/关闭), 1=LOW, 2=MEDIUM, 3=HIGH
+static napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+
+  int32_t qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
+  if (argc >= 1) {
+    napi_get_value_int32(env, argv[0], &qualityLevel);
+    if (qualityLevel < VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_NONE ||
+        qualityLevel > VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_HIGH) {
+      qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_NONE;
+    }
+  }
+
+  napi_value undef;
+  napi_get_undefined(env, &undef);
+
+  std::lock_guard<std::mutex> lock(g_vpeMutex);
+  if (!g_vpeProcessor) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: updateQuality ignored (no processor)");
+    return undef;
+  }
+
+  OH_AVFormat* param = OH_AVFormat_Create();
+  OH_AVFormat_SetIntValue(param, VIDEO_DETAIL_ENHANCER_PARAMETER_KEY_QUALITY_LEVEL, qualityLevel);
+  VideoProcessing_ErrorCode ret = OH_VideoProcessing_SetParameter(g_vpeProcessor, param);
+  OH_AVFormat_Destroy(param);
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+    "VPE: quality updated to %{public}d ret=%{public}d", qualityLevel, static_cast<int>(ret));
+  return undef;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -2707,7 +2743,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "isVpeDetailEnhancerSupported", nullptr, IsVpeDetailEnhancerSupported, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

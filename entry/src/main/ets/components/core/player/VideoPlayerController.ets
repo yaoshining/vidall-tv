@@ -635,35 +635,26 @@ export class VideoPlayerController {
   // ─── VPE AI 画质增强 ──────────────────────────────────────────
 
   /**
-   * 开启 AI 画质增强（立即对当前 AVPlayer 生效）。
-   * 若设备不支持，将自动静默降级，不影响正常播放。
+   * 开启/切换 AI 画质增强。
+   * - VPE 已运行：直接更新质量参数（不重建管线，不影响播放）
+   * - VPE 未运行（首次启用）：下次 initPlayer 时才会创建（当前播放不影响）
    */
-  setAiEnhance(quality: VpeQualityLevel = 'medium'): void {
+  setAiEnhance(quality: VpeQualityLevel = 'low'): void {
     this.aiEnhanceEnabled = true;
     this.aiEnhanceQuality = quality;
-    this.reapplyVpe();
-  }
-
-  /** 关闭 AI 画质增强（立即对当前 AVPlayer 生效） */
-  disableAiEnhance(): void {
-    this.aiEnhanceEnabled = false;
-    this.reapplyVpe();
+    if (VpeEnhancerUtil.isRunning) {
+      VpeEnhancerUtil.updateQuality(quality);
+    }
+    // VPE 未运行时无需操作，下次播放时 initPlayer 会按 aiEnhanceEnabled/Quality 创建
   }
 
   /**
-   * 重建 VPE 管线并将新 surfaceId 热更新到 AVPlayer。
-   * - 先销毁旧 VPE，再按当前 aiEnhanceEnabled/aiEnhanceQuality 决定是否创建新 VPE
-   * - 最后通过 AVPlayerAdapter.updateSurfaceId() 重定向 AVPlayer 的渲染目标
-   * - 仅对 avplayer 后端生效；player 未初始化时静默跳过
+   * 关闭 AI 画质增强。
+   * 切换为透传模式（NONE 质量），保持 VPE 管线完整，不摧毁 Surface，不冻结画面。
    */
-  private reapplyVpe(): void {
-    if (this.backend !== 'avplayer' || !this.player) {
-      return;
-    }
-    VpeEnhancerUtil.destroyEnhancer();
-    const effectiveSurfaceId = this.tryCreateVpeEnhancer(this.surfaceId);
-    const avAdapter = this.player as AVPlayerAdapter;
-    avAdapter.updateSurfaceId(effectiveSurfaceId);
+  disableAiEnhance(): void {
+    this.aiEnhanceEnabled = false;
+    VpeEnhancerUtil.setPassthrough();
   }
 
   /**
