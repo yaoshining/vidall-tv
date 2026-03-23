@@ -692,44 +692,61 @@ export struct PlayerSettingsDialog {
                 .alignSelf(ItemAlign.Start)
 
               Row({ space: 12 }) {
-                Row() {
-                  this.SettingsChip('关闭', !this.aiEnhanceOn)
-                }
-                .onClick(() => {
-                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击关闭');
-                  this.aiEnhanceOn = false;
-                  this.videoController.disableAiEnhance();
-                })
+                // 直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
+                Text('关闭')
+                  .fontSize(26)
+                  .fontColor(!this.aiEnhanceOn ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(!this.aiEnhanceOn ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: !this.aiEnhanceOn ? 2 : 1, color: !this.aiEnhanceOn ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击关闭');
+                    this.aiEnhanceOn = false;
+                    this.videoController.disableAiEnhance();
+                  })
 
-                Row() {
-                  this.SettingsChip('低', this.aiEnhanceOn && this.aiEnhanceQuality === 'low')
-                }
-                .onClick(() => {
-                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击低');
-                  this.aiEnhanceOn = true;
-                  this.aiEnhanceQuality = 'low';
-                  this.videoController.setAiEnhance('low');
-                })
+                Text('低')
+                  .fontSize(26)
+                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击低');
+                    this.aiEnhanceOn = true;
+                    this.aiEnhanceQuality = 'low';
+                    this.videoController.setAiEnhance('low');
+                  })
 
-                Row() {
-                  this.SettingsChip('中', this.aiEnhanceOn && this.aiEnhanceQuality === 'medium')
-                }
-                .onClick(() => {
-                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击中');
-                  this.aiEnhanceOn = true;
-                  this.aiEnhanceQuality = 'medium';
-                  this.videoController.setAiEnhance('medium');
-                })
+                Text('中')
+                  .fontSize(26)
+                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击中');
+                    this.aiEnhanceOn = true;
+                    this.aiEnhanceQuality = 'medium';
+                    this.videoController.setAiEnhance('medium');
+                  })
 
-                Row() {
-                  this.SettingsChip('高', this.aiEnhanceOn && this.aiEnhanceQuality === 'high')
-                }
-                .onClick(() => {
-                  hilog.info(0xFF00, 'PlayerSettingsDialog', '画质增强: 点击高');
-                  this.aiEnhanceOn = true;
-                  this.aiEnhanceQuality = 'high';
-                  this.videoController.setAiEnhance('high');
-                })
+                Text('高')
+                  .fontSize(26)
+                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius(99)
+                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#fffefe' : '#45ffffff' })
+                  .onClick(() => {
+                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击高');
+                    this.aiEnhanceOn = true;
+                    this.aiEnhanceQuality = 'high';
+                    this.videoController.setAiEnhance('high');
+                  })
               }
               .justifyContent(FlexAlign.Start)
               .width('100%')
