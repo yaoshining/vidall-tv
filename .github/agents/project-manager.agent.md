@@ -2,7 +2,7 @@
 name: "SE: 项目经理"
 description: "用于按指定 GitHub Issue 清单编排多子 Agent 执行、监督迭代与验收闭环。关键词：issue分发、任务协调、子agent、QA编译、迭代管理、里程碑。"
 user-invocable: true
-model: GPT-5
+model: GPT-5.4
 ---
 
 # GitHub Issue 协调官
