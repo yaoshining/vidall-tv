@@ -15,8 +15,10 @@
 #include <multimedia/player_framework/native_avformat.h>
 #include <multimedia/player_framework/native_avcapability.h>
 #include <multimedia/player_framework/native_avcodec_base.h>
+#ifdef VIDALL_HAS_VPE
 #include <multimedia/video_processing_engine/video_processing.h>
 #include <multimedia/video_processing_engine/video_processing_types.h>
+#endif // VIDALL_HAS_VPE
 #include <hilog/log.h>
 
 extern "C" {
@@ -2516,7 +2518,10 @@ static napi_value GetNativeCapabilities(napi_env env, napi_callback_info info) {
 // ============================================================
 // VPE (Video Processing Engine) — AI 画质增强 (Detail Enhancer)
 // API 12+，不支持的设备返回空字符串而不是报错
+// 用 VIDALL_HAS_VPE 宏守卫，避免 IDE 在不支持的设备上误报警告
 // ============================================================
+
+#ifdef VIDALL_HAS_VPE
 
 static OH_VideoProcessing*    g_vpeProcessor  = nullptr;
 static OHNativeWindow*        g_vpeInputWindow  = nullptr;
@@ -2717,6 +2722,21 @@ static napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
     "VPE: quality updated to %{public}d ret=%{public}d", qualityLevel, static_cast<int>(ret));
   return undef;
 }
+
+#else // !VIDALL_HAS_VPE — 桩函数（无 VPE 支持时保持 NAPI 表完整）
+static napi_value IsVpeDetailEnhancerSupported(napi_env env, napi_callback_info /*info*/) {
+  napi_value r; napi_get_boolean(env, false, &r); return r;
+}
+static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
+  napi_value r; napi_create_string_utf8(env, "", 0, &r); return r;
+}
+static napi_value DestroyVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
+  napi_value r; napi_get_undefined(env, &r); return r;
+}
+static napi_value UpdateVpeQuality(napi_env env, napi_callback_info /*info*/) {
+  napi_value r; napi_get_undefined(env, &r); return r;
+}
+#endif // VIDALL_HAS_VPE
 
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
