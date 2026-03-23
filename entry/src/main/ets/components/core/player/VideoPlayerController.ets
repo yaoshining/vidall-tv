@@ -146,7 +146,7 @@ export class VideoPlayerController {
   /** AI 画质增强开关（仅 avplayer 路径有效；ijkplayer 路径因渲染方式不同暂不支持） */
   @Trace aiEnhanceEnabled: boolean = true;
   /** AI 画质增强质量档位 */
-  @Trace aiEnhanceQuality: VpeQualityLevel = 'low';
+  @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
 
   /** 当前使用的播放内核实例 */
   private player?: IPlayer;
@@ -663,11 +663,20 @@ export class VideoPlayerController {
    * - 增强失败或不支持：返回原始 displaySurfaceId（透明降级）
    */
   private tryCreateVpeEnhancer(displaySurfaceId: string): string {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[VPE] tryCreate: enabled=${this.aiEnhanceEnabled} backend=${this.backend} quality=${this.aiEnhanceQuality}`);
     if (!this.aiEnhanceEnabled || this.backend !== 'avplayer') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[VPE] 跳过创建: enabled=${this.aiEnhanceEnabled} backend=${this.backend}`);
       return displaySurfaceId;
     }
     const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, this.aiEnhanceQuality);
-    return vpeSurfaceId.length > 0 ? vpeSurfaceId : displaySurfaceId;
+    if (vpeSurfaceId.length > 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[VPE] 管线建立: vpeSurfaceId=${vpeSurfaceId}`);
+      return vpeSurfaceId;
+    }
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[VPE] 创建失败，回退到原始 surfaceId');
+    return displaySurfaceId;
   }
 
   private prepareFfmpegPreview(videoData: VideoData): void {

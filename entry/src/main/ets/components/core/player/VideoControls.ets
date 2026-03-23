@@ -587,7 +587,7 @@ export struct PlayerSettingsDialog {
   @State selectedPlaybackRateIndex: number = 1
   @State selectedScreenFitIndex: number = 0
   @State private aiEnhanceOn: boolean = true
-  @State private aiEnhanceQuality: VpeQualityLevel = 'low'
+  @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
