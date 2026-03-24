@@ -868,36 +868,30 @@ static bool RunExtractSubtitleTrack(
     return false;
   }
 
-  // ── 分段 seek 策略 ──────────────────────────────────────────────────────────
-  // 将视频按 5 分钟分段。支持 fromMs/durationMs 窗口参数：
+  // ── 提取策略：优先 Index-based，降级到 Segmented seek ─────────────────────
+  // fromMs/durationMs 窗口参数：
   //   fromMs=0,   durationMs=-1  → 提取全文件
   //   fromMs=T,   durationMs=D   → 只提取 [T, T+D] 窗口（用于播放位置感知）
-  // 每段 seek 一次利用 MKV Cues 直接跳到目标 cluster，不顺序扫描。
-  // ───────────────────────────────────────────────────────────────────────────
-  static const int64_t SEGMENT_US = 300LL * AV_TIME_BASE; // 5 分钟
+  // ─────────────────────────────────────────────────────────────────────────
 
-  const int64_t fromUs    = fromMs > 0 ? fromMs * 1000LL : 0LL;
-  const int64_t endUs     = durationMs > 0
+  const int64_t fromUs = fromMs > 0 ? fromMs * 1000LL : 0LL;
+  const int64_t endUs  = durationMs > 0
     ? fromUs + durationMs * 1000LL
     : (totalDurationUs > 0 ? totalDurationUs : INT64_MAX);
 
-  const int64_t startSeg  = fromUs / SEGMENT_US;
-  const int64_t totalSegs = totalDurationUs > 0
-    ? (totalDurationUs + SEGMENT_US - 1) / SEGMENT_US
-    : (endUs / SEGMENT_US + 1);
-  const int64_t endSeg    = std::min(endUs / SEGMENT_US + 1, totalSegs);
-
+  // 检查字幕流 index_entries（FFmpeg 在 find_stream_info 时从 MKV Cues 填充）
+  AVStream *subStream = formatContext->streams[targetStreamIdx];
+  const int indexEntryCount = subStream->nb_index_entries;
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-    "[ExtractSub] window fromMs=%{public}lld durationMs=%{public}lld seg=[%{public}lld,%{public}lld)",
-    (long long)fromMs, (long long)durationMs,
-    (long long)startSeg, (long long)endSeg);
+    "[ExtractSub] index_entries=%{public}d strategy=%{public}s",
+    indexEntryCount,
+    indexEntryCount > 0 ? "index_seek" : "segmented_seek");
 
   int packetCount = 0;
   int64_t lastProgressLogUs = av_gettime_relative();
   bool firstSubtitleLogged = false;
-  int64_t lastDecodedPts = AV_NOPTS_VALUE; // 去重：seek 后可能重读上一段末尾 packet
-
-  bool firstEmptyLogged = false; // 诊断：gotSubtitle=1 但 text 为空
+  int64_t lastDecodedPts = AV_NOPTS_VALUE;
+  bool firstEmptyLogged = false;
 
   auto decodePacket = [&](AVPacket *pkt) {
     AVSubtitle subtitle;
@@ -955,57 +949,124 @@ static bool RunExtractSubtitleTrack(
     avsubtitle_free(&subtitle);
   };
 
-  for (int64_t seg = startSeg; seg < endSeg; seg++) {
-    const int64_t seekUs = seg * SEGMENT_US;
-    if (seg == startSeg && fromUs > 0) {
-      // 窗口起始段：seek 到 fromUs（比 seekUs 更精准）
-      const int seekRet = av_seek_frame(formatContext, -1, fromUs, AVSEEK_FLAG_ANY);
+  if (indexEntryCount > 0) {
+    // ── 策略 A：Index-based seek ───────────────────────────────────────────────
+    // MKV Cues 已缓存到内存，直接按字幕 index 条目逐条 seek。
+    // 每条 = 1 次 avformat_seek_file（内存查找 + 1 次 HTTP Range） +
+    //         最多 MAX_READS_PER_ENTRY 次 av_read_frame（读同一 cluster）
+    // 复杂度：O(字幕条数) 而不是 O(所有 packet 数) —— 39 流文件可从 ~120s 降到 ~秒级
+    // ─────────────────────────────────────────────────────────────────────────
+    constexpr int MAX_READS_PER_ENTRY = 64; // 最多读 64 个 packet 找本条字幕
+
+    for (int i = 0; i < indexEntryCount; i++) {
+      const AVIndexEntry &entry = subStream->index_entries[i];
+      const int64_t entryUs = av_rescale_q(entry.timestamp, subStream->time_base, AV_TIME_BASE_Q);
+
+      // 跳过窗口之前的条目
+      if (entryUs < fromUs) { continue; }
+      // 超出窗口末尾则终止
+      if (entryUs > endUs) { break; }
+
+      // seek 到本条目对应位置
+      const int seekRet = avformat_seek_file(formatContext, targetStreamIdx,
+        entry.timestamp, entry.timestamp, entry.timestamp, AVSEEK_FLAG_ANY);
       if (seekRet < 0) {
         OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
-          "[ExtractSub] initial seek failed fromUs=%{public}lld ret=%{public}d",
-          (long long)fromUs, seekRet);
-      }
-    } else if (seg > startSeg) {
-      // 非首段：seek 到段开头
-      const int seekRet = av_seek_frame(formatContext, -1, seekUs, AVSEEK_FLAG_ANY);
-      if (seekRet < 0) {
-        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
-          "[ExtractSub] seek failed seg=%{public}lld ret=%{public}d",
-          (long long)seg, seekRet);
+          "[ExtractSub] index_seek fail i=%{public}d ts=%{public}lld ret=%{public}d",
+          i, (long long)entry.timestamp, seekRet);
         continue;
       }
+
+      // 读 packet 直到找到本条字幕或超出容忍范围
+      int reads = 0;
+      bool found = false;
+      while (!found && reads < MAX_READS_PER_ENTRY && av_read_frame(formatContext, packet) >= 0) {
+        reads++;
+        if (packet->stream_index == targetStreamIdx && packet->pts != AV_NOPTS_VALUE) {
+          const int64_t pktUs = av_rescale_q(packet->pts, subStream->time_base, AV_TIME_BASE_Q);
+          if (pktUs >= fromUs && pktUs <= endUs) {
+            if (lastDecodedPts == AV_NOPTS_VALUE || packet->pts > lastDecodedPts) {
+              packetCount++;
+              lastDecodedPts = packet->pts;
+              decodePacket(packet);
+              found = true;
+            } else {
+              found = true; // 重复，跳过但也不必继续读
+            }
+          } else if (pktUs > endUs) {
+            av_packet_unref(packet);
+            break; // 已超窗口，终止
+          }
+        }
+        av_packet_unref(packet);
+
+        const int64_t nowUs = av_gettime_relative();
+        if (nowUs - lastProgressLogUs >= 20 * 1000000LL) {
+          lastProgressLogUs = nowUs;
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+            "[ExtractSub] index_progress i=%{public}d/%{public}d packets=%{public}d items=%{public}zu",
+            i, indexEntryCount, packetCount, items.size());
+        }
+      }
     }
+  } else {
+    // ── 策略 B：Segmented seek（无 index 时降级）──────────────────────────────
+    static const int64_t SEGMENT_US = 300LL * AV_TIME_BASE; // 5 分钟
 
-    const int64_t segEndUs = std::min((seg + 1) * SEGMENT_US, endUs);
+    const int64_t startSeg  = fromUs / SEGMENT_US;
+    const int64_t totalSegs = totalDurationUs > 0
+      ? (totalDurationUs + SEGMENT_US - 1) / SEGMENT_US
+      : (endUs / SEGMENT_US + 1);
+    const int64_t endSeg = std::min(endUs / SEGMENT_US + 1, totalSegs);
 
-    while (av_read_frame(formatContext, packet) >= 0) {
-      if (packet->stream_index == targetStreamIdx) {
-        if (packet->pts != AV_NOPTS_VALUE) {
-          const int64_t pktUs = av_rescale_q(packet->pts, subTimeBase, AV_TIME_BASE_Q);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+      "[ExtractSub] seg_window fromMs=%{public}lld durationMs=%{public}lld seg=[%{public}lld,%{public}lld)",
+      (long long)fromMs, (long long)durationMs,
+      (long long)startSeg, (long long)endSeg);
 
-          // 当前 packet 超出本段时间范围 → 退出内层循环，推进到下一段
+    for (int64_t seg = startSeg; seg < endSeg; seg++) {
+      const int64_t seekUs = seg * SEGMENT_US;
+      if (seg == startSeg && fromUs > 0) {
+        const int seekRet = av_seek_frame(formatContext, -1, fromUs, AVSEEK_FLAG_ANY);
+        if (seekRet < 0) {
+          OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+            "[ExtractSub] initial seek failed fromUs=%{public}lld ret=%{public}d",
+            (long long)fromUs, seekRet);
+        }
+      } else if (seg > startSeg) {
+        const int seekRet = av_seek_frame(formatContext, -1, seekUs, AVSEEK_FLAG_ANY);
+        if (seekRet < 0) {
+          OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+            "[ExtractSub] seek failed seg=%{public}lld ret=%{public}d",
+            (long long)seg, seekRet);
+          continue;
+        }
+      }
+
+      const int64_t segEndUs = std::min((seg + 1) * SEGMENT_US, endUs);
+
+      while (av_read_frame(formatContext, packet) >= 0) {
+        if (packet->stream_index == targetStreamIdx && packet->pts != AV_NOPTS_VALUE) {
+          const int64_t pktUs = av_rescale_q(packet->pts, subStream->time_base, AV_TIME_BASE_Q);
           if (pktUs > segEndUs) {
             av_packet_unref(packet);
             break;
           }
-
-          // 去重：seek 后可能重读上一段末尾的 packet
           if (lastDecodedPts == AV_NOPTS_VALUE || packet->pts > lastDecodedPts) {
             packetCount++;
             lastDecodedPts = packet->pts;
             decodePacket(packet);
           }
         }
-      }
-      av_packet_unref(packet);
+        av_packet_unref(packet);
 
-      // 每 20 秒打一次进度日志，方便定位哪段慢
-      const int64_t nowUs = av_gettime_relative();
-      if (nowUs - lastProgressLogUs >= 20 * 1000000LL) {
-        lastProgressLogUs = nowUs;
-        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-          "[ExtractSub] progress seg=%{public}lld/%{public}lld packets=%{public}d items=%{public}zu",
-          (long long)seg, (long long)endSeg, packetCount, items.size());
+        const int64_t nowUs = av_gettime_relative();
+        if (nowUs - lastProgressLogUs >= 20 * 1000000LL) {
+          lastProgressLogUs = nowUs;
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+            "[ExtractSub] progress seg=%{public}lld/%{public}lld packets=%{public}d items=%{public}zu",
+            (long long)seg, (long long)endSeg, packetCount, items.size());
+        }
       }
     }
   }
