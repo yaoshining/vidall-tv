@@ -1,4 +1,5 @@
 #include <string>
+#include <algorithm>
 #include <chrono>
 #include <unordered_map>
 #include <vector>
@@ -664,7 +665,9 @@ struct ExtractSubtitleAsyncContext {
   std::string url;
   std::string headerLines;
   int subtitleStreamIndex = 0;   // 0-based 字幕流序号（对应 s:N）
-  int64_t timeoutMs = 30000;
+  int64_t fromMs = 0;            // 提取起始时间（ms），0=从头
+  int64_t durationMs = -1;       // 提取时长（ms），-1=到文件末尾
+  int64_t timeoutMs = 120000;
   std::string srtResult;         // 输出：SRT 格式文本
   std::string errorMessage;
 };
@@ -745,6 +748,8 @@ static bool RunExtractSubtitleTrack(
   const std::string &url,
   const std::string &headerLines,
   int subtitleStreamIndex,
+  int64_t fromMs,       // 提取起始时间（ms），0=从头
+  int64_t durationMs,   // 提取时长（ms），-1=到文件末尾
   int64_t timeoutMs,
   std::string &srtResult,
   std::string &errorMessage
@@ -864,23 +869,33 @@ static bool RunExtractSubtitleTrack(
   }
 
   // ── 分段 seek 策略 ──────────────────────────────────────────────────────────
-  // 将视频按 5 分钟分段，每段 seek 一次（利用 MKV Cues 跳到对应 cluster），
-  // 只读字幕 packet，不顺序扫描整个文件，大幅减少 HTTP Range 请求数量。
+  // 将视频按 5 分钟分段。支持 fromMs/durationMs 窗口参数：
+  //   fromMs=0,   durationMs=-1  → 提取全文件
+  //   fromMs=T,   durationMs=D   → 只提取 [T, T+D] 窗口（用于播放位置感知）
+  // 每段 seek 一次利用 MKV Cues 直接跳到目标 cluster，不顺序扫描。
   // ───────────────────────────────────────────────────────────────────────────
   static const int64_t SEGMENT_US = 300LL * AV_TIME_BASE; // 5 分钟
-  const int64_t numSegments = totalDurationUs > 0
+
+  const int64_t fromUs    = fromMs > 0 ? fromMs * 1000LL : 0LL;
+  const int64_t endUs     = durationMs > 0
+    ? fromUs + durationMs * 1000LL
+    : (totalDurationUs > 0 ? totalDurationUs : INT64_MAX);
+
+  const int64_t startSeg  = fromUs / SEGMENT_US;
+  const int64_t totalSegs = totalDurationUs > 0
     ? (totalDurationUs + SEGMENT_US - 1) / SEGMENT_US
-    : 1;
+    : (endUs / SEGMENT_US + 1);
+  const int64_t endSeg    = std::min(endUs / SEGMENT_US + 1, totalSegs);
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-    "[ExtractSub] segments=%{public}lld strategy=%{public}s",
-    (long long)numSegments,
-    totalDurationUs > 0 ? "segmented_seek" : "sequential");
+    "[ExtractSub] window fromMs=%{public}lld durationMs=%{public}lld seg=[%{public}lld,%{public}lld)",
+    (long long)fromMs, (long long)durationMs,
+    (long long)startSeg, (long long)endSeg);
 
   int packetCount = 0;
   int64_t lastProgressLogUs = av_gettime_relative();
   bool firstSubtitleLogged = false;
-  int64_t lastDecodedPts = AV_NOPTS_VALUE; // 去重：跳过 seek 后重复的 packet
+  int64_t lastDecodedPts = AV_NOPTS_VALUE; // 去重：seek 后可能重读上一段末尾 packet
 
   bool firstEmptyLogged = false; // 诊断：gotSubtitle=1 但 text 为空
 
@@ -940,10 +955,18 @@ static bool RunExtractSubtitleTrack(
     avsubtitle_free(&subtitle);
   };
 
-  for (int64_t seg = 0; seg < numSegments; seg++) {
-    if (seg > 0) {
-      // 利用 MKV Cues seek 到本段开始位置（避免顺序扫描整个文件）
-      const int64_t seekUs = seg * SEGMENT_US;
+  for (int64_t seg = startSeg; seg < endSeg; seg++) {
+    const int64_t seekUs = seg * SEGMENT_US;
+    if (seg == startSeg && fromUs > 0) {
+      // 窗口起始段：seek 到 fromUs（比 seekUs 更精准）
+      const int seekRet = av_seek_frame(formatContext, -1, fromUs, AVSEEK_FLAG_ANY);
+      if (seekRet < 0) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+          "[ExtractSub] initial seek failed fromUs=%{public}lld ret=%{public}d",
+          (long long)fromUs, seekRet);
+      }
+    } else if (seg > startSeg) {
+      // 非首段：seek 到段开头
       const int seekRet = av_seek_frame(formatContext, -1, seekUs, AVSEEK_FLAG_ANY);
       if (seekRet < 0) {
         OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
@@ -953,7 +976,7 @@ static bool RunExtractSubtitleTrack(
       }
     }
 
-    const int64_t segEndUs = (seg + 1) * SEGMENT_US;
+    const int64_t segEndUs = std::min((seg + 1) * SEGMENT_US, endUs);
 
     while (av_read_frame(formatContext, packet) >= 0) {
       if (packet->stream_index == targetStreamIdx) {
@@ -982,7 +1005,7 @@ static bool RunExtractSubtitleTrack(
         lastProgressLogUs = nowUs;
         OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
           "[ExtractSub] progress seg=%{public}lld/%{public}lld packets=%{public}d items=%{public}zu",
-          (long long)seg, (long long)numSegments, packetCount, items.size());
+          (long long)seg, (long long)endSeg, packetCount, items.size());
       }
     }
   }
@@ -1010,6 +1033,7 @@ static void ExecuteExtractSubtitleAsync(napi_env env, void *data) {
   ExtractSubtitleAsyncContext *context = static_cast<ExtractSubtitleAsyncContext *>(data);
   if (!context) { return; }
   RunExtractSubtitleTrack(context->url, context->headerLines, context->subtitleStreamIndex,
+                          context->fromMs, context->durationMs,
                           context->timeoutMs, context->srtResult, context->errorMessage);
 }
 
@@ -1039,14 +1063,14 @@ static void CompleteExtractSubtitleAsync(napi_env env, napi_status status, void 
 }
 
 static napi_value ExtractSubtitleTrack(napi_env env, napi_callback_info info) {
-  size_t argc = 4;
-  napi_value args[4];
+  size_t argc = 6;
+  napi_value args[6];
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
     ThrowTypeError(env, "extractSubtitleTrack: failed to read args");
     return nullptr;
   }
   if (argc < 4) {
-    ThrowTypeError(env, "extractSubtitleTrack requires (url, headerLines, streamIndex, timeoutMs)");
+    ThrowTypeError(env, "extractSubtitleTrack requires (url, headerLines, streamIndex, timeoutMs[, fromMs, durationMs])");
     return nullptr;
   }
 
@@ -1067,10 +1091,18 @@ static napi_value ExtractSubtitleTrack(napi_env env, napi_callback_info info) {
     ThrowTypeError(env, "extractSubtitleTrack: streamIndex must be int32");
     return nullptr;
   }
-  int64_t timeoutMs = 0;
+  int64_t timeoutMs = 120000;
   if (napi_get_value_int64(env, args[3], &timeoutMs) != napi_ok) {
     ThrowTypeError(env, "extractSubtitleTrack: timeoutMs must be int64");
     return nullptr;
+  }
+  int64_t fromMs = 0;
+  if (argc >= 5) {
+    napi_get_value_int64(env, args[4], &fromMs); // 可选，默认 0
+  }
+  int64_t durationMs = -1;
+  if (argc >= 6) {
+    napi_get_value_int64(env, args[5], &durationMs); // 可选，-1=全文件
   }
 
   napi_value promise;
@@ -1079,6 +1111,8 @@ static napi_value ExtractSubtitleTrack(napi_env env, napi_callback_info info) {
   context->headerLines = headerBuf;
   context->subtitleStreamIndex = static_cast<int>(streamIndex);
   context->timeoutMs = timeoutMs;
+  context->fromMs = fromMs;
+  context->durationMs = durationMs;
 
   if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
     delete context;

@@ -63,6 +63,8 @@ export class IjkPlayerAdapter implements IPlayer {
   private _currentUrl: string = '';
   /** 当前视频 HTTP 鉴权头（用于 native 字幕提取，格式: "Authorization: Basic xxx\r\n"） */
   private _currentHeaderLines: string = '';
+  /** [调研] 检测到的第一条内嵌字幕流序号，-1=无 */
+  private _researchSubStreamIndex: number = -1;
 
   // ─── XComponent context（必须在 native_setup 之前调用 setContext）───
   private _pendingContext: object | null = null;
@@ -589,30 +591,33 @@ export class IjkPlayerAdapter implements IPlayer {
           `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()} session=${this._sessionId}`);
         this.writeBreadcrumb('on-prepared', `duration=${this._duration}`);
 
-        // ── [调研] native 字幕提取端到端验证 ──
-        // 若当前视频含内嵌字幕流（通过 getMediaInfo().meta 解析），则触发 native 提取，
-        // 打印提取耗时和前 200 字符，验证 FFmpeg Range 请求方案可行性。
+        // ── [调研] native 字幕提取端到端验证（位置感知窗口版）──
+        // 若当前视频含内嵌字幕流，先从头提取前 10 分钟窗口，验证首字幕是否能快速加载。
+        // seek 时会在 onSeekComplete 中触发对应窗口的重新提取。
         try {
           const rawInfo = this.ijk.getMediaInfo() as Record<string, string>;
           const meta: string = rawInfo['meta'] ?? '';
           const streams = this.parseIjkSubtitleMeta(meta);
           if (streams.length > 0) {
             const s = streams[0];
+            this._researchSubStreamIndex = s.streamIndex;
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `[调研·NativeExtract] 发现字幕流 s:${s.streamIndex} codec=${s.codecName} lang=${s.language}，开始 native 提取...`);
+              `[调研·NativeExtract] 发现字幕流 s:${s.streamIndex} codec=${s.codecName} lang=${s.language}，提取前10min窗口...`);
             const extractStart = Date.now();
+            // fromMs=0, durationMs=600000(10分钟)
             FfprobeUtil.extractSubtitleTrackAsync(
-              this._currentUrl, this._currentHeaderLines, s.streamIndex, 120000
+              this._currentUrl, this._currentHeaderLines, s.streamIndex, 120000, 0, 600000
             ).then((srtText: string) => {
               const elapsed = Date.now() - extractStart;
               hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-                `[调研·NativeExtract] 完成！耗时=${elapsed}ms 总长度=${srtText.length} 前200字符:\n${srtText.substring(0, 200)}`);
+                `[调研·NativeExtract] 前10min完成！耗时=${elapsed}ms 总长度=${srtText.length} 前200字符:\n${srtText.substring(0, 200)}`);
             }).catch(() => {
               const elapsed = Date.now() - extractStart;
               hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
                 `[调研·NativeExtract] 提取失败，耗时=${elapsed}ms`);
             });
           } else {
+            this._researchSubStreamIndex = -1;
             hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[调研·NativeExtract] 无内嵌字幕流，跳过');
           }
         } catch (e) {
@@ -661,6 +666,26 @@ export class IjkPlayerAdapter implements IPlayer {
         this._currentTime = pos;
         if (this._onTimeUpdateCb) { this._onTimeUpdateCb(pos); }
         if (this._onSeekDoneCb) { this._onSeekDoneCb(); }
+
+        // ── [调研] seek 后重新提取 seek 位置开始的 10min 窗口 ──
+        const subIdx = this._researchSubStreamIndex;
+        if (subIdx >= 0 && this._currentUrl.length > 0) {
+          const fromMs = Math.max(0, pos - 5000); // 往前 5s 作为缓冲
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[调研·NativeExtract] seek后重提取 fromMs=${fromMs} durationMs=600000`);
+          const extractStart = Date.now();
+          FfprobeUtil.extractSubtitleTrackAsync(
+            this._currentUrl, this._currentHeaderLines, subIdx, 120000, fromMs, 600000
+          ).then((srtText: string) => {
+            const elapsed = Date.now() - extractStart;
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `[调研·NativeExtract] seek窗口完成！耗时=${elapsed}ms 总长度=${srtText.length} 前200字符:\n${srtText.substring(0, 200)}`);
+          }).catch(() => {
+            const elapsed = Date.now() - extractStart;
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `[调研·NativeExtract] seek窗口提取失败，耗时=${elapsed}ms`);
+          });
+        }
       }
     };
     this.ijk.setOnSeekCompleteListener(onSeekCompleteListener);

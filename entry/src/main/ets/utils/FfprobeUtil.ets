@@ -5,7 +5,7 @@ export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
 
 interface FfprobeNapiBridge {
   ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
-  extractSubtitleTrack: (url: string, headerLines: string, streamIndex: number, timeoutMs: number) => Promise<string>;
+  extractSubtitleTrack: (url: string, headerLines: string, streamIndex: number, timeoutMs: number, fromMs: number, durationMs: number) => Promise<string>;
 }
 
 interface FfprobeNapiBridgeModule {
@@ -657,16 +657,26 @@ export class FfprobeUtil {
    * @param headerLines 附加 HTTP 头，格式同 ffprobeAsync（每行 "Key: Value\r\n"）
    * @param streamIndex 0-based 字幕流序号（对应 s:N）
    * @param timeoutMs  超时毫秒数，0 表示不限制
+  /**
+   * 提取视频内嵌字幕轨道（支持位置感知窗口）
+   * @param url       视频 URL
+   * @param headerLines HTTP 头（Authorization 等）
+   * @param streamIndex 字幕流序号（0-based，对应 s:0/s:1）
+   * @param timeoutMs 最大等待时长（ms）
+   * @param fromMs    提取起始时间（ms），0=从头开始
+   * @param durationMs 提取时长（ms），-1=到文件末尾
    * @returns SRT 格式文本字符串
    */
   static async extractSubtitleTrackAsync(
     url: string,
     headerLines: string,
     streamIndex: number,
-    timeoutMs: number
+    timeoutMs: number,
+    fromMs: number = 0,
+    durationMs: number = -1
   ): Promise<string> {
     const napi = getVidAllCorePlayerNapi();
-    return napi.extractSubtitleTrack(url, headerLines, streamIndex, timeoutMs);
+    return napi.extractSubtitleTrack(url, headerLines, streamIndex, timeoutMs, fromMs, durationMs);
   }
 }
 
