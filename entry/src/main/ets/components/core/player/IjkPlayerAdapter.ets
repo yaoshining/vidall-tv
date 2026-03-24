@@ -602,7 +602,7 @@ export class IjkPlayerAdapter implements IPlayer {
               `[调研·NativeExtract] 发现字幕流 s:${s.streamIndex} codec=${s.codecName} lang=${s.language}，开始 native 提取...`);
             const extractStart = Date.now();
             FfprobeUtil.extractSubtitleTrackAsync(
-              this._currentUrl, this._currentHeaderLines, s.streamIndex, 30000
+              this._currentUrl, this._currentHeaderLines, s.streamIndex, 120000
             ).then((srtText: string) => {
               const elapsed = Date.now() - extractStart;
               hilog.info(CommonConstants.LOG_DOMAIN, TAG,

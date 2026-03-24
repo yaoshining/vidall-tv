@@ -761,6 +761,7 @@ static bool RunExtractSubtitleTrack(
     av_dict_set(&options, "headers", headerLines.c_str(), 0);
   }
 
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=open_input url=%.80s", url.c_str());
   int ret = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
   av_dict_free(&options);
   if (ret < 0) {
@@ -769,6 +770,11 @@ static bool RunExtractSubtitleTrack(
     return false;
   }
 
+  // 减少 probe 数据量：MKV 容器头已包含完整字幕流信息，无需大量探测
+  formatContext->probesize = 512 * 1024;          // 512KB（默认 5MB）
+  formatContext->max_analyze_duration = 1000000;  // 1s 媒体时长（默认 5s）
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=find_stream_info");
   ret = avformat_find_stream_info(formatContext, nullptr);
   if (ret < 0) {
     errorMessage = "extractSubtitle: find stream info failed: " + FfmpegErrorToString(ret);
@@ -793,6 +799,13 @@ static bool RunExtractSubtitleTrack(
                    " not found (total=" + std::to_string(subCount) + ")";
     avformat_close_input(&formatContext);
     return false;
+  }
+
+  // 丢弃非目标流：FFmpeg 通过 HTTP Range 请求跳过视频/音频数据，大幅减少网络下载量
+  for (unsigned i = 0; i < formatContext->nb_streams; i++) {
+    if (static_cast<int>(i) != targetStreamIdx) {
+      formatContext->streams[i]->discard = AVDISCARD_ALL;
+    }
   }
 
   // 打开字幕解码器
@@ -834,8 +847,11 @@ static bool RunExtractSubtitleTrack(
     return false;
   }
 
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=read_frame streamIdx=%d", targetStreamIdx);
+  int packetCount = 0;
   while (av_read_frame(formatContext, packet) >= 0) {
     if (packet->stream_index == targetStreamIdx) {
+      packetCount++;
       AVSubtitle subtitle;
       int gotSubtitle = 0;
       avcodec_decode_subtitle2(codecCtx, &subtitle, &gotSubtitle, packet);
@@ -875,6 +891,8 @@ static bool RunExtractSubtitleTrack(
     av_packet_unref(packet);
   }
 
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=done packets=%d items=%zu",
+               packetCount, items.size());
   av_packet_free(&packet);
   avcodec_free_context(&codecCtx);
   avformat_close_input(&formatContext);
