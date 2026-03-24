@@ -881,7 +881,7 @@ static bool RunExtractSubtitleTrack(
 
   // 检查字幕流 index_entries（FFmpeg 在 find_stream_info 时从 MKV Cues 填充）
   AVStream *subStream = formatContext->streams[targetStreamIdx];
-  const int indexEntryCount = subStream->nb_index_entries;
+  const int indexEntryCount = avformat_index_get_entries_count(subStream);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
     "[ExtractSub] index_entries=%{public}d strategy=%{public}s",
     indexEntryCount,
@@ -959,8 +959,9 @@ static bool RunExtractSubtitleTrack(
     constexpr int MAX_READS_PER_ENTRY = 64; // 最多读 64 个 packet 找本条字幕
 
     for (int i = 0; i < indexEntryCount; i++) {
-      const AVIndexEntry &entry = subStream->index_entries[i];
-      const int64_t entryUs = av_rescale_q(entry.timestamp, subStream->time_base, AV_TIME_BASE_Q);
+      const AVIndexEntry *entry = avformat_index_get_entry(subStream, i);
+      if (!entry) { continue; }
+      const int64_t entryUs = av_rescale_q(entry->timestamp, subStream->time_base, AV_TIME_BASE_Q);
 
       // 跳过窗口之前的条目
       if (entryUs < fromUs) { continue; }
@@ -969,11 +970,11 @@ static bool RunExtractSubtitleTrack(
 
       // seek 到本条目对应位置
       const int seekRet = avformat_seek_file(formatContext, targetStreamIdx,
-        entry.timestamp, entry.timestamp, entry.timestamp, AVSEEK_FLAG_ANY);
+        entry->timestamp, entry->timestamp, entry->timestamp, AVSEEK_FLAG_ANY);
       if (seekRet < 0) {
         OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
           "[ExtractSub] index_seek fail i=%{public}d ts=%{public}lld ret=%{public}d",
-          i, (long long)entry.timestamp, seekRet);
+          i, (long long)entry->timestamp, seekRet);
         continue;
       }
 
