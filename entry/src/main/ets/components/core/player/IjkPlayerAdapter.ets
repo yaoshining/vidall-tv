@@ -13,9 +13,17 @@ import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
 import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
+import { FfprobeUtil } from '../../../utils/FfprobeUtil';
 
 const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
+
+/** ijk 内嵌字幕流（从 getMediaInfo().meta 解析） */
+interface IjkSubtitleStreamInfo {
+  streamIndex: number;
+  language: string;
+  codecName: string;
+}
 
 /**
  * IjkPlayer 播放内核适配器
@@ -51,6 +59,10 @@ export class IjkPlayerAdapter implements IPlayer {
   private _isReleased: boolean = false;
   /** 当前视频的编码类型（由 VideoData.videoCodec 传入，如 'hevc', 'h264'） */
   private _videoCodec: string = '';
+  /** 当前视频 URL（用于 native 字幕提取） */
+  private _currentUrl: string = '';
+  /** 当前视频 HTTP 鉴权头（用于 native 字幕提取，格式: "Authorization: Basic xxx\r\n"） */
+  private _currentHeaderLines: string = '';
 
   // ─── XComponent context（必须在 native_setup 之前调用 setContext）───
   private _pendingContext: object | null = null;
@@ -148,6 +160,15 @@ export class IjkPlayerAdapter implements IPlayer {
     this._seekRenderingInfoCount = 0;
     this._lastHeartbeatWriteAt = 0;
     this._videoCodec = (videoData.videoCodec ?? '').toLowerCase();
+    this._currentUrl = videoData.videoSrc;
+    // 将 httpHeader 转为 FFmpeg headers 格式（"Key: Value\r\n" 拼接）供 native 字幕提取使用
+    this._currentHeaderLines = '';
+    if (videoData.httpHeader) {
+      const headerKeys = Object.keys(videoData.httpHeader);
+      for (const k of headerKeys) {
+        this._currentHeaderLines += k + ': ' + videoData.httpHeader[k] + '\r\n';
+      }
+    }
     this.writeBreadcrumb('init-start', `type=${videoData.type}`);
 
     try {
@@ -567,6 +588,37 @@ export class IjkPlayerAdapter implements IPlayer {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()} session=${this._sessionId}`);
         this.writeBreadcrumb('on-prepared', `duration=${this._duration}`);
+
+        // ── [调研] native 字幕提取端到端验证 ──
+        // 若当前视频含内嵌字幕流（通过 getMediaInfo().meta 解析），则触发 native 提取，
+        // 打印提取耗时和前 200 字符，验证 FFmpeg Range 请求方案可行性。
+        try {
+          const rawInfo = this.ijk.getMediaInfo() as Record<string, string>;
+          const meta: string = rawInfo['meta'] ?? '';
+          const streams = this.parseIjkSubtitleMeta(meta);
+          if (streams.length > 0) {
+            const s = streams[0];
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `[调研·NativeExtract] 发现字幕流 s:${s.streamIndex} codec=${s.codecName} lang=${s.language}，开始 native 提取...`);
+            const extractStart = Date.now();
+            FfprobeUtil.extractSubtitleTrackAsync(
+              this._currentUrl, this._currentHeaderLines, s.streamIndex, 30000
+            ).then((srtText: string) => {
+              const elapsed = Date.now() - extractStart;
+              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+                `[调研·NativeExtract] 完成！耗时=${elapsed}ms 总长度=${srtText.length} 前200字符:\n${srtText.substring(0, 200)}`);
+            }).catch(() => {
+              const elapsed = Date.now() - extractStart;
+              hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+                `[调研·NativeExtract] 提取失败，耗时=${elapsed}ms`);
+            });
+          } else {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[调研·NativeExtract] 无内嵌字幕流，跳过');
+          }
+        } catch (e) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·NativeExtract] meta 解析异常');
+        }
+
         if (this._onReadyCb) { this._onReadyCb(); }
       }
     };
@@ -715,6 +767,47 @@ export class IjkPlayerAdapter implements IPlayer {
       this._timeUpdateTimer = undefined;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'timeUpdate 定时器已停止');
     }
+  }
+
+  /** 解析 getMediaInfo().meta，提取内嵌字幕流列表（仅供调研探针使用） */
+  private parseIjkSubtitleMeta(meta: string): IjkSubtitleStreamInfo[] {
+    const streams: IjkSubtitleStreamInfo[] = [];
+    if (!meta || meta.length === 0) {
+      return streams;
+    }
+    const parts = meta.split(';');
+    const keys: string[] = [];
+    const vals: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      const commaIdx = part.indexOf(',value:');
+      if (commaIdx < 0) {
+        continue;
+      }
+      const keyPart = part.substring(0, commaIdx);
+      const valPart = part.substring(commaIdx + 7);
+      if (keyPart.startsWith('key:')) {
+        keys.push(keyPart.substring(4));
+        vals.push(valPart);
+      }
+    }
+    let streamIdx = 0;
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i] === 'type' && vals[i] === 'timedtext') {
+        const ws = Math.max(0, i - 5);
+        const we = Math.min(keys.length - 1, i + 15);
+        let codecName = 'subrip';
+        let language = '';
+        for (let j = ws; j <= we; j++) {
+          if (keys[j] === 'codec_name') { codecName = vals[j]; }
+          else if (keys[j] === 'language') { language = vals[j]; }
+        }
+        const stream: IjkSubtitleStreamInfo = { streamIndex: streamIdx, language, codecName };
+        streams.push(stream);
+        streamIdx++;
+      }
+    }
+    return streams;
   }
 }
 

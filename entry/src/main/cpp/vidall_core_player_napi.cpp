@@ -653,6 +653,344 @@ static napi_value Ffprobe(napi_env env, napi_callback_info info) {
   return promise;
 }
 
+// ── ExtractSubtitleTrack async implementation ─────────────────────────────────
+// 通过 FFmpeg libavformat 从远程 URL 提取内嵌字幕流，输出 SRT 文本。
+// 使用 HTTP Range 请求，不需要下载整个视频文件。
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct ExtractSubtitleAsyncContext {
+  napi_async_work work = nullptr;
+  napi_deferred deferred = nullptr;
+  std::string url;
+  std::string headerLines;
+  int subtitleStreamIndex = 0;   // 0-based 字幕流序号（对应 s:N）
+  int64_t timeoutMs = 30000;
+  std::string srtResult;         // 输出：SRT 格式文本
+  std::string errorMessage;
+};
+
+// 将毫秒数转换为 SRT 时间码格式：HH:MM:SS,mmm
+static std::string BuildSrtTimecode(int64_t ms) {
+  if (ms < 0) { ms = 0; }
+  const int64_t h = ms / 3600000;
+  const int64_t m = (ms % 3600000) / 60000;
+  const int64_t s = (ms % 60000) / 1000;
+  const int64_t millis = ms % 1000;
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%02lld:%02lld:%02lld,%03lld",
+           static_cast<long long>(h), static_cast<long long>(m),
+           static_cast<long long>(s), static_cast<long long>(millis));
+  return std::string(buf);
+}
+
+// 去除 ASS override 标签（{tag}）并将 \N/\n 转为换行、\h 转为空格
+static std::string StripAssOverrideCodes(const std::string &text) {
+  std::string result;
+  result.reserve(text.size());
+  bool inTag = false;
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] == '{') {
+      inTag = true;
+    } else if (text[i] == '}' && inTag) {
+      inTag = false;
+    } else if (!inTag) {
+      if (text[i] == '\\' && i + 1 < text.size()) {
+        const char next = text[i + 1];
+        if (next == 'N' || next == 'n') {
+          result += '\n';
+          i++;
+        } else if (next == 'h') {
+          result += ' ';
+          i++;
+        } else {
+          result += text[i];
+        }
+      } else {
+        result += text[i];
+      }
+    }
+  }
+  // 去除末尾空白
+  while (!result.empty() &&
+         (result.back() == '\n' || result.back() == '\r' || result.back() == ' ')) {
+    result.pop_back();
+  }
+  return result;
+}
+
+// 从 ASS Dialogue 行提取正文（第 9 个逗号之后）
+static std::string ExtractAssDialogueText(const char *assLine) {
+  if (!assLine) { return ""; }
+  const std::string line(assLine);
+  int commaCount = 0;
+  for (size_t i = 0; i < line.size(); i++) {
+    if (line[i] == ',') {
+      commaCount++;
+      if (commaCount == 9) {
+        return StripAssOverrideCodes(line.substr(i + 1));
+      }
+    }
+  }
+  return "";
+}
+
+static bool RunExtractSubtitleTrack(
+  const std::string &url,
+  const std::string &headerLines,
+  int subtitleStreamIndex,
+  int64_t timeoutMs,
+  std::string &srtResult,
+  std::string &errorMessage
+) {
+  avformat_network_init();
+
+  ProbeInterruptContext interruptContext;
+  interruptContext.startTimeUs = av_gettime_relative();
+  interruptContext.timeoutUs = timeoutMs > 0 ? timeoutMs * 1000 : 0;
+
+  AVFormatContext *formatContext = avformat_alloc_context();
+  if (!formatContext) {
+    errorMessage = "extractSubtitle: cannot allocate format context";
+    return false;
+  }
+  formatContext->interrupt_callback.callback = ProbeInterruptCallback;
+  formatContext->interrupt_callback.opaque = &interruptContext;
+
+  AVDictionary *options = nullptr;
+  if (!headerLines.empty()) {
+    av_dict_set(&options, "headers", headerLines.c_str(), 0);
+  }
+
+  int ret = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
+  av_dict_free(&options);
+  if (ret < 0) {
+    errorMessage = "extractSubtitle: open input failed: " + FfmpegErrorToString(ret);
+    if (formatContext) { avformat_close_input(&formatContext); }
+    return false;
+  }
+
+  ret = avformat_find_stream_info(formatContext, nullptr);
+  if (ret < 0) {
+    errorMessage = "extractSubtitle: find stream info failed: " + FfmpegErrorToString(ret);
+    avformat_close_input(&formatContext);
+    return false;
+  }
+
+  // 找第 N 条字幕流（0-based）
+  int subCount = 0;
+  int targetStreamIdx = -1;
+  for (unsigned i = 0; i < formatContext->nb_streams; i++) {
+    if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+      if (subCount == subtitleStreamIndex) {
+        targetStreamIdx = static_cast<int>(i);
+        break;
+      }
+      subCount++;
+    }
+  }
+  if (targetStreamIdx < 0) {
+    errorMessage = "extractSubtitle: s:" + std::to_string(subtitleStreamIndex) +
+                   " not found (total=" + std::to_string(subCount) + ")";
+    avformat_close_input(&formatContext);
+    return false;
+  }
+
+  // 打开字幕解码器
+  AVCodecParameters *codecpar = formatContext->streams[targetStreamIdx]->codecpar;
+  const AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
+  if (!codec) {
+    errorMessage = "extractSubtitle: no decoder for codec_id=" + std::to_string(codecpar->codec_id);
+    avformat_close_input(&formatContext);
+    return false;
+  }
+  AVCodecContext *codecCtx = avcodec_alloc_context3(codec);
+  if (!codecCtx) {
+    errorMessage = "extractSubtitle: cannot allocate codec context";
+    avformat_close_input(&formatContext);
+    return false;
+  }
+  avcodec_parameters_to_context(codecCtx, codecpar);
+  if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
+    errorMessage = "extractSubtitle: avcodec_open2 failed";
+    avcodec_free_context(&codecCtx);
+    avformat_close_input(&formatContext);
+    return false;
+  }
+
+  const AVRational timeBase = formatContext->streams[targetStreamIdx]->time_base;
+
+  struct SrtItem {
+    int64_t startMs;
+    int64_t endMs;
+    std::string text;
+  };
+  std::vector<SrtItem> items;
+
+  AVPacket *packet = av_packet_alloc();
+  if (!packet) {
+    avcodec_free_context(&codecCtx);
+    avformat_close_input(&formatContext);
+    errorMessage = "extractSubtitle: cannot allocate packet";
+    return false;
+  }
+
+  while (av_read_frame(formatContext, packet) >= 0) {
+    if (packet->stream_index == targetStreamIdx) {
+      AVSubtitle subtitle;
+      int gotSubtitle = 0;
+      avcodec_decode_subtitle2(codecCtx, &subtitle, &gotSubtitle, packet);
+      if (gotSubtitle) {
+        const int64_t startMs = av_rescale_q(packet->pts, timeBase, {1, 1000});
+        // end_display_time 是相对 packet pts 的毫秒偏移
+        int64_t endMs = startMs + static_cast<int64_t>(subtitle.end_display_time);
+        if (endMs <= startMs) {
+          endMs = startMs + 3000; // fallback: 显示 3 秒
+        }
+
+        std::string text;
+        for (unsigned r = 0; r < subtitle.num_rects; r++) {
+          const AVSubtitleRect *rect = subtitle.rects[r];
+          std::string part;
+          if (rect->type == SUBTITLE_ASS && rect->ass) {
+            part = ExtractAssDialogueText(rect->ass);
+          } else if (rect->type == SUBTITLE_TEXT && rect->text) {
+            part = StripAssOverrideCodes(std::string(rect->text));
+          }
+          if (!part.empty()) {
+            if (!text.empty()) { text += "\n"; }
+            text += part;
+          }
+        }
+
+        if (!text.empty() && startMs >= 0) {
+          SrtItem item;
+          item.startMs = startMs;
+          item.endMs = endMs;
+          item.text = text;
+          items.push_back(item);
+        }
+        avsubtitle_free(&subtitle);
+      }
+    }
+    av_packet_unref(packet);
+  }
+
+  av_packet_free(&packet);
+  avcodec_free_context(&codecCtx);
+  avformat_close_input(&formatContext);
+
+  // 组装 SRT 文本
+  std::string srt;
+  for (size_t i = 0; i < items.size(); i++) {
+    srt += std::to_string(i + 1) + "\n";
+    srt += BuildSrtTimecode(items[i].startMs) + " --> " + BuildSrtTimecode(items[i].endMs) + "\n";
+    srt += items[i].text + "\n\n";
+  }
+  srtResult = srt;
+  return true;
+}
+
+static void ExecuteExtractSubtitleAsync(napi_env env, void *data) {
+  (void)env;
+  ExtractSubtitleAsyncContext *context = static_cast<ExtractSubtitleAsyncContext *>(data);
+  if (!context) { return; }
+  RunExtractSubtitleTrack(context->url, context->headerLines, context->subtitleStreamIndex,
+                          context->timeoutMs, context->srtResult, context->errorMessage);
+}
+
+static void CompleteExtractSubtitleAsync(napi_env env, napi_status status, void *data) {
+  (void)status;
+  ExtractSubtitleAsyncContext *context = static_cast<ExtractSubtitleAsyncContext *>(data);
+  if (!context) { return; }
+
+  if (!context->errorMessage.empty()) {
+    napi_value errorValue;
+    napi_create_string_utf8(env, context->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errorValue);
+    napi_reject_deferred(env, context->deferred, errorValue);
+  } else {
+    napi_value result;
+    if (napi_create_string_utf8(env, context->srtResult.c_str(), NAPI_AUTO_LENGTH, &result) != napi_ok) {
+      napi_value errMsg;
+      napi_create_string_utf8(env, "extractSubtitleTrack: failed to create result string",
+                              NAPI_AUTO_LENGTH, &errMsg);
+      napi_reject_deferred(env, context->deferred, errMsg);
+    } else {
+      napi_resolve_deferred(env, context->deferred, result);
+    }
+  }
+
+  napi_delete_async_work(env, context->work);
+  delete context;
+}
+
+static napi_value ExtractSubtitleTrack(napi_env env, napi_callback_info info) {
+  size_t argc = 4;
+  napi_value args[4];
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleTrack: failed to read args");
+    return nullptr;
+  }
+  if (argc < 4) {
+    ThrowTypeError(env, "extractSubtitleTrack requires (url, headerLines, streamIndex, timeoutMs)");
+    return nullptr;
+  }
+
+  char urlBuf[2048] = {};
+  size_t urlLen = 0;
+  if (napi_get_value_string_utf8(env, args[0], urlBuf, sizeof(urlBuf), &urlLen) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleTrack: url must be string");
+    return nullptr;
+  }
+  char headerBuf[4096] = {};
+  size_t headerLen = 0;
+  if (napi_get_value_string_utf8(env, args[1], headerBuf, sizeof(headerBuf), &headerLen) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleTrack: headerLines must be string");
+    return nullptr;
+  }
+  int32_t streamIndex = 0;
+  if (napi_get_value_int32(env, args[2], &streamIndex) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleTrack: streamIndex must be int32");
+    return nullptr;
+  }
+  int64_t timeoutMs = 0;
+  if (napi_get_value_int64(env, args[3], &timeoutMs) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleTrack: timeoutMs must be int64");
+    return nullptr;
+  }
+
+  napi_value promise;
+  ExtractSubtitleAsyncContext *context = new ExtractSubtitleAsyncContext();
+  context->url = urlBuf;
+  context->headerLines = headerBuf;
+  context->subtitleStreamIndex = static_cast<int>(streamIndex);
+  context->timeoutMs = timeoutMs;
+
+  if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "extractSubtitleTrack: failed to create promise");
+    return nullptr;
+  }
+  napi_value resourceName;
+  if (napi_create_string_utf8(env, "extractSubtitleTrackAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "extractSubtitleTrack: failed to create resource name");
+    return nullptr;
+  }
+  if (napi_create_async_work(env, nullptr, resourceName, ExecuteExtractSubtitleAsync,
+                              CompleteExtractSubtitleAsync, context, &context->work) != napi_ok) {
+    delete context;
+    ThrowTypeError(env, "extractSubtitleTrack: failed to create async work");
+    return nullptr;
+  }
+  if (napi_queue_async_work(env, context->work) != napi_ok) {
+    napi_delete_async_work(env, context->work);
+    delete context;
+    ThrowTypeError(env, "extractSubtitleTrack: failed to queue async work");
+    return nullptr;
+  }
+  return promise;
+}
+
 struct NativePlayerSkeletonState {
   std::string url;
   std::string headersJson;
@@ -2764,7 +3102,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "isVpeDetailEnhancerSupported", nullptr, IsVpeDetailEnhancerSupported, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "extractSubtitleTrack", nullptr, ExtractSubtitleTrack, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

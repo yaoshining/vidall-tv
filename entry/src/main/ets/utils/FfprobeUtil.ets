@@ -5,6 +5,7 @@ export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
 
 interface FfprobeNapiBridge {
   ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
+  extractSubtitleTrack: (url: string, headerLines: string, streamIndex: number, timeoutMs: number) => Promise<string>;
 }
 
 interface FfprobeNapiBridgeModule {
@@ -646,6 +647,26 @@ export class FfprobeUtil {
       return `${langName} (${codecDisplay})`;
     }
     return langName;
+  }
+
+  /**
+   * 从远程 URL 提取内嵌字幕流，返回 SRT 格式文本。
+   * 通过 FFmpeg HTTP Range 请求实现，无需下载整个视频文件。
+   *
+   * @param url        视频文件 URL（支持 http/https/WebDAV）
+   * @param headerLines 附加 HTTP 头，格式同 ffprobeAsync（每行 "Key: Value\r\n"）
+   * @param streamIndex 0-based 字幕流序号（对应 s:N）
+   * @param timeoutMs  超时毫秒数，0 表示不限制
+   * @returns SRT 格式文本字符串
+   */
+  static async extractSubtitleTrackAsync(
+    url: string,
+    headerLines: string,
+    streamIndex: number,
+    timeoutMs: number
+  ): Promise<string> {
+    const napi = getVidAllCorePlayerNapi();
+    return napi.extractSubtitleTrack(url, headerLines, streamIndex, timeoutMs);
   }
 }
 
