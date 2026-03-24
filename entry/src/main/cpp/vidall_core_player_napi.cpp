@@ -879,12 +879,24 @@ static bool RunExtractSubtitleTrack(
     ? fromUs + durationMs * 1000LL
     : (totalDurationUs > 0 ? totalDurationUs : INT64_MAX);
 
-  // 检查字幕流 index_entries（FFmpeg 在 find_stream_info 时从 MKV Cues 填充）
+  // 检查所有流的 index_entries，诊断 MKV Cues 覆盖情况
   AVStream *subStream = formatContext->streams[targetStreamIdx];
   const int indexEntryCount = avformat_index_get_entries_count(subStream);
+
+  // 找视频流并检查其 index_entries（视频 Cues 通常是 MKV 里唯一有 index 的流）
+  int videoStreamIdx = -1;
+  int videoIndexCount = 0;
+  for (unsigned i = 0; i < formatContext->nb_streams; i++) {
+    if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+      videoStreamIdx = static_cast<int>(i);
+      videoIndexCount = avformat_index_get_entries_count(formatContext->streams[i]);
+      break;
+    }
+  }
+
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-    "[ExtractSub] index_entries=%{public}d strategy=%{public}s",
-    indexEntryCount,
+    "[ExtractSub] subtitle_index=%{public}d video_index=%{public}d strategy=%{public}s",
+    indexEntryCount, videoIndexCount,
     indexEntryCount > 0 ? "index_seek" : "segmented_seek");
 
   int packetCount = 0;
