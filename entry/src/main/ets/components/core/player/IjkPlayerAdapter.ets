@@ -11,6 +11,7 @@ import type { OnSeekCompleteListener } from '@ohos/ijkplayer';
 import type { OnInfoListener } from '@ohos/ijkplayer';
 import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
 import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
+import type { OnTimedTextListener } from '@ohos/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 
@@ -72,6 +73,9 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onSeekDoneCb?: () => void;
   // IjkPlayer 无内嵌字幕，此回调永不触发，仅满足接口
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
+
+  // onTimedText 内嵌字幕回调（由 VideoPlayerController 注入）
+  private _onEmbeddedSubtitleCb: ((text: string) => void) | null = null;
 
   constructor() {
     // 使用多实例模式，避免单例跨页面状态残留导致的偶发异常。
@@ -473,6 +477,11 @@ export class IjkPlayerAdapter implements IPlayer {
   }
   onBuffering(_callback: (isBuffering: boolean) => void): void { /* no-op */ }
 
+  /** 注册内嵌字幕回调（onTimedText → VideoPlayerController）*/
+  setOnEmbeddedSubtitleCallback(cb: (text: string) => void): void {
+    this._onEmbeddedSubtitleCb = cb;
+  }
+
   // ─── 内部实现 ───
 
   /**
@@ -653,6 +662,16 @@ export class IjkPlayerAdapter implements IPlayer {
       }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
+
+    // onTimedText：内嵌字幕（SRT / ASS 轨道）回调
+    const onTimedTextListener: OnTimedTextListener = {
+      onTimedText: (text: string) => {
+        if (this._onEmbeddedSubtitleCb) {
+          this._onEmbeddedSubtitleCb(text);
+        }
+      }
+    };
+    this.ijk.setOnTimedTextListener(onTimedTextListener);
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, '所有监听器已注册');
   }

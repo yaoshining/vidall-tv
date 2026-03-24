@@ -3,7 +3,7 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
-import { FfprobeUtil } from '../../../utils/FfprobeUtil';
+import { FfprobeUtil, type FfprobeTrack } from '../../../utils/FfprobeUtil';
 import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
@@ -332,6 +332,7 @@ export interface ISubtitleBridgeAdapter {
   init(player: IPlayer, videoData?: VideoData): Promise<void>;
   onTimeUpdate(currentTimeMs: number): void;
   onSubtitleUpdate(info: SubtitleInfo): void;
+  onEmbeddedTimedText(text: string): void;
   switchTrack(allIndex: number): Promise<void>;
   adjustDelay(deltaMs: number): void;
   onSeekSync(): void;
@@ -445,6 +446,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
     this.currentSubtitleText = info.text ?? '';
   }
+
+  onEmbeddedTimedText(_text: string): void { /* 子类按需覆盖 */ }
 
   async switchTrack(allIndex: number): Promise<void> {
     if (!this.player) {
@@ -744,10 +747,85 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
 export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
-    // 隐藏内嵌字幕以避免长时间的字幕提取等待
-    // 扫描时仍然会保存所有轨道信息到数据库（供未来优化使用）
-    // 运行时只通过 loadExternalTracks() 加载外置字幕
-    return [];
+    if (!this.videoData) {
+      return [];
+    }
+
+    // 通过 FfprobeUtil 探测内嵌字幕轨道（stream index 与 IJKPlayer selectTrack 一致）
+    const probe = await FfprobeUtil.probe(
+      this.videoData.videoSrc,
+      this.videoData.httpHeader,
+      9000
+    );
+    if (!probe.success || probe.subtitleTracks.length === 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[IjkSub] 无内嵌字幕轨道');
+      return [];
+    }
+
+    const rawTracks = probe.subtitleTracks;
+    const newSubtitleTracks: TrackInfo[] = [];
+    for (let i = 0; i < rawTracks.length; i++) {
+      const ft: FfprobeTrack = rawTracks[i];
+      const ti: TrackInfo = {
+        trackIndex: ft.index,
+        trackType: 'subtitle',
+        language: ft.language,
+        mimeType: ft.codecName
+      };
+      newSubtitleTracks.push(ti);
+    }
+    this.subtitleTracks = newSubtitleTracks;
+
+    const items: SubtitleTrackItem[] = [];
+    for (let i = 0; i < rawTracks.length; i++) {
+      const ft: FfprobeTrack = rawTracks[i];
+      const hasLang = ft.language.length > 0;
+      const languageName = hasLang ? FfprobeUtil.getLanguageDisplayName(ft.language) : '';
+      const displayName = languageName.length > 0
+        ? `内嵌字幕 ${i + 1} (${languageName})`
+        : `内嵌字幕 ${i + 1}`;
+      const item: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName,
+        internalIndex: ft.index
+      };
+      items.push(item);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[IjkSub] 内嵌字幕轨道数=${items.length}`);
+    return items;
+  }
+
+  /**
+   * 处理 IJKPlayer onTimedText 回调。
+   * - 优先级：外置 SRT 激活时不替换（srtEntries > 0）
+   * - 需要内嵌字幕轨道已被选中（currentSubtitleTrack >= 0）
+   * - 自动剥离 ASS override codes {..} 和 HTML 标签 <..>
+   */
+  onEmbeddedTimedText(text: string): void {
+    if (this.srtEntries.length > 0) {
+      return; // 外置 SRT 优先，不覆盖
+    }
+    if (this.currentSubtitleTrack < 0) {
+      return; // 未选中内嵌轨道
+    }
+    this.currentSubtitleText = IjkSubtitleBridgeAdapter.stripSubtitleMarkup(text);
+  }
+
+  /** 剥离 ASS override codes {..} 与 HTML 标签 <..>，返回纯文本 */
+  private static stripSubtitleMarkup(raw: string): string {
+    let result = '';
+    let depth = 0;
+    let inHtml = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '{') { depth++; continue; }
+      if (ch === '}') { if (depth > 0) { depth--; } continue; }
+      if (depth > 0) { continue; }
+      if (ch === '<') { inHtml = true; continue; }
+      if (ch === '>') { inHtml = false; continue; }
+      if (!inHtml) { result += ch; }
+    }
+    return result.trim();
   }
 }
 
@@ -813,6 +891,8 @@ export class NoSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   onTimeUpdate(_currentTimeMs: number): void {}
 
   onSubtitleUpdate(_info: SubtitleInfo): void {}
+
+  onEmbeddedTimedText(_text: string): void {}
 
   async switchTrack(_allIndex: number): Promise<void> {
     return Promise.resolve();
