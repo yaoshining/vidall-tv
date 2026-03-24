@@ -11,6 +11,7 @@ import type { OnSeekCompleteListener } from '@ohos/ijkplayer';
 import type { OnInfoListener } from '@ohos/ijkplayer';
 import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
 import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
+import type { OnTimedTextListener } from '@ohos/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 
@@ -567,10 +568,50 @@ export class IjkPlayerAdapter implements IPlayer {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()} session=${this._sessionId}`);
         this.writeBreadcrumb('on-prepared', `duration=${this._duration}`);
+
+        // ── [调研] 内嵌字幕可行性诊断（research/ijk-internal-subtitle）──
+        // 打印完整 getMediaInfo() 以了解字幕流字段结构
+        try {
+          const rawInfo: object = this.ijk.getMediaInfo();
+          const rawStr: string = JSON.stringify(rawInfo);
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[调研·MediaMeta] ${rawStr.substring(0, 500)}`);
+          if (rawStr.length > 500) {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `[调研·MediaMeta续] ${rawStr.substring(500, 1000)}`);
+          }
+        } catch (e) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·MediaMeta] getMediaInfo 异常');
+        }
+
+        // 尝试用 FFmpeg stream specifier 选中第一条字幕流，观察 onTimedText 是否触发
+        // 若 s:0 无效，再尝试数字索引 2/3/4（视音视频流数量而定）
+        try {
+          this.ijk.selectTrack('s:0');
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] selectTrack("s:0") 已调用，等待 onTimedText...');
+        } catch (e) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] s:0 失败，尝试数字索引 2');
+          try {
+            this.ijk.selectTrack('2');
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] selectTrack("2") 已调用');
+          } catch (e2) {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] 索引 2 也失败');
+          }
+        }
+
         if (this._onReadyCb) { this._onReadyCb(); }
       }
     };
     this.ijk.setOnPreparedListener(onPreparedListener);
+
+    // ── [调研] onTimedText 回调格式探针 ──
+    const timedTextListener: OnTimedTextListener = {
+      onTimedText: (text: string) => {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[调研·TimedText] len=${text.length} text前100=${text.substring(0, 100)}`);
+      }
+    };
+    this.ijk.setOnTimedTextListener(timedTextListener);
 
     // onCompletion
     const onCompletionListener: OnCompletionListener = {
