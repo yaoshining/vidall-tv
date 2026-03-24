@@ -384,6 +384,13 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     if (this.allSubtitleTracks.length > 0) {
       const preferredIndex = this.findPreferredTrackIndex();
       await this.switchTrack(preferredIndex);
+      const selected = this.allSubtitleTracks[preferredIndex];
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length}` +
+        ` 自动选中[${preferredIndex}]=${selected.displayName}(${selected.kind})`);
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 初始化完成: 内嵌=0 外置=0 无字幕轨道`);
     }
   }
 
