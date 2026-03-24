@@ -12,8 +12,9 @@
 | 🌐 WebDAV 文件源 | 基于 libcurl 的 HTTPS WebDAV，支持 PikPak、群晖、Alist 等 |
 | 🔍 视频扫描 | 递归扫描配置目录，自动去重，支持深度限制 |
 | 🎭 元数据刮削 | 接入 TMDB API，自动匹配海报、简介、类型、年份 |
-| 💬 字幕支持 | 内嵌字幕轨道切换 + 外挂 SRT/ASS 字幕，支持延迟调节 |
+| 💬 字幕支持 | 内嵌字幕轨道切换 + 外挂 SRT/ASS/VTT 字幕，延迟调节，seek 后 ≤200ms 恢复 |
 | 🎵 音轨切换 | 多音频轨道实时切换，显示语言与编码信息 |
+| ✨ AI 画质增强 | 接入鸿蒙 VideoProcessingEngine（VPE），低/中/高三档画质，支持按需开关 |
 | 🏠 TV 端交互 | 遥控器焦点导航，大屏排版优化 |
 
 ---
@@ -29,22 +30,38 @@
 ┌──────────────────▼──────────────────────────┐
 │           C++ Native 层                     │
 │  vidall_core_player_napi.cpp                │
-│  ├── AVPlayer 控制（XComponent 渲染）       │
 │  ├── ffprobe  媒体信息探测                  │
+│  ├── VPE     VideoProcessingEngine 画质增强 │
 │  ├── webdavRequest  libcurl HTTPS 请求      │
 │  └── downloadToFile  libcurl 文件下载       │
 └──────────────────┬──────────────────────────┘
                    │
-        libffmpeg.so / libcurl.so
+        libffmpeg.so / libcurl.so / libvideo_processing.so
 ```
 
 ### 播放器分层
 
 ```
 VideoPlayerController (ArkTS)
-  ├── AVPlayerAdapter      ← HarmonyOS 原生，主链
-  └── IjkPlayerAdapter     ← IJKPlayer，兜底
+  ├── AVPlayerAdapter         ← HarmonyOS 原生，主链
+  │     └── VPE 画质增强管线（AVPlayer → VPE → XComponent）
+  └── IjkPlayerAdapter        ← IJKPlayer，兜底
+
+字幕适配层（统一接口 ISubtitleBridgeAdapter）
+  ├── AvSubtitleBridgeAdapter   ← AVPlayer 内嵌 + 外置字幕
+  ├── IjkSubtitleBridgeAdapter  ← ijk 外置字幕（100ms 轮询）
+  └── NoSubtitleBridgeAdapter   ← 无字幕回退
 ```
+
+### VPE 画质增强管线
+
+```
+AVPlayer（解码输出）
+  └──► VPE 输入 Surface（VideoProcessingEngine）
+         └──► XComponent 显示
+```
+
+VPE 仅在 AVPlayer 后端下生效，IJKPlayer 路径不经过 VPE。
 
 ### WebDAV 请求链
 
@@ -113,7 +130,9 @@ VidAll_TV/
 │           ├── components/core/player/  # 播放器核心
 │           │   ├── VideoPlayerController.ets
 │           │   ├── AVPlayerAdapter.ets
-│           │   └── IjkPlayerAdapter.ets
+│           │   ├── IjkPlayerAdapter.ets
+│           │   ├── SubtitleBridgeAdapter.ets  # 统一字幕适配层
+│           │   └── SubtitleRenderer.ets       # SRT/ASS/VTT 渲染
 │           ├── db/                      # 数据库（RelationalStore）
 │           │   └── FileSourceDatabase.ets
 │           ├── lib/                     # 底层库
@@ -127,7 +146,9 @@ VidAll_TV/
 │           └── utils/                   # 工具类
 │               ├── VideoScannerUtil.ets
 │               ├── VideoInfoUtil.ets
-│               └── FfprobeUtil.ets
+│               ├── FfprobeUtil.ets
+│               ├── VpeEnhancerUtil.ets  # VPE 画质增强工具
+│               └── DeviceCapabilityUtil.ets
 └── entry/src/test/                      # 本地单元测试
     ├── List.test.ets                    # 测试套件入口
     ├── WebDAVClientUtils.test.ets       # TLS 工具函数测试（30 个用例）
@@ -177,6 +198,8 @@ hdc shell hilog | grep VidAll_TLS_Audit
 | SMB/NFS 文件源 | 尚未实现 | Phase 2 |
 | AVMetadataExtractor 不支持远程 URL | API 20 起才有 `setUrlSource` | 待 SDK 升级 |
 | 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |
+| VPE 画质增强仅支持 AVPlayer 后端 | IJKPlayer 渲染机制不兼容 VPE 管线 | 设计限制，不影响 ijk 正常播放 |
+| AVPlayer 内嵌字幕轨道元信息（语言/MIME）可能为空 | `getTrackDescription()` 返回字段不稳定 | 规划 #63 增强识别链路 |
 
 ---
 
