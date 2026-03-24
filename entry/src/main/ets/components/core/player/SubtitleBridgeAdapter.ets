@@ -780,13 +780,16 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       return;
     }
 
+    // 只在当前已激活内嵌字幕流时才需要 deselect（避免多余的 deselectTrack 干扰 ijk 播放状态）
+    const prevInternalActive = this.currentSubtitleTrack >= 0;
+
     if (allIndex < 0) {
       this.activeSubtitleIndex = -1;
       this.currentSubtitleText = '';
       this.srtEntries = [];
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
-      if (this.player instanceof IjkPlayerAdapter) {
+      if (prevInternalActive && this.player instanceof IjkPlayerAdapter) {
         this.player.selectIjkSubtitleStream(-1);
       }
       return;
@@ -805,7 +808,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       this.srtEntries = entries;
       this.lastSrtText = '';
       this.currentSubtitleTrack = -1;
-      if (this.player instanceof IjkPlayerAdapter) {
+      // 若之前激活了内嵌字幕，切换到外置时才需要 deselect
+      if (prevInternalActive && this.player instanceof IjkPlayerAdapter) {
         this.player.selectIjkSubtitleStream(-1);
       }
       return;
