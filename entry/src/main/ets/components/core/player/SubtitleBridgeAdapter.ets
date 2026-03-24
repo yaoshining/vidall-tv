@@ -405,6 +405,12 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   onTimeUpdate(currentTimeMs: number): void {
+    // 时间源异常守卫：NaN / 负值自动降级跳过，避免阻断播放
+    if (isNaN(currentTimeMs) || currentTimeMs < 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 时间源异常 currentTimeMs=${currentTimeMs}，跳过本次字幕更新`);
+      return;
+    }
     if (this.srtEntries.length === 0) {
       return;
     }
