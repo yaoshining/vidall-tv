@@ -761,7 +761,7 @@ static bool RunExtractSubtitleTrack(
     av_dict_set(&options, "headers", headerLines.c_str(), 0);
   }
 
-  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=open_input url=%.80s", url.c_str());
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=open_input");
   int ret = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
   av_dict_free(&options);
   if (ret < 0) {
@@ -774,7 +774,8 @@ static bool RunExtractSubtitleTrack(
   formatContext->probesize = 512 * 1024;          // 512KB（默认 5MB）
   formatContext->max_analyze_duration = 1000000;  // 1s 媒体时长（默认 5s）
 
-  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=find_stream_info");
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=find_stream_info probesize=%{public}lld",
+    (long long)formatContext->probesize);
   ret = avformat_find_stream_info(formatContext, nullptr);
   if (ret < 0) {
     errorMessage = "extractSubtitle: find stream info failed: " + FfmpegErrorToString(ret);
@@ -808,6 +809,14 @@ static bool RunExtractSubtitleTrack(
     }
   }
 
+  // 打印关键诊断信息（全部用 {public} 避免 HarmonyOS 隐私过滤）
+  const int64_t totalDurationUs = formatContext->duration;
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+    "[ExtractSub] targetStream=%{public}d durationSec=%{public}lld nb_streams=%{public}u",
+    targetStreamIdx,
+    (long long)(totalDurationUs > 0 ? totalDurationUs / AV_TIME_BASE : -1LL),
+    formatContext->nb_streams);
+
   // 打开字幕解码器
   AVCodecParameters *codecpar = formatContext->streams[targetStreamIdx]->codecpar;
   const AVCodec *codec = avcodec_find_decoder(codecpar->codec_id);
@@ -830,7 +839,7 @@ static bool RunExtractSubtitleTrack(
     return false;
   }
 
-  const AVRational timeBase = formatContext->streams[targetStreamIdx]->time_base;
+  const AVRational subTimeBase = formatContext->streams[targetStreamIdx]->time_base;
 
   struct SrtItem {
     int64_t startMs;
@@ -847,52 +856,116 @@ static bool RunExtractSubtitleTrack(
     return false;
   }
 
-  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=read_frame streamIdx=%d", targetStreamIdx);
+  // ── 分段 seek 策略 ──────────────────────────────────────────────────────────
+  // 将视频按 5 分钟分段，每段 seek 一次（利用 MKV Cues 跳到对应 cluster），
+  // 只读字幕 packet，不顺序扫描整个文件，大幅减少 HTTP Range 请求数量。
+  // ───────────────────────────────────────────────────────────────────────────
+  static const int64_t SEGMENT_US = 300LL * AV_TIME_BASE; // 5 分钟
+  const int64_t numSegments = totalDurationUs > 0
+    ? (totalDurationUs + SEGMENT_US - 1) / SEGMENT_US
+    : 1;
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+    "[ExtractSub] segments=%{public}lld strategy=%{public}s",
+    (long long)numSegments,
+    totalDurationUs > 0 ? "segmented_seek" : "sequential");
+
   int packetCount = 0;
-  while (av_read_frame(formatContext, packet) >= 0) {
-    if (packet->stream_index == targetStreamIdx) {
-      packetCount++;
-      AVSubtitle subtitle;
-      int gotSubtitle = 0;
-      avcodec_decode_subtitle2(codecCtx, &subtitle, &gotSubtitle, packet);
-      if (gotSubtitle) {
-        const int64_t startMs = av_rescale_q(packet->pts, timeBase, {1, 1000});
-        // end_display_time 是相对 packet pts 的毫秒偏移
-        int64_t endMs = startMs + static_cast<int64_t>(subtitle.end_display_time);
-        if (endMs <= startMs) {
-          endMs = startMs + 3000; // fallback: 显示 3 秒
-        }
+  int64_t lastProgressLogUs = av_gettime_relative();
+  bool firstSubtitleLogged = false;
+  int64_t lastDecodedPts = AV_NOPTS_VALUE; // 去重：跳过 seek 后重复的 packet
 
-        std::string text;
-        for (unsigned r = 0; r < subtitle.num_rects; r++) {
-          const AVSubtitleRect *rect = subtitle.rects[r];
-          std::string part;
-          if (rect->type == SUBTITLE_ASS && rect->ass) {
-            part = ExtractAssDialogueText(rect->ass);
-          } else if (rect->type == SUBTITLE_TEXT && rect->text) {
-            part = StripAssOverrideCodes(std::string(rect->text));
-          }
-          if (!part.empty()) {
-            if (!text.empty()) { text += "\n"; }
-            text += part;
-          }
-        }
+  auto decodePacket = [&](AVPacket *pkt) {
+    AVSubtitle subtitle;
+    int gotSubtitle = 0;
+    avcodec_decode_subtitle2(codecCtx, &subtitle, &gotSubtitle, pkt);
+    if (!gotSubtitle) { return; }
 
-        if (!text.empty() && startMs >= 0) {
-          SrtItem item;
-          item.startMs = startMs;
-          item.endMs = endMs;
-          item.text = text;
-          items.push_back(item);
-        }
-        avsubtitle_free(&subtitle);
+    const int64_t startMs = av_rescale_q(pkt->pts, subTimeBase, {1, 1000});
+    int64_t endMs = startMs + static_cast<int64_t>(subtitle.end_display_time);
+    if (endMs <= startMs) { endMs = startMs + 3000; }
+
+    std::string text;
+    for (unsigned r = 0; r < subtitle.num_rects; r++) {
+      const AVSubtitleRect *rect = subtitle.rects[r];
+      std::string part;
+      if (rect->type == SUBTITLE_ASS && rect->ass) {
+        part = ExtractAssDialogueText(rect->ass);
+      } else if (rect->type == SUBTITLE_TEXT && rect->text) {
+        part = StripAssOverrideCodes(std::string(rect->text));
+      }
+      if (!part.empty()) {
+        if (!text.empty()) { text += "\n"; }
+        text += part;
       }
     }
-    av_packet_unref(packet);
+
+    if (!text.empty() && startMs >= 0) {
+      if (!firstSubtitleLogged) {
+        firstSubtitleLogged = true;
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+          "[ExtractSub] first_subtitle startMs=%{public}lld text_len=%{public}zu",
+          (long long)startMs, text.size());
+      }
+      SrtItem item;
+      item.startMs = startMs;
+      item.endMs = endMs;
+      item.text = text;
+      items.push_back(item);
+    }
+    avsubtitle_free(&subtitle);
+  };
+
+  for (int64_t seg = 0; seg < numSegments; seg++) {
+    if (seg > 0) {
+      // 利用 MKV Cues seek 到本段开始位置（避免顺序扫描整个文件）
+      const int64_t seekUs = seg * SEGMENT_US;
+      const int seekRet = av_seek_frame(formatContext, -1, seekUs, AVSEEK_FLAG_ANY);
+      if (seekRet < 0) {
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+          "[ExtractSub] seek failed seg=%{public}lld ret=%{public}d",
+          (long long)seg, seekRet);
+        continue;
+      }
+    }
+
+    const int64_t segEndUs = (seg + 1) * SEGMENT_US;
+
+    while (av_read_frame(formatContext, packet) >= 0) {
+      if (packet->stream_index == targetStreamIdx) {
+        if (packet->pts != AV_NOPTS_VALUE) {
+          const int64_t pktUs = av_rescale_q(packet->pts, subTimeBase, AV_TIME_BASE_Q);
+
+          // 当前 packet 超出本段时间范围 → 退出内层循环，推进到下一段
+          if (pktUs > segEndUs) {
+            av_packet_unref(packet);
+            break;
+          }
+
+          // 去重：seek 后可能重读上一段末尾的 packet
+          if (lastDecodedPts == AV_NOPTS_VALUE || packet->pts > lastDecodedPts) {
+            packetCount++;
+            lastDecodedPts = packet->pts;
+            decodePacket(packet);
+          }
+        }
+      }
+      av_packet_unref(packet);
+
+      // 每 20 秒打一次进度日志，方便定位哪段慢
+      const int64_t nowUs = av_gettime_relative();
+      if (nowUs - lastProgressLogUs >= 20 * 1000000LL) {
+        lastProgressLogUs = nowUs;
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+          "[ExtractSub] progress seg=%{public}lld/%{public}lld packets=%{public}d items=%{public}zu",
+          (long long)seg, (long long)numSegments, packetCount, items.size());
+      }
+    }
   }
 
-  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "[ExtractSub] step=done packets=%d items=%zu",
-               packetCount, items.size());
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+    "[ExtractSub] done packets=%{public}d items=%{public}zu",
+    packetCount, items.size());
   av_packet_free(&packet);
   avcodec_free_context(&codecCtx);
   avformat_close_input(&formatContext);
