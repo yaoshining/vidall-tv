@@ -19,6 +19,10 @@ export struct VideoPlayer {
   /** 镜像 controller.backend，用于驱动多后端分支重建 */
   @Local backendMode: PlayerBackend = 'avplayer'
 
+  // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
+  private _lastRawText: string = ''
+  private _lastParsedSubtitle: ParsedSubtitle | null = null
+
   @Monitor('controller.backend')
   onBackendChange(): void {
     this.clearIjkInitTimer()
@@ -153,17 +157,26 @@ export struct VideoPlayer {
       return null
     }
 
+    // 相同 raw 文本命中缓存，跳过重复解析（ASS 回调高频时的 CPU 优化）
+    if (text === this._lastRawText && this._lastParsedSubtitle !== null) {
+      return this._lastParsedSubtitle
+    }
+
     // 自动检测：是否是 ASS Dialogue 行（有 9 个以上逗号且前段是数字/空字符串）
     // 如果是，截取第 9 个逗号后的纯文本；否则直接当纯文本渲染
     const pureText = this.extractSubtitleText(text)
 
     if (pureText.trim().length === 0) {
+      this._lastRawText = text
+      this._lastParsedSubtitle = null
       return null
     }
 
     const parsed = SubtitleParserFactory.parse(pureText)
     this.convertFontSize(parsed)
     console.log(`[VideoPlayer] counter=${counter} lines=${parsed.lines.length}`)
+    this._lastRawText = text
+    this._lastParsedSubtitle = parsed
     return parsed
   }
 

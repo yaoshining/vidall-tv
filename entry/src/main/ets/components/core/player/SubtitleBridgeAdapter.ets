@@ -351,6 +351,11 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   protected srtEntries: SrtEntry[] = [];
   protected lastSrtText: string = '';
 
+  // 指标字段：seek 后字幕恢复时延测量（#17）
+  private _seekStartMs: number = 0;
+  // 防止漂移日志过于频繁：每 5s 输出一次
+  private _lastDriftLogMs: number = 0;
+
   async init(player: IPlayer, videoData?: VideoData): Promise<void> {
     this.player = player;
     this.videoData = videoData;
@@ -379,6 +384,13 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     if (this.allSubtitleTracks.length > 0) {
       const preferredIndex = this.findPreferredTrackIndex();
       await this.switchTrack(preferredIndex);
+      const selected = this.allSubtitleTracks[preferredIndex];
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length}` +
+        ` 自动选中[${preferredIndex}]=${selected.displayName}(${selected.kind})`);
+    } else {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 初始化完成: 内嵌=0 外置=0 无字幕轨道`);
     }
   }
 
@@ -393,14 +405,37 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   onTimeUpdate(currentTimeMs: number): void {
+    // 时间源异常守卫：NaN / 负值自动降级跳过，避免阻断播放
+    if (isNaN(currentTimeMs) || currentTimeMs < 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 时间源异常 currentTimeMs=${currentTimeMs}，跳过本次字幕更新`);
+      return;
+    }
     if (this.srtEntries.length === 0) {
       return;
     }
     const adjustedTime = currentTimeMs - this.subtitleDelayMs;
     const text = SrtParser.findAt(this.srtEntries, adjustedTime);
     if (text !== this.lastSrtText) {
+      // seek 后恢复时延：首次字幕文本改变时记录
+      if (this._seekStartMs > 0) {
+        const recoveryMs = Date.now() - this._seekStartMs;
+        this._seekStartMs = 0;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[字幕指标] seek恢复时延=${recoveryMs}ms（目标≤200ms）`);
+      }
       this.lastSrtText = text;
       this.currentSubtitleText = text;
+    }
+
+    // 漂移监测：每 5s 输出一次，记录调整后时间与系统时间的差值供分析
+    if (this.subtitleDelayMs !== 0) {
+      const now = Date.now();
+      if (now - this._lastDriftLogMs >= 5000) {
+        this._lastDriftLogMs = now;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[字幕指标] 当前延迟偏移=${this.subtitleDelayMs}ms pts=${currentTimeMs}ms adjustedPts=${adjustedTime}ms`);
+      }
     }
   }
 
@@ -456,6 +491,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   onSeekSync(): void {
+    // 记录 seek 开始时间，用于计算字幕恢复时延（#17）
+    this._seekStartMs = Date.now();
     this.lastSrtText = '';
   }
 
@@ -481,6 +518,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     this.subtitleDelayMs = 0;
     this.srtEntries = [];
     this.lastSrtText = '';
+    this._seekStartMs = 0;
+    this._lastDriftLogMs = 0;
     this.player = undefined;
     this.videoData = undefined;
   }
@@ -722,10 +761,18 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     const allTracks = await this.player.getTrackInfos();
     const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
     this.subtitleTracks = subtitleTracks;
+
+    // 统计轨道元信息可读率（#17）
+    let readableCount = 0;
     for (let i = 0; i < subtitleTracks.length; i++) {
       const track = subtitleTracks[i];
-      const languageName = track.language && track.language.length > 0
-        ? FfprobeUtil.getLanguageDisplayName(track.language)
+      const hasLang = track.language !== undefined && track.language.length > 0;
+      const hasMime = track.mimeType !== undefined && track.mimeType.length > 0;
+      if (hasLang || hasMime) {
+        readableCount++;
+      }
+      const languageName = hasLang
+        ? FfprobeUtil.getLanguageDisplayName(track.language!)
         : '';
       const displayName = languageName.length > 0
         ? `字幕 ${i + 1} (${languageName})`
@@ -737,6 +784,13 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       };
       items.push(item);
     }
+
+    if (subtitleTracks.length > 0) {
+      const rate = Math.round(readableCount / subtitleTracks.length * 100);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕指标] 内嵌字幕轨道识别率=${rate}% (${readableCount}/${subtitleTracks.length})`);
+    }
+
     return items;
   }
 }
