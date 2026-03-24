@@ -718,15 +718,22 @@ static std::string StripAssOverrideCodes(const std::string &text) {
   return result;
 }
 
-// 从 ASS Dialogue 行提取正文（第 9 个逗号之后）
+// 从 ASS 行提取正文，兼容两种格式：
+// - 完整 Dialogue 行（以 "Dialogue:" 开头）：文本在第 9 个逗号后
+// - MKV 内嵌 ASS 事件（无前缀，格式 ReadOrder,Layer,Style,...,Text）：文本在第 8 个逗号后
 static std::string ExtractAssDialogueText(const char *assLine) {
   if (!assLine) { return ""; }
   const std::string line(assLine);
+  // 判断是否有 "Dialogue:" 前缀
+  const bool isFullDialogue = line.size() > 9 &&
+    line[0]=='D' && line[1]=='i' && line[2]=='a' && line[3]=='l' &&
+    line[4]=='o' && line[5]=='g' && line[6]=='u' && line[7]=='e' && line[8]==':';
+  const int targetComma = isFullDialogue ? 9 : 8;
   int commaCount = 0;
   for (size_t i = 0; i < line.size(); i++) {
     if (line[i] == ',') {
       commaCount++;
-      if (commaCount == 9) {
+      if (commaCount == targetComma) {
         return StripAssOverrideCodes(line.substr(i + 1));
       }
     }
