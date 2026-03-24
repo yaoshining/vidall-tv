@@ -18,6 +18,16 @@ import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
 
+/** ijk 内嵌字幕流描述（通过 getMediaInfo().meta 解析获得） */
+export interface IjkInternalSubtitleStream {
+  /** 0-based 字幕流序号，对应 selectTrack("s:N") 中的 N */
+  streamIndex: number;
+  /** 语言代码，如 "chi"、"eng"，可能为空 */
+  language: string;
+  /** FFmpeg codec 名称，如 "subrip"、"ass" */
+  codecName: string;
+}
+
 /**
  * IjkPlayer 播放内核适配器
  *
@@ -71,8 +81,11 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onTimeUpdateCb?: (currentTime: number) => void;
   private _onErrorCb?: (error: Error) => void;
   private _onSeekDoneCb?: () => void;
-  // IjkPlayer 无内嵌字幕，此回调永不触发，仅满足接口
+  /** ijk 内嵌字幕回调：selectIjkSubtitleStream() 激活后由 onTimedText 触发 */
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
+
+  /** 当前视频解析到的内嵌字幕流列表 */
+  private _ijkInternalSubtitles: IjkInternalSubtitleStream[] = [];
 
   constructor() {
     // 使用多实例模式，避免单例跨页面状态残留导致的偶发异常。
@@ -569,34 +582,21 @@ export class IjkPlayerAdapter implements IPlayer {
           `onPrepared — duration=${this._duration}ms videoSize=${this.ijk.getVideoWidth()}x${this.ijk.getVideoHeight()} session=${this._sessionId}`);
         this.writeBreadcrumb('on-prepared', `duration=${this._duration}`);
 
-        // ── [调研] 内嵌字幕可行性诊断（research/ijk-internal-subtitle）──
-        // 打印完整 getMediaInfo() 以了解字幕流字段结构
+        // 解析内嵌字幕流信息
         try {
-          const rawInfo: object = this.ijk.getMediaInfo();
-          const rawStr: string = JSON.stringify(rawInfo);
+          const rawInfo = this.ijk.getMediaInfo() as Record<string, string>;
+          const meta: string = rawInfo['meta'] ?? '';
+          this._ijkInternalSubtitles = this.parseIjkSubtitleMeta(meta);
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[调研·MediaMeta] ${rawStr.substring(0, 500)}`);
-          if (rawStr.length > 500) {
+            `[内嵌字幕] 解析完成: 发现 ${this._ijkInternalSubtitles.length} 条内嵌字幕流`);
+          for (let i = 0; i < this._ijkInternalSubtitles.length; i++) {
+            const s = this._ijkInternalSubtitles[i];
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `[调研·MediaMeta续] ${rawStr.substring(500, 1000)}`);
+              `[内嵌字幕] 流[${s.streamIndex}] codec=${s.codecName} lang=${s.language}`);
           }
         } catch (e) {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·MediaMeta] getMediaInfo 异常');
-        }
-
-        // 尝试用 FFmpeg stream specifier 选中第一条字幕流，观察 onTimedText 是否触发
-        // 若 s:0 无效，再尝试数字索引 2/3/4（视音视频流数量而定）
-        try {
-          this.ijk.selectTrack('s:0');
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] selectTrack("s:0") 已调用，等待 onTimedText...');
-        } catch (e) {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] s:0 失败，尝试数字索引 2');
-          try {
-            this.ijk.selectTrack('2');
-            hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] selectTrack("2") 已调用');
-          } catch (e2) {
-            hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[调研·SelectTrack] 索引 2 也失败');
-          }
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[内嵌字幕] getMediaInfo 解析异常，内嵌字幕不可用');
+          this._ijkInternalSubtitles = [];
         }
 
         if (this._onReadyCb) { this._onReadyCb(); }
@@ -604,11 +604,13 @@ export class IjkPlayerAdapter implements IPlayer {
     };
     this.ijk.setOnPreparedListener(onPreparedListener);
 
-    // ── [调研] onTimedText 回调格式探针 ──
+    // onTimedText：ijk 内嵌字幕回调
     const timedTextListener: OnTimedTextListener = {
       onTimedText: (text: string) => {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[调研·TimedText] len=${text.length} text前100=${text.substring(0, 100)}`);
+        if (this._onSubtitleUpdateCb) {
+          const info: SubtitleInfo = { text };
+          this._onSubtitleUpdateCb(info);
+        }
       }
     };
     this.ijk.setOnTimedTextListener(timedTextListener);
@@ -756,6 +758,99 @@ export class IjkPlayerAdapter implements IPlayer {
       this._timeUpdateTimer = undefined;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'timeUpdate 定时器已停止');
     }
+  }
+
+  // ─── 内嵌字幕公开接口 ───
+
+  /** 返回当前视频解析到的内嵌字幕流列表 */
+  getIjkInternalSubtitleStreams(): IjkInternalSubtitleStream[] {
+    return this._ijkInternalSubtitles;
+  }
+
+  /**
+   * 选择或关闭 ijk 内嵌字幕流
+   * @param streamIndex 0-based 字幕流序号；传 -1 取消所有内嵌字幕
+   */
+  selectIjkSubtitleStream(streamIndex: number): void {
+    if (streamIndex < 0) {
+      for (let i = 0; i < this._ijkInternalSubtitles.length; i++) {
+        const s = this._ijkInternalSubtitles[i];
+        try {
+          this.ijk.deselectTrack('s:' + s.streamIndex.toString());
+        } catch (e) {
+          // 忽略取消失败
+        }
+      }
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[内嵌字幕] 已取消所有内嵌字幕流');
+      return;
+    }
+    try {
+      this.ijk.selectTrack('s:' + streamIndex.toString());
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[内嵌字幕] selectTrack("s:${streamIndex}") 已调用`);
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[内嵌字幕] selectTrack("s:${streamIndex}") 失败: ${JSON.stringify(e)}`);
+    }
+  }
+
+  /**
+   * 解析 getMediaInfo().meta 字符串，提取内嵌字幕流列表
+   *
+   * meta 格式（分号分隔的 key:K,value:V 对）：
+   *   "key:type,value:timedtext;key:codec_name,value:subrip;key:language,value:chi;..."
+   *
+   * 每个 type=timedtext 对应一条字幕流，取周围 ±10 个 KV 对内的 codec_name 和 language
+   */
+  private parseIjkSubtitleMeta(meta: string): IjkInternalSubtitleStream[] {
+    const streams: IjkInternalSubtitleStream[] = [];
+    if (!meta || meta.length === 0) {
+      return streams;
+    }
+
+    // 将 meta 分割为 key-value 对数组
+    const parts = meta.split(';');
+    const keys: string[] = [];
+    const values: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      if (part.length === 0) {
+        continue;
+      }
+      const commaIdx = part.indexOf(',value:');
+      if (commaIdx < 0) {
+        continue;
+      }
+      const keyPart = part.substring(0, commaIdx);
+      const valPart = part.substring(commaIdx + 7);
+      if (keyPart.startsWith('key:')) {
+        keys.push(keyPart.substring(4));
+        values.push(valPart);
+      }
+    }
+
+    // 找所有 type=timedtext 的位置，每个对应一条字幕流
+    let streamIdx = 0;
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i] === 'type' && values[i] === 'timedtext') {
+        const windowStart = Math.max(0, i - 5);
+        const windowEnd = Math.min(keys.length - 1, i + 15);
+        let codecName = 'subrip';
+        let language = '';
+        for (let j = windowStart; j <= windowEnd; j++) {
+          if (keys[j] === 'codec_name') {
+            codecName = values[j];
+          } else if (keys[j] === 'language') {
+            language = values[j];
+          }
+        }
+        const stream: IjkInternalSubtitleStream = { streamIndex: streamIdx, language, codecName };
+        streams.push(stream);
+        streamIdx++;
+      }
+    }
+
+    return streams;
   }
 }
 

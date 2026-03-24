@@ -8,6 +8,7 @@ import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
+import { IjkPlayerAdapter, IjkInternalSubtitleStream } from './IjkPlayerAdapter';
 
 const TAG = '[SubtitleBridgeAdapter]';
 const MAX_SUBTITLE_PROBE_CANDIDATES = 12;
@@ -744,10 +745,80 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
 export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
-    // 隐藏内嵌字幕以避免长时间的字幕提取等待
-    // 扫描时仍然会保存所有轨道信息到数据库（供未来优化使用）
-    // 运行时只通过 loadExternalTracks() 加载外置字幕
-    return [];
+    if (!(this.player instanceof IjkPlayerAdapter)) {
+      return [];
+    }
+    const streams: IjkInternalSubtitleStream[] = this.player.getIjkInternalSubtitleStreams();
+    if (streams.length === 0) {
+      return [];
+    }
+
+    const items: SubtitleTrackItem[] = [];
+    for (let i = 0; i < streams.length; i++) {
+      const s = streams[i];
+      const langDisplay = s.language.length > 0
+        ? FfprobeUtil.getLanguageDisplayName(s.language)
+        : '';
+      const displayName = langDisplay.length > 0
+        ? `字幕 ${i + 1} (${langDisplay})`
+        : `字幕 ${i + 1}`;
+      const item: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName,
+        internalIndex: s.streamIndex
+      };
+      items.push(item);
+    }
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[字幕指标] ijk 内嵌字幕轨道识别: ${items.length} 条`);
+    return items;
+  }
+
+  async switchTrack(allIndex: number): Promise<void> {
+    if (!this.player) {
+      return;
+    }
+
+    if (allIndex < 0) {
+      this.activeSubtitleIndex = -1;
+      this.currentSubtitleText = '';
+      this.srtEntries = [];
+      this.lastSrtText = '';
+      this.currentSubtitleTrack = -1;
+      if (this.player instanceof IjkPlayerAdapter) {
+        this.player.selectIjkSubtitleStream(-1);
+      }
+      return;
+    }
+
+    if (allIndex >= this.allSubtitleTracks.length) {
+      return;
+    }
+
+    this.activeSubtitleIndex = allIndex;
+    this.currentSubtitleText = '';
+
+    const target = this.allSubtitleTracks[allIndex];
+    if (target.kind === 'external') {
+      const entries = target.srtEntries ?? [];
+      this.srtEntries = entries;
+      this.lastSrtText = '';
+      this.currentSubtitleTrack = -1;
+      if (this.player instanceof IjkPlayerAdapter) {
+        this.player.selectIjkSubtitleStream(-1);
+      }
+      return;
+    }
+
+    // 内嵌字幕：通过 ijk selectTrack("s:N") 激活
+    this.srtEntries = [];
+    this.lastSrtText = '';
+    const streamIndex = target.internalIndex ?? 0;
+    this.currentSubtitleTrack = streamIndex;
+    if (this.player instanceof IjkPlayerAdapter) {
+      this.player.selectIjkSubtitleStream(streamIndex);
+    }
   }
 }
 
