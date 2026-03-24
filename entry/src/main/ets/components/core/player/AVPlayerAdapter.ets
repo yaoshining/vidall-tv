@@ -9,7 +9,8 @@ import { CommonConstants } from '../../../common/constants/CommonConstants';
 
 const TAG = '[AVPlayerAdapter]';
 
-const ENABLE_AVPLAYER_TRACK_DIAG_LOG = false;
+// 轨道信息诊断日志：常态开启，记录字幕轨道 language/mimeType 完整度（#17/#63）
+const ENABLE_AVPLAYER_TRACK_DIAG_LOG = true;
 const ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG = false;
 
 /**
@@ -172,12 +173,22 @@ export class AVPlayerAdapter implements IPlayer {
         result.push(info);
       }
       if (ENABLE_AVPLAYER_TRACK_DIAG_LOG) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, `getTrackInfos 返回轨道数: ${result.length}`);
+        const subtitleCount = result.filter((t: TrackInfo) => t.trackType === 'subtitle').length;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[轨道识别] 总轨道=${result.length} 字幕轨道=${subtitleCount}`);
         for (let i = 0; i < result.length; i++) {
           const track = result[i];
+          if (track.trackType !== 'subtitle') {
+            continue;
+          }
+          const hasLang = track.language !== undefined && track.language.length > 0;
+          const hasMime = track.mimeType !== undefined && track.mimeType.length > 0;
+          const completeness = (hasLang ? 1 : 0) + (hasMime ? 1 : 0);
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `getTrackInfos 轨道[${i}]: index=${track.trackIndex} type=${track.trackType}` +
-            ` mime=${track.mimeType ?? ''} lang=${track.language ?? ''}`);
+            `[轨道识别] 字幕[${i}] index=${track.trackIndex}` +
+            ` lang=${track.language ?? '(空)'}` +
+            ` mime=${track.mimeType ?? '(空)'}` +
+            ` 完整度=${completeness}/2`);
         }
       }
       return result;

@@ -58,7 +58,8 @@ export class IjkPlayerAdapter implements IPlayer {
 
   // ─── 定时器（轮询 currentTime） ───
   private _timeUpdateTimer?: number;
-  private readonly TIME_UPDATE_INTERVAL = 500; // ms
+  // 100ms 轮询确保外置字幕显示偏差 P95 ≤ 120ms（#17）
+  private readonly TIME_UPDATE_INTERVAL = 100; // ms
 
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
@@ -600,8 +601,13 @@ export class IjkPlayerAdapter implements IPlayer {
     // onSeekComplete
     const onSeekCompleteListener: OnSeekCompleteListener = {
       onSeekComplete: () => {
+        const pos = this.ijk.getCurrentPosition();
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `onSeekComplete — currentPosition=${this.ijk.getCurrentPosition()}ms`);
+          `onSeekComplete — currentPosition=${pos}ms`);
+        // seek 完成后立即触发一次 onTimeUpdate，使外置字幕无需等待下个 tick 就能重定位
+        // 最差恢复时延从 ~500ms 降到 seek 完成延迟（通常 <100ms）—— #17
+        this._currentTime = pos;
+        if (this._onTimeUpdateCb) { this._onTimeUpdateCb(pos); }
         if (this._onSeekDoneCb) { this._onSeekDoneCb(); }
       }
     };
@@ -652,8 +658,10 @@ export class IjkPlayerAdapter implements IPlayer {
   }
 
   /**
-   * 启动定时器，每 500ms 轮询 getCurrentPosition()
-   * IjkPlayer 没有 timeUpdate 事件，必须用轮询实现
+   * 启动定时器，每 100ms 轮询 getCurrentPosition()
+   * IjkPlayer 没有 timeUpdate 事件，必须用轮询实现。
+   * 100ms 间隔满足字幕偏差 P95 ≤ 120ms 目标（#17）；
+   * seek 后 onSeekComplete 会额外触发一次立即刷新，保证恢复时延 ≤ 200ms。
    */
   private startTimeUpdateTimer(): void {
     if (this._timeUpdateTimer !== undefined) {
