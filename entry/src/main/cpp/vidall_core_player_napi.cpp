@@ -875,6 +875,8 @@ static bool RunExtractSubtitleTrack(
   bool firstSubtitleLogged = false;
   int64_t lastDecodedPts = AV_NOPTS_VALUE; // 去重：跳过 seek 后重复的 packet
 
+  bool firstEmptyLogged = false; // 诊断：gotSubtitle=1 但 text 为空
+
   auto decodePacket = [&](AVPacket *pkt) {
     AVSubtitle subtitle;
     int gotSubtitle = 0;
@@ -891,8 +893,23 @@ static bool RunExtractSubtitleTrack(
       std::string part;
       if (rect->type == SUBTITLE_ASS && rect->ass) {
         part = ExtractAssDialogueText(rect->ass);
+        // 一次性诊断：记录原始 ass 行辅助排查文本为空的原因
+        if (part.empty() && !firstEmptyLogged && text.empty()) {
+          firstEmptyLogged = true;
+          char preview[64] = {};
+          snprintf(preview, sizeof(preview), "%.60s", rect->ass);
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+            "[ExtractSub] empty_ass num_rects=%{public}u raw=%.60s",
+            subtitle.num_rects, preview);
+        }
       } else if (rect->type == SUBTITLE_TEXT && rect->text) {
         part = StripAssOverrideCodes(std::string(rect->text));
+      } else if (!firstEmptyLogged) {
+        // 非 ASS/TEXT 类型（如 BITMAP）：记录一次
+        firstEmptyLogged = true;
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+          "[ExtractSub] non_text_rect type=%{public}d num_rects=%{public}u startMs=%{public}lld",
+          (int)rect->type, subtitle.num_rects, (long long)startMs);
       }
       if (!part.empty()) {
         if (!text.empty()) { text += "\n"; }
