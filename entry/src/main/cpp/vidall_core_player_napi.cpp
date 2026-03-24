@@ -899,7 +899,7 @@ static bool RunExtractSubtitleTrack(
           char preview[64] = {};
           snprintf(preview, sizeof(preview), "%.60s", rect->ass);
           OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
-            "[ExtractSub] empty_ass num_rects=%{public}u raw=%.60s",
+            "[ExtractSub] empty_ass num_rects=%{public}u raw=%{public}.60s",
             subtitle.num_rects, preview);
         }
       } else if (rect->type == SUBTITLE_TEXT && rect->text) {
