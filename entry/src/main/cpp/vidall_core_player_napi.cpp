@@ -907,26 +907,45 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       }
       avsubtitle_free(&sub);
     } else {
-      // 无解码器：subrip 在 MKV 中 pkt->data 即为原始 UTF-8 文本
+      // 无解码器：subrip 在 MKV 中 pkt->data 可能是 ASS block 格式或纯 SRT 文本
       text = std::string(reinterpret_cast<char *>(pkt->data),
                          static_cast<size_t>(pkt->size));
-      // 去除可能的 SRT 格式头（序号行、时间行）
-      size_t lineStart = 0;
-      for (int linePass = 0; linePass < 3 && lineStart < text.size(); linePass++) {
-        size_t nlPos = text.find('\n', lineStart);
-        if (nlPos == std::string::npos) break;
-        std::string line = text.substr(lineStart, nlPos - lineStart);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        bool isSeqOrTime = !line.empty() &&
-          (std::all_of(line.begin(), line.end(), ::isdigit) ||
-           line.find("-->") != std::string::npos);
-        if (isSeqOrTime) {
-          lineStart = nlPos + 1;
+      // 检测 MKV ASS block 格式：readorder,layer,style,name,marginL,marginR,marginV,effect,text
+      // 特征：首字符为数字，前 200 字节内有 8 个逗号
+      bool isAssBlock = !text.empty() && std::isdigit((unsigned char)text[0]);
+      if (isAssBlock) {
+        int commas = 0;
+        size_t pos = 0;
+        size_t scanEnd = std::min(text.size(), (size_t)200);
+        while (pos < scanEnd && commas < 8) {
+          if (text[pos] == ',') commas++;
+          pos++;
+        }
+        if (commas == 8 && pos < text.size()) {
+          text = StripAssOverrideTags(text.substr(pos));
         } else {
-          break;
+          isAssBlock = false; // 逗号不足，不是 ASS block，走 SRT 路径
         }
       }
-      text = text.substr(lineStart);
+      if (!isAssBlock) {
+        // SRT 格式：去除序号行和时间行
+        size_t lineStart = 0;
+        for (int linePass = 0; linePass < 3 && lineStart < text.size(); linePass++) {
+          size_t nlPos = text.find('\n', lineStart);
+          if (nlPos == std::string::npos) break;
+          std::string line = text.substr(lineStart, nlPos - lineStart);
+          if (!line.empty() && line.back() == '\r') line.pop_back();
+          bool isSeqOrTime = !line.empty() &&
+            (std::all_of(line.begin(), line.end(), ::isdigit) ||
+             line.find("-->") != std::string::npos);
+          if (isSeqOrTime) {
+            lineStart = nlPos + 1;
+          } else {
+            break;
+          }
+        }
+        text = text.substr(lineStart);
+      }
       size_t ts = text.find_first_not_of(" \t\r\n");
       size_t te = text.find_last_not_of(" \t\r\n");
       if (ts != std::string::npos) {
