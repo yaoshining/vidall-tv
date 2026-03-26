@@ -666,6 +666,8 @@ export class IjkPlayerAdapter implements IPlayer {
     // onTimedText：内嵌字幕（SRT / ASS 轨道）回调
     const onTimedTextListener: OnTimedTextListener = {
       onTimedText: (text: string) => {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[IjkSub] onTimedText fired len=${text.length} preview="${text.substring(0, 40)}"`);
         if (this._onEmbeddedSubtitleCb) {
           this._onEmbeddedSubtitleCb(text);
         }

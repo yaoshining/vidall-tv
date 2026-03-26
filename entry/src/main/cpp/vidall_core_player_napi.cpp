@@ -653,6 +653,302 @@ static napi_value Ffprobe(napi_env env, napi_callback_info info) {
   return promise;
 }
 
+// ─────────────────────────────────────────────────────────────
+// ExtractSubtitleEntries: 从 MKV 等容器提取指定字幕流的全部条目
+// 返回 JSON 数组：[{"startMs":N,"endMs":N,"text":"..."},...]
+// 对于 subrip(SRT) 类型，pkt->data 即为原始文本，无需解码器
+// ─────────────────────────────────────────────────────────────
+
+struct ExtractSubAsyncContext {
+  napi_async_work work = nullptr;
+  napi_deferred deferred = nullptr;
+  std::string url;
+  std::string headerLines;
+  int streamIndex = -1;
+  int64_t timeoutMs = 30000;
+  std::string jsonResult;
+  std::string errorMessage;
+};
+
+static std::string StripAssOverrideTags(const std::string &text) {
+  std::string out;
+  out.reserve(text.size());
+  bool inTag = false;
+  for (char c : text) {
+    if (c == '{') { inTag = true; continue; }
+    if (c == '}') { inTag = false; continue; }
+    if (!inTag) out += c;
+  }
+  // 替换 \N（ASS 强制换行）为 \n
+  size_t pos = 0;
+  while ((pos = out.find("\\N", pos)) != std::string::npos) {
+    out.replace(pos, 2, "\n");
+  }
+  return out;
+}
+
+// 从 ASS Dialogue 行提取纯文本（格式：Dialogue: layer,start,end,style,...,text）
+static std::string ParseAssDialogue(const char *ass) {
+  if (ass == nullptr) return "";
+  // 跳过 9 个逗号分隔的字段到文本部分
+  int commas = 0;
+  const char *p = ass;
+  while (*p && commas < 9) {
+    if (*p == ',') commas++;
+    p++;
+  }
+  if (commas < 9) return ass; // 解析失败，返回原始
+  return StripAssOverrideTags(std::string(p));
+}
+
+static void ExecuteExtractSubAsync(napi_env env, void *data) {
+  (void)env;
+  ExtractSubAsyncContext *ctx = static_cast<ExtractSubAsyncContext *>(data);
+  if (ctx == nullptr) return;
+
+  avformat_network_init();
+
+  ProbeInterruptContext interruptCtx;
+  interruptCtx.startTimeUs = av_gettime_relative();
+  interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 0;
+
+  AVFormatContext *formatCtx = avformat_alloc_context();
+  if (formatCtx == nullptr) {
+    ctx->errorMessage = "extractSub: cannot alloc format context";
+    return;
+  }
+  formatCtx->interrupt_callback.callback = ProbeInterruptCallback;
+  formatCtx->interrupt_callback.opaque = &interruptCtx;
+
+  AVDictionary *options = nullptr;
+  if (!ctx->headerLines.empty()) {
+    av_dict_set(&options, "headers", ctx->headerLines.c_str(), 0);
+  }
+
+  int ret = avformat_open_input(&formatCtx, ctx->url.c_str(), nullptr, &options);
+  av_dict_free(&options);
+  if (ret < 0) {
+    ctx->errorMessage = "extractSub: open input failed: " + FfmpegErrorToString(ret);
+    if (formatCtx) avformat_close_input(&formatCtx);
+    return;
+  }
+
+  ret = avformat_find_stream_info(formatCtx, nullptr);
+  if (ret < 0) {
+    ctx->errorMessage = "extractSub: find stream info failed: " + FfmpegErrorToString(ret);
+    avformat_close_input(&formatCtx);
+    return;
+  }
+
+  const int si = ctx->streamIndex;
+  if (si < 0 || si >= (int)formatCtx->nb_streams ||
+      formatCtx->streams[si]->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE) {
+    ctx->errorMessage = "extractSub: invalid subtitle stream index " + std::to_string(si);
+    avformat_close_input(&formatCtx);
+    return;
+  }
+
+  AVStream *subStream = formatCtx->streams[si];
+  AVRational tb = subStream->time_base;
+
+  // 尝试打开解码器（subrip 在 OHOS 可能未编译进去，则退回原始包）
+  const AVCodec *codec = avcodec_find_decoder(subStream->codecpar->codec_id);
+  AVCodecContext *codecCtx = nullptr;
+  if (codec != nullptr) {
+    codecCtx = avcodec_alloc_context3(codec);
+    if (codecCtx != nullptr) {
+      avcodec_parameters_to_context(codecCtx, subStream->codecpar);
+      if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
+        avcodec_free_context(&codecCtx);
+        codecCtx = nullptr;
+      }
+    }
+  }
+
+  // 只读目标字幕流，丢弃其他
+  for (unsigned int i = 0; i < formatCtx->nb_streams; i++) {
+    formatCtx->streams[i]->discard = (i == (unsigned int)si) ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
+  }
+
+  std::string json = "[";
+  bool first = true;
+
+  AVPacket *pkt = av_packet_alloc();
+  while (av_read_frame(formatCtx, pkt) >= 0) {
+    if (pkt->stream_index != si || pkt->size <= 0 || pkt->data == nullptr) {
+      av_packet_unref(pkt);
+      continue;
+    }
+
+    int64_t startMs = (pkt->pts == AV_NOPTS_VALUE) ? 0 :
+      (int64_t)((double)pkt->pts * av_q2d(tb) * 1000.0);
+    int64_t endMs = (pkt->duration > 0) ?
+      startMs + (int64_t)((double)pkt->duration * av_q2d(tb) * 1000.0) :
+      startMs + 5000;
+
+    std::string text;
+
+    if (codecCtx != nullptr) {
+      // 有解码器：走 avcodec_decode_subtitle2
+      AVSubtitle sub = {};
+      int gotSub = 0;
+      int dr = avcodec_decode_subtitle2(codecCtx, &sub, &gotSub, pkt);
+      if (dr >= 0 && gotSub && sub.num_rects > 0) {
+        for (unsigned int r = 0; r < sub.num_rects; r++) {
+          if (sub.rects[r]->ass != nullptr) {
+            text = ParseAssDialogue(sub.rects[r]->ass);
+          } else if (sub.rects[r]->text != nullptr) {
+            text = std::string(sub.rects[r]->text);
+          }
+          if (!text.empty()) break;
+        }
+      }
+      avsubtitle_free(&sub);
+    } else {
+      // 无解码器：subrip 在 MKV 中 pkt->data 即为原始 UTF-8 文本
+      text = std::string(reinterpret_cast<char *>(pkt->data),
+                         static_cast<size_t>(pkt->size));
+      // 去除可能的 SRT 格式头（序号行、时间行）
+      // 找到第一个非数字、非冒号、非箭头的内容行
+      size_t lineStart = 0;
+      for (int linePass = 0; linePass < 3 && lineStart < text.size(); linePass++) {
+        size_t nlPos = text.find('\n', lineStart);
+        if (nlPos == std::string::npos) break;
+        std::string line = text.substr(lineStart, nlPos - lineStart);
+        // 去 \r
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        bool isSeqOrTime = !line.empty() &&
+          (std::all_of(line.begin(), line.end(), ::isdigit) ||
+           line.find("-->") != std::string::npos);
+        if (isSeqOrTime) {
+          lineStart = nlPos + 1;
+        } else {
+          break;
+        }
+      }
+      text = text.substr(lineStart);
+      // 去首尾空白
+      size_t ts = text.find_first_not_of(" \t\r\n");
+      size_t te = text.find_last_not_of(" \t\r\n");
+      if (ts != std::string::npos) {
+        text = text.substr(ts, te - ts + 1);
+      } else {
+        text.clear();
+      }
+    }
+
+    av_packet_unref(pkt);
+
+    if (text.empty()) continue;
+
+    if (!first) json += ",";
+    first = false;
+    json += "{\"startMs\":";
+    json += std::to_string(startMs);
+    json += ",\"endMs\":";
+    json += std::to_string(endMs);
+    json += ",\"text\":\"";
+    json += JsonEscape(text);
+    json += "\"}";
+  }
+  av_packet_free(&pkt);
+
+  if (codecCtx) avcodec_free_context(&codecCtx);
+  avformat_close_input(&formatCtx);
+
+  json += "]";
+  ctx->jsonResult = json;
+
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+               "extractSub stream=%d url=...done jsonLen=%zu",
+               si, ctx->jsonResult.size());
+}
+
+static void CompleteExtractSubAsync(napi_env env, napi_status status, void *data) {
+  ExtractSubAsyncContext *ctx = static_cast<ExtractSubAsyncContext *>(data);
+  if (ctx == nullptr) return;
+
+  napi_value settleValue = nullptr;
+  if (status == napi_ok && ctx->errorMessage.empty()) {
+    napi_create_string_utf8(env, ctx->jsonResult.c_str(), NAPI_AUTO_LENGTH, &settleValue);
+    napi_resolve_deferred(env, ctx->deferred, settleValue);
+  } else {
+    napi_value msg = nullptr;
+    napi_value err = nullptr;
+    const std::string &errStr = ctx->errorMessage.empty() ? "extractSub cancelled" : ctx->errorMessage;
+    napi_create_string_utf8(env, errStr.c_str(), NAPI_AUTO_LENGTH, &msg);
+    napi_create_error(env, nullptr, msg, &err);
+    napi_reject_deferred(env, ctx->deferred, err);
+  }
+
+  napi_delete_async_work(env, ctx->work);
+  delete ctx;
+}
+
+static napi_value ExtractSubtitleEntries(napi_env env, napi_callback_info info) {
+  size_t argc = 4;
+  napi_value args[4] = { nullptr, nullptr, nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 4) {
+    ThrowTypeError(env, "extractSubtitleEntries requires (url, headerLines, streamIndex, timeoutMs)");
+    return nullptr;
+  }
+
+  std::string url;
+  std::string headerLines;
+  int64_t streamIndex = -1;
+  int64_t timeoutMs = 30000;
+
+  if (!ReadUtf8String(env, args[0], url)) {
+    ThrowTypeError(env, "extractSubtitleEntries: url must be string");
+    return nullptr;
+  }
+  if (!ReadUtf8String(env, args[1], headerLines)) {
+    ThrowTypeError(env, "extractSubtitleEntries: headerLines must be string");
+    return nullptr;
+  }
+  if (napi_get_value_int64(env, args[2], &streamIndex) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleEntries: streamIndex must be int64");
+    return nullptr;
+  }
+  if (napi_get_value_int64(env, args[3], &timeoutMs) != napi_ok) {
+    ThrowTypeError(env, "extractSubtitleEntries: timeoutMs must be int64");
+    return nullptr;
+  }
+
+  ExtractSubAsyncContext *ctx = new ExtractSubAsyncContext();
+  ctx->url = url;
+  ctx->headerLines = headerLines;
+  ctx->streamIndex = (int)streamIndex;
+  ctx->timeoutMs = timeoutMs;
+
+  napi_value promise = nullptr;
+  if (napi_create_promise(env, &ctx->deferred, &promise) != napi_ok) {
+    delete ctx;
+    ThrowTypeError(env, "extractSubtitleEntries: failed to create promise");
+    return nullptr;
+  }
+
+  napi_value resourceName = nullptr;
+  napi_create_string_utf8(env, "extractSubtitleEntriesAsync", NAPI_AUTO_LENGTH, &resourceName);
+
+  if (napi_create_async_work(env, nullptr, resourceName,
+                             ExecuteExtractSubAsync, CompleteExtractSubAsync,
+                             ctx, &ctx->work) != napi_ok) {
+    delete ctx;
+    ThrowTypeError(env, "extractSubtitleEntries: failed to create async work");
+    return nullptr;
+  }
+
+  if (napi_queue_async_work(env, ctx->work) != napi_ok) {
+    napi_delete_async_work(env, ctx->work);
+    delete ctx;
+    ThrowTypeError(env, "extractSubtitleEntries: failed to queue work");
+    return nullptr;
+  }
+
+  return promise;
+}
+
 struct NativePlayerSkeletonState {
   std::string url;
   std::string headersJson;
@@ -2764,7 +3060,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "isVpeDetailEnhancerSupported", nullptr, IsVpeDetailEnhancerSupported, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "extractSubtitleEntries", nullptr, ExtractSubtitleEntries, nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

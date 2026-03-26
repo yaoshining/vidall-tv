@@ -3,7 +3,7 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
-import { FfprobeUtil, type FfprobeTrack } from '../../../utils/FfprobeUtil';
+import { FfprobeUtil, type FfprobeTrack, type EmbeddedSubEntry } from '../../../utils/FfprobeUtil';
 import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
@@ -796,8 +796,79 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   }
 
   /**
+   * 对于 IjkPlayer：内嵌字幕改用"全量提取 → srtEntries"模式。
+   * 原因：ohos_ijkplayer 的 FFmpeg 构建未启用 subrip 解码器（CONFIG_SUBRIP_DECODER=0），
+   * FFP_MSG_TIMED_TEXT 永远不会触发。改用 VidAll_TV 自身的 libffmpeg.so（含 subrip）
+   * 提前提取全部字幕条目，与外置 SRT 共用同一套时间轴轮询机制。
+   */
+  override async switchTrack(allIndex: number): Promise<void> {
+    if (!this.player) {
+      return;
+    }
+
+    if (allIndex < 0) {
+      this.activeSubtitleIndex = -1;
+      this.currentSubtitleText = '';
+      this.srtEntries = [];
+      this.lastSrtText = '';
+      this.currentSubtitleTrack = -1;
+      await this.player.selectTrack(-1);
+      return;
+    }
+
+    if (allIndex >= this.allSubtitleTracks.length) {
+      return;
+    }
+
+    this.activeSubtitleIndex = allIndex;
+    this.currentSubtitleText = '';
+
+    const target = this.allSubtitleTracks[allIndex];
+    if (target.kind === 'external') {
+      // 外置 SRT：与 Base 行为一致
+      const entries = target.srtEntries ?? [];
+      this.srtEntries = entries;
+      this.lastSrtText = '';
+      this.currentSubtitleTrack = -1;
+      await this.player.selectTrack(-1);
+      return;
+    }
+
+    // 内嵌轨道：提取全部字幕条目（VidAll_TV 的 libffmpeg.so 支持 subrip）
+    const internalIndex = target.internalIndex ?? -1;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub] 开始提取内嵌字幕 stream=${internalIndex}`);
+
+    this.srtEntries = [];
+    this.lastSrtText = '';
+    this.currentSubtitleTrack = internalIndex; // 仅记录，不调用 selectTrack
+
+    if (internalIndex >= 0 && this.videoData) {
+      const rawEntries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
+        this.videoData.videoSrc,
+        this.videoData.httpHeader,
+        internalIndex,
+        25000
+      );
+      const entries: SrtEntry[] = [];
+      for (let i = 0; i < rawEntries.length; i++) {
+        const re: EmbeddedSubEntry = rawEntries[i];
+        const se: SrtEntry = {
+          startMs: re.startMs,
+          endMs: re.endMs,
+          text: IjkSubtitleBridgeAdapter.stripSubtitleMarkup(re.text)
+        };
+        entries.push(se);
+      }
+      this.srtEntries = entries;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[IjkSub] 内嵌字幕提取完成 stream=${internalIndex} count=${entries.length}`);
+    }
+  }
+
+  /**
    * 处理 IJKPlayer onTimedText 回调。
-   * - 优先级：外置 SRT 激活时不替换（srtEntries > 0）
+   * - 优先级：外置 SRT 或内嵌提取模式激活时不替换（srtEntries > 0）
    * - 需要内嵌字幕轨道已被选中（currentSubtitleTrack >= 0）
    * - 自动剥离 ASS override codes {..} 和 HTML 标签 <..>
    */

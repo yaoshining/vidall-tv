@@ -5,6 +5,7 @@ export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
 
 interface FfprobeNapiBridge {
   ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
+  extractSubtitleEntries: (url: string, headerLines: string, streamIndex: number, timeoutMs: number) => Promise<string>;
 }
 
 interface FfprobeNapiBridgeModule {
@@ -259,6 +260,13 @@ function parseRawStream(raw: RawStream): FfprobeTrack {
  * 使用示例：
  * const result = await FfprobeUtil.probe(url, { Authorization: 'Basic xxx' });
  */
+/** extractEmbeddedSubtitles 返回的单条字幕 */
+export interface EmbeddedSubEntry {
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
 export class FfprobeUtil {
   private static readonly MAX_CONCURRENT_PROBES: number = 2;
   private static activeProbeCount: number = 0;
@@ -416,6 +424,37 @@ export class FfprobeUtil {
       errorMessage,
     };
     return result;
+  }
+
+  /**
+   * 从媒体文件中提取指定内嵌字幕流的所有字幕条目。
+   * 内部使用 VidAll_TV 自己的 libffmpeg.so（支持 subrip 解码器）。
+   * 返回 {startMs, endMs, text} 数组，可直接作为 SrtEntry[] 使用。
+   */
+  static async extractEmbeddedSubtitles(
+    url: string,
+    headers: Record<string, string> | undefined,
+    streamIndex: number,
+    timeoutMs: number = 20000
+  ): Promise<EmbeddedSubEntry[]> {
+    let headersStr = '';
+    if (headers) {
+      const keys = Object.keys(headers);
+      for (const key of keys) {
+        headersStr += `${key}: ${headers[key]}\r\n`;
+      }
+    }
+    try {
+      const jsonStr = await getVidAllCorePlayerNapi().extractSubtitleEntries(
+        url, headersStr, streamIndex, timeoutMs
+      );
+      const raw = JSON.parse(jsonStr) as EmbeddedSubEntry[];
+      return Array.isArray(raw) ? raw : [];
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[FfprobeUtil] extractEmbeddedSubtitles failed: ${err.message ?? JSON.stringify(e)}`);
+      return [];
+    }
   }
 
   /**
