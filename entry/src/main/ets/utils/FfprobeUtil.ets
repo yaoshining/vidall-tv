@@ -1,4 +1,5 @@
 import { BusinessError } from '@kit.BasicServicesKit';
+import hilog from '@ohos.hilog';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 
 export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
@@ -444,15 +445,25 @@ export class FfprobeUtil {
         headersStr += `${key}: ${headers[key]}\r\n`;
       }
     }
+    // 诊断：打印传入 NAPI 的参数（url 截断到 80 字符，header key 数量）
+    const headerKeyCount = headers ? Object.keys(headers).length : 0;
+    const urlPreview = url.length > 80 ? url.substring(0, 80) + '...' : url;
+    hilog.info(0x0000, 'FfprobeUtil',
+      `[extractEmbeddedSubtitles] si=${streamIndex} timeout=${timeoutMs} headerKeys=${headerKeyCount} url=${urlPreview}`);
     try {
       const jsonStr = await getVidAllCorePlayerNapi().extractSubtitleEntries(
         url, headersStr, streamIndex, timeoutMs
       );
+      // 诊断：打印原始 JSON 开头（最多 200 字符）
+      const preview = jsonStr.length > 200 ? jsonStr.substring(0, 200) + '...' : jsonStr;
+      hilog.info(0x0000, 'FfprobeUtil',
+        `[extractEmbeddedSubtitles] jsonLen=${jsonStr.length} preview=${preview}`);
       const raw = JSON.parse(jsonStr) as EmbeddedSubEntry[];
       return Array.isArray(raw) ? raw : [];
     } catch (e) {
       const err = e as BusinessError;
-      console.error(`[FfprobeUtil] extractEmbeddedSubtitles failed: ${err.message ?? JSON.stringify(e)}`);
+      hilog.error(0x0000, 'FfprobeUtil',
+        `[extractEmbeddedSubtitles] failed: ${err.message ?? JSON.stringify(e)}`);
       return [];
     }
   }

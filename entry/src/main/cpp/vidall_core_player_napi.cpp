@@ -790,20 +790,24 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
     }
   }
 
-  // 只读目标字幕流，丢弃其他
-  for (unsigned int i = 0; i < formatCtx->nb_streams; i++) {
-    formatCtx->streams[i]->discard = (i == (unsigned int)si) ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
-  }
+  // 不设置 AVDISCARD_ALL：在 WebDAV/HTTP 场景下，AVDISCARD_ALL 会触发
+  // Matroska demuxer 对每个 video/audio block 调用 avio_skip()，
+  // 进而发起大量 HTTP Range 请求（每帧一个），高 RTT 下速度极慢。
+  // 改为顺序读取全部 packet，在循环里过滤，仅保留目标字幕流数据。
 
   std::string json = "[";
   bool first = true;
+  int64_t totalPkts = 0;
+  int64_t subPkts = 0;
 
   AVPacket *pkt = av_packet_alloc();
   while (av_read_frame(formatCtx, pkt) >= 0) {
+    totalPkts++;
     if (pkt->stream_index != si || pkt->size <= 0 || pkt->data == nullptr) {
       av_packet_unref(pkt);
       continue;
     }
+    subPkts++;
 
     int64_t startMs = (pkt->pts == AV_NOPTS_VALUE) ? 0 :
       (int64_t)((double)pkt->pts * av_q2d(tb) * 1000.0);
@@ -834,13 +838,11 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       text = std::string(reinterpret_cast<char *>(pkt->data),
                          static_cast<size_t>(pkt->size));
       // 去除可能的 SRT 格式头（序号行、时间行）
-      // 找到第一个非数字、非冒号、非箭头的内容行
       size_t lineStart = 0;
       for (int linePass = 0; linePass < 3 && lineStart < text.size(); linePass++) {
         size_t nlPos = text.find('\n', lineStart);
         if (nlPos == std::string::npos) break;
         std::string line = text.substr(lineStart, nlPos - lineStart);
-        // 去 \r
         if (!line.empty() && line.back() == '\r') line.pop_back();
         bool isSeqOrTime = !line.empty() &&
           (std::all_of(line.begin(), line.end(), ::isdigit) ||
@@ -852,7 +854,6 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
         }
       }
       text = text.substr(lineStart);
-      // 去首尾空白
       size_t ts = text.find_first_not_of(" \t\r\n");
       size_t te = text.find_last_not_of(" \t\r\n");
       if (ts != std::string::npos) {
@@ -885,8 +886,8 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   ctx->jsonResult = json;
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
-               "extractSub stream=%d url=...done jsonLen=%zu",
-               si, ctx->jsonResult.size());
+               "extractSub done stream=%d totalPkts=%lld subPkts=%lld jsonLen=%zu",
+               si, (long long)totalPkts, (long long)subPkts, ctx->jsonResult.size());
 }
 
 static void CompleteExtractSubAsync(napi_env env, napi_status status, void *data) {
