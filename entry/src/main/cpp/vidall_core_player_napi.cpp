@@ -831,10 +831,42 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
     }
   }
 
-  // 不设置 AVDISCARD_ALL：在 WebDAV/HTTP 场景下，AVDISCARD_ALL 会触发
-  // Matroska demuxer 对每个 video/audio block 调用 avio_skip()，
-  // 进而发起大量 HTTP Range 请求（每帧一个），高 RTT 下速度极慢。
-  // 改为顺序读取全部 packet，在循环里过滤，仅保留目标字幕流数据。
+  // Cues-based seek 策略（针对蓝光原盘等非交错封装 MKV）：
+  // MKV Cues 元素记录了每条流各 Cluster 的字节偏移；FFmpeg 在 avformat_open_input 后
+  // 通过 SeekHead 读取 Cues，并将结果存入 stream index_entries。
+  // 若字幕流有 index_entries，可直接 seek 到字幕 Cluster 起始位置后顺序读取，
+  // 避免从文件头部顺序扫描大量视频/音频数据（可能需要数分钟）。
+  {
+    int nIdx = avformat_index_get_entries_count(subStream);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                 "extractSub stream[%d] nb_index_entries=%d", si, nIdx);
+    if (nIdx > 0) {
+      // 找字幕流所有 index_entries 中字节偏移最小的一个作为起始 seek 点
+      const AVIndexEntry *firstEntry = avformat_index_get_entry(subStream, 0);
+      int64_t minPos = firstEntry ? firstEntry->pos : INT64_MAX;
+      int64_t firstTs = firstEntry ? firstEntry->timestamp : 0;
+      for (int ie = 1; ie < nIdx; ie++) {
+        const AVIndexEntry *e = avformat_index_get_entry(subStream, ie);
+        if (e && e->pos < minPos) {
+          minPos = e->pos;
+          firstTs = e->timestamp;
+        }
+      }
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                   "extractSub cues-seek firstTs=%lld minPos=%lld nIdx=%d",
+                   (long long)firstTs, (long long)minPos, nIdx);
+      // seek 到字幕最早的 Cluster 位置；MKV demuxer 会用 Cues 精确定位
+      avformat_seek_file(formatCtx, si, firstTs - 1, firstTs, firstTs + 1, 0);
+      // 重置超时，为从字幕起始位置做顺序读取提供完整时间窗口
+      interruptCtx.startTimeUs = av_gettime_relative();
+      interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;
+    }
+    // 若 nb_index_entries == 0（Cues 无字幕条目），保持当前文件位置顺序读取
+  }
+
+  // 顺序读取 packet 并过滤字幕流
+  // 注意：不设 AVDISCARD_ALL——HTTP/WebDAV 场景下 AVDISCARD_ALL 会对每个 video/audio block
+  // 调用 avio_skip()，进而发起大量 HTTP Range 请求（每帧一次），高 RTT 下速度极慢。
 
   std::string json = "[";
   bool first = true;
