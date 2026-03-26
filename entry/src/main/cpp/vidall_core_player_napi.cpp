@@ -708,9 +708,10 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
 
   avformat_network_init();
 
+  // find_stream_info 阶段给 10s 超时（足够探测流信息），读包阶段单独计时
   ProbeInterruptContext interruptCtx;
   interruptCtx.startTimeUs = av_gettime_relative();
-  interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 0;
+  interruptCtx.timeoutUs = 10LL * 1000000LL; // 10s for open+find_stream_info
 
   AVFormatContext *formatCtx = avformat_alloc_context();
   if (formatCtx == nullptr) {
@@ -724,6 +725,9 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   if (!ctx->headerLines.empty()) {
     av_dict_set(&options, "headers", ctx->headerLines.c_str(), 0);
   }
+  // 限制 probe 量，避免 find_stream_info 在大型网络文件上耗费过长时间
+  av_dict_set(&options, "probesize", "65536", 0);
+  av_dict_set(&options, "analyzeduration", "0", 0);
 
   int ret = avformat_open_input(&formatCtx, ctx->url.c_str(), nullptr, &options);
   av_dict_free(&options);
@@ -740,9 +744,24 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
     return;
   }
 
+  // 重置中断时钟：find_stream_info 完成，给读包阶段完整的 timeoutMs 预算
+  interruptCtx.startTimeUs = av_gettime_relative();
+  interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;
+
   const int si = ctx->streamIndex;
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+               "extractSub nb_streams=%u target_si=%d", formatCtx->nb_streams, si);
+
   if (si < 0 || si >= (int)formatCtx->nb_streams ||
       formatCtx->streams[si]->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE) {
+    // 目标 index 不是字幕流，打印所有流信息辅助排查
+    for (unsigned int i = 0; i < formatCtx->nb_streams; i++) {
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                   "  stream[%u] codec_type=%d codec_id=%d",
+                   i,
+                   (int)formatCtx->streams[i]->codecpar->codec_type,
+                   (int)formatCtx->streams[i]->codecpar->codec_id);
+    }
     ctx->errorMessage = "extractSub: invalid subtitle stream index " + std::to_string(si);
     avformat_close_input(&formatCtx);
     return;
@@ -753,6 +772,10 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
 
   // 尝试打开解码器（subrip 在 OHOS 可能未编译进去，则退回原始包）
   const AVCodec *codec = avcodec_find_decoder(subStream->codecpar->codec_id);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+               "extractSub stream[%d] codec_id=%d decoder=%s",
+               si, (int)subStream->codecpar->codec_id,
+               codec ? codec->name : "NULL(raw-pkt-mode)");
   AVCodecContext *codecCtx = nullptr;
   if (codec != nullptr) {
     codecCtx = avcodec_alloc_context3(codec);
@@ -761,6 +784,8 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       if (avcodec_open2(codecCtx, codec, nullptr) < 0) {
         avcodec_free_context(&codecCtx);
         codecCtx = nullptr;
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "ExtractSub",
+                     "extractSub codec open failed, fallback to raw-pkt-mode");
       }
     }
   }

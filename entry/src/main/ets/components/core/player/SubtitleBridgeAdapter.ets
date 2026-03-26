@@ -848,7 +848,7 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         this.videoData.videoSrc,
         this.videoData.httpHeader,
         internalIndex,
-        25000
+        60000
       );
       const entries: SrtEntry[] = [];
       for (let i = 0; i < rawEntries.length; i++) {
