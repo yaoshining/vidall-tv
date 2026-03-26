@@ -777,16 +777,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     this.subtitleTracks = newSubtitleTracks;
 
     const items: SubtitleTrackItem[] = [];
-    // 只保留文本类字幕（subrip/ass/webvtt/text 等），跳过图像字幕（PGS/VOBSUB/DVB）
-    const imageBasedCodecs = new Set<string>([
-      'hdmv_pgs_subtitle', 'pgssub', 'dvd_subtitle', 'dvbsub', 'dvb_subtitle',
-      'xsub', 'dvb_teletext'
-    ]);
     for (let i = 0; i < rawTracks.length; i++) {
       const ft: FfprobeTrack = rawTracks[i];
-      if (imageBasedCodecs.has(ft.codecName.toLowerCase())) {
-        continue; // 图像字幕无法提取文本，跳过不显示
-      }
       const hasLang = ft.language.length > 0;
       const languageName = hasLang ? FfprobeUtil.getLanguageDisplayName(ft.language) : '';
       const displayName = languageName.length > 0

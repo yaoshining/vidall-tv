@@ -737,6 +737,30 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
     return;
   }
 
+  // MKV 等格式在 avformat_open_input 后已通过 Tracks 元素填充流信息，
+  // 可在调用耗时较长的 find_stream_info 之前就完成图像字幕的快速检测。
+  {
+    const int earlySi = ctx->streamIndex;
+    if (formatCtx->nb_streams > 0 &&
+        earlySi >= 0 && earlySi < (int)formatCtx->nb_streams &&
+        formatCtx->streams[earlySi]->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+      const AVCodecID earlyId = formatCtx->streams[earlySi]->codecpar->codec_id;
+      const char *earlyName = avcodec_get_name(earlyId);
+      bool earlyImageBased = (earlyId == AV_CODEC_ID_HDMV_PGS_SUBTITLE ||
+                              earlyId == AV_CODEC_ID_DVD_SUBTITLE ||
+                              earlyId == AV_CODEC_ID_DVB_SUBTITLE);
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                   "extractSub early-check stream[%d] codec=%s imageBased=%d",
+                   earlySi, earlyName ? earlyName : "?", (int)earlyImageBased);
+      if (earlyImageBased) {
+        ctx->errorMessage = std::string("image-based subtitle not supported: ") +
+                            (earlyName ? earlyName : "unknown");
+        avformat_close_input(&formatCtx);
+        return;
+      }
+    }
+  }
+
   ret = avformat_find_stream_info(formatCtx, nullptr);
   if (ret < 0) {
     ctx->errorMessage = "extractSub: find stream info failed: " + FfmpegErrorToString(ret);
@@ -896,15 +920,24 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   }
   av_packet_free(&pkt);
 
+  const int nbStreams = formatCtx ? (int)formatCtx->nb_streams : 0;
   if (codecCtx) avcodec_free_context(&codecCtx);
   avformat_close_input(&formatCtx);
 
-  json += "]";
-  ctx->jsonResult = json;
-
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
-               "extractSub done stream=%d totalPkts=%lld subPkts=%lld jsonLen=%zu",
-               si, (long long)totalPkts, (long long)subPkts, ctx->jsonResult.size());
+               "extractSub done stream=%d totalPkts=%lld subPkts=%lld",
+               si, (long long)totalPkts, (long long)subPkts);
+
+  if (first) {
+    // count=0：以错误形式 reject，让 ArkTS catch 能打印 codec/packet 诊断信息
+    ctx->errorMessage = "count=0 codec=" + std::string(subCodecName ? subCodecName : "?") +
+                        " totalPkts=" + std::to_string(totalPkts) +
+                        " subPkts=" + std::to_string(subPkts) +
+                        " nbStreams=" + std::to_string(nbStreams);
+  } else {
+    json += "]";
+    ctx->jsonResult = json;
+  }
 }
 
 static void CompleteExtractSubAsync(napi_env env, napi_status status, void *data) {
