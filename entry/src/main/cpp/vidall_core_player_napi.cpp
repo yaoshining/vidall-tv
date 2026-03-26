@@ -770,11 +770,28 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   AVStream *subStream = formatCtx->streams[si];
   AVRational tb = subStream->time_base;
 
+  // 检测图像类字幕（PGS/VOBSUB/DVB）：这类字幕数据是二进制位图，无法提取为文本，
+  // 直接快速失败，避免白白等待 60 秒超时。
+  const AVCodecID subCodecId = subStream->codecpar->codec_id;
+  const char *subCodecName = avcodec_get_name(subCodecId);
+  bool isImageBased = (subCodecId == AV_CODEC_ID_HDMV_PGS_SUBTITLE ||
+                       subCodecId == AV_CODEC_ID_DVD_SUBTITLE ||
+                       subCodecId == AV_CODEC_ID_DVB_SUBTITLE);
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+               "extractSub stream[%d] codec_id=%d codec_name=%s imageBased=%d",
+               si, (int)subCodecId, subCodecName ? subCodecName : "?", (int)isImageBased);
+  if (isImageBased) {
+    ctx->errorMessage = std::string("image-based subtitle not supported: ") +
+                        (subCodecName ? subCodecName : "unknown");
+    avformat_close_input(&formatCtx);
+    return;
+  }
+
   // 尝试打开解码器（subrip 在 OHOS 可能未编译进去，则退回原始包）
-  const AVCodec *codec = avcodec_find_decoder(subStream->codecpar->codec_id);
+  const AVCodec *codec = avcodec_find_decoder(subCodecId);
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
                "extractSub stream[%d] codec_id=%d decoder=%s",
-               si, (int)subStream->codecpar->codec_id,
+               si, (int)subCodecId,
                codec ? codec->name : "NULL(raw-pkt-mode)");
   AVCodecContext *codecCtx = nullptr;
   if (codec != nullptr) {
