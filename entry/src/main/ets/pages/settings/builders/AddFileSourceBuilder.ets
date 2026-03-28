@@ -27,7 +27,11 @@ struct AddFileSourceBuilderComponent {
       }) {
         SettingListItem({
           title: "SMB",
-          iconBuilder: SmbIcon
+          iconBuilder: SmbIcon,
+          isLink: true,
+          onItemClick: () => {
+            this.controller.pushType(SettingType.SMB_CONFIG)
+          }
         })
 
         SettingListItem({
