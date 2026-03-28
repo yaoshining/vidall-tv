@@ -2,7 +2,8 @@ import { SMBSourceConfig } from '../db/models/FileSourceEntity'
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NAPI 桥接接口（占位 - 待 Native C++ smb_napi.cpp 实现后真实接入）
+// NAPI 桥接接口（当前通过 vidall_core_player_napi.cpp / libvidall_core_player_napi.so 接入）
+// 如后续拆分为独立 smb_napi.cpp，再将 SMB 相关接口迁移到对应 NAPI 模块
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SmbTestConnectionResult {
@@ -30,6 +31,31 @@ export interface SmbListDirectoryResult {
 export interface SmbAuthInfo {
   username: string;
   domain: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NAPI default export 兼容层
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SmbNapiBridge {
+  smbTestConnection: (host: string, port: number, username: string, password: string, domain: string, shareName: string, timeoutMs: number) => Promise<Record<string, Object>>;
+  smbListDirectory: (host: string, port: number, username: string, password: string, domain: string, shareName: string, path: string, timeoutMs: number) => Promise<Record<string, Object>>;
+}
+
+interface SmbNapiBridgeModule {
+  default?: SmbNapiBridge;
+}
+
+function getModule(): SmbNapiBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as SmbNapiBridgeModule | SmbNapiBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as SmbNapiBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as SmbNapiBridge;
+  }
+  return bridgeModule as SmbNapiBridge;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,12 +118,25 @@ export class SMBClient {
    * 获取 SMB URL（smb://host/share 格式）
    */
   getSmbUrl(path?: string): string {
-    const base = `smb://${this.host}/${this.shareName}`;
-    if (!path || path === '/') {
+    const base: string = `smb://${this.host}/${this.shareName}`;
+    if (path === undefined) {
       return base;
     }
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${base}${normalizedPath}`;
+    const raw: string = path.trim();
+    if (raw.length === 0 || raw === '/') {
+      return base;
+    }
+    // 将反斜杠统一替换为正斜杠
+    let normalized: string = raw.split('\\').join('/');
+    // 确保以 / 开头
+    if (!normalized.startsWith('/')) {
+      normalized = '/' + normalized;
+    }
+    // 收敛连续多重斜杠
+    while (normalized.indexOf('//') !== -1) {
+      normalized = normalized.split('//').join('/');
+    }
+    return `${base}${normalized}`;
   }
 
   /**
@@ -107,7 +146,7 @@ export class SMBClient {
   async testConnection(): Promise<SmbTestConnectionResult> {
     console.info(`[SMBClient] testConnection: ${this.host}/${this.shareName}`);
     try {
-      const raw = await VidAllCorePlayerNapiModule.smbTestConnection(
+      const raw = await getModule().smbTestConnection(
         this.host,
         this.port,
         this.username,
@@ -128,9 +167,10 @@ export class SMBClient {
       }
       return result;
     } catch (e) {
+      const err = e as import('@kit.BasicServicesKit').BusinessError;
       const result: SmbTestConnectionResult = {
         success: false,
-        error: `调用失败: ${JSON.stringify(e)}`
+        error: err.message ?? '调用失败'
       };
       return result;
     }
@@ -143,7 +183,7 @@ export class SMBClient {
   async listDirectory(path: string): Promise<SmbListDirectoryResult> {
     console.info(`[SMBClient] listDirectory: ${this.getSmbUrl(path)}`);
     try {
-      const raw = await VidAllCorePlayerNapiModule.smbListDirectory(
+      const raw = await getModule().smbListDirectory(
         this.host,
         this.port,
         this.username,
@@ -173,9 +213,10 @@ export class SMBClient {
       }
       return result;
     } catch (e) {
+      const err = e as import('@kit.BasicServicesKit').BusinessError;
       const result: SmbListDirectoryResult = {
         files: [],
-        error: `调用失败: ${JSON.stringify(e)}`
+        error: err.message ?? '调用失败'
       };
       return result;
     }

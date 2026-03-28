@@ -531,11 +531,11 @@ export class SMBAdapter implements ISourceAdapter {
           sourceName: this.fileSource.name,
           sourceType: this.fileSource.type,
           directoryPath: rootPath,
-          filePath: this.client.getFullUrl(file.path),
+          filePath: file.path,           // 相对路径，与 WebDAVAdapter 保持一致
           fileName: file.name,
           fileSize: file.size,
           lastModified: file.lastModified > 0 ? new Date(file.lastModified).toISOString() : undefined,
-          wasProcessed: true
+          wasProcessed: false            // 未实现处理链前保持 false
         };
         console.info(
           `[VideoScanner][SMB] 文件源=${this.fileSource.name} | 路径=${file.path} | 文件名=${file.name} | 大小=${file.size} bytes`

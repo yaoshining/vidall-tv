@@ -31,7 +31,7 @@
 
 > **关于 SMB 状态**：UI 配置表单、适配器层、NAPI 桩函数均已就绪（含 `VIDALL_HAS_LIBSMB2` 编译守卫）。
 > 待 libsmb2 完成 ARM64 交叉编译后，将 `.so` 放入 `entry/libs/arm64-v8a/` 并以 `-DVIDALL_ENABLE_LIBSMB2=ON` 构建即可激活。
-> 详见 [`docs/smb-protocol.md`](docs/smb-protocol.md)。
+> 详见后续将补充的 SMB 协议设计文档（当前仓库暂未提供独立文档文件）。
 
 ---
 
