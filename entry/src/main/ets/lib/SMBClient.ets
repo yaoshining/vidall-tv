@@ -27,6 +27,11 @@ export interface SmbListDirectoryResult {
   error?: string;
 }
 
+export interface SmbAuthInfo {
+  username: string;
+  domain: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SMB 客户端配置
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,10 +191,11 @@ export class SMBClient {
   /**
    * 获取认证头信息（预留接口，SMB 认证通过 NTLM 在 Native 层处理）
    */
-  getAuthInfo(): { username: string; domain: string } {
-    return {
+  getAuthInfo(): SmbAuthInfo {
+    const info: SmbAuthInfo = {
       username: this.username,
       domain: this.domain
     };
+    return info;
   }
 }
