@@ -30,6 +30,32 @@ export interface WebDAVSourceConfig {
 }
 
 /**
+ * SMB / CIFS 文件源配置
+ *
+ * 用于连接局域网内的 Windows 共享目录或 NAS 设备，
+ * 支持 Workgroup 与 Windows AD 域两种认证模式。
+ */
+export interface SMBSourceConfig {
+  /** 服务器地址，IP 或主机名，如 "192.168.1.100" 或 "nas.local" */
+  host: string;
+  /** 端口号，默认 445；Samba 旧版可能使用 139 */
+  port?: number;
+  /** 认证用户名 */
+  username: string;
+  /** 认证密码 */
+  password: string;
+  /**
+   * Windows 域名（企业 AD 环境使用）。
+   * 普通工作组场景可留空，不影响连接。
+   */
+  domain?: string;
+  /** SMB 共享名，如 "nas-share"、"Videos" */
+  shareName: string;
+  /** 工作组名，默认 "WORKGROUP" */
+  workgroup?: string;
+}
+
+/**
  * 文件源实体
  */
 export interface FileSource {
