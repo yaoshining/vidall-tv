@@ -1,5 +1,6 @@
 import { Context } from '@ohos.abilityAccessCtrl';
-import { FileSource, FileSourceDirectory, FileSourceType } from '../db/models/FileSourceEntity';
+import { FileSource, FileSourceDirectory, FileSourceType, SMBSourceConfig } from '../db/models/FileSourceEntity';
+import { SMBClient } from '../lib/SMBClient';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
@@ -479,6 +480,73 @@ export class WebDAVAdapter implements ISourceAdapter {
 }
 
 // ─────────────────────────────────────────────
+// SMB 适配器
+// ─────────────────────────────────────────────
+
+export class SMBAdapter implements ISourceAdapter {
+  private client: SMBClient;
+  private fileSource: FileSource;
+
+  constructor(fileSource: FileSource) {
+    this.fileSource = fileSource;
+    const config = JSON.parse(fileSource.configJson) as SMBSourceConfig;
+    this.client = SMBClient.fromSourceConfig(config);
+  }
+
+  async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
+    console.info(
+      `[VideoScanner][SMB] 开始扫描: ${directoryPath} 最大深度: ${options.maxDepth}`
+    );
+    const results: VideoFileInfo[] = [];
+    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results);
+    return results;
+  }
+
+  private async scanDir(
+    rootPath: string,
+    dirPath: string,
+    currentDepth: number,
+    maxDepth: number,
+    results: VideoFileInfo[]
+  ): Promise<void> {
+    if (currentDepth > maxDepth) {
+      return;
+    }
+
+    const listResult = await this.client.listDirectory(dirPath);
+
+    if (listResult.error) {
+      console.warn(
+        `[VideoScanner][SMB] 列举目录失败: ${dirPath} error=${listResult.error}`
+      );
+      return;
+    }
+
+    for (const file of listResult.files) {
+      if (file.isDirectory) {
+        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, results);
+      } else if (isVideoFile(file.name)) {
+        const info: VideoFileInfo = {
+          sourceId: this.fileSource.id ?? 0,
+          sourceName: this.fileSource.name,
+          sourceType: this.fileSource.type,
+          directoryPath: rootPath,
+          filePath: this.client.getFullUrl(file.path),
+          fileName: file.name,
+          fileSize: file.size,
+          lastModified: file.lastModified > 0 ? new Date(file.lastModified).toISOString() : undefined,
+          wasProcessed: true
+        };
+        console.info(
+          `[VideoScanner][SMB] 文件源=${this.fileSource.name} | 路径=${file.path} | 文件名=${file.name} | 大小=${file.size} bytes`
+        );
+        results.push(info);
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
 // 不支持协议占位适配器
 // ─────────────────────────────────────────────
 
@@ -508,6 +576,8 @@ function createAdapter(fileSource: FileSource, scrapeClient?: ScrapeClient): ISo
   switch (fileSource.type) {
     case FileSourceType.WEBDAV:
       return new WebDAVAdapter(fileSource, scrapeClient);
+    case FileSourceType.SMB:
+      return new SMBAdapter(fileSource);
     default:
       return new UnsupportedAdapter(fileSource.name, fileSource.type);
   }

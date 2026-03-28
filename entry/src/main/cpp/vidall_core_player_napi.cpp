@@ -2738,6 +2738,99 @@ static napi_value UpdateVpeQuality(napi_env env, napi_callback_info /*info*/) {
 }
 #endif // VIDALL_HAS_VPE
 
+// ============================================================================
+// SMB Protocol NAPI Functions
+// ============================================================================
+
+/**
+ * smbTestConnection(host, port, username, password, domain, shareName, timeoutMs)
+ * -> Promise<{ success: boolean; error?: string; serverInfo?: string }>
+ *
+ * 阶段一（VIDALL_HAS_LIBSMB2=0）：返回未实现提示
+ * 阶段二（VIDALL_HAS_LIBSMB2=1）：调用 libsmb2 真实连接
+ */
+static napi_value SmbTestConnection(napi_env env, napi_callback_info info) {
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    napi_create_promise(env, &deferred, &promise);
+
+#if VIDALL_HAS_LIBSMB2
+    // TODO: Phase 2 - 使用 libsmb2 实现真实连接测试
+    // 需要 smb2_new_context() / smb2_connect_share() / smb2_get_error()
+    // 这里预留占位，避免编译错误
+    napi_value result;
+    napi_create_object(env, &result);
+    napi_value successVal;
+    napi_get_boolean(env, false, &successVal);
+    napi_set_named_property(env, result, "success", successVal);
+    napi_value errorMsg;
+    napi_create_string_utf8(env, "libsmb2 enabled but not yet implemented", NAPI_AUTO_LENGTH, &errorMsg);
+    napi_set_named_property(env, result, "error", errorMsg);
+    napi_resolve_deferred(env, deferred, result);
+#else
+    // libsmb2 未启用，返回明确的未实现状态
+    napi_value result;
+    napi_create_object(env, &result);
+
+    napi_value successVal;
+    napi_get_boolean(env, false, &successVal);
+    napi_set_named_property(env, result, "success", successVal);
+
+    napi_value errorMsg;
+    napi_create_string_utf8(env,
+        "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+        NAPI_AUTO_LENGTH, &errorMsg);
+    napi_set_named_property(env, result, "error", errorMsg);
+
+    napi_resolve_deferred(env, deferred, result);
+#endif
+
+    return promise;
+}
+
+/**
+ * smbListDirectory(host, port, username, password, domain, shareName, path, timeoutMs)
+ * -> Promise<{ files: SmbFileInfo[]; error?: string }>
+ *
+ * SmbFileInfo: { name, path, isDirectory, size, lastModified }
+ */
+static napi_value SmbListDirectory(napi_env env, napi_callback_info info) {
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    napi_create_promise(env, &deferred, &promise);
+
+#if VIDALL_HAS_LIBSMB2
+    // TODO: Phase 2 - 使用 libsmb2 实现目录列举
+    napi_value result;
+    napi_create_object(env, &result);
+    napi_value filesArr;
+    napi_create_array(env, &filesArr);
+    napi_set_named_property(env, result, "files", filesArr);
+    napi_value errorMsg;
+    napi_create_string_utf8(env, "libsmb2 enabled but not yet implemented", NAPI_AUTO_LENGTH, &errorMsg);
+    napi_set_named_property(env, result, "error", errorMsg);
+    napi_resolve_deferred(env, deferred, result);
+#else
+    // libsmb2 未启用，返回空文件列表和错误信息
+    napi_value result;
+    napi_create_object(env, &result);
+
+    napi_value filesArr;
+    napi_create_array(env, &filesArr);
+    napi_set_named_property(env, result, "files", filesArr);
+
+    napi_value errorMsg;
+    napi_create_string_utf8(env,
+        "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+        NAPI_AUTO_LENGTH, &errorMsg);
+    napi_set_named_property(env, result, "error", errorMsg);
+
+    napi_resolve_deferred(env, deferred, result);
+#endif
+
+    return promise;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -2764,7 +2857,9 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "isVpeDetailEnhancerSupported", nullptr, IsVpeDetailEnhancerSupported, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbTestConnection", nullptr, SmbTestConnection, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbListDirectory",  nullptr, SmbListDirectory,  nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");
