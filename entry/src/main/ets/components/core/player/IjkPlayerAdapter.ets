@@ -496,6 +496,10 @@ export class IjkPlayerAdapter implements IPlayer {
     // 精确 seek 会增加 HEVC 片源的回退解码压力，先关闭以降低崩溃概率。
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'enable-accurate-seek', '0');
 
+    // ── 字幕解码开关 ──
+    // 必须设为 1，否则 stream_component_open 会跳过 AVMEDIA_TYPE_SUBTITLE 分支，onTimedText 永远不会触发
+    this.ijk.setOptionLong(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'subtitle', '1');
+
     // ── 缓冲控制 ──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'max_cached_duration', '1500');
     // infbuf=1 可能导致长播时缓冲无上限增长，增加系统回收/强杀风险。
@@ -666,8 +670,15 @@ export class IjkPlayerAdapter implements IPlayer {
     // onTimedText：内嵌字幕（SRT / ASS 轨道）回调
     const onTimedTextListener: OnTimedTextListener = {
       onTimedText: (text: string) => {
+        // Hex dump first 30 UTF-16 code units for diagnosing raw ASS format
+        const hexParts: string[] = [];
+        const dumpLen = Math.min(text.length, 30);
+        for (let _i = 0; _i < dumpLen; _i++) {
+          const h = text.charCodeAt(_i).toString(16).toUpperCase().padStart(4, '0');
+          hexParts.push(h);
+        }
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[IjkSub] onTimedText fired len=${text.length} preview="${text.substring(0, 40)}"`);
+          `[IjkSub] onTimedText fired len=${text.length} hex=[${hexParts.join(' ')}] preview="${text.substring(0, 80)}"`);
         if (this._onEmbeddedSubtitleCb) {
           this._onEmbeddedSubtitleCb(text);
         }

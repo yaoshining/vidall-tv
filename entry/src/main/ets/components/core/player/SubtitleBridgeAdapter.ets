@@ -3,7 +3,7 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
-import { FfprobeUtil, type FfprobeTrack, type EmbeddedSubEntry } from '../../../utils/FfprobeUtil';
+import { FfprobeUtil, type FfprobeTrack } from '../../../utils/FfprobeUtil';
 import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
@@ -796,10 +796,9 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   }
 
   /**
-   * 对于 IjkPlayer：内嵌字幕改用"全量提取 → srtEntries"模式。
-   * 原因：ohos_ijkplayer 的 FFmpeg 构建未启用 subrip 解码器（CONFIG_SUBRIP_DECODER=0），
-   * FFP_MSG_TIMED_TEXT 永远不会触发。改用 VidAll_TV 自身的 libffmpeg.so（含 subrip）
-   * 提前提取全部字幕条目，与外置 SRT 共用同一套时间轴轮询机制。
+   * 对于 IjkPlayer：内嵌字幕走实时 onTimedText 路径。
+   * CI 构建的 ohos_ijkplayer 已启用 subrip/ass 解码器，FFP_MSG_TIMED_TEXT 会实时回调。
+   * 选轨后直接调用 selectTrack，等待 onEmbeddedTimedText 回调更新字幕文本。
    */
   override async switchTrack(allIndex: number): Promise<void> {
     if (!this.player) {
@@ -825,7 +824,7 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
 
     const target = this.allSubtitleTracks[allIndex];
     if (target.kind === 'external') {
-      // 外置 SRT：与 Base 行为一致
+      // 外置 SRT：填充 srtEntries，不选内嵌轨道
       const entries = target.srtEntries ?? [];
       this.srtEntries = entries;
       this.lastSrtText = '';
@@ -834,41 +833,23 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       return;
     }
 
-    // 内嵌轨道：提取全部字幕条目（VidAll_TV 的 libffmpeg.so 支持 subrip）
+    // 内嵌轨道：实时模式 —— 告知 ijkplayer 选轨，onTimedText 回调负责更新字幕文本
     const internalIndex = target.internalIndex ?? -1;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[IjkSub] 开始提取内嵌字幕 stream=${internalIndex}`);
+      `[IjkSub] 选择内嵌字幕轨 stream=${internalIndex}，等待 onTimedText 实时回调`);
 
     this.srtEntries = [];
     this.lastSrtText = '';
-    this.currentSubtitleTrack = internalIndex; // 仅记录，不调用 selectTrack
+    this.currentSubtitleTrack = internalIndex;
 
-    if (internalIndex >= 0 && this.videoData) {
-      const rawEntries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
-        this.videoData.videoSrc,
-        this.videoData.httpHeader,
-        internalIndex,
-        60000
-      );
-      const entries: SrtEntry[] = [];
-      for (let i = 0; i < rawEntries.length; i++) {
-        const re: EmbeddedSubEntry = rawEntries[i];
-        const se: SrtEntry = {
-          startMs: re.startMs,
-          endMs: re.endMs,
-          text: IjkSubtitleBridgeAdapter.stripSubtitleMarkup(re.text)
-        };
-        entries.push(se);
-      }
-      this.srtEntries = entries;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[IjkSub] 内嵌字幕提取完成 stream=${internalIndex} count=${entries.length}`);
+    if (internalIndex >= 0) {
+      await this.player.selectTrack(internalIndex);
     }
   }
 
   /**
-   * 处理 IJKPlayer onTimedText 回调。
-   * - 优先级：外置 SRT 或内嵌提取模式激活时不替换（srtEntries > 0）
+   * 处理 IJKPlayer onTimedText 实时回调。
+   * - 外置 SRT 激活时（srtEntries > 0）不覆盖
    * - 需要内嵌字幕轨道已被选中（currentSubtitleTrack >= 0）
    * - 自动剥离 ASS override codes {..} 和 HTML 标签 <..>
    */
@@ -879,7 +860,62 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     if (this.currentSubtitleTrack < 0) {
       return; // 未选中内嵌轨道
     }
-    this.currentSubtitleText = IjkSubtitleBridgeAdapter.stripSubtitleMarkup(text);
+    const parsed = IjkSubtitleBridgeAdapter.parseAssIfNeeded(text);
+    this.currentSubtitleText = IjkSubtitleBridgeAdapter.stripSubtitleMarkup(parsed);
+  }
+
+  /**
+   * 若字符串是 MKV ASS 格式（ReadOrder,Layer,Style,Name,0,0,0,Effect,Text），
+   * 跳过 8 个逗号提取 Text 字段并还原 \N 换行；否则返回原字符串（去尾部 \r\n）。
+   * 格式样例：1,0,Default,,0,0,0,,字幕文本\r\n
+   */
+  private static parseAssIfNeeded(raw: string): string {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub ASS raw] len=${raw.length} preview="${raw.substring(0, 120)}"`);
+
+    // 检测是否为 ASS 格式：第一字段为纯数字（ReadOrder），紧接逗号
+    const firstCommaIdx = raw.indexOf(',');
+    if (firstCommaIdx > 0 && firstCommaIdx < 10) {
+      let isNumeric = true;
+      for (let _c = 0; _c < firstCommaIdx; _c++) {
+        const code = raw.charCodeAt(_c);
+        if (code < 48 || code > 57) {
+          isNumeric = false;
+          break;
+        }
+      }
+      if (isNumeric) {
+        // 跳过 8 个逗号以到达 Text 字段
+        let pos = 0;
+        let commaCount = 0;
+        while (pos < raw.length && commaCount < 8) {
+          if (raw[pos] === ',') {
+            commaCount++;
+          }
+          pos++;
+        }
+        if (commaCount === 8) {
+          let textField = raw.substring(pos);
+          // 去尾部 \r\n
+          let end = textField.length;
+          while (end > 0 && (textField[end - 1] === '\r' || textField[end - 1] === '\n')) {
+            end--;
+          }
+          textField = textField.substring(0, end);
+          // \N → 换行
+          textField = textField.split('\\N').join('\n');
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[IjkSub ASS parsed] commas=8 text="${textField}"`);
+          return textField;
+        }
+      }
+    }
+    // 非 ASS 格式，去尾部空白后原样返回
+    let end = raw.length;
+    while (end > 0 && (raw[end - 1] === '\r' || raw[end - 1] === '\n')) {
+      end--;
+    }
+    return raw.substring(0, end);
   }
 
   /** 剥离 ASS override codes {..} 与 HTML 标签 <..>，返回纯文本 */
