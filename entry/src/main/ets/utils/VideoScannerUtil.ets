@@ -516,10 +516,9 @@ export class SMBAdapter implements ISourceAdapter {
     const listResult = await this.client.listDirectory(dirPath);
 
     if (listResult.error) {
-      console.warn(
-        `[VideoScanner][SMB] 列举目录失败: ${dirPath} error=${listResult.error}`
-      );
-      return;
+      const errMsg = `[SMBAdapter] scanDirectory failed: ${listResult.error} (path=${dirPath})`;
+      console.warn(errMsg);
+      throw new Error(errMsg);
     }
 
     for (const file of listResult.files) {
@@ -534,7 +533,7 @@ export class SMBAdapter implements ISourceAdapter {
           filePath: file.path,           // 相对路径，与 WebDAVAdapter 保持一致
           fileName: file.name,
           fileSize: file.size,
-          lastModified: file.lastModified > 0 ? new Date(file.lastModified).toISOString() : undefined,
+          lastModified: file.lastModifiedMs > 0 ? new Date(file.lastModifiedMs).toISOString() : undefined,
           wasProcessed: false            // 未实现处理链前保持 false
         };
         console.info(

@@ -181,13 +181,22 @@ struct SMBConfigBuilderComponent {
     this.isLoading = true
     this.loadingText = '保存中...'
 
+    // 编辑模式下保留原 createdAt，避免每次编辑都重写创建时间戳
+    let originalCreatedAt: number = Date.now();
+    if (this.isEditMode && this.editingFileSourceId !== undefined) {
+      const existing = FileSourceStore.getState().getFileSourceById(this.editingFileSourceId);
+      if (existing) {
+        originalCreatedAt = existing.createdAt;
+      }
+    }
+
     try {
       const config = this.buildConfig()
       const fileSource: FileSource = {
         name: this.serverName,
         type: FileSourceType.SMB,
         configJson: JSON.stringify(config),
-        createdAt: Date.now()
+        createdAt: originalCreatedAt
       }
       const store = FileSourceStore.getState()
       if (this.isEditMode && this.editingFileSourceId !== undefined) {

@@ -20,7 +20,8 @@ export interface SmbFileInfo {
   path: string;
   isDirectory: boolean;
   size: number;
-  lastModified: number;
+  /** Unix epoch 毫秒（ms）。Native 层实现时须保证返回毫秒，勿透传秒级时间戳。 */
+  lastModifiedMs: number;
 }
 
 export interface SmbListDirectoryResult {
@@ -202,7 +203,8 @@ export class SMBClient {
           path: fm['path'] as string,
           isDirectory: fm['isDirectory'] as boolean,
           size: fm['size'] as number,
-          lastModified: fm['lastModified'] as number
+          // Native 层须返回毫秒（ms）；Phase 2 实现时注意单位
+          lastModifiedMs: fm['lastModified'] as number
         };
         return fileInfo;
       });
