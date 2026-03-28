@@ -122,19 +122,23 @@ struct SMBConfigBuilderComponent {
     this.isLoading = true
     this.loadingText = '连接测试中...'
 
-    const config = this.buildConfig()
-    const client = SMBClient.fromSourceConfig(config)
-    const result = await client.testConnection()
-
-    this.isLoading = false
-    this.loadingText = ''
-    if (result.success) {
-      promptAction.showToast({ message: '连接成功', duration: 2000 })
-    } else {
-      promptAction.showToast({
-        message: result.error ?? '连接失败',
-        duration: 3000
-      })
+    try {
+      const config = this.buildConfig()
+      const client = SMBClient.fromSourceConfig(config)
+      const result = await client.testConnection()
+      if (result.success) {
+        promptAction.showToast({ message: '连接成功', duration: 2000 })
+      } else {
+        promptAction.showToast({
+          message: result.error ?? '连接失败',
+          duration: 3000
+        })
+      }
+    } catch (e) {
+      promptAction.showToast({ message: '连接测试异常', duration: 2000 })
+    } finally {
+      this.isLoading = false
+      this.loadingText = ''
     }
   }
 
