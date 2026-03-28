@@ -138,3 +138,32 @@ export const setCallbacks: (
   onBufferingChange: (isBuffering: boolean) => void,
   onSeekDone: () => void
 ) => void;
+
+/**
+ * 测试 SMB 连接。
+ * VIDALL_HAS_LIBSMB2=0 时返回 success:false + error 信息（非异常）。
+ */
+export const smbTestConnection: (
+  host: string,
+  port: number,
+  username: string,
+  password: string,
+  domain: string,
+  shareName: string,
+  timeoutMs: number
+) => Promise<Record<string, Object>>;
+
+/**
+ * 列举 SMB 共享目录。
+ * VIDALL_HAS_LIBSMB2=0 时返回空 files 数组 + error 信息（非异常）。
+ */
+export const smbListDirectory: (
+  host: string,
+  port: number,
+  username: string,
+  password: string,
+  domain: string,
+  shareName: string,
+  path: string,
+  timeoutMs: number
+) => Promise<Record<string, Object>>;
