@@ -1,4 +1,5 @@
 import { SMBSourceConfig } from '../db/models/FileSourceEntity'
+import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NAPI 桥接接口（占位 - 待 Native C++ smb_napi.cpp 实现后真实接入）
@@ -96,40 +97,83 @@ export class SMBClient {
 
   /**
    * 测试 SMB 连接
-   * 阶段一：Native 层未就绪时返回占位结果
+   * 调用 Native NAPI smbTestConnection，当前返回 success:false+"libsmb2 not compiled" 是预期行为
    */
   async testConnection(): Promise<SmbTestConnectionResult> {
-    // TODO: 待 Native smb_napi.cpp 实现后，替换为真实 NAPI 调用
-    // return await libvidall_core_player_napi.smbTestConnection(
-    //   this.host, this.port, this.username, this.password,
-    //   this.domain, this.shareName, this.timeoutMs
-    // )
+    console.info(`[SMBClient] testConnection: ${this.host}/${this.shareName}`);
+    try {
+      const raw = await VidAllCorePlayerNapiModule.smbTestConnection(
+        this.host,
+        this.port,
+        this.username,
+        this.password,
+        this.domain,
+        this.shareName,
+        this.timeoutMs
+      ) as Record<string, Object>;
 
-    console.info(`[SMBClient] testConnection called: ${this.host}/${this.shareName} (Native 层未就绪)`);
-    const result: SmbTestConnectionResult = {
-      success: false,
-      error: 'SMB Native 层开发中，暂不支持连接测试'
-    };
-    return result;
+      const result: SmbTestConnectionResult = {
+        success: raw['success'] as boolean
+      };
+      if (raw['error']) {
+        result.error = raw['error'] as string;
+      }
+      if (raw['serverInfo']) {
+        result.serverInfo = raw['serverInfo'] as string;
+      }
+      return result;
+    } catch (e) {
+      const result: SmbTestConnectionResult = {
+        success: false,
+        error: `调用失败: ${JSON.stringify(e)}`
+      };
+      return result;
+    }
   }
 
   /**
    * 列举指定路径下的文件和目录
-   * 阶段一：Native 层未就绪时返回空列表
+   * 调用 Native NAPI smbListDirectory
    */
   async listDirectory(path: string): Promise<SmbListDirectoryResult> {
-    // TODO: 待 Native smb_napi.cpp 实现后，替换为真实 NAPI 调用
-    // return await libvidall_core_player_napi.smbListDirectory(
-    //   this.host, this.port, this.username, this.password,
-    //   this.domain, this.shareName, path, this.timeoutMs
-    // )
+    console.info(`[SMBClient] listDirectory: ${this.getSmbUrl(path)}`);
+    try {
+      const raw = await VidAllCorePlayerNapiModule.smbListDirectory(
+        this.host,
+        this.port,
+        this.username,
+        this.password,
+        this.domain,
+        this.shareName,
+        path,
+        this.timeoutMs
+      ) as Record<string, Object>;
 
-    console.info(`[SMBClient] listDirectory called: ${this.getSmbUrl(path)} (Native 层未就绪)`);
-    const result: SmbListDirectoryResult = {
-      files: [],
-      error: 'SMB Native 层开发中，暂不支持目录列举'
-    };
-    return result;
+      const filesRaw = raw['files'] as Object[];
+      const files: SmbFileInfo[] = filesRaw.map((f) => {
+        const fm = f as Record<string, Object>;
+        const fileInfo: SmbFileInfo = {
+          name: fm['name'] as string,
+          path: fm['path'] as string,
+          isDirectory: fm['isDirectory'] as boolean,
+          size: fm['size'] as number,
+          lastModified: fm['lastModified'] as number
+        };
+        return fileInfo;
+      });
+
+      const result: SmbListDirectoryResult = { files };
+      if (raw['error']) {
+        result.error = raw['error'] as string;
+      }
+      return result;
+    } catch (e) {
+      const result: SmbListDirectoryResult = {
+        files: [],
+        error: `调用失败: ${JSON.stringify(e)}`
+      };
+      return result;
+    }
   }
 
   /**

@@ -5,6 +5,7 @@ import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 import promptAction from '@ohos.promptAction'
+import { SMBClient } from '../../../lib/SMBClient'
 
 @ComponentV2
 struct SMBConfigBuilderComponent {
@@ -99,7 +100,7 @@ struct SMBConfigBuilderComponent {
   }
 
   /**
-   * 测试连接（阶段一：SMBClient 未实现，仅显示提示）
+   * 测试连接：调用 SMBClient 真实 NAPI 桩函数
    */
   private async handleTestConnection(): Promise<void> {
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '名称')
@@ -120,12 +121,21 @@ struct SMBConfigBuilderComponent {
 
     this.isLoading = true
     this.loadingText = '连接测试中...'
-    await new Promise<void>((resolve) => {
-      setTimeout(() => resolve(), 500)
-    })
+
+    const config = this.buildConfig()
+    const client = SMBClient.fromSourceConfig(config)
+    const result = await client.testConnection()
+
     this.isLoading = false
     this.loadingText = ''
-    promptAction.showToast({ message: 'SMB 连接功能开发中，敬请期待', duration: 2000 })
+    if (result.success) {
+      promptAction.showToast({ message: '连接成功', duration: 2000 })
+    } else {
+      promptAction.showToast({
+        message: result.error ?? '连接失败',
+        duration: 3000
+      })
+    }
   }
 
   /**
