@@ -19,6 +19,22 @@
 
 ---
 
+## 文件源协议支持
+
+| 协议 | 状态 | 说明 |
+|---|---|---|
+| WebDAV | ✅ 已实现 | 支持 HTTP/HTTPS，自签名证书，完整目录扫描；基于 libcurl NAPI |
+| SMB/CIFS | 🚧 架构就绪 | `SMBAdapter` + `SMBConfigBuilder` + NAPI 桩完整；Native libsmb2 待交叉编译后启用 |
+| NFS | ⏳ 计划中 | 预留扩展接口（`ISourceAdapter`），待 Phase 3 实现 |
+| 阿里云盘 | ⏳ 计划中 | — |
+| 百度网盘 | ⏳ 计划中 | — |
+
+> **关于 SMB 状态**：UI 配置表单、适配器层、NAPI 桩函数均已就绪（含 `VIDALL_HAS_LIBSMB2` 编译守卫）。
+> 待 libsmb2 完成 ARM64 交叉编译后，将 `.so` 放入 `entry/libs/arm64-v8a/` 并以 `-DVIDALL_ENABLE_LIBSMB2=ON` 构建即可激活。
+> 详见 [`docs/smb-protocol.md`](docs/smb-protocol.md)。
+
+---
+
 ## 技术架构
 
 ```
@@ -33,7 +49,9 @@
 │  ├── ffprobe  媒体信息探测                  │
 │  ├── VPE     VideoProcessingEngine 画质增强 │
 │  ├── webdavRequest  libcurl HTTPS 请求      │
-│  └── downloadToFile  libcurl 文件下载       │
+│  ├── downloadToFile  libcurl 文件下载       │
+│  └── SmbTestConnection / SmbListDirectory  │
+│           libsmb2 桩（VIDALL_HAS_LIBSMB2） │
 └──────────────────┬──────────────────────────┘
                    │
         libffmpeg.so / libcurl.so / libvideo_processing.so
@@ -195,7 +213,8 @@ hdc shell hilog | grep VidAll_TLS_Audit
 | 问题 | 原因 | 状态 |
 |---|---|---|
 | AC-3/DTS 音频无法播放 | AVPlayer 不内置 AC-3 解码器 | 规划引入 FFmpeg NAPI |
-| SMB/NFS 文件源 | 尚未实现 | Phase 2 |
+| SMB 文件源实际连接 | UI+适配器已就绪，libsmb2 Native 层待交叉编译启用 | 见 [docs/smb-protocol.md](docs/smb-protocol.md) |
+| NFS 文件源 | 尚未实现，预留扩展接口 | Phase 3 计划中 |
 | AVMetadataExtractor 不支持远程 URL | API 20 起才有 `setUrlSource` | 待 SDK 升级 |
 | 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |
 | VPE 画质增强仅支持 AVPlayer 后端 | IJKPlayer 渲染机制不兼容 VPE 管线 | 设计限制，不影响 ijk 正常播放 |
