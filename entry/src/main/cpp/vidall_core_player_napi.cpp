@@ -701,7 +701,7 @@ static std::string ParseAssDialogue(const char *ass) {
     if (*p == ',') commas++;
     p++;
   }
-  if (commas < 9) return ass; // 解析失败，返回原始
+  if (commas < 9) return ""; // 格式不符，返回空串（不暴露原始乱码内容）
   return StripAssOverrideTags(std::string(p));
 }
 
@@ -876,6 +876,9 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   bool first = true;
   int64_t totalPkts = 0;
   int64_t subPkts = 0;
+  // 防止超大字幕文件耗尽内存：限制最大条目数和 JSON 字节数
+  static constexpr int MAX_SUBTITLE_ENTRIES = 50000;
+  static constexpr size_t MAX_JSON_BYTES = 16 * 1024 * 1024; // 16 MB
 
   AVPacket *pkt = av_packet_alloc();
   if (pkt == nullptr) {
@@ -969,6 +972,15 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
     av_packet_unref(pkt);
 
     if (text.empty()) continue;
+
+    // OOM guard：超过上限时终止，避免超大文件耗尽内存
+    if (subPkts >= MAX_SUBTITLE_ENTRIES || json.size() >= MAX_JSON_BYTES) {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "ExtractSub",
+                   "extractSub cap reached entries=%lld jsonBytes=%zu, stopping",
+                   (long long)subPkts, json.size());
+      av_packet_unref(pkt);
+      break;
+    }
 
     if (!first) json += ",";
     first = false;
