@@ -43,6 +43,16 @@ extern "C" {
 #include <curl/curl.h>
 #endif
 
+#if !defined(VIDALL_HAS_LIBSMB2)
+#define VIDALL_HAS_LIBSMB2 0
+#endif
+
+#if VIDALL_HAS_LIBSMB2
+#include <smb2/libsmb2.h>
+#include <smb2/smb2.h>
+#include <cstring>
+#endif
+
 namespace {
 
 static void ThrowTypeError(napi_env env, const char *message);
@@ -3209,6 +3219,183 @@ static napi_value UpdateVpeQuality(napi_env env, napi_callback_info /*info*/) {
 // SMB Protocol NAPI Functions
 // ============================================================================
 
+#if VIDALL_HAS_LIBSMB2
+
+// ── 异步上下文：SmbTestConnection ──────────────────────────────────────────
+struct SmbConnTestContext {
+    napi_async_work work = nullptr;
+    napi_deferred deferred = nullptr;
+    std::string host;
+    int64_t port = 445;
+    std::string username;
+    std::string password;
+    std::string domain;
+    std::string shareName;
+    int64_t timeoutMs = 5000;
+    bool success = false;
+    std::string errorMessage;
+};
+
+static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
+    auto *ctx = static_cast<SmbConnTestContext *>(data);
+    struct smb2_context *smb2 = smb2_init_context();
+    if (!smb2) {
+        ctx->errorMessage = "smb2_init_context failed (out of memory)";
+        return;
+    }
+    if (!ctx->username.empty()) smb2_set_user(smb2, ctx->username.c_str());
+    if (!ctx->password.empty()) smb2_set_password(smb2, ctx->password.c_str());
+    if (!ctx->domain.empty()) smb2_set_domain(smb2, ctx->domain.c_str());
+    int timeoutSec = (ctx->timeoutMs > 0) ? (int)(ctx->timeoutMs / 1000) : 5;
+    smb2_set_timeout(smb2, timeoutSec);
+    int ret = smb2_connect_share(smb2, ctx->host.c_str(), ctx->shareName.c_str(),
+                                  ctx->username.empty() ? nullptr : ctx->username.c_str());
+    if (ret < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "SMB connection failed";
+    } else {
+        ctx->success = true;
+        smb2_disconnect_share(smb2);
+    }
+    smb2_destroy_context(smb2);
+}
+
+static void CompleteSmbTestConnection(napi_env env, napi_status /*status*/, void *data) {
+    auto *ctx = static_cast<SmbConnTestContext *>(data);
+    napi_value result = nullptr;
+    if (napi_create_object(env, &result) != napi_ok) {
+        if (ctx->work) napi_delete_async_work(env, ctx->work);
+        delete ctx;
+        return;
+    }
+    napi_value successVal = nullptr;
+    napi_get_boolean(env, ctx->success, &successVal);
+    napi_set_named_property(env, result, "success", successVal);
+    if (!ctx->success && !ctx->errorMessage.empty()) {
+        napi_value errMsg = nullptr;
+        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+        napi_set_named_property(env, result, "error", errMsg);
+    }
+    napi_resolve_deferred(env, ctx->deferred, result);
+    if (ctx->work) napi_delete_async_work(env, ctx->work);
+    delete ctx;
+}
+
+// ── 异步上下文：SmbListDirectory ───────────────────────────────────────────
+struct SmbFileEntry {
+    std::string name;
+    bool isDirectory = false;
+    uint64_t size = 0;
+    uint64_t lastModified = 0;  // POSIX seconds（windows filetime / 10000000 - 11644473600）
+};
+
+struct SmbListDirContext {
+    napi_async_work work = nullptr;
+    napi_deferred deferred = nullptr;
+    std::string host;
+    int64_t port = 445;
+    std::string username;
+    std::string password;
+    std::string domain;
+    std::string shareName;
+    std::string path;
+    int64_t timeoutMs = 10000;
+    std::vector<SmbFileEntry> files;
+    std::string errorMessage;
+};
+
+// Windows FILETIME（100ns intervals since 1601-01-01）转为 POSIX 秒
+static inline int64_t WinTimeToUnix(uint64_t winTime) {
+    if (winTime == 0) return 0;
+    return (int64_t)(winTime / 10000000ULL) - (int64_t)11644473600LL;
+}
+
+static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
+    auto *ctx = static_cast<SmbListDirContext *>(data);
+    struct smb2_context *smb2 = smb2_init_context();
+    if (!smb2) {
+        ctx->errorMessage = "smb2_init_context failed (out of memory)";
+        return;
+    }
+    if (!ctx->username.empty()) smb2_set_user(smb2, ctx->username.c_str());
+    if (!ctx->password.empty()) smb2_set_password(smb2, ctx->password.c_str());
+    if (!ctx->domain.empty()) smb2_set_domain(smb2, ctx->domain.c_str());
+    int timeoutSec = (ctx->timeoutMs > 0) ? (int)(ctx->timeoutMs / 1000) : 10;
+    smb2_set_timeout(smb2, timeoutSec);
+    int ret = smb2_connect_share(smb2, ctx->host.c_str(), ctx->shareName.c_str(),
+                                  ctx->username.empty() ? nullptr : ctx->username.c_str());
+    if (ret < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "SMB connection failed";
+        smb2_destroy_context(smb2);
+        return;
+    }
+    const char *dirPath = ctx->path.empty() ? "/" : ctx->path.c_str();
+    struct smb2dir *dir = smb2_opendir(smb2, dirPath);
+    if (!dir) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "opendir failed";
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+    struct smb2dirent *ent;
+    while ((ent = smb2_readdir(smb2, dir)) != nullptr) {
+        if (!ent->name) continue;
+        if (std::strcmp(ent->name, ".") == 0 || std::strcmp(ent->name, "..") == 0) continue;
+        SmbFileEntry entry;
+        entry.name = ent->name;
+        entry.isDirectory = (ent->st.smb2_type == SMB2_TYPE_DIRECTORY);
+        entry.size = ent->st.smb2_size;
+        entry.lastModified = (uint64_t)WinTimeToUnix(ent->st.smb2_mtime);
+        ctx->files.push_back(std::move(entry));
+    }
+    smb2_closedir(smb2, dir);
+    smb2_disconnect_share(smb2);
+    smb2_destroy_context(smb2);
+}
+
+static void CompleteSmbListDirectory(napi_env env, napi_status /*status*/, void *data) {
+    auto *ctx = static_cast<SmbListDirContext *>(data);
+    napi_value result = nullptr;
+    if (napi_create_object(env, &result) != napi_ok) {
+        if (ctx->work) napi_delete_async_work(env, ctx->work);
+        delete ctx;
+        return;
+    }
+    napi_value filesArr = nullptr;
+    napi_create_array_with_length(env, ctx->files.size(), &filesArr);
+    for (size_t i = 0; i < ctx->files.size(); i++) {
+        const auto &f = ctx->files[i];
+        napi_value fileObj = nullptr;
+        napi_create_object(env, &fileObj);
+        napi_value nm = nullptr;
+        napi_create_string_utf8(env, f.name.c_str(), NAPI_AUTO_LENGTH, &nm);
+        napi_set_named_property(env, fileObj, "name", nm);
+        napi_value isDir = nullptr;
+        napi_get_boolean(env, f.isDirectory, &isDir);
+        napi_set_named_property(env, fileObj, "isDirectory", isDir);
+        napi_value sz = nullptr;
+        napi_create_int64(env, (int64_t)f.size, &sz);
+        napi_set_named_property(env, fileObj, "size", sz);
+        napi_value lm = nullptr;
+        napi_create_int64(env, (int64_t)f.lastModified, &lm);
+        napi_set_named_property(env, fileObj, "lastModified", lm);
+        napi_set_element(env, filesArr, (uint32_t)i, fileObj);
+    }
+    napi_set_named_property(env, result, "files", filesArr);
+    if (!ctx->errorMessage.empty()) {
+        napi_value errMsg = nullptr;
+        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+        napi_set_named_property(env, result, "error", errMsg);
+    }
+    napi_resolve_deferred(env, ctx->deferred, result);
+    if (ctx->work) napi_delete_async_work(env, ctx->work);
+    delete ctx;
+}
+
+#endif // VIDALL_HAS_LIBSMB2
+
 /**
  * smbTestConnection(host, port, username, password, domain, shareName, timeoutMs)
  * -> Promise<{ success: boolean; error?: string; serverInfo?: string }>
@@ -3268,51 +3455,69 @@ static napi_value SmbTestConnection(napi_env env, napi_callback_info info) {
     }
 
 #if VIDALL_HAS_LIBSMB2
-    // TODO: Phase 2 - 使用 libsmb2 实现真实连接测试
-    // 需要 smb2_new_context() / smb2_connect_share() / smb2_get_error()
-    // 这里预留占位，避免编译错误
-    napi_value result = nullptr;
-    if (napi_create_object(env, &result) != napi_ok) { return nullptr; }
-    napi_value successVal = nullptr;
-    if (napi_get_boolean(env, false, &successVal) != napi_ok) { return nullptr; }
-    if (napi_set_named_property(env, result, "success", successVal) != napi_ok) { return nullptr; }
-    napi_value errorMsg = nullptr;
-    if (napi_create_string_utf8(env, "libsmb2 enabled but not yet implemented", NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) { return nullptr; }
-    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) { return nullptr; }
-    if (napi_resolve_deferred(env, deferred, result) != napi_ok) { return nullptr; }
+    {
+        auto *ctx = new SmbConnTestContext();
+        ctx->deferred = deferred;
+        ctx->host = host;
+        ctx->port = port;
+        ctx->username = username;
+        ctx->password = password;
+        ctx->domain = domain;
+        ctx->shareName = shareName;
+        ctx->timeoutMs = timeoutMs;
+
+        napi_value resourceName = nullptr;
+        if (napi_create_string_utf8(env, "smbTestConnectionAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbTestConnection failed to create resource name");
+            return nullptr;
+        }
+        if (napi_create_async_work(env, nullptr, resourceName,
+                                   ExecuteSmbTestConnection, CompleteSmbTestConnection,
+                                   ctx, &ctx->work) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbTestConnection failed to create async work");
+            return nullptr;
+        }
+        if (napi_queue_async_work(env, ctx->work) != napi_ok) {
+            napi_delete_async_work(env, ctx->work);
+            delete ctx;
+            ThrowTypeError(env, "smbTestConnection failed to queue async work");
+            return nullptr;
+        }
+    }
 #else
     // libsmb2 未启用，返回明确的未实现状态
-    napi_value result = nullptr;
-    if (napi_create_object(env, &result) != napi_ok) {
-        ThrowTypeError(env, "smbTestConnection failed to create result object");
-        return nullptr;
-    }
-
-    napi_value successVal = nullptr;
-    if (napi_get_boolean(env, false, &successVal) != napi_ok) {
-        ThrowTypeError(env, "smbTestConnection failed to create boolean");
-        return nullptr;
-    }
-    if (napi_set_named_property(env, result, "success", successVal) != napi_ok) {
-        ThrowTypeError(env, "smbTestConnection failed to set success");
-        return nullptr;
-    }
-
-    napi_value errorMsg = nullptr;
-    if (napi_create_string_utf8(env,
-        "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
-        NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) {
-        ThrowTypeError(env, "smbTestConnection failed to create error string");
-        return nullptr;
-    }
-    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) {
-        ThrowTypeError(env, "smbTestConnection failed to set error");
-        return nullptr;
-    }
-
-    if (napi_resolve_deferred(env, deferred, result) != napi_ok) {
-        ThrowTypeError(env, "smbTestConnection failed to resolve deferred");
-        return nullptr;
+    {
+        napi_value result = nullptr;
+        if (napi_create_object(env, &result) != napi_ok) {
+            ThrowTypeError(env, "smbTestConnection failed to create result object");
+            return nullptr;
+        }
+        napi_value successVal = nullptr;
+        if (napi_get_boolean(env, false, &successVal) != napi_ok) {
+            ThrowTypeError(env, "smbTestConnection failed to create boolean");
+            return nullptr;
+        }
+        if (napi_set_named_property(env, result, "success", successVal) != napi_ok) {
+            ThrowTypeError(env, "smbTestConnection failed to set success");
+            return nullptr;
+        }
+        napi_value errorMsg = nullptr;
+        if (napi_create_string_utf8(env,
+            "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+            NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) {
+            ThrowTypeError(env, "smbTestConnection failed to create error string");
+            return nullptr;
+        }
+        if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) {
+            ThrowTypeError(env, "smbTestConnection failed to set error");
+            return nullptr;
+        }
+        if (napi_resolve_deferred(env, deferred, result) != napi_ok) {
+            ThrowTypeError(env, "smbTestConnection failed to resolve deferred");
+            return nullptr;
+        }
     }
 #endif
 
@@ -3381,49 +3586,70 @@ static napi_value SmbListDirectory(napi_env env, napi_callback_info info) {
     }
 
 #if VIDALL_HAS_LIBSMB2
-    // TODO: Phase 2 - 使用 libsmb2 实现目录列举
-    napi_value result = nullptr;
-    if (napi_create_object(env, &result) != napi_ok) { return nullptr; }
-    napi_value filesArr = nullptr;
-    if (napi_create_array(env, &filesArr) != napi_ok) { return nullptr; }
-    if (napi_set_named_property(env, result, "files", filesArr) != napi_ok) { return nullptr; }
-    napi_value errorMsg = nullptr;
-    if (napi_create_string_utf8(env, "libsmb2 enabled but not yet implemented", NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) { return nullptr; }
-    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) { return nullptr; }
-    if (napi_resolve_deferred(env, deferred, result) != napi_ok) { return nullptr; }
+    {
+        auto *ctx = new SmbListDirContext();
+        ctx->deferred = deferred;
+        ctx->host = host;
+        ctx->port = port;
+        ctx->username = username;
+        ctx->password = password;
+        ctx->domain = domain;
+        ctx->shareName = shareName;
+        ctx->path = path;
+        ctx->timeoutMs = timeoutMs;
+
+        napi_value resourceName = nullptr;
+        if (napi_create_string_utf8(env, "smbListDirectoryAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbListDirectory failed to create resource name");
+            return nullptr;
+        }
+        if (napi_create_async_work(env, nullptr, resourceName,
+                                   ExecuteSmbListDirectory, CompleteSmbListDirectory,
+                                   ctx, &ctx->work) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbListDirectory failed to create async work");
+            return nullptr;
+        }
+        if (napi_queue_async_work(env, ctx->work) != napi_ok) {
+            napi_delete_async_work(env, ctx->work);
+            delete ctx;
+            ThrowTypeError(env, "smbListDirectory failed to queue async work");
+            return nullptr;
+        }
+    }
 #else
     // libsmb2 未启用，返回空文件列表和错误信息
-    napi_value result = nullptr;
-    if (napi_create_object(env, &result) != napi_ok) {
-        ThrowTypeError(env, "smbListDirectory failed to create result object");
-        return nullptr;
-    }
-
-    napi_value filesArr = nullptr;
-    if (napi_create_array(env, &filesArr) != napi_ok) {
-        ThrowTypeError(env, "smbListDirectory failed to create files array");
-        return nullptr;
-    }
-    if (napi_set_named_property(env, result, "files", filesArr) != napi_ok) {
-        ThrowTypeError(env, "smbListDirectory failed to set files property");
-        return nullptr;
-    }
-
-    napi_value errorMsg = nullptr;
-    if (napi_create_string_utf8(env,
-        "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
-        NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) {
-        ThrowTypeError(env, "smbListDirectory failed to create error string");
-        return nullptr;
-    }
-    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) {
-        ThrowTypeError(env, "smbListDirectory failed to set error property");
-        return nullptr;
-    }
-
-    if (napi_resolve_deferred(env, deferred, result) != napi_ok) {
-        ThrowTypeError(env, "smbListDirectory failed to resolve deferred");
-        return nullptr;
+    {
+        napi_value result = nullptr;
+        if (napi_create_object(env, &result) != napi_ok) {
+            ThrowTypeError(env, "smbListDirectory failed to create result object");
+            return nullptr;
+        }
+        napi_value filesArr = nullptr;
+        if (napi_create_array(env, &filesArr) != napi_ok) {
+            ThrowTypeError(env, "smbListDirectory failed to create files array");
+            return nullptr;
+        }
+        if (napi_set_named_property(env, result, "files", filesArr) != napi_ok) {
+            ThrowTypeError(env, "smbListDirectory failed to set files property");
+            return nullptr;
+        }
+        napi_value errorMsg = nullptr;
+        if (napi_create_string_utf8(env,
+            "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+            NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) {
+            ThrowTypeError(env, "smbListDirectory failed to create error string");
+            return nullptr;
+        }
+        if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) {
+            ThrowTypeError(env, "smbListDirectory failed to set error property");
+            return nullptr;
+        }
+        if (napi_resolve_deferred(env, deferred, result) != napi_ok) {
+            ThrowTypeError(env, "smbListDirectory failed to resolve deferred");
+            return nullptr;
+        }
     }
 #endif
 
