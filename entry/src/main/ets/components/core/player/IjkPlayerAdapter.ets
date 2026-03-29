@@ -3,14 +3,15 @@ import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
-import { IjkMediaPlayer } from '@ohos/ijkplayer';
-import type { OnPreparedListener } from '@ohos/ijkplayer';
-import type { OnCompletionListener } from '@ohos/ijkplayer';
-import type { OnErrorListener } from '@ohos/ijkplayer';
-import type { OnSeekCompleteListener } from '@ohos/ijkplayer';
-import type { OnInfoListener } from '@ohos/ijkplayer';
-import type { OnBufferingUpdateListener } from '@ohos/ijkplayer';
-import type { OnVideoSizeChangedListener } from '@ohos/ijkplayer';
+import { IjkMediaPlayer } from '@yaoshining/ijkplayer';
+import type { OnPreparedListener } from '@yaoshining/ijkplayer';
+import type { OnCompletionListener } from '@yaoshining/ijkplayer';
+import type { OnErrorListener } from '@yaoshining/ijkplayer';
+import type { OnSeekCompleteListener } from '@yaoshining/ijkplayer';
+import type { OnInfoListener } from '@yaoshining/ijkplayer';
+import type { OnBufferingUpdateListener } from '@yaoshining/ijkplayer';
+import type { OnVideoSizeChangedListener } from '@yaoshining/ijkplayer';
+import type { OnTimedTextListener } from '@yaoshining/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 
@@ -70,8 +71,11 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onTimeUpdateCb?: (currentTime: number) => void;
   private _onErrorCb?: (error: Error) => void;
   private _onSeekDoneCb?: () => void;
-  // IjkPlayer 无内嵌字幕，此回调永不触发，仅满足接口
+  // onSubtitleUpdate 接口满足 IPlayer 约定；IJKPlayer 内嵌字幕通过 onTimedText → _onEmbeddedSubtitleCb 传递，不走此回调
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
+
+  // onTimedText 内嵌字幕回调（由 VideoPlayerController 注入）
+  private _onEmbeddedSubtitleCb: ((text: string) => void) | null = null;
 
   constructor() {
     // 使用多实例模式，避免单例跨页面状态残留导致的偶发异常。
@@ -469,9 +473,14 @@ export class IjkPlayerAdapter implements IPlayer {
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void {
     this._onSubtitleUpdateCb = callback;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      'onSubtitleUpdate 已注册（IjkPlayer 无内嵌字幕，此回调不会被主动触发）');
+      'onSubtitleUpdate 已注册（IJKPlayer 内嵌字幕走 onTimedText 路径，此回调仅供接口兼容）');
   }
   onBuffering(_callback: (isBuffering: boolean) => void): void { /* no-op */ }
+
+  /** 注册内嵌字幕回调（onTimedText → VideoPlayerController）*/
+  setOnEmbeddedSubtitleCallback(cb: (text: string) => void): void {
+    this._onEmbeddedSubtitleCb = cb;
+  }
 
   // ─── 内部实现 ───
 
@@ -486,6 +495,10 @@ export class IjkPlayerAdapter implements IPlayer {
     // ── seek 策略（稳定性优先）──
     // 精确 seek 会增加 HEVC 片源的回退解码压力，先关闭以降低崩溃概率。
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'enable-accurate-seek', '0');
+
+    // ── 字幕解码开关 ──
+    // 必须设为 1，否则 stream_component_open 会跳过 AVMEDIA_TYPE_SUBTITLE 分支，onTimedText 永远不会触发
+    this.ijk.setOptionLong(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'subtitle', '1');
 
     // ── 缓冲控制 ──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'max_cached_duration', '1500');
@@ -653,6 +666,18 @@ export class IjkPlayerAdapter implements IPlayer {
       }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
+
+    // onTimedText：内嵌字幕（SRT / ASS 轨道）回调
+    const onTimedTextListener: OnTimedTextListener = {
+      onTimedText: (text: string) => {
+        hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+          `[IjkSub] onTimedText fired len=${text.length}`);
+        if (this._onEmbeddedSubtitleCb) {
+          this._onEmbeddedSubtitleCb(text);
+        }
+      }
+    };
+    this.ijk.setOnTimedTextListener(onTimedTextListener);
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, '所有监听器已注册');
   }

@@ -1,6 +1,6 @@
 # VidAll TV
 
-一款面向家庭大屏场景的 HarmonyOS TV 端视频播放器，支持通过 WebDAV 挂载远程影音库，提供媒体元数据刮削、字幕管理与多轨道切换能力。
+面向家庭大屏的 HarmonyOS TV 视频播放器。挂载 WebDAV 远程影音库，自动刮削元数据，原生支持内嵌字幕与多轨道切换，仅用遥控器搞定。
 
 ---
 
@@ -8,13 +8,13 @@
 
 | 功能 | 说明 |
 |---|---|
-| 🎬 视频播放 | AVPlayer 主链 + IJKPlayer 兜底，支持 mp4/mkv 等主流格式 |
-| 🌐 WebDAV 文件源 | 基于 libcurl 的 HTTPS WebDAV，支持 PikPak、群晖、Alist 等 |
+| 🎬 视频播放 | AVPlayer 主链 + IJKPlayer 兜底，覆盖 mp4 / mkv 等主流格式 |
+| 🌐 WebDAV 文件源 | 基于 libcurl 的 HTTPS WebDAV，兼容 PikPak、群晖、Alist 等 |
 | 🔍 视频扫描 | 递归扫描配置目录，自动去重，支持深度限制 |
 | 🎭 元数据刮削 | 接入 TMDB API，自动匹配海报、简介、类型、年份 |
-| 💬 字幕支持 | 内嵌字幕轨道切换 + 外挂 SRT/ASS/VTT 字幕，延迟调节，seek 后 ≤200ms 恢复 |
+| 💬 字幕 | 内嵌字幕（ASS/SRT，含简/繁体标注）优先 + 外挂 SRT/ASS/VTT 兜底，支持延迟调节，seek 后 ≤200ms 恢复 |
 | 🎵 音轨切换 | 多音频轨道实时切换，显示语言与编码信息 |
-| ✨ AI 画质增强 | 接入鸿蒙 VideoProcessingEngine（VPE），低/中/高三档画质，支持按需开关 |
+| ✨ AI 画质增强 | 接入鸿蒙 VideoProcessingEngine（VPE），低/中/高三档，按需开关 |
 | 🏠 TV 端交互 | 遥控器焦点导航，大屏排版优化 |
 
 ---
@@ -36,6 +36,8 @@
 ---
 
 ## 技术架构
+
+整体分为 ArkTS UI 层与 C++ Native 层，通过 NAPI 桥接：
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -67,7 +69,7 @@ VideoPlayerController (ArkTS)
 
 字幕适配层（统一接口 ISubtitleBridgeAdapter）
   ├── AvSubtitleBridgeAdapter   ← AVPlayer 内嵌 + 外置字幕
-  ├── IjkSubtitleBridgeAdapter  ← ijk 外置字幕（100ms 轮询）
+  ├── IjkSubtitleBridgeAdapter  ← ijk 内嵌字幕（onTimedText 实时回调，ASS/SRT）+ 外置字幕
   └── NoSubtitleBridgeAdapter   ← 无字幕回退
 ```
 
@@ -82,6 +84,8 @@ AVPlayer（解码输出）
 VPE 仅在 AVPlayer 后端下生效，IJKPlayer 路径不经过 VPE。
 
 ### WebDAV 请求链
+
+所有 WebDAV 网络请求在 C++ 工作线程执行，不阻塞 UI：
 
 ```
 WebDAVClient.sendViaNative()
@@ -192,15 +196,13 @@ VidAll_TV/
 
 ## TLS 与证书策略
 
-WebDAV 连接默认使用 `allow_self_signed` 策略（跳过证书验证），兼容家庭 NAS、代理环境与自签名证书。
-
-若需要严格校验（企业场景），在文件源配置中设置：
+WebDAV 连接默认使用 `allow_self_signed` 策略，兼容家庭 NAS、代理环境与自签名证书。企业场景如需严格校验，在文件源配置中指定：
 
 ```json
 { "tlsCertPolicy": "strict" }
 ```
 
-TLS 错误会记录审计日志，可通过以下命令提取：
+TLS 错误会写入审计日志：
 
 ```bash
 hdc shell hilog | grep VidAll_TLS_Audit
@@ -219,12 +221,14 @@ hdc shell hilog | grep VidAll_TLS_Audit
 | 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |
 | VPE 画质增强仅支持 AVPlayer 后端 | IJKPlayer 渲染机制不兼容 VPE 管线 | 设计限制，不影响 ijk 正常播放 |
 | AVPlayer 内嵌字幕轨道元信息（语言/MIME）可能为空 | `getTrackDescription()` 返回字段不稳定 | 规划 #63 增强识别链路 |
+| IJKPlayer 内嵌字幕 ASS Dialogue 行头部字节损坏 | `rect->ass` 在 HarmonyOS 上"Dialogue"关键字被乱码替换，已在 ArkTS 侧用 `": "` 定位绕过 | 已修复 |
+| IJKPlayer 内嵌字幕简/繁体标注依赖 MKV title 字段 | 无 title 的轨道只显示语言名，无法区分简繁 | 设计限制 |
 
 ---
 
 ## 开发与测试
 
-### 本地单元测试（不需要设备）
+### 本地单元测试（无需设备）
 
 ```bash
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk
@@ -253,3 +257,4 @@ node /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
 ## 许可证
 
 本项目仅供个人学习与家庭使用。
+

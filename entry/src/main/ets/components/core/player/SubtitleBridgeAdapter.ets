@@ -3,7 +3,7 @@ import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
-import { FfprobeUtil } from '../../../utils/FfprobeUtil';
+import { FfprobeUtil, type FfprobeTrack } from '../../../utils/FfprobeUtil';
 import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
@@ -332,6 +332,7 @@ export interface ISubtitleBridgeAdapter {
   init(player: IPlayer, videoData?: VideoData): Promise<void>;
   onTimeUpdate(currentTimeMs: number): void;
   onSubtitleUpdate(info: SubtitleInfo): void;
+  onEmbeddedTimedText(text: string): void;
   switchTrack(allIndex: number): Promise<void>;
   adjustDelay(deltaMs: number): void;
   onSeekSync(): void;
@@ -394,8 +395,15 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
   }
 
-  /** 默认优先选择外置字幕，其次才是第一条内嵌字幕 */
+  /** 默认优先选择第一条内嵌字幕，没有内嵌字幕再选第一条外置字幕 */
   protected findPreferredTrackIndex(): number {
+    // 先找内嵌字幕
+    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
+      if (this.allSubtitleTracks[i].kind === 'internal') {
+        return i;
+      }
+    }
+    // 没有内嵌字幕则找外置字幕
     for (let i = 0; i < this.allSubtitleTracks.length; i++) {
       if (this.allSubtitleTracks[i].kind === 'external') {
         return i;
@@ -445,6 +453,8 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
     this.currentSubtitleText = info.text ?? '';
   }
+
+  onEmbeddedTimedText(_text: string): void { /* 子类按需覆盖 */ }
 
   async switchTrack(allIndex: number): Promise<void> {
     if (!this.player) {
@@ -744,10 +754,228 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
 export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
-    // 隐藏内嵌字幕以避免长时间的字幕提取等待
-    // 扫描时仍然会保存所有轨道信息到数据库（供未来优化使用）
-    // 运行时只通过 loadExternalTracks() 加载外置字幕
-    return [];
+    if (!this.videoData) {
+      return [];
+    }
+
+    // 通过 FfprobeUtil 探测内嵌字幕轨道（stream index 与 IJKPlayer selectTrack 一致）
+    const probe = await FfprobeUtil.probe(
+      this.videoData.videoSrc,
+      this.videoData.httpHeader,
+      9000
+    );
+    if (!probe.success || probe.subtitleTracks.length === 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[IjkSub] 无内嵌字幕轨道');
+      return [];
+    }
+
+    const rawTracks = probe.subtitleTracks;
+    // 过滤掉图像型字幕编解码器（PGS/BD/DVD/DVB），这类轨道只有位图数据，文本管线无法处理
+    const IMAGE_CODECS: string[] = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvb_subtitle',
+      'dvb_teletext', 'eia_608', 'eia_708'];
+    const textTracks = rawTracks.filter((ft: FfprobeTrack) => {
+      const codec = (ft.codecName ?? '').toLowerCase();
+      return !IMAGE_CODECS.includes(codec);
+    });
+    const newSubtitleTracks: TrackInfo[] = [];
+    for (let i = 0; i < textTracks.length; i++) {
+      const ft: FfprobeTrack = textTracks[i];
+      const ti: TrackInfo = {
+        trackIndex: ft.index,
+        trackType: 'subtitle',
+        language: ft.language,
+        mimeType: ft.codecName
+      };
+      newSubtitleTracks.push(ti);
+    }
+    this.subtitleTracks = newSubtitleTracks;
+
+    const items: SubtitleTrackItem[] = [];
+    for (let i = 0; i < textTracks.length; i++) {
+      const ft: FfprobeTrack = textTracks[i];
+      // 直接用描述作为显示名，外部字幕已有标识，内嵌字幕不再加前缀
+      const displayName = FfprobeUtil.buildSubtitleTrackDisplayName(ft, i);
+      const item: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName,
+        internalIndex: ft.index
+      };
+      items.push(item);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[IjkSub] 内嵌字幕轨道数=${items.length}`);
+    return items;
+  }
+
+  /**
+   * 对于 IjkPlayer：内嵌字幕走实时 onTimedText 路径。
+   * CI 构建的 ohos_ijkplayer 已启用 subrip/ass 解码器，FFP_MSG_TIMED_TEXT 会实时回调。
+   * 选轨后直接调用 selectTrack，等待 onEmbeddedTimedText 回调更新字幕文本。
+   */
+  override async switchTrack(allIndex: number): Promise<void> {
+    if (!this.player) {
+      return;
+    }
+
+    if (allIndex < 0) {
+      this.activeSubtitleIndex = -1;
+      this.currentSubtitleText = '';
+      this.srtEntries = [];
+      this.lastSrtText = '';
+      this.currentSubtitleTrack = -1;
+      await this.player.selectTrack(-1);
+      return;
+    }
+
+    if (allIndex >= this.allSubtitleTracks.length) {
+      return;
+    }
+
+    this.activeSubtitleIndex = allIndex;
+    this.currentSubtitleText = '';
+
+    const target = this.allSubtitleTracks[allIndex];
+    if (target.kind === 'external') {
+      // 外置 SRT：填充 srtEntries，不选内嵌轨道
+      const entries = target.srtEntries ?? [];
+      this.srtEntries = entries;
+      this.lastSrtText = '';
+      this.currentSubtitleTrack = -1;
+      await this.player.selectTrack(-1);
+      return;
+    }
+
+    // 内嵌轨道：实时模式 —— 告知 ijkplayer 选轨，onTimedText 回调负责更新字幕文本
+    const internalIndex = target.internalIndex ?? -1;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub] 选择内嵌字幕轨 stream=${internalIndex}，等待 onTimedText 实时回调`);
+
+    this.srtEntries = [];
+    this.lastSrtText = '';
+    this.currentSubtitleTrack = internalIndex;
+
+    if (internalIndex >= 0) {
+      await this.player.selectTrack(internalIndex);
+    }
+  }
+
+  /**
+   * 处理 IJKPlayer onTimedText 实时回调。
+   * - 外置 SRT 激活时（srtEntries > 0）不覆盖
+   * - 需要内嵌字幕轨道已被选中（currentSubtitleTrack >= 0）
+   * - 自动剥离 ASS override codes {..} 和 HTML 标签 <..>
+   */
+  onEmbeddedTimedText(text: string): void {
+    if (this.srtEntries.length > 0) {
+      return; // 外置 SRT 优先，不覆盖
+    }
+    if (this.currentSubtitleTrack < 0) {
+      return; // 未选中内嵌轨道
+    }
+    const parsed = IjkSubtitleBridgeAdapter.parseAssIfNeeded(text);
+    this.currentSubtitleText = IjkSubtitleBridgeAdapter.stripSubtitleMarkup(parsed);
+  }
+
+  /**
+   * 解析 ijkplayer 内嵌字幕 ASS 格式，提取纯文本。
+   *
+   * rect->ass 的实际格式是完整 Dialogue 行（"Dialogue" 单词可能被乱码替换）：
+   *   <garbled>: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+   * 冒号+空格（": "）是稳定的 ASCII 标记，": " 之后需跳过 9 个逗号才能到 Text 字段。
+   *
+   * 若不含 ": "，尝试 MKV 包格式（ReadOrder 为数字开头，跳 8 逗号）。
+   * 都不匹配则视为清除信号，返回空字符串。
+   */
+  private static parseAssIfNeeded(raw: string): string {
+    hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub ASS raw] len=${raw.length}`);
+
+    // 策略 1：完整 Dialogue 行格式 — 查找 ": "（冒号+空格），之后跳 9 个逗号
+    const colonSpaceIdx = raw.indexOf(': ');
+    if (colonSpaceIdx >= 0) {
+      const afterColon = raw.substring(colonSpaceIdx + 2);
+      let pos = 0;
+      let commaCount = 0;
+      while (pos < afterColon.length && commaCount < 9) {
+        if (afterColon[pos] === ',') {
+          commaCount++;
+        }
+        pos++;
+      }
+      if (commaCount === 9) {
+        let textField = afterColon.substring(pos);
+        let end = textField.length;
+        while (end > 0 && (textField[end - 1] === '\r' || textField[end - 1] === '\n')) {
+          end--;
+        }
+        textField = textField.substring(0, end);
+        textField = textField.split('\\N').join('\n');
+        hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+          `[IjkSub ASS parsed] dialogue+9commas len=${textField.length}`);
+        return textField;
+      }
+    }
+
+    // 策略 2：MKV 包格式 — 第一字段为纯数字（ReadOrder），跳 8 个逗号
+    const firstCommaIdx = raw.indexOf(',');
+    if (firstCommaIdx > 0 && firstCommaIdx < 10) {
+      let isNumeric = true;
+      for (let _c = 0; _c < firstCommaIdx; _c++) {
+        const code = raw.charCodeAt(_c);
+        if (code < 48 || code > 57) {
+          isNumeric = false;
+          break;
+        }
+      }
+      if (isNumeric) {
+        let pos = 0;
+        let commaCount = 0;
+        while (pos < raw.length && commaCount < 8) {
+          if (raw[pos] === ',') {
+            commaCount++;
+          }
+          pos++;
+        }
+        if (commaCount === 8) {
+          let textField = raw.substring(pos);
+          let end = textField.length;
+          while (end > 0 && (textField[end - 1] === '\r' || textField[end - 1] === '\n')) {
+            end--;
+          }
+          textField = textField.substring(0, end);
+          textField = textField.split('\\N').join('\n');
+          hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+            `[IjkSub ASS parsed] readorder+8commas len=${textField.length}`);
+          return textField;
+        }
+      }
+    }
+
+    // 无法识别结构 → 清除信号或垃圾包，返回空字符串
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub ASS fallback] no structure, returning empty`);
+    return '';
+  }
+
+  /** 剥离 ASS override codes {..} 与 HTML 标签 <..>，返回纯文本 */
+  private static stripSubtitleMarkup(raw: string): string {
+    let result = '';
+    let depth = 0;
+    let inHtml = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '{') { depth++; continue; }
+      if (ch === '}') { if (depth > 0) { depth--; } continue; }
+      if (depth > 0) { continue; }
+      if (ch === '<') {
+        // 只有 <字母 或 </ 才认为是 HTML/ASS 标签，避免误吃 "1 < 2" 这样的内容
+        const next = i + 1 < raw.length ? raw[i + 1] : '';
+        const isTag = (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') || next === '/';
+        if (isTag) { inHtml = true; continue; }
+      }
+      if (ch === '>' && inHtml) { inHtml = false; continue; }
+      if (!inHtml) { result += ch; }
+    }
+    return result.trim();
   }
 }
 
@@ -774,9 +1002,7 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const languageName = hasLang
         ? FfprobeUtil.getLanguageDisplayName(track.language!)
         : '';
-      const displayName = languageName.length > 0
-        ? `字幕 ${i + 1} (${languageName})`
-        : `字幕 ${i + 1}`;
+      const displayName = languageName.length > 0 ? languageName : `字幕 ${i + 1}`;
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
@@ -813,6 +1039,8 @@ export class NoSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   onTimeUpdate(_currentTimeMs: number): void {}
 
   onSubtitleUpdate(_info: SubtitleInfo): void {}
+
+  onEmbeddedTimedText(_text: string): void {}
 
   async switchTrack(_allIndex: number): Promise<void> {
     return Promise.resolve();

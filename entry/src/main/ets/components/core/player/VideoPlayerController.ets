@@ -401,8 +401,18 @@ export class VideoPlayerController {
     if (this.backend === 'ijkplayer') {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
-      adapter = new IjkPlayerAdapter();
-      this.subtitleAdapter = new IjkSubtitleBridgeAdapter();
+      const ijkAdapter = new IjkPlayerAdapter();
+      const ijkSubAdapter = new IjkSubtitleBridgeAdapter();
+      this.subtitleAdapter = ijkSubAdapter;
+      // 注册内嵌字幕回调：onTimedText → subtitleAdapter → currentSubtitleText
+      ijkAdapter.setOnEmbeddedSubtitleCallback((text: string) => {
+        if (currentSessionId !== this.playbackSessionId || this.subtitleAdapter !== ijkSubAdapter) {
+          return;
+        }
+        ijkSubAdapter.onEmbeddedTimedText(text);
+        this.applySubtitleBridgeState(ijkSubAdapter.getState());
+      });
+      adapter = ijkAdapter;
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
