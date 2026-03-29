@@ -779,9 +779,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     const items: SubtitleTrackItem[] = [];
     for (let i = 0; i < rawTracks.length; i++) {
       const ft: FfprobeTrack = rawTracks[i];
-      // 用 buildSubtitleTrackDisplayName 获取含简/繁体标注的完整描述（如 "中文 (ASS) 简体"）
-      const trackDesc = FfprobeUtil.buildSubtitleTrackDisplayName(ft, i);
-      const displayName = `内嵌字幕 ${i + 1} (${trackDesc})`;
+      // 直接用描述作为显示名，外部字幕已有标识，内嵌字幕不再加前缀
+      const displayName = FfprobeUtil.buildSubtitleTrackDisplayName(ft, i);
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
@@ -984,9 +983,7 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const languageName = hasLang
         ? FfprobeUtil.getLanguageDisplayName(track.language!)
         : '';
-      const displayName = languageName.length > 0
-        ? `字幕 ${i + 1} (${languageName})`
-        : `字幕 ${i + 1}`;
+      const displayName = languageName.length > 0 ? languageName : `字幕 ${i + 1}`;
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
