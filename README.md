@@ -12,7 +12,7 @@
 | 🌐 WebDAV 文件源 | 基于 libcurl 的 HTTPS WebDAV，支持 PikPak、群晖、Alist 等 |
 | 🔍 视频扫描 | 递归扫描配置目录，自动去重，支持深度限制 |
 | 🎭 元数据刮削 | 接入 TMDB API，自动匹配海报、简介、类型、年份 |
-| 💬 字幕支持 | 内嵌字幕轨道切换 + 外挂 SRT/ASS/VTT 字幕，延迟调节，seek 后 ≤200ms 恢复 |
+| 💬 字幕支持 | 内嵌字幕（ASS/SRT，含简/繁体标注）+ 外挂 SRT/ASS/VTT，默认优先内嵌字幕，延迟调节，seek 后 ≤200ms 恢复 |
 | 🎵 音轨切换 | 多音频轨道实时切换，显示语言与编码信息 |
 | ✨ AI 画质增强 | 接入鸿蒙 VideoProcessingEngine（VPE），低/中/高三档画质，支持按需开关 |
 | 🏠 TV 端交互 | 遥控器焦点导航，大屏排版优化 |
@@ -49,7 +49,7 @@ VideoPlayerController (ArkTS)
 
 字幕适配层（统一接口 ISubtitleBridgeAdapter）
   ├── AvSubtitleBridgeAdapter   ← AVPlayer 内嵌 + 外置字幕
-  ├── IjkSubtitleBridgeAdapter  ← ijk 外置字幕（100ms 轮询）
+  ├── IjkSubtitleBridgeAdapter  ← ijk 内嵌字幕（onTimedText 实时回调，ASS/SRT）+ 外置字幕
   └── NoSubtitleBridgeAdapter   ← 无字幕回退
 ```
 
@@ -200,6 +200,8 @@ hdc shell hilog | grep VidAll_TLS_Audit
 | 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |
 | VPE 画质增强仅支持 AVPlayer 后端 | IJKPlayer 渲染机制不兼容 VPE 管线 | 设计限制，不影响 ijk 正常播放 |
 | AVPlayer 内嵌字幕轨道元信息（语言/MIME）可能为空 | `getTrackDescription()` 返回字段不稳定 | 规划 #63 增强识别链路 |
+| IJKPlayer 内嵌字幕 ASS "Dialogue" 关键字被乱码字节替换 | ijkplayer 在 HarmonyOS 上 `rect->ass` 返回的 Dialogue 行头部字节损坏，已在 ArkTS 侧通过 `": "` 定位解析绕过 | 已修复 |
+| IJKPlayer 内嵌字幕简/繁体标注依赖 MKV stream title 字段 | 无 title 的轨道只显示语言名（如"中文"），无法区分简繁 | 设计限制 |
 
 ---
 
