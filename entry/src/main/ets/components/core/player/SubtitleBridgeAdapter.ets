@@ -865,15 +865,46 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   }
 
   /**
-   * 若字符串是 MKV ASS 格式（ReadOrder,Layer,Style,Name,0,0,0,Effect,Text），
-   * 跳过 8 个逗号提取 Text 字段并还原 \N 换行；否则返回原字符串（去尾部 \r\n）。
-   * 格式样例：1,0,Default,,0,0,0,,字幕文本\r\n
+   * 解析 ijkplayer 内嵌字幕 ASS 格式，提取纯文本。
+   *
+   * rect->ass 的实际格式是完整 Dialogue 行（"Dialogue" 单词可能被乱码替换）：
+   *   <garbled>: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+   * 冒号+空格（": "）是稳定的 ASCII 标记，": " 之后需跳过 9 个逗号才能到 Text 字段。
+   *
+   * 若不含 ": "，尝试 MKV 包格式（ReadOrder 为数字开头，跳 8 逗号）。
+   * 都不匹配则视为清除信号，返回空字符串。
    */
   private static parseAssIfNeeded(raw: string): string {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[IjkSub ASS raw] len=${raw.length} preview="${raw.substring(0, 120)}"`);
 
-    // 检测是否为 ASS 格式：第一字段为纯数字（ReadOrder），紧接逗号
+    // 策略 1：完整 Dialogue 行格式 — 查找 ": "（冒号+空格），之后跳 9 个逗号
+    const colonSpaceIdx = raw.indexOf(': ');
+    if (colonSpaceIdx >= 0) {
+      const afterColon = raw.substring(colonSpaceIdx + 2);
+      let pos = 0;
+      let commaCount = 0;
+      while (pos < afterColon.length && commaCount < 9) {
+        if (afterColon[pos] === ',') {
+          commaCount++;
+        }
+        pos++;
+      }
+      if (commaCount === 9) {
+        let textField = afterColon.substring(pos);
+        let end = textField.length;
+        while (end > 0 && (textField[end - 1] === '\r' || textField[end - 1] === '\n')) {
+          end--;
+        }
+        textField = textField.substring(0, end);
+        textField = textField.split('\\N').join('\n');
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[IjkSub ASS parsed] dialogue+9commas text="${textField}"`);
+        return textField;
+      }
+    }
+
+    // 策略 2：MKV 包格式 — 第一字段为纯数字（ReadOrder），跳 8 个逗号
     const firstCommaIdx = raw.indexOf(',');
     if (firstCommaIdx > 0 && firstCommaIdx < 10) {
       let isNumeric = true;
@@ -885,7 +916,6 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         }
       }
       if (isNumeric) {
-        // 跳过 8 个逗号以到达 Text 字段
         let pos = 0;
         let commaCount = 0;
         while (pos < raw.length && commaCount < 8) {
@@ -896,26 +926,23 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         }
         if (commaCount === 8) {
           let textField = raw.substring(pos);
-          // 去尾部 \r\n
           let end = textField.length;
           while (end > 0 && (textField[end - 1] === '\r' || textField[end - 1] === '\n')) {
             end--;
           }
           textField = textField.substring(0, end);
-          // \N → 换行
           textField = textField.split('\\N').join('\n');
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[IjkSub ASS parsed] commas=8 text="${textField}"`);
+            `[IjkSub ASS parsed] readorder+8commas text="${textField}"`);
           return textField;
         }
       }
     }
-    // 非 ASS 格式，去尾部空白后原样返回
-    let end = raw.length;
-    while (end > 0 && (raw[end - 1] === '\r' || raw[end - 1] === '\n')) {
-      end--;
-    }
-    return raw.substring(0, end);
+
+    // 无法识别结构 → 清除信号或垃圾包，返回空字符串
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub ASS fallback] no structure, returning empty`);
+    return '';
   }
 
   /** 剥离 ASS override codes {..} 与 HTML 标签 <..>，返回纯文本 */
