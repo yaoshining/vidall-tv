@@ -51,6 +51,12 @@ extern "C" {
 #include <smb2/smb2.h>       // 必须先于 libsmb2.h：定义 SMB2_GUID_SIZE / smb2_lease_key
 #include <smb2/libsmb2.h>
 #include <cstring>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace {
@@ -3238,6 +3244,71 @@ struct SmbConnTestContext {
 
 static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
     auto *ctx = static_cast<SmbConnTestContext *>(data);
+
+    // ── TCP 预检：验证 host:port 是否可达，排除网络层问题 ──────────────────
+    {
+        int tcpFd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (tcpFd < 0) {
+            ctx->errorMessage = std::string("socket() failed, errno:") + std::to_string(errno)
+                                + " (" + std::strerror(errno) + ")";
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check: socket() failed errno=%d", errno);
+            return;
+        }
+        // 设置连接超时（非阻塞 connect + poll）
+        int flags = ::fcntl(tcpFd, F_GETFL, 0);
+        ::fcntl(tcpFd, F_SETFL, flags | O_NONBLOCK);
+
+        struct sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port   = htons((uint16_t)ctx->port);
+        ::inet_pton(AF_INET, ctx->host.c_str(), &addr.sin_addr);
+
+        int connRet = ::connect(tcpFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (connRet < 0 && errno != EINPROGRESS) {
+            int savedErrno = errno;
+            ::close(tcpFd);
+            ctx->errorMessage = std::string("TCP connect() failed, host=") + ctx->host
+                                + " port=" + std::to_string(ctx->port)
+                                + " errno:" + std::to_string(savedErrno)
+                                + " (" + std::strerror(savedErrno) + ")";
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check failed errno=%d host=%s port=%lld",
+                        savedErrno, ctx->host.c_str(), (long long)ctx->port);
+            return;
+        }
+        // 等待连接完成
+        int timeoutMs = (ctx->timeoutMs > 0 && ctx->timeoutMs < 10000) ? (int)ctx->timeoutMs : 5000;
+        struct pollfd pfd{};
+        pfd.fd = tcpFd;
+        pfd.events = POLLOUT;
+        int pollRet = ::poll(&pfd, 1, timeoutMs);
+        if (pollRet <= 0) {
+            ::close(tcpFd);
+            ctx->errorMessage = std::string("TCP connect timeout/error, host=") + ctx->host
+                                + " port=" + std::to_string(ctx->port)
+                                + (pollRet == 0 ? " (timed out)" : " (poll error)");
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check poll ret=%d host=%s port=%lld",
+                        pollRet, ctx->host.c_str(), (long long)ctx->port);
+            return;
+        }
+        // 检查 SO_ERROR
+        int soErr = 0;
+        socklen_t soErrLen = sizeof(soErr);
+        ::getsockopt(tcpFd, SOL_SOCKET, SO_ERROR, &soErr, &soErrLen);
+        ::close(tcpFd);
+        if (soErr != 0) {
+            ctx->errorMessage = std::string("TCP connect refused/error, host=") + ctx->host
+                                + " port=" + std::to_string(ctx->port)
+                                + " errno:" + std::to_string(soErr)
+                                + " (" + std::strerror(soErr) + ")";
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check SO_ERROR=%d host=%s port=%lld",
+                        soErr, ctx->host.c_str(), (long long)ctx->port);
+            return;
+        }
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient", "TCP pre-check OK host=%s port=%lld",
+                    ctx->host.c_str(), (long long)ctx->port);
+    }
+
+    // ── libsmb2 连接 ──────────────────────────────────────────────────────
     struct smb2_context *smb2 = smb2_init_context();
     if (!smb2) {
         ctx->errorMessage = "smb2_init_context failed (out of memory)";
@@ -3247,12 +3318,14 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
     if (!ctx->password.empty()) smb2_set_password(smb2, ctx->password.c_str());
     if (!ctx->domain.empty()) smb2_set_domain(smb2, ctx->domain.c_str());
     int timeoutSec = (ctx->timeoutMs > 0) ? (int)(ctx->timeoutMs / 1000) : 5;
+    if (timeoutSec < 1) timeoutSec = 1;
     smb2_set_timeout(smb2, timeoutSec);
     int ret = smb2_connect_share(smb2, ctx->host.c_str(), ctx->shareName.c_str(),
                                   ctx->username.empty() ? nullptr : ctx->username.c_str());
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
         ctx->errorMessage = (errStr && errStr[0]) ? errStr : "SMB connection failed";
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smb2_connect_share failed: %s", ctx->errorMessage.c_str());
     } else {
         ctx->success = true;
         smb2_disconnect_share(smb2);
