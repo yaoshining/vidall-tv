@@ -7,6 +7,8 @@
 #include <cerrno>
 #include <cstring>
 #include <mutex>
+#include <algorithm>
+#include <cctype>
 
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
@@ -936,7 +938,7 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
           std::string line = text.substr(lineStart, nlPos - lineStart);
           if (!line.empty() && line.back() == '\r') line.pop_back();
           bool isSeqOrTime = !line.empty() &&
-            (std::all_of(line.begin(), line.end(), ::isdigit) ||
+            (std::all_of(line.begin(), line.end(), [](unsigned char c){ return std::isdigit(c) != 0; }) ||
              line.find("-->") != std::string::npos);
           if (isSeqOrTime) {
             lineStart = nlPos + 1;

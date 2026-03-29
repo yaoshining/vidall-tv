@@ -8,7 +8,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IJK_SRC="${1:-$HOME/Downloads/ohos_ijkplayer-master/ijkplayer/src/main/cpp}"
-IJK_LIBS="$PROJECT_ROOT/oh_modules/.ohpm/@ohos+ijkplayer@2.0.7/oh_modules/@ohos/ijkplayer/libs"
+IJK_LIBS_SEARCH=$(ls -d "$PROJECT_ROOT/oh_modules/.ohpm/@yaoshining+ijkplayer@"*/oh_modules/@yaoshining/ijkplayer/libs 2>/dev/null | head -1)
+if [ -z "$IJK_LIBS_SEARCH" ]; then
+  # fallback: 尝试旧包名
+  IJK_LIBS_SEARCH=$(ls -d "$PROJECT_ROOT/oh_modules/.ohpm/@ohos+ijkplayer@"*/oh_modules/@ohos/ijkplayer/libs 2>/dev/null | head -1)
+fi
+if [ -z "$IJK_LIBS_SEARCH" ]; then
+  echo "❌ 找不到 ijkplayer libs 目录，请先执行 ohpm install" && exit 1
+fi
+IJK_LIBS="$IJK_LIBS_SEARCH"
 DEVECO_NDK="/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/native"
 FFMPEG_INC="$PROJECT_ROOT/entry/src/main/cpp/third_party/ffmpeg/include"
 BUILD_DIR="$PROJECT_ROOT/build/ijk_napi_build"

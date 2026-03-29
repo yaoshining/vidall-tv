@@ -454,10 +454,8 @@ export class FfprobeUtil {
       const jsonStr = await getVidAllCorePlayerNapi().extractSubtitleEntries(
         url, headersStr, streamIndex, timeoutMs
       );
-      // 诊断：打印原始 JSON 开头（最多 200 字符）
-      const preview = jsonStr.length > 200 ? jsonStr.substring(0, 200) + '...' : jsonStr;
-      hilog.info(0x0000, 'FfprobeUtil',
-        `[extractEmbeddedSubtitles] jsonLen=${jsonStr.length} preview=${preview}`);
+      hilog.debug(0x0000, 'FfprobeUtil',
+        `[extractEmbeddedSubtitles] jsonLen=${jsonStr.length}`);
       const raw = JSON.parse(jsonStr) as EmbeddedSubEntry[];
       return Array.isArray(raw) ? raw : [];
     } catch (e) {

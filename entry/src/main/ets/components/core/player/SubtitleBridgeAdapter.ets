@@ -879,8 +879,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
    * 都不匹配则视为清除信号，返回空字符串。
    */
   private static parseAssIfNeeded(raw: string): string {
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[IjkSub ASS raw] len=${raw.length} preview="${raw.substring(0, 120)}"`);
+    hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+      `[IjkSub ASS raw] len=${raw.length}`);
 
     // 策略 1：完整 Dialogue 行格式 — 查找 ": "（冒号+空格），之后跳 9 个逗号
     const colonSpaceIdx = raw.indexOf(': ');
@@ -902,8 +902,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         }
         textField = textField.substring(0, end);
         textField = textField.split('\\N').join('\n');
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[IjkSub ASS parsed] dialogue+9commas text="${textField}"`);
+        hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+          `[IjkSub ASS parsed] dialogue+9commas len=${textField.length}`);
         return textField;
       }
     }
@@ -936,8 +936,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
           }
           textField = textField.substring(0, end);
           textField = textField.split('\\N').join('\n');
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[IjkSub ASS parsed] readorder+8commas text="${textField}"`);
+          hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+            `[IjkSub ASS parsed] readorder+8commas len=${textField.length}`);
           return textField;
         }
       }

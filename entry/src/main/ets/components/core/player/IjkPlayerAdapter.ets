@@ -71,7 +71,7 @@ export class IjkPlayerAdapter implements IPlayer {
   private _onTimeUpdateCb?: (currentTime: number) => void;
   private _onErrorCb?: (error: Error) => void;
   private _onSeekDoneCb?: () => void;
-  // IjkPlayer 无内嵌字幕，此回调永不触发，仅满足接口
+  // onSubtitleUpdate 接口满足 IPlayer 约定；IJKPlayer 内嵌字幕通过 onTimedText → _onEmbeddedSubtitleCb 传递，不走此回调
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
 
   // onTimedText 内嵌字幕回调（由 VideoPlayerController 注入）
@@ -473,7 +473,7 @@ export class IjkPlayerAdapter implements IPlayer {
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void {
     this._onSubtitleUpdateCb = callback;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      'onSubtitleUpdate 已注册（IjkPlayer 无内嵌字幕，此回调不会被主动触发）');
+      'onSubtitleUpdate 已注册（IJKPlayer 内嵌字幕走 onTimedText 路径，此回调仅供接口兼容）');
   }
   onBuffering(_callback: (isBuffering: boolean) => void): void { /* no-op */ }
 
@@ -670,15 +670,8 @@ export class IjkPlayerAdapter implements IPlayer {
     // onTimedText：内嵌字幕（SRT / ASS 轨道）回调
     const onTimedTextListener: OnTimedTextListener = {
       onTimedText: (text: string) => {
-        // Hex dump first 30 UTF-16 code units for diagnosing raw ASS format
-        const hexParts: string[] = [];
-        const dumpLen = Math.min(text.length, 30);
-        for (let _i = 0; _i < dumpLen; _i++) {
-          const h = text.charCodeAt(_i).toString(16).toUpperCase().padStart(4, '0');
-          hexParts.push(h);
-        }
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[IjkSub] onTimedText fired len=${text.length} hex=[${hexParts.join(' ')}] preview="${text.substring(0, 80)}"`);
+        hilog.debug(CommonConstants.LOG_DOMAIN, TAG,
+          `[IjkSub] onTimedText fired len=${text.length}`);
         if (this._onEmbeddedSubtitleCb) {
           this._onEmbeddedSubtitleCb(text);
         }
