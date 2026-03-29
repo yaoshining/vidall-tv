@@ -91,6 +91,8 @@ CFLAGS="$BASE_FLAGS \
   -I$SMB2_SRC/include \
   -I$SMB2_SRC/include/smb2 \
   -I$SMB2_SRC/lib \
+  -I$SYSROOT/usr/include \
+  -D__OHOS__=1 \
   -DHAVE_STDINT_H -DHAVE_STDLIB_H -DHAVE_STRING_H -DSTDC_HEADERS \
   -DHAVE_TIME_H -DHAVE_SYS_TIME_H -DHAVE_UNISTD_H -DHAVE_SYS_TYPES_H \
   -DHAVE_SYS_SOCKET_H -DHAVE_NETINET_IN_H -DHAVE_ARPA_INET_H \
@@ -123,7 +125,8 @@ OUT_SO="$OBJ_DIR/libsmb2.so"
 
 if [ "$USE_OHOS_NDK" -eq 1 ]; then
   $CLANG -target "$TARGET" --sysroot="$SYSROOT" \
-    -shared -fPIC -o "$OUT_SO" *.o
+    -shared -fPIC -Wl,-soname,libsmb2.so -o "$OUT_SO" *.o \
+    -L$SYSROOT/usr/lib/aarch64-linux-ohos -lhilog_ndk.z
 else
   "$LD_BIN" -shared -soname libsmb2.so -o "$OUT_SO" *.o
 fi

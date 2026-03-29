@@ -3308,6 +3308,7 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
                     ctx->host.c_str(), (long long)ctx->port);
     }
 
+
     // ── libsmb2 连接 ──────────────────────────────────────────────────────
     struct smb2_context *smb2 = smb2_init_context();
     if (!smb2) {
