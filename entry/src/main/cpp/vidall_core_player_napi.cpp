@@ -3251,7 +3251,7 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
         if (tcpFd < 0) {
             ctx->errorMessage = std::string("socket() failed, errno:") + std::to_string(errno)
                                 + " (" + std::strerror(errno) + ")";
-            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check: socket() failed errno=%d", errno);
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check: socket() failed errno=%{public}d", errno);
             return;
         }
         // 设置连接超时（非阻塞 connect + poll）
@@ -3271,7 +3271,7 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
                                 + " port=" + std::to_string(ctx->port)
                                 + " errno:" + std::to_string(savedErrno)
                                 + " (" + std::strerror(savedErrno) + ")";
-            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check failed errno=%d host=%s port=%lld",
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check failed errno=%{public}d host=%{public}s port=%{public}lld",
                         savedErrno, ctx->host.c_str(), (long long)ctx->port);
             return;
         }
@@ -3286,7 +3286,7 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
             ctx->errorMessage = std::string("TCP connect timeout/error, host=") + ctx->host
                                 + " port=" + std::to_string(ctx->port)
                                 + (pollRet == 0 ? " (timed out)" : " (poll error)");
-            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check poll ret=%d host=%s port=%lld",
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check poll ret=%{public}d host=%{public}s port=%{public}lld",
                         pollRet, ctx->host.c_str(), (long long)ctx->port);
             return;
         }
@@ -3300,11 +3300,11 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
                                 + " port=" + std::to_string(ctx->port)
                                 + " errno:" + std::to_string(soErr)
                                 + " (" + std::strerror(soErr) + ")";
-            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check SO_ERROR=%d host=%s port=%lld",
+            OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check SO_ERROR=%{public}d host=%{public}s port=%{public}lld",
                         soErr, ctx->host.c_str(), (long long)ctx->port);
             return;
         }
-        OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient", "TCP pre-check OK host=%s port=%lld",
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient", "TCP pre-check OK host=%{public}s port=%{public}lld",
                     ctx->host.c_str(), (long long)ctx->port);
     }
 
@@ -3325,7 +3325,7 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
         ctx->errorMessage = (errStr && errStr[0]) ? errStr : "SMB connection failed";
-        OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smb2_connect_share failed: %s", ctx->errorMessage.c_str());
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smb2_connect_share failed: %{public}s", ctx->errorMessage.c_str());
     } else {
         ctx->success = true;
         smb2_disconnect_share(smb2);
