@@ -69,6 +69,55 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
+# libsmb2 集成（SMB2/3 协议支持）
+#
+# 选型：libsmb2 (https://github.com/sahlberg/libsmb2)
+#   - 零系统依赖，纯 C (C99)，支持 SMB2/3 协议
+#   - ARM64 兼容，HarmonyOS NDK 无障碍
+#
+# 使用方式：
+#   默认 OFF（libsmb2.so 尚未交叉编译）。
+#   完成交叉编译后，将 libsmb2.so 放入 entry/libs/<abi>/，
+#   再以 -DVIDALL_ENABLE_LIBSMB2=ON 启用。
+#
+#   交叉编译参考：
+#     export CC=<NDK_PATH>/llvm/bin/clang
+#     export CFLAGS="-target aarch64-none-linux-ohos --sysroot=<NDK_PATH>/sysroot"
+#     cmake libsmb2/ -DCMAKE_C_COMPILER=$CC -DCMAKE_C_FLAGS="$CFLAGS"
+#     make -j4
+# ---------------------------------------------------------------------------
+set(LIBSMB2_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH})
+set(LIBSMB2_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libsmb2/include)
+
+option(VIDALL_ENABLE_LIBSMB2 "Enable libsmb2 for SMB2/3 protocol support" OFF)
+
+if(VIDALL_ENABLE_LIBSMB2)
+  if(NOT EXISTS ${LIBSMB2_LIB_DIR}/libsmb2.so)
+    message(FATAL_ERROR
+      "VIDALL_ENABLE_LIBSMB2=ON but libsmb2.so not found at:\n"
+      "  ${LIBSMB2_LIB_DIR}/libsmb2.so\n"
+      "Place the compiled library or pass -DVIDALL_ENABLE_LIBSMB2=OFF to disable."
+    )
+  endif()
+
+  add_library(smb2 SHARED IMPORTED)
+  set_target_properties(smb2 PROPERTIES
+    IMPORTED_LOCATION ${LIBSMB2_LIB_DIR}/libsmb2.so
+  )
+
+  target_include_directories(vidall_core_player_napi PRIVATE
+    ${LIBSMB2_INCLUDE_DIR}
+  )
+
+  target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBSMB2=1)
+  target_link_libraries(vidall_core_player_napi PUBLIC smb2)
+  message(STATUS "VIDALL_ENABLE_LIBSMB2=ON — libsmb2 enabled for SMB2/3 support")
+else()
+  target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBSMB2=0)
+  message(STATUS "VIDALL_ENABLE_LIBSMB2=OFF — SMB2/3 support disabled")
+endif()
+
+# ---------------------------------------------------------------------------
 # OH_AVPlayer 系统 C API（libaudio_renderer / OH_AVPlayer）
 #
 # libnative_window.so — OHNativeWindow* 操作（Surface/XComponent 侧）

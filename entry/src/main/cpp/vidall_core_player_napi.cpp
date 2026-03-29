@@ -3163,6 +3163,231 @@ static napi_value UpdateVpeQuality(napi_env env, napi_callback_info /*info*/) {
 }
 #endif // VIDALL_HAS_VPE
 
+// ============================================================================
+// SMB Protocol NAPI Functions
+// ============================================================================
+
+/**
+ * smbTestConnection(host, port, username, password, domain, shareName, timeoutMs)
+ * -> Promise<{ success: boolean; error?: string; serverInfo?: string }>
+ *
+ * 阶段一（VIDALL_HAS_LIBSMB2=0）：返回未实现提示
+ * 阶段二（VIDALL_HAS_LIBSMB2=1）：调用 libsmb2 真实连接
+ */
+static napi_value SmbTestConnection(napi_env env, napi_callback_info info) {
+    // ── 参数校验（仿照 Ffprobe / WebdavRequest 模式）─────────────────────────
+    size_t argc = 7;
+    napi_value args[7] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to read args");
+        return nullptr;
+    }
+    if (argc < 7) {
+        ThrowTypeError(env, "smbTestConnection requires (host, port, username, password, domain, shareName, timeoutMs)");
+        return nullptr;
+    }
+
+    std::string host, username, password, domain, shareName;
+    int64_t port = 0, timeoutMs = 0;
+    if (!ReadUtf8String(env, args[0], host)) {
+        ThrowTypeError(env, "smbTestConnection host must be string");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[1], &port) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection port must be int64");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[2], username)) {
+        ThrowTypeError(env, "smbTestConnection username must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[3], password)) {
+        ThrowTypeError(env, "smbTestConnection password must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[4], domain)) {
+        ThrowTypeError(env, "smbTestConnection domain must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[5], shareName)) {
+        ThrowTypeError(env, "smbTestConnection shareName must be string");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[6], &timeoutMs) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection timeoutMs must be int64");
+        return nullptr;
+    }
+
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to create promise");
+        return nullptr;
+    }
+
+#if VIDALL_HAS_LIBSMB2
+    // TODO: Phase 2 - 使用 libsmb2 实现真实连接测试
+    // 需要 smb2_new_context() / smb2_connect_share() / smb2_get_error()
+    // 这里预留占位，避免编译错误
+    napi_value result = nullptr;
+    if (napi_create_object(env, &result) != napi_ok) { return nullptr; }
+    napi_value successVal = nullptr;
+    if (napi_get_boolean(env, false, &successVal) != napi_ok) { return nullptr; }
+    if (napi_set_named_property(env, result, "success", successVal) != napi_ok) { return nullptr; }
+    napi_value errorMsg = nullptr;
+    if (napi_create_string_utf8(env, "libsmb2 enabled but not yet implemented", NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) { return nullptr; }
+    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) { return nullptr; }
+    if (napi_resolve_deferred(env, deferred, result) != napi_ok) { return nullptr; }
+#else
+    // libsmb2 未启用，返回明确的未实现状态
+    napi_value result = nullptr;
+    if (napi_create_object(env, &result) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to create result object");
+        return nullptr;
+    }
+
+    napi_value successVal = nullptr;
+    if (napi_get_boolean(env, false, &successVal) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to create boolean");
+        return nullptr;
+    }
+    if (napi_set_named_property(env, result, "success", successVal) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to set success");
+        return nullptr;
+    }
+
+    napi_value errorMsg = nullptr;
+    if (napi_create_string_utf8(env,
+        "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+        NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to create error string");
+        return nullptr;
+    }
+    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to set error");
+        return nullptr;
+    }
+
+    if (napi_resolve_deferred(env, deferred, result) != napi_ok) {
+        ThrowTypeError(env, "smbTestConnection failed to resolve deferred");
+        return nullptr;
+    }
+#endif
+
+    return promise;
+}
+
+/**
+ * smbListDirectory(host, port, username, password, domain, shareName, path, timeoutMs)
+ * -> Promise<{ files: SmbFileInfo[]; error?: string }>
+ *
+ * SmbFileInfo: { name, path, isDirectory, size, lastModified }
+ */
+static napi_value SmbListDirectory(napi_env env, napi_callback_info info) {
+    // ── 参数校验（仿照 Ffprobe / WebdavRequest 模式）─────────────────────────
+    size_t argc = 8;
+    napi_value args[8] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to read args");
+        return nullptr;
+    }
+    if (argc < 8) {
+        ThrowTypeError(env, "smbListDirectory requires (host, port, username, password, domain, shareName, path, timeoutMs)");
+        return nullptr;
+    }
+
+    std::string host, username, password, domain, shareName, path;
+    int64_t port = 0, timeoutMs = 0;
+    if (!ReadUtf8String(env, args[0], host)) {
+        ThrowTypeError(env, "smbListDirectory host must be string");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[1], &port) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory port must be int64");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[2], username)) {
+        ThrowTypeError(env, "smbListDirectory username must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[3], password)) {
+        ThrowTypeError(env, "smbListDirectory password must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[4], domain)) {
+        ThrowTypeError(env, "smbListDirectory domain must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[5], shareName)) {
+        ThrowTypeError(env, "smbListDirectory shareName must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[6], path)) {
+        ThrowTypeError(env, "smbListDirectory path must be string");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[7], &timeoutMs) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory timeoutMs must be int64");
+        return nullptr;
+    }
+
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to create promise");
+        return nullptr;
+    }
+
+#if VIDALL_HAS_LIBSMB2
+    // TODO: Phase 2 - 使用 libsmb2 实现目录列举
+    napi_value result = nullptr;
+    if (napi_create_object(env, &result) != napi_ok) { return nullptr; }
+    napi_value filesArr = nullptr;
+    if (napi_create_array(env, &filesArr) != napi_ok) { return nullptr; }
+    if (napi_set_named_property(env, result, "files", filesArr) != napi_ok) { return nullptr; }
+    napi_value errorMsg = nullptr;
+    if (napi_create_string_utf8(env, "libsmb2 enabled but not yet implemented", NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) { return nullptr; }
+    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) { return nullptr; }
+    if (napi_resolve_deferred(env, deferred, result) != napi_ok) { return nullptr; }
+#else
+    // libsmb2 未启用，返回空文件列表和错误信息
+    napi_value result = nullptr;
+    if (napi_create_object(env, &result) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to create result object");
+        return nullptr;
+    }
+
+    napi_value filesArr = nullptr;
+    if (napi_create_array(env, &filesArr) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to create files array");
+        return nullptr;
+    }
+    if (napi_set_named_property(env, result, "files", filesArr) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to set files property");
+        return nullptr;
+    }
+
+    napi_value errorMsg = nullptr;
+    if (napi_create_string_utf8(env,
+        "SMB protocol not yet available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+        NAPI_AUTO_LENGTH, &errorMsg) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to create error string");
+        return nullptr;
+    }
+    if (napi_set_named_property(env, result, "error", errorMsg) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to set error property");
+        return nullptr;
+    }
+
+    if (napi_resolve_deferred(env, deferred, result) != napi_ok) {
+        ThrowTypeError(env, "smbListDirectory failed to resolve deferred");
+        return nullptr;
+    }
+#endif
+
+    return promise;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -3190,7 +3415,9 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "destroyVpeDetailEnhancer", nullptr, DestroyVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "updateVpeQuality", nullptr, UpdateVpeQuality, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "extractSubtitleEntries", nullptr, ExtractSubtitleEntries, nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "extractSubtitleEntries", nullptr, ExtractSubtitleEntries, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbTestConnection", nullptr, SmbTestConnection, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbListDirectory",  nullptr, SmbListDirectory,  nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

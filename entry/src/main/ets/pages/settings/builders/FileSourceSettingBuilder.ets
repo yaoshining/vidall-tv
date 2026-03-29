@@ -113,9 +113,13 @@ struct FileSourceSettingBuilderComponent {
       const params: ESObject = {}
       params['fileSourceId'] = fileSource.id as Object
       this.controller.pushType(SettingType.WEBDAV_CONFIG, params as Record<string, Object>)
+    } else if (fileSource.type === FileSourceType.SMB) {
+      const params: ESObject = {}
+      params['fileSourceId'] = fileSource.id as Object
+      this.controller.pushType(SettingType.SMB_CONFIG, params as Record<string, Object>)
     } else {
       promptAction.showToast({
-        message: '该类型暂不支持编辑'
+        message: '暂不支持编辑该协议类型'
       } as promptAction.ShowToastOptions)
     }
   }
