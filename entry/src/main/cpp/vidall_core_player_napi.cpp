@@ -48,8 +48,8 @@ extern "C" {
 #endif
 
 #if VIDALL_HAS_LIBSMB2
+#include <smb2/smb2.h>       // 必须先于 libsmb2.h：定义 SMB2_GUID_SIZE / smb2_lease_key
 #include <smb2/libsmb2.h>
-#include <smb2/smb2.h>
 #include <cstring>
 #endif
 
