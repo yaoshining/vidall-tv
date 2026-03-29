@@ -770,9 +770,16 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     }
 
     const rawTracks = probe.subtitleTracks;
+    // 过滤掉图像型字幕编解码器（PGS/BD/DVD/DVB），这类轨道只有位图数据，文本管线无法处理
+    const IMAGE_CODECS: string[] = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvb_subtitle',
+      'dvb_teletext', 'eia_608', 'eia_708'];
+    const textTracks = rawTracks.filter((ft: FfprobeTrack) => {
+      const codec = (ft.codecName ?? '').toLowerCase();
+      return !IMAGE_CODECS.includes(codec);
+    });
     const newSubtitleTracks: TrackInfo[] = [];
-    for (let i = 0; i < rawTracks.length; i++) {
-      const ft: FfprobeTrack = rawTracks[i];
+    for (let i = 0; i < textTracks.length; i++) {
+      const ft: FfprobeTrack = textTracks[i];
       const ti: TrackInfo = {
         trackIndex: ft.index,
         trackType: 'subtitle',
@@ -784,8 +791,8 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     this.subtitleTracks = newSubtitleTracks;
 
     const items: SubtitleTrackItem[] = [];
-    for (let i = 0; i < rawTracks.length; i++) {
-      const ft: FfprobeTrack = rawTracks[i];
+    for (let i = 0; i < textTracks.length; i++) {
+      const ft: FfprobeTrack = textTracks[i];
       // 直接用描述作为显示名，外部字幕已有标识，内嵌字幕不再加前缀
       const displayName = FfprobeUtil.buildSubtitleTrackDisplayName(ft, i);
       const item: SubtitleTrackItem = {
@@ -959,8 +966,13 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       if (ch === '{') { depth++; continue; }
       if (ch === '}') { if (depth > 0) { depth--; } continue; }
       if (depth > 0) { continue; }
-      if (ch === '<') { inHtml = true; continue; }
-      if (ch === '>') { inHtml = false; continue; }
+      if (ch === '<') {
+        // 只有 <字母 或 </ 才认为是 HTML/ASS 标签，避免误吃 "1 < 2" 这样的内容
+        const next = i + 1 < raw.length ? raw[i + 1] : '';
+        const isTag = (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') || next === '/';
+        if (isTag) { inHtml = true; continue; }
+      }
+      if (ch === '>' && inHtml) { inHtml = false; continue; }
       if (!inHtml) { result += ch; }
     }
     return result.trim();

@@ -406,6 +406,9 @@ export class VideoPlayerController {
       this.subtitleAdapter = ijkSubAdapter;
       // 注册内嵌字幕回调：onTimedText → subtitleAdapter → currentSubtitleText
       ijkAdapter.setOnEmbeddedSubtitleCallback((text: string) => {
+        if (currentSessionId !== this.playbackSessionId || this.subtitleAdapter !== ijkSubAdapter) {
+          return;
+        }
         ijkSubAdapter.onEmbeddedTimedText(text);
         this.applySubtitleBridgeState(ijkSubAdapter.getState());
       });
