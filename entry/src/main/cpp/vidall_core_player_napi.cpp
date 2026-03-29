@@ -9,6 +9,7 @@
 #include <mutex>
 #include <algorithm>
 #include <cctype>
+#include <climits>
 
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
@@ -45,6 +46,7 @@ extern "C" {
 namespace {
 
 static void ThrowTypeError(napi_env env, const char *message);
+static void ThrowRangeError(napi_env env, const char *message);
 static bool ReadUtf8String(napi_env env, napi_value value, std::string &output);
 
 struct ProbeInterruptContext {
@@ -876,7 +878,14 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   int64_t subPkts = 0;
 
   AVPacket *pkt = av_packet_alloc();
-  while (av_read_frame(formatCtx, pkt) >= 0) {
+  if (pkt == nullptr) {
+    if (codecCtx != nullptr) avcodec_free_context(&codecCtx);
+    avformat_close_input(&formatCtx);
+    ctx->errorMessage = "extractSub: cannot alloc packet";
+    return;
+  }
+  int readRet = 0;
+  while ((readRet = av_read_frame(formatCtx, pkt)) >= 0) {
     totalPkts++;
     if (pkt->stream_index != si || pkt->size <= 0 || pkt->data == nullptr) {
       av_packet_unref(pkt);
@@ -981,7 +990,11 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
                "extractSub done stream=%d totalPkts=%lld subPkts=%lld",
                si, (long long)totalPkts, (long long)subPkts);
 
-  if (first) {
+  if (readRet < 0 && readRet != AVERROR_EOF) {
+    ctx->errorMessage = "extractSub: read failed: " + FfmpegErrorToString(readRet) +
+                        " totalPkts=" + std::to_string(totalPkts) +
+                        " subPkts=" + std::to_string(subPkts);
+  } else if (first) {
     // count=0：以错误形式 reject，让 ArkTS catch 能打印 codec/packet 诊断信息
     ctx->errorMessage = "count=0 codec=" + std::string(subCodecName ? subCodecName : "?") +
                         " totalPkts=" + std::to_string(totalPkts) +
@@ -997,17 +1010,29 @@ static void CompleteExtractSubAsync(napi_env env, napi_status status, void *data
   ExtractSubAsyncContext *ctx = static_cast<ExtractSubAsyncContext *>(data);
   if (ctx == nullptr) return;
 
-  napi_value settleValue = nullptr;
+  bool settled = false;
   if (status == napi_ok && ctx->errorMessage.empty()) {
-    napi_create_string_utf8(env, ctx->jsonResult.c_str(), NAPI_AUTO_LENGTH, &settleValue);
-    napi_resolve_deferred(env, ctx->deferred, settleValue);
-  } else {
+    napi_value settleValue = nullptr;
+    if (napi_create_string_utf8(env, ctx->jsonResult.c_str(), NAPI_AUTO_LENGTH, &settleValue) == napi_ok &&
+        napi_resolve_deferred(env, ctx->deferred, settleValue) == napi_ok) {
+      settled = true;
+    }
+  }
+  if (!settled) {
     napi_value msg = nullptr;
     napi_value err = nullptr;
     const std::string &errStr = ctx->errorMessage.empty() ? "extractSub cancelled" : ctx->errorMessage;
-    napi_create_string_utf8(env, errStr.c_str(), NAPI_AUTO_LENGTH, &msg);
-    napi_create_error(env, nullptr, msg, &err);
-    napi_reject_deferred(env, ctx->deferred, err);
+    if (napi_create_string_utf8(env, errStr.c_str(), NAPI_AUTO_LENGTH, &msg) == napi_ok &&
+        napi_create_error(env, nullptr, msg, &err) == napi_ok) {
+      napi_reject_deferred(env, ctx->deferred, err);
+    } else {
+      // 兜底：确保 Promise 一定被 settle，避免 JS 端永久挂起
+      napi_value fallback = nullptr;
+      napi_create_string_utf8(env, "extractSub: internal napi error", NAPI_AUTO_LENGTH, &fallback);
+      napi_value fallbackErr = nullptr;
+      napi_create_error(env, nullptr, fallback, &fallbackErr);
+      napi_reject_deferred(env, ctx->deferred, fallbackErr);
+    }
   }
 
   napi_delete_async_work(env, ctx->work);
@@ -1041,6 +1066,11 @@ static napi_value ExtractSubtitleEntries(napi_env env, napi_callback_info info) 
   }
   if (napi_get_value_int64(env, args[3], &timeoutMs) != napi_ok) {
     ThrowTypeError(env, "extractSubtitleEntries: timeoutMs must be int64");
+    return nullptr;
+  }
+
+  if (streamIndex < 0 || streamIndex > (int64_t)INT_MAX) {
+    ThrowRangeError(env, "extractSubtitleEntries: streamIndex out of range");
     return nullptr;
   }
 
