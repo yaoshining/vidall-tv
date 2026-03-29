@@ -29,9 +29,16 @@ export interface SmbListDirectoryResult {
   error?: string;
 }
 
-export interface SmbAuthInfo {
-  username: string;
-  domain: string;
+export interface SmbShareInfo {
+  name: string;
+  remark: string;
+  /** 原始 type 位字段，0=磁盘, 1=打印, 2=设备, 3=IPC */
+  type: number;
+}
+
+export interface SmbListSharesResult {
+  shares: SmbShareInfo[];
+  error?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,6 +48,7 @@ export interface SmbAuthInfo {
 interface SmbNapiBridge {
   smbTestConnection: (host: string, port: number, username: string, password: string, domain: string, shareName: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbListDirectory: (host: string, port: number, username: string, password: string, domain: string, shareName: string, path: string, timeoutMs: number) => Promise<Record<string, Object>>;
+  smbListShares: (host: string, port: number, username: string, password: string, domain: string, timeoutMs: number) => Promise<Record<string, Object>>;
 }
 
 interface SmbNapiBridgeModule {
@@ -68,7 +76,8 @@ export interface SMBClientConfig {
   port: number;
   username: string;
   password: string;
-  shareName: string;
+  /** 共享名，如 "nas-share"。为空时 testConnection 连接 IPC$（纯认证检验） */
+  shareName?: string;
   domain?: string;
   workgroup?: string;
   timeoutMs?: number;
@@ -93,7 +102,7 @@ export class SMBClient {
     this.port = config.port ?? 445;
     this.username = config.username;
     this.password = config.password;
-    this.shareName = config.shareName;
+    this.shareName = config.shareName ?? '';
     this.domain = config.domain ?? '';
     this.workgroup = config.workgroup ?? 'WORKGROUP';
     this.timeoutMs = config.timeoutMs ?? 30000;
@@ -108,7 +117,7 @@ export class SMBClient {
       port: config.port ?? 445,
       username: config.username,
       password: config.password,
-      shareName: config.shareName,
+      shareName: config.shareName ?? '',
       domain: config.domain,
       workgroup: config.workgroup
     }
@@ -225,6 +234,47 @@ export class SMBClient {
   }
 
   /**
+   * 枚举服务器上的 SMB 共享列表（连接到 IPC$，无需提前知道共享名）
+   */
+  async listShares(): Promise<SmbListSharesResult> {
+    console.info(`[SMBClient] listShares: ${this.host}`);
+    try {
+      const raw = await getModule().smbListShares(
+        this.host,
+        this.port,
+        this.username,
+        this.password,
+        this.domain,
+        this.timeoutMs
+      ) as Record<string, Object>;
+
+      const sharesRaw = raw['shares'] as Object[];
+      const shares: SmbShareInfo[] = sharesRaw.map((s) => {
+        const sm = s as Record<string, Object>;
+        const shareInfo: SmbShareInfo = {
+          name: sm['name'] as string,
+          remark: sm['remark'] as string,
+          type: sm['type'] as number
+        };
+        return shareInfo;
+      });
+
+      const result: SmbListSharesResult = { shares };
+      if (raw['error']) {
+        result.error = raw['error'] as string;
+      }
+      return result;
+    } catch (e) {
+      const err = e as import('@kit.BasicServicesKit').BusinessError;
+      const result: SmbListSharesResult = {
+        shares: [],
+        error: err.message ?? '调用失败'
+      };
+      return result;
+    }
+  }
+
+  /**
    * 获取完整的 SMB URL（用于播放器直接使用）
    */
   getFullUrl(path: string): string {
@@ -241,4 +291,9 @@ export class SMBClient {
     };
     return info;
   }
+}
+
+export interface SmbAuthInfo {
+  username: string;
+  domain: string;
 }

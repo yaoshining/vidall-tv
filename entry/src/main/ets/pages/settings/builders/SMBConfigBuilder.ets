@@ -5,7 +5,10 @@ import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 import promptAction from '@ohos.promptAction'
-import { SMBClient } from '../../../lib/SMBClient'
+import { SMBClient, SmbShareInfo } from '../../../lib/SMBClient'
+
+/** 磁盘共享类型常量（SHARE_TYPE_DISKTREE = 0，低 2 bit） */
+const SHARE_TYPE_DISK: number = 0
 
 @ComponentV2
 struct SMBConfigBuilderComponent {
@@ -23,6 +26,10 @@ struct SMBConfigBuilderComponent {
   // Loading 状态
   @Local isLoading: boolean = false
   @Local loadingText: string = ''
+
+  // 共享扫描结果
+  @Local availableShares: SmbShareInfo[] = []
+  @Local isScanning: boolean = false
 
   // 焦点状态管理
   @Local currentFocusIndex: number = 0
@@ -63,7 +70,7 @@ struct SMBConfigBuilderComponent {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
         this.serverName = fileSource.name
         this.host = config.host
-        this.shareName = config.shareName
+        this.shareName = config.shareName ?? ''
         this.username = config.username
         this.password = config.password
         this.domain = config.domain ?? ''
@@ -113,11 +120,6 @@ struct SMBConfigBuilderComponent {
       promptAction.showToast({ message: hostResult.message, duration: 2000 })
       return
     }
-    const shareResult = ValidationUtil.validateNotEmpty(this.shareName, '共享名')
-    if (!shareResult.valid) {
-      promptAction.showToast({ message: shareResult.message, duration: 2000 })
-      return
-    }
 
     this.isLoading = true
     this.loadingText = '连接测试中...'
@@ -143,6 +145,46 @@ struct SMBConfigBuilderComponent {
   }
 
   /**
+   * 扫描共享列表（连接 IPC$，不需要预先知道共享名）
+   */
+  private async handleScanShares(): Promise<void> {
+    if (this.host.trim().length === 0) {
+      promptAction.showToast({ message: '请先填写服务器地址', duration: 2000 })
+      return
+    }
+    if (this.username.trim().length === 0) {
+      promptAction.showToast({ message: '请先填写用户名', duration: 2000 })
+      return
+    }
+    this.isScanning = true
+    this.availableShares = []
+    try {
+      const config = this.buildConfig()
+      const client = SMBClient.fromSourceConfig(config)
+      const result = await client.listShares()
+      if (result.error && result.shares.length === 0) {
+        promptAction.showToast({ message: result.error, duration: 3000 })
+      } else {
+        // 只展示磁盘共享（type & 3 == 0）
+        const diskShares: SmbShareInfo[] = result.shares.filter((s) => (s.type & 3) === SHARE_TYPE_DISK)
+        this.availableShares = diskShares
+        if (diskShares.length === 0) {
+          promptAction.showToast({ message: '未找到可用的磁盘共享', duration: 2000 })
+        }
+      }
+    } catch {
+      promptAction.showToast({ message: '扫描共享失败', duration: 2000 })
+    } finally {
+      this.isScanning = false
+    }
+  }
+
+  /** 返回当前扫描状态文字 */
+  private getScanButtonText(): string {
+    return this.isScanning ? '扫描中...' : '扫描共享'
+  }
+
+  /**
    * 保存配置
    */
   private async handleSave(): Promise<void> {
@@ -155,11 +197,6 @@ struct SMBConfigBuilderComponent {
     const hostResult = ValidationUtil.validateNotEmpty(this.host, '服务器地址')
     if (!hostResult.valid) {
       promptAction.showToast({ message: hostResult.message, duration: 2000 })
-      return
-    }
-    const shareResult = ValidationUtil.validateNotEmpty(this.shareName, '共享名')
-    if (!shareResult.valid) {
-      promptAction.showToast({ message: shareResult.message, duration: 2000 })
       return
     }
     const usernameResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
@@ -261,12 +298,12 @@ struct SMBConfigBuilderComponent {
             this.focusNext()
           })
 
-        // 共享名（必填）
-        TextInput({ text: this.shareName, placeholder: '共享名（如 nas-share）' })
+        // 共享名（可选，可通过扫描自动发现）
+        TextInput({ text: this.shareName, placeholder: '共享名（可选，可扫描发现）' })
           .height(40)
           .fontSize(16)
           .placeholderFont({ size: 16 })
-          .enabled(!this.isLoading)
+          .enabled(!this.isLoading && !this.isScanning)
           .id('smbShareNameInput')
           .key(`smbShareName_${this.currentFocusIndex === 2 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 2)
@@ -277,6 +314,48 @@ struct SMBConfigBuilderComponent {
           .onSubmit(() => {
             this.focusNext()
           })
+
+        // 扫描共享按钮
+        IBestButton({
+          text: this.getScanButtonText(),
+          type: 'default',
+          btnWidth: '100%',
+          plain: true,
+          btnFontSize: 18,
+          loading: this.isScanning,
+          onBtnClick: () => {
+            this.handleScanShares()
+          }
+        })
+          .width('100%')
+          .enabled(!this.isLoading && !this.isScanning)
+
+        // 扫描到的共享列表（点击即填入共享名）
+        if (this.availableShares.length > 0) {
+          Column({ space: 8 }) {
+            Text('发现的共享文件夹（点击选择）')
+              .fontSize(14)
+              .fontColor(Color.Gray)
+              .width('100%')
+            Flex({ wrap: FlexWrap.Wrap }) {
+              ForEach(this.availableShares, (share: SmbShareInfo) => {
+                Text(share.name)
+                  .fontSize(16)
+                  .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+                  .margin({ right: 8, bottom: 8 })
+                  .borderRadius(4)
+                  .backgroundColor(this.shareName === share.name ? '#1677FF' : '#F0F0F0')
+                  .fontColor(this.shareName === share.name ? Color.White : Color.Black)
+                  .focusable(true)
+                  .onClick(() => {
+                    this.shareName = share.name
+                  })
+              })
+            }
+            .width('100%')
+          }
+          .width('100%')
+        }
 
         // 用户名（必填）
         TextInput({ text: this.username, placeholder: '用户名（必填）' })

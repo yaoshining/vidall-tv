@@ -49,8 +49,8 @@ export interface SMBSourceConfig {
    * 普通工作组场景可留空，不影响连接。
    */
   domain?: string;
-  /** SMB 共享名，如 "nas-share"、"Videos" */
-  shareName: string;
+  /** SMB 共享名，如 "nas-share"、"Videos"。为空时可通过 listShares() 枚举后选择 */
+  shareName?: string;
   /** 工作组名，默认 "WORKGROUP" */
   workgroup?: string;
 }
