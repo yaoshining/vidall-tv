@@ -779,11 +779,9 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     const items: SubtitleTrackItem[] = [];
     for (let i = 0; i < rawTracks.length; i++) {
       const ft: FfprobeTrack = rawTracks[i];
-      const hasLang = ft.language.length > 0;
-      const languageName = hasLang ? FfprobeUtil.getLanguageDisplayName(ft.language) : '';
-      const displayName = languageName.length > 0
-        ? `内嵌字幕 ${i + 1} (${languageName})`
-        : `内嵌字幕 ${i + 1}`;
+      // 用 buildSubtitleTrackDisplayName 获取含简/繁体标注的完整描述（如 "中文 (ASS) 简体"）
+      const trackDesc = FfprobeUtil.buildSubtitleTrackDisplayName(ft, i);
+      const displayName = `内嵌字幕 ${i + 1} (${trackDesc})`;
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
