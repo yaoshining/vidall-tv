@@ -395,8 +395,15 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
   }
 
-  /** 默认优先选择外置字幕，其次才是第一条内嵌字幕 */
+  /** 默认优先选择第一条内嵌字幕，没有内嵌字幕再选第一条外置字幕 */
   protected findPreferredTrackIndex(): number {
+    // 先找内嵌字幕
+    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
+      if (this.allSubtitleTracks[i].kind === 'internal') {
+        return i;
+      }
+    }
+    // 没有内嵌字幕则找外置字幕
     for (let i = 0; i < this.allSubtitleTracks.length; i++) {
       if (this.allSubtitleTracks[i].kind === 'external') {
         return i;
