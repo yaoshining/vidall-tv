@@ -583,23 +583,24 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) {
       throw new Error('Database not initialized');
     }
-    this.rdbStore.beginTransaction();
+    const store = this.rdbStore;
+    await store.executeSql('BEGIN TRANSACTION');
     try {
       const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
       predicates.equalTo('source_id', sourceId);
-      await this.rdbStore.delete(predicates);
+      await store.delete(predicates);
       for (const dir of directories) {
         const valueBucket: relationalStore.ValuesBucket = {
           source_id: sourceId,
           directory_path: dir.directoryPath,
           custom_name: dir.customName ?? null
         };
-        await this.rdbStore.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
+        await store.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
       }
-      this.rdbStore.commit();
+      await store.executeSql('COMMIT');
       console.info(`FileSourceDatabase: Saved ${directories.length} directory(ies) for source ${sourceId}`);
     } catch (error) {
-      this.rdbStore.rollback();
+      await store.executeSql('ROLLBACK');
       console.error('FileSourceDatabase: saveDirectoriesForSource failed, rollback', JSON.stringify(error));
       throw new Error('Failed to save directories: ' + JSON.stringify(error));
     }
