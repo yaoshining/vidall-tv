@@ -1611,10 +1611,12 @@ static void AdvancePlaybackClockIfNeeded(NativePlayerSkeletonState &state) {
 }
 
 // ============================================================================
-// SMB → local HTTP proxy
+// ============================================================================
+// SMB → local HTTP proxy (仅在 VIDALL_HAS_LIBSMB2=1 时编译)
 // Bridges libsmb2 reads to OH_AVPlayer via http://127.0.0.1:PORT/
 // Each OH_AVPlayer Range request spawns one handler thread with its own smb2 context.
 // ============================================================================
+#if VIDALL_HAS_LIBSMB2
 
 static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
     // Read HTTP request headers (until "\r\n\r\n")
@@ -1801,6 +1803,15 @@ static void SmbStopProxy(NativePlayerSkeletonState &state) {
     state.isSmbPlayback = false;
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "proxy stopped");
 }
+
+#else  // VIDALL_HAS_LIBSMB2 == 0
+
+// libsmb2 未编译时的空实现，避免调用方报错
+static int SmbStartProxy(NativePlayerSkeletonState & /*state*/,
+                          const SmbUrlComponents & /*comps*/) { return -1; }
+static void SmbStopProxy(NativePlayerSkeletonState & /*state*/) {}
+
+#endif // VIDALL_HAS_LIBSMB2
 
 static void ResetRuntimeState(NativePlayerSkeletonState &state) {
   SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
@@ -2250,6 +2261,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   // state.url 保持不变（保留原始 smb:// URL），避免重复 prepare 时丢失 URL。
   std::string playUrl = state.url;
   if (state.url.size() > 6 && state.url.compare(0, 6, "smb://") == 0) {
+#if VIDALL_HAS_LIBSMB2
     SmbUrlComponents comps = ParseSmbUrl(state.url);
     if (!comps.valid) {
       EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: invalid smb:// URL");
@@ -2265,6 +2277,11 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/";
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "SMB rewritten to %{public}s", playUrl.c_str());
+#else
+    EmitError(state, ERR_SMB_PREPARE_FAILED,
+              "prepare failed: SMB playback not supported (VIDALL_HAS_LIBSMB2=0)");
+    return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+#endif
   }
 
   // 设置播放源 URL
