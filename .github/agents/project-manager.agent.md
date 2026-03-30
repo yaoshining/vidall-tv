@@ -141,3 +141,103 @@ model: GPT-5.4
   - 失败后重试记录
   - QA 验证结果汇总
   - 后续优化建议
+
+---
+
+## 并行 Agent 执行规范（经验教训，强制）
+
+> 本节源于 Issue #68 SMB 功能开发的实际踩坑，是对「并行调度规则」的补充约束。
+
+### P0：并行 Agent 必须使用 git worktree 隔离
+
+**问题**：多个后台 Agent 并行运行时共享同一个本地 git 工作区，`git add .` 会把其他 Agent 的未提交文件一并带入，导致跨分支提交污染。
+
+**强制规则**：
+- 并行分发 ≥ 2 个 Agent 时，**必须**为每个任务开独立 worktree：
+  ```bash
+  git worktree add ../<任务目录名> <分支名>
+  # 示例：git worktree add ../smb-player feat/issue-68-player-smb
+  ```
+- 在 Agent 的 prompt 中明确写明：**工作目录为 `../<任务目录名>`，不得在主工作区操作**。
+- 任务完成后清理 worktree：`git worktree remove ../<任务目录名>`。
+- 若环境不支持 worktree，退化为**串行执行**，禁止在共享工作区并行运行多个 Agent。
+
+### P0：提交前必须明确 `git add` 具体文件
+
+**问题**：Agent 新建文件后只提交了已有文件的修改，新文件（未追踪状态）未被 `git add`，导致本地编译通过但分支缺文件，第一轮 QA 漏过、清理工作区后 QA 才暴露。
+
+**强制规则**：
+- Agent 的任务 prompt 中必须包含：
+  > 提交前执行 `git status`，确认所有新建文件（`?? 路径`）已显式 `git add <文件路径>`，禁止用 `git add .`。
+- QA 验证流程新增**工作区清洁检查**：
+  ```bash
+  git status --short | grep "^??"
+  ```
+  若输出不为空，标记 `QA_FAILED`，要求 Agent 补充提交未追踪文件后重验。
+
+### P0：任务 Prompt 必须包含「已知风险 + 验收要点」
+
+**问题**：分发任务时只描述"做什么"，缺少关键约束（安全要求、接口规范、ArkTS 限制），导致 PR 被审查指出多个可预防的问题（凭据泄露、字段未声明、路由逻辑错误）。
+
+**强制规则**：每个开发任务 prompt 末尾必须包含独立的「验收要点 checklist」章节，至少涵盖：
+
+```
+### 验收要点（提交前自查）
+- [ ] 新增字段在类/struct 顶部显式声明（含 @Trace 等装饰器）
+- [ ] 日志中不得打印含凭据的完整 URL（smb://user:pass@host/...），必须脱敏
+- [ ] fallback / 回退逻辑对新协议是否需要豁免
+- [ ] catch 子句不加类型注解（ArkTS 规范）
+- [ ] build() 内不声明变量
+- [ ] 提交前 git status 确认无未追踪文件
+```
+
+### P1：QA 验证完成后立即检查 PR Review 评论
+
+**问题**：QA 只验编译，PR 上的自动审查评论（CodeRabbit / Copilot Reviewer）需要额外一轮才能跟进，延长了整体周期。
+
+**规则**：QA 编译通过后，立即执行：
+```bash
+gh api graphql -f query='{ repository(owner:"yaoshining", name:"vidall-tv") {
+  pullRequest(number: <PR号>) { reviewThreads(first:20) { nodes {
+    id isResolved comments(first:1){ nodes { body databaseId } }
+  }}}}}' 
+```
+若有未 resolved 的 thread，在同一轮内一并上报给项目经理处理，不拆成独立轮次。
+
+### P1：分支污染发现后的标准修复流程
+
+若发现 PR 对应分支含有其他任务的提交（污染），按以下流程修复：
+
+```bash
+# 1. 确认污染提交的 hash（污染 commit）
+git log --oneline origin/<目标分支>
+
+# 2. 若污染 commit 尚未推送到 origin：
+git checkout <目标分支>
+git reset --hard origin/<目标分支>   # 回退到 origin 状态，丢弃本地污染
+
+# 3. 若污染 commit 已推送到 origin：
+git checkout <目标分支>
+git rebase --onto main <污染commit的父hash>   # 切除污染
+git push --force-with-lease origin <目标分支>
+
+# 4. 同时在正确分支上 cherry-pick 正确改动（若改动散落在污染 commit 里）
+git checkout <正确分支>
+git cherry-pick <包含正确改动的 commit hash>
+git push origin <正确分支>
+```
+
+修复后必须重新触发 QA，不得跳过。
+
+### P2：看板状态同步时机
+
+每次状态流转（`IN_PROGRESS` / `READY_FOR_QA` / `QA_FAILED` / `DONE`）后，立即执行 `gh project item-edit` 同步，不得在轮次末尾批量补更新。
+
+### P2：新增规则后执行前必须预检
+
+规则更新到 agent.md 后，下一次分发任务前，先对照本节 checklist 做「dry-run 预检」：
+
+- [ ] 并行任务数 ≥ 2？→ 检查 worktree 是否已建立
+- [ ] 有新建文件的任务？→ prompt 里是否含 `git status` + 显式 `git add` 要求
+- [ ] 涉及凭据/安全？→ prompt 里是否含日志脱敏要求
+- [ ] 有 fallback 逻辑的模块？→ prompt 里是否含豁免检查要求

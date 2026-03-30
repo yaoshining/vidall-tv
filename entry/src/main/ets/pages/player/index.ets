@@ -50,7 +50,14 @@ export struct PlayerPage {
   private pendingSeekMs: number = -1
 
   private getBackendDebugText(): string {
-    const backendText = `backend=${this.videoPlayerController.backend}`;
+    const proto = this.videoPlayerController.sourceProtocol;
+    const rawBackend = this.videoPlayerController.backend;
+    // SMB 源实际走 OH_AVPlayer + C++ HTTP 代理，显示更具体的标签
+    const backendLabel = (rawBackend === 'native' && proto === 'SMB')
+      ? 'avplayer(smb-proxy)'
+      : rawBackend;
+    const protoSuffix = proto.length > 0 ? ` | ${proto}` : '';
+    const backendText = `backend=${backendLabel}${protoSuffix}`;
     const reason = this.videoPlayerController.lastErrorMessage;
     if (reason.length === 0) {
       return backendText;
