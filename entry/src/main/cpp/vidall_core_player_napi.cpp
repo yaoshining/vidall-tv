@@ -3418,7 +3418,8 @@ static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
         smb2_destroy_context(smb2);
         return;
     }
-    const char *dirPath = ctx->path.empty() ? "/" : ctx->path.c_str();
+    // 空字符串表示 share 根目录（libsmb2 期望 ""，传 "/" 会触发 Windows STATUS_INVALID_PARAMETER）
+    const char *dirPath = ctx->path.c_str();
     struct smb2dir *dir = smb2_opendir(smb2, dirPath);
     if (!dir) {
         const char *errStr = smb2_get_error(smb2);
