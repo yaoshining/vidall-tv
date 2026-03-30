@@ -1,5 +1,6 @@
 import { SidebarStore } from '../stores/sidebar/SidebarStore';
 import { FileExplorerPage } from './files';
+import { SmbFileExplorerPage } from './files/SmbFileExplorerPage';
 import { HomePage } from './home';
 import { PlayerPage } from './player/index';
 import { SettingsPage } from './settings/Index';
@@ -19,6 +20,8 @@ struct Index {
       SettingsPage();
     } else if (name === FileExplorerPage.PAGE_NAME) {
       FileExplorerPage();
+    } else if (name === SmbFileExplorerPage.PAGE_NAME) {
+      SmbFileExplorerPage();
     } else if (name === SeriesDetailPage.PAGE_NAME) {
       SeriesDetailPage();
     } else if (name === SeasonDetailPage.PAGE_NAME) {

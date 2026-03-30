@@ -1,8 +1,9 @@
 import { LengthMetrics } from "@kit.ArkUI"
 import { WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
+import { SmbFileExplorerPage, SmbFileExplorerPageParam } from "../../files/SmbFileExplorerPage"
 import promptAction from '@ohos.promptAction'
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
+import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
@@ -124,6 +125,20 @@ export struct FileSourceTab {
           name: FileExplorerPage.PAGE_NAME,
           param: config as WebDAVConfig
         }, false)
+      }
+    } else if (item.fileSource.type === FileSourceType.SMB) {
+      try {
+        const smbConfig = JSON.parse(item.fileSource.configJson) as SMBSourceConfig
+        const param: SmbFileExplorerPageParam = {
+          config: smbConfig,
+          initialPath: item.directoryPath && item.directoryPath !== '/' ? item.directoryPath : '/'
+        }
+        this.pageStack.pushPath({
+          name: SmbFileExplorerPage.PAGE_NAME,
+          param: param
+        }, false)
+      } catch (e) {
+        console.error('FileSourceTab: 解析 SMB 配置失败', JSON.stringify(e))
       }
     } else {
       console.warn('FileSourceTab: Unsupported file source type', item.fileSource.type)
