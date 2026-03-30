@@ -203,7 +203,7 @@ export struct SmbFileExplorerPage {
 
   // ── 返回导航 ────────────────────────────────────────────────────────────────
 
-  // UI 返回箭头：导航到上级目录；已在根目录时关闭弹窗
+  // UI 返回箭头 / 系统返回键共用：非根目录时导航上级，根目录时关闭弹窗（与 WebDAV 行为一致）
   private navigateUp(): void {
     if (this.currentPath === '/') {
       this.pageStack.pop(true)
@@ -214,9 +214,9 @@ export struct SmbFileExplorerPage {
     this.loadDirectory(parentPath)
   }
 
-  // 系统/遥控器返回键：始终关闭弹窗（与 WebDAV 文件浏览器行为一致）
+  // 系统/遥控器返回键：与 navigateUp 行为一致（非根目录返回上级，根目录关闭）
   private handleBack(): boolean {
-    this.pageStack.pop(true)
+    this.navigateUp()
     return true
   }
 
