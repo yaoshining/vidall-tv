@@ -235,6 +235,9 @@ export class SMBClient {
    */
   private async listDirectoryInShare(shareName: string, subPath: string): Promise<SmbListDirectoryResult> {
     try {
+      // smb2_opendir 在连接 share 后期望路径不含前导 "/"（如 "Movies" 而非 "/Movies"）
+      // 空字符串由 native 层自动处理为 share 根目录
+      const nativePath = subPath.startsWith('/') ? subPath.substring(1) : subPath;
       const raw = await getModule().smbListDirectory(
         this.host,
         this.port,
@@ -242,7 +245,7 @@ export class SMBClient {
         this.password,
         this.domain,
         shareName,
-        subPath,
+        nativePath,
         this.timeoutMs
       ) as Record<string, Object>;
 
