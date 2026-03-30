@@ -496,13 +496,19 @@ export class SMBAdapter implements ISourceAdapter {
     this.scrapeClient = scrapeClient;
   }
 
-  /** 构建完整 smb:// 播放 URL（凭据内嵌，用于 FFmpeg 播放与刮削） */
+  /** 构建完整 smb:// 播放 URL（凭据内嵌，路径段编码，用于 FFmpeg 播放与刮削） */
   private buildSmbUrl(filePath: string): string {
     const port = this.config.port ?? 445;
     const user = encodeURIComponent(this.config.username);
     const pass = encodeURIComponent(this.config.password);
-    // filePath 形如 /Videos/TV Series/xxx/yyy.mkv，首段即 shareName
-    return `smb://${user}:${pass}@${this.config.host}:${port}${filePath}`;
+    // filePath 形如 /Videos/TV Series/xxx/yyy.mkv，对每段路径做 URI 编码（保留斜杠）
+    const encodedPath = filePath.split('/').map((seg: string): string => {
+      if (seg.length === 0) { return ''; }
+      let decoded: string = seg;
+      try { decoded = decodeURIComponent(seg); } catch { decoded = seg; }
+      return encodeURIComponent(decoded);
+    }).join('/');
+    return `smb://${user}:${pass}@${this.config.host}:${port}${encodedPath}`;
   }
 
   /** 日志脱敏：smb://user:pass@host → smb://***@host */

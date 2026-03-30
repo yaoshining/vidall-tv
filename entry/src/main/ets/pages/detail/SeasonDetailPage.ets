@@ -687,7 +687,13 @@ export struct SeasonDetailPage {
         const port = smbConfig.port ?? 445;
         const user = encodeURIComponent(smbConfig.username);
         const pass = encodeURIComponent(smbConfig.password);
-        fullUrl = `smb://${user}:${pass}@${smbConfig.host}:${port}${episode.filePath}`;
+        const encodedPath = episode.filePath.split('/').map((seg: string): string => {
+          if (seg.length === 0) { return ''; }
+          let decoded: string = seg;
+          try { decoded = decodeURIComponent(seg); } catch { decoded = seg; }
+          return encodeURIComponent(decoded);
+        }).join('/');
+        fullUrl = `smb://${user}:${pass}@${smbConfig.host}:${port}${encodedPath}`;
         httpHeader = {};
       } else {
         const protocol = config['protocol'] ?? 'http';
@@ -1379,6 +1385,9 @@ export struct SeasonDetailPage {
           this.loadData(tvSeriesId, seasonNumber);
         }
       }
+    })
+    .onShown(() => {
+      this.refreshProgressState().catch(() => {});
     })
     .onBackPressed(() => {
       if (this.showOverviewDialog) {
