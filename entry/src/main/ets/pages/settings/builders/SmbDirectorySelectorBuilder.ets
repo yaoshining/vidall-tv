@@ -38,6 +38,7 @@ struct SmbDirectorySelectorBuilderComponent {
   private sourceId: number = 0
   private smbClient: SMBClient | null = null
   private previousSelectedMap: Map<string, string> = new Map()
+  private directoryLoadSeq: number = 0
   private uncheckedMap: Map<string, string> = new Map()
 
   aboutToAppear(): void {
@@ -109,11 +110,16 @@ struct SmbDirectorySelectorBuilderComponent {
       this.errorMessage = 'SMB 客户端未初始化'
       return
     }
+    const seq = ++this.directoryLoadSeq
+    const requestPath = this.currentPath
     this.isLoading = true
     this.errorMessage = ''
     try {
-      console.info('[SmbDirSelector] 加载目录:', this.currentPath)
-      const result = await this.smbClient.listDirectory(this.currentPath)
+      console.info('[SmbDirSelector] 加载目录:', requestPath)
+      const result = await this.smbClient.listDirectory(requestPath)
+      if (seq !== this.directoryLoadSeq || requestPath !== this.currentPath) {
+        return
+      }
       if (result.error && result.files.length === 0) {
         this.errorMessage = result.error
       } else {
@@ -127,12 +133,17 @@ struct SmbDirectorySelectorBuilderComponent {
       }
       console.info(`[SmbDirSelector] 找到 ${this.directories.length} 个文件夹`)
     } catch (e) {
+      if (seq !== this.directoryLoadSeq) {
+        return
+      }
       const err = e as BusinessError
       const errMsg = err.message ?? String(e)
       console.error('[SmbDirSelector] 加载目录失败', errMsg)
       this.errorMessage = errMsg
     } finally {
-      this.isLoading = false
+      if (seq === this.directoryLoadSeq) {
+        this.isLoading = false
+      }
     }
   }
 
@@ -194,7 +205,6 @@ struct SmbDirectorySelectorBuilderComponent {
     this.isSaving = true
     try {
       const database = FileSourceDatabase.getInstance()
-      await database.deleteDirectoriesBySourceId(this.sourceId)
       const dirEntries: FileSourceDirectory[] = []
       this.selectedMap.forEach((customName: string, path: string) => {
         const entry: FileSourceDirectory = {
@@ -204,7 +214,7 @@ struct SmbDirectorySelectorBuilderComponent {
         }
         dirEntries.push(entry)
       })
-      await database.insertDirectories(this.sourceId, dirEntries)
+      await database.saveDirectoriesForSource(this.sourceId, dirEntries)
       await this.fileSourceModel.loadFileSources(true)
       this.uncheckedMap.clear()
       console.info(`[SmbDirSelector] 保存 ${dirEntries.length} 个目录`)
@@ -288,7 +298,7 @@ struct SmbDirectorySelectorBuilderComponent {
       this.isAllSelected = false
     } else {
       this.previousSelectedMap = new Map(this.selectedMap)
-      this.selectedMap = new Map([[' /', '']])
+      this.selectedMap = new Map([['/', '']])
       this.isAllSelected = true
     }
   }

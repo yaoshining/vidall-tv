@@ -577,6 +577,35 @@ export class FileSourceDatabase {
   }
 
   /**
+   * 原子性替换指定文件源的目录关联（先删后插，在同一事务内完成，避免部分失败导致数据丢失）
+   */
+  async saveDirectoriesForSource(sourceId: number, directories: FileSourceDirectory[]): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    this.rdbStore.beginTransaction();
+    try {
+      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
+      predicates.equalTo('source_id', sourceId);
+      await this.rdbStore.delete(predicates);
+      for (const dir of directories) {
+        const valueBucket: relationalStore.ValuesBucket = {
+          source_id: sourceId,
+          directory_path: dir.directoryPath,
+          custom_name: dir.customName ?? null
+        };
+        await this.rdbStore.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
+      }
+      this.rdbStore.commit();
+      console.info(`FileSourceDatabase: Saved ${directories.length} directory(ies) for source ${sourceId}`);
+    } catch (error) {
+      this.rdbStore.rollback();
+      console.error('FileSourceDatabase: saveDirectoriesForSource failed, rollback', JSON.stringify(error));
+      throw new Error('Failed to save directories: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
    * 查询指定文件源的所有目录关联
    */
   async getDirectoriesBySourceId(sourceId: number): Promise<FileSourceDirectory[]> {
