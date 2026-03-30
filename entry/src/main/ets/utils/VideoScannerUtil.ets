@@ -668,7 +668,7 @@ export class SMBAdapter implements ISourceAdapter {
 
           if (parsed.mediaType === 'movie') {
             try {
-              const movie = await capturedScrapeClient.searchMovie(parsed.title ?? fileName);
+              const movie = await capturedScrapeClient.autoScrapeMovie(fileName);
               if (!movie) {
                 console.warn(`[VideoScanner][SMB][SCRAPE] 电影刮削无结果 ${fileName}`);
                 return;
