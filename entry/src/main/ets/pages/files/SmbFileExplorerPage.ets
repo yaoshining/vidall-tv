@@ -53,6 +53,9 @@ export struct SmbFileExplorerPage {
   @Local private currentPath: string = '/'
   @Local private isLoading: boolean = false
   @Local private errorMessage: string = ''
+  @Local private sortField: string = 'name'
+  @Local private sortAscending: boolean = true
+  @Local private showHiddenFiles: boolean = false
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
 
   private config: SMBSourceConfig = DEFAULT_SMB_CONFIG
@@ -88,6 +91,43 @@ export struct SmbFileExplorerPage {
       items.push({ name: parts[i], path: accumulated })
     }
     return items
+  }
+
+  @Computed
+  get sortedFiles(): SmbFileInfo[] {
+    let filtered = this.files
+    if (!this.showHiddenFiles) {
+      filtered = this.files.filter((f: SmbFileInfo) => !f.name.startsWith('.'))
+    }
+    const sorted = filtered.slice()
+    sorted.sort((a: SmbFileInfo, b: SmbFileInfo) => {
+      if (a.isDirectory && !b.isDirectory) return -1
+      if (!a.isDirectory && b.isDirectory) return 1
+      let cmp = 0
+      if (this.sortField === 'name') {
+        cmp = a.name.localeCompare(b.name)
+      } else if (this.sortField === 'size') {
+        cmp = a.size - b.size
+      } else if (this.sortField === 'date') {
+        cmp = a.lastModifiedMs - b.lastModifiedMs
+      }
+      return this.sortAscending ? cmp : -cmp
+    })
+    return sorted
+  }
+
+  private getSortIcon(field: string): string {
+    if (this.sortField !== field) return ''
+    return this.sortAscending ? '↑' : '↓'
+  }
+
+  private changeSortField(field: string): void {
+    if (this.sortField === field) {
+      this.sortAscending = !this.sortAscending
+    } else {
+      this.sortField = field
+      this.sortAscending = true
+    }
   }
 
   // ── 列举目录 ────────────────────────────────────────────────────────────────
@@ -241,12 +281,27 @@ export struct SmbFileExplorerPage {
   build() {
     NavDestination() {
       Column() {
-        // ── 标题栏 ────────────────────────────────────────────────────────────
+        // ── 工具栏（返回 / 隐藏文件 / 文件计数 / 加载指示）────────────────────
         Row() {
-          Text('SMB 文件浏览器')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.COLORS.primaryText)
+          Button('返回')
+            .fontSize(16)
+            .height(40)
+            .backgroundColor(this.COLORS.button)
+            .fontColor(this.COLORS.accent)
+            .onClick(() => { this.handleBack() })
+            .margin({ right: 10 })
+
+          Button(this.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
+            .fontSize(16)
+            .height(40)
+            .backgroundColor(this.COLORS.button)
+            .fontColor(this.showHiddenFiles ? this.COLORS.accent : this.COLORS.secondaryText)
+            .onClick(() => { this.showHiddenFiles = !this.showHiddenFiles })
+            .margin({ right: 10 })
+
+          Text('文件：' + this.sortedFiles.length.toString())
+            .fontSize(14)
+            .fontColor(this.COLORS.tertiaryText)
             .layoutWeight(1)
 
           if (this.isLoading) {
@@ -299,24 +354,30 @@ export struct SmbFileExplorerPage {
         Divider()
           .color(this.COLORS.divider)
 
-        // ── 排序栏头 ──────────────────────────────────────────────────────────
+        // ── 排序栏头（可点击切换排序字段和升降序）──────────────────────────────
         Row() {
-          Text('名称')
+          Text('名称 ' + this.getSortIcon('name'))
             .fontSize(13)
-            .fontColor(this.COLORS.tertiaryText)
+            .fontColor(this.sortField === 'name' ? this.COLORS.accent : this.COLORS.tertiaryText)
+            .fontWeight(this.sortField === 'name' ? FontWeight.Medium : FontWeight.Normal)
             .layoutWeight(3)
+            .onClick(() => { this.changeSortField('name') })
 
-          Text('大小')
+          Text('大小 ' + this.getSortIcon('size'))
             .fontSize(13)
-            .fontColor(this.COLORS.tertiaryText)
+            .fontColor(this.sortField === 'size' ? this.COLORS.accent : this.COLORS.tertiaryText)
+            .fontWeight(this.sortField === 'size' ? FontWeight.Medium : FontWeight.Normal)
             .layoutWeight(2)
             .textAlign(TextAlign.End)
+            .onClick(() => { this.changeSortField('size') })
 
-          Text('修改日期')
+          Text('修改日期 ' + this.getSortIcon('date'))
             .fontSize(13)
-            .fontColor(this.COLORS.tertiaryText)
+            .fontColor(this.sortField === 'date' ? this.COLORS.accent : this.COLORS.tertiaryText)
+            .fontWeight(this.sortField === 'date' ? FontWeight.Medium : FontWeight.Normal)
             .layoutWeight(2)
             .textAlign(TextAlign.End)
+            .onClick(() => { this.changeSortField('date') })
         }
         .width('100%')
         .padding({ left: 16, right: 16, top: 8, bottom: 8 })
@@ -338,7 +399,7 @@ export struct SmbFileExplorerPage {
         }
 
         // ── 文件列表 ──────────────────────────────────────────────────────────
-        if (this.files.length === 0 && !this.isLoading) {
+        if (this.sortedFiles.length === 0 && !this.isLoading) {
           Column() {
             Text('📂')
               .fontSize(48)
@@ -354,17 +415,17 @@ export struct SmbFileExplorerPage {
           .backgroundColor(this.COLORS.background)
         } else {
           List({ space: 0 }) {
-            ForEach(this.files, (file: SmbFileInfo, index: number) => {
+            ForEach(this.sortedFiles, (file: SmbFileInfo, index: number) => {
               ListItem() {
                 Row() {
                   // 图标 + 文件名
                   Row({ space: 12 }) {
                     Text(this.getFileIcon(file))
-                      .fontSize(20)
+                      .fontSize($r('app.float.font_h6_title_large'))
 
                     Column() {
                       Text(file.name)
-                        .fontSize(15)
+                        .fontSize($r('app.float.font_h7_title_small'))
                         .maxLines(1)
                         .textOverflow({ overflow: TextOverflow.MARQUEE })
                         .fontColor(file.isDirectory
