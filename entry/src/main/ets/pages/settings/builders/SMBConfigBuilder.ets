@@ -5,10 +5,7 @@ import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 import promptAction from '@ohos.promptAction'
-import { SMBClient, SmbShareInfo } from '../../../lib/SMBClient'
-
-/** 磁盘共享类型常量（SHARE_TYPE_DISKTREE = 0，低 2 bit） */
-const SHARE_TYPE_DISK: number = 0
+import { SMBClient } from '../../../lib/SMBClient'
 
 @ComponentV2
 struct SMBConfigBuilderComponent {
@@ -17,7 +14,6 @@ struct SMBConfigBuilderComponent {
   // 表单状态
   @Local serverName: string = ''
   @Local host: string = ''
-  @Local shareName: string = ''
   @Local username: string = ''
   @Local password: string = ''
   @Local domain: string = ''
@@ -27,9 +23,9 @@ struct SMBConfigBuilderComponent {
   @Local isLoading: boolean = false
   @Local loadingText: string = ''
 
-  // 共享扫描结果
-  @Local availableShares: SmbShareInfo[] = []
-  @Local isScanning: boolean = false
+  // 局域网设备发现
+  @Local isDiscovering: boolean = false
+  @Local discoveredHosts: string[] = []
 
   // 焦点状态管理
   @Local currentFocusIndex: number = 0
@@ -38,9 +34,6 @@ struct SMBConfigBuilderComponent {
   private isEditMode: boolean = false
   private editingFileSourceId: number | undefined = undefined
 
-  /**
-   * 跳转到下一个输入框
-   */
   private focusNext(): void {
     this.currentFocusIndex++
   }
@@ -53,9 +46,6 @@ struct SMBConfigBuilderComponent {
     }
   }
 
-  /**
-   * 加载已有配置（编辑模式）
-   */
   private async loadEditData(): Promise<void> {
     if (!this.editingFileSourceId) {
       return
@@ -70,7 +60,6 @@ struct SMBConfigBuilderComponent {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
         this.serverName = fileSource.name
         this.host = config.host
-        this.shareName = config.shareName ?? ''
         this.username = config.username
         this.password = config.password
         this.domain = config.domain ?? ''
@@ -88,13 +77,9 @@ struct SMBConfigBuilderComponent {
     }
   }
 
-  /**
-   * 构造 SMBSourceConfig
-   */
   private buildConfig(): SMBSourceConfig {
     const config: SMBSourceConfig = {
       host: this.host.trim(),
-      shareName: this.shareName.trim(),
       username: this.username,
       password: this.password,
       port: this.port
@@ -106,9 +91,6 @@ struct SMBConfigBuilderComponent {
     return config
   }
 
-  /**
-   * 测试连接：调用 SMBClient 真实 NAPI 桩函数
-   */
   private async handleTestConnection(): Promise<void> {
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '名称')
     if (!nameResult.valid) {
@@ -136,7 +118,7 @@ struct SMBConfigBuilderComponent {
           duration: 3000
         })
       }
-    } catch (e) {
+    } catch {
       promptAction.showToast({ message: '连接测试异常', duration: 2000 })
     } finally {
       this.isLoading = false
@@ -145,50 +127,44 @@ struct SMBConfigBuilderComponent {
   }
 
   /**
-   * 扫描共享列表（连接 IPC$，不需要预先知道共享名）
+   * 发现局域网内开放 SMB(445) 端口的设备。
+   * 从当前 host 提取子网前缀（若已填写），否则默认扫描 192.168.1.x。
    */
-  private async handleScanShares(): Promise<void> {
-    if (this.host.trim().length === 0) {
-      promptAction.showToast({ message: '请先填写服务器地址', duration: 2000 })
-      return
+  private getSubnetPrefix(): string {
+    const h = this.host.trim()
+    if (h.length > 0) {
+      const parts = h.split('.')
+      if (parts.length === 4) {
+        return parts[0] + '.' + parts[1] + '.' + parts[2] + '.'
+      }
     }
-    if (this.username.trim().length === 0) {
-      promptAction.showToast({ message: '请先填写用户名', duration: 2000 })
-      return
-    }
-    this.isScanning = true
-    this.availableShares = []
+    return '192.168.1.'
+  }
+
+  private async handleDiscoverHosts(): Promise<void> {
+    this.isDiscovering = true
+    this.discoveredHosts = []
     try {
-      const config = this.buildConfig()
-      const client = SMBClient.fromSourceConfig(config)
-      const result = await client.listShares()
-      if (result.error && result.shares.length === 0) {
-        promptAction.showToast({ message: result.error, duration: 3000 })
+      const prefix = this.getSubnetPrefix()
+      promptAction.showToast({ message: `扫描 ${prefix}1-254:445...`, duration: 1500 })
+      const result = await SMBClient.discoverHosts(prefix, 1, 254, 445, 5000)
+      if (result.hosts.length === 0) {
+        promptAction.showToast({ message: '未发现局域网 SMB 设备', duration: 2000 })
       } else {
-        // 只展示磁盘共享（type & 3 == 0）
-        const diskShares: SmbShareInfo[] = result.shares.filter((s) => (s.type & 3) === SHARE_TYPE_DISK)
-        this.availableShares = diskShares
-        if (diskShares.length === 0) {
-          promptAction.showToast({ message: '未找到可用的磁盘共享', duration: 2000 })
-        }
+        this.discoveredHosts = result.hosts
       }
     } catch {
-      promptAction.showToast({ message: '扫描共享失败', duration: 2000 })
+      promptAction.showToast({ message: '发现失败', duration: 2000 })
     } finally {
-      this.isScanning = false
+      this.isDiscovering = false
     }
   }
 
-  /** 返回当前扫描状态文字 */
-  private getScanButtonText(): string {
-    return this.isScanning ? '扫描中...' : '扫描共享'
+  private getDiscoverButtonText(): string {
+    return this.isDiscovering ? '扫描中...' : '发现局域网设备'
   }
 
-  /**
-   * 保存配置
-   */
   private async handleSave(): Promise<void> {
-    // 必填字段校验
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '名称')
     if (!nameResult.valid) {
       promptAction.showToast({ message: nameResult.message, duration: 2000 })
@@ -218,7 +194,6 @@ struct SMBConfigBuilderComponent {
     this.isLoading = true
     this.loadingText = '保存中...'
 
-    // 编辑模式下保留原 createdAt，避免每次编辑都重写创建时间戳
     let originalCreatedAt: number = Date.now();
     if (this.isEditMode && this.editingFileSourceId !== undefined) {
       const existing = FileSourceStore.getState().getFileSourceById(this.editingFileSourceId);
@@ -270,8 +245,6 @@ struct SMBConfigBuilderComponent {
           .fontSize(16)
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
-          .id('smbServerNameInput')
-          .key(`smbServerName_${this.currentFocusIndex === 0 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 0)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
@@ -287,8 +260,6 @@ struct SMBConfigBuilderComponent {
           .fontSize(16)
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
-          .id('smbHostInput')
-          .key(`smbHost_${this.currentFocusIndex === 1 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 1)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
@@ -298,57 +269,40 @@ struct SMBConfigBuilderComponent {
             this.focusNext()
           })
 
-        // 共享名（可选，可通过扫描自动发现）
-        TextInput({ text: this.shareName, placeholder: '共享名（可选，可扫描发现）' })
-          .height(40)
-          .fontSize(16)
-          .placeholderFont({ size: 16 })
-          .enabled(!this.isLoading && !this.isScanning)
-          .id('smbShareNameInput')
-          .key(`smbShareName_${this.currentFocusIndex === 2 ? 'focus' : 'blur'}`)
-          .defaultFocus(this.currentFocusIndex === 2)
-          .enterKeyType(EnterKeyType.Next)
-          .onChange((value: string) => {
-            this.shareName = value
-          })
-          .onSubmit(() => {
-            this.focusNext()
-          })
-
-        // 扫描共享按钮
+        // 发现局域网设备按钮
         IBestButton({
-          text: this.getScanButtonText(),
+          text: this.getDiscoverButtonText(),
           type: 'default',
           btnWidth: '100%',
           plain: true,
           btnFontSize: 18,
-          loading: this.isScanning,
+          loading: this.isDiscovering,
           onBtnClick: () => {
-            this.handleScanShares()
+            this.handleDiscoverHosts()
           }
         })
           .width('100%')
-          .enabled(!this.isLoading && !this.isScanning)
+          .enabled(!this.isLoading && !this.isDiscovering)
 
-        // 扫描到的共享列表（点击即填入共享名）
-        if (this.availableShares.length > 0) {
+        // 发现的设备列表（点击填入服务器地址）
+        if (this.discoveredHosts.length > 0) {
           Column({ space: 8 }) {
-            Text('发现的共享文件夹（点击选择）')
+            Text('发现的设备（点击选择）')
               .fontSize(14)
               .fontColor(Color.Gray)
               .width('100%')
             Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(this.availableShares, (share: SmbShareInfo) => {
-                Text(share.name)
+              ForEach(this.discoveredHosts, (ip: string) => {
+                Text(ip)
                   .fontSize(16)
                   .padding({ left: 12, right: 12, top: 6, bottom: 6 })
                   .margin({ right: 8, bottom: 8 })
                   .borderRadius(4)
-                  .backgroundColor(this.shareName === share.name ? '#1677FF' : '#F0F0F0')
-                  .fontColor(this.shareName === share.name ? Color.White : Color.Black)
+                  .backgroundColor(this.host === ip ? '#1677FF' : '#F0F0F0')
+                  .fontColor(this.host === ip ? Color.White : Color.Black)
                   .focusable(true)
                   .onClick(() => {
-                    this.shareName = share.name
+                    this.host = ip
                   })
               })
             }
@@ -363,9 +317,7 @@ struct SMBConfigBuilderComponent {
           .fontSize(16)
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
-          .id('smbUsernameInput')
-          .key(`smbUsername_${this.currentFocusIndex === 3 ? 'focus' : 'blur'}`)
-          .defaultFocus(this.currentFocusIndex === 3)
+          .defaultFocus(this.currentFocusIndex === 2)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
             this.username = value
@@ -381,9 +333,7 @@ struct SMBConfigBuilderComponent {
           .placeholderFont({ size: 16 })
           .type(InputType.Password)
           .enabled(!this.isLoading)
-          .id('smbPasswordInput')
-          .key(`smbPassword_${this.currentFocusIndex === 4 ? 'focus' : 'blur'}`)
-          .defaultFocus(this.currentFocusIndex === 4)
+          .defaultFocus(this.currentFocusIndex === 3)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
             this.password = value
@@ -398,9 +348,7 @@ struct SMBConfigBuilderComponent {
           .fontSize(16)
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
-          .id('smbDomainInput')
-          .key(`smbDomain_${this.currentFocusIndex === 5 ? 'focus' : 'blur'}`)
-          .defaultFocus(this.currentFocusIndex === 5)
+          .defaultFocus(this.currentFocusIndex === 4)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
             this.domain = value
@@ -416,9 +364,7 @@ struct SMBConfigBuilderComponent {
           .placeholderFont({ size: 16 })
           .type(InputType.Number)
           .enabled(!this.isLoading)
-          .id('smbPortInput')
-          .key(`smbPort_${this.currentFocusIndex === 6 ? 'focus' : 'blur'}`)
-          .defaultFocus(this.currentFocusIndex === 6)
+          .defaultFocus(this.currentFocusIndex === 5)
           .enterKeyType(EnterKeyType.Done)
           .onChange((value: string) => {
             const portNum = parseInt(value)
@@ -426,9 +372,7 @@ struct SMBConfigBuilderComponent {
               this.port = portNum
             }
           })
-          .onSubmit(() => {
-            // 最后一个字段，无需跳转
-          })
+          .onSubmit(() => {})
 
         // 操作按钮
         Row({ space: 16 }) {

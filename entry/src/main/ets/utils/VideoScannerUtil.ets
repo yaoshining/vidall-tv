@@ -494,11 +494,13 @@ export class SMBAdapter implements ISourceAdapter {
   }
 
   async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
+    // 若目录路径为空或"/"，从根目录开始（listDirectory("/"）会自动枚举所有磁盘共享）
+    const rootPath = (directoryPath.trim().length === 0 || directoryPath.trim() === '/') ? '/' : directoryPath;
     console.info(
-      `[VideoScanner][SMB] 开始扫描: ${directoryPath} 最大深度: ${options.maxDepth}`
+      `[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`
     );
     const results: VideoFileInfo[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results);
+    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, results);
     return results;
   }
 

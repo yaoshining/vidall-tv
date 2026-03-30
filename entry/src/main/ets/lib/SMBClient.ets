@@ -41,6 +41,17 @@ export interface SmbListSharesResult {
   error?: string;
 }
 
+export interface SmbDiscoverHostsResult {
+  hosts: string[];
+  error?: string;
+}
+
+/** parsePath 返回结果 */
+interface ParsedSmbPath {
+  shareName: string;
+  subPath: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NAPI default export 兼容层
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,6 +60,7 @@ interface SmbNapiBridge {
   smbTestConnection: (host: string, port: number, username: string, password: string, domain: string, shareName: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbListDirectory: (host: string, port: number, username: string, password: string, domain: string, shareName: string, path: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbListShares: (host: string, port: number, username: string, password: string, domain: string, timeoutMs: number) => Promise<Record<string, Object>>;
+  smbDiscoverHosts: (subnetPrefix: string, startOctet: number, endOctet: number, port: number, timeoutMs: number) => Promise<Record<string, Object>>;
 }
 
 interface SmbNapiBridgeModule {
@@ -187,11 +199,38 @@ export class SMBClient {
   }
 
   /**
-   * 列举指定路径下的文件和目录
-   * 调用 Native NAPI smbListDirectory
+   * 解析全路径 "/shareName/sub/path" → { shareName, subPath }
+   * 根目录 "/" 或 "" → { shareName: '', subPath: '/' }
    */
-  async listDirectory(path: string): Promise<SmbListDirectoryResult> {
-    console.info(`[SMBClient] listDirectory: ${this.getSmbUrl(path)}`);
+  private parsePath(fullPath: string): ParsedSmbPath {
+    let clean = fullPath;
+    while (clean.startsWith('/')) {
+      clean = clean.substring(1);
+    }
+    while (clean.endsWith('/')) {
+      clean = clean.substring(0, clean.length - 1);
+    }
+    if (clean.length === 0) {
+      const r: ParsedSmbPath = { shareName: '', subPath: '/' };
+      return r;
+    }
+    const slashIdx = clean.indexOf('/');
+    if (slashIdx === -1) {
+      const r: ParsedSmbPath = { shareName: clean, subPath: '/' };
+      return r;
+    }
+    const r: ParsedSmbPath = {
+      shareName: clean.substring(0, slashIdx),
+      subPath: '/' + clean.substring(slashIdx + 1)
+    };
+    return r;
+  }
+
+  /**
+   * 在指定 shareName 下列举 subPath 目录内容。
+   * 返回的每个文件 path 格式为 "/<shareName>/<sub/path>/<name>"。
+   */
+  private async listDirectoryInShare(shareName: string, subPath: string): Promise<SmbListDirectoryResult> {
     try {
       const raw = await getModule().smbListDirectory(
         this.host,
@@ -199,20 +238,25 @@ export class SMBClient {
         this.username,
         this.password,
         this.domain,
-        this.shareName,
-        path,
+        shareName,
+        subPath,
         this.timeoutMs
       ) as Record<string, Object>;
 
       const filesRaw = raw['files'] as Object[];
+      // 构造全路径：/<shareName>/<subPath去尾斜杠>/<name>
+      let cleanSub = subPath;
+      while (cleanSub.endsWith('/')) {
+        cleanSub = cleanSub.substring(0, cleanSub.length - 1);
+      }
       const files: SmbFileInfo[] = filesRaw.map((f) => {
         const fm = f as Record<string, Object>;
+        const name = fm['name'] as string;
         const fileInfo: SmbFileInfo = {
-          name: fm['name'] as string,
-          path: fm['path'] as string,
+          name: name,
+          path: '/' + shareName + cleanSub + '/' + name,
           isDirectory: fm['isDirectory'] as boolean,
           size: fm['size'] as number,
-          // Native 层须返回毫秒（ms）；Phase 2 实现时注意单位
           lastModifiedMs: fm['lastModified'] as number
         };
         return fileInfo;
@@ -225,12 +269,42 @@ export class SMBClient {
       return result;
     } catch (e) {
       const err = e as import('@kit.BasicServicesKit').BusinessError;
-      const result: SmbListDirectoryResult = {
-        files: [],
-        error: err.message ?? '调用失败'
-      };
-      return result;
+      return { files: [], error: err.message ?? '调用失败' };
     }
+  }
+
+  /**
+   * 列举指定路径下的文件和目录。
+   *
+   * 路径规则：
+   *   - "" 或 "/"：列举服务器上所有磁盘共享，以目录形式返回（无需预知共享名）
+   *   - "/<share>"：列举 share 的根目录
+   *   - "/<share>/sub/path"：列举 share 内部的子路径
+   */
+  async listDirectory(path: string): Promise<SmbListDirectoryResult> {
+    console.info(`[SMBClient] listDirectory: ${this.host}${path}`);
+    const parsed = this.parsePath(path);
+
+    if (parsed.shareName.length === 0) {
+      // 根目录：枚举共享，每个磁盘共享作为一个目录项
+      const sharesResult = await this.listShares();
+      const files: SmbFileInfo[] = [];
+      for (const s of sharesResult.shares) {
+        if ((s.type & 3) === 0) {
+          const fileInfo: SmbFileInfo = {
+            name: s.name,
+            path: '/' + s.name,
+            isDirectory: true,
+            size: 0,
+            lastModifiedMs: 0
+          };
+          files.push(fileInfo);
+        }
+      }
+      return { files, error: sharesResult.error };
+    }
+
+    return this.listDirectoryInShare(parsed.shareName, parsed.subPath);
   }
 
   /**
@@ -290,6 +364,39 @@ export class SMBClient {
       domain: this.domain
     };
     return info;
+  }
+
+  /**
+   * 并发扫描子网内开放指定端口的主机（通常 port=445 用于 SMB 发现）。
+   * subnetPrefix 如 "192.168.3."，startOctet/endOctet 如 1/254，timeoutMs 扫描超时。
+   */
+  static async discoverHosts(
+    subnetPrefix: string,
+    startOctet: number,
+    endOctet: number,
+    port: number,
+    timeoutMs: number
+  ): Promise<SmbDiscoverHostsResult> {
+    try {
+      const raw = await getModule().smbDiscoverHosts(
+        subnetPrefix,
+        startOctet,
+        endOctet,
+        port,
+        timeoutMs
+      ) as Record<string, Object>;
+
+      const hostsRaw = raw['hosts'] as Object[];
+      const hosts: string[] = hostsRaw.map((h) => h as string);
+      const result: SmbDiscoverHostsResult = { hosts };
+      if (raw['error']) {
+        result.error = raw['error'] as string;
+      }
+      return result;
+    } catch (e) {
+      const err = e as import('@kit.BasicServicesKit').BusinessError;
+      return { hosts: [], error: err.message ?? '调用失败' };
+    }
   }
 }
 

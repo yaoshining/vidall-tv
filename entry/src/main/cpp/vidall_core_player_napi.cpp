@@ -47,18 +47,20 @@ extern "C" {
 #define VIDALL_HAS_LIBSMB2 0
 #endif
 
-#if VIDALL_HAS_LIBSMB2
-#include <smb2/smb2.h>       // 必须先于 libsmb2.h：定义 SMB2_GUID_SIZE / smb2_lease_key
-#include <smb2/libsmb2.h>
-#include <smb2/libsmb2-raw.h>
-#include <smb2/libsmb2-dcerpc-srvsvc.h>
-#include <cstring>
+// POSIX socket/poll 头文件：smbDiscoverHosts 不依赖 libsmb2，始终需要
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#if VIDALL_HAS_LIBSMB2
+#include <smb2/smb2.h>       // 必须先于 libsmb2.h：定义 SMB2_GUID_SIZE / smb2_lease_key
+#include <smb2/libsmb2.h>
+#include <smb2/libsmb2-raw.h>
+#include <smb2/libsmb2-dcerpc-srvsvc.h>
+#include <cstring>
 #endif
 
 namespace {
@@ -3362,6 +3364,7 @@ static void CompleteSmbTestConnection(napi_env env, napi_status /*status*/, void
 // ── 异步上下文：SmbListDirectory ───────────────────────────────────────────
 struct SmbFileEntry {
     std::string name;
+    std::string path;           // 完整相对路径（dirPath/name），由 ArkTS 层基于 shareName+subPath 拼接
     bool isDirectory = false;
     uint64_t size = 0;
     uint64_t lastModified = 0;  // POSIX seconds（windows filetime / 10000000 - 11644473600）
@@ -3423,6 +3426,12 @@ static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
         if (std::strcmp(ent->name, ".") == 0 || std::strcmp(ent->name, "..") == 0) continue;
         SmbFileEntry entry;
         entry.name = ent->name;
+        // 构造完整路径：dir/name（ArkTS 层不应再 re-derive）
+        {
+            std::string base = dirPath;
+            while (!base.empty() && base.back() == '/') base.pop_back();
+            entry.path = base + "/" + ent->name;
+        }
         entry.isDirectory = (ent->st.smb2_type == SMB2_TYPE_DIRECTORY);
         entry.size = ent->st.smb2_size;
         entry.lastModified = (uint64_t)WinTimeToUnix(ent->st.smb2_mtime);
@@ -3556,6 +3565,9 @@ static void CompleteSmbListDirectory(napi_env env, napi_status /*status*/, void 
         napi_value nm = nullptr;
         napi_create_string_utf8(env, f.name.c_str(), NAPI_AUTO_LENGTH, &nm);
         napi_set_named_property(env, fileObj, "name", nm);
+        napi_value pathVal = nullptr;
+        napi_create_string_utf8(env, f.path.c_str(), NAPI_AUTO_LENGTH, &pathVal);
+        napi_set_named_property(env, fileObj, "path", pathVal);
         napi_value isDir = nullptr;
         napi_get_boolean(env, f.isDirectory, &isDir);
         napi_set_named_property(env, fileObj, "isDirectory", isDir);
@@ -3680,6 +3692,197 @@ static napi_value SmbListShares(napi_env env, napi_callback_info info) {
     }
 #endif
 
+    return promise;
+}
+
+
+/**
+ * smbDiscoverHosts(subnetPrefix, startOctet, endOctet, port, timeoutMs)
+ * -> Promise<{ hosts: string[]; error?: string }>
+ *
+ * 并发扫描指定子网（subnetPrefix + startOctet..endOctet）的 TCP 端口，
+ * 返回在 timeoutMs 内成功建立连接的主机 IP 列表。
+ * 不依赖 libsmb2，使用纯 POSIX socket。
+ */
+struct SmbDiscoverCtx {
+    napi_async_work work = nullptr;
+    napi_deferred deferred = nullptr;
+    std::string subnetPrefix;   // 如 "192.168.3."
+    int startOctet = 1;
+    int endOctet = 254;
+    int port = 445;
+    int timeoutMs = 3000;
+    std::vector<std::string> hosts;
+    std::string errorMessage;
+};
+
+static void ExecuteSmbDiscoverHosts(napi_env /*env*/, void *data) {
+    auto *ctx = static_cast<SmbDiscoverCtx *>(data);
+
+    struct Probe {
+        int fd = -1;
+        std::string ip;
+        bool done = false;
+    };
+
+    int count = ctx->endOctet - ctx->startOctet + 1;
+    if (count <= 0) return;
+
+    std::vector<Probe> probes(count);
+    for (int i = 0; i < count; i++) {
+        int octet = ctx->startOctet + i;
+        std::string ip = ctx->subnetPrefix + std::to_string(octet);
+        int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) continue;
+        // 非阻塞
+        int flags = ::fcntl(fd, F_GETFL, 0);
+        if (flags >= 0) ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        struct sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons((uint16_t)ctx->port);
+        if (::inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) != 1) {
+            ::close(fd);
+            continue;
+        }
+        ::connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
+        probes[i] = { fd, ip, false };
+    }
+
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(ctx->timeoutMs);
+
+    while (true) {
+        auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) break;
+
+        auto remMs = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        int pollTimeout = (int)std::min(remMs, (long long)100);
+
+        std::vector<struct pollfd> pfds;
+        std::vector<int> indices;
+        pfds.reserve(count);
+        indices.reserve(count);
+        for (int j = 0; j < count; j++) {
+            if (!probes[j].done && probes[j].fd >= 0) {
+                struct pollfd pfd{};
+                pfd.fd = probes[j].fd;
+                pfd.events = POLLOUT;
+                pfds.push_back(pfd);
+                indices.push_back(j);
+            }
+        }
+        if (pfds.empty()) break;
+
+        int n = ::poll(pfds.data(), (nfds_t)pfds.size(), pollTimeout);
+        if (n < 0) continue;
+
+        for (size_t k = 0; k < pfds.size(); k++) {
+            if (pfds[k].revents & (POLLOUT | POLLERR | POLLHUP)) {
+                int j = indices[k];
+                probes[j].done = true;
+                int err = 0;
+                socklen_t errlen = sizeof(err);
+                ::getsockopt(pfds[k].fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
+                if (err == 0) {
+                    ctx->hosts.push_back(probes[j].ip);
+                }
+                ::close(pfds[k].fd);
+                probes[j].fd = -1;
+            }
+        }
+    }
+
+    for (auto &p : probes) {
+        if (p.fd >= 0) ::close(p.fd);
+    }
+}
+
+static void CompleteSmbDiscoverHosts(napi_env env, napi_status /*status*/, void *data) {
+    auto *ctx = static_cast<SmbDiscoverCtx *>(data);
+    napi_value result = nullptr;
+    napi_create_object(env, &result);
+    napi_value hostsArr = nullptr;
+    napi_create_array_with_length(env, ctx->hosts.size(), &hostsArr);
+    for (size_t i = 0; i < ctx->hosts.size(); i++) {
+        napi_value ipVal = nullptr;
+        napi_create_string_utf8(env, ctx->hosts[i].c_str(), NAPI_AUTO_LENGTH, &ipVal);
+        napi_set_element(env, hostsArr, (uint32_t)i, ipVal);
+    }
+    napi_set_named_property(env, result, "hosts", hostsArr);
+    if (!ctx->errorMessage.empty()) {
+        napi_value errMsg = nullptr;
+        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+        napi_set_named_property(env, result, "error", errMsg);
+    }
+    napi_resolve_deferred(env, ctx->deferred, result);
+    if (ctx->work) napi_delete_async_work(env, ctx->work);
+    delete ctx;
+}
+
+static napi_value SmbDiscoverHosts(napi_env env, napi_callback_info info) {
+    size_t argc = 5;
+    napi_value args[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 5) {
+        ThrowTypeError(env, "smbDiscoverHosts requires (subnetPrefix, startOctet, endOctet, port, timeoutMs)");
+        return nullptr;
+    }
+    std::string subnetPrefix;
+    int64_t startOctet = 0, endOctet = 0, port = 0, timeoutMs = 0;
+    if (!ReadUtf8String(env, args[0], subnetPrefix)) {
+        ThrowTypeError(env, "smbDiscoverHosts subnetPrefix must be string");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[1], &startOctet) != napi_ok) {
+        ThrowTypeError(env, "smbDiscoverHosts startOctet must be int64");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[2], &endOctet) != napi_ok) {
+        ThrowTypeError(env, "smbDiscoverHosts endOctet must be int64");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[3], &port) != napi_ok) {
+        ThrowTypeError(env, "smbDiscoverHosts port must be int64");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[4], &timeoutMs) != napi_ok) {
+        ThrowTypeError(env, "smbDiscoverHosts timeoutMs must be int64");
+        return nullptr;
+    }
+
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
+        ThrowTypeError(env, "smbDiscoverHosts failed to create promise");
+        return nullptr;
+    }
+
+    auto *ctx = new SmbDiscoverCtx();
+    ctx->deferred = deferred;
+    ctx->subnetPrefix = subnetPrefix;
+    ctx->startOctet = (int)startOctet;
+    ctx->endOctet = (int)endOctet;
+    ctx->port = (int)port;
+    ctx->timeoutMs = (int)timeoutMs;
+
+    napi_value resourceName = nullptr;
+    if (napi_create_string_utf8(env, "smbDiscoverHostsAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+        delete ctx;
+        ThrowTypeError(env, "smbDiscoverHosts failed to create resource name");
+        return nullptr;
+    }
+    if (napi_create_async_work(env, nullptr, resourceName,
+                               ExecuteSmbDiscoverHosts, CompleteSmbDiscoverHosts,
+                               ctx, &ctx->work) != napi_ok) {
+        delete ctx;
+        ThrowTypeError(env, "smbDiscoverHosts failed to create async work");
+        return nullptr;
+    }
+    if (napi_queue_async_work(env, ctx->work) != napi_ok) {
+        napi_delete_async_work(env, ctx->work);
+        delete ctx;
+        ThrowTypeError(env, "smbDiscoverHosts failed to queue async work");
+        return nullptr;
+    }
     return promise;
 }
 
@@ -3973,7 +4176,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "extractSubtitleEntries", nullptr, ExtractSubtitleEntries, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "smbTestConnection", nullptr, SmbTestConnection, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "smbListDirectory",  nullptr, SmbListDirectory,  nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "smbListShares",     nullptr, SmbListShares,     nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "smbListShares",     nullptr, SmbListShares,     nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbDiscoverHosts",  nullptr, SmbDiscoverHosts,  nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");
