@@ -3265,7 +3265,12 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port   = htons((uint16_t)ctx->port);
-        ::inet_pton(AF_INET, ctx->host.c_str(), &addr.sin_addr);
+        if (::inet_pton(AF_INET, ctx->host.c_str(), &addr.sin_addr) != 1) {
+            // 非纯 IPv4 字面量（主机名/IPv6），跳过 TCP 预检，由 libsmb2 自行解析
+            ::close(tcpFd);
+            OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient",
+                "TCP pre-check skipped (not IPv4 literal), host=%{public}s", ctx->host.c_str());
+        } else {
 
         int connRet = ::connect(tcpFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
         if (connRet < 0 && errno != EINPROGRESS) {
@@ -3297,19 +3302,21 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
         // 检查 SO_ERROR
         int soErr = 0;
         socklen_t soErrLen = sizeof(soErr);
-        ::getsockopt(tcpFd, SOL_SOCKET, SO_ERROR, &soErr, &soErrLen);
+        int gsRet = ::getsockopt(tcpFd, SOL_SOCKET, SO_ERROR, &soErr, &soErrLen);
         ::close(tcpFd);
-        if (soErr != 0) {
+        if (gsRet != 0 || soErr != 0) {
+            int finalErr = (gsRet != 0) ? errno : soErr;
             ctx->errorMessage = std::string("TCP connect refused/error, host=") + ctx->host
                                 + " port=" + std::to_string(ctx->port)
-                                + " errno:" + std::to_string(soErr)
-                                + " (" + std::strerror(soErr) + ")";
+                                + " errno:" + std::to_string(finalErr)
+                                + " (" + std::strerror(finalErr) + ")";
             OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "TCP pre-check SO_ERROR=%{public}d host=%{public}s port=%{public}lld",
-                        soErr, ctx->host.c_str(), (long long)ctx->port);
+                        finalErr, ctx->host.c_str(), (long long)ctx->port);
             return;
         }
         OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient", "TCP pre-check OK host=%{public}s port=%{public}lld",
                     ctx->host.c_str(), (long long)ctx->port);
+        } // end IPv4 pre-check else
     }
 
 
@@ -3516,6 +3523,10 @@ static void CompleteSmbListShares(napi_env env, napi_status /*status*/, void *da
     auto *ctx = static_cast<SmbListSharesContext *>(data);
     napi_value result = nullptr;
     if (napi_create_object(env, &result) != napi_ok) {
+        napi_value errStr = nullptr;
+        napi_create_string_utf8(env, "NAPI internal error: failed to create result object",
+                                NAPI_AUTO_LENGTH, &errStr);
+        napi_reject_deferred(env, ctx->deferred, errStr);
         if (ctx->work) napi_delete_async_work(env, ctx->work);
         delete ctx;
         return;
@@ -3552,6 +3563,10 @@ static void CompleteSmbListDirectory(napi_env env, napi_status /*status*/, void 
     auto *ctx = static_cast<SmbListDirContext *>(data);
     napi_value result = nullptr;
     if (napi_create_object(env, &result) != napi_ok) {
+        napi_value errStr = nullptr;
+        napi_create_string_utf8(env, "NAPI internal error: failed to create result object",
+                                NAPI_AUTO_LENGTH, &errStr);
+        napi_reject_deferred(env, ctx->deferred, errStr);
         if (ctx->work) napi_delete_async_work(env, ctx->work);
         delete ctx;
         return;
@@ -3802,7 +3817,15 @@ static void ExecuteSmbDiscoverHosts(napi_env /*env*/, void *data) {
 static void CompleteSmbDiscoverHosts(napi_env env, napi_status /*status*/, void *data) {
     auto *ctx = static_cast<SmbDiscoverCtx *>(data);
     napi_value result = nullptr;
-    napi_create_object(env, &result);
+    if (napi_create_object(env, &result) != napi_ok) {
+        napi_value errStr = nullptr;
+        napi_create_string_utf8(env, "NAPI internal error: failed to create result object",
+                                NAPI_AUTO_LENGTH, &errStr);
+        napi_reject_deferred(env, ctx->deferred, errStr);
+        if (ctx->work) napi_delete_async_work(env, ctx->work);
+        delete ctx;
+        return;
+    }
     napi_value hostsArr = nullptr;
     napi_create_array_with_length(env, ctx->hosts.size(), &hostsArr);
     for (size_t i = 0; i < ctx->hosts.size(); i++) {
@@ -3848,6 +3871,23 @@ static napi_value SmbDiscoverHosts(napi_env env, napi_callback_info info) {
     }
     if (napi_get_value_int64(env, args[4], &timeoutMs) != napi_ok) {
         ThrowTypeError(env, "smbDiscoverHosts timeoutMs must be int64");
+        return nullptr;
+    }
+    // 参数范围校验，防止 FD/内存耗尽
+    if (startOctet < 0 || startOctet > 255 || endOctet < 0 || endOctet > 255 || endOctet < startOctet) {
+        ThrowTypeError(env, "smbDiscoverHosts: octet must be in [0,255] with startOctet <= endOctet");
+        return nullptr;
+    }
+    if (endOctet - startOctet + 1 > 254) {
+        ThrowTypeError(env, "smbDiscoverHosts: scan range too large (max 254 hosts)");
+        return nullptr;
+    }
+    if (port < 1 || port > 65535) {
+        ThrowTypeError(env, "smbDiscoverHosts: port must be in [1,65535]");
+        return nullptr;
+    }
+    if (timeoutMs <= 0 || timeoutMs > 30000) {
+        ThrowTypeError(env, "smbDiscoverHosts: timeoutMs must be in (0, 30000]");
         return nullptr;
     }
 

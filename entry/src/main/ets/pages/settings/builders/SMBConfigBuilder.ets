@@ -149,7 +149,9 @@ struct SMBConfigBuilderComponent {
       const prefix = this.getSubnetPrefix()
       promptAction.showToast({ message: `扫描 ${prefix}1-254:445...`, duration: 1500 })
       const result = await SMBClient.discoverHosts(prefix, 1, 254, 445, 5000)
-      if (result.hosts.length === 0) {
+      if (result.error) {
+        promptAction.showToast({ message: `发现失败: ${result.error}`, duration: 3000 })
+      } else if (result.hosts.length === 0) {
         promptAction.showToast({ message: '未发现局域网 SMB 设备', duration: 2000 })
       } else {
         this.discoveredHosts = result.hosts
@@ -311,7 +313,7 @@ struct SMBConfigBuilderComponent {
                   .onClick(() => {
                     this.host = ip
                   })
-              })
+              }, (ip: string) => ip)
             }
             .width('100%')
           }

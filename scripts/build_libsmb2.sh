@@ -54,12 +54,15 @@ fi
 [ -x "$CLANG" ] || die "clang 不可执行: $CLANG"
 
 # ── 克隆 / 更新 libsmb2 源码 ─────────────────────────────────────────────────
-SMB2_SRC="/tmp/libsmb2-src"
+SMB2_SRC="/tmp/libsmb2-src-${SMB2_VERSION}"
 if [ ! -d "$SMB2_SRC/.git" ]; then
   info "克隆 libsmb2 $SMB2_VERSION..."
   git clone --depth=1 --branch "$SMB2_VERSION" https://github.com/sahlberg/libsmb2.git "$SMB2_SRC"
 else
-  info "复用已有 libsmb2 源码: $SMB2_SRC"
+  info "强制切换到 $SMB2_VERSION..."
+  git -C "$SMB2_SRC" fetch --tags --depth=1 origin "refs/tags/${SMB2_VERSION}:refs/tags/${SMB2_VERSION}" 2>/dev/null || true
+  git -C "$SMB2_SRC" checkout -f "tags/${SMB2_VERSION}" 2>/dev/null || \
+    git -C "$SMB2_SRC" checkout -f "${SMB2_VERSION}"
 fi
 
 # ── 兼容 header（处理 _U_ 宏、musl 头文件差异）──────────────────────────────
@@ -76,14 +79,17 @@ printf '%s\n' \
   > "$CONFIG_H"
 
 # ── 编译 ──────────────────────────────────────────────────────────────────────
-OBJ_DIR="/tmp/libsmb2-objs"
+OBJ_DIR="/tmp/libsmb2-objs-${SMB2_VERSION}"
+rm -rf "$OBJ_DIR"
 mkdir -p "$OBJ_DIR"
 cd "$OBJ_DIR"
 
 if [ "$USE_OHOS_NDK" -eq 1 ]; then
   BASE_FLAGS="-target $TARGET --sysroot=$SYSROOT"
+  SYSROOT_INCLUDE="-I$SYSROOT/usr/include"
 else
   BASE_FLAGS="-target $TARGET -isystem ${MUSL_SYSROOT}/include"
+  SYSROOT_INCLUDE=""
 fi
 
 CFLAGS="$BASE_FLAGS \
@@ -91,7 +97,7 @@ CFLAGS="$BASE_FLAGS \
   -I$SMB2_SRC/include \
   -I$SMB2_SRC/include/smb2 \
   -I$SMB2_SRC/lib \
-  -I$SYSROOT/usr/include \
+  $SYSROOT_INCLUDE \
   -D__OHOS__=1 \
   -DHAVE_STDINT_H -DHAVE_STDLIB_H -DHAVE_STRING_H -DSTDC_HEADERS \
   -DHAVE_TIME_H -DHAVE_SYS_TIME_H -DHAVE_UNISTD_H -DHAVE_SYS_TYPES_H \
@@ -118,7 +124,10 @@ for src in $(find "$SMB2_SRC/lib" -maxdepth 1 -name "*.c" | sort); do
 done
 
 info "编译完成: $COMPILED 成功, $FAILED 失败"
-[ "$FAILED" -eq 0 ] || echo "WARNING: 有文件编译失败，.so 可能不完整"
+if [ "$FAILED" -gt 0 ]; then
+  echo "ERROR: 有 $FAILED 个文件编译失败，停止链接（产物不可信）"
+  exit 1
+fi
 
 # ── 链接 ──────────────────────────────────────────────────────────────────────
 OUT_SO="$OBJ_DIR/libsmb2.so"
