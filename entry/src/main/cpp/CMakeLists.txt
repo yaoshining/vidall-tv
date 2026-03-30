@@ -91,15 +91,17 @@ set(LIBSMB2_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libsmb2/include)
 
 option(VIDALL_ENABLE_LIBSMB2 "Enable libsmb2 for SMB2/3 protocol support" OFF)
 
-if(VIDALL_ENABLE_LIBSMB2)
-  if(NOT EXISTS ${LIBSMB2_LIB_DIR}/libsmb2.so)
-    message(FATAL_ERROR
-      "VIDALL_ENABLE_LIBSMB2=ON but libsmb2.so not found at:\n"
-      "  ${LIBSMB2_LIB_DIR}/libsmb2.so\n"
-      "Place the compiled library or pass -DVIDALL_ENABLE_LIBSMB2=OFF to disable."
-    )
-  endif()
+# 若目标架构没有 libsmb2.so，自动降级为 OFF（避免 x86_64 模拟器失败）
+if(VIDALL_ENABLE_LIBSMB2 AND NOT EXISTS ${LIBSMB2_LIB_DIR}/libsmb2.so)
+  message(WARNING
+    "VIDALL_ENABLE_LIBSMB2=ON but libsmb2.so not found at:\n"
+    "  ${LIBSMB2_LIB_DIR}/libsmb2.so\n"
+    "Auto-disabling libsmb2 for arch=${OHOS_ARCH}."
+  )
+  set(VIDALL_ENABLE_LIBSMB2 OFF)
+endif()
 
+if(VIDALL_ENABLE_LIBSMB2)
   add_library(smb2 SHARED IMPORTED)
   set_target_properties(smb2 PROPERTIES
     IMPORTED_LOCATION ${LIBSMB2_LIB_DIR}/libsmb2.so
@@ -114,7 +116,7 @@ if(VIDALL_ENABLE_LIBSMB2)
   message(STATUS "VIDALL_ENABLE_LIBSMB2=ON — libsmb2 enabled for SMB2/3 support")
 else()
   target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_LIBSMB2=0)
-  message(STATUS "VIDALL_ENABLE_LIBSMB2=OFF — SMB2/3 support disabled")
+  message(STATUS "VIDALL_ENABLE_LIBSMB2=OFF — SMB2/3 support disabled (arch=${OHOS_ARCH})")
 endif()
 
 # ---------------------------------------------------------------------------

@@ -494,11 +494,13 @@ export class SMBAdapter implements ISourceAdapter {
   }
 
   async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
+    // 若目录路径为空或"/"，从根目录开始（listDirectory("/"）会自动枚举所有磁盘共享）
+    const rootPath = (directoryPath.trim().length === 0 || directoryPath.trim() === '/') ? '/' : directoryPath;
     console.info(
-      `[VideoScanner][SMB] 开始扫描: ${directoryPath} 最大深度: ${options.maxDepth}`
+      `[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`
     );
     const results: VideoFileInfo[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, results);
+    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, results);
     return results;
   }
 
@@ -516,9 +518,9 @@ export class SMBAdapter implements ISourceAdapter {
     const listResult = await this.client.listDirectory(dirPath);
 
     if (listResult.error) {
-      const errMsg = `[SMBAdapter] scanDirectory failed: ${listResult.error} (path=${dirPath})`;
-      console.warn(errMsg);
-      throw new Error(errMsg);
+      // 跳过无权访问或不存在的目录，继续扫描其他路径（对齐 WebDAVAdapter 策略）
+      console.warn(`[SMBAdapter] 跳过目录: ${listResult.error} (path=${dirPath})`);
+      return;
     }
 
     for (const file of listResult.files) {
