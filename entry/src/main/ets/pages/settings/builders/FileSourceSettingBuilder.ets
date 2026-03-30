@@ -147,7 +147,6 @@ struct FileSourceSettingBuilderComponent {
       return
     }
 
-    // 目前只支持 WebDAV 类型
     if (fileSource.type === FileSourceType.WEBDAV) {
       try {
         // 解析配置
