@@ -1,3 +1,4 @@
+import { BusinessError } from '@kit.BasicServicesKit'
 import { SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { SMBClient, SmbFileInfo } from '../../lib/SMBClient'
 import { PlayerPage, PlayerPageParam } from '../player'
@@ -107,7 +108,15 @@ export struct SmbFileExplorerPage {
     })
   }
 
+  // ── 脱敏辅助：隐藏 URL 中的用户名与密码，仅用于日志输出 ─────────────────
+
+  private maskSmbUrl(url: string): string {
+    return url.replace(/smb:\/\/[^@]+@/, 'smb://***@')
+  }
+
   // ── 构造 SMB 播放 URL（内嵌凭据供播放器使用）──────────────────────────────
+  // 注意：凭据仅用于 libsmb2 认证，不得将完整 URL 记录到日志。
+  //       日志输出请统一使用 maskSmbUrl() 脱敏后的版本。
 
   private buildPlaybackUrl(filePath: string): string {
     const host = this.config.host
@@ -136,6 +145,7 @@ export struct SmbFileExplorerPage {
 
   private playVideo(file: SmbFileInfo): void {
     const url = this.buildPlaybackUrl(file.path)
+    console.info('SmbFileExplorerPage', `播放视频: ${this.maskSmbUrl(url)}`)
     const pageParam: PlayerPageParam = {
       url: url,
       title: file.name

@@ -1,4 +1,5 @@
 import { LengthMetrics } from "@kit.ArkUI"
+import { BusinessError } from '@kit.BasicServicesKit'
 import { WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
 import { SmbFileExplorerPage, SmbFileExplorerPageParam } from "../../files/SmbFileExplorerPage"
@@ -65,7 +66,8 @@ export struct FileSourceTab {
         message: '刷新成功'
       } as promptAction.ShowToastOptions)
     } catch (error) {
-      console.error('FileSourceTab: Refresh failed', JSON.stringify(error))
+      const err = error as BusinessError
+      console.error('FileSourceTab', `刷新失败: code=${err.code} msg=${err.message}`)
     }
   }
 
@@ -109,7 +111,8 @@ export struct FileSourceTab {
         timeout: 10000
       }
     } catch (error) {
-      console.error('FileSourceTab: Failed to build WebDAV config', JSON.stringify(error))
+      const err = error as BusinessError
+      console.error('FileSourceTab', `构造 WebDAV 配置失败: code=${err.code} msg=${err.message}`)
       return null
     }
   }
@@ -138,7 +141,11 @@ export struct FileSourceTab {
           param: param
         }, false)
       } catch (e) {
-        console.error('FileSourceTab: 解析 SMB 配置失败', JSON.stringify(e))
+        const err = e as BusinessError
+        console.error('FileSourceTab', `解析 SMB 配置失败: code=${err.code} msg=${err.message}`)
+        this.getUIContext().getPromptAction().showToast({
+          message: '解析 SMB 配置失败'
+        } as promptAction.ShowToastOptions)
       }
     } else {
       console.warn('FileSourceTab: Unsupported file source type', item.fileSource.type)
