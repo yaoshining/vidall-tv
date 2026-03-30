@@ -16,13 +16,11 @@ import {
 import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
 import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
-import { SmbFileExplorerPage, SmbFileExplorerPageParam } from "../../files/SmbFileExplorerPage";
 import { FileSourceModel } from "../../../stores/files/FileSourceModel";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
-  @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Local fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local isLoading: boolean = false
 
@@ -196,14 +194,14 @@ struct FileSourceSettingBuilderComponent {
     } else if (fileSource.type === FileSourceType.SMB) {
       try {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
-        const param: SmbFileExplorerPageParam = {
-          config: config,
-          initialPath: '/'
-        }
-        this.pageStack.pushPath({
-          name: SmbFileExplorerPage.PAGE_NAME,
-          param: param
-        })
+        const params: ESObject = {}
+        params['sourceId'] = fileSource.id as Object
+        params['host'] = config.host as Object
+        params['username'] = config.username as Object
+        params['password'] = (config.password ?? '') as Object
+        params['port'] = (config.port ?? 445) as Object
+        params['domain'] = (config.domain ?? '') as Object
+        this.controller.pushType(SettingType.SMB_DIRECTORY_SELECTOR, params as Record<string, Object>)
       } catch (e) {
         console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
         promptAction.showToast({

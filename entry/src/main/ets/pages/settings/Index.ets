@@ -6,6 +6,7 @@ import { VideoServerSettingBuilder } from "./builders/VideoServerSettingBuilder"
 import { WebDAVConfigBuilder } from "./builders/WebDAVConfigBuilder"
 import { SMBConfigBuilder } from "./builders/SMBConfigBuilder"
 import { DirectorySelectorBuilder } from "./builders/DirectorySelectorBuilder"
+import { SmbDirectorySelectorBuilder } from "./builders/SmbDirectorySelectorBuilder"
 import { SettingsController } from "./SettingsController"
 import SettingType from "./SettingType"
 
@@ -55,6 +56,9 @@ export struct SettingsPage {
             }
             if (this.controller.type === SettingType.DIRECTORY_SELECTOR) {
               DirectorySelectorBuilder()
+            }
+            if (this.controller.type === SettingType.SMB_DIRECTORY_SELECTOR) {
+              SmbDirectorySelectorBuilder()
             }
             if (this.controller.type === SettingType.VIDEO_SERVER) {
               VideoServerSettingBuilder()
