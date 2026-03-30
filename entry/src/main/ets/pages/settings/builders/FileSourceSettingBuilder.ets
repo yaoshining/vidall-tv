@@ -15,7 +15,7 @@ import {
 } from "./IconBuilders";
 import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity";
+import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceModel } from "../../../stores/files/FileSourceModel";
 
 @ComponentV2
@@ -145,7 +145,6 @@ struct FileSourceSettingBuilderComponent {
       return
     }
 
-    // 目前只支持 WebDAV 类型
     if (fileSource.type === FileSourceType.WEBDAV) {
       try {
         // 解析配置
@@ -190,6 +189,23 @@ struct FileSourceSettingBuilderComponent {
         console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
         promptAction.showToast({
           message: '解析配置失败'
+        } as promptAction.ShowToastOptions)
+      }
+    } else if (fileSource.type === FileSourceType.SMB) {
+      try {
+        const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
+        const params: ESObject = {}
+        params['sourceId'] = fileSource.id as Object
+        params['host'] = config.host as Object
+        params['username'] = config.username as Object
+        params['password'] = (config.password ?? '') as Object
+        params['port'] = (config.port ?? 445) as Object
+        params['domain'] = (config.domain ?? '') as Object
+        this.controller.pushType(SettingType.SMB_DIRECTORY_SELECTOR, params as Record<string, Object>)
+      } catch (e) {
+        console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
+        promptAction.showToast({
+          message: '解析 SMB 配置失败'
         } as promptAction.ShowToastOptions)
       }
     } else {
