@@ -208,6 +208,19 @@ export struct SmbFileExplorerPage {
     })
   }
 
+  // ── 面包屑导航 ──────────────────────────────────────────────────────────────
+
+  // 截断历史栈到目标路径并跳转（从 build() 的 onClick 提取，避免在 build() 内写变量声明）
+  private navigateToBreadcrumb(path: string): void {
+    const targetIndex = this.pathHistory.indexOf(path)
+    if (targetIndex >= 0) {
+      this.pathHistory = this.pathHistory.slice(0, targetIndex + 1)
+    } else {
+      this.pathHistory = [path]
+    }
+    this.loadDirectory(path)
+  }
+
   // ── 返回导航 ────────────────────────────────────────────────────────────────
 
   // UI 返回箭头 / 系统返回键共用：历史栈 > 1 时回到上一级，否则关闭弹窗（与 WebDAV 行为一致）
@@ -342,14 +355,7 @@ export struct SmbFileExplorerPage {
                     : FontWeight.Normal)
                   .onClick(() => {
                     if (index !== this.pathItems.length - 1) {
-                      // 截断历史栈到目标路径（与 DirectorySelectorBuilder 一致）
-                      const targetIndex = this.pathHistory.indexOf(item.path)
-                      if (targetIndex >= 0) {
-                        this.pathHistory = this.pathHistory.slice(0, targetIndex + 1)
-                      } else {
-                        this.pathHistory = [item.path]
-                      }
-                      this.loadDirectory(item.path)
+                      this.navigateToBreadcrumb(item.path)
                     }
                   })
 

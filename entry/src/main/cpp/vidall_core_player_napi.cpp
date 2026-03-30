@@ -120,7 +120,9 @@ static SmbUrlComponents ParseSmbUrl(const std::string &url) {
     std::string rest = url.substr(prefix.size());
 
     // Extract user[:pass]@
-    auto atPos = rest.rfind('@');
+    // RFC 3986: userinfo 结束于第一个 '@'，用 find 而非 rfind，
+    // 防止密码中含 '@'（如 smb://user:p@ss@host/share）时解析错误。
+    auto atPos = rest.find('@');
     if (atPos != std::string::npos) {
         std::string userInfo = rest.substr(0, atPos);
         rest = rest.substr(atPos + 1);
@@ -1618,7 +1620,27 @@ static void AdvancePlaybackClockIfNeeded(NativePlayerSkeletonState &state) {
 // ============================================================================
 #if VIDALL_HAS_LIBSMB2
 
+// 并发 handler 线程上限。OH_AVPlayer 并发 Range 请求较多时，避免无界 detach 线程耗尽系统资源。
+// 超出上限时返回 503，OH_AVPlayer 会在短暂延迟后重试。
+static constexpr int SMB_MAX_CONCURRENT_HANDLERS = 8;
+static std::atomic<int> g_smbActiveHandlers{0};
+
 static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
+    // 并发限流：超出上限直接返回 503，防止 detached 线程数无界增长
+    if (g_smbActiveHandlers.fetch_add(1, std::memory_order_relaxed) >= SMB_MAX_CONCURRENT_HANDLERS) {
+        g_smbActiveHandlers.fetch_sub(1, std::memory_order_relaxed);
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll/SmbProxy",
+                     "too many concurrent handlers (max=%{public}d), rejecting request",
+                     SMB_MAX_CONCURRENT_HANDLERS);
+        const char *e = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nRetry-After: 1\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
+    // RAII：函数退出时（任何路径）递减计数
+    struct HandlerGuard {
+        ~HandlerGuard() { g_smbActiveHandlers.fetch_sub(1, std::memory_order_relaxed); }
+    } guard;
     // Read HTTP request headers (until "\r\n\r\n")
     std::string req;
     req.reserve(2048);
@@ -1668,7 +1690,15 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
     if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
     smb2_set_timeout(smb2, 30);
 
-    int ret = smb2_connect_share(smb2, comps.host.c_str(), comps.share.c_str(),
+    // smb2_set_port() 在此版本 libsmb2 中不存在。
+    // libsmb2 的 smb2_connect_share() server 参数支持 "host:port" 格式（经由 getaddrinfo 解析），
+    // 在非标准端口时构造 "host:port" 字符串传入，445 端口无需拼接。
+    std::string connectHost = comps.host;
+    if (comps.port > 0 && comps.port != 445) {
+        connectHost = comps.host + ":" + std::to_string(comps.port);
+    }
+
+    int ret = smb2_connect_share(smb2, connectHost.c_str(), comps.share.c_str(),
                                   comps.user.empty() ? nullptr : comps.user.c_str());
     if (ret < 0) {
         OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
@@ -1694,7 +1724,17 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
     }
 
     struct smb2_stat_64 st = {};
-    smb2_fstat(smb2, fh, &st);
+    if (smb2_fstat(smb2, fh, &st) < 0) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
+                     "smb2_fstat failed: %{public}s", smb2_get_error(smb2));
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        const char *e = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
     int64_t fileSize = static_cast<int64_t>(st.smb2_size);
     if (fileSize <= 0) fileSize = 0;
 
@@ -1702,7 +1742,21 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
     int64_t contentLen = (fileSize > 0) ? (rangeEnd - rangeStart + 1) : 0;
     if (contentLen < 0) contentLen = 0;
 
-    if (rangeStart > 0) smb2_lseek(smb2, fh, rangeStart, SEEK_SET, nullptr);
+    if (rangeStart > 0) {
+        int64_t seekRet = smb2_lseek(smb2, fh, rangeStart, SEEK_SET, nullptr);
+        if (seekRet < 0) {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
+                         "smb2_lseek failed: %{public}s rangeStart=%{public}lld",
+                         smb2_get_error(smb2), (long long)rangeStart);
+            smb2_close(smb2, fh);
+            smb2_disconnect_share(smb2);
+            smb2_destroy_context(smb2);
+            const char *e = "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            (void)write(clientFd, e, strlen(e));
+            close(clientFd);
+            return;
+        }
+    }
 
     bool isPartial = (rangeStart > 0 || (fileSize > 0 && rangeEnd < fileSize - 1));
     char hdr[512];
@@ -2287,6 +2341,10 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   // 设置播放源 URL
   OH_AVErrCode avRet = OH_AVPlayer_SetURLSource(state.avPlayer, playUrl.c_str());
   if (avRet != AV_ERR_OK) {
+    // SMB 代理已启动，SetURLSource 失败时必须先停止代理，防止线程泄漏
+    if (state.isSmbPlayback) {
+      SmbStopProxy(state);
+    }
     EmitError(state, ERR_PREPARE_EMPTY_URL, "prepare failed: OH_AVPlayer_SetURLSource failed");
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
   }
