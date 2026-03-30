@@ -305,6 +305,7 @@ export class VideoPlayerController {
     // 先重置可展示状态，避免复用上次播放残留。
     this.audioCapabilityText = '';
     this.ffmpegPreviewUri = '';
+    this.sourceProtocol = '';
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
@@ -337,8 +338,18 @@ export class VideoPlayerController {
       this.backend = 'ijkplayer';
     }
 
-    // native 后端已停止主路径接入，强制回退到 ijkplayer
-    if (this.backend === 'native') {
+    // SMB 协议（smb://）只有 native FFmpeg 后端支持，ijkplayer 和 AVPlayer 均不支持。
+    // 此处在所有自动路由决策完成后强制切换，确保 SMB 源始终走 native 路径。
+    if (videoData.videoSrc.startsWith('smb://')) {
+      this.backend = 'native';
+      this.sourceProtocol = 'SMB';
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'SMB 源检测：已强制切换到 native FFmpeg 后端（smb:// 协议）');
+    }
+
+    // native 后端已停止主路径接入，强制回退到 ijkplayer；
+    // SMB 源必须保留 native 后端，不在此处回退。
+    if (this.backend === 'native' && !videoData.videoSrc.startsWith('smb://')) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         'native 播放后端已从主路径下线，自动回退到 ijkplayer');
       this.backend = 'ijkplayer';

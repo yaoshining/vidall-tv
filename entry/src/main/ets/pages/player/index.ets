@@ -50,7 +50,9 @@ export struct PlayerPage {
   private pendingSeekMs: number = -1
 
   private getBackendDebugText(): string {
-    const backendText = `backend=${this.videoPlayerController.backend}`;
+    const proto = this.videoPlayerController.sourceProtocol;
+    const protoSuffix = proto.length > 0 ? ` | ${proto}` : '';
+    const backendText = `backend=${this.videoPlayerController.backend}${protoSuffix}`;
     const reason = this.videoPlayerController.lastErrorMessage;
     if (reason.length === 0) {
       return backendText;
