@@ -93,18 +93,23 @@ export struct SmbFileExplorerPage {
   // ── 列举目录 ────────────────────────────────────────────────────────────────
 
   private loadDirectory(path: string): void {
+    console.info('[SmbExplorer] loadDirectory path=' + path)
     this.isLoading = true
     this.errorMessage = ''
     this.client.listDirectory(path).then((result) => {
       this.isLoading = false
       if (result.error) {
+        console.error('[SmbExplorer] listDirectory error path=' + path + ' err=' + result.error)
         this.errorMessage = result.error
+      } else {
+        console.info('[SmbExplorer] listDirectory ok path=' + path + ' count=' + result.files.length.toString())
       }
       this.files = result.files
       this.currentPath = path
     }).catch(() => {
       this.isLoading = false
       this.errorMessage = '加载目录失败'
+      console.error('[SmbExplorer] listDirectory catch path=' + path)
     })
   }
 

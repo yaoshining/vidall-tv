@@ -238,6 +238,7 @@ export class SMBClient {
       // smb2_opendir 在连接 share 后期望路径不含前导 "/"（如 "Movies" 而非 "/Movies"）
       // 空字符串由 native 层自动处理为 share 根目录
       const nativePath = subPath.startsWith('/') ? subPath.substring(1) : subPath;
+      console.info('[SMBClient] listDirectoryInShare shareName=' + shareName + ' subPath=' + subPath + ' nativePath=' + nativePath);
       const raw = await getModule().smbListDirectory(
         this.host,
         this.port,
@@ -250,6 +251,11 @@ export class SMBClient {
       ) as Record<string, Object>;
 
       const filesRaw = raw['files'] as Object[];
+      if (raw['error']) {
+        console.error('[SMBClient] native error shareName=' + shareName + ' nativePath=' + nativePath + ' err=' + (raw['error'] as string));
+      } else {
+        console.info('[SMBClient] native ok shareName=' + shareName + ' nativePath=' + nativePath + ' count=' + filesRaw.length.toString());
+      }
       // 构造全路径：/<shareName>/<subPath去尾斜杠>/<name>
       let cleanSub = subPath;
       while (cleanSub.endsWith('/')) {
