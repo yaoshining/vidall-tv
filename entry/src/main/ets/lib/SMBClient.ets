@@ -137,10 +137,13 @@ export class SMBClient {
   }
 
   /**
-   * 获取 SMB URL（smb://host/share 格式）
+   * 获取 SMB URL（smb://host/share 格式）。
+   * shareName 为空时 base 为 "smb://host"（无尾部斜杠），避免与 normalized 拼接产生双斜杠。
    */
   getSmbUrl(path?: string): string {
-    const base: string = `smb://${this.host}/${this.shareName}`;
+    const base: string = this.shareName.length > 0
+      ? `smb://${this.host}/${this.shareName}`
+      : `smb://${this.host}`;
     if (path === undefined) {
       return base;
     }
@@ -154,7 +157,7 @@ export class SMBClient {
     if (!normalized.startsWith('/')) {
       normalized = '/' + normalized;
     }
-    // 收敛连续多重斜杠
+    // 收敛连续多重斜杠（smb:// 协议头之后的部分）
     while (normalized.indexOf('//') !== -1) {
       normalized = normalized.split('//').join('/');
     }

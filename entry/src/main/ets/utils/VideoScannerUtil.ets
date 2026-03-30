@@ -518,9 +518,9 @@ export class SMBAdapter implements ISourceAdapter {
     const listResult = await this.client.listDirectory(dirPath);
 
     if (listResult.error) {
-      const errMsg = `[SMBAdapter] scanDirectory failed: ${listResult.error} (path=${dirPath})`;
-      console.warn(errMsg);
-      throw new Error(errMsg);
+      // 跳过无权访问或不存在的目录，继续扫描其他路径（对齐 WebDAVAdapter 策略）
+      console.warn(`[SMBAdapter] 跳过目录: ${listResult.error} (path=${dirPath})`);
+      return;
     }
 
     for (const file of listResult.files) {

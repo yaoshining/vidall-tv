@@ -26,6 +26,7 @@ struct SMBConfigBuilderComponent {
   // 局域网设备发现
   @Local isDiscovering: boolean = false
   @Local discoveredHosts: string[] = []
+  @Local focusedHost: string = ''
 
   // 焦点状态管理
   @Local currentFocusIndex: number = 0
@@ -298,9 +299,15 @@ struct SMBConfigBuilderComponent {
                   .padding({ left: 12, right: 12, top: 6, bottom: 6 })
                   .margin({ right: 8, bottom: 8 })
                   .borderRadius(4)
-                  .backgroundColor(this.host === ip ? '#1677FF' : '#F0F0F0')
+                  .backgroundColor(
+                    this.host === ip ? '#1677FF'
+                      : this.focusedHost === ip ? '#D0E8FF'
+                      : '#F0F0F0'
+                  )
                   .fontColor(this.host === ip ? Color.White : Color.Black)
                   .focusable(true)
+                  .onFocus(() => { this.focusedHost = ip })
+                  .onBlur(() => { this.focusedHost = '' })
                   .onClick(() => {
                     this.host = ip
                   })

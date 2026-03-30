@@ -3367,7 +3367,7 @@ struct SmbFileEntry {
     std::string path;           // 完整相对路径（dirPath/name），由 ArkTS 层基于 shareName+subPath 拼接
     bool isDirectory = false;
     uint64_t size = 0;
-    uint64_t lastModified = 0;  // POSIX seconds（windows filetime / 10000000 - 11644473600）
+    uint64_t lastModified = 0;  // Unix epoch 毫秒（ms），对齐 ArkTS 侧 lastModifiedMs
 };
 
 struct SmbListDirContext {
@@ -3434,7 +3434,7 @@ static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
         }
         entry.isDirectory = (ent->st.smb2_type == SMB2_TYPE_DIRECTORY);
         entry.size = ent->st.smb2_size;
-        entry.lastModified = (uint64_t)WinTimeToUnix(ent->st.smb2_mtime);
+        entry.lastModified = (uint64_t)WinTimeToUnix(ent->st.smb2_mtime) * 1000ULL;  // 转毫秒
         ctx->files.push_back(std::move(entry));
     }
     smb2_closedir(smb2, dir);
@@ -3736,7 +3736,10 @@ static void ExecuteSmbDiscoverHosts(napi_env /*env*/, void *data) {
         if (fd < 0) continue;
         // 非阻塞
         int flags = ::fcntl(fd, F_GETFL, 0);
-        if (flags >= 0) ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        if (flags < 0 || ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+            ::close(fd);
+            continue;
+        }
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons((uint16_t)ctx->port);
@@ -3782,8 +3785,7 @@ static void ExecuteSmbDiscoverHosts(napi_env /*env*/, void *data) {
                 probes[j].done = true;
                 int err = 0;
                 socklen_t errlen = sizeof(err);
-                ::getsockopt(pfds[k].fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
-                if (err == 0) {
+                if (::getsockopt(pfds[k].fd, SOL_SOCKET, SO_ERROR, &err, &errlen) == 0 && err == 0) {
                     ctx->hosts.push_back(probes[j].ip);
                 }
                 ::close(pfds[k].fd);
