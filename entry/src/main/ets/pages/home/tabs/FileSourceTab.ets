@@ -1,8 +1,10 @@
 import { LengthMetrics } from "@kit.ArkUI"
+import { BusinessError } from '@kit.BasicServicesKit'
 import { WebDAVConfig } from "../../../lib/WebDAVClient"
 import { FileExplorerPage } from "../../files"
+import { SmbFileExplorerPage, SmbFileExplorerPageParam } from "../../files/SmbFileExplorerPage"
 import promptAction from '@ohos.promptAction'
-import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
+import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
@@ -64,7 +66,8 @@ export struct FileSourceTab {
         message: '刷新成功'
       } as promptAction.ShowToastOptions)
     } catch (error) {
-      console.error('FileSourceTab: Refresh failed', JSON.stringify(error))
+      const err = error as BusinessError
+      console.error('FileSourceTab', `刷新失败: code=${err.code} msg=${err.message}`)
     }
   }
 
@@ -108,7 +111,8 @@ export struct FileSourceTab {
         timeout: 10000
       }
     } catch (error) {
-      console.error('FileSourceTab: Failed to build WebDAV config', JSON.stringify(error))
+      const err = error as BusinessError
+      console.error('FileSourceTab', `构造 WebDAV 配置失败: code=${err.code} msg=${err.message}`)
       return null
     }
   }
@@ -124,6 +128,24 @@ export struct FileSourceTab {
           name: FileExplorerPage.PAGE_NAME,
           param: config as WebDAVConfig
         }, false)
+      }
+    } else if (item.fileSource.type === FileSourceType.SMB) {
+      try {
+        const smbConfig = JSON.parse(item.fileSource.configJson) as SMBSourceConfig
+        const param: SmbFileExplorerPageParam = {
+          config: smbConfig,
+          initialPath: item.directoryPath && item.directoryPath !== '/' ? item.directoryPath : '/'
+        }
+        this.pageStack.pushPath({
+          name: SmbFileExplorerPage.PAGE_NAME,
+          param: param
+        }, false)
+      } catch (e) {
+        const err = e as BusinessError
+        console.error('FileSourceTab', `解析 SMB 配置失败: code=${err.code} msg=${err.message}`)
+        this.getUIContext().getPromptAction().showToast({
+          message: '解析 SMB 配置失败'
+        } as promptAction.ShowToastOptions)
       }
     } else {
       console.warn('FileSourceTab: Unsupported file source type', item.fileSource.type)

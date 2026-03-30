@@ -6,5 +6,6 @@ export default class SettingType {
   static ADD_FILE_SOURCE = "addFileSource" // 添加文件源
   static WEBDAV_CONFIG = "webdavConfig" // WebDAV 配置
   static SMB_CONFIG = "smbConfig" // SMB 配置
-  static DIRECTORY_SELECTOR = "directorySelector" // 文件夹选择器
+  static DIRECTORY_SELECTOR = "directorySelector" // WebDAV 文件夹选择器
+  static SMB_DIRECTORY_SELECTOR = "smbDirectorySelector" // SMB 文件夹选择器
 }
