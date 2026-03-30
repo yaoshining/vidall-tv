@@ -203,14 +203,20 @@ export struct SmbFileExplorerPage {
 
   // ── 返回导航 ────────────────────────────────────────────────────────────────
 
-  private handleBack(): boolean {
+  // UI 返回箭头：导航到上级目录；已在根目录时关闭弹窗
+  private navigateUp(): void {
     if (this.currentPath === '/') {
       this.pageStack.pop(true)
-      return true
+      return
     }
     const lastSlash = this.currentPath.lastIndexOf('/')
     const parentPath = lastSlash > 0 ? this.currentPath.substring(0, lastSlash) : '/'
     this.loadDirectory(parentPath)
+  }
+
+  // 系统/遥控器返回键：始终关闭弹窗（与 WebDAV 文件浏览器行为一致）
+  private handleBack(): boolean {
+    this.pageStack.pop(true)
     return true
   }
 
@@ -288,7 +294,7 @@ export struct SmbFileExplorerPage {
             .height(40)
             .backgroundColor(this.COLORS.button)
             .fontColor(this.COLORS.accent)
-            .onClick(() => { this.handleBack() })
+            .onClick(() => { this.navigateUp() })
             .margin({ right: 10 })
 
           Button(this.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
