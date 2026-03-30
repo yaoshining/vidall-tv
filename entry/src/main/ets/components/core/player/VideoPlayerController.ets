@@ -185,6 +185,8 @@ export class VideoPlayerController {
   /** 音轨列表 */
   @Trace audioTracks: AudioTrackItem[] = [];
   @Trace activeAudioIndex: number = -1;
+  /** 当前播放源的协议类型标识（如 'SMB'），用于 UI 展示与路由决策 */
+  @Trace sourceProtocol: string = '';
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private currentVideoData?: VideoData;
   private timeToSeek = -1
@@ -305,6 +307,7 @@ export class VideoPlayerController {
     // 先重置可展示状态，避免复用上次播放残留。
     this.audioCapabilityText = '';
     this.ffmpegPreviewUri = '';
+    this.sourceProtocol = '';
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
@@ -337,8 +340,19 @@ export class VideoPlayerController {
       this.backend = 'ijkplayer';
     }
 
-    // native 后端已停止主路径接入，强制回退到 ijkplayer
-    if (this.backend === 'native') {
+    // SMB 协议（smb://）只有 native FFmpeg 后端支持，ijkplayer 和 AVPlayer 均不支持。
+    // 此处在所有自动路由决策完成后强制切换，确保 SMB 源始终走 native 路径。
+    if (videoData.videoSrc.startsWith('smb://')) {
+      this.backend = 'native';
+      this.sourceProtocol = 'SMB';
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'SMB 源检测：已强制切换到 native FFmpeg 后端（smb:// 协议）');
+    }
+
+    // native 后端已停止主路径接入，强制回退到 ijkplayer；
+    // SMB 源必须保留 native 后端（VidAllPlayerAdapter），不在此处回退。
+    // 运行时错误场景的 SMB 豁免由 fallbackNativeToIjk 统一拦截。
+    if (this.backend === 'native' && !videoData.videoSrc.startsWith('smb://')) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         'native 播放后端已从主路径下线，自动回退到 ijkplayer');
       this.backend = 'ijkplayer';
@@ -413,6 +427,11 @@ export class VideoPlayerController {
         this.applySubtitleBridgeState(ijkSubAdapter.getState());
       });
       adapter = ijkAdapter;
+    } else if (this.backend === 'native') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: 使用 VidAllPlayerAdapter，等待 UI 层调用 setNativeContext()');
+      adapter = new VidAllPlayerAdapter();
+      this.subtitleAdapter = new NoSubtitleBridgeAdapter();
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
@@ -629,6 +648,11 @@ export class VideoPlayerController {
       // 注意：VPE AI 画质增强不适用于 ijkplayer 路径（ijkplayer 使用 XComponent native hook 渲染）
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
+    } else if (this.backend === 'native') {
+      // native 路径同 ijkplayer：需等待 UI 层在 XComponent.onLoad 中调用 setNativeContext()
+      // 真正的 initWithContext() 将在 setNativeContext() 内触发
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'VidAllPlayerAdapter 已创建，等待 UI 层 setNativeContext() 绑定 XComponent...');
     } else {
       // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE
       const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
@@ -1514,6 +1538,15 @@ export class VideoPlayerController {
 
   private fallbackNativeToIjk(fallbackReason: string, userMessage: string, detailMessage: string = ''): void {
     if (this.backend !== 'native') {
+      return;
+    }
+    // SMB 源仅支持 native 后端，禁止回退到 ijkplayer（ijkplayer 不支持 smb://，回退必然再次失败）
+    const src = (this.currentVideoData?.videoSrc ?? '').toLowerCase();
+    if (src.startsWith('smb://')) {
+      this.isLoading = false;
+      this.lastErrorMessage = userMessage;
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[fallback] SMB 源禁止 native->ijkplayer 回退: reason=${fallbackReason}`);
       return;
     }
     const fallbackPosition = this.player?.currentTime ?? this.currentTime;

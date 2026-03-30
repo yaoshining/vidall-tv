@@ -52,6 +52,9 @@ export struct SmbFileExplorerPage {
   @Local private files: SmbFileInfo[] = []
   @Local private currentPath: string = '/'
   @Local private isLoading: boolean = false
+
+  // 导航历史栈：记录已访问路径（含当前）；初始值在 onReady 中按 initialPath 覆盖
+  private pathHistory: string[] = ['/']
   @Local private errorMessage: string = ''
   @Local private sortField: string = 'name'
   @Local private sortAscending: boolean = true
@@ -134,6 +137,10 @@ export struct SmbFileExplorerPage {
 
   private loadDirectory(path: string): void {
     console.info('[SmbExplorer] loadDirectory path=' + path)
+    // 避免重复 push 同一路径（面包屑点击 / navigateUp 已截断后再调用时）
+    if (this.pathHistory.length === 0 || this.pathHistory[this.pathHistory.length - 1] !== path) {
+      this.pathHistory.push(path)
+    }
     this.isLoading = true
     this.errorMessage = ''
     this.client.listDirectory(path).then((result) => {
@@ -201,16 +208,34 @@ export struct SmbFileExplorerPage {
     })
   }
 
+  // ── 面包屑导航 ──────────────────────────────────────────────────────────────
+
+  // 截断历史栈到目标路径并跳转（从 build() 的 onClick 提取，避免在 build() 内写变量声明）
+  private navigateToBreadcrumb(path: string): void {
+    const targetIndex = this.pathHistory.indexOf(path)
+    if (targetIndex >= 0) {
+      this.pathHistory = this.pathHistory.slice(0, targetIndex + 1)
+    } else {
+      this.pathHistory = [path]
+    }
+    this.loadDirectory(path)
+  }
+
   // ── 返回导航 ────────────────────────────────────────────────────────────────
 
-  private handleBack(): boolean {
-    if (this.currentPath === '/') {
+  // UI 返回箭头 / 系统返回键共用：历史栈 > 1 时回到上一级，否则关闭弹窗（与 WebDAV 行为一致）
+  private navigateUp(): void {
+    if (this.pathHistory.length > 1) {
+      this.pathHistory.pop()
+      this.loadDirectory(this.pathHistory[this.pathHistory.length - 1])
+    } else {
       this.pageStack.pop(true)
-      return true
     }
-    const lastSlash = this.currentPath.lastIndexOf('/')
-    const parentPath = lastSlash > 0 ? this.currentPath.substring(0, lastSlash) : '/'
-    this.loadDirectory(parentPath)
+  }
+
+  // 系统/遥控器返回键：与 navigateUp 行为一致（非根目录返回上级，根目录关闭）
+  private handleBack(): boolean {
+    this.navigateUp()
     return true
   }
 
@@ -288,7 +313,7 @@ export struct SmbFileExplorerPage {
             .height(40)
             .backgroundColor(this.COLORS.button)
             .fontColor(this.COLORS.accent)
-            .onClick(() => { this.handleBack() })
+            .onClick(() => { this.navigateUp() })
             .margin({ right: 10 })
 
           Button(this.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
@@ -330,7 +355,7 @@ export struct SmbFileExplorerPage {
                     : FontWeight.Normal)
                   .onClick(() => {
                     if (index !== this.pathItems.length - 1) {
-                      this.loadDirectory(item.path)
+                      this.navigateToBreadcrumb(item.path)
                     }
                   })
 
@@ -486,6 +511,8 @@ export struct SmbFileExplorerPage {
       this.config = param.config
       this.client = SMBClient.fromSourceConfig(param.config)
       const startPath = param.initialPath ?? '/'
+      // 以 startPath 为历史栈起点，确保首次点返回键直接关闭弹窗
+      this.pathHistory = [startPath]
       this.loadDirectory(startPath)
     })
     .onBackPressed(() => {

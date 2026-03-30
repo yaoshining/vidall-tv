@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <thread>
+#include <atomic>
 
 #include "napi/native_api.h"
 #include <ace/xcomponent/native_interface_xcomponent.h>
@@ -33,6 +35,7 @@ extern "C" {
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
 #include <libavutil/time.h>
+#include <libswscale/swscale.h>
 }
 
 #if !defined(VIDALL_HAS_LIBCURL)
@@ -64,6 +67,101 @@ extern "C" {
 #endif
 
 namespace {
+
+// ============================================================================
+// SMB URL components – filled by ParseSmbUrl()
+// ============================================================================
+struct SmbUrlComponents {
+    std::string host;
+    int         port     = 445;
+    std::string user;
+    std::string password;
+    std::string share;
+    std::string subPath;  // file path within share, no leading /
+    bool        valid    = false;
+};
+
+// ============================================================================
+// SmbAVIOContext – opaque passed to the custom AVIOContext read/seek callbacks
+// ============================================================================
+struct SmbAVIOContext {
+    struct smb2_context *smb2     = nullptr;
+    struct smb2fh       *fh       = nullptr;
+    int64_t              fileSize = 0;
+};
+
+// ============================================================================
+// SMB URL helpers – ParseSmbUrl() used by HTTP proxy and future AVIO path
+// ============================================================================
+
+// URL percent-decode: "%XX" → byte
+static std::string PercentDecode(const std::string &s) {
+    std::string out;
+    out.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ) {
+        if (s[i] == '%' && i + 2 < s.size() &&
+            std::isxdigit((unsigned char)s[i+1]) &&
+            std::isxdigit((unsigned char)s[i+2])) {
+            char hex[3] = { s[i+1], s[i+2], '\0' };
+            out += static_cast<char>(std::strtol(hex, nullptr, 16));
+            i += 3;
+        } else {
+            out += s[i++];
+        }
+    }
+    return out;
+}
+
+// Parse smb://[user[:pass]@]host[:port]/share[/subPath]
+static SmbUrlComponents ParseSmbUrl(const std::string &url) {
+    SmbUrlComponents c;
+    const std::string prefix = "smb://";
+    if (url.size() <= prefix.size() || url.compare(0, prefix.size(), prefix) != 0) return c;
+    std::string rest = url.substr(prefix.size());
+
+    // Extract user[:pass]@
+    // RFC 3986: userinfo 结束于第一个 '@'，用 find 而非 rfind，
+    // 防止密码中含 '@'（如 smb://user:p@ss@host/share）时解析错误。
+    auto atPos = rest.find('@');
+    if (atPos != std::string::npos) {
+        std::string userInfo = rest.substr(0, atPos);
+        rest = rest.substr(atPos + 1);
+        auto colonPos = userInfo.find(':');
+        if (colonPos != std::string::npos) {
+            c.user     = PercentDecode(userInfo.substr(0, colonPos));
+            c.password = PercentDecode(userInfo.substr(colonPos + 1));
+        } else {
+            c.user = PercentDecode(userInfo);
+        }
+    }
+
+    // Extract host[:port]
+    auto slashPos = rest.find('/');
+    std::string hostPort = (slashPos != std::string::npos) ? rest.substr(0, slashPos) : rest;
+    std::string pathPart = (slashPos != std::string::npos) ? rest.substr(slashPos + 1) : std::string();
+
+    auto colonPos = hostPort.find(':');
+    if (colonPos != std::string::npos) {
+        c.host = hostPort.substr(0, colonPos);
+        try { c.port = std::stoi(hostPort.substr(colonPos + 1)); } catch (...) { c.port = 445; }
+    } else {
+        c.host = hostPort;
+        c.port = 445;
+    }
+
+    // Extract share[/subPath]
+    auto slash2 = pathPart.find('/');
+    if (slash2 != std::string::npos) {
+        c.share   = PercentDecode(pathPart.substr(0, slash2));
+        c.subPath = PercentDecode(pathPart.substr(slash2 + 1));
+    } else {
+        c.share   = PercentDecode(pathPart);
+        c.subPath = std::string();
+    }
+
+    c.valid = !c.host.empty() && !c.share.empty() && !c.subPath.empty();
+    return c;
+}
 
 static void ThrowTypeError(napi_env env, const char *message);
 static void ThrowRangeError(napi_env env, const char *message);
@@ -1173,6 +1271,18 @@ struct NativePlayerSkeletonState {
   // PR#49 修复（问题6）：per-player mutex，保护 state 字段的跨线程读写
   // 注意：std::mutex 不可拷贝/移动；unordered_map 通过节点指针操作，不需要拷贝值
   std::mutex stateMutex;
+
+  // ── SMB / FFmpeg 软件解码播放字段（isSmbPlayback == true 时有效）──────────────────────────
+  // 生命周期：Prepare 时由 ExecuteSmbPrepare 填充，Release/ResetRuntimeState 时由
+  // SmbCleanupResources 清理；播放线程通过 smbStopFlag/smbPauseFlag/smbSeekTargetMs 与主线程通信。
+  bool             isSmbPlayback   = false;
+  SmbAVIOContext  *smbAvioOpaque   = nullptr;  // 由 SmbCleanupResources 负责 delete
+  AVIOContext     *ffmpegAvio      = nullptr;  // 由 SmbCleanupResources 负责 free
+  AVFormatContext *ffmpegFmt       = nullptr;  // 由 SmbCleanupResources 负责 close
+  std::thread      smbPlayThread;              // 播放线程；joinable 时表示线程正在运行
+  std::atomic<bool>    smbStopFlag  {false};   // 通知播放线程退出（原子）
+  std::atomic<bool>    smbPauseFlag {false};   // 通知播放线程暂停（原子）
+  std::atomic<int64_t> smbSeekTargetMs {-1};   // ≥0 时表示待执行的 seek 目标（原子）
 };
 
 static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
@@ -1207,6 +1317,8 @@ static constexpr int32_t ERR_SELECT_TRACK_NOT_PREPARED = 1004;
 static constexpr int32_t ERR_PAUSE_NOT_PREPARED = 1005;
 static constexpr int32_t ERR_SEEK_NOT_PREPARED = 1006;
 static constexpr int32_t ERR_SELECT_TRACK_INVALID_INDEX = 1007;
+static constexpr int32_t ERR_SMB_PREPARE_FAILED = 1008;   // SMB/AVIO prepare 失败
+static constexpr int32_t ERR_SMB_PLAYBACK_ERROR = 1009;   // SMB 播放线程运行时错误
 
 static void ThrowTypeError(napi_env env, const char *message) {
   napi_throw_type_error(env, nullptr, message);
@@ -1500,7 +1612,263 @@ static void AdvancePlaybackClockIfNeeded(NativePlayerSkeletonState &state) {
   }
 }
 
+// ============================================================================
+// ============================================================================
+// SMB → local HTTP proxy (仅在 VIDALL_HAS_LIBSMB2=1 时编译)
+// Bridges libsmb2 reads to OH_AVPlayer via http://127.0.0.1:PORT/
+// Each OH_AVPlayer Range request spawns one handler thread with its own smb2 context.
+// ============================================================================
+#if VIDALL_HAS_LIBSMB2
+
+// 并发 handler 线程上限。OH_AVPlayer 并发 Range 请求较多时，避免无界 detach 线程耗尽系统资源。
+// 超出上限时返回 503，OH_AVPlayer 会在短暂延迟后重试。
+static constexpr int SMB_MAX_CONCURRENT_HANDLERS = 8;
+static std::atomic<int> g_smbActiveHandlers{0};
+
+static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
+    // 并发限流：超出上限直接返回 503，防止 detached 线程数无界增长
+    if (g_smbActiveHandlers.fetch_add(1, std::memory_order_relaxed) >= SMB_MAX_CONCURRENT_HANDLERS) {
+        g_smbActiveHandlers.fetch_sub(1, std::memory_order_relaxed);
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll/SmbProxy",
+                     "too many concurrent handlers (max=%{public}d), rejecting request",
+                     SMB_MAX_CONCURRENT_HANDLERS);
+        const char *e = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nRetry-After: 1\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
+    // RAII：函数退出时（任何路径）递减计数
+    struct HandlerGuard {
+        ~HandlerGuard() { g_smbActiveHandlers.fetch_sub(1, std::memory_order_relaxed); }
+    } guard;
+    // Read HTTP request headers (until "\r\n\r\n")
+    std::string req;
+    req.reserve(2048);
+    {
+        char tmp[1024];
+        while (req.find("\r\n\r\n") == std::string::npos) {
+            struct pollfd pfd;
+            pfd.fd = clientFd; pfd.events = POLLIN; pfd.revents = 0;
+            if (poll(&pfd, 1, 5000) <= 0) { close(clientFd); return; }
+            int n = static_cast<int>(read(clientFd, tmp, sizeof(tmp)));
+            if (n <= 0) { close(clientFd); return; }
+            req.append(tmp, static_cast<size_t>(n));
+        }
+    }
+
+    bool isHead = req.size() >= 4 && req.compare(0, 4, "HEAD") == 0;
+
+    // Parse Range: bytes=START-[END]
+    int64_t rangeStart = 0, rangeEnd = -1;
+    {
+        size_t pos = req.find("Range: bytes=");
+        if (pos == std::string::npos) pos = req.find("range: bytes=");
+        if (pos != std::string::npos) {
+            std::string rng = req.substr(pos + 13);
+            auto nl = rng.find('\r');
+            if (nl != std::string::npos) rng = rng.substr(0, nl);
+            auto dash = rng.find('-');
+            if (dash != std::string::npos) {
+                try { rangeStart = std::stoll(rng.substr(0, dash)); } catch (...) { rangeStart = 0; }
+                std::string endStr = rng.substr(dash + 1);
+                if (!endStr.empty()) {
+                    try { rangeEnd = std::stoll(endStr); } catch (...) { rangeEnd = -1; }
+                }
+            }
+        }
+    }
+
+    // Open SMB connection
+    struct smb2_context *smb2 = smb2_init_context();
+    if (!smb2) {
+        const char *e = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
+    if (!comps.user.empty())     smb2_set_user(smb2,     comps.user.c_str());
+    if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
+    smb2_set_timeout(smb2, 30);
+
+    // smb2_set_port() 在此版本 libsmb2 中不存在。
+    // libsmb2 的 smb2_connect_share() server 参数支持 "host:port" 格式（经由 getaddrinfo 解析），
+    // 在非标准端口时构造 "host:port" 字符串传入，445 端口无需拼接。
+    std::string connectHost = comps.host;
+    if (comps.port > 0 && comps.port != 445) {
+        connectHost = comps.host + ":" + std::to_string(comps.port);
+    }
+
+    int ret = smb2_connect_share(smb2, connectHost.c_str(), comps.share.c_str(),
+                                  comps.user.empty() ? nullptr : comps.user.c_str());
+    if (ret < 0) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
+                     "connect failed: %{public}s", smb2_get_error(smb2));
+        smb2_destroy_context(smb2);
+        const char *e = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
+
+    struct smb2fh *fh = smb2_open(smb2, comps.subPath.c_str(), O_RDONLY);
+    if (!fh) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
+                     "open failed: %{public}s path=%{public}s",
+                     smb2_get_error(smb2), comps.subPath.c_str());
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        const char *e = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
+
+    struct smb2_stat_64 st = {};
+    if (smb2_fstat(smb2, fh, &st) < 0) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
+                     "smb2_fstat failed: %{public}s", smb2_get_error(smb2));
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        const char *e = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
+    int64_t fileSize = static_cast<int64_t>(st.smb2_size);
+    if (fileSize <= 0) fileSize = 0;
+
+    if (rangeEnd < 0 || rangeEnd >= fileSize) rangeEnd = (fileSize > 0) ? fileSize - 1 : 0;
+    int64_t contentLen = (fileSize > 0) ? (rangeEnd - rangeStart + 1) : 0;
+    if (contentLen < 0) contentLen = 0;
+
+    if (rangeStart > 0) {
+        int64_t seekRet = smb2_lseek(smb2, fh, rangeStart, SEEK_SET, nullptr);
+        if (seekRet < 0) {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll/SmbProxy",
+                         "smb2_lseek failed: %{public}s rangeStart=%{public}lld",
+                         smb2_get_error(smb2), (long long)rangeStart);
+            smb2_close(smb2, fh);
+            smb2_disconnect_share(smb2);
+            smb2_destroy_context(smb2);
+            const char *e = "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            (void)write(clientFd, e, strlen(e));
+            close(clientFd);
+            return;
+        }
+    }
+
+    bool isPartial = (rangeStart > 0 || (fileSize > 0 && rangeEnd < fileSize - 1));
+    char hdr[512];
+    if (isPartial) {
+        snprintf(hdr, sizeof(hdr),
+            "HTTP/1.1 206 Partial Content\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            "Content-Length: %lld\r\n"
+            "Content-Range: bytes %lld-%lld/%lld\r\n"
+            "Accept-Ranges: bytes\r\n"
+            "Connection: close\r\n\r\n",
+            (long long)contentLen, (long long)rangeStart,
+            (long long)rangeEnd,   (long long)fileSize);
+    } else {
+        snprintf(hdr, sizeof(hdr),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            "Content-Length: %lld\r\n"
+            "Accept-Ranges: bytes\r\n"
+            "Connection: close\r\n\r\n",
+            (long long)fileSize);
+    }
+    (void)write(clientFd, hdr, strlen(hdr));
+
+    if (!isHead && contentLen > 0) {
+        uint8_t buf[65536];
+        int64_t remaining = contentLen;
+        bool writeErr = false;
+        while (remaining > 0 && !writeErr) {
+            uint32_t toRead = static_cast<uint32_t>(std::min(static_cast<int64_t>(sizeof(buf)), remaining));
+            int n = smb2_read(smb2, fh, buf, toRead);
+            if (n <= 0) break;
+            ssize_t sent = 0;
+            while (sent < static_cast<ssize_t>(n)) {
+                ssize_t r = write(clientFd, buf + sent, static_cast<size_t>(n - sent));
+                if (r <= 0) { writeErr = true; break; }
+                sent += r;
+            }
+            remaining -= static_cast<int64_t>(n);
+        }
+    }
+
+    smb2_close(smb2, fh);
+    smb2_disconnect_share(smb2);
+    smb2_destroy_context(smb2);
+    close(clientFd);
+}
+
+static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
+                                std::atomic<bool> *stopFlag) {
+    while (!stopFlag->load(std::memory_order_relaxed)) {
+        struct pollfd pfd;
+        pfd.fd = serverFd; pfd.events = POLLIN; pfd.revents = 0;
+        if (poll(&pfd, 1, 300) <= 0) continue;
+        if (!(pfd.revents & POLLIN)) continue;
+        int clientFd = accept(serverFd, nullptr, nullptr);
+        if (clientFd < 0) continue;
+        std::thread([clientFd, comps]() {
+            SmbProxyHandleRequest(clientFd, comps);
+        }).detach();
+    }
+    close(serverFd);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "accept loop exited");
+}
+
+// Returns listening port, or -1 on error
+static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponents &comps) {
+    int serverFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverFd < 0) return -1;
+    int opt = 1;
+    setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    struct sockaddr_in addr = {};
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port        = 0;  // OS assigns port
+    if (bind(serverFd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0 ||
+        listen(serverFd, 8) < 0) {
+        close(serverFd);
+        return -1;
+    }
+    socklen_t addrLen = sizeof(addr);
+    getsockname(serverFd, reinterpret_cast<struct sockaddr *>(&addr), &addrLen);
+    int port = ntohs(addr.sin_port);
+    state.smbStopFlag.store(false, std::memory_order_relaxed);
+    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, &state.smbStopFlag);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
+                 "proxy started port=%{public}d host=%{public}s share=%{public}s",
+                 port, comps.host.c_str(), comps.share.c_str());
+    return port;
+}
+
+static void SmbStopProxy(NativePlayerSkeletonState &state) {
+    if (!state.isSmbPlayback) return;
+    state.smbStopFlag.store(true, std::memory_order_relaxed);
+    if (state.smbPlayThread.joinable()) {
+        state.smbPlayThread.join();
+    }
+    state.isSmbPlayback = false;
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "proxy stopped");
+}
+
+#else  // VIDALL_HAS_LIBSMB2 == 0
+
+// libsmb2 未编译时的空实现，避免调用方报错
+static int SmbStartProxy(NativePlayerSkeletonState & /*state*/,
+                          const SmbUrlComponents & /*comps*/) { return -1; }
+static void SmbStopProxy(NativePlayerSkeletonState & /*state*/) {}
+
+#endif // VIDALL_HAS_LIBSMB2
+
 static void ResetRuntimeState(NativePlayerSkeletonState &state) {
+  SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
   state.prepared = false;
   state.playing = false;
   state.pendingPrepare = false;  // A5修复: 切换 surface 时清除延迟标志
@@ -1942,9 +2310,41 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     }
   }
 
+  // SMB 源：启动本地 HTTP 代理，将 smb:// 透明转换为 http://127.0.0.1:PORT/
+  // OH_AVPlayer 通过 Range 请求访问本地代理，代理再通过 libsmb2 读取 SMB 文件。
+  // state.url 保持不变（保留原始 smb:// URL），避免重复 prepare 时丢失 URL。
+  std::string playUrl = state.url;
+  if (state.url.size() > 6 && state.url.compare(0, 6, "smb://") == 0) {
+#if VIDALL_HAS_LIBSMB2
+    SmbUrlComponents comps = ParseSmbUrl(state.url);
+    if (!comps.valid) {
+      EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: invalid smb:// URL");
+      return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+    }
+    SmbStopProxy(state);  // 清理旧代理（防止 surface 切换后残留）
+    int proxyPort = SmbStartProxy(state, comps);
+    if (proxyPort < 0) {
+      EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: SMB HTTP proxy start failed");
+      return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+    }
+    state.isSmbPlayback = true;
+    playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/";
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
+                 "SMB rewritten to %{public}s", playUrl.c_str());
+#else
+    EmitError(state, ERR_SMB_PREPARE_FAILED,
+              "prepare failed: SMB playback not supported (VIDALL_HAS_LIBSMB2=0)");
+    return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
+#endif
+  }
+
   // 设置播放源 URL
-  OH_AVErrCode avRet = OH_AVPlayer_SetURLSource(state.avPlayer, state.url.c_str());
+  OH_AVErrCode avRet = OH_AVPlayer_SetURLSource(state.avPlayer, playUrl.c_str());
   if (avRet != AV_ERR_OK) {
+    // SMB 代理已启动，SetURLSource 失败时必须先停止代理，防止线程泄漏
+    if (state.isSmbPlayback) {
+      SmbStopProxy(state);
+    }
     EmitError(state, ERR_PREPARE_EMPTY_URL, "prepare failed: OH_AVPlayer_SetURLSource failed");
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
   }
