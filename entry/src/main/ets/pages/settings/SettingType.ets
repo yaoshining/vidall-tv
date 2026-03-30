@@ -7,6 +7,5 @@ export default class SettingType {
   static WEBDAV_CONFIG = "webdavConfig" // WebDAV 配置
   static SMB_CONFIG = "smbConfig" // SMB 配置
   static DIRECTORY_SELECTOR = "directorySelector" // WebDAV 文件夹选择器
-  static SMB_DIRECTORY_SELECTOR = "smbDirectorySelector" // SMB 文件夹选择器（WebDAV）
   static SMB_DIRECTORY_SELECTOR = "smbDirectorySelector" // SMB 文件夹选择器
 }

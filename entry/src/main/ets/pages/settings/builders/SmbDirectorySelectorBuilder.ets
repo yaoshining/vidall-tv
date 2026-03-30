@@ -1,6 +1,6 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
-import { SMBClient, SmbFileInfo } from "../../../lib/SMBClient"
+import { SMBClient, SmbFileInfo, SMBClientConfig } from "../../../lib/SMBClient"
 import promptAction from '@ohos.promptAction'
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import { FileSourceDirectory } from "../../../db/models/FileSourceEntity"
@@ -68,7 +68,15 @@ struct SmbDirectorySelectorBuilderComponent {
         return
       }
 
-      this.smbClient = new SMBClient(host, port, username, password, domain, 10000)
+      const clientConfig: SMBClientConfig = {
+        host: host,
+        port: port,
+        username: username,
+        password: password,
+        domain: domain,
+        timeoutMs: 10000
+      }
+      this.smbClient = new SMBClient(clientConfig)
       await this.loadSelectedDirectories()
       await this.loadCurrentDirectory()
     } catch (e) {
