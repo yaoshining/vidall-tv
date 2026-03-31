@@ -8,7 +8,6 @@ import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from 
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
-import { SourceTypeIcon } from "../../settings/builders/IconBuilders"
 
 @ComponentV2
 export struct FileSourceTab {
@@ -141,6 +140,20 @@ export struct FileSourceTab {
     }
   }
 
+  @Builder
+  buildTabIcon(type: FileSourceType) {
+    if (type === FileSourceType.WEBDAV) {
+      Image($r('app.media.webdav_folder'))
+        .width(30).height(30).objectFit(ImageFit.Contain)
+    } else if (type === FileSourceType.SMB) {
+      Image($r('app.media.smb_folder'))
+        .width(30).height(30).objectFit(ImageFit.Contain)
+    } else {
+      Image($r('app.media.empty_folder'))
+        .width(30).height(30).objectFit(ImageFit.Contain)
+    }
+  }
+
   build() {
     GridRow({
       gutter: 10,
@@ -157,7 +170,7 @@ export struct FileSourceTab {
             }
           }) {
             Column() {
-              SourceTypeIcon(item.fileSource.type)
+              this.buildTabIcon(item.fileSource.type)
             }
             .width(60)
             .height(60)

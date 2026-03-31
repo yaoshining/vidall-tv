@@ -2,7 +2,7 @@ import { FileSourceType } from "../../../db/models/FileSourceEntity"
 
 @Builder
 export function SmbIcon() {
-  Image($r('app.media.smb_folder'))
+  Image($r('app.media.windows'))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
@@ -10,7 +10,7 @@ export function SmbIcon() {
 
 @Builder
 export function WebdavIcon() {
-  Image($r('app.media.webdav_folder'))
+  Image($r('app.media.global_folder'))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
@@ -58,7 +58,7 @@ export function Cloud115Icon() {
 
 @Builder
 export function OtherIcon() {
-  Image($r('app.media.empty_folder'))
+  Image($r('app.media.cloud_drive'))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
