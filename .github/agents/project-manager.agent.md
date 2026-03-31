@@ -162,6 +162,18 @@ model: GPT-5.4
 - 任务完成后清理 worktree：`git worktree remove ../<任务目录名>`。
 - 若环境不支持 worktree，退化为**串行执行**，禁止在共享工作区并行运行多个 Agent。
 
+**P0：worktree 首次编译前必须执行 `ohpm install`**
+
+**问题**：新建 worktree 后 `oh_modules/` 目录为空（依赖不随 worktree 复制），直接编译会报 52+ 个 `Cannot find module` 错误，误判为代码质量问题。
+
+**强制规则**：
+- 每次 `git worktree add` 之后，Agent prompt 中必须包含以下初始化步骤，在编译前执行：
+  ```bash
+  cd ../<任务目录名>
+  /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm install
+  ```
+- QA 若发现编译错误全部为 `Cannot find module`（且数量 > 10），优先检查 `oh_modules/` 是否为空，而非直接标记 `QA_FAILED`。
+
 ### P0：提交前必须明确 `git add` 具体文件
 
 **问题**：Agent 新建文件后只提交了已有文件的修改，新文件（未追踪状态）未被 `git add`，导致本地编译通过但分支缺文件，第一轮 QA 漏过、清理工作区后 QA 才暴露。
