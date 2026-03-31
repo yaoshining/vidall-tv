@@ -168,7 +168,13 @@ export struct FileSourceTab {
               main: LengthMetrics.vp(20)
             }
           }) {
-            SourceTypeIcon(item.fileSource.type)
+            Column() {
+              SourceTypeIcon(item.fileSource.type)
+            }
+            .width(60)
+            .height(60)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
             Flex({
               direction: FlexDirection.Column,
               justifyContent: FlexAlign.SpaceAround,
@@ -201,7 +207,13 @@ export struct FileSourceTab {
             main: LengthMetrics.vp(20)
           }
         }) {
-          WebdavIcon()
+          Column() {
+            WebdavIcon()
+          }
+          .width(60)
+          .height(60)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
           Flex({
             direction: FlexDirection.Column,
             justifyContent: FlexAlign.SpaceAround,
@@ -235,7 +247,13 @@ export struct FileSourceTab {
             main: LengthMetrics.vp(20)
           }
         }) {
-          WebdavIcon()
+          Column() {
+            WebdavIcon()
+          }
+          .width(60)
+          .height(60)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
           Flex({
             direction: FlexDirection.Column,
             justifyContent: FlexAlign.SpaceAround,
@@ -270,7 +288,13 @@ export struct FileSourceTab {
               main: LengthMetrics.vp(20)
             }
           }) {
-            WebdavIcon()
+            Column() {
+              WebdavIcon()
+            }
+            .width(60)
+            .height(60)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
             Flex({
               direction: FlexDirection.Column,
               justifyContent: FlexAlign.SpaceAround,
