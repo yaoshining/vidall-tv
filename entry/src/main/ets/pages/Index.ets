@@ -6,6 +6,7 @@ import { PlayerPage } from './player/index';
 import { SettingsPage } from './settings/Index';
 import { SeriesDetailPage } from './detail/SeriesDetailPage';
 import { SeasonDetailPage } from './detail/SeasonDetailPage';
+import { MovieDetailPage } from './detail/MovieDetailPage';
 @Entry
 @ComponentV2
 struct Index {
@@ -24,6 +25,8 @@ struct Index {
       SmbFileExplorerPage();
     } else if (name === SeriesDetailPage.PAGE_NAME) {
       SeriesDetailPage();
+    } else if (name === MovieDetailPage.PAGE_NAME) {
+      MovieDetailPage();
     } else if (name === SeasonDetailPage.PAGE_NAME) {
       SeasonDetailPage();
     }
