@@ -255,6 +255,24 @@ git push origin <正确分支>
 
 每次状态流转（`IN_PROGRESS` / `READY_FOR_QA` / `QA_FAILED` / `DONE`）后，立即执行 `gh project item-edit` 同步，不得在轮次末尾批量补更新。
 
+### P0：每次开发任务完成后必须强制编译验证
+
+**规则**：开发工程师 Agent 每次提交代码后，无论任务粒度大小，**必须立即在对应工作目录下执行全量编译**，确保零 ERROR 后才能标记为"可验证"并移交 QA。
+
+**强制流程**：
+```bash
+# 开发 Agent 提交后，在任务工作目录执行：
+cd <工作目录>
+hvigorw assembleHap --no-daemon 2>&1 | tail -20
+# 必须出现 "BUILD SUCCESSFUL" 才能继续
+```
+
+- 若编译报 ERROR：开发 Agent 自行修复后重新提交，**不得将有编译错误的代码推送到远端**。
+- 若编译通过（BUILD SUCCESSFUL，允许有 WARNING）：标记"可验证"，移交 QA 正式验证。
+- 此步骤由开发 Agent 自主执行，不需要等待项目经理触发。
+
+**项目经理检查点**：每次收到开发 Agent"可验证"声明时，必须确认其 prompt 中包含了编译验证步骤，否则退回要求补充验证结果再移交 QA。
+
 ### P2：新增规则后执行前必须预检
 
 规则更新到 agent.md 后，下一次分发任务前，先对照本节 checklist 做「dry-run 预检」：
