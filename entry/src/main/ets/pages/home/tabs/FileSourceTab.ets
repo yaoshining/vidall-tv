@@ -144,13 +144,13 @@ export struct FileSourceTab {
   buildTabIcon(type: FileSourceType) {
     if (type === FileSourceType.WEBDAV) {
       Image($r('app.media.webdav_folder'))
-        .width(30).height(30).objectFit(ImageFit.Contain)
+        .width("100%").height("100%").objectFit(ImageFit.Contain)
     } else if (type === FileSourceType.SMB) {
       Image($r('app.media.smb_folder'))
-        .width(30).height(30).objectFit(ImageFit.Contain)
+        .width("100%").height("100%").objectFit(ImageFit.Contain)
     } else {
       Image($r('app.media.empty_folder'))
-        .width(30).height(30).objectFit(ImageFit.Contain)
+        .width("100%").height("100%").objectFit(ImageFit.Contain)
     }
   }
 
