@@ -138,6 +138,20 @@ export class SMBClient {
   }
 
   /**
+   * 路径规范化：将反斜杠转为正斜杠，合并重复斜杠（Fix 4）。
+   * 不处理前导 "/"，调用方按需补充。
+   */
+  private normalizePath(rawPath: string): string {
+    // 将反斜杠统一替换为正斜杠
+    let path: string = rawPath.split('\\').join('/');
+    // 收敛连续多重斜杠
+    while (path.indexOf('//') !== -1) {
+      path = path.split('//').join('/');
+    }
+    return path;
+  }
+
+  /**
    * 获取 SMB URL（smb://host/share 格式）。
    * shareName 为空时 base 为 "smb://host"（无尾部斜杠），避免与 normalized 拼接产生双斜杠。
    */
@@ -152,15 +166,11 @@ export class SMBClient {
     if (raw.length === 0 || raw === '/') {
       return base;
     }
-    // 将反斜杠统一替换为正斜杠
-    let normalized: string = raw.split('\\').join('/');
+    // 统一规范化路径（Fix 4：与 buildSmbUrl 共用同一逻辑）
+    let normalized: string = this.normalizePath(raw);
     // 确保以 / 开头
     if (!normalized.startsWith('/')) {
       normalized = '/' + normalized;
-    }
-    // 收敛连续多重斜杠（smb:// 协议头之后的部分）
-    while (normalized.indexOf('//') !== -1) {
-      normalized = normalized.split('//').join('/');
     }
     return `${base}${normalized}`;
   }
@@ -377,7 +387,8 @@ export class SMBClient {
     }
     const portPart: string = this.port !== 445 ? `:${this.port.toString()}` : '';
     const sharePart: string = this.shareName.length > 0 ? '/' + this.shareName : '';
-    let normalized: string = filePath.trim();
+    // Fix 4：规范化路径（反斜杠转正斜杠、合并重复斜杠），与 getSmbUrl 保持一致
+    let normalized: string = this.normalizePath(filePath.trim());
     if (normalized.length > 0 && !normalized.startsWith('/')) {
       normalized = '/' + normalized;
     }

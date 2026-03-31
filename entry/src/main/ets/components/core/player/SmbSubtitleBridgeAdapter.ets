@@ -8,6 +8,13 @@ const TAG = '[SmbSubtitleBridgeAdapter]';
 
 const SUBTITLE_EXTENSIONS: string[] = ['.srt', '.ass', '.ssa', '.vtt'];
 
+/** 候选字幕文件信息，供并发读取阶段使用 */
+interface SubtitleCandidate {
+  name: string;
+  filePath: string;
+  matchedExt: string;
+}
+
 /** SMB 视频 URL 解析结果 */
 interface ParsedSmbVideoUrl {
   host: string;
@@ -217,8 +224,10 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       // SmbFileInfo.path 格式为 "/<shareName>/<subPath>/<name>"
       // readTextFile 需要相对于 shareName 的路径，即去掉 "/<shareName>" 前缀
       const sharePrefix: string = '/' + parsed.shareName;
-      const found: SubtitleTrackItem[] = [];
+      const lowerBaseName: string = parsed.baseName.toLowerCase();
 
+      // Phase 1：过滤候选字幕文件（Fix 1：严格同名匹配）
+      const candidates: SubtitleCandidate[] = [];
       for (let i = 0; i < dirResult.files.length; i++) {
         const file = dirResult.files[i];
         if (file.isDirectory) {
@@ -241,10 +250,11 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
           continue;
         }
 
-        // 文件名（小写，不含扩展名）必须以视频 baseName（小写）开头
+        // Fix 1：严格匹配——完全相同，或以 "baseName." 开头（支持 movie.chs.srt 语言后缀格式）
         const nameWithoutExt: string = lowerName.substring(0, lowerName.length - matchedExt.length);
-        const lowerBaseName: string = parsed.baseName.toLowerCase();
-        if (!nameWithoutExt.startsWith(lowerBaseName)) {
+        const strictMatch: boolean = nameWithoutExt === lowerBaseName
+          || nameWithoutExt.startsWith(`${lowerBaseName}.`);
+        if (!strictMatch) {
           continue;
         }
 
@@ -254,9 +264,43 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
           filePath = filePath.substring(sharePrefix.length);
         }
 
-        try {
-          const content: string = await client.readTextFile(filePath);
+        const candidate: SubtitleCandidate = {
+          name: file.name,
+          filePath,
+          matchedExt
+        };
+        candidates.push(candidate);
+      }
 
+      if (candidates.length === 0) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[外置字幕探测完成] 找到 0 个 SMB 外置字幕');
+        return [];
+      }
+
+      // Phase 2：并发读取候选文件，整体 3 秒超时（Fix 3）
+      const readPromises: Promise<string>[] = candidates.map((candidate) => {
+        return client.readTextFile(candidate.filePath).catch(() => '');
+      });
+      const timeoutPromise: Promise<string[]> = new Promise<string[]>((resolve) => {
+        setTimeout(() => resolve(candidates.map(() => '')), 3000);
+      });
+      const contents: string[] = await Promise.race([
+        Promise.all(readPromises),
+        timeoutPromise
+      ]);
+
+      // Phase 3：解析每个读取结果
+      const found: SubtitleTrackItem[] = [];
+      for (let i = 0; i < candidates.length; i++) {
+        const content: string = contents[i];
+        if (content.length === 0) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[外置字幕] 读取超时或失败: ${candidates[i].name}`);
+          continue;
+        }
+
+        try {
+          const matchedExt: string = candidates[i].matchedExt;
           let entries: SrtEntry[] = [];
           let formatLabel: string = 'SRT';
           if (matchedExt === '.ass' || matchedExt === '.ssa') {
@@ -270,7 +314,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
             formatLabel = 'SRT';
           }
 
-          const langLabel: string = extractSmbLangLabel(file.name, parsed.baseName);
+          const langLabel: string = extractSmbLangLabel(candidates[i].name, parsed.baseName);
           const displayName: string = langLabel.length > 0
             ? `${langLabel} [外部·${formatLabel}]`
             : `字幕 [外部·${formatLabel}]`;
@@ -283,11 +327,11 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
           found.push(item);
 
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[外置字幕] 加载成功: ${file.name} entries=${entries.length}`);
+            `[外置字幕] 加载成功: ${candidates[i].name} entries=${entries.length}`);
         } catch (e) {
-          // 单条字幕失败不中断整体流程
+          // 单条字幕解析失败不中断整体流程
           hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `[外置字幕] 读取或解析失败: ${file.name}`);
+            `[外置字幕] 解析失败: ${candidates[i].name}`);
         }
       }
 

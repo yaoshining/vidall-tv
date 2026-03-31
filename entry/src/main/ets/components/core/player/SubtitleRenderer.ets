@@ -405,6 +405,10 @@ export class SrtParser {
       if (trimmed.length === 0) {
         continue;
       }
+      // 跳过 WebVTT 文件头部声明块（Fix 2）
+      if (trimmed.startsWith('WEBVTT')) {
+        continue;
+      }
       const entry = SrtParser.parseBlock(trimmed);
       if (entry !== null) {
         entries.push(entry);
@@ -505,6 +509,10 @@ export class SrtParser {
     let normalized = '';
     for (let i = 0; i < ts.length; i++) {
       normalized += ts[i] === ',' ? '.' : ts[i];
+    }
+    // Fix 2：兼容 WebVTT mm:ss(.ms) 两段格式（无小时）—— 补 "00:" 前缀
+    if (normalized.split(':').length === 2) {
+      normalized = '00:' + normalized;
     }
     const parts = normalized.split(':');
     if (parts.length !== 3) {
