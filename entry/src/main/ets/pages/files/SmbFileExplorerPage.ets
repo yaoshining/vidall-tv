@@ -2,6 +2,8 @@ import { BusinessError } from '@kit.BasicServicesKit'
 import { SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { SMBClient, SmbFileInfo } from '../../lib/SMBClient'
 import { PlayerPage, PlayerPageParam } from '../player'
+import { FfprobeUtil } from '../../utils/FfprobeUtil'
+import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 对外导出的路由参数接口
@@ -195,12 +197,53 @@ export struct SmbFileExplorerPage {
     }
   }
 
-  private playVideo(file: SmbFileInfo): void {
+  private async playVideo(file: SmbFileInfo): Promise<void> {
     const url = this.buildPlaybackUrl(file.path)
-    console.info('SmbFileExplorerPage', `播放视频: ${this.maskSmbUrl(url)}`)
+    console.info('[SmbExplorer] 播放视频: ' + this.maskSmbUrl(url))
+
+    // ── 探测音轨/字幕轨信息（失败时降级为空轨道，不阻断播放主流程）────────────
+    let presetAudioTracks: PresetAudioTrack[] = []
+    let presetSubtitleTracks: PresetSubtitleTrack[] = []
+    try {
+      const probeResult = await FfprobeUtil.probeSmb(url, 15000)
+      if (probeResult.success) {
+        console.info(
+          '[SmbExplorer] 轨道探测成功: 音轨=' + probeResult.audioTracks.length.toString() +
+          ' 字幕轨=' + probeResult.subtitleTracks.length.toString()
+        )
+        for (let i = 0; i < probeResult.audioTracks.length; i++) {
+          const t = probeResult.audioTracks[i]
+          const item: PresetAudioTrack = {
+            trackIndex: t.index,
+            displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+            language: t.language,
+            mimeType: t.codecName
+          }
+          presetAudioTracks.push(item)
+        }
+        for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
+          const t = probeResult.subtitleTracks[i]
+          const item: PresetSubtitleTrack = {
+            trackIndex: t.index,
+            displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
+            language: t.language,
+            codecName: t.codecName
+          }
+          presetSubtitleTracks.push(item)
+        }
+      } else {
+        console.warn('[SmbExplorer] 轨道探测未成功（降级为空轨道）: ' + (probeResult.errorMessage ?? '(未知原因)'))
+      }
+    } catch (e) {
+      const err = e as BusinessError
+      console.warn('[SmbExplorer] 轨道探测异常，不阻断播放: ' + (err.message ? err.message : JSON.stringify(e)))
+    }
+
     const pageParam: PlayerPageParam = {
       url: url,
-      title: file.name
+      title: file.name,
+      presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
+      presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
     }
     this.pageStack.pushPath({
       name: PlayerPage.PAGE_NAME,

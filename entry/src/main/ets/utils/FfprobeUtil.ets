@@ -26,6 +26,49 @@ function getVidAllCorePlayerNapi(): FfprobeNapiBridge {
 }
 
 // ─────────────────────────────────────────────
+// SMB 代理探测所需的 NAPI 桥接（与 libvidall_core_player_napi.so 共模块）
+// ─────────────────────────────────────────────
+
+/** probeSmb() 创建临时 player 时传入的 XComponent 占位上下文（无实际渲染需求） */
+interface SmbProbeOnlyContext {
+}
+
+/** SMB 代理探测所需的 native player 管理方法子集 */
+interface SmbProbeNapiBridge {
+  createPlayer: () => number;
+  setSource: (handle: number, url: string) => void;
+  setXComponent: (handle: number, context: Object, xComponentId: string) => void;
+  setCallbacks: (
+    handle: number,
+    onPrepared: () => void,
+    onError: (code: number, msg: string) => void,
+    onTimeUpdate: (posMs: number) => void,
+    onCompleted: () => void,
+    onBufferingChange: (isBuffering: boolean) => void,
+    onSeekDone: () => void
+  ) => void;
+  prepare: (handle: number) => void;
+  getProxyUrl: (handle: number) => string;
+  release: (handle: number, keepProxy?: boolean) => void;
+}
+
+interface SmbProbeNapiBridgeModule {
+  default?: SmbProbeNapiBridge;
+}
+
+function getSmbProbeNapi(): SmbProbeNapiBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as SmbProbeNapiBridgeModule | SmbProbeNapiBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as SmbProbeNapiBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as SmbProbeNapiBridge;
+  }
+  return bridgeModule as SmbProbeNapiBridge;
+}
+
+// ─────────────────────────────────────────────
 // 数据结构
 // ─────────────────────────────────────────────
 
@@ -460,6 +503,101 @@ export class FfprobeUtil {
       errorMessage,
     };
     return result;
+  }
+
+  /**
+   * 通过 SMB HTTP 代理探测 SMB 视频文件的轨道信息。
+   *
+   * 流程：
+   *   1. 创建临时 native player → prepare() 同步启动 SMB HTTP 代理
+   *   2. 获取代理 URL（http://127.0.0.1:PORT/share/path/file.mkv）
+   *   3. 用代理 URL 调用 ffprobe 探测轨道
+   *   4. ffprobe 完成后释放临时 player（代理随之停止）
+   *
+   * 若代理启动或 ffprobe 失败，返回 success=false 的结果，不抛出异常，
+   * 由调用方决定是否阻断播放（降级策略：失败时空轨道、正常播放）。
+   *
+   * @param smbUrl   smb://user:pass@host:port/share/path 格式的完整 SMB URL
+   * @param timeoutMs ffprobe 超时，默认 15000ms
+   */
+  static async probeSmb(
+    smbUrl: string,
+    timeoutMs: number = 15000
+  ): Promise<FfprobeResult> {
+    console.info(`[FfprobeUtil] SMB probe via HTTP proxy: ${maskUrlForLog(smbUrl)}`);
+
+    let playerHandle: number = 0;
+    let proxyUrl: string = '';
+
+    // ── 阶段 1：启动 SMB HTTP 代理（native player prepare 同步触发）──────────
+    try {
+      const napi = getSmbProbeNapi();
+      playerHandle = napi.createPlayer();
+      napi.setSource(playerHandle, smbUrl);
+
+      // probe 不需要实际渲染；XComponent 传 dummy 值（C++ 骨架阶段仅存储 id，不立即绑定 surface）
+      const dummyCtx: SmbProbeOnlyContext = {};
+      napi.setXComponent(playerHandle, dummyCtx as Object, 'smb-probe-only');
+
+      // prepare() 是同步调用：onPrepared 在 prepare() 内部同步触发，代理随之启动
+      const h = playerHandle;
+      napi.setCallbacks(
+        h,
+        () => { /* onPrepared: prepare() 同步触发，代理已启动，无需额外操作 */ },
+        (code: number, msg: string) => {
+          console.warn(`[FfprobeUtil] SMB probe player error: code=${code} msg=${msg}`);
+        },
+        (posMs: number) => {
+          console.debug(`[FfprobeUtil] SMB probe time update: ${posMs}`);
+        },
+        () => { /* onCompleted: probe 阶段不播放，忽略 */ },
+        (isBuffering: boolean) => {
+          console.debug(`[FfprobeUtil] SMB probe buffering: ${isBuffering}`);
+        },
+        () => { /* onSeekDone: probe 阶段无 seek，忽略 */ }
+      );
+
+      napi.prepare(h);
+
+      proxyUrl = napi.getProxyUrl(h) ?? '';
+      console.info(`[FfprobeUtil] SMB proxy URL: ${proxyUrl.length > 0 ? proxyUrl : '(空)'}`);
+    } catch (e) {
+      const err = e as BusinessError;
+      const msg = err.message ? err.message : JSON.stringify(e);
+      console.warn(`[FfprobeUtil] SMB proxy 启动失败，跳过探测: ${msg}`);
+      if (playerHandle > 0) {
+        try {
+          getSmbProbeNapi().release(playerHandle);
+        } catch {
+          /* 释放失败不抛出 */
+        }
+      }
+      return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), `SMB proxy 启动失败: ${msg}`);
+    }
+
+    if (proxyUrl.length === 0) {
+      console.warn(`[FfprobeUtil] SMB proxy URL 为空，跳过探测（可能 prepare 未成功或非 SMB 源）`);
+      try {
+        getSmbProbeNapi().release(playerHandle);
+      } catch {
+        /* 释放失败不抛出 */
+      }
+      return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), 'SMB proxy URL 为空');
+    }
+
+    // ── 阶段 2：通过 HTTP proxy URL 调用 ffprobe，完成后释放 player ──────────
+    let probeResult: FfprobeResult;
+    try {
+      probeResult = await FfprobeUtil.probe(proxyUrl, {}, timeoutMs);
+    } finally {
+      // 无论探测成功/失败都释放临时 player，代理随之停止
+      try {
+        getSmbProbeNapi().release(playerHandle);
+      } catch {
+        /* 释放失败不抛出 */
+      }
+    }
+    return probeResult;
   }
 
   /**
