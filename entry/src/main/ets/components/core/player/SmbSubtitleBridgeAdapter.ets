@@ -3,6 +3,9 @@ import { CommonConstants } from '../../../common/constants/CommonConstants';
 import { SMBClient, SMBClientConfig } from '../../../lib/SMBClient';
 import { BaseSubtitleBridgeAdapter, SubtitleTrackItem } from './SubtitleBridgeAdapter';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
+import { PresetSubtitleTrack } from './VideoData';
+import { FfprobeUtil, EmbeddedSubEntry } from '../../../utils/FfprobeUtil';
+import { VidAllPlayerAdapter } from './VidAllPlayerAdapter';
 
 const TAG = '[SmbSubtitleBridgeAdapter]';
 
@@ -351,6 +354,102 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         '[外置字幕] SMB 字幕加载异常，返回空数组');
       return [];
+    }
+  }
+
+  /**
+   * 覆写内嵌轨道加载：从 videoData.presetSubtitleTracks 读取已由 ffprobe 探测到的字幕轨，
+   * 过滤掉 PGS / DVD subtitle 等图形格式，只保留可文本渲染的格式。
+   */
+  protected override async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
+    const items: SubtitleTrackItem[] = [];
+    const presets = this.videoData?.presetSubtitleTracks;
+    if (!presets || presets.length === 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        '[SmbSub] 无 presetSubtitleTracks，跳过内嵌轨道加载');
+      return items;
+    }
+    // 只保留可文本渲染的格式，跳过 hdmv_pgs_subtitle、dvd_subtitle 等图形字幕
+    const TEXT_CODECS: string[] = ['subrip', 'srt', 'ass', 'ssa', 'webvtt', 'mov_text'];
+    for (let i = 0; i < presets.length; i++) {
+      const t: PresetSubtitleTrack = presets[i];
+      if (t.codecName && !TEXT_CODECS.includes(t.codecName)) {
+        continue;
+      }
+      const item: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName: t.displayName,
+        internalIndex: t.trackIndex
+      };
+      items.push(item);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[SmbSub] loadInternalTracks: preset=${presets.length} 可渲染文本字幕=${items.length}`);
+    return items;
+  }
+
+  /**
+   * 覆写轨道切换：内嵌字幕通过 FfprobeUtil.extractEmbeddedSubtitles 提取后走 SRT 渲染管线；
+   * 外置字幕交由父类处理（srtEntries 已在 loadExternalTracks 解析完毕）。
+   * SMB 视频通过 native player 的 HTTP 代理提供 ffprobe 可用的 URL。
+   */
+  override async switchTrack(allIndex: number): Promise<void> {
+    if (!this.player) {
+      return;
+    }
+    // allIndex < 0 表示取消选中，交由父类处理（重置状态 + selectTrack(-1)）
+    if (allIndex < 0) {
+      await super.switchTrack(allIndex);
+      return;
+    }
+
+    const target = this.allSubtitleTracks[allIndex];
+    if (!target) {
+      return;
+    }
+
+    if (target.kind === 'external') {
+      // 外置字幕 srtEntries 已预加载，直接交父类处理
+      await super.switchTrack(allIndex);
+      return;
+    }
+
+    // 内嵌字幕：实时提取字幕文本，走 SRT 渲染管线
+    const internalIndex = target.internalIndex ?? -1;
+    if (internalIndex < 0) {
+      return;
+    }
+
+    this.activeSubtitleIndex = allIndex;
+    this.srtEntries = [];
+    this.lastSrtText = '';
+    this.currentSubtitleText = '';
+    this.currentSubtitleTrack = internalIndex;
+
+    // 优先使用 native player 的 HTTP 代理 URL（native 后端已为 SMB 源建立代理）
+    // 回退到 videoData.videoSrc（ijkplayer fallback 后 videoSrc 已更新为代理 URL）
+    let videoSrc: string = this.videoData?.videoSrc ?? '';
+    const vidAllAdapter = this.player as VidAllPlayerAdapter;
+    const proxyUrl: string = vidAllAdapter?.getProxyUrl?.() ?? '';
+    if (proxyUrl.length > 0) {
+      videoSrc = proxyUrl;
+    }
+    if (videoSrc.length === 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        '[SmbSub] 无可用视频 URL，降级无字幕');
+      return;
+    }
+
+    try {
+      const entries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
+        videoSrc, undefined, internalIndex, 30000
+      );
+      this.srtEntries = entries as SrtEntry[];
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[SmbSub] 内嵌字幕提取完成 stream=${internalIndex} entries=${entries.length}`);
+    } catch {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        '[SmbSub] 内嵌字幕提取失败，降级无字幕');
     }
   }
 }
