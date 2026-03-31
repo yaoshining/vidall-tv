@@ -61,7 +61,7 @@ interface SmbNapiBridge {
   smbListDirectory: (host: string, port: number, username: string, password: string, domain: string, shareName: string, path: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbListShares: (host: string, port: number, username: string, password: string, domain: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbDiscoverHosts: (subnetPrefix: string, startOctet: number, endOctet: number, port: number, timeoutMs: number) => Promise<Record<string, Object>>;
-  smbReadTextFile: (url: string, maxSizeBytes: number) => Promise<string>;
+  smbReadTextFile: (url: string, maxSizeBytes: number, timeoutSeconds?: number) => Promise<string>;
 }
 
 interface SmbNapiBridgeModule {
@@ -407,7 +407,8 @@ export class SMBClient {
     console.info(`[SMBClient] readTextFile: ${this.host}/${this.shareName}${filePath}`);
     const url: string = this.buildSmbUrl(filePath);
     try {
-      const content: string = await getModule().smbReadTextFile(url, maxSizeBytes);
+      // Fix C: 传入 timeoutSeconds=5，替代 Native 侧原硬编码 30s
+      const content: string = await getModule().smbReadTextFile(url, maxSizeBytes, 5);
       return content;
     } catch (e) {
       const err = e as import('@kit.BasicServicesKit').BusinessError;

@@ -4201,6 +4201,7 @@ struct SmbReadTextFileContext {
     napi_deferred deferred = nullptr;
     std::string url;           // 完整 smb:// URL（含凭据，仅在 Execute 内部使用，不打印）
     int64_t maxSizeBytes = 5 * 1024 * 1024;
+    int32_t timeoutSeconds = 5; // Fix C: 可配置超时，默认 5s（原硬编码 30s）
     std::string content;       // 读取结果：UTF-8 文本内容
     std::string errorMessage;
 };
@@ -4224,7 +4225,7 @@ static void ExecuteSmbReadTextFile(napi_env /*env*/, void *data) {
     }
     if (!comps.user.empty())     smb2_set_user(smb2, comps.user.c_str());
     if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
-    smb2_set_timeout(smb2, 30);
+    smb2_set_timeout(smb2, ctx->timeoutSeconds); // Fix C: 使用可配置超时（原硬编码 30s）
 
     int ret = smb2_connect_share(smb2, comps.host.c_str(), comps.share.c_str(),
                                   comps.user.empty() ? nullptr : comps.user.c_str());
@@ -4255,7 +4256,8 @@ static void ExecuteSmbReadTextFile(napi_env /*env*/, void *data) {
     }
 
     uint64_t fileSize = st.smb2_size;
-    if ((int64_t)fileSize > ctx->maxSizeBytes) {
+    // Fix E: uint64_t 比较，避免 int64_t 转换溢出
+    if (fileSize > (uint64_t)ctx->maxSizeBytes) {
         ctx->errorMessage = "smbReadTextFile: file size " + std::to_string(fileSize) +
                             " bytes exceeds maxSizeBytes " + std::to_string(ctx->maxSizeBytes);
         smb2_close(smb2, fh);
@@ -4271,8 +4273,8 @@ static void ExecuteSmbReadTextFile(napi_env /*env*/, void *data) {
     int32_t bytesRead = 0;
     while ((bytesRead = smb2_read(smb2, fh, buf.data(), kBufSize)) > 0) {
         ctx->content.append(reinterpret_cast<const char *>(buf.data()), (size_t)bytesRead);
-        // 二次防护：读取途中若超出限制则中止
-        if ((int64_t)ctx->content.size() > ctx->maxSizeBytes) {
+        // 二次防护：读取途中若超出限制则中止（Fix E: 使用 uint64_t 比较）
+        if (ctx->content.size() > (uint64_t)ctx->maxSizeBytes) {
             ctx->errorMessage = "smbReadTextFile: data exceeded maxSizeBytes during read";
             ctx->content.clear();
             smb2_close(smb2, fh);
@@ -4302,16 +4304,28 @@ static void ExecuteSmbReadTextFile(napi_env /*env*/, void *data) {
 static void CompleteSmbReadTextFile(napi_env env, napi_status /*status*/, void *data) {
     auto *ctx = static_cast<SmbReadTextFileContext *>(data);
     if (!ctx->errorMessage.empty()) {
-        napi_value errStr = nullptr;
-        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errStr);
-        napi_reject_deferred(env, ctx->deferred, errStr);
+        // Fix D: reject with Error object (not raw string), consistent with ffprobe interface
+        napi_value errMsg = nullptr;
+        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+        napi_value errObj = nullptr;
+        if (napi_create_error(env, nullptr, errMsg, &errObj) == napi_ok) {
+            napi_reject_deferred(env, ctx->deferred, errObj);
+        } else {
+            napi_reject_deferred(env, ctx->deferred, errMsg);
+        }
     } else {
         napi_value contentVal = nullptr;
         if (napi_create_string_utf8(env, ctx->content.c_str(), ctx->content.size(), &contentVal) != napi_ok) {
-            napi_value errStr = nullptr;
+            // Fix D: reject with Error object for internal error too
+            napi_value errMsg = nullptr;
             napi_create_string_utf8(env, "NAPI internal error: failed to create content string",
-                                    NAPI_AUTO_LENGTH, &errStr);
-            napi_reject_deferred(env, ctx->deferred, errStr);
+                                    NAPI_AUTO_LENGTH, &errMsg);
+            napi_value errObj = nullptr;
+            if (napi_create_error(env, nullptr, errMsg, &errObj) == napi_ok) {
+                napi_reject_deferred(env, ctx->deferred, errObj);
+            } else {
+                napi_reject_deferred(env, ctx->deferred, errMsg);
+            }
         } else {
             napi_resolve_deferred(env, ctx->deferred, contentVal);
         }
@@ -4904,15 +4918,16 @@ static napi_value SmbListDirectory(napi_env env, napi_callback_info info) {
 }
 
 /**
- * smbReadTextFile(url: string, maxSizeBytes: number): Promise<string>
+ * smbReadTextFile(url: string, maxSizeBytes: number, timeoutSeconds?: number): Promise<string>
  *
  * 通过 SMB 协议读取小文件（如字幕文件）的 UTF-8 文本内容。
  * url 格式：smb://[user[:pass]@]host[:port]/share/path/to/file
  * maxSizeBytes：超过此大小则 reject（防止误读大文件）。
+ * timeoutSeconds（可选，默认 5）：SMB 连接超时秒数，Fix C。
  */
 static napi_value SmbReadTextFile(napi_env env, napi_callback_info info) {
-    size_t argc = 2;
-    napi_value args[2] = { nullptr, nullptr };
+    size_t argc = 3;
+    napi_value args[3] = { nullptr, nullptr, nullptr };
     if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
         ThrowTypeError(env, "smbReadTextFile failed to read args");
         return nullptr;
@@ -4932,6 +4947,20 @@ static napi_value SmbReadTextFile(napi_env env, napi_callback_info info) {
         ThrowTypeError(env, "smbReadTextFile maxSizeBytes must be int64");
         return nullptr;
     }
+    // Fix E: 校验 maxSizeBytes 范围 (0, 50MB]，越界时 clamp 到默认 5MB
+    constexpr int64_t MAX_ALLOWED_BYTES = 50LL * 1024 * 1024;
+    if (maxSizeBytes <= 0 || maxSizeBytes > MAX_ALLOWED_BYTES) {
+        maxSizeBytes = 5LL * 1024 * 1024;
+    }
+
+    // Fix C: 读取可选第 3 个参数 timeoutSeconds，默认 5s
+    int32_t timeoutSeconds = 5;
+    if (argc >= 3 && args[2] != nullptr) {
+        int64_t ts = 0;
+        if (napi_get_value_int64(env, args[2], &ts) == napi_ok && ts > 0 && ts <= 300) {
+            timeoutSeconds = (int32_t)ts;
+        }
+    }
 
     napi_deferred deferred = nullptr;
     napi_value promise = nullptr;
@@ -4946,6 +4975,7 @@ static napi_value SmbReadTextFile(napi_env env, napi_callback_info info) {
         ctx->deferred = deferred;
         ctx->url = url;
         ctx->maxSizeBytes = maxSizeBytes;
+        ctx->timeoutSeconds = timeoutSeconds; // Fix C
 
         napi_value resourceName = nullptr;
         if (napi_create_string_utf8(env, "smbReadTextFileAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {

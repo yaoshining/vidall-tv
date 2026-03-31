@@ -277,17 +277,18 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         return [];
       }
 
-      // Phase 2：并发读取候选文件，整体 3 秒超时（Fix 3）
-      const readPromises: Promise<string>[] = candidates.map((candidate) => {
-        return client.readTextFile(candidate.filePath).catch(() => '');
-      });
-      const timeoutPromise: Promise<string[]> = new Promise<string[]>((resolve) => {
-        setTimeout(() => resolve(candidates.map(() => '')), 3000);
-      });
-      const contents: string[] = await Promise.race([
-        Promise.all(readPromises),
-        timeoutPromise
-      ]);
+      // Phase 2：逐文件并发读取，每个文件单独 3 秒超时（Fix F: 避免一文件超时丢弃其他结果）
+      const readWithTimeout = (p: Promise<string>, ms: number): Promise<string> => {
+        const timeoutP: Promise<string> = new Promise<string>((resolve) => {
+          setTimeout(() => resolve(''), ms);
+        });
+        return Promise.race([p, timeoutP]);
+      };
+      const contents: string[] = await Promise.all(
+        candidates.map((candidate) =>
+          readWithTimeout(client.readTextFile(candidate.filePath).catch(() => ''), 3000)
+        )
+      );
 
       // Phase 3：解析每个读取结果
       const found: SubtitleTrackItem[] = [];
@@ -318,6 +319,13 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
           const displayName: string = langLabel.length > 0
             ? `${langLabel} [外部·${formatLabel}]`
             : `字幕 [外部·${formatLabel}]`;
+
+          // Fix G: 空解析结果不加入字幕轨道，避免产生空字幕轨道
+          if (entries.length === 0) {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `[外置字幕] 解析结果为空，跳过: ${candidates[i].name}`);
+            continue;
+          }
 
           const item: SubtitleTrackItem = {
             kind: 'external',

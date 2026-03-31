@@ -485,6 +485,7 @@ export class SrtParser {
 
   /**
    * 解析时间轴行 "00:00:01,000 --> 00:00:03,500"
+   * 支持 VTT cue settings（如 "line:0% position:50%"），自动剥离。
    * 返回 [startMs, endMs]，失败返回 null
    */
   private static parseTimeLine(line: string): number[] | null {
@@ -493,7 +494,10 @@ export class SrtParser {
       return null;
     }
     const startStr = line.substring(0, arrowIdx).trim();
-    const endStr = line.substring(arrowIdx + 3).trim();
+    // Fix A: VTT cue settings（空格后的部分）在 endStr 中需剥离，只取第一个 token
+    const endRaw = line.substring(arrowIdx + 3).trim();
+    const endSpaceIdx = endRaw.indexOf(' ');
+    const endStr = endSpaceIdx >= 0 ? endRaw.substring(0, endSpaceIdx) : endRaw;
 
     const startMs = SrtParser.parseTimestamp(startStr);
     const endMs = SrtParser.parseTimestamp(endStr);
