@@ -857,7 +857,9 @@ export class FfprobeUtil {
       ? FfprobeUtil.getCodecDisplayName(track.codecName)
       : '';
     const tier3 = FfprobeUtil.getSubtitleTier3Label(track, index);
-    const isSemanticTier3 = tier3.length > 0 && tier3 !== '未标注' && !tier3.startsWith('轨道');
+    // 只保留短语义标签（简体/繁体/香港等），过滤 MKV track title 长字符串
+    const SEMANTIC_TIER3_KEYWORDS: string[] = ['简体', '繁体', '香港', '台湾', 'Simplified', 'Traditional', 'HK', 'TW'];
+    const isSemanticTier3 = SEMANTIC_TIER3_KEYWORDS.some((kw: string) => tier3.includes(kw));
 
     let label = '';
     if (langName && codecDisplay) {
