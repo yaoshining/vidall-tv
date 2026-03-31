@@ -3,18 +3,18 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
-  MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, PlayProgressEntity
+  MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry
 } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 
 /**
- * 文件源数据库管理类 — DB v5
+ * 文件源数据库管理类 — DB v6
  * 表结构：file_sources, file_source_directories, videos, scrape_info,
- *         movies, tv_series, tv_seasons, tv_episodes, play_progress
+ *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 5;
+  private static readonly DB_VERSION = 6;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -25,6 +25,7 @@ export class FileSourceDatabase {
   private static readonly TABLE_TV_SEASONS = 'tv_seasons';
   private static readonly TABLE_TV_EPISODES = 'tv_episodes';
   private static readonly TABLE_PLAY_PROGRESS = 'play_progress';
+  private static readonly TABLE_MEDIA_PROGRESS = 'media_progress';
   private static readonly DATABASE_READY = 'FILE_SOURCES_DB_READY'
 
   // 单例实例
@@ -306,6 +307,19 @@ export class FileSourceDatabase {
       )
     `);
     console.info('FileSourceDatabase: v3 media tables created');
+
+    // media_progress（媒体级播放进度，以 media_key 为主键）
+    await rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} (
+        media_key TEXT PRIMARY KEY,
+        position_ms INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        last_played_at INTEGER NOT NULL,
+        episode_number INTEGER NOT NULL DEFAULT 0,
+        season_number INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    console.info('FileSourceDatabase: media_progress table created');
   }
 
   /**
@@ -346,6 +360,20 @@ export class FileSourceDatabase {
           )
         `);
         console.info(`FileSourceDatabase: CREATE TABLE play_progress`);
+      }
+      if (oldVersion < 6) {
+        // v5 → v6：新增媒体级播放进度表
+        await rdbStore.executeSql(`
+          CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} (
+            media_key TEXT PRIMARY KEY,
+            position_ms INTEGER NOT NULL DEFAULT 0,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            last_played_at INTEGER NOT NULL,
+            episode_number INTEGER NOT NULL DEFAULT 0,
+            season_number INTEGER NOT NULL DEFAULT 0
+          )
+        `);
+        console.info(`FileSourceDatabase: CREATE TABLE media_progress`);
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -2258,7 +2286,99 @@ export class FileSourceDatabase {
       updatedAt: num('updated_at')
     };
   }
+
+  // ─────────────────────────────────────────────
+  // 媒体级播放进度（media_progress 表）
+  // ─────────────────────────────────────────────
+
+  /**
+   * 写入或更新媒体级播放进度（以 media_key 为主键，INSERT OR REPLACE）。
+   * 写入失败仅打 warn，不抛出异常，不阻塞调用方。
+   */
+  async upsertMediaProgress(entry: MediaProgressEntry): Promise<void> {
+    if (this.rdbStore === null) {
+      console.warn('[DB][upsertMediaProgress] DB 未初始化，跳过写入');
+      return;
+    }
+    try {
+      const sql = `
+        INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}
+          (media_key, position_ms, duration_ms, last_played_at, episode_number, season_number)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `;
+      const args: relationalStore.ValueType[] = [
+        entry.mediaKey,
+        entry.positionMs,
+        entry.durationMs,
+        entry.lastPlayedAt,
+        entry.episodeNumber,
+        entry.seasonNumber
+      ];
+      await this.rdbStore.executeSql(sql, args);
+      console.info(
+        `[DB][upsertMediaProgress] key=${entry.mediaKey} pos=${entry.positionMs}ms ` +
+        `s${entry.seasonNumber}e${entry.episodeNumber}`
+      );
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][upsertMediaProgress] 写入失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 查询媒体级播放进度，不存在返回 null。
+   */
+  async getMediaProgress(mediaKey: string): Promise<MediaProgressEntry | null> {
+    if (this.rdbStore === null) {
+      return null;
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MEDIA_PROGRESS);
+      pred.equalTo('media_key', mediaKey);
+      const rs = await this.rdbStore.query(pred, [
+        'media_key', 'position_ms', 'duration_ms', 'last_played_at',
+        'episode_number', 'season_number'
+      ]);
+      if (!rs.goToFirstRow()) {
+        rs.close();
+        return null;
+      }
+      const entry: MediaProgressEntry = {
+        mediaKey: rs.getString(rs.getColumnIndex('media_key')),
+        positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
+        durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
+        lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
+        episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
+        seasonNumber: rs.getLong(rs.getColumnIndex('season_number'))
+      };
+      rs.close();
+      return entry;
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][getMediaProgress] 查询失败 code=${err.code} msg=${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 删除媒体级播放进度（完播重置）。
+   */
+  async clearMediaProgress(mediaKey: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MEDIA_PROGRESS);
+      pred.equalTo('media_key', mediaKey);
+      await this.rdbStore.delete(pred);
+      console.info(`[DB][clearMediaProgress] key=${mediaKey} 已清除`);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][clearMediaProgress] 删除失败 code=${err.code} msg=${err.message}`);
+    }
+  }
 }
+
 
 
 

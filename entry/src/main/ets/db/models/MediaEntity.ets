@@ -180,6 +180,26 @@ export interface PlayProgressEntity {
 }
 
 // ─────────────────────────────────────────────
+// 媒体级播放进度（跨季聚合，key 由 MediaProgressStore 构造）
+// ─────────────────────────────────────────────
+
+/** 媒体级播放进度实体（对应 media_progress 表） */
+export interface MediaProgressEntry {
+  /** 存储 key，格式 media_progress_series_<id> 或 media_progress_movie_<id> */
+  mediaKey: string;
+  /** 上次播放位置（毫秒） */
+  positionMs: number;
+  /** 视频总时长（毫秒） */
+  durationMs: number;
+  /** 最近播放时间戳 */
+  lastPlayedAt: number;
+  /** 剧集：集号（0 表示无） */
+  episodeNumber: number;
+  /** 剧集：季号（0 表示无） */
+  seasonNumber: number;
+}
+
+// ─────────────────────────────────────────────
 // UI 聚合视图
 // ─────────────────────────────────────────────
 
