@@ -1323,7 +1323,8 @@ struct NativePlayerSkeletonState {
   AVIOContext     *ffmpegAvio      = nullptr;  // 由 SmbCleanupResources 负责 free
   AVFormatContext *ffmpegFmt       = nullptr;  // 由 SmbCleanupResources 负责 close
   std::thread      smbPlayThread;              // 播放线程；joinable 时表示线程正在运行
-  std::atomic<bool>    smbStopFlag  {false};   // 通知播放线程退出（原子）
+  // shared_ptr 使停止标志生命周期独立于 state，防止 keepProxy=true 时 state 析构后出现 UAF
+  std::shared_ptr<std::atomic<bool>> smbStopFlag { std::make_shared<std::atomic<bool>>(false) };
   std::atomic<bool>    smbPauseFlag {false};   // 通知播放线程暂停（原子）
   std::atomic<int64_t> smbSeekTargetMs {-1};   // ≥0 时表示待执行的 seek 目标（原子）
 };
@@ -1332,6 +1333,12 @@ static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
 static int32_t g_nextHandle = 1;
 // A4：保护 g_players 跨线程访问（XC 表面回调来自 UI 线程，AV 回调来自媒体线程）
 static std::mutex g_playersMutex;
+
+// keepProxy=true 场景下，smbPlayThread 在 state 析构前被 move 到此处持有，
+// 防止 ~thread() 在 joinable 时被调用触发 std::terminate。
+// 每个元素是 {thread, stopFlag}，stopFlag 共享所有权防止 UAF。
+static std::mutex g_orphanedProxiesMutex;
+static std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> g_orphanedProxies;
 
 // 修复 #48-A5：pending window 缓存
 // 根因：RegisterCallback 在 SetXComponent（onLoad 回调）中调用时 surface 已创建完毕，
@@ -1880,7 +1887,7 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 }
 
 static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
-                                std::atomic<bool> *stopFlag) {
+                                std::shared_ptr<std::atomic<bool>> stopFlag) {
     while (!stopFlag->load(std::memory_order_relaxed)) {
         struct pollfd pfd;
         pfd.fd = serverFd; pfd.events = POLLIN; pfd.revents = 0;
@@ -1914,8 +1921,8 @@ static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponent
     socklen_t addrLen = sizeof(addr);
     getsockname(serverFd, reinterpret_cast<struct sockaddr *>(&addr), &addrLen);
     int port = ntohs(addr.sin_port);
-    state.smbStopFlag.store(false, std::memory_order_relaxed);
-    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, &state.smbStopFlag);
+    state.smbStopFlag->store(false, std::memory_order_relaxed);
+    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, state.smbStopFlag);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "proxy started port=%{public}d host=%{public}s share=%{public}s",
                  port, comps.host.c_str(), comps.share.c_str());
@@ -1924,7 +1931,7 @@ static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponent
 
 static void SmbStopProxy(NativePlayerSkeletonState &state) {
     if (!state.isSmbPlayback) return;
-    state.smbStopFlag.store(true, std::memory_order_relaxed);
+    state.smbStopFlag->store(true, std::memory_order_relaxed);
     if (state.smbPlayThread.joinable()) {
         state.smbPlayThread.join();
     }
@@ -1945,6 +1952,13 @@ static void ResetRuntimeState(NativePlayerSkeletonState &state, bool keepProxy =
   if (!keepProxy) {
     SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
     state.proxyPlayUrl.clear();
+  } else if (state.smbPlayThread.joinable()) {
+    // keepProxy=true：代理线程需继续服务 ijkplayer，但 state 即将析构。
+    // 将 thread + shared stopFlag 转移至全局 orphaned 列表，防止 ~thread() 在
+    // joinable 时被调用触发 std::terminate（SIGABRT, #78）。
+    // stopFlag 使用 shared_ptr 共享所有权，保证线程退出前不会出现悬挂访问（UAF）。
+    std::lock_guard<std::mutex> orphanLock(g_orphanedProxiesMutex);
+    g_orphanedProxies.emplace_back(std::move(state.smbPlayThread), state.smbStopFlag);
   }
   state.prepared = false;
   state.playing = false;
