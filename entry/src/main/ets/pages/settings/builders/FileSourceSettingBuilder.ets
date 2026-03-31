@@ -4,14 +4,7 @@ import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
 import {
-  WebdavIcon,
-  SmbIcon,
-  AliyunIcon,
-  Cloud139Icon,
-  BaiduIcon,
-  Cloud123Icon,
-  Cloud115Icon,
-  OtherIcon
+  SourceTypeIcon
 } from "./IconBuilders";
 import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
@@ -58,30 +51,6 @@ struct FileSourceSettingBuilderComponent {
       'other': '其他'
     }
     return typeMap[type] || '未知类型'
-  }
-
-  /**
-   * 获取文件源类型的图标
-   */
-  @Builder
-  getFileSourceTypeIcon(type: FileSourceType) {
-    if (type === FileSourceType.WEBDAV) {
-      WebdavIcon()
-    } else if (type === FileSourceType.SMB) {
-      SmbIcon()
-    } else if (type === FileSourceType.ALIYUN) {
-      AliyunIcon()
-    } else if (type === FileSourceType.CLOUD_139) {
-      Cloud139Icon()
-    } else if (type === FileSourceType.BAIDU) {
-      BaiduIcon()
-    } else if (type === FileSourceType.CLOUD_123) {
-      Cloud123Icon()
-    } else if (type === FileSourceType.CLOUD_115) {
-      Cloud115Icon()
-    } else {
-      OtherIcon()
-    }
   }
 
   /**
@@ -238,7 +207,7 @@ struct FileSourceSettingBuilderComponent {
         ForEach(this.fileSourceModel.fileSources, (fileSource: FileSource) => {
           SettingListItem({
             icon: () => {
-              this.getFileSourceTypeIcon(fileSource.type)
+              SourceTypeIcon(fileSource.type)
             },
             title: fileSource.name,
             value: this.getFileSourceTypeName(fileSource.type),
