@@ -1316,6 +1316,8 @@ struct NativePlayerSkeletonState {
   // ── SMB / FFmpeg 软件解码播放字段（isSmbPlayback == true 时有效）──────────────────────────
   // 生命周期：Prepare 时由 ExecuteSmbPrepare 填充，Release/ResetRuntimeState 时由
   // SmbCleanupResources 清理；播放线程通过 smbStopFlag/smbPauseFlag/smbSeekTargetMs 与主线程通信。
+  // proxyPlayUrl: Prepare 时赋值，供 GetProxyUrl NAPI 返回给 JS 层（SMB fallback 场景使用）
+  std::string      proxyPlayUrl;
   bool             isSmbPlayback   = false;
   SmbAVIOContext  *smbAvioOpaque   = nullptr;  // 由 SmbCleanupResources 负责 delete
   AVIOContext     *ffmpegAvio      = nullptr;  // 由 SmbCleanupResources 负责 free
@@ -1939,8 +1941,11 @@ static void SmbStopProxy(NativePlayerSkeletonState & /*state*/) {}
 
 #endif // VIDALL_HAS_LIBSMB2
 
-static void ResetRuntimeState(NativePlayerSkeletonState &state) {
-  SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
+static void ResetRuntimeState(NativePlayerSkeletonState &state, bool keepProxy = false) {
+  if (!keepProxy) {
+    SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
+    state.proxyPlayUrl.clear();
+  }
   state.prepared = false;
   state.playing = false;
   state.pendingPrepare = false;  // A5修复: 切换 surface 时清除延迟标志
@@ -2393,7 +2398,8 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
       EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: invalid smb:// URL");
       return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
     }
-    SmbStopProxy(state);  // 清理旧代理（防止 surface 切换后残留）
+    SmbStopProxy(state);  // 清理旧代理（防止 surface 切换后残留，含上次 keepProxy 遗留代理）
+    state.proxyPlayUrl.clear();
     int proxyPort = SmbStartProxy(state, comps);
     if (proxyPort < 0) {
       EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: SMB HTTP proxy start failed");
@@ -2410,6 +2416,8 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/"
               + PercentEncodePathSegment(comps.share) + "/"
               + PercentEncodePath(comps.subPath);
+    // 存储 proxy URL，供 GetProxyUrl NAPI 返回给 JS 层（SMB fallback 到 ijkplayer 时使用）
+    state.proxyPlayUrl = playUrl;
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "SMB rewritten to %{public}s", playUrl.c_str());
 #else
@@ -2825,10 +2833,22 @@ static napi_value SelectTrack(napi_env env, napi_callback_info info) {
 }
 
 static napi_value Release(napi_env env, napi_callback_info info) {
-  int32_t handle = 0;
-  if (!ReadHandleArg(env, info, 1, handle)) {
-    ThrowTypeError(env, "release requires (handle)");
+  // 支持可选的 keepProxy 参数：Release(handle, keepProxy=false)
+  // 当 keepProxy=true 时，SMB HTTP 代理线程不会被停止，允许 ijkplayer 在 fallback 后继续使用代理 URL。
+  size_t argc = 2;
+  napi_value args[2] = { nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
+    ThrowTypeError(env, "release requires (handle[, keepProxy])");
     return nullptr;
+  }
+  int32_t handle = 0;
+  if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
+    ThrowTypeError(env, "release handle must be int32");
+    return nullptr;
+  }
+  bool keepProxy = false;
+  if (argc >= 2 && args[1] != nullptr) {
+    napi_get_value_bool(env, args[1], &keepProxy);
   }
   // PR#49（问题3）：分两段持锁：
   //   ① 持锁找到 state 指针后立即释放，避免 OH_AVPlayer_Release（阻塞）期间持有 g_playersMutex
@@ -2855,7 +2875,9 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     OH_AVPlayer_Release(state.avPlayer); // 阻塞直到媒体线程所有回调执行完毕
     state.avPlayer = nullptr;
   }
-  ResetRuntimeState(state);
+  // keepProxy=true 时跳过 SmbStopProxy，保持代理线程继续服务 ijkplayer；
+  // proxyPlayUrl 保留供 JS 层在 erase 后已不可访问前读取（erase 前已读完）。
+  ResetRuntimeState(state, keepProxy);
   state.url.clear();
   state.headersJson.clear();
   state.xComponentId.clear();
@@ -2868,6 +2890,30 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     g_players.erase(handle);
   }
   return ReturnUndefinedOrThrow(env, "release failed to create return value");
+}
+
+// GetProxyUrl(handle) → string
+// 返回当前 SMB 播放的 HTTP 代理 URL（如 http://127.0.0.1:PORT/share/path/file.mkv）。
+// 在 native player 失败时由 JS 层调用，将 proxy URL 传给 ijkplayer 进行 fallback 软解。
+// 若 handle 无效或尚未 prepare SMB 源，返回空字符串，不 crash。
+static napi_value GetProxyUrl(napi_env env, napi_callback_info info) {
+  int32_t handle = 0;
+  if (!ReadHandleArg(env, info, 1, handle)) {
+    ThrowTypeError(env, "getProxyUrl requires (handle)");
+    return nullptr;
+  }
+  std::lock_guard<std::mutex> lock(g_playersMutex);
+  auto iter = g_players.find(handle);
+  if (iter == g_players.end()) {
+    // handle 无效：安全返回空字符串，不 crash
+    napi_value emptyStr = nullptr;
+    napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &emptyStr);
+    return emptyStr;
+  }
+  const std::string &proxyUrl = iter->second.proxyPlayUrl;
+  napi_value result = nullptr;
+  napi_create_string_utf8(env, proxyUrl.c_str(), proxyUrl.size(), &result);
+  return result;
 }
 
 static napi_value GetCurrentTime(napi_env env, napi_callback_info info) {
@@ -4683,6 +4729,7 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "seek", nullptr, Seek, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "selectTrack", nullptr, SelectTrack, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "getProxyUrl", nullptr, GetProxyUrl, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getCurrentTime", nullptr, GetCurrentTime, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },

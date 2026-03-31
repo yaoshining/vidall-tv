@@ -24,7 +24,8 @@ interface VidAllCorePlayerNapiBridge {
   pause: (handle: number) => void;
   seek: (handle: number, positionMs: number) => void;
   selectTrack: (handle: number, trackIndex: number) => void;
-  release: (handle: number) => void;
+  release: (handle: number, keepProxy?: boolean) => void;
+  getProxyUrl: (handle: number) => string;
   getCurrentTime: (handle: number) => number;
   getDuration: (handle: number) => number;
   setCallbacks: (
@@ -315,7 +316,58 @@ export class VidAllPlayerAdapter implements IPlayer {
     await this.releaseInternal(true);
   }
 
-  seek(timeMs: number): void {
+  /**
+   * 获取当前 SMB HTTP 代理 URL（如 http://127.0.0.1:PORT/share/file.mkv）。
+   * 供 SMB fallback 场景：native player 不支持格式时，将 proxy URL 传给 ijkplayer。
+   * 若尚未 prepare SMB 源或 handle 无效，返回空字符串。
+   */
+  getProxyUrl(): string {
+    if (this._playerHandle <= 0) {
+      return '';
+    }
+    try {
+      return VidAllCorePlayerNapi.getProxyUrl(this._playerHandle) ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * 释放 native player 但保持 SMB HTTP 代理线程继续运行。
+   * 用于 SMB fallback 场景：ijkplayer 接手 proxy URL 后，代理需继续服务；
+   * 下一次调用 prepare() 时的 SmbStopProxy 会清理遗留代理。
+   */
+  async releaseKeepProxy(): Promise<void> {
+    this._isPlaying = false;
+    this._isPrepared = false;
+    this._readyFired = false;
+    this._videoData = undefined;
+    this._duration = 0;
+    this._currentTime = 0;
+    this._seekPending = false;
+    if (this._seekDoneTimeoutTimer !== undefined) {
+      clearTimeout(this._seekDoneTimeoutTimer);
+      this._seekDoneTimeoutTimer = undefined;
+    }
+    if (this._timeUpdateTimer !== undefined) {
+      clearInterval(this._timeUpdateTimer);
+      this._timeUpdateTimer = undefined;
+    }
+    if (this._playerHandle > 0) {
+      const handle = this._playerHandle;
+      this._playerHandle = 0;
+      try {
+        this.callNativeVoid('release', () => {
+          VidAllCorePlayerNapi.release(handle, true);
+        });
+      } catch {
+        // release 阶段以清理为主，native 失败不抛出
+      }
+    }
+    // 注意：不调用 _onStoppedCb，由调用方（VideoPlayerController）负责状态切换
+  }
+
+
     this._metricsSeekStartMs = Date.now();
     let targetTimeMs = timeMs < 0 ? 0 : timeMs;
     if (this._duration > 0 && targetTimeMs > this._duration) {

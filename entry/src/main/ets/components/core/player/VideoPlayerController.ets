@@ -1540,15 +1540,45 @@ export class VideoPlayerController {
     if (this.backend !== 'native') {
       return;
     }
-    // SMB 源仅支持 native 后端，禁止回退到 ijkplayer（ijkplayer 不支持 smb://，回退必然再次失败）
+    // SMB 源：native player 不支持当前格式（H.265 DV/Atmos 等）时，
+    // 通过已启动的 HTTP proxy URL 转接给 ijkplayer 软解，避免直接传 smb:// 导致黑屏。
     const src = (this.currentVideoData?.videoSrc ?? '').toLowerCase();
     if (src.startsWith('smb://')) {
-      this.isLoading = false;
-      // 提供面向用户的 SMB 专属提示，避免展示"已回退到 IJK"等误导性泛用文本
-      this.lastErrorMessage = 'SMB 视频播放失败：当前格式（H.265/Atmos 等）暂不支持，请检查文件格式或联系支持';
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `[fallback] SMB 源禁止 native->ijkplayer 回退: reason=${fallbackReason}`);
-      return;
+      const vidAllAdapter = this.player as VidAllPlayerAdapter;
+      const proxyUrl = vidAllAdapter?.getProxyUrl?.() ?? '';
+
+      if (proxyUrl.length > 0) {
+        // 用 proxy URL 替换 videoSrc，ijkplayer 将通过 http://127.0.0.1:PORT/... 拉流
+        if (this.currentVideoData) {
+          this.currentVideoData.videoSrc = proxyUrl;
+        }
+        const fallbackPosition = this.player?.currentTime ?? this.currentTime;
+        const safeFallbackPosition = fallbackPosition > 0 ? fallbackPosition : 0;
+        const shouldResumePlay = this.isPlaying;
+        this.logFallbackEvent(fallbackReason, 'native', 'ijkplayer', detailMessage);
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[fallback] SMB proxy URL 转接到 ijkplayer: ${proxyUrl}`);
+        this.lastErrorMessage = userMessage;
+        this.isLoading = true;
+        this.clearNativeReadyGuardTimer();
+        this.pendingBackendResumeTimeMs = safeFallbackPosition;
+        this.pendingBackendResumePlay = shouldResumePlay;
+        this.currentTime = safeFallbackPosition;
+        this.progress = this.duration > 0 ? safeFallbackPosition / this.duration : 0;
+        // 释放 native player 但保持 proxy 继续运行，ijkplayer 随后通过 proxy URL 拉流
+        const oldAdapter = this.player as VidAllPlayerAdapter;
+        this.player = undefined;
+        this.backend = 'ijkplayer';
+        oldAdapter?.releaseKeepProxy?.().catch(() => {});
+        return;
+      } else {
+        // proxy URL 不可用（未 prepare 或非 SMB proxy 路径），显示格式不支持提示
+        this.isLoading = false;
+        this.lastErrorMessage = 'SMB 视频播放失败：当前格式（H.265/Atmos 等）暂不支持，请检查文件格式或联系支持';
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[fallback] SMB 源 proxy URL 不可用，无法转接到 ijkplayer: reason=${fallbackReason}`);
+        return;
+      }
     }
     const fallbackPosition = this.player?.currentTime ?? this.currentTime;
     const safeFallbackPosition = fallbackPosition > 0 ? fallbackPosition : 0;
