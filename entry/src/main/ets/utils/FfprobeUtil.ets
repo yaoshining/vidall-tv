@@ -843,27 +843,36 @@ export class FfprobeUtil {
 
   /**
    * 构建字幕轨显示名称
-   * e.g. "中文 (SRT)", "英语 (ASS)", "字幕 1"
+   * 格式：N 语言(编码)，例如：
+   *   "1 中文(ASS)"、"2 中文(SRT)"、"3 英语(ASS)"
+   *   "4 中文(ASS) 简体"（tier3 语义标签保留）
+   *   "5 字幕"（无语言无编码时的兜底）
    */
   static buildSubtitleTrackDisplayName(track: FfprobeTrack, index: number): string {
+    const num = index + 1;
     const langName = track.language
       ? FfprobeUtil.getLanguageDisplayName(track.language)
-      : `字幕 ${index + 1}`;
+      : '';
     const codecDisplay = track.codecName
       ? FfprobeUtil.getCodecDisplayName(track.codecName)
       : '';
     const tier3 = FfprobeUtil.getSubtitleTier3Label(track, index);
+    const isSemanticTier3 = tier3.length > 0 && tier3 !== '未标注' && !tier3.startsWith('轨道');
 
-    if (codecDisplay) {
-      // 有编解码显示名称时：语言 (编码)，与 buildAudioTrackDisplayName 风格一致
-      // tier3 为语义标签（简体/繁体/香港）时追加，通用兜底（'未标注'/'轨道N'）时省略
-      const isSemanticTier3 = tier3.length > 0 && tier3 !== '未标注' && !tier3.startsWith('轨道');
-      if (isSemanticTier3) {
-        return `${langName} (${codecDisplay}) ${tier3}`;
-      }
-      return `${langName} (${codecDisplay})`;
+    let label = '';
+    if (langName && codecDisplay) {
+      label = isSemanticTier3
+        ? `${langName}(${codecDisplay}) ${tier3}`
+        : `${langName}(${codecDisplay})`;
+    } else if (langName) {
+      label = langName;
+    } else if (codecDisplay) {
+      label = `字幕(${codecDisplay})`;
+    } else {
+      label = '字幕';
     }
-    return langName;
+
+    return `${num} ${label}`;
   }
 }
 
