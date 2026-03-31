@@ -1,6 +1,8 @@
+import { FileSourceType } from "../../../db/models/FileSourceEntity"
+
 @Builder
 export function SmbIcon() {
-  Image($r('app.media.windows'))
+  Image($r('app.media.smb_folder'))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
@@ -8,7 +10,7 @@ export function SmbIcon() {
 
 @Builder
 export function WebdavIcon() {
-  Image($r('app.media.global_folder'))
+  Image($r('app.media.webdav_folder'))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
@@ -56,9 +58,30 @@ export function Cloud115Icon() {
 
 @Builder
 export function OtherIcon() {
-  Image($r('app.media.cloud_drive'))
+  Image($r('app.media.empty_folder'))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
+}
+
+@Builder
+export function SourceTypeIcon(type: FileSourceType) {
+  if (type === FileSourceType.WEBDAV) {
+    WebdavIcon()
+  } else if (type === FileSourceType.SMB) {
+    SmbIcon()
+  } else if (type === FileSourceType.ALIYUN) {
+    AliyunIcon()
+  } else if (type === FileSourceType.CLOUD_139) {
+    Cloud139Icon()
+  } else if (type === FileSourceType.BAIDU) {
+    BaiduIcon()
+  } else if (type === FileSourceType.CLOUD_123) {
+    Cloud123Icon()
+  } else if (type === FileSourceType.CLOUD_115) {
+    Cloud115Icon()
+  } else {
+    OtherIcon()
+  }
 }
 
