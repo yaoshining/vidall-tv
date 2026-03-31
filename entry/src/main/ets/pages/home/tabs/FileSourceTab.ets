@@ -8,6 +8,7 @@ import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from 
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { WebdavIcon, SmbIcon, AliyunIcon, Cloud139Icon, BaiduIcon, Cloud123Icon, Cloud115Icon, OtherIcon } from "../../settings/builders/IconBuilders"
 
 const config1: WebDAVConfig = {
   baseUrl: 'http://192.168.3.59:5445/dav',
@@ -68,6 +69,30 @@ export struct FileSourceTab {
     } catch (error) {
       const err = error as BusinessError
       console.error('FileSourceTab', `刷新失败: code=${err.code} msg=${err.message}`)
+    }
+  }
+
+  /**
+   * 根据文件源类型渲染对应协议图标
+   */
+  @Builder
+  buildSourceTypeIcon(type: FileSourceType) {
+    if (type === FileSourceType.WEBDAV) {
+      WebdavIcon()
+    } else if (type === FileSourceType.SMB) {
+      SmbIcon()
+    } else if (type === FileSourceType.ALIYUN) {
+      AliyunIcon()
+    } else if (type === FileSourceType.CLOUD_139) {
+      Cloud139Icon()
+    } else if (type === FileSourceType.BAIDU) {
+      BaiduIcon()
+    } else if (type === FileSourceType.CLOUD_123) {
+      Cloud123Icon()
+    } else if (type === FileSourceType.CLOUD_115) {
+      Cloud115Icon()
+    } else {
+      OtherIcon()
     }
   }
 
@@ -167,8 +192,7 @@ export struct FileSourceTab {
               main: LengthMetrics.vp(20)
             }
           }) {
-            Image($r('app.media.empty_folder'))
-              .height("100%")
+            this.buildSourceTypeIcon(item.fileSource.type)
             Flex({
               direction: FlexDirection.Column,
               justifyContent: FlexAlign.SpaceAround,
@@ -201,8 +225,7 @@ export struct FileSourceTab {
             main: LengthMetrics.vp(20)
           }
         }) {
-          Image($r('app.media.empty_folder'))
-            .height("100%")
+          WebdavIcon()
           Flex({
             direction: FlexDirection.Column,
             justifyContent: FlexAlign.SpaceAround,
@@ -236,8 +259,7 @@ export struct FileSourceTab {
             main: LengthMetrics.vp(20)
           }
         }) {
-          Image($r('app.media.empty_folder'))
-            .height("100%")
+          WebdavIcon()
           Flex({
             direction: FlexDirection.Column,
             justifyContent: FlexAlign.SpaceAround,
@@ -272,8 +294,7 @@ export struct FileSourceTab {
               main: LengthMetrics.vp(20)
             }
           }) {
-            Image($r('app.media.empty_folder'))
-              .height("100%")
+            WebdavIcon()
             Flex({
               direction: FlexDirection.Column,
               justifyContent: FlexAlign.SpaceAround,
