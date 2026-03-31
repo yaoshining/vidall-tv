@@ -217,7 +217,7 @@ export struct SmbFileExplorerPage {
             trackIndex: t.index,
             displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
             language: t.language,
-            mimeType: t.codecName
+            mimeType: undefined   // codec 名不是 MIME type，下游用 codecName 匹配即可
           }
           presetAudioTracks.push(item)
         }

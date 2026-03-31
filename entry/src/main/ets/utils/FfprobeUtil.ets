@@ -526,11 +526,12 @@ export class FfprobeUtil {
   ): Promise<FfprobeResult> {
     console.info(`[FfprobeUtil] SMB probe via HTTP proxy: ${maskUrlForLog(smbUrl)}`);
 
-    let playerHandle: number = 0;
-    let proxyUrl: string = '';
+    // ── 先拿并发槽位，防止多文件快速滑动时代理并发创建失控 ─────────────────
+    await FfprobeUtil.acquireProbeSlot();
 
-    // ── 阶段 1：启动 SMB HTTP 代理（native player prepare 同步触发）──────────
+    let playerHandle: number = 0;
     try {
+      // ── 阶段 1：启动 SMB HTTP 代理（native player prepare 异步回调）──────────
       const napi = getSmbProbeNapi();
       playerHandle = napi.createPlayer();
       napi.setSource(playerHandle, smbUrl);
@@ -539,11 +540,11 @@ export class FfprobeUtil {
       const dummyCtx: SmbProbeOnlyContext = {};
       napi.setXComponent(playerHandle, dummyCtx as Object, 'smb-probe-only');
 
-      // prepare() 是同步调用：onPrepared 在 prepare() 内部同步触发，代理随之启动
+      // prepare() 是非阻塞调用：onPrepared 通过异步回调触发，代理随之启动
       const h = playerHandle;
       napi.setCallbacks(
         h,
-        () => { /* onPrepared: prepare() 同步触发，代理已启动，无需额外操作 */ },
+        () => { /* onPrepared: prepare() 异步回调，代理已启动，无需额外操作 */ },
         (code: number, msg: string) => {
           console.warn(`[FfprobeUtil] SMB probe player error: code=${code} msg=${msg}`);
         },
@@ -559,12 +560,33 @@ export class FfprobeUtil {
 
       napi.prepare(h);
 
-      proxyUrl = napi.getProxyUrl(h) ?? '';
+      const proxyUrl = napi.getProxyUrl(h) ?? '';
       console.info(`[FfprobeUtil] SMB proxy URL: ${proxyUrl.length > 0 ? proxyUrl : '(空)'}`);
+
+      if (proxyUrl.length === 0) {
+        console.warn(`[FfprobeUtil] SMB proxy URL 为空，跳过探测（可能 prepare 未成功或非 SMB 源）`);
+        return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), 'SMB proxy URL 为空');
+      }
+
+      // ── 阶段 2：通过 HTTP proxy URL 直接调用 ffprobe NAPI（槽位已持有）────
+      try {
+        const outputJson = await getVidAllCorePlayerNapi().ffprobe(proxyUrl, '', timeoutMs);
+        console.info(`[FfprobeUtil] SMB probe 完成，输出长度=${outputJson.length}`);
+        return FfprobeUtil.parseOutput(proxyUrl, outputJson);
+      } catch (e) {
+        const err = e as BusinessError;
+        const msg = err.message ? err.message : JSON.stringify(e);
+        console.error(`[FfprobeUtil] SMB probe 探测失败: ${msg}`);
+        return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), msg);
+      }
     } catch (e) {
       const err = e as BusinessError;
       const msg = err.message ? err.message : JSON.stringify(e);
       console.warn(`[FfprobeUtil] SMB proxy 启动失败，跳过探测: ${msg}`);
+      return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), `SMB proxy 启动失败: ${msg}`);
+    } finally {
+      // 无论成功/失败，始终释放并发槽位与临时 player（代理随之停止）
+      FfprobeUtil.releaseProbeSlot();
       if (playerHandle > 0) {
         try {
           getSmbProbeNapi().release(playerHandle);
@@ -572,32 +594,7 @@ export class FfprobeUtil {
           /* 释放失败不抛出 */
         }
       }
-      return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), `SMB proxy 启动失败: ${msg}`);
     }
-
-    if (proxyUrl.length === 0) {
-      console.warn(`[FfprobeUtil] SMB proxy URL 为空，跳过探测（可能 prepare 未成功或非 SMB 源）`);
-      try {
-        getSmbProbeNapi().release(playerHandle);
-      } catch {
-        /* 释放失败不抛出 */
-      }
-      return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), 'SMB proxy URL 为空');
-    }
-
-    // ── 阶段 2：通过 HTTP proxy URL 调用 ffprobe，完成后释放 player ──────────
-    let probeResult: FfprobeResult;
-    try {
-      probeResult = await FfprobeUtil.probe(proxyUrl, {}, timeoutMs);
-    } finally {
-      // 无论探测成功/失败都释放临时 player，代理随之停止
-      try {
-        getSmbProbeNapi().release(playerHandle);
-      } catch {
-        /* 释放失败不抛出 */
-      }
-    }
-    return probeResult;
   }
 
   /**
