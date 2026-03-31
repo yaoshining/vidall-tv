@@ -112,6 +112,47 @@ static std::string PercentDecode(const std::string &s) {
     return out;
 }
 
+// URL percent-encode a single path segment (must NOT contain '/').
+// Encodes all bytes except RFC 3986 unreserved characters (A-Z a-z 0-9 - _ . ~).
+// Used to build the HTTP proxy URL so that OH_AVPlayer/FFmpeg can see the file
+// extension and determine the media format correctly.
+static std::string PercentEncodePathSegment(const std::string &s) {
+    static const char kHex[] = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(s.size() * 3);
+    for (unsigned char c : s) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+            out += static_cast<char>(c);
+        } else {
+            out += '%';
+            out += kHex[(c >> 4) & 0x0F];
+            out += kHex[c & 0x0F];
+        }
+    }
+    return out;
+}
+
+// URL percent-encode a path that may contain '/' separators.
+// Each slash-separated segment is encoded individually; '/' is preserved as-is.
+// Example: "中文/file name.mp4" → "%E4%B8%AD%E6%96%87/file%20name.mp4"
+static std::string PercentEncodePath(const std::string &path) {
+    std::string out;
+    out.reserve(path.size() * 3);
+    std::string seg;
+    for (char c : path) {
+        if (c == '/') {
+            out += PercentEncodePathSegment(seg);
+            out += '/';
+            seg.clear();
+        } else {
+            seg += c;
+        }
+    }
+    out += PercentEncodePathSegment(seg);
+    return out;
+}
+
 // Parse smb://[user[:pass]@]host[:port]/share[/subPath]
 static SmbUrlComponents ParseSmbUrl(const std::string &url) {
     SmbUrlComponents c;
@@ -1275,12 +1316,15 @@ struct NativePlayerSkeletonState {
   // ── SMB / FFmpeg 软件解码播放字段（isSmbPlayback == true 时有效）──────────────────────────
   // 生命周期：Prepare 时由 ExecuteSmbPrepare 填充，Release/ResetRuntimeState 时由
   // SmbCleanupResources 清理；播放线程通过 smbStopFlag/smbPauseFlag/smbSeekTargetMs 与主线程通信。
+  // proxyPlayUrl: Prepare 时赋值，供 GetProxyUrl NAPI 返回给 JS 层（SMB fallback 场景使用）
+  std::string      proxyPlayUrl;
   bool             isSmbPlayback   = false;
   SmbAVIOContext  *smbAvioOpaque   = nullptr;  // 由 SmbCleanupResources 负责 delete
   AVIOContext     *ffmpegAvio      = nullptr;  // 由 SmbCleanupResources 负责 free
   AVFormatContext *ffmpegFmt       = nullptr;  // 由 SmbCleanupResources 负责 close
   std::thread      smbPlayThread;              // 播放线程；joinable 时表示线程正在运行
-  std::atomic<bool>    smbStopFlag  {false};   // 通知播放线程退出（原子）
+  // shared_ptr 使停止标志生命周期独立于 state，防止 keepProxy=true 时 state 析构后出现 UAF
+  std::shared_ptr<std::atomic<bool>> smbStopFlag { std::make_shared<std::atomic<bool>>(false) };
   std::atomic<bool>    smbPauseFlag {false};   // 通知播放线程暂停（原子）
   std::atomic<int64_t> smbSeekTargetMs {-1};   // ≥0 时表示待执行的 seek 目标（原子）
 };
@@ -1289,6 +1333,31 @@ static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
 static int32_t g_nextHandle = 1;
 // A4：保护 g_players 跨线程访问（XC 表面回调来自 UI 线程，AV 回调来自媒体线程）
 static std::mutex g_playersMutex;
+
+// keepProxy=true 场景下，smbPlayThread 在 state 析构前被 move 到此处持有，
+// 防止 ~thread() 在 joinable 时被调用触发 std::terminate。
+// 每个元素是 {thread, stopFlag}，stopFlag 共享所有权防止 UAF。
+static std::mutex g_orphanedProxiesMutex;
+static std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> g_orphanedProxies;
+
+// 清理所有孤立代理线程：通知停止并 join，防止进程退出时 std::terminate。
+// 调用时机：
+//   1. Release(handle, keepProxy=false) 时顺带清扫历史孤立代理；
+//   2. JS 层 ijkplayer 播放完成后主动调用 cleanupOrphanedProxies() NAPI。
+static void CleanupOrphanedProxies() {
+    std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> toClean;
+    {
+        std::lock_guard<std::mutex> lock(g_orphanedProxiesMutex);
+        toClean.swap(g_orphanedProxies);
+    }
+    for (auto &entry : toClean) {
+        entry.second->store(true, std::memory_order_relaxed);
+        if (entry.first.joinable()) {
+            entry.first.join();
+        }
+    }
+    // toClean 析构时 thread 已不 joinable，安全销毁
+}
 
 // 修复 #48-A5：pending window 缓存
 // 根因：RegisterCallback 在 SetXComponent（onLoad 回调）中调用时 surface 已创建完毕，
@@ -1658,6 +1727,46 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 
     bool isHead = req.size() >= 4 && req.compare(0, 4, "HEAD") == 0;
 
+    // fix #2（安全）：校验请求路径与代理初始化时绑定的预期路径一致，防止越权访问。
+    // 任何本地进程均可向代理端口发送请求；若不校验，攻击者可替换路径复用凭据访问任意文件。
+    // host/port/user/password 不在 HTTP 请求中，继续沿用传入的 comps（不可被请求覆盖）。
+    {
+        size_t methodEnd = req.find(' ');
+        if (methodEnd != std::string::npos) {
+            size_t pathStart = methodEnd + 1;
+            size_t pathEnd = req.find(' ', pathStart);
+            if (pathEnd != std::string::npos) {
+                std::string rawPath = req.substr(pathStart, pathEnd - pathStart);
+                // 去掉查询串（如 ?xxx），FFmpeg 可能附加
+                auto qmark = rawPath.find('?');
+                if (qmark != std::string::npos) rawPath = rawPath.substr(0, qmark);
+                // 去掉前导 '/'
+                if (!rawPath.empty() && rawPath[0] == '/') rawPath = rawPath.substr(1);
+                // 第一个 '/' 前是 share（PercentEncodePathSegment 编码），后是 subPath
+                std::string requestedShare, requestedSubPath;
+                auto sep = rawPath.find('/');
+                if (sep != std::string::npos) {
+                    requestedShare   = PercentDecode(rawPath.substr(0, sep));
+                    requestedSubPath = PercentDecode(rawPath.substr(sep + 1));
+                } else if (!rawPath.empty()) {
+                    requestedShare   = PercentDecode(rawPath);
+                    requestedSubPath.clear();
+                }
+                // 校验：请求路径必须与代理绑定的 share 和 subPath 完全匹配
+                if (requestedShare != comps.share || requestedSubPath != comps.subPath) {
+                    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll/SmbProxy",
+                                 "403 Forbidden: path mismatch (expected share=%{public}s, got %{public}s)",
+                                 comps.share.c_str(), requestedShare.c_str());
+                    const char *e = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    (void)write(clientFd, e, strlen(e));
+                    close(clientFd);
+                    return;
+                }
+                // 路径合法：comps.share / comps.subPath 保持不变，直接使用传入值
+            }
+        }
+    }
+
     // Parse Range: bytes=START-[END]
     int64_t rangeStart = 0, rangeEnd = -1;
     {
@@ -1806,7 +1915,7 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 }
 
 static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
-                                std::atomic<bool> *stopFlag) {
+                                std::shared_ptr<std::atomic<bool>> stopFlag) {
     while (!stopFlag->load(std::memory_order_relaxed)) {
         struct pollfd pfd;
         pfd.fd = serverFd; pfd.events = POLLIN; pfd.revents = 0;
@@ -1840,8 +1949,8 @@ static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponent
     socklen_t addrLen = sizeof(addr);
     getsockname(serverFd, reinterpret_cast<struct sockaddr *>(&addr), &addrLen);
     int port = ntohs(addr.sin_port);
-    state.smbStopFlag.store(false, std::memory_order_relaxed);
-    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, &state.smbStopFlag);
+    state.smbStopFlag->store(false, std::memory_order_relaxed);
+    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, state.smbStopFlag);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "proxy started port=%{public}d host=%{public}s share=%{public}s",
                  port, comps.host.c_str(), comps.share.c_str());
@@ -1850,7 +1959,7 @@ static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponent
 
 static void SmbStopProxy(NativePlayerSkeletonState &state) {
     if (!state.isSmbPlayback) return;
-    state.smbStopFlag.store(true, std::memory_order_relaxed);
+    state.smbStopFlag->store(true, std::memory_order_relaxed);
     if (state.smbPlayThread.joinable()) {
         state.smbPlayThread.join();
     }
@@ -1867,8 +1976,18 @@ static void SmbStopProxy(NativePlayerSkeletonState & /*state*/) {}
 
 #endif // VIDALL_HAS_LIBSMB2
 
-static void ResetRuntimeState(NativePlayerSkeletonState &state) {
-  SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
+static void ResetRuntimeState(NativePlayerSkeletonState &state, bool keepProxy = false) {
+  if (!keepProxy) {
+    SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
+    state.proxyPlayUrl.clear();
+  } else if (state.smbPlayThread.joinable()) {
+    // keepProxy=true：代理线程需继续服务 ijkplayer，但 state 即将析构。
+    // 将 thread + shared stopFlag 转移至全局 orphaned 列表，防止 ~thread() 在
+    // joinable 时被调用触发 std::terminate（SIGABRT, #78）。
+    // stopFlag 使用 shared_ptr 共享所有权，保证线程退出前不会出现悬挂访问（UAF）。
+    std::lock_guard<std::mutex> orphanLock(g_orphanedProxiesMutex);
+    g_orphanedProxies.emplace_back(std::move(state.smbPlayThread), state.smbStopFlag);
+  }
   state.prepared = false;
   state.playing = false;
   state.pendingPrepare = false;  // A5修复: 切换 surface 时清除延迟标志
@@ -2321,14 +2440,26 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
       EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: invalid smb:// URL");
       return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
     }
-    SmbStopProxy(state);  // 清理旧代理（防止 surface 切换后残留）
+    SmbStopProxy(state);  // 清理旧代理（防止 surface 切换后残留，含上次 keepProxy 遗留代理）
+    state.proxyPlayUrl.clear();
     int proxyPort = SmbStartProxy(state, comps);
     if (proxyPort < 0) {
       EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: SMB HTTP proxy start failed");
       return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
     }
     state.isSmbPlayback = true;
-    playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/";
+    // 修复：构建包含完整路径的 HTTP 代理 URL，格式：http://127.0.0.1:PORT/share/subPath
+    // comps.share 和 comps.subPath 已由 ParseSmbUrl() PercentDecode，
+    // 这里重新编码为合法 HTTP URL 路径，原因：
+    //   1. OH_AVPlayer/FFmpeg 通过文件扩展名感知媒体格式，路径缺失会导致黑屏；
+    //   2. SmbProxyHandleRequest() 从请求行解析路径并 decode 后传给 libsmb2，
+    //      libsmb2 需要 decoded 路径（不含 %XX），此处编码 → 传输 → 解码保证正确性。
+    // 注意：playUrl 仅含 127.0.0.1 地址，不含 SMB 凭据，日志可安全输出。
+    playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/"
+              + PercentEncodePathSegment(comps.share) + "/"
+              + PercentEncodePath(comps.subPath);
+    // 存储 proxy URL，供 GetProxyUrl NAPI 返回给 JS 层（SMB fallback 到 ijkplayer 时使用）
+    state.proxyPlayUrl = playUrl;
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "SMB rewritten to %{public}s", playUrl.c_str());
 #else
@@ -2344,6 +2475,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     // SMB 代理已启动，SetURLSource 失败时必须先停止代理，防止线程泄漏
     if (state.isSmbPlayback) {
       SmbStopProxy(state);
+      state.proxyPlayUrl.clear();  // fix #4：代理已停止，清空 dead URL 防止 GetProxyUrl 返回失效地址
     }
     EmitError(state, ERR_PREPARE_EMPTY_URL, "prepare failed: OH_AVPlayer_SetURLSource failed");
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
@@ -2744,10 +2876,22 @@ static napi_value SelectTrack(napi_env env, napi_callback_info info) {
 }
 
 static napi_value Release(napi_env env, napi_callback_info info) {
-  int32_t handle = 0;
-  if (!ReadHandleArg(env, info, 1, handle)) {
-    ThrowTypeError(env, "release requires (handle)");
+  // 支持可选的 keepProxy 参数：Release(handle, keepProxy=false)
+  // 当 keepProxy=true 时，SMB HTTP 代理线程不会被停止，允许 ijkplayer 在 fallback 后继续使用代理 URL。
+  size_t argc = 2;
+  napi_value args[2] = { nullptr, nullptr };
+  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
+    ThrowTypeError(env, "release requires (handle[, keepProxy])");
     return nullptr;
+  }
+  int32_t handle = 0;
+  if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
+    ThrowTypeError(env, "release handle must be int32");
+    return nullptr;
+  }
+  bool keepProxy = false;
+  if (argc >= 2 && args[1] != nullptr) {
+    napi_get_value_bool(env, args[1], &keepProxy);
   }
   // PR#49（问题3）：分两段持锁：
   //   ① 持锁找到 state 指针后立即释放，避免 OH_AVPlayer_Release（阻塞）期间持有 g_playersMutex
@@ -2774,7 +2918,13 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     OH_AVPlayer_Release(state.avPlayer); // 阻塞直到媒体线程所有回调执行完毕
     state.avPlayer = nullptr;
   }
-  ResetRuntimeState(state);
+  // keepProxy=true 时跳过 SmbStopProxy，保持代理线程继续服务 ijkplayer；
+  // proxyPlayUrl 保留供 JS 层在 erase 后已不可访问前读取（erase 前已读完）。
+  // keepProxy=false 时顺带清扫历史孤立代理（fix #1：防止进程退出时 std::terminate）。
+  ResetRuntimeState(state, keepProxy);
+  if (!keepProxy) {
+    CleanupOrphanedProxies();
+  }
   state.url.clear();
   state.headersJson.clear();
   state.xComponentId.clear();
@@ -2787,6 +2937,45 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     g_players.erase(handle);
   }
   return ReturnUndefinedOrThrow(env, "release failed to create return value");
+}
+
+// GetProxyUrl(handle) → string
+// 返回当前 SMB 播放的 HTTP 代理 URL（如 http://127.0.0.1:PORT/share/path/file.mkv）。
+// 在 native player 失败时由 JS 层调用，将 proxy URL 传给 ijkplayer 进行 fallback 软解。
+// 若 handle 无效或尚未 prepare SMB 源，返回空字符串，不 crash。
+static napi_value GetProxyUrl(napi_env env, napi_callback_info info) {
+  int32_t handle = 0;
+  if (!ReadHandleArg(env, info, 1, handle)) {
+    ThrowTypeError(env, "getProxyUrl requires (handle)");
+    return nullptr;
+  }
+  std::lock_guard<std::mutex> lock(g_playersMutex);
+  auto iter = g_players.find(handle);
+  if (iter == g_players.end()) {
+    // handle 无效：安全返回空字符串，不 crash
+    napi_value emptyStr = nullptr;
+    napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &emptyStr);
+    return emptyStr;
+  }
+  const std::string &proxyUrl = iter->second.proxyPlayUrl;
+  // fix #4：proxy 已停止（isSmbPlayback=false）时返回空字符串，防止死 URL 被使用
+  if (!iter->second.isSmbPlayback) {
+    napi_value emptyStr = nullptr;
+    napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &emptyStr);
+    return emptyStr;
+  }
+  napi_value result = nullptr;
+  napi_create_string_utf8(env, proxyUrl.c_str(), proxyUrl.size(), &result);
+  return result;
+}
+
+// CleanupOrphanedProxies() → undefined
+// 停止并 join 所有因 keepProxy=true 而孤立的 SMB 代理线程。
+// 应在 ijkplayer 播放完成（onStop / onError）后由 JS 层主动调用，
+// 防止进程退出时 joinable thread 析构触发 std::terminate。
+static napi_value CleanupOrphanedProxiesNapi(napi_env env, napi_callback_info /*info*/) {
+  CleanupOrphanedProxies();
+  return ReturnUndefinedOrThrow(env, "cleanupOrphanedProxies failed to create return value");
 }
 
 static napi_value GetCurrentTime(napi_env env, napi_callback_info info) {
@@ -4602,6 +4791,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "seek", nullptr, Seek, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "selectTrack", nullptr, SelectTrack, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "getProxyUrl", nullptr, GetProxyUrl, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "cleanupOrphanedProxies", nullptr, CleanupOrphanedProxiesNapi, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getCurrentTime", nullptr, GetCurrentTime, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },
