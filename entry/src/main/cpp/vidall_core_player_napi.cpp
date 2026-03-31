@@ -1023,8 +1023,17 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       // 重置超时，为从字幕起始位置做顺序读取提供完整时间窗口
       interruptCtx.startTimeUs = av_gettime_relative();
       interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;
+    } else {
+      // Cues 无该字幕流索引条目，回退到从文件起始位置读取
+      // avformat_find_stream_info 可能已将文件指针推进到中段，需 seek 回 0
+      // 否则后续 av_read_frame 从中段顺序扫描，对大文件（4K SMB）需读 90000+ 包导致 30s 超时
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                   "extractSub stream[%d] no cues-seek, seek to beginning", si);
+      av_seek_frame(formatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
+      // 重置超时时钟，为从起始位置完整读取提供完整时间窗口
+      interruptCtx.startTimeUs = av_gettime_relative();
+      interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;
     }
-    // 若 nb_index_entries == 0（Cues 无字幕条目），保持当前文件位置顺序读取
   }
 
   // 顺序读取 packet 并过滤字幕流
