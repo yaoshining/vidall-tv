@@ -463,6 +463,19 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       this.srtEntries = entries as SrtEntry[];
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[SmbSub] 内嵌字幕提取完成 stream=${internalIndex} entries=${entries.length}`);
+
+      // entries=0 说明内嵌字幕提取失败，尝试 fallback 到第一个外置字幕轨
+      if (entries.length === 0) {
+        const externalIndex: number = this.allSubtitleTracks.findIndex(
+          (t: SubtitleTrackItem) => t.kind === 'external'
+        );
+        if (externalIndex >= 0) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[SmbSub] 内嵌字幕提取失败，fallback 到外置字幕 index=${externalIndex}`);
+          // 调用父类 switchTrack：对 external 轨道直接从预加载的 srtEntries 赋值，不递归
+          await super.switchTrack(externalIndex);
+        }
+      }
     } catch {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         '[SmbSub] 内嵌字幕提取失败，降级无字幕');
