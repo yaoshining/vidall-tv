@@ -367,7 +367,7 @@ export class VidAllPlayerAdapter implements IPlayer {
     // 注意：不调用 _onStoppedCb，由调用方（VideoPlayerController）负责状态切换
   }
 
-
+  seek(timeMs: number): void {
     this._metricsSeekStartMs = Date.now();
     let targetTimeMs = timeMs < 0 ? 0 : timeMs;
     if (this._duration > 0 && targetTimeMs > this._duration) {
