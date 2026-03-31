@@ -1544,7 +1544,8 @@ export class VideoPlayerController {
     const src = (this.currentVideoData?.videoSrc ?? '').toLowerCase();
     if (src.startsWith('smb://')) {
       this.isLoading = false;
-      this.lastErrorMessage = userMessage;
+      // 提供面向用户的 SMB 专属提示，避免展示"已回退到 IJK"等误导性泛用文本
+      this.lastErrorMessage = 'SMB 视频播放失败：当前格式（H.265/Atmos 等）暂不支持，请检查文件格式或联系支持';
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `[fallback] SMB 源禁止 native->ijkplayer 回退: reason=${fallbackReason}`);
       return;

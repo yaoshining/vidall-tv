@@ -325,6 +325,20 @@ export class FfprobeUtil {
     headers?: Record<string, string>,
     timeoutMs: number = 20000
   ): Promise<FfprobeResult> {
+    // SMB 源跳过 ffprobe 探测：FFmpeg 编译时未包含 smb:// 协议支持，强行探测必然报 Protocol not found
+    if (url.toLowerCase().startsWith('smb://')) {
+      console.info('[FfprobeUtil] SMB 源跳过 ffprobe 探测（不支持 smb:// 协议）');
+      const emptyResult: FfprobeResult = {
+        success: false,
+        durationMs: 0,
+        durationText: '00:00:00',
+        videoTracks: [],
+        audioTracks: [],
+        subtitleTracks: []
+      };
+      return emptyResult;
+    }
+
     let headersStr = '';
     if (headers) {
       const keys = Object.keys(headers);
