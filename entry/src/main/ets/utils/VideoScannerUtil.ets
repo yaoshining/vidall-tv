@@ -813,8 +813,8 @@ export class SMBAdapter implements ISourceAdapter {
               console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
             }
           }
-        }).catch((e) => {
-          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}: ${(e as Error).message ?? String(e)}`);
+        }).catch((e: Error) => {
+          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}: ${e.message ?? String(e)}`);
         });
         processingTasks.push(task);
       }
