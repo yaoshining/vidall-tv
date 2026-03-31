@@ -1340,6 +1340,25 @@ static std::mutex g_playersMutex;
 static std::mutex g_orphanedProxiesMutex;
 static std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> g_orphanedProxies;
 
+// 清理所有孤立代理线程：通知停止并 join，防止进程退出时 std::terminate。
+// 调用时机：
+//   1. Release(handle, keepProxy=false) 时顺带清扫历史孤立代理；
+//   2. JS 层 ijkplayer 播放完成后主动调用 cleanupOrphanedProxies() NAPI。
+static void CleanupOrphanedProxies() {
+    std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> toClean;
+    {
+        std::lock_guard<std::mutex> lock(g_orphanedProxiesMutex);
+        toClean.swap(g_orphanedProxies);
+    }
+    for (auto &entry : toClean) {
+        entry.second->store(true, std::memory_order_relaxed);
+        if (entry.first.joinable()) {
+            entry.first.join();
+        }
+    }
+    // toClean 析构时 thread 已不 joinable，安全销毁
+}
+
 // 修复 #48-A5：pending window 缓存
 // 根因：RegisterCallback 在 SetXComponent（onLoad 回调）中调用时 surface 已创建完毕，
 // OnSurfaceCreated 不会补发，nativeWindow 永远 nullptr。
@@ -1708,11 +1727,9 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 
     bool isHead = req.size() >= 4 && req.compare(0, 4, "HEAD") == 0;
 
-    // 方案 A：从 HTTP 请求行解析路径，覆盖 comps.share 和 comps.subPath。
-    // 请求行格式：GET /share/subPath HTTP/1.1
-    // Prepare() 中将 comps.share 和 comps.subPath 编码进了代理 URL，
-    // 这里解码还原，保持路径作为唯一真相来源（URL）。
-    // host/port/user/password 仍沿用传入的 comps（不在 HTTP 路径中）。
+    // fix #2（安全）：校验请求路径与代理初始化时绑定的预期路径一致，防止越权访问。
+    // 任何本地进程均可向代理端口发送请求；若不校验，攻击者可替换路径复用凭据访问任意文件。
+    // host/port/user/password 不在 HTTP 请求中，继续沿用传入的 comps（不可被请求覆盖）。
     {
         size_t methodEnd = req.find(' ');
         if (methodEnd != std::string::npos) {
@@ -1726,15 +1743,26 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
                 // 去掉前导 '/'
                 if (!rawPath.empty() && rawPath[0] == '/') rawPath = rawPath.substr(1);
                 // 第一个 '/' 前是 share（PercentEncodePathSegment 编码），后是 subPath
+                std::string requestedShare, requestedSubPath;
                 auto sep = rawPath.find('/');
                 if (sep != std::string::npos) {
-                    comps.share   = PercentDecode(rawPath.substr(0, sep));
-                    // subPath 可能含多级目录，整体 PercentDecode 即可（'/' 不会被编码）
-                    comps.subPath = PercentDecode(rawPath.substr(sep + 1));
+                    requestedShare   = PercentDecode(rawPath.substr(0, sep));
+                    requestedSubPath = PercentDecode(rawPath.substr(sep + 1));
                 } else if (!rawPath.empty()) {
-                    comps.share   = PercentDecode(rawPath);
-                    comps.subPath.clear();
+                    requestedShare   = PercentDecode(rawPath);
+                    requestedSubPath.clear();
                 }
+                // 校验：请求路径必须与代理绑定的 share 和 subPath 完全匹配
+                if (requestedShare != comps.share || requestedSubPath != comps.subPath) {
+                    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll/SmbProxy",
+                                 "403 Forbidden: path mismatch (expected share=%{public}s, got %{public}s)",
+                                 comps.share.c_str(), requestedShare.c_str());
+                    const char *e = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    (void)write(clientFd, e, strlen(e));
+                    close(clientFd);
+                    return;
+                }
+                // 路径合法：comps.share / comps.subPath 保持不变，直接使用传入值
             }
         }
     }
@@ -2447,6 +2475,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     // SMB 代理已启动，SetURLSource 失败时必须先停止代理，防止线程泄漏
     if (state.isSmbPlayback) {
       SmbStopProxy(state);
+      state.proxyPlayUrl.clear();  // fix #4：代理已停止，清空 dead URL 防止 GetProxyUrl 返回失效地址
     }
     EmitError(state, ERR_PREPARE_EMPTY_URL, "prepare failed: OH_AVPlayer_SetURLSource failed");
     return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
@@ -2891,7 +2920,11 @@ static napi_value Release(napi_env env, napi_callback_info info) {
   }
   // keepProxy=true 时跳过 SmbStopProxy，保持代理线程继续服务 ijkplayer；
   // proxyPlayUrl 保留供 JS 层在 erase 后已不可访问前读取（erase 前已读完）。
+  // keepProxy=false 时顺带清扫历史孤立代理（fix #1：防止进程退出时 std::terminate）。
   ResetRuntimeState(state, keepProxy);
+  if (!keepProxy) {
+    CleanupOrphanedProxies();
+  }
   state.url.clear();
   state.headersJson.clear();
   state.xComponentId.clear();
@@ -2925,9 +2958,24 @@ static napi_value GetProxyUrl(napi_env env, napi_callback_info info) {
     return emptyStr;
   }
   const std::string &proxyUrl = iter->second.proxyPlayUrl;
+  // fix #4：proxy 已停止（isSmbPlayback=false）时返回空字符串，防止死 URL 被使用
+  if (!iter->second.isSmbPlayback) {
+    napi_value emptyStr = nullptr;
+    napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &emptyStr);
+    return emptyStr;
+  }
   napi_value result = nullptr;
   napi_create_string_utf8(env, proxyUrl.c_str(), proxyUrl.size(), &result);
   return result;
+}
+
+// CleanupOrphanedProxies() → undefined
+// 停止并 join 所有因 keepProxy=true 而孤立的 SMB 代理线程。
+// 应在 ijkplayer 播放完成（onStop / onError）后由 JS 层主动调用，
+// 防止进程退出时 joinable thread 析构触发 std::terminate。
+static napi_value CleanupOrphanedProxiesNapi(napi_env env, napi_callback_info /*info*/) {
+  CleanupOrphanedProxies();
+  return ReturnUndefinedOrThrow(env, "cleanupOrphanedProxies failed to create return value");
 }
 
 static napi_value GetCurrentTime(napi_env env, napi_callback_info info) {
@@ -4744,6 +4792,7 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "selectTrack", nullptr, SelectTrack, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getProxyUrl", nullptr, GetProxyUrl, nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "cleanupOrphanedProxies", nullptr, CleanupOrphanedProxiesNapi, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getCurrentTime", nullptr, GetCurrentTime, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },

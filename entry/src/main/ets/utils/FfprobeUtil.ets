@@ -334,7 +334,8 @@ export class FfprobeUtil {
         durationText: '00:00:00',
         videoTracks: [],
         audioTracks: [],
-        subtitleTracks: []
+        subtitleTracks: [],
+        errorMessage: 'SMB 源跳过探测：不支持 smb:// 协议'
       };
       return emptyResult;
     }
