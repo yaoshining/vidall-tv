@@ -241,3 +241,74 @@ git push origin <正确分支>
 - [ ] 有新建文件的任务？→ prompt 里是否含 `git status` + 显式 `git add` 要求
 - [ ] 涉及凭据/安全？→ prompt 里是否含日志脱敏要求
 - [ ] 有 fallback 逻辑的模块？→ prompt 里是否含豁免检查要求
+
+---
+
+## Iteration 规划规则（经验补充）
+
+### Iteration 字段管理
+
+- Project #7 使用 Iteration 字段（ID：`PVTIF_lAHOAEUtmc4BRppDzg_ar5Q`）划分迭代周期，每次分发任务前先确认该 Issue 已归属正确 Iteration。
+- 新 Issue 加入 Project 后，立即设置 Iteration、StartDate、TargetDate、负责Agent 四个字段，不得留空。
+- Iteration 分配原则：按 StartDate 归属——StartDate 在 Iteration 周期内即分配到该 Iteration，跨周期时以 StartDate 所在 Iteration 为准。
+
+### Iteration 与排期一致性
+
+- 每次新建 Issue 或调整排期后，必须同步更新 Project Iteration 字段，保持看板与排期一致。
+- 若 Iteration 内任务超载（>6 个活跃 Issue），须升级给用户决策是否延期或削减范围。
+
+---
+
+## PR Review 处理标准流程（经验补充）
+
+### Review Thread 分类处理
+
+QA 编译通过后，按以下规则处理 PR 上的 Review Threads：
+
+| Thread 状态 | 处理方式 |
+|------------|---------|
+| `isResolved: true` | 已关闭，无需处理 |
+| `isOutdated: true` | 代码已在该区域改动，可视为已处理；开发者手动 Resolve |
+| `isResolved: false, isOutdated: false` | 活跃问题，必须明确处理 |
+
+### 活跃 Thread 分发决策
+
+对每条活跃 Thread，按以下决策树处理：
+
+1. **本 PR 涉及文件 vs 另一 Issue 涉及文件重叠**？
+   - 是 → 将该 Thread 的修复**并入另一 Issue**，在 PR 评论中写明"将随 Issue #xxx 一并修复"，避免重复 PR 往返。
+   - 否 → 在本 PR 分支上补充提交修复，重新触发 QA。
+
+2. **修复影响范围 > 本 PR 职责**（如需大幅重构）？
+   - 是 → 创建新 Issue 跟踪，本 PR 评论中标注"已记录为 Issue #xxx"，当前 Thread 标记暂缓。
+   - 否 → 同上，本 PR 补充修复。
+
+### PR 阻塞依赖管理
+
+当 PR 合并需依赖另一 Issue 完成后才能验证时：
+
+1. 在 PR 上添加评论，写明：
+   - 已完成的修复内容
+   - 并入其他 Issue 的修复项
+   - 阻塞原因 + `blocked by #xxx`
+2. 在 Project 中将该 Issue 状态置为「计划中」（BLOCKED 语义），在负责Agent字段写入阻塞原因摘要。
+3. 不得在阻塞期间合并 PR，但代码改善提交可继续推进。
+4. 被依赖 Issue（如 #78）完成后，立即解除阻塞并重新验证完整链路。
+
+### Review 决策评论模板
+
+```markdown
+## Review Threads 处理决策
+
+**已修复（commit <hash>）**：
+- ✅ Thread #N：<问题简述>
+
+**并入 Issue #xxx 修复（与 #xxx 修复目标文件重叠）**：
+- 🔀 Thread #N：<问题简述>
+
+**创建新 Issue 跟踪**：
+- 📋 Thread #N：<问题简述> → Issue #xxx
+
+**PR 合并时机**：
+<说明合并前置条件>
+```
