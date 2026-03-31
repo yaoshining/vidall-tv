@@ -486,21 +486,62 @@ export class WebDAVAdapter implements ISourceAdapter {
 export class SMBAdapter implements ISourceAdapter {
   private client: SMBClient;
   private fileSource: FileSource;
+  private config: SMBSourceConfig;
+  private scrapeClient?: ScrapeClient;
 
-  constructor(fileSource: FileSource) {
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient) {
     this.fileSource = fileSource;
-    const config = JSON.parse(fileSource.configJson) as SMBSourceConfig;
-    this.client = SMBClient.fromSourceConfig(config);
+    this.config = JSON.parse(fileSource.configJson) as SMBSourceConfig;
+    this.client = SMBClient.fromSourceConfig(this.config);
+    this.scrapeClient = scrapeClient;
+  }
+
+  /** 构建完整 smb:// 播放 URL（凭据内嵌，路径段编码，用于 FFmpeg 播放与刮削） */
+  private buildSmbUrl(filePath: string): string {
+    const port = this.config.port ?? 445;
+    const user = encodeURIComponent(this.config.username);
+    const pass = encodeURIComponent(this.config.password);
+    // filePath 形如 /Videos/TV Series/xxx/yyy.mkv，对每段路径做 URI 编码（保留斜杠）
+    const encodedPath = filePath.split('/').map((seg: string): string => {
+      if (seg.length === 0) { return ''; }
+      let decoded: string = seg;
+      try { decoded = decodeURIComponent(seg); } catch { decoded = seg; }
+      return encodeURIComponent(decoded);
+    }).join('/');
+    return `smb://${user}:${pass}@${this.config.host}:${port}${encodedPath}`;
+  }
+
+  /** 日志脱敏：smb://user:pass@host → smb://***@host */
+  private maskUrl(url: string): string {
+    const atIdx = url.indexOf('@');
+    if (atIdx < 0) {
+      return url;
+    }
+    const protoEnd = url.indexOf('://');
+    if (protoEnd < 0) {
+      return url;
+    }
+    return `${url.substring(0, protoEnd + 3)}***${url.substring(atIdx)}`;
+  }
+
+  /** 增量跳过判断（对照 WebDAVAdapter.canSkipIncrementalProcessing） */
+  private canSkip(existing: VideoEntity | null, info: VideoFileInfo): boolean {
+    if (!existing) {
+      return false;
+    }
+    if (!existing.lastModified || !info.lastModified) {
+      return false;
+    }
+    return existing.lastModified === info.lastModified;
   }
 
   async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
-    // 若目录路径为空或"/"，从根目录开始（listDirectory("/"）会自动枚举所有磁盘共享）
     const rootPath = (directoryPath.trim().length === 0 || directoryPath.trim() === '/') ? '/' : directoryPath;
-    console.info(
-      `[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`
-    );
+    console.info(`[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
-    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, results);
+    const processingTasks: Promise<void>[] = [];
+    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.incremental, results, processingTasks);
+    await Promise.allSettled(processingTasks);
     return results;
   }
 
@@ -509,7 +550,9 @@ export class SMBAdapter implements ISourceAdapter {
     dirPath: string,
     currentDepth: number,
     maxDepth: number,
-    results: VideoFileInfo[]
+    incremental: boolean,
+    results: VideoFileInfo[],
+    processingTasks: Promise<void>[]
   ): Promise<void> {
     if (currentDepth > maxDepth) {
       return;
@@ -518,30 +561,262 @@ export class SMBAdapter implements ISourceAdapter {
     const listResult = await this.client.listDirectory(dirPath);
 
     if (listResult.error) {
-      // 跳过无权访问或不存在的目录，继续扫描其他路径（对齐 WebDAVAdapter 策略）
       console.warn(`[SMBAdapter] 跳过目录: ${listResult.error} (path=${dirPath})`);
       return;
     }
 
     for (const file of listResult.files) {
       if (file.isDirectory) {
-        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, results);
+        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, incremental, results, processingTasks);
       } else if (isVideoFile(file.name)) {
         const info: VideoFileInfo = {
           sourceId: this.fileSource.id ?? 0,
           sourceName: this.fileSource.name,
           sourceType: this.fileSource.type,
           directoryPath: rootPath,
-          filePath: file.path,           // 相对路径，与 WebDAVAdapter 保持一致
+          filePath: file.path,
           fileName: file.name,
           fileSize: file.size,
           lastModified: file.lastModifiedMs > 0 ? new Date(file.lastModifiedMs).toISOString() : undefined,
-          wasProcessed: false            // 未实现处理链前保持 false
+          wasProcessed: true
         };
         console.info(
           `[VideoScanner][SMB] 文件源=${this.fileSource.name} | 路径=${file.path} | 文件名=${file.name} | 大小=${file.size} bytes`
         );
         results.push(info);
+
+        // 增量跳过：文件未变化则仅更新 updated_at，不重新处理
+        if (incremental) {
+          let existing: VideoEntity | null = null;
+          try {
+            existing = await FileSourceDatabase.getInstance().getVideoByPath(file.path);
+          } catch {
+            // 查询失败视为新文件
+          }
+          if (this.canSkip(existing, info)) {
+            info.wasProcessed = false;
+            try {
+              await FileSourceDatabase.getInstance().markVideoUpdatedByPath(file.path);
+            } catch {
+              // 标记失败不阻断扫描
+            }
+            console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
+            continue;
+          }
+        }
+
+        // 异步处理：媒体信息抓取 + 入库 + 刮削
+        const capturedInfo = info;
+        const capturedScrapeClient = this.scrapeClient;
+        const smbUrl = this.buildSmbUrl(file.path);
+        const maskedUrl = this.maskUrl(smbUrl);
+
+        const task: Promise<void> = FfprobeUtil.probe(smbUrl).then(async (videoInfo) => {
+          if (videoInfo.success) {
+            const mainVideo = videoInfo.videoTracks.length > 0 ? videoInfo.videoTracks[0] : undefined;
+            console.info(
+              `[VideoScanner][SMB][MEDIA] ${capturedInfo.fileName} | ` +
+              `时长=${videoInfo.durationText} | ` +
+              `分辨率=${mainVideo?.width ?? '?'}x${mainVideo?.height ?? '?'} | ` +
+              `编码=${mainVideo?.codecName ?? '?'}`
+            );
+          } else {
+            console.warn(`[VideoScanner][SMB][MEDIA] 媒体信息抓取失败（将无媒体元数据入库）: ${capturedInfo.fileName} — ${videoInfo.errorMessage ?? ''}`);
+          }
+
+          const mainVideo = videoInfo.success && videoInfo.videoTracks.length > 0
+            ? videoInfo.videoTracks[0] : undefined;
+
+          const videoEntity: VideoEntity = {
+            sourceId: capturedInfo.sourceId,
+            directoryPath: capturedInfo.directoryPath,
+            filePath: capturedInfo.filePath,
+            fileName: capturedInfo.fileName,
+            fileSize: capturedInfo.fileSize,
+            lastModified: capturedInfo.lastModified,
+            contentType: undefined,
+            durationMs: videoInfo.success ? videoInfo.durationMs : undefined,
+            width: videoInfo.success ? mainVideo?.width : undefined,
+            height: videoInfo.success ? mainVideo?.height : undefined,
+            frameRate: videoInfo.success ? mainVideo?.frameRate : undefined,
+            videoCodec: videoInfo.success ? mainVideo?.codecName : undefined,
+            audioTracksJson: videoInfo.success ? JSON.stringify(videoInfo.audioTracks) : undefined,
+            subtitleTracksJson: videoInfo.success ? JSON.stringify(videoInfo.subtitleTracks) : undefined,
+            scannedAt: Date.now()
+          };
+
+          let videoId: number = -1;
+          try {
+            videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity);
+            console.info(`[VideoScanner][SMB][DB] 落库成功 videoId=${videoId} fileName=${capturedInfo.fileName} url=${maskedUrl}`);
+          } catch (dbErr) {
+            console.warn(`[VideoScanner][SMB][DB] 落库失败 fileName=${capturedInfo.fileName}: ${JSON.stringify(dbErr)}`);
+            return;
+          }
+
+          if (!capturedScrapeClient) {
+            return;
+          }
+          try {
+            const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
+            if (existing) {
+              console.info(`[VideoScanner][SMB][SCRAPE] 已有刮削记录，跳过 fileName=${capturedInfo.fileName}`);
+              return;
+            }
+          } catch {
+            // 查询失败继续刮削
+          }
+
+          console.info(`[VideoScanner][SMB][SCRAPE] 开始刮削 fileName=${capturedInfo.fileName}`);
+          const parsed = parseFileName(capturedInfo.fileName);
+          const fileName = capturedInfo.fileName;
+          const db = FileSourceDatabase.getInstance();
+
+          if (parsed.mediaType === 'movie') {
+            try {
+              const movie = await capturedScrapeClient.autoScrapeMovie(fileName);
+              if (!movie) {
+                console.warn(`[VideoScanner][SMB][SCRAPE] 电影刮削无结果 ${fileName}`);
+                return;
+              }
+              let movieId: number;
+              const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
+              if (existingMovie && existingMovie.id !== undefined) {
+                movieId = existingMovie.id;
+                console.info(`[VideoScanner][SMB][SCRAPE] 电影复用已有记录 movieId=${movieId} title="${movie.title}" 已有posterUrl=${existingMovie.posterUrl ? 'Y' : 'null'}`);
+                if (!existingMovie.posterUrl && movie.posterUrl) {
+                  const updateEntity: MovieEntity = {
+                    id: existingMovie.id,
+                    provider: movie.provider, providerId: movie.providerId,
+                    title: movie.title, originalTitle: movie.originalTitle,
+                    overview: movie.overview, releaseDate: movie.releaseDate,
+                    rating: movie.rating, voteCount: movie.voteCount,
+                    posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                    posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                    genresJson: movie.genresJson, castJson: movie.castJson,
+                    directorsJson: movie.directorsJson, runtime: movie.runtime,
+                    originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                    scrapedAt: Date.now()
+                  };
+                  await db.upsertMovie(updateEntity);
+                  console.info(`[VideoScanner][SMB][SCRAPE] 电影复用更新 posterUrl movieId=${movieId}`);
+                }
+              } else {
+                const movieEntity: MovieEntity = {
+                  provider: movie.provider, providerId: movie.providerId,
+                  title: movie.title, originalTitle: movie.originalTitle,
+                  overview: movie.overview, releaseDate: movie.releaseDate,
+                  rating: movie.rating, voteCount: movie.voteCount,
+                  posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                  posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                  genresJson: movie.genresJson, castJson: movie.castJson,
+                  directorsJson: movie.directorsJson, runtime: movie.runtime,
+                  originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                  scrapedAt: Date.now()
+                };
+                movieId = await db.upsertMovie(movieEntity);
+              }
+              const scrapeInfo: ScrapeInfoEntity = {
+                videoId, provider: movie.provider, providerId: movie.providerId,
+                mediaType: 'movie', title: movie.title, originalTitle: movie.originalTitle,
+                movieId, scrapedAt: Date.now()
+              };
+              await db.upsertScrapeInfo(scrapeInfo);
+              console.info(`[VideoScanner][SMB][SCRAPE] movie scrape_info 落库 videoId=${videoId} movieId=${movieId}`);
+            } catch (e) {
+              const err = e as Error;
+              console.warn(`[VideoScanner][SMB][SCRAPE] 电影刮削异常 ${fileName}: ${err.message}`);
+            }
+          } else {
+            try {
+              const result = await capturedScrapeClient.autoScrapeTvEpisode(fileName);
+              if (!result.series) {
+                console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削无结果 ${fileName}`);
+                return;
+              }
+              const series: TvSeriesScrapeResult = result.series;
+              const season = result.season;
+              const episode = result.episode;
+
+              let seriesId: number;
+              const existingSeries = await db.getTvSeriesByProviderId(series.provider, series.providerId);
+              if (existingSeries && existingSeries.id !== undefined) {
+                seriesId = existingSeries.id;
+              } else {
+                const seriesEntity: TvSeriesEntity = {
+                  provider: series.provider, providerId: series.providerId,
+                  title: series.title, originalTitle: series.originalTitle,
+                  overview: series.overview, firstAirDate: series.firstAirDate,
+                  rating: series.rating, voteCount: series.voteCount,
+                  posterPath: series.posterPath, backdropPath: series.backdropPath,
+                  posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
+                  genresJson: series.genresJson, castJson: series.castJson,
+                  numberOfSeasons: series.numberOfSeasons,
+                  originalLanguage: series.originalLanguage, rawJson: series.rawJson,
+                  scrapedAt: Date.now()
+                };
+                seriesId = await db.upsertTvSeries(seriesEntity);
+              }
+
+              let seasonId: number | undefined;
+              if (season) {
+                const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
+                if (existingSeason && existingSeason.id !== undefined) {
+                  seasonId = existingSeason.id;
+                } else {
+                  const seasonEntity: TvSeasonEntity = {
+                    seriesId, provider: season.provider, providerId: season.providerId,
+                    seasonNumber: season.seasonNumber, title: season.title,
+                    overview: season.overview, airDate: season.airDate,
+                    episodeCount: season.episodeCount, posterPath: season.posterPath,
+                    posterUrl: season.posterUrl, rawJson: season.rawJson,
+                    scrapedAt: Date.now()
+                  };
+                  seasonId = await db.upsertTvSeason(seasonEntity);
+                }
+              }
+
+              let episodeId: number | undefined;
+              if (episode) {
+                const existingEp = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
+                if (existingEp && existingEp.id !== undefined) {
+                  episodeId = existingEp.id;
+                } else {
+                  const epEntity: TvEpisodeEntity = {
+                    seriesId, seasonId, provider: episode.provider, providerId: episode.providerId,
+                    seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+                    title: episode.title, overview: episode.overview, airDate: episode.airDate,
+                    runtime: episode.runtime, rating: episode.rating,
+                    stillPath: episode.stillPath, stillUrl: episode.stillUrl,
+                    rawJson: episode.rawJson, scrapedAt: Date.now()
+                  };
+                  episodeId = await db.upsertTvEpisode(epEntity);
+                }
+              }
+
+              const mediaType = episodeId !== undefined ? 'episode' : 'tv';
+              const scrapeInfo: ScrapeInfoEntity = {
+                videoId, provider: series.provider,
+                providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
+                mediaType, title: episode?.title ?? series.title,
+                originalTitle: series.originalTitle,
+                tvSeriesId: seriesId, episodeId,
+                seasonNumber: parsed.seasonNumber, episodeNumber: parsed.episodeNumber,
+                scrapedAt: Date.now()
+              };
+              await db.upsertScrapeInfo(scrapeInfo);
+              console.info(
+                `[VideoScanner][SMB][SCRAPE] tv scrape_info 落库 videoId=${videoId} S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'}`
+              );
+            } catch (e) {
+              const err = e as Error;
+              console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
+            }
+          }
+        }).catch((e: Error) => {
+          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}: ${e.message ?? String(e)}`);
+        });
+        processingTasks.push(task);
       }
     }
   }
@@ -578,7 +853,7 @@ function createAdapter(fileSource: FileSource, scrapeClient?: ScrapeClient): ISo
     case FileSourceType.WEBDAV:
       return new WebDAVAdapter(fileSource, scrapeClient);
     case FileSourceType.SMB:
-      return new SMBAdapter(fileSource);
+      return new SMBAdapter(fileSource, scrapeClient);
     default:
       return new UnsupportedAdapter(fileSource.name, fileSource.type);
   }

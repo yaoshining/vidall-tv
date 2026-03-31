@@ -268,6 +268,26 @@ export interface EmbeddedSubEntry {
   text: string;
 }
 
+// ─────────────────────────────────────────────
+// 日志脱敏
+// ─────────────────────────────────────────────
+
+/**
+ * 对日志输出中的 SMB URL 做凭据脱敏：
+ *   smb://user:secret@host/share → smb://***@host/share
+ * 非 SMB URL 原样返回。
+ */
+function maskUrlForLog(url: string): string {
+  if (!url.toLowerCase().startsWith('smb://')) {
+    return url;
+  }
+  const atIdx: number = url.indexOf('@');
+  if (atIdx < 0) { return url; }
+  const protoEnd: number = url.indexOf('://');
+  if (protoEnd < 0 || atIdx < protoEnd) { return url; }
+  return `${url.substring(0, protoEnd + 3)}***${url.substring(atIdx)}`;
+}
+
 export class FfprobeUtil {
   private static readonly MAX_CONCURRENT_PROBES: number = 2;
   private static activeProbeCount: number = 0;
@@ -327,7 +347,7 @@ export class FfprobeUtil {
 
     commands.push('-i', url);
 
-    console.info(`[FfprobeUtil] 开始探测: ${url}`);
+    console.info(`[FfprobeUtil] 开始探测: ${maskUrlForLog(url)}`);
     const safeCommands = commands.map((c) => {
       if (typeof c === 'string' && c.toLowerCase().includes('authorization:')) {
         return c.replace(/Authorization:[^\r\n]*/gi, 'Authorization: ***');

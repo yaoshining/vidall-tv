@@ -6,6 +6,7 @@ import http from '@ohos.net.http'
 import image from '@ohos.multimedia.image'
 import effectKit from '@ohos.effectKit'
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
+import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 
@@ -677,18 +678,37 @@ export struct SeasonDetailPage {
         return;
       }
       const config = JSON.parse(fileSource.configJson) as Record<string, string>;
-      const protocol = config['protocol'] ?? 'http';
-      const host = config['url'] ?? '';
-      const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
-      const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
-      const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
-      const webdavConfig: WebDAVConfig = {
-        baseUrl, username: config['username'] ?? '', password: config['password'] ?? '', timeout: 30000
-      };
-      const client = new WebDAVClient(webdavConfig);
-      const fullUrl = client.getFullUrl(episode.filePath);
-      const authHeader = client.getAuthHeaderPublic();
-      const httpHeader: Record<string, string> = authHeader ? { 'Authorization': authHeader } : {};
+
+      let fullUrl: string;
+      let httpHeader: Record<string, string>;
+
+      if (fileSource.type === FileSourceType.SMB) {
+        const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
+        const port = smbConfig.port ?? 445;
+        const user = encodeURIComponent(smbConfig.username);
+        const pass = encodeURIComponent(smbConfig.password);
+        const encodedPath = episode.filePath.split('/').map((seg: string): string => {
+          if (seg.length === 0) { return ''; }
+          let decoded: string = seg;
+          try { decoded = decodeURIComponent(seg); } catch { decoded = seg; }
+          return encodeURIComponent(decoded);
+        }).join('/');
+        fullUrl = `smb://${user}:${pass}@${smbConfig.host}:${port}${encodedPath}`;
+        httpHeader = {};
+      } else {
+        const protocol = config['protocol'] ?? 'http';
+        const host = config['url'] ?? '';
+        const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
+        const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
+        const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
+        const webdavConfig: WebDAVConfig = {
+          baseUrl, username: config['username'] ?? '', password: config['password'] ?? '', timeout: 30000
+        };
+        const client = new WebDAVClient(webdavConfig);
+        fullUrl = client.getFullUrl(episode.filePath);
+        const authHeader = client.getAuthHeaderPublic();
+        httpHeader = authHeader ? { 'Authorization': authHeader } : {};
+      }
 
       // ── 音轨 / 字幕轨 ──────────────────────────
       let presetAudioTracks: PresetAudioTrack[] = [];
@@ -1365,6 +1385,9 @@ export struct SeasonDetailPage {
           this.loadData(tvSeriesId, seasonNumber);
         }
       }
+    })
+    .onShown(() => {
+      this.refreshProgressState().catch(() => {});
     })
     .onBackPressed(() => {
       if (this.showOverviewDialog) {
