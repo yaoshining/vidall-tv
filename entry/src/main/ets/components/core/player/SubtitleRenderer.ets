@@ -405,6 +405,10 @@ export class SrtParser {
       if (trimmed.length === 0) {
         continue;
       }
+      // 跳过 WebVTT 文件头部声明块（Fix 2）
+      if (trimmed.startsWith('WEBVTT')) {
+        continue;
+      }
       const entry = SrtParser.parseBlock(trimmed);
       if (entry !== null) {
         entries.push(entry);
@@ -481,6 +485,7 @@ export class SrtParser {
 
   /**
    * 解析时间轴行 "00:00:01,000 --> 00:00:03,500"
+   * 支持 VTT cue settings（如 "line:0% position:50%"），自动剥离。
    * 返回 [startMs, endMs]，失败返回 null
    */
   private static parseTimeLine(line: string): number[] | null {
@@ -489,7 +494,10 @@ export class SrtParser {
       return null;
     }
     const startStr = line.substring(0, arrowIdx).trim();
-    const endStr = line.substring(arrowIdx + 3).trim();
+    // Fix A: VTT cue settings（空格后的部分）在 endStr 中需剥离，只取第一个 token
+    const endRaw = line.substring(arrowIdx + 3).trim();
+    const endSpaceIdx = endRaw.indexOf(' ');
+    const endStr = endSpaceIdx >= 0 ? endRaw.substring(0, endSpaceIdx) : endRaw;
 
     const startMs = SrtParser.parseTimestamp(startStr);
     const endMs = SrtParser.parseTimestamp(endStr);
@@ -505,6 +513,10 @@ export class SrtParser {
     let normalized = '';
     for (let i = 0; i < ts.length; i++) {
       normalized += ts[i] === ',' ? '.' : ts[i];
+    }
+    // Fix 2：兼容 WebVTT mm:ss(.ms) 两段格式（无小时）—— 补 "00:" 前缀
+    if (normalized.split(':').length === 2) {
+      normalized = '00:' + normalized;
     }
     const parts = normalized.split(':');
     if (parts.length !== 3) {

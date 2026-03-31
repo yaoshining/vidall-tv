@@ -20,6 +20,7 @@ import {
   SubtitleBridgeState,
   SubtitleTrackItem
 } from "./SubtitleBridgeAdapter";
+import { SmbSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
 import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
@@ -431,7 +432,10 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 VidAllPlayerAdapter，等待 UI 层调用 setNativeContext()');
       adapter = new VidAllPlayerAdapter();
-      this.subtitleAdapter = new NoSubtitleBridgeAdapter();
+      // SMB 协议使用专用字幕适配器（通过 SMBClient 读取同名字幕文件），其他 native 源无外置字幕
+      this.subtitleAdapter = videoData.videoSrc.startsWith('smb://')
+        ? new SmbSubtitleBridgeAdapter()
+        : new NoSubtitleBridgeAdapter();
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
