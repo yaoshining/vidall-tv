@@ -683,6 +683,24 @@ export class SMBAdapter implements ISourceAdapter {
               const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
               if (existingMovie && existingMovie.id !== undefined) {
                 movieId = existingMovie.id;
+                console.info(`[VideoScanner][SMB][SCRAPE] 电影复用已有记录 movieId=${movieId} title="${movie.title}" 已有posterUrl=${existingMovie.posterUrl ? 'Y' : 'null'}`);
+                if (!existingMovie.posterUrl && movie.posterUrl) {
+                  const updateEntity: MovieEntity = {
+                    id: existingMovie.id,
+                    provider: movie.provider, providerId: movie.providerId,
+                    title: movie.title, originalTitle: movie.originalTitle,
+                    overview: movie.overview, releaseDate: movie.releaseDate,
+                    rating: movie.rating, voteCount: movie.voteCount,
+                    posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+                    posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+                    genresJson: movie.genresJson, castJson: movie.castJson,
+                    directorsJson: movie.directorsJson, runtime: movie.runtime,
+                    originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                    scrapedAt: Date.now()
+                  };
+                  await db.upsertMovie(updateEntity);
+                  console.info(`[VideoScanner][SMB][SCRAPE] 电影复用更新 posterUrl movieId=${movieId}`);
+                }
               } else {
                 const movieEntity: MovieEntity = {
                   provider: movie.provider, providerId: movie.providerId,
@@ -795,6 +813,8 @@ export class SMBAdapter implements ISourceAdapter {
               console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
             }
           }
+        }).catch((e) => {
+          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}: ${(e as Error).message ?? String(e)}`);
         });
         processingTasks.push(task);
       }
