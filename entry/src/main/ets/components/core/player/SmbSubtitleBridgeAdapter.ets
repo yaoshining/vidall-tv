@@ -186,6 +186,8 @@ function extractSmbLangLabel(fileName: string, baseName: string): string {
  * 任何步骤失败均静默处理（catch 后返回空数组），不向上抛出异常。
  */
 export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
+  /** 防止异步提取竞态：每次发起新切轨请求时递增，过期结果不写入 srtEntries */
+  private subtitleSwitchGeneration: number = 0;
   protected async loadExternalTracks(): Promise<SubtitleTrackItem[]> {
     if (!this.videoData) {
       return [];
@@ -397,8 +399,9 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     if (!this.player) {
       return;
     }
-    // allIndex < 0 表示取消选中，交由父类处理（重置状态 + selectTrack(-1)）
+    // allIndex < 0 表示关闭字幕：先显式清除播放器轨，再交由父类重置状态
     if (allIndex < 0) {
+      await this.player?.selectTrack(-1);
       await super.switchTrack(allIndex);
       return;
     }
@@ -419,6 +422,13 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     if (internalIndex < 0) {
       return;
     }
+
+    // Major #4：切换内嵌字幕前先清除播放器层面旧轨，防止双轨叠加
+    await this.player?.selectTrack(-1);
+
+    // Major #5：递增版本号，防止慢请求覆盖快请求的结果（竞态防护）
+    this.subtitleSwitchGeneration += 1;
+    const currentGen = this.subtitleSwitchGeneration;
 
     this.activeSubtitleIndex = allIndex;
     this.srtEntries = [];
@@ -444,6 +454,12 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const entries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
         videoSrc, undefined, internalIndex, 30000
       );
+      // Major #5：写入前检查版本号，过期结果直接丢弃
+      if (currentGen !== this.subtitleSwitchGeneration) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          '[SmbSub] 字幕提取结果已过期，丢弃（generation 不匹配）');
+        return;
+      }
       this.srtEntries = entries as SrtEntry[];
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[SmbSub] 内嵌字幕提取完成 stream=${internalIndex} entries=${entries.length}`);
