@@ -340,7 +340,7 @@ export interface ISubtitleBridgeAdapter {
   release(): void;
 }
 
-class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
+export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   protected player?: IPlayer;
   protected videoData?: VideoData;
   protected subtitleTracks: TrackInfo[] = [];

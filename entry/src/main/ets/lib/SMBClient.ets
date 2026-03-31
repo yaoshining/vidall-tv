@@ -61,6 +61,7 @@ interface SmbNapiBridge {
   smbListDirectory: (host: string, port: number, username: string, password: string, domain: string, shareName: string, path: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbListShares: (host: string, port: number, username: string, password: string, domain: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbDiscoverHosts: (subnetPrefix: string, startOctet: number, endOctet: number, port: number, timeoutMs: number) => Promise<Record<string, Object>>;
+  smbReadTextFile: (url: string, maxSizeBytes: number, timeoutSeconds?: number) => Promise<string>;
 }
 
 interface SmbNapiBridgeModule {
@@ -137,6 +138,20 @@ export class SMBClient {
   }
 
   /**
+   * 路径规范化：将反斜杠转为正斜杠，合并重复斜杠（Fix 4）。
+   * 不处理前导 "/"，调用方按需补充。
+   */
+  private normalizePath(rawPath: string): string {
+    // 将反斜杠统一替换为正斜杠
+    let path: string = rawPath.split('\\').join('/');
+    // 收敛连续多重斜杠
+    while (path.indexOf('//') !== -1) {
+      path = path.split('//').join('/');
+    }
+    return path;
+  }
+
+  /**
    * 获取 SMB URL（smb://host/share 格式）。
    * shareName 为空时 base 为 "smb://host"（无尾部斜杠），避免与 normalized 拼接产生双斜杠。
    */
@@ -151,15 +166,11 @@ export class SMBClient {
     if (raw.length === 0 || raw === '/') {
       return base;
     }
-    // 将反斜杠统一替换为正斜杠
-    let normalized: string = raw.split('\\').join('/');
+    // 统一规范化路径（Fix 4：与 buildSmbUrl 共用同一逻辑）
+    let normalized: string = this.normalizePath(raw);
     // 确保以 / 开头
     if (!normalized.startsWith('/')) {
       normalized = '/' + normalized;
-    }
-    // 收敛连续多重斜杠（smb:// 协议头之后的部分）
-    while (normalized.indexOf('//') !== -1) {
-      normalized = normalized.split('//').join('/');
     }
     return `${base}${normalized}`;
   }
@@ -357,6 +368,51 @@ export class SMBClient {
         error: err.message ?? '调用失败'
       };
       return result;
+    }
+  }
+
+  /**
+   * 构建带凭据的完整 SMB URL，用于直接传递给 Native NAPI。
+   * 格式：smb://[user[:pass]@]host[:port]/share/filePath
+   * 凭据经过 percent-encode，与 Native ParseSmbUrl() 的解码逻辑对应。
+   */
+  private buildSmbUrl(filePath: string): string {
+    let auth: string = '';
+    if (this.username.length > 0) {
+      auth = encodeURIComponent(this.username);
+      if (this.password.length > 0) {
+        auth += ':' + encodeURIComponent(this.password);
+      }
+      auth += '@';
+    }
+    const portPart: string = this.port !== 445 ? `:${this.port.toString()}` : '';
+    const sharePart: string = this.shareName.length > 0 ? '/' + this.shareName : '';
+    // Fix 4：规范化路径（反斜杠转正斜杠、合并重复斜杠），与 getSmbUrl 保持一致
+    let normalized: string = this.normalizePath(filePath.trim());
+    if (normalized.length > 0 && !normalized.startsWith('/')) {
+      normalized = '/' + normalized;
+    }
+    return 'smb://' + auth + this.host + portPart + sharePart + normalized;
+  }
+
+  /**
+   * 通过 SMB 协议读取小文件（如字幕 .srt/.ass）的 UTF-8 文本内容。
+   *
+   * @param filePath  相对于配置根 shareName 的文件路径，如 "/Videos/subtitle.srt"
+   * @param maxSizeBytes  最大读取字节数，超过则 reject；默认 5MB
+   * @returns  文件全文 UTF-8 字符串
+   */
+  async readTextFile(filePath: string, maxSizeBytes: number = 5 * 1024 * 1024): Promise<string> {
+    // 脱敏日志：只打印 host + shareName + filePath，不打印凭据
+    console.info(`[SMBClient] readTextFile: ${this.host}/${this.shareName}${filePath}`);
+    const url: string = this.buildSmbUrl(filePath);
+    try {
+      // Fix C: 传入 timeoutSeconds=5，替代 Native 侧原硬编码 30s
+      const content: string = await getModule().smbReadTextFile(url, maxSizeBytes, 5);
+      return content;
+    } catch (e) {
+      const err = e as import('@kit.BasicServicesKit').BusinessError;
+      throw new Error(err.message ?? '读取文件失败');
     }
   }
 
