@@ -478,7 +478,18 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       }
     } catch {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        '[SmbSub] 内嵌字幕提取失败，降级无字幕');
+        '[SmbSub] 内嵌字幕提取失败，尝试 fallback 到外置字幕');
+      // generation 检查：若用户已切换到其他轨道，不干扰
+      if (currentGen === this.subtitleSwitchGeneration) {
+        const externalIdx: number = this.allSubtitleTracks.findIndex(
+          (t: SubtitleTrackItem) => t.kind === 'external'
+        );
+        if (externalIdx >= 0) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[SmbSub] catch fallback 到外置字幕 index=${externalIdx}`);
+          await super.switchTrack(externalIdx);
+        }
+      }
     }
   }
 }
