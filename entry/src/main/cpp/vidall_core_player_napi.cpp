@@ -112,6 +112,47 @@ static std::string PercentDecode(const std::string &s) {
     return out;
 }
 
+// URL percent-encode a single path segment (must NOT contain '/').
+// Encodes all bytes except RFC 3986 unreserved characters (A-Z a-z 0-9 - _ . ~).
+// Used to build the HTTP proxy URL so that OH_AVPlayer/FFmpeg can see the file
+// extension and determine the media format correctly.
+static std::string PercentEncodePathSegment(const std::string &s) {
+    static const char kHex[] = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(s.size() * 3);
+    for (unsigned char c : s) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+            out += static_cast<char>(c);
+        } else {
+            out += '%';
+            out += kHex[(c >> 4) & 0x0F];
+            out += kHex[c & 0x0F];
+        }
+    }
+    return out;
+}
+
+// URL percent-encode a path that may contain '/' separators.
+// Each slash-separated segment is encoded individually; '/' is preserved as-is.
+// Example: "中文/file name.mp4" → "%E4%B8%AD%E6%96%87/file%20name.mp4"
+static std::string PercentEncodePath(const std::string &path) {
+    std::string out;
+    out.reserve(path.size() * 3);
+    std::string seg;
+    for (char c : path) {
+        if (c == '/') {
+            out += PercentEncodePathSegment(seg);
+            out += '/';
+            seg.clear();
+        } else {
+            seg += c;
+        }
+    }
+    out += PercentEncodePathSegment(seg);
+    return out;
+}
+
 // Parse smb://[user[:pass]@]host[:port]/share[/subPath]
 static SmbUrlComponents ParseSmbUrl(const std::string &url) {
     SmbUrlComponents c;
@@ -1658,6 +1699,37 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 
     bool isHead = req.size() >= 4 && req.compare(0, 4, "HEAD") == 0;
 
+    // 方案 A：从 HTTP 请求行解析路径，覆盖 comps.share 和 comps.subPath。
+    // 请求行格式：GET /share/subPath HTTP/1.1
+    // Prepare() 中将 comps.share 和 comps.subPath 编码进了代理 URL，
+    // 这里解码还原，保持路径作为唯一真相来源（URL）。
+    // host/port/user/password 仍沿用传入的 comps（不在 HTTP 路径中）。
+    {
+        size_t methodEnd = req.find(' ');
+        if (methodEnd != std::string::npos) {
+            size_t pathStart = methodEnd + 1;
+            size_t pathEnd = req.find(' ', pathStart);
+            if (pathEnd != std::string::npos) {
+                std::string rawPath = req.substr(pathStart, pathEnd - pathStart);
+                // 去掉查询串（如 ?xxx），FFmpeg 可能附加
+                auto qmark = rawPath.find('?');
+                if (qmark != std::string::npos) rawPath = rawPath.substr(0, qmark);
+                // 去掉前导 '/'
+                if (!rawPath.empty() && rawPath[0] == '/') rawPath = rawPath.substr(1);
+                // 第一个 '/' 前是 share（PercentEncodePathSegment 编码），后是 subPath
+                auto sep = rawPath.find('/');
+                if (sep != std::string::npos) {
+                    comps.share   = PercentDecode(rawPath.substr(0, sep));
+                    // subPath 可能含多级目录，整体 PercentDecode 即可（'/' 不会被编码）
+                    comps.subPath = PercentDecode(rawPath.substr(sep + 1));
+                } else if (!rawPath.empty()) {
+                    comps.share   = PercentDecode(rawPath);
+                    comps.subPath.clear();
+                }
+            }
+        }
+    }
+
     // Parse Range: bytes=START-[END]
     int64_t rangeStart = 0, rangeEnd = -1;
     {
@@ -2328,7 +2400,16 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
       return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
     }
     state.isSmbPlayback = true;
-    playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/";
+    // 修复：构建包含完整路径的 HTTP 代理 URL，格式：http://127.0.0.1:PORT/share/subPath
+    // comps.share 和 comps.subPath 已由 ParseSmbUrl() PercentDecode，
+    // 这里重新编码为合法 HTTP URL 路径，原因：
+    //   1. OH_AVPlayer/FFmpeg 通过文件扩展名感知媒体格式，路径缺失会导致黑屏；
+    //   2. SmbProxyHandleRequest() 从请求行解析路径并 decode 后传给 libsmb2，
+    //      libsmb2 需要 decoded 路径（不含 %XX），此处编码 → 传输 → 解码保证正确性。
+    // 注意：playUrl 仅含 127.0.0.1 地址，不含 SMB 凭据，日志可安全输出。
+    playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/"
+              + PercentEncodePathSegment(comps.share) + "/"
+              + PercentEncodePath(comps.subPath);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "SMB rewritten to %{public}s", playUrl.c_str());
 #else
