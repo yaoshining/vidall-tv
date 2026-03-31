@@ -60,9 +60,6 @@ struct FileSourceSettingBuilderComponent {
     return typeMap[type] || '未知类型'
   }
 
-  /**
-   * 获取文件源类型的图标
-   */
   @Builder
   getFileSourceTypeIcon(type: FileSourceType) {
     if (type === FileSourceType.WEBDAV) {

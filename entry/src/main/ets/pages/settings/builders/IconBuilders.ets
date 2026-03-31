@@ -1,3 +1,5 @@
+import { FileSourceType } from "../../../db/models/FileSourceEntity"
+
 @Builder
 export function SmbIcon() {
   Image($r('app.media.windows'))
@@ -60,5 +62,26 @@ export function OtherIcon() {
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)
+}
+
+@Builder
+export function SourceTypeIcon(type: FileSourceType) {
+  if (type === FileSourceType.WEBDAV) {
+    WebdavIcon()
+  } else if (type === FileSourceType.SMB) {
+    SmbIcon()
+  } else if (type === FileSourceType.ALIYUN) {
+    AliyunIcon()
+  } else if (type === FileSourceType.CLOUD_139) {
+    Cloud139Icon()
+  } else if (type === FileSourceType.BAIDU) {
+    BaiduIcon()
+  } else if (type === FileSourceType.CLOUD_123) {
+    Cloud123Icon()
+  } else if (type === FileSourceType.CLOUD_115) {
+    Cloud115Icon()
+  } else {
+    OtherIcon()
+  }
 }
 
