@@ -63,14 +63,14 @@ function formatMovieDuration(runtimeMinutes: number | undefined, durationMs: num
 interface CastPerson {
   name: string;
   character?: string;
-  profile_path?: string;
+  profilePath?: string;
 }
 
 /** 演职人员统一展示项（导演 + 演员合并列表） */
 interface CastCrewItem {
   name: string;
   role?: string;
-  profile_path?: string;
+  profilePath?: string;
 }
 
 function parseCastArr(json: string | undefined): CastPerson[] {
@@ -246,7 +246,7 @@ export struct MovieDetailPage {
     }
     const castList = parseCastArr(this.movieEntity?.castJson);
     for (const c of castList) {
-      const ci: CastCrewItem = { name: c.name, role: c.character, profile_path: c.profile_path };
+      const ci: CastCrewItem = { name: c.name, role: c.character, profilePath: c.profilePath };
       result.push(ci);
     }
     return result;
@@ -656,8 +656,8 @@ export struct MovieDetailPage {
             ForEach(this.buildCastCrewList().slice(0, 15), (c: CastCrewItem) => {
               Column({ space: 8 }) {
                 // 人物照片（长方形）
-                if (c.profile_path !== undefined && c.profile_path.length > 0) {
-                  Image(tmdbImageUrl(c.profile_path, 'w185'))
+                if (c.profilePath !== undefined && c.profilePath.length > 0) {
+                  Image(tmdbImageUrl(c.profilePath, 'w185'))
                     .width(110).aspectRatio(2 / 3)
                     .objectFit(ImageFit.Cover).borderRadius(6)
                     .hoverEffect(HoverEffect.Scale)
