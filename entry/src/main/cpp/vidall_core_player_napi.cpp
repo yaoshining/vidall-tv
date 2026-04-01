@@ -853,15 +853,32 @@ static std::string StripAssOverrideTags(const std::string &text) {
 // 从 ASS Dialogue 行提取纯文本（格式：Dialogue: layer,start,end,style,...,text）
 static std::string ParseAssDialogue(const char *ass) {
   if (ass == nullptr) return "";
-  // 跳过 9 个逗号分隔的字段到文本部分
+  // 支持两种合法格式：
+  //   1. 完整 Dialogue 行（FFmpeg ass 解码器输出）：
+  //      "Dialogue: Marked,Start,End,Style,Name,ML,MR,MV,Effect,Text"
+  //      → 9 个逗号后取文本
+  //   2. MKV ASS block 原始包（raw-pkt / 解码器 fallback）：
+  //      "ReadOrder,Layer,Style,Name,ML,MR,MV,Effect,Text"
+  //      → 8 个逗号后取文本
   int commas = 0;
   const char *p = ass;
+  const char *textAt8 = nullptr; // 指向第 8 个逗号之后的字符
   while (*p && commas < 9) {
-    if (*p == ',') commas++;
+    if (*p == ',') {
+      commas++;
+      if (commas == 8) textAt8 = p + 1;
+    }
     p++;
   }
-  if (commas < 9) return ""; // 格式不符，返回空串（不暴露原始乱码内容）
-  return StripAssOverrideTags(std::string(p));
+  if (commas == 9) {
+    // 完整 Dialogue 行：p 指向第 9 个逗号之后
+    return StripAssOverrideTags(std::string(p));
+  }
+  if (commas == 8 && textAt8 != nullptr) {
+    // MKV raw block：textAt8 指向第 8 个逗号之后
+    return StripAssOverrideTags(std::string(textAt8));
+  }
+  return ""; // 格式不符，返回空串
 }
 
 static void ExecuteExtractSubAsync(napi_env env, void *data) {
@@ -913,8 +930,9 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
                               earlyId == AV_CODEC_ID_DVD_SUBTITLE ||
                               earlyId == AV_CODEC_ID_DVB_SUBTITLE);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
-                   "extractSub early-check stream[%d] codec=%s imageBased=%d",
-                   earlySi, earlyName ? earlyName : "?", (int)earlyImageBased);
+                   "extractSub early-check stream[%d] codec_type=%d codec=%s imageBased=%d",
+                   earlySi, (int)formatCtx->streams[earlySi]->codecpar->codec_type,
+                   earlyName ? earlyName : "?", (int)earlyImageBased);
       if (earlyImageBased) {
         ctx->errorMessage = std::string("image-based subtitle not supported: ") +
                             (earlyName ? earlyName : "unknown");
@@ -993,6 +1011,10 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       }
     }
   }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+               "extractSub codecCtx=%s extradata_size=%d",
+               codecCtx != nullptr ? "opened" : "NULL(raw-pkt-mode)",
+               subStream->codecpar->extradata_size);
 
   // Cues-based seek 策略（针对蓝光原盘等非交错封装 MKV）：
   // MKV Cues 元素记录了每条流各 Cluster 的字节偏移；FFmpeg 在 avformat_open_input 后
@@ -1072,11 +1094,34 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
 
     std::string text;
 
+    // 诊断日志：前 3 个字幕包打印详情，帮助定位 entries=0 根因
+    bool diagLog = (subPkts <= 3);
+
     if (codecCtx != nullptr) {
       // 有解码器：走 avcodec_decode_subtitle2
       AVSubtitle sub = {};
       int gotSub = 0;
       int dr = avcodec_decode_subtitle2(codecCtx, &sub, &gotSub, pkt);
+
+      if (diagLog) {
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                     "extractSub pkt#%lld decode dr=%d gotSub=%d num_rects=%u",
+                     (long long)subPkts, dr, gotSub,
+                     (unsigned)(gotSub ? sub.num_rects : 0u));
+        if (gotSub && sub.num_rects > 0 && sub.rects[0]->ass != nullptr) {
+          // 截取前 100 字节，替换 \0 为 '?' 保证 %s 安全
+          char assSnip[101] = {};
+          int assLen = (int)strlen(sub.rects[0]->ass);
+          int snipLen = assLen < 100 ? assLen : 100;
+          for (int ci = 0; ci < snipLen; ci++) {
+            assSnip[ci] = (sub.rects[0]->ass[ci] == '\0') ? '?' : sub.rects[0]->ass[ci];
+          }
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                       "extractSub pkt#%lld ass[0](%d)=%{public}s",
+                       (long long)subPkts, assLen, assSnip);
+        }
+      }
+
       if (dr >= 0 && gotSub && sub.num_rects > 0) {
         for (unsigned int r = 0; r < sub.num_rects; r++) {
           if (sub.rects[r]->ass != nullptr) {
@@ -1088,8 +1133,34 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
         }
       }
       avsubtitle_free(&sub);
+
+      // gotSub=0 降级：解码器未解出内容时，尝试将原始包当作 raw-pkt 解析
+      // 常见于 OHOS 上 extradata 为空导致 ass 解码器拒绝所有包
+      if (text.empty() && pkt->size > 0 && pkt->data != nullptr) {
+        if (diagLog) {
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                       "extractSub pkt#%lld gotSub=0 fallback to raw-pkt",
+                       (long long)subPkts);
+        }
+        goto raw_pkt_parse; // 跳到 raw-pkt 路径；goto 仅在此处使用，清晰且无资源泄漏
+      }
     } else {
-      // 无解码器：subrip 在 MKV 中 pkt->data 可能是 ASS block 格式或纯 SRT 文本
+raw_pkt_parse:
+      // 无解码器（或 gotSub=0 降级）：
+      // subrip/ass 在 MKV 中 pkt->data 可能是 ASS block 格式或纯 SRT 文本
+      if (diagLog) {
+        // 截取前 200 字节，替换控制字符为 '?' 保证 %s 安全
+        size_t snipLen = std::min((size_t)200, (size_t)pkt->size);
+        char rawSnip[201] = {};
+        for (size_t ci = 0; ci < snipLen; ci++) {
+          unsigned char ch = pkt->data[ci];
+          rawSnip[ci] = (ch < 0x20 && ch != '\n' && ch != '\r') ? '?' : (char)ch;
+        }
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                     "extractSub pkt#%lld raw(%d)=%{public}s",
+                     (long long)subPkts, pkt->size, rawSnip);
+      }
+
       text = std::string(reinterpret_cast<char *>(pkt->data),
                          static_cast<size_t>(pkt->size));
       // 检测 MKV ASS block 格式：readorder,layer,style,name,marginL,marginR,marginV,effect,text
