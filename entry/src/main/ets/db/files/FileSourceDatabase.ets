@@ -1903,7 +1903,7 @@ export class FileSourceDatabase {
                v.id AS vid, v.source_id, v.directory_path, v.file_path, v.file_name,
                v.file_size, v.duration_ms, v.width, v.height, v.video_codec,
                v.audio_tracks_json, v.scanned_at,
-               si.scraped_at
+               si.scraped_at, si.provider, si.provider_id, si.movie_id
         FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} si
         JOIN ${FileSourceDatabase.TABLE_MOVIES} m ON si.movie_id = m.id
         JOIN ${FileSourceDatabase.TABLE_VIDEOS} v ON si.video_id = v.id
@@ -1945,7 +1945,10 @@ export class FileSourceDatabase {
           posterUrl: str('poster_url'),
           posterLocalPath: str('poster_local_path'),
           backdropUrl: str('backdrop_url'),
-          rating: dbl('rating')
+          rating: dbl('rating'),
+          provider: str('provider'),
+          providerId: str('provider_id'),
+          movieId: num('movie_id')
         };
         const item: MediaListItem = { kind: 'video', video: mediaItem, sortTs: scrapedAt };
         movieItems.push(item);
