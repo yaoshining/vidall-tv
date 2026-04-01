@@ -626,21 +626,15 @@ export struct MovieDetailPage {
           // 简介：超 100 字截断显示 + 「更多」按钮（独立 Text 可聚焦），不超出仅显示原文
           if (this.getOverview().length > 0) {
             if (this.isOverviewLong()) {
-              Row({ space: 4 }) {
-                Text(this.getOverviewShort())
+              Text() {
+                Span(this.getOverviewShort())
                   .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-                  .constraintSize({ maxWidth: 640 })
-                Text('更多')
-                  .fontSize(14)
-                  .fontColor(this.focusMoreBtn ? '#FFFFFFFF' : '#1B78F2')
+                Span('更多')
+                  .fontSize(14).fontColor('#1B78F2')
                   .fontWeight(FontWeight.Medium)
-                  .focusable(true)
-                  .onFocus(() => { this.focusMoreBtn = true; })
-                  .onBlur(() => { this.focusMoreBtn = false; })
                   .onClick(() => { this.showOverviewDialog = true; })
               }
               .constraintSize({ maxWidth: 700 })
-              .alignItems(VerticalAlign.Bottom)
             } else {
               Text(this.getOverview())
                 .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
@@ -650,14 +644,6 @@ export struct MovieDetailPage {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
-
-        // 中间：海报封面（有数据时显示）
-        if (this.getPosterUrl().length > 0) {
-          Image(this.getPosterUrl())
-            .width(120).aspectRatio(2 / 3)
-            .objectFit(ImageFit.Cover)
-            .borderRadius(8)
-        }
 
         // 右侧：电影版续播卡片
         this.MovieWatchingCard()
