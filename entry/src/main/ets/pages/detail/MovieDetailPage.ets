@@ -100,6 +100,8 @@ export struct MovieDetailPage {
   /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
   @Local dominantBgColor: string = '#111111';
   @Local showOverviewDialog: boolean = false;
+  /** 简介「更多」按钮焦点状态，用于 TV 遥控器 D-Pad 焦点高亮 */
+  @Local focusMoreBtn: boolean = false;
   /** 播放按钮焦点/Hover 状态 key */
   @Local focusedActionKey: string = '';
   @Local hoveredActionKey: string = '';
@@ -407,7 +409,8 @@ export struct MovieDetailPage {
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
-      console.error('[MovieDetailPage] play() 构建播放 URL 失败');
+      const err = e as BusinessError;
+      console.error('MovieDetailPage', `play() 构建播放 URL 失败: ${err.message}`);
     }
   }
 
@@ -628,9 +631,12 @@ export struct MovieDetailPage {
                   .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
                   .constraintSize({ maxWidth: 640 })
                 Text('更多')
-                  .fontSize(14).fontColor('#1B78F2')
+                  .fontSize(14)
+                  .fontColor(this.focusMoreBtn ? '#FFFFFFFF' : '#1B78F2')
                   .fontWeight(FontWeight.Medium)
                   .focusable(true)
+                  .onFocus(() => { this.focusMoreBtn = true; })
+                  .onBlur(() => { this.focusMoreBtn = false; })
                   .onClick(() => { this.showOverviewDialog = true; })
               }
               .constraintSize({ maxWidth: 700 })
