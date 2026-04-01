@@ -853,14 +853,19 @@ static std::string StripAssOverrideTags(const std::string &text) {
 // 从 ASS Dialogue 行提取纯文本（格式：Dialogue: layer,start,end,style,...,text）
 static std::string ParseAssDialogue(const char *ass) {
   if (ass == nullptr) return "";
-  // 跳过 9 个逗号分隔的字段到文本部分
+  // MKV ASS block 格式（avcodec_decode_subtitle2 及 raw-pkt 均输出此格式）：
+  //   "ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
+  //   共 8 个逗号分隔的字段，第 8 个逗号之后即为 Text 字段。
+  //
+  // 注意：Text 字段本身可包含逗号（如 \fad(500,1000) 内的逗号），
+  // 因此必须在恰好数到第 8 个逗号后立即停止，不得继续向后搜索。
   int commas = 0;
   const char *p = ass;
-  while (*p && commas < 9) {
+  while (*p && commas < 8) {
     if (*p == ',') commas++;
     p++;
   }
-  if (commas < 9) return ""; // 格式不符，返回空串（不暴露原始乱码内容）
+  if (commas < 8) return ""; // 字段不足，格式不符
   return StripAssOverrideTags(std::string(p));
 }
 
@@ -913,8 +918,9 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
                               earlyId == AV_CODEC_ID_DVD_SUBTITLE ||
                               earlyId == AV_CODEC_ID_DVB_SUBTITLE);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
-                   "extractSub early-check stream[%d] codec=%s imageBased=%d",
-                   earlySi, earlyName ? earlyName : "?", (int)earlyImageBased);
+                   "extractSub early-check stream[%d] codec_type=%d codec=%s imageBased=%d",
+                   earlySi, (int)formatCtx->streams[earlySi]->codecpar->codec_type,
+                   earlyName ? earlyName : "?", (int)earlyImageBased);
       if (earlyImageBased) {
         ctx->errorMessage = std::string("image-based subtitle not supported: ") +
                             (earlyName ? earlyName : "unknown");
@@ -993,6 +999,10 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       }
     }
   }
+  OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+               "extractSub codecCtx=%s extradata_size=%d",
+               codecCtx != nullptr ? "opened" : "NULL(raw-pkt-mode)",
+               subStream->codecpar->extradata_size);
 
   // Cues-based seek 策略（针对蓝光原盘等非交错封装 MKV）：
   // MKV Cues 元素记录了每条流各 Cluster 的字节偏移；FFmpeg 在 avformat_open_input 后
@@ -1023,13 +1033,35 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       // 重置超时，为从字幕起始位置做顺序读取提供完整时间窗口
       interruptCtx.startTimeUs = av_gettime_relative();
       interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;
+    } else {
+      // Cues 无该字幕流索引条目，回退到从文件起始位置读取
+      // avformat_find_stream_info 可能已将文件指针推进到中段，需 seek 回 0
+      // 否则后续 av_read_frame 从中段顺序扫描，对大文件（4K SMB）需读 90000+ 包导致 30s 超时
+      OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                   "extractSub stream[%d] no cues-seek, seek to beginning", si);
+      const int seekRet = av_seek_frame(formatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
+      if (seekRet < 0) {
+        ctx->errorMessage = "extractSub: rewind failed: " + FfmpegErrorToString(seekRet);
+        if (codecCtx != nullptr) { avcodec_free_context(&codecCtx); }
+        avformat_close_input(&formatCtx);
+        return;
+      }
+      // 重置超时时钟，为从起始位置完整读取提供完整时间窗口
+      interruptCtx.startTimeUs = av_gettime_relative();
+      interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;
     }
-    // 若 nb_index_entries == 0（Cues 无字幕条目），保持当前文件位置顺序读取
   }
 
-  // 顺序读取 packet 并过滤字幕流
-  // 注意：不设 AVDISCARD_ALL——HTTP/WebDAV 场景下 AVDISCARD_ALL 会对每个 video/audio block
-  // 调用 avio_skip()，进而发起大量 HTTP Range 请求（每帧一次），高 RTT 下速度极慢。
+  // 丢弃所有非字幕流，减少 av_read_frame 返回的无效包数量。
+  // 对于 MKV 容器：demuxer 在找到 subtitle cluster 之前仍需顺序解析块头，
+  // 但设置 AVDISCARD_ALL 后 FFmpeg 会跳过这些包的解码，减少 CPU 开销。
+  // 对于 localhost SMB proxy（127.0.0.1）：额外的 avio_skip()/Range 请求
+  // 延迟可忽略不计（<1ms/请求），不存在 WebDAV 场景的高 RTT 问题。
+  for (unsigned int discardI = 0; discardI < formatCtx->nb_streams; discardI++) {
+    if ((int)discardI != si) {
+      formatCtx->streams[discardI]->discard = AVDISCARD_ALL;
+    }
+  }
 
   std::string json = "[";
   bool first = true;
@@ -1063,11 +1095,34 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
 
     std::string text;
 
+    // 诊断日志：前 3 个字幕包打印详情，帮助定位 entries=0 根因
+    bool diagLog = (subPkts <= 3);
+
     if (codecCtx != nullptr) {
       // 有解码器：走 avcodec_decode_subtitle2
       AVSubtitle sub = {};
       int gotSub = 0;
       int dr = avcodec_decode_subtitle2(codecCtx, &sub, &gotSub, pkt);
+
+      if (diagLog) {
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                     "extractSub pkt#%lld decode dr=%d gotSub=%d num_rects=%u",
+                     (long long)subPkts, dr, gotSub,
+                     (unsigned)(gotSub ? sub.num_rects : 0u));
+        if (gotSub && sub.num_rects > 0 && sub.rects[0]->ass != nullptr) {
+          // 截取前 100 字节，替换 \0 为 '?' 保证 %s 安全
+          char assSnip[101] = {};
+          int assLen = (int)strlen(sub.rects[0]->ass);
+          int snipLen = assLen < 100 ? assLen : 100;
+          for (int ci = 0; ci < snipLen; ci++) {
+            assSnip[ci] = (sub.rects[0]->ass[ci] == '\0') ? '?' : sub.rects[0]->ass[ci];
+          }
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                       "extractSub pkt#%lld ass[0](%d)=%{public}s",
+                       (long long)subPkts, assLen, assSnip);
+        }
+      }
+
       if (dr >= 0 && gotSub && sub.num_rects > 0) {
         for (unsigned int r = 0; r < sub.num_rects; r++) {
           if (sub.rects[r]->ass != nullptr) {
@@ -1079,8 +1134,34 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
         }
       }
       avsubtitle_free(&sub);
+
+      // gotSub=0 降级：解码器未解出内容时，尝试将原始包当作 raw-pkt 解析
+      // 常见于 OHOS 上 extradata 为空导致 ass 解码器拒绝所有包
+      if (text.empty() && pkt->size > 0 && pkt->data != nullptr) {
+        if (diagLog) {
+          OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                       "extractSub pkt#%lld gotSub=0 fallback to raw-pkt",
+                       (long long)subPkts);
+        }
+        goto raw_pkt_parse; // 跳到 raw-pkt 路径；goto 仅在此处使用，清晰且无资源泄漏
+      }
     } else {
-      // 无解码器：subrip 在 MKV 中 pkt->data 可能是 ASS block 格式或纯 SRT 文本
+raw_pkt_parse:
+      // 无解码器（或 gotSub=0 降级）：
+      // subrip/ass 在 MKV 中 pkt->data 可能是 ASS block 格式或纯 SRT 文本
+      if (diagLog) {
+        // 截取前 200 字节，替换控制字符为 '?' 保证 %s 安全
+        size_t snipLen = std::min((size_t)200, (size_t)pkt->size);
+        char rawSnip[201] = {};
+        for (size_t ci = 0; ci < snipLen; ci++) {
+          unsigned char ch = pkt->data[ci];
+          rawSnip[ci] = (ch < 0x20 && ch != '\n' && ch != '\r') ? '?' : (char)ch;
+        }
+        OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
+                     "extractSub pkt#%lld raw(%d)=%{public}s",
+                     (long long)subPkts, pkt->size, rawSnip);
+      }
+
       text = std::string(reinterpret_cast<char *>(pkt->data),
                          static_cast<size_t>(pkt->size));
       // 检测 MKV ASS block 格式：readorder,layer,style,name,marginL,marginR,marginV,effect,text
@@ -1161,19 +1242,21 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
                "extractSub done stream=%d totalPkts=%lld subPkts=%lld",
                si, (long long)totalPkts, (long long)subPkts);
 
-  if (readRet < 0 && readRet != AVERROR_EOF) {
+  if (!first) {
+    // 找到至少一条字幕条目——即使超时也以已有结果 resolve（partial results）
+    json += "]";
+    ctx->jsonResult = json;
+  } else if (readRet < 0 && readRet != AVERROR_EOF) {
+    // 无条目且读取中途出错（超时 / 网络断开等）
     ctx->errorMessage = "extractSub: read failed: " + FfmpegErrorToString(readRet) +
                         " totalPkts=" + std::to_string(totalPkts) +
                         " subPkts=" + std::to_string(subPkts);
-  } else if (first) {
-    // count=0：以错误形式 reject，让 ArkTS catch 能打印 codec/packet 诊断信息
+  } else {
+    // 无条目且正常结束（EOF 或空文件）
     ctx->errorMessage = "count=0 codec=" + std::string(subCodecName ? subCodecName : "?") +
                         " totalPkts=" + std::to_string(totalPkts) +
                         " subPkts=" + std::to_string(subPkts) +
                         " nbStreams=" + std::to_string(nbStreams);
-  } else {
-    json += "]";
-    ctx->jsonResult = json;
   }
 }
 
@@ -4195,6 +4278,145 @@ static void CompleteSmbListDirectory(napi_env env, napi_status /*status*/, void 
     delete ctx;
 }
 
+// ── 异步上下文：SmbReadTextFile ─────────────────────────────────────────────
+struct SmbReadTextFileContext {
+    napi_async_work work = nullptr;
+    napi_deferred deferred = nullptr;
+    std::string url;           // 完整 smb:// URL（含凭据，仅在 Execute 内部使用，不打印）
+    int64_t maxSizeBytes = 5 * 1024 * 1024;
+    int32_t timeoutSeconds = 5; // Fix C: 可配置超时，默认 5s（原硬编码 30s）
+    std::string content;       // 读取结果：UTF-8 文本内容
+    std::string errorMessage;
+};
+
+static void ExecuteSmbReadTextFile(napi_env /*env*/, void *data) {
+    auto *ctx = static_cast<SmbReadTextFileContext *>(data);
+    SmbUrlComponents comps = ParseSmbUrl(ctx->url);
+    if (!comps.valid) {
+        ctx->errorMessage = "smbReadTextFile: invalid SMB URL";
+        return;
+    }
+    // 脱敏日志：只打印 host + share + subPath，不打印凭据
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient",
+                 "smbReadTextFile: host=%{public}s share=%{public}s path=%{public}s",
+                 comps.host.c_str(), comps.share.c_str(), comps.subPath.c_str());
+
+    struct smb2_context *smb2 = smb2_init_context();
+    if (!smb2) {
+        ctx->errorMessage = "smb2_init_context failed (out of memory)";
+        return;
+    }
+    if (!comps.user.empty())     smb2_set_user(smb2, comps.user.c_str());
+    if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
+    smb2_set_timeout(smb2, ctx->timeoutSeconds); // Fix C: 使用可配置超时（原硬编码 30s）
+
+    int ret = smb2_connect_share(smb2, comps.host.c_str(), comps.share.c_str(),
+                                  comps.user.empty() ? nullptr : comps.user.c_str());
+    if (ret < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "SMB connection failed";
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    struct smb2fh *fh = smb2_open(smb2, comps.subPath.c_str(), O_RDONLY);
+    if (!fh) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_open failed";
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    struct smb2_stat_64 st;
+    if (smb2_fstat(smb2, fh, &st) < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_fstat failed";
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    uint64_t fileSize = st.smb2_size;
+    // Fix E: uint64_t 比较，避免 int64_t 转换溢出
+    if (fileSize > (uint64_t)ctx->maxSizeBytes) {
+        ctx->errorMessage = "smbReadTextFile: file size " + std::to_string(fileSize) +
+                            " bytes exceeds maxSizeBytes " + std::to_string(ctx->maxSizeBytes);
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    // 分块读取全部内容到 std::string
+    ctx->content.reserve((size_t)fileSize);
+    const size_t kBufSize = 65536;
+    std::vector<uint8_t> buf(kBufSize);
+    int32_t bytesRead = 0;
+    while ((bytesRead = smb2_read(smb2, fh, buf.data(), kBufSize)) > 0) {
+        ctx->content.append(reinterpret_cast<const char *>(buf.data()), (size_t)bytesRead);
+        // 二次防护：读取途中若超出限制则中止（Fix E: 使用 uint64_t 比较）
+        if (ctx->content.size() > (uint64_t)ctx->maxSizeBytes) {
+            ctx->errorMessage = "smbReadTextFile: data exceeded maxSizeBytes during read";
+            ctx->content.clear();
+            smb2_close(smb2, fh);
+            smb2_disconnect_share(smb2);
+            smb2_destroy_context(smb2);
+            return;
+        }
+    }
+    if (bytesRead < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_read failed";
+        ctx->content.clear();
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    smb2_close(smb2, fh);
+    smb2_disconnect_share(smb2);
+    smb2_destroy_context(smb2);
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient",
+                 "smbReadTextFile: read %{public}zu bytes from %{public}s/%{public}s",
+                 ctx->content.size(), comps.share.c_str(), comps.subPath.c_str());
+}
+
+static void CompleteSmbReadTextFile(napi_env env, napi_status /*status*/, void *data) {
+    auto *ctx = static_cast<SmbReadTextFileContext *>(data);
+    if (!ctx->errorMessage.empty()) {
+        // Fix D: reject with Error object (not raw string), consistent with ffprobe interface
+        napi_value errMsg = nullptr;
+        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+        napi_value errObj = nullptr;
+        if (napi_create_error(env, nullptr, errMsg, &errObj) == napi_ok) {
+            napi_reject_deferred(env, ctx->deferred, errObj);
+        } else {
+            napi_reject_deferred(env, ctx->deferred, errMsg);
+        }
+    } else {
+        napi_value contentVal = nullptr;
+        if (napi_create_string_utf8(env, ctx->content.c_str(), ctx->content.size(), &contentVal) != napi_ok) {
+            // Fix D: reject with Error object for internal error too
+            napi_value errMsg = nullptr;
+            napi_create_string_utf8(env, "NAPI internal error: failed to create content string",
+                                    NAPI_AUTO_LENGTH, &errMsg);
+            napi_value errObj = nullptr;
+            if (napi_create_error(env, nullptr, errMsg, &errObj) == napi_ok) {
+                napi_reject_deferred(env, ctx->deferred, errObj);
+            } else {
+                napi_reject_deferred(env, ctx->deferred, errMsg);
+            }
+        } else {
+            napi_resolve_deferred(env, ctx->deferred, contentVal);
+        }
+    }
+    if (ctx->work) napi_delete_async_work(env, ctx->work);
+    delete ctx;
+}
+
 #endif // VIDALL_HAS_LIBSMB2
 
 /**
@@ -4778,6 +5000,99 @@ static napi_value SmbListDirectory(napi_env env, napi_callback_info info) {
     return promise;
 }
 
+/**
+ * smbReadTextFile(url: string, maxSizeBytes: number, timeoutSeconds?: number): Promise<string>
+ *
+ * 通过 SMB 协议读取小文件（如字幕文件）的 UTF-8 文本内容。
+ * url 格式：smb://[user[:pass]@]host[:port]/share/path/to/file
+ * maxSizeBytes：超过此大小则 reject（防止误读大文件）。
+ * timeoutSeconds（可选，默认 5）：SMB 连接超时秒数，Fix C。
+ */
+static napi_value SmbReadTextFile(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3] = { nullptr, nullptr, nullptr };
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+        ThrowTypeError(env, "smbReadTextFile failed to read args");
+        return nullptr;
+    }
+    if (argc < 2) {
+        ThrowTypeError(env, "smbReadTextFile requires (url, maxSizeBytes)");
+        return nullptr;
+    }
+
+    std::string url;
+    int64_t maxSizeBytes = 0;
+    if (!ReadUtf8String(env, args[0], url)) {
+        ThrowTypeError(env, "smbReadTextFile url must be string");
+        return nullptr;
+    }
+    if (napi_get_value_int64(env, args[1], &maxSizeBytes) != napi_ok) {
+        ThrowTypeError(env, "smbReadTextFile maxSizeBytes must be int64");
+        return nullptr;
+    }
+    // Fix E: 校验 maxSizeBytes 范围 (0, 50MB]，越界时 clamp 到默认 5MB
+    constexpr int64_t MAX_ALLOWED_BYTES = 50LL * 1024 * 1024;
+    if (maxSizeBytes <= 0 || maxSizeBytes > MAX_ALLOWED_BYTES) {
+        maxSizeBytes = 5LL * 1024 * 1024;
+    }
+
+    // Fix C: 读取可选第 3 个参数 timeoutSeconds，默认 5s
+    int32_t timeoutSeconds = 5;
+    if (argc >= 3 && args[2] != nullptr) {
+        int64_t ts = 0;
+        if (napi_get_value_int64(env, args[2], &ts) == napi_ok && ts > 0 && ts <= 300) {
+            timeoutSeconds = (int32_t)ts;
+        }
+    }
+
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
+        ThrowTypeError(env, "smbReadTextFile failed to create promise");
+        return nullptr;
+    }
+
+#if VIDALL_HAS_LIBSMB2
+    {
+        auto *ctx = new SmbReadTextFileContext();
+        ctx->deferred = deferred;
+        ctx->url = url;
+        ctx->maxSizeBytes = maxSizeBytes;
+        ctx->timeoutSeconds = timeoutSeconds; // Fix C
+
+        napi_value resourceName = nullptr;
+        if (napi_create_string_utf8(env, "smbReadTextFileAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbReadTextFile failed to create resource name");
+            return nullptr;
+        }
+        if (napi_create_async_work(env, nullptr, resourceName,
+                                   ExecuteSmbReadTextFile, CompleteSmbReadTextFile,
+                                   ctx, &ctx->work) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbReadTextFile failed to create async work");
+            return nullptr;
+        }
+        if (napi_queue_async_work(env, ctx->work) != napi_ok) {
+            napi_delete_async_work(env, ctx->work);
+            delete ctx;
+            ThrowTypeError(env, "smbReadTextFile failed to queue async work");
+            return nullptr;
+        }
+    }
+#else
+    {
+        napi_value errorMsg = nullptr;
+        napi_create_string_utf8(env,
+            "SMB protocol not available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+            NAPI_AUTO_LENGTH, &errorMsg);
+        napi_reject_deferred(env, deferred, errorMsg);
+    }
+#endif
+
+    return promise;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -4811,7 +5126,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "smbTestConnection", nullptr, SmbTestConnection, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "smbListDirectory",  nullptr, SmbListDirectory,  nullptr, nullptr, nullptr, napi_default, nullptr },
     { "smbListShares",     nullptr, SmbListShares,     nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "smbDiscoverHosts",  nullptr, SmbDiscoverHosts,  nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "smbDiscoverHosts",  nullptr, SmbDiscoverHosts,  nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbReadTextFile",   nullptr, SmbReadTextFile,   nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");

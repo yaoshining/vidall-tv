@@ -340,7 +340,7 @@ export interface ISubtitleBridgeAdapter {
   release(): void;
 }
 
-class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
+export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   protected player?: IPlayer;
   protected videoData?: VideoData;
   protected subtitleTracks: TrackInfo[] = [];
@@ -384,11 +384,21 @@ class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
     if (this.allSubtitleTracks.length > 0) {
       const preferredIndex = this.findPreferredTrackIndex();
-      await this.switchTrack(preferredIndex);
+      // 不 await：auto-select 的轨道切换可能包含长时间异步操作（如 SMB 内嵌字幕 30s 提取）
+      // fire-and-forget，初始化立即完成，字幕在提取完成后自动开始渲染
+      this.switchTrack(preferredIndex).catch(() => {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[字幕指标] 自动选轨异常，降级无字幕`);
+      });
       const selected = this.allSubtitleTracks[preferredIndex];
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length}` +
-        ` 自动选中[${preferredIndex}]=${selected.displayName}(${selected.kind})`);
+      if (selected) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length}` +
+          ` 自动选中[${preferredIndex}]=${selected.displayName}(${selected.kind})`);
+      } else {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length} 轨道索引越界`);
+      }
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[字幕指标] 初始化完成: 内嵌=0 外置=0 无字幕轨道`);
@@ -980,6 +990,12 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
 }
 
 export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
+  override onSeekSync(): void {
+    super.onSeekSync();
+    // seek 后 AVPlayer 会重新推送当前位置的字幕，清空旧文本避免 applySubtitleBridgeState 还原过期字幕
+    this.currentSubtitleText = '';
+  }
+
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
     const items: SubtitleTrackItem[] = [];
     if (!this.player) {

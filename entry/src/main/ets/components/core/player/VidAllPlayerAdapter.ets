@@ -392,6 +392,59 @@ export class VidAllPlayerAdapter implements IPlayer {
     }
   }
 
+  /**
+   * 仅启动 SMB HTTP 代理，不初始化播放器渲染上下文。
+   * 适用于 AVPlayer 路径：代理启动后 AVPlayer 通过 http://127.0.0.1:PORT/... 拉流，
+   * 无需 native XComponent 渲染环境，避免两阶段切换延迟。
+   *
+   * @param smbUrl  smb://user:pass@host:port/share/path 格式的完整 SMB URL
+   * @returns 代理 URL（http://127.0.0.1:PORT/...），失败时返回空字符串
+   */
+  static startSmbProxy(smbUrl: string): string {
+    let handle: number = 0;
+    try {
+      handle = VidAllCorePlayerNapi.createPlayer();
+      VidAllCorePlayerNapi.setSource(handle, smbUrl);
+      // C++ 骨架阶段仅存储 xComponentId，不立即绑定 surface，dummy 值可安全传入
+      const dummyCtx: NativeXComponentFallbackContext = {};
+      VidAllCorePlayerNapi.setXComponent(handle, dummyCtx as Object, 'smb-proxy-avplayer');
+      VidAllCorePlayerNapi.setCallbacks(
+        handle,
+        () => {},
+        (c: number, m: string) => { hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `startSmbProxy onError: ${c} ${m}`); },
+        (_p: number) => {},
+        () => {},
+        (_b: boolean) => {},
+        () => {}
+      );
+      // prepare() 同步触发 onPrepared，代理随之启动，getProxyUrl() 立即可用
+      VidAllCorePlayerNapi.prepare(handle);
+      const proxyUrl = VidAllCorePlayerNapi.getProxyUrl(handle) ?? '';
+      // keepProxy=true：释放 player handle 但保持代理线程运行，由后续 cleanupOrphanedProxies 清理
+      VidAllCorePlayerNapi.release(handle, true);
+      return proxyUrl;
+    } catch {
+      if (handle > 0) {
+        try {
+          VidAllCorePlayerNapi.release(handle, false);
+        } catch {}
+      }
+      return '';
+    }
+  }
+
+  /**
+   * 清理所有因 keepProxy=true 释放而孤立的 SMB 代理线程。
+   * 在切换视频、播放器 release 时调用，防止可结合线程（joinable thread）泄漏。
+   */
+  static cleanupOrphanedProxies(): void {
+    try {
+      VidAllCorePlayerNapi.cleanupOrphanedProxies();
+    } catch {
+      // 清理阶段失败不抛出
+    }
+  }
+
   seek(timeMs: number): void {
     this._metricsSeekStartMs = Date.now();
     let targetTimeMs = timeMs < 0 ? 0 : timeMs;

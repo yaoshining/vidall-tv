@@ -26,6 +26,49 @@ function getVidAllCorePlayerNapi(): FfprobeNapiBridge {
 }
 
 // ─────────────────────────────────────────────
+// SMB 代理探测所需的 NAPI 桥接（与 libvidall_core_player_napi.so 共模块）
+// ─────────────────────────────────────────────
+
+/** probeSmb() 创建临时 player 时传入的 XComponent 占位上下文（无实际渲染需求） */
+interface SmbProbeOnlyContext {
+}
+
+/** SMB 代理探测所需的 native player 管理方法子集 */
+interface SmbProbeNapiBridge {
+  createPlayer: () => number;
+  setSource: (handle: number, url: string) => void;
+  setXComponent: (handle: number, context: Object, xComponentId: string) => void;
+  setCallbacks: (
+    handle: number,
+    onPrepared: () => void,
+    onError: (code: number, msg: string) => void,
+    onTimeUpdate: (posMs: number) => void,
+    onCompleted: () => void,
+    onBufferingChange: (isBuffering: boolean) => void,
+    onSeekDone: () => void
+  ) => void;
+  prepare: (handle: number) => void;
+  getProxyUrl: (handle: number) => string;
+  release: (handle: number, keepProxy?: boolean) => void;
+}
+
+interface SmbProbeNapiBridgeModule {
+  default?: SmbProbeNapiBridge;
+}
+
+function getSmbProbeNapi(): SmbProbeNapiBridge {
+  const bridgeModule = VidAllCorePlayerNapiModule as SmbProbeNapiBridgeModule | SmbProbeNapiBridge | undefined;
+  if (bridgeModule === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const defaultBridge = (bridgeModule as SmbProbeNapiBridgeModule).default;
+  if (defaultBridge !== undefined) {
+    return defaultBridge as SmbProbeNapiBridge;
+  }
+  return bridgeModule as SmbProbeNapiBridge;
+}
+
+// ─────────────────────────────────────────────
 // 数据结构
 // ─────────────────────────────────────────────
 
@@ -463,6 +506,94 @@ export class FfprobeUtil {
   }
 
   /**
+   * 通过 SMB HTTP 代理探测 SMB 视频文件的轨道信息。
+   *
+   * 流程：
+   *   1. 创建临时 native player → prepare() 同步启动 SMB HTTP 代理
+   *   2. 获取代理 URL（http://127.0.0.1:PORT/share/path/file.mkv）
+   *   3. 用代理 URL 调用 ffprobe 探测轨道
+   *   4. ffprobe 完成后释放临时 player（代理随之停止）
+   *
+   * 若代理启动或 ffprobe 失败，返回 success=false 的结果，不抛出异常，
+   * 由调用方决定是否阻断播放（降级策略：失败时空轨道、正常播放）。
+   *
+   * @param smbUrl   smb://user:pass@host:port/share/path 格式的完整 SMB URL
+   * @param timeoutMs ffprobe 超时，默认 15000ms
+   */
+  static async probeSmb(
+    smbUrl: string,
+    timeoutMs: number = 15000
+  ): Promise<FfprobeResult> {
+    console.info(`[FfprobeUtil] SMB probe via HTTP proxy: ${maskUrlForLog(smbUrl)}`);
+
+    // ── 先拿并发槽位，防止多文件快速滑动时代理并发创建失控 ─────────────────
+    await FfprobeUtil.acquireProbeSlot();
+
+    let playerHandle: number = 0;
+    try {
+      // ── 阶段 1：启动 SMB HTTP 代理（native player prepare 异步回调）──────────
+      const napi = getSmbProbeNapi();
+      playerHandle = napi.createPlayer();
+      napi.setSource(playerHandle, smbUrl);
+
+      // probe 不需要实际渲染；XComponent 传 dummy 值（C++ 骨架阶段仅存储 id，不立即绑定 surface）
+      const dummyCtx: SmbProbeOnlyContext = {};
+      napi.setXComponent(playerHandle, dummyCtx as Object, 'smb-probe-only');
+
+      // prepare() 是非阻塞调用：onPrepared 通过异步回调触发，代理随之启动
+      const h = playerHandle;
+      napi.setCallbacks(
+        h,
+        () => { /* onPrepared: prepare() 异步回调，代理已启动，无需额外操作 */ },
+        (code: number, msg: string) => {
+          console.warn(`[FfprobeUtil] SMB probe player error: code=${code} msg=${msg}`);
+        },
+        () => { /* onTimeUpdate: probe 阶段不播放，忽略 */ },
+        () => { /* onCompleted: probe 阶段不播放，忽略 */ },
+        () => { /* onBufferingChange: probe 阶段不播放，忽略 */ },
+        () => { /* onSeekDone: probe 阶段无 seek，忽略 */ }
+      );
+
+      napi.prepare(h);
+
+      const proxyUrl = napi.getProxyUrl(h) ?? '';
+      console.info(`[FfprobeUtil] SMB proxy URL: ${proxyUrl.length > 0 ? proxyUrl : '(空)'}`);
+
+      if (proxyUrl.length === 0) {
+        console.warn(`[FfprobeUtil] SMB proxy URL 为空，跳过探测（可能 prepare 未成功或非 SMB 源）`);
+        return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), 'SMB proxy URL 为空');
+      }
+
+      // ── 阶段 2：通过 HTTP proxy URL 直接调用 ffprobe NAPI（槽位已持有）────
+      try {
+        const outputJson = await getVidAllCorePlayerNapi().ffprobe(proxyUrl, '', timeoutMs);
+        console.info(`[FfprobeUtil] SMB probe 完成，输出长度=${outputJson.length}`);
+        return FfprobeUtil.parseOutput(proxyUrl, outputJson);
+      } catch (e) {
+        const err = e as BusinessError;
+        const msg = err.message ? err.message : JSON.stringify(e);
+        console.error(`[FfprobeUtil] SMB probe 探测失败: ${msg}`);
+        return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), msg);
+      }
+    } catch (e) {
+      const err = e as BusinessError;
+      const msg = err.message ? err.message : JSON.stringify(e);
+      console.warn(`[FfprobeUtil] SMB proxy 启动失败，跳过探测: ${msg}`);
+      return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), `SMB proxy 启动失败: ${msg}`);
+    } finally {
+      // 无论成功/失败，始终释放并发槽位与临时 player（代理随之停止）
+      FfprobeUtil.releaseProbeSlot();
+      if (playerHandle > 0) {
+        try {
+          getSmbProbeNapi().release(playerHandle);
+        } catch {
+          /* 释放失败不抛出 */
+        }
+      }
+    }
+  }
+
+  /**
    * 从媒体文件中提取指定内嵌字幕流的所有字幕条目。
    * 内部使用 VidAll_TV 自己的 libffmpeg.so（支持 subrip 解码器）。
    * 返回 {startMs, endMs, text} 数组，可直接作为 SrtEntry[] 使用。
@@ -708,27 +839,38 @@ export class FfprobeUtil {
 
   /**
    * 构建字幕轨显示名称
-   * e.g. "中文 (SRT)", "英语 (ASS)", "字幕 1"
+   * 格式：N 语言(编码)，例如：
+   *   "1 中文(ASS)"、"2 中文(SRT)"、"3 英语(ASS)"
+   *   "4 中文(ASS) 简体"（tier3 语义标签保留）
+   *   "5 字幕"（无语言无编码时的兜底）
    */
   static buildSubtitleTrackDisplayName(track: FfprobeTrack, index: number): string {
+    const num = index + 1;
     const langName = track.language
       ? FfprobeUtil.getLanguageDisplayName(track.language)
-      : `字幕 ${index + 1}`;
+      : '';
     const codecDisplay = track.codecName
       ? FfprobeUtil.getCodecDisplayName(track.codecName)
       : '';
     const tier3 = FfprobeUtil.getSubtitleTier3Label(track, index);
+    // 只保留短语义标签（简体/繁体/香港等），过滤 MKV track title 长字符串
+    const SEMANTIC_TIER3_KEYWORDS: string[] = ['简体', '繁体', '香港', '台湾', 'Simplified', 'Traditional', 'HK', 'TW'];
+    const isSemanticTier3 = SEMANTIC_TIER3_KEYWORDS.some((kw: string) => tier3.includes(kw));
 
-    if (codecDisplay) {
-      // 有编解码显示名称时：语言 (编码)，与 buildAudioTrackDisplayName 风格一致
-      // tier3 为语义标签（简体/繁体/香港）时追加，通用兜底（'未标注'/'轨道N'）时省略
-      const isSemanticTier3 = tier3.length > 0 && tier3 !== '未标注' && !tier3.startsWith('轨道');
-      if (isSemanticTier3) {
-        return `${langName} (${codecDisplay}) ${tier3}`;
-      }
-      return `${langName} (${codecDisplay})`;
+    let label = '';
+    if (langName && codecDisplay) {
+      label = isSemanticTier3
+        ? `${langName}(${codecDisplay}) ${tier3}`
+        : `${langName}(${codecDisplay})`;
+    } else if (langName) {
+      label = langName;
+    } else if (codecDisplay) {
+      label = `字幕(${codecDisplay})`;
+    } else {
+      label = '字幕';
     }
-    return langName;
+
+    return `${num} ${label}`;
   }
 }
 
