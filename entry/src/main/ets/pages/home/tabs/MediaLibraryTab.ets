@@ -10,6 +10,7 @@ import { FileSourceType } from "../../../db/models/FileSourceEntity"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
 import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
+import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 
@@ -77,6 +78,7 @@ interface SourceRuntimeConfig {
 struct PosterCard {
   @Require @Param item: MediaItem
   @Local isHovered: boolean = false
+  @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
   private getTitle(): string { return displayTitle(this.item); }
   private getPoster(): string { return posterSrc(this.item); }
   private hasPosterImg(): boolean { return hasPoster(this.item); }
@@ -165,11 +167,13 @@ struct PosterCard {
     }
     .width(POSTER_WIDTH)
     .alignItems(HorizontalAlign.Start)
+    .onClick(() => {
+      if (this.item.mediaType === 'movie') {
+        this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, this.item);
+      }
+    })
   }
 }
-
-// ─────────────────────────────────────────────
-// 合集卡片（电视剧/综艺）
 // ─────────────────────────────────────────────
 @ComponentV2
 struct SeriesCard {
