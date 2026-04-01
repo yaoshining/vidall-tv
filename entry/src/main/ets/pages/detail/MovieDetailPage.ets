@@ -7,6 +7,7 @@ import http from '@ohos.net.http';
 import image from '@ohos.multimedia.image';
 import effectKit from '@ohos.effectKit';
 import { millisecondsToTime } from '../../utils/TimeUtil';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -279,31 +280,37 @@ export struct MovieDetailPage {
       if (buf === undefined || buf.byteLength === 0) { return; }
 
       // 缩小尺寸加速：从 ArrayBuffer 创建 ImageSource，解码为小尺寸 PixelMap
-      const imgSrc = image.createImageSource(buf);
-      const pixelMap = await imgSrc.createPixelMap({
-        desiredSize: { width: 64, height: 36 },
-        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
-      });
-      imgSrc.release();
+      let imgSrc: image.ImageSource | undefined;
+      let pixelMap: image.PixelMap | undefined;
+      try {
+        imgSrc = image.createImageSource(buf);
+        pixelMap = await imgSrc.createPixelMap({
+          desiredSize: { width: 64, height: 36 },
+          desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+        });
 
-      // effectKit 提取主色
-      const picker = await effectKit.createColorPicker(pixelMap);
-      const mainColor = picker.getMainColorSync();
-      pixelMap.release();
+        // effectKit 提取主色
+        const picker = await effectKit.createColorPicker(pixelMap);
+        const mainColor = picker.getMainColorSync();
 
-      // 将 RGB 分量各减暗 40%，保证背景色足够深
-      const darken = (v: number): number => Math.round(v * 0.4);
-      const toHex = (v: number): string => {
-        const h = v.toString(16);
-        return h.length < 2 ? '0' + h : h;
-      };
-      const r = darken(mainColor.red & 0xFF);
-      const g = darken(mainColor.green & 0xFF);
-      const b = darken(mainColor.blue & 0xFF);
-      this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
+        // 将 RGB 分量各减暗 40%，保证背景色足够深
+        const darken = (v: number): number => Math.round(v * 0.4);
+        const toHex = (v: number): string => {
+          const h = v.toString(16);
+          return h.length < 2 ? '0' + h : h;
+        };
+        const r = darken(mainColor.red & 0xFF);
+        const g = darken(mainColor.green & 0xFF);
+        const b = darken(mainColor.blue & 0xFF);
+        this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
+      } finally {
+        pixelMap?.release();
+        imgSrc?.release();
+      }
     } catch (e) {
       // 提取失败，保持默认色
-      console.warn('[MovieDetailPage] extractDominantColor failed', JSON.stringify(e));
+      const err = e as BusinessError;
+      console.warn('[MovieDetailPage]', `extractDominantColor failed: ${err.message}`);
     }
   }
 
@@ -367,7 +374,7 @@ export struct MovieDetailPage {
         }).join('/');
         fullUrl = 'smb://' + user + ':' + pass + '@' + smbConfig.host + ':' + port.toString() + encodedPath;
         httpHeader = {};
-      } else {
+      } else if (fileSource.type === FileSourceType.WEBDAV) {
         const protocol = config['protocol'] ?? 'http';
         const host = config['url'] ?? '';
         const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
@@ -383,6 +390,9 @@ export struct MovieDetailPage {
         fullUrl = client.getFullUrl(item.filePath);
         const authHeader = client.getAuthHeaderPublic();
         httpHeader = authHeader.length > 0 ? { 'Authorization': authHeader } : {};
+      } else {
+        console.warn('[MovieDetailPage]', `不支持的文件源类型: ${fileSource.type}`);
+        return;
       }
 
       const param: PlayerPageParam = {
@@ -610,18 +620,21 @@ export struct MovieDetailPage {
           }
           .alignItems(VerticalAlign.Center)
 
-          // 简介：超 100 字截断显示 + 「更多」Span，不超出仅显示原文
+          // 简介：超 100 字截断显示 + 「更多」按钮（独立 Text 可聚焦），不超出仅显示原文
           if (this.getOverview().length > 0) {
             if (this.isOverviewLong()) {
-              Text() {
-                Span(this.getOverviewShort())
+              Row({ space: 4 }) {
+                Text(this.getOverviewShort())
                   .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-                Span('更多')
+                  .constraintSize({ maxWidth: 640 })
+                Text('更多')
                   .fontSize(14).fontColor('#1B78F2')
                   .fontWeight(FontWeight.Medium)
+                  .focusable(true)
                   .onClick(() => { this.showOverviewDialog = true; })
               }
               .constraintSize({ maxWidth: 700 })
+              .alignItems(VerticalAlign.Bottom)
             } else {
               Text(this.getOverview())
                 .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
@@ -631,6 +644,14 @@ export struct MovieDetailPage {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
+
+        // 中间：海报封面（有数据时显示）
+        if (this.getPosterUrl().length > 0) {
+          Image(this.getPosterUrl())
+            .width(120).aspectRatio(2 / 3)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(8)
+        }
 
         // 右侧：电影版续播卡片
         this.MovieWatchingCard()
@@ -828,7 +849,13 @@ export struct MovieDetailPage {
             .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
             .textShadow({ radius: 6, color: '#88000000', offsetX: 1, offsetY: 1 })
             .padding(20)
-            .onClick(() => { this.pageStack.pop(); })
+            .onClick(() => {
+              if (this.showOverviewDialog) {
+                this.showOverviewDialog = false;
+              } else {
+                this.pageStack.pop();
+              }
+            })
         }
         .width('100%')
         .padding({ left: 16, top: 8 })
