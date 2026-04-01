@@ -853,32 +853,20 @@ static std::string StripAssOverrideTags(const std::string &text) {
 // 从 ASS Dialogue 行提取纯文本（格式：Dialogue: layer,start,end,style,...,text）
 static std::string ParseAssDialogue(const char *ass) {
   if (ass == nullptr) return "";
-  // 支持两种合法格式：
-  //   1. 完整 Dialogue 行（FFmpeg ass 解码器输出）：
-  //      "Dialogue: Marked,Start,End,Style,Name,ML,MR,MV,Effect,Text"
-  //      → 9 个逗号后取文本
-  //   2. MKV ASS block 原始包（raw-pkt / 解码器 fallback）：
-  //      "ReadOrder,Layer,Style,Name,ML,MR,MV,Effect,Text"
-  //      → 8 个逗号后取文本
+  // MKV ASS block 格式（avcodec_decode_subtitle2 及 raw-pkt 均输出此格式）：
+  //   "ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
+  //   共 8 个逗号分隔的字段，第 8 个逗号之后即为 Text 字段。
+  //
+  // 注意：Text 字段本身可包含逗号（如 \fad(500,1000) 内的逗号），
+  // 因此必须在恰好数到第 8 个逗号后立即停止，不得继续向后搜索。
   int commas = 0;
   const char *p = ass;
-  const char *textAt8 = nullptr; // 指向第 8 个逗号之后的字符
-  while (*p && commas < 9) {
-    if (*p == ',') {
-      commas++;
-      if (commas == 8) textAt8 = p + 1;
-    }
+  while (*p && commas < 8) {
+    if (*p == ',') commas++;
     p++;
   }
-  if (commas == 9) {
-    // 完整 Dialogue 行：p 指向第 9 个逗号之后
-    return StripAssOverrideTags(std::string(p));
-  }
-  if (commas == 8 && textAt8 != nullptr) {
-    // MKV raw block：textAt8 指向第 8 个逗号之后
-    return StripAssOverrideTags(std::string(textAt8));
-  }
-  return ""; // 格式不符，返回空串
+  if (commas < 8) return ""; // 字段不足，格式不符
+  return StripAssOverrideTags(std::string(p));
 }
 
 static void ExecuteExtractSubAsync(napi_env env, void *data) {
@@ -1241,19 +1229,21 @@ raw_pkt_parse:
                "extractSub done stream=%d totalPkts=%lld subPkts=%lld",
                si, (long long)totalPkts, (long long)subPkts);
 
-  if (readRet < 0 && readRet != AVERROR_EOF) {
+  if (!first) {
+    // 找到至少一条字幕条目——即使超时也以已有结果 resolve（partial results）
+    json += "]";
+    ctx->jsonResult = json;
+  } else if (readRet < 0 && readRet != AVERROR_EOF) {
+    // 无条目且读取中途出错（超时 / 网络断开等）
     ctx->errorMessage = "extractSub: read failed: " + FfmpegErrorToString(readRet) +
                         " totalPkts=" + std::to_string(totalPkts) +
                         " subPkts=" + std::to_string(subPkts);
-  } else if (first) {
-    // count=0：以错误形式 reject，让 ArkTS catch 能打印 codec/packet 诊断信息
+  } else {
+    // 无条目且正常结束（EOF 或空文件）
     ctx->errorMessage = "count=0 codec=" + std::string(subCodecName ? subCodecName : "?") +
                         " totalPkts=" + std::to_string(totalPkts) +
                         " subPkts=" + std::to_string(subPkts) +
                         " nbStreams=" + std::to_string(nbStreams);
-  } else {
-    json += "]";
-    ctx->jsonResult = json;
   }
 }
 
