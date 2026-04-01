@@ -452,7 +452,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
 
     try {
       const entries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
-        videoSrc, undefined, internalIndex, 30000
+        videoSrc, undefined, internalIndex, 90000
       );
       // Major #5：写入前检查版本号，过期结果直接丢弃
       if (currentGen !== this.subtitleSwitchGeneration) {

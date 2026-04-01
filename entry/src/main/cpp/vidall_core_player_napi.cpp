@@ -1046,9 +1046,16 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
     }
   }
 
-  // 顺序读取 packet 并过滤字幕流
-  // 注意：不设 AVDISCARD_ALL——HTTP/WebDAV 场景下 AVDISCARD_ALL 会对每个 video/audio block
-  // 调用 avio_skip()，进而发起大量 HTTP Range 请求（每帧一次），高 RTT 下速度极慢。
+  // 丢弃所有非字幕流，减少 av_read_frame 返回的无效包数量。
+  // 对于 MKV 容器：demuxer 在找到 subtitle cluster 之前仍需顺序解析块头，
+  // 但设置 AVDISCARD_ALL 后 FFmpeg 会跳过这些包的解码，减少 CPU 开销。
+  // 对于 localhost SMB proxy（127.0.0.1）：额外的 avio_skip()/Range 请求
+  // 延迟可忽略不计（<1ms/请求），不存在 WebDAV 场景的高 RTT 问题。
+  for (unsigned int discardI = 0; discardI < formatCtx->nb_streams; discardI++) {
+    if ((int)discardI != si) {
+      formatCtx->streams[discardI]->discard = AVDISCARD_ALL;
+    }
+  }
 
   std::string json = "[";
   bool first = true;
