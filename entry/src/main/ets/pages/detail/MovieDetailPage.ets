@@ -1,5 +1,18 @@
-import { MediaItem } from '../../db/models/MediaEntity';
+import { MediaItem, PlayProgressEntity, MovieEntity } from '../../db/models/MediaEntity';
 import { PlayerPageParam, PlayerPage } from '../player/index';
+import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
+import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity';
+import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
+
+// ─────────────────────────────────────────────
+// 辅助类型
+// ─────────────────────────────────────────────
+
+interface CastPerson {
+  name: string;
+  character?: string;
+  profile_path?: string;
+}
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -36,6 +49,28 @@ function parseGenresArr(json: string | undefined): string[] {
   }
 }
 
+function parseCastArr(json: string | undefined): CastPerson[] {
+  if (!json) {
+    return [];
+  }
+  try {
+    return JSON.parse(json) as CastPerson[];
+  } catch (e) {
+    return [];
+  }
+}
+
+function parseDirectorsArr(json: string | undefined): string[] {
+  if (!json) {
+    return [];
+  }
+  try {
+    return JSON.parse(json) as string[];
+  } catch (e) {
+    return [];
+  }
+}
+
 // ─────────────────────────────────────────────
 // 电影详情页
 // ─────────────────────────────────────────────
@@ -47,7 +82,33 @@ export struct MovieDetailPage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
 
   @Local item: MediaItem | undefined = undefined;
-  @Local isHovered: boolean = false;
+  // Thread 2：续播进度
+  @Local progress: PlayProgressEntity | null = null;
+  // Thread 3：电影详情（演员/导演）
+  @Local movieEntity: MovieEntity | null = null;
+
+  // ── 数据加载 ──
+
+  private loadAuxData(item: MediaItem): void {
+    const db = FileSourceDatabase.getInstance();
+    // 加载续播进度
+    db.getPlayProgress(item.id).then((p: PlayProgressEntity | null) => {
+      this.progress = p;
+    }).catch(() => {
+      this.progress = null;
+    });
+    // 加载电影详情（演员/导演），仅在已刮削时查询
+    const provider = item.provider;
+    const providerId = item.providerId;
+    if (provider !== undefined && provider.length > 0 &&
+        providerId !== undefined && providerId.length > 0) {
+      db.getMovieByProviderId(provider, providerId).then((m: MovieEntity | null) => {
+        this.movieEntity = m;
+      }).catch(() => {
+        this.movieEntity = null;
+      });
+    }
+  }
 
   // ── 计算属性 ──
 
@@ -92,19 +153,105 @@ export struct MovieDetailPage {
     return parseGenresArr(this.item?.genresJson);
   }
 
-  // ── 播放 ──
+  // Thread 3：演员列表，最多5人
+  private getCast(): CastPerson[] {
+    return parseCastArr(this.movieEntity?.castJson).slice(0, 5);
+  }
 
-  private play(): void {
-    if (this.item === undefined) {
+  // Thread 3：导演列表
+  private getDirectors(): string[] {
+    return parseDirectorsArr(this.movieEntity?.directorsJson);
+  }
+
+  // Thread 2：是否有续播进度（大于5秒才算）
+  private hasProgress(): boolean {
+    const p = this.progress;
+    return p !== null && p.positionMs > 5000;
+  }
+
+  private getProgressPercent(): number {
+    const p = this.progress;
+    if (p === null || p.durationMs <= 0) {
+      return 0;
+    }
+    return Math.min(1, p.positionMs / p.durationMs);
+  }
+
+  private getPlayButtonText(): string {
+    return this.hasProgress() ? '继续播放' : '立即播放';
+  }
+
+  // ── 播放（Thread 1：构建正确的 WebDAV/SMB URL）──
+
+  private async play(): Promise<void> {
+    const item = this.item;
+    if (item === undefined) {
       return;
     }
-    const param: PlayerPageParam = {
-      videoId: this.item.id,
-      url: this.item.filePath,
-      title: this.getTitle(),
-      durationHintMs: this.item.durationMs,
-    };
-    this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const fileSource = await db.getFileSourceById(item.sourceId);
+      if (fileSource === null) {
+        console.warn('[MovieDetailPage] 找不到文件源 sourceId=' + item.sourceId.toString());
+        return;
+      }
+      const config = JSON.parse(fileSource.configJson) as Record<string, string>;
+      let fullUrl: string;
+      let httpHeader: Record<string, string>;
+
+      if (fileSource.type === FileSourceType.SMB) {
+        // SMB 源：构建带认证的 smb:// URL
+        const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
+        const port = smbConfig.port ?? 445;
+        const user = encodeURIComponent(smbConfig.username);
+        const pass = encodeURIComponent(smbConfig.password);
+        const encodedPath = item.filePath.split('/').map((seg: string): string => {
+          if (seg.length === 0) {
+            return '';
+          }
+          let decoded: string = seg;
+          try {
+            decoded = decodeURIComponent(seg);
+          } catch {
+            decoded = seg;
+          }
+          return encodeURIComponent(decoded);
+        }).join('/');
+        fullUrl = 'smb://' + user + ':' + pass + '@' + smbConfig.host + ':' + port.toString() + encodedPath;
+        httpHeader = {};
+      } else {
+        // WebDAV 源：使用 WebDAVClient 构建完整认证 URL
+        const protocol = config['protocol'] ?? 'http';
+        const host = config['url'] ?? '';
+        const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
+        const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
+        const baseUrl = protocol + '://' + host + ':' + port + rootPath;
+        const webdavConfig: WebDAVConfig = {
+          baseUrl,
+          username: config['username'] ?? '',
+          password: config['password'] ?? '',
+          timeout: 30000,
+        };
+        const client = new WebDAVClient(webdavConfig);
+        fullUrl = client.getFullUrl(item.filePath);
+        const authHeader = client.getAuthHeaderPublic();
+        httpHeader = authHeader.length > 0 ? { 'Authorization': authHeader } : {};
+      }
+
+      const param: PlayerPageParam = {
+        videoId: item.id,
+        url: fullUrl,
+        httpHeader,
+        title: this.getTitle(),
+        durationHintMs: item.durationMs,
+        seriesProviderId: '',
+        seasonNumber: 0,
+        episodeNumber: 0,
+      };
+      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
+    } catch {
+      console.error('[MovieDetailPage] play() 构建播放 URL 失败');
+    }
   }
 
   // ── 构建 ──
@@ -206,25 +353,57 @@ export struct MovieDetailPage {
               }
             }
 
-            // 播放按钮
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 8 }) {
-                Text('▶')
-                  .fontSize(20)
-                  .fontColor(Color.White)
-                Text('立即播放')
-                  .fontSize(22)
-                  .fontColor(Color.White)
-                  .fontWeight(FontWeight.Medium)
+            // Thread 2：播放按钮（含续播进度）
+            Column({ space: 8 }) {
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 8 }) {
+                  Text('▶')
+                    .fontSize(20)
+                    .fontColor(Color.White)
+                  Text(this.getPlayButtonText())
+                    .fontSize(22)
+                    .fontColor(Color.White)
+                    .fontWeight(FontWeight.Medium)
+                }
+                .padding({ left: 8, right: 8 })
               }
-              .padding({ left: 8, right: 8 })
+              .width(220)
+              .height(60)
+              .backgroundColor('#2196F3')
+              .borderRadius(8)
+              .focusable(true)
+              .onClick(() => { this.play(); })
+
+              // Thread 2：续播进度条
+              if (this.hasProgress()) {
+                Column({ space: 4 }) {
+                  Progress({ value: this.getProgressPercent() * 100, total: 100, type: ProgressType.Linear })
+                    .width(220)
+                    .height(4)
+                    .color('#2196F3')
+                    .backgroundColor('rgba(255,255,255,0.2)')
+                  Text('已观看 ' + Math.round(this.getProgressPercent() * 100).toString() + '%')
+                    .fontSize(12)
+                    .fontColor('#AAAAAA')
+                }
+                .alignItems(HorizontalAlign.Start)
+              }
             }
-            .width(220)
-            .height(60)
-            .backgroundColor('#2196F3')
-            .borderRadius(8)
-            .focusable(true)
-            .onClick(() => { this.play(); })
+            .alignItems(HorizontalAlign.Start)
+
+            // Thread 3：导演信息
+            if (this.getDirectors().length > 0) {
+              Row({ space: 8 }) {
+                Text('导演：')
+                  .fontSize(15)
+                  .fontColor('#AAAAAA')
+                Text(this.getDirectors().join('、'))
+                  .fontSize(15)
+                  .fontColor('#CCCCCC')
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+            }
 
             // 简介
             Column({ space: 8 }) {
@@ -242,6 +421,41 @@ export struct MovieDetailPage {
             }
             .alignItems(HorizontalAlign.Start)
             .margin({ top: 8 })
+
+            // Thread 3：演员列表（最多5人）
+            if (this.getCast().length > 0) {
+              Column({ space: 8 }) {
+                Text('演员')
+                  .fontSize(18)
+                  .fontColor('#FFFFFF')
+                  .fontWeight(FontWeight.Medium)
+                Row({ space: 12 }) {
+                  ForEach(this.getCast(), (person: CastPerson) => {
+                    Column({ space: 4 }) {
+                      Text(person.name)
+                        .fontSize(13)
+                        .fontColor('#CCCCCC')
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .width(80)
+                        .textAlign(TextAlign.Center)
+                      if (person.character !== undefined && person.character.length > 0) {
+                        Text(person.character)
+                          .fontSize(11)
+                          .fontColor('#888888')
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .width(80)
+                          .textAlign(TextAlign.Center)
+                      }
+                    }
+                    .width(80)
+                  })
+                }
+              }
+              .alignItems(HorizontalAlign.Start)
+              .margin({ top: 8 })
+            }
           }
           .layoutWeight(1)
           .alignItems(HorizontalAlign.Start)
@@ -259,6 +473,7 @@ export struct MovieDetailPage {
       const param = context.pathInfo.param as MediaItem;
       if (param !== undefined && param !== null) {
         this.item = param;
+        this.loadAuxData(param);
       }
     })
     .hideTitleBar(true)
