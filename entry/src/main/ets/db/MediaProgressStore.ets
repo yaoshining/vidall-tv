@@ -29,7 +29,7 @@ export class MediaProgressStore {
     if (durationMs <= 0) {
       return false;
     }
-    return (durationMs - positionMs) < 60000 || positionMs > durationMs * 0.95;
+    return (durationMs - positionMs) < 60000 || positionMs >= durationMs * 0.95;
   }
 
   /**

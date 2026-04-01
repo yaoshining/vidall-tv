@@ -134,8 +134,6 @@ export struct SeriesDetailPage {
   @Local selectedSeasonNumber: number = -1
   /** 播放进度映射（key = videoId，文件级，用于集列表进度条） */
   @Local progressMap: Map<number, PlayProgressEntity> = new Map()
-  /** 最新播放进度（文件级，保留以供 getResumeCardEpLabel 等辅助方法访问） */
-  @Local lastProgress: PlayProgressEntity | null = null
   /** 媒体级播放进度（用于 ContinueWatchingCard 续播入口） */
   @Local mediaProgress: MediaProgressEntry | null = null
   /** 最新播放集信息 */
@@ -344,7 +342,6 @@ export struct SeriesDetailPage {
       newMap.set(progress.videoId, progress);
     }
     this.progressMap = newMap;
-    this.lastProgress = progressList.length > 0 ? progressList[0] : null;
 
     // ── 媒体级进度：用于 ContinueWatchingCard 续播入口 ─────────────────────
     const mKey = MediaProgressStore.seriesKey(seriesProviderId);
