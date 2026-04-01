@@ -196,6 +196,8 @@ export class VideoPlayerController {
   private subtitlePauseTime: number = 0
   /** 字幕时间轴诊断日志节流：每 1s 打印一次 */
   private lastSubtitleTimelineLogMs: number = -1000;
+  /** 上一次内嵌字幕的 startTime，用于判断是否是同一字幕的重复回调 */
+  private lastSubtitleStartTime: number = -1;
   private readonly SUBTITLE_TIMELINE_LOG_INTERVAL = 1000;
 
   /** 播放进度上下文（由调用方在 initPlayer 前设置） */
@@ -645,19 +647,34 @@ export class VideoPlayerController {
       this.subtitleAdapter.onSubtitleUpdate(info);
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `内嵌字幕回调: text="${info.text?.substring(0, 80)}" duration=${info.duration}ms`);
-      if (this.subtitleClearTimer) {
-        clearTimeout(this.subtitleClearTimer);
-        this.subtitleClearTimer = undefined;
-      }
+        `内嵌字幕回调: text="${info.text?.substring(0, 80)}" startTime=${info.startTime}ms duration=${info.duration}ms`);
       if (info.text) {
-        this.currentSubtitleText = info.text;
-        const displayDuration = (info.duration && info.duration > 0) ? info.duration : 3000;
-        this.subtitleRemainingTime = displayDuration;
-        if (this.isPlaying) { this.startSubtitleTimer(); }
+        // 只在字幕内容或 startTime 发生变化时重置定时器。
+        // AVPlayer 对同一字幕可能在持续期间内多次重复回调，若每次都清除并重建定时器，
+        // 定时器永远无法触发，字幕就不会被清除。
+        const isNewSubtitle = info.text !== this.currentSubtitleText ||
+          (info.startTime !== undefined && info.startTime !== this.lastSubtitleStartTime);
+        if (isNewSubtitle) {
+          if (this.subtitleClearTimer) {
+            clearTimeout(this.subtitleClearTimer);
+            this.subtitleClearTimer = undefined;
+          }
+          this.currentSubtitleText = info.text;
+          this.lastSubtitleStartTime = info.startTime ?? -1;
+          const displayDuration = (info.duration && info.duration > 0) ? info.duration : 3000;
+          this.subtitleRemainingTime = displayDuration;
+          if (this.isPlaying) { this.startSubtitleTimer(); }
+        }
+        // 同一字幕的重复回调：保持现有定时器继续运行，不重置
       } else {
+        // 空文本（字幕区间结束）：立即清除
+        if (this.subtitleClearTimer) {
+          clearTimeout(this.subtitleClearTimer);
+          this.subtitleClearTimer = undefined;
+        }
         this.currentSubtitleText = '';
         this.subtitleRemainingTime = 0;
+        this.lastSubtitleStartTime = -1;
       }
       this.subtitleUpdateCounter++;
     });
