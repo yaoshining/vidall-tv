@@ -188,6 +188,14 @@ function extractSmbLangLabel(fileName: string, baseName: string): string {
 export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   /** 防止异步提取竞态：每次发起新切轨请求时递增，过期结果不写入 srtEntries */
   private subtitleSwitchGeneration: number = 0;
+  /** 缓存最新播放位置，用于提取完成后判断 entries 是否覆盖当前时间 */
+  private lastKnownPositionMs: number = 0;
+
+  override onTimeUpdate(currentTimeMs: number): void {
+    this.lastKnownPositionMs = currentTimeMs;
+    super.onTimeUpdate(currentTimeMs);
+  }
+
   protected async loadExternalTracks(): Promise<SubtitleTrackItem[]> {
     if (!this.videoData) {
       return [];
@@ -464,15 +472,31 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[SmbSub] 内嵌字幕提取完成 stream=${internalIndex} entries=${entries.length}`);
 
-      // entries=0 说明内嵌字幕提取失败，尝试 fallback 到第一个外置字幕轨
-      if (entries.length === 0) {
+      // 判断是否需要 fallback 到外置字幕：
+      // 1. entries=0（提取失败）
+      // 2. entries 时间范围无法覆盖当前播放位置（典型场景：超时后只拿到片头动画字幕，
+      //    而播放已在片中，此时 entries 最大时间 < 当前位置）
+      let needFallback = entries.length === 0;
+      if (!needFallback && entries.length > 0) {
+        const maxEndMs: number = (entries as SrtEntry[]).reduce(
+          (maxVal: number, e: SrtEntry) => e.endMs > maxVal ? e.endMs : maxVal,
+          0
+        );
+        const curPos: number = this.lastKnownPositionMs;
+        if (curPos > 0 && maxEndMs < curPos) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[SmbSub] 内嵌字幕仅覆盖到 ${maxEndMs}ms，当前播放 ${curPos}ms，需 fallback`);
+          needFallback = true;
+        }
+      }
+
+      if (needFallback) {
         const externalIndex: number = this.allSubtitleTracks.findIndex(
           (t: SubtitleTrackItem) => t.kind === 'external'
         );
         if (externalIndex >= 0) {
           hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `[SmbSub] 内嵌字幕提取失败，fallback 到外置字幕 index=${externalIndex}`);
-          // 调用父类 switchTrack：对 external 轨道直接从预加载的 srtEntries 赋值，不递归
+            `[SmbSub] 内嵌字幕不足，fallback 到外置字幕 index=${externalIndex}`);
           await super.switchTrack(externalIndex);
         }
       }
