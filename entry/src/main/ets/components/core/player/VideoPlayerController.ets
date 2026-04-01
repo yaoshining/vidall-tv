@@ -20,7 +20,7 @@ import {
   SubtitleBridgeState,
   SubtitleTrackItem
 } from "./SubtitleBridgeAdapter";
-import { SmbSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
+import { SmbAvSubtitleBridgeAdapter, SmbSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
 import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
@@ -220,6 +220,8 @@ export class VideoPlayerController {
   private pendingBackendResumeTimeMs: number = -1;
   /** native 自动回退后，是否在 seek 完成后自动续播 */
   private pendingBackendResumePlay: boolean = false;
+  /** SMB 源原始 URL（smb://...），在 native→AVPlayer 切换完成前保留，供字幕适配器使用 */
+  private pendingSmbOriginalUrl: string = '';
   /** 一次性控制：本次 seek 完成后不自动恢复播放 */
   private suppressPlayAfterSeekOnce: boolean = false;
   /** ffmpeg 动态预览：当前是否正在抽帧 */
@@ -294,6 +296,8 @@ export class VideoPlayerController {
     this.ffmpegLastEmptyQueueCatchupAtMs = 0;
     this.ffmpegSingleFrameMode = false;
     this.clearNativeReadyGuardTimer();
+    // SMB 代理切换标记：native player 就绪后将 videoSrc 换为代理 URL 并重新 init，此时需跳过后端覆写
+    const isSmbProxySwitch = this.pendingSmbOriginalUrl.length > 0 && !videoData.videoSrc.startsWith('smb://');
     const shouldPreserveBackendResume = this.backend === 'ijkplayer' && this.pendingBackendResumeTimeMs >= 0;
     if (!shouldPreserveBackendResume) {
       this.pendingBackendResumeTimeMs = -1;
@@ -318,7 +322,7 @@ export class VideoPlayerController {
       videoData.ffmpegDecodeChannels = decision.preferredChannels;
       videoData.audioProbeSummary = decision.summary;
       videoData.videoCodec = decision.videoCodecName;
-      if (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native') {
+      if (!isSmbProxySwitch && (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native')) {
         this.backend = decision.preferredBackend;
       }
       if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
@@ -346,6 +350,7 @@ export class VideoPlayerController {
     if (videoData.videoSrc.startsWith('smb://')) {
       this.backend = 'native';
       this.sourceProtocol = 'SMB';
+      this.pendingSmbOriginalUrl = videoData.videoSrc;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'SMB 源检测：已强制切换到 native FFmpeg 后端（smb:// 协议）');
     }
@@ -440,7 +445,13 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
       adapter = new AVPlayerAdapter();
-      this.subtitleAdapter = new AvSubtitleBridgeAdapter();
+      if (isSmbProxySwitch) {
+        // SMB 代理切换：AVPlayer 内嵌字幕实时推送 + SMB 外置字幕加载
+        this.subtitleAdapter = new SmbAvSubtitleBridgeAdapter(this.pendingSmbOriginalUrl);
+        this.pendingSmbOriginalUrl = '';
+      } else {
+        this.subtitleAdapter = new AvSubtitleBridgeAdapter();
+      }
     }
 
     // 注册所有 IPlayer 事件回调
@@ -1466,6 +1477,12 @@ export class VideoPlayerController {
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
     this.clearNativeReadyGuardTimer();
+    // SMB 源：native player 已就绪（HTTP 代理已启动），立即切换到 AVPlayer 路径以获得实时字幕
+    if (this.backend === 'native' && this.pendingSmbOriginalUrl.length > 0) {
+      if (this.switchSmbToAvPlayer()) {
+        return;
+      }
+    }
     const playerDuration = this.player?.duration ?? 0;
     this.duration = playerDuration > 0
       ? playerDuration
@@ -1600,6 +1617,40 @@ export class VideoPlayerController {
     this.player = undefined;
     this.backend = 'ijkplayer';
     oldPlayer?.release().catch(() => {});
+  }
+
+  /**
+   * SMB → AVPlayer 两阶段切换。
+   * native player 就绪后调用：获取代理 URL → 释放 native 保留代理 → backend='avplayer' → UI 重建 XComponent。
+   * 返回 true 表示切换已启动（onPlayerReady 应立即 return）；false 表示代理不可用，继续使用 native。
+   */
+  private switchSmbToAvPlayer(): boolean {
+    if (this.backend !== 'native') {
+      return false;
+    }
+    const vidAllAdapter = this.player as VidAllPlayerAdapter;
+    const proxyUrl = vidAllAdapter?.getProxyUrl?.() ?? '';
+    if (proxyUrl.length === 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        '[SMB→AVPlayer] 代理 URL 不可用，继续 native 路径');
+      return false;
+    }
+    // 将 videoSrc 替换为代理 URL，后续 initPlayer 走 AVPlayer 路径
+    if (this.currentVideoData) {
+      this.currentVideoData.videoSrc = proxyUrl;
+    }
+    const resumePosition = this.player?.currentTime ?? this.currentTime;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[SMB→AVPlayer] 切换: resumePos=${resumePosition}`);
+    this.isLoading = true;
+    this.pendingBackendResumeTimeMs = resumePosition > 0 ? resumePosition : 0;
+    this.pendingBackendResumePlay = true;
+    // 释放 native player 但保留代理线程，AVPlayer 通过代理 URL 拉流
+    const oldAdapter = this.player as VidAllPlayerAdapter;
+    this.player = undefined;
+    this.backend = 'avplayer'; // @Monitor 响应 → VideoPlayer.ets 重建 XComponent → initPlayer
+    oldAdapter?.releaseKeepProxy?.().catch(() => {});
+    return true;
   }
 
   private logFallbackEvent(
