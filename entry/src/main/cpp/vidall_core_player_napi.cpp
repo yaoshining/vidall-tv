@@ -1039,7 +1039,13 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
       // 否则后续 av_read_frame 从中段顺序扫描，对大文件（4K SMB）需读 90000+ 包导致 30s 超时
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "ExtractSub",
                    "extractSub stream[%d] no cues-seek, seek to beginning", si);
-      av_seek_frame(formatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
+      const int seekRet = av_seek_frame(formatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
+      if (seekRet < 0) {
+        ctx->errorMessage = "extractSub: rewind failed: " + FfmpegErrorToString(seekRet);
+        if (codecCtx != nullptr) { avcodec_free_context(&codecCtx); }
+        avformat_close_input(&formatCtx);
+        return;
+      }
       // 重置超时时钟，为从起始位置完整读取提供完整时间窗口
       interruptCtx.startTimeUs = av_gettime_relative();
       interruptCtx.timeoutUs = ctx->timeoutMs > 0 ? ctx->timeoutMs * 1000 : 60LL * 1000000LL;

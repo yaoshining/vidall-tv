@@ -548,13 +548,9 @@ export class FfprobeUtil {
         (code: number, msg: string) => {
           console.warn(`[FfprobeUtil] SMB probe player error: code=${code} msg=${msg}`);
         },
-        (posMs: number) => {
-          console.debug(`[FfprobeUtil] SMB probe time update: ${posMs}`);
-        },
+        () => { /* onTimeUpdate: probe 阶段不播放，忽略 */ },
         () => { /* onCompleted: probe 阶段不播放，忽略 */ },
-        (isBuffering: boolean) => {
-          console.debug(`[FfprobeUtil] SMB probe buffering: ${isBuffering}`);
-        },
+        () => { /* onBufferingChange: probe 阶段不播放，忽略 */ },
         () => { /* onSeekDone: probe 阶段无 seek，忽略 */ }
       );
 
