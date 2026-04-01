@@ -1,7 +1,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import { SMBClient, SMBClientConfig } from '../../../lib/SMBClient';
-import { BaseSubtitleBridgeAdapter, SubtitleTrackItem } from './SubtitleBridgeAdapter';
+import { AvSubtitleBridgeAdapter, BaseSubtitleBridgeAdapter, SubtitleTrackItem } from './SubtitleBridgeAdapter';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
 import { PresetSubtitleTrack } from './VideoData';
 import { FfprobeUtil, EmbeddedSubEntry } from '../../../utils/FfprobeUtil';
@@ -181,9 +181,147 @@ function extractSmbLangLabel(fileName: string, baseName: string): string {
 }
 
 /**
- * SMB 外置字幕适配器。
- * 在 `loadExternalTracks()` 中通过 SMB 协议枚举视频同名字幕文件并解析。
+ * 通过 SMB 协议加载视频同名外置字幕文件（可被多个适配器复用）。
  * 任何步骤失败均静默处理（catch 后返回空数组），不向上抛出异常。
+ */
+async function loadSmbExternalSubtitles(smbVideoUrl: string): Promise<SubtitleTrackItem[]> {
+  if (!smbVideoUrl.startsWith('smb://')) {
+    return [];
+  }
+  try {
+    const parsed: ParsedSmbVideoUrl | null = parseSmbVideoUrl(smbVideoUrl);
+    if (!parsed) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        '[外置字幕] SMB URL 解析失败，跳过字幕加载');
+      return [];
+    }
+
+    const clientConfig: SMBClientConfig = {
+      host: parsed.host,
+      port: parsed.port,
+      username: parsed.username,
+      password: parsed.password,
+      shareName: parsed.shareName
+    };
+    const client: SMBClient = new SMBClient(clientConfig);
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[外置字幕] 列举目录 host=${parsed.host} path=${parsed.listDirPath} baseName=${parsed.baseName}`);
+
+    const dirResult = await client.listDirectory(parsed.listDirPath);
+    if (dirResult.error && dirResult.files.length === 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[外置字幕] 目录列举失败: ${dirResult.error}`);
+      return [];
+    }
+
+    const sharePrefix: string = '/' + parsed.shareName;
+    const lowerBaseName: string = parsed.baseName.toLowerCase();
+
+    const candidates: SubtitleCandidate[] = [];
+    for (let i = 0; i < dirResult.files.length; i++) {
+      const file = dirResult.files[i];
+      if (file.isDirectory) {
+        continue;
+      }
+      const lowerName: string = file.name.toLowerCase();
+      let isSubtitle: boolean = false;
+      let matchedExt: string = '';
+      for (let j = 0; j < SUBTITLE_EXTENSIONS.length; j++) {
+        if (lowerName.endsWith(SUBTITLE_EXTENSIONS[j])) {
+          isSubtitle = true;
+          matchedExt = SUBTITLE_EXTENSIONS[j];
+          break;
+        }
+      }
+      if (!isSubtitle) {
+        continue;
+      }
+      const nameWithoutExt: string = lowerName.substring(0, lowerName.length - matchedExt.length);
+      const strictMatch: boolean = nameWithoutExt === lowerBaseName
+        || nameWithoutExt.startsWith(`${lowerBaseName}.`);
+      if (!strictMatch) {
+        continue;
+      }
+      let filePath: string = file.path;
+      if (filePath.startsWith(sharePrefix)) {
+        filePath = filePath.substring(sharePrefix.length);
+      }
+      const candidate: SubtitleCandidate = { name: file.name, filePath, matchedExt };
+      candidates.push(candidate);
+    }
+
+    if (candidates.length === 0) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[外置字幕探测完成] 找到 0 个 SMB 外置字幕');
+      return [];
+    }
+
+    const readWithTimeout = (p: Promise<string>, ms: number): Promise<string> => {
+      const timeoutP: Promise<string> = new Promise<string>((resolve) => {
+        setTimeout(() => resolve(''), ms);
+      });
+      return Promise.race([p, timeoutP]);
+    };
+    const contents: string[] = await Promise.all(
+      candidates.map((candidate) =>
+        readWithTimeout(client.readTextFile(candidate.filePath).catch(() => ''), 3000)
+      )
+    );
+
+    const found: SubtitleTrackItem[] = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const content: string = contents[i];
+      if (content.length === 0) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[外置字幕] 读取超时或失败: ${candidates[i].name}`);
+        continue;
+      }
+      try {
+        const matchedExt: string = candidates[i].matchedExt;
+        let entries: SrtEntry[] = [];
+        let formatLabel: string = 'SRT';
+        if (matchedExt === '.ass' || matchedExt === '.ssa') {
+          entries = AssFileParser.parse(content);
+          formatLabel = 'ASS';
+        } else if (matchedExt === '.vtt') {
+          entries = SrtParser.parse(content);
+          formatLabel = 'VTT';
+        } else {
+          entries = SrtParser.parse(content);
+          formatLabel = 'SRT';
+        }
+        const langLabel: string = extractSmbLangLabel(candidates[i].name, parsed.baseName);
+        const displayName: string = langLabel.length > 0
+          ? `${langLabel} [外部·${formatLabel}]`
+          : `字幕 [外部·${formatLabel}]`;
+        if (entries.length === 0) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[外置字幕] 解析结果为空，跳过: ${candidates[i].name}`);
+          continue;
+        }
+        const item: SubtitleTrackItem = { kind: 'external', displayName, srtEntries: entries };
+        found.push(item);
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[外置字幕] 加载成功: ${candidates[i].name} entries=${entries.length}`);
+      } catch (e) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[外置字幕] 解析失败: ${candidates[i].name}`);
+      }
+    }
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[外置字幕探测完成] 找到 ${found.length} 个 SMB 外置字幕`);
+    return found;
+  } catch (e) {
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+      '[外置字幕] SMB 字幕加载异常，返回空数组');
+    return [];
+  }
+}
+
+/**
+ * SMB 外置字幕适配器（配合 native FFmpeg 后端使用）。
+ * 外置字幕通过 SMB 协议加载；内嵌字幕通过 FfprobeUtil.extractEmbeddedSubtitles 提取。
  */
 export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   /** 防止异步提取竞态：每次发起新切轨请求时递增，过期结果不写入 srtEntries */
@@ -197,189 +335,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   }
 
   protected async loadExternalTracks(): Promise<SubtitleTrackItem[]> {
-    if (!this.videoData) {
-      return [];
-    }
-
-    const videoUrl: string = this.videoData.videoSrc;
-    if (!videoUrl.startsWith('smb://')) {
-      return [];
-    }
-
-    try {
-      const parsed: ParsedSmbVideoUrl | null = parseSmbVideoUrl(videoUrl);
-      if (!parsed) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          '[外置字幕] SMB URL 解析失败，跳过字幕加载');
-        return [];
-      }
-
-      const clientConfig: SMBClientConfig = {
-        host: parsed.host,
-        port: parsed.port,
-        username: parsed.username,
-        password: parsed.password,
-        shareName: parsed.shareName
-      };
-      const client: SMBClient = new SMBClient(clientConfig);
-
-      // 日志脱敏：不打印凭据，仅打印 host、路径和 baseName
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[外置字幕] 列举目录 host=${parsed.host} path=${parsed.listDirPath} baseName=${parsed.baseName}`);
-
-      const dirResult = await client.listDirectory(parsed.listDirPath);
-      if (dirResult.error && dirResult.files.length === 0) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `[外置字幕] 目录列举失败: ${dirResult.error}`);
-        return [];
-      }
-
-      // SmbFileInfo.path 格式为 "/<shareName>/<subPath>/<name>"
-      // readTextFile 需要相对于 shareName 的路径，即去掉 "/<shareName>" 前缀
-      const sharePrefix: string = '/' + parsed.shareName;
-      const lowerBaseName: string = parsed.baseName.toLowerCase();
-
-      // Phase 1：过滤候选字幕文件（Fix 1：严格同名匹配）
-      const candidates: SubtitleCandidate[] = [];
-      for (let i = 0; i < dirResult.files.length; i++) {
-        const file = dirResult.files[i];
-        if (file.isDirectory) {
-          continue;
-        }
-
-        const lowerName: string = file.name.toLowerCase();
-
-        // 检查是否为支持的字幕扩展名
-        let isSubtitle: boolean = false;
-        let matchedExt: string = '';
-        for (let j = 0; j < SUBTITLE_EXTENSIONS.length; j++) {
-          if (lowerName.endsWith(SUBTITLE_EXTENSIONS[j])) {
-            isSubtitle = true;
-            matchedExt = SUBTITLE_EXTENSIONS[j];
-            break;
-          }
-        }
-        if (!isSubtitle) {
-          continue;
-        }
-
-        // Fix 1：严格匹配——完全相同，或以 "baseName." 开头（支持 movie.chs.srt 语言后缀格式）
-        const nameWithoutExt: string = lowerName.substring(0, lowerName.length - matchedExt.length);
-        const strictMatch: boolean = nameWithoutExt === lowerBaseName
-          || nameWithoutExt.startsWith(`${lowerBaseName}.`);
-        if (!strictMatch) {
-          continue;
-        }
-
-        // 构造 readTextFile 路径：去掉 "/<shareName>" 前缀
-        let filePath: string = file.path;
-        if (filePath.startsWith(sharePrefix)) {
-          filePath = filePath.substring(sharePrefix.length);
-        }
-
-        const candidate: SubtitleCandidate = {
-          name: file.name,
-          filePath,
-          matchedExt
-        };
-        candidates.push(candidate);
-      }
-
-      if (candidates.length === 0) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[外置字幕探测完成] 找到 0 个 SMB 外置字幕');
-        return [];
-      }
-
-      // Phase 2：逐文件并发读取，每个文件单独 3 秒超时（Fix F: 避免一文件超时丢弃其他结果）
-      const readWithTimeout = (p: Promise<string>, ms: number): Promise<string> => {
-        const timeoutP: Promise<string> = new Promise<string>((resolve) => {
-          setTimeout(() => resolve(''), ms);
-        });
-        return Promise.race([p, timeoutP]);
-      };
-      const contents: string[] = await Promise.all(
-        candidates.map((candidate) =>
-          readWithTimeout(client.readTextFile(candidate.filePath).catch(() => ''), 3000)
-        )
-      );
-
-      // Phase 3：解析每个读取结果
-      const found: SubtitleTrackItem[] = [];
-      for (let i = 0; i < candidates.length; i++) {
-        const content: string = contents[i];
-        if (content.length === 0) {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `[外置字幕] 读取超时或失败: ${candidates[i].name}`);
-          continue;
-        }
-
-        try {
-          const matchedExt: string = candidates[i].matchedExt;
-          let entries: SrtEntry[] = [];
-          let formatLabel: string = 'SRT';
-          if (matchedExt === '.ass' || matchedExt === '.ssa') {
-            entries = AssFileParser.parse(content);
-            formatLabel = 'ASS';
-          } else if (matchedExt === '.vtt') {
-            entries = SrtParser.parse(content);
-            formatLabel = 'VTT';
-          } else {
-            entries = SrtParser.parse(content);
-            formatLabel = 'SRT';
-          }
-
-          const langLabel: string = extractSmbLangLabel(candidates[i].name, parsed.baseName);
-          const displayName: string = langLabel.length > 0
-            ? `${langLabel} [外部·${formatLabel}]`
-            : `字幕 [外部·${formatLabel}]`;
-
-          // Fix G: 空解析结果不加入字幕轨道，避免产生空字幕轨道
-          if (entries.length === 0) {
-            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-              `[外置字幕] 解析结果为空，跳过: ${candidates[i].name}`);
-            continue;
-          }
-
-          const item: SubtitleTrackItem = {
-            kind: 'external',
-            displayName,
-            srtEntries: entries
-          };
-          found.push(item);
-
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[外置字幕] 加载成功: ${candidates[i].name} entries=${entries.length}`);
-        } catch (e) {
-          // 单条字幕解析失败不中断整体流程
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `[外置字幕] 解析失败: ${candidates[i].name}`);
-        }
-      }
-
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[外置字幕探测完成] 找到 ${found.length} 个 SMB 外置字幕`);
-      return found;
-    } catch (e) {
-      // 任何未预期的异常，静默处理，不影响播放流程
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        '[外置字幕] SMB 字幕加载异常，返回空数组');
-      return [];
-    }
-  }
-
-  /** SMB 源优先选外置字幕（已预加载，立即可用）；无外置字幕时才回落到内嵌字幕 */
-  protected override findPreferredTrackIndex(): number {
-    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
-      if (this.allSubtitleTracks[i].kind === 'external') {
-        return i;
-      }
-    }
-    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
-      if (this.allSubtitleTracks[i].kind === 'internal') {
-        return i;
-      }
-    }
-    return -1;
+    return loadSmbExternalSubtitles(this.videoData?.videoSrc ?? '');
   }
 
   /**
@@ -394,7 +350,6 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         '[SmbSub] 无 presetSubtitleTracks，跳过内嵌轨道加载');
       return items;
     }
-    // 只保留可文本渲染的格式，跳过 hdmv_pgs_subtitle、dvd_subtitle 等图形字幕
     const TEXT_CODECS: string[] = ['subrip', 'srt', 'ass', 'ssa', 'webvtt', 'mov_text'];
     for (let i = 0; i < presets.length; i++) {
       const t: PresetSubtitleTrack = presets[i];
@@ -416,51 +371,37 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   /**
    * 覆写轨道切换：内嵌字幕通过 FfprobeUtil.extractEmbeddedSubtitles 提取后走 SRT 渲染管线；
    * 外置字幕交由父类处理（srtEntries 已在 loadExternalTracks 解析完毕）。
-   * SMB 视频通过 native player 的 HTTP 代理提供 ffprobe 可用的 URL。
    */
   override async switchTrack(allIndex: number): Promise<void> {
     if (!this.player) {
       return;
     }
-    // allIndex < 0 表示关闭字幕：先显式清除播放器轨，再交由父类重置状态
     if (allIndex < 0) {
       await this.player?.selectTrack(-1);
       await super.switchTrack(allIndex);
       return;
     }
-
     const target = this.allSubtitleTracks[allIndex];
     if (!target) {
       return;
     }
-
     if (target.kind === 'external') {
-      // 外置字幕 srtEntries 已预加载，直接交父类处理
       await super.switchTrack(allIndex);
       return;
     }
-
-    // 内嵌字幕：实时提取字幕文本，走 SRT 渲染管线
     const internalIndex = target.internalIndex ?? -1;
     if (internalIndex < 0) {
       return;
     }
-
-    // Major #4：切换内嵌字幕前先清除播放器层面旧轨，防止双轨叠加
     await this.player?.selectTrack(-1);
-
-    // Major #5：递增版本号，防止慢请求覆盖快请求的结果（竞态防护）
     this.subtitleSwitchGeneration += 1;
     const currentGen = this.subtitleSwitchGeneration;
-
     this.activeSubtitleIndex = allIndex;
     this.srtEntries = [];
     this.lastSrtText = '';
     this.currentSubtitleText = '';
     this.currentSubtitleTrack = internalIndex;
 
-    // 优先使用 native player 的 HTTP 代理 URL（native 后端已为 SMB 源建立代理）
-    // 回退到 videoData.videoSrc（ijkplayer fallback 后 videoSrc 已更新为代理 URL）
     let videoSrc: string = this.videoData?.videoSrc ?? '';
     const vidAllAdapter = this.player as VidAllPlayerAdapter;
     const proxyUrl: string = vidAllAdapter?.getProxyUrl?.() ?? '';
@@ -468,8 +409,7 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       videoSrc = proxyUrl;
     }
     if (videoSrc.length === 0) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        '[SmbSub] 无可用视频 URL，降级无字幕');
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[SmbSub] 无可用视频 URL，降级无字幕');
       return;
     }
 
@@ -477,7 +417,6 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const entries: EmbeddedSubEntry[] = await FfprobeUtil.extractEmbeddedSubtitles(
         videoSrc, undefined, internalIndex, 90000
       );
-      // Major #5：写入前检查版本号，过期结果直接丢弃
       if (currentGen !== this.subtitleSwitchGeneration) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           '[SmbSub] 字幕提取结果已过期，丢弃（generation 不匹配）');
@@ -487,10 +426,6 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[SmbSub] 内嵌字幕提取完成 stream=${internalIndex} entries=${entries.length}`);
 
-      // 判断是否需要 fallback 到外置字幕：
-      // 1. entries=0（提取失败）
-      // 2. entries 时间范围无法覆盖当前播放位置（典型场景：超时后只拿到片头动画字幕，
-      //    而播放已在片中，此时 entries 最大时间 < 当前位置）
       let needFallback = entries.length === 0;
       if (!needFallback && entries.length > 0) {
         const maxEndMs: number = (entries as SrtEntry[]).reduce(
@@ -504,7 +439,6 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
           needFallback = true;
         }
       }
-
       if (needFallback) {
         const externalIndex: number = this.allSubtitleTracks.findIndex(
           (t: SubtitleTrackItem) => t.kind === 'external'
@@ -518,7 +452,6 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     } catch {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         '[SmbSub] 内嵌字幕提取失败，尝试 fallback 到外置字幕');
-      // generation 检查：若用户已切换到其他轨道，不干扰
       if (currentGen === this.subtitleSwitchGeneration) {
         const externalIdx: number = this.allSubtitleTracks.findIndex(
           (t: SubtitleTrackItem) => t.kind === 'external'
@@ -530,5 +463,24 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
         }
       }
     }
+  }
+}
+
+/**
+ * SMB + AVPlayer 字幕适配器。
+ * 内嵌字幕通过 AVPlayer 原生 subtitleInfoUpdate 实时推送（继承 AvSubtitleBridgeAdapter）；
+ * 外置字幕通过 SMBClient 从原始 SMB URL 目录加载（覆写 loadExternalTracks）。
+ * 适用于 SMB 源切换到 AVPlayer 路径（通过 HTTP 代理拉流）的场景。
+ */
+export class SmbAvSubtitleBridgeAdapter extends AvSubtitleBridgeAdapter {
+  private readonly smbVideoUrl: string;
+
+  constructor(smbVideoUrl: string) {
+    super();
+    this.smbVideoUrl = smbVideoUrl;
+  }
+
+  protected override async loadExternalTracks(): Promise<SubtitleTrackItem[]> {
+    return loadSmbExternalSubtitles(this.smbVideoUrl);
   }
 }
