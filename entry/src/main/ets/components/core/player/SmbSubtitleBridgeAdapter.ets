@@ -367,6 +367,21 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     }
   }
 
+  /** SMB 源优先选外置字幕（已预加载，立即可用）；无外置字幕时才回落到内嵌字幕 */
+  protected override findPreferredTrackIndex(): number {
+    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
+      if (this.allSubtitleTracks[i].kind === 'external') {
+        return i;
+      }
+    }
+    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
+      if (this.allSubtitleTracks[i].kind === 'internal') {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   /**
    * 覆写内嵌轨道加载：从 videoData.presetSubtitleTracks 读取已由 ffprobe 探测到的字幕轨，
    * 过滤掉 PGS / DVD subtitle 等图形格式，只保留可文本渲染的格式。
