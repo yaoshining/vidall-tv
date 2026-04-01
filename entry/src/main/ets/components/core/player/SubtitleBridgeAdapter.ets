@@ -990,6 +990,12 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
 }
 
 export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
+  override onSeekSync(): void {
+    super.onSeekSync();
+    // seek 后 AVPlayer 会重新推送当前位置的字幕，清空旧文本避免 applySubtitleBridgeState 还原过期字幕
+    this.currentSubtitleText = '';
+  }
+
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
     const items: SubtitleTrackItem[] = [];
     if (!this.player) {

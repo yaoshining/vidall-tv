@@ -1883,6 +1883,8 @@ export class VideoPlayerController {
 
     this.subtitleClearTimer = setTimeout(() => {
       console.log(`[VideoPlayerController] Clearing subtitle`)
+      // 同步清空 adapter 内部状态，防止后续 applySubtitleBridgeState 还原过期字幕
+      this.subtitleAdapter.onSubtitleUpdate({ text: '' });
       this.currentSubtitleText = ''
       this.subtitleUpdateCounter++
       this.subtitleClearTimer = undefined
