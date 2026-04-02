@@ -1,4 +1,4 @@
-import { MediaItem, PlayProgressEntity, MovieEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
+import { MediaItem, MovieEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
 import { PlayerPageParam, PlayerPage } from '../player/index';
 import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
@@ -402,6 +402,9 @@ export struct MovieDetailPage {
         return;
       }
 
+      const providerId = item.providerId ?? '';
+      const mKey = providerId.length > 0 ? MediaProgressStore.movieKey(providerId) : undefined;
+
       const param: PlayerPageParam = {
         videoId: item.id,
         url: fullUrl,
@@ -410,7 +413,8 @@ export struct MovieDetailPage {
         durationHintMs: item.durationMs,
         seriesProviderId: '',
         seasonNumber: 0,
-        episodeNumber: 0
+        episodeNumber: 0,
+        mediaKey: mKey
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
@@ -872,7 +876,7 @@ export struct MovieDetailPage {
       }
     })
     .onShown(() => {
-      if (this.item !== undefined) { this.refreshMovieProgress(); }
+      this.refreshMovieProgress().catch(() => {});
     })
     .onBackPressed(() => {
       if (this.showOverviewDialog) {
