@@ -13,6 +13,7 @@ import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntit
 import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -54,6 +55,7 @@ interface TmdbRawSeason {
 }
 
 interface TmdbRawCastItem {
+  id?: number;
   name?: string;
   character?: string;
   profile_path?: string;
@@ -61,6 +63,7 @@ interface TmdbRawCastItem {
 }
 
 interface TmdbRawCrewItem {
+  id?: number;
   name?: string;
   job?: string;
   profile_path?: string;
@@ -429,11 +432,14 @@ export struct SeriesDetailPage {
           const allCredits: ScrapeCredit[] = [];
           const castItems = detail2.credits?.cast ?? [];
           for (const c of castItems.slice(0, 20)) {
+            // 过滤无名称演员，避免下游 CastDetailPage 崩溃
+            if (c.name == null || (c.name as string).length === 0) { continue; }
             const cr: ScrapeCredit = {
               name: c.name ?? '',
               role: c.character,
               profilePath: c.profile_path,
-              order: c.order
+              order: c.order,
+              personId: c.id
             };
             allCredits.push(cr);
           }
@@ -446,7 +452,8 @@ export struct SeriesDetailPage {
             const cr: ScrapeCredit = {
               name: cName,
               role: translateJob(c.job ?? ''),
-              profilePath: c.profile_path
+              profilePath: c.profile_path,
+              personId: c.id
             };
             allCredits.push(cr);
             castNames.push(cName);
@@ -1278,6 +1285,14 @@ export struct SeriesDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
+              .focusable(true)
+              .onClick(() => {
+                const castName = c.name ?? '';
+                const castProfile = c.profilePath ?? '';
+                if (castName.length === 0 && castProfile.length === 0) { return; }
+                const param: CastDetailPageParam = { personId: c.personId ?? 0, name: castName };
+                this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
+              })
             }, (c: ScrapeCredit) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })
@@ -1488,20 +1503,7 @@ export struct SeriesDetailPage {
         // 简介全文弹窗
         this.OverviewDialog()
 
-        // 顶部透明导航栏（后退按钮）
-        Row() {
-          Text('←')
-            .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
-            .textShadow({ radius: 6, color: '#88000000', offsetX: 1, offsetY: 1 })
-            .padding(20)
-            .onClick(() => { this.pageStack.pop(); })
-        }
-        .width('100%')
-        .padding({ left: 16, top: 8 })
-        .linearGradient({
-          angle: 180,
-          colors: [['#AA000000', 0.0], ['#00000000', 1.0]]
-        })
+
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)

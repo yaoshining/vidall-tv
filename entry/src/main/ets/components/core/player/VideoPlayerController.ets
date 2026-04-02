@@ -224,6 +224,8 @@ export class VideoPlayerController {
   private pendingBackendResumePlay: boolean = false;
   /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
   private smbProxyActive: boolean = false;
+  /** 保存原始 smb:// URL，供 avplayer→ijkplayer fallback 时重新启动代理 */
+  private smbOriginalSrc: string = '';
   /** 一次性控制：本次 seek 完成后不自动恢复播放 */
   private suppressPlayAfterSeekOnce: boolean = false;
   /** ffmpeg 动态预览：当前是否正在抽帧 */
@@ -357,28 +359,33 @@ export class VideoPlayerController {
       this.backend = 'ijkplayer';
     }
 
-    // SMB 源（smb://）通过本地 HTTP 代理转发给 AVPlayer 播放，无需 native 路径。
+    // SMB 源（smb://）统一通过本地 HTTP 代理转发，avplayer 和 ijkplayer 均适用。
     // 在所有自动路由决策完成后（backend 已确定为 avplayer/ijkplayer），启动代理并将
     // videoSrc 替换为代理 URL，下游 AVPlayerAdapter / IjkPlayerAdapter 均透明使用。
     let smbOriginalUrl: string = '';
     if (videoData.videoSrc.startsWith('smb://')) {
       this.sourceProtocol = 'SMB';
       smbOriginalUrl = videoData.videoSrc;
-      if (this.backend === 'avplayer') {
-        const proxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalUrl);
-        if (proxyUrl.length > 0) {
-          videoData.videoSrc = proxyUrl;
-          this.smbProxyActive = true;
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `SMB 源已通过代理 URL 转交 AVPlayer（proxy started → rewritten to ${proxyUrl}）`);
-        } else {
-          // 代理启动失败，回退到 ijkplayer 兜底（不含代理，纯 smb:// 拉流路径）
-          this.backend = 'ijkplayer';
-          smbOriginalUrl = '';
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            'SMB 代理启动失败，回退到 ijkplayer 后端');
-        }
+      // SMB 源统一通过本地 HTTP 代理转发，avplayer 和 ijkplayer 均适用
+      const proxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalUrl);
+      if (proxyUrl.length > 0) {
+        videoData.videoSrc = proxyUrl;
+        this.smbProxyActive = true;
+        this.smbOriginalSrc = smbOriginalUrl;  // 保存原始 smb:// URL，供 fallback 时重启代理
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `SMB 源已通过代理 URL 转交 ${this.backend}（proxy started → rewritten to ${proxyUrl}）`);
+      } else {
+        // 代理启动失败，保留原始 smb:// URL（ijkplayer 会尝试直连，大概率失败）
+        smbOriginalUrl = '';
+        this.smbOriginalSrc = '';  // 代理未启动，清空缓存
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `SMB 代理启动失败，backend=${this.backend} 将使用原始 smb:// URL`);
       }
+    } else if (!videoData.videoSrc.startsWith('http://127.0.0.1')) {
+      // 非 SMB、非本地代理 URL（即真正的非 SMB 播放源），才清空缓存。
+      // fallback 场景下第二次 initPlayer() 收到的是上一次代理的 http://127.0.0.1:PORT/... URL，
+      // 不能清空 smbOriginalSrc，否则 setIjkContext() 无法重启代理。
+      this.smbOriginalSrc = '';
     }
 
     // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
@@ -1226,6 +1233,21 @@ export class VideoPlayerController {
     // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 前调用 setContext
     ijkAdapter.setPendingContext(context, xComponentId);
     if (this.currentVideoData) {
+      // SMB fallback：avplayer release 时会停止代理，若原始源是 SMB 则需重新启动
+      if (this.smbOriginalSrc.length > 0) {
+        const newProxyUrl = VidAllPlayerAdapter.startSmbProxy(this.smbOriginalSrc);
+        if (newProxyUrl.length > 0) {
+          this.currentVideoData.videoSrc = newProxyUrl;
+          this.smbProxyActive = true;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[setIjkContext] SMB fallback 重启代理成功: ${newProxyUrl}`);
+        } else {
+          // 代理重启失败：回退到原始 smb:// URL，不保留已停止代理的死 URL
+          this.currentVideoData.videoSrc = this.smbOriginalSrc;
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[setIjkContext] SMB fallback 代理重启失败，已回退到原始 SMB URL: ${this.smbOriginalSrc}`);
+        }
+      }
       try {
         await ijkAdapter.init(this.currentVideoData, this.surfaceId);
       } catch (e) {

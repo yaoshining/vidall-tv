@@ -7,6 +7,7 @@ import { SettingsPage } from './settings/Index';
 import { SeriesDetailPage } from './detail/SeriesDetailPage';
 import { SeasonDetailPage } from './detail/SeasonDetailPage';
 import { MovieDetailPage } from './detail/MovieDetailPage';
+import { CastDetailPage } from './detail/CastDetailPage';
 @Entry
 @ComponentV2
 struct Index {
@@ -29,6 +30,8 @@ struct Index {
       MovieDetailPage();
     } else if (name === SeasonDetailPage.PAGE_NAME) {
       SeasonDetailPage();
+    } else if (name === CastDetailPage.PAGE_NAME) {
+      CastDetailPage();
     }
   }
 

@@ -539,7 +539,11 @@ export class IjkPlayerAdapter implements IPlayer {
       this._videoCodec.includes('h265') ||
       this._videoCodec.includes('265');
 
-    const useH264Hw = !isHevc && hwSupport.h264;
+    // codec 未知时（videoCodec 为空，如 SMB fallback 场景 ffprobe 未能传入），
+    // 无法确认是 H264，不得开启 all-videos（会附带开启 H265 硬解导致花屏），
+    // 安全回退为全软解。
+    const isCodecKnown = this._videoCodec.length > 0;
+    const useH264Hw = isCodecKnown && !isHevc && hwSupport.h264;
     // HEVC 硬解始终关闭（花屏根因），H265 能力留着但不使用
     const useH265Hw = false;
 

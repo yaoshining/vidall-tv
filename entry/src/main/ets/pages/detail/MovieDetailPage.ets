@@ -9,6 +9,7 @@ import image from '@ohos.multimedia.image';
 import effectKit from '@ohos.effectKit';
 import { millisecondsToTime } from '../../utils/TimeUtil';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { CastDetailPage, CastDetailPageParam } from './CastDetailPage';
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -66,6 +67,7 @@ interface CastPerson {
   name: string;
   character?: string;
   profilePath?: string;
+  personId?: number;
 }
 
 /** 演职人员统一展示项（导演 + 演员合并列表） */
@@ -73,6 +75,7 @@ interface CastCrewItem {
   name: string;
   role?: string;
   profilePath?: string;
+  personId?: number;
 }
 
 function parseCastArr(json: string | undefined): CastPerson[] {
@@ -250,7 +253,9 @@ export struct MovieDetailPage {
     }
     const castList = parseCastArr(this.movieEntity?.castJson);
     for (const c of castList) {
-      const ci: CastCrewItem = { name: c.name, role: c.character, profilePath: c.profilePath };
+      // 过滤无名称的演员，避免导航到 CastDetailPage 时 displayName 为 null
+      if (c.name == null || c.name.length === 0) { continue; }
+      const ci: CastCrewItem = { name: c.name, role: c.character, profilePath: c.profilePath, personId: c.personId };
       result.push(ci);
     }
     return result;
@@ -707,6 +712,13 @@ export struct MovieDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
+              .focusable((c.personId ?? 0) > 0)
+              .onClick(() => {
+                if ((c.personId ?? 0) <= 0) { return; }
+                const castName = c.name ?? '';
+                const param: CastDetailPageParam = { personId: c.personId!, name: castName };
+                this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
+              })
             }, (c: CastCrewItem) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })
@@ -844,26 +856,7 @@ export struct MovieDetailPage {
         // 简介全文弹窗
         this.OverviewDialog()
 
-        // 顶部浮动返回按钮
-        Row() {
-          Text('←')
-            .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
-            .textShadow({ radius: 6, color: '#88000000', offsetX: 1, offsetY: 1 })
-            .padding(20)
-            .onClick(() => {
-              if (this.showOverviewDialog) {
-                this.showOverviewDialog = false;
-              } else {
-                this.pageStack.pop();
-              }
-            })
-        }
-        .width('100%')
-        .padding({ left: 16, top: 8 })
-        .linearGradient({
-          angle: 180,
-          colors: [['#AA000000', 0.0], ['#00000000', 1.0]]
-        })
+
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
