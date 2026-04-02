@@ -319,8 +319,8 @@ export struct CastDetailPage {
                           Text(this.getCreditsYear(item))
                             .fontSize(11).fontColor('#888888')
 
-                          if (item.character != null && item.character.length > 0) {
-                            Text(item.character)
+                          if ((item.character != null && item.character.length > 0) || (item.job != null && item.job.length > 0)) {
+                            Text(item.character != null && item.character.length > 0 ? item.character : (item.job ?? ''))
                               .fontSize(11).fontColor('#666666')
                               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                               .width(100).textAlign(TextAlign.Center)
@@ -328,7 +328,10 @@ export struct CastDetailPage {
                         }
                         .focusable(true)
                         .onClick(() => { this.navigateToCredit(item); })
-                      }, (item: TmdbCreditItem) => (item.id !== undefined ? item.id.toString() : '') + (item.media_type ?? ''))
+                      }, (item: TmdbCreditItem) => {
+                        const k: string = (item.media_type ?? 'x') + '-' + (item.id != null ? item.id.toString() : '0') + '-' + (item.title ?? item.name ?? '');
+                        return k;
+                      })
                     }
                     .padding({ left: 40, right: 40 })
                   }
