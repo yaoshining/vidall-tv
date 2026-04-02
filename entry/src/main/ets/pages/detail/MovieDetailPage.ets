@@ -1,5 +1,6 @@
-import { MediaItem, PlayProgressEntity, MovieEntity } from '../../db/models/MediaEntity';
+import { MediaItem, PlayProgressEntity, MovieEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
 import { PlayerPageParam, PlayerPage } from '../player/index';
+import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
@@ -95,7 +96,8 @@ export struct MovieDetailPage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
 
   @Local item: MediaItem | undefined = undefined;
-  @Local progress: PlayProgressEntity | null = null;
+  @Local mediaProgress: MediaProgressEntry | null = null;
+  @Local hasActiveProgress: boolean = false;
   @Local movieEntity: MovieEntity | null = null;
   /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
   @Local dominantBgColor: string = '#111111';
@@ -204,20 +206,19 @@ export struct MovieDetailPage {
 
   /** 是否有有效续播进度（大于 5 秒才算） */
   private hasProgress(): boolean {
-    const p = this.progress;
-    return p !== null && p.positionMs > 5000;
+    return this.hasActiveProgress && this.mediaProgress !== null && this.mediaProgress.positionMs > 5000;
   }
 
   /** 是否已看完（>= 95%） */
   private isWatched(): boolean {
-    const p = this.progress;
+    const p = this.mediaProgress;
     if (p === null || p.durationMs <= 0) { return false; }
     return p.positionMs / p.durationMs >= 0.95;
   }
 
   /** 播放进度百分比（0~1） */
   private getProgressPercent(): number {
-    const p = this.progress;
+    const p = this.mediaProgress;
     if (p === null || p.durationMs <= 0) { return 0; }
     return Math.min(1, p.positionMs / p.durationMs);
   }
@@ -318,11 +319,6 @@ export struct MovieDetailPage {
 
   private loadAuxData(item: MediaItem): void {
     const db = FileSourceDatabase.getInstance();
-    // 并行加载续播进度
-    db.getPlayProgress(item.id).then((p: PlayProgressEntity | null) => {
-      this.progress = p;
-    }).catch(() => {});
-
     const provider = item.provider;
     const providerId = item.providerId;
     if (provider !== undefined && provider.length > 0 &&
@@ -333,6 +329,12 @@ export struct MovieDetailPage {
         const backdropUrl = this.getBackdropUrl();
         if (backdropUrl.length > 0) { this.extractDominantColor(backdropUrl); }
       }).catch(() => {});
+      // 加载媒体级进度
+      const mKey = MediaProgressStore.movieKey(providerId);
+      MediaProgressStore.get(mKey).then((mp: MediaProgressEntry | null) => {
+        this.mediaProgress = mp;
+        this.hasActiveProgress = mp !== null && mp.positionMs > 0 && mp.durationMs > 0;
+      }).catch(() => {});
     } else {
       // 无刮削数据时直接尝试用 item.backdropUrl 提取
       const backdropUrl = this.getBackdropUrl();
@@ -340,12 +342,15 @@ export struct MovieDetailPage {
     }
   }
 
-  /** 返回播放器后刷新进度 */
-  private refreshProgress(item: MediaItem): void {
-    FileSourceDatabase.getInstance()
-      .getPlayProgress(item.id)
-      .then((p: PlayProgressEntity | null) => { this.progress = p; })
-      .catch(() => {});
+  /** 返回播放器后刷新媒体级进度 */
+  private refreshMovieProgress(): Promise<void> {
+    const providerId = this.item?.providerId ?? '';
+    if (providerId.length === 0) { return Promise.resolve(); }
+    const mKey = MediaProgressStore.movieKey(providerId);
+    return MediaProgressStore.get(mKey).then((mp: MediaProgressEntry | null) => {
+      this.mediaProgress = mp;
+      this.hasActiveProgress = mp !== null && mp.positionMs > 0 && mp.durationMs > 0;
+    });
   }
 
   /** 构建播放 URL 并跳转播放器 */
@@ -437,7 +442,7 @@ export struct MovieDetailPage {
         }
 
         // 右：信息区
-        if (this.hasProgress() && this.progress !== null) {
+        if (this.hasProgress() && this.mediaProgress !== null) {
           // ── 有续播进度 ────────────────────────────────
           Column({ space: 10 }) {
             // 时长标签 + 电影标题
@@ -486,7 +491,7 @@ export struct MovieDetailPage {
               })
               .onClick(() => { this.play(); })
 
-              Text(millisecondsToTime(this.progress.positionMs))
+              Text(millisecondsToTime(this.mediaProgress.positionMs))
                 .fontSize(12).fontColor('#888888')
             }
             .alignItems(VerticalAlign.Center)
@@ -867,7 +872,7 @@ export struct MovieDetailPage {
       }
     })
     .onShown(() => {
-      if (this.item !== undefined) { this.refreshProgress(this.item); }
+      if (this.item !== undefined) { this.refreshMovieProgress(); }
     })
     .onBackPressed(() => {
       if (this.showOverviewDialog) {
