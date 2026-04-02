@@ -2,7 +2,8 @@ import http from '@ohos.net.http';
 import fs from '@ohos.file.fs';
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences';
 import { MovieDetailPage } from './MovieDetailPage';
-import { MediaItem } from '../../db/models/MediaEntity';
+import { MediaItem, MovieEntity } from '../../db/models/MediaEntity';
+import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 
 export interface CastDetailPageParam {
   personId: number;
@@ -208,20 +209,27 @@ export struct CastDetailPage {
   private navigateToCredit(item: TmdbCreditItem): void {
     // TV 类型暂不支持跳转（SeriesDetailPage 需要 tvSeriesId，无法从 TMDB 直接构造）
     if (item.media_type === 'tv') { return; }
-    const mediaItem: MediaItem = {
-      id: 0,
-      sourceId: 0,
-      directoryPath: '',
-      filePath: '',
-      fileName: this.getCreditsTitle(item),
-      scannedAt: 0,
-      title: this.getCreditsTitle(item),
-      provider: 'tmdb',
-      providerId: item.id != null ? item.id.toString() : '',
-      posterUrl: tmdbImg(item.poster_path, 'w342'),
-      mediaType: 'movie',
-    };
-    this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, mediaItem);
+    if (item.id == null) { return; }
+
+    const tmdbId = item.id.toString();
+    const db = FileSourceDatabase.getInstance();
+    db.getMovieByProviderId('tmdb', tmdbId).then((movie: MovieEntity | null) => {
+      if (movie == null) { return; }   // 本地库无此电影，不跳转
+      const mediaItem: MediaItem = {
+        id: 0,
+        sourceId: 0,
+        directoryPath: '',
+        filePath: '',
+        fileName: this.getCreditsTitle(item),
+        scannedAt: 0,
+        title: this.getCreditsTitle(item),
+        provider: 'tmdb',
+        providerId: tmdbId,
+        posterUrl: tmdbImg(item.poster_path, 'w342'),
+        mediaType: 'movie',
+      };
+      this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, mediaItem);
+    }).catch(() => {});
   }
 
   build() {
@@ -341,22 +349,23 @@ export struct CastDetailPage {
                           Column() {
                             Text(this.getCreditsTitle(item))
                               .fontSize(12).fontColor('#CCCCCC')
-                              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                               .width(100).textAlign(TextAlign.Center)
                           }
                           .width(100)
-                          .height(36)
+                          .height(24)
                           .justifyContent(FlexAlign.Start)
 
                           Text(this.getCreditsYear(item))
                             .fontSize(11).fontColor('#888888')
+                            .width(100).textAlign(TextAlign.Center)
 
-                          if ((item.character != null && item.character.length > 0) || (item.job != null && item.job.length > 0)) {
-                            Text(item.character != null && item.character.length > 0 ? item.character : (item.job ?? ''))
-                              .fontSize(11).fontColor('#666666')
-                              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                              .width(100).textAlign(TextAlign.Center)
-                          }
+                          Text(item.character != null && item.character.length > 0
+                            ? item.character
+                            : (item.job != null && item.job.length > 0 ? item.job : ''))
+                            .fontSize(11).fontColor('#666666')
+                            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                            .width(100).textAlign(TextAlign.Center)
                         }
                         .focusable(true)
                         .onClick(() => { this.navigateToCredit(item); })

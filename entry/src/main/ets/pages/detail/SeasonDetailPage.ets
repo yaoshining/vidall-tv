@@ -1,4 +1,5 @@
 import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
+import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
 import { PlayerPageParam, PlayerPage } from '../player/index'
@@ -69,6 +70,7 @@ interface SeasonRawJson {
 
 /** tv_series.raw_json 中 credits.cast 条目 */
 interface TmdbSeriesCastItem {
+  id?: number;
   name?: string;
   character?: string;
   profile_path?: string;
@@ -77,6 +79,7 @@ interface TmdbSeriesCastItem {
 
 /** tv_series.raw_json 中 credits.crew 条目 */
 interface TmdbSeriesCrewItem {
+  id?: number;
   name?: string;
   job?: string;
   profile_path?: string;
@@ -577,7 +580,8 @@ export struct SeasonDetailPage {
               name: c.name ?? '',
               role: c.character,
               profilePath: c.profile_path,
-              order: c.order
+              order: c.order,
+              personId: c.id
             };
             allCredits.push(cr);
           }
@@ -590,7 +594,8 @@ export struct SeasonDetailPage {
             const cr: ScrapeCredit = {
               name: cName,
               role: translateJob(c.job ?? ''),
-              profilePath: c.profile_path
+              profilePath: c.profile_path,
+              personId: c.id
             };
             allCredits.push(cr);
             castNames.push(cName);
@@ -1249,6 +1254,17 @@ export struct SeasonDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
+              .focusable(true)
+              .onClick(() => {
+                const name = c.name ?? '';
+                const profilePath = c.profilePath ?? '';
+                if (name.length === 0 && profilePath.length === 0) { return; }
+                const param: CastDetailPageParam = {
+                  personId: c.personId ?? 0,
+                  name: name
+                };
+                this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
+              })
             }, (c: ScrapeCredit) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })
