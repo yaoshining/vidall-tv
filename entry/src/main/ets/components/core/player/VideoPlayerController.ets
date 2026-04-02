@@ -357,27 +357,25 @@ export class VideoPlayerController {
       this.backend = 'ijkplayer';
     }
 
-    // SMB 源（smb://）通过本地 HTTP 代理转发给 AVPlayer 播放，无需 native 路径。
+    // SMB 源（smb://）统一通过本地 HTTP 代理转发，avplayer 和 ijkplayer 均适用。
     // 在所有自动路由决策完成后（backend 已确定为 avplayer/ijkplayer），启动代理并将
     // videoSrc 替换为代理 URL，下游 AVPlayerAdapter / IjkPlayerAdapter 均透明使用。
     let smbOriginalUrl: string = '';
     if (videoData.videoSrc.startsWith('smb://')) {
       this.sourceProtocol = 'SMB';
       smbOriginalUrl = videoData.videoSrc;
-      if (this.backend === 'avplayer') {
-        const proxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalUrl);
-        if (proxyUrl.length > 0) {
-          videoData.videoSrc = proxyUrl;
-          this.smbProxyActive = true;
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `SMB 源已通过代理 URL 转交 AVPlayer（proxy started → rewritten to ${proxyUrl}）`);
-        } else {
-          // 代理启动失败，回退到 ijkplayer 兜底（不含代理，纯 smb:// 拉流路径）
-          this.backend = 'ijkplayer';
-          smbOriginalUrl = '';
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            'SMB 代理启动失败，回退到 ijkplayer 后端');
-        }
+      // SMB 源统一通过本地 HTTP 代理转发，avplayer 和 ijkplayer 均适用
+      const proxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalUrl);
+      if (proxyUrl.length > 0) {
+        videoData.videoSrc = proxyUrl;
+        this.smbProxyActive = true;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `SMB 源已通过代理 URL 转交 ${this.backend}（proxy started → rewritten to ${proxyUrl}）`);
+      } else {
+        // 代理启动失败，保留原始 smb:// URL（ijkplayer 会尝试直连，大概率失败）
+        smbOriginalUrl = '';
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `SMB 代理启动失败，backend=${this.backend} 将使用原始 smb:// URL`);
       }
     }
 
