@@ -576,13 +576,17 @@ export struct SeasonDetailPage {
     }
     this.progressMap = newMap;
 
-    // ── 当前季进度计算：找 updatedAt 最大的有进度集 ─────────────────────
+    // ── 当前季进度计算：找 updatedAt 最大的有进度且未看完（<95%）的集 ─────
     let bestProgress: PlayProgressEntity | undefined;
     for (const ep of this.seasonEpisodes) {
       const p = newMap.get(ep.mediaItem.id ?? -1);
       if (p !== undefined && p.positionMs > 0) {
-        if (bestProgress === undefined || p.updatedAt > bestProgress.updatedAt) {
-          bestProgress = p;
+        // 若有 durationMs，排除已看完（≥95%）的集，保持与 playEpisode() 逻辑一致
+        const isWatched = p.durationMs > 0 && (p.positionMs / p.durationMs) >= 0.95;
+        if (!isWatched) {
+          if (bestProgress === undefined || p.updatedAt > bestProgress.updatedAt) {
+            bestProgress = p;
+          }
         }
       }
     }
@@ -612,19 +616,28 @@ export struct SeasonDetailPage {
         && latestEntry.seasonNumber > 0
         && latestEntry.episodeNumber > 0) {
       this.crossSeasonEntry = latestEntry;
-      // 找跨季目标集 MediaItem（仅在当前季无进度时才需要）
-      const seriesId = this.seriesEntity?.id ?? -1;
-      if (seriesId > 0) {
-        const allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
-        let found: MediaItem | undefined;
-        for (const m of allEpisodes) {
-          if ((m.seasonNumber ?? -1) === latestEntry.seasonNumber
-              && (m.episodeNumber ?? -1) === latestEntry.episodeNumber) {
-            found = m;
-            break;
+      // 仅在当前季无未看完进度时，才需要查找跨季目标集（UI 才会展示跨季入口）
+      if (!this.hasCurrentSeasonProgress) {
+        const seriesId = this.seriesEntity?.id ?? -1;
+        if (seriesId > 0) {
+          const allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
+          let found: MediaItem | undefined;
+          for (const m of allEpisodes) {
+            if ((m.seasonNumber ?? -1) === latestEntry.seasonNumber
+                && (m.episodeNumber ?? -1) === latestEntry.episodeNumber) {
+              found = m;
+              break;
+            }
           }
+          this.crossSeasonEpisode = found;
+        } else {
+          // seriesId 缺失：清空残留，避免误判跨季入口可展示
+          this.crossSeasonEpisode = undefined;
+          this.crossSeasonEntry = null;
         }
-        this.crossSeasonEpisode = found;
+      } else {
+        // 当前季有进度：不需要展示跨季入口，清空残留
+        this.crossSeasonEpisode = undefined;
       }
     } else {
       this.crossSeasonEntry = null;
