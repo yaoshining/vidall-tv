@@ -8,6 +8,7 @@ import {
 } from "../../components/core/player/VideoPlayerController";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
+import { MediaProgressStore } from "../../db/MediaProgressStore";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
 import { emitter } from "@kit.BasicServicesKit";
@@ -35,6 +36,12 @@ export interface PlayerPageParam {
   preferredBackend?: PlayerBackend;
   /** 可选：AVPlayer 不支持格式时的自动回退后端 */
   unsupportedFormatFallback?: UnsupportedFormatFallback;
+  /**
+   * 媒体级进度 key（由 MediaProgressStore.seriesKey / movieKey 生成）。
+   * 设置后，播放器使用媒体级进度续播（直接 seek，不弹续播弹窗），
+   * 并在退出/切后台时回写媒体级进度，完播时自动清除。
+   */
+  mediaKey?: string;
 }
 
 @ComponentV2
@@ -48,6 +55,14 @@ export struct PlayerPage {
   @Local savedPositionMs: number = 0
   @Local totalDurationMs: number = 0
   private pendingSeekMs: number = -1
+  /** 媒体级进度 key（来自 PlayerPageParam.mediaKey） */
+  private currentMediaKey: string = '';
+  /** 媒体级进度：当前集季号 */
+  private currentMediaSeason: number = 0;
+  /** 媒体级进度：当前集号 */
+  private currentMediaEpisode: number = 0;
+  /** media_progress 周期写入定时器 ID，-1 表示未启动 */
+  private mediaProgressTimerId: number = -1;
 
   private getBackendDebugText(): string {
     const proto = this.videoPlayerController.sourceProtocol;
@@ -183,7 +198,32 @@ export struct PlayerPage {
       // 订阅 App 切后台事件，确保进度立即落盘
       emitter.on(PlayerEvents.APP_BACKGROUND, () => {
         this.videoPlayerController.saveProgressNow();
+        // 媒体级进度：切后台时保存当前位置
+        if (this.currentMediaKey.length > 0) {
+          const posMs = this.videoPlayerController.currentTime;
+          const durMs = this.videoPlayerController.duration;
+          if (posMs > 0 && durMs > 0) {
+            MediaProgressStore.save(
+              this.currentMediaKey, posMs, durMs,
+              this.currentMediaSeason, this.currentMediaEpisode
+            ).catch(() => {});
+          }
+        }
       });
+
+      // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
+      this.mediaProgressTimerId = setInterval(() => {
+        if (this.currentMediaKey.length > 0) {
+          const posMs: number = this.videoPlayerController.currentTime;
+          const durMs: number = this.videoPlayerController.duration;
+          if (posMs > 0 && durMs > 0) {
+            MediaProgressStore.save(
+              this.currentMediaKey, posMs, durMs,
+              this.currentMediaSeason, this.currentMediaEpisode
+            ).catch(() => {});
+          }
+        }
+      }, 10000);
 
       let pageParam = context.pathInfo.param as PlayerPageParam
       if (pageParam) {
@@ -234,25 +274,47 @@ export struct PlayerPage {
           };
           this.videoPlayerController.progressContext = ctx;
 
-          // 播放器 prepared 后检查是否有已保存进度
-          emitter.once(PlayerEvents.PREPARED, () => {
-            const videoId = pageParam.videoId ?? 0;
-            FileSourceDatabase.getInstance().getPlayProgress(videoId).then((saved) => {
-              if (saved !== null && saved.positionMs > 0) {
-                const dur = this.videoPlayerController.duration;
-                const isWatched = dur > 0 && saved.positionMs >= dur * 0.95;
-                this.savedPositionMs = saved.positionMs;
-                this.totalDurationMs = dur > 0 ? dur : saved.durationMs;
-                if (isWatched) {
-                  // 视为看完，默认从头，仍弹提示
-                  this.pendingSeekMs = 0;
-                } else {
-                  this.pendingSeekMs = saved.positionMs;
+          const mKey = pageParam.mediaKey ?? '';
+          if (mKey.length > 0) {
+            // ── 媒体级入口：直接 seek，不弹续播弹窗 ──────────────────────
+            this.currentMediaKey = mKey;
+            this.currentMediaSeason = pageParam.seasonNumber ?? 0;
+            this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
+            emitter.once(PlayerEvents.PREPARED, () => {
+              MediaProgressStore.get(this.currentMediaKey).then((saved) => {
+                if (saved !== null && saved.positionMs > 0) {
+                  const dur = this.videoPlayerController.duration;
+                  const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
+                  if (!isNearEnd) {
+                    this.videoPlayerController.seek(saved.positionMs).catch(() => {});
+                  } else {
+                    // 进程被杀前已近结尾，清除残留进度避免详情页仍显示"继续播放"
+                    MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
+                  }
                 }
-                this.showResumeDialog = true;
-              }
-            }).catch(() => {});
-          });
+              }).catch(() => {});
+            });
+          } else {
+            // ── 文件级入口：显示续播弹窗（原有逻辑不变）────────────────────
+            emitter.once(PlayerEvents.PREPARED, () => {
+              const videoId = pageParam.videoId ?? 0;
+              FileSourceDatabase.getInstance().getPlayProgress(videoId).then((saved) => {
+                if (saved !== null && saved.positionMs > 0) {
+                  const dur = this.videoPlayerController.duration;
+                  const isWatched = dur > 0 && saved.positionMs >= dur * 0.95;
+                  this.savedPositionMs = saved.positionMs;
+                  this.totalDurationMs = dur > 0 ? dur : saved.durationMs;
+                  if (isWatched) {
+                    // 视为看完，默认从头，仍弹提示
+                    this.pendingSeekMs = 0;
+                  } else {
+                    this.pendingSeekMs = saved.positionMs;
+                  }
+                  this.showResumeDialog = true;
+                }
+              }).catch(() => {});
+            });
+          }
         }
       }
     })
@@ -272,6 +334,26 @@ export struct PlayerPage {
 
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
+    if (this.mediaProgressTimerId >= 0) {
+      clearInterval(this.mediaProgressTimerId);
+      this.mediaProgressTimerId = -1;
+    }
+    // 媒体级进度：完播则清除，否则保存当前位置
+    if (this.currentMediaKey.length > 0) {
+      const posMs = this.videoPlayerController.currentTime;
+      const durMs = this.videoPlayerController.duration;
+      // duration 未就绪时跳过完播判断，避免 duration=0 误清除进度
+      if (durMs > 0) {
+        if (MediaProgressStore.isNearEnd(posMs, durMs)) {
+          MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
+        } else if (posMs > 0) {
+          MediaProgressStore.save(
+            this.currentMediaKey, posMs, durMs,
+            this.currentMediaSeason, this.currentMediaEpisode
+          ).catch(() => {});
+        }
+      }
+    }
     this.videoPlayerController.saveProgressNow()
     this.videoPlayerController.release()
   }

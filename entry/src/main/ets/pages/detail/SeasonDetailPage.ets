@@ -2,6 +2,7 @@ import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
 import { PlayerPageParam, PlayerPage } from '../player/index'
+import { MediaProgressStore } from '../../db/MediaProgressStore'
 import http from '@ohos.net.http'
 import image from '@ohos.multimedia.image'
 import effectKit from '@ohos.effectKit'
@@ -799,6 +800,8 @@ export struct SeasonDetailPage {
       }
 
       const episodeName = await this.resolveEpisodeName(db, episode);
+      const seriesProviderId = this.seriesEntity?.providerId ?? '';
+      const mKey = seriesProviderId.length > 0 ? MediaProgressStore.seriesKey(seriesProviderId) : undefined;
       const param: PlayerPageParam = {
         // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
         url: fullUrl,
@@ -806,11 +809,12 @@ export struct SeasonDetailPage {
         title: this.buildPlayerTitle(episode, episodeName),
         durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
         videoId: episode.id,
-        seriesProviderId: this.seriesEntity?.providerId ?? '',
+        seriesProviderId,
         seasonNumber: episode.seasonNumber ?? 0,
         episodeNumber: episode.episodeNumber ?? 0,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
-        presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
+        presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
+        mediaKey: mKey
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
@@ -892,13 +896,15 @@ export struct SeasonDetailPage {
         // 简介
         if (this.getOverview().length > 0) {
           if (this.isOverviewLong()) {
-            Text() {
-              Span(this.getOverviewShort())
+            Row({ space: 4 }) {
+              Text(this.getOverviewShort())
                 .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-              Span('更多')
+              Text('更多')
                 .fontSize(14).fontColor('#1B78F2').fontWeight(FontWeight.Medium)
+                .focusable(true)
                 .onClick(() => { this.showOverviewDialog = true; })
             }
+            .alignItems(VerticalAlign.Bottom)
             .constraintSize({ maxWidth: 700 })
           } else {
             Text(this.getOverview())

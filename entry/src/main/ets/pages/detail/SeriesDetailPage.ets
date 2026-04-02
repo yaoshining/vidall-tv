@@ -1,5 +1,6 @@
-import { SeriesGroup, TvSeriesEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
+import { SeriesGroup, TvSeriesEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity, MediaProgressEntry } from '../../db/models/MediaEntity'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
+import { MediaProgressStore } from '../../db/MediaProgressStore'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
 import { SeasonDetailPage } from './SeasonDetailPage'
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences'
@@ -131,10 +132,10 @@ export struct SeriesDetailPage {
   @Local dominantBgColor: string = '#111111'
   /** 当前选中显示的季号（-1 = 未选） */
   @Local selectedSeasonNumber: number = -1
-  /** 播放进度映射（key = videoId） */
+  /** 播放进度映射（key = videoId，文件级，用于集列表进度条） */
   @Local progressMap: Map<number, PlayProgressEntity> = new Map()
-  /** 最新播放进度（用于 ContinueWatchingCard） */
-  @Local lastProgress: PlayProgressEntity | null = null
+  /** 媒体级播放进度（用于 ContinueWatchingCard 续播入口） */
+  @Local mediaProgress: MediaProgressEntry | null = null
   /** 最新播放集信息 */
   @Local lastEpisode: MediaItem | null = null
   /** 最新播放集详情（用于缩略图/标题） */
@@ -333,6 +334,8 @@ export struct SeriesDetailPage {
     }
 
     const db = FileSourceDatabase.getInstance();
+
+    // ── 文件级进度：仍用于集列表进度条（不受本 Issue 影响）────────────────
     const progressList = await db.getPlayProgressBySeries(seriesProviderId);
     const newMap = new Map<number, PlayProgressEntity>();
     for (const progress of progressList) {
@@ -340,17 +343,19 @@ export struct SeriesDetailPage {
     }
     this.progressMap = newMap;
 
-    const latestRecord: PlayProgressEntity | null = progressList.length > 0 ? progressList[0] : null;
-
-    this.lastProgress = latestRecord;
-    this.hasActiveProgress = this.isValidProgress(latestRecord);
+    // ── 媒体级进度：用于 ContinueWatchingCard 续播入口 ─────────────────────
+    const mKey = MediaProgressStore.seriesKey(seriesProviderId);
+    const mp = await MediaProgressStore.get(mKey);
+    this.mediaProgress = mp;
+    this.hasActiveProgress = mp !== null && mp.positionMs > 0 && mp.durationMs > 0;
     this.lastEpisode = null;
     this.lastEpisodeEntity = null;
 
-    if (latestRecord === null) {
+    if (mp === null || !this.hasActiveProgress) {
       return;
     }
 
+    // 根据媒体级进度中的 seasonNumber + episodeNumber 定位集
     let allEpisodes = this.group?.episodes ?? [];
     if (allEpisodes.length === 0) {
       const seriesId = this.seriesEntity?.id;
@@ -360,15 +365,15 @@ export struct SeriesDetailPage {
     }
 
     for (const episode of allEpisodes) {
-      if (episode.id === latestRecord.videoId) {
+      if (episode.seasonNumber === mp.seasonNumber && episode.episodeNumber === mp.episodeNumber) {
         this.lastEpisode = episode;
         break;
       }
     }
 
     const seriesId = this.seriesEntity?.id;
-    if (seriesId !== undefined && latestRecord.episodeNumber > 0) {
-      const entity = await db.getTvEpisode(seriesId, latestRecord.seasonNumber, latestRecord.episodeNumber);
+    if (seriesId !== undefined && mp.episodeNumber > 0) {
+      const entity = await db.getTvEpisode(seriesId, mp.seasonNumber, mp.episodeNumber);
       if (entity !== null) {
         this.lastEpisodeEntity = entity;
       }
@@ -663,8 +668,10 @@ export struct SeriesDetailPage {
    * 点击集 → 导航到播放器
    * 构造 WebDAV 完整 URL + Authorization 请求头后传入 PlayerPageParam，
    * 同时从 DB / ffprobe 读取音轨和字幕轨元数据并注入，与文件浏览器行为一致。
+   * @param episode  要播放的集
+   * @param mediaKey 媒体级进度 key（仅"继续播放"入口传入，文件浏览器/集列表不传）
    */
-  private async playEpisode(episode: MediaItem): Promise<void> {
+  private async playEpisode(episode: MediaItem, mediaKey?: string): Promise<void> {
     try {
       const db = FileSourceDatabase.getInstance();
       const fileSource = await db.getFileSourceById(episode.sourceId);
@@ -809,7 +816,8 @@ export struct SeriesDetailPage {
         seasonNumber: episode.seasonNumber ?? 0,
         episodeNumber: episode.episodeNumber ?? 0,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
-        presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
+        presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
+        mediaKey: mediaKey
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
@@ -827,6 +835,20 @@ export struct SeriesDetailPage {
   /** 是否已看完（≥95%） */
   private isEpisodeWatched(episode: MediaItem): boolean {
     return this.getEpisodeProgress(episode) >= 0.95;
+  }
+
+  /** 媒体级进度百分比（0~100），用于 ContinueWatchingCard 进度条 */
+  private getMediaProgressPercent(): number {
+    const mp = this.mediaProgress;
+    if (mp === null || mp.durationMs <= 0) { return 0; }
+    return Math.min(100, Math.round(mp.positionMs / mp.durationMs * 100));
+  }
+
+  /** 媒体级是否已达完播阈值（供 ContinueWatchingCard 按钮文案判断） */
+  private isMediaWatched(): boolean {
+    const mp = this.mediaProgress;
+    if (mp === null || mp.durationMs <= 0) { return false; }
+    return MediaProgressStore.isNearEnd(mp.positionMs, mp.durationMs);
   }
 
   private isContinueActionFocused(action: string): boolean {
@@ -890,12 +912,12 @@ export struct SeriesDetailPage {
         }
 
         // 信息部分
-        if (this.hasActiveProgress && this.lastProgress !== null && this.lastEpisode !== null) {
+        if (this.hasActiveProgress && this.mediaProgress !== null && this.lastEpisode !== null) {
           // ── 有播放记录 ──────────────────────────────────
           Column({ space: 10 }) {
             // 集号标签 + 标题
             Row({ space: 8 }) {
-              Text(`S${String(this.lastProgress.seasonNumber).padStart(2, '0')}:E${String(this.lastProgress.episodeNumber).padStart(2, '0')}`)
+              Text(`S${String(this.mediaProgress.seasonNumber).padStart(2, '0')}:E${String(this.mediaProgress.episodeNumber).padStart(2, '0')}`)
                 .fontSize(12)
                 .fontColor('#1B78F2')
                 .padding({ left: 7, right: 7, top: 2, bottom: 2 })
@@ -908,10 +930,10 @@ export struct SeriesDetailPage {
             }
             .alignItems(VerticalAlign.Center)
 
-            // 进度条
+            // 进度条（使用媒体级进度）
             Column() {
               Column()
-                .width(`${Math.round(this.getEpisodeProgress(this.lastEpisode) * 100)}%`)
+                .width(`${this.getMediaProgressPercent()}%`)
                 .height('100%')
                 .backgroundColor('#1B78F2').borderRadius(2)
                 .alignSelf(ItemAlign.Start)
@@ -924,7 +946,7 @@ export struct SeriesDetailPage {
             Row({ space: 10 }) {
               Row({ space: 6 }) {
                 Text('▶').fontSize(12).fontColor(Color.White)
-                Text(this.isEpisodeWatched(this.lastEpisode) ? '重新播放' : '继续播放')
+                Text(this.isMediaWatched() ? '重新播放' : '继续播放')
                   .fontSize(14).fontColor(Color.White).fontWeight(FontWeight.Bold)
               }
               .padding({ left: 12, right: 12, top: 6, bottom: 6 })
@@ -941,10 +963,15 @@ export struct SeriesDetailPage {
                 }
               })
               .onClick(() => {
-                if (this.lastEpisode !== null) { this.playEpisode(this.lastEpisode); }
+                if (this.lastEpisode !== null) {
+                  const pid = this.seriesEntity?.providerId ?? '';
+                  if (pid.length === 0) { return; }
+                  const mKey = MediaProgressStore.seriesKey(pid);
+                  this.playEpisode(this.lastEpisode, mKey);
+                }
               })
 
-              Text(millisecondsToTime(this.lastProgress.positionMs))
+              Text(millisecondsToTime(this.mediaProgress.positionMs))
                 .fontSize(12).fontColor('#888888')
             }
             .alignItems(VerticalAlign.Center)
@@ -999,12 +1026,15 @@ export struct SeriesDetailPage {
                 }
               })
               .onClick(() => {
+                const pid = this.seriesEntity?.providerId ?? '';
+                if (pid.length === 0) { return; }
+                const mKey = MediaProgressStore.seriesKey(pid);
                 if (this.lastEpisode !== null) {
-                  this.playEpisode(this.lastEpisode);
+                  this.playEpisode(this.lastEpisode, mKey);
                   return;
                 }
                 const eps = this.group?.episodes ?? [];
-                if (eps.length > 0) { this.playEpisode(eps[0]); }
+                if (eps.length > 0) { this.playEpisode(eps[0], mKey); }
               })
             }
             .alignItems(VerticalAlign.Center)
@@ -1092,17 +1122,19 @@ export struct SeriesDetailPage {
           }
           .alignItems(VerticalAlign.Center)
 
-          // 简介：超100字截断显示 + 「更多」Span，不超出仅显示原文
+          // 简介：超100字截断显示 + 「更多」按钮（独立 Text，支持 TV 焦点）
           if (this.getOverview().length > 0) {
             if (this.isOverviewLong()) {
-              Text() {
-                Span(this.getOverviewShort())
+              Row({ space: 4 }) {
+                Text(this.getOverviewShort())
                   .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-                Span('更多')
+                Text('更多')
                   .fontSize(14).fontColor('#1B78F2')
                   .fontWeight(FontWeight.Medium)
+                  .focusable(true)
                   .onClick(() => { this.showOverviewDialog = true; })
               }
+              .alignItems(VerticalAlign.Bottom)
               .constraintSize({ maxWidth: 700 })
             } else {
               Text(this.getOverview())
