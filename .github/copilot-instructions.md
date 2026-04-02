@@ -13,10 +13,12 @@
 
 ## 文档与计划文件存放规则
 
-所有由 Copilot 生成的文档、计划、分析报告等 Markdown 文件，必须统一存放在项目根目录的 `.plans/` 文件夹下，文件命名格式为 `plan-${camelCaseName}.md`。
+所有由 Copilot 生成的文档、计划、分析报告等 Markdown 文件，必须统一存放在项目根目录的 `.plans/` 文件夹下；允许在 `.plans/` 内按用途建立子目录，但文件名仍必须遵守 `plan-${camelCaseName}.md`。
 
-- ✅ 正确路径：`.plans/plan-videoPlayerStrategy.md`
+- ✅ 正确路径：`.plans/reference/plan-videoPlayerStrategy.md`
+- ✅ 正确路径：`.plans/product-rules/plan-productDecisionChecklist.md`
 - ❌ 错误路径：`plan-videoPlayerStrategy.md`（直接放根目录）
+- ❌ 错误路径：`.plans/plan-videoPlayerStrategy.prompt.md`（正式文档不再用 `.prompt.md` 结尾）
 
 ## Instructions 组织规则
 
