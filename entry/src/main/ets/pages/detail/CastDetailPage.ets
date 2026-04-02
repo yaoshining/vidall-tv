@@ -230,16 +230,6 @@ export struct CastDetailPage {
           .width('100%').height('100%')
           .backgroundColor('#111111')
 
-        // 返回按钮
-        Text('← 返回')
-          .fontSize(14).fontColor('#AAAAAA')
-          .padding({ left: 24, right: 12, top: 8, bottom: 8 })
-          .margin({ top: 16, left: 16 })
-          .backgroundColor('#222222').borderRadius(4)
-          .focusable(true)
-          .defaultFocus(true)
-          .onClick(() => { this.pageStack.pop(); })
-
         if (this.loading) {
           Column() {
             Text('加载中…').fontSize(16).fontColor('#888888')

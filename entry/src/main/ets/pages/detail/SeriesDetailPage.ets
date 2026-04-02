@@ -1498,20 +1498,7 @@ export struct SeriesDetailPage {
         // 简介全文弹窗
         this.OverviewDialog()
 
-        // 顶部透明导航栏（后退按钮）
-        Row() {
-          Text('←')
-            .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
-            .textShadow({ radius: 6, color: '#88000000', offsetX: 1, offsetY: 1 })
-            .padding(20)
-            .onClick(() => { this.pageStack.pop(); })
-        }
-        .width('100%')
-        .padding({ left: 16, top: 8 })
-        .linearGradient({
-          angle: 180,
-          colors: [['#AA000000', 0.0], ['#00000000', 1.0]]
-        })
+
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
