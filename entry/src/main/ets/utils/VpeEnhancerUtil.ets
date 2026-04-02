@@ -1,8 +1,33 @@
 import hilog from '@ohos.hilog';
-import * as VidAllNapi from 'libvidall_core_player_napi.so';
+import * as VidAllNapiModule from 'libvidall_core_player_napi.so';
 import { CommonConstants } from '../common/constants/CommonConstants';
 
 const TAG = 'VpeEnhancerUtil';
+
+// ─── NAPI Bridge（.so 模块必须通过 Bridge 模式获得类型安全访问）───────────────
+
+interface VpeNapiBridge {
+  isVpeDetailEnhancerSupported: () => boolean;
+  createVpeDetailEnhancer: (displaySurfaceId: string, qualityLevel: number) => string;
+  updateVpeQuality: (qualityLevel: number) => void;
+  destroyVpeDetailEnhancer: () => void;
+}
+
+interface VpeNapiBridgeModule {
+  default?: VpeNapiBridge;
+}
+
+function getVidAllCorePlayerNapi(): VpeNapiBridge {
+  const mod = VidAllNapiModule as VpeNapiBridgeModule | VpeNapiBridge | undefined;
+  if (mod === undefined) {
+    throw new Error('libvidall_core_player_napi.so 未加载');
+  }
+  const def = (mod as VpeNapiBridgeModule).default;
+  if (def !== undefined) {
+    return def as VpeNapiBridge;
+  }
+  return mod as VpeNapiBridge;
+}
 
 /**
  * VPE AI 画质增强质量档位
@@ -50,7 +75,7 @@ export class VpeEnhancerUtil {
       return VpeEnhancerUtil._supported;
     }
     try {
-      VpeEnhancerUtil._supported = VidAllNapi.isVpeDetailEnhancerSupported();
+      VpeEnhancerUtil._supported = getVidAllCorePlayerNapi().isVpeDetailEnhancerSupported();
     } catch {
       VpeEnhancerUtil._supported = false;
     }
@@ -72,7 +97,7 @@ export class VpeEnhancerUtil {
     }
     const level = qualityToLevel(quality);
     try {
-      const inputSurfaceId = VidAllNapi.createVpeDetailEnhancer(displaySurfaceId, level);
+      const inputSurfaceId = getVidAllCorePlayerNapi().createVpeDetailEnhancer(displaySurfaceId, level);
       if (inputSurfaceId && inputSurfaceId.length > 0) {
         VpeEnhancerUtil._isRunning = true;
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -98,7 +123,7 @@ export class VpeEnhancerUtil {
     }
     const level = qualityToLevel(quality);
     try {
-      VidAllNapi.updateVpeQuality(level);
+      getVidAllCorePlayerNapi().updateVpeQuality(level);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, `VPE 质量已更新: ${quality}(${level})`);
     } catch {
       // ignore
@@ -114,7 +139,7 @@ export class VpeEnhancerUtil {
       return;
     }
     try {
-      VidAllNapi.updateVpeQuality(0); // NONE = 透传
+      getVidAllCorePlayerNapi().updateVpeQuality(0); // NONE = 透传
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'VPE 已切换为透传模式（关闭增强）');
     } catch {
       // ignore
@@ -130,7 +155,7 @@ export class VpeEnhancerUtil {
       return;
     }
     try {
-      VidAllNapi.destroyVpeDetailEnhancer();
+      getVidAllCorePlayerNapi().destroyVpeDetailEnhancer();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'VPE 已销毁');
     } catch {
       // ignore

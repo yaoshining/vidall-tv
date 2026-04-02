@@ -1,5 +1,5 @@
 import { debounce } from "@ibestservices/ibest-ui"
-import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem } from "./VideoPlayerController"
+import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend } from "./VideoPlayerController"
 import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
@@ -683,7 +683,7 @@ export struct PlayerSettingsDialog {
             })
           }
 
-          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine')) {
+          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.videoController.backend === 'avplayer') {
             Column({ space: 12 }) {
               Text('画质增强')
                 .fontSize(32)
