@@ -179,8 +179,11 @@ export struct CastDetailPage {
         try { await fs.mkdir(this.getCacheDir()); } catch (e) { /* 已存在 */ }
         const cache: CastCache = { detail: d, credits: this.credits };
         const cacheFile = await fs.open(this.getCachePath(), fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-        await fs.write(cacheFile.fd, JSON.stringify(cache));
-        await fs.close(cacheFile.fd);
+        try {
+          await fs.write(cacheFile.fd, JSON.stringify(cache));
+        } finally {
+          await fs.close(cacheFile.fd);
+        }
       } catch (e) {
         // 缓存写入失败，忽略
       }
@@ -369,7 +372,7 @@ export struct CastDetailPage {
                         .focusable(true)
                         .onClick(() => { this.navigateToCredit(item); })
                       }, (item: TmdbCreditItem) => {
-                        const k: string = (item.media_type ?? 'x') + '-' + (item.id != null ? item.id.toString() : '0') + '-' + (item.title ?? item.name ?? '');
+                        const k: string = (item.media_type ?? 'x') + '-' + (item.id != null ? item.id.toString() : '0') + '-' + (item.title ?? item.name ?? '') + '-' + (item.character ?? item.job ?? '');
                         return k;
                       })
                     }

@@ -1242,8 +1242,10 @@ export class VideoPlayerController {
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `[setIjkContext] SMB fallback 重启代理成功: ${newProxyUrl}`);
         } else {
+          // 代理重启失败：回退到原始 smb:// URL，不保留已停止代理的死 URL
+          this.currentVideoData.videoSrc = this.smbOriginalSrc;
           hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `[setIjkContext] SMB fallback 代理重启失败，backend=${this.backend} 将使用缓存 URL`);
+            `[setIjkContext] SMB fallback 代理重启失败，已回退到原始 SMB URL: ${this.smbOriginalSrc}`);
         }
       }
       try {
