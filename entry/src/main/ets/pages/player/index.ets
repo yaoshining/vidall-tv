@@ -61,6 +61,8 @@ export struct PlayerPage {
   private currentMediaSeason: number = 0;
   /** 媒体级进度：当前集号 */
   private currentMediaEpisode: number = 0;
+  /** media_progress 周期写入定时器 ID，-1 表示未启动 */
+  private mediaProgressTimerId: number = -1;
 
   private getBackendDebugText(): string {
     const proto = this.videoPlayerController.sourceProtocol;
@@ -209,6 +211,20 @@ export struct PlayerPage {
         }
       });
 
+      // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
+      this.mediaProgressTimerId = setInterval(() => {
+        if (this.currentMediaKey.length > 0) {
+          const posMs: number = this.videoPlayerController.currentTime;
+          const durMs: number = this.videoPlayerController.duration;
+          if (posMs > 0 && durMs > 0) {
+            MediaProgressStore.save(
+              this.currentMediaKey, posMs, durMs,
+              this.currentMediaSeason, this.currentMediaEpisode
+            ).catch(() => {});
+          }
+        }
+      }, 10000);
+
       let pageParam = context.pathInfo.param as PlayerPageParam
       if (pageParam) {
         if (pageParam.preferredBackend) {
@@ -315,6 +331,10 @@ export struct PlayerPage {
 
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
+    if (this.mediaProgressTimerId >= 0) {
+      clearInterval(this.mediaProgressTimerId);
+      this.mediaProgressTimerId = -1;
+    }
     // 媒体级进度：完播则清除，否则保存当前位置
     if (this.currentMediaKey.length > 0) {
       const posMs = this.videoPlayerController.currentTime;
