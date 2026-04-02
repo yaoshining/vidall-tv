@@ -1,4 +1,4 @@
-import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
+import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity, MediaProgressEntry } from '../../db/models/MediaEntity'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
@@ -142,6 +142,14 @@ export struct SeasonDetailPage {
   @Local hoveredHeroActionKey: string = ''
   @Local focusedEpisodeRowId: number = -1
   @Local hoveredEpisodeRowId: number = -1
+  /** 当前季是否存在播放进度（用于主按钮文案判断） */
+  @Local hasCurrentSeasonProgress: boolean = false
+  /** 主按钮目标集：有进度时为最近观看集，无进度时为第一集 */
+  @Local resumeEpisode: MediaItem | undefined = undefined
+  /** 跨季最近观看指针（当前季无进度且其他季有最近观看时才有值） */
+  @Local crossSeasonEntry: MediaProgressEntry | null = null
+  /** 跨季目标集 MediaItem（用于跨季次级入口点击直接播放） */
+  @Local crossSeasonEpisode: MediaItem | undefined = undefined
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -514,6 +522,47 @@ export struct SeasonDetailPage {
     return '#662C2F33';
   }
 
+  // ── 主按钮 / 跨季次级入口 辅助 ──────────────────────────────────────
+
+  /** 主按钮文案：有进度 → 继续本季；无进度 → 从本季开始 */
+  private getHeroPlayLabel(): string {
+    return this.hasCurrentSeasonProgress ? '继续本季' : '从本季开始';
+  }
+
+  /** 跨季次级入口文案，如"继续观看 S1E8" */
+  private getCrossSeasonLabel(): string {
+    const entry = this.crossSeasonEntry;
+    if (entry === null) { return ''; }
+    return `继续观看 S${entry.seasonNumber}E${entry.episodeNumber}`;
+  }
+
+  /** 是否显示跨季次级入口 */
+  private shouldShowCrossSeasonEntry(): boolean {
+    return !this.hasCurrentSeasonProgress
+      && this.crossSeasonEntry !== null
+      && this.crossSeasonEpisode !== undefined;
+  }
+
+  /** 主按钮点击处理 */
+  private handleHeroPlayClick(): void {
+    const ep = this.resumeEpisode;
+    if (ep !== undefined) {
+      this.playEpisode(ep).catch(() => {
+        console.warn('[SeasonDetailPage] handleHeroPlayClick playEpisode failed');
+      });
+    }
+  }
+
+  /** 跨季次级入口点击处理 */
+  private handleCrossSeasonClick(): void {
+    const ep = this.crossSeasonEpisode;
+    if (ep !== undefined) {
+      this.playEpisode(ep).catch(() => {
+        console.warn('[SeasonDetailPage] handleCrossSeasonClick playEpisode failed');
+      });
+    }
+  }
+
   private async refreshProgressState(): Promise<void> {
     const seriesProviderId = this.seriesEntity?.providerId ?? '';
     if (seriesProviderId.length === 0) {
@@ -526,6 +575,61 @@ export struct SeasonDetailPage {
       newMap.set(progress.videoId, progress);
     }
     this.progressMap = newMap;
+
+    // ── 当前季进度计算：找 updatedAt 最大的有进度集 ─────────────────────
+    let bestProgress: PlayProgressEntity | undefined;
+    for (const ep of this.seasonEpisodes) {
+      const p = newMap.get(ep.mediaItem.id ?? -1);
+      if (p !== undefined && p.positionMs > 0) {
+        if (bestProgress === undefined || p.updatedAt > bestProgress.updatedAt) {
+          bestProgress = p;
+        }
+      }
+    }
+    this.hasCurrentSeasonProgress = bestProgress !== undefined;
+
+    if (bestProgress !== undefined) {
+      // 继续本季：找对应 MediaItem
+      let found: MediaItem | undefined;
+      for (const ep of this.seasonEpisodes) {
+        if ((ep.mediaItem.id ?? -1) === bestProgress.videoId) {
+          found = ep.mediaItem;
+          break;
+        }
+      }
+      this.resumeEpisode = found;
+    } else {
+      // 从本季开始：排序后首集
+      this.resumeEpisode = this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined;
+    }
+
+    // ── 跨季次级入口：读整剧最近观看指针 ────────────────────────────────
+    const seriesKey = MediaProgressStore.seriesKey(seriesProviderId);
+    const latestEntry = await MediaProgressStore.get(seriesKey);
+    const currentSeason = this.getSeasonNumber();
+    if (latestEntry !== null
+        && latestEntry.seasonNumber !== currentSeason
+        && latestEntry.seasonNumber > 0
+        && latestEntry.episodeNumber > 0) {
+      this.crossSeasonEntry = latestEntry;
+      // 找跨季目标集 MediaItem（仅在当前季无进度时才需要）
+      const seriesId = this.seriesEntity?.id ?? -1;
+      if (seriesId > 0) {
+        const allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
+        let found: MediaItem | undefined;
+        for (const m of allEpisodes) {
+          if ((m.seasonNumber ?? -1) === latestEntry.seasonNumber
+              && (m.episodeNumber ?? -1) === latestEntry.episodeNumber) {
+            found = m;
+            break;
+          }
+        }
+        this.crossSeasonEpisode = found;
+      }
+    } else {
+      this.crossSeasonEntry = null;
+      this.crossSeasonEpisode = undefined;
+    }
   }
 
   aboutToAppear(): void {
@@ -678,6 +782,21 @@ export struct SeasonDetailPage {
   private async playEpisode(episode: MediaItem): Promise<void> {
     try {
       const db = FileSourceDatabase.getInstance();
+
+      // 查询该集的历史播放进度（per-episode，不影响其他集/季进度）
+      let startPositionMs: number = 0;
+      const episodeId = episode.id ?? 0;
+      if (episodeId > 0) {
+        const epProgress = await db.getPlayProgress(episodeId);
+        if (epProgress !== null && epProgress.positionMs > 0) {
+          const isWatched = epProgress.durationMs > 0
+            && epProgress.positionMs >= epProgress.durationMs * 0.95;
+          if (!isWatched) {
+            startPositionMs = epProgress.positionMs;
+          }
+        }
+      }
+
       const fileSource = await db.getFileSourceById(episode.sourceId);
       if (fileSource === null) {
         console.warn('[SeasonDetailPage] 找不到文件源 sourceId=' + episode.sourceId);
@@ -819,7 +938,8 @@ export struct SeasonDetailPage {
         episodeNumber: episode.episodeNumber ?? 0,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
-        mediaKey: mKey
+        mediaKey: mKey,
+        startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
@@ -922,7 +1042,7 @@ export struct SeasonDetailPage {
         Row({ space: 14 }) {
           Row({ space: 10 }) {
             Text('▶').fontSize(14).fontColor(Color.White)
-            Text('开始播放').fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
+            Text(this.getHeroPlayLabel()).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
           }
           .padding({ left: 24, right: 24, top: 10, bottom: 10 })
           .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(6)
@@ -937,11 +1057,29 @@ export struct SeasonDetailPage {
               this.clearHeroActionHoverIfMatches('play');
             }
           })
-          .onClick(() => {
-            if (this.seasonEpisodes.length > 0) {
-              this.playEpisode(this.seasonEpisodes[0].mediaItem);
+          .onClick(() => { this.handleHeroPlayClick(); })
+
+          // 跨季次级入口：当前季无进度且其他季存在最近观看时显示
+          if (this.shouldShowCrossSeasonEntry()) {
+            Row({ space: 8 }) {
+              Text('↩').fontSize(14).fontColor('#AEB4BC')
+              Text(this.getCrossSeasonLabel()).fontSize(14).fontColor('#AEB4BC')
             }
-          })
+            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+            .backgroundColor(this.getHeroSecondaryButtonBgColor('cross')).borderRadius(6)
+            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('cross') })
+            .focusable(true)
+            .onFocus(() => { this.focusedHeroActionKey = 'cross'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('cross'); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredHeroActionKey = 'cross';
+              } else {
+                this.clearHeroActionHoverIfMatches('cross');
+              }
+            })
+            .onClick(() => { this.handleCrossSeasonClick(); })
+          }
 
           Row({ space: 8 }) {
             Text('✓').fontSize(16).fontColor('#AEB4BC')

@@ -42,6 +42,12 @@ export interface PlayerPageParam {
    * 并在退出/切后台时回写媒体级进度，完播时自动清除。
    */
   mediaKey?: string;
+  /**
+   * 集内起播位置（毫秒）。由调用方从 play_progress 表按 videoId 查出后传入。
+   * 优先级高于 mediaKey 路径的 MediaProgressStore.get() seek。
+   * 若未设置或为 0，则回退到 media_progress 同季同集匹配 seek 逻辑。
+   */
+  startPositionMs?: number;
 }
 
 @ComponentV2
@@ -281,8 +287,17 @@ export struct PlayerPage {
             this.currentMediaSeason = pageParam.seasonNumber ?? 0;
             this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
             emitter.once(PlayerEvents.PREPARED, () => {
+              // 优先使用调用方从 play_progress 查到的集内起播位置（精确、不跨集）
+              const directStart = pageParam.startPositionMs ?? 0;
+              if (directStart > 0) {
+                this.videoPlayerController.seek(directStart).catch(() => {});
+                return;
+              }
+              // 回退：读 media_progress，但必须与当前季/集完全匹配，防止跨集乱 seek
               MediaProgressStore.get(this.currentMediaKey).then((saved) => {
-                if (saved !== null && saved.positionMs > 0) {
+                if (saved !== null && saved.positionMs > 0
+                    && saved.seasonNumber === this.currentMediaSeason
+                    && saved.episodeNumber === this.currentMediaEpisode) {
                   const dur = this.videoPlayerController.duration;
                   const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
                   if (!isNearEnd) {
