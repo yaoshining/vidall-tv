@@ -1024,12 +1024,13 @@ export struct SeriesDetailPage {
                 }
               })
               .onClick(() => {
+                const mKey = MediaProgressStore.seriesKey(this.seriesEntity?.providerId ?? '');
                 if (this.lastEpisode !== null) {
-                  this.playEpisode(this.lastEpisode);
+                  this.playEpisode(this.lastEpisode, mKey);
                   return;
                 }
                 const eps = this.group?.episodes ?? [];
-                if (eps.length > 0) { this.playEpisode(eps[0]); }
+                if (eps.length > 0) { this.playEpisode(eps[0], mKey); }
               })
             }
             .alignItems(VerticalAlign.Center)
