@@ -295,10 +295,15 @@ export struct CastDetailPage {
                             .alignItems(HorizontalAlign.Center)
                           }
 
-                          Text(this.getCreditsTitle(item))
-                            .fontSize(12).fontColor('#CCCCCC')
-                            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                            .width(100).textAlign(TextAlign.Center)
+                          Column() {
+                            Text(this.getCreditsTitle(item))
+                              .fontSize(12).fontColor('#CCCCCC')
+                              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                              .width(100).textAlign(TextAlign.Center)
+                          }
+                          .width(100)
+                          .height(36)
+                          .justifyContent(FlexAlign.Start)
 
                           Text(this.getCreditsYear(item))
                             .fontSize(11).fontColor('#888888')
@@ -310,8 +315,7 @@ export struct CastDetailPage {
                               .width(100).textAlign(TextAlign.Center)
                           }
                         }
-                        .focusable(true)
-                        .onClick(() => { this.navigateToCredit(item); })
+                        .focusable(false)
                       }, (item: TmdbCreditItem) => (item.id !== undefined ? item.id.toString() : '') + (item.media_type ?? ''))
                     }
                     .padding({ left: 40, right: 40 })
