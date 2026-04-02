@@ -1,29 +1,19 @@
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import * as VidAllCapNapiModule from 'libvidall_core_player_napi.so';
+import type { VideoDecoderCapability } from 'libvidall_core_player_napi.so';
 
 // ─── NAPI Bridge ─────────────────────────────────────────────────────────────
 
-interface VideoDecoderCapabilityResult {
-  capabilityKnown: boolean;
-  supported: boolean;
-  isHardware: boolean;
-  maxWidth: number;
-  maxHeight: number;
-  decoderName: string;
-  mimeType: string;
-  errorMessage: string;
-}
-
 interface DevCapNapiBridge {
-  queryVideoDecoderCapability: (codecOrMime: string) => VideoDecoderCapabilityResult;
+  queryVideoDecoderCapability: (codecOrMime: string) => VideoDecoderCapability;
 }
 
 interface DevCapNapiBridgeModule {
   default?: DevCapNapiBridge;
 }
 
-function getDevCapNapi(): DevCapNapiBridge {
+function getVidAllCorePlayerNapi(): DevCapNapiBridge {
   const mod = VidAllCapNapiModule as DevCapNapiBridgeModule | DevCapNapiBridge | undefined;
   if (mod === undefined) {
     throw new Error('libvidall_core_player_napi.so 未加载');
@@ -402,8 +392,8 @@ export class DeviceCapabilityUtil {
     let h264 = false;
     let h265 = false;
     try {
-      const r264 = getDevCapNapi().queryVideoDecoderCapability('video/avc');
-      const r265 = getDevCapNapi().queryVideoDecoderCapability('video/hevc');
+      const r264 = getVidAllCorePlayerNapi().queryVideoDecoderCapability('video/avc');
+      const r265 = getVidAllCorePlayerNapi().queryVideoDecoderCapability('video/hevc');
       h264 = r264.supported && r264.isHardware;
       h265 = r265.supported && r265.isHardware;
     } catch (e) {

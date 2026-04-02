@@ -588,12 +588,10 @@ export struct PlayerSettingsDialog {
   @State selectedScreenFitIndex: number = 0
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
-  @State private currentBackend: PlayerBackend = 'avplayer'
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
-    this.currentBackend = this.videoController.backend;
   }
 
   @Builder
@@ -685,7 +683,7 @@ export struct PlayerSettingsDialog {
             })
           }
 
-          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.currentBackend !== 'ijkplayer') {
+          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.videoController.backend === 'avplayer') {
             Column({ space: 12 }) {
               Text('画质增强')
                 .fontSize(32)
