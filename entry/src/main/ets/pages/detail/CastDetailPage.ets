@@ -360,9 +360,7 @@ export struct CastDetailPage {
                             .fontSize(11).fontColor('#888888')
                             .width(100).textAlign(TextAlign.Center)
 
-                          Text(item.character != null && item.character.length > 0
-                            ? item.character
-                            : (item.job != null && item.job.length > 0 ? item.job : ''))
+                          Text(item.character ?? '')
                             .fontSize(11).fontColor('#666666')
                             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                             .width(100).textAlign(TextAlign.Center)
