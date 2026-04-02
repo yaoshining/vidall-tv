@@ -224,6 +224,8 @@ export class VideoPlayerController {
   private pendingBackendResumePlay: boolean = false;
   /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
   private smbProxyActive: boolean = false;
+  /** 保存原始 smb:// URL，供 avplayer→ijkplayer fallback 时重新启动代理 */
+  private smbOriginalSrc: string = '';
   /** 一次性控制：本次 seek 完成后不自动恢复播放 */
   private suppressPlayAfterSeekOnce: boolean = false;
   /** ffmpeg 动态预览：当前是否正在抽帧 */
@@ -369,14 +371,19 @@ export class VideoPlayerController {
       if (proxyUrl.length > 0) {
         videoData.videoSrc = proxyUrl;
         this.smbProxyActive = true;
+        this.smbOriginalSrc = smbOriginalUrl;  // 保存原始 smb:// URL，供 fallback 时重启代理
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `SMB 源已通过代理 URL 转交 ${this.backend}（proxy started → rewritten to ${proxyUrl}）`);
       } else {
         // 代理启动失败，保留原始 smb:// URL（ijkplayer 会尝试直连，大概率失败）
         smbOriginalUrl = '';
+        this.smbOriginalSrc = '';  // 代理未启动，清空缓存
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `SMB 代理启动失败，backend=${this.backend} 将使用原始 smb:// URL`);
       }
+    } else {
+      // 非 SMB 源，清空缓存，防止前一次 SMB 播放残留
+      this.smbOriginalSrc = '';
     }
 
     // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
@@ -1224,6 +1231,19 @@ export class VideoPlayerController {
     // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 前调用 setContext
     ijkAdapter.setPendingContext(context, xComponentId);
     if (this.currentVideoData) {
+      // SMB fallback：avplayer release 时会停止代理，若原始源是 SMB 则需重新启动
+      if (this.smbOriginalSrc.length > 0) {
+        const newProxyUrl = VidAllPlayerAdapter.startSmbProxy(this.smbOriginalSrc);
+        if (newProxyUrl.length > 0) {
+          this.currentVideoData.videoSrc = newProxyUrl;
+          this.smbProxyActive = true;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[setIjkContext] SMB fallback 重启代理成功: ${newProxyUrl}`);
+        } else {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[setIjkContext] SMB fallback 代理重启失败，backend=${this.backend} 将使用缓存 URL`);
+        }
+      }
       try {
         await ijkAdapter.init(this.currentVideoData, this.surfaceId);
       } catch (e) {
