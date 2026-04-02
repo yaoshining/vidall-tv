@@ -1287,7 +1287,7 @@ export struct SeriesDetailPage {
               .onClick(() => {
                 const pid = c.personId;
                 if (pid !== undefined && pid > 0) {
-                  const param: CastDetailPageParam = { personId: pid, name: c.name };
+                  const param: CastDetailPageParam = { personId: pid, name: c.name ?? '' };
                   this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
                 }
               })

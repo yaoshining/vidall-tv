@@ -2,7 +2,6 @@ import http from '@ohos.net.http';
 import fs from '@ohos.file.fs';
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences';
 import { MovieDetailPage } from './MovieDetailPage';
-import { SeriesDetailPage } from './SeriesDetailPage';
 import { MediaItem } from '../../db/models/MediaEntity';
 
 export interface CastDetailPageParam {
@@ -76,8 +75,9 @@ export struct CastDetailPage {
 
   private async loadData(): Promise<void> {
     const cachePath = this.getCachePath();
+    // Thread 4: 同步 readTextSync → 异步 readText
     try {
-      const text = fs.readTextSync(cachePath);
+      const text = await fs.readText(cachePath);
       const cached = JSON.parse(text) as CastCache;
       this.detail = cached.detail;
       this.credits = (cached.credits ?? []).slice(0, 20);
@@ -98,35 +98,48 @@ export struct CastDetailPage {
     const pid = this.personId.toString();
 
     try {
-      // 拉取 person detail
+      // Thread 3: req1 用 try/finally 保证 destroy()
       const req1 = http.createHttp();
-      const res1 = await req1.request(`${base}/person/${pid}?api_key=${apiKey}&language=${lang}`);
-      req1.destroy();
-      const d = JSON.parse(res1.result as string) as TmdbPersonDetail;
+      let d: TmdbPersonDetail = {};
+      try {
+        const res1 = await req1.request(
+          `${base}/person/${pid}?api_key=${apiKey}&language=${lang}`,
+          { method: http.RequestMethod.GET, connectTimeout: 5000, readTimeout: 10000 }
+        );
+        if (res1.responseCode === 200) {
+          d = JSON.parse(res1.result as string) as TmdbPersonDetail;
+        }
+      } finally {
+        req1.destroy();
+      }
       this.detail = d;
 
-      // 拉取 combined_credits
+      // Thread 3: req2 用 try/finally 保证 destroy()
       const req2 = http.createHttp();
-      const res2 = await req2.request(`${base}/person/${pid}/combined_credits?api_key=${apiKey}&language=${lang}`);
-      req2.destroy();
-      const cr = JSON.parse(res2.result as string) as TmdbCombinedCredits;
+      let cr: TmdbCombinedCredits = {};
+      try {
+        const res2 = await req2.request(
+          `${base}/person/${pid}/combined_credits?api_key=${apiKey}&language=${lang}`,
+          { method: http.RequestMethod.GET, connectTimeout: 5000, readTimeout: 10000 }
+        );
+        if (res2.responseCode === 200) {
+          cr = JSON.parse(res2.result as string) as TmdbCombinedCredits;
+        }
+      } finally {
+        req2.destroy();
+      }
       const allCredits: TmdbCreditItem[] = [...(cr.cast ?? []), ...(cr.crew ?? [])];
       // 按 vote_average 降序，取前 20
       allCredits.sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0));
       this.credits = allCredits.slice(0, 20);
 
-      // 写缓存
+      // Thread 4: 同步 mkdirSync/openSync/writeSync/closeSync → 异步版本
       try {
-        fs.mkdirSync(this.getCacheDir());
-      } catch (e) {
-        // 目录已存在或创建失败，忽略
-      }
-      try {
+        try { await fs.mkdir(this.getCacheDir()); } catch (e) { /* 已存在 */ }
         const cache: CastCache = { detail: d, credits: this.credits };
-        const cacheText = JSON.stringify(cache);
-        const cacheFile = fs.openSync(this.getCachePath(), fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-        fs.writeSync(cacheFile.fd, cacheText);
-        fs.closeSync(cacheFile);
+        const cacheFile = await fs.open(this.getCachePath(), fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+        await fs.write(cacheFile.fd, JSON.stringify(cache));
+        await fs.close(cacheFile.fd);
       } catch (e) {
         // 缓存写入失败，忽略
       }
@@ -151,6 +164,8 @@ export struct CastDetailPage {
   }
 
   private navigateToCredit(item: TmdbCreditItem): void {
+    // TV 类型暂不支持跳转（SeriesDetailPage 需要 tvSeriesId，无法从 TMDB 直接构造）
+    if (item.media_type === 'tv') { return; }
     const mediaItem: MediaItem = {
       id: 0,
       sourceId: 0,
@@ -160,15 +175,11 @@ export struct CastDetailPage {
       scannedAt: 0,
       title: this.getCreditsTitle(item),
       provider: 'tmdb',
-      providerId: item.id !== undefined ? item.id.toString() : '',
+      providerId: item.id != null ? item.id.toString() : '',
       posterUrl: tmdbImg(item.poster_path, 'w342'),
-      mediaType: item.media_type === 'tv' ? 'series' : 'movie',
+      mediaType: 'movie',
     };
-    if (item.media_type === 'tv') {
-      this.pageStack.pushPathByName(SeriesDetailPage.PAGE_NAME, mediaItem);
-    } else {
-      this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, mediaItem);
-    }
+    this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, mediaItem);
   }
 
   build() {
@@ -315,7 +326,8 @@ export struct CastDetailPage {
                               .width(100).textAlign(TextAlign.Center)
                           }
                         }
-                        .focusable(false)
+                        .focusable(true)
+                        .onClick(() => { this.navigateToCredit(item); })
                       }, (item: TmdbCreditItem) => (item.id !== undefined ? item.id.toString() : '') + (item.media_type ?? ''))
                     }
                     .padding({ left: 40, right: 40 })
