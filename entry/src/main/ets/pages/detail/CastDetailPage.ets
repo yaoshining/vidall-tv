@@ -190,9 +190,11 @@ export struct CastDetailPage {
   }
 
   private getInitial(): string {
-    const n = this.detail?.name ?? this.displayName;
+    const raw = this.detail?.name ?? this.displayName;
+    // 防御性转换：displayName 在运行时可能为 null，String() 确保不会调用 null.charAt
+    const n: string = (raw != null) ? String(raw) : '';
     if (n.length === 0) { return '?'; }
-    return n.charAt(0).toUpperCase();
+    return n[0].toUpperCase();
   }
 
   private getCreditsTitle(item: TmdbCreditItem): string {

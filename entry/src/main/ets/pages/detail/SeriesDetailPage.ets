@@ -432,6 +432,8 @@ export struct SeriesDetailPage {
           const allCredits: ScrapeCredit[] = [];
           const castItems = detail2.credits?.cast ?? [];
           for (const c of castItems.slice(0, 20)) {
+            // 过滤无名称演员，避免下游 CastDetailPage 崩溃
+            if (c.name == null || (c.name as string).length === 0) { continue; }
             const cr: ScrapeCredit = {
               name: c.name ?? '',
               role: c.character,

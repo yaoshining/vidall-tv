@@ -253,6 +253,8 @@ export struct MovieDetailPage {
     }
     const castList = parseCastArr(this.movieEntity?.castJson);
     for (const c of castList) {
+      // 过滤无名称的演员，避免导航到 CastDetailPage 时 displayName 为 null
+      if (c.name == null || c.name.length === 0) { continue; }
       const ci: CastCrewItem = { name: c.name, role: c.character, profilePath: c.profilePath, personId: c.personId };
       result.push(ci);
     }
