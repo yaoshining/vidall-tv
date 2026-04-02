@@ -360,11 +360,12 @@ export struct CastDetailPage {
                             .fontSize(11).fontColor('#888888')
                             .width(100).textAlign(TextAlign.Center)
 
-                          Text(item.character ?? '')
+                          Text(item.character || ' ')
                             .fontSize(11).fontColor('#666666')
                             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                             .width(100).textAlign(TextAlign.Center)
                         }
+                        .alignItems(HorizontalAlign.Start)
                         .focusable(true)
                         .onClick(() => { this.navigateToCredit(item); })
                       }, (item: TmdbCreditItem) => {
