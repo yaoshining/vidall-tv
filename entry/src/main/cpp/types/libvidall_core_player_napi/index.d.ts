@@ -15,11 +15,13 @@ export const getDuration: (handle: number) => number;
 /** ffprobe 异步探测：返回 JSON 字符串，包含轨道、编码、时长等信息 */
 export const ffprobe: (url: string, headerLines: string, timeoutMs: number) => Promise<string>;
 
-export const ffmpegSelfCheck: () => {
+export interface FfmpegSelfCheckResult {
   avVersionInfo: string;
   avformatVersion: number;
   avutilVersion: number;
-};
+}
+
+export const ffmpegSelfCheck: () => FfmpegSelfCheckResult;
 
 /**
  * 通过 libcurl 发送 WebDAV / HTTP 请求（异步 NAPI，不阻塞主线程）。
@@ -32,6 +34,12 @@ export const ffmpegSelfCheck: () => {
  * @param tlsPolicy   TLS 校验策略：'allow_self_signed'（默认，跳过证书验证）| 'strict'（严格校验系统 CA）
  * @returns           statusCode / body / error（error 非空表示 libcurl 层错误，如 [CURL:60]）
  */
+export interface WebdavResponse {
+  statusCode: number;
+  body: string;
+  error: string;
+}
+
 export const webdavRequest: (
   method: string,
   url: string,
@@ -39,11 +47,7 @@ export const webdavRequest: (
   body: string,
   timeoutMs: number,
   tlsPolicy?: string
-) => Promise<{
-  statusCode: number;
-  body: string;
-  error: string;
-}>;
+) => Promise<WebdavResponse>;
 
 /**
  * 通过 libcurl 将远端文件下载到本地路径（异步 NAPI，不阻塞主线程）。
@@ -57,6 +61,12 @@ export const webdavRequest: (
  * @param tlsPolicy   TLS 校验策略，同 webdavRequest
  * @returns           statusCode / downloadedBytes / error
  */
+export interface DownloadResult {
+  statusCode: number;
+  downloadedBytes: number;
+  error: string;
+}
+
 export const downloadToFile: (
   method: string,
   url: string,
@@ -65,21 +75,18 @@ export const downloadToFile: (
   timeoutMs: number,
   outputPath: string,
   tlsPolicy?: string
-) => Promise<{
-  statusCode: number;
-  downloadedBytes: number;
-  error: string;
-}>;
+) => Promise<DownloadResult>;
 
-/** 查询 native 层能力（libcurl/ffmpeg 是否可用及版本信息） */
-export const getNativeCapabilities: () => {
+export interface NativeCapabilities {
   ffmpegEnabled: boolean;
   libcurlEnabled: boolean;
   libcurlVersion: string;
-};
+}
 
-/** 查询设备对指定视频编码的硬件解码能力 */
-export const queryVideoDecoderCapability: (codecOrMime: string) => {
+/** 查询 native 层能力（libcurl/ffmpeg 是否可用及版本信息） */
+export const getNativeCapabilities: () => NativeCapabilities;
+
+export interface VideoDecoderCapability {
   capabilityKnown: boolean;
   supported: boolean;
   isHardware: boolean;
@@ -88,10 +95,12 @@ export const queryVideoDecoderCapability: (codecOrMime: string) => {
   decoderName: string;
   mimeType: string;
   errorMessage: string;
-};
+}
 
-/** 查询设备对指定音频编码的硬件解码能力 */
-export const queryAudioDecoderCapability: (codecOrMime: string) => {
+/** 查询设备对指定视频编码的硬件解码能力 */
+export const queryVideoDecoderCapability: (codecOrMime: string) => VideoDecoderCapability;
+
+export interface AudioDecoderCapability {
   capabilityKnown: boolean;
   supported: boolean;
   isHardware: boolean;
@@ -99,7 +108,10 @@ export const queryAudioDecoderCapability: (codecOrMime: string) => {
   decoderName: string;
   mimeType: string;
   errorMessage: string;
-};
+}
+
+/** 查询设备对指定音频编码的硬件解码能力 */
+export const queryAudioDecoderCapability: (codecOrMime: string) => AudioDecoderCapability;
 
 /**
  * 查询当前设备是否支持 VPE AI 画质增强（Detail Enhancer）。

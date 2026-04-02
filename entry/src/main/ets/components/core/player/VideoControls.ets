@@ -1,5 +1,5 @@
 import { debounce } from "@ibestservices/ibest-ui"
-import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem } from "./VideoPlayerController"
+import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend } from "./VideoPlayerController"
 import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
@@ -588,10 +588,12 @@ export struct PlayerSettingsDialog {
   @State selectedScreenFitIndex: number = 0
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
+  @State private currentBackend: PlayerBackend = 'avplayer'
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
+    this.currentBackend = this.videoController.backend;
   }
 
   @Builder
@@ -683,7 +685,7 @@ export struct PlayerSettingsDialog {
             })
           }
 
-          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine')) {
+          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.currentBackend !== 'ijkplayer') {
             Column({ space: 12 }) {
               Text('画质增强')
                 .fontSize(32)
