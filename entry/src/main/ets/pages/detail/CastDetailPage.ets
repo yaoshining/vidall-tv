@@ -202,7 +202,7 @@ export struct CastDetailPage {
               // Hero 区
               Row({ space: 24 }) {
                 // 左：照片
-                if (this.detail?.profile_path !== undefined && this.detail.profile_path.length > 0) {
+                if (this.detail?.profile_path != null && this.detail.profile_path.length > 0) {
                   Image(tmdbImg(this.detail.profile_path, 'w185'))
                     .width(120).height(180)
                     .borderRadius(8)
@@ -224,17 +224,17 @@ export struct CastDetailPage {
                     .fontSize(28).fontColor(Color.White).fontWeight(FontWeight.Bold)
                     .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
 
-                  if (this.detail?.known_for_department !== undefined && this.detail.known_for_department.length > 0) {
+                  if (this.detail?.known_for_department != null && this.detail.known_for_department.length > 0) {
                     Text(this.detail.known_for_department)
                       .fontSize(14).fontColor('#1B78F2')
                   }
 
-                  if (this.detail?.birthday !== undefined && this.detail.birthday.length > 0) {
+                  if (this.detail?.birthday != null && this.detail.birthday.length > 0) {
                     Text('生日：' + this.detail.birthday)
                       .fontSize(13).fontColor('#AAAAAA')
                   }
 
-                  if (this.detail?.place_of_birth !== undefined && this.detail.place_of_birth.length > 0) {
+                  if (this.detail?.place_of_birth != null && this.detail.place_of_birth.length > 0) {
                     Text('出生地：' + this.detail.place_of_birth)
                       .fontSize(13).fontColor('#AAAAAA')
                       .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -248,7 +248,7 @@ export struct CastDetailPage {
               .alignItems(VerticalAlign.Top)
 
               // Biography
-              if (this.detail?.biography !== undefined && this.detail.biography.length > 0) {
+              if (this.detail?.biography != null && this.detail.biography.length > 0) {
                 Column({ space: 8 }) {
                   Text('简介')
                     .fontSize(16).fontColor('#CCCCCC').fontWeight(FontWeight.Bold)
@@ -281,7 +281,7 @@ export struct CastDetailPage {
                     Row({ space: 12 }) {
                       ForEach(this.credits, (item: TmdbCreditItem) => {
                         Column({ space: 6 }) {
-                          if (item.poster_path !== undefined && item.poster_path.length > 0) {
+                          if (item.poster_path != null && item.poster_path.length > 0) {
                             Image(tmdbImg(item.poster_path, 'w185'))
                               .width(100).height(150)
                               .borderRadius(6).objectFit(ImageFit.Cover)
@@ -308,7 +308,7 @@ export struct CastDetailPage {
                           Text(this.getCreditsYear(item))
                             .fontSize(11).fontColor('#888888')
 
-                          if (item.character !== undefined && item.character.length > 0) {
+                          if (item.character != null && item.character.length > 0) {
                             Text(item.character)
                               .fontSize(11).fontColor('#666666')
                               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
