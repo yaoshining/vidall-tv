@@ -13,6 +13,7 @@ import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntit
 import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -54,6 +55,7 @@ interface TmdbRawSeason {
 }
 
 interface TmdbRawCastItem {
+  id?: number;
   name?: string;
   character?: string;
   profile_path?: string;
@@ -61,6 +63,7 @@ interface TmdbRawCastItem {
 }
 
 interface TmdbRawCrewItem {
+  id?: number;
   name?: string;
   job?: string;
   profile_path?: string;
@@ -433,7 +436,8 @@ export struct SeriesDetailPage {
               name: c.name ?? '',
               role: c.character,
               profilePath: c.profile_path,
-              order: c.order
+              order: c.order,
+              personId: c.id
             };
             allCredits.push(cr);
           }
@@ -446,7 +450,8 @@ export struct SeriesDetailPage {
             const cr: ScrapeCredit = {
               name: cName,
               role: translateJob(c.job ?? ''),
-              profilePath: c.profile_path
+              profilePath: c.profile_path,
+              personId: c.id
             };
             allCredits.push(cr);
             castNames.push(cName);
@@ -1278,6 +1283,14 @@ export struct SeriesDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
+              .focusable(true)
+              .onClick(() => {
+                const pid = c.personId;
+                if (pid !== undefined && pid > 0) {
+                  const param: CastDetailPageParam = { personId: pid, name: c.name };
+                  this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
+                }
+              })
             }, (c: ScrapeCredit) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })

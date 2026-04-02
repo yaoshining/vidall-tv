@@ -11,6 +11,7 @@ export interface ScrapeCredit {
   role?: string;
   profilePath?: string;
   order?: number;
+  personId?: number;
 }
 
 /** 搜索参数 */
@@ -244,6 +245,7 @@ interface TmdbSearchItem {
 }
 
 interface TmdbCastItem {
+  id?: number;
   name?: string;
   character?: string;
   profile_path?: string;
@@ -251,6 +253,7 @@ interface TmdbCastItem {
 }
 
 interface TmdbCrewItem {
+  id?: number;
   name?: string;
   job?: string;
   profile_path?: string;
@@ -404,11 +407,11 @@ export class TmdbProvider implements IScrapeProvider {
     const rawJson = await this.httpGet(url);
     const item = JSON.parse(rawJson) as TmdbMovieDetail;
     const cast: ScrapeCredit[] = (item.credits?.cast ?? []).slice(0, 20).map(c => {
-      const cr: ScrapeCredit = { name: c.name ?? '', role: c.character, profilePath: c.profile_path ?? undefined, order: c.order };
+      const cr: ScrapeCredit = { name: c.name ?? '', role: c.character, profilePath: c.profile_path ?? undefined, order: c.order, personId: c.id };
       return cr;
     });
     const directors: ScrapeCredit[] = (item.credits?.crew ?? []).filter(c => c.job === 'Director').map(c => {
-      const cr: ScrapeCredit = { name: c.name ?? '', role: c.job, profilePath: c.profile_path ?? undefined };
+      const cr: ScrapeCredit = { name: c.name ?? '', role: c.job, profilePath: c.profile_path ?? undefined, personId: c.id };
       return cr;
     });
     const r: MovieScrapeResult = {
@@ -439,7 +442,7 @@ export class TmdbProvider implements IScrapeProvider {
     const rawJson = await this.httpGet(url);
     const item = JSON.parse(rawJson) as TmdbTvDetail;
     const cast: ScrapeCredit[] = (item.credits?.cast ?? []).slice(0, 20).map(c => {
-      const cr: ScrapeCredit = { name: c.name ?? '', role: c.character, profilePath: c.profile_path ?? undefined, order: c.order };
+      const cr: ScrapeCredit = { name: c.name ?? '', role: c.character, profilePath: c.profile_path ?? undefined, order: c.order, personId: c.id };
       return cr;
     });
     const r: TvSeriesScrapeResult = {

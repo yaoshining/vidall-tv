@@ -9,6 +9,7 @@ import image from '@ohos.multimedia.image';
 import effectKit from '@ohos.effectKit';
 import { millisecondsToTime } from '../../utils/TimeUtil';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { CastDetailPage, CastDetailPageParam } from './CastDetailPage';
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -66,6 +67,7 @@ interface CastPerson {
   name: string;
   character?: string;
   profilePath?: string;
+  personId?: number;
 }
 
 /** 演职人员统一展示项（导演 + 演员合并列表） */
@@ -73,6 +75,7 @@ interface CastCrewItem {
   name: string;
   role?: string;
   profilePath?: string;
+  personId?: number;
 }
 
 function parseCastArr(json: string | undefined): CastPerson[] {
@@ -250,7 +253,7 @@ export struct MovieDetailPage {
     }
     const castList = parseCastArr(this.movieEntity?.castJson);
     for (const c of castList) {
-      const ci: CastCrewItem = { name: c.name, role: c.character, profilePath: c.profilePath };
+      const ci: CastCrewItem = { name: c.name, role: c.character, profilePath: c.profilePath, personId: c.personId };
       result.push(ci);
     }
     return result;
@@ -707,6 +710,14 @@ export struct MovieDetailPage {
                 }
               }
               .width(110).alignItems(HorizontalAlign.Center)
+              .focusable(true)
+              .onClick(() => {
+                const pid = c.personId;
+                if (pid !== undefined && pid > 0) {
+                  const param: CastDetailPageParam = { personId: pid, name: c.name };
+                  this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
+                }
+              })
             }, (c: CastCrewItem) => c.name ?? '')
           }
           .padding({ left: 80, right: 80 })
