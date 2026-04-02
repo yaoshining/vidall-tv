@@ -1285,11 +1285,8 @@ export struct SeriesDetailPage {
               .width(110).alignItems(HorizontalAlign.Center)
               .focusable(true)
               .onClick(() => {
-                const pid = c.personId;
-                if (pid !== undefined && pid > 0) {
-                  const param: CastDetailPageParam = { personId: pid, name: c.name ?? '' };
-                  this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
-                }
+                const param: CastDetailPageParam = { personId: c.personId ?? 0, name: c.name ?? '' };
+                this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
               })
             }, (c: ScrapeCredit) => c.name ?? '')
           }

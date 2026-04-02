@@ -9,6 +9,15 @@ export interface CastDetailPageParam {
   name: string;
 }
 
+interface TmdbSearchPersonResult {
+  results?: TmdbPersonBrief[];
+}
+
+interface TmdbPersonBrief {
+  id?: number;
+  name?: string;
+}
+
 interface TmdbPersonDetail {
   id?: number;
   name?: string;
@@ -74,6 +83,37 @@ export struct CastDetailPage {
   }
 
   private async loadData(): Promise<void> {
+    // 若没有 personId，先通过名字搜索 TMDB
+    if (this.personId === 0 && this.displayName.length > 0) {
+      const apiKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+      if (apiKey.length > 0) {
+        const searchReq = http.createHttp();
+        try {
+          const encodedName = encodeURIComponent(this.displayName);
+          const searchRes = await searchReq.request(
+            `https://api.themoviedb.org/3/search/person?api_key=${apiKey}&language=zh-CN&query=${encodedName}`,
+            { method: http.RequestMethod.GET, connectTimeout: 5000, readTimeout: 10000 }
+          );
+          if (searchRes.responseCode === 200) {
+            const searchData = JSON.parse(searchRes.result as string) as TmdbSearchPersonResult;
+            if (searchData.results != null && searchData.results.length > 0) {
+              const firstResult = searchData.results[0];
+              if (firstResult.id != null) {
+                this.personId = firstResult.id;
+              }
+            }
+          }
+        } finally {
+          searchReq.destroy();
+        }
+      }
+      // 若仍为 0 则无 TMDB 数据，直接退出
+      if (this.personId === 0) {
+        this.loading = false;
+        return;
+      }
+    }
+
     const cachePath = this.getCachePath();
     // Thread 4: 同步 readTextSync → 异步 readText
     try {
