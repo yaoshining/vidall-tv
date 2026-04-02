@@ -1287,7 +1287,10 @@ export struct SeriesDetailPage {
               .width(110).alignItems(HorizontalAlign.Center)
               .focusable(true)
               .onClick(() => {
-                const param: CastDetailPageParam = { personId: c.personId ?? 0, name: c.name ?? '' };
+                const castName = c.name ?? '';
+                const castProfile = c.profilePath ?? '';
+                if (castName.length === 0 && castProfile.length === 0) { return; }
+                const param: CastDetailPageParam = { personId: c.personId ?? 0, name: castName };
                 this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
               })
             }, (c: ScrapeCredit) => c.name ?? '')
