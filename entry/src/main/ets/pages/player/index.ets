@@ -287,6 +287,9 @@ export struct PlayerPage {
                   const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
                   if (!isNearEnd) {
                     this.videoPlayerController.seek(saved.positionMs).catch(() => {});
+                  } else {
+                    // 进程被杀前已近结尾，清除残留进度避免详情页仍显示"继续播放"
+                    MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
                   }
                 }
               }).catch(() => {});

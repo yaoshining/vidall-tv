@@ -964,7 +964,9 @@ export struct SeriesDetailPage {
               })
               .onClick(() => {
                 if (this.lastEpisode !== null) {
-                  const mKey = MediaProgressStore.seriesKey(this.seriesEntity?.providerId ?? '');
+                  const pid = this.seriesEntity?.providerId ?? '';
+                  if (pid.length === 0) { return; }
+                  const mKey = MediaProgressStore.seriesKey(pid);
                   this.playEpisode(this.lastEpisode, mKey);
                 }
               })
@@ -1024,7 +1026,9 @@ export struct SeriesDetailPage {
                 }
               })
               .onClick(() => {
-                const mKey = MediaProgressStore.seriesKey(this.seriesEntity?.providerId ?? '');
+                const pid = this.seriesEntity?.providerId ?? '';
+                if (pid.length === 0) { return; }
+                const mKey = MediaProgressStore.seriesKey(pid);
                 if (this.lastEpisode !== null) {
                   this.playEpisode(this.lastEpisode, mKey);
                   return;
@@ -1118,17 +1122,19 @@ export struct SeriesDetailPage {
           }
           .alignItems(VerticalAlign.Center)
 
-          // 简介：超100字截断显示 + 「更多」Span，不超出仅显示原文
+          // 简介：超100字截断显示 + 「更多」按钮（独立 Text，支持 TV 焦点）
           if (this.getOverview().length > 0) {
             if (this.isOverviewLong()) {
-              Text() {
-                Span(this.getOverviewShort())
+              Row({ space: 4 }) {
+                Text(this.getOverviewShort())
                   .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-                Span('更多')
+                Text('更多')
                   .fontSize(14).fontColor('#1B78F2')
                   .fontWeight(FontWeight.Medium)
+                  .focusable(true)
                   .onClick(() => { this.showOverviewDialog = true; })
               }
+              .alignItems(VerticalAlign.Bottom)
               .constraintSize({ maxWidth: 700 })
             } else {
               Text(this.getOverview())

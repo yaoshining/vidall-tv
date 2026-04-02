@@ -12,8 +12,8 @@ import { MediaProgressEntry } from './models/MediaEntity';
  */
 export class MediaProgressStore {
   /** 构造剧集媒体进度 key */
-  static seriesKey(seriesProviderId: string): string {
-    return `media_progress_series_${seriesProviderId}`;
+  static seriesKey(seriesProviderId: string, provider: string = 'tmdb'): string {
+    return `media_progress_series_${provider}_${seriesProviderId}`;
   }
 
   /** 构造电影媒体进度 key */
