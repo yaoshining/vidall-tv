@@ -381,8 +381,10 @@ export class VideoPlayerController {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `SMB 代理启动失败，backend=${this.backend} 将使用原始 smb:// URL`);
       }
-    } else {
-      // 非 SMB 源，清空缓存，防止前一次 SMB 播放残留
+    } else if (!videoData.videoSrc.startsWith('http://127.0.0.1')) {
+      // 非 SMB、非本地代理 URL（即真正的非 SMB 播放源），才清空缓存。
+      // fallback 场景下第二次 initPlayer() 收到的是上一次代理的 http://127.0.0.1:PORT/... URL，
+      // 不能清空 smbOriginalSrc，否则 setIjkContext() 无法重启代理。
       this.smbOriginalSrc = '';
     }
 
