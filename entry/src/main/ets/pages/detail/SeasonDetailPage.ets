@@ -1,4 +1,4 @@
-import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity } from '../../db/models/MediaEntity'
+import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity, MediaProgressEntry } from '../../db/models/MediaEntity'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit } from '../../lib/ScrapeClient'
@@ -39,6 +39,21 @@ function formatDuration(ms: number | undefined): string {
   const m = totalMins % 60;
   if (h > 0) { return `${h}h ${m}m`; }
   return `${m}m`;
+}
+
+function formatProgressTime(ms: number): string {
+  if (ms <= 0) { return ''; }
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  if (hours > 0) {
+    const hh = String(hours).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+  return `${mm}:${ss}`;
 }
 
 // ─────────────────────────────────────────────
@@ -142,6 +157,14 @@ export struct SeasonDetailPage {
   @Local hoveredHeroActionKey: string = ''
   @Local focusedEpisodeRowId: number = -1
   @Local hoveredEpisodeRowId: number = -1
+  /** 当前季是否存在播放进度（用于主按钮文案判断） */
+  @Local hasCurrentSeasonProgress: boolean = false
+  /** 主按钮目标集：有进度时为最近观看集，无进度时为第一集 */
+  @Local resumeEpisode: MediaItem | undefined = undefined
+  /** 跨季最近观看指针（整剧最近观看指针指向其他季时有值，与当前季是否有进度无关） */
+  @Local crossSeasonEntry: MediaProgressEntry | null = null
+  /** 跨季目标集 MediaItem（用于跨季次级入口点击直接播放） */
+  @Local crossSeasonEpisode: MediaItem | undefined = undefined
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -480,14 +503,24 @@ export struct SeasonDetailPage {
     return '#1B78F2';
   }
 
+  private getHeroPlayButtonShadowColor(): string {
+    if (this.isHeroActionFocused('play')) {
+      return 'rgba(27, 120, 242, 0.46)';
+    }
+    if (this.isHeroActionHovered('play')) {
+      return 'rgba(27, 120, 242, 0.30)';
+    }
+    return 'rgba(27, 120, 242, 0.20)';
+  }
+
   private getHeroSecondaryButtonBgColor(action: string): string {
     if (this.isHeroActionFocused(action)) {
-      return 'rgba(27, 120, 242, 0.36)';
+      return 'rgba(27, 120, 242, 0.26)';
     }
     if (this.isHeroActionHovered(action)) {
-      return 'rgba(255, 255, 255, 0.20)';
+      return 'rgba(255, 255, 255, 0.14)';
     }
-    return this.getEpisodeActionButtonBgColor();
+    return 'rgba(33, 37, 43, 0.90)';
   }
 
   private getHeroSecondaryButtonBorderColor(action: string): string {
@@ -498,6 +531,41 @@ export struct SeasonDetailPage {
       return 'rgba(255, 255, 255, 0.38)';
     }
     return '#00FFFFFF';
+  }
+
+  private getHeroSecondaryButtonShadowColor(action: string): string {
+    if (this.isHeroActionFocused(action)) {
+      return 'rgba(102, 169, 216, 0.24)';
+    }
+    if (this.isHeroActionHovered(action)) {
+      return 'rgba(0, 0, 0, 0.26)';
+    }
+    return 'rgba(0, 0, 0, 0.18)';
+  }
+
+  private getHeroSecondaryTitleColor(action: string): string {
+    if (this.isHeroActionActive(action)) {
+      return '#FFFFFF';
+    }
+    return '#DDE3EB';
+  }
+
+  private getHeroSecondaryMetaColor(action: string): string {
+    if (this.isHeroActionFocused(action)) {
+      return '#D3E7FF';
+    }
+    if (this.isHeroActionHovered(action)) {
+      return '#C7CDD6';
+    }
+    return '#9AA3AF';
+  }
+
+  private getHeroPrimaryButtonScale(): number {
+    return this.isHeroActionActive('play') ? 1.03 : 1.0;
+  }
+
+  private getHeroSecondaryButtonScale(action: string): number {
+    return this.isHeroActionActive(action) ? 1.02 : 1.0;
   }
 
   private getHeroPlayButtonBorderColor(): string {
@@ -514,6 +582,57 @@ export struct SeasonDetailPage {
     return '#662C2F33';
   }
 
+  // ── 主按钮 / 跨季次级入口 辅助 ──────────────────────────────────────
+
+  /** 主按钮文案：有进度 → 继续本季；无进度 → 从本季开始 */
+  private getHeroPlayLabel(): string {
+    return this.hasCurrentSeasonProgress ? '继续本季' : '从本季开始';
+  }
+
+  /** 跨季次级入口文案，如"继续观看 S1E8" */
+  private getCrossSeasonLabel(): string {
+    const entry = this.crossSeasonEntry;
+    if (entry === null) { return ''; }
+    return `继续上次观看 S${entry.seasonNumber}E${entry.episodeNumber}`;
+  }
+
+  private getCrossSeasonMetaLabel(): string {
+    const entry = this.crossSeasonEntry;
+    if (entry === null) { return ''; }
+    const episodeCode = `S${entry.seasonNumber}E${entry.episodeNumber}`;
+    const progressText = formatProgressTime(entry.positionMs);
+    if (progressText.length > 0) {
+      return `${episodeCode} · ${progressText}`;
+    }
+    return episodeCode;
+  }
+
+  /** 是否显示跨季次级入口 */
+  private shouldShowCrossSeasonEntry(): boolean {
+    return this.crossSeasonEntry !== null
+      && this.crossSeasonEpisode !== undefined;
+  }
+
+  /** 主按钮点击处理 */
+  private handleHeroPlayClick(): void {
+    const ep = this.resumeEpisode;
+    if (ep !== undefined) {
+      this.playEpisode(ep).catch(() => {
+        console.warn('[SeasonDetailPage] handleHeroPlayClick playEpisode failed');
+      });
+    }
+  }
+
+  /** 跨季次级入口点击处理 */
+  private handleCrossSeasonClick(): void {
+    const ep = this.crossSeasonEpisode;
+    if (ep !== undefined) {
+      this.playEpisode(ep).catch(() => {
+        console.warn('[SeasonDetailPage] handleCrossSeasonClick playEpisode failed');
+      });
+    }
+  }
+
   private async refreshProgressState(): Promise<void> {
     const seriesProviderId = this.seriesEntity?.providerId ?? '';
     if (seriesProviderId.length === 0) {
@@ -526,6 +645,69 @@ export struct SeasonDetailPage {
       newMap.set(progress.videoId, progress);
     }
     this.progressMap = newMap;
+
+    // ── 当前季进度计算：找 updatedAt 最大的有进度且未看完（<95%）的集 ─────
+    let bestProgress: PlayProgressEntity | undefined;
+    for (const ep of this.seasonEpisodes) {
+      const p = newMap.get(ep.mediaItem.id ?? -1);
+      if (p !== undefined && p.positionMs > 0) {
+        // 若有 durationMs，排除已看完（≥95%）的集，保持与 playEpisode() 逻辑一致
+        const isWatched = p.durationMs > 0 && (p.positionMs / p.durationMs) >= 0.95;
+        if (!isWatched) {
+          if (bestProgress === undefined || p.updatedAt > bestProgress.updatedAt) {
+            bestProgress = p;
+          }
+        }
+      }
+    }
+    this.hasCurrentSeasonProgress = bestProgress !== undefined;
+
+    if (bestProgress !== undefined) {
+      // 继续本季：找对应 MediaItem
+      let found: MediaItem | undefined;
+      for (const ep of this.seasonEpisodes) {
+        if ((ep.mediaItem.id ?? -1) === bestProgress.videoId) {
+          found = ep.mediaItem;
+          break;
+        }
+      }
+      // 若有进度记录但集已被删除/找不到，回退到首集，避免按钮失效
+      this.resumeEpisode = found ?? (this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined);
+    } else {
+      // 从本季开始：排序后首集
+      this.resumeEpisode = this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined;
+    }
+
+    // ── 跨季次级入口：读整剧最近观看指针 ────────────────────────────────
+    const seriesKey = MediaProgressStore.seriesKey(seriesProviderId);
+    const latestEntry = await MediaProgressStore.get(seriesKey);
+    const currentSeason = this.getSeasonNumber();
+    if (latestEntry !== null
+        && latestEntry.seasonNumber !== currentSeason
+        && latestEntry.episodeNumber > 0) {
+      this.crossSeasonEntry = latestEntry;
+      // 跨季目标集查询：只取决于 latestEntry 是否指向其他季，与当前季是否有进度无关
+      const seriesId = this.seriesEntity?.id ?? -1;
+      if (seriesId > 0) {
+        const allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
+        let found: MediaItem | undefined;
+        for (const m of allEpisodes) {
+          if ((m.seasonNumber ?? -1) === latestEntry.seasonNumber
+              && (m.episodeNumber ?? -1) === latestEntry.episodeNumber) {
+            found = m;
+            break;
+          }
+        }
+        this.crossSeasonEpisode = found;
+      } else {
+        // seriesId 缺失：清空残留，避免误判跨季入口可展示
+        this.crossSeasonEpisode = undefined;
+        this.crossSeasonEntry = null;
+      }
+    } else {
+      this.crossSeasonEntry = null;
+      this.crossSeasonEpisode = undefined;
+    }
   }
 
   aboutToAppear(): void {
@@ -678,6 +860,21 @@ export struct SeasonDetailPage {
   private async playEpisode(episode: MediaItem): Promise<void> {
     try {
       const db = FileSourceDatabase.getInstance();
+
+      // 查询该集的历史播放进度（per-episode，不影响其他集/季进度）
+      let startPositionMs: number = 0;
+      const episodeId = episode.id ?? 0;
+      if (episodeId > 0) {
+        const epProgress = await db.getPlayProgress(episodeId);
+        if (epProgress !== null && epProgress.positionMs > 0) {
+          const isWatched = epProgress.durationMs > 0
+            && epProgress.positionMs >= epProgress.durationMs * 0.95;
+          if (!isWatched) {
+            startPositionMs = epProgress.positionMs;
+          }
+        }
+      }
+
       const fileSource = await db.getFileSourceById(episode.sourceId);
       if (fileSource === null) {
         console.warn('[SeasonDetailPage] 找不到文件源 sourceId=' + episode.sourceId);
@@ -819,7 +1016,8 @@ export struct SeasonDetailPage {
         episodeNumber: episode.episodeNumber ?? 0,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
-        mediaKey: mKey
+        mediaKey: mKey,
+        startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
@@ -918,68 +1116,120 @@ export struct SeasonDetailPage {
           }
         }
 
-        // 操作按钮行
-        Row({ space: 14 }) {
-          Row({ space: 10 }) {
-            Text('▶').fontSize(14).fontColor(Color.White)
-            Text('开始播放').fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          }
-          .padding({ left: 24, right: 24, top: 10, bottom: 10 })
-          .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(6)
-          .border({ width: 2, color: this.getHeroPlayButtonBorderColor() })
-          .focusable(true)
-          .onFocus(() => { this.focusedHeroActionKey = 'play'; })
-          .onBlur(() => { this.clearHeroActionFocusIfMatches('play'); })
-          .onHover((isHover: boolean) => {
-            if (isHover) {
-              this.hoveredHeroActionKey = 'play';
-            } else {
-              this.clearHeroActionHoverIfMatches('play');
+        // 操作区：主入口与辅助动作分层，突出当前季播放动作
+        Column({ space: 12 }) {
+          Row({ space: 14 }) {
+            Row({ space: 10 }) {
+              Text('▶').fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
+              Text(this.getHeroPlayLabel()).fontSize(17).fontColor(Color.White).fontWeight(FontWeight.Bold)
             }
-          })
-          .onClick(() => {
-            if (this.seasonEpisodes.length > 0) {
-              this.playEpisode(this.seasonEpisodes[0].mediaItem);
-            }
-          })
+            .height(64)
+            .padding({ left: 26, right: 26, top: 14, bottom: 14 })
+            .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(10)
+            .border({ width: 2, color: this.getHeroPlayButtonBorderColor() })
+            .shadow({ radius: 18, color: this.getHeroPlayButtonShadowColor(), offsetX: 0, offsetY: 10 })
+            .scale({ x: this.getHeroPrimaryButtonScale(), y: this.getHeroPrimaryButtonScale() })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .focusable(true)
+            .onFocus(() => { this.focusedHeroActionKey = 'play'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('play'); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredHeroActionKey = 'play';
+              } else {
+                this.clearHeroActionHoverIfMatches('play');
+              }
+            })
+            .onClick(() => { this.handleHeroPlayClick(); })
 
-          Row({ space: 8 }) {
-            Text('✓').fontSize(16).fontColor('#AEB4BC')
-            Text('想看').fontSize(14).fontColor('#AEB4BC')
-          }
-          .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor(this.getHeroSecondaryButtonBgColor('wish')).borderRadius(6)
-          .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('wish') })
-          .focusable(true)
-          .onFocus(() => { this.focusedHeroActionKey = 'wish'; })
-          .onBlur(() => { this.clearHeroActionFocusIfMatches('wish'); })
-          .onHover((isHover: boolean) => {
-            if (isHover) {
-              this.hoveredHeroActionKey = 'wish';
-            } else {
-              this.clearHeroActionHoverIfMatches('wish');
-            }
-          })
+            if (this.shouldShowCrossSeasonEntry()) {
+              Column({ space: 4 }) {
+                Row({ space: 8 }) {
+                  Text('↩').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('cross'))
+                  Text(this.getCrossSeasonLabel())
+                    .fontSize(14).fontColor(this.getHeroSecondaryTitleColor('cross')).fontWeight(FontWeight.Bold)
+                }
+                .alignItems(VerticalAlign.Center)
 
-          Row({ space: 8 }) {
-            Text('♥').fontSize(16).fontColor('#AEB4BC')
-            Text('收藏').fontSize(14).fontColor('#AEB4BC')
-          }
-          .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor(this.getHeroSecondaryButtonBgColor('favorite')).borderRadius(6)
-          .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('favorite') })
-          .focusable(true)
-          .onFocus(() => { this.focusedHeroActionKey = 'favorite'; })
-          .onBlur(() => { this.clearHeroActionFocusIfMatches('favorite'); })
-          .onHover((isHover: boolean) => {
-            if (isHover) {
-              this.hoveredHeroActionKey = 'favorite';
-            } else {
-              this.clearHeroActionHoverIfMatches('favorite');
+                Text(this.getCrossSeasonMetaLabel())
+                  .fontSize(12).fontColor(this.getHeroSecondaryMetaColor('cross'))
+              }
+              .alignItems(HorizontalAlign.Start)
+              .height(64)
+              .padding({ left: 18, right: 18, top: 12, bottom: 12 })
+              .backgroundColor(this.getHeroSecondaryButtonBgColor('cross')).borderRadius(10)
+              .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('cross') })
+              .shadow({ radius: 14, color: this.getHeroSecondaryButtonShadowColor('cross'), offsetX: 0, offsetY: 8 })
+              .scale({ x: this.getHeroSecondaryButtonScale('cross'), y: this.getHeroSecondaryButtonScale('cross') })
+              .justifyContent(FlexAlign.Center)
+              .focusable(true)
+              .onFocus(() => { this.focusedHeroActionKey = 'cross'; })
+              .onBlur(() => { this.clearHeroActionFocusIfMatches('cross'); })
+              .onHover((isHover: boolean) => {
+                if (isHover) {
+                  this.hoveredHeroActionKey = 'cross';
+                } else {
+                  this.clearHeroActionHoverIfMatches('cross');
+                }
+              })
+              .onClick(() => { this.handleCrossSeasonClick(); })
             }
-          })
+          }
+          .alignItems(VerticalAlign.Center)
+          .alignSelf(ItemAlign.Start)
+
+          Row({ space: 12 }) {
+            Row({ space: 8 }) {
+              Text('✓').fontSize(16).fontColor(this.getHeroSecondaryTitleColor('wish'))
+              Text('想看').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('wish')).fontWeight(FontWeight.Medium)
+            }
+            .height(44)
+            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+            .backgroundColor(this.getHeroSecondaryButtonBgColor('wish')).borderRadius(8)
+            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('wish') })
+            .shadow({ radius: 12, color: this.getHeroSecondaryButtonShadowColor('wish'), offsetX: 0, offsetY: 6 })
+            .scale({ x: this.getHeroSecondaryButtonScale('wish'), y: this.getHeroSecondaryButtonScale('wish') })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .focusable(true)
+            .onFocus(() => { this.focusedHeroActionKey = 'wish'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('wish'); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredHeroActionKey = 'wish';
+              } else {
+                this.clearHeroActionHoverIfMatches('wish');
+              }
+            })
+
+            Row({ space: 8 }) {
+              Text('♥').fontSize(16).fontColor(this.getHeroSecondaryTitleColor('favorite'))
+              Text('收藏').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('favorite')).fontWeight(FontWeight.Medium)
+            }
+            .height(44)
+            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+            .backgroundColor(this.getHeroSecondaryButtonBgColor('favorite')).borderRadius(8)
+            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('favorite') })
+            .shadow({ radius: 12, color: this.getHeroSecondaryButtonShadowColor('favorite'), offsetX: 0, offsetY: 6 })
+            .scale({ x: this.getHeroSecondaryButtonScale('favorite'), y: this.getHeroSecondaryButtonScale('favorite') })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .focusable(true)
+            .onFocus(() => { this.focusedHeroActionKey = 'favorite'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('favorite'); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredHeroActionKey = 'favorite';
+              } else {
+                this.clearHeroActionHoverIfMatches('favorite');
+              }
+            })
+          }
+          .alignItems(VerticalAlign.Center)
+          .alignSelf(ItemAlign.Start)
         }
-        .alignItems(VerticalAlign.Center)
+        .alignItems(HorizontalAlign.Start)
       }
       .alignItems(HorizontalAlign.Start)
       .padding({ left: 80, right: 80, bottom: 52 })
