@@ -41,6 +41,21 @@ function formatDuration(ms: number | undefined): string {
   return `${m}m`;
 }
 
+function formatProgressTime(ms: number): string {
+  if (ms <= 0) { return ''; }
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  if (hours > 0) {
+    const hh = String(hours).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+  return `${mm}:${ss}`;
+}
+
 // ─────────────────────────────────────────────
 // 内部类型
 // ─────────────────────────────────────────────
@@ -488,14 +503,24 @@ export struct SeasonDetailPage {
     return '#1B78F2';
   }
 
+  private getHeroPlayButtonShadowColor(): string {
+    if (this.isHeroActionFocused('play')) {
+      return 'rgba(27, 120, 242, 0.46)';
+    }
+    if (this.isHeroActionHovered('play')) {
+      return 'rgba(27, 120, 242, 0.30)';
+    }
+    return 'rgba(27, 120, 242, 0.20)';
+  }
+
   private getHeroSecondaryButtonBgColor(action: string): string {
     if (this.isHeroActionFocused(action)) {
-      return 'rgba(27, 120, 242, 0.36)';
+      return 'rgba(27, 120, 242, 0.26)';
     }
     if (this.isHeroActionHovered(action)) {
-      return 'rgba(255, 255, 255, 0.20)';
+      return 'rgba(255, 255, 255, 0.14)';
     }
-    return this.getEpisodeActionButtonBgColor();
+    return 'rgba(33, 37, 43, 0.90)';
   }
 
   private getHeroSecondaryButtonBorderColor(action: string): string {
@@ -506,6 +531,41 @@ export struct SeasonDetailPage {
       return 'rgba(255, 255, 255, 0.38)';
     }
     return '#00FFFFFF';
+  }
+
+  private getHeroSecondaryButtonShadowColor(action: string): string {
+    if (this.isHeroActionFocused(action)) {
+      return 'rgba(102, 169, 216, 0.24)';
+    }
+    if (this.isHeroActionHovered(action)) {
+      return 'rgba(0, 0, 0, 0.26)';
+    }
+    return 'rgba(0, 0, 0, 0.18)';
+  }
+
+  private getHeroSecondaryTitleColor(action: string): string {
+    if (this.isHeroActionActive(action)) {
+      return '#FFFFFF';
+    }
+    return '#DDE3EB';
+  }
+
+  private getHeroSecondaryMetaColor(action: string): string {
+    if (this.isHeroActionFocused(action)) {
+      return '#D3E7FF';
+    }
+    if (this.isHeroActionHovered(action)) {
+      return '#C7CDD6';
+    }
+    return '#9AA3AF';
+  }
+
+  private getHeroPrimaryButtonScale(): number {
+    return this.isHeroActionActive('play') ? 1.03 : 1.0;
+  }
+
+  private getHeroSecondaryButtonScale(action: string): number {
+    return this.isHeroActionActive(action) ? 1.02 : 1.0;
   }
 
   private getHeroPlayButtonBorderColor(): string {
@@ -533,7 +593,19 @@ export struct SeasonDetailPage {
   private getCrossSeasonLabel(): string {
     const entry = this.crossSeasonEntry;
     if (entry === null) { return ''; }
-    return `继续观看 S${entry.seasonNumber}E${entry.episodeNumber}`;
+    return '继续上次观看';
+  }
+
+  private getCrossSeasonMetaLabel(): string {
+    const entry = this.crossSeasonEntry;
+    if (entry === null) { return ''; }
+    const seasonText = `第 ${entry.seasonNumber} 季`;
+    const episodeText = `第 ${entry.episodeNumber} 集`;
+    const progressText = formatProgressTime(entry.positionMs);
+    if (progressText.length > 0) {
+      return `${seasonText} · ${episodeText} ${progressText}`;
+    }
+    return `${seasonText} · ${episodeText}`;
   }
 
   /** 是否显示跨季次级入口 */
@@ -1051,86 +1123,120 @@ export struct SeasonDetailPage {
           }
         }
 
-        // 操作按钮行
-        Row({ space: 14 }) {
-          Row({ space: 10 }) {
-            Text('▶').fontSize(14).fontColor(Color.White)
-            Text(this.getHeroPlayLabel()).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          }
-          .padding({ left: 24, right: 24, top: 10, bottom: 10 })
-          .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(6)
-          .border({ width: 2, color: this.getHeroPlayButtonBorderColor() })
-          .focusable(true)
-          .onFocus(() => { this.focusedHeroActionKey = 'play'; })
-          .onBlur(() => { this.clearHeroActionFocusIfMatches('play'); })
-          .onHover((isHover: boolean) => {
-            if (isHover) {
-              this.hoveredHeroActionKey = 'play';
-            } else {
-              this.clearHeroActionHoverIfMatches('play');
+        // 操作区：主入口与辅助动作分层，突出当前季播放动作
+        Column({ space: 12 }) {
+          Row({ space: 14 }) {
+            Row({ space: 10 }) {
+              Text('▶').fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
+              Text(this.getHeroPlayLabel()).fontSize(17).fontColor(Color.White).fontWeight(FontWeight.Bold)
             }
-          })
-          .onClick(() => { this.handleHeroPlayClick(); })
-
-          // 跨季次级入口：当前季无进度且其他季存在最近观看时显示
-          if (this.shouldShowCrossSeasonEntry()) {
-            Row({ space: 8 }) {
-              Text('↩').fontSize(14).fontColor('#AEB4BC')
-              Text(this.getCrossSeasonLabel()).fontSize(14).fontColor('#AEB4BC')
-            }
-            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-            .backgroundColor(this.getHeroSecondaryButtonBgColor('cross')).borderRadius(6)
-            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('cross') })
+            .height(64)
+            .padding({ left: 26, right: 26, top: 14, bottom: 14 })
+            .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(10)
+            .border({ width: 2, color: this.getHeroPlayButtonBorderColor() })
+            .shadow({ radius: 18, color: this.getHeroPlayButtonShadowColor(), offsetX: 0, offsetY: 10 })
+            .scale({ x: this.getHeroPrimaryButtonScale(), y: this.getHeroPrimaryButtonScale() })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
             .focusable(true)
-            .onFocus(() => { this.focusedHeroActionKey = 'cross'; })
-            .onBlur(() => { this.clearHeroActionFocusIfMatches('cross'); })
+            .onFocus(() => { this.focusedHeroActionKey = 'play'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('play'); })
             .onHover((isHover: boolean) => {
               if (isHover) {
-                this.hoveredHeroActionKey = 'cross';
+                this.hoveredHeroActionKey = 'play';
               } else {
-                this.clearHeroActionHoverIfMatches('cross');
+                this.clearHeroActionHoverIfMatches('play');
               }
             })
-            .onClick(() => { this.handleCrossSeasonClick(); })
-          }
+            .onClick(() => { this.handleHeroPlayClick(); })
 
-          Row({ space: 8 }) {
-            Text('✓').fontSize(16).fontColor('#AEB4BC')
-            Text('想看').fontSize(14).fontColor('#AEB4BC')
-          }
-          .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor(this.getHeroSecondaryButtonBgColor('wish')).borderRadius(6)
-          .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('wish') })
-          .focusable(true)
-          .onFocus(() => { this.focusedHeroActionKey = 'wish'; })
-          .onBlur(() => { this.clearHeroActionFocusIfMatches('wish'); })
-          .onHover((isHover: boolean) => {
-            if (isHover) {
-              this.hoveredHeroActionKey = 'wish';
-            } else {
-              this.clearHeroActionHoverIfMatches('wish');
-            }
-          })
+            if (this.shouldShowCrossSeasonEntry()) {
+              Column({ space: 4 }) {
+                Row({ space: 8 }) {
+                  Text('↩').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('cross'))
+                  Text(this.getCrossSeasonLabel())
+                    .fontSize(14).fontColor(this.getHeroSecondaryTitleColor('cross')).fontWeight(FontWeight.Bold)
+                }
+                .alignItems(VerticalAlign.Center)
 
-          Row({ space: 8 }) {
-            Text('♥').fontSize(16).fontColor('#AEB4BC')
-            Text('收藏').fontSize(14).fontColor('#AEB4BC')
-          }
-          .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-          .backgroundColor(this.getHeroSecondaryButtonBgColor('favorite')).borderRadius(6)
-          .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('favorite') })
-          .focusable(true)
-          .onFocus(() => { this.focusedHeroActionKey = 'favorite'; })
-          .onBlur(() => { this.clearHeroActionFocusIfMatches('favorite'); })
-          .onHover((isHover: boolean) => {
-            if (isHover) {
-              this.hoveredHeroActionKey = 'favorite';
-            } else {
-              this.clearHeroActionHoverIfMatches('favorite');
+                Text(this.getCrossSeasonMetaLabel())
+                  .fontSize(12).fontColor(this.getHeroSecondaryMetaColor('cross'))
+              }
+              .alignItems(HorizontalAlign.Start)
+              .height(64)
+              .padding({ left: 18, right: 18, top: 12, bottom: 12 })
+              .backgroundColor(this.getHeroSecondaryButtonBgColor('cross')).borderRadius(10)
+              .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('cross') })
+              .shadow({ radius: 14, color: this.getHeroSecondaryButtonShadowColor('cross'), offsetX: 0, offsetY: 8 })
+              .scale({ x: this.getHeroSecondaryButtonScale('cross'), y: this.getHeroSecondaryButtonScale('cross') })
+              .justifyContent(FlexAlign.Center)
+              .focusable(true)
+              .onFocus(() => { this.focusedHeroActionKey = 'cross'; })
+              .onBlur(() => { this.clearHeroActionFocusIfMatches('cross'); })
+              .onHover((isHover: boolean) => {
+                if (isHover) {
+                  this.hoveredHeroActionKey = 'cross';
+                } else {
+                  this.clearHeroActionHoverIfMatches('cross');
+                }
+              })
+              .onClick(() => { this.handleCrossSeasonClick(); })
             }
-          })
+          }
+          .alignItems(VerticalAlign.Center)
+          .alignSelf(ItemAlign.Start)
+
+          Row({ space: 12 }) {
+            Row({ space: 8 }) {
+              Text('✓').fontSize(16).fontColor(this.getHeroSecondaryTitleColor('wish'))
+              Text('想看').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('wish')).fontWeight(FontWeight.Medium)
+            }
+            .height(44)
+            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+            .backgroundColor(this.getHeroSecondaryButtonBgColor('wish')).borderRadius(8)
+            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('wish') })
+            .shadow({ radius: 12, color: this.getHeroSecondaryButtonShadowColor('wish'), offsetX: 0, offsetY: 6 })
+            .scale({ x: this.getHeroSecondaryButtonScale('wish'), y: this.getHeroSecondaryButtonScale('wish') })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .focusable(true)
+            .onFocus(() => { this.focusedHeroActionKey = 'wish'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('wish'); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredHeroActionKey = 'wish';
+              } else {
+                this.clearHeroActionHoverIfMatches('wish');
+              }
+            })
+
+            Row({ space: 8 }) {
+              Text('♥').fontSize(16).fontColor(this.getHeroSecondaryTitleColor('favorite'))
+              Text('收藏').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('favorite')).fontWeight(FontWeight.Medium)
+            }
+            .height(44)
+            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+            .backgroundColor(this.getHeroSecondaryButtonBgColor('favorite')).borderRadius(8)
+            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('favorite') })
+            .shadow({ radius: 12, color: this.getHeroSecondaryButtonShadowColor('favorite'), offsetX: 0, offsetY: 6 })
+            .scale({ x: this.getHeroSecondaryButtonScale('favorite'), y: this.getHeroSecondaryButtonScale('favorite') })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .focusable(true)
+            .onFocus(() => { this.focusedHeroActionKey = 'favorite'; })
+            .onBlur(() => { this.clearHeroActionFocusIfMatches('favorite'); })
+            .onHover((isHover: boolean) => {
+              if (isHover) {
+                this.hoveredHeroActionKey = 'favorite';
+              } else {
+                this.clearHeroActionHoverIfMatches('favorite');
+              }
+            })
+          }
+          .alignItems(VerticalAlign.Center)
+          .alignSelf(ItemAlign.Start)
         }
-        .alignItems(VerticalAlign.Center)
+        .alignItems(HorizontalAlign.Start)
       }
       .alignItems(HorizontalAlign.Start)
       .padding({ left: 80, right: 80, bottom: 52 })
