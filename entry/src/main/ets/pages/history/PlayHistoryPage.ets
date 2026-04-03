@@ -144,17 +144,20 @@ export struct PlayHistoryPage {
       for (let i = 0; i < allVideos.length; i++) {
         const v = allVideos[i];
         if (v.movieId !== undefined) {
-          movieVideoMap.set('movie_' + v.movieId.toString(), v);
+          const key = 'movie_' + v.movieId.toString();
+          if (!movieVideoMap.has(key)) {
+            movieVideoMap.set(key, v);
+          }
         }
         if (v.tvSeriesId !== undefined &&
             v.seasonNumber !== undefined &&
             v.episodeNumber !== undefined) {
-          seriesVideoMap.set(
-            'series_' + v.tvSeriesId.toString() +
+          const key = 'series_' + v.tvSeriesId.toString() +
             '_' + v.seasonNumber.toString() +
-            '_' + v.episodeNumber.toString(),
-            v
-          );
+            '_' + v.episodeNumber.toString();
+          if (!seriesVideoMap.has(key)) {
+            seriesVideoMap.set(key, v);
+          }
         }
       }
 
@@ -240,7 +243,8 @@ export struct PlayHistoryPage {
       }
       this.historyList = items;
     } catch (e) {
-      // 静默失败，保持列表为空
+      const err = e as BusinessError;
+      console.warn(`[PlayHistory] loadHistoryData 失败 code=${err.code} msg=${err.message}`);
     } finally {
       this.isLoading = false;
     }
@@ -418,16 +422,21 @@ export struct PlayHistoryPage {
   private async doClearAllAsync(): Promise<void> {
     const db = FileSourceDatabase.getInstance();
     const keys = this.historyList.map((i: HistoryDisplayItem): string => i.mediaKey);
+    let failCount = 0;
     for (let i = 0; i < keys.length; i++) {
       try {
         await db.clearMediaProgress(keys[i]);
       } catch (e) {
-        // 单条失败不阻断后续
+        failCount++;
       }
     }
     this.historyList = [];
     emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-    promptAction.showToast({ message: '已清除全部播放记录' });
+    if (failCount > 0) {
+      promptAction.showToast({ message: `清除完成，${failCount} 条删除失败` });
+    } else {
+      promptAction.showToast({ message: '已清除全部播放记录' });
+    }
   }
 
   // ─── 工具方法 ─────────────────────────────────
