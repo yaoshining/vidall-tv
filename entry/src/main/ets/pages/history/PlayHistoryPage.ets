@@ -483,47 +483,47 @@ export struct PlayHistoryPage {
         // 缩略图
         if (item.posterLocalPath.length > 0 || item.posterUrl.length > 0) {
           Image(item.posterLocalPath.length > 0 ? item.posterLocalPath : item.posterUrl)
-            .width(120)
-            .height(68)
+            .width(156)
+            .height(88)
             .objectFit(ImageFit.Cover)
-            .borderRadius(6)
+            .borderRadius(8)
         } else {
           Column() {
             Text('🎬')
               .fontSize(24)
           }
-          .width(120)
-          .height(68)
+          .width(156)
+          .height(88)
           .backgroundColor('#2A2A2A')
           .justifyContent(FlexAlign.Center)
-          .borderRadius(6)
+          .borderRadius(8)
         }
 
         // 进度条：背景轨道 + 填充层叠
         Stack({ alignContent: Alignment.Start }) {
           Row()
-            .width(120)
-            .height(3)
+            .width(156)
+            .height(4)
             .backgroundColor('#333333')
-            .borderRadius(1.5)
+            .borderRadius(2)
           Row()
             .width(
               MediaProgressStore.isNearEnd(item.positionMs, item.durationMs)
                 ? '100%'
                 : `${item.durationMs > 0 ? Math.min(100, item.positionMs / item.durationMs * 100) : 0}%`
             )
-            .height(3)
+            .height(4)
             .backgroundColor(
               MediaProgressStore.isNearEnd(item.positionMs, item.durationMs)
                 ? '#66DD88' : '#4488FF'
             )
-            .borderRadius(1.5)
+            .borderRadius(2)
         }
-        .width(120)
-        .height(3)
+        .width(156)
+        .height(4)
         .margin({ top: 4 })
       }
-      .width(120)
+      .width(156)
       .alignItems(HorizontalAlign.Start)
 
       // ── 中：文字信息区 ───────────────────────
@@ -578,7 +578,7 @@ export struct PlayHistoryPage {
       // ── 右：删除按钮（聚焦时可见）────────────
       Column() {
         Button('删除')
-          .width(48)
+          .width(60)
           .height(40)
           .fontSize(12)
           .fontColor('#FF6B6B')
@@ -603,18 +603,19 @@ export struct PlayHistoryPage {
             }
           })
       }
-      .width(60)
+      .width(72)
+      .alignItems(HorizontalAlign.End)
       .justifyContent(FlexAlign.Center)
       .opacity(
         this.focusedIndex === index ||
         this.deleteFocusedIndex === index ||
-        this.hoveredIndex === index ? 1 : 0
+        this.hoveredIndex === index ? 1 : 0.18
       )
       .animation({ duration: 140, curve: Curve.Linear })
     }
     .width('100%')
-    .height(100)
-    .padding({ left: 24, right: 24, top: 8, bottom: 8 })
+    .height(120)
+    .padding({ left: 24, right: 24, top: 10, bottom: 10 })
     .backgroundColor(
       this.focusedIndex === index ||
       this.deleteFocusedIndex === index ||
