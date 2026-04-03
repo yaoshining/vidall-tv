@@ -522,6 +522,7 @@ export struct MediaLibraryTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Require @Param tab: TabItem
   @Local isScanning: boolean = false
+  @Local isViewAllFocused: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
 
   aboutToAppear(): void {
@@ -934,38 +935,51 @@ export struct MediaLibraryTab {
 
   // ── Builders ──────────────────────────────────
   @Builder
-  PlayHistoryEntry() {
-    Row() {
-      Text('🕐')
-        .fontSize(18)
-        .margin({ right: 10 })
-      Text('播放历史')
-        .fontSize(16)
-        .fontColor('#FFFFFF')
-        .fontWeight(FontWeight.Medium)
-        .layoutWeight(1)
-      Text('>')
-        .fontSize(16)
-        .fontColor('rgba(255,255,255,0.40)')
-    }
-    .width('100%')
-    .height(52)
-    .padding({ left: 24, right: 24 })
-    .backgroundColor('rgba(255,255,255,0.04)')
-    .borderRadius(8)
-    .margin({ left: 16, right: 16, bottom: 8 })
-    .focusable(true)
-    .onClick(() => {
-      this.pageStack.pushPathByName(PlayHistoryPage.PAGE_NAME, null);
-    })
-  }
-
-  @Builder
   ContinueWatchingSection() {
-    SectionRow({ title: '继续播放' }) {
-      PlaceholderWideCard({ label: '暂无播放记录' })
-      PlaceholderWideCard({ label: '播放历史功能即将上线' })
+    Column() {
+      Row() {
+        Text('继续播放')
+          .fontSize(14)
+          .fontColor('#FFFFFF')
+          .fontWeight(FontWeight.Bold)
+          .padding({ left: 16 })
+          .layoutWeight(1)
+
+        Text('查看全部 →')
+          .fontSize(13)
+          .fontColor(this.isViewAllFocused ? '#FFFFFF' : 'rgba(255,255,255,0.55)')
+          .fontWeight(FontWeight.Medium)
+          .padding({ left: 12, right: 16, top: 6, bottom: 6 })
+          .backgroundColor(this.isViewAllFocused ? 'rgba(255,255,255,0.12)' : Color.Transparent)
+          .borderRadius(6)
+          .border({ width: this.isViewAllFocused ? 2 : 0, color: 'rgba(255,255,255,0.70)' })
+          .focusable(true)
+          .onFocus(() => { this.isViewAllFocused = true })
+          .onBlur(() => { this.isViewAllFocused = false })
+          .onClick(() => {
+            this.pageStack.pushPathByName(PlayHistoryPage.PAGE_NAME, null)
+          })
+          .animation({ duration: 140, curve: Curve.EaseInOut })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .constraintSize({ minHeight: 44 })
+      .margin({ bottom: 8 })
+
+      Scroll() {
+        Row({ space: 10 }) {
+          PlaceholderWideCard({ label: '暂无播放记录' })
+          PlaceholderWideCard({ label: '播放历史功能即将上线' })
+        }
+        .padding({ left: 16, right: 16 })
+        .alignItems(VerticalAlign.Top)
+      }
+      .align(Alignment.Start)
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .width('100%')
     }
+    .width('100%').alignItems(HorizontalAlign.Start).margin({ bottom: 20 })
   }
 
   @Builder
@@ -1111,7 +1125,6 @@ export struct MediaLibraryTab {
 
   build() {
     Column() {
-      this.PlayHistoryEntry()
       if (this.model.isLoading) {
         this.LoadingView()
       } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
