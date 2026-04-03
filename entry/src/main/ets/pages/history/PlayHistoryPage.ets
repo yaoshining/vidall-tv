@@ -378,9 +378,12 @@ export struct PlayHistoryPage {
    * 弹出 AlertDialog 确认后删除单条记录。
    */
   private confirmDeleteItem(item: HistoryDisplayItem): void {
+    const message = item.kind === 'series'
+      ? `确定删除《${item.title}》的播放记录吗？\n这将清除该剧全部集数的播放进度，此操作无法撤销。`
+      : `确定删除《${item.title}》的播放记录吗？此操作无法撤销。`;
     AlertDialog.show({
       title: '删除播放记录',
-      message: `确定删除《${item.title}》的播放记录吗？此操作无法撤销。`,
+      message,
       primaryButton: {
         value: '取消',
         action: () => {},
