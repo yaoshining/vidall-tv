@@ -5,6 +5,7 @@ import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { PlayerPage, PlayerPageParam } from '../player/index';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 
 // ─────────────────────────────────────────────
@@ -41,6 +42,11 @@ interface PlayUrlResult {
   fileUrl: string;
   url: string;
   httpHeader: Record<string, string>;
+}
+
+/** showActionMenu 回调数据结构（仅需 index 字段） */
+interface ActionMenuSuccessResult {
+  index: number;
 }
 
 // ─────────────────────────────────────────────
@@ -107,13 +113,51 @@ export struct PlayHistoryPage {
       const entries = await db.getAllMediaProgress();
       if (entries.length === 0) {
         this.historyList = [];
-        this.isLoading = false;
         return;
       }
-      // 一次性加载所有视频 MediaItem，用于跨表匹配文件路径
-      const allVideos = await db.getAllMediaItems();
-      const items: HistoryDisplayItem[] = [];
 
+      // 批量加载所有数据，消除 N+1 查询
+      const allVideos = await db.getAllMediaItems();
+      const allMovies = await db.getAllMovies();
+      const allSeriesList = await db.getAllTvSeries();
+
+      // 构建查找 Map，O(1) 替代 Array.find()
+      const movieMap = new Map<string, MovieEntity>();
+      for (let i = 0; i < allMovies.length; i++) {
+        const m = allMovies[i];
+        if (m.providerId !== undefined) {
+          movieMap.set(m.providerId, m);
+        }
+      }
+      const seriesMap = new Map<string, TvSeriesEntity>();
+      for (let i = 0; i < allSeriesList.length; i++) {
+        const s = allSeriesList[i];
+        if (s.providerId !== undefined) {
+          seriesMap.set(s.providerId, s);
+        }
+      }
+      // 电影视频 Map: key = "movie_<movieId>"
+      const movieVideoMap = new Map<string, MediaItem>();
+      // 剧集视频 Map: key = "series_<seriesId>_<sn>_<en>"
+      const seriesVideoMap = new Map<string, MediaItem>();
+      for (let i = 0; i < allVideos.length; i++) {
+        const v = allVideos[i];
+        if (v.movieId !== undefined) {
+          movieVideoMap.set('movie_' + v.movieId.toString(), v);
+        }
+        if (v.tvSeriesId !== undefined &&
+            v.seasonNumber !== undefined &&
+            v.episodeNumber !== undefined) {
+          seriesVideoMap.set(
+            'series_' + v.tvSeriesId.toString() +
+            '_' + v.seasonNumber.toString() +
+            '_' + v.episodeNumber.toString(),
+            v
+          );
+        }
+      }
+
+      const items: HistoryDisplayItem[] = [];
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i];
         const parsed = parseMediaKey(entry.mediaKey);
@@ -131,8 +175,8 @@ export struct PlayHistoryPage {
         let seriesProviderId: string = '';
 
         if (parsed.kind === 'movie') {
-          const movie: MovieEntity | null = await db.getMovieByProviderId('tmdb', parsed.providerId);
-          if (movie !== null) {
+          const movie = movieMap.get(parsed.providerId);
+          if (movie !== undefined) {
             title = movie.title;
             posterLocalPath = movie.posterLocalPath ?? '';
             posterUrl = movie.posterUrl ?? '';
@@ -140,9 +184,7 @@ export struct PlayHistoryPage {
             releaseYear = rd.length >= 4 ? rd.substring(0, 4) : '';
             const movieDbId = movie.id ?? 0;
             if (movieDbId > 0) {
-              const matched = allVideos.find((v: MediaItem): boolean =>
-                v.movieId !== undefined && v.movieId === movieDbId
-              );
+              const matched = movieVideoMap.get('movie_' + movieDbId.toString());
               if (matched !== undefined) {
                 videoId = matched.id;
                 sourceId = matched.sourceId;
@@ -153,8 +195,8 @@ export struct PlayHistoryPage {
         } else {
           // series
           seriesProviderId = parsed.providerId;
-          const series: TvSeriesEntity | null = await db.getTvSeriesByProviderId('tmdb', parsed.providerId);
-          if (series !== null) {
+          const series = seriesMap.get(parsed.providerId);
+          if (series !== undefined) {
             title = series.title;
             posterLocalPath = series.posterLocalPath ?? '';
             posterUrl = series.posterUrl ?? '';
@@ -162,10 +204,10 @@ export struct PlayHistoryPage {
             if (seriesDbId > 0) {
               const sn = entry.seasonNumber;
               const en = entry.episodeNumber;
-              const matched = allVideos.find((v: MediaItem): boolean =>
-                v.tvSeriesId !== undefined && v.tvSeriesId === seriesDbId &&
-                (v.seasonNumber ?? -1) === sn &&
-                (v.episodeNumber ?? -1) === en
+              const matched = seriesVideoMap.get(
+                'series_' + seriesDbId.toString() +
+                '_' + sn.toString() +
+                '_' + en.toString()
               );
               if (matched !== undefined) {
                 videoId = matched.id;
@@ -198,8 +240,9 @@ export struct PlayHistoryPage {
       this.historyList = items;
     } catch (e) {
       // 静默失败，保持列表为空
+    } finally {
+      this.isLoading = false;
     }
-    this.isLoading = false;
   }
 
   // ─── 播放 ────────────────────────────────────
@@ -239,7 +282,11 @@ export struct PlayHistoryPage {
         const protocol = config['protocol'] ?? 'http';
         const host = config['url'] ?? '';
         const webdavPort = config['port'] ?? (protocol === 'https' ? '443' : '80');
-        const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
+        const rawRootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
+        // 确保前导 / 避免拼出错误路径（Thread 7）
+        const rootPath = rawRootPath.length > 0 && !rawRootPath.startsWith('/')
+          ? '/' + rawRootPath
+          : rawRootPath;
         const baseUrl = protocol + '://' + host + ':' + webdavPort + rootPath;
         const webdavConfig: WebDAVConfig = {
           baseUrl,
@@ -289,7 +336,7 @@ export struct PlayHistoryPage {
       seasonNumber: item.episodeNumber > 0 ? item.seasonNumber : 0,
       episodeNumber: item.episodeNumber > 0 ? item.episodeNumber : 0,
       mediaKey: fromStart ? undefined : item.mediaKey,
-      startPositionMs: fromStart ? undefined : (item.positionMs > 0 ? item.positionMs : undefined),
+      startPositionMs: fromStart ? 0 : (item.positionMs > 0 ? item.positionMs : undefined),
     };
     this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
   }
@@ -323,11 +370,18 @@ export struct PlayHistoryPage {
   }
 
   private async doDeleteItemAsync(item: HistoryDisplayItem): Promise<void> {
-    await FileSourceDatabase.getInstance().clearMediaProgress(item.mediaKey);
-    this.historyList = this.historyList.filter(
-      (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
-    );
-    promptAction.showToast({ message: '已删除播放记录' });
+    try {
+      await FileSourceDatabase.getInstance().clearMediaProgress(item.mediaKey);
+      // DB 成功后才更新 UI，确保原子性
+      this.historyList = this.historyList.filter(
+        (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
+      );
+      promptAction.showToast({ message: '已删除播放记录' });
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[PlayHistory] 删除失败 code=${err.code} msg=${err.message}`);
+      promptAction.showToast({ message: '删除失败，请重试' });
+    }
   }
 
   /**
@@ -374,6 +428,15 @@ export struct PlayHistoryPage {
   }
 
   // ─── 工具方法 ─────────────────────────────────
+
+  /** ActionSheet 选项处理（从 showActionMenu 回调中提取，避免 ArkTS 内联类型推断问题） */
+  private handleHistoryActionMenu(item: HistoryDisplayItem, index: number): void {
+    if (index === 0) {
+      this.playItemSync(item, true);
+    } else if (index === 1) {
+      this.confirmDeleteItem(item);
+    }
+  }
 
   private formatRelativeTime(lastPlayedAt: number): string {
     const diff = Date.now() - lastPlayedAt;
@@ -584,26 +647,17 @@ export struct PlayHistoryPage {
       if (event.type !== KeyType.Down) {
         return;
       }
-      // 菜单键（2067）：弹出 ActionSheet
+      // 菜单键（2067）：弹出操作菜单（showActionMenu 支持 color 字段）
       if (event.keyCode === 2067) {
-        ActionSheet.show({
+        promptAction.showActionMenu({
           title: '操作',
-          message: '',
-          sheets: [
-            {
-              title: '从头播放',
-              action: () => {
-                this.playItemSync(item, true);
-              },
-            },
-            {
-              title: '删除此条记录',
-              action: () => {
-                this.confirmDeleteItem(item);
-              },
-            },
+          buttons: [
+            { text: '从头播放', color: '#FFFFFF' },
+            { text: '删除此条记录', color: '#FF6B6B' },
           ],
-        });
+        }).then((data: ActionMenuSuccessResult): void => {
+          this.handleHistoryActionMenu(item, data.index);
+        }).catch((): void => {});
       } else if (event.keyCode === 2014) { // → 键：将焦点移至删除按钮
         focusControl.requestFocus('delete_btn_' + index.toString());
       }
@@ -685,7 +739,7 @@ export struct PlayHistoryPage {
         .alignItems(VerticalAlign.Center)
 
         // ── 内容区 ────────────────────────────
-        if (this.historyList.length === 0) {
+        if (this.historyList.length === 0 && !this.isLoading) {
           this.EmptyView()
         } else {
           List({ space: 0 }) {
