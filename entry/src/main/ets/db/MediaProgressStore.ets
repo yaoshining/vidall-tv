@@ -4,14 +4,25 @@ import { MediaProgressEntry } from './models/MediaEntity';
 /**
  * 媒体级播放进度读写工具类。
  *
- * Key 规则：
- *   - 剧集：media_progress_series_<seriesProviderId>
- *   - 电影：media_progress_movie_<movieId>
+ * Key 规则（新）：
+ *   - 集级剧集：media_progress_episode_tmdb_{seriesTmdbId}_s{seasonNum}_e{episodeNum}
+ *   - 电影：     media_progress_movie_<movieId>
  *
  * 完播阈值：剩余时长 < 60 秒 或 已播比例 > 95%，由调用方判断后调用 clear()。
  */
 export class MediaProgressStore {
-  /** 构造剧集媒体进度 key */
+  /**
+   * 构造集级剧集媒体进度 key。
+   * 例：media_progress_episode_tmdb_1399_s1_e2
+   */
+  static episodeKey(seriesTmdbId: string, seasonNumber: number, episodeNumber: number): string {
+    return `media_progress_episode_tmdb_${seriesTmdbId}_s${seasonNumber}_e${episodeNumber}`;
+  }
+
+  /**
+   * 构造整剧级媒体进度 key（保留用于向后兼容旧数据读取）。
+   * @deprecated 新写入请使用 episodeKey()
+   */
   static seriesKey(seriesProviderId: string, provider: string = 'tmdb'): string {
     return `media_progress_series_${provider}_${seriesProviderId}`;
   }
@@ -66,9 +77,25 @@ export class MediaProgressStore {
   }
 
   /**
+   * 读取指定剧集最近播放的一集进度。
+   * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
+   */
+  static async getLatestForSeries(seriesTmdbId: string): Promise<MediaProgressEntry | null> {
+    return FileSourceDatabase.getInstance().getLatestMediaProgressBySeries(seriesTmdbId);
+  }
+
+  /**
    * 清除媒体级进度（完播重置）。
    */
   static async clear(key: string): Promise<void> {
     await FileSourceDatabase.getInstance().clearMediaProgress(key);
+  }
+
+  /**
+   * 清除指定剧集所有集的进度记录。
+   * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
+   */
+  static async clearAllForSeries(seriesTmdbId: string): Promise<void> {
+    await FileSourceDatabase.getInstance().clearAllMediaProgressBySeries(seriesTmdbId);
   }
 }

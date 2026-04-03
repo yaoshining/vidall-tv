@@ -2473,6 +2473,66 @@ export class FileSourceDatabase {
   }
 
   /**
+   * 删除指定剧集所有集的进度记录。
+   * 匹配所有 media_key 以 media_progress_episode_tmdb_{seriesTmdbId}_ 开头的记录。
+   * @param seriesTmdbId 剧集 TMDB ID（如 "1399"），不含下划线等特殊字符
+   */
+  async clearAllMediaProgressBySeries(seriesTmdbId: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      const prefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      const sql =
+        `DELETE FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` WHERE media_key LIKE '${prefix}%'`;
+      await this.rdbStore.executeSql(sql);
+      console.info(`[DB][clearAllMediaProgressBySeries] seriesTmdbId=${seriesTmdbId} 已全部清除`);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][clearAllMediaProgressBySeries] 删除失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 查询指定剧集最近播放的一集进度。
+   * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
+   */
+  async getLatestMediaProgressBySeries(seriesTmdbId: string): Promise<MediaProgressEntry | null> {
+    if (this.rdbStore === null) {
+      return null;
+    }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const prefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      const sql =
+        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
+        ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` WHERE media_key LIKE '${prefix}%'` +
+        ` ORDER BY last_played_at DESC LIMIT 1`;
+      rs = await this.rdbStore.querySql(sql);
+      if (rs.goToNextRow()) {
+        const entry: MediaProgressEntry = {
+          mediaKey: rs.getString(rs.getColumnIndex('media_key')),
+          positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
+          durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
+          lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
+          episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
+          seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
+        };
+        return entry;
+      }
+      return null;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][getLatestMediaProgressBySeries] 查询失败 code=${err.code} msg=${err.message}`);
+      return null;
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
    * 查询全部媒体级播放进度，按最近播放时间倒序返回。
    * 用于「继续播放」栏数据源。
    */
