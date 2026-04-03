@@ -161,7 +161,7 @@ export struct SeasonDetailPage {
   @Local hasCurrentSeasonProgress: boolean = false
   /** 主按钮目标集：有进度时为最近观看集，无进度时为第一集 */
   @Local resumeEpisode: MediaItem | undefined = undefined
-  /** 跨季最近观看指针（当前季无进度且其他季有最近观看时才有值） */
+  /** 跨季最近观看指针（整剧最近观看指针指向其他季时有值，与当前季是否有进度无关） */
   @Local crossSeasonEntry: MediaProgressEntry | null = null
   /** 跨季目标集 MediaItem（用于跨季次级入口点击直接播放） */
   @Local crossSeasonEpisode: MediaItem | undefined = undefined
@@ -671,7 +671,8 @@ export struct SeasonDetailPage {
           break;
         }
       }
-      this.resumeEpisode = found;
+      // 若有进度记录但集已被删除/找不到，回退到首集，避免按钮失效
+      this.resumeEpisode = found ?? (this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined);
     } else {
       // 从本季开始：排序后首集
       this.resumeEpisode = this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined;
