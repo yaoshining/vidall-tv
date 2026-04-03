@@ -5,6 +5,7 @@ import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { PlayerPage, PlayerPageParam } from '../player/index';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
+import { focusControl } from '@kit.ArkUI';
 
 // ─────────────────────────────────────────────
 // 数据类型
@@ -303,15 +304,15 @@ export struct PlayHistoryPage {
       title: '删除播放记录',
       message: `确定删除《${item.title}》的播放记录吗？此操作无法撤销。`,
       primaryButton: {
+        value: '取消',
+        action: () => {},
+      },
+      secondaryButton: {
         value: '确定删除',
         fontColor: '#FF6B6B',
         action: () => {
           this.doDeleteItem(item);
         },
-      },
-      secondaryButton: {
-        value: '取消',
-        action: () => {},
       },
       autoCancel: true,
     });
@@ -340,15 +341,15 @@ export struct PlayHistoryPage {
       title: '清除全部记录',
       message: '确定清除所有播放历史记录吗？此操作无法撤销。',
       primaryButton: {
+        value: '取消',
+        action: () => {},
+      },
+      secondaryButton: {
         value: '全部清除',
         fontColor: '#FF6B6B',
         action: () => {
           this.doClearAll();
         },
-      },
-      secondaryButton: {
-        value: '取消',
-        action: () => {},
       },
       autoCancel: true,
     });
@@ -521,6 +522,7 @@ export struct PlayHistoryPage {
           .backgroundColor('rgba(255,107,107,0.12)')
           .border({ width: 1, color: 'rgba(255,107,107,0.30)' })
           .borderRadius(6)
+          .id('delete_btn_' + index.toString())
           .focusable(true)
           .onFocus(() => {
             this.deleteFocusedIndex = index;
@@ -531,6 +533,11 @@ export struct PlayHistoryPage {
           })
           .onClick(() => {
             this.confirmDeleteItem(item);
+          })
+          .onKeyEvent((event: KeyEvent) => {
+            if (event.type === KeyType.Down && event.keyCode === 2012) { // ← 键：返回行焦点
+              focusControl.requestFocus('history_row_' + index.toString());
+            }
           })
       }
       .width(60)
@@ -558,6 +565,7 @@ export struct PlayHistoryPage {
         ? { width: { left: 3, top: 0, right: 0, bottom: 0 }, color: 'rgba(255,255,255,0.30)' }
         : { width: 0 }
     )
+    .id('history_row_' + index.toString())
     .focusable(true)
     .onFocus(() => {
       this.focusedIndex = index;
@@ -590,12 +598,15 @@ export struct PlayHistoryPage {
             },
             {
               title: '删除此条记录',
+              fontColor: '#FF6B6B',
               action: () => {
                 this.confirmDeleteItem(item);
               },
             },
           ],
         });
+      } else if (event.keyCode === 2014) { // → 键：将焦点移至删除按钮
+        focusControl.requestFocus('delete_btn_' + index.toString());
       }
     })
   }

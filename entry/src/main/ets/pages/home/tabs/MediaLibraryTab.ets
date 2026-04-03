@@ -1111,13 +1111,13 @@ export struct MediaLibraryTab {
 
   build() {
     Column() {
+      this.PlayHistoryEntry()
       if (this.model.isLoading) {
         this.LoadingView()
       } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
         this.EmptyView()
         this.StatsAndScan()
       } else {
-        this.PlayHistoryEntry()
         this.ContinueWatchingSection()
         this.RecentlyAddedSection()
         this.MoviesSection()
