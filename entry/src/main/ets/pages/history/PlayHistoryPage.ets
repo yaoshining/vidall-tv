@@ -5,7 +5,8 @@ import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { PlayerPage, PlayerPageParam } from '../player/index';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError, emitter } from '@kit.BasicServicesKit';
+import { PlayerEvents } from '../../components/core/player/Constants';
 
 
 // ─────────────────────────────────────────────
@@ -376,6 +377,7 @@ export struct PlayHistoryPage {
       this.historyList = this.historyList.filter(
         (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
       );
+      emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
       promptAction.showToast({ message: '已删除播放记录' });
     } catch (e) {
       const err = e as BusinessError;
@@ -424,6 +426,7 @@ export struct PlayHistoryPage {
       }
     }
     this.historyList = [];
+    emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
     promptAction.showToast({ message: '已清除全部播放记录' });
   }
 
