@@ -593,19 +593,18 @@ export struct SeasonDetailPage {
   private getCrossSeasonLabel(): string {
     const entry = this.crossSeasonEntry;
     if (entry === null) { return ''; }
-    return '继续上次观看';
+    return `继续上次观看 S${entry.seasonNumber}E${entry.episodeNumber}`;
   }
 
   private getCrossSeasonMetaLabel(): string {
     const entry = this.crossSeasonEntry;
     if (entry === null) { return ''; }
-    const seasonText = `第 ${entry.seasonNumber} 季`;
-    const episodeText = `第 ${entry.episodeNumber} 集`;
+    const episodeCode = `S${entry.seasonNumber}E${entry.episodeNumber}`;
     const progressText = formatProgressTime(entry.positionMs);
     if (progressText.length > 0) {
-      return `${seasonText} · ${episodeText} ${progressText}`;
+      return `${episodeCode} · ${progressText}`;
     }
-    return `${seasonText} · ${episodeText}`;
+    return episodeCode;
   }
 
   /** 是否显示跨季次级入口 */
@@ -684,7 +683,6 @@ export struct SeasonDetailPage {
     const currentSeason = this.getSeasonNumber();
     if (latestEntry !== null
         && latestEntry.seasonNumber !== currentSeason
-        && latestEntry.seasonNumber > 0
         && latestEntry.episodeNumber > 0) {
       this.crossSeasonEntry = latestEntry;
       // 跨季目标集查询：只取决于 latestEntry 是否指向其他季，与当前季是否有进度无关
