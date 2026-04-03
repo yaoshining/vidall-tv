@@ -2380,6 +2380,38 @@ export class FileSourceDatabase {
       console.warn(`[DB][clearMediaProgress] 删除失败 code=${err.code} msg=${err.message}`);
     }
   }
+
+  /**
+   * 查询全部媒体级播放进度，按最近播放时间倒序。
+   * 用于「播放历史」列表页展示。
+   */
+  async getAllMediaProgress(): Promise<MediaProgressEntry[]> {
+    if (this.rdbStore === null) {
+      return [];
+    }
+    try {
+      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MEDIA_PROGRESS);
+      predicates.orderByDesc('last_played_at');
+      const rs = await this.rdbStore.query(predicates,
+        ['media_key', 'position_ms', 'duration_ms', 'last_played_at', 'episode_number', 'season_number']);
+      const result: MediaProgressEntry[] = [];
+      while (rs.goToNextRow()) {
+        const entry: MediaProgressEntry = {
+          mediaKey: rs.getString(rs.getColumnIndex('media_key')),
+          positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
+          durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
+          lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
+          episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
+          seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
+        };
+        result.push(entry);
+      }
+      rs.close();
+      return result;
+    } catch (e) {
+      return [];
+    }
+  }
 }
 
 

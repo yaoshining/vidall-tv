@@ -13,6 +13,7 @@ import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
 import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
+import { PlayHistoryPage } from "../../history/PlayHistoryPage"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -933,6 +934,33 @@ export struct MediaLibraryTab {
 
   // ── Builders ──────────────────────────────────
   @Builder
+  PlayHistoryEntry() {
+    Row() {
+      Text('🕐')
+        .fontSize(18)
+        .margin({ right: 10 })
+      Text('播放历史')
+        .fontSize(16)
+        .fontColor('#FFFFFF')
+        .fontWeight(FontWeight.Medium)
+        .layoutWeight(1)
+      Text('>')
+        .fontSize(16)
+        .fontColor('rgba(255,255,255,0.40)')
+    }
+    .width('100%')
+    .height(52)
+    .padding({ left: 24, right: 24 })
+    .backgroundColor('rgba(255,255,255,0.04)')
+    .borderRadius(8)
+    .margin({ left: 16, right: 16, bottom: 8 })
+    .focusable(true)
+    .onClick(() => {
+      this.pageStack.pushPathByName(PlayHistoryPage.PAGE_NAME, null);
+    })
+  }
+
+  @Builder
   ContinueWatchingSection() {
     SectionRow({ title: '继续播放' }) {
       PlaceholderWideCard({ label: '暂无播放记录' })
@@ -1089,6 +1117,7 @@ export struct MediaLibraryTab {
         this.EmptyView()
         this.StatsAndScan()
       } else {
+        this.PlayHistoryEntry()
         this.ContinueWatchingSection()
         this.RecentlyAddedSection()
         this.MoviesSection()
