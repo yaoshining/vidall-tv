@@ -3,10 +3,11 @@ import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from "../../../db/models/MediaEntity"
+import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import { FileSourceType } from "../../../db/models/FileSourceEntity"
+import { ContinueWatchCard } from "../../../components/media/ContinueWatchCard"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
 import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
@@ -934,9 +935,16 @@ export struct MediaLibraryTab {
   // ── Builders ──────────────────────────────────
   @Builder
   ContinueWatchingSection() {
-    SectionRow({ title: '继续播放' }) {
-      PlaceholderWideCard({ label: '暂无播放记录' })
-      PlaceholderWideCard({ label: '播放历史功能即将上线' })
+    if (this.model.continueWatchingList.length > 0) {
+      SectionRow({ title: '继续播放' }) {
+        ForEach(
+          this.model.continueWatchingList,
+          (item: ContinueWatchingItem) => {
+            ContinueWatchCard({ item })
+          },
+          (item: ContinueWatchingItem) => item.mediaKey
+        )
+      }
     }
   }
 
