@@ -221,7 +221,7 @@ export interface ContinueWatchingItem {
   /** 宽幅封面远端 URL */
   backdropUrl: string;
   /** 媒体类型：'movie' | 'series' | 'video' */
-  kind: string;
+  kind: 'movie' | 'series' | 'video';
   /** 播放进度比例，0.0~1.0 */
   progressRatio: number;
   /** 已播时间格式化文字（如 "1:23:45"） */

@@ -130,14 +130,14 @@ export class MediaLibraryModel {
         `电视剧=${seriesGroups.length} 年代组=${this.decadeGroups.length}`
       );
 
-      // 继续播放栏（非阻塞：失败不影响主库加载结果）
-      await this.loadContinueWatching();
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryModel] 加载失败: ${err.message}`);
     } finally {
       this.isLoading = false;
     }
+    // 继续播放栏：在主库加载流程结束后 fire-and-forget，彻底不阻塞主库 isLoading 状态
+    this.loadContinueWatching().catch(() => {});
   }
 
   async reload(): Promise<void> {
@@ -158,19 +158,15 @@ export class MediaLibraryModel {
       const db = FileSourceDatabase.getInstance();
       const allEntries: MediaProgressEntry[] = await db.getAllMediaProgress();
 
-      // 过滤：进度有效 && 未近完播（ratio < 0.95）
-      const filtered: MediaProgressEntry[] = allEntries.filter((e: MediaProgressEntry): boolean => {
-        if (e.positionMs <= 0 || e.durationMs <= 0) {
-          return false;
+      // getAllMediaProgress() 已按最近播放倒序返回，直接过滤取前 20 条
+      const top20: MediaProgressEntry[] = [];
+      for (const entry of allEntries) {
+        if (top20.length >= 20) { break; }
+        if (entry.positionMs <= 0 || entry.durationMs <= 0) { continue; }
+        if ((entry.positionMs / entry.durationMs) < 0.95) {
+          top20.push(entry);
         }
-        return (e.positionMs / e.durationMs) < 0.95;
-      });
-
-      // 按最近播放倒序，最多 20 条
-      const sorted: MediaProgressEntry[] = filtered
-        .slice()
-        .sort((a: MediaProgressEntry, b: MediaProgressEntry): number => b.lastPlayedAt - a.lastPlayedAt);
-      const top20: MediaProgressEntry[] = sorted.slice(0, 20);
+      }
 
       // 从已加载的 recentlyAdded 构建两张查找 Map
       // movieMap: movie.providerId → MediaItem

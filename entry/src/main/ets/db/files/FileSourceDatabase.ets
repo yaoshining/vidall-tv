@@ -2389,10 +2389,11 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) {
       return [];
     }
+    let rs: relationalStore.ResultSet | null = null;
     try {
       const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MEDIA_PROGRESS);
       predicates.orderByDesc('last_played_at');
-      const rs = await this.rdbStore.query(predicates, [
+      rs = await this.rdbStore.query(predicates, [
         'media_key', 'position_ms', 'duration_ms',
         'last_played_at', 'episode_number', 'season_number'
       ]);
@@ -2408,12 +2409,14 @@ export class FileSourceDatabase {
         };
         result.push(entry);
       }
-      rs.close();
       console.info(`[DB][getAllMediaProgress] 共 ${result.length} 条记录`);
       return result;
     } catch (e) {
-      console.warn('[DB][getAllMediaProgress] 查询失败', JSON.stringify(e));
+      const err = e as BusinessError;
+      console.warn(`[DB][getAllMediaProgress] 查询失败 code=${err.code} msg=${err.message}`);
       return [];
+    } finally {
+      rs?.close();
     }
   }
 }
