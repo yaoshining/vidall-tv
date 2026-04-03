@@ -959,7 +959,7 @@ export struct MediaLibraryTab {
           (item: ContinueWatchingItem) => {
             ContinueWatchCard({ item })
           },
-          (item: ContinueWatchingItem) => item.mediaKey
+          (item: ContinueWatchingItem) => `${item.mediaKey}_${item.startPositionMs}`
         )
       }
     }
