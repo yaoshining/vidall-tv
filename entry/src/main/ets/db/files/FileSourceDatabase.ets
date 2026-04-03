@@ -2473,8 +2473,8 @@ export class FileSourceDatabase {
   }
 
   /**
-   * 查询全部媒体级播放进度，按最近播放时间倒序。
-   * 用于「播放历史」列表页展示。
+   * 查询全部媒体级播放进度，按最近播放时间倒序返回。
+   * 用于「继续播放」栏数据源。
    */
   async getAllMediaProgress(): Promise<MediaProgressEntry[]> {
     if (this.rdbStore === null) {
@@ -2482,10 +2482,12 @@ export class FileSourceDatabase {
     }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MEDIA_PROGRESS);
-      predicates.orderByDesc('last_played_at');
-      rs = await this.rdbStore.query(predicates,
-        ['media_key', 'position_ms', 'duration_ms', 'last_played_at', 'episode_number', 'season_number']);
+      // LIMIT 40：稍大于上层取 20 条的余量，减少全表 IO；DB 已按 last_played_at DESC 排序
+      const sql =
+        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
+        ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` ORDER BY last_played_at DESC LIMIT 40`;
+      rs = await this.rdbStore.querySql(sql);
       const result: MediaProgressEntry[] = [];
       while (rs.goToNextRow()) {
         const entry: MediaProgressEntry = {
@@ -2498,8 +2500,11 @@ export class FileSourceDatabase {
         };
         result.push(entry);
       }
+      console.info(`[DB][getAllMediaProgress] 共 ${result.length} 条记录`);
       return result;
     } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][getAllMediaProgress] 查询失败 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
       rs?.close();
