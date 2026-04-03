@@ -2391,12 +2391,12 @@ export class FileSourceDatabase {
     }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MEDIA_PROGRESS);
-      predicates.orderByDesc('last_played_at');
-      rs = await this.rdbStore.query(predicates, [
-        'media_key', 'position_ms', 'duration_ms',
-        'last_played_at', 'episode_number', 'season_number'
-      ]);
+      // LIMIT 40：稍大于上层取 20 条的余量，减少全表 IO；DB 已按 last_played_at DESC 排序
+      const sql =
+        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
+        ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` ORDER BY last_played_at DESC LIMIT 40`;
+      rs = await this.rdbStore.querySql(sql);
       const result: MediaProgressEntry[] = [];
       while (rs.goToNextRow()) {
         const entry: MediaProgressEntry = {
