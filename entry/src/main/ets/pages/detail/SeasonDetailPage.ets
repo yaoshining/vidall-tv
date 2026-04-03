@@ -678,9 +678,8 @@ export struct SeasonDetailPage {
       this.resumeEpisode = this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined;
     }
 
-    // ── 跨季次级入口：读整剧最近观看指针 ────────────────────────────────
-    const seriesKey = MediaProgressStore.seriesKey(seriesProviderId);
-    const latestEntry = await MediaProgressStore.get(seriesKey);
+    // ── 跨季次级入口：读整剧最近观看指针（集级进度）────────────────────────────────
+    const latestEntry = await MediaProgressStore.getLatestForSeries(seriesProviderId);
     const currentSeason = this.getSeasonNumber();
     if (latestEntry !== null
         && latestEntry.seasonNumber !== currentSeason
@@ -1003,7 +1002,12 @@ export struct SeasonDetailPage {
 
       const episodeName = await this.resolveEpisodeName(db, episode);
       const seriesProviderId = this.seriesEntity?.providerId ?? '';
-      const mKey = seriesProviderId.length > 0 ? MediaProgressStore.seriesKey(seriesProviderId) : undefined;
+      const episodeSeason = episode.seasonNumber ?? 0;
+      const episodeNum = episode.episodeNumber ?? 0;
+      // 集级 key：每集独立存储进度，避免跨集覆盖
+      const mKey = (seriesProviderId.length > 0 && episodeSeason > 0 && episodeNum > 0)
+        ? MediaProgressStore.episodeKey(seriesProviderId, episodeSeason, episodeNum)
+        : undefined;
       const param: PlayerPageParam = {
         // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
         url: fullUrl,
@@ -1012,8 +1016,8 @@ export struct SeasonDetailPage {
         durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
         videoId: episode.id,
         seriesProviderId,
-        seasonNumber: episode.seasonNumber ?? 0,
-        episodeNumber: episode.episodeNumber ?? 0,
+        seasonNumber: episodeSeason,
+        episodeNumber: episodeNum,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mKey,
