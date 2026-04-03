@@ -5,7 +5,7 @@ import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { PlayerPage, PlayerPageParam } from '../player/index';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
-import { focusControl } from '@kit.ArkUI';
+
 
 // ─────────────────────────────────────────────
 // 数据类型
@@ -598,7 +598,6 @@ export struct PlayHistoryPage {
             },
             {
               title: '删除此条记录',
-              fontColor: '#FF6B6B',
               action: () => {
                 this.confirmDeleteItem(item);
               },
