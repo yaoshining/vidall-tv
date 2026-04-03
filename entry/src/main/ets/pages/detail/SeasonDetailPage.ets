@@ -610,8 +610,7 @@ export struct SeasonDetailPage {
 
   /** 是否显示跨季次级入口 */
   private shouldShowCrossSeasonEntry(): boolean {
-    return !this.hasCurrentSeasonProgress
-      && this.crossSeasonEntry !== null
+    return this.crossSeasonEntry !== null
       && this.crossSeasonEpisode !== undefined;
   }
 
@@ -688,28 +687,23 @@ export struct SeasonDetailPage {
         && latestEntry.seasonNumber > 0
         && latestEntry.episodeNumber > 0) {
       this.crossSeasonEntry = latestEntry;
-      // 仅在当前季无未看完进度时，才需要查找跨季目标集（UI 才会展示跨季入口）
-      if (!this.hasCurrentSeasonProgress) {
-        const seriesId = this.seriesEntity?.id ?? -1;
-        if (seriesId > 0) {
-          const allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
-          let found: MediaItem | undefined;
-          for (const m of allEpisodes) {
-            if ((m.seasonNumber ?? -1) === latestEntry.seasonNumber
-                && (m.episodeNumber ?? -1) === latestEntry.episodeNumber) {
-              found = m;
-              break;
-            }
+      // 跨季目标集查询：只取决于 latestEntry 是否指向其他季，与当前季是否有进度无关
+      const seriesId = this.seriesEntity?.id ?? -1;
+      if (seriesId > 0) {
+        const allEpisodes = await db.getMediaItemsByTvSeriesId(seriesId);
+        let found: MediaItem | undefined;
+        for (const m of allEpisodes) {
+          if ((m.seasonNumber ?? -1) === latestEntry.seasonNumber
+              && (m.episodeNumber ?? -1) === latestEntry.episodeNumber) {
+            found = m;
+            break;
           }
-          this.crossSeasonEpisode = found;
-        } else {
-          // seriesId 缺失：清空残留，避免误判跨季入口可展示
-          this.crossSeasonEpisode = undefined;
-          this.crossSeasonEntry = null;
         }
+        this.crossSeasonEpisode = found;
       } else {
-        // 当前季有进度：不需要展示跨季入口，清空残留
+        // seriesId 缺失：清空残留，避免误判跨季入口可展示
         this.crossSeasonEpisode = undefined;
+        this.crossSeasonEntry = null;
       }
     } else {
       this.crossSeasonEntry = null;
