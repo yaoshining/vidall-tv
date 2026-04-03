@@ -194,6 +194,8 @@ export class MediaLibraryModel {
       const seriesIdCache = new Map<string, number>();
 
       const result: ContinueWatchingItem[] = [];
+      // 剧集按 seriesProviderId 去重：entries 已按 lastPlayedAt DESC 排序，第一次出现即最近播放集
+      const seriesSeenSet = new Set<string>();
 
       for (const entry of top20) {
         const key = entry.mediaKey;
@@ -229,12 +231,77 @@ export class MediaLibraryModel {
             };
             result.push(cwi);
           }
+        } else if (key.startsWith('media_progress_episode_tmdb_')) {
+          // ── 集级剧集（新格式）──
+          // 格式：media_progress_episode_tmdb_{seriesTmdbId}_s{sn}_e{en}
+          const rest = key.slice('media_progress_episode_tmdb_'.length);
+          const eIdx = rest.lastIndexOf('_e');
+          const sIdx = eIdx >= 0 ? rest.lastIndexOf('_s', eIdx) : -1;
+          const seriesProviderId = sIdx >= 0 ? rest.substring(0, sIdx) : rest;
+          if (seriesProviderId.length === 0) {
+            continue;
+          }
+          // 每剧只展示最近一集（已按时间倒序，首次出现即最新）
+          if (seriesSeenSet.has(seriesProviderId)) {
+            continue;
+          }
+          seriesSeenSet.add(seriesProviderId);
+
+          // 解析 tvSeriesDbId（优先读缓存）
+          if (!seriesIdCache.has(seriesProviderId)) {
+            const seriesEntity: TvSeriesEntity | null =
+              await db.getTvSeriesByProviderId('tmdb', seriesProviderId);
+            if (seriesEntity !== null && seriesEntity.id !== undefined) {
+              seriesIdCache.set(seriesProviderId, seriesEntity.id);
+            } else {
+              seriesIdCache.set(seriesProviderId, -1);
+            }
+          }
+          const tvSeriesDbId: number = seriesIdCache.get(seriesProviderId) ?? -1;
+          if (tvSeriesDbId <= 0) {
+            continue;
+          }
+
+          const epKey =
+            `${tvSeriesDbId}_S${entry.seasonNumber}E${entry.episodeNumber}`;
+          const mi: MediaItem | undefined = episodeMap.get(epKey);
+          if (mi !== undefined) {
+            const ratio: number = entry.positionMs / entry.durationMs;
+            const cwi: ContinueWatchingItem = {
+              mediaKey: key,
+              title: mi.title ?? mi.fileName,
+              posterLocalPath: mi.posterLocalPath ?? '',
+              posterUrl: mi.posterUrl ?? '',
+              backdropLocalPath: mi.backdropLocalPath ?? '',
+              backdropUrl: mi.backdropUrl ?? '',
+              kind: 'series',
+              progressRatio: ratio,
+              positionFormatted: millisecondsToTime(entry.positionMs),
+              durationFormatted: millisecondsToTime(entry.durationMs),
+              lastPlayedAt: entry.lastPlayedAt,
+              seasonNumber: entry.seasonNumber,
+              episodeNumber: entry.episodeNumber,
+              episodeTitle: '',
+              videoId: mi.id,
+              tvSeriesId: tvSeriesDbId,
+              startPositionMs: entry.positionMs,
+              sourceId: mi.sourceId,
+              filePath: mi.filePath,
+              durationMs: entry.durationMs,
+              seriesProviderId: seriesProviderId
+            };
+            result.push(cwi);
+          }
         } else if (key.startsWith('media_progress_series_tmdb_')) {
-          // ── 剧集 ──
+          // ── 旧剧级格式（向后兼容）──
           const seriesProviderId = key.slice('media_progress_series_tmdb_'.length);
           if (seriesProviderId.length === 0) {
             continue;
           }
+          if (seriesSeenSet.has(seriesProviderId)) {
+            continue;
+          }
+          seriesSeenSet.add(seriesProviderId);
 
           // 解析 tvSeriesDbId（优先读缓存）
           if (!seriesIdCache.has(seriesProviderId)) {
