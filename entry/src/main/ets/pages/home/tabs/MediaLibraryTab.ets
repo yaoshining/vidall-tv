@@ -556,11 +556,18 @@ export struct MediaLibraryTab {
     });
     // 播放器退出时刷新继续播放栏
     emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
-      this.model.loadContinueWatching().catch(() => {});
+      console.info('[MediaLibraryTab][REFRESH] 收到 MEDIA_PROGRESS_SAVED 事件，触发 loadContinueWatching');
+      this.model.loadContinueWatching().then(() => {
+        console.info(`[MediaLibraryTab][REFRESH] loadContinueWatching 完成，列表长度=${this.model.continueWatchingList.length}`);
+      }).catch(() => {
+        console.warn('[MediaLibraryTab][REFRESH] loadContinueWatching 失败');
+      });
     });
+    console.info('[MediaLibraryTab][REFRESH] emitter 订阅已注册 eventId=15');
   }
 
   aboutToDisappear(): void {
+    console.info('[MediaLibraryTab][REFRESH] aboutToDisappear 调用，取消订阅 eventId=15');
     emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
   }
 
