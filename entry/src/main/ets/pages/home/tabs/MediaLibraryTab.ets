@@ -969,7 +969,6 @@ export struct MediaLibraryTab {
       Scroll() {
         Row({ space: 10 }) {
           PlaceholderWideCard({ label: '暂无播放记录' })
-          PlaceholderWideCard({ label: '播放历史功能即将上线' })
         }
         .padding({ left: 16, right: 16 })
         .alignItems(VerticalAlign.Top)
@@ -1125,13 +1124,13 @@ export struct MediaLibraryTab {
 
   build() {
     Column() {
+      this.ContinueWatchingSection()
       if (this.model.isLoading) {
         this.LoadingView()
       } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
         this.EmptyView()
         this.StatsAndScan()
       } else {
-        this.ContinueWatchingSection()
         this.RecentlyAddedSection()
         this.MoviesSection()
         this.TvShowsSection()
