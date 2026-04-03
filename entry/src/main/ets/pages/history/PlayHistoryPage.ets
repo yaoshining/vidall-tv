@@ -412,9 +412,16 @@ export struct PlayHistoryPage {
         await FileSourceDatabase.getInstance().clearMediaProgress(item.mediaKey);
       }
       // DB 成功后才更新 UI，确保原子性
-      this.historyList = this.historyList.filter(
-        (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
-      );
+      if (item.kind === 'series') {
+        // 按剧删除：过滤掉该剧的全部聚合条目
+        this.historyList = this.historyList.filter(
+          (i: HistoryDisplayItem): boolean => i.seriesProviderId !== item.seriesProviderId
+        );
+      } else {
+        this.historyList = this.historyList.filter(
+          (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
+        );
+      }
       emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
       promptAction.showToast({ message: '已删除播放记录' });
     } catch (e) {

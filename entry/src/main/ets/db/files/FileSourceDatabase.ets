@@ -2481,6 +2481,10 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) {
       return;
     }
+    if (!/^\d+$/.test(seriesTmdbId)) {
+      console.warn(`[DB][clearAllMediaProgressBySeries] 非法 seriesTmdbId: ${seriesTmdbId}`);
+      return;
+    }
     try {
       const prefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
       const sql =
@@ -2500,6 +2504,10 @@ export class FileSourceDatabase {
    */
   async getLatestMediaProgressBySeries(seriesTmdbId: string): Promise<MediaProgressEntry | null> {
     if (this.rdbStore === null) {
+      return null;
+    }
+    if (!/^\d+$/.test(seriesTmdbId)) {
+      console.warn(`[DB][getLatestMediaProgressBySeries] 非法 seriesTmdbId: ${seriesTmdbId}`);
       return null;
     }
     let rs: relationalStore.ResultSet | null = null;
