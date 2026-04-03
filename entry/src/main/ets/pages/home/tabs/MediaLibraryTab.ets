@@ -14,6 +14,8 @@ import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
 import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
+import { emitter } from "@kit.BasicServicesKit"
+import { PlayerEvents } from "../../../components/core/player/Constants"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -552,6 +554,14 @@ export struct MediaLibraryTab {
         }
       });
     });
+    // 播放器退出时刷新继续播放栏
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
+      this.model.loadContinueWatching().catch(() => {});
+    });
+  }
+
+  aboutToDisappear(): void {
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
   }
 
   private async startScan(): Promise<void> {
