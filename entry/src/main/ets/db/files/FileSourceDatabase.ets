@@ -2486,12 +2486,15 @@ export class FileSourceDatabase {
       return;
     }
     try {
-      const prefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      // 同时清除新格式（集级 key）和旧格式（整剧级 key），确保历史迁移数据也能被删除
+      const episodePrefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      const oldKey = `media_progress_series_tmdb_${seriesTmdbId}`;
       const sql =
         `DELETE FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
-        ` WHERE media_key LIKE '${prefix}%'`;
+        ` WHERE media_key LIKE '${episodePrefix}%'` +
+        ` OR media_key = '${oldKey}'`;
       await this.rdbStore.executeSql(sql);
-      console.info(`[DB][clearAllMediaProgressBySeries] seriesTmdbId=${seriesTmdbId} 已全部清除`);
+      console.info(`[DB][clearAllMediaProgressBySeries] seriesTmdbId=${seriesTmdbId} 已全部清除（含旧格式）`);
     } catch (error) {
       const err = error as BusinessError;
       console.warn(`[DB][clearAllMediaProgressBySeries] 删除失败 code=${err.code} msg=${err.message}`);
