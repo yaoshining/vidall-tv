@@ -3,16 +3,19 @@ import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from "../../../db/models/MediaEntity"
+import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import { FileSourceType } from "../../../db/models/FileSourceEntity"
+import { ContinueWatchCard } from "../../../components/media/ContinueWatchCard"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
 import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
 import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
+import { emitter } from "@kit.BasicServicesKit"
+import { PlayerEvents } from "../../../components/core/player/Constants"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -551,6 +554,21 @@ export struct MediaLibraryTab {
         }
       });
     });
+    // 播放器退出时刷新继续播放栏
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
+      console.info('[MediaLibraryTab][REFRESH] 收到 MEDIA_PROGRESS_SAVED 事件，触发 loadContinueWatching');
+      this.model.loadContinueWatching().then(() => {
+        console.info(`[MediaLibraryTab][REFRESH] loadContinueWatching 完成，列表长度=${this.model.continueWatchingList.length}`);
+      }).catch(() => {
+        console.warn('[MediaLibraryTab][REFRESH] loadContinueWatching 失败');
+      });
+    });
+    console.info('[MediaLibraryTab][REFRESH] emitter 订阅已注册 eventId=15');
+  }
+
+  aboutToDisappear(): void {
+    console.info('[MediaLibraryTab][REFRESH] aboutToDisappear 调用，取消订阅 eventId=15');
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
   }
 
   private async startScan(): Promise<void> {
@@ -934,9 +952,16 @@ export struct MediaLibraryTab {
   // ── Builders ──────────────────────────────────
   @Builder
   ContinueWatchingSection() {
-    SectionRow({ title: '继续播放' }) {
-      PlaceholderWideCard({ label: '暂无播放记录' })
-      PlaceholderWideCard({ label: '播放历史功能即将上线' })
+    if (this.model.continueWatchingList.length > 0) {
+      SectionRow({ title: '继续播放' }) {
+        ForEach(
+          this.model.continueWatchingList,
+          (item: ContinueWatchingItem) => {
+            ContinueWatchCard({ item })
+          },
+          (item: ContinueWatchingItem) => `${item.mediaKey}_${item.startPositionMs}`
+        )
+      }
     }
   }
 

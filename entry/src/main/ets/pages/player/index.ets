@@ -353,21 +353,42 @@ export struct PlayerPage {
       clearInterval(this.mediaProgressTimerId);
       this.mediaProgressTimerId = -1;
     }
-    // 媒体级进度：完播则清除，否则保存当前位置
+    // 媒体级进度：完播则清除，否则保存当前位置；结束后通知继续播放栏刷新
     if (this.currentMediaKey.length > 0) {
       const posMs = this.videoPlayerController.currentTime;
       const durMs = this.videoPlayerController.duration;
+      console.info(`[PlayerPage][REFRESH] aboutToDisappear: currentMediaKey=${this.currentMediaKey} posMs=${posMs} durMs=${durMs}`);
       // duration 未就绪时跳过完播判断，避免 duration=0 误清除进度
       if (durMs > 0) {
         if (MediaProgressStore.isNearEnd(posMs, durMs)) {
-          MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
+          MediaProgressStore.clear(this.currentMediaKey).then(() => {
+            console.info('[PlayerPage][REFRESH] clear 完成，emit MEDIA_PROGRESS_SAVED');
+            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+          }).catch(() => {
+            console.warn('[PlayerPage][REFRESH] clear 失败，仍 emit MEDIA_PROGRESS_SAVED');
+            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+          });
         } else if (posMs > 0) {
           MediaProgressStore.save(
             this.currentMediaKey, posMs, durMs,
             this.currentMediaSeason, this.currentMediaEpisode
-          ).catch(() => {});
+          ).then(() => {
+            console.info('[PlayerPage][REFRESH] save 完成，emit MEDIA_PROGRESS_SAVED');
+            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+          }).catch(() => {
+            console.warn('[PlayerPage][REFRESH] save 失败，仍 emit MEDIA_PROGRESS_SAVED');
+            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+          });
+        } else {
+          console.info('[PlayerPage][REFRESH] posMs=0，直接 emit MEDIA_PROGRESS_SAVED');
+          emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
         }
+      } else {
+        console.info('[PlayerPage][REFRESH] durMs=0，直接 emit MEDIA_PROGRESS_SAVED');
+        emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
       }
+    } else {
+      console.info('[PlayerPage][REFRESH] currentMediaKey 为空，跳过 emit');
     }
     this.videoPlayerController.saveProgressNow()
     this.videoPlayerController.release()

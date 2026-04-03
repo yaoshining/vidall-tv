@@ -98,4 +98,9 @@ export class PlayerEvents {
     eventId: 14,
     priority: emitter.EventPriority.HIGH
   };
+  /** 播放器退出时媒体进度已保存/清除，继续播放栏需刷新 */
+  static readonly MEDIA_PROGRESS_SAVED: emitter.InnerEvent = {
+    eventId: 15,
+    priority: emitter.EventPriority.HIGH
+  };
 }

@@ -200,6 +200,59 @@ export interface MediaProgressEntry {
 }
 
 // ─────────────────────────────────────────────
+// 继续播放卡片视图模型
+// ─────────────────────────────────────────────
+
+/**
+ * 「继续播放」栏单项视图模型。
+ * 由 MediaLibraryModel.loadContinueWatching() 构建，由 ContinueWatchCard 消费。
+ */
+export interface ContinueWatchingItem {
+  /** media_progress 存储 key，由 MediaProgressStore.seriesKey/movieKey 生成 */
+  mediaKey: string;
+  /** 显示标题（电影 = 电影名，剧集 = 剧名） */
+  title: string;
+  /** 封面图本地路径（优先用 backdrop；空字符串表示不可用） */
+  posterLocalPath: string;
+  /** 封面图远端 URL（优先用 backdrop；空字符串表示不可用） */
+  posterUrl: string;
+  /** 宽幅封面本地路径 */
+  backdropLocalPath: string;
+  /** 宽幅封面远端 URL */
+  backdropUrl: string;
+  /** 媒体类型：'movie' | 'series' | 'video' */
+  kind: 'movie' | 'series' | 'video';
+  /** 播放进度比例，0.0~1.0 */
+  progressRatio: number;
+  /** 已播时间格式化文字（如 "1:23:45"） */
+  positionFormatted: string;
+  /** 总时长格式化文字 */
+  durationFormatted: string;
+  /** 最近播放时间戳（毫秒） */
+  lastPlayedAt: number;
+  /** 剧集：季号（电影为 0） */
+  seasonNumber: number;
+  /** 剧集：集号（电影为 0） */
+  episodeNumber: number;
+  /** 剧集：集标题（可能为空） */
+  episodeTitle: string;
+  /** videos 表主键，用于构建 PlayerPageParam.videoId */
+  videoId: number;
+  /** tv_series 表主键（电影为 0） */
+  tvSeriesId: number;
+  /** 跳转播放时直接 seek 到的位置（毫秒） */
+  startPositionMs: number;
+  /** 文件源 ID，点击时按需获取完整 URL */
+  sourceId: number;
+  /** 视频文件路径，用于 URL 构建 */
+  filePath: string;
+  /** 视频总时长（毫秒），用于 PlayerPageParam.durationHintMs */
+  durationMs: number;
+  /** 剧集的 TMDB series providerId（电影为空字符串） */
+  seriesProviderId: string;
+}
+
+// ─────────────────────────────────────────────
 // UI 聚合视图
 // ─────────────────────────────────────────────
 

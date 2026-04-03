@@ -1,5 +1,6 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem } from '../../db/models/MediaEntity';
+import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ContinueWatchingItem, TvSeriesEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
+import { millisecondsToTime } from '../../utils/TimeUtil';
 
 export interface YearGroup {
   year: string;
@@ -49,6 +50,8 @@ export class MediaLibraryModel {
   @Trace stats: MediaStats = { total: 0, movies: 0, tv: 0, other: 0 };
   /** 最近扫描时间戳（ms），0 表示未扫描 */
   @Trace latestScanTime: number = 0;
+  /** 「继续播放」栏数据，按最近播放时间倒序，最多 20 条 */
+  @Trace continueWatchingList: ContinueWatchingItem[] = [];
 
   async load(): Promise<void> {
     if (this.isLoading) {
@@ -125,12 +128,16 @@ export class MediaLibraryModel {
       console.info(
         `[MediaLibraryModel] 加载完成 | 全部=${all.length} 电影=${movies.length} ` +
         `电视剧=${seriesGroups.length} 年代组=${this.decadeGroups.length}`
-      );    } catch (e) {
+      );
+
+    } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryModel] 加载失败: ${err.message}`);
     } finally {
       this.isLoading = false;
     }
+    // 继续播放栏：在主库加载流程结束后 fire-and-forget，彻底不阻塞主库 isLoading 状态
+    this.loadContinueWatching().catch(() => {});
   }
 
   async reload(): Promise<void> {
@@ -139,6 +146,151 @@ export class MediaLibraryModel {
     this.isLoaded = false;
     console.info('[MediaLibraryModel] reload 触发');
     await this.load();
+  }
+
+  /**
+   * 加载「继续播放」栏数据。
+   * 从 media_progress 表读取进度，过滤完播项，匹配 recentlyAdded 元数据，
+   * 构建 ContinueWatchingItem 列表写入 continueWatchingList。
+   */
+  async loadContinueWatching(): Promise<void> {
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const allEntries: MediaProgressEntry[] = await db.getAllMediaProgress();
+
+      // getAllMediaProgress() 已按最近播放倒序返回，直接过滤取前 20 条
+      const top20: MediaProgressEntry[] = [];
+      for (const entry of allEntries) {
+        if (top20.length >= 20) { break; }
+        if (entry.positionMs <= 0 || entry.durationMs <= 0) { continue; }
+        if ((entry.positionMs / entry.durationMs) < 0.95) {
+          top20.push(entry);
+        }
+      }
+
+      // 从已加载的 recentlyAdded 构建两张查找 Map
+      // movieMap: movie.providerId → MediaItem
+      const movieMap = new Map<string, MediaItem>();
+      // episodeMap: `${tvSeriesId}_S${season}E${ep}` → MediaItem
+      const episodeMap = new Map<string, MediaItem>();
+
+      for (const item of this.recentlyAdded) {
+        const pid = item.providerId;
+        if (item.mediaType === 'movie' && pid !== undefined && pid.length > 0) {
+          movieMap.set(pid, item);
+        } else if (
+          item.mediaType === 'episode' &&
+          item.tvSeriesId !== undefined &&
+          item.seasonNumber !== undefined &&
+          item.episodeNumber !== undefined
+        ) {
+          const epKey =
+            `${item.tvSeriesId}_S${item.seasonNumber}E${item.episodeNumber}`;
+          episodeMap.set(epKey, item);
+        }
+      }
+
+      // 剧集：seriesProviderId → tv_series DB id（缓存，避免重复查询）
+      const seriesIdCache = new Map<string, number>();
+
+      const result: ContinueWatchingItem[] = [];
+
+      for (const entry of top20) {
+        const key = entry.mediaKey;
+
+        if (key.startsWith('media_progress_movie_')) {
+          // ── 电影 ──
+          const providerId = key.slice('media_progress_movie_'.length);
+          const mi: MediaItem | undefined = movieMap.get(providerId);
+          if (mi !== undefined) {
+            const ratio: number = entry.positionMs / entry.durationMs;
+            const cwi: ContinueWatchingItem = {
+              mediaKey: key,
+              title: mi.title ?? mi.fileName,
+              posterLocalPath: mi.posterLocalPath ?? '',
+              posterUrl: mi.posterUrl ?? '',
+              backdropLocalPath: mi.backdropLocalPath ?? '',
+              backdropUrl: mi.backdropUrl ?? '',
+              kind: 'movie',
+              progressRatio: ratio,
+              positionFormatted: millisecondsToTime(entry.positionMs),
+              durationFormatted: millisecondsToTime(entry.durationMs),
+              lastPlayedAt: entry.lastPlayedAt,
+              seasonNumber: 0,
+              episodeNumber: 0,
+              episodeTitle: '',
+              videoId: mi.id,
+              tvSeriesId: 0,
+              startPositionMs: entry.positionMs,
+              sourceId: mi.sourceId,
+              filePath: mi.filePath,
+              durationMs: entry.durationMs,
+              seriesProviderId: ''
+            };
+            result.push(cwi);
+          }
+        } else if (key.startsWith('media_progress_series_tmdb_')) {
+          // ── 剧集 ──
+          const seriesProviderId = key.slice('media_progress_series_tmdb_'.length);
+          if (seriesProviderId.length === 0) {
+            continue;
+          }
+
+          // 解析 tvSeriesDbId（优先读缓存）
+          if (!seriesIdCache.has(seriesProviderId)) {
+            const seriesEntity: TvSeriesEntity | null =
+              await db.getTvSeriesByProviderId('tmdb', seriesProviderId);
+            if (seriesEntity !== null && seriesEntity.id !== undefined) {
+              seriesIdCache.set(seriesProviderId, seriesEntity.id);
+            } else {
+              seriesIdCache.set(seriesProviderId, -1);
+            }
+          }
+          const tvSeriesDbId: number = seriesIdCache.get(seriesProviderId) ?? -1;
+          if (tvSeriesDbId <= 0) {
+            continue;
+          }
+
+          const epKey =
+            `${tvSeriesDbId}_S${entry.seasonNumber}E${entry.episodeNumber}`;
+          const mi: MediaItem | undefined = episodeMap.get(epKey);
+          if (mi !== undefined) {
+            const ratio: number = entry.positionMs / entry.durationMs;
+            const cwi: ContinueWatchingItem = {
+              mediaKey: key,
+              title: mi.title ?? mi.fileName,
+              posterLocalPath: mi.posterLocalPath ?? '',
+              posterUrl: mi.posterUrl ?? '',
+              backdropLocalPath: mi.backdropLocalPath ?? '',
+              backdropUrl: mi.backdropUrl ?? '',
+              kind: 'series',
+              progressRatio: ratio,
+              positionFormatted: millisecondsToTime(entry.positionMs),
+              durationFormatted: millisecondsToTime(entry.durationMs),
+              lastPlayedAt: entry.lastPlayedAt,
+              seasonNumber: entry.seasonNumber,
+              episodeNumber: entry.episodeNumber,
+              episodeTitle: '',
+              videoId: mi.id,
+              tvSeriesId: tvSeriesDbId,
+              startPositionMs: entry.positionMs,
+              sourceId: mi.sourceId,
+              filePath: mi.filePath,
+              durationMs: entry.durationMs,
+              seriesProviderId: seriesProviderId
+            };
+            result.push(cwi);
+          }
+        }
+        // 其他 key 格式（'video' 类）暂不支持，跳过
+      }
+
+      this.continueWatchingList = result;
+      console.info(`[MediaLibraryModel] loadContinueWatching 完成，共 ${result.length} 条`);
+    } catch (e) {
+      console.warn('[MediaLibraryModel] loadContinueWatching 失败', JSON.stringify(e));
+      this.continueWatchingList = [];
+    }
   }
 }
 
