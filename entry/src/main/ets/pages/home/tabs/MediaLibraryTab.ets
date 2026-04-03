@@ -14,6 +14,7 @@ import { SeasonDetailPage } from "../../detail/SeasonDetailPage"
 import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
+import { PlayHistoryPage } from "../../history/PlayHistoryPage"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "../../../components/core/player/Constants"
 
@@ -524,6 +525,7 @@ export struct MediaLibraryTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Require @Param tab: TabItem
   @Local isScanning: boolean = false
+  @Local isViewAllFocused: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
 
   aboutToAppear(): void {
@@ -952,17 +954,59 @@ export struct MediaLibraryTab {
   // ── Builders ──────────────────────────────────
   @Builder
   ContinueWatchingSection() {
-    if (this.model.continueWatchingList.length > 0) {
-      SectionRow({ title: '继续播放' }) {
-        ForEach(
-          this.model.continueWatchingList,
-          (item: ContinueWatchingItem) => {
-            ContinueWatchCard({ item })
-          },
-          (item: ContinueWatchingItem) => `${item.mediaKey}_${item.startPositionMs}`
-        )
+    Column() {
+      Row() {
+        Text('继续播放')
+          .fontSize(14)
+          .fontColor('#FFFFFF')
+          .fontWeight(FontWeight.Bold)
+          .padding({ left: 16 })
+          .layoutWeight(1)
+
+        Text('查看全部 →')
+          .fontSize(13)
+          .fontColor(this.isViewAllFocused ? '#FFFFFF' : 'rgba(255,255,255,0.55)')
+          .fontWeight(FontWeight.Medium)
+          .padding({ left: 12, right: 16, top: 6, bottom: 6 })
+          .backgroundColor(this.isViewAllFocused ? 'rgba(255,255,255,0.12)' : Color.Transparent)
+          .borderRadius(6)
+          .border({ width: this.isViewAllFocused ? 2 : 0, color: '#FFFFFF' })
+          .focusable(true)
+          .onFocus(() => { this.isViewAllFocused = true })
+          .onBlur(() => { this.isViewAllFocused = false })
+          .onClick(() => {
+            this.pageStack.pushPathByName(PlayHistoryPage.PAGE_NAME, null)
+          })
+          .animation({ duration: 140, curve: Curve.EaseInOut })
       }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .constraintSize({ minHeight: 44 })
+      .margin({ bottom: 8 })
+
+      Scroll() {
+        Row({ space: 10 }) {
+          if (this.model.continueWatchingList.length > 0) {
+            ForEach(
+              this.model.continueWatchingList,
+              (item: ContinueWatchingItem) => {
+                ContinueWatchCard({ item })
+              },
+              (item: ContinueWatchingItem) => `${item.mediaKey}_${item.startPositionMs}`
+            )
+          } else {
+            PlaceholderWideCard({ label: '暂无播放记录' })
+          }
+        }
+        .padding({ left: 16, right: 16 })
+        .alignItems(VerticalAlign.Top)
+      }
+      .align(Alignment.Start)
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .width('100%')
     }
+    .width('100%').alignItems(HorizontalAlign.Start).margin({ bottom: 20 })
   }
 
   @Builder
@@ -1108,13 +1152,13 @@ export struct MediaLibraryTab {
 
   build() {
     Column() {
+      this.ContinueWatchingSection()
       if (this.model.isLoading) {
         this.LoadingView()
       } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
         this.EmptyView()
         this.StatsAndScan()
       } else {
-        this.ContinueWatchingSection()
         this.RecentlyAddedSection()
         this.MoviesSection()
         this.TvShowsSection()

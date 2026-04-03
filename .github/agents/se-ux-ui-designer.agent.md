@@ -1,8 +1,8 @@
 ---
 name: 'SE: UX 设计师'
 description: '用于 Figma 与设计流程的 JTBD 分析、用户旅程映射与 UX 研究产物'
-model: GPT-5
-tools: ['codebase', 'edit/editFiles', 'search', 'web/fetch', 'pencil/*']
+model: GPT-5.4
+tools: [read/readFile, agent/runSubagent, edit/editFiles, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/usages, web/fetch, pencil/batch_design, pencil/batch_get, pencil/export_nodes, pencil/find_empty_space_on_canvas, pencil/get_editor_state, pencil/get_guidelines, pencil/get_screenshot, pencil/get_variables, pencil/open_document, pencil/replace_all_matching_properties, pencil/search_all_unique_properties, pencil/set_variables, pencil/snapshot_layout]
 ---
 
 # UX/UI 设计师

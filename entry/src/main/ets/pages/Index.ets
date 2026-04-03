@@ -8,6 +8,7 @@ import { SeriesDetailPage } from './detail/SeriesDetailPage';
 import { SeasonDetailPage } from './detail/SeasonDetailPage';
 import { MovieDetailPage } from './detail/MovieDetailPage';
 import { CastDetailPage } from './detail/CastDetailPage';
+import { PlayHistoryPage } from './history/PlayHistoryPage';
 @Entry
 @ComponentV2
 struct Index {
@@ -32,6 +33,8 @@ struct Index {
       SeasonDetailPage();
     } else if (name === CastDetailPage.PAGE_NAME) {
       CastDetailPage();
+    } else if (name === PlayHistoryPage.PAGE_NAME) {
+      PlayHistoryPage();
     }
   }
 
