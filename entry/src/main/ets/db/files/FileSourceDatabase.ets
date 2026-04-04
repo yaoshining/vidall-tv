@@ -3,7 +3,8 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
-  MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry
+  MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry,
+  SearchHistoryEntry
 } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
@@ -26,6 +27,7 @@ export class FileSourceDatabase {
   private static readonly TABLE_TV_EPISODES = 'tv_episodes';
   private static readonly TABLE_PLAY_PROGRESS = 'play_progress';
   private static readonly TABLE_MEDIA_PROGRESS = 'media_progress';
+  private static readonly TABLE_SEARCH_HISTORY = 'search_history';
   private static readonly DATABASE_READY = 'FILE_SOURCES_DB_READY'
 
   // 单例实例
@@ -137,6 +139,15 @@ export class FileSourceDatabase {
         )
       `);
       await this.createMediaTablesV3(rdbStore);
+      // search_history：持久化搜索关键词，keyword 唯一
+      await rdbStore.executeSql(`
+        CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_SEARCH_HISTORY} (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          keyword TEXT NOT NULL,
+          searched_at INTEGER NOT NULL,
+          UNIQUE(keyword)
+        )
+      `);
       console.info('FileSourceDatabase: Tables created (v3)');
     } catch (error) {
       console.error('FileSourceDatabase: Failed to create tables', JSON.stringify(error));
@@ -2617,6 +2628,103 @@ export class FileSourceDatabase {
     } catch (error) {
       const err = error as BusinessError;
       console.warn(`[DB][clearAllPlayProgress] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 搜索历史 CRUD
+  // ─────────────────────────────────────────────
+
+  /**
+   * 新增或更新搜索历史（upsert by keyword）。
+   * 相同关键词重复搜索时，更新 searched_at 为当前时间。
+   */
+  async upsertSearchHistory(keyword: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    const now = Date.now();
+    try {
+      // 标准 SQLite upsert：ON CONFLICT(keyword) DO UPDATE
+      await this.rdbStore.executeSql(
+        `INSERT INTO ${FileSourceDatabase.TABLE_SEARCH_HISTORY} (keyword, searched_at) VALUES (?, ?)` +
+        ` ON CONFLICT(keyword) DO UPDATE SET searched_at = excluded.searched_at`,
+        [keyword, now]
+      );
+      console.info(`[DB][upsertSearchHistory] keyword="${keyword}"`);
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][upsertSearchHistory] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 获取搜索历史列表，按 searched_at 倒序排列。
+   * @param limit 最大返回条数，默认 20
+   */
+  async getSearchHistory(limit: number = 20): Promise<SearchHistoryEntry[]> {
+    if (this.rdbStore === null) {
+      return [];
+    }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.rdbStore.querySql(
+        `SELECT keyword, searched_at FROM ${FileSourceDatabase.TABLE_SEARCH_HISTORY}` +
+        ` ORDER BY searched_at DESC LIMIT ${limit}`
+      );
+      const result: SearchHistoryEntry[] = [];
+      while (rs.goToNextRow()) {
+        const entry = new SearchHistoryEntry();
+        entry.keyword = rs.getString(rs.getColumnIndex('keyword'));
+        entry.searchedAt = rs.getLong(rs.getColumnIndex('searched_at'));
+        result.push(entry);
+      }
+      console.info(`[DB][getSearchHistory] 共 ${result.length} 条记录`);
+      return result;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][getSearchHistory] 查询失败 code=${err.code} msg=${err.message}`);
+      return [];
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 删除单条搜索历史。
+   * @param keyword 要删除的关键词
+   */
+  async deleteSearchHistory(keyword: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SEARCH_HISTORY} WHERE keyword = ?`,
+        [keyword]
+      );
+      console.info(`[DB][deleteSearchHistory] keyword="${keyword}" 已删除`);
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][deleteSearchHistory] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 清空全部搜索历史。
+   */
+  async clearSearchHistory(): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SEARCH_HISTORY}`
+      );
+      console.info('[DB][clearSearchHistory] 全部搜索历史已清空');
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][clearSearchHistory] 失败 code=${err.code} msg=${err.message}`);
     }
   }
 }

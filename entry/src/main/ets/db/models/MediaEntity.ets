@@ -334,3 +334,13 @@ export interface DecadeGroup {
   count: number;
 }
 
+// ─────────────────────────────────────────────
+// 搜索历史
+// ─────────────────────────────────────────────
+
+/** 搜索历史条目（对应 search_history 表） */
+export class SearchHistoryEntry {
+  keyword: string = '';
+  searchedAt: number = 0;
+}
+
