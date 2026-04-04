@@ -67,7 +67,6 @@ function posterSrc(item: MediaItem): string {
 @ComponentV2
 struct KeyButton {
   @Param label: string = '';
-  @Param kw: number = 112;
   @Param kh: number = 60;
   @Param kbg: string = C_LETTER_KEY_BG;
   @Event onPress: () => void = () => {};
@@ -79,7 +78,6 @@ struct KeyButton {
       .fontWeight(600)
       .fontColor(C_KEY_TEXT)
       .textAlign(TextAlign.Center)
-      .width(this.kw)
       .height(this.kh)
       .borderRadius(10)
       .backgroundColor(this.isFocused ? C_SEL_BLUE : this.kbg)
@@ -360,7 +358,7 @@ struct SearchWorkspacePage {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       } else {
-        Text('\u8f93\u5165\u5173\u952e\u8bcd\u641c\u7d22\u2026')
+        Text('\u652f\u6301\u9996\u5b57\u6bcd\u3001\u5168\u62fc\u3001\u4e2d\u6587\u7247\u540d\u641c\u7d22')
           .fontSize(22)
           .fontWeight(500)
           .fontColor(C_PLACEHOLDER)
@@ -380,103 +378,93 @@ struct SearchWorkspacePage {
   // row1: Q-P + 1-4
   @Builder
   buildKbdRow1() {
-    Row() {
-      Row({ space: 8 }) {
-        ForEach(KBD_R1_L, (key: string) => {
-          KeyButton({ label: key, kw: 112, kh: 60, onPress: () => { this.appendChar(key); } })
-        }, (key: string) => key)
-      }
-      Row({ space: 8 }) {
-        ForEach(KBD_R1_R, (key: string) => {
-          KeyButton({ label: key, kw: 128, kh: 60, onPress: () => { this.appendChar(key); } })
-        }, (key: string) => key)
-      }
+    Row({ space: 8 }) {
+      ForEach(KBD_R1_L, (key: string) => {
+        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
+          .layoutWeight(1)
+      }, (key: string) => key)
+      ForEach(KBD_R1_R, (key: string) => {
+        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
+          .layoutWeight(1.14)
+      }, (key: string) => key)
     }
     .width('100%')
-    .justifyContent(FlexAlign.SpaceBetween)
   }
 
   // row2: A-L + clear + 5-8
   @Builder
   buildKbdRow2() {
-    Row() {
-      Row({ space: 8 }) {
-        ForEach(KBD_R2_L, (key: string) => {
-          KeyButton({ label: key, kw: 112, kh: 60, onPress: () => { this.appendChar(key); } })
-        }, (key: string) => key)
-        // Clear key — red-toned, trash icon
-        Text('\uD83D\uDDD1')
-          .fontSize(24)
-          .fontColor(C_CLEAR_ICON)
-          .textAlign(TextAlign.Center)
-          .width(112)
-          .height(60)
-          .borderRadius(10)
-          .backgroundColor(C_CLEAR_BG)
-          .border({ width: 1, color: C_CLEAR_BORDER })
-          .focusable(true)
-          .onClick(() => { this.clearSearch(); })
-      }
-      Row({ space: 8 }) {
-        ForEach(KBD_R2_R, (key: string) => {
-          KeyButton({ label: key, kw: 128, kh: 60, onPress: () => { this.appendChar(key); } })
-        }, (key: string) => key)
-      }
+    Row({ space: 8 }) {
+      ForEach(KBD_R2_L, (key: string) => {
+        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
+          .layoutWeight(1)
+      }, (key: string) => key)
+      // Clear key — red-toned, trash icon
+      Text('\uD83D\uDDD1')
+        .fontSize(24)
+        .fontColor(C_CLEAR_ICON)
+        .textAlign(TextAlign.Center)
+        .height(60)
+        .borderRadius(10)
+        .backgroundColor(C_CLEAR_BG)
+        .border({ width: 1, color: C_CLEAR_BORDER })
+        .focusable(true)
+        .onClick(() => { this.clearSearch(); })
+        .layoutWeight(1)
+      ForEach(KBD_R2_R, (key: string) => {
+        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
+          .layoutWeight(1.14)
+      }, (key: string) => key)
     }
     .width('100%')
-    .justifyContent(FlexAlign.SpaceBetween)
   }
 
-  // row3: Z-M + backspace(352) + 9(128) + 0(400)
+  // row3: Z-M + backspace + 9 + 0
   @Builder
   buildKbdRow3() {
-    Row() {
-      Row({ space: 8 }) {
-        ForEach(KBD_R3_L, (key: string) => {
-          KeyButton({ label: key, kw: 112, kh: 60, onPress: () => { this.appendChar(key); } })
-        }, (key: string) => key)
-        // Backspace key
-        Text('\u232B')
-          .fontSize(20)
-          .fontWeight(700)
-          .fontColor('#FFFFFF')
-          .textAlign(TextAlign.Center)
-          .width(352)
-          .height(60)
-          .borderRadius(10)
-          .backgroundColor(C_BKSP_BG)
-          .focusable(true)
-          .onClick(() => { this.deleteLastChar(); })
-      }
-      Row({ space: 8 }) {
-        // 9 key
-        Text('9')
-          .fontSize(20)
-          .fontWeight(600)
-          .fontColor(C_KEY_TEXT)
-          .textAlign(TextAlign.Center)
-          .width(128)
-          .height(60)
-          .borderRadius(10)
-          .backgroundColor(C_LETTER_KEY_BG)
-          .focusable(true)
-          .onClick(() => { this.appendChar('9'); })
-        // 0 key (wide)
-        Text('0')
-          .fontSize(20)
-          .fontWeight(600)
-          .fontColor(C_KEY_TEXT)
-          .textAlign(TextAlign.Center)
-          .width(400)
-          .height(60)
-          .borderRadius(10)
-          .backgroundColor(C_LETTER_KEY_BG)
-          .focusable(true)
-          .onClick(() => { this.appendChar('0'); })
-      }
+    Row({ space: 8 }) {
+      ForEach(KBD_R3_L, (key: string) => {
+        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
+          .layoutWeight(1)
+      }, (key: string) => key)
+      // Backspace key
+      Text('\u232B')
+        .fontSize(20)
+        .fontWeight(700)
+        .fontColor('#FFFFFF')
+        .textAlign(TextAlign.Center)
+        .height(60)
+        .borderRadius(10)
+        .backgroundColor(C_BKSP_BG)
+        .focusable(true)
+        .onClick(() => { this.deleteLastChar(); })
+        .layoutWeight(3.14)
+      // 9 key
+      Text('9')
+        .fontSize(20)
+        .fontWeight(600)
+        .fontColor(C_KEY_TEXT)
+        .textAlign(TextAlign.Center)
+        .height(60)
+        .borderRadius(10)
+        .backgroundColor(C_LETTER_KEY_BG)
+        .focusable(true)
+        .onClick(() => { this.appendChar('9'); })
+        .layoutWeight(1.14)
+      // 0 key (wide)
+      Text('0')
+        .fontSize(20)
+        .fontWeight(600)
+        .fontColor(C_KEY_TEXT)
+        .textAlign(TextAlign.Center)
+        .height(60)
+        .borderRadius(10)
+        .backgroundColor(C_LETTER_KEY_BG)
+        .focusable(true)
+        .onClick(() => { this.appendChar('0'); })
+        .layoutWeight(3.57)
     }
     .width('100%')
-    .justifyContent(FlexAlign.SpaceBetween)
   }
 
   @Builder
@@ -601,21 +589,25 @@ struct SearchWorkspacePage {
 
   build() {
     NavDestination() {
-      Column({ space: 20 }) {
-        this.buildBackRow()
-        this.buildTitleArea()
-        this.buildSearchBar()
-        this.buildKeyboard()
-        // M7：始终显示历史和热搜；本地预览结果只在有内容时附加展示
-        this.buildHistory()
-        this.buildHotSearch()
-        if (this.searchResults.length > 0) {
-          this.buildResultsPreview()
+      Scroll() {
+        Column({ space: 20 }) {
+          this.buildBackRow()
+          this.buildSearchBar()
+          this.buildKeyboard()
+          // M7：始终显示历史和热搜；本地预览结果只在有内容时附加展示
+          this.buildHistory()
+          this.buildHotSearch()
+          if (this.searchResults.length > 0) {
+            this.buildResultsPreview()
+          }
         }
+        .width('100%')
+        .padding(20)
+        .backgroundColor(C_PAGE_BG)
       }
+      .scrollable(ScrollDirection.Vertical)
       .width('100%')
       .height('100%')
-      .padding(20)
       .backgroundColor(C_PAGE_BG)
     }
     .hideTitleBar(true)
