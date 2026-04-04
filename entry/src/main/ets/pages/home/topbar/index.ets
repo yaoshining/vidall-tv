@@ -4,6 +4,7 @@ import { LucideCloudDownload } from "lucide"
 import { BasicClock } from "../../../components/common/BasicClock"
 import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
+import { SearchWorkspacePage } from "../../search"
 
 @ComponentV2
 export struct HomeTopBar {
@@ -68,7 +69,10 @@ export struct HomeTopBar {
         IBestButton({
           buttonSize: "small",
           btnBorderColor: Color.Transparent,
-          iconBuilder: (): void => this.settingIBestIconBuilder('search')
+          iconBuilder: (): void => this.settingIBestIconBuilder('search'),
+          onBtnClick: () => {
+            this.pageStack.pushPathByName(SearchWorkspacePage.PAGE_NAME, null)
+          }
         }).bindTips('搜索')
 
         IBestButton({
