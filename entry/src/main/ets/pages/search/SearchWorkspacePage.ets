@@ -67,7 +67,6 @@ function posterSrc(item: MediaItem): string {
 @ComponentV2
 struct KeyButton {
   @Param label: string = '';
-  @Param kh: number = 60;
   @Param kbg: string = C_LETTER_KEY_BG;
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
@@ -78,7 +77,8 @@ struct KeyButton {
       .fontWeight(600)
       .fontColor(C_KEY_TEXT)
       .textAlign(TextAlign.Center)
-      .height(this.kh)
+      .width('100%')
+      .aspectRatio(112 / 60)   // 高度由列宽自动推导，无需硬编码 height
       .borderRadius(10)
       .backgroundColor(this.isFocused ? C_SEL_BLUE : this.kbg)
       .border({ width: this.isFocused ? 2 : 0, color: '#5B9BD5' })
@@ -175,7 +175,7 @@ struct SearchWorkspacePage {
   @Local hotItems: MediaItem[] = [];
 
   private db: FileSourceDatabase = FileSourceDatabase.getInstance();
-  private searchTimerId: number = 0;
+  @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
   private searchGeneration: number = 0;
 
@@ -187,7 +187,9 @@ struct SearchWorkspacePage {
   }
 
   aboutToDisappear(): void {
-    clearTimeout(this.searchTimerId);
+    if (this.searchDebounceTimer !== -1) {
+      clearTimeout(this.searchDebounceTimer);
+    }
   }
 
   // ── Data helpers ──────────────────────────────────────────────────────────
@@ -209,10 +211,18 @@ struct SearchWorkspacePage {
   }
 
   private scheduleSearch(): void {
-    clearTimeout(this.searchTimerId);
-    this.searchTimerId = setTimeout((): void => {
-      this.executeSearch().catch((): void => {});
-    }, 300);
+    if (this.searchDebounceTimer !== -1) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = -1;
+    }
+    if (this.searchText.trim().length === 0) {
+      this.searchResults = [];
+      return;
+    }
+    this.searchDebounceTimer = setTimeout(() => {
+      this.searchDebounceTimer = -1;
+      this.triggerSearchAndNavigate();
+    }, 800);
   }
 
   /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
@@ -267,6 +277,7 @@ struct SearchWorkspacePage {
   private clearSearch(): void {
     this.searchText = '';
     this.searchResults = [];
+    this.scheduleSearch();
   }
 
   private deleteHistory(keyword: string): void {
@@ -378,93 +389,111 @@ struct SearchWorkspacePage {
   // row1: Q-P + 1-4
   @Builder
   buildKbdRow1() {
-    Row({ space: 8 }) {
+    Grid() {
       ForEach(KBD_R1_L, (key: string) => {
-        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
-          .layoutWeight(1)
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
       }, (key: string) => key)
       ForEach(KBD_R1_R, (key: string) => {
-        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
-          .layoutWeight(1.14)
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
       }, (key: string) => key)
     }
+    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsGap(8)
     .width('100%')
   }
 
   // row2: A-L + clear + 5-8
   @Builder
   buildKbdRow2() {
-    Row({ space: 8 }) {
+    Grid() {
       ForEach(KBD_R2_L, (key: string) => {
-        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
-          .layoutWeight(1)
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
       }, (key: string) => key)
-      // Clear key — red-toned, trash icon
-      Text('\uD83D\uDDD1')
-        .fontSize(24)
-        .fontColor(C_CLEAR_ICON)
-        .textAlign(TextAlign.Center)
-        .height(60)
-        .borderRadius(10)
-        .backgroundColor(C_CLEAR_BG)
-        .border({ width: 1, color: C_CLEAR_BORDER })
-        .focusable(true)
-        .onClick(() => { this.clearSearch(); })
-        .layoutWeight(1)
+      // Clear key（占 1 列）
+      GridItem() {
+        Text('\uD83D\uDDD1')
+          .fontSize(22)
+          .fontColor(C_CLEAR_ICON)
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .aspectRatio(112 / 60)
+          .borderRadius(10)
+          .backgroundColor(C_CLEAR_BG)
+          .border({ width: 1, color: C_CLEAR_BORDER })
+          .focusable(true)
+          .onClick(() => { this.clearSearch(); })
+      }
       ForEach(KBD_R2_R, (key: string) => {
-        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
-          .layoutWeight(1.14)
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
       }, (key: string) => key)
     }
+    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsGap(8)
     .width('100%')
   }
 
-  // row3: Z-M + backspace + 9 + 0
+  // row3: Z-M + backspace(3cols) + 9 + 0(3cols)
   @Builder
   buildKbdRow3() {
-    Row({ space: 8 }) {
-      ForEach(KBD_R3_L, (key: string) => {
-        KeyButton({ label: key, kh: 60, onPress: () => { this.appendChar(key); } })
-          .layoutWeight(1)
+    Grid() {
+      ForEach(KBD_R3_L, (key: string, index: number) => {
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
+        .columnStart(index)
+        .columnEnd(index)
       }, (key: string) => key)
-      // Backspace key
-      Text('\u232B')
-        .fontSize(20)
-        .fontWeight(700)
-        .fontColor('#FFFFFF')
-        .textAlign(TextAlign.Center)
-        .height(60)
-        .borderRadius(10)
-        .backgroundColor(C_BKSP_BG)
-        .focusable(true)
-        .onClick(() => { this.deleteLastChar(); })
-        .layoutWeight(3.14)
-      // 9 key
-      Text('9')
-        .fontSize(20)
-        .fontWeight(600)
-        .fontColor(C_KEY_TEXT)
-        .textAlign(TextAlign.Center)
-        .height(60)
-        .borderRadius(10)
-        .backgroundColor(C_LETTER_KEY_BG)
-        .focusable(true)
-        .onClick(() => { this.appendChar('9'); })
-        .layoutWeight(1.14)
-      // 0 key (wide)
-      Text('0')
-        .fontSize(20)
-        .fontWeight(600)
-        .fontColor(C_KEY_TEXT)
-        .textAlign(TextAlign.Center)
-        .height(60)
-        .borderRadius(10)
-        .backgroundColor(C_LETTER_KEY_BG)
-        .focusable(true)
-        .onClick(() => { this.appendChar('0'); })
-        .layoutWeight(3.57)
+      // Backspace（跨 3 列：colStart 7-9）
+      GridItem() {
+        Text('\u232B')
+          .fontSize(20)
+          .fontWeight(700)
+          .fontColor('#FFFFFF')
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .height('100%')
+          .borderRadius(10)
+          .backgroundColor(C_BKSP_BG)
+          .focusable(true)
+          .onClick(() => { this.deleteLastChar(); })
+      }
+      .columnStart(7)
+      .columnEnd(9)
+      // 9 key（colStart 10）
+      GridItem() {
+        KeyButton({ label: '9', onPress: () => { this.appendChar('9'); } })
+      }
+      .columnStart(10)
+      .columnEnd(10)
+      // 0 key（跨 3 列：colStart 11-13）
+      GridItem() {
+        Text('0')
+          .fontSize(20)
+          .fontWeight(600)
+          .fontColor(C_KEY_TEXT)
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .height('100%')
+          .borderRadius(10)
+          .backgroundColor(C_LETTER_KEY_BG)
+          .focusable(true)
+          .onClick(() => { this.appendChar('0'); })
+      }
+      .columnStart(11)
+      .columnEnd(13)
     }
+    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsGap(8)
     .width('100%')
+    .height(64)   // 跨列 GridItem 的 height('100%') 需 Grid 有已知高度；64vp ≈ aspectRatio 推算结果
   }
 
   @Builder
@@ -473,19 +502,7 @@ struct SearchWorkspacePage {
       this.buildKbdRow1()
       this.buildKbdRow2()
       this.buildKbdRow3()
-      // M1：确认搜索按钮 — 跳转到 MediaResultPage
-      Text('\u641C\u7D22')
-        .fontSize(22)
-        .fontWeight(700)
-        .fontColor('#FFFFFF')
-        .textAlign(TextAlign.Center)
-        .width('100%')
-        .height(60)
-        .borderRadius(10)
-        .backgroundColor(this.searchText.trim().length > 0 ? C_SEL_BLUE : C_BKSP_BG)
-        .animation({ duration: 140, curve: Curve.EaseInOut })
-        .focusable(true)
-        .onClick(() => { this.triggerSearchAndNavigate(); })
+      // 搜索按钮已移除，改由防抖 800ms 自动触发 triggerSearchAndNavigate
     }
     .width('100%')
     .backgroundColor(C_KBD_BG)
