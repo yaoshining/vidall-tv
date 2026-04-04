@@ -170,6 +170,8 @@ export struct SeasonDetailPage {
 
   static PAGE_NAME = 'seasonDetail'
 
+  private progressRefreshCallback: () => void = () => {};
+
   // ── 属性计算方法 ──────────────────────────────────
 
   private getSeasonNumber(): number { return this.group?.seasonNumber ?? 0; }
@@ -715,15 +717,16 @@ export struct SeasonDetailPage {
     this.refreshProgressState().catch(() => {
       console.warn('[SeasonDetailPage] aboutToAppear refresh failed');
     });
-    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
+    this.progressRefreshCallback = () => {
       this.refreshProgressState().catch(() => {
         console.warn('[SeasonDetailPage] progress refresh on event failed');
       });
-    });
+    };
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, this.progressRefreshCallback);
   }
 
   aboutToDisappear(): void {
-    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId, this.progressRefreshCallback);
   }
 
   // ── 数据加载 ──────────────────────────────────
