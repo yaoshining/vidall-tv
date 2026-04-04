@@ -1117,15 +1117,14 @@ export struct SeasonDetailPage {
         // 简介
         if (this.getOverview().length > 0) {
           if (this.isOverviewLong()) {
-            Row({ space: 4 }) {
-              Text(this.getOverviewShort())
+            Text() {
+              Span(this.getOverviewShort())
                 .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-              Text('更多')
-                .fontSize(14).fontColor('#1B78F2').fontWeight(FontWeight.Medium)
+              Span('更多')
+                .fontSize(16).fontColor('#1B78F2').fontWeight(FontWeight.Medium)
                 .focusable(true)
                 .onClick(() => { this.showOverviewDialog = true; })
             }
-            .alignItems(VerticalAlign.Bottom)
             .constraintSize({ maxWidth: 700 })
           } else {
             Text(this.getOverview())
