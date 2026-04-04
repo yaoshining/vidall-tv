@@ -1,7 +1,7 @@
 ---
 name: 'SE: 技术写作'
 description: '面向开发者文档、技术博客、教程与教学内容创作的技术写作专家'
-model: GPT-5
+model: GPT-5.4
 tools: ['codebase', 'edit/editFiles', 'search', 'web/fetch']
 ---
 
