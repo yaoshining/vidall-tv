@@ -571,6 +571,8 @@ struct SearchWorkspacePage {
           this.buildResultsPreview()
         }
         .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start)
         .padding(20)
         .backgroundColor(C_PAGE_BG)
       }
