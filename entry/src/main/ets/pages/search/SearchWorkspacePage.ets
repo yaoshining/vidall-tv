@@ -11,24 +11,24 @@ const PAGE_BG: string = '#1A1A1A';
 const KEY_BG: string = '#2D2F33';
 const KEY_BG_FOCUS: string = '#3B77D4';
 const KEY_BG_PRESS: string = '#4488FF';
-const FOCUS_BORDER_CLR: string = '#66A9D8FF';
-const FOCUS_SHADOW_CLR: string = '#553A86FF';
+const FOCUS_BORDER_CLR: string = '#FF66A9D8';
+const FOCUS_SHADOW_CLR: string = '#FF553A86';
 const KEY_TEXT_CLR: string = '#E3E7ED';
 const PLACEHOLDER_CLR: string = '#97A9CD';
 const INPUT_TEXT_CLR: string = '#E8EEFF';
-const INPUT_BG: string = '#ffffff12';
-const INPUT_BORDER: string = '#ffffff25';
+const INPUT_BG: string = '#12FFFFFF';
+const INPUT_BORDER: string = '#25FFFFFF';
 const SPACE_KEY_BG: string = '#3B3D40';
-const CLEAR_KEY_BG: string = '#FF6B6B14';
-const CLEAR_KEY_BORDER: string = '#FF6B6B4D';
+const CLEAR_KEY_BG: string = '#14FF6B6B';
+const CLEAR_KEY_BORDER: string = '#4DFF6B6B';
 const SEARCH_KEY_BG: string = '#2F77F5';
 const HISTORY_TITLE_CLR: string = '#DDE2EA';
 const HISTORY_TAG_CLR: string = '#CBD5E1';
-const HISTORY_TAG_BG: string = '#33415550';
-const HISTORY_TAG_BORDER: string = '#CBD5E166';
+const HISTORY_TAG_BG: string = '#50334155';
+const HISTORY_TAG_BORDER: string = '#66CBD5E1';
 const CLEAR_ALL_CLR: string = '#FF6B6B';
-const CLEAR_ALL_BG: string = '#FF6B6B14';
-const CLEAR_ALL_BORDER: string = '#FF6B6B4D';
+const CLEAR_ALL_BG: string = '#14FF6B6B';
+const CLEAR_ALL_BORDER: string = '#4DFF6B6B';
 const RESULT_CNT_CLR: string = '#97A9CD';
 const CARD_TITLE_CLR: string = '#E3E7ED';
 const TRANSPARENT: string = '#00000000';
@@ -114,13 +114,13 @@ struct HistoryTag {
         .padding({ left: 16, right: 4 })
       Text('×')
         .fontSize(13)
-        .fontColor(this.isFocused ? '#BFDBFE80' : '#CBD5E160')
+        .fontColor(this.isFocused ? '#80BFDBFE' : '#60CBD5E1')
         .padding({ right: 12 })
         .hitTestBehavior(HitTestMode.Block)
         .onClick(() => { this.onDelete(); })
     }
     .height(38)
-    .backgroundColor(this.isFocused ? '#1D4ED860' : HISTORY_TAG_BG)
+    .backgroundColor(this.isFocused ? '#601D4ED8' : HISTORY_TAG_BG)
     .borderRadius(19)
     .border({ width: this.isFocused ? 2 : 1, color: this.isFocused ? FOCUS_BORDER_CLR : HISTORY_TAG_BORDER })
     .animation({ duration: 140, curve: Curve.EaseInOut })
@@ -301,7 +301,7 @@ struct SearchWorkspacePage {
       }
       .width(112)
       .height(40)
-      .backgroundColor('#FFFFFF14')
+      .backgroundColor('#14FFFFFF')
       .borderRadius(8)
       .justifyContent(FlexAlign.Center)
       .focusable(true)
@@ -360,7 +360,7 @@ struct SearchWorkspacePage {
           .width(28)
           .height(28)
           .borderRadius(14)
-          .backgroundColor('#FFFFFF25')
+          .backgroundColor('#25FFFFFF')
           .margin({ right: 12 })
           .focusable(true)
           .onClick(() => { this.clearSearch(); })

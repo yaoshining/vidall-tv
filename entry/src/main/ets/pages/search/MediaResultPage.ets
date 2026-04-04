@@ -154,10 +154,10 @@ struct ResultPosterCard {
       .width(180)
       .height(270)
       .clip(true)
-      .border({ width: this.isFocused ? 2 : 0, color: '#66A9D8FF' })
+      .border({ width: this.isFocused ? 2 : 0, color: '#FF66A9D8' })
       .shadow({
         radius: this.isFocused ? 14 : 4,
-        color: this.isFocused ? '#553A86FF' : '#33000000',
+        color: this.isFocused ? '#FF553A86' : '#33000000',
         offsetX: 0,
         offsetY: this.isFocused ? 0 : 2,
       })
@@ -362,7 +362,7 @@ export struct MediaResultPage {
   }
 
   private chipBg(key: string): string {
-    return this.isChipSelected(key) ? '#1D4ED860' : '#33415550';
+    return this.isChipSelected(key) ? '#601D4ED8' : '#50334155';
   }
 
   private chipText(key: string): string {
@@ -371,9 +371,9 @@ export struct MediaResultPage {
 
   private chipBorderColor(key: string, idx: number): string {
     if (this.focusedChip === idx) {
-      return '#66A9D8FF';
+      return '#FF66A9D8';
     }
-    return this.isChipSelected(key) ? '#93C5FD99' : '#CBD5E166';
+    return this.isChipSelected(key) ? '#9993C5FD' : '#66CBD5E1';
   }
 
   private chipBorderWidth(idx: number): number {
@@ -393,7 +393,7 @@ export struct MediaResultPage {
         Text(opt.label)
           .fontSize(14)
           .fontColor(this.filterMediaType === opt.value ? '#BFDBFE' : '#CBD5E1')
-          .backgroundColor(this.filterMediaType === opt.value ? '#1D4ED860' : Color.Transparent)
+          .backgroundColor(this.filterMediaType === opt.value ? '#601D4ED8' : Color.Transparent)
           .padding({ top: 10, bottom: 10, left: 16, right: 16 })
           .width('100%')
           .focusable(true)
@@ -416,7 +416,7 @@ export struct MediaResultPage {
         Text('全部')
           .fontSize(14)
           .fontColor(this.filterGenre === '' ? '#BFDBFE' : '#CBD5E1')
-          .backgroundColor(this.filterGenre === '' ? '#1D4ED860' : Color.Transparent)
+          .backgroundColor(this.filterGenre === '' ? '#601D4ED8' : Color.Transparent)
           .padding({ top: 10, bottom: 10, left: 16, right: 16 })
           .width('100%')
           .focusable(true)
@@ -429,7 +429,7 @@ export struct MediaResultPage {
           Text(g)
             .fontSize(14)
             .fontColor(this.filterGenre === g ? '#BFDBFE' : '#CBD5E1')
-            .backgroundColor(this.filterGenre === g ? '#1D4ED860' : Color.Transparent)
+            .backgroundColor(this.filterGenre === g ? '#601D4ED8' : Color.Transparent)
             .padding({ top: 10, bottom: 10, left: 16, right: 16 })
             .width('100%')
             .focusable(true)
@@ -455,7 +455,7 @@ export struct MediaResultPage {
         Text(opt.label)
           .fontSize(14)
           .fontColor(this.filterRating === opt.value ? '#BFDBFE' : '#CBD5E1')
-          .backgroundColor(this.filterRating === opt.value ? '#1D4ED860' : Color.Transparent)
+          .backgroundColor(this.filterRating === opt.value ? '#601D4ED8' : Color.Transparent)
           .padding({ top: 10, bottom: 10, left: 16, right: 16 })
           .width('100%')
           .focusable(true)
@@ -478,7 +478,7 @@ export struct MediaResultPage {
         Text(opt.label)
           .fontSize(14)
           .fontColor(this.filterYear === opt.value ? '#BFDBFE' : '#CBD5E1')
-          .backgroundColor(this.filterYear === opt.value ? '#1D4ED860' : Color.Transparent)
+          .backgroundColor(this.filterYear === opt.value ? '#601D4ED8' : Color.Transparent)
           .padding({ top: 10, bottom: 10, left: 16, right: 16 })
           .width('100%')
           .focusable(true)
@@ -501,7 +501,7 @@ export struct MediaResultPage {
         Text(opt.label)
           .fontSize(14)
           .fontColor(this.filterSort === opt.value ? '#BFDBFE' : '#CBD5E1')
-          .backgroundColor(this.filterSort === opt.value ? '#1D4ED860' : Color.Transparent)
+          .backgroundColor(this.filterSort === opt.value ? '#601D4ED8' : Color.Transparent)
           .padding({ top: 10, bottom: 10, left: 16, right: 16 })
           .width('100%')
           .focusable(true)
@@ -528,7 +528,7 @@ export struct MediaResultPage {
           Button('← 返回')
             .fontSize(14)
             .fontColor('#FFFFFF')
-            .backgroundColor('#FFFFFF14')
+            .backgroundColor('#14FFFFFF')
             .borderRadius(0)
             .width(112)
             .height(40)
@@ -573,7 +573,7 @@ export struct MediaResultPage {
             .border({ width: this.chipBorderWidth(0), color: this.chipBorderColor('mediaType', 0) })
             .shadow({
               radius: this.chipShadowRadius(0),
-              color: '#553A86FF',
+              color: '#FF553A86',
               offsetX: 0,
               offsetY: 0,
             })
@@ -608,7 +608,7 @@ export struct MediaResultPage {
             .border({ width: this.chipBorderWidth(1), color: this.chipBorderColor('genre', 1) })
             .shadow({
               radius: this.chipShadowRadius(1),
-              color: '#553A86FF',
+              color: '#FF553A86',
               offsetX: 0,
               offsetY: 0,
             })
@@ -642,7 +642,7 @@ export struct MediaResultPage {
             .border({ width: this.chipBorderWidth(2), color: this.chipBorderColor('rating', 2) })
             .shadow({
               radius: this.chipShadowRadius(2),
-              color: '#553A86FF',
+              color: '#FF553A86',
               offsetX: 0,
               offsetY: 0,
             })
@@ -676,7 +676,7 @@ export struct MediaResultPage {
             .border({ width: this.chipBorderWidth(3), color: this.chipBorderColor('year', 3) })
             .shadow({
               radius: this.chipShadowRadius(3),
-              color: '#553A86FF',
+              color: '#FF553A86',
               offsetX: 0,
               offsetY: 0,
             })
@@ -710,7 +710,7 @@ export struct MediaResultPage {
             .border({ width: this.chipBorderWidth(4), color: this.chipBorderColor('sort', 4) })
             .shadow({
               radius: this.chipShadowRadius(4),
-              color: '#553A86FF',
+              color: '#FF553A86',
               offsetX: 0,
               offsetY: 0,
             })
@@ -740,7 +740,7 @@ export struct MediaResultPage {
           Row()
             .width('100%')
             .height(1)
-            .backgroundColor('#ffffff20')
+            .backgroundColor('#20FFFFFF')
         }
         .width('100%')
         .backgroundColor('#1E1E22')
@@ -777,7 +777,7 @@ export struct MediaResultPage {
             Button('重置筛选')
               .width(200)
               .height(44)
-              .backgroundColor('#FFFFFF14')
+              .backgroundColor('#14FFFFFF')
               .fontColor('#FFFFFF')
               .fontSize(14)
               .borderRadius(0)
