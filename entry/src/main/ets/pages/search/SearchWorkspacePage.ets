@@ -500,7 +500,8 @@ struct SearchWorkspacePage {
       this.buildNumericKbd()
       // 搜索按钮已移除，改由防抖 800ms 自动触发 triggerSearchAndNavigate
     }
-    .width('100%')
+    .alignSelf(ItemAlign.Center)
+    .width('90%')
     .backgroundColor(C_KBD_BG)
     .borderRadius(14)
     .padding(14)
