@@ -1,6 +1,6 @@
 import { MediaItem, SearchHistoryEntry, SeriesGroup } from '../../db/models/MediaEntity';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
-import { MediaResultPage, MediaResultPageParam } from './MediaResultPage';
+
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
 import { LengthMetrics } from '@kit.ArkUI';
@@ -173,7 +173,6 @@ struct SearchWorkspacePage {
   @Local searchResults: MediaItem[] = [];
   @Local historyList: SearchHistoryEntry[] = [];
   @Local isSearching: boolean = false;
-  @Local hotItems: MediaItem[] = [];
 
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
@@ -186,7 +185,6 @@ struct SearchWorkspacePage {
     try {
       this.db = FileSourceDatabase.getInstance();
       this.loadHistory();
-      this.loadHotItems();
     } catch (e) {
       // Preview 沙箱：native DB 不可用，静默降级
     }
@@ -209,14 +207,6 @@ struct SearchWorkspacePage {
       .catch(() => {});
   }
 
-  private loadHotItems(): void {
-    if (this.db === null) { return; }
-    this.db.searchMediaItems('', { sortBy: 'rating', limit: 8 })
-      .then((items: MediaItem[]) => {
-        this.hotItems = items;
-      })
-      .catch(() => {});
-  }
 
   private scheduleSearch(): void {
     if (this.searchDebounceTimer !== -1) {
@@ -229,7 +219,7 @@ struct SearchWorkspacePage {
     }
     this.searchDebounceTimer = setTimeout(() => {
       this.searchDebounceTimer = -1;
-      this.triggerSearchAndNavigate();
+      this.executeSearch();
     }, 800);
   }
 
@@ -256,8 +246,8 @@ struct SearchWorkspacePage {
     }
   }
 
-  /** 确认搜索：保存历史 + 导航到 MediaResultPage（M1 核心路由） */
-  private triggerSearchAndNavigate(): void {
+  /** 执行搜索并保存历史 */
+  private executeSearchWithHistory(): void {
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
     if (this.db !== null) {
@@ -265,11 +255,7 @@ struct SearchWorkspacePage {
         .then(() => { this.loadHistory(); })
         .catch(() => {});
     }
-    const param: MediaResultPageParam = {
-      keyword: kw,
-      pageTitle: kw,
-    };
-    this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
+    this.executeSearch();
   }
 
   private appendChar(c: string): void {
@@ -498,7 +484,7 @@ struct SearchWorkspacePage {
     } }) {
       this.buildAlphabetKbd()
       this.buildNumericKbd()
-      // 搜索按钮已移除，改由防抖 800ms 自动触发 triggerSearchAndNavigate
+      // 防抖 800ms 自动触发搜索
     }
     .alignSelf(ItemAlign.Center)
     .width('90%')
@@ -523,7 +509,7 @@ struct SearchWorkspacePage {
               .focusable(true)
               .onClick(() => {
                 this.searchText = entry.keyword;
-                this.triggerSearchAndNavigate();
+                this.executeSearchWithHistory();
               })
             // 右侧：× 删除按钮 — 聚焦后 OK 键触发删除
             Text('\u00D7')
@@ -557,33 +543,6 @@ struct SearchWorkspacePage {
   }
 
   @Builder
-  buildHotSearch() {
-    if (this.hotItems.length > 0) {
-      Column({ space: 16 }) {
-        Text('\u5927\u5bb6\u90fd\u5728\u641c')
-          .fontSize(24)
-          .fontWeight(700)
-          .fontColor('#DDE2EA')
-          .width('100%')
-        Scroll() {
-          Row({ space: 30 }) {
-            ForEach(this.hotItems, (item: MediaItem) => {
-              WorkspacePosterCard({
-                item: item,
-                onPress: () => { this.navigateToDetail(item); }
-              })
-            }, (item: MediaItem) => String(item.id))
-          }
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .width('100%')
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-    }
-  }
-
-  @Builder
   buildResultsPreview() {
     if (this.searchResults.length > 0) {
       Scroll() {
@@ -608,12 +567,8 @@ struct SearchWorkspacePage {
           this.buildBackRow()
           this.buildSearchBar()
           this.buildKeyboard()
-          // M7：始终显示历史和热搜；本地预览结果只在有内容时附加展示
           this.buildHistory()
-          this.buildHotSearch()
-          if (this.searchResults.length > 0) {
-            this.buildResultsPreview()
-          }
+          this.buildResultsPreview()
         }
         .width('100%')
         .padding(20)
