@@ -1005,7 +1005,7 @@ export struct SeasonDetailPage {
       const episodeSeason = episode.seasonNumber ?? 0;
       const episodeNum = episode.episodeNumber ?? 0;
       // 集级 key：每集独立存储进度，避免跨集覆盖
-      const mKey = (seriesProviderId.length > 0 && episodeSeason > 0 && episodeNum > 0)
+      const mKey = (seriesProviderId.length > 0 && episodeNum > 0)
         ? MediaProgressStore.episodeKey(seriesProviderId, episodeSeason, episodeNum)
         : undefined;
       const param: PlayerPageParam = {

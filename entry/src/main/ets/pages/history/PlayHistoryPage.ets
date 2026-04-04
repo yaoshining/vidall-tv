@@ -127,7 +127,7 @@ export struct PlayHistoryPage {
     this.isLoading = true;
     const db = FileSourceDatabase.getInstance();
     try {
-      const entries = await db.getAllMediaProgress();
+      const entries = await db.getAllMediaProgress(200);
       if (entries.length === 0) {
         this.historyList = [];
         return;
@@ -192,7 +192,7 @@ export struct PlayHistoryPage {
           if (seriesSeenSet.has(parsed.providerId)) {
             continue;
           }
-          seriesSeenSet.add(parsed.providerId);
+          // 不在此处 add，需等确认找到 metadata 后才标记，避免 metadata 缺失时跳过后续更完整的条目
         }
 
         let title: string = '';
@@ -245,6 +245,10 @@ export struct PlayHistoryPage {
                 filePath = matched.filePath;
               }
             }
+            // 确认找到 series metadata 后才标记已处理，未找到则跳过让后续条目尝试
+            seriesSeenSet.add(parsed.providerId);
+          } else {
+            continue;
           }
         }
 
@@ -413,6 +417,10 @@ export struct PlayHistoryPage {
       }
       // DB 成功后才更新 UI，确保原子性
       if (item.kind === 'series') {
+        // 同时清理 play_progress 表（按 series_provider_id）
+        if (item.seriesProviderId.length > 0) {
+          await FileSourceDatabase.getInstance().clearPlayProgressBySeries(item.seriesProviderId);
+        }
         // 按剧删除：过滤掉该剧的全部聚合条目
         this.historyList = this.historyList.filter(
           (i: HistoryDisplayItem): boolean => i.seriesProviderId !== item.seriesProviderId
@@ -481,6 +489,7 @@ export struct PlayHistoryPage {
     }
     this.historyList = [];
     emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+    await FileSourceDatabase.getInstance().clearAllPlayProgress();
     if (failCount > 0) {
       promptAction.showToast({ message: `清除完成，${failCount} 条删除失败` });
     } else {

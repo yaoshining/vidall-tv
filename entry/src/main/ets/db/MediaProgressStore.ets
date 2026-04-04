@@ -6,7 +6,7 @@ import { MediaProgressEntry } from './models/MediaEntity';
  *
  * Key 规则（新）：
  *   - 集级剧集：media_progress_episode_tmdb_{seriesTmdbId}_s{seasonNum}_e{episodeNum}
- *   - 电影：     media_progress_movie_<movieId>
+ *   - 电影：     media_progress_movie_{movieId}（movieId 格式由调用方决定，如 "tmdb_12345"）
  *
  * 完播阈值：剩余时长 < 60 秒 或 已播比例 > 95%，由调用方判断后调用 clear()。
  */
