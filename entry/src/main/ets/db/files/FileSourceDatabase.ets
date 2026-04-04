@@ -2473,20 +2473,92 @@ export class FileSourceDatabase {
   }
 
   /**
+   * 删除指定剧集所有集的进度记录。
+   * 匹配所有 media_key 以 media_progress_episode_tmdb_{seriesTmdbId}_ 开头的记录。
+   * @param seriesTmdbId 剧集 TMDB ID（如 "1399"），不含下划线等特殊字符
+   */
+  async clearAllMediaProgressBySeries(seriesTmdbId: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    if (!/^\d+$/.test(seriesTmdbId)) {
+      console.warn(`[DB][clearAllMediaProgressBySeries] 非法 seriesTmdbId: ${seriesTmdbId}`);
+      return;
+    }
+    try {
+      // 同时清除新格式（集级 key）和旧格式（整剧级 key），确保历史迁移数据也能被删除
+      const episodePrefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      const oldKey = `media_progress_series_tmdb_${seriesTmdbId}`;
+      const sql =
+        `DELETE FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` WHERE media_key LIKE ? OR media_key = ?`;
+      await this.rdbStore.executeSql(sql, [`${episodePrefix}%`, oldKey]);
+      console.info(`[DB][clearAllMediaProgressBySeries] seriesTmdbId=${seriesTmdbId} 已全部清除（含旧格式）`);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][clearAllMediaProgressBySeries] 删除失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 查询指定剧集最近播放的一集进度。
+   * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
+   */
+  async getLatestMediaProgressBySeries(seriesTmdbId: string): Promise<MediaProgressEntry | null> {
+    if (this.rdbStore === null) {
+      return null;
+    }
+    if (!/^\d+$/.test(seriesTmdbId)) {
+      console.warn(`[DB][getLatestMediaProgressBySeries] 非法 seriesTmdbId: ${seriesTmdbId}`);
+      return null;
+    }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const episodePrefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      const oldKey = `media_progress_series_tmdb_${seriesTmdbId}`;
+      // 同时查新旧格式，取最近播放的一条
+      const sql =
+        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
+        ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` WHERE media_key LIKE ? OR media_key = ?` +
+        ` ORDER BY last_played_at DESC LIMIT 1`;
+      rs = await this.rdbStore.querySql(sql, [`${episodePrefix}%`, oldKey]);
+      if (rs.goToNextRow()) {
+        const entry: MediaProgressEntry = {
+          mediaKey: rs.getString(rs.getColumnIndex('media_key')),
+          positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
+          durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
+          lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
+          episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
+          seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
+        };
+        return entry;
+      }
+      return null;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][getLatestMediaProgressBySeries] 查询失败 code=${err.code} msg=${err.message}`);
+      return null;
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
    * 查询全部媒体级播放进度，按最近播放时间倒序返回。
    * 用于「继续播放」栏数据源。
    */
-  async getAllMediaProgress(): Promise<MediaProgressEntry[]> {
+  async getAllMediaProgress(limit: number = 40): Promise<MediaProgressEntry[]> {
     if (this.rdbStore === null) {
       return [];
     }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      // LIMIT 40：稍大于上层取 20 条的余量，减少全表 IO；DB 已按 last_played_at DESC 排序
+      // limit 为数字类型，不存在注入风险；默认 40 用于「继续播放」栏，历史页可传 200
       const sql =
         `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
         ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
-        ` ORDER BY last_played_at DESC LIMIT 40`;
+        ` ORDER BY last_played_at DESC LIMIT ${limit}`;
       rs = await this.rdbStore.querySql(sql);
       const result: MediaProgressEntry[] = [];
       while (rs.goToNextRow()) {
@@ -2508,6 +2580,43 @@ export class FileSourceDatabase {
       return [];
     } finally {
       rs?.close();
+    }
+  }
+
+  /**
+   * 删除指定剧集在 play_progress 表中的进度记录。
+   * @param seriesProviderId 剧集 provider ID（如 TMDB ID 字符串）
+   */
+  async clearPlayProgressBySeries(seriesProviderId: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_PROGRESS);
+      pred.equalTo('series_provider_id', seriesProviderId);
+      await this.rdbStore.delete(pred);
+      console.info(`[DB][clearPlayProgressBySeries] series=${seriesProviderId} 已清除`);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][clearPlayProgressBySeries] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 清空 play_progress 表全部记录（用于"清除全部历史"场景）。
+   */
+  async clearAllPlayProgress(): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_PLAY_PROGRESS}`
+      );
+      console.info('[DB][clearAllPlayProgress] 全部已清除');
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][clearAllPlayProgress] 失败 code=${err.code} msg=${err.message}`);
     }
   }
 }

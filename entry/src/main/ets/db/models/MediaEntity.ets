@@ -185,7 +185,11 @@ export interface PlayProgressEntity {
 
 /** 媒体级播放进度实体（对应 media_progress 表） */
 export interface MediaProgressEntry {
-  /** 存储 key，格式 media_progress_series_<id> 或 media_progress_movie_<id> */
+  /** 存储 key，格式：
+   *   集级剧集：media_progress_episode_tmdb_{seriesTmdbId}_s{sn}_e{en}
+   *   电影：    media_progress_movie_{movieId}
+   *   旧剧级（向后兼容）：media_progress_series_tmdb_{seriesTmdbId}
+   */
   mediaKey: string;
   /** 上次播放位置（毫秒） */
   positionMs: number;

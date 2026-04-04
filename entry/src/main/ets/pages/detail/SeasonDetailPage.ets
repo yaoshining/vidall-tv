@@ -11,6 +11,8 @@ import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { emitter } from "@kit.BasicServicesKit"
+import { PlayerEvents } from '../../components/core/player/Constants'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -167,6 +169,8 @@ export struct SeasonDetailPage {
   @Local crossSeasonEpisode: MediaItem | undefined = undefined
 
   static PAGE_NAME = 'seasonDetail'
+
+  private progressRefreshCallback: () => void = () => {};
 
   // ── 属性计算方法 ──────────────────────────────────
 
@@ -678,9 +682,8 @@ export struct SeasonDetailPage {
       this.resumeEpisode = this.seasonEpisodes.length > 0 ? this.seasonEpisodes[0].mediaItem : undefined;
     }
 
-    // ── 跨季次级入口：读整剧最近观看指针 ────────────────────────────────
-    const seriesKey = MediaProgressStore.seriesKey(seriesProviderId);
-    const latestEntry = await MediaProgressStore.get(seriesKey);
+    // ── 跨季次级入口：读整剧最近观看指针（集级进度）────────────────────────────────
+    const latestEntry = await MediaProgressStore.getLatestForSeries(seriesProviderId);
     const currentSeason = this.getSeasonNumber();
     if (latestEntry !== null
         && latestEntry.seasonNumber !== currentSeason
@@ -714,6 +717,16 @@ export struct SeasonDetailPage {
     this.refreshProgressState().catch(() => {
       console.warn('[SeasonDetailPage] aboutToAppear refresh failed');
     });
+    this.progressRefreshCallback = () => {
+      this.refreshProgressState().catch(() => {
+        console.warn('[SeasonDetailPage] progress refresh on event failed');
+      });
+    };
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, this.progressRefreshCallback);
+  }
+
+  aboutToDisappear(): void {
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId, this.progressRefreshCallback);
   }
 
   // ── 数据加载 ──────────────────────────────────
@@ -1003,7 +1016,12 @@ export struct SeasonDetailPage {
 
       const episodeName = await this.resolveEpisodeName(db, episode);
       const seriesProviderId = this.seriesEntity?.providerId ?? '';
-      const mKey = seriesProviderId.length > 0 ? MediaProgressStore.seriesKey(seriesProviderId) : undefined;
+      const episodeSeason = episode.seasonNumber ?? 0;
+      const episodeNum = episode.episodeNumber ?? 0;
+      // 集级 key：每集独立存储进度，避免跨集覆盖
+      const mKey = (seriesProviderId.length > 0 && episodeNum > 0)
+        ? MediaProgressStore.episodeKey(seriesProviderId, episodeSeason, episodeNum)
+        : undefined;
       const param: PlayerPageParam = {
         // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
         url: fullUrl,
@@ -1012,8 +1030,8 @@ export struct SeasonDetailPage {
         durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
         videoId: episode.id,
         seriesProviderId,
-        seasonNumber: episode.seasonNumber ?? 0,
-        episodeNumber: episode.episodeNumber ?? 0,
+        seasonNumber: episodeSeason,
+        episodeNumber: episodeNum,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mKey,
@@ -1099,15 +1117,14 @@ export struct SeasonDetailPage {
         // 简介
         if (this.getOverview().length > 0) {
           if (this.isOverviewLong()) {
-            Row({ space: 4 }) {
-              Text(this.getOverviewShort())
+            Text() {
+              Span(this.getOverviewShort())
                 .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-              Text('更多')
-                .fontSize(14).fontColor('#1B78F2').fontWeight(FontWeight.Medium)
+              Span('更多')
+                .fontSize(16).fontColor('#1B78F2').fontWeight(FontWeight.Medium)
                 .focusable(true)
                 .onClick(() => { this.showOverviewDialog = true; })
             }
-            .alignItems(VerticalAlign.Bottom)
             .constraintSize({ maxWidth: 700 })
           } else {
             Text(this.getOverview())

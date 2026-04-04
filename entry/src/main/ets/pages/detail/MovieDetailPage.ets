@@ -644,7 +644,7 @@ export struct MovieDetailPage {
                 Span(this.getOverviewShort())
                   .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
                 Span('更多')
-                  .fontSize(14).fontColor('#1B78F2')
+                  .fontSize(16).fontColor('#1B78F2')
                   .fontWeight(FontWeight.Medium)
                   .onClick(() => { this.showOverviewDialog = true; })
               }

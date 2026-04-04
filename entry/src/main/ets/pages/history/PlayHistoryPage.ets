@@ -57,16 +57,32 @@ interface ActionMenuSuccessResult {
 /**
  * 解析 mediaKey 格式：
  *   media_progress_movie_<providerId>
- *   media_progress_series_tmdb_<seriesProviderId>
+ *   media_progress_episode_tmdb_<seriesTmdbId>_s<sn>_e<en>  （新集级格式）
+ *   media_progress_series_tmdb_<seriesTmdbId>              （旧剧级格式，向后兼容）
+ *
+ * 返回 providerId：
+ *   - 电影：movieProviderId（如 "tmdb_12345"）
+ *   - 剧集：seriesTmdbId（如 "1399"）
  */
 function parseMediaKey(mediaKey: string): ParsedMediaKey {
   const MOVIE_PREFIX = 'media_progress_movie_';
+  const EPISODE_TMDB_PREFIX = 'media_progress_episode_tmdb_';
   const SERIES_TMDB_PREFIX = 'media_progress_series_tmdb_';
   const SERIES_PREFIX = 'media_progress_series_';
 
   if (mediaKey.startsWith(MOVIE_PREFIX)) {
     return { kind: 'movie', providerId: mediaKey.substring(MOVIE_PREFIX.length) };
   }
+  if (mediaKey.startsWith(EPISODE_TMDB_PREFIX)) {
+    // 格式：media_progress_episode_tmdb_{seriesTmdbId}_s{sn}_e{en}
+    const rest = mediaKey.slice(EPISODE_TMDB_PREFIX.length);
+    // 从尾部找 _e{digits} 再找 _s{digits}，以提取 seriesTmdbId
+    const eIdx = rest.lastIndexOf('_e');
+    const sIdx = eIdx >= 0 ? rest.lastIndexOf('_s', eIdx) : -1;
+    const seriesProviderId = sIdx >= 0 ? rest.substring(0, sIdx) : rest;
+    return { kind: 'series', providerId: seriesProviderId };
+  }
+  // 向后兼容：旧剧级 key
   if (mediaKey.startsWith(SERIES_TMDB_PREFIX)) {
     return { kind: 'series', providerId: mediaKey.substring(SERIES_TMDB_PREFIX.length) };
   }
@@ -111,7 +127,7 @@ export struct PlayHistoryPage {
     this.isLoading = true;
     const db = FileSourceDatabase.getInstance();
     try {
-      const entries = await db.getAllMediaProgress();
+      const entries = await db.getAllMediaProgress(200);
       if (entries.length === 0) {
         this.historyList = [];
         return;
@@ -162,11 +178,21 @@ export struct PlayHistoryPage {
       }
 
       const items: HistoryDisplayItem[] = [];
+      // 剧集按 seriesProviderId 聚合，entries 已按 lastPlayedAt DESC 排序，第一次出现即最近播放集
+      const seriesSeenSet = new Set<string>();
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i];
         const parsed = parseMediaKey(entry.mediaKey);
         if (parsed.kind === 'unknown') {
           continue;
+        }
+
+        // 剧集去重：每个 seriesProviderId 只取最近一条
+        if (parsed.kind === 'series') {
+          if (seriesSeenSet.has(parsed.providerId)) {
+            continue;
+          }
+          // 不在此处 add，需等确认找到 metadata 后才标记，避免 metadata 缺失时跳过后续更完整的条目
         }
 
         let title: string = '';
@@ -219,6 +245,10 @@ export struct PlayHistoryPage {
                 filePath = matched.filePath;
               }
             }
+            // 确认找到 series metadata 后才标记已处理，未找到则跳过让后续条目尝试
+            seriesSeenSet.add(parsed.providerId);
+          } else {
+            continue;
           }
         }
 
@@ -352,9 +382,12 @@ export struct PlayHistoryPage {
    * 弹出 AlertDialog 确认后删除单条记录。
    */
   private confirmDeleteItem(item: HistoryDisplayItem): void {
+    const message = item.kind === 'series'
+      ? `确定删除《${item.title}》的播放记录吗？\n这将清除该剧全部集数的播放进度，此操作无法撤销。`
+      : `确定删除《${item.title}》的播放记录吗？此操作无法撤销。`;
     AlertDialog.show({
       title: '删除播放记录',
-      message: `确定删除《${item.title}》的播放记录吗？此操作无法撤销。`,
+      message,
       primaryButton: {
         value: '取消',
         action: () => {},
@@ -376,11 +409,27 @@ export struct PlayHistoryPage {
 
   private async doDeleteItemAsync(item: HistoryDisplayItem): Promise<void> {
     try {
-      await FileSourceDatabase.getInstance().clearMediaProgress(item.mediaKey);
+      if (item.kind === 'series' && item.seriesProviderId.length > 0) {
+        // 按剧删除：清除该剧所有集的进度记录
+        await FileSourceDatabase.getInstance().clearAllMediaProgressBySeries(item.seriesProviderId);
+      } else {
+        await FileSourceDatabase.getInstance().clearMediaProgress(item.mediaKey);
+      }
       // DB 成功后才更新 UI，确保原子性
-      this.historyList = this.historyList.filter(
-        (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
-      );
+      if (item.kind === 'series') {
+        // 同时清理 play_progress 表（按 series_provider_id）
+        if (item.seriesProviderId.length > 0) {
+          await FileSourceDatabase.getInstance().clearPlayProgressBySeries(item.seriesProviderId);
+        }
+        // 按剧删除：过滤掉该剧的全部聚合条目
+        this.historyList = this.historyList.filter(
+          (i: HistoryDisplayItem): boolean => i.seriesProviderId !== item.seriesProviderId
+        );
+      } else {
+        this.historyList = this.historyList.filter(
+          (i: HistoryDisplayItem): boolean => i.mediaKey !== item.mediaKey
+        );
+      }
       emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
       promptAction.showToast({ message: '已删除播放记录' });
     } catch (e) {
@@ -421,16 +470,25 @@ export struct PlayHistoryPage {
 
   private async doClearAllAsync(): Promise<void> {
     const db = FileSourceDatabase.getInstance();
-    const keys = this.historyList.map((i: HistoryDisplayItem): string => i.mediaKey);
     let failCount = 0;
-    for (let i = 0; i < keys.length; i++) {
+    const deletedSeriesIds = new Set<string>();
+    for (let i = 0; i < this.historyList.length; i++) {
+      const item = this.historyList[i];
       try {
-        await db.clearMediaProgress(keys[i]);
+        if (item.kind === 'series' && item.seriesProviderId.length > 0) {
+          if (!deletedSeriesIds.has(item.seriesProviderId)) {
+            await db.clearAllMediaProgressBySeries(item.seriesProviderId);
+            deletedSeriesIds.add(item.seriesProviderId);
+          }
+        } else {
+          await db.clearMediaProgress(item.mediaKey);
+        }
       } catch (e) {
         failCount++;
       }
     }
     this.historyList = [];
+    await FileSourceDatabase.getInstance().clearAllPlayProgress();
     emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
     if (failCount > 0) {
       promptAction.showToast({ message: `清除完成，${failCount} 条删除失败` });
@@ -562,10 +620,10 @@ export struct PlayHistoryPage {
         }
         .width('100%')
 
-        // 副标题：剧集显示「第S季 第E集」，电影显示年份
+        // 副标题：剧集显示「第S季第E集 · X分钟」，电影显示年份
         Text(
           item.kind === 'series' && item.episodeNumber > 0
-            ? `第${item.seasonNumber}季 第${item.episodeNumber}集`
+            ? `第${item.seasonNumber}季第${item.episodeNumber}集 · ${Math.floor(item.positionMs / 60000).toString()}分钟`
             : item.releaseYear
         )
           .fontSize(12)
