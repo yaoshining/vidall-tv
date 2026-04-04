@@ -8,6 +8,22 @@ import {
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 
+/** 媒体搜索选项（用于 searchMediaItems） */
+export interface SearchMediaOptions {
+  /** 媒体类型过滤：'movie' | 'tv' | 'all'，默认 'all' */
+  mediaType?: 'movie' | 'tv' | 'all';
+  /** 类别关键词，模糊匹配 genres_json */
+  genre?: string;
+  /** 最低评分（含），对应 COALESCE(m.rating, ts.rating) */
+  minRating?: number;
+  /** 年份（4位整数），对应 release_date/first_air_date 前4位 */
+  year?: number;
+  /** 排序方式：rating（默认）| year | title */
+  sortBy?: 'rating' | 'year' | 'title';
+  /** 最大返回条数，默认 50 */
+  limit?: number;
+}
+
 /**
  * 文件源数据库管理类 — DB v6
  * 表结构：file_sources, file_source_directories, videos, scrape_info,
@@ -2617,6 +2633,138 @@ export class FileSourceDatabase {
     } catch (error) {
       const err = error as BusinessError;
       console.warn(`[DB][clearAllPlayProgress] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // 媒体搜索查询 — Issue #101
+  // ─────────────────────────────────────────────
+
+  /**
+   * 多条件媒体搜索，支持关键词/类型/类别/评分/年份/排序/分页。
+   *
+   * - keyword 为空字符串时返回全部（受其余筛选条件约束）
+   * - 所有用户输入均通过 ? 参数化，不拼接进 SQL 字符串
+   *
+   * @param keyword  搜索关键词（标题 / 原始标题模糊匹配）
+   * @param options  可选筛选与排序参数，缺省值见各字段注释
+   */
+  async searchMediaItems(keyword: string, options?: SearchMediaOptions): Promise<MediaItem[]> {
+    if (this.rdbStore === null) {
+      return [];
+    }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const conditions: string[] = [];
+      const params: relationalStore.ValueType[] = [];
+
+      // ── keyword 非空时：title / original_title 四字段模糊匹配 ──
+      if (keyword.trim().length > 0) {
+        const kw: string = `%${keyword}%`;
+        conditions.push('(m.title LIKE ? OR m.original_title LIKE ? OR ts.title LIKE ? OR ts.original_title LIKE ?)');
+        params.push(kw);
+        params.push(kw);
+        params.push(kw);
+        params.push(kw);
+      }
+
+      // ── mediaType 过滤（'all' 时不加条件） ──
+      const mediaType: string = options?.mediaType ?? 'all';
+      if (mediaType !== 'all') {
+        conditions.push('s.media_type = ?');
+        params.push(mediaType);
+      }
+
+      // ── genre 过滤：genres_json 模糊匹配 ──
+      if (options?.genre !== undefined && options.genre.length > 0) {
+        conditions.push('genres_json LIKE ?');
+        params.push(`%${options.genre}%`);
+      }
+
+      // ── minRating 过滤 ──
+      if (options?.minRating !== undefined) {
+        conditions.push('COALESCE(m.rating, ts.rating) >= ?');
+        params.push(options.minRating);
+      }
+
+      // ── year 过滤：取日期字段前4位字符进行字符串比较 ──
+      if (options?.year !== undefined) {
+        conditions.push("substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) = ?");
+        params.push(String(options.year));
+      }
+
+      const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+      // ── ORDER BY ──
+      const sortBy: string = options?.sortBy ?? 'rating';
+      let orderClause: string;
+      if (sortBy === 'year') {
+        orderClause = ' ORDER BY release_date DESC';
+      } else if (sortBy === 'title') {
+        orderClause = ' ORDER BY COALESCE(m.title, ts.title) ASC';
+      } else {
+        // 默认：评分降序
+        orderClause = ' ORDER BY COALESCE(m.rating, ts.rating) DESC';
+      }
+
+      // ── LIMIT（limit 是 number 类型，直接插值安全，不受注入风险） ──
+      const limit: number = options?.limit ?? 50;
+      const limitClause: string = ` LIMIT ${limit}`;
+
+      const sql: string = this.mediaItemSql + whereClause + orderClause + limitClause;
+      rs = await this.rdbStore.querySql(sql, params);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        items.push(this.parseMediaItem(rs));
+      }
+      console.info(`[DB][searchMediaItems] keyword="${keyword}" type=${mediaType} count=${items.length}`);
+      return items;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
+      return [];
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 获取所有有效的 genres_json 原始值列表（DISTINCT，升序排列）。
+   *
+   * genres_json 格式示例：`["剧情","动作"]`
+   * 调用方需自行解析 JSON 数组、拆分并去重各类别标签。
+   * 此方法仅负责从 DB 获取原始值，不做 JSON 解析。
+   */
+  async getDistinctGenres(): Promise<string[]> {
+    if (this.rdbStore === null) {
+      return [];
+    }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const sql: string = `
+        SELECT DISTINCT COALESCE(m.genres_json, ts.genres_json) AS genres_json
+        FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s
+        LEFT JOIN ${FileSourceDatabase.TABLE_MOVIES} m ON s.movie_id = m.id
+        LEFT JOIN ${FileSourceDatabase.TABLE_TV_SERIES} ts ON s.tv_series_id = ts.id
+        WHERE COALESCE(m.genres_json, ts.genres_json) IS NOT NULL
+        ORDER BY genres_json ASC
+      `;
+      rs = await this.rdbStore.querySql(sql);
+      const result: string[] = [];
+      while (rs.goToNextRow()) {
+        const g: string = rs.getString(rs.getColumnIndex('genres_json'));
+        if (g) {
+          result.push(g);
+        }
+      }
+      console.info(`[DB][getDistinctGenres] 共 ${result.length} 条 genres_json 记录`);
+      return result;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[DB][getDistinctGenres] 异常 code=${err.code} msg=${err.message}`);
+      return [];
+    } finally {
+      rs?.close();
     }
   }
 }
