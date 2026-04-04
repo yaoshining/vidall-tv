@@ -17,8 +17,10 @@ export interface SearchMediaOptions {
   genre?: string;
   /** 最低评分（含），对应 COALESCE(m.rating, ts.rating) */
   minRating?: number;
-  /** 年份（4位整数），对应 release_date/first_air_date 前4位 */
-  year?: number;
+  /** 年份起始（含），用于十年段筛选，例如 2020 表示 2020s 的起点 */
+  yearFrom?: number;
+  /** 年份截止（含），用于十年段筛选，例如 2029 表示 2020s 的终点 */
+  yearTo?: number;
   /** 排序方式：rating（默认）| year | title */
   sortBy?: 'rating' | 'year' | 'title';
   /** 最大返回条数，默认 50 */
@@ -2710,10 +2712,14 @@ export class FileSourceDatabase {
         params.push(options.minRating);
       }
 
-      // ── year 过滤：取日期字段前4位字符进行字符串比较 ──
-      if (options?.year !== undefined) {
-        conditions.push("substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) = ?");
-        params.push(String(options.year));
+      // ── yearFrom / yearTo 过滤：十年段区间匹配 ──
+      if (options?.yearFrom !== undefined) {
+        conditions.push("CAST(substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS INTEGER) >= ?");
+        params.push(options.yearFrom);
+      }
+      if (options?.yearTo !== undefined) {
+        conditions.push("CAST(substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS INTEGER) <= ?");
+        params.push(options.yearTo);
       }
 
       const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
