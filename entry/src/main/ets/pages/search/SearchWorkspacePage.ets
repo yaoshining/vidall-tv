@@ -79,7 +79,7 @@ struct KeyButton {
       .fontColor(C_KEY_TEXT)
       .textAlign(TextAlign.Center)
       .width('100%')
-      .aspectRatio(112 / 60)   // 高度由列宽自动推导，无需硬编码 height
+      .aspectRatio(112/60)
       .borderRadius(10)
       .backgroundColor(this.isFocused ? C_SEL_BLUE : this.kbg)
       .border({ width: this.isFocused ? 2 : 0, color: '#5B9BD5' })
@@ -398,86 +398,49 @@ struct SearchWorkspacePage {
     .defaultFocus(true)
   }
 
-  // row1: Q-P + 1-4
   @Builder
-  buildKbdRow1() {
-    Flex({
-      space: {
-        main: LengthMetrics.vp(8)
-      }
-    }) {
-      ForEach(KBD_R1_L, (key: string) => {
-        KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        // GridItem() {
-        //   KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        // }
-      }, (key: string) => key)
-      ForEach(KBD_R1_R, (key: string) => {
-        KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        // GridItem() {
-        //   KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        // }
-      }, (key: string) => key)
-    }
-    // .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
-    // .columnsGap(8)
-    .width('100%')
-  }
-
-  // row2: A-L + clear + 5-8
-  @Builder
-  buildKbdRow2() {
+  buildAlphabetKbd() {
     Grid() {
+      ForEach(KBD_R1_L, (key: string) => {
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
+      }, (key: string) => key)
+
       ForEach(KBD_R2_L, (key: string) => {
         GridItem() {
           KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
         }
       }, (key: string) => key)
-      // Clear key（占 1 列）
+
       GridItem() {
         Text('\uD83D\uDDD1')
           .fontSize(22)
           .fontColor(C_CLEAR_ICON)
           .textAlign(TextAlign.Center)
           .width('100%')
-          .aspectRatio(112 / 60)
+          .aspectRatio(112/60)
           .borderRadius(10)
           .backgroundColor(C_CLEAR_BG)
           .border({ width: 1, color: C_CLEAR_BORDER })
           .focusable(true)
           .onClick(() => { this.clearSearch(); })
       }
-      ForEach(KBD_R2_R, (key: string) => {
-        GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        }
-      }, (key: string) => key)
-    }
-    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
-    .columnsGap(8)
-    .width('100%')
-  }
 
-  // row3: Z-M + backspace(3cols) + 9 + 0(3cols)
-  @Builder
-  buildKbdRow3() {
-    Grid() {
-      ForEach(KBD_R3_L, (key: string, index: number) => {
+      ForEach(KBD_R3_L, (key: string) => {
         GridItem() {
           KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
         }
-        .columnStart(index)
-        .columnEnd(index)
       }, (key: string) => key)
-      // Backspace（跨 3 列：colStart 7-9）
+
       GridItem() {
         Text('\u232B')
           .fontSize(20)
           .fontWeight("100%")
           .fontColor('#FFFFFF')
+          .width("100%")
+          .aspectRatio(352/60)
           .textAlign(TextAlign.Center)
-          .width('100%')
-          .height('100%')
           .borderRadius(10)
           .backgroundColor(C_BKSP_BG)
           .focusable(true)
@@ -485,13 +448,25 @@ struct SearchWorkspacePage {
       }
       .columnStart(7)
       .columnEnd(9)
-      // 9 key（colStart 10）
+    }
+    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsGap(8)
+    .rowsGap(8)
+  }
+
+  @Builder
+  buildNumericKbd() {
+    Grid() {
+      ForEach([...KBD_R1_R, ...KBD_R2_R], (key: string) => {
+        GridItem() {
+          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        }
+      })
+
       GridItem() {
         KeyButton({ label: '9', onPress: () => { this.appendChar('9'); } })
       }
-      .columnStart(10)
-      .columnEnd(10)
-      // 0 key（跨 3 列：colStart 11-13）
+
       GridItem() {
         Text('0')
           .fontSize(20)
@@ -499,26 +474,30 @@ struct SearchWorkspacePage {
           .fontColor(C_KEY_TEXT)
           .textAlign(TextAlign.Center)
           .width('100%')
-          .height('100%')
+          .aspectRatio(352/60)
           .borderRadius(10)
           .backgroundColor(C_LETTER_KEY_BG)
           .focusable(true)
-          .onClick(() => { this.appendChar('0'); })
+          .onClick(() => {
+            this.appendChar('0');
+          })
       }
-      .columnStart(11)
-      .columnEnd(13)
+      .columnStart(1)
+      .columnEnd(3)
     }
-    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsTemplate('1fr 1fr 1fr 1fr')
     .columnsGap(8)
-    .width('100%')
+    .rowsGap(8)
+    .width("40%")
   }
 
   @Builder
   buildKeyboard() {
-    Column({ space: 10 }) {
-      this.buildKbdRow1()
-      this.buildKbdRow2()
-      this.buildKbdRow3()
+    Flex({ space: {
+      main: LengthMetrics.vp(50)
+    } }) {
+      this.buildAlphabetKbd()
+      this.buildNumericKbd()
       // 搜索按钮已移除，改由防抖 800ms 自动触发 triggerSearchAndNavigate
     }
     .width('100%')
