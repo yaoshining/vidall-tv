@@ -488,8 +488,8 @@ export struct PlayHistoryPage {
       }
     }
     this.historyList = [];
-    emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
     await FileSourceDatabase.getInstance().clearAllPlayProgress();
+    emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
     if (failCount > 0) {
       promptAction.showToast({ message: `清除完成，${failCount} 条删除失败` });
     } else {

@@ -11,6 +11,8 @@ import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
 import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { emitter } from "@kit.BasicServicesKit"
+import { PlayerEvents } from '../../components/core/player/Constants'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -713,6 +715,15 @@ export struct SeasonDetailPage {
     this.refreshProgressState().catch(() => {
       console.warn('[SeasonDetailPage] aboutToAppear refresh failed');
     });
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
+      this.refreshProgressState().catch(() => {
+        console.warn('[SeasonDetailPage] progress refresh on event failed');
+      });
+    });
+  }
+
+  aboutToDisappear(): void {
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
   }
 
   // ── 数据加载 ──────────────────────────────────
