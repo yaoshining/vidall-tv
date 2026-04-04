@@ -401,6 +401,15 @@ export class FileSourceDatabase {
           )
         `);
         console.info(`FileSourceDatabase: CREATE TABLE media_progress`);
+        // v5 → v6：同步补建 search_history 表（旧版本升级时 onCreate 不再执行）
+        await rdbStore.executeSql(
+          'CREATE TABLE IF NOT EXISTS search_history (' +
+          'id INTEGER PRIMARY KEY AUTOINCREMENT, ' +
+          'keyword TEXT NOT NULL, ' +
+          'searched_at INTEGER NOT NULL DEFAULT 0, ' +
+          'UNIQUE(keyword))'
+        );
+        console.info(`FileSourceDatabase: CREATE TABLE IF NOT EXISTS search_history`);
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -2669,14 +2678,17 @@ export class FileSourceDatabase {
       const conditions: string[] = [];
       const params: relationalStore.ValueType[] = [];
 
+      // ── 统一 trim keyword，避免含前后空格时无法正确匹配 ──
+      const kw: string = keyword.trim();
+
       // ── keyword 非空时：title / original_title 四字段模糊匹配 ──
-      if (keyword.trim().length > 0) {
-        const kw: string = `%${keyword}%`;
+      if (kw.length > 0) {
+        const kwLike: string = `%${kw}%`;
         conditions.push('(m.title LIKE ? OR m.original_title LIKE ? OR ts.title LIKE ? OR ts.original_title LIKE ?)');
-        params.push(kw);
-        params.push(kw);
-        params.push(kw);
-        params.push(kw);
+        params.push(kwLike);
+        params.push(kwLike);
+        params.push(kwLike);
+        params.push(kwLike);
       }
 
       // ── mediaType 过滤（'all' 时不加条件） ──
@@ -2686,9 +2698,9 @@ export class FileSourceDatabase {
         params.push(mediaType);
       }
 
-      // ── genre 过滤：genres_json 模糊匹配 ──
+      // ── genre 过滤：genres_json 模糊匹配（加表别名避免多表 JOIN 时列名歧义） ──
       if (options?.genre !== undefined && options.genre.length > 0) {
-        conditions.push('genres_json LIKE ?');
+        conditions.push('m.genres_json LIKE ?');
         params.push(`%${options.genre}%`);
       }
 
@@ -2718,9 +2730,10 @@ export class FileSourceDatabase {
         orderClause = ' ORDER BY COALESCE(m.rating, ts.rating) DESC';
       }
 
-      // ── LIMIT（limit 是 number 类型，直接插值安全，不受注入风险） ──
-      const limit: number = options?.limit ?? 50;
-      const limitClause: string = ` LIMIT ${limit}`;
+      // ── LIMIT 范围校验，防止 NaN/负数/超大值 ──
+      const rawLimit: number = options?.limit ?? 50;
+      const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 200) : 50;
+      const limitClause: string = ` LIMIT ${safeLimit}`;
 
       const sql: string = this.mediaItemSql + whereClause + orderClause + limitClause;
       rs = await this.rdbStore.querySql(sql, params);
@@ -2728,7 +2741,7 @@ export class FileSourceDatabase {
       while (rs.goToNextRow()) {
         items.push(this.parseMediaItem(rs));
       }
-      console.info(`[DB][searchMediaItems] keyword="${keyword}" type=${mediaType} count=${items.length}`);
+      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} count=${items.length}`);
       return items;
     } catch (e) {
       const err = e as BusinessError;
@@ -2799,7 +2812,12 @@ export class FileSourceDatabase {
         ` ON CONFLICT(keyword) DO UPDATE SET searched_at = excluded.searched_at`,
         [keyword, now]
       );
-      console.info(`[DB][upsertSearchHistory] keyword="${keyword}"`);
+      // 裁剪：只保留最近 15 条，防止表无限增长
+      await this.rdbStore.executeSql(
+        'DELETE FROM search_history WHERE id NOT IN ' +
+        '(SELECT id FROM search_history ORDER BY searched_at DESC LIMIT 15)'
+      );
+      console.info(`[DB][upsertSearchHistory] keyword=[${keyword.length}chars]`);
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[DB][upsertSearchHistory] 失败 code=${err.code} msg=${err.message}`);
@@ -2814,11 +2832,13 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) {
       return [];
     }
+    // 入口校验：防止 NaN / 负数 / 超出合理范围的值
+    const safeLimit: number = (Number.isInteger(limit) && limit > 0 && limit <= 50) ? limit : 20;
     let rs: relationalStore.ResultSet | null = null;
     try {
       rs = await this.rdbStore.querySql(
         `SELECT keyword, searched_at FROM ${FileSourceDatabase.TABLE_SEARCH_HISTORY}` +
-        ` ORDER BY searched_at DESC LIMIT ${limit}`
+        ` ORDER BY searched_at DESC LIMIT ${safeLimit}`
       );
       const result: SearchHistoryEntry[] = [];
       while (rs.goToNextRow()) {
@@ -2851,7 +2871,7 @@ export class FileSourceDatabase {
         `DELETE FROM ${FileSourceDatabase.TABLE_SEARCH_HISTORY} WHERE keyword = ?`,
         [keyword]
       );
-      console.info(`[DB][deleteSearchHistory] keyword="${keyword}" 已删除`);
+      console.info(`[DB][deleteSearchHistory] keyword=[${keyword.length}chars] 已删除`);
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[DB][deleteSearchHistory] 失败 code=${err.code} msg=${err.message}`);
