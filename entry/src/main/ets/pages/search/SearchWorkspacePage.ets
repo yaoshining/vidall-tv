@@ -3,6 +3,7 @@ import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaResultPage, MediaResultPageParam } from './MediaResultPage';
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
+import { LengthMetrics } from '@kit.ArkUI';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Token Constants — strictly follows Pencil vidall_pages.pen
@@ -174,7 +175,7 @@ struct SearchWorkspacePage {
   @Local isSearching: boolean = false;
   @Local hotItems: MediaItem[] = [];
 
-  private db: FileSourceDatabase = FileSourceDatabase.getInstance();
+  private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
   private searchGeneration: number = 0;
@@ -182,8 +183,13 @@ struct SearchWorkspacePage {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   aboutToAppear(): void {
-    this.loadHistory();
-    this.loadHotItems();
+    try {
+      this.db = FileSourceDatabase.getInstance();
+      this.loadHistory();
+      this.loadHotItems();
+    } catch (e) {
+      // Preview 沙箱：native DB 不可用，静默降级
+    }
   }
 
   aboutToDisappear(): void {
@@ -195,6 +201,7 @@ struct SearchWorkspacePage {
   // ── Data helpers ──────────────────────────────────────────────────────────
 
   private loadHistory(): void {
+    if (this.db === null) { return; }
     this.db.getSearchHistory(20)
       .then((list: SearchHistoryEntry[]) => {
         this.historyList = list;
@@ -203,6 +210,7 @@ struct SearchWorkspacePage {
   }
 
   private loadHotItems(): void {
+    if (this.db === null) { return; }
     this.db.searchMediaItems('', { sortBy: 'rating', limit: 8 })
       .then((items: MediaItem[]) => {
         this.hotItems = items;
@@ -235,7 +243,7 @@ struct SearchWorkspacePage {
     const generation = ++this.searchGeneration;
     this.isSearching = true;
     try {
-      const items: MediaItem[] = await this.db.searchMediaItems(kw, { limit: 50 });
+      const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 50 });
       if (generation !== this.searchGeneration) { return; } // 丢弃过期结果
       this.searchResults = items;
     } catch {
@@ -252,9 +260,11 @@ struct SearchWorkspacePage {
   private triggerSearchAndNavigate(): void {
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
-    this.db.upsertSearchHistory(kw)
-      .then(() => { this.loadHistory(); })
-      .catch(() => {});
+    if (this.db !== null) {
+      this.db.upsertSearchHistory(kw)
+        .then(() => { this.loadHistory(); })
+        .catch(() => {});
+    }
     const param: MediaResultPageParam = {
       keyword: kw,
       pageTitle: kw,
@@ -281,12 +291,14 @@ struct SearchWorkspacePage {
   }
 
   private deleteHistory(keyword: string): void {
+    if (this.db === null) { return; }
     this.db.deleteSearchHistory(keyword)
       .then(() => { this.loadHistory(); })
       .catch(() => {});
   }
 
   private clearAllHistory(): void {
+    if (this.db === null) { return; }
     this.db.clearSearchHistory()
       .then(() => { this.historyList = []; })
       .catch(() => {});
@@ -389,20 +401,26 @@ struct SearchWorkspacePage {
   // row1: Q-P + 1-4
   @Builder
   buildKbdRow1() {
-    Grid() {
+    Flex({
+      space: {
+        main: LengthMetrics.vp(8)
+      }
+    }) {
       ForEach(KBD_R1_L, (key: string) => {
-        GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        }
+        KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        // GridItem() {
+        //   KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        // }
       }, (key: string) => key)
       ForEach(KBD_R1_R, (key: string) => {
-        GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
-        }
+        KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        // GridItem() {
+        //   KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+        // }
       }, (key: string) => key)
     }
-    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
-    .columnsGap(8)
+    // .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
+    // .columnsGap(8)
     .width('100%')
   }
 
@@ -455,7 +473,7 @@ struct SearchWorkspacePage {
       GridItem() {
         Text('\u232B')
           .fontSize(20)
-          .fontWeight(700)
+          .fontWeight("100%")
           .fontColor('#FFFFFF')
           .textAlign(TextAlign.Center)
           .width('100%')
@@ -493,7 +511,6 @@ struct SearchWorkspacePage {
     .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
     .columnsGap(8)
     .width('100%')
-    .height(64)   // 跨列 GridItem 的 height('100%') 需 Grid 有已知高度；64vp ≈ aspectRatio 推算结果
   }
 
   @Builder
@@ -636,3 +653,4 @@ struct SearchWorkspacePage {
 }
 
 export { SearchWorkspacePage };
+
