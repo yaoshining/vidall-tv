@@ -178,6 +178,15 @@ struct ResultPosterCard {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helper type for decade-range mapping (avoids ArkTS inline-object-literal type)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface YearRange {
+  from: number;
+  to: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MediaResultPage — generic search result page (TV vertical layout)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -204,12 +213,22 @@ export struct MediaResultPage {
   @Local totalCount: number = 0;
 
   private db: FileSourceDatabase = FileSourceDatabase.getInstance();
+  // 竞态保护：每次发起新请求时递增，回调中比对版本号，过期则丢弃
+  private searchGeneration: number = 0;
 
   // ── Data operations ───────────────────────────────────────────────────────
 
+  /** 将年代字符串（如 '2020'）转换为十年段区间 [2020, 2029] */
+  private decadeToYearRange(decade: string): YearRange | null {
+    if (decade.length === 0) { return null; }
+    const start: number = parseInt(decade, 10);
+    if (isNaN(start)) { return null; }
+    return { from: start, to: start + 9 };
+  }
+
   private async doSearch(): Promise<void> {
+    const generation = ++this.searchGeneration;
     this.isLoading = true;
-    this.results = [];
     try {
       let mt: 'movie' | 'tv' | 'all' | undefined = undefined;
       if (this.filterMediaType === 'movie') { mt = 'movie'; }
@@ -219,27 +238,30 @@ export struct MediaResultPage {
       if (this.filterSort === 'rating') { sb = 'rating'; }
       else if (this.filterSort === 'year') { sb = 'year'; }
 
-      const yearNum: number | undefined = this.filterYear.length > 0
-        ? parseInt(this.filterYear, 10)
-        : undefined;
+      const yearRange: YearRange | null = this.decadeToYearRange(this.filterYear);
 
       const options: SearchMediaOptions = {
         mediaType: mt,
         genre: this.filterGenre.length > 0 ? this.filterGenre : undefined,
         minRating: this.filterRating > 0 ? this.filterRating : undefined,
-        year: yearNum,
+        yearFrom: yearRange !== null ? yearRange.from : undefined,
+        yearTo: yearRange !== null ? yearRange.to : undefined,
         sortBy: sb,
         limit: 200,
       };
 
       const items: MediaItem[] = await this.db.searchMediaItems(this.keyword, options);
+      if (generation !== this.searchGeneration) { return; } // 丢弃过期结果
       this.results = items;
       this.totalCount = items.length;
     } catch {
+      if (generation !== this.searchGeneration) { return; }
       this.results = [];
       this.totalCount = 0;
     } finally {
-      this.isLoading = false;
+      if (generation === this.searchGeneration) {
+        this.isLoading = false;
+      }
     }
   }
 

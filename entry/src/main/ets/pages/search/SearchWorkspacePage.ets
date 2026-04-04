@@ -1,5 +1,6 @@
 import { MediaItem, SearchHistoryEntry, SeriesGroup } from '../../db/models/MediaEntity';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
+import { MediaResultPage, MediaResultPageParam } from './MediaResultPage';
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
 
@@ -177,6 +178,8 @@ struct SearchWorkspacePage {
 
   private db: FileSourceDatabase = FileSourceDatabase.getInstance();
   private searchTimerId: number = 0;
+  // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
+  private searchGeneration: number = 0;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -210,28 +213,45 @@ struct SearchWorkspacePage {
   private scheduleSearch(): void {
     clearTimeout(this.searchTimerId);
     this.searchTimerId = setTimeout((): void => {
-      this.executeSearch();
+      this.executeSearch().catch((): void => {});
     }, 300);
   }
 
-  private executeSearch(): void {
+  /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
+  private async executeSearch(): Promise<void> {
     const kw: string = this.searchText.trim();
     if (kw.length === 0) {
       this.searchResults = [];
       return;
     }
+    const generation = ++this.searchGeneration;
     this.isSearching = true;
-    this.db.searchMediaItems(kw, { limit: 50 })
-      .then((results: MediaItem[]) => {
-        this.searchResults = results;
+    try {
+      const items: MediaItem[] = await this.db.searchMediaItems(kw, { limit: 50 });
+      if (generation !== this.searchGeneration) { return; } // 丢弃过期结果
+      this.searchResults = items;
+    } catch {
+      if (generation !== this.searchGeneration) { return; }
+      this.searchResults = []; // 失败时清空，不保留旧数据
+    } finally {
+      if (generation === this.searchGeneration) {
         this.isSearching = false;
-      })
-      .catch(() => {
-        this.isSearching = false;
-      });
+      }
+    }
+  }
+
+  /** 确认搜索：保存历史 + 导航到 MediaResultPage（M1 核心路由） */
+  private triggerSearchAndNavigate(): void {
+    const kw: string = this.searchText.trim();
+    if (kw.length === 0) { return; }
     this.db.upsertSearchHistory(kw)
       .then(() => { this.loadHistory(); })
       .catch(() => {});
+    const param: MediaResultPageParam = {
+      keyword: kw,
+      pageTitle: kw,
+    };
+    this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
   }
 
   private appendChar(c: string): void {
@@ -465,6 +485,19 @@ struct SearchWorkspacePage {
       this.buildKbdRow1()
       this.buildKbdRow2()
       this.buildKbdRow3()
+      // M1：确认搜索按钮 — 跳转到 MediaResultPage
+      Text('\u641C\u7D22')
+        .fontSize(22)
+        .fontWeight(700)
+        .fontColor('#FFFFFF')
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .height(60)
+        .borderRadius(10)
+        .backgroundColor(this.searchText.trim().length > 0 ? C_SEL_BLUE : C_BKSP_BG)
+        .animation({ duration: 140, curve: Curve.EaseInOut })
+        .focusable(true)
+        .onClick(() => { this.triggerSearchAndNavigate(); })
     }
     .width('100%')
     .backgroundColor(C_KBD_BG)
@@ -477,27 +510,31 @@ struct SearchWorkspacePage {
     if (this.historyList.length > 0) {
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(this.historyList, (entry: SearchHistoryEntry) => {
-          Row({ space: 4 }) {
+          // M2：拆成两个独立可聚焦节点，遥控器 D-pad 可分别聚焦到关键词和删除按钮
+          Row({ space: 0 }) {
+            // 左侧：关键词文字 — 聚焦后 OK 键触发搜索并跳转
             Text(entry.keyword)
               .fontSize(16)
               .fontWeight(500)
               .fontColor(C_HIST_TEXT)
+              .padding({ left: 14, right: 6, top: 8, bottom: 8 })
+              .focusable(true)
+              .onClick(() => {
+                this.searchText = entry.keyword;
+                this.triggerSearchAndNavigate();
+              })
+            // 右侧：× 删除按钮 — 聚焦后 OK 键触发删除
             Text('\u00D7')
               .fontSize(14)
               .fontColor(C_SECONDARY)
-              .hitTestBehavior(HitTestMode.Block)
+              .padding({ left: 6, right: 14, top: 8, bottom: 8 })
+              .focusable(true)
               .onClick(() => { this.deleteHistory(entry.keyword); })
           }
-          .padding({ left: 14, right: 14, top: 8, bottom: 8 })
           .backgroundColor(C_HIST_CHIP_BG)
           .borderRadius(999)
           .border({ width: 1, color: C_HIST_BORDER })
           .margin({ right: 10, bottom: 10 })
-          .focusable(true)
-          .onClick(() => {
-            this.searchText = entry.keyword;
-            this.executeSearch();
-          })
         }, (entry: SearchHistoryEntry) => entry.keyword)
 
         // Clear-all button styled same as chip
@@ -569,11 +606,11 @@ struct SearchWorkspacePage {
         this.buildTitleArea()
         this.buildSearchBar()
         this.buildKeyboard()
-        if (this.searchText.length > 0) {
+        // M7：始终显示历史和热搜；本地预览结果只在有内容时附加展示
+        this.buildHistory()
+        this.buildHotSearch()
+        if (this.searchResults.length > 0) {
           this.buildResultsPreview()
-        } else {
-          this.buildHistory()
-          this.buildHotSearch()
         }
       }
       .width('100%')
