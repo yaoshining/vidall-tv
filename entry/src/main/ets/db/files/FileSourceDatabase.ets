@@ -352,72 +352,83 @@ export class FileSourceDatabase {
   }
 
   /**
-   * 版本升级：v2→v3 清空旧媒体数据，重建新结构（文件源保留）
+   * 版本升级入口：按 currentVersion 逐步执行各版本迁移步骤，
+   * 确保从任意旧版本升级都能经过所有中间版本的 DDL 变更。
    */
   private async onUpgrade(rdbStore: relationalStore.RdbStore, oldVersion: number, newVersion: number): Promise<void> {
     console.info(`FileSourceDatabase: Upgrading ${oldVersion} → ${newVersion}`);
+    // 用 currentVersion 追踪迁移进度，避免 oldVersion 固定导致跳步
+    let currentVersion = oldVersion;
     try {
-      if (oldVersion < 4) {
-        // v2/v3 → v4：清除所有媒体表，重建干净的 v3 结构
-        // 注意：DROP 顺序需遵守外键依赖（先子表再父表）
-        const dropOrder = [
-          'scrape_info', 'play_history', 'tv_episodes', 'tv_seasons',
-          'videos', 'movies', 'tv_series'
-        ];
-        for (const t of dropOrder) {
-          await rdbStore.executeSql(`DROP TABLE IF EXISTS ${t}`);
-          console.info(`FileSourceDatabase: DROP TABLE ${t}`);
-        }
-        await this.createMediaTablesV3(rdbStore);
+      if (currentVersion < 4 && currentVersion < newVersion) {
+        const fromVersion = currentVersion;
+        await this.migrateToV4(rdbStore);
+        currentVersion = 4;
+        console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`);
       }
-      if (oldVersion < 5) {
-        // v4 → v5：用带上下文字段的 play_progress 取代 play_history
-        await rdbStore.executeSql(`DROP TABLE IF EXISTS play_history`);
-        console.info(`FileSourceDatabase: DROP TABLE play_history`);
-        await rdbStore.executeSql(`
-          CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_PLAY_PROGRESS} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            video_id INTEGER NOT NULL,
-            series_provider_id TEXT NOT NULL DEFAULT '',
-            season_number INTEGER NOT NULL DEFAULT 0,
-            episode_number INTEGER NOT NULL DEFAULT 0,
-            position_ms INTEGER NOT NULL DEFAULT 0,
-            duration_ms INTEGER NOT NULL DEFAULT 0,
-            updated_at INTEGER NOT NULL,
-            FOREIGN KEY(video_id) REFERENCES ${FileSourceDatabase.TABLE_VIDEOS}(id) ON DELETE CASCADE,
-            UNIQUE(video_id)
-          )
-        `);
-        console.info(`FileSourceDatabase: CREATE TABLE play_progress`);
+      if (currentVersion < 5 && currentVersion < newVersion) {
+        const fromVersion = currentVersion;
+        await this.migrateV4ToV5(rdbStore);
+        currentVersion = 5;
+        console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`);
       }
-      if (oldVersion < 6) {
-        // v5 → v6：新增媒体级播放进度表
-        await rdbStore.executeSql(`
-          CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} (
-            media_key TEXT PRIMARY KEY,
-            position_ms INTEGER NOT NULL DEFAULT 0,
-            duration_ms INTEGER NOT NULL DEFAULT 0,
-            last_played_at INTEGER NOT NULL,
-            episode_number INTEGER NOT NULL DEFAULT 0,
-            season_number INTEGER NOT NULL DEFAULT 0
-          )
-        `);
-        console.info(`FileSourceDatabase: CREATE TABLE media_progress`);
-        // v5 → v6：同步补建 search_history 表（旧版本升级时 onCreate 不再执行）
-        await rdbStore.executeSql(
-          'CREATE TABLE IF NOT EXISTS search_history (' +
-          'id INTEGER PRIMARY KEY AUTOINCREMENT, ' +
-          'keyword TEXT NOT NULL, ' +
-          'searched_at INTEGER NOT NULL DEFAULT 0, ' +
-          'UNIQUE(keyword))'
-        );
-        console.info(`FileSourceDatabase: CREATE TABLE IF NOT EXISTS search_history`);
+      if (currentVersion < 6 && currentVersion < newVersion) {
+        const fromVersion = currentVersion;
+        await this.migrateV5ToV6(rdbStore);
+        currentVersion = 6;
+        console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`);
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
       console.error('FileSourceDatabase: Upgrade failed', JSON.stringify(error));
       throw new Error('Upgrade failed: ' + JSON.stringify(error));
     }
+  }
+
+  /**
+   * 迁移至 v4：清除旧版媒体表，重建含完整最新结构的媒体表
+   * （包含 play_progress、media_progress 等后续版本表，均以 IF NOT EXISTS 保护）。
+   * 适用于从 v1/v2/v3 任意版本升级的场景。
+   * 注意：DROP 顺序需遵守外键依赖（先子表再父表）。
+   */
+  private async migrateToV4(rdbStore: relationalStore.RdbStore): Promise<void> {
+    const dropOrder: string[] = [
+      'scrape_info', 'play_history', 'tv_episodes', 'tv_seasons',
+      'videos', 'movies', 'tv_series'
+    ];
+    for (const t of dropOrder) {
+      await rdbStore.executeSql(`DROP TABLE IF EXISTS ${t}`);
+      console.info(`FileSourceDatabase: DROP TABLE ${t}`);
+    }
+    await this.createMediaTablesV3(rdbStore);
+  }
+
+  /**
+   * 迁移至 v5：用带上下文字段的 play_progress 取代 play_history。
+   * 复用 createMediaTablesV3 建表，避免与主建表逻辑重复定义。
+   */
+  private async migrateV4ToV5(rdbStore: relationalStore.RdbStore): Promise<void> {
+    await rdbStore.executeSql(`DROP TABLE IF EXISTS play_history`);
+    console.info(`FileSourceDatabase: DROP TABLE play_history`);
+    await this.createMediaTablesV3(rdbStore);
+  }
+
+  /**
+   * 迁移至 v6：新增媒体级播放进度表 media_progress，
+   * 以及旧版本升级时未自动建立的 search_history 表。
+   * 复用 createMediaTablesV3 建表，避免与主建表逻辑重复定义。
+   */
+  private async migrateV5ToV6(rdbStore: relationalStore.RdbStore): Promise<void> {
+    await this.createMediaTablesV3(rdbStore);
+    // 旧版本升级时 onCreate 不再执行，需在此补建 search_history 表
+    await rdbStore.executeSql(
+      `CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_SEARCH_HISTORY} (` +
+      'id INTEGER PRIMARY KEY AUTOINCREMENT, ' +
+      'keyword TEXT NOT NULL, ' +
+      'searched_at INTEGER NOT NULL DEFAULT 0, ' +
+      'UNIQUE(keyword))'
+    );
+    console.info(`FileSourceDatabase: CREATE TABLE search_history`);
   }
 
   /**
