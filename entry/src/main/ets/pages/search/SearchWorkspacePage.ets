@@ -559,58 +559,13 @@ struct SearchWorkspacePage {
   @Builder
   buildResultsPreview() {
     if (this.searchResults.length > 0) {
-      Column({ space: 0 }) {
+      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
         ForEach(this.searchResults, (item: MediaItem) => {
-          Row({ space: 16 }) {
-            // 左：缩略图
-            if (posterSrc(item).length > 0) {
-              Image(posterSrc(item))
-                .width(80)
-                .height(120)
-                .objectFit(ImageFit.Cover)
-                .borderRadius(6)
-            } else {
-              Column() {
-                Text('\u{1F3AC}')
-                  .fontSize(28)
-                  .opacity(0.4)
-              }
-              .width(80)
-              .height(120)
-              .backgroundColor(C_COMPONENT_BG)
-              .borderRadius(6)
-              .justifyContent(FlexAlign.Center)
-              .alignItems(HorizontalAlign.Center)
-            }
-            // 右：信息
-            Column({ space: 6 }) {
-              Text(item.title ?? '')
-                .fontSize(22)
-                .fontColor('#E3E7ED')
-                .fontWeight(500)
-                .maxLines(2)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-              if (item.rating !== undefined && item.rating > 0) {
-                Text(item.rating.toFixed(1))
-                  .fontSize(18)
-                  .fontWeight(600)
-                  .fontColor(scoreColor(item.rating))
-              }
-              if (item.releaseDate !== undefined && item.releaseDate.length >= 4) {
-                Text(item.releaseDate.slice(0, 4))
-                  .fontSize(16)
-                  .fontColor('#8A9BB0')
-              }
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-            .justifyContent(FlexAlign.Center)
-          }
-          .width('100%')
-          .padding({ top: 10, bottom: 10, left: 4, right: 4 })
-          .borderRadius(10)
-          .focusable(true)
-          .onClick(() => { this.navigateToDetail(item); })
+          WorkspacePosterCard({
+            item: item,
+            onPress: () => { this.navigateToDetail(item); }
+          })
+          .margin({ right: 20, bottom: 20 })
         }, (item: MediaItem) => String(item.id))
       }
       .width('100%')
