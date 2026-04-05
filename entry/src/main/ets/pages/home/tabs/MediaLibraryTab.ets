@@ -17,6 +17,7 @@ import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import { PlayHistoryPage } from "../../history/PlayHistoryPage"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "../../../components/core/player/Constants"
+import { MediaResultPage, MediaResultPageParam } from "../../search/MediaResultPage"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -334,6 +335,7 @@ struct SeriesCard {
 @ComponentV2
 struct RatingLabelCard {
   @Require @Param ratingLabel: RatingLabel
+  @Event onPress: () => void = () => {}
 
   private getLabelColor(): string {
     if (this.ratingLabel.minRating >= 9) { return '#FFD700'; }
@@ -357,6 +359,7 @@ struct RatingLabelCard {
       }
     }
     .width(RATING_CARD_W).height(RATING_CARD_H)
+    .onClick(() => { this.onPress(); })
   }
 }
 
@@ -366,6 +369,7 @@ struct RatingLabelCard {
 @ComponentV2
 struct DecadeCard {
   @Require @Param decade: DecadeGroup
+  @Event onPress: () => void = () => {}
 
   private isCurrentYear(): boolean { return this.decade.label === '今年'; }
 
@@ -388,6 +392,7 @@ struct DecadeCard {
       }
     }
     .width(DECADE_CARD_W).height(DECADE_CARD_H)
+    .onClick(() => { this.onPress(); })
   }
 }
 
@@ -398,6 +403,7 @@ struct DecadeCard {
 struct GenreCard {
   @Require @Param genre: string
   @Require @Param count: number
+  @Event onPress: () => void = () => {}
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
@@ -413,6 +419,7 @@ struct GenreCard {
     }
     .width(WIDE_WIDTH)
     .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+    .onClick(() => { this.onPress(); })
   }
 }
 
@@ -1058,7 +1065,10 @@ export struct MediaLibraryTab {
     if (this.getGenreKeys().length > 0) {
       SectionRow({ title: '类别' }) {
         ForEach(this.getGenreKeys(), (genre: string) => {
-          GenreCard({ genre, count: this.getGenreCount(genre) })
+          GenreCard({ genre, count: this.getGenreCount(genre), onPress: () => {
+            const param: MediaResultPageParam = { pageTitle: genre, genre };
+            this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
+          }})
         })
       }
     }
@@ -1069,7 +1079,10 @@ export struct MediaLibraryTab {
     if (this.model.ratingLabels.length > 0) {
       SectionRow({ title: '高分推荐' }) {
         ForEach(this.model.ratingLabels, (rl: RatingLabel) => {
-          RatingLabelCard({ ratingLabel: rl })
+          RatingLabelCard({ ratingLabel: rl, onPress: () => {
+            const param: MediaResultPageParam = { pageTitle: rl.label, minRating: rl.minRating };
+            this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
+          }})
         })
       }
     }
@@ -1080,7 +1093,13 @@ export struct MediaLibraryTab {
     if (this.model.decadeGroups.length > 0) {
       SectionRow({ title: '上映年代' }) {
         ForEach(this.model.decadeGroups, (decade: DecadeGroup) => {
-          DecadeCard({ decade })
+          DecadeCard({ decade, onPress: () => {
+            const decadeYear = decade.label === '今年'
+              ? new Date().getFullYear().toString()
+              : decade.label.replace('s', '');
+            const param: MediaResultPageParam = { pageTitle: decade.label, decadeYear };
+            this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
+          }})
         })
       }
     }

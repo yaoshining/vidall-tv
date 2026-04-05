@@ -17,8 +17,10 @@ export interface SearchMediaOptions {
   genre?: string;
   /** 最低评分（含），对应 COALESCE(m.rating, ts.rating) */
   minRating?: number;
-  /** 年份（4位整数），对应 release_date/first_air_date 前4位 */
-  year?: number;
+  /** 年份起始（含），用于十年段筛选，例如 2020 表示 2020s 的起点 */
+  yearFrom?: number;
+  /** 年份截止（含），用于十年段筛选，例如 2029 表示 2020s 的终点 */
+  yearTo?: number;
   /** 排序方式：rating（默认）| year | title */
   sortBy?: 'rating' | 'year' | 'title';
   /** 最大返回条数，默认 50 */
@@ -2710,10 +2712,14 @@ export class FileSourceDatabase {
         params.push(options.minRating);
       }
 
-      // ── year 过滤：取日期字段前4位字符进行字符串比较 ──
-      if (options?.year !== undefined) {
-        conditions.push("substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) = ?");
-        params.push(String(options.year));
+      // ── yearFrom / yearTo 过滤：十年段区间匹配 ──
+      if (options?.yearFrom !== undefined) {
+        conditions.push("CAST(substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS INTEGER) >= ?");
+        params.push(options.yearFrom);
+      }
+      if (options?.yearTo !== undefined) {
+        conditions.push("CAST(substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS INTEGER) <= ?");
+        params.push(options.yearTo);
       }
 
       const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
@@ -2732,16 +2738,38 @@ export class FileSourceDatabase {
 
       // ── LIMIT 范围校验，防止 NaN/负数/超大值 ──
       const rawLimit: number = options?.limit ?? 50;
-      const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 200) : 50;
-      const limitClause: string = ` LIMIT ${safeLimit}`;
+      const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 500) : 50;
+      // SQL 层多拉一批，内存去重后再裁剪到 safeLimit
+      const fetchLimit: number = Math.min(safeLimit * 10, 2000);
+      const limitClause: string = ` LIMIT ${fetchLimit}`;
 
       const sql: string = this.mediaItemSql + whereClause + orderClause + limitClause;
       rs = await this.rdbStore.querySql(sql, params);
-      const items: MediaItem[] = [];
+      const rawItems: MediaItem[] = [];
       while (rs.goToNextRow()) {
-        items.push(this.parseMediaItem(rs));
+        rawItems.push(this.parseMediaItem(rs));
       }
-      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} count=${items.length}`);
+
+      // 按 tvSeriesId / movieId 去重，避免同一部剧多集重复展示
+      const seen = new Set<string>();
+      const items: MediaItem[] = [];
+      for (const item of rawItems) {
+        let key: string;
+        if (item.tvSeriesId !== undefined) {
+          key = `tv-${item.tvSeriesId}`;
+        } else if (item.movieId !== undefined) {
+          key = `mv-${item.movieId}`;
+        } else {
+          key = `vid-${item.id}`;
+        }
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(item);
+          if (items.length >= safeLimit) { break; }
+        }
+      }
+
+      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} raw=${rawItems.length} deduped=${items.length}`);
       return items;
     } catch (e) {
       const err = e as BusinessError;
