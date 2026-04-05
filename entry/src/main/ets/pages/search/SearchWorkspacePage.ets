@@ -305,7 +305,7 @@ struct SearchWorkspacePage {
   }
 
   private navigateToDetail(item: MediaItem): void {
-    if (item.mediaType === 'tv') {
+    if (item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
         title: item.title ?? '',
         tvSeriesId: item.tvSeriesId,
