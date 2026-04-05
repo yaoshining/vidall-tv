@@ -2738,16 +2738,38 @@ export class FileSourceDatabase {
 
       // ── LIMIT 范围校验，防止 NaN/负数/超大值 ──
       const rawLimit: number = options?.limit ?? 50;
-      const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 200) : 50;
-      const limitClause: string = ` LIMIT ${safeLimit}`;
+      const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 500) : 50;
+      // SQL 层多拉一批，内存去重后再裁剪到 safeLimit
+      const fetchLimit: number = Math.min(safeLimit * 10, 2000);
+      const limitClause: string = ` LIMIT ${fetchLimit}`;
 
       const sql: string = this.mediaItemSql + whereClause + orderClause + limitClause;
       rs = await this.rdbStore.querySql(sql, params);
-      const items: MediaItem[] = [];
+      const rawItems: MediaItem[] = [];
       while (rs.goToNextRow()) {
-        items.push(this.parseMediaItem(rs));
+        rawItems.push(this.parseMediaItem(rs));
       }
-      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} count=${items.length}`);
+
+      // 按 tvSeriesId / movieId 去重，避免同一部剧多集重复展示
+      const seen = new Set<string>();
+      const items: MediaItem[] = [];
+      for (const item of rawItems) {
+        let key: string;
+        if (item.tvSeriesId !== undefined) {
+          key = `tv-${item.tvSeriesId}`;
+        } else if (item.movieId !== undefined) {
+          key = `mv-${item.movieId}`;
+        } else {
+          key = `vid-${item.id}`;
+        }
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(item);
+          if (items.length >= safeLimit) { break; }
+        }
+      }
+
+      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} raw=${rawItems.length} deduped=${items.length}`);
       return items;
     } catch (e) {
       const err = e as BusinessError;
