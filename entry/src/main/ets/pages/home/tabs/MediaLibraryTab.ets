@@ -3,8 +3,8 @@ import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
-import { MediaLibraryModel, RatingLabel } from "../../../stores/media/MediaLibraryModel"
+import { MediaItem, MediaStats, SeriesGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
+import { MediaLibraryModel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import { FileSourceType } from "../../../db/models/FileSourceEntity"
 import { ContinueWatchCard } from "../../../components/media/ContinueWatchCard"
@@ -28,13 +28,6 @@ const LANDSCAPE_ASPECT_RATIO = 16/9;
 
 const WIDE_WIDTH = 360;
 // const WIDE_HEIGHT = 135;
-/** 评分标签卡片尺寸 */
-const RATING_CARD_W = 110;
-const RATING_CARD_H = 60;
-/** 年代标签卡片尺寸 */
-const DECADE_CARD_W = 120;
-const DECADE_CARD_H = 60;
-
 // ─────────────────────────────────────────────
 // 工具函数
 // ─────────────────────────────────────────────
@@ -59,10 +52,6 @@ function resolutionLabel(width?: number, height?: number): string {
   if (h >= 2160 || width >= 3840) { return '4K'; }
   if (h >= 1080 || width >= 1920) { return '1080P'; }
   return '';
-}
-function genreList(item: MediaItem): string[] {
-  if (!item.genresJson) { return []; }
-  try { return JSON.parse(item.genresJson) as string[]; } catch { return []; }
 }
 function formatScanTime(ts: number): string {
   if (ts === 0) { return '从未扫描'; }
@@ -330,100 +319,6 @@ struct SeriesCard {
 }
 
 // ─────────────────────────────────────────────
-// 评分标签卡片（只显示分数段，不显示具体内容）
-// ─────────────────────────────────────────────
-@ComponentV2
-struct RatingLabelCard {
-  @Require @Param ratingLabel: RatingLabel
-  @Event onPress: () => void = () => {}
-
-  private getLabelColor(): string {
-    if (this.ratingLabel.minRating >= 9) { return '#FFD700'; }
-    if (this.ratingLabel.minRating >= 8) { return '#FFA500'; }
-    if (this.ratingLabel.minRating >= 7) { return '#90EE90'; }
-    if (this.ratingLabel.minRating >= 6) { return '#87CEEB'; }
-    return '#AAAAAA';
-  }
-
-  build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column()
-        .width(RATING_CARD_W).height(RATING_CARD_H)
-        .backgroundColor('#1E1E1E').borderRadius(8)
-        .border({ width: 1, color: this.getLabelColor() })
-      Column() {
-        Text(this.ratingLabel.label)
-          .fontSize(16).fontColor(this.getLabelColor()).fontWeight(FontWeight.Bold)
-        Text(`${this.ratingLabel.count} 部`)
-          .fontSize(10).fontColor('#888888').margin({ top: 2 })
-      }
-    }
-    .width(RATING_CARD_W).height(RATING_CARD_H)
-    .onClick(() => { this.onPress(); })
-  }
-}
-
-// ─────────────────────────────────────────────
-// 年代标签卡片（只显示年代标签 + 数量）
-// ─────────────────────────────────────────────
-@ComponentV2
-struct DecadeCard {
-  @Require @Param decade: DecadeGroup
-  @Event onPress: () => void = () => {}
-
-  private isCurrentYear(): boolean { return this.decade.label === '今年'; }
-
-  build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column()
-        .width(DECADE_CARD_W).height(DECADE_CARD_H)
-        .linearGradient(this.isCurrentYear()
-          ? { angle: 135, colors: [['#1A3A5C', 0.0], ['#0D7FBF', 1.0]] }
-          : { angle: 135, colors: [['#1A1A2E', 0.0], ['#2D2D44', 1.0]] }
-        )
-        .borderRadius(8)
-        .border({ width: 1, color: this.isCurrentYear() ? '#2288CC' : '#333344' })
-      Column() {
-        Text(this.decade.label)
-          .fontSize(16).fontColor(this.isCurrentYear() ? '#66BBFF' : '#AAAACC')
-          .fontWeight(FontWeight.Bold)
-        Text(`${this.decade.count} 部`)
-          .fontSize(10).fontColor('#666688').margin({ top: 2 })
-      }
-    }
-    .width(DECADE_CARD_W).height(DECADE_CARD_H)
-    .onClick(() => { this.onPress(); })
-  }
-}
-
-// ─────────────────────────────────────────────
-// 分类卡片（16:9 渐变）
-// ─────────────────────────────────────────────
-@ComponentV2
-struct GenreCard {
-  @Require @Param genre: string
-  @Require @Param count: number
-  @Event onPress: () => void = () => {}
-
-  build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column()
-        .width(WIDE_WIDTH)
-        .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-        .linearGradient({ angle: 135, colors: [['#3A1C71', 0.0], ['#D76D77', 0.5], ['#FFAF7B', 1.0]] })
-        .borderRadius(6)
-      Column() {
-        Text(this.genre).fontSize(14).fontColor(Color.White).fontWeight(FontWeight.Bold)
-        Text(`${this.count} 部`).fontSize(11).fontColor('#DDDDDD').margin({ top: 4 })
-      }
-    }
-    .width(WIDE_WIDTH)
-    .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-    .onClick(() => { this.onPress(); })
-  }
-}
-
-// ─────────────────────────────────────────────
 // 混合卡片（自动选择 PosterCard 或 SeriesCard）
 // ─────────────────────────────────────────────
 @ComponentV2
@@ -459,16 +354,46 @@ struct MixedCard {
 @ComponentV2
 struct SectionRow {
   @Require @Param title: string
+  @Param showAction: boolean = false
+  @Param actionLabel: string = '查看全部 >'
+  @Event onAction: () => void = () => {}
   @BuilderParam content: () => void
+  @Local isActionFocused: boolean = false
 
   build() {
     Column() {
-      Text(this.title)
-        .fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Bold)
-        .padding({ left: 16, bottom: 8 })
+      Row() {
+        Text(this.title)
+          .fontSize(28)
+          .fontColor('#FFFFFF')
+          .fontWeight(FontWeight.Bold)
+          .padding({ left: 16 })
+          .layoutWeight(1)
+
+        if (this.showAction) {
+          Text(this.actionLabel)
+            .fontSize(18)
+            .fontColor(this.isActionFocused ? '#FFFFFF' : '#E29A43')
+            .fontWeight(FontWeight.Medium)
+            .height(32)
+            .padding({ left: 12, right: 16, top: 0, bottom: 0 })
+            .backgroundColor(this.isActionFocused ? 'rgba(226,154,67,0.15)' : Color.Transparent)
+            .borderRadius(6)
+            .border({ width: this.isActionFocused ? 2 : 0, color: '#E29A43' })
+            .focusable(true)
+            .onFocus(() => { this.isActionFocused = true; })
+            .onBlur(() => { this.isActionFocused = false; })
+            .onClick(() => { this.onAction(); })
+            .animation({ duration: 140, curve: Curve.EaseInOut })
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .constraintSize({ minHeight: 44 })
+      .margin({ bottom: 8 })
+
       Scroll() {
-        Row({ space: 10 })
-        {
+        Row({ space: 10 }) {
           this.content()
         }
         .padding({ left: 16, right: 16 })
@@ -923,32 +848,6 @@ export struct MediaLibraryTab {
     });
   }
 
-  // ── 类别统计 ─────────────────────────────────
-  private getGenreMap(): Map<string, number> {
-    const map = new Map<string, number>();
-    const all: MediaItem[] = [];
-    for (const m of this.model.movies) { all.push(m); }
-    for (const sg of this.model.seriesGroups) {
-      for (const ep of sg.episodes) { all.push(ep); }
-    }
-    for (const item of all) {
-      for (const g of genreList(item)) {
-        map.set(g, (map.get(g) ?? 0) + 1);
-      }
-    }
-    return map;
-  }
-
-  private getGenreKeys(): string[] {
-    const keys: string[] = [];
-    this.getGenreMap().forEach((_v, k) => { keys.push(k); });
-    return keys;
-  }
-
-  private getGenreCount(genre: string): number {
-    return this.getGenreMap().get(genre) ?? 0;
-  }
-
   private getStatsText(): string {
     const s = this.model.stats;
     return `共 ${s.total} 个视频 · 电影 ${s.movies} 部 · 电视剧 ${s.tv} 部 · 其他 ${s.other} 个`;
@@ -1030,7 +929,15 @@ export struct MediaLibraryTab {
   @Builder
   MoviesSection() {
     if (this.model.movies.length > 0) {
-      SectionRow({ title: `电影  (${this.model.movies.length})` }) {
+      SectionRow({
+        title: `电影片库  (${this.model.movies.length})`,
+        showAction: true,
+        actionLabel: '查看全部 >',
+        onAction: () => {
+          const param: MediaResultPageParam = { pageTitle: '全部电影', mediaType: 'movie' };
+          this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
+        }
+      }) {
         ForEach(this.model.movies.slice(0, 30), (item: MediaItem) => {
           PosterCard({ item })
         })
@@ -1041,7 +948,15 @@ export struct MediaLibraryTab {
   @Builder
   TvShowsSection() {
     if (this.model.seriesGroups.length > 0) {
-      SectionRow({ title: `电视剧  (${this.model.seriesGroups.length} 部)` }) {
+      SectionRow({
+        title: `电视剧片库  (${this.model.seriesGroups.length} 部)`,
+        showAction: true,
+        actionLabel: '查看全部 >',
+        onAction: () => {
+          const param: MediaResultPageParam = { pageTitle: '全部电视剧', mediaType: 'tv' };
+          this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
+        }
+      }) {
         ForEach(this.model.seriesGroups.slice(0, 30), (group: SeriesGroup) => {
           SeriesCard({ group })
         })
@@ -1055,51 +970,6 @@ export struct MediaLibraryTab {
       SectionRow({ title: '未观看' }) {
         ForEach(this.model.unwatchedList.slice(0, 20), (listItem: MediaListItem) => {
           MixedCard({ listItem })
-        })
-      }
-    }
-  }
-
-  @Builder
-  GenreSection() {
-    if (this.getGenreKeys().length > 0) {
-      SectionRow({ title: '类别' }) {
-        ForEach(this.getGenreKeys(), (genre: string) => {
-          GenreCard({ genre, count: this.getGenreCount(genre), onPress: () => {
-            const param: MediaResultPageParam = { pageTitle: genre, genre };
-            this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
-          }})
-        })
-      }
-    }
-  }
-
-  @Builder
-  RatingSection() {
-    if (this.model.ratingLabels.length > 0) {
-      SectionRow({ title: '高分推荐' }) {
-        ForEach(this.model.ratingLabels, (rl: RatingLabel) => {
-          RatingLabelCard({ ratingLabel: rl, onPress: () => {
-            const param: MediaResultPageParam = { pageTitle: rl.label, minRating: rl.minRating };
-            this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
-          }})
-        })
-      }
-    }
-  }
-
-  @Builder
-  DecadeSection() {
-    if (this.model.decadeGroups.length > 0) {
-      SectionRow({ title: '上映年代' }) {
-        ForEach(this.model.decadeGroups, (decade: DecadeGroup) => {
-          DecadeCard({ decade, onPress: () => {
-            const decadeYear = decade.label === '今年'
-              ? new Date().getFullYear().toString()
-              : decade.label.replace('s', '');
-            const param: MediaResultPageParam = { pageTitle: decade.label, decadeYear };
-            this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
-          }})
         })
       }
     }
@@ -1182,9 +1052,6 @@ export struct MediaLibraryTab {
         this.MoviesSection()
         this.TvShowsSection()
         this.UnwatchedSection()
-        this.GenreSection()
-        this.RatingSection()
-        this.DecadeSection()
         this.StatsAndScan()
       }
     }
