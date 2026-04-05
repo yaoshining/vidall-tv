@@ -12,6 +12,8 @@ export interface MediaResultPageParam {
   mediaType?: string;
   genre?: string;
   pageTitle?: string;
+  minRating?: number;
+  decadeYear?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -582,6 +584,12 @@ export struct MediaResultPage {
         this.keyword = param.keyword ?? '';
         this.filterMediaType = param.mediaType ?? '';
         this.filterGenre = param.genre ?? '';
+        if (param.minRating !== undefined && param.minRating > 0) {
+          this.filterRating = param.minRating;
+        }
+        if (param.decadeYear !== undefined && param.decadeYear.length > 0) {
+          this.filterYear = param.decadeYear;
+        }
       }
       this.doSearch().catch((): void => {});
     })
