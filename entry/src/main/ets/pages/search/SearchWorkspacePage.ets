@@ -233,12 +233,26 @@ struct SearchWorkspacePage {
     const generation = ++this.searchGeneration;
     this.isSearching = true;
     try {
-      const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 50 });
-      if (generation !== this.searchGeneration) { return; } // 丢弃过期结果
-      this.searchResults = items;
+      const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 200 });
+      if (generation !== this.searchGeneration) { return; }
+      // 按 (tvSeriesId, movieId) 去重：同一部剧/电影只保留第一条
+      const seen: Set<string> = new Set<string>();
+      const deduped: MediaItem[] = [];
+      for (const item of items) {
+        const key: string = item.tvSeriesId !== undefined
+          ? `tv-${item.tvSeriesId}`
+          : item.movieId !== undefined
+            ? `mv-${item.movieId}`
+            : `v-${item.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduped.push(item);
+        }
+      }
+      this.searchResults = deduped;
     } catch {
       if (generation !== this.searchGeneration) { return; }
-      this.searchResults = []; // 失败时清空，不保留旧数据
+      this.searchResults = [];
     } finally {
       if (generation === this.searchGeneration) {
         this.isSearching = false;
@@ -545,17 +559,60 @@ struct SearchWorkspacePage {
   @Builder
   buildResultsPreview() {
     if (this.searchResults.length > 0) {
-      Scroll() {
-        Row({ space: 30 }) {
-          ForEach(this.searchResults, (item: MediaItem) => {
-            WorkspacePosterCard({
-              item: item,
-              onPress: () => { this.navigateToDetail(item); }
-            })
-          }, (item: MediaItem) => String(item.id))
-        }
+      Column({ space: 0 }) {
+        ForEach(this.searchResults, (item: MediaItem) => {
+          Row({ space: 16 }) {
+            // 左：缩略图
+            if (posterSrc(item).length > 0) {
+              Image(posterSrc(item))
+                .width(80)
+                .height(120)
+                .objectFit(ImageFit.Cover)
+                .borderRadius(6)
+            } else {
+              Column() {
+                Text('\u{1F3AC}')
+                  .fontSize(28)
+                  .opacity(0.4)
+              }
+              .width(80)
+              .height(120)
+              .backgroundColor(C_COMPONENT_BG)
+              .borderRadius(6)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(HorizontalAlign.Center)
+            }
+            // 右：信息
+            Column({ space: 6 }) {
+              Text(item.title ?? '')
+                .fontSize(22)
+                .fontColor('#E3E7ED')
+                .fontWeight(500)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              if (item.rating !== undefined && item.rating > 0) {
+                Text(item.rating.toFixed(1))
+                  .fontSize(18)
+                  .fontWeight(600)
+                  .fontColor(scoreColor(item.rating))
+              }
+              if (item.releaseDate !== undefined && item.releaseDate.length >= 4) {
+                Text(item.releaseDate.slice(0, 4))
+                  .fontSize(16)
+                  .fontColor('#8A9BB0')
+              }
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+            .justifyContent(FlexAlign.Center)
+          }
+          .width('100%')
+          .padding({ top: 10, bottom: 10, left: 4, right: 4 })
+          .borderRadius(10)
+          .focusable(true)
+          .onClick(() => { this.navigateToDetail(item); })
+        }, (item: MediaItem) => String(item.id))
       }
-      .scrollable(ScrollDirection.Horizontal)
       .width('100%')
     }
   }
@@ -579,6 +636,7 @@ struct SearchWorkspacePage {
       .scrollable(ScrollDirection.Vertical)
       .width('100%')
       .height('100%')
+      .align(Alignment.TopStart)
       .backgroundColor(C_PAGE_BG)
     }
     .hideTitleBar(true)
