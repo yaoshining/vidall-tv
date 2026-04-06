@@ -244,6 +244,9 @@ export struct MediaResultPage {
   private db: FileSourceDatabase = FileSourceDatabase.getInstance();
   // 竞态保护：每次发起新请求时递增，回调中比对版本号，过期则丢弃
   private searchGeneration: number = 0;
+  // 路由初始参数，用于 resetAll() 恢复入口语义
+  private initialMediaType: string = '';
+  private initialGenre: string = '';
 
   // ── Data operations ───────────────────────────────────────────────────────
 
@@ -255,10 +258,11 @@ export struct MediaResultPage {
       if (this.filterMediaType === 'movie') { mt = 'movie'; }
       else if (this.filterMediaType === 'tv') { mt = 'tv'; }
 
-      // 排序映射：composite → title（DB 没有单独的 composite 排序，用 title 做默认）
-      let sb: 'rating' | 'year' | 'title' = 'title';
+      // 排序映射：composite → rating（综合排序以评分为主）
+      let sb: 'rating' | 'year' | 'title' = 'rating';
       if (this.filterSort === 'rating') { sb = 'rating'; }
       else if (this.filterSort === 'year') { sb = 'year'; }
+      else if (this.filterSort === 'title') { sb = 'title'; }
 
       // 年份筛选：年代区间
       let yearFrom: number | undefined = undefined;
@@ -309,8 +313,8 @@ export struct MediaResultPage {
   // ── Label helpers ─────────────────────────────────────────────────────────
 
   private resetAll(): void {
-    this.filterMediaType = '';
-    this.filterGenre = '';
+    this.filterMediaType = this.initialMediaType;
+    this.filterGenre = this.initialGenre;
     this.filterYearLabel = '';
     this.filterRating = 0;
     this.filterSort = 'composite';
@@ -612,6 +616,9 @@ export struct MediaResultPage {
         this.keyword = param.keyword ?? '';
         this.filterMediaType = param.mediaType ?? '';
         this.filterGenre = param.genre ?? '';
+        // 保存入口初始值，resetAll() 时恢复入口语义而非全部清空
+        this.initialMediaType = this.filterMediaType;
+        this.initialGenre = this.filterGenre;
       }
       this.doSearch().catch((): void => {});
     })
