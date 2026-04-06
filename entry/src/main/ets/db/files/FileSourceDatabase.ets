@@ -2694,8 +2694,11 @@ export class FileSourceDatabase {
       }
 
       // ── mediaType 过滤（'all' 时不加条件） ──
+      // TV 系列整体存为 media_type='tv'，单集存为 media_type='episode'，两者均属电视剧
       const mediaType: string = options?.mediaType ?? 'all';
-      if (mediaType !== 'all') {
+      if (mediaType === 'tv') {
+        conditions.push("s.media_type IN ('tv', 'episode')");
+      } else if (mediaType !== 'all') {
         conditions.push('s.media_type = ?');
         params.push(mediaType);
       }

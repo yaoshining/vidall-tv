@@ -375,7 +375,7 @@ export struct MediaResultPage {
                   this.doSearch().catch((): void => {});
                 }
               )
-            }, (val: string) => 'ct_' + val)
+            }, (val: string) => 'ct_' + val + '_' + this.filterMediaType)
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -402,7 +402,7 @@ export struct MediaResultPage {
                 this.filterSort = opt.value;
                 this.doSearch().catch((): void => {});
               })
-            }, (opt: StringOption) => 'sort_' + opt.value)
+            }, (opt: StringOption) => 'sort_' + opt.value + '_' + this.filterSort)
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -429,7 +429,7 @@ export struct MediaResultPage {
                 this.filterGenre = (g === '全部') ? '' : g;
                 this.doSearch().catch((): void => {});
               })
-            }, (g: string) => 'genre_' + g)
+            }, (g: string) => 'genre_' + g + '_' + this.filterGenre)
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -456,7 +456,7 @@ export struct MediaResultPage {
                 this.filterYear = (y === '全部') ? '' : y;
                 this.doSearch().catch((): void => {});
               })
-            }, (y: string) => 'year_' + y)
+            }, (y: string) => 'year_' + y + '_' + this.filterYear)
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -519,7 +519,6 @@ export struct MediaResultPage {
   build() {
     NavDestination() {
       Column({ space: 20 }) {
-        this.buildBackRow()
         this.buildHeader()
         this.buildFilterPanel()
         // summary 可简化为一行文字（当有筛选时显示当前条件）
