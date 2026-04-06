@@ -429,7 +429,7 @@ export struct MediaResultPage {
                   this.filterGenre = '';
                   if (val === 'movie') { this.pageTitle = '全部电影'; }
                   else if (val === 'tv') { this.pageTitle = '全部电视剧'; }
-                  else { this.pageTitle = this.initialPageTitle; }
+                  else { this.pageTitle = '全部内容'; }
                   this.loadGenreOptions().catch((): void => {});
                   this.doSearch().catch((): void => {});
                 }
