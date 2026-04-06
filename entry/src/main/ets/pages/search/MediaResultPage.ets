@@ -245,6 +245,7 @@ export struct MediaResultPage {
   // 路由初始参数，用于 resetAll() 恢复入口语义
   private initialMediaType: string = '';
   private initialGenre: string = '';
+  private initialPageTitle: string = '搜索结果';
 
   // ── Data operations ───────────────────────────────────────────────────────
 
@@ -326,6 +327,7 @@ export struct MediaResultPage {
     this.filterYearLabel = '';
     this.filterRating = 0;
     this.filterSort = 'composite';
+    this.pageTitle = this.initialPageTitle;
     this.doSearch().catch((): void => {});
   }
 
@@ -425,6 +427,9 @@ export struct MediaResultPage {
                 () => {
                   this.filterMediaType = val;
                   this.filterGenre = '';
+                  if (val === 'movie') { this.pageTitle = '全部电影'; }
+                  else if (val === 'tv') { this.pageTitle = '全部电视剧'; }
+                  else { this.pageTitle = this.initialPageTitle; }
                   this.loadGenreOptions().catch((): void => {});
                   this.doSearch().catch((): void => {});
                 }
@@ -628,6 +633,7 @@ export struct MediaResultPage {
         // 保存入口初始值，resetAll() 时恢复入口语义而非全部清空
         this.initialMediaType = this.filterMediaType;
         this.initialGenre = this.filterGenre;
+        this.initialPageTitle = this.pageTitle;
       }
       this.loadGenreOptions().catch((): void => {});
       this.doSearch().catch((): void => {});
