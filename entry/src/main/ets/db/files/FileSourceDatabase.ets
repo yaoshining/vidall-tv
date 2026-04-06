@@ -25,6 +25,13 @@ export interface SearchMediaOptions {
   sortBy?: 'rating' | 'year' | 'title';
   /** 最大返回条数，默认 50 */
   limit?: number;
+  /**
+   * 观看进度过滤
+   * 'unseen'  - 未看：media_progress 表无记录，或 position_ms = 0
+   * 'partial' - 未看完：有进度且 position_ms < duration_ms * 0.9
+   * 'done'    - 已看完：position_ms >= duration_ms * 0.9
+   */
+  watchProgress?: 'unseen' | 'partial' | 'done';
 }
 
 /**
@@ -2724,6 +2731,52 @@ export class FileSourceDatabase {
       if (options?.yearTo !== undefined) {
         conditions.push("CAST(substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS INTEGER) <= ?");
         params.push(options.yearTo);
+      }
+
+      // ── watchProgress 过滤：通过 EXISTS 子查询匹配 media_progress 表 ──
+      // 电影 key 格式: media_progress_movie_{s.provider_id}
+      // 集级剧集 key 格式: media_progress_episode_tmdb_{ts.provider_id}_s{n}_e{n}
+      // 使用 '_s%' 后缀而非 '_%'，避免 provider_id 为前缀子串时误匹配（如 1399 匹配到 13990）
+      if (options?.watchProgress === 'unseen') {
+        conditions.push(
+          `((s.media_type = 'movie' AND NOT EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.position_ms > 0` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND NOT EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.position_ms > 0` +
+          `)))`
+        );
+      } else if (options?.watchProgress === 'partial') {
+        conditions.push(
+          `((s.media_type = 'movie' AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.position_ms > 0 AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) < CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.position_ms > 0 AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) < CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)))`
+        );
+      } else if (options?.watchProgress === 'done') {
+        conditions.push(
+          `((s.media_type = 'movie' AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)))`
+        );
       }
 
       const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';

@@ -68,6 +68,20 @@ const RATING_OPTIONS: RatingOption[] = [
   { label: '6分+', value: 6 },
 ];
 
+const MOVIE_PROGRESS_OPTIONS: StringOption[] = [
+  { label: '全部进度', value: '' },
+  { label: '未看', value: 'unseen' },
+  { label: '未看完', value: 'partial' },
+  { label: '已看完', value: 'done' },
+];
+
+const TV_PROGRESS_OPTIONS: StringOption[] = [
+  { label: '全部进度', value: '' },
+  { label: '未看', value: 'unseen' },
+  { label: '追更中', value: 'partial' },
+  { label: '已看完', value: 'done' },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Token Constants — strictly follows Pencil vidall_pages.pen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,6 +275,7 @@ export struct MediaResultPage {
   @Local filterGenre: string = '';         // '' 或具体流派
   @Local filterYearLabel: string = '';     // '' | '2020s' | '2010s' | '2000s' | '1990s' | '更早'
   @Local filterRating: number = 0;         // 0 = 全部，6/7/8 = 对应最低分
+  @Local filterProgress: string = '';      // '' | 'unseen' | 'partial' | 'done'
   @Local genreOptions: string[] = [];      // 从库中动态加载
 
   // ── Data state ────────────────────────────────────────────────────────────
@@ -275,6 +290,23 @@ export struct MediaResultPage {
   private initialMediaType: string = '';
   private initialGenre: string = '';
   private initialPageTitle: string = '搜索结果';
+
+  private getWatchProgressFilter(): 'unseen' | 'partial' | 'done' | undefined {
+    if (this.filterProgress === 'unseen') { return 'unseen'; }
+    if (this.filterProgress === 'partial') { return 'partial'; }
+    if (this.filterProgress === 'done') { return 'done'; }
+    return undefined;
+  }
+
+  /** 计算 Grid 高度，用于 Scroll 内 Grid 无法使用 layoutWeight 时的替代方案 */
+  private calcGridHeight(): number {
+    if (this.results.length === 0) { return 300; }
+    const cols = 6;
+    const rows = Math.ceil(this.results.length / cols);
+    // ResultPosterCard: poster(270) + space(8) + title(~26) + score(~26) ≈ 330
+    // rowsGap: 30
+    return rows * (330 + 30) + 60;
+  }
 
   // ── Data operations ───────────────────────────────────────────────────────
 
@@ -309,6 +341,7 @@ export struct MediaResultPage {
         sortBy: sb,
         limit: 200,
         minRating: this.filterRating > 0 ? this.filterRating : undefined,
+        watchProgress: this.getWatchProgressFilter(),
       };
 
       const items: MediaItem[] = await this.db.searchMediaItems(this.keyword, options);
@@ -355,6 +388,7 @@ export struct MediaResultPage {
     this.filterGenre = this.initialGenre;
     this.filterYearLabel = '';
     this.filterRating = 0;
+    this.filterProgress = '';
     this.filterSort = 'composite';
     this.pageTitle = this.initialPageTitle;
     this.doSearch().catch((): void => {});
@@ -367,6 +401,9 @@ export struct MediaResultPage {
     if (this.filterGenre.length > 0) { parts.push(this.filterGenre); }
     if (this.filterYearLabel.length > 0) { parts.push(this.filterYearLabel); }
     if (this.filterRating > 0) { parts.push(this.filterRating.toString() + '分+'); }
+    if (this.filterProgress === 'unseen') { parts.push('未看'); }
+    else if (this.filterProgress === 'partial') { parts.push(this.filterMediaType === 'tv' ? '追更中' : '未看完'); }
+    else if (this.filterProgress === 'done') { parts.push('已看完'); }
     if (parts.length === 0) { return ''; }
     return '当前条件：' + parts.join(' / ');
   }
@@ -441,6 +478,7 @@ export struct MediaResultPage {
                 onPress: () => {
                   this.filterMediaType = val;
                   this.filterGenre = '';
+                  this.filterProgress = '';
                   if (val === 'movie') { this.pageTitle = '全部电影'; }
                   else if (val === 'tv') { this.pageTitle = '全部电视剧'; }
                   else { this.pageTitle = '全部内容'; }
@@ -587,6 +625,43 @@ export struct MediaResultPage {
       .width('100%')
       .height(48)
       .alignItems(VerticalAlign.Center)
+
+      // 行6：观看进度（仅当 filterMediaType !== '' 时显示）
+      if (this.filterMediaType !== '') {
+        Divider().color('#3A3A3A').height(1)
+
+        Row() {
+          Scroll() {
+            Row({ space: 8 }) {
+              ForEach(
+                this.filterMediaType === 'movie' ? MOVIE_PROGRESS_OPTIONS : TV_PROGRESS_OPTIONS,
+                (opt: StringOption) => {
+                  this.buildChip(
+                    opt.label,
+                    this.filterProgress === opt.value,
+                    () => {
+                      this.filterProgress = opt.value;
+                      this.doSearch().catch((): void => {});
+                    }
+                  )
+                },
+                (opt: StringOption) => 'prog_' + opt.value + '_' + this.filterProgress + '_' + this.filterMediaType
+              )
+            }
+            .padding({ left: 12, right: 12 })
+            .justifyContent(FlexAlign.Start)
+            .alignItems(VerticalAlign.Center)
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .layoutWeight(1)
+          .height(48)
+          .align(Alignment.Start)
+        }
+        .width('100%')
+        .height(48)
+        .alignItems(VerticalAlign.Center)
+      }
     }
     .width('100%')
     .backgroundColor(C_FILTER_BG)
@@ -602,8 +677,8 @@ export struct MediaResultPage {
           .fontSize(18)
           .fontColor(C_SECONDARY)
       }
-      .layoutWeight(1)
       .width('100%')
+      .height(300)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
     } else if (this.results.length === 0) {
@@ -612,8 +687,8 @@ export struct MediaResultPage {
           .fontSize(18)
           .fontColor(C_SECONDARY)
       }
-      .layoutWeight(1)
       .width('100%')
+      .height(300)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
     } else {
@@ -628,23 +703,35 @@ export struct MediaResultPage {
       .columnsGap(30)
       .rowsGap(30)
       .width('100%')
-      .layoutWeight(1)
+      .height(this.calcGridHeight())
+      .nestedScroll({ scrollForward: NestedScrollMode.PARENT_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
     }
   }
 
   build() {
     NavDestination() {
-      Column({ space: 20 }) {
+      Column() {
+        // 标题栏固定，不随内容滚动
         this.buildHeader()
-        this.buildFilterPanel()
-        // summary 可简化为一行文字（当有筛选时显示当前条件）
-        if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYearLabel !== '' || this.filterRating > 0) {
-          Text(this.summaryText())
-            .fontSize(16)
-            .fontColor(C_SECONDARY)
-            .width('100%')
+
+        // FilterPanel + 结果列表整体滚动
+        Scroll() {
+          Column({ space: 20 }) {
+            this.buildFilterPanel()
+            // summary：有筛选条件时显示当前条件
+            if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYearLabel !== '' || this.filterRating > 0 || this.filterProgress !== '') {
+              Text(this.summaryText())
+                .fontSize(16)
+                .fontColor(C_SECONDARY)
+                .width('100%')
+            }
+            this.buildResultGrid()
+          }
+          .width('100%')
         }
-        this.buildResultGrid()
+        .layoutWeight(1)
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Off)
       }
       .width('100%')
       .height('100%')
