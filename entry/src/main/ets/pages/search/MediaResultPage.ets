@@ -29,24 +29,47 @@ interface StringOption {
 // Filter option constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SORT_OPTIONS: StringOption[] = [
+const MOVIE_SORT_OPTIONS: StringOption[] = [
+  { label: '综合', value: 'composite' },
+  { label: '评分最高', value: 'rating' },
+  { label: '年份', value: 'year' },
+  { label: '名称', value: 'title' },
+];
+const TV_SORT_OPTIONS: StringOption[] = [
   { label: '综合', value: 'composite' },
   { label: '评分最高', value: 'rating' },
   { label: '首播年份', value: 'year' },
   { label: '名称', value: 'title' },
 ];
 
-const GENRE_OPTIONS: string[] = ['全部', '古装', '都市', '爱情', '剧情', '悬疑', '喜剧', '动作', '科幻', '奇幻'];
+const MOVIE_GENRE_OPTIONS: string[] = ['全部', '动作', '喜剧', '科幻', '悬疑', '犯罪', '动画', '纪录', '剧情', '爱情', '奇幻', '恐怖', '历史'];
+const TV_GENRE_OPTIONS: string[] = ['全部', '古装', '都市', '悬疑', '喜剧', '家庭', '犯罪', '纪录', '动画', '爱情', '历史', '奇幻'];
+const ALL_GENRE_OPTIONS: string[] = ['全部', '动作', '喜剧', '科幻', '悬疑', '古装', '都市', '犯罪', '动画', '纪录', '爱情', '剧情'];
 
-function buildYearOptions(): string[] {
-  const opts: string[] = ['全部'];
-  const cur = new Date().getFullYear();
-  for (let y = cur; y >= 2015; y--) {
-    opts.push(y.toString());
-  }
-  return opts;
+interface YearOption {
+  label: string;
+  from: number;
+  to: number;
 }
-const YEAR_OPTIONS: string[] = buildYearOptions();
+const DECADE_OPTIONS: YearOption[] = [
+  { label: '全部', from: 0, to: 0 },
+  { label: '2020s', from: 2020, to: 2029 },
+  { label: '2010s', from: 2010, to: 2019 },
+  { label: '2000s', from: 2000, to: 2009 },
+  { label: '1990s', from: 1990, to: 1999 },
+  { label: '更早', from: 1900, to: 1989 },
+];
+
+interface RatingOption {
+  label: string;
+  value: number;
+}
+const RATING_OPTIONS: RatingOption[] = [
+  { label: '全部评分', value: 0 },
+  { label: '8分+', value: 8 },
+  { label: '7分+', value: 7 },
+  { label: '6分+', value: 6 },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Token Constants — strictly follows Pencil vidall_pages.pen
@@ -210,7 +233,8 @@ export struct MediaResultPage {
   @Local filterMediaType: string = '';    // '' | 'movie' | 'tv'
   @Local filterSort: string = 'composite'; // 'composite' | 'rating' | 'year' | 'title'
   @Local filterGenre: string = '';         // '' 或具体流派
-  @Local filterYear: string = '';          // '' 或具体年份如 '2024'
+  @Local filterYearLabel: string = '';     // '' | '2020s' | '2010s' | '2000s' | '1990s' | '更早'
+  @Local filterRating: number = 0;         // 0 = 全部，6/7/8 = 对应最低分
 
   // ── Data state ────────────────────────────────────────────────────────────
   @Local results: MediaItem[] = [];
@@ -236,12 +260,13 @@ export struct MediaResultPage {
       if (this.filterSort === 'rating') { sb = 'rating'; }
       else if (this.filterSort === 'year') { sb = 'year'; }
 
-      // 年份筛选：精确年份（不再是年代区间）
+      // 年份筛选：年代区间
       let yearFrom: number | undefined = undefined;
       let yearTo: number | undefined = undefined;
-      if (this.filterYear.length > 0) {
-        const y = parseInt(this.filterYear, 10);
-        if (!isNaN(y)) { yearFrom = y; yearTo = y; }
+      const decade = DECADE_OPTIONS.find(d => d.label === this.filterYearLabel);
+      if (decade !== undefined && decade.from > 0) {
+        yearFrom = decade.from;
+        yearTo = decade.to;
       }
 
       const options: SearchMediaOptions = {
@@ -251,6 +276,7 @@ export struct MediaResultPage {
         yearTo,
         sortBy: sb,
         limit: 200,
+        minRating: this.filterRating > 0 ? this.filterRating : undefined,
       };
 
       const items: MediaItem[] = await this.db.searchMediaItems(this.keyword, options);
@@ -268,12 +294,25 @@ export struct MediaResultPage {
     }
   }
 
+  // ── Filter option getters ─────────────────────────────────────────────────
+
+  private getGenreOptions(): string[] {
+    if (this.filterMediaType === 'movie') { return MOVIE_GENRE_OPTIONS; }
+    if (this.filterMediaType === 'tv') { return TV_GENRE_OPTIONS; }
+    return ALL_GENRE_OPTIONS;
+  }
+
+  private getSortOptions(): StringOption[] {
+    return this.filterMediaType === 'tv' ? TV_SORT_OPTIONS : MOVIE_SORT_OPTIONS;
+  }
+
   // ── Label helpers ─────────────────────────────────────────────────────────
 
   private resetAll(): void {
     this.filterMediaType = '';
     this.filterGenre = '';
-    this.filterYear = '';
+    this.filterYearLabel = '';
+    this.filterRating = 0;
     this.filterSort = 'composite';
     this.doSearch().catch((): void => {});
   }
@@ -283,7 +322,8 @@ export struct MediaResultPage {
     if (this.filterMediaType === 'movie') { parts.push('电影'); }
     else if (this.filterMediaType === 'tv') { parts.push('电视剧'); }
     if (this.filterGenre.length > 0) { parts.push(this.filterGenre); }
-    if (this.filterYear.length > 0) { parts.push(this.filterYear); }
+    if (this.filterYearLabel.length > 0) { parts.push(this.filterYearLabel); }
+    if (this.filterRating > 0) { parts.push(this.filterRating.toString() + '分+'); }
     if (parts.length === 0) { return ''; }
     return '当前条件：' + parts.join(' / ');
   }
@@ -372,6 +412,7 @@ export struct MediaResultPage {
                 this.filterMediaType === val,
                 () => {
                   this.filterMediaType = val;
+                  this.filterGenre = '';
                   this.doSearch().catch((): void => {});
                 }
               )
@@ -397,12 +438,12 @@ export struct MediaResultPage {
       Row() {
         Scroll() {
           Row({ space: 8 }) {
-            ForEach(SORT_OPTIONS, (opt: StringOption) => {
+            ForEach(this.getSortOptions(), (opt: StringOption) => {
               this.buildChip(opt.label, this.filterSort === opt.value, () => {
                 this.filterSort = opt.value;
                 this.doSearch().catch((): void => {});
               })
-            }, (opt: StringOption) => 'sort_' + opt.value + '_' + this.filterSort)
+            }, (opt: StringOption) => 'sort_' + opt.value + '_' + this.filterSort + '_' + this.filterMediaType)
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -424,12 +465,12 @@ export struct MediaResultPage {
       Row() {
         Scroll() {
           Row({ space: 8 }) {
-            ForEach(GENRE_OPTIONS, (g: string) => {
+            ForEach(this.getGenreOptions(), (g: string) => {
               this.buildChip(g === '全部' ? '全部类型' : g, (g === '全部' ? this.filterGenre === '' : this.filterGenre === g), () => {
                 this.filterGenre = (g === '全部') ? '' : g;
                 this.doSearch().catch((): void => {});
               })
-            }, (g: string) => 'genre_' + g + '_' + this.filterGenre)
+            }, (g: string) => 'genre_' + g + '_' + this.filterGenre + '_' + this.filterMediaType)
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -447,16 +488,45 @@ export struct MediaResultPage {
 
       Divider().color('#3A3A3A').height(1)
 
-      // 行4：年份
+      // 行4：年代区间
       Row() {
         Scroll() {
           Row({ space: 8 }) {
-            ForEach(YEAR_OPTIONS, (y: string) => {
-              this.buildChip(y === '全部' ? '全部年份' : y, (y === '全部' ? this.filterYear === '' : this.filterYear === y), () => {
-                this.filterYear = (y === '全部') ? '' : y;
+            ForEach(DECADE_OPTIONS, (d: YearOption) => {
+              this.buildChip(d.label === '全部' ? '全部年份' : d.label,
+                this.filterYearLabel === d.label || (d.label === '全部' && this.filterYearLabel === ''),
+                () => {
+                  this.filterYearLabel = d.label === '全部' ? '' : d.label;
+                  this.doSearch().catch((): void => {});
+                })
+            }, (d: YearOption) => 'year_' + d.label + '_' + this.filterYearLabel)
+          }
+          .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Start)
+          .alignItems(VerticalAlign.Center)
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .layoutWeight(1)
+        .height(48)
+        .align(Alignment.Start)
+      }
+      .width('100%')
+      .height(48)
+      .alignItems(VerticalAlign.Center)
+
+      Divider().color('#3A3A3A').height(1)
+
+      // 行5：评分筛选
+      Row() {
+        Scroll() {
+          Row({ space: 8 }) {
+            ForEach(RATING_OPTIONS, (r: RatingOption) => {
+              this.buildChip(r.label, this.filterRating === r.value, () => {
+                this.filterRating = r.value;
                 this.doSearch().catch((): void => {});
               })
-            }, (y: string) => 'year_' + y + '_' + this.filterYear)
+            }, (r: RatingOption) => 'rating_' + r.value.toString() + '_' + this.filterRating.toString())
           }
           .padding({ left: 12, right: 12 })
           .justifyContent(FlexAlign.Start)
@@ -522,7 +592,7 @@ export struct MediaResultPage {
         this.buildHeader()
         this.buildFilterPanel()
         // summary 可简化为一行文字（当有筛选时显示当前条件）
-        if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYear !== '') {
+        if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYearLabel !== '' || this.filterRating > 0) {
           Text(this.summaryText())
             .fontSize(16)
             .fontColor(C_SECONDARY)
