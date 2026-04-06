@@ -113,7 +113,7 @@ struct ResultPosterCard {
   @Local isFocused: boolean = false;
 
   private navigateToDetail(): void {
-    if (this.item.mediaType === 'tv') {
+    if (this.item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
         title: itemTitle(this.item),
         tvSeriesId: this.item.tvSeriesId,

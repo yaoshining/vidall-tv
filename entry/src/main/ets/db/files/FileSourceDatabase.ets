@@ -1447,7 +1447,7 @@ export class FileSourceDatabase {
              s.provider, s.provider_id, s.media_type,
              s.movie_id, s.tv_series_id, s.episode_id,
              s.season_number, s.episode_number,
-             COALESCE(m.title, ts.title)                          AS scrape_title,
+             COALESCE(m.title, ts.title, s.title)                 AS scrape_title,
              COALESCE(m.original_title, ts.original_title)        AS original_title,
              COALESCE(te.overview, m.overview, ts.overview)       AS overview,
              COALESCE(m.release_date, ts.first_air_date)          AS release_date,
@@ -2695,9 +2695,10 @@ export class FileSourceDatabase {
 
       // ── mediaType 过滤（'all' 时不加条件） ──
       // TV 系列整体存为 media_type='tv'，单集存为 media_type='episode'，两者均属电视剧
+      // 同时要求 tv_series_id IS NOT NULL，剔除刮削不完整的脏数据（无系列关联的单集）
       const mediaType: string = options?.mediaType ?? 'all';
       if (mediaType === 'tv') {
-        conditions.push("s.media_type IN ('tv', 'episode')");
+        conditions.push("(s.media_type IN ('tv', 'episode') AND s.tv_series_id IS NOT NULL)");
       } else if (mediaType !== 'all') {
         conditions.push('s.media_type = ?');
         params.push(mediaType);
@@ -2772,8 +2773,16 @@ export class FileSourceDatabase {
         }
       }
 
-      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} raw=${rawItems.length} deduped=${items.length}`);
-      return items;
+      // 剔除 tv/episode 类型但缺少系列关联的脏数据（tv_series_id=NULL 导致无标题无海报）
+      const displayItems = items.filter((item: MediaItem): boolean => {
+        if (item.mediaType === 'episode' || item.mediaType === 'tv') {
+          return item.tvSeriesId !== undefined && item.title !== undefined;
+        }
+        return true;
+      });
+
+      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} raw=${rawItems.length} deduped=${items.length} display=${displayItems.length}`);
+      return displayItems;
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
