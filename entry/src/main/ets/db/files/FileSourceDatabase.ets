@@ -2706,7 +2706,7 @@ export class FileSourceDatabase {
 
       // ── genre 过滤：genres_json 模糊匹配（加表别名避免多表 JOIN 时列名歧义） ──
       if (options?.genre !== undefined && options.genre.length > 0) {
-        conditions.push('m.genres_json LIKE ?');
+        conditions.push('COALESCE(m.genres_json, ts.genres_json) LIKE ?');
         params.push(`%${options.genre}%`);
       }
 
@@ -2826,6 +2826,57 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][getDistinctGenres] 异常 code=${err.code} msg=${err.message}`);
+      return [];
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 从当前库中提取所有独立 genre 名称（已解析，去重，排序）。
+   * @param mediaType 'movie' | 'tv' | undefined（undefined = 全部）
+   */
+  async getDistinctGenreNames(mediaType?: 'movie' | 'tv'): Promise<string[]> {
+    if (this.rdbStore === null) { return []; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      let typeCondition: string = '';
+      const typeParams: relationalStore.ValueType[] = [];
+      if (mediaType === 'movie') {
+        typeCondition = "WHERE s.media_type = 'movie' AND m.genres_json IS NOT NULL";
+      } else if (mediaType === 'tv') {
+        typeCondition = "WHERE (s.media_type IN ('tv', 'episode')) AND s.tv_series_id IS NOT NULL AND ts.genres_json IS NOT NULL";
+      } else {
+        typeCondition = 'WHERE COALESCE(m.genres_json, ts.genres_json) IS NOT NULL';
+      }
+      const sql: string = `
+        SELECT COALESCE(m.genres_json, ts.genres_json) AS genres_json
+        FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s
+        LEFT JOIN ${FileSourceDatabase.TABLE_MOVIES} m ON s.movie_id = m.id
+        LEFT JOIN ${FileSourceDatabase.TABLE_TV_SERIES} ts ON s.tv_series_id = ts.id
+        ${typeCondition}
+      `;
+      rs = await this.rdbStore.querySql(sql, typeParams);
+      const nameSet = new Set<string>();
+      while (rs.goToNextRow()) {
+        const raw: string = rs.getString(rs.getColumnIndex('genres_json'));
+        if (raw) {
+          try {
+            const arr = JSON.parse(raw) as string[];
+            for (const name of arr) {
+              if (name && name.length > 0) { nameSet.add(name); }
+            }
+          } catch {
+            // 解析失败跳过
+          }
+        }
+      }
+      const result: string[] = Array.from(nameSet).sort();
+      console.info(`[DB][getDistinctGenreNames] mediaType=${mediaType ?? 'all'} 共 ${result.length} 个 genre`);
+      return result;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[DB][getDistinctGenreNames] 异常 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
       rs?.close();

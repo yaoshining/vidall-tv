@@ -42,9 +42,6 @@ const TV_SORT_OPTIONS: StringOption[] = [
   { label: '名称', value: 'title' },
 ];
 
-const MOVIE_GENRE_OPTIONS: string[] = ['全部', '动作', '喜剧', '科幻', '悬疑', '犯罪', '动画', '纪录', '剧情', '爱情', '奇幻', '恐怖', '历史'];
-const TV_GENRE_OPTIONS: string[] = ['全部', '古装', '都市', '悬疑', '喜剧', '家庭', '犯罪', '纪录', '动画', '爱情', '历史', '奇幻'];
-const ALL_GENRE_OPTIONS: string[] = ['全部', '动作', '喜剧', '科幻', '悬疑', '古装', '都市', '犯罪', '动画', '纪录', '爱情', '剧情'];
 
 interface YearOption {
   label: string;
@@ -235,6 +232,7 @@ export struct MediaResultPage {
   @Local filterGenre: string = '';         // '' 或具体流派
   @Local filterYearLabel: string = '';     // '' | '2020s' | '2010s' | '2000s' | '1990s' | '更早'
   @Local filterRating: number = 0;         // 0 = 全部，6/7/8 = 对应最低分
+  @Local genreOptions: string[] = [];      // 从库中动态加载
 
   // ── Data state ────────────────────────────────────────────────────────────
   @Local results: MediaItem[] = [];
@@ -300,10 +298,20 @@ export struct MediaResultPage {
 
   // ── Filter option getters ─────────────────────────────────────────────────
 
-  private getGenreOptions(): string[] {
-    if (this.filterMediaType === 'movie') { return MOVIE_GENRE_OPTIONS; }
-    if (this.filterMediaType === 'tv') { return TV_GENRE_OPTIONS; }
-    return ALL_GENRE_OPTIONS;
+  private async loadGenreOptions(): Promise<void> {
+    let mt: 'movie' | 'tv' | undefined = undefined;
+    if (this.filterMediaType === 'movie') { mt = 'movie'; }
+    else if (this.filterMediaType === 'tv') { mt = 'tv'; }
+    const names = await this.db.getDistinctGenreNames(mt);
+    this.genreOptions = names;
+  }
+
+  private getGenreList(): string[] {
+    const list: string[] = ['全部'];
+    for (const g of this.genreOptions) {
+      list.push(g);
+    }
+    return list;
   }
 
   private getSortOptions(): StringOption[] {
@@ -417,6 +425,7 @@ export struct MediaResultPage {
                 () => {
                   this.filterMediaType = val;
                   this.filterGenre = '';
+                  this.loadGenreOptions().catch((): void => {});
                   this.doSearch().catch((): void => {});
                 }
               )
@@ -469,7 +478,7 @@ export struct MediaResultPage {
       Row() {
         Scroll() {
           Row({ space: 8 }) {
-            ForEach(this.getGenreOptions(), (g: string) => {
+            ForEach(this.getGenreList(), (g: string) => {
               this.buildChip(g === '全部' ? '全部类型' : g, (g === '全部' ? this.filterGenre === '' : this.filterGenre === g), () => {
                 this.filterGenre = (g === '全部') ? '' : g;
                 this.doSearch().catch((): void => {});
@@ -620,6 +629,7 @@ export struct MediaResultPage {
         this.initialMediaType = this.filterMediaType;
         this.initialGenre = this.filterGenre;
       }
+      this.loadGenreOptions().catch((): void => {});
       this.doSearch().catch((): void => {});
     })
     .hideTitleBar(true)
