@@ -213,6 +213,35 @@ struct ResultPosterCard {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FilterChip — focusable filter chip with selected/focused visual states
+// ─────────────────────────────────────────────────────────────────────────────
+
+@ComponentV2
+struct FilterChip {
+  @Param label: string = '';
+  @Param selected: boolean = false;
+  @Event onPress: () => void = () => {};
+  @Local isFocused: boolean = false;
+
+  build() {
+    Text(this.label)
+      .fontSize(16)
+      .fontWeight(this.selected ? 700 : 500)
+      .fontColor(this.selected ? C_CHIP_SEL_TEXT : '#E6EDF5')
+      .height(32)
+      .padding({ left: 14, right: 14 })
+      .backgroundColor(this.selected ? C_CHIP_SEL_BG : (this.isFocused ? '#353D4A' : C_COMPONENT_BG))
+      .borderRadius(999)
+      .border(this.isFocused ? { width: 2, color: C_SEL_BLUE } : { width: this.selected ? 0 : 1, color: C_BORDER })
+      .animation({ duration: 140, curve: Curve.EaseInOut })
+      .focusable(true)
+      .onFocus(() => { this.isFocused = true; })
+      .onBlur(() => { this.isFocused = false; })
+      .onClick(() => { this.onPress(); })
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MediaResultPage — generic search result page (TV vertical layout)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -399,21 +428,6 @@ export struct MediaResultPage {
   }
 
   @Builder
-  buildChip(label: string, isSelected: boolean, onTap: () => void) {
-    Text(label)
-      .fontSize(16)
-      .fontWeight(isSelected ? 700 : 500)
-      .fontColor(isSelected ? C_CHIP_SEL_TEXT : '#E6EDF5')
-      .height(32)
-      .padding({ left: 14, right: 14 })
-      .backgroundColor(isSelected ? C_CHIP_SEL_BG : C_COMPONENT_BG)
-      .borderRadius(999)
-      .border({ width: isSelected ? 0 : 1, color: C_BORDER })
-      .focusable(true)
-      .onClick(onTap)
-  }
-
-  @Builder
   buildFilterPanel() {
     Column({ space: 0 }) {
       // 行1：内容类型
@@ -421,10 +435,10 @@ export struct MediaResultPage {
         Scroll() {
           Row({ space: 8 }) {
             ForEach(['', 'movie', 'tv'], (val: string) => {
-              this.buildChip(
-                val === '' ? '全部内容' : (val === 'movie' ? '电影' : '电视剧'),
-                this.filterMediaType === val,
-                () => {
+              FilterChip({
+                label: val === '' ? '全部内容' : (val === 'movie' ? '电影' : '电视剧'),
+                selected: this.filterMediaType === val,
+                onPress: () => {
                   this.filterMediaType = val;
                   this.filterGenre = '';
                   if (val === 'movie') { this.pageTitle = '全部电影'; }
@@ -433,7 +447,7 @@ export struct MediaResultPage {
                   this.loadGenreOptions().catch((): void => {});
                   this.doSearch().catch((): void => {});
                 }
-              )
+              })
             }, (val: string) => 'ct_' + val + '_' + this.filterMediaType)
           }
           .padding({ left: 12, right: 12 })
@@ -457,9 +471,13 @@ export struct MediaResultPage {
         Scroll() {
           Row({ space: 8 }) {
             ForEach(this.getSortOptions(), (opt: StringOption) => {
-              this.buildChip(opt.label, this.filterSort === opt.value, () => {
-                this.filterSort = opt.value;
-                this.doSearch().catch((): void => {});
+              FilterChip({
+                label: opt.label,
+                selected: this.filterSort === opt.value,
+                onPress: () => {
+                  this.filterSort = opt.value;
+                  this.doSearch().catch((): void => {});
+                }
               })
             }, (opt: StringOption) => 'sort_' + opt.value + '_' + this.filterSort + '_' + this.filterMediaType)
           }
@@ -484,9 +502,13 @@ export struct MediaResultPage {
         Scroll() {
           Row({ space: 8 }) {
             ForEach(this.getGenreList(), (g: string) => {
-              this.buildChip(g === '全部' ? '全部类型' : g, (g === '全部' ? this.filterGenre === '' : this.filterGenre === g), () => {
-                this.filterGenre = (g === '全部') ? '' : g;
-                this.doSearch().catch((): void => {});
+              FilterChip({
+                label: g === '全部' ? '全部类型' : g,
+                selected: g === '全部' ? this.filterGenre === '' : this.filterGenre === g,
+                onPress: () => {
+                  this.filterGenre = (g === '全部') ? '' : g;
+                  this.doSearch().catch((): void => {});
+                }
               })
             }, (g: string) => 'genre_' + g + '_' + this.filterGenre + '_' + this.filterMediaType)
           }
@@ -511,12 +533,14 @@ export struct MediaResultPage {
         Scroll() {
           Row({ space: 8 }) {
             ForEach(DECADE_OPTIONS, (d: YearOption) => {
-              this.buildChip(d.label === '全部' ? '全部年份' : d.label,
-                this.filterYearLabel === d.label || (d.label === '全部' && this.filterYearLabel === ''),
-                () => {
+              FilterChip({
+                label: d.label === '全部' ? '全部年份' : d.label,
+                selected: this.filterYearLabel === d.label || (d.label === '全部' && this.filterYearLabel === ''),
+                onPress: () => {
                   this.filterYearLabel = d.label === '全部' ? '' : d.label;
                   this.doSearch().catch((): void => {});
-                })
+                }
+              })
             }, (d: YearOption) => 'year_' + d.label + '_' + this.filterYearLabel)
           }
           .padding({ left: 12, right: 12 })
@@ -540,9 +564,13 @@ export struct MediaResultPage {
         Scroll() {
           Row({ space: 8 }) {
             ForEach(RATING_OPTIONS, (r: RatingOption) => {
-              this.buildChip(r.label, this.filterRating === r.value, () => {
-                this.filterRating = r.value;
-                this.doSearch().catch((): void => {});
+              FilterChip({
+                label: r.label,
+                selected: this.filterRating === r.value,
+                onPress: () => {
+                  this.filterRating = r.value;
+                  this.doSearch().catch((): void => {});
+                }
               })
             }, (r: RatingOption) => 'rating_' + r.value.toString() + '_' + this.filterRating.toString())
           }
