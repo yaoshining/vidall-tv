@@ -92,6 +92,44 @@ struct KeyButton {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ActionKey — functional key component (clear / backspace / wide keys)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@ComponentV2
+struct ActionKey {
+  @Param label: string = '';
+  @Param bgColor: string = C_BKSP_BG;
+  @Param focusBgColor: string = C_SEL_BLUE;
+  @Param keyBorderColor: string = '';
+  @Param keyFocusColor: string = '#5B9BD5';
+  @Param labelColor: string = C_KEY_TEXT;
+  @Param labelFontSize: number = 20;
+  @Param keyAspect: number = 112 / 60;
+  @Event onPress: () => void = () => {};
+  @Local isFocused: boolean = false;
+
+  build() {
+    Text(this.label)
+      .fontSize(this.labelFontSize)
+      .fontColor(this.labelColor)
+      .textAlign(TextAlign.Center)
+      .width('100%')
+      .aspectRatio(this.keyAspect)
+      .borderRadius(10)
+      .backgroundColor(this.isFocused ? this.focusBgColor : this.bgColor)
+      .border({
+        width: this.isFocused ? 2 : (this.keyBorderColor.length > 0 ? 1 : 0),
+        color: this.isFocused ? this.keyFocusColor : (this.keyBorderColor.length > 0 ? this.keyBorderColor : this.keyFocusColor)
+      })
+      .animation({ duration: 140, curve: Curve.EaseInOut })
+      .focusable(true)
+      .onFocus(() => { this.isFocused = true; })
+      .onBlur(() => { this.isFocused = false; })
+      .onClick(() => { this.onPress(); })
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // WorkspacePosterCard — card used in workspace hot-search / results preview
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -173,6 +211,7 @@ struct SearchWorkspacePage {
   @Local searchResults: MediaItem[] = [];
   @Local historyList: SearchHistoryEntry[] = [];
   @Local isSearching: boolean = false;
+  @Local isSearchBarFocused: boolean = false;
 
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
@@ -393,9 +432,12 @@ struct SearchWorkspacePage {
     .padding({ left: 16, right: 16 })
     .backgroundColor(C_COMPONENT_BG)
     .borderRadius(14)
-    .border({ width: 1, color: C_BORDER })
+    .border({ width: this.isSearchBarFocused ? 2 : 1, color: this.isSearchBarFocused ? C_SEL_BLUE : C_BORDER })
     .alignItems(VerticalAlign.Center)
     .defaultFocus(true)
+    .focusable(true)
+    .onFocus(() => { this.isSearchBarFocused = true; })
+    .onBlur(() => { this.isSearchBarFocused = false; })
   }
 
   @Builder
@@ -414,17 +456,16 @@ struct SearchWorkspacePage {
       }, (key: string) => key)
 
       GridItem() {
-        Text('\uD83D\uDDD1')
-          .fontSize(22)
-          .fontColor(C_CLEAR_ICON)
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .aspectRatio(112/60)
-          .borderRadius(10)
-          .backgroundColor(C_CLEAR_BG)
-          .border({ width: 1, color: C_CLEAR_BORDER })
-          .focusable(true)
-          .onClick(() => { this.clearSearch(); })
+        ActionKey({
+          label: '\uD83D\uDDD1',
+          bgColor: C_CLEAR_BG,
+          focusBgColor: '#8B3040',
+          keyBorderColor: C_CLEAR_BORDER,
+          keyFocusColor: '#E06070',
+          labelColor: C_CLEAR_ICON,
+          labelFontSize: 22,
+          onPress: () => { this.clearSearch(); }
+        })
       }
 
       ForEach(KBD_R3_L, (key: string) => {
@@ -434,17 +475,14 @@ struct SearchWorkspacePage {
       }, (key: string) => key)
 
       GridItem() {
-        Text('\u232B')
-          .fontSize(20)
-          .fontWeight("100%")
-          .fontColor('#FFFFFF')
-          .width("100%")
-          .aspectRatio(352/60)
-          .textAlign(TextAlign.Center)
-          .borderRadius(10)
-          .backgroundColor(C_BKSP_BG)
-          .focusable(true)
-          .onClick(() => { this.deleteLastChar(); })
+        ActionKey({
+          label: '\u232B',
+          bgColor: C_BKSP_BG,
+          focusBgColor: C_SEL_BLUE,
+          labelColor: '#FFFFFF',
+          keyAspect: 352 / 60,
+          onPress: () => { this.deleteLastChar(); }
+        })
       }
       .columnStart(7)
       .columnEnd(9)
@@ -468,19 +506,13 @@ struct SearchWorkspacePage {
       }
 
       GridItem() {
-        Text('0')
-          .fontSize(20)
-          .fontWeight(600)
-          .fontColor(C_KEY_TEXT)
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .aspectRatio(352/60)
-          .borderRadius(10)
-          .backgroundColor(C_LETTER_KEY_BG)
-          .focusable(true)
-          .onClick(() => {
-            this.appendChar('0');
-          })
+        ActionKey({
+          label: '0',
+          bgColor: C_LETTER_KEY_BG,
+          focusBgColor: C_SEL_BLUE,
+          keyAspect: 352 / 60,
+          onPress: () => { this.appendChar('0'); }
+        })
       }
       .columnStart(1)
       .columnEnd(3)
