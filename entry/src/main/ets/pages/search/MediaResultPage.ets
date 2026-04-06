@@ -384,11 +384,14 @@ export struct MediaResultPage {
             }, (val: string) => 'ct_' + val)
           }
           .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Start)
+          .alignItems(VerticalAlign.Center)
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
         .layoutWeight(1)
         .height(48)
+        .align(Alignment.Start)
       }
       .width('100%')
       .height(48)
@@ -413,11 +416,14 @@ export struct MediaResultPage {
             }, (opt: StringOption) => 'sort_' + opt.value)
           }
           .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Start)
+          .alignItems(VerticalAlign.Center)
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
         .layoutWeight(1)
         .height(48)
+        .align(Alignment.Start)
       }
       .width('100%')
       .height(48)
@@ -442,11 +448,14 @@ export struct MediaResultPage {
             }, (g: string) => 'genre_' + g)
           }
           .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Start)
+          .alignItems(VerticalAlign.Center)
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
         .layoutWeight(1)
         .height(48)
+        .align(Alignment.Start)
       }
       .width('100%')
       .height(48)
@@ -471,11 +480,14 @@ export struct MediaResultPage {
             }, (y: string) => 'year_' + y)
           }
           .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Start)
+          .alignItems(VerticalAlign.Center)
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
         .layoutWeight(1)
         .height(48)
+        .align(Alignment.Start)
       }
       .width('100%')
       .height(48)
