@@ -364,17 +364,11 @@ export struct MediaResultPage {
     Column({ space: 0 }) {
       // 行1：内容类型
       Row() {
-        Text('内容')
-          .fontSize(16).fontWeight(700).fontColor(C_LABEL_TEXT)
-          .width(86).height(48)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(C_ORANGE)
-          .borderRadius(0)
         Scroll() {
           Row({ space: 8 }) {
             ForEach(['', 'movie', 'tv'], (val: string) => {
               this.buildChip(
-                val === '' ? '全部' : (val === 'movie' ? '电影' : '电视剧'),
+                val === '' ? '全部内容' : (val === 'movie' ? '电影' : '电视剧'),
                 this.filterMediaType === val,
                 () => {
                   this.filterMediaType = val;
@@ -401,11 +395,6 @@ export struct MediaResultPage {
 
       // 行2：排序
       Row() {
-        Text('排序')
-          .fontSize(16).fontWeight(700).fontColor(C_LABEL_TEXT)
-          .width(86).height(48)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(C_ORANGE)
         Scroll() {
           Row({ space: 8 }) {
             ForEach(SORT_OPTIONS, (opt: StringOption) => {
@@ -433,15 +422,10 @@ export struct MediaResultPage {
 
       // 行3：类型（流派）
       Row() {
-        Text('类型')
-          .fontSize(16).fontWeight(700).fontColor(C_LABEL_TEXT)
-          .width(86).height(48)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(C_ORANGE)
         Scroll() {
           Row({ space: 8 }) {
             ForEach(GENRE_OPTIONS, (g: string) => {
-              this.buildChip(g, (g === '全部' ? this.filterGenre === '' : this.filterGenre === g), () => {
+              this.buildChip(g === '全部' ? '全部类型' : g, (g === '全部' ? this.filterGenre === '' : this.filterGenre === g), () => {
                 this.filterGenre = (g === '全部') ? '' : g;
                 this.doSearch().catch((): void => {});
               })
@@ -465,15 +449,10 @@ export struct MediaResultPage {
 
       // 行4：年份
       Row() {
-        Text('年份')
-          .fontSize(16).fontWeight(700).fontColor(C_LABEL_TEXT)
-          .width(86).height(48)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(C_ORANGE)
         Scroll() {
           Row({ space: 8 }) {
             ForEach(YEAR_OPTIONS, (y: string) => {
-              this.buildChip(y, (y === '全部' ? this.filterYear === '' : this.filterYear === y), () => {
+              this.buildChip(y === '全部' ? '全部年份' : y, (y === '全部' ? this.filterYear === '' : this.filterYear === y), () => {
                 this.filterYear = (y === '全部') ? '' : y;
                 this.doSearch().catch((): void => {});
               })
