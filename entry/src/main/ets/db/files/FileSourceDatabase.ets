@@ -1639,7 +1639,32 @@ export class FileSourceDatabase {
       const movies = await q(`SELECT COUNT(DISTINCT movie_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE movie_id IS NOT NULL`);
       const tv = await q(`SELECT COUNT(DISTINCT tv_series_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE tv_series_id IS NOT NULL`);
       const scraped = await q(`SELECT COUNT(DISTINCT video_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`);
-      return { total, movies, tv, other: total - scraped };
+      const other = total - scraped;
+
+      // 诊断：打印无刮削记录的文件列表（source_id + file_name）
+      if (other > 0 && this.rdbStore) {
+        let diagRs: relationalStore.ResultSet | undefined;
+        try {
+          diagRs = await this.rdbStore.querySql(
+            `SELECT v.source_id, v.file_name, v.file_path FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+             WHERE NOT EXISTS (SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s WHERE s.video_id = v.id)
+             ORDER BY v.source_id, v.file_name`
+          );
+          const unscrapedFiles: string[] = [];
+          while (diagRs.goToNextRow()) {
+            const sid = diagRs.getLong(diagRs.getColumnIndex('source_id'));
+            const name = diagRs.getString(diagRs.getColumnIndex('file_name'));
+            unscrapedFiles.push(`[src=${sid}] ${name}`);
+          }
+          console.info(`[DB][getMediaStats] 未刮削文件(${other}个):\n${unscrapedFiles.join('\n')}`);
+        } catch {
+          // 诊断失败不影响主流程
+        } finally {
+          diagRs?.close();
+        }
+      }
+
+      return { total, movies, tv, other };
     } catch { return { total: 0, movies: 0, tv: 0, other: 0 }; }
   }
 
