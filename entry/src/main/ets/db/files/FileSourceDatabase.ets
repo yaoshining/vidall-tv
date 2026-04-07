@@ -32,6 +32,8 @@ export interface SearchMediaOptions {
    * 'done'    - 已看完：position_ms >= duration_ms * 0.9
    */
   watchProgress?: 'unseen' | 'partial' | 'done';
+  /** 制作国过滤：ISO 3166-1 代码，如 "CN"、"JP"、"US"，LIKE 匹配 origin_country_json */
+  originCountry?: string;
 }
 
 /**
@@ -2800,6 +2802,12 @@ export class FileSourceDatabase {
             `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
           `)))`
         );
+      }
+
+      // ── originCountry 过滤：LIKE 匹配 origin_country_json ──
+      if (options?.originCountry !== undefined && options.originCountry.length > 0) {
+        conditions.push('COALESCE(m.origin_country_json, ts.origin_country_json) LIKE ?');
+        params.push(`%"${options.originCountry}"%`);
       }
 
       const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
