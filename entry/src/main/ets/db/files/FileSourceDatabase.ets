@@ -25,6 +25,13 @@ export interface SearchMediaOptions {
   sortBy?: 'rating' | 'year' | 'title';
   /** 最大返回条数，默认 50 */
   limit?: number;
+  /**
+   * 观看进度过滤
+   * 'unseen'  - 未看：media_progress 表无记录，或 position_ms = 0
+   * 'partial' - 未看完：有进度且 position_ms < duration_ms * 0.9
+   * 'done'    - 已看完：position_ms >= duration_ms * 0.9
+   */
+  watchProgress?: 'unseen' | 'partial' | 'done';
 }
 
 /**
@@ -1458,7 +1465,7 @@ export class FileSourceDatabase {
              s.provider, s.provider_id, s.media_type,
              s.movie_id, s.tv_series_id, s.episode_id,
              s.season_number, s.episode_number,
-             COALESCE(m.title, ts.title)                          AS scrape_title,
+             COALESCE(m.title, ts.title, s.title)                 AS scrape_title,
              COALESCE(m.original_title, ts.original_title)        AS original_title,
              COALESCE(te.overview, m.overview, ts.overview)       AS overview,
              COALESCE(m.release_date, ts.first_air_date)          AS release_date,
@@ -2705,15 +2712,19 @@ export class FileSourceDatabase {
       }
 
       // ── mediaType 过滤（'all' 时不加条件） ──
+      // TV 系列整体存为 media_type='tv'，单集存为 media_type='episode'，两者均属电视剧
+      // 同时要求 tv_series_id IS NOT NULL，剔除刮削不完整的脏数据（无系列关联的单集）
       const mediaType: string = options?.mediaType ?? 'all';
-      if (mediaType !== 'all') {
+      if (mediaType === 'tv') {
+        conditions.push("(s.media_type IN ('tv', 'episode') AND s.tv_series_id IS NOT NULL)");
+      } else if (mediaType !== 'all') {
         conditions.push('s.media_type = ?');
         params.push(mediaType);
       }
 
       // ── genre 过滤：genres_json 模糊匹配（加表别名避免多表 JOIN 时列名歧义） ──
       if (options?.genre !== undefined && options.genre.length > 0) {
-        conditions.push('m.genres_json LIKE ?');
+        conditions.push('COALESCE(m.genres_json, ts.genres_json) LIKE ?');
         params.push(`%${options.genre}%`);
       }
 
@@ -2733,6 +2744,52 @@ export class FileSourceDatabase {
         params.push(options.yearTo);
       }
 
+      // ── watchProgress 过滤：通过 EXISTS 子查询匹配 media_progress 表 ──
+      // 电影 key 格式: media_progress_movie_{s.provider_id}
+      // 集级剧集 key 格式: media_progress_episode_tmdb_{ts.provider_id}_s{n}_e{n}
+      // 使用 '_s%' 后缀而非 '_%'，避免 provider_id 为前缀子串时误匹配（如 1399 匹配到 13990）
+      if (options?.watchProgress === 'unseen') {
+        conditions.push(
+          `((s.media_type = 'movie' AND NOT EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.position_ms > 0` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND NOT EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.position_ms > 0` +
+          `)))`
+        );
+      } else if (options?.watchProgress === 'partial') {
+        conditions.push(
+          `((s.media_type = 'movie' AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.position_ms > 0 AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) < CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.position_ms > 0 AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) < CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)))`
+        );
+      } else if (options?.watchProgress === 'done') {
+        conditions.push(
+          `((s.media_type = 'movie' AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)))`
+        );
+      }
+
       const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
 
       // ── ORDER BY ──
@@ -2750,11 +2807,21 @@ export class FileSourceDatabase {
       // ── LIMIT 范围校验，防止 NaN/负数/超大值 ──
       const rawLimit: number = options?.limit ?? 50;
       const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 500) : 50;
-      // SQL 层多拉一批，内存去重后再裁剪到 safeLimit
-      const fetchLimit: number = Math.min(safeLimit * 10, 2000);
+
+      // TV 模式：SQL 层直接按 tv_series_id 分组去重，LIMIT 对准唯一 series 数量
+      // 非 TV 模式：多拉一批后在内存去重再裁剪（电影 movieId 唯一，冗余极少）
+      let groupClause: string;
+      let fetchLimit: number;
+      if (mediaType === 'tv') {
+        groupClause = ' GROUP BY s.tv_series_id';
+        fetchLimit = safeLimit;
+      } else {
+        groupClause = '';
+        fetchLimit = Math.min(safeLimit * 10, 2000);
+      }
       const limitClause: string = ` LIMIT ${fetchLimit}`;
 
-      const sql: string = this.mediaItemSql + whereClause + orderClause + limitClause;
+      const sql: string = this.mediaItemSql + whereClause + groupClause + orderClause + limitClause;
       rs = await this.rdbStore.querySql(sql, params);
       const rawItems: MediaItem[] = [];
       while (rs.goToNextRow()) {
@@ -2780,8 +2847,16 @@ export class FileSourceDatabase {
         }
       }
 
-      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} raw=${rawItems.length} deduped=${items.length}`);
-      return items;
+      // 剔除 tv/episode 类型但缺少系列关联的脏数据（tv_series_id=NULL 导致无标题无海报）
+      const displayItems = items.filter((item: MediaItem): boolean => {
+        if (item.mediaType === 'episode' || item.mediaType === 'tv') {
+          return item.tvSeriesId !== undefined && item.title !== undefined;
+        }
+        return true;
+      });
+
+      console.info(`[DB][searchMediaItems] keyword=[${kw.length}chars] type=${mediaType} raw=${rawItems.length} deduped=${items.length} display=${displayItems.length}`);
+      return displayItems;
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
@@ -2825,6 +2900,57 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][getDistinctGenres] 异常 code=${err.code} msg=${err.message}`);
+      return [];
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 从当前库中提取所有独立 genre 名称（已解析，去重，排序）。
+   * @param mediaType 'movie' | 'tv' | undefined（undefined = 全部）
+   */
+  async getDistinctGenreNames(mediaType?: 'movie' | 'tv'): Promise<string[]> {
+    if (this.rdbStore === null) { return []; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      let typeCondition: string = '';
+      const typeParams: relationalStore.ValueType[] = [];
+      if (mediaType === 'movie') {
+        typeCondition = "WHERE s.media_type = 'movie' AND m.genres_json IS NOT NULL";
+      } else if (mediaType === 'tv') {
+        typeCondition = "WHERE (s.media_type IN ('tv', 'episode')) AND s.tv_series_id IS NOT NULL AND ts.genres_json IS NOT NULL";
+      } else {
+        typeCondition = 'WHERE COALESCE(m.genres_json, ts.genres_json) IS NOT NULL';
+      }
+      const sql: string = `
+        SELECT COALESCE(m.genres_json, ts.genres_json) AS genres_json
+        FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s
+        LEFT JOIN ${FileSourceDatabase.TABLE_MOVIES} m ON s.movie_id = m.id
+        LEFT JOIN ${FileSourceDatabase.TABLE_TV_SERIES} ts ON s.tv_series_id = ts.id
+        ${typeCondition}
+      `;
+      rs = await this.rdbStore.querySql(sql, typeParams);
+      const nameSet = new Set<string>();
+      while (rs.goToNextRow()) {
+        const raw: string = rs.getString(rs.getColumnIndex('genres_json'));
+        if (raw) {
+          try {
+            const arr = JSON.parse(raw) as string[];
+            for (const name of arr) {
+              if (name && name.length > 0) { nameSet.add(name); }
+            }
+          } catch {
+            // 解析失败跳过
+          }
+        }
+      }
+      const result: string[] = Array.from(nameSet).sort();
+      console.info(`[DB][getDistinctGenreNames] mediaType=${mediaType ?? 'all'} 共 ${result.length} 个 genre`);
+      return result;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[DB][getDistinctGenreNames] 异常 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
       rs?.close();
