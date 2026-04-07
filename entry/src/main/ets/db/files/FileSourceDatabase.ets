@@ -2872,6 +2872,10 @@ export class FileSourceDatabase {
         if (item.mediaType === 'episode' || item.mediaType === 'tv') {
           return item.tvSeriesId !== undefined && item.title !== undefined;
         }
+        // 剔除完全未刮削的视频（无标题、无海报），此类内容在媒体库中无可识别信息
+        if (item.title === undefined && item.posterUrl === undefined && item.posterLocalPath === undefined) {
+          return false;
+        }
         return true;
       });
 
@@ -3060,6 +3064,56 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[DB][deleteSearchHistory] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 检查指定 movie 是否已有 origin_country_json。
+   */
+  async hasMovieOriginCountry(movieId: number): Promise<boolean> {
+    if (!this.rdbStore) {
+      return false;
+    }
+    let rs: relationalStore.ResultSet | undefined;
+    try {
+      rs = await this.rdbStore.querySql('SELECT origin_country_json FROM movies WHERE id = ?', [movieId]);
+      if (rs.goToNextRow()) {
+        const idx = rs.getColumnIndex('origin_country_json');
+        const isNull = rs.isColumnNull(idx);
+        return !isNull;
+      }
+      return false;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][hasMovieOriginCountry] 失败 code=${err.code} msg=${err.message}`);
+      return false;
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 检查指定 tv_series 是否已有 origin_country_json。
+   */
+  async hasTvSeriesOriginCountry(seriesId: number): Promise<boolean> {
+    if (!this.rdbStore) {
+      return false;
+    }
+    let rs: relationalStore.ResultSet | undefined;
+    try {
+      rs = await this.rdbStore.querySql('SELECT origin_country_json FROM tv_series WHERE id = ?', [seriesId]);
+      if (rs.goToNextRow()) {
+        const idx = rs.getColumnIndex('origin_country_json');
+        const isNull = rs.isColumnNull(idx);
+        return !isNull;
+      }
+      return false;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][hasTvSeriesOriginCountry] 失败 code=${err.code} msg=${err.message}`);
+      return false;
+    } finally {
+      rs?.close();
     }
   }
 

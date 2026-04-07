@@ -286,16 +286,32 @@ export class WebDAVAdapter implements ISourceAdapter {
                   return;
                 }
               } else if (capturedMode === 'fix-missing') {
-                // fix-missing: 仅在 scrape_info 完整时跳过（已有 movieId 或 tvSeriesId）
+                // fix-missing: 仅在 scrape_info 完整且 origin_country_json 已填充时跳过
                 if (existing) {
                   const isComplete = existing.mediaType === 'movie'
                     ? existing.movieId !== undefined
                     : existing.tvSeriesId !== undefined;
                   if (isComplete) {
-                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
-                    return;
+                    // 额外检查 origin_country_json 是否已填充（DB v7 新增字段，老数据为 NULL）
+                    let hasCountry = false;
+                    try {
+                      const db = FileSourceDatabase.getInstance();
+                      if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
+                        hasCountry = await db.hasMovieOriginCountry(existing.movieId);
+                      } else if (existing.tvSeriesId !== undefined) {
+                        hasCountry = await db.hasTvSeriesOriginCountry(existing.tvSeriesId);
+                      }
+                    } catch {
+                      hasCountry = false;
+                    }
+                    if (hasCountry) {
+                      console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
+                      return;
+                    }
+                    console.info(`[VideoScanner][SCRAPE] fix-missing origin_country_json 缺失，重新刮削 fileName=${fileName}`);
+                  } else {
+                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${fileName}`);
                   }
-                  console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${fileName}`);
                 }
               }
               // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
@@ -693,10 +709,26 @@ export class SMBAdapter implements ISourceAdapter {
                   ? existing.movieId !== undefined
                   : existing.tvSeriesId !== undefined;
                 if (isComplete) {
-                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
-                  return;
+                  // 额外检查 origin_country_json 是否已填充（DB v7 新增字段，老数据为 NULL）
+                  let hasCountry = false;
+                  try {
+                    const dbInst = FileSourceDatabase.getInstance();
+                    if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
+                      hasCountry = await dbInst.hasMovieOriginCountry(existing.movieId);
+                    } else if (existing.tvSeriesId !== undefined) {
+                      hasCountry = await dbInst.hasTvSeriesOriginCountry(existing.tvSeriesId);
+                    }
+                  } catch {
+                    hasCountry = false;
+                  }
+                  if (hasCountry) {
+                    console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
+                    return;
+                  }
+                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing origin_country_json 缺失，重新刮削 fileName=${capturedInfo.fileName}`);
+                } else {
+                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${capturedInfo.fileName}`);
                 }
-                console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${capturedInfo.fileName}`);
               }
             }
             // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
