@@ -43,12 +43,14 @@ export interface ScanResult {
   videos: VideoFileInfo[];
 }
 
+export type ScanMode = 'incremental' | 'fix-missing' | 'overwrite';
+
 export interface ScanOptions {
   maxDepth: number;
-  incremental: boolean;
+  mode: ScanMode;
 }
 
-const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, incremental: false };
+const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, mode: 'incremental' };
 
 // ─────────────────────────────────────────────
 // 视频扩展名白名单
@@ -130,7 +132,7 @@ export class WebDAVAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.incremental, results, processingTasks);
+    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.mode, results, processingTasks);
     // 等待所有 ffprobe + 视频入库任务完成，确保 scan() 返回时 DB 已有数据
     if (processingTasks.length > 0) {
       console.info(`[VideoScanner][WebDAV] 等待 ${processingTasks.length} 个视频处理任务完成...`);
@@ -145,7 +147,7 @@ export class WebDAVAdapter implements ISourceAdapter {
     currentPath: string,
     depth: number,
     maxDepth: number,
-    incremental: boolean,
+    mode: ScanMode,
     results: VideoFileInfo[],
     processingTasks: Promise<void>[]
   ): Promise<void> {
@@ -172,7 +174,7 @@ export class WebDAVAdapter implements ISourceAdapter {
           console.info(`[VideoScanner][MAX_DEPTH] 已达最大深度 ${maxDepth}，跳过子目录: ${relativePath}`);
           continue;
         }
-        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, incremental, results, processingTasks);
+        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, mode, results, processingTasks);
       } else {
         const fileName = resource.displayName || this.extractFileName(decodedHref);
         if (isVideoFile(fileName, resource.contentType)) {
@@ -198,10 +200,10 @@ export class WebDAVAdapter implements ISourceAdapter {
 
           results.push(info);
 
-          const existingVideo = incremental
+          const existingVideo = (mode === 'incremental')
             ? await FileSourceDatabase.getInstance().getVideoByPath(relativePath)
             : null;
-          if (incremental && this.canSkipIncrementalProcessing(existingVideo, info)) {
+          if (mode === 'incremental' && this.canSkipIncrementalProcessing(existingVideo, info)) {
             info.wasProcessed = false;
             await FileSourceDatabase.getInstance().markVideoUpdatedByPath(relativePath);
             console.info(
@@ -217,6 +219,7 @@ export class WebDAVAdapter implements ISourceAdapter {
           const fullUrl = this.client.getFullUrl(relativePath);
           const capturedInfo = info;
           const capturedScrapeClient = this.scrapeClient;
+          const capturedMode = mode;
 
           const processingTask: Promise<void> = FfprobeUtil.probe(fullUrl, httpHeader).then(async (videoInfo) => {
             if (videoInfo.success) {
@@ -270,18 +273,34 @@ export class WebDAVAdapter implements ISourceAdapter {
               return;
             }
 
-            // 刮削（已有记录跳过）
+            // 刮削跳过判断（三种模式路由）
             if (!capturedScrapeClient) {
               return;
             }
             try {
               const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
-              if (existing) {
-                console.info(`[VideoScanner][SCRAPE] 已有刮削记录，跳过 fileName=${fileName}`);
-                return;
+              if (capturedMode === 'incremental') {
+                // incremental: 有任何刮削记录就跳过
+                if (existing) {
+                  console.info(`[VideoScanner][SCRAPE] incremental 已有刮削记录，跳过 fileName=${fileName}`);
+                  return;
+                }
+              } else if (capturedMode === 'fix-missing') {
+                // fix-missing: 仅在 scrape_info 完整时跳过（已有 movieId 或 tvSeriesId）
+                if (existing) {
+                  const isComplete = existing.mediaType === 'movie'
+                    ? existing.movieId !== undefined
+                    : existing.tvSeriesId !== undefined;
+                  if (isComplete) {
+                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
+                    return;
+                  }
+                  console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${fileName}`);
+                }
               }
+              // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
             } catch {
-              // 查询失败继续
+              // 查询失败继续刮削
             }
 
             console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
@@ -540,7 +559,7 @@ export class SMBAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.incremental, results, processingTasks);
+    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.mode, results, processingTasks);
     await Promise.allSettled(processingTasks);
     return results;
   }
@@ -550,7 +569,7 @@ export class SMBAdapter implements ISourceAdapter {
     dirPath: string,
     currentDepth: number,
     maxDepth: number,
-    incremental: boolean,
+    mode: ScanMode,
     results: VideoFileInfo[],
     processingTasks: Promise<void>[]
   ): Promise<void> {
@@ -567,7 +586,7 @@ export class SMBAdapter implements ISourceAdapter {
 
     for (const file of listResult.files) {
       if (file.isDirectory) {
-        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, incremental, results, processingTasks);
+        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks);
       } else if (isVideoFile(file.name)) {
         const info: VideoFileInfo = {
           sourceId: this.fileSource.id ?? 0,
@@ -586,7 +605,7 @@ export class SMBAdapter implements ISourceAdapter {
         results.push(info);
 
         // 增量跳过：文件未变化则仅更新 updated_at，不重新处理
-        if (incremental) {
+        if (mode === 'incremental') {
           let existing: VideoEntity | null = null;
           try {
             existing = await FileSourceDatabase.getInstance().getVideoByPath(file.path);
@@ -608,6 +627,7 @@ export class SMBAdapter implements ISourceAdapter {
         // 异步处理：媒体信息抓取 + 入库 + 刮削
         const capturedInfo = info;
         const capturedScrapeClient = this.scrapeClient;
+        const capturedMode = mode;
         const smbUrl = this.buildSmbUrl(file.path);
         const maskedUrl = this.maskUrl(smbUrl);
 
@@ -659,10 +679,24 @@ export class SMBAdapter implements ISourceAdapter {
           }
           try {
             const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
-            if (existing) {
-              console.info(`[VideoScanner][SMB][SCRAPE] 已有刮削记录，跳过 fileName=${capturedInfo.fileName}`);
-              return;
+            if (capturedMode === 'incremental') {
+              if (existing) {
+                console.info(`[VideoScanner][SMB][SCRAPE] incremental 已有刮削记录，跳过 fileName=${capturedInfo.fileName}`);
+                return;
+              }
+            } else if (capturedMode === 'fix-missing') {
+              if (existing) {
+                const isComplete = existing.mediaType === 'movie'
+                  ? existing.movieId !== undefined
+                  : existing.tvSeriesId !== undefined;
+                if (isComplete) {
+                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
+                  return;
+                }
+                console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${capturedInfo.fileName}`);
+              }
             }
+            // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
           } catch {
             // 查询失败继续刮削
           }
@@ -873,13 +907,13 @@ export class VideoScannerUtil {
   static async scan(context: Context, scrapeClient?: ScrapeClient, options?: Partial<ScanOptions>): Promise<ScanResult> {
     const scanOptions: ScanOptions = {
       maxDepth: (options?.maxDepth !== undefined) ? options.maxDepth : DEFAULT_SCAN_OPTIONS.maxDepth,
-      incremental: (options?.incremental !== undefined) ? options.incremental : DEFAULT_SCAN_OPTIONS.incremental
+      mode: (options?.mode !== undefined) ? options.mode : DEFAULT_SCAN_OPTIONS.mode
     };
 
     const startTime = Date.now();
     console.info(`[VideoScanner] ======== 开始视频扫描 ========`);
     console.info(
-      `[VideoScanner] 扫描参数: maxDepth=${scanOptions.maxDepth}, 增量=${scanOptions.incremental ? '是' : '否'}, 刮削=${scrapeClient ? '开启' : '关闭'}`
+      `[VideoScanner] 扫描参数: maxDepth=${scanOptions.maxDepth}, mode=${scanOptions.mode}, 刮削=${scrapeClient ? '开启' : '关闭'}`
     );
 
     const db = FileSourceDatabase.getInstance(context);
