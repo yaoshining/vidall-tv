@@ -332,7 +332,8 @@ export class WebDAVAdapter implements ISourceAdapter {
                       posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
                       genresJson: movie.genresJson, castJson: movie.castJson,
                       directorsJson: movie.directorsJson, runtime: movie.runtime,
-                      originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                      originalLanguage: movie.originalLanguage,
+                      originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
                       scrapedAt: Date.now()
                     };
                     await db.upsertMovie(updateEntity);
@@ -348,7 +349,8 @@ export class WebDAVAdapter implements ISourceAdapter {
                     posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
                     genresJson: movie.genresJson, castJson: movie.castJson,
                     directorsJson: movie.directorsJson, runtime: movie.runtime,
-                    originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                    originalLanguage: movie.originalLanguage,
+                    originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
                     scrapedAt: Date.now()
                   };
                   movieId = await db.upsertMovie(movieEntity);
@@ -393,7 +395,8 @@ export class WebDAVAdapter implements ISourceAdapter {
                     posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
                     genresJson: series.genresJson, castJson: series.castJson,
                     numberOfSeasons: series.numberOfSeasons,
-                    originalLanguage: series.originalLanguage, rawJson: series.rawJson,
+                    originalLanguage: series.originalLanguage,
+                    originCountryJson: series.originCountryJson, rawJson: series.rawJson,
                     scrapedAt: Date.now()
                   };
                   seriesId = await db.upsertTvSeries(seriesEntity);
@@ -729,7 +732,8 @@ export class SMBAdapter implements ISourceAdapter {
                     posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
                     genresJson: movie.genresJson, castJson: movie.castJson,
                     directorsJson: movie.directorsJson, runtime: movie.runtime,
-                    originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                    originalLanguage: movie.originalLanguage,
+                    originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
                     scrapedAt: Date.now()
                   };
                   await db.upsertMovie(updateEntity);
@@ -745,7 +749,8 @@ export class SMBAdapter implements ISourceAdapter {
                   posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
                   genresJson: movie.genresJson, castJson: movie.castJson,
                   directorsJson: movie.directorsJson, runtime: movie.runtime,
-                  originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
+                  originalLanguage: movie.originalLanguage,
+                  originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
                   scrapedAt: Date.now()
                 };
                 movieId = await db.upsertMovie(movieEntity);
@@ -786,7 +791,8 @@ export class SMBAdapter implements ISourceAdapter {
                   posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
                   genresJson: series.genresJson, castJson: series.castJson,
                   numberOfSeasons: series.numberOfSeasons,
-                  originalLanguage: series.originalLanguage, rawJson: series.rawJson,
+                  originalLanguage: series.originalLanguage,
+                  originCountryJson: series.originCountryJson, rawJson: series.rawJson,
                   scrapedAt: Date.now()
                 };
                 seriesId = await db.upsertTvSeries(seriesEntity);

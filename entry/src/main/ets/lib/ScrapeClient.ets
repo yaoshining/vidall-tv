@@ -45,6 +45,7 @@ export interface MovieScrapeResult {
   directorsJson?: string;
   runtime?: number;
   originalLanguage?: string;
+  originCountryJson?: string;
   rawJson?: string;
 }
 
@@ -66,6 +67,7 @@ export interface TvSeriesScrapeResult {
   castJson?: string;
   numberOfSeasons?: number;
   originalLanguage?: string;
+  originCountryJson?: string;
   rawJson?: string;
 }
 
@@ -269,6 +271,11 @@ interface TmdbCredits {
   crew?: TmdbCrewItem[];
 }
 
+interface TmdbProductionCountry {
+  iso_3166_1: string;
+  name: string;
+}
+
 interface TmdbMovieDetail {
   id: number;
   title?: string;
@@ -283,6 +290,7 @@ interface TmdbMovieDetail {
   original_language?: string;
   runtime?: number;
   credits?: TmdbCredits;
+  production_countries?: TmdbProductionCountry[];
 }
 
 interface TmdbTvDetail {
@@ -300,6 +308,7 @@ interface TmdbTvDetail {
   number_of_seasons?: number;
   episode_run_time?: number[];
   credits?: TmdbCredits;
+  origin_country?: string[];
 }
 
 interface TmdbSeasonDetail {
@@ -432,6 +441,12 @@ export class TmdbProvider implements IScrapeProvider {
       directorsJson: directors.length > 0 ? JSON.stringify(directors) : undefined,
       runtime: item.runtime ?? undefined,
       originalLanguage: item.original_language ?? undefined,
+      originCountryJson: (() => {
+        const countries = item.production_countries;
+        if (!countries || countries.length === 0) { return undefined; }
+        const codes: string[] = countries.map((c: TmdbProductionCountry): string => c.iso_3166_1);
+        return JSON.stringify(codes);
+      })(),
       rawJson
     };
     return r;
@@ -462,6 +477,11 @@ export class TmdbProvider implements IScrapeProvider {
       castJson: cast.length > 0 ? JSON.stringify(cast) : undefined,
       numberOfSeasons: item.number_of_seasons ?? undefined,
       originalLanguage: item.original_language ?? undefined,
+      originCountryJson: (() => {
+        const countries = item.origin_country;
+        if (!countries || countries.length === 0) { return undefined; }
+        return JSON.stringify(countries);
+      })(),
       rawJson
     };
     return r;

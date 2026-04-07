@@ -40,7 +40,7 @@ export interface SearchMediaOptions {
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 6;
+  private static readonly DB_VERSION = 7;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -228,6 +228,7 @@ export class FileSourceDatabase {
         directors_json TEXT,
         runtime INTEGER,
         original_language TEXT,
+        origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
         UNIQUE(provider, provider_id)
@@ -255,6 +256,7 @@ export class FileSourceDatabase {
         cast_json TEXT,
         number_of_seasons INTEGER,
         original_language TEXT,
+        origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
         UNIQUE(provider, provider_id)
@@ -384,6 +386,12 @@ export class FileSourceDatabase {
         await this.migrateV5ToV6(rdbStore);
         currentVersion = 6;
         console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`);
+      }
+      if (currentVersion < 7) {
+        await rdbStore.executeSql('ALTER TABLE movies ADD COLUMN origin_country_json TEXT');
+        await rdbStore.executeSql('ALTER TABLE tv_series ADD COLUMN origin_country_json TEXT');
+        currentVersion = 7;
+        console.info('[DB] 已迁移到 v7：movies/tv_series 新增 origin_country_json');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -966,6 +974,7 @@ export class FileSourceDatabase {
         backdrop_local_path: e.backdropLocalPath ?? null, genres_json: e.genresJson ?? null,
         cast_json: e.castJson ?? null, directors_json: e.directorsJson ?? null,
         runtime: e.runtime ?? null, original_language: e.originalLanguage ?? null,
+        origin_country_json: e.originCountryJson ?? null,
         raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt
       };
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
@@ -979,8 +988,8 @@ export class FileSourceDatabase {
         (provider, provider_id, title, original_title, overview, release_date, rating,
          vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
          poster_local_path, backdrop_local_path, genres_json, cast_json, directors_json,
-         runtime, original_language, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         runtime, original_language, origin_country_json, raw_json, scraped_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `;
     const args: relationalStore.ValueType[] = [
       e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
@@ -988,7 +997,7 @@ export class FileSourceDatabase {
       e.posterPath ?? null, e.backdropPath ?? null, e.posterUrl ?? null,
       e.backdropUrl ?? null, e.posterLocalPath ?? null, e.backdropLocalPath ?? null,
       e.genresJson ?? null, e.castJson ?? null, e.directorsJson ?? null,
-      e.runtime ?? null, e.originalLanguage ?? null, e.rawJson ?? null, e.scrapedAt
+      e.runtime ?? null, e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
     ];
     await this.rdbStore.executeSql(sql, args);
     // 查回刚插入的 id
@@ -1014,6 +1023,7 @@ export class FileSourceDatabase {
       posterLocalPath: str('poster_local_path'), backdropLocalPath: str('backdrop_local_path'),
       genresJson: str('genres_json'), castJson: str('cast_json'), directorsJson: str('directors_json'),
       runtime: num('runtime'), originalLanguage: str('original_language'),
+      originCountryJson: str('origin_country_json'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
   }
@@ -1064,7 +1074,8 @@ export class FileSourceDatabase {
         backdrop_url: e.backdropUrl ?? null, poster_local_path: e.posterLocalPath ?? null,
         backdrop_local_path: e.backdropLocalPath ?? null, genres_json: e.genresJson ?? null,
         cast_json: e.castJson ?? null, number_of_seasons: e.numberOfSeasons ?? null,
-        original_language: e.originalLanguage ?? null, raw_json: e.rawJson ?? null,
+        original_language: e.originalLanguage ?? null, origin_country_json: e.originCountryJson ?? null,
+        raw_json: e.rawJson ?? null,
         scraped_at: e.scrapedAt
       };
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
@@ -1077,8 +1088,8 @@ export class FileSourceDatabase {
         (provider, provider_id, title, original_title, overview, first_air_date, rating,
          vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
          poster_local_path, backdrop_local_path, genres_json, cast_json,
-         number_of_seasons, original_language, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         number_of_seasons, original_language, origin_country_json, raw_json, scraped_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `;
     const args: relationalStore.ValueType[] = [
       e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
@@ -1087,7 +1098,7 @@ export class FileSourceDatabase {
       e.backdropUrl ?? null, e.posterLocalPath ?? null, e.backdropLocalPath ?? null,
       e.genresJson ?? null, e.castJson ?? null,
       e.numberOfSeasons !== undefined ? e.numberOfSeasons : null,
-      e.originalLanguage ?? null, e.rawJson ?? null, e.scrapedAt
+      e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
     ];
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvSeriesByProviderId(e.provider, e.providerId);
@@ -1110,6 +1121,7 @@ export class FileSourceDatabase {
       posterLocalPath: str('poster_local_path'), backdropLocalPath: str('backdrop_local_path'),
       genresJson: str('genres_json'), castJson: str('cast_json'),
       numberOfSeasons: num('number_of_seasons'), originalLanguage: str('original_language'),
+      originCountryJson: str('origin_country_json'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
   }
