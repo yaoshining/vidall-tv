@@ -493,10 +493,15 @@ export class WebDAVAdapter implements ISourceAdapter {
     if (!existingVideo) {
       return false;
     }
-    if (!existingVideo.lastModified || !currentInfo.lastModified) {
-      return false;
+    // 优先用 lastModified 比较
+    if (existingVideo.lastModified && currentInfo.lastModified) {
+      return existingVideo.lastModified === currentInfo.lastModified;
     }
-    return existingVideo.lastModified === currentInfo.lastModified;
+    // lastModified 不可用时（部分 WebDAV 服务器不返回 Last-Modified），用文件大小兜底
+    if (existingVideo.fileSize !== undefined && currentInfo.fileSize !== undefined) {
+      return existingVideo.fileSize === currentInfo.fileSize;
+    }
+    return false;
   }
 
   private toRelativePath(fullPath: string): string {
@@ -567,10 +572,15 @@ export class SMBAdapter implements ISourceAdapter {
     if (!existing) {
       return false;
     }
-    if (!existing.lastModified || !info.lastModified) {
-      return false;
+    // 优先用 lastModified 比较；SMB 源 lastModifiedMs=0 时 lastModified 为 undefined，降级用文件大小
+    if (existing.lastModified && info.lastModified) {
+      return existing.lastModified === info.lastModified;
     }
-    return existing.lastModified === info.lastModified;
+    // lastModified 不可用（SMB 库未返回有效时间戳），用文件大小作为变化检测后备
+    if (existing.fileSize !== undefined && info.fileSize !== undefined) {
+      return existing.fileSize === info.fileSize;
+    }
+    return false;
   }
 
   async scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]> {
