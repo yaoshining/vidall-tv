@@ -636,14 +636,14 @@ export struct MediaResultPage {
               ForEach(
                 this.filterMediaType === 'movie' ? MOVIE_PROGRESS_OPTIONS : TV_PROGRESS_OPTIONS,
                 (opt: StringOption) => {
-                  this.buildChip(
-                    opt.label,
-                    this.filterProgress === opt.value,
-                    () => {
+                  FilterChip({
+                    label: opt.label,
+                    selected: this.filterProgress === opt.value,
+                    onPress: () => {
                       this.filterProgress = opt.value;
                       this.doSearch().catch((): void => {});
                     }
-                  )
+                  })
                 },
                 (opt: StringOption) => 'prog_' + opt.value + '_' + this.filterProgress + '_' + this.filterMediaType
               )
