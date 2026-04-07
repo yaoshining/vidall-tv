@@ -99,8 +99,8 @@ const C_CHIP_WEAK_TEXT: string = '#B8C1CD';
 const TRANSPARENT: string = '#00000000';
 const C_ORANGE: string = '#E6892E';
 const C_FILTER_BG: string = '#2B2B2B';
-const C_CHIP_SEL_BG: string = '#E6892E';
-const C_CHIP_SEL_TEXT: string = '#FFFFFF';
+const C_CHIP_SEL_BG: string = C_ORANGE;
+const C_CHIP_SEL_TEXT: string = '#1C1C1C';
 const C_LABEL_TEXT: string = '#FFFFFF';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -452,7 +452,7 @@ export struct MediaResultPage {
       // 重置筛选 badge
       Text('重置筛选')
         .fontSize(16)
-        .fontColor('#FFFFFF')
+        .fontColor('#1C1C1C')
         .padding({ left: 14, right: 14, top: 8, bottom: 8 })
         .backgroundColor(C_ORANGE)
         .borderRadius(8)

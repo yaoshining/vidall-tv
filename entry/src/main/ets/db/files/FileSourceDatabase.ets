@@ -2796,11 +2796,21 @@ export class FileSourceDatabase {
       // ── LIMIT 范围校验，防止 NaN/负数/超大值 ──
       const rawLimit: number = options?.limit ?? 50;
       const safeLimit: number = (Number.isInteger(rawLimit) && rawLimit > 0) ? Math.min(rawLimit, 500) : 50;
-      // SQL 层多拉一批，内存去重后再裁剪到 safeLimit
-      const fetchLimit: number = Math.min(safeLimit * 10, 2000);
+
+      // TV 模式：SQL 层直接按 tv_series_id 分组去重，LIMIT 对准唯一 series 数量
+      // 非 TV 模式：多拉一批后在内存去重再裁剪（电影 movieId 唯一，冗余极少）
+      let groupClause: string;
+      let fetchLimit: number;
+      if (mediaType === 'tv') {
+        groupClause = ' GROUP BY s.tv_series_id';
+        fetchLimit = safeLimit;
+      } else {
+        groupClause = '';
+        fetchLimit = Math.min(safeLimit * 10, 2000);
+      }
       const limitClause: string = ` LIMIT ${fetchLimit}`;
 
-      const sql: string = this.mediaItemSql + whereClause + orderClause + limitClause;
+      const sql: string = this.mediaItemSql + whereClause + groupClause + orderClause + limitClause;
       rs = await this.rdbStore.querySql(sql, params);
       const rawItems: MediaItem[] = [];
       while (rs.goToNextRow()) {
