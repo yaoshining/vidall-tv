@@ -710,32 +710,27 @@ export struct MediaResultPage {
 
   build() {
     NavDestination() {
-      Column() {
-        // 标题栏固定，不随内容滚动
-        this.buildHeader()
-
-        // FilterPanel + 结果列表整体滚动
-        Scroll() {
-          Column({ space: 20 }) {
-            this.buildFilterPanel()
-            // summary：有筛选条件时显示当前条件
-            if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYearLabel !== '' || this.filterRating > 0 || this.filterProgress !== '') {
-              Text(this.summaryText())
-                .fontSize(16)
-                .fontColor(C_SECONDARY)
-                .width('100%')
-            }
-            this.buildResultGrid()
+      Scroll() {
+        Column({ space: 20 }) {
+          // 标题栏随内容整体滚动
+          this.buildHeader()
+          this.buildFilterPanel()
+          // summary：有筛选条件时显示当前条件
+          if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYearLabel !== '' || this.filterRating > 0 || this.filterProgress !== '') {
+            Text(this.summaryText())
+              .fontSize(16)
+              .fontColor(C_SECONDARY)
+              .width('100%')
           }
-          .width('100%')
+          this.buildResultGrid()
         }
-        .layoutWeight(1)
-        .scrollable(ScrollDirection.Vertical)
-        .scrollBar(BarState.Off)
+        .width('100%')
+        .padding(20)
       }
+      .scrollable(ScrollDirection.Vertical)
+      .scrollBar(BarState.Off)
       .width('100%')
       .height('100%')
-      .padding(20)
       .backgroundColor(C_PAGE_BG)
     }
     .onReady((context: NavDestinationContext) => {
