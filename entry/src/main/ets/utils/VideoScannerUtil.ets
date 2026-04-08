@@ -973,9 +973,13 @@ export class VideoScannerUtil {
 
     // 全量覆盖模式：先清空所有源的 scrape_info，确保重刮前无历史垃圾数据
     if (scanOptions.mode === 'overwrite') {
-      const sourceIds = fileSources
-        .map((s: FileSource) => s.id)
-        .filter((id: number | undefined): id is number => id !== undefined && id > 0);
+      const sourceIds: number[] = [];
+      for (const s of fileSources) {
+        const sid = s.id;
+        if (sid !== undefined && sid > 0) {
+          sourceIds.push(sid);
+        }
+      }
       if (sourceIds.length > 0) {
         await db.clearScrapeInfoForSources(sourceIds);
         console.info(`[VideoScanner] 全量覆盖预清空完成，已清除 ${sourceIds.length} 个文件源的 scrape_info`);

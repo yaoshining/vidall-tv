@@ -1458,7 +1458,10 @@ export class FileSourceDatabase {
     if (this.rdbStore === null || sourceIds.length === 0) { return; }
     try {
       const placeholders = sourceIds.map(() => '?').join(',');
-      const args: relationalStore.ValueType[] = sourceIds.map(id => id as relationalStore.ValueType);
+      const args: relationalStore.ValueType[] = [];
+      for (const id of sourceIds) {
+        args.push(id);
+      }
       await this.rdbStore.executeSql(
         `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
          WHERE video_id IN (
