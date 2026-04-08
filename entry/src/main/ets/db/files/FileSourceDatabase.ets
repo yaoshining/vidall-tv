@@ -1450,6 +1450,28 @@ export class FileSourceDatabase {
     }
   }
 
+  /**
+   * 全量覆盖模式专用：清空指定文件源下所有视频的 scrape_info，
+   * 确保重刮前无历史垃圾数据干扰。
+   */
+  async clearScrapeInfoForSources(sourceIds: number[]): Promise<void> {
+    if (this.rdbStore === null || sourceIds.length === 0) { return; }
+    try {
+      const placeholders = sourceIds.map(() => '?').join(',');
+      const args: relationalStore.ValueType[] = sourceIds.map(id => id as relationalStore.ValueType);
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
+         WHERE video_id IN (
+           SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE source_id IN (${placeholders})
+         )`,
+        args
+      );
+      console.info(`[DB] clearScrapeInfoForSources 完成 sourceIds=[${sourceIds.join(',')}]`);
+    } catch (e) {
+      console.warn(`[DB] clearScrapeInfoForSources 失败: ${JSON.stringify(e)}`);
+    }
+  }
+
   /** 查询 scrape_info 中某剧已刮削的所有季号（用于季列表过滤） */
   async getScrapedSeasonNumbers(tvSeriesId: number): Promise<number[]> {
     if (this.rdbStore === null) { return []; }
