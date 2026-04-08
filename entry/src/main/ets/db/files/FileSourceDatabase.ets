@@ -42,7 +42,7 @@ export interface SearchMediaOptions {
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 7;
+  private static readonly DB_VERSION = 8;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -394,6 +394,16 @@ export class FileSourceDatabase {
         await rdbStore.executeSql('ALTER TABLE tv_series ADD COLUMN origin_country_json TEXT');
         currentVersion = 7;
         console.info('[DB] 已迁移到 v7：movies/tv_series 新增 origin_country_json');
+      }
+      if (currentVersion < 8) {
+        // 移除 scrape_info.(provider,provider_id) 唯一索引：多个文件源可以对应同一 TMDB 条目
+        await rdbStore.executeSql(`DROP INDEX IF EXISTS idx_scrape_info_provider_pid_uq`);
+        // 清理孤立 scrape_info（video_id 不在 videos 表中，由历史 INSERT OR REPLACE 产生）
+        await rdbStore.executeSql(
+          `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id NOT IN (SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS})`
+        );
+        currentVersion = 8;
+        console.info('[DB] 已迁移到 v8：移除 scrape_info 唯一索引，清理孤立刮削数据');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -756,9 +766,35 @@ export class FileSourceDatabase {
       throw new Error('Database not initialized');
     }
     try {
-      // INSERT OR REPLACE 保证 file_path UNIQUE 并发安全
+      // 先查是否已存在，有则 UPDATE（保留原始 id，避免外键级联删除 scrape_info）
+      const existing = await this.getVideoByPath(entity.filePath);
+      if (existing && existing.id !== undefined) {
+        const bucket: relationalStore.ValuesBucket = {
+          source_id: entity.sourceId,
+          directory_path: entity.directoryPath,
+          file_name: entity.fileName,
+          file_size: entity.fileSize !== undefined ? entity.fileSize : null,
+          last_modified: entity.lastModified ?? null,
+          content_type: entity.contentType ?? null,
+          duration_ms: entity.durationMs !== undefined ? entity.durationMs : null,
+          width: entity.width !== undefined ? entity.width : null,
+          height: entity.height !== undefined ? entity.height : null,
+          frame_rate: entity.frameRate !== undefined ? entity.frameRate : null,
+          video_codec: entity.videoCodec ?? null,
+          audio_tracks_json: entity.audioTracksJson ?? null,
+          subtitle_tracks_json: entity.subtitleTracksJson ?? null,
+          updated_in_last_scan: 1,
+          scanned_at: entity.scannedAt
+        };
+        const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_VIDEOS);
+        pred.equalTo('id', existing.id);
+        await this.rdbStore.update(bucket, pred);
+        console.info(`[FileSourceDatabase] upsertVideo UPDATE id=${existing.id} path=${entity.filePath}`);
+        return existing.id;
+      }
+      // 新文件 INSERT
       const sql = `
-        INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_VIDEOS}
+        INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_VIDEOS}
           (source_id, directory_path, file_path, file_name, file_size, last_modified,
            content_type, duration_ms, width, height, frame_rate, video_codec,
            audio_tracks_json, subtitle_tracks_json, updated_in_last_scan, scanned_at)
@@ -779,10 +815,9 @@ export class FileSourceDatabase {
         entity.scannedAt
       ];
       await this.rdbStore.executeSql(sql, args);
-      // 查回 id
       const inserted = await this.getVideoByPath(entity.filePath);
       const rowId = inserted?.id ?? -1;
-      console.info(`[FileSourceDatabase] upsertVideo id=${rowId} path=${entity.filePath}`);
+      console.info(`[FileSourceDatabase] upsertVideo INSERT id=${rowId} path=${entity.filePath}`);
       return rowId;
     } catch (error) {
       console.error(`[FileSourceDatabase] upsertVideo 失败: ${JSON.stringify(error)}`);
@@ -1402,6 +1437,19 @@ export class FileSourceDatabase {
     } catch { return null; } finally { rs?.close(); }
   }
 
+  /** 清理孤立 scrape_info（video_id 不在 videos 表中），由历史 INSERT OR REPLACE 产生 */
+  async cleanupOrphanedScrapeInfo(): Promise<void> {
+    if (this.rdbStore === null) { return; }
+    try {
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id NOT IN (SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS})`
+      );
+      console.info('[DB] cleanupOrphanedScrapeInfo 完成');
+    } catch (e) {
+      console.warn(`[DB] cleanupOrphanedScrapeInfo 失败: ${JSON.stringify(e)}`);
+    }
+  }
+
   /** 查询 scrape_info 中某剧已刮削的所有季号（用于季列表过滤） */
   async getScrapedSeasonNumbers(tvSeriesId: number): Promise<number[]> {
     if (this.rdbStore === null) { return []; }
@@ -1421,11 +1469,31 @@ export class FileSourceDatabase {
 
   async upsertScrapeInfo(e: ScrapeInfoEntity): Promise<void> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
-    // 诊断日志
     console.info(`[DB][upsertScrapeInfo] videoId=${e.videoId} type=${e.mediaType} movieId=${e.movieId ?? 'null'} tvSeriesId=${e.tvSeriesId ?? 'null'} episodeId=${e.episodeId ?? 'null'} title="${e.title}"`);
-    // 使用 INSERT OR REPLACE，配合 UNIQUE(video_id) 与 UNIQUE(provider,provider_id) 做幂等写入
+    // 先查 video_id 是否已有 scrape_info，有则 UPDATE（不依赖 provider+provider_id 唯一索引）
+    const existing = await this.getScrapeInfoByVideoId(e.videoId);
+    if (existing && existing.id !== undefined) {
+      const bucket: relationalStore.ValuesBucket = {
+        provider: e.provider,
+        provider_id: e.providerId,
+        media_type: e.mediaType,
+        title: e.title,
+        original_title: e.originalTitle ?? null,
+        movie_id: e.movieId !== undefined ? e.movieId : null,
+        tv_series_id: e.tvSeriesId !== undefined ? e.tvSeriesId : null,
+        episode_id: e.episodeId !== undefined ? e.episodeId : null,
+        season_number: e.seasonNumber !== undefined ? e.seasonNumber : null,
+        episode_number: e.episodeNumber !== undefined ? e.episodeNumber : null,
+        scraped_at: e.scrapedAt
+      };
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
+      pred.equalTo('id', existing.id);
+      await this.rdbStore.update(bucket, pred);
+      console.info(`[DB][upsertScrapeInfo] ✅ 写入成功 videoId=${e.videoId}`);
+      return;
+    }
     const sql = `
-      INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_SCRAPE_INFO}
+      INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_SCRAPE_INFO}
         (video_id, provider, provider_id, media_type, title, original_title,
          movie_id, tv_series_id, episode_id, season_number, episode_number, scraped_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

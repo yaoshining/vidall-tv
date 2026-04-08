@@ -1057,6 +1057,9 @@ export class VideoScannerUtil {
     }
     console.info(`[VideoScanner] ===========================`);
 
+    // 清理孤立 scrape_info（由历史 INSERT OR REPLACE upsertVideo 产生的无效引用）
+    await FileSourceDatabase.getInstance().cleanupOrphanedScrapeInfo();
+
     return {
       totalDirectories,
       totalVideos: allVideos.length,
