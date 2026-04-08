@@ -131,8 +131,8 @@ export class FileSourceDatabase {
       // 防御性 schema 兼容：补齐 videos 扫描更新标记列
       await this.ensureVideosSchema(this.rdbStore);
 
-      // 防御性修复：清理历史重复 scrape_info，并确保 provider + provider_id 唯一
-      await this.ensureScrapeInfoUniqueness(this.rdbStore);
+      // 防御性修复：确保 provider+provider_id 唯一索引已被移除（v8 起允许多文件源对应同一 TMDB 内容）
+      await this.dropScrapeInfoProviderPidIndex(this.rdbStore);
 
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
@@ -1380,48 +1380,73 @@ export class FileSourceDatabase {
   }
 
   /**
-   * 清理 scrape_info 历史重复数据，并确保 provider + provider_id 联合唯一索引存在。
-   * 同一 provider/provider_id 仅保留最新一条（以 id 最大作为最新）。
+   * 确保 scrape_info 的 provider+provider_id 联合唯一索引已被移除。
+   * v8 起允许多个文件源（WebDAV/SMB）指向同一 TMDB 内容，不能再用该索引限制写入。
    */
-  private async ensureScrapeInfoUniqueness(rdbStore: relationalStore.RdbStore): Promise<void> {
+  private async dropScrapeInfoProviderPidIndex(rdbStore: relationalStore.RdbStore): Promise<void> {
     try {
-      const beforeRs = await rdbStore.querySql(
-        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
-      );
-      let before = 0;
-      if (beforeRs.goToFirstRow()) {
-        before = beforeRs.getLong(beforeRs.getColumnIndex('cnt'));
-      }
-      beforeRs.close();
-
-      await rdbStore.executeSql(`
-        DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
-        WHERE id NOT IN (
-          SELECT keep_id FROM (
-            SELECT MAX(id) AS keep_id
-            FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
-            GROUP BY provider, provider_id
-          )
-        )
-      `);
-
-      await rdbStore.executeSql(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_scrape_info_provider_pid_uq
-        ON ${FileSourceDatabase.TABLE_SCRAPE_INFO}(provider, provider_id)
-      `);
-
-      const afterRs = await rdbStore.querySql(
-        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
-      );
-      let after = 0;
-      if (afterRs.goToFirstRow()) {
-        after = afterRs.getLong(afterRs.getColumnIndex('cnt'));
-      }
-      afterRs.close();
-
-      console.info(`[DB][scrape_info] 去重完成 before=${before} after=${after} removed=${before - after}`);
+      await rdbStore.executeSql(`DROP INDEX IF EXISTS idx_scrape_info_provider_pid_uq`);
+      console.info('[DB] scrape_info provider+provider_id 唯一索引已移除（多文件源兼容）');
     } catch (e) {
-      console.warn(`[DB][scrape_info] 去重/唯一索引修复失败: ${JSON.stringify(e)}`);
+      console.warn('[DB] 移除 scrape_info 唯一索引失败: ' + JSON.stringify(e));
+    }
+  }
+
+  /**
+   * 全量覆盖扫描完成后，删除指定文件源中不再存在的鬼记录（旧扫描遗留、现已不在 NAS 上的视频）。
+   * foundPaths：本轮扫描写入 DB 的 file_path 集合。
+   * 注意：SQLite 外键未启用，需显式删除 scrape_info（overwrite 模式下已由 clearScrapeInfoForSources 预清空）。
+   */
+  async deleteGhostVideosForSources(sourceIds: number[], foundPaths: string[]): Promise<number> {
+    if (!this.rdbStore || sourceIds.length === 0) { return 0; }
+    try {
+      const foundPathsSet = new Set<string>(foundPaths);
+      const sidHolders = sourceIds.map(() => '?').join(', ');
+      const sidArgs: relationalStore.ValueType[] = sourceIds.map(id => id as relationalStore.ValueType);
+
+      // 1. 查询这些文件源的所有视频记录
+      const rs = await this.rdbStore.querySql(
+        `SELECT id, file_path FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE source_id IN (${sidHolders})`,
+        sidArgs
+      );
+      const ghostIds: number[] = [];
+      while (rs.goToNextRow()) {
+        const filePath = rs.getString(rs.getColumnIndex('file_path'));
+        const id = rs.getLong(rs.getColumnIndex('id'));
+        if (!foundPathsSet.has(filePath)) {
+          ghostIds.push(id);
+        }
+      }
+      rs.close();
+
+      if (ghostIds.length === 0) {
+        console.info(`[DB][deleteGhostVideos] 无鬼记录，无需清理`);
+        return 0;
+      }
+
+      // 2. 分批删除（SQLite IN 参数上限 999）
+      const BATCH = 100;
+      for (let i = 0; i < ghostIds.length; i += BATCH) {
+        const batch = ghostIds.slice(i, i + BATCH);
+        const idHolders = batch.map(() => '?').join(', ');
+        const idArgs: relationalStore.ValueType[] = batch.map(gid => gid as relationalStore.ValueType);
+        // 先删 scrape_info（无外键 CASCADE）
+        await this.rdbStore!.executeSql(
+          `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id IN (${idHolders})`,
+          idArgs
+        );
+        // 再删 videos
+        await this.rdbStore!.executeSql(
+          `DELETE FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE id IN (${idHolders})`,
+          idArgs
+        );
+      }
+
+      console.info(`[DB][deleteGhostVideos] 已清理 ${ghostIds.length} 条鬼记录，source_id IN (${sourceIds})`);
+      return ghostIds.length;
+    } catch (e) {
+      console.warn('[DB][deleteGhostVideos] 清理鬼记录失败: ' + JSON.stringify(e));
+      return 0;
     }
   }
 

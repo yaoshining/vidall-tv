@@ -972,6 +972,8 @@ export class VideoScannerUtil {
     console.info(`[VideoScanner] 共找到 ${fileSources.length} 个文件源`);
 
     // 全量覆盖模式：先清空所有源的 scrape_info，确保重刮前无历史垃圾数据
+    // 同时记录哪些文件源参与了本次全量扫描（仅记录 sourceId，实际是否成功扫到由 seenPaths 决定）
+    const overwriteSourceIds: number[] = [];
     if (scanOptions.mode === 'overwrite') {
       const sourceIds: number[] = [];
       for (const s of fileSources) {
@@ -983,8 +985,14 @@ export class VideoScannerUtil {
       if (sourceIds.length > 0) {
         await db.clearScrapeInfoForSources(sourceIds);
         console.info(`[VideoScanner] 全量覆盖预清空完成，已清除 ${sourceIds.length} 个文件源的 scrape_info`);
+        for (const sid of sourceIds) {
+          overwriteSourceIds.push(sid);
+        }
       }
     }
+
+    // 成功扫描到至少一个文件的文件源 ID（用于鬼记录清理，避免扫描失败时误删全部记录）
+    const successfullyScannedSourceIds = new Set<number>();
 
     const seenPaths = new Set<string>();
     const allVideos: VideoFileInfo[] = [];
@@ -1045,6 +1053,10 @@ export class VideoScannerUtil {
             seenPaths.add(video.filePath);
             allVideos.push(video);
             stat.videosFound++;
+            // 标记该文件源已成功扫到文件（用于鬼记录清理保护）
+            if (fileSource.id !== undefined) {
+              successfullyScannedSourceIds.add(fileSource.id);
+            }
           } else {
             console.info(`[VideoScanner] 重复路径，已跳过: ${video.filePath}`);
           }
@@ -1074,6 +1086,19 @@ export class VideoScannerUtil {
 
     // 清理孤立 scrape_info（由历史 INSERT OR REPLACE upsertVideo 产生的无效引用）
     await FileSourceDatabase.getInstance().cleanupOrphanedScrapeInfo();
+
+    // 全量覆盖模式：清理鬼记录（本轮未扫到、但仍留在 videos 表中的旧文件记录）
+    // 仅清理成功扫描到文件的文件源，避免扫描失败时误删全部记录
+    if (scanOptions.mode === 'overwrite' && overwriteSourceIds.length > 0) {
+      const safeSourceIds = overwriteSourceIds.filter(sid => successfullyScannedSourceIds.has(sid));
+      if (safeSourceIds.length > 0) {
+        const foundPaths = Array.from(seenPaths);
+        await db.deleteGhostVideosForSources(safeSourceIds, foundPaths);
+        console.info(`[VideoScanner] 鬼记录清理完成，有效文件源=${safeSourceIds.length} 个，有效路径=${foundPaths.length} 个`);
+      } else {
+        console.warn(`[VideoScanner] 鬼记录清理跳过：所有文件源均未成功扫到文件`);
+      }
+    }
 
     return {
       totalDirectories,
