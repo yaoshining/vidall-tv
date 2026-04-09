@@ -579,6 +579,11 @@ export struct VideoControlsDialog {
   }
 }
 
+interface AspectRatioOption {
+  label: string;
+  mode: AspectRatioMode;
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
@@ -586,9 +591,12 @@ export struct PlayerSettingsDialog {
   @Require onOpenSubtitleSelector: () => void
   @State selectedPlaybackRateIndex: number = 1
   @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
-  @State private arFocused0: boolean = false
-  @State private arFocused1: boolean = false
-  @State private arFocused2: boolean = false
+  @State private arFocusedIndex: number = -1
+  private readonly aspectRatioOptions: AspectRatioOption[] = [
+    { label: '适应', mode: AspectRatioMode.FIT },
+    { label: '填充', mode: AspectRatioMode.FILL },
+    { label: '拉伸', mode: AspectRatioMode.STRETCH },
+  ]
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
 
@@ -596,6 +604,7 @@ export struct PlayerSettingsDialog {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
     this.currentAspectRatioMode = this.videoController.aspectRatioMode;
+    this.arFocusedIndex = -1;
   }
 
   @Builder
@@ -654,92 +663,38 @@ export struct PlayerSettingsDialog {
               .alignSelf(ItemAlign.Start)
 
             Row({ space: 12 }) {
-              // 适应：直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
-              Row() {
-                Text('适应')
-                  .fontSize(26)
-                  .fontColor(this.currentAspectRatioMode === AspectRatioMode.FIT ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.currentAspectRatioMode === AspectRatioMode.FIT
-                    ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius("50%")
-                  .border({
-                    width: this.currentAspectRatioMode === AspectRatioMode.FIT ? 2 : 1,
-                    color: this.currentAspectRatioMode === AspectRatioMode.FIT ? '#fffefe' : '#45ffffff'
-                  })
-                  .shadow({
-                    radius: this.currentAspectRatioMode === AspectRatioMode.FIT ? 8 : 0,
-                    color: this.currentAspectRatioMode === AspectRatioMode.FIT ? '#33597FB8' : '#00ffffff'
-                  })
-              }
-              .focusable(true)
-              .onFocus(() => { this.arFocused0 = true })
-              .onBlur(() => { this.arFocused0 = false })
-              .borderRadius(99)
-              .padding(this.arFocused0 ? 2 : 0)
-              .border({ width: this.arFocused0 ? 2 : 0, color: this.arFocused0 ? '#4D9FFF' : Color.Transparent })
-              .onClick(() => {
-                this.currentAspectRatioMode = AspectRatioMode.FIT
-                this.videoController.setAspectRatioMode(AspectRatioMode.FIT)
-              })
-
-              // 填充：直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
-              Row() {
-                Text('填充')
-                  .fontSize(26)
-                  .fontColor(this.currentAspectRatioMode === AspectRatioMode.FILL ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.currentAspectRatioMode === AspectRatioMode.FILL
-                    ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius("50%")
-                  .border({
-                    width: this.currentAspectRatioMode === AspectRatioMode.FILL ? 2 : 1,
-                    color: this.currentAspectRatioMode === AspectRatioMode.FILL ? '#fffefe' : '#45ffffff'
-                  })
-                  .shadow({
-                    radius: this.currentAspectRatioMode === AspectRatioMode.FILL ? 8 : 0,
-                    color: this.currentAspectRatioMode === AspectRatioMode.FILL ? '#33597FB8' : '#00ffffff'
-                  })
-              }
-              .focusable(true)
-              .onFocus(() => { this.arFocused1 = true })
-              .onBlur(() => { this.arFocused1 = false })
-              .borderRadius(99)
-              .padding(this.arFocused1 ? 2 : 0)
-              .border({ width: this.arFocused1 ? 2 : 0, color: this.arFocused1 ? '#4D9FFF' : Color.Transparent })
-              .onClick(() => {
-                this.currentAspectRatioMode = AspectRatioMode.FILL
-                this.videoController.setAspectRatioMode(AspectRatioMode.FILL)
-              })
-
-              // 拉伸：直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
-              Row() {
-                Text('拉伸')
-                  .fontSize(26)
-                  .fontColor(this.currentAspectRatioMode === AspectRatioMode.STRETCH ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.currentAspectRatioMode === AspectRatioMode.STRETCH
-                    ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius("50%")
-                  .border({
-                    width: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? 2 : 1,
-                    color: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? '#fffefe' : '#45ffffff'
-                  })
-                  .shadow({
-                    radius: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? 8 : 0,
-                    color: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? '#33597FB8' : '#00ffffff'
-                  })
-              }
-              .focusable(true)
-              .onFocus(() => { this.arFocused2 = true })
-              .onBlur(() => { this.arFocused2 = false })
-              .borderRadius(99)
-              .padding(this.arFocused2 ? 2 : 0)
-              .border({ width: this.arFocused2 ? 2 : 0, color: this.arFocused2 ? '#4D9FFF' : Color.Transparent })
-              .onClick(() => {
-                this.currentAspectRatioMode = AspectRatioMode.STRETCH
-                this.videoController.setAspectRatioMode(AspectRatioMode.STRETCH)
-              })
+              ForEach(this.aspectRatioOptions, (opt: AspectRatioOption, idx: number) => {
+                Row() {
+                  Text(opt.label)
+                    .fontSize(26)
+                    .fontColor(this.currentAspectRatioMode === opt.mode ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(this.currentAspectRatioMode === opt.mode
+                      ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius("50%")
+                    .border({
+                      width: this.currentAspectRatioMode === opt.mode ? 2 : 1,
+                      color: this.currentAspectRatioMode === opt.mode ? '#fffefe' : '#45ffffff'
+                    })
+                    .shadow({
+                      radius: this.currentAspectRatioMode === opt.mode ? 8 : 0,
+                      color: this.currentAspectRatioMode === opt.mode ? '#33597FB8' : '#00ffffff'
+                    })
+                }
+                .focusable(true)
+                .onFocus(() => { this.arFocusedIndex = idx })
+                .onBlur(() => { this.arFocusedIndex = -1 })
+                .borderRadius(99)
+                .padding(this.arFocusedIndex === idx ? 2 : 0)
+                .border({
+                  width: this.arFocusedIndex === idx ? 2 : 0,
+                  color: this.arFocusedIndex === idx ? '#4D9FFF' : Color.Transparent
+                })
+                .onClick(() => {
+                  this.currentAspectRatioMode = opt.mode
+                  this.videoController.setAspectRatioMode(opt.mode)
+                })
+              }, (opt: AspectRatioOption) => opt.mode.toString())
             }
             .justifyContent(FlexAlign.Start)
             .width('100%')

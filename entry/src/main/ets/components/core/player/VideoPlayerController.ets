@@ -30,11 +30,11 @@ export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
 
 /** 画面比例模式 */
 export enum AspectRatioMode {
-  /** 适应：等比缩放保留黑边（ImageFit.Contain 语义，默认） */
+  /** 适应：等比缩放保留黑边（RenderFit.RESIZE_CONTAIN 语义，默认） */
   FIT = 0,
-  /** 填充：等比裁剪铺满（ImageFit.Cover 语义） */
+  /** 填充：等比裁剪铺满（RenderFit.RESIZE_COVER 语义） */
   FILL = 1,
-  /** 拉伸：不等比铺满（ImageFit.Fill 语义） */
+  /** 拉伸：不等比铺满（RenderFit.RESIZE_FILL 语义） */
   STRETCH = 2
 }
 
@@ -752,6 +752,8 @@ export class VideoPlayerController {
    */
   setAspectRatioMode(mode: AspectRatioMode): void {
     this.aspectRatioMode = mode;
+    const modeNames: string[] = ['FIT', 'FILL', 'STRETCH'];
+    console.info(`[VideoPlayer] aspectRatioMode → ${modeNames[mode] ?? mode}`);
   }
 
   /**
