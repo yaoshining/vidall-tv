@@ -187,14 +187,22 @@ struct ActionKey {
   }
 
   build() {
-    Row({ space: 6 }) {
-      Text(this.label)
-        .fontSize(this.labelFontSize)
-        .fontColor(this.labelColor)
+    Row() {
       if (this.sublabel.length > 0) {
-        Text(this.sublabel)
-          .fontSize(this.sublabelFontSize)
+        Text() {
+          Span(this.label)
+            .fontSize(this.labelFontSize)
+            .fontColor(this.labelColor)
+          Span('\u2009' + this.sublabel)
+            .fontSize(this.sublabelFontSize)
+            .fontColor(this.labelColor)
+        }
+        .textAlign(TextAlign.Center)
+      } else {
+        Text(this.label)
+          .fontSize(this.labelFontSize)
           .fontColor(this.labelColor)
+          .textAlign(TextAlign.Center)
       }
     }
     .justifyContent(FlexAlign.Center)
