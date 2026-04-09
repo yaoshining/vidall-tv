@@ -86,6 +86,7 @@ export interface MovieEntity {
   directorsJson?: string;
   runtime?: number;
   originalLanguage?: string;
+  originCountryJson?: string;
   rawJson?: string;
   scrapedAt: number;
 }
@@ -114,6 +115,7 @@ export interface TvSeriesEntity {
   castJson?: string;
   numberOfSeasons?: number;
   originalLanguage?: string;
+  originCountryJson?: string;
   rawJson?: string;
   scrapedAt: number;
 }

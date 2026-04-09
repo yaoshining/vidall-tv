@@ -82,6 +82,19 @@ const TV_PROGRESS_OPTIONS: StringOption[] = [
   { label: '已看完', value: 'done' },
 ];
 
+const REGION_OPTIONS: StringOption[] = [
+  { label: '全部地区', value: '' },
+  { label: '中国大陆', value: 'CN' },
+  { label: '中国香港', value: 'HK' },
+  { label: '中国台湾', value: 'TW' },
+  { label: '日本', value: 'JP' },
+  { label: '韩国', value: 'KR' },
+  { label: '美国', value: 'US' },
+  { label: '英国', value: 'GB' },
+  { label: '法国', value: 'FR' },
+  { label: '德国', value: 'DE' },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Token Constants — strictly follows Pencil vidall_pages.pen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,6 +289,7 @@ export struct MediaResultPage {
   @Local filterYearLabel: string = '';     // '' | '2020s' | '2010s' | '2000s' | '1990s' | '更早'
   @Local filterRating: number = 0;         // 0 = 全部，6/7/8 = 对应最低分
   @Local filterProgress: string = '';      // '' | 'unseen' | 'partial' | 'done'
+  @Local filterRegion: string = '';        // '' 或 ISO 3166-1 代码，如 "CN"、"JP"
   @Local genreOptions: string[] = [];      // 从库中动态加载
 
   // ── Data state ────────────────────────────────────────────────────────────
@@ -342,6 +356,7 @@ export struct MediaResultPage {
         limit: 200,
         minRating: this.filterRating > 0 ? this.filterRating : undefined,
         watchProgress: this.getWatchProgressFilter(),
+        originCountry: this.filterRegion.length > 0 ? this.filterRegion : undefined,
       };
 
       const items: MediaItem[] = await this.db.searchMediaItems(this.keyword, options);
@@ -389,6 +404,7 @@ export struct MediaResultPage {
     this.filterYearLabel = '';
     this.filterRating = 0;
     this.filterProgress = '';
+    this.filterRegion = '';
     this.filterSort = 'composite';
     this.pageTitle = this.initialPageTitle;
     this.doSearch().catch((): void => {});
@@ -662,6 +678,37 @@ export struct MediaResultPage {
         .height(48)
         .alignItems(VerticalAlign.Center)
       }
+
+      // 行7：地区
+      Divider().color('#3A3A3A').height(1)
+
+      Row() {
+        Scroll() {
+          Row({ space: 8 }) {
+            ForEach(REGION_OPTIONS, (opt: StringOption) => {
+              FilterChip({
+                label: opt.label,
+                selected: this.filterRegion === opt.value,
+                onPress: () => {
+                  this.filterRegion = opt.value;
+                  this.doSearch().catch((): void => {});
+                }
+              })
+            }, (opt: StringOption) => 'region_' + opt.value + '_' + this.filterRegion)
+          }
+          .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Start)
+          .alignItems(VerticalAlign.Center)
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .layoutWeight(1)
+        .height(48)
+        .align(Alignment.Start)
+      }
+      .width('100%')
+      .height(48)
+      .alignItems(VerticalAlign.Center)
     }
     .width('100%')
     .backgroundColor(C_FILTER_BG)

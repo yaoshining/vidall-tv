@@ -32,6 +32,8 @@ export interface SearchMediaOptions {
    * 'done'    - 已看完：position_ms >= duration_ms * 0.9
    */
   watchProgress?: 'unseen' | 'partial' | 'done';
+  /** 制作国过滤：ISO 3166-1 代码，如 "CN"、"JP"、"US"，LIKE 匹配 origin_country_json */
+  originCountry?: string;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface SearchMediaOptions {
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 6;
+  private static readonly DB_VERSION = 8;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -129,8 +131,11 @@ export class FileSourceDatabase {
       // 防御性 schema 兼容：补齐 videos 扫描更新标记列
       await this.ensureVideosSchema(this.rdbStore);
 
-      // 防御性修复：清理历史重复 scrape_info，并确保 provider + provider_id 唯一
-      await this.ensureScrapeInfoUniqueness(this.rdbStore);
+      // 防御性 schema 兼容：补齐 movies/tv_series origin_country_json 列（v7 新增，幂等）
+      await this.ensureOriginCountrySchema(this.rdbStore);
+
+      // 防御性修复：确保 provider+provider_id 唯一索引已被移除（v8 起允许多文件源对应同一 TMDB 内容）
+      await this.dropScrapeInfoProviderPidIndex(this.rdbStore);
 
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
@@ -228,6 +233,7 @@ export class FileSourceDatabase {
         directors_json TEXT,
         runtime INTEGER,
         original_language TEXT,
+        origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
         UNIQUE(provider, provider_id)
@@ -255,6 +261,7 @@ export class FileSourceDatabase {
         cast_json TEXT,
         number_of_seasons INTEGER,
         original_language TEXT,
+        origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
         UNIQUE(provider, provider_id)
@@ -384,6 +391,21 @@ export class FileSourceDatabase {
         await this.migrateV5ToV6(rdbStore);
         currentVersion = 6;
         console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`);
+      }
+      if (currentVersion < 7 && currentVersion < newVersion) {
+        await this.ensureOriginCountrySchema(rdbStore);
+        currentVersion = 7;
+        console.info('[DB] 已迁移到 v7：movies/tv_series 新增 origin_country_json');
+      }
+      if (currentVersion < 8) {
+        // 移除 scrape_info.(provider,provider_id) 唯一索引：多个文件源可以对应同一 TMDB 条目
+        await rdbStore.executeSql(`DROP INDEX IF EXISTS idx_scrape_info_provider_pid_uq`);
+        // 清理孤立 scrape_info（video_id 不在 videos 表中，由历史 INSERT OR REPLACE 产生）
+        await rdbStore.executeSql(
+          `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id NOT IN (SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS})`
+        );
+        currentVersion = 8;
+        console.info('[DB] 已迁移到 v8：移除 scrape_info 唯一索引，清理孤立刮削数据');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -746,9 +768,35 @@ export class FileSourceDatabase {
       throw new Error('Database not initialized');
     }
     try {
-      // INSERT OR REPLACE 保证 file_path UNIQUE 并发安全
+      // 先查是否已存在，有则 UPDATE（保留原始 id，避免外键级联删除 scrape_info）
+      const existing = await this.getVideoByPath(entity.filePath);
+      if (existing && existing.id !== undefined) {
+        const bucket: relationalStore.ValuesBucket = {
+          source_id: entity.sourceId,
+          directory_path: entity.directoryPath,
+          file_name: entity.fileName,
+          file_size: entity.fileSize !== undefined ? entity.fileSize : null,
+          last_modified: entity.lastModified ?? null,
+          content_type: entity.contentType ?? null,
+          duration_ms: entity.durationMs !== undefined ? entity.durationMs : null,
+          width: entity.width !== undefined ? entity.width : null,
+          height: entity.height !== undefined ? entity.height : null,
+          frame_rate: entity.frameRate !== undefined ? entity.frameRate : null,
+          video_codec: entity.videoCodec ?? null,
+          audio_tracks_json: entity.audioTracksJson ?? null,
+          subtitle_tracks_json: entity.subtitleTracksJson ?? null,
+          updated_in_last_scan: 1,
+          scanned_at: entity.scannedAt
+        };
+        const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_VIDEOS);
+        pred.equalTo('id', existing.id);
+        await this.rdbStore.update(bucket, pred);
+        console.info(`[FileSourceDatabase] upsertVideo UPDATE id=${existing.id} path=${entity.filePath}`);
+        return existing.id;
+      }
+      // 新文件 INSERT
       const sql = `
-        INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_VIDEOS}
+        INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_VIDEOS}
           (source_id, directory_path, file_path, file_name, file_size, last_modified,
            content_type, duration_ms, width, height, frame_rate, video_codec,
            audio_tracks_json, subtitle_tracks_json, updated_in_last_scan, scanned_at)
@@ -769,10 +817,9 @@ export class FileSourceDatabase {
         entity.scannedAt
       ];
       await this.rdbStore.executeSql(sql, args);
-      // 查回 id
       const inserted = await this.getVideoByPath(entity.filePath);
       const rowId = inserted?.id ?? -1;
-      console.info(`[FileSourceDatabase] upsertVideo id=${rowId} path=${entity.filePath}`);
+      console.info(`[FileSourceDatabase] upsertVideo INSERT id=${rowId} path=${entity.filePath}`);
       return rowId;
     } catch (error) {
       console.error(`[FileSourceDatabase] upsertVideo 失败: ${JSON.stringify(error)}`);
@@ -932,6 +979,22 @@ export class FileSourceDatabase {
     } catch { return null; }
   }
 
+  async getMovieById(id: number): Promise<MovieEntity | null> {
+    if (this.rdbStore === null) { return null; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
+      pred.equalTo('id', id);
+      rs = await this.rdbStore.query(pred);
+      if (rs.goToFirstRow()) { return this.parseMovieEntity(rs); }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      rs?.close();
+    }
+  }
+
   /** 批量获取所有电影，供播放历史等场景一次性加载 */
   async getAllMovies(): Promise<MovieEntity[]> {
     if (this.rdbStore === null) { return []; }
@@ -966,6 +1029,7 @@ export class FileSourceDatabase {
         backdrop_local_path: e.backdropLocalPath ?? null, genres_json: e.genresJson ?? null,
         cast_json: e.castJson ?? null, directors_json: e.directorsJson ?? null,
         runtime: e.runtime ?? null, original_language: e.originalLanguage ?? null,
+        origin_country_json: e.originCountryJson ?? null,
         raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt
       };
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
@@ -979,8 +1043,8 @@ export class FileSourceDatabase {
         (provider, provider_id, title, original_title, overview, release_date, rating,
          vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
          poster_local_path, backdrop_local_path, genres_json, cast_json, directors_json,
-         runtime, original_language, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         runtime, original_language, origin_country_json, raw_json, scraped_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `;
     const args: relationalStore.ValueType[] = [
       e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
@@ -988,7 +1052,7 @@ export class FileSourceDatabase {
       e.posterPath ?? null, e.backdropPath ?? null, e.posterUrl ?? null,
       e.backdropUrl ?? null, e.posterLocalPath ?? null, e.backdropLocalPath ?? null,
       e.genresJson ?? null, e.castJson ?? null, e.directorsJson ?? null,
-      e.runtime ?? null, e.originalLanguage ?? null, e.rawJson ?? null, e.scrapedAt
+      e.runtime ?? null, e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
     ];
     await this.rdbStore.executeSql(sql, args);
     // 查回刚插入的 id
@@ -1014,6 +1078,7 @@ export class FileSourceDatabase {
       posterLocalPath: str('poster_local_path'), backdropLocalPath: str('backdrop_local_path'),
       genresJson: str('genres_json'), castJson: str('cast_json'), directorsJson: str('directors_json'),
       runtime: num('runtime'), originalLanguage: str('original_language'),
+      originCountryJson: str('origin_country_json'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
   }
@@ -1064,7 +1129,8 @@ export class FileSourceDatabase {
         backdrop_url: e.backdropUrl ?? null, poster_local_path: e.posterLocalPath ?? null,
         backdrop_local_path: e.backdropLocalPath ?? null, genres_json: e.genresJson ?? null,
         cast_json: e.castJson ?? null, number_of_seasons: e.numberOfSeasons ?? null,
-        original_language: e.originalLanguage ?? null, raw_json: e.rawJson ?? null,
+        original_language: e.originalLanguage ?? null, origin_country_json: e.originCountryJson ?? null,
+        raw_json: e.rawJson ?? null,
         scraped_at: e.scrapedAt
       };
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
@@ -1077,8 +1143,8 @@ export class FileSourceDatabase {
         (provider, provider_id, title, original_title, overview, first_air_date, rating,
          vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
          poster_local_path, backdrop_local_path, genres_json, cast_json,
-         number_of_seasons, original_language, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         number_of_seasons, original_language, origin_country_json, raw_json, scraped_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `;
     const args: relationalStore.ValueType[] = [
       e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
@@ -1087,7 +1153,7 @@ export class FileSourceDatabase {
       e.backdropUrl ?? null, e.posterLocalPath ?? null, e.backdropLocalPath ?? null,
       e.genresJson ?? null, e.castJson ?? null,
       e.numberOfSeasons !== undefined ? e.numberOfSeasons : null,
-      e.originalLanguage ?? null, e.rawJson ?? null, e.scrapedAt
+      e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
     ];
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvSeriesByProviderId(e.provider, e.providerId);
@@ -1110,6 +1176,7 @@ export class FileSourceDatabase {
       posterLocalPath: str('poster_local_path'), backdropLocalPath: str('backdrop_local_path'),
       genresJson: str('genres_json'), castJson: str('cast_json'),
       numberOfSeasons: num('number_of_seasons'), originalLanguage: str('original_language'),
+      originCountryJson: str('origin_country_json'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
   }
@@ -1293,6 +1360,23 @@ export class FileSourceDatabase {
   // ─────────────────────────────────────────────
 
   /** 确保 videos 表存在扫描更新标记列 */
+  private async ensureOriginCountrySchema(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
+      await rdbStore.executeSql(
+        `ALTER TABLE ${FileSourceDatabase.TABLE_MOVIES} ADD COLUMN origin_country_json TEXT`
+      );
+    } catch {
+      // 列已存在时忽略
+    }
+    try {
+      await rdbStore.executeSql(
+        `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN origin_country_json TEXT`
+      );
+    } catch {
+      // 列已存在时忽略
+    }
+  }
+
   private async ensureVideosSchema(rdbStore: relationalStore.RdbStore): Promise<void> {
     try {
       await rdbStore.executeSql(
@@ -1331,48 +1415,73 @@ export class FileSourceDatabase {
   }
 
   /**
-   * 清理 scrape_info 历史重复数据，并确保 provider + provider_id 联合唯一索引存在。
-   * 同一 provider/provider_id 仅保留最新一条（以 id 最大作为最新）。
+   * 确保 scrape_info 的 provider+provider_id 联合唯一索引已被移除。
+   * v8 起允许多个文件源（WebDAV/SMB）指向同一 TMDB 内容，不能再用该索引限制写入。
    */
-  private async ensureScrapeInfoUniqueness(rdbStore: relationalStore.RdbStore): Promise<void> {
+  private async dropScrapeInfoProviderPidIndex(rdbStore: relationalStore.RdbStore): Promise<void> {
     try {
-      const beforeRs = await rdbStore.querySql(
-        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
-      );
-      let before = 0;
-      if (beforeRs.goToFirstRow()) {
-        before = beforeRs.getLong(beforeRs.getColumnIndex('cnt'));
-      }
-      beforeRs.close();
-
-      await rdbStore.executeSql(`
-        DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
-        WHERE id NOT IN (
-          SELECT keep_id FROM (
-            SELECT MAX(id) AS keep_id
-            FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
-            GROUP BY provider, provider_id
-          )
-        )
-      `);
-
-      await rdbStore.executeSql(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_scrape_info_provider_pid_uq
-        ON ${FileSourceDatabase.TABLE_SCRAPE_INFO}(provider, provider_id)
-      `);
-
-      const afterRs = await rdbStore.querySql(
-        `SELECT COUNT(*) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`
-      );
-      let after = 0;
-      if (afterRs.goToFirstRow()) {
-        after = afterRs.getLong(afterRs.getColumnIndex('cnt'));
-      }
-      afterRs.close();
-
-      console.info(`[DB][scrape_info] 去重完成 before=${before} after=${after} removed=${before - after}`);
+      await rdbStore.executeSql(`DROP INDEX IF EXISTS idx_scrape_info_provider_pid_uq`);
+      console.info('[DB] scrape_info provider+provider_id 唯一索引已移除（多文件源兼容）');
     } catch (e) {
-      console.warn(`[DB][scrape_info] 去重/唯一索引修复失败: ${JSON.stringify(e)}`);
+      console.warn('[DB] 移除 scrape_info 唯一索引失败: ' + JSON.stringify(e));
+    }
+  }
+
+  /**
+   * 全量覆盖扫描完成后，删除指定文件源中不再存在的鬼记录（旧扫描遗留、现已不在 NAS 上的视频）。
+   * foundPaths：本轮扫描写入 DB 的 file_path 集合。
+   * 注意：SQLite 外键未启用，需显式删除 scrape_info（overwrite 模式下已由 clearScrapeInfoForSources 预清空）。
+   */
+  async deleteGhostVideosForSources(sourceIds: number[], foundPaths: string[]): Promise<number> {
+    if (!this.rdbStore || sourceIds.length === 0) { return 0; }
+    try {
+      const foundPathsSet = new Set<string>(foundPaths);
+      const sidHolders = sourceIds.map(() => '?').join(', ');
+      const sidArgs: relationalStore.ValueType[] = sourceIds.map(id => id as relationalStore.ValueType);
+
+      // 1. 查询这些文件源的所有视频记录
+      const rs = await this.rdbStore.querySql(
+        `SELECT id, file_path FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE source_id IN (${sidHolders})`,
+        sidArgs
+      );
+      const ghostIds: number[] = [];
+      while (rs.goToNextRow()) {
+        const filePath = rs.getString(rs.getColumnIndex('file_path'));
+        const id = rs.getLong(rs.getColumnIndex('id'));
+        if (!foundPathsSet.has(filePath)) {
+          ghostIds.push(id);
+        }
+      }
+      rs.close();
+
+      if (ghostIds.length === 0) {
+        console.info(`[DB][deleteGhostVideos] 无鬼记录，无需清理`);
+        return 0;
+      }
+
+      // 2. 分批删除（SQLite IN 参数上限 999）
+      const BATCH = 100;
+      for (let i = 0; i < ghostIds.length; i += BATCH) {
+        const batch = ghostIds.slice(i, i + BATCH);
+        const idHolders = batch.map(() => '?').join(', ');
+        const idArgs: relationalStore.ValueType[] = batch.map(gid => gid as relationalStore.ValueType);
+        // 先删 scrape_info（无外键 CASCADE）
+        await this.rdbStore!.executeSql(
+          `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id IN (${idHolders})`,
+          idArgs
+        );
+        // 再删 videos
+        await this.rdbStore!.executeSql(
+          `DELETE FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE id IN (${idHolders})`,
+          idArgs
+        );
+      }
+
+      console.info(`[DB][deleteGhostVideos] 已清理 ${ghostIds.length} 条鬼记录，source_id IN (${sourceIds})`);
+      return ghostIds.length;
+    } catch (e) {
+      console.warn('[DB][deleteGhostVideos] 清理鬼记录失败: ' + JSON.stringify(e));
+      return 0;
     }
   }
 
@@ -1386,6 +1495,44 @@ export class FileSourceDatabase {
       if (rs.goToFirstRow()) { return this.parseScrapeInfoEntity(rs); }
       return null;
     } catch { return null; } finally { rs?.close(); }
+  }
+
+  /** 清理孤立 scrape_info（video_id 不在 videos 表中），由历史 INSERT OR REPLACE 产生 */
+  async cleanupOrphanedScrapeInfo(): Promise<void> {
+    if (this.rdbStore === null) { return; }
+    try {
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id NOT IN (SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS})`
+      );
+      console.info('[DB] cleanupOrphanedScrapeInfo 完成');
+    } catch (e) {
+      console.warn(`[DB] cleanupOrphanedScrapeInfo 失败: ${JSON.stringify(e)}`);
+    }
+  }
+
+  /**
+   * 全量覆盖模式专用：清空指定文件源下所有视频的 scrape_info，
+   * 确保重刮前无历史垃圾数据干扰。
+   */
+  async clearScrapeInfoForSources(sourceIds: number[]): Promise<void> {
+    if (this.rdbStore === null || sourceIds.length === 0) { return; }
+    try {
+      const placeholders = sourceIds.map(() => '?').join(',');
+      const args: relationalStore.ValueType[] = [];
+      for (const id of sourceIds) {
+        args.push(id);
+      }
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}
+         WHERE video_id IN (
+           SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE source_id IN (${placeholders})
+         )`,
+        args
+      );
+      console.info(`[DB] clearScrapeInfoForSources 完成 sourceIds=[${sourceIds.join(',')}]`);
+    } catch (e) {
+      console.warn(`[DB] clearScrapeInfoForSources 失败: ${JSON.stringify(e)}`);
+    }
   }
 
   /** 查询 scrape_info 中某剧已刮削的所有季号（用于季列表过滤） */
@@ -1407,11 +1554,31 @@ export class FileSourceDatabase {
 
   async upsertScrapeInfo(e: ScrapeInfoEntity): Promise<void> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
-    // 诊断日志
     console.info(`[DB][upsertScrapeInfo] videoId=${e.videoId} type=${e.mediaType} movieId=${e.movieId ?? 'null'} tvSeriesId=${e.tvSeriesId ?? 'null'} episodeId=${e.episodeId ?? 'null'} title="${e.title}"`);
-    // 使用 INSERT OR REPLACE，配合 UNIQUE(video_id) 与 UNIQUE(provider,provider_id) 做幂等写入
+    // 先查 video_id 是否已有 scrape_info，有则 UPDATE（不依赖 provider+provider_id 唯一索引）
+    const existing = await this.getScrapeInfoByVideoId(e.videoId);
+    if (existing && existing.id !== undefined) {
+      const bucket: relationalStore.ValuesBucket = {
+        provider: e.provider,
+        provider_id: e.providerId,
+        media_type: e.mediaType,
+        title: e.title,
+        original_title: e.originalTitle ?? null,
+        movie_id: e.movieId !== undefined ? e.movieId : null,
+        tv_series_id: e.tvSeriesId !== undefined ? e.tvSeriesId : null,
+        episode_id: e.episodeId !== undefined ? e.episodeId : null,
+        season_number: e.seasonNumber !== undefined ? e.seasonNumber : null,
+        episode_number: e.episodeNumber !== undefined ? e.episodeNumber : null,
+        scraped_at: e.scrapedAt
+      };
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
+      pred.equalTo('id', existing.id);
+      await this.rdbStore.update(bucket, pred);
+      console.info(`[DB][upsertScrapeInfo] ✅ 写入成功 videoId=${e.videoId}`);
+      return;
+    }
     const sql = `
-      INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_SCRAPE_INFO}
+      INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_SCRAPE_INFO}
         (video_id, provider, provider_id, media_type, title, original_title,
          movie_id, tv_series_id, episode_id, season_number, episode_number, scraped_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1625,7 +1792,32 @@ export class FileSourceDatabase {
       const movies = await q(`SELECT COUNT(DISTINCT movie_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE movie_id IS NOT NULL`);
       const tv = await q(`SELECT COUNT(DISTINCT tv_series_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE tv_series_id IS NOT NULL`);
       const scraped = await q(`SELECT COUNT(DISTINCT video_id) AS cnt FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO}`);
-      return { total, movies, tv, other: total - scraped };
+      const other = total - scraped;
+
+      // 诊断：打印无刮削记录的文件列表（source_id + file_name）
+      if (other > 0 && this.rdbStore) {
+        let diagRs: relationalStore.ResultSet | undefined;
+        try {
+          diagRs = await this.rdbStore.querySql(
+            `SELECT v.source_id, v.file_name, v.file_path FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+             WHERE NOT EXISTS (SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} s WHERE s.video_id = v.id)
+             ORDER BY v.source_id, v.file_name`
+          );
+          const unscrapedFiles: string[] = [];
+          while (diagRs.goToNextRow()) {
+            const sid = diagRs.getLong(diagRs.getColumnIndex('source_id'));
+            const name = diagRs.getString(diagRs.getColumnIndex('file_name'));
+            unscrapedFiles.push(`[src=${sid}] ${name}`);
+          }
+          console.info(`[DB][getMediaStats] 未刮削文件(${other}个):\n${unscrapedFiles.join('\n')}`);
+        } catch {
+          // 诊断失败不影响主流程
+        } finally {
+          diagRs?.close();
+        }
+      }
+
+      return { total, movies, tv, other };
     } catch { return { total: 0, movies: 0, tv: 0, other: 0 }; }
   }
 
@@ -2790,6 +2982,12 @@ export class FileSourceDatabase {
         );
       }
 
+      // ── originCountry 过滤：LIKE 匹配 origin_country_json ──
+      if (options?.originCountry !== undefined && options.originCountry.length > 0) {
+        conditions.push('COALESCE(m.origin_country_json, ts.origin_country_json) LIKE ?');
+        params.push(`%"${options.originCountry}"%`);
+      }
+
       const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
 
       // ── ORDER BY ──
@@ -2851,6 +3049,10 @@ export class FileSourceDatabase {
       const displayItems = items.filter((item: MediaItem): boolean => {
         if (item.mediaType === 'episode' || item.mediaType === 'tv') {
           return item.tvSeriesId !== undefined && item.title !== undefined;
+        }
+        // 剔除完全未刮削的视频（无标题、无海报），此类内容在媒体库中无可识别信息
+        if (item.title === undefined && item.posterUrl === undefined && item.posterLocalPath === undefined) {
+          return false;
         }
         return true;
       });
@@ -3040,6 +3242,56 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[DB][deleteSearchHistory] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 检查指定 movie 是否已有 origin_country_json。
+   */
+  async hasMovieOriginCountry(movieId: number): Promise<boolean> {
+    if (!this.rdbStore) {
+      return false;
+    }
+    let rs: relationalStore.ResultSet | undefined;
+    try {
+      rs = await this.rdbStore.querySql('SELECT origin_country_json FROM movies WHERE id = ?', [movieId]);
+      if (rs.goToNextRow()) {
+        const idx = rs.getColumnIndex('origin_country_json');
+        const isNull = rs.isColumnNull(idx);
+        return !isNull;
+      }
+      return false;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][hasMovieOriginCountry] 失败 code=${err.code} msg=${err.message}`);
+      return false;
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 检查指定 tv_series 是否已有 origin_country_json。
+   */
+  async hasTvSeriesOriginCountry(seriesId: number): Promise<boolean> {
+    if (!this.rdbStore) {
+      return false;
+    }
+    let rs: relationalStore.ResultSet | undefined;
+    try {
+      rs = await this.rdbStore.querySql('SELECT origin_country_json FROM tv_series WHERE id = ?', [seriesId]);
+      if (rs.goToNextRow()) {
+        const idx = rs.getColumnIndex('origin_country_json');
+        const isNull = rs.isColumnNull(idx);
+        return !isNull;
+      }
+      return false;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][hasTvSeriesOriginCountry] 失败 code=${err.code} msg=${err.message}`);
+      return false;
+    } finally {
+      rs?.close();
     }
   }
 

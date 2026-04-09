@@ -1,6 +1,6 @@
 import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
-import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
+import { VideoScannerUtil, ScanMode } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
@@ -505,15 +505,34 @@ export struct MediaLibraryTab {
     emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
   }
 
-  private async startScan(): Promise<void> {
-    await this.runScan(false);
-  }
-
   private async startIncrementalScan(): Promise<void> {
-    await this.runScan(true);
+    await this.runScan('incremental');
   }
 
-  private async runScan(incremental: boolean): Promise<void> {
+  private async startFixMissingScan(): Promise<void> {
+    await this.runScan('fix-missing');
+  }
+
+  private startOverwriteScan(): void {
+    if (this.isScanning) { return; }
+    AlertDialog.show({
+      title: '覆盖所有元数据',
+      message: '「覆盖所有元数据」将重新刮削所有视频的信息，覆盖现有海报、评分、分类等数据。确定继续吗？',
+      autoCancel: true,
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      },
+      primaryButton: {
+        value: '确定覆盖',
+        action: () => {
+          this.runScan('overwrite');
+        }
+      }
+    });
+  }
+
+  private async runScan(mode: ScanMode): Promise<void> {
     if (this.isScanning) { return; }
     this.isScanning = true;
     try {
@@ -527,20 +546,23 @@ export struct MediaLibraryTab {
         });
       }
 
-      const result = await VideoScannerUtil.scan(context, scrapeClient, { incremental });
+      const result = await VideoScannerUtil.scan(context, scrapeClient, { mode });
+      const scrapeStats = result.scrapeSkippedVideos > 0
+        ? `，已跳过 ${result.scrapeSkippedVideos} 个元数据完整的视频`
+        : '';
       console.info(
-        `[MediaLibraryTab] ${incremental ? '增量扫描' : '扫描'}完成，共 ${result.totalVideos} 个视频，` +
-        `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，耗时 ${result.elapsedMs}ms`
+        `[MediaLibraryTab] 扫描(${mode})完成，共 ${result.totalVideos} 个视频，` +
+        `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，刮削跳过 ${result.scrapeSkippedVideos} 个，耗时 ${result.elapsedMs}ms`
       );
       await this.model.reload();
       promptAction.showToast({
-        message: `${incremental ? '增量扫描' : '扫描'}完成：处理 ${result.processedVideos}，跳过 ${result.skippedVideos}`
+        message: `扫描完成：共 ${result.totalVideos} 个视频${scrapeStats}`
       });
     } catch (e) {
       const err = e as Error;
-      console.error(`[MediaLibraryTab] ${incremental ? '增量扫描' : '扫描'}异常: ${err.message}`);
+      console.error(`[MediaLibraryTab] 扫描(${mode})异常: ${err.message}`);
       promptAction.showToast({
-        message: `${incremental ? '增量扫描' : '扫描'}失败: ` + err.message
+        message: `扫描失败: ` + err.message
       });
     } finally {
       this.isScanning = false;
@@ -986,36 +1008,53 @@ export struct MediaLibraryTab {
       Text(this.getLastScanText())
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
-      Row({ space: 16 }) {
-        Button(this.isScanning ? '扫描中...' : '重新扫描')
-          .width(150).height(40).fontSize(14)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.EMPHASIZED)
-          .onClick(() => { this.startScan(); })
+      Column({ space: 10 }) {
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Column({ space: 5 }) {
+            Text(this.isScanning ? '扫描中...' : '扫描新增和已修改的文件')
+              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#4A9FFF')
+              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+            Text('仅处理新增或已改动的文件，已有元数据不受影响')
+              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+          }
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+        .enabled(!this.isScanning)
+        .onClick(() => { this.startIncrementalScan(); })
 
-        Button(this.isScanning ? '扫描中...' : '非全量更新')
-          .width(150).height(40).fontSize(14)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.startIncrementalScan(); })
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Column({ space: 5 }) {
+            Text(this.isScanning ? '扫描中...' : '补全缺少的元数据')
+              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#52C41A')
+              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+            Text('为缺少海报或信息的视频重新补全，已完整的跳过')
+              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+          }
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+        .enabled(!this.isScanning)
+        .onClick(() => { this.startFixMissingScan(); })
+
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Column({ space: 5 }) {
+            Text(this.isScanning ? '扫描中...' : '覆盖所有元数据')
+              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#FF8C4A')
+              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+            Text('重新刮削全部视频，覆盖现有海报、评分和分类')
+              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+          }
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+        .enabled(!this.isScanning)
+        .onClick(() => { this.startOverwriteScan(); })
       }
-      .justifyContent(FlexAlign.Center)
-
-      Row({ space: 16 }) {
-        Button(this.isScanning ? '刷新中...' : '刷新元数据')
-          .width(150).height(40).fontSize(14)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.refreshMetadata(); })
-
-        Button(this.isScanning ? '刷新中...' : '刷新字幕轨信息')
-          .width(150).height(40).fontSize(14)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.showRefreshSubtitleTrackDialog(); })
-      }
-      .justifyContent(FlexAlign.Center)
-      .margin({ top: 12, bottom: 40 })
+      .width('100%').margin({ bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
   }
@@ -1033,7 +1072,7 @@ export struct MediaLibraryTab {
   EmptyView() {
     Column() {
       Text('暂无媒体').fontSize(16).fontColor('#666666')
-      Text('请先配置文件源并点击"重新扫描"')
+      Text('请先配置文件源并点击"扫描新的和有修改的文件"')
         .fontSize(12).fontColor('#444444').margin({ top: 8 })
     }
     .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)

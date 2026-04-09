@@ -7,11 +7,24 @@
         "material": {
           "certpath": "/Users/yaoshining/.ohos/config/default_VidAll_TV_CVN80dExYXumUogQhhatKo1F9BfL3s3VCemMeMdSQic=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001AD549548D5DE7525D5FEF25F3912CA5B5C359CE6E796D09583430D48B649B2B3E4D5BCBAC1A58",
+          "keyPassword": "0000001A9130DBD4E6127F87CCEA6CE34B13E55D2D5EC046961CD973DDF1A06520C8A71C20D78169B3AF",
           "profile": "/Users/yaoshining/.ohos/config/default_VidAll_TV_CVN80dExYXumUogQhhatKo1F9BfL3s3VCemMeMdSQic=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "/Users/yaoshining/.ohos/config/default_VidAll_TV_CVN80dExYXumUogQhhatKo1F9BfL3s3VCemMeMdSQic=.p12",
-          "storePassword": "0000001A7993CACE1F915685FCE403B7E59F7154D2A9DD44B105ED1B8AEE44284300244ACB6C8B1A5611"
+          "storePassword": "0000001A20C04C1B03EEB86A54CEE3F86A31F698E0D075C92A60F3394DA297BEDD6BA6DE08B290975C6A"
+        }
+      },
+      {
+        "name": "release",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/yaoshining/DevEcoStudioProjects/VidAll_TV/certs/release/发布证书.cer",
+          "keyAlias": "vidall_tv",
+          "keyPassword": "00000018D5755E024FA4584DC72E2E0BF3D1DCBE6E2F30AA76815E6A296ABE770F8810A10E6B2140",
+          "profile": "/Users/yaoshining/DevEcoStudioProjects/VidAll_TV/certs/release/测试ProfileRelease.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/yaoshining/DevEcoStudioProjects/VidAll_TV/certs/release/key.p12",
+          "storePassword": "00000018FF1417790D7CF0C8D765ADF90A989A67078AA20E53679839AC8AD059210053D6562C7750"
         }
       }
     ],
