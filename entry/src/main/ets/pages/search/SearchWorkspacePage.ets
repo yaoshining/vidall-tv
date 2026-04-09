@@ -511,10 +511,14 @@ struct SearchWorkspacePage {
     }
     .width('100%')
     .height(56)
-    .padding({ left: 16, right: 16 })
-    .backgroundColor(C_COMPONENT_BG)
-    .borderRadius(14)
-    .border({ width: this.isSearchBarFocused ? 2 : 1, color: this.isSearchBarFocused ? C_SEL_BLUE : C_BORDER })
+    .padding({ left: 16, right: 16, bottom: 4 })
+    .backgroundColor('transparent')
+    .border({
+      width: { bottom: this.isSearchBarFocused ? 2 : 1 },
+      color: { bottom: this.isSearchBarFocused ? '#4A9FFF' : C_BORDER },
+      style: { bottom: BorderStyle.Solid }
+    })
+    .animation({ duration: 150, curve: Curve.EaseOut })
     .alignItems(VerticalAlign.Center)
     .defaultFocus(true)
     .focusable(true)
