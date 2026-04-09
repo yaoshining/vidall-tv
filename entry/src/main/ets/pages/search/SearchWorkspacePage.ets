@@ -4,6 +4,7 @@ import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
 import { LengthMetrics } from '@kit.ArkUI';
+import { KeyCode } from '@kit.InputKit';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Token Constants — strictly follows Pencil vidall_pages.pen
@@ -126,6 +127,12 @@ struct KeyButton {
           this.isPressed = false;
         }
       })
+      .onKeyEvent((event: KeyEvent) => {
+        if (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER) {
+          if (event.type === KeyType.Down) { this.isPressed = true; }
+          else if (event.type === KeyType.Up) { this.isPressed = false; }
+        }
+      })
       .onClick(() => { this.onPress(); })
   }
 }
@@ -227,6 +234,12 @@ struct ActionKey {
         this.isPressed = true;
       } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
         this.isPressed = false;
+      }
+    })
+    .onKeyEvent((event: KeyEvent) => {
+      if (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER) {
+        if (event.type === KeyType.Down) { this.isPressed = true; }
+        else if (event.type === KeyType.Up) { this.isPressed = false; }
       }
     })
     .onClick(() => { this.onPress(); })
