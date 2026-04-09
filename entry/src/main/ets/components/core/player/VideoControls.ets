@@ -654,9 +654,23 @@ export struct PlayerSettingsDialog {
               .alignSelf(ItemAlign.Start)
 
             Row({ space: 12 }) {
-              // 适应
+              // 适应：直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
               Row() {
-                this.SettingsChip('适应', this.currentAspectRatioMode === AspectRatioMode.FIT)
+                Text('适应')
+                  .fontSize(26)
+                  .fontColor(this.currentAspectRatioMode === AspectRatioMode.FIT ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.currentAspectRatioMode === AspectRatioMode.FIT
+                    ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius("50%")
+                  .border({
+                    width: this.currentAspectRatioMode === AspectRatioMode.FIT ? 2 : 1,
+                    color: this.currentAspectRatioMode === AspectRatioMode.FIT ? '#fffefe' : '#45ffffff'
+                  })
+                  .shadow({
+                    radius: this.currentAspectRatioMode === AspectRatioMode.FIT ? 8 : 0,
+                    color: this.currentAspectRatioMode === AspectRatioMode.FIT ? '#33597FB8' : '#00ffffff'
+                  })
               }
               .focusable(true)
               .onFocus(() => { this.arFocused0 = true })
@@ -669,9 +683,23 @@ export struct PlayerSettingsDialog {
                 this.videoController.setAspectRatioMode(AspectRatioMode.FIT)
               })
 
-              // 填充
+              // 填充：直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
               Row() {
-                this.SettingsChip('填充', this.currentAspectRatioMode === AspectRatioMode.FILL)
+                Text('填充')
+                  .fontSize(26)
+                  .fontColor(this.currentAspectRatioMode === AspectRatioMode.FILL ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.currentAspectRatioMode === AspectRatioMode.FILL
+                    ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius("50%")
+                  .border({
+                    width: this.currentAspectRatioMode === AspectRatioMode.FILL ? 2 : 1,
+                    color: this.currentAspectRatioMode === AspectRatioMode.FILL ? '#fffefe' : '#45ffffff'
+                  })
+                  .shadow({
+                    radius: this.currentAspectRatioMode === AspectRatioMode.FILL ? 8 : 0,
+                    color: this.currentAspectRatioMode === AspectRatioMode.FILL ? '#33597FB8' : '#00ffffff'
+                  })
               }
               .focusable(true)
               .onFocus(() => { this.arFocused1 = true })
@@ -684,9 +712,23 @@ export struct PlayerSettingsDialog {
                 this.videoController.setAspectRatioMode(AspectRatioMode.FILL)
               })
 
-              // 拉伸
+              // 拉伸：直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
               Row() {
-                this.SettingsChip('拉伸', this.currentAspectRatioMode === AspectRatioMode.STRETCH)
+                Text('拉伸')
+                  .fontSize(26)
+                  .fontColor(this.currentAspectRatioMode === AspectRatioMode.STRETCH ? '#F3F7FF' : '#D7DCE7')
+                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                  .backgroundColor(this.currentAspectRatioMode === AspectRatioMode.STRETCH
+                    ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                  .borderRadius("50%")
+                  .border({
+                    width: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? 2 : 1,
+                    color: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? '#fffefe' : '#45ffffff'
+                  })
+                  .shadow({
+                    radius: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? 8 : 0,
+                    color: this.currentAspectRatioMode === AspectRatioMode.STRETCH ? '#33597FB8' : '#00ffffff'
+                  })
               }
               .focusable(true)
               .onFocus(() => { this.arFocused2 = true })
