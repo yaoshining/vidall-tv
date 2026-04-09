@@ -147,6 +147,8 @@ struct ActionKey {
   @Param activeBorderColor: string = '#454545';
   @Param labelColor: string = C_KEY_TEXT;
   @Param labelFontSize: number = 20;
+  @Param sublabel: string = '';
+  @Param sublabelFontSize: number = 16;
   @Param keyAspect: number = 112 / 60;
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
@@ -185,29 +187,37 @@ struct ActionKey {
   }
 
   build() {
-    Text(this.label)
-      .fontSize(this.labelFontSize)
-      .fontColor(this.labelColor)
-      .textAlign(TextAlign.Center)
-      .width('100%')
-      .aspectRatio(this.keyAspect)
-      .borderRadius(10)
-      .backgroundColor(this.getBgColor())
-      .border({ width: this.getBorderWidth(), color: this.getBorderColor() })
-      .scale({ x: this.getScale(), y: this.getScale() })
-      .animation({ duration: 100, curve: Curve.EaseOut })
-      .focusable(true)
-      .onFocus(() => { this.isFocused = true; })
-      .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
-      .onHover((isHover: boolean) => { this.isHovered = isHover; })
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down) {
-          this.isPressed = true;
-        } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-          this.isPressed = false;
-        }
-      })
-      .onClick(() => { this.onPress(); })
+    Row({ space: 6 }) {
+      Text(this.label)
+        .fontSize(this.labelFontSize)
+        .fontColor(this.labelColor)
+      if (this.sublabel.length > 0) {
+        Text(this.sublabel)
+          .fontSize(this.sublabelFontSize)
+          .fontColor(this.labelColor)
+      }
+    }
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .width('100%')
+    .aspectRatio(this.keyAspect)
+    .borderRadius(10)
+    .backgroundColor(this.getBgColor())
+    .border({ width: this.getBorderWidth(), color: this.getBorderColor() })
+    .scale({ x: this.getScale(), y: this.getScale() })
+    .animation({ duration: 100, curve: Curve.EaseOut })
+    .focusable(true)
+    .onFocus(() => { this.isFocused = true; })
+    .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
+    .onHover((isHover: boolean) => { this.isHovered = isHover; })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.isPressed = true;
+      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.isPressed = false;
+      }
+    })
+    .onClick(() => { this.onPress(); })
   }
 }
 
@@ -569,6 +579,7 @@ struct SearchWorkspacePage {
       GridItem() {
         ActionKey({
           label: '\u232B',
+          sublabel: '退格',
           keyAspect: 352 / 60,
           onPress: () => { this.deleteLastChar(); }
         })
