@@ -68,7 +68,7 @@ function posterSrc(item: MediaItem): string {
 @ComponentV2
 struct KeyButton {
   @Param label: string = '';
-  @Param kbg: string = '#2A2A2A';
+  @Param kbg: string = C_LETTER_KEY_BG;
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
   @Local isHovered: boolean = false;
@@ -78,8 +78,8 @@ struct KeyButton {
   private getBgColor(): string {
     if (this.isPressed && this.isFocused) { return '#2C5C96'; }
     if (this.isPressed) { return '#202020'; }
-    if (this.isFocused) { return '#356DAE'; }
-    if (this.isHovered) { return '#353535'; }
+    if (this.isFocused) { return C_SEL_BLUE; }
+    if (this.isHovered) { return '#464E58'; }
     return this.kbg;
   }
 
@@ -136,11 +136,11 @@ struct KeyButton {
 @ComponentV2
 struct ActionKey {
   @Param label: string = '';
-  @Param bgColor: string = '#2A2A2A';
+  @Param bgColor: string = C_LETTER_KEY_BG;
   @Param focusBgColor: string = C_SEL_BLUE;
   @Param focusPressBgColor: string = '#2C5C96';
-  @Param hoverBgColor: string = '#353535';
-  @Param activeBgColor: string = '#202020';
+  @Param hoverBgColor: string = '#464E58';
+  @Param activeBgColor: string = '#2E3540';
   @Param keyBorderColor: string = '';
   @Param keyFocusColor: string = '#5B9BD5';
   @Param hoverBorderColor: string = '#5A5A5A';
@@ -596,8 +596,6 @@ struct SearchWorkspacePage {
       GridItem() {
         ActionKey({
           label: '0',
-          bgColor: C_LETTER_KEY_BG,
-          focusBgColor: C_SEL_BLUE,
           keyAspect: 352 / 60,
           onPress: () => { this.appendChar('0'); }
         })
