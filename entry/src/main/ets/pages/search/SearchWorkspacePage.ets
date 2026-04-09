@@ -98,6 +98,10 @@ struct KeyButton {
     return 0;
   }
 
+  private getScale(): number {
+    return this.isPressed ? 0.97 : 1.0;
+  }
+
   build() {
     Text(this.label)
       .fontSize(20)
