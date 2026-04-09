@@ -1009,25 +1009,41 @@ export struct MediaLibraryTab {
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
       Row({ space: 12 }) {
-        Button(this.isScanning ? '扫描中...' : '扫描新的和有修改的文件')
-          .height(40).fontSize(13).layoutWeight(1)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.EMPHASIZED)
-          .onClick(() => { this.startIncrementalScan(); })
+        Column({ space: 6 }) {
+          Button(this.isScanning ? '扫描中...' : '扫描新的和有修改的文件')
+            .height(40).fontSize(13).width('100%')
+            .enabled(!this.isScanning)
+            .buttonStyle(ButtonStyleMode.EMPHASIZED)
+            .onClick(() => { this.startIncrementalScan(); })
+          Text('仅处理新增或已改动的文件，已有元数据不受影响')
+            .fontSize(11).fontColor('#888888').textAlign(TextAlign.Center)
+        }
+        .layoutWeight(1)
 
-        Button(this.isScanning ? '扫描中...' : '搜索缺少的元数据')
-          .height(40).fontSize(13).layoutWeight(1)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.startFixMissingScan(); })
+        Column({ space: 6 }) {
+          Button(this.isScanning ? '扫描中...' : '搜索缺少的元数据')
+            .height(40).fontSize(13).width('100%')
+            .enabled(!this.isScanning)
+            .buttonStyle(ButtonStyleMode.TEXTUAL)
+            .onClick(() => { this.startFixMissingScan(); })
+          Text('为缺少海报或信息的视频重新补全，已完整的跳过')
+            .fontSize(11).fontColor('#888888').textAlign(TextAlign.Center)
+        }
+        .layoutWeight(1)
 
-        Button(this.isScanning ? '扫描中...' : '覆盖所有元数据')
-          .height(40).fontSize(13).layoutWeight(1)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.startOverwriteScan(); })
+        Column({ space: 6 }) {
+          Button(this.isScanning ? '扫描中...' : '覆盖所有元数据')
+            .height(40).fontSize(13).width('100%')
+            .enabled(!this.isScanning)
+            .buttonStyle(ButtonStyleMode.TEXTUAL)
+            .onClick(() => { this.startOverwriteScan(); })
+          Text('重新刮削全部视频，覆盖现有海报、评分和分类')
+            .fontSize(11).fontColor('#888888').textAlign(TextAlign.Center)
+        }
+        .layoutWeight(1)
       }
       .justifyContent(FlexAlign.Center)
+      .alignItems(VerticalAlign.Top)
       .width('100%')
       .margin({ bottom: 40 })
     }
