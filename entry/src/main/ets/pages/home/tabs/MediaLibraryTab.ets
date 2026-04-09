@@ -1006,19 +1006,19 @@ export struct MediaLibraryTab {
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
       Row({ space: 12 }) {
-        Button(this.isScanning ? '扫描中...' : '扫描新增')
+        Button(this.isScanning ? '扫描中...' : '扫描新的和有修改的文件')
           .height(40).fontSize(13).layoutWeight(1)
           .enabled(!this.isScanning)
           .buttonStyle(ButtonStyleMode.EMPHASIZED)
           .onClick(() => { this.startIncrementalScan(); })
 
-        Button(this.isScanning ? '扫描中...' : '补全元数据')
+        Button(this.isScanning ? '扫描中...' : '搜索缺少的元数据')
           .height(40).fontSize(13).layoutWeight(1)
           .enabled(!this.isScanning)
           .buttonStyle(ButtonStyleMode.TEXTUAL)
           .onClick(() => { this.startFixMissingScan(); })
 
-        Button(this.isScanning ? '扫描中...' : '全量覆盖')
+        Button(this.isScanning ? '扫描中...' : '覆盖所有元数据')
           .height(40).fontSize(13).layoutWeight(1)
           .enabled(!this.isScanning)
           .buttonStyle(ButtonStyleMode.TEXTUAL)
@@ -1026,22 +1026,7 @@ export struct MediaLibraryTab {
       }
       .justifyContent(FlexAlign.Center)
       .width('100%')
-
-      Row({ space: 16 }) {
-        Button(this.isScanning ? '刷新中...' : '刷新元数据')
-          .width(150).height(40).fontSize(14)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.refreshMetadata(); })
-
-        Button(this.isScanning ? '刷新中...' : '刷新字幕轨信息')
-          .width(150).height(40).fontSize(14)
-          .enabled(!this.isScanning)
-          .buttonStyle(ButtonStyleMode.TEXTUAL)
-          .onClick(() => { this.showRefreshSubtitleTrackDialog(); })
-      }
-      .justifyContent(FlexAlign.Center)
-      .margin({ top: 12, bottom: 40 })
+      .margin({ bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
   }
@@ -1059,7 +1044,7 @@ export struct MediaLibraryTab {
   EmptyView() {
     Column() {
       Text('暂无媒体').fontSize(16).fontColor('#666666')
-      Text('请先配置文件源并点击"扫描新增"')
+      Text('请先配置文件源并点击"扫描新的和有修改的文件"')
         .fontSize(12).fontColor('#444444').margin({ top: 8 })
     }
     .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
