@@ -92,13 +92,10 @@ struct KeyButton {
   }
 
   private getBorderWidth(): number {
+    if (this.isPressed && this.isFocused) { return 1; }
     if (this.isFocused) { return 2; }
     if (this.isPressed || this.isHovered) { return 1; }
     return 0;
-  }
-
-  private getScale(): number {
-    return this.isPressed ? 0.97 : 1.0;
   }
 
   build() {
@@ -173,6 +170,7 @@ struct ActionKey {
   }
 
   private getBorderWidth(): number {
+    if (this.isPressed && this.isFocused) { return 1; }
     if (this.isFocused) { return 2; }
     if (this.isPressed || this.isHovered) { return 1; }
     return this.keyBorderColor.length > 0 ? 1 : 0;
