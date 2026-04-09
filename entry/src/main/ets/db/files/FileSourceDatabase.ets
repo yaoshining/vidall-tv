@@ -977,6 +977,22 @@ export class FileSourceDatabase {
     } catch { return null; }
   }
 
+  async getMovieById(id: number): Promise<MovieEntity | null> {
+    if (this.rdbStore === null) { return null; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
+      pred.equalTo('id', id);
+      rs = await this.rdbStore.query(pred);
+      if (rs.goToFirstRow()) { return this.parseMovieEntity(rs); }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      rs?.close();
+    }
+  }
+
   /** 批量获取所有电影，供播放历史等场景一次性加载 */
   async getAllMovies(): Promise<MovieEntity[]> {
     if (this.rdbStore === null) { return []; }

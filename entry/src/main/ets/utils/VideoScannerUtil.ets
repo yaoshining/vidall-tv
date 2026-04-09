@@ -288,17 +288,34 @@ export class WebDAVAdapter implements ISourceAdapter {
                   return;
                 }
               } else if (capturedMode === 'fix-missing') {
-                // fix-missing: scrape_info 存在且 ID 已关联就跳过，不检查额外字段
+                // fix-missing: scrape_info 存在且 ID 已关联，且海报不为空，才跳过
                 if (existing) {
                   const isComplete = existing.mediaType === 'movie'
                     ? existing.movieId !== undefined
                     : existing.tvSeriesId !== undefined;
                   if (isComplete) {
-                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
-                    capturedInfo.scrapeSkipped = true;
-                    return;
+                    let hasPoster = false;
+                    try {
+                      const db = FileSourceDatabase.getInstance();
+                      if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
+                        const movie = await db.getMovieById(existing.movieId);
+                        hasPoster = !!(movie?.posterUrl);
+                      } else if (existing.tvSeriesId !== undefined) {
+                        const series = await db.getTvSeriesById(existing.tvSeriesId);
+                        hasPoster = !!(series?.posterUrl);
+                      }
+                    } catch {
+                      hasPoster = true; // 查询失败则保守跳过
+                    }
+                    if (hasPoster) {
+                      console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
+                      capturedInfo.scrapeSkipped = true;
+                      return;
+                    }
+                    console.info(`[VideoScanner][SCRAPE] fix-missing 海报缺失，重新刮削 fileName=${fileName}`);
+                  } else {
+                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整（ID未关联），重新刮削 fileName=${fileName}`);
                   }
-                  console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${fileName}`);
                 }
               }
               // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
@@ -701,17 +718,34 @@ export class SMBAdapter implements ISourceAdapter {
                 return;
               }
             } else if (capturedMode === 'fix-missing') {
-              // fix-missing: scrape_info 存在且 ID 已关联就跳过，不检查额外字段
+              // fix-missing: scrape_info 存在且 ID 已关联，且海报不为空，才跳过
               if (existing) {
                 const isComplete = existing.mediaType === 'movie'
                   ? existing.movieId !== undefined
                   : existing.tvSeriesId !== undefined;
                 if (isComplete) {
-                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
-                  capturedInfo.scrapeSkipped = true;
-                  return;
+                  let hasPoster = false;
+                  try {
+                    const db = FileSourceDatabase.getInstance();
+                    if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
+                      const movie = await db.getMovieById(existing.movieId);
+                      hasPoster = !!(movie?.posterUrl);
+                    } else if (existing.tvSeriesId !== undefined) {
+                      const series = await db.getTvSeriesById(existing.tvSeriesId);
+                      hasPoster = !!(series?.posterUrl);
+                    }
+                  } catch {
+                    hasPoster = true; // 查询失败则保守跳过
+                  }
+                  if (hasPoster) {
+                    console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
+                    capturedInfo.scrapeSkipped = true;
+                    return;
+                  }
+                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 海报缺失，重新刮削 fileName=${capturedInfo.fileName}`);
+                } else {
+                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整（ID未关联），重新刮削 fileName=${capturedInfo.fileName}`);
                 }
-                console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${capturedInfo.fileName}`);
               }
             }
             // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
