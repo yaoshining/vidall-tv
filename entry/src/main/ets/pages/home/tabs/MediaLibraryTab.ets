@@ -547,13 +547,16 @@ export struct MediaLibraryTab {
       }
 
       const result = await VideoScannerUtil.scan(context, scrapeClient, { mode });
+      const scrapeStats = result.scrapeSkippedVideos > 0
+        ? `，已跳过 ${result.scrapeSkippedVideos} 个元数据完整的视频`
+        : '';
       console.info(
         `[MediaLibraryTab] 扫描(${mode})完成，共 ${result.totalVideos} 个视频，` +
-        `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，耗时 ${result.elapsedMs}ms`
+        `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，刮削跳过 ${result.scrapeSkippedVideos} 个，耗时 ${result.elapsedMs}ms`
       );
       await this.model.reload();
       promptAction.showToast({
-        message: `扫描完成：处理 ${result.processedVideos}，跳过 ${result.skippedVideos}`
+        message: `扫描完成：共 ${result.totalVideos} 个视频${scrapeStats}`
       });
     } catch (e) {
       const err = e as Error;

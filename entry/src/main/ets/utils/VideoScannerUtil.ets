@@ -23,6 +23,7 @@ export interface VideoFileInfo {
   lastModified?: string;
   contentType?: string;
   wasProcessed?: boolean;
+  scrapeSkipped?: boolean;
 }
 
 export interface SourceScanStat {
@@ -38,6 +39,7 @@ export interface ScanResult {
   totalVideos: number;
   processedVideos: number;
   skippedVideos: number;
+  scrapeSkippedVideos: number;
   perSourceStats: SourceScanStat[];
   elapsedMs: number;
   videos: VideoFileInfo[];
@@ -286,32 +288,17 @@ export class WebDAVAdapter implements ISourceAdapter {
                   return;
                 }
               } else if (capturedMode === 'fix-missing') {
-                // fix-missing: 仅在 scrape_info 完整且 origin_country_json 已填充时跳过
+                // fix-missing: scrape_info 存在且 ID 已关联就跳过，不检查额外字段
                 if (existing) {
                   const isComplete = existing.mediaType === 'movie'
                     ? existing.movieId !== undefined
                     : existing.tvSeriesId !== undefined;
                   if (isComplete) {
-                    // 额外检查 origin_country_json 是否已填充（DB v7 新增字段，老数据为 NULL）
-                    let hasCountry = false;
-                    try {
-                      const db = FileSourceDatabase.getInstance();
-                      if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
-                        hasCountry = await db.hasMovieOriginCountry(existing.movieId);
-                      } else if (existing.tvSeriesId !== undefined) {
-                        hasCountry = await db.hasTvSeriesOriginCountry(existing.tvSeriesId);
-                      }
-                    } catch {
-                      hasCountry = false;
-                    }
-                    if (hasCountry) {
-                      console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
-                      return;
-                    }
-                    console.info(`[VideoScanner][SCRAPE] fix-missing origin_country_json 缺失，重新刮削 fileName=${fileName}`);
-                  } else {
-                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${fileName}`);
+                    console.info(`[VideoScanner][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
+                    capturedInfo.scrapeSkipped = true;
+                    return;
                   }
+                  console.info(`[VideoScanner][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${fileName}`);
                 }
               }
               // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
@@ -714,31 +701,17 @@ export class SMBAdapter implements ISourceAdapter {
                 return;
               }
             } else if (capturedMode === 'fix-missing') {
+              // fix-missing: scrape_info 存在且 ID 已关联就跳过，不检查额外字段
               if (existing) {
                 const isComplete = existing.mediaType === 'movie'
                   ? existing.movieId !== undefined
                   : existing.tvSeriesId !== undefined;
                 if (isComplete) {
-                  // 额外检查 origin_country_json 是否已填充（DB v7 新增字段，老数据为 NULL）
-                  let hasCountry = false;
-                  try {
-                    const dbInst = FileSourceDatabase.getInstance();
-                    if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
-                      hasCountry = await dbInst.hasMovieOriginCountry(existing.movieId);
-                    } else if (existing.tvSeriesId !== undefined) {
-                      hasCountry = await dbInst.hasTvSeriesOriginCountry(existing.tvSeriesId);
-                    }
-                  } catch {
-                    hasCountry = false;
-                  }
-                  if (hasCountry) {
-                    console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
-                    return;
-                  }
-                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing origin_country_json 缺失，重新刮削 fileName=${capturedInfo.fileName}`);
-                } else {
-                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${capturedInfo.fileName}`);
+                  console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${capturedInfo.fileName}`);
+                  capturedInfo.scrapeSkipped = true;
+                  return;
                 }
+                console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整，重新刮削 fileName=${capturedInfo.fileName}`);
               }
             }
             // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
@@ -1070,12 +1043,14 @@ export class VideoScannerUtil {
     const elapsedMs = Date.now() - startTime;
     const processedVideos = allVideos.filter((video: VideoFileInfo) => video.wasProcessed !== false).length;
     const skippedVideos = allVideos.length - processedVideos;
+    const scrapeSkippedVideos = allVideos.filter((video: VideoFileInfo) => video.scrapeSkipped === true).length;
     console.info(`[VideoScanner] ======== 扫描完成 ========`);
     console.info(`[VideoScanner][STATS] 总耗时: ${elapsedMs} ms`);
     console.info(`[VideoScanner][STATS] 扫描目录总数: ${totalDirectories}`);
     console.info(`[VideoScanner][STATS] 发现视频总数（去重后）: ${allVideos.length}`);
     console.info(`[VideoScanner][STATS] 本轮处理视频数: ${processedVideos}`);
     console.info(`[VideoScanner][STATS] 本轮跳过未变化视频数: ${skippedVideos}`);
+    console.info(`[VideoScanner][STATS] 本轮跳过刮削（元数据完整）: ${scrapeSkippedVideos}`);
     for (const stat of perSourceStats) {
       console.info(
         `[VideoScanner][STATS] 文件源="${stat.sourceName}" (${stat.sourceType}) | ` +
@@ -1105,6 +1080,7 @@ export class VideoScannerUtil {
       totalVideos: allVideos.length,
       processedVideos,
       skippedVideos,
+      scrapeSkippedVideos,
       perSourceStats,
       elapsedMs,
       videos: allVideos
