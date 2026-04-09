@@ -193,9 +193,11 @@ struct ActionKey {
           Span(this.label)
             .fontSize(this.labelFontSize)
             .fontColor(this.labelColor)
+            .lineHeight(24)
           Span('\u2009' + this.sublabel)
             .fontSize(this.sublabelFontSize)
             .fontColor(this.labelColor)
+            .lineHeight(24)
         }
         .textAlign(TextAlign.Center)
       } else {
