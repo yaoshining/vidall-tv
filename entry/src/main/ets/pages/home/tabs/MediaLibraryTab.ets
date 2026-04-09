@@ -1008,44 +1008,53 @@ export struct MediaLibraryTab {
       Text(this.getLastScanText())
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
-      Row({ space: 12 }) {
-        Column({ space: 6 }) {
-          Button(this.isScanning ? '扫描中...' : '扫描新的和有修改的文件')
-            .height(40).fontSize(13).width('100%')
-            .enabled(!this.isScanning)
-            .buttonStyle(ButtonStyleMode.EMPHASIZED)
-            .onClick(() => { this.startIncrementalScan(); })
-          Text('仅处理新增或已改动的文件，已有元数据不受影响')
-            .fontSize(11).fontColor('#888888').textAlign(TextAlign.Center)
+      Column({ space: 10 }) {
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Column({ space: 5 }) {
+            Text(this.isScanning ? '扫描中...' : '扫描新增和已修改的文件')
+              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#4A9FFF')
+              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+            Text('仅处理新增或已改动的文件，已有元数据不受影响')
+              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+          }
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(HorizontalAlign.Start)
         }
-        .layoutWeight(1)
+        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+        .enabled(!this.isScanning)
+        .onClick(() => { this.startIncrementalScan(); })
 
-        Column({ space: 6 }) {
-          Button(this.isScanning ? '扫描中...' : '搜索缺少的元数据')
-            .height(40).fontSize(13).width('100%')
-            .enabled(!this.isScanning)
-            .buttonStyle(ButtonStyleMode.TEXTUAL)
-            .onClick(() => { this.startFixMissingScan(); })
-          Text('为缺少海报或信息的视频重新补全，已完整的跳过')
-            .fontSize(11).fontColor('#888888').textAlign(TextAlign.Center)
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Column({ space: 5 }) {
+            Text(this.isScanning ? '扫描中...' : '补全缺少的元数据')
+              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#52C41A')
+              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+            Text('为缺少海报或信息的视频重新补全，已完整的跳过')
+              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+          }
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(HorizontalAlign.Start)
         }
-        .layoutWeight(1)
+        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+        .enabled(!this.isScanning)
+        .onClick(() => { this.startFixMissingScan(); })
 
-        Column({ space: 6 }) {
-          Button(this.isScanning ? '扫描中...' : '覆盖所有元数据')
-            .height(40).fontSize(13).width('100%')
-            .enabled(!this.isScanning)
-            .buttonStyle(ButtonStyleMode.TEXTUAL)
-            .onClick(() => { this.startOverwriteScan(); })
-          Text('重新刮削全部视频，覆盖现有海报、评分和分类')
-            .fontSize(11).fontColor('#888888').textAlign(TextAlign.Center)
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Column({ space: 5 }) {
+            Text(this.isScanning ? '扫描中...' : '覆盖所有元数据')
+              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#FF8C4A')
+              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+            Text('重新刮削全部视频，覆盖现有海报、评分和分类')
+              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+          }
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .alignItems(HorizontalAlign.Start)
         }
-        .layoutWeight(1)
+        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+        .enabled(!this.isScanning)
+        .onClick(() => { this.startOverwriteScan(); })
       }
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Top)
-      .width('100%')
-      .margin({ bottom: 40 })
+      .width('100%').margin({ bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
   }
