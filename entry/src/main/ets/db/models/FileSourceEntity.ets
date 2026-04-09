@@ -67,6 +67,14 @@ export interface FileSource {
 }
 
 /**
+ * 目录可达性状态
+ * - active:      最近一次扫描成功，目录正常可达
+ * - missing:     服务器返回 404，目录已不存在
+ * - unreachable: 网络超时、401 鉴权失败等暂时不可达
+ */
+export type DirStatus = 'active' | 'missing' | 'unreachable';
+
+/**
  * 文件源目录关联
  */
 export interface FileSourceDirectory {
@@ -74,6 +82,8 @@ export interface FileSourceDirectory {
   sourceId: number;
   directoryPath: string;
   customName?: string;
+  /** 目录可达性状态，默认 'active' */
+  dirStatus?: DirStatus;
 }
 
 /**
