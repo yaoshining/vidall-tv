@@ -509,10 +509,11 @@ struct SearchWorkspacePage {
           .layoutWeight(1)
       }
     }
-    .width('100%')
+    .width('70%')
     .height(56)
     .padding({ left: 16, right: 16, bottom: 4 })
     .backgroundColor('transparent')
+    .alignSelf(ItemAlign.Center)
     .border({
       width: { bottom: this.isSearchBarFocused ? 2 : 1 },
       color: { bottom: this.isSearchBarFocused ? '#4A9FFF' : C_BORDER },
