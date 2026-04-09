@@ -4,6 +4,7 @@ import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
 import { LengthMetrics } from '@kit.ArkUI';
+import { KeyCode } from '@kit.InputKit';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Token Constants — strictly follows Pencil vidall_pages.pen
@@ -71,22 +72,67 @@ struct KeyButton {
   @Param kbg: string = C_LETTER_KEY_BG;
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
+  @Local isHovered: boolean = false;
+  @Local isPressed: boolean = false;
+
+  // State priority: Active > Focus > Hover > Default
+  private getBgColor(): string {
+    if (this.isPressed && this.isFocused) { return '#2C5C96'; }
+    if (this.isPressed) { return '#202020'; }
+    if (this.isFocused) { return C_SEL_BLUE; }
+    if (this.isHovered) { return '#464E58'; }
+    return this.kbg;
+  }
+
+  private getBorderColor(): string {
+    if (this.isPressed && this.isFocused) { return '#76B6FF'; }
+    if (this.isPressed) { return '#454545'; }
+    if (this.isFocused) { return '#4A9FFF'; }
+    if (this.isHovered) { return '#5A5A5A'; }
+    return TRANSPARENT;
+  }
+
+  private getBorderWidth(): number {
+    if (this.isPressed && this.isFocused) { return 1; }
+    if (this.isFocused) { return 2; }
+    if (this.isPressed || this.isHovered) { return 1; }
+    return 0;
+  }
+
+  private getScale(): number {
+    return this.isPressed ? 0.97 : 1.0;
+  }
 
   build() {
     Text(this.label)
       .fontSize(20)
       .fontWeight(600)
-      .fontColor(C_KEY_TEXT)
+      .fontColor('#FFFFFF')
       .textAlign(TextAlign.Center)
       .width('100%')
-      .aspectRatio(112/60)
+      .aspectRatio(112 / 60)
       .borderRadius(10)
-      .backgroundColor(this.isFocused ? C_SEL_BLUE : this.kbg)
-      .border({ width: this.isFocused ? 2 : 0, color: '#5B9BD5' })
-      .animation({ duration: 140, curve: Curve.EaseInOut })
+      .backgroundColor(this.getBgColor())
+      .border({ width: this.getBorderWidth(), color: this.getBorderColor() })
+      .scale({ x: this.getScale(), y: this.getScale() })
+      .animation({ duration: 100, curve: Curve.EaseOut })
       .focusable(true)
       .onFocus(() => { this.isFocused = true; })
-      .onBlur(() => { this.isFocused = false; })
+      .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
+      .onHover((isHover: boolean) => { this.isHovered = isHover; })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.isPressed = true;
+        } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+          this.isPressed = false;
+        }
+      })
+      .onKeyEvent((event: KeyEvent) => {
+        if (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER) {
+          if (event.type === KeyType.Down) { this.isPressed = true; }
+          else if (event.type === KeyType.Up) { this.isPressed = false; }
+        }
+      })
       .onClick(() => { this.onPress(); })
   }
 }
@@ -98,34 +144,105 @@ struct KeyButton {
 @ComponentV2
 struct ActionKey {
   @Param label: string = '';
-  @Param bgColor: string = C_BKSP_BG;
+  @Param bgColor: string = C_LETTER_KEY_BG;
   @Param focusBgColor: string = C_SEL_BLUE;
+  @Param focusPressBgColor: string = '#2C5C96';
+  @Param hoverBgColor: string = '#464E58';
+  @Param activeBgColor: string = '#2E3540';
   @Param keyBorderColor: string = '';
   @Param keyFocusColor: string = '#5B9BD5';
+  @Param hoverBorderColor: string = '#5A5A5A';
+  @Param activeBorderColor: string = '#454545';
   @Param labelColor: string = C_KEY_TEXT;
   @Param labelFontSize: number = 20;
+  @Param sublabel: string = '';
+  @Param sublabelFontSize: number = 16;
   @Param keyAspect: number = 112 / 60;
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
+  @Local isHovered: boolean = false;
+  @Local isPressed: boolean = false;
+
+  // State priority: Active > Focus > Hover > Default
+  private getBgColor(): string {
+    if (this.isPressed && this.isFocused) { return this.focusPressBgColor; }
+    if (this.isPressed) { return this.activeBgColor; }
+    if (this.isFocused) { return this.focusBgColor; }
+    if (this.isHovered) { return this.hoverBgColor; }
+    return this.bgColor;
+  }
+
+  private getBorderColor(): string {
+    if (this.isPressed && this.isFocused) { return '#76B6FF'; }
+    if (this.isPressed) { return this.activeBorderColor; }
+    if (this.isFocused) { return this.keyFocusColor; }
+    if (this.isHovered) { return this.hoverBorderColor; }
+    return this.keyBorderColor.length > 0 ? this.keyBorderColor : TRANSPARENT;
+  }
+
+  private getBorderWidth(): number {
+    if (this.isPressed && this.isFocused) { return 1; }
+    if (this.isFocused) { return 2; }
+    if (this.isPressed || this.isHovered) { return 1; }
+    return this.keyBorderColor.length > 0 ? 1 : 0;
+  }
+
+  // Wide keys (aspect > 2) use 0.98 scale to keep press feel proportional
+  private getScale(): number {
+    if (this.isPressed) {
+      return this.keyAspect > 2 ? 0.98 : 0.97;
+    }
+    return 1.0;
+  }
 
   build() {
-    Text(this.label)
-      .fontSize(this.labelFontSize)
-      .fontColor(this.labelColor)
-      .textAlign(TextAlign.Center)
-      .width('100%')
-      .aspectRatio(this.keyAspect)
-      .borderRadius(10)
-      .backgroundColor(this.isFocused ? this.focusBgColor : this.bgColor)
-      .border({
-        width: this.isFocused ? 2 : (this.keyBorderColor.length > 0 ? 1 : 0),
-        color: this.isFocused ? this.keyFocusColor : (this.keyBorderColor.length > 0 ? this.keyBorderColor : this.keyFocusColor)
-      })
-      .animation({ duration: 140, curve: Curve.EaseInOut })
-      .focusable(true)
-      .onFocus(() => { this.isFocused = true; })
-      .onBlur(() => { this.isFocused = false; })
-      .onClick(() => { this.onPress(); })
+    Row() {
+      if (this.sublabel.length > 0) {
+        Text() {
+          Span(this.label)
+            .fontSize(this.labelFontSize)
+            .fontColor(this.labelColor)
+            .lineHeight(24)
+          Span('\u2009' + this.sublabel)
+            .fontSize(this.sublabelFontSize)
+            .fontColor(this.labelColor)
+            .lineHeight(24)
+        }
+        .textAlign(TextAlign.Center)
+      } else {
+        Text(this.label)
+          .fontSize(this.labelFontSize)
+          .fontColor(this.labelColor)
+          .textAlign(TextAlign.Center)
+      }
+    }
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .width('100%')
+    .aspectRatio(this.keyAspect)
+    .borderRadius(10)
+    .backgroundColor(this.getBgColor())
+    .border({ width: this.getBorderWidth(), color: this.getBorderColor() })
+    .scale({ x: this.getScale(), y: this.getScale() })
+    .animation({ duration: 100, curve: Curve.EaseOut })
+    .focusable(true)
+    .onFocus(() => { this.isFocused = true; })
+    .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
+    .onHover((isHover: boolean) => { this.isHovered = isHover; })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.isPressed = true;
+      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.isPressed = false;
+      }
+    })
+    .onKeyEvent((event: KeyEvent) => {
+      if (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER) {
+        if (event.type === KeyType.Down) { this.isPressed = true; }
+        else if (event.type === KeyType.Up) { this.isPressed = false; }
+      }
+    })
+    .onClick(() => { this.onPress(); })
   }
 }
 
@@ -427,12 +544,17 @@ struct SearchWorkspacePage {
           .layoutWeight(1)
       }
     }
-    .width('100%')
+    .width('70%')
     .height(56)
-    .padding({ left: 16, right: 16 })
-    .backgroundColor(C_COMPONENT_BG)
-    .borderRadius(14)
-    .border({ width: this.isSearchBarFocused ? 2 : 1, color: this.isSearchBarFocused ? C_SEL_BLUE : C_BORDER })
+    .padding({ left: 16, right: 16, bottom: 4 })
+    .backgroundColor('transparent')
+    .alignSelf(ItemAlign.Center)
+    .border({
+      width: { bottom: this.isSearchBarFocused ? 2 : 1 },
+      color: { bottom: this.isSearchBarFocused ? '#4A9FFF' : C_BORDER },
+      style: { bottom: BorderStyle.Solid }
+    })
+    .animation({ duration: 150, curve: Curve.EaseOut })
     .alignItems(VerticalAlign.Center)
     .defaultFocus(true)
     .focusable(true)
@@ -458,10 +580,15 @@ struct SearchWorkspacePage {
       GridItem() {
         ActionKey({
           label: '\uD83D\uDDD1',
-          bgColor: C_CLEAR_BG,
-          focusBgColor: '#8B3040',
-          keyBorderColor: C_CLEAR_BORDER,
-          keyFocusColor: '#E06070',
+          bgColor: '#3A2525',
+          focusBgColor: '#356DAE',
+          focusPressBgColor: '#2C5C96',
+          hoverBgColor: '#4A2F2F',
+          activeBgColor: '#2E1E1E',
+          keyBorderColor: '#E06070',
+          keyFocusColor: '#4A9FFF',
+          hoverBorderColor: '#F07B89',
+          activeBorderColor: '#C95463',
           labelColor: C_CLEAR_ICON,
           labelFontSize: 22,
           onPress: () => { this.clearSearch(); }
@@ -477,9 +604,7 @@ struct SearchWorkspacePage {
       GridItem() {
         ActionKey({
           label: '\u232B',
-          bgColor: C_BKSP_BG,
-          focusBgColor: C_SEL_BLUE,
-          labelColor: '#FFFFFF',
+          sublabel: '退格',
           keyAspect: 352 / 60,
           onPress: () => { this.deleteLastChar(); }
         })
@@ -508,8 +633,6 @@ struct SearchWorkspacePage {
       GridItem() {
         ActionKey({
           label: '0',
-          bgColor: C_LETTER_KEY_BG,
-          focusBgColor: C_SEL_BLUE,
           keyAspect: 352 / 60,
           onPress: () => { this.appendChar('0'); }
         })
