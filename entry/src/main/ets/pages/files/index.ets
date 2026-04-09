@@ -152,20 +152,7 @@ export struct FileExplorerPage {
           if (videoEntity.audioTracksJson.length > 0) {
             const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
             console.info(`[playVideo] DB 音轨 JSON 解析: 共 ${tracks.length} 条`);
-            for (let i = 0; i < tracks.length; i++) {
-              const t = tracks[i];
-              const item: PresetAudioTrack = {
-                trackIndex: t.index,
-                displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-                language: t.language,
-                mimeType: t.codecName
-              };
-              presetAudioTracks.push(item);
-              console.info(
-                `[playVideo]   音轨[${i}]: trackIndex=${t.index} codec=${t.codecName}` +
-                ` lang=${t.language || '(无)'} displayName="${item.displayName}"`
-              );
-            }
+            presetAudioTracks = FfprobeUtil.toPresetAudioTracks(tracks);
           } else {
             console.info(`[playVideo] DB 音轨 JSON 为空字符串，视为已扫描无音轨`);
           }
@@ -178,20 +165,7 @@ export struct FileExplorerPage {
           if (videoEntity.subtitleTracksJson.length > 0) {
             const subTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
             console.info(`[playVideo] DB 字幕轨 JSON 解析: 共 ${subTracks.length} 条`);
-            for (let i = 0; i < subTracks.length; i++) {
-              const t = subTracks[i];
-              const item: PresetSubtitleTrack = {
-                trackIndex: t.index,
-                displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
-                language: t.language,
-                codecName: t.codecName
-              };
-              presetSubtitleTracks.push(item);
-              console.info(
-                `[playVideo]   字幕轨[${i}]: trackIndex=${t.index} codec=${t.codecName}` +
-                ` lang=${t.language || '(无)'} displayName="${item.displayName}"`
-              );
-            }
+            presetSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(subTracks);
           } else {
             console.info(`[playVideo] DB 字幕轨 JSON 为空字符串，视为已扫描无内嵌字幕`);
           }
@@ -238,36 +212,8 @@ export struct FileExplorerPage {
               durationHintMs = probeResult.durationMs;
             }
             // 实时策略下，probe 成功后以 probe 结果覆盖轨道列表。
-            presetAudioTracks = [];
-            presetSubtitleTracks = [];
-            for (let i = 0; i < probeResult.audioTracks.length; i++) {
-              const t = probeResult.audioTracks[i];
-              const item: PresetAudioTrack = {
-                trackIndex: t.index,
-                displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-                language: t.language,
-                mimeType: t.codecName
-              };
-              presetAudioTracks.push(item);
-              console.info(
-                `[playVideo]   ffprobe 音轨[${i}]: trackIndex=${t.index}` +
-                ` codec=${t.codecName} lang=${t.language || '(无)'} displayName="${item.displayName}"`
-              );
-            }
-            for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
-              const t = probeResult.subtitleTracks[i];
-              const item: PresetSubtitleTrack = {
-                trackIndex: t.index,
-                displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
-                language: t.language,
-                codecName: t.codecName
-              };
-              presetSubtitleTracks.push(item);
-              console.info(
-                `[playVideo]   ffprobe 字幕轨[${i}]: trackIndex=${t.index}` +
-                ` codec=${t.codecName} lang=${t.language || '(无)'} displayName="${item.displayName}"`
-              );
-            }
+            presetAudioTracks = FfprobeUtil.toPresetAudioTracks(probeResult.audioTracks);
+            presetSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(probeResult.subtitleTracks);
           } else {
             console.warn('[playVideo] ffprobe 成功但未返回有效轨道/时长，保留 DB 结果作为兜底');
           }

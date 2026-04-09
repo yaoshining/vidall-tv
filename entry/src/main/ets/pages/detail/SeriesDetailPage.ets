@@ -740,32 +740,14 @@ export struct SeriesDetailPage {
             dbHasAudioData = true;
             if (videoEntity.audioTracksJson.length > 0) {
               const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
-              for (let i = 0; i < tracks.length; i++) {
-                const t = tracks[i];
-                const item: PresetAudioTrack = {
-                  trackIndex: t.index,
-                  displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-                  language: t.language,
-                  mimeType: t.codecName
-                };
-                presetAudioTracks.push(item);
-              }
+              presetAudioTracks = FfprobeUtil.toPresetAudioTracks(tracks);
             }
           }
           if (videoEntity.subtitleTracksJson !== null && videoEntity.subtitleTracksJson !== undefined) {
             dbHasSubtitleData = true;
             if (videoEntity.subtitleTracksJson.length > 0) {
               const subTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
-              for (let i = 0; i < subTracks.length; i++) {
-                const t = subTracks[i];
-                const item: PresetSubtitleTrack = {
-                  trackIndex: t.index,
-                  displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
-                  language: t.language,
-                  codecName: t.codecName
-                };
-                presetSubtitleTracks.push(item);
-              }
+              presetSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(subTracks);
             }
           }
         }
@@ -782,28 +764,10 @@ export struct SeriesDetailPage {
               durationHintMs = probeResult.durationMs;
             }
             if (!dbHasAudioData) {
-              for (let i = 0; i < probeResult.audioTracks.length; i++) {
-                const t = probeResult.audioTracks[i];
-                const item: PresetAudioTrack = {
-                  trackIndex: t.index,
-                  displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-                  language: t.language,
-                  mimeType: t.codecName
-                };
-                presetAudioTracks.push(item);
-              }
+              presetAudioTracks = FfprobeUtil.toPresetAudioTracks(probeResult.audioTracks);
             }
             if (!dbHasSubtitleData) {
-              for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
-                const t = probeResult.subtitleTracks[i];
-                const item: PresetSubtitleTrack = {
-                  trackIndex: t.index,
-                  displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
-                  language: t.language,
-                  codecName: t.codecName
-                };
-                presetSubtitleTracks.push(item);
-              }
+              presetSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(probeResult.subtitleTracks);
             }
           }
         } catch (e) {
