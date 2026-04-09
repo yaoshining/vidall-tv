@@ -1,6 +1,7 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import hilog from '@ohos.hilog';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
+import { PresetAudioTrack, PresetSubtitleTrack } from '../components/core/player/VideoData';
 
 export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
 
@@ -9,20 +10,37 @@ interface FfprobeNapiBridge {
   extractSubtitleEntries: (url: string, headerLines: string, streamIndex: number, timeoutMs: number) => Promise<string>;
 }
 
-interface FfprobeNapiBridgeModule {
-  default?: FfprobeNapiBridge;
+// ─────────────────────────────────────────────
+// NAPI 模块解析工具（Issue #95：消除 bridge 获取重复逻辑）
+// ─────────────────────────────────────────────
+
+/** 统一 NAPI .so 模块 default 导出与直接导出两种格式的辅助接口 */
+interface NapiModuleWithDefault {
+  default?: object;
+}
+
+/**
+ * 从 NAPI .so 模块中解析桥接对象，兼容 default 导出与直接导出两种格式。
+ * @param soModule  import * as Xxx from 'xxx.so' 加载的模块（转为 object | undefined）
+ * @param soName    .so 文件名（用于错误提示）
+ * @returns 桥接对象本体（调用方负责 cast 到具体接口类型）
+ */
+function resolveNapiBridge(soModule: object | undefined, soName: string): object {
+  if (soModule === undefined) {
+    throw new Error(`${soName} 未加载`);
+  }
+  const withDefault = soModule as NapiModuleWithDefault;
+  if (withDefault.default !== undefined) {
+    return withDefault.default;
+  }
+  return soModule;
 }
 
 function getVidAllCorePlayerNapi(): FfprobeNapiBridge {
-  const bridgeModule = VidAllCorePlayerNapiModule as FfprobeNapiBridgeModule | FfprobeNapiBridge | undefined;
-  if (bridgeModule === undefined) {
-    throw new Error('libvidall_core_player_napi.so 未加载');
-  }
-  const defaultBridge = (bridgeModule as FfprobeNapiBridgeModule).default;
-  if (defaultBridge !== undefined) {
-    return defaultBridge as FfprobeNapiBridge;
-  }
-  return bridgeModule as FfprobeNapiBridge;
+  return resolveNapiBridge(
+    VidAllCorePlayerNapiModule as object | undefined,
+    'libvidall_core_player_napi.so'
+  ) as FfprobeNapiBridge;
 }
 
 // ─────────────────────────────────────────────
@@ -52,20 +70,11 @@ interface SmbProbeNapiBridge {
   release: (handle: number, keepProxy?: boolean) => void;
 }
 
-interface SmbProbeNapiBridgeModule {
-  default?: SmbProbeNapiBridge;
-}
-
 function getSmbProbeNapi(): SmbProbeNapiBridge {
-  const bridgeModule = VidAllCorePlayerNapiModule as SmbProbeNapiBridgeModule | SmbProbeNapiBridge | undefined;
-  if (bridgeModule === undefined) {
-    throw new Error('libvidall_core_player_napi.so 未加载');
-  }
-  const defaultBridge = (bridgeModule as SmbProbeNapiBridgeModule).default;
-  if (defaultBridge !== undefined) {
-    return defaultBridge as SmbProbeNapiBridge;
-  }
-  return bridgeModule as SmbProbeNapiBridge;
+  return resolveNapiBridge(
+    VidAllCorePlayerNapiModule as object | undefined,
+    'libvidall_core_player_napi.so'
+  ) as SmbProbeNapiBridge;
 }
 
 // ─────────────────────────────────────────────
@@ -817,6 +826,46 @@ export class FfprobeUtil {
 
     // 非中文无 title 时，保留最弱兜底信息
     return `轨道${index + 1}`;
+  }
+
+  /**
+   * 将 FfprobeTrack 列表转换为 PresetAudioTrack[]（Issue #96）。
+   * 适用于 probe()/probeSmb() 返回的 FfprobeResult.audioTracks，
+   * 以及数据库 JSON 反序列化得到的 FfprobeTrack[]。
+   */
+  static toPresetAudioTracks(tracks: FfprobeTrack[]): PresetAudioTrack[] {
+    const result: PresetAudioTrack[] = [];
+    for (let i = 0; i < tracks.length; i++) {
+      const t = tracks[i];
+      const item: PresetAudioTrack = {
+        trackIndex: t.index,
+        displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
+        language: t.language,
+        mimeType: t.codecName
+      };
+      result.push(item);
+    }
+    return result;
+  }
+
+  /**
+   * 将 FfprobeTrack 列表转换为 PresetSubtitleTrack[]（Issue #96）。
+   * 适用于 probe()/probeSmb() 返回的 FfprobeResult.subtitleTracks，
+   * 以及数据库 JSON 反序列化得到的 FfprobeTrack[]。
+   */
+  static toPresetSubtitleTracks(tracks: FfprobeTrack[]): PresetSubtitleTrack[] {
+    const result: PresetSubtitleTrack[] = [];
+    for (let i = 0; i < tracks.length; i++) {
+      const t = tracks[i];
+      const item: PresetSubtitleTrack = {
+        trackIndex: t.index,
+        displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
+        language: t.language,
+        codecName: t.codecName
+      };
+      result.push(item);
+    }
+    return result;
   }
 
   /**
