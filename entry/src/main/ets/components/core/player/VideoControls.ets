@@ -607,6 +607,10 @@ export struct PlayerSettingsDialog {
     this.arFocusedIndex = -1;
   }
 
+  aboutToDisappear(): void {
+    this.arFocusedIndex = -1;
+  }
+
   @Builder
   private SettingsChip(label: string, selected: boolean) {
     Text(label)
