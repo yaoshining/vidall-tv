@@ -28,6 +28,16 @@ export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 /** 播放内核类型 */
 export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
 
+/** 画面比例模式 */
+export enum AspectRatioMode {
+  /** 适应：等比缩放保留黑边（ImageFit.Contain 语义，默认） */
+  FIT = 0,
+  /** 填充：等比裁剪铺满（ImageFit.Cover 语义） */
+  FILL = 1,
+  /** 拉伸：不等比铺满（ImageFit.Fill 语义） */
+  STRETCH = 2
+}
+
 const TAG = '[VideoPlayerController]';
 const METRICS_TAG = 'VidAll_Metrics';
 const GENERIC_SYSTEM_ERROR = 'system error';
@@ -188,6 +198,8 @@ export class VideoPlayerController {
   @Trace activeAudioIndex: number = -1;
   /** 当前播放源的协议类型标识（如 'SMB'），用于 UI 展示与路由决策 */
   @Trace sourceProtocol: string = '';
+  /** 画面比例模式，默认为适应（等比保留黑边） */
+  @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private currentVideoData?: VideoData;
   private timeToSeek = -1
@@ -730,6 +742,16 @@ export class VideoPlayerController {
   disableAiEnhance(): void {
     this.aiEnhanceEnabled = false;
     VpeEnhancerUtil.setPassthrough();
+  }
+
+  /**
+   * 设置画面比例模式。三路后端通过 XComponent.renderFit 统一生效：
+   * - FIT → RenderFit.RESIZE_CONTAIN（等比保留黑边）
+   * - FILL → RenderFit.RESIZE_COVER（等比裁剪铺满）
+   * - STRETCH → RenderFit.RESIZE_FILL（不等比拉伸铺满）
+   */
+  setAspectRatioMode(mode: AspectRatioMode): void {
+    this.aspectRatioMode = mode;
   }
 
   /**

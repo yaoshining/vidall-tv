@@ -1,5 +1,5 @@
 import { debounce } from "@ibestservices/ibest-ui"
-import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend } from "./VideoPlayerController"
+import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
 import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
@@ -585,13 +585,17 @@ export struct PlayerSettingsDialog {
   @Require videoController: VideoPlayerController
   @Require onOpenSubtitleSelector: () => void
   @State selectedPlaybackRateIndex: number = 1
-  @State selectedScreenFitIndex: number = 0
+  @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
+  @State private arFocused0: boolean = false
+  @State private arFocused1: boolean = false
+  @State private arFocused2: boolean = false
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
+    this.currentAspectRatioMode = this.videoController.aspectRatioMode;
   }
 
   @Builder
@@ -650,18 +654,49 @@ export struct PlayerSettingsDialog {
               .alignSelf(ItemAlign.Start)
 
             Row({ space: 12 }) {
+              // 适应
               Row() {
-                this.SettingsChip('适应内容', this.selectedScreenFitIndex === 0)
+                this.SettingsChip('适应', this.currentAspectRatioMode === AspectRatioMode.FIT)
               }
+              .focusable(true)
+              .onFocus(() => { this.arFocused0 = true })
+              .onBlur(() => { this.arFocused0 = false })
+              .borderRadius(99)
+              .padding(this.arFocused0 ? 2 : 0)
+              .border({ width: this.arFocused0 ? 2 : 0, color: this.arFocused0 ? '#4D9FFF' : Color.Transparent })
               .onClick(() => {
-                this.selectedScreenFitIndex = 0
+                this.currentAspectRatioMode = AspectRatioMode.FIT
+                this.videoController.setAspectRatioMode(AspectRatioMode.FIT)
               })
 
+              // 填充
               Row() {
-                this.SettingsChip('铺满全屏', this.selectedScreenFitIndex === 1)
+                this.SettingsChip('填充', this.currentAspectRatioMode === AspectRatioMode.FILL)
               }
+              .focusable(true)
+              .onFocus(() => { this.arFocused1 = true })
+              .onBlur(() => { this.arFocused1 = false })
+              .borderRadius(99)
+              .padding(this.arFocused1 ? 2 : 0)
+              .border({ width: this.arFocused1 ? 2 : 0, color: this.arFocused1 ? '#4D9FFF' : Color.Transparent })
               .onClick(() => {
-                this.selectedScreenFitIndex = 1
+                this.currentAspectRatioMode = AspectRatioMode.FILL
+                this.videoController.setAspectRatioMode(AspectRatioMode.FILL)
+              })
+
+              // 拉伸
+              Row() {
+                this.SettingsChip('拉伸', this.currentAspectRatioMode === AspectRatioMode.STRETCH)
+              }
+              .focusable(true)
+              .onFocus(() => { this.arFocused2 = true })
+              .onBlur(() => { this.arFocused2 = false })
+              .borderRadius(99)
+              .padding(this.arFocused2 ? 2 : 0)
+              .border({ width: this.arFocused2 ? 2 : 0, color: this.arFocused2 ? '#4D9FFF' : Color.Transparent })
+              .onClick(() => {
+                this.currentAspectRatioMode = AspectRatioMode.STRETCH
+                this.videoController.setAspectRatioMode(AspectRatioMode.STRETCH)
               })
             }
             .justifyContent(FlexAlign.Start)

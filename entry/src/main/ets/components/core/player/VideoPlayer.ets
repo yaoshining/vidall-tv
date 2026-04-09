@@ -1,6 +1,6 @@
 import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
-import { VideoPlayerController, type PlayerBackend } from "./VideoPlayerController"
+import { VideoPlayerController, type PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
@@ -18,6 +18,8 @@ export struct VideoPlayer {
   @Param autoPlay: boolean = false
   /** 镜像 controller.backend，用于驱动多后端分支重建 */
   @Local backendMode: PlayerBackend = 'avplayer'
+  /** 镜像 controller.aspectRatioMode，用于驱动 renderFit 响应式更新 */
+  @Local aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
 
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
   private _lastRawText: string = ''
@@ -30,6 +32,23 @@ export struct VideoPlayer {
     // backend 切换后允许新分支重新初始化。
     this.initMode = ''
     console.info(`[VideoPlayer] backend 变更 → ${this.backendMode}`)
+  }
+
+  @Monitor('controller.aspectRatioMode')
+  onAspectRatioModeChange(): void {
+    this.aspectRatioMode = this.controller.aspectRatioMode
+    console.info(`[VideoPlayer] 画面比例变更 → ${this.aspectRatioMode}`)
+  }
+
+  /** 将画面比例模式映射到 XComponent.renderFit */
+  private toRenderFit(mode: AspectRatioMode): RenderFit {
+    if (mode === AspectRatioMode.FILL) {
+      return RenderFit.RESIZE_COVER
+    }
+    if (mode === AspectRatioMode.STRETCH) {
+      return RenderFit.RESIZE_FILL
+    }
+    return RenderFit.RESIZE_CONTAIN
   }
 
   private tryMarkInit(mode: string): boolean {
@@ -389,7 +408,7 @@ export struct VideoPlayer {
           )
           .width("100%")
           .height("100%")
-          .renderFit(RenderFit.RESIZE_CONTAIN)
+          .renderFit(this.toRenderFit(this.aspectRatioMode))
           .backgroundColor(Color.Black)
       } else if (this.backendMode === 'ijkplayer') {
         // IjkPlayer 内核：必须用 libraryname 模式，不能用 XComponentController
@@ -433,7 +452,7 @@ export struct VideoPlayer {
             })
             .width("100%")
             .height("100%")
-            .renderFit(RenderFit.RESIZE_CONTAIN)
+            .renderFit(this.toRenderFit(this.aspectRatioMode))
             .backgroundColor(Color.Black)
 
           // 透明触摸拦截层：专门处理点击和手势，解决 libraryname 模式事件不透传问题
@@ -495,7 +514,7 @@ export struct VideoPlayer {
             })
             .width("100%")
             .height("100%")
-            .renderFit(RenderFit.RESIZE_CONTAIN)
+            .renderFit(this.toRenderFit(this.aspectRatioMode))
             .backgroundColor(Color.Black)
 
           Stack()
@@ -560,6 +579,7 @@ export struct VideoPlayer {
 
   aboutToAppear(): void {
     this.backendMode = this.controller.backend
+    this.aspectRatioMode = this.controller.aspectRatioMode
     this.initMode = ''
     emitter.on(PlayerEvents.COMPLETED, () => {
       this.clearIjkInitTimer()
