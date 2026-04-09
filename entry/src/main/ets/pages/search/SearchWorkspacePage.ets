@@ -116,7 +116,7 @@ struct KeyButton {
       .animation({ duration: 100, curve: Curve.EaseOut })
       .focusable(true)
       .onFocus(() => { this.isFocused = true; })
-      .onBlur(() => { this.isFocused = false; })
+      .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
       .onHover((isHover: boolean) => { this.isHovered = isHover; })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
@@ -198,7 +198,7 @@ struct ActionKey {
       .animation({ duration: 100, curve: Curve.EaseOut })
       .focusable(true)
       .onFocus(() => { this.isFocused = true; })
-      .onBlur(() => { this.isFocused = false; })
+      .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
       .onHover((isHover: boolean) => { this.isHovered = isHover; })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
