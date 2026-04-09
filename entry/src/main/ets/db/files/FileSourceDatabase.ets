@@ -131,6 +131,9 @@ export class FileSourceDatabase {
       // 防御性 schema 兼容：补齐 videos 扫描更新标记列
       await this.ensureVideosSchema(this.rdbStore);
 
+      // 防御性 schema 兼容：补齐 movies/tv_series origin_country_json 列（v7 新增，幂等）
+      await this.ensureOriginCountrySchema(this.rdbStore);
+
       // 防御性修复：确保 provider+provider_id 唯一索引已被移除（v8 起允许多文件源对应同一 TMDB 内容）
       await this.dropScrapeInfoProviderPidIndex(this.rdbStore);
 
@@ -389,9 +392,8 @@ export class FileSourceDatabase {
         currentVersion = 6;
         console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`);
       }
-      if (currentVersion < 7) {
-        await rdbStore.executeSql('ALTER TABLE movies ADD COLUMN origin_country_json TEXT');
-        await rdbStore.executeSql('ALTER TABLE tv_series ADD COLUMN origin_country_json TEXT');
+      if (currentVersion < 7 && currentVersion < newVersion) {
+        await this.ensureOriginCountrySchema(rdbStore);
         currentVersion = 7;
         console.info('[DB] 已迁移到 v7：movies/tv_series 新增 origin_country_json');
       }
@@ -1358,6 +1360,23 @@ export class FileSourceDatabase {
   // ─────────────────────────────────────────────
 
   /** 确保 videos 表存在扫描更新标记列 */
+  private async ensureOriginCountrySchema(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
+      await rdbStore.executeSql(
+        `ALTER TABLE ${FileSourceDatabase.TABLE_MOVIES} ADD COLUMN origin_country_json TEXT`
+      );
+    } catch {
+      // 列已存在时忽略
+    }
+    try {
+      await rdbStore.executeSql(
+        `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN origin_country_json TEXT`
+      );
+    } catch {
+      // 列已存在时忽略
+    }
+  }
+
   private async ensureVideosSchema(rdbStore: relationalStore.RdbStore): Promise<void> {
     try {
       await rdbStore.executeSql(

@@ -341,7 +341,9 @@ export class WebDAVAdapter implements ISourceAdapter {
                 if (existingMovie && existingMovie.id !== undefined) {
                   movieId = existingMovie.id;
                   console.info(`[VideoScanner][SCRAPE] 电影复用已有记录 movieId=${movieId} title="${movie.title}" 已有posterUrl=${existingMovie.posterUrl ? 'Y' : 'null'}`);
-                  if (!existingMovie.posterUrl && movie.posterUrl) {
+                  const needsUpdate = (!existingMovie.posterUrl && movie.posterUrl) ||
+                    (!existingMovie.originCountryJson && movie.originCountryJson);
+                  if (needsUpdate) {
                     const updateEntity: MovieEntity = {
                       id: existingMovie.id,
                       provider: movie.provider, providerId: movie.providerId,
@@ -357,7 +359,7 @@ export class WebDAVAdapter implements ISourceAdapter {
                       scrapedAt: Date.now()
                     };
                     await db.upsertMovie(updateEntity);
-                    console.info(`[VideoScanner][SCRAPE] 电影复用更新 posterUrl movieId=${movieId}`);
+                    console.info(`[VideoScanner][SCRAPE] 电影复用更新元数据 movieId=${movieId}`);
                   }
                 } else {
                   const movieEntity: MovieEntity = {
