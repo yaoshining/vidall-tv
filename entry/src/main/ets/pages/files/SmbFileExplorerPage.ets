@@ -211,26 +211,8 @@ export struct SmbFileExplorerPage {
           '[SmbExplorer] 轨道探测成功: 音轨=' + probeResult.audioTracks.length.toString() +
           ' 字幕轨=' + probeResult.subtitleTracks.length.toString()
         )
-        for (let i = 0; i < probeResult.audioTracks.length; i++) {
-          const t = probeResult.audioTracks[i]
-          const item: PresetAudioTrack = {
-            trackIndex: t.index,
-            displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
-            language: t.language,
-            mimeType: undefined   // codec 名不是 MIME type，下游用 codecName 匹配即可
-          }
-          presetAudioTracks.push(item)
-        }
-        for (let i = 0; i < probeResult.subtitleTracks.length; i++) {
-          const t = probeResult.subtitleTracks[i]
-          const item: PresetSubtitleTrack = {
-            trackIndex: t.index,
-            displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
-            language: t.language,
-            codecName: t.codecName
-          }
-          presetSubtitleTracks.push(item)
-        }
+        presetAudioTracks = FfprobeUtil.toPresetAudioTracks(probeResult.audioTracks)
+        presetSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(probeResult.subtitleTracks)
       } else {
         console.warn('[SmbExplorer] 轨道探测未成功（降级为空轨道）: ' + (probeResult.errorMessage ?? '(未知原因)'))
       }
