@@ -2321,6 +2321,7 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) { return []; }
     let tvRs: relationalStore.ResultSet | null = null;
     let movieRs: relationalStore.ResultSet | null = null;
+    let unscrapedRs: relationalStore.ResultSet | null = null;
     try {
       // ── 电视剧（按剧+季分组）──────────────────────────────────
       const tvSql = `
@@ -2429,13 +2430,58 @@ export class FileSourceDatabase {
       }
       movieRs.close(); movieRs = null;
 
+      // ── 未刮削视频（兜底：新增目录扫描后未配置 TMDB Key 或刮削失败的文件） ──
+      // 这类文件存在于 videos 表但无 scrape_info 记录，通过 scanned_at 排序保证新扫描文件出现在最前
+      const unscrapedSql = `
+        SELECT v.id AS vid, v.source_id, v.directory_path, v.file_path, v.file_name,
+               v.file_size, v.duration_ms, v.width, v.height, v.video_codec,
+               v.audio_tracks_json, v.scanned_at
+        FROM ${FileSourceDatabase.TABLE_VIDEOS} v
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} si WHERE si.video_id = v.id
+        )
+        ORDER BY v.scanned_at DESC
+        LIMIT ?
+      `;
+      unscrapedRs = await this.rdbStore.querySql(unscrapedSql, [limit]);
+      const unscrapedItems: MediaListItem[] = [];
+      while (unscrapedRs.goToNextRow()) {
+        const strU = (col: string): string | undefined => {
+          const i = unscrapedRs!.getColumnIndex(col);
+          return unscrapedRs!.isColumnNull(i) ? undefined : unscrapedRs!.getString(i);
+        };
+        const numU = (col: string): number | undefined => {
+          const i = unscrapedRs!.getColumnIndex(col);
+          return unscrapedRs!.isColumnNull(i) ? undefined : unscrapedRs!.getLong(i);
+        };
+        const uScannedAt = unscrapedRs.getLong(unscrapedRs.getColumnIndex('scanned_at'));
+        const uMediaItem: MediaItem = {
+          id: unscrapedRs.getLong(unscrapedRs.getColumnIndex('vid')),
+          sourceId: unscrapedRs.getLong(unscrapedRs.getColumnIndex('source_id')),
+          directoryPath: strU('directory_path') ?? '',
+          filePath: strU('file_path') ?? '',
+          fileName: strU('file_name') ?? '',
+          fileSize: numU('file_size'),
+          durationMs: numU('duration_ms'),
+          width: numU('width'),
+          height: numU('height'),
+          videoCodec: strU('video_codec'),
+          audioTracksJson: strU('audio_tracks_json'),
+          scannedAt: uScannedAt,
+        };
+        const uListItem: MediaListItem = { kind: 'video', video: uMediaItem, sortTs: uScannedAt };
+        unscrapedItems.push(uListItem);
+      }
+      unscrapedRs.close(); unscrapedRs = null;
+
       // ── 合并，按 sortTs 倒序，取前 limit 条 ──────────────────
       const combined: MediaListItem[] = [];
       for (const it of tvItems) { combined.push(it); }
       for (const it of movieItems) { combined.push(it); }
+      for (const it of unscrapedItems) { combined.push(it); }
       combined.sort((a: MediaListItem, b: MediaListItem) => b.sortTs - a.sortTs);
       const result = combined.slice(0, limit);
-      console.info(`[DB][getRecentlyAddedList] TV季=${tvItems.length} 电影=${movieItems.length} 合并后=${result.length}`);
+      console.info(`[DB][getRecentlyAddedList] TV季=${tvItems.length} 电影=${movieItems.length} 未刮削=${unscrapedItems.length} 合并后=${result.length}`);
       return result;
     } catch (e) {
       console.error('[DB][getRecentlyAddedList] 查询失败', JSON.stringify(e));
@@ -2443,6 +2489,7 @@ export class FileSourceDatabase {
     } finally {
       tvRs?.close();
       movieRs?.close();
+      unscrapedRs?.close();
     }
   }
 
