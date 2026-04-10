@@ -182,11 +182,20 @@ struct FileSourceSettingBuilderComponent {
     if (!target || target.dirId === undefined) {
       return;
     }
+    // 校验 sourceId：若未加载则中止，避免 source_id=0 导致误删其他文件源数据
+    const sourceId = target.fileSource.id;
+    if (!sourceId) {
+      console.warn('FileSourceSettingBuilder: fileSource.id 未加载，中止清理');
+      this.getUIContext().getPromptAction().showToast({
+        message: '文件源信息未加载，请稍后重试'
+      } as promptAction.ShowToastOptions);
+      return;
+    }
     try {
       this.isCleaningUp = true;
       await this.fileSourceModel.clearMissingDirectory(
         target.dirId,
-        target.fileSource.id ?? 0,
+        sourceId,
         target.directoryPath
       );
       this.getUIContext().getPromptAction().showToast({
@@ -442,6 +451,7 @@ struct FileSourceSettingBuilderComponent {
         .width('100%')
         .height('100%')
         .backgroundColor('#80000000')
+        .onClick(() => {}) // 拦截蒙层点击穿透
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }
@@ -499,6 +509,7 @@ struct FileSourceSettingBuilderComponent {
         .width('100%')
         .height('100%')
         .backgroundColor('#80000000')
+        .onClick(() => {}) // 拦截蒙层点击穿透
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }
