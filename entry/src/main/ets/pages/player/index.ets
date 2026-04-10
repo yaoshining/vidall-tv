@@ -150,6 +150,8 @@ export struct PlayerPage {
             data: this.videoData,
             autoPlay: true
           })
+            .width('100%')
+            .height('100%')
             .alignRules({
               center: { anchor: '__container__', align: VerticalAlign.Center },
               middle: { anchor: '__container__', align: HorizontalAlign.Center }

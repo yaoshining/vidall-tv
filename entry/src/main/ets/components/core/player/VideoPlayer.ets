@@ -564,11 +564,14 @@ export struct VideoPlayer {
       }
 
       // 字幕显示层 - 使用字幕渲染器支持多种格式
+      // position({x:0,y:0}) 确保相对 Stack 左上角绝对定位，
+      // 避免 Stack 默认居中对齐在 renderFit 切换时造成字幕抖动/偏移
       Row() {
         this.SubtitleRenderer()
       }
       .width('100%')
       .height('100%')
+      .position({ x: 0, y: 0 })
       .padding({ left: 40, right: 40, bottom: 80 })
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Bottom)
