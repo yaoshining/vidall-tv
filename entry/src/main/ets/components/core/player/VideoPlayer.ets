@@ -37,7 +37,7 @@ export struct VideoPlayer {
   @Monitor('controller.aspectRatioMode')
   onAspectRatioModeChange(): void {
     this.aspectRatioMode = this.controller.aspectRatioMode
-    console.info(`[VideoPlayer] 画面比例变更 → ${this.aspectRatioMode}`)
+    console.info(`[VideoPlayer] 画面比例变更 → mode=${this.aspectRatioMode}, renderFit=${this.toRenderFit(this.aspectRatioMode)}`)
   }
 
   /** 将画面比例模式映射到 XComponent.renderFit */
@@ -365,6 +365,9 @@ export struct VideoPlayer {
         }, (line: SubtitleSegment[], index: number) => `line-${index}-${this.controller.subtitleUpdateCounter}`)
       }
       .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+      .onAreaChange((oldArea: Area, newArea: Area) => {
+        console.info(`[字幕Column实际尺寸] ${JSON.stringify(oldArea)} → ${JSON.stringify(newArea)}`)
+      })
     }
   }
 
@@ -576,10 +579,16 @@ export struct VideoPlayer {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Bottom)
       .hitTestBehavior(HitTestMode.Transparent)
+      .onAreaChange((oldArea: Area, newArea: Area) => {
+        console.info(`[字幕Row尺寸] ${JSON.stringify(oldArea)} → ${JSON.stringify(newArea)}`)
+      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)
+    .onAreaChange((oldArea: Area, newArea: Area) => {
+      console.info(`[VideoPlayer外层Stack尺寸] ${JSON.stringify(oldArea)} → ${JSON.stringify(newArea)}`)
+    })
   }
 
   aboutToAppear(): void {
