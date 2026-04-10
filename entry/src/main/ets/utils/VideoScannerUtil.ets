@@ -159,7 +159,12 @@ export class WebDAVAdapter implements ISourceAdapter {
     try {
       resources = await this.client.listDirectory(currentPath);
     } catch (err) {
-      console.error(`[VideoScanner][ERROR] 列举目录失败: ${currentPath}，原因: ${JSON.stringify(err)}`);
+      const errMsg = (err as Error).message ?? String(err);
+      console.error(`[VideoScanner][ERROR] 列举目录失败: ${currentPath}，原因: ${errMsg}`);
+      // 根目录（depth===0）失败时向上抛出，让调用方可以写 dir_status；子目录失败继续跳过
+      if (depth === 0) {
+        throw new Error(errMsg);
+      }
       return;
     }
 
@@ -1052,8 +1057,22 @@ export class VideoScannerUtil {
         try {
           found = await adapter.scan(dir.directoryPath, scanOptions);
           console.info(`[VideoScanner] 目录 "${dir.directoryPath}" 扫描完毕，找到 ${found.length} 个视频`);
+          // 扫描成功 → 目录状态恢复为 active
+          if (dir.id !== undefined) {
+            db.updateDirStatus(dir.id, 'active').catch(() => {});
+          }
         } catch (err) {
-          console.error(`[VideoScanner][ERROR] 扫描目录 "${dir.directoryPath}" 异常: ${JSON.stringify(err)}`);
+          const errMsg = (err as Error).message ?? String(err);
+          console.error(`[VideoScanner][ERROR] 扫描目录 "${dir.directoryPath}" 异常: ${errMsg}`);
+          // 按错误类型写状态：404 → missing；其他（超时/401/网络）→ unreachable
+          if (dir.id !== undefined) {
+            const isMissing = errMsg.includes('HTTP 404') ||
+              errMsg.toLowerCase().includes('not found') ||
+              errMsg.includes('404');
+            const newStatus = isMissing ? 'missing' : 'unreachable';
+            db.updateDirStatus(dir.id, newStatus).catch(() => {});
+            console.info(`[VideoScanner] 目录 "${dir.directoryPath}" 状态标记为: ${newStatus}`);
+          }
           continue;
         }
 

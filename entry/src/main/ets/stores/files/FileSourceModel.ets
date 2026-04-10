@@ -1,5 +1,5 @@
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
-import { FileSource } from "../../db/models/FileSourceEntity";
+import { FileSource, FileSourceDirectory, DirStatus } from "../../db/models/FileSourceEntity";
 
 /**
  * 文件夹项接口，包含文件夹信息和所属文件源信息
@@ -10,6 +10,10 @@ export interface DirectoryItem {
   customName: string;
   fileSourceName: string;
   fileSource: FileSource;
+  /** 目录可达性状态 */
+  dirStatus: DirStatus;
+  /** 目录 DB 主键，用于状态更新与清理操作 */
+  dirId?: number;
 }
 
 /**
@@ -80,7 +84,9 @@ export class FileSourceModel {
             directoryName: dirName,
             customName: dir.customName || dirName,
             fileSourceName: fileSource.name,
-            fileSource: fileSource
+            fileSource: fileSource,
+            dirStatus: dir.dirStatus ?? 'active',
+            dirId: dir.id
           })
         }
       }
@@ -181,6 +187,31 @@ export class FileSourceModel {
     console.info('FileSourceStore: Invalidating cache');
     this.isLoaded = false;
     this.lastUpdateTime = 0;
+  }
+
+  /**
+   * 一键清理缺失目录：删除目录配置 + 关联媒体记录，并刷新缓存
+   * @param dirId         file_source_directories 主键
+   * @param sourceId      所属文件源 ID
+   * @param directoryPath 目录路径
+   */
+  async clearMissingDirectory(dirId: number, sourceId: number, directoryPath: string): Promise<void> {
+    try {
+      const database = FileSourceDatabase.getInstance();
+      await database.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath);
+      // 从缓存中移除
+      const idx = this.directories.findIndex(
+        d => d.dirId === dirId
+      );
+      if (idx !== -1) {
+        this.directories.splice(idx, 1);
+      }
+      this.lastUpdateTime = Date.now();
+      console.info(`FileSourceModel: 目录 ${directoryPath} 已清理`);
+    } catch (error) {
+      console.error('FileSourceModel: clearMissingDirectory 失败', JSON.stringify(error));
+      throw new Error('Failed to clearMissingDirectory: ' + JSON.stringify(error));
+    }
   }
 }
 

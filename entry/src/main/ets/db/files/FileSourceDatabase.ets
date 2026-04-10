@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
-import { FileSource, FileSourceDirectory, FileSourceType } from '../models/FileSourceEntity';
+import { FileSource, FileSourceDirectory, FileSourceType, DirStatus } from '../models/FileSourceEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
   MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry,
@@ -42,7 +42,7 @@ export interface SearchMediaOptions {
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 8;
+  private static readonly DB_VERSION = 9;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -165,6 +165,7 @@ export class FileSourceDatabase {
           source_id INTEGER NOT NULL,
           directory_path TEXT NOT NULL,
           custom_name TEXT,
+          dir_status TEXT NOT NULL DEFAULT 'active',
           FOREIGN KEY(source_id) REFERENCES ${FileSourceDatabase.TABLE_FILE_SOURCES}(id) ON DELETE CASCADE
         )
       `);
@@ -406,6 +407,19 @@ export class FileSourceDatabase {
         );
         currentVersion = 8;
         console.info('[DB] 已迁移到 v8：移除 scrape_info 唯一索引，清理孤立刮削数据');
+      }
+      if (currentVersion < 9) {
+        // v9：file_source_directories 新增 dir_status 列，追踪目录可达性
+        try {
+          await rdbStore.executeSql(
+            `ALTER TABLE ${FileSourceDatabase.TABLE_DIRECTORIES} ADD COLUMN dir_status TEXT NOT NULL DEFAULT 'active'`
+          );
+        } catch (e) {
+          // 列已存在时忽略（幂等）
+          console.warn('[DB] v9 ALTER TABLE dir_status: 列可能已存在，已忽略', JSON.stringify(e));
+        }
+        currentVersion = 9;
+        console.info('[DB] 已迁移到 v9：file_source_directories 新增 dir_status 列');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -653,7 +667,8 @@ export class FileSourceDatabase {
         const valueBucket: relationalStore.ValuesBucket = {
           source_id: sourceId,
           directory_path: dir.directoryPath,
-          custom_name: dir.customName ?? null
+          custom_name: dir.customName ?? null,
+          dir_status: dir.dirStatus ?? 'active'
         };
         await this.rdbStore.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
       }
@@ -701,7 +716,8 @@ export class FileSourceDatabase {
         const valueBucket: relationalStore.ValuesBucket = {
           source_id: sourceId,
           directory_path: dir.directoryPath,
-          custom_name: dir.customName ?? null
+          custom_name: dir.customName ?? null,
+          dir_status: dir.dirStatus ?? 'active'
         };
         await tx.insert(FileSourceDatabase.TABLE_DIRECTORIES, valueBucket);
       }
@@ -736,12 +752,23 @@ export class FileSourceDatabase {
         const directoryPath = resultSet.getString(resultSet.getColumnIndex('directory_path'));
         const customNameIdx = resultSet.getColumnIndex('custom_name');
         const customName = resultSet.isColumnNull(customNameIdx) ? undefined : resultSet.getString(customNameIdx);
+        // 兼容旧版本（dir_status 列可能不存在）
+        let dirStatus: DirStatus = 'active';
+        try {
+          const statusIdx = resultSet.getColumnIndex('dir_status');
+          if (statusIdx >= 0 && !resultSet.isColumnNull(statusIdx)) {
+            dirStatus = resultSet.getString(statusIdx) as DirStatus;
+          }
+        } catch {
+          // 旧 schema 无此列，保持 active 默认值
+        }
 
         directories.push({
           id: id,
           sourceId: sourceIdVal,
           directoryPath: directoryPath,
-          customName: customName
+          customName: customName,
+          dirStatus: dirStatus
         });
       }
 
@@ -752,6 +779,95 @@ export class FileSourceDatabase {
       throw new Error('Failed to get directories: ' + JSON.stringify(error));
     } finally {
       resultSet?.close();
+    }
+  }
+
+  /**
+   * 更新单条目录的可达性状态
+   * @param dirId  file_source_directories 主键
+   * @param status 新状态：'active' | 'missing' | 'unreachable'
+   */
+  async updateDirStatus(dirId: number, status: DirStatus): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    try {
+      const valueBucket: relationalStore.ValuesBucket = { dir_status: status };
+      const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
+      predicates.equalTo('id', dirId);
+      await this.rdbStore.update(valueBucket, predicates);
+      console.info(`[DB][updateDirStatus] dirId=${dirId} → ${status}`);
+    } catch (error) {
+      console.error('[DB][updateDirStatus] 失败', JSON.stringify(error));
+      throw new Error('Failed to updateDirStatus: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 清理指定目录及其下属视频文件、关联的 scrape_info、play_progress。
+   * 注意：movies/tv_series 等元数据表可能跨目录/文件源共享，不在本次清理范围内。
+   * 孤立的元数据记录由 cleanOrphanedScrapeData() 统一处理。
+   * 所有删除操作在同一事务内完成，保证原子性。
+   * @param dirId         file_source_directories 主键
+   * @param sourceId      所属文件源 ID
+   * @param directoryPath 目录路径（用于过滤 videos 表）
+   */
+  async clearMediaAndDirectoryForDir(dirId: number, sourceId: number, directoryPath: string): Promise<void> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    const store = this.rdbStore;
+    const BATCH_SIZE = 100;
+
+    // 1. 查询该目录下的 video id 列表（事务外只读，不影响原子性）
+    const videoQueryPredicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_VIDEOS);
+    videoQueryPredicates.equalTo('source_id', sourceId);
+    videoQueryPredicates.and();
+    videoQueryPredicates.equalTo('directory_path', directoryPath);
+    const videoRs = await store.query(videoQueryPredicates, ['id']);
+    const videoIds: number[] = [];
+    while (videoRs.goToNextRow()) {
+      videoIds.push(videoRs.getLong(videoRs.getColumnIndex('id')));
+    }
+    videoRs.close();
+
+    // 2. 在事务中执行所有删除操作，保证原子性
+    const tx = await store.createTransaction();
+    try {
+      // 2a. 分批删除 scrape_info（防止超过 SQLite 999 参数上限）
+      for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        const batch = videoIds.slice(i, i + BATCH_SIZE);
+        const scrapePredicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
+        scrapePredicates.in('video_id', batch.map(v => v as relationalStore.ValueType));
+        await tx.delete(scrapePredicates);
+      }
+
+      // 2b. 分批删除 play_progress（外键未启用，无级联删除）
+      for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        const batch = videoIds.slice(i, i + BATCH_SIZE);
+        const progressPredicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_PLAY_PROGRESS);
+        progressPredicates.in('video_id', batch.map(v => v as relationalStore.ValueType));
+        await tx.delete(progressPredicates);
+      }
+
+      // 2c. 删除视频记录
+      const videoDelPredicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_VIDEOS);
+      videoDelPredicates.equalTo('source_id', sourceId);
+      videoDelPredicates.and();
+      videoDelPredicates.equalTo('directory_path', directoryPath);
+      await tx.delete(videoDelPredicates);
+
+      // 2d. 删除目录配置本身
+      const dirPredicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
+      dirPredicates.equalTo('id', dirId);
+      await tx.delete(dirPredicates);
+
+      await tx.commit();
+      console.info(`[DB][clearMediaAndDirectoryForDir] dirId=${dirId} sourceId=${sourceId} path=${directoryPath} 已清理`);
+    } catch (error) {
+      await tx.rollback();
+      console.error('[DB][clearMediaAndDirectoryForDir] 失败，已回滚', JSON.stringify(error));
+      throw new Error('Failed to clearMediaAndDirectoryForDir: ' + JSON.stringify(error));
     }
   }
 

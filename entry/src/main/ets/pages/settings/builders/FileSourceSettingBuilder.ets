@@ -16,13 +16,23 @@ import {
 import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
 import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
-import { FileSourceModel } from "../../../stores/files/FileSourceModel";
+import { FileSourceModel, DirectoryItem } from "../../../stores/files/FileSourceModel";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
   @Local fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local isLoading: boolean = false
+
+  // 一键清理弹窗状态
+  @Local showCleanupDialog: boolean = false
+  @Local cleanupTarget: DirectoryItem | null = null
+  @Local isCleaningUp: boolean = false
+
+  // 删除文件源确认弹窗状态
+  @Local showDeleteDialog: boolean = false
+  @Local deleteTarget: FileSource | null = null
+  @Local isDeletingSource: boolean = false
 
   aboutToAppear(): void {
     // 加载文件源列表
@@ -122,10 +132,94 @@ struct FileSourceSettingBuilderComponent {
   }
 
   /**
-   * 删除文件源
+   * 删除文件源（弹出确认 Dialog）
    */
   handleDelete(fileSource: FileSource): void {
-    // ...existing code...
+    this.deleteTarget = fileSource;
+    this.showDeleteDialog = true;
+  }
+
+  /**
+   * 确认删除文件源
+   */
+  async confirmDeleteFileSource(): Promise<void> {
+    const target = this.deleteTarget;
+    if (!target || !target.id) {
+      return;
+    }
+    try {
+      this.isDeletingSource = true;
+      await this.fileSourceModel.deleteFileSource(target.id);
+      await this.fileSourceModel.loadFileSources(true);
+      this.getUIContext().getPromptAction().showToast({
+        message: '文件源已删除'
+      } as promptAction.ShowToastOptions);
+    } catch (error) {
+      console.error('FileSourceSettingBuilder: 删除文件源失败', JSON.stringify(error));
+      this.getUIContext().getPromptAction().showToast({
+        message: '删除失败，请重试'
+      } as promptAction.ShowToastOptions);
+    } finally {
+      this.isDeletingSource = false;
+      this.showDeleteDialog = false;
+      this.deleteTarget = null;
+    }
+  }
+
+  /**
+   * 一键清理缺失目录（弹出确认 Dialog）
+   */
+  handleCleanupMissingDir(item: DirectoryItem): void {
+    this.cleanupTarget = item;
+    this.showCleanupDialog = true;
+  }
+
+  /**
+   * 确认清理缺失目录
+   */
+  async confirmCleanupDir(): Promise<void> {
+    const target = this.cleanupTarget;
+    if (!target || target.dirId === undefined) {
+      return;
+    }
+    // 校验 sourceId：若未加载则中止，避免 source_id=0 导致误删其他文件源数据
+    const sourceId = target.fileSource.id;
+    if (!sourceId) {
+      console.warn('FileSourceSettingBuilder: fileSource.id 未加载，中止清理');
+      this.getUIContext().getPromptAction().showToast({
+        message: '文件源信息未加载，请稍后重试'
+      } as promptAction.ShowToastOptions);
+      return;
+    }
+    try {
+      this.isCleaningUp = true;
+      await this.fileSourceModel.clearMissingDirectory(
+        target.dirId,
+        sourceId,
+        target.directoryPath
+      );
+      this.getUIContext().getPromptAction().showToast({
+        message: '目录已清理'
+      } as promptAction.ShowToastOptions);
+    } catch (error) {
+      console.error('FileSourceSettingBuilder: 清理失败', JSON.stringify(error));
+      this.getUIContext().getPromptAction().showToast({
+        message: '清理失败，请重试'
+      } as promptAction.ShowToastOptions);
+    } finally {
+      this.isCleaningUp = false;
+      this.showCleanupDialog = false;
+      this.cleanupTarget = null;
+    }
+  }
+
+  /**
+   * 重新定位目录（进入编辑目录界面）
+   */
+  handleRelocateDir(item: DirectoryItem): void {
+    this.showCleanupDialog = false;
+    this.cleanupTarget = null;
+    this.handleOpenDirectorySelector(item.fileSource);
   }
 
   /**
@@ -213,66 +307,215 @@ struct FileSourceSettingBuilderComponent {
   }
 
   build() {
-    SettingContainer({
-      title: "文件源"
-    }) {
-      SettingListItemGroup({
-        title: "已添加的文件源"
+    Stack() {
+      SettingContainer({
+        title: "文件源"
       }) {
-        // 显示加载状态
-        if (this.isLoading) {
-          Row() {
-            LoadingProgress()
-              .width(30)
-              .height(30)
-              .margin(20)
+        SettingListItemGroup({
+          title: "已添加的文件源"
+        }) {
+          // 显示加载状态
+          if (this.isLoading) {
+            Row() {
+              LoadingProgress()
+                .width(30)
+                .height(30)
+                .margin(20)
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
           }
-          .width('100%')
-          .justifyContent(FlexAlign.Center)
-        }
 
-        // 显示文件源列表
-        ForEach(this.fileSourceModel.fileSources, (fileSource: FileSource) => {
-          SettingListItem({
-            icon: () => {
-              this.getFileSourceTypeIcon(fileSource.type)
-            },
-            title: fileSource.name,
-            value: this.getFileSourceTypeName(fileSource.type),
-            rightIcon: () => {
-              this.buildMoreButton()
-            },
-            menuItems: [
-              {
-                value: '编辑',
-                action: () => {
-                  this.handleEdit(fileSource)
-                }
+          // 显示文件源列表
+          ForEach(this.fileSourceModel.fileSources, (fileSource: FileSource) => {
+            SettingListItem({
+              icon: () => {
+                this.getFileSourceTypeIcon(fileSource.type)
               },
-              {
-                value: '删除',
-                action: () => {
-                  this.handleDelete(fileSource)
+              title: fileSource.name,
+              value: this.getFileSourceTypeName(fileSource.type),
+              rightIcon: () => {
+                this.buildMoreButton()
+              },
+              menuItems: [
+                {
+                  value: '编辑',
+                  action: () => {
+                    this.handleEdit(fileSource)
+                  }
+                },
+                {
+                  value: '删除',
+                  action: () => {
+                    this.handleDelete(fileSource)
+                  }
                 }
+              ],
+              onItemClick: () => {
+                // 点击打开文件夹选择器
+                this.handleOpenDirectorySelector(fileSource)
               }
-            ],
+            })
+            // 展示该文件源下的目录状态（缺失/不可达时显示标记）
+            ForEach(
+              this.fileSourceModel.directories.filter(
+                (d: DirectoryItem) => d.fileSource.id === fileSource.id && d.dirStatus !== 'active'
+              ),
+              (dirItem: DirectoryItem) => {
+                Row() {
+                  // 状态标识徽章
+                  Text(dirItem.dirStatus === 'missing' ? '路径缺失' : '暂不可达')
+                    .fontSize(10)
+                    .fontColor(dirItem.dirStatus === 'missing' ? '#FF4444' : '#FF8800')
+                    .backgroundColor(dirItem.dirStatus === 'missing' ? '#FFE8E8' : '#FFF3E0')
+                    .borderRadius(4)
+                    .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                    .margin({ right: 8 })
+                  Text(dirItem.customName || dirItem.directoryName)
+                    .fontSize(12)
+                    .fontColor($r('sys.color.font_secondary'))
+                    .layoutWeight(1)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  if (dirItem.dirStatus === 'missing') {
+                    Button('一键清理')
+                      .fontSize(11)
+                      .height(28)
+                      .padding({ left: 10, right: 10 })
+                      .fontColor(Color.White)
+                      .backgroundColor('#FF4444')
+                      .borderRadius(4)
+                      .onClick(() => {
+                        this.handleCleanupMissingDir(dirItem)
+                      })
+                  }
+                }
+                .width('100%')
+                .padding({ left: 56, right: 16, top: 4, bottom: 4 })
+                .alignItems(VerticalAlign.Center)
+              },
+              (dirItem: DirectoryItem) => (dirItem.dirId ?? 0).toString() + dirItem.dirStatus
+            )
+          }, (fileSource: FileSource) => fileSource.id?.toString() || '')
+
+          // 添加文件源按钮
+          SettingListItem({
+            title: "添加文件源",
+            isLink: true,
             onItemClick: () => {
-              // 点击打开文件夹选择器
-              this.handleOpenDirectorySelector(fileSource)
+              this.controller.pushType(SettingType.ADD_FILE_SOURCE)
             }
           })
-        }, (fileSource: FileSource) => fileSource.id?.toString() || '')
+        }
+      }
 
-        // 添加文件源按钮
-        SettingListItem({
-          title: "添加文件源",
-          isLink: true,
-          onItemClick: () => {
-            this.controller.pushType(SettingType.ADD_FILE_SOURCE)
+      // ── 删除文件源确认弹窗 ──
+      if (this.showDeleteDialog) {
+        Column() {
+          Column() {
+            Text('删除文件源')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .margin({ bottom: 12 })
+            Text('确认删除文件源？此操作将同时删除：文件源配置记录、所有目录配置、所有扫描媒体记录。')
+              .fontSize(14)
+              .fontColor($r('sys.color.font_secondary'))
+              .textAlign(TextAlign.Start)
+              .margin({ bottom: 20 })
+            Row() {
+              Button('取消')
+                .layoutWeight(1)
+                .margin({ right: 8 })
+                .fontColor($r('sys.color.font_primary'))
+                .backgroundColor($r('sys.color.comp_background_tertiary'))
+                .onClick(() => {
+                  this.showDeleteDialog = false;
+                  this.deleteTarget = null;
+                })
+              Button(this.isDeletingSource ? '删除中...' : '确认删除')
+                .layoutWeight(1)
+                .fontColor(Color.White)
+                .backgroundColor('#FF4444')
+                .enabled(!this.isDeletingSource)
+                .onClick(() => {
+                  this.confirmDeleteFileSource()
+                })
+            }
+            .width('100%')
           }
-        })
+          .width(360)
+          .padding(24)
+          .backgroundColor($r('sys.color.comp_background_primary'))
+          .borderRadius(12)
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#80000000')
+        .onClick(() => {}) // 拦截蒙层点击穿透
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      }
+
+      // ── 一键清理缺失目录确认弹窗 ──
+      if (this.showCleanupDialog) {
+        Column() {
+          Column() {
+            Text('移除路径缺失目录')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .margin({ bottom: 12 })
+            Text('该目录在服务器上已不存在。确认后将清除该目录的配置记录及所有扫描媒体记录。')
+              .fontSize(14)
+              .fontColor($r('sys.color.font_secondary'))
+              .textAlign(TextAlign.Start)
+              .margin({ bottom: 20 })
+            Row() {
+              Button('稍后重试')
+                .layoutWeight(1)
+                .margin({ right: 6 })
+                .fontColor($r('sys.color.font_primary'))
+                .backgroundColor($r('sys.color.comp_background_tertiary'))
+                .onClick(() => {
+                  this.showCleanupDialog = false;
+                  this.cleanupTarget = null;
+                })
+              Button('重新定位')
+                .layoutWeight(1)
+                .margin({ right: 6 })
+                .fontColor($r('sys.color.font_primary'))
+                .backgroundColor($r('sys.color.comp_background_tertiary'))
+                .onClick(() => {
+                  const target = this.cleanupTarget;
+                  if (target !== null) {
+                    this.handleRelocateDir(target);
+                  }
+                })
+              Button(this.isCleaningUp ? '清理中...' : '一键清理')
+                .layoutWeight(1)
+                .fontColor(Color.White)
+                .backgroundColor('#FF4444')
+                .enabled(!this.isCleaningUp)
+                .onClick(() => {
+                  this.confirmCleanupDir()
+                })
+            }
+            .width('100%')
+          }
+          .width(400)
+          .padding(24)
+          .backgroundColor($r('sys.color.comp_background_primary'))
+          .borderRadius(12)
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#80000000')
+        .onClick(() => {}) // 拦截蒙层点击穿透
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
       }
     }
+    .width('100%')
+    .height('100%')
   }
 }
 
