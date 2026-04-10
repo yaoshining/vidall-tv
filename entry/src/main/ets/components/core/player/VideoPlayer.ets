@@ -164,39 +164,41 @@ export struct VideoPlayer {
   })
 
   /**
-   * 计算属性：自动解析字幕
-   * 当 subtitleUpdateCounter 或 currentSubtitleText 变化时自动重新计算
+   * 字幕解析：监听 subtitleUpdateCounter 变化，解析后写入 controller.parsedSubtitle
+   * 供播放器页独立渲染层（RelativeContainer 顶层）直接读取，
+   * 避免与 XComponent renderFit GPU 合成层共享同一 Stack Surface。
    */
-  @Computed
-  get parsedSubtitle(): ParsedSubtitle | null {
-    const counter = this.controller.subtitleUpdateCounter
+  @Monitor('controller.subtitleUpdateCounter')
+  onSubtitleUpdate(): void {
     const text = this.controller.currentSubtitleText
 
     if (!text || text.trim().length === 0) {
-      return null
+      this.controller.parsedSubtitle = null
+      return
     }
 
     // 相同 raw 文本命中缓存，跳过重复解析（ASS 回调高频时的 CPU 优化）
     if (text === this._lastRawText && this._lastParsedSubtitle !== null) {
-      return this._lastParsedSubtitle
+      this.controller.parsedSubtitle = this._lastParsedSubtitle
+      return
     }
 
-    // 自动检测：是否是 ASS Dialogue 行（有 9 个以上逗号且前段是数字/空字符串）
-    // 如果是，截取第 9 个逗号后的纯文本；否则直接当纯文本渲染
     const pureText = this.extractSubtitleText(text)
 
     if (pureText.trim().length === 0) {
       this._lastRawText = text
       this._lastParsedSubtitle = null
-      return null
+      this.controller.parsedSubtitle = null
+      return
     }
 
+    const counter = this.controller.subtitleUpdateCounter
     const parsed = SubtitleParserFactory.parse(pureText)
     this.convertFontSize(parsed)
     console.log(`[VideoPlayer] counter=${counter} lines=${parsed.lines.length}`)
     this._lastRawText = text
     this._lastParsedSubtitle = parsed
-    return parsed
+    this.controller.parsedSubtitle = parsed
   }
 
   /**
@@ -343,13 +345,13 @@ export struct VideoPlayer {
   }
 
   /**
-   * 字幕渲染器 - 纯 UI 渲染
+   * 字幕渲染器 - 纯 UI 渲染（保留供备用；主渲染路径已移至播放器页独立层）
    */
   @Builder
   SubtitleRenderer() {
-    if (this.parsedSubtitle && this.parsedSubtitle.lines.length > 0) {
+    if (this.controller.parsedSubtitle && this.controller.parsedSubtitle.lines.length > 0) {
       Column({ space: 6 }) {
-        ForEach(this.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
+        ForEach(this.controller.parsedSubtitle.lines, (line: SubtitleSegment[], lineIndex: number) => {
           Text(this.mergeSubtitleLineText(line))
             .fontSize(30)
             .lineHeight(34)
@@ -365,9 +367,6 @@ export struct VideoPlayer {
         }, (line: SubtitleSegment[], index: number) => `line-${index}-${this.controller.subtitleUpdateCounter}`)
       }
       .padding({ left: 20, right: 20, top: 8, bottom: 8 })
-      .onAreaChange((oldArea: Area, newArea: Area) => {
-        console.info(`[字幕Column实际尺寸] ${JSON.stringify(oldArea)} → ${JSON.stringify(newArea)}`)
-      })
     }
   }
 
@@ -566,29 +565,12 @@ export struct VideoPlayer {
         })
       }
 
-      // 字幕显示层 - 使用字幕渲染器支持多种格式
-      // position({x:0,y:0}) 确保相对 Stack 左上角绝对定位，
-      // 避免 Stack 默认居中对齐在 renderFit 切换时造成字幕抖动/偏移
-      Row() {
-        this.SubtitleRenderer()
-      }
-      .width('100%')
-      .height('100%')
-      .position({ x: 0, y: 0 })
-      .padding({ left: 40, right: 40, bottom: 80 })
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Bottom)
-      .hitTestBehavior(HitTestMode.Transparent)
-      .onAreaChange((oldArea: Area, newArea: Area) => {
-        console.info(`[字幕Row尺寸] ${JSON.stringify(oldArea)} → ${JSON.stringify(newArea)}`)
-      })
+      // 字幕显示层已移至播放器页 RelativeContainer 顶层（独立于 XComponent GPU 合成层）
+
     }
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)
-    .onAreaChange((oldArea: Area, newArea: Area) => {
-      console.info(`[VideoPlayer外层Stack尺寸] ${JSON.stringify(oldArea)} → ${JSON.stringify(newArea)}`)
-    })
   }
 
   aboutToAppear(): void {

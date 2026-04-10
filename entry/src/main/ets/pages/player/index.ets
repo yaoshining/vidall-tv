@@ -12,6 +12,7 @@ import { MediaProgressStore } from "../../db/MediaProgressStore";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
 import { emitter } from "@kit.BasicServicesKit";
+import { SubtitleSegment } from "../../components/core/player/SubtitleRenderer";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -69,6 +70,15 @@ export struct PlayerPage {
   private currentMediaEpisode: number = 0;
   /** media_progress 周期写入定时器 ID，-1 表示未启动 */
   private mediaProgressTimerId: number = -1;
+
+  /** 合并字幕行中各 Segment 的文本 */
+  private mergeSubtitleLineText(line: SubtitleSegment[]): string {
+    let merged = ''
+    for (let i = 0; i < line.length; i++) {
+      merged += line[i].text
+    }
+    return merged
+  }
 
   private getBackendDebugText(): string {
     const proto = this.videoPlayerController.sourceProtocol;
@@ -157,6 +167,43 @@ export struct PlayerPage {
               middle: { anchor: '__container__', align: HorizontalAlign.Center }
             })
         }
+
+        // 字幕覆盖层：独立于 VideoPlayer 的 Stack/XComponent 渲染层，
+        // 避免 GPU 合成器把 XComponent Surface 与 ArkUI 覆盖层视为同一 Surface
+        // 导致 renderFit 矩阵变换连同字幕一起扭曲的问题（PR #146 修复）
+        Row() {
+          if (this.videoPlayerController.parsedSubtitle !== null &&
+              this.videoPlayerController.parsedSubtitle.lines.length > 0) {
+            Column({ space: 6 }) {
+              ForEach(
+                this.videoPlayerController.parsedSubtitle.lines,
+                (line: SubtitleSegment[], lineIndex: number) => {
+                  Text(this.mergeSubtitleLineText(line))
+                    .fontSize(30)
+                    .lineHeight(34)
+                    .fontColor(Color.White)
+                    .fontWeight(FontWeight.Normal)
+                    .textAlign(TextAlign.Center)
+                    .textShadow({ radius: 3, offsetX: 3, offsetY: 3, color: Color.Black })
+                },
+                (line: SubtitleSegment[], index: number) =>
+                  `line-${index}-${this.videoPlayerController.subtitleUpdateCounter}`
+              )
+            }
+            .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+          }
+        }
+        .width('100%')
+        .height('100%')
+        .position({ x: 0, y: 0 })
+        .padding({ left: 40, right: 40, bottom: 80 })
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Bottom)
+        .hitTestBehavior(HitTestMode.Transparent)
+        .alignRules({
+          center: { anchor: '__container__', align: VerticalAlign.Center },
+          middle: { anchor: '__container__', align: HorizontalAlign.Center }
+        })
 
         if (this.isBackPressedOnce) {
           Text("再次按返回键退出播放")
