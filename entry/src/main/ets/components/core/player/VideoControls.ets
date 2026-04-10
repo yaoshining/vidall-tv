@@ -1,5 +1,5 @@
 import { debounce } from "@ibestservices/ibest-ui"
-import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend } from "./VideoPlayerController"
+import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
 import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
@@ -579,19 +579,36 @@ export struct VideoControlsDialog {
   }
 }
 
+interface AspectRatioOption {
+  label: string;
+  mode: AspectRatioMode;
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
   @Require onOpenSubtitleSelector: () => void
   @State selectedPlaybackRateIndex: number = 1
-  @State selectedScreenFitIndex: number = 0
+  @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
+  @State private arFocusedIndex: number = -1
+  private readonly aspectRatioOptions: AspectRatioOption[] = [
+    { label: '适应', mode: AspectRatioMode.FIT },
+    { label: '填充', mode: AspectRatioMode.FILL },
+    { label: '拉伸', mode: AspectRatioMode.STRETCH },
+  ]
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
+    this.currentAspectRatioMode = this.videoController.aspectRatioMode;
+    this.arFocusedIndex = -1;
+  }
+
+  aboutToDisappear(): void {
+    this.arFocusedIndex = -1;
   }
 
   @Builder
@@ -650,19 +667,38 @@ export struct PlayerSettingsDialog {
               .alignSelf(ItemAlign.Start)
 
             Row({ space: 12 }) {
-              Row() {
-                this.SettingsChip('适应内容', this.selectedScreenFitIndex === 0)
-              }
-              .onClick(() => {
-                this.selectedScreenFitIndex = 0
-              })
-
-              Row() {
-                this.SettingsChip('铺满全屏', this.selectedScreenFitIndex === 1)
-              }
-              .onClick(() => {
-                this.selectedScreenFitIndex = 1
-              })
+              ForEach(this.aspectRatioOptions, (opt: AspectRatioOption, idx: number) => {
+                Row() {
+                  Text(opt.label)
+                    .fontSize(26)
+                    .fontColor(this.currentAspectRatioMode === opt.mode ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(this.currentAspectRatioMode === opt.mode
+                      ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius("50%")
+                    .border({
+                      width: this.currentAspectRatioMode === opt.mode ? 2 : 1,
+                      color: this.currentAspectRatioMode === opt.mode ? '#fffefe' : '#45ffffff'
+                    })
+                    .shadow({
+                      radius: this.currentAspectRatioMode === opt.mode ? 8 : 0,
+                      color: this.currentAspectRatioMode === opt.mode ? '#33597FB8' : '#00ffffff'
+                    })
+                }
+                .focusable(true)
+                .onFocus(() => { this.arFocusedIndex = idx })
+                .onBlur(() => { this.arFocusedIndex = -1 })
+                .borderRadius(99)
+                .padding(this.arFocusedIndex === idx ? 2 : 0)
+                .border({
+                  width: this.arFocusedIndex === idx ? 2 : 0,
+                  color: this.arFocusedIndex === idx ? '#4D9FFF' : Color.Transparent
+                })
+                .onClick(() => {
+                  this.currentAspectRatioMode = opt.mode
+                  this.videoController.setAspectRatioMode(opt.mode)
+                })
+              }, (opt: AspectRatioOption) => opt.mode.toString())
             }
             .justifyContent(FlexAlign.Start)
             .width('100%')
