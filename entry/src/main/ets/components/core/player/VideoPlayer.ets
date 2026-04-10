@@ -574,6 +574,8 @@ export struct VideoPlayer {
       .alignItems(VerticalAlign.Bottom)
       .hitTestBehavior(HitTestMode.Transparent)
     }
+    .width('100%')
+    .height('100%')
     .backgroundColor(Color.Black)
   }
 
