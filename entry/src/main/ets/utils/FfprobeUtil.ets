@@ -829,19 +829,27 @@ export class FfprobeUtil {
   }
 
   /**
-   * 将 FfprobeTrack 列表转换为 PresetAudioTrack[]（Issue #96）。
+   * 将 ffprobe 音轨列表转换为播放器预设音轨格式。
+   * 注意：入参为 FfprobeTrack[]（而非 FfprobeResult），调用方自行从 result.audioTracks 传入。
    * 适用于 probe()/probeSmb() 返回的 FfprobeResult.audioTracks，
    * 以及数据库 JSON 反序列化得到的 FfprobeTrack[]。
+   * mimeType 留 undefined：codecName 是解码器名（如 "eac3"），不是 MIME type（如 "audio/eac3"），
+   * 下游逻辑应通过 codecName 字段匹配，不依赖 mimeType。
    */
   static toPresetAudioTracks(tracks: FfprobeTrack[]): PresetAudioTrack[] {
+    if (tracks.length === 0) {
+      return [];
+    }
     const result: PresetAudioTrack[] = [];
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i];
+      console.info(`[FfprobeUtil] 音轨[${i}]: trackIndex=${t.index} codec=${t.codecName} lang=${t.language ?? '(无)'}`);
       const item: PresetAudioTrack = {
         trackIndex: t.index,
         displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
         language: t.language,
-        mimeType: t.codecName
+        // codecName 是解码器名，不是 MIME type，下游用 codecName 匹配即可
+        mimeType: undefined
       };
       result.push(item);
     }
@@ -849,14 +857,19 @@ export class FfprobeUtil {
   }
 
   /**
-   * 将 FfprobeTrack 列表转换为 PresetSubtitleTrack[]（Issue #96）。
+   * 将 ffprobe 字幕轨列表转换为播放器预设字幕轨格式。
+   * 注意：入参为 FfprobeTrack[]（而非 FfprobeResult），调用方自行从 result.subtitleTracks 传入。
    * 适用于 probe()/probeSmb() 返回的 FfprobeResult.subtitleTracks，
    * 以及数据库 JSON 反序列化得到的 FfprobeTrack[]。
    */
   static toPresetSubtitleTracks(tracks: FfprobeTrack[]): PresetSubtitleTrack[] {
+    if (tracks.length === 0) {
+      return [];
+    }
     const result: PresetSubtitleTrack[] = [];
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i];
+      console.info(`[FfprobeUtil] 字幕轨[${i}]: trackIndex=${t.index} codec=${t.codecName} lang=${t.language ?? '(无)'}`);
       const item: PresetSubtitleTrack = {
         trackIndex: t.index,
         displayName: FfprobeUtil.buildSubtitleTrackDisplayName(t, i),
