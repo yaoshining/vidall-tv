@@ -22,6 +22,7 @@ import {
 } from "./SubtitleBridgeAdapter";
 import { SmbAvSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
 import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
+import { ParsedSubtitle } from "./SubtitleRenderer";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -193,6 +194,8 @@ export class VideoPlayerController {
    * 作用于外部 SRT/ASS/VTT 字幕时间轴查找，见 onTimeUpdate 回调。
    */
   @Trace subtitleDelayMs: number = 0;
+  /** 当前帧解析后的字幕数据，由 VideoPlayer @Monitor 写入，供播放器页独立渲染层直接读取 */
+  @Trace parsedSubtitle: ParsedSubtitle | null = null;
   /** 音轨列表 */
   @Trace audioTracks: AudioTrackItem[] = [];
   @Trace activeAudioIndex: number = -1;
