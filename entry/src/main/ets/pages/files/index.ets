@@ -11,6 +11,23 @@ import { ImagePreviewDialog } from "../../components/core/file/ImagePreview";
 import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
+import { DirStatus } from "../../db/models/FileSourceEntity";
+
+/**
+ * 文件浏览页路由参数
+ * 兼容旧版仅传 WebDAVConfig 的调用方，新增 dir 元信息用于删除目录检测
+ */
+export interface FileExplorerPageParam {
+  config: WebDAVConfig;
+  /** file_source_directories 主键，清理时必填 */
+  dirId?: number;
+  /** 所属文件源 id，清理时必填 */
+  sourceId?: number;
+  /** 目录路径，用于 DB 清理 */
+  directoryPath?: string;
+  /** 目录可达性状态，'missing' 时触发清理 Dialog */
+  dirStatus?: DirStatus;
+}
 
 const config: WebDAVConfig = {
   baseUrl: 'http://www.baidu.com',
@@ -23,6 +40,11 @@ export struct FileExplorerPage {
   static PAGE_NAME = "fileExplorerPage"
   client: WebDAVClient = new WebDAVClient(config)
   @Local imagePath: string = ''
+  @Local showMissingDirDialog: boolean = false
+  @Local isCleaningUp: boolean = false
+  private cachedDirId: number = 0
+  private cachedSourceId: number = 0
+  private cachedDirectoryPath: string = ''
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   private fileExplorerController = new FileExplorerController({
     resources: [],
@@ -51,13 +73,74 @@ export struct FileExplorerPage {
             }
           }
         })
+
+        // ── 已删除目录提示 Dialog ──────────────────────────────
+        if (this.showMissingDirDialog) {
+          Column() {
+            Column() {
+              Text('目录不存在')
+                .fontSize(24)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#FFFFFF')
+              Text('此目录在服务器上已不存在，是否立即清理相关数据？')
+                .fontSize(18)
+                .fontColor('#CCCCCC')
+                .margin({ top: 16 })
+                .textAlign(TextAlign.Center)
+              Row({ space: 24 }) {
+                Button('取消')
+                  .fontSize(18)
+                  .fontColor('#FFFFFF')
+                  .backgroundColor('#555555')
+                  .borderRadius(8)
+                  .width(120)
+                  .height(48)
+                  .enabled(!this.isCleaningUp)
+                  .onClick(() => {
+                    this.showMissingDirDialog = false
+                  })
+                Button(this.isCleaningUp ? '清理中...' : '清理')
+                  .fontSize(18)
+                  .fontColor('#FFFFFF')
+                  .backgroundColor('#E53935')
+                  .borderRadius(8)
+                  .width(120)
+                  .height(48)
+                  .enabled(!this.isCleaningUp)
+                  .onClick(() => {
+                    this.confirmCleanup()
+                  })
+              }
+              .margin({ top: 24 })
+            }
+            .padding(32)
+            .borderRadius(12)
+            .backgroundColor('#2C2C2C')
+            .width(460)
+          }
+          .width('100%')
+          .height('100%')
+          .backgroundColor('#80000000')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .onClick(() => {
+            // 拦截蒙层点击穿透
+          })
+        }
       }
       .width('100%')
       .height('100%')
     }
     .onReady((context) => {
-      const param = context.pathInfo.param as WebDAVConfig
-      this.client = new WebDAVClient(param)
+      const param = context.pathInfo.param as FileExplorerPageParam
+      this.client = new WebDAVClient(param.config)
+      this.cachedDirId = param.dirId ?? 0
+      this.cachedSourceId = param.sourceId ?? 0
+      this.cachedDirectoryPath = param.directoryPath ?? ''
+      if (param.dirStatus === 'missing') {
+        this.showMissingDirDialog = true
+        return
+      }
       this.changePath(this.fileExplorerController.currentPath)
     })
     .onBackPressed(() => {
@@ -71,6 +154,27 @@ export struct FileExplorerPage {
     })
     .mode(NavDestinationMode.DIALOG)
     .hideTitleBar(true)
+  }
+
+  /**
+   * 确认清理已删除目录：调用 DB 清理方法后返回上一页
+   */
+  private confirmCleanup(): void {
+    this.isCleaningUp = true
+    const dirId = this.cachedDirId
+    const sourceId = this.cachedSourceId
+    const directoryPath = this.cachedDirectoryPath
+    const db = FileSourceDatabase.getInstance()
+    db.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath)
+      .then((): void => {
+        this.pageStack.pop(true)
+      })
+      .catch((): void => {
+        console.error('[FileExplorerPage][confirmCleanup] 清理失败')
+        IBestToast.show('清理失败，请重试')
+        this.isCleaningUp = false
+        this.showMissingDirDialog = false
+      })
   }
 
   private previewImage(path: string, displayName: string) {
