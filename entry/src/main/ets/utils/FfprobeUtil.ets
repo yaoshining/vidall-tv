@@ -836,8 +836,8 @@ export class FfprobeUtil {
    * mimeType 留 undefined：codecName 是解码器名（如 "eac3"），不是 MIME type（如 "audio/eac3"），
    * 下游逻辑应通过 codecName 字段匹配，不依赖 mimeType。
    */
-  static toPresetAudioTracks(tracks: FfprobeTrack[]): PresetAudioTrack[] {
-    if (tracks.length === 0) {
+  static toPresetAudioTracks(tracks: FfprobeTrack[] | null | undefined): PresetAudioTrack[] {
+    if (!tracks || tracks.length === 0) {
       return [];
     }
     const result: PresetAudioTrack[] = [];
@@ -862,8 +862,8 @@ export class FfprobeUtil {
    * 适用于 probe()/probeSmb() 返回的 FfprobeResult.subtitleTracks，
    * 以及数据库 JSON 反序列化得到的 FfprobeTrack[]。
    */
-  static toPresetSubtitleTracks(tracks: FfprobeTrack[]): PresetSubtitleTrack[] {
-    if (tracks.length === 0) {
+  static toPresetSubtitleTracks(tracks: FfprobeTrack[] | null | undefined): PresetSubtitleTrack[] {
+    if (!tracks || tracks.length === 0) {
       return [];
     }
     const result: PresetSubtitleTrack[] = [];
