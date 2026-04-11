@@ -3145,9 +3145,12 @@ export class FileSourceDatabase {
         );
       }
 
-      // ── originCountry 过滤：LIKE 匹配 origin_country_json ──
+      // ── originCountry 过滤：分别匹配 movies / tv_series 的 origin_country_json ──
+      // 用 OR 而非 COALESCE，避免 COALESCE 优先取电影字段导致同行存在 tv_series 国家数据时被屏蔽，
+      // 同时保持参数化查询防止 SQL 注入。
       if (options?.originCountry !== undefined && options.originCountry.length > 0) {
-        conditions.push('COALESCE(m.origin_country_json, ts.origin_country_json) LIKE ?');
+        conditions.push('(m.origin_country_json LIKE ? OR ts.origin_country_json LIKE ?)');
+        params.push(`%"${options.originCountry}"%`);
         params.push(`%"${options.originCountry}"%`);
       }
 
