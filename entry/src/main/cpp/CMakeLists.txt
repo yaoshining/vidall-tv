@@ -91,13 +91,23 @@ set(LIBSMB2_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libsmb2/include)
 
 option(VIDALL_ENABLE_LIBSMB2 "Enable libsmb2 for SMB2/3 protocol support" OFF)
 
-# 若目标架构没有 libsmb2.so，自动降级为 OFF（避免 x86_64 模拟器失败）
+# 若目标架构没有 libsmb2.so，自动降级为 OFF。
+# 对 x86_64（模拟器）仅输出 STATUS，避免产生误导性告警；
+# 对 arm64-v8a 等目标架构维持 WARNING，提醒补齐交叉编译产物。
 if(VIDALL_ENABLE_LIBSMB2 AND NOT EXISTS ${LIBSMB2_LIB_DIR}/libsmb2.so)
-  message(WARNING
-    "VIDALL_ENABLE_LIBSMB2=ON but libsmb2.so not found at:\n"
-    "  ${LIBSMB2_LIB_DIR}/libsmb2.so\n"
-    "Auto-disabling libsmb2 for arch=${OHOS_ARCH}."
-  )
+  if(OHOS_ARCH STREQUAL "x86_64")
+    message(STATUS
+      "VIDALL_ENABLE_LIBSMB2=ON but libsmb2.so not found at:\n"
+      "  ${LIBSMB2_LIB_DIR}/libsmb2.so\n"
+      "Auto-disabling libsmb2 for emulator arch=${OHOS_ARCH}."
+    )
+  else()
+    message(WARNING
+      "VIDALL_ENABLE_LIBSMB2=ON but libsmb2.so not found at:\n"
+      "  ${LIBSMB2_LIB_DIR}/libsmb2.so\n"
+      "Auto-disabling libsmb2 for arch=${OHOS_ARCH}."
+    )
+  endif()
   set(VIDALL_ENABLE_LIBSMB2 OFF)
 endif()
 

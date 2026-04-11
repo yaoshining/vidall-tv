@@ -4142,6 +4142,22 @@ struct SmbListSharesContext {
     std::string errorMessage;
 };
 
+  struct SmbShareEnumAsyncState {
+    std::atomic<bool> done{false};
+    int status = -1;
+    struct srvsvc_NetrShareEnum_rep *rep = nullptr;
+  };
+
+  static void OnSmbShareEnumAsync(struct smb2_context * /*smb2*/, int status,
+                  void *command_data, void *cb_data) {
+    auto *state = static_cast<SmbShareEnumAsyncState *>(cb_data);
+    state->status = status;
+    if (status == 0) {
+      state->rep = static_cast<struct srvsvc_NetrShareEnum_rep *>(command_data);
+    }
+    state->done.store(true);
+  }
+
 static void ExecuteSmbListShares(napi_env /*env*/, void *data) {
     auto *ctx = static_cast<SmbListSharesContext *>(data);
     struct smb2_context *smb2 = smb2_init_context();
@@ -4167,8 +4183,8 @@ static void ExecuteSmbListShares(napi_env /*env*/, void *data) {
         return;
     }
 
-    struct srvsvc_NetrShareEnum_rep *rep = smb2_share_enum_sync(smb2, SHARE_INFO_1);
-    if (!rep) {
+    SmbShareEnumAsyncState enumState;
+    if (smb2_share_enum_async(smb2, SHARE_INFO_1, OnSmbShareEnumAsync, &enumState) != 0) {
         const char *errStr = smb2_get_error(smb2);
         ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_share_enum failed";
         OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smbListShares enum failed: %{public}s", ctx->errorMessage.c_str());
@@ -4176,6 +4192,60 @@ static void ExecuteSmbListShares(napi_env /*env*/, void *data) {
         smb2_destroy_context(smb2);
         return;
     }
+
+    int waitMs = (ctx->timeoutMs > 0) ? static_cast<int>(ctx->timeoutMs) : 10000;
+    if (waitMs < 1000) waitMs = 1000;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(waitMs);
+
+    while (!enumState.done.load()) {
+      auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        ctx->errorMessage = "smb2_share_enum timeout";
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smbListShares enum timeout");
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+      }
+
+      int remainMs = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count());
+      if (remainMs > 1000) remainMs = 1000;
+
+      struct pollfd pfd{};
+      pfd.fd = smb2_get_fd(smb2);
+      pfd.events = static_cast<short>(smb2_which_events(smb2));
+
+      int pollRet = ::poll(&pfd, 1, remainMs);
+      if (pollRet < 0) {
+        if (errno == EINTR) continue;
+        ctx->errorMessage = std::string("poll failed: ") + std::strerror(errno);
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smbListShares poll failed: %{public}s", ctx->errorMessage.c_str());
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+      }
+
+      int revents = (pollRet == 0) ? 0 : pfd.revents;
+      if (smb2_service(smb2, revents) < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_service failed";
+        OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smbListShares service failed: %{public}s", ctx->errorMessage.c_str());
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+      }
+    }
+
+    if (enumState.status != 0 || !enumState.rep) {
+      const char *errStr = smb2_get_error(smb2);
+      ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_share_enum callback failed";
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0x0000, "SMBClient", "smbListShares enum callback failed: %{public}s", ctx->errorMessage.c_str());
+      smb2_disconnect_share(smb2);
+      smb2_destroy_context(smb2);
+      return;
+    }
+
+    struct srvsvc_NetrShareEnum_rep *rep = enumState.rep;
 
     uint32_t count = rep->ses.ShareInfo.Level1.EntriesRead;
     struct srvsvc_SHARE_INFO_1_carray *buf = rep->ses.ShareInfo.Level1.Buffer;
