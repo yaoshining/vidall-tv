@@ -790,10 +790,65 @@ export struct SeriesDetailPage {
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mediaKey
       };
-      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
+      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
+        if (popInfo.result !== null && popInfo.result !== undefined) {
+          const r = popInfo.result as Record<string, Object>;
+          if (r['fileNotFound'] === true) {
+            const vid = r['videoId'] as number;
+            if (vid > 0) { this.confirmDeleteEpisodeRecord(vid); }
+          }
+        }
+      });
     } catch (e) {
       console.error('[SeriesDetailPage] playEpisode failed', JSON.stringify(e));
     }
+  }
+
+  /** 弹窗询问用户是否删除文件不存在的集记录 */
+  private confirmDeleteEpisodeRecord(videoId: number): void {
+    AlertDialog.show({
+      title: '文件无法播放',
+      message: '视频文件可能已被删除或移动，无法打开。是否删除该集的本地记录和元数据？',
+      autoCancel: true,
+      primaryButton: {
+        value: '删除记录',
+        fontColor: '#FF5252',
+        action: () => {
+          FileSourceDatabase.getInstance().deleteVideoWithScrapeInfo(videoId)
+            .then(() => { this.reloadEpisodes(); })
+            .catch(() => {});
+        }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
+  }
+
+  /** 删除后重新从 DB 加载集列表（不重新刮削，仅刷新本地数据） */
+  private reloadEpisodes(): void {
+    const seriesId = this.seriesEntity?.id;
+    if (seriesId === undefined) { return; }
+    FileSourceDatabase.getInstance().getMediaItemsByTvSeriesId(seriesId).then((allEpisodes) => {
+      if (this.group !== undefined) {
+        const updated: SeriesGroup = {
+          title: this.group.title,
+          tvSeriesId: this.group.tvSeriesId,
+          seasonLabel: this.group.seasonLabel,
+          posterUrl: this.group.posterUrl,
+          posterLocalPath: this.group.posterLocalPath,
+          backdropUrl: this.group.backdropUrl,
+          seasonNumber: this.group.seasonNumber,
+          seasonPosterUrl: this.group.seasonPosterUrl,
+          rating: this.group.rating,
+          episodeCount: allEpisodes.length,
+          episodes: allEpisodes,
+          latestScannedAt: this.group.latestScannedAt
+        };
+        this.group = updated;
+      }
+    }).catch(() => {});
   }
 
   /** 进度百分比（0~1） */

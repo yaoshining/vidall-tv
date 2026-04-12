@@ -103,4 +103,9 @@ export class PlayerEvents {
     eventId: 15,
     priority: emitter.EventPriority.HIGH
   };
+  /** 文件无法访问（prepare 前 IO Resource Not Found），携带 videoId */
+  static readonly FILE_INACCESSIBLE: emitter.InnerEvent = {
+    eventId: 16,
+    priority: emitter.EventPriority.HIGH
+  };
 }

@@ -1647,6 +1647,26 @@ export class FileSourceDatabase {
     }
   }
 
+  /**
+   * 删除单个视频的全部本地记录（scrape_info + play_progress + videos）。
+   * 用于"文件已删除/移动"场景，用户确认后清理孤立元数据。
+   */
+  async deleteVideoWithScrapeInfo(videoId: number): Promise<void> {
+    if (!this.rdbStore) { return; }
+    try {
+      const id: relationalStore.ValueType = videoId;
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id = ?`, [id]);
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_PLAY_PROGRESS} WHERE video_id = ?`, [id]);
+      await this.rdbStore.executeSql(
+        `DELETE FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE id = ?`, [id]);
+      console.info(`[DB][deleteVideoWithScrapeInfo] videoId=${videoId} 已删除`);
+    } catch (e) {
+      console.warn('[DB][deleteVideoWithScrapeInfo] 失败: ' + JSON.stringify(e));
+    }
+  }
+
   async getScrapeInfoByVideoId(videoId: number): Promise<ScrapeInfoEntity | null> {
     if (this.rdbStore === null) { return null; }
     let rs: relationalStore.ResultSet | null = null;

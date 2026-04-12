@@ -233,6 +233,8 @@ export class VideoPlayerController {
   private lastTimeUpdateMs: number = -1;
   /** duration 未就绪时 seek 的诊断日志节流 */
   private lastSeekDurationUnknownLogMs: number = 0;
+  /** prepare 成功标志：首次 onPlayerReady 后置 true，每次 initPlayer 重置 */
+  private hasPrepared: boolean = false;
   /** native seek 诊断开关（默认关闭） */
   private nativeSeekDiagLogEnabled: boolean = DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED;
   /** native 初始化就绪保护定时器：超时后自动回退到 ijkplayer */
@@ -296,6 +298,7 @@ export class VideoPlayerController {
     this.playbackSessionId += 1;
     const currentSessionId = this.playbackSessionId;
     this.metricsLoadStartMs = Date.now();
+    this.hasPrepared = false;
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
     this.surfaceId = surfaceId;
@@ -608,6 +611,13 @@ export class VideoPlayerController {
       if (this.backend === 'native') {
         this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
         return;
+      }
+      // prepare 前的 IO 文件不存在错误：通知上层页面提示用户删除元数据
+      if (!this.hasPrepared && error.message.toLowerCase().includes('io resource not found')) {
+        const videoId = this.progressContext?.videoId ?? -1;
+        if (videoId > 0) {
+          emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: videoId } });
+        }
       }
       this.isLoading = false;
       this.lastErrorMessage = this.normalizePlayerError(error.message);
@@ -1620,6 +1630,7 @@ export class VideoPlayerController {
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
     this.clearNativeReadyGuardTimer();
+    this.hasPrepared = true;
     const playerDuration = this.player?.duration ?? 0;
     this.duration = playerDuration > 0
       ? playerDuration

@@ -70,6 +70,8 @@ export struct PlayerPage {
   private currentMediaEpisode: number = 0;
   /** media_progress 周期写入定时器 ID，-1 表示未启动 */
   private mediaProgressTimerId: number = -1;
+  /** 文件不存在时待 pop 的 videoId（-1 表示无） */
+  private fileNotFoundVideoId: number = -1;
 
   /** 合并字幕行中各 Segment 的文本 */
   private mergeSubtitleLineText(line: SubtitleSegment[]): string {
@@ -265,6 +267,16 @@ export struct PlayerPage {
           }
         }
       });
+      // 订阅文件不存在事件：记录 videoId 并自动退出播放页
+      emitter.on(PlayerEvents.FILE_INACCESSIBLE, (event: emitter.EventData) => {
+        const data = event.data as Record<string, number>;
+        this.fileNotFoundVideoId = data?.['videoId'] ?? -1;
+        const popResult: Record<string, Object> = {
+          'fileNotFound': true as Object,
+          'videoId': (this.fileNotFoundVideoId as Object)
+        };
+        this.pageStack.pop(popResult);
+      });
 
       // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
       this.mediaProgressTimerId = setInterval(() => {
@@ -398,6 +410,7 @@ export struct PlayerPage {
 
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
+    emitter.off(PlayerEvents.FILE_INACCESSIBLE.eventId)
     if (this.mediaProgressTimerId >= 0) {
       clearInterval(this.mediaProgressTimerId);
       this.mediaProgressTimerId = -1;

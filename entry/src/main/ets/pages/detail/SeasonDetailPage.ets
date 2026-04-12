@@ -1001,10 +1001,65 @@ export struct SeasonDetailPage {
         mediaKey: mKey,
         startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
       };
-      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
+      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
+        if (popInfo.result !== null && popInfo.result !== undefined) {
+          const r = popInfo.result as Record<string, Object>;
+          if (r['fileNotFound'] === true) {
+            const vid = r['videoId'] as number;
+            if (vid > 0) { this.confirmDeleteEpisodeRecord(vid); }
+          }
+        }
+      });
     } catch (e) {
       console.error('[SeasonDetailPage] playEpisode failed', JSON.stringify(e));
     }
+  }
+
+  /** 弹窗询问用户是否删除文件不存在的集记录 */
+  private confirmDeleteEpisodeRecord(videoId: number): void {
+    AlertDialog.show({
+      title: '文件无法播放',
+      message: '视频文件可能已被删除或移动，无法打开。是否删除该集的本地记录和元数据？',
+      autoCancel: true,
+      primaryButton: {
+        value: '删除记录',
+        fontColor: '#FF5252',
+        action: () => {
+          FileSourceDatabase.getInstance().deleteVideoWithScrapeInfo(videoId)
+            .then(() => { this.reloadSeasonEpisodes(); })
+            .catch(() => {});
+        }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
+  }
+
+  /** 删除后重新从 DB 加载本季集列表 */
+  private reloadSeasonEpisodes(): void {
+    const seriesId = this.seriesEntity?.id;
+    if (seriesId === undefined) { return; }
+    const seasonNumber = this.getSeasonNumber();
+    const db = FileSourceDatabase.getInstance();
+    db.getMediaItemsByTvSeriesId(seriesId).then((allEpisodes) => {
+      const seasonItems: MediaItem[] = allEpisodes.filter((m: MediaItem) => (m.seasonNumber ?? -1) === seasonNumber);
+      db.getEpisodesBySeriesAndSeason(seriesId, seasonNumber).then((episodeEntities) => {
+        const epMap = new Map<number, TvEpisodeEntity>();
+        for (const e of episodeEntities) {
+          epMap.set(e.episodeNumber, e);
+        }
+        const items: SeasonEpisodeItem[] = seasonItems.map((m: MediaItem) => {
+          const item: SeasonEpisodeItem = {
+            mediaItem: m,
+            episodeEntity: epMap.get(m.episodeNumber ?? -1)
+          };
+          return item;
+        });
+        this.seasonEpisodes = items;
+      }).catch(() => {});
+    }).catch(() => {});
   }
 
   // ── Builders ──────────────────────────────────
