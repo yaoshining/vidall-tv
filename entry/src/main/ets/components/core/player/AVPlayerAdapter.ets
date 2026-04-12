@@ -233,6 +233,32 @@ export class AVPlayerAdapter implements IPlayer {
     // no-op: 延迟偏移由上层 SRT 查找逻辑处理
   }
 
+  /**
+   * 设置播放速率。
+   * 将浮点速率映射到 media.PlaybackSpeed 枚举后调用 AVPlayer.setSpeed()。
+   * 支持：0.5 / 0.75 / 1.0 / 1.25 / 1.5 / 2.0；其余值回退到正常速度。
+   */
+  setPlaybackSpeed(speed: number): void {
+    if (!this.avPlayer) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed(${speed}) 忽略：AVPlayer 未初始化`);
+      return;
+    }
+    const playbackSpeed = this.speedToPlaybackSpeed(speed);
+    this.avPlayer.setSpeed(playbackSpeed);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed} enum=${playbackSpeed}`);
+  }
+
+  /** 将浮点速率映射到 media.PlaybackSpeed 枚举，不支持的值回退到 1.0x */
+  private speedToPlaybackSpeed(speed: number): media.PlaybackSpeed {
+    if (speed === 0.5) { return media.PlaybackSpeed.SPEED_FORWARD_0_50_X; }
+    if (speed === 0.75) { return media.PlaybackSpeed.SPEED_FORWARD_0_75_X; }
+    if (speed === 1.25) { return media.PlaybackSpeed.SPEED_FORWARD_1_25_X; }
+    if (speed === 1.5) { return media.PlaybackSpeed.SPEED_FORWARD_1_50_X; }
+    if (speed === 2.0) { return media.PlaybackSpeed.SPEED_FORWARD_2_00_X; }
+    // 默认/未知速率回退到 1.0x
+    return media.PlaybackSpeed.SPEED_FORWARD_1_00_X;
+  }
+
   // ─── 事件回调注册 ───
 
   onReady(callback: () => void): void {

@@ -203,6 +203,8 @@ export class VideoPlayerController {
   @Trace sourceProtocol: string = '';
   /** 画面比例模式，默认为适应（等比保留黑边） */
   @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
+  /** 当前播放速率，默认 1.0（正常速度）。支持档位：0.5/0.75/1.0/1.25/1.5/2.0 */
+  @Trace playbackSpeed: number = 1.0;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private currentVideoData?: VideoData;
   private timeToSeek = -1
@@ -757,6 +759,21 @@ export class VideoPlayerController {
     this.aspectRatioMode = mode;
     const modeNames: string[] = ['FIT', 'FILL', 'STRETCH'];
     console.info(`[VideoPlayer] aspectRatioMode → ${modeNames[mode] ?? mode}`);
+  }
+
+  /**
+   * 设置播放速率（倍速）。
+   *
+   * 支持档位：0.5 / 0.75 / 1.0 / 1.25 / 1.5 / 2.0。
+   * 通过 IPlayer 接口向当前内核分发，各后端自行实现或降级。
+   * 速率会在 onPlayerReady 后重新应用，确保后端切换后倍速设置不丢失。
+   */
+  setPlaybackSpeed(speed: number): void {
+    this.playbackSpeed = speed;
+    if (this.player) {
+      this.player.setPlaybackSpeed(speed);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed} backend=${this.backend}`);
   }
 
   /**
@@ -1615,6 +1632,12 @@ export class VideoPlayerController {
       this.pendingBackendResumePlay = false;
     }
     emitter.emit(PlayerEvents.PREPARED);
+    // 重新应用播放速率（后端切换或重新 init 后，保持用户设置的倍速）
+    if (this.playbackSpeed !== 1.0 && this.player) {
+      this.player.setPlaybackSpeed(this.playbackSpeed);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `onPlayerReady: 重新应用播放速率 speed=${this.playbackSpeed}`);
+    }
     await this.loadSubtitleTracks();
     await this.loadAudioTracks();
     if (resumeTimeMs > 0 && this.player) {

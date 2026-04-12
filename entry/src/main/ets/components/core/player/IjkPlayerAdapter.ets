@@ -458,6 +458,20 @@ export class IjkPlayerAdapter implements IPlayer {
       `setSubtitleDelay: 延迟已由 VideoPlayerController 层处理`);
   }
 
+  /**
+   * 设置播放速率。
+   * 直接调用 IjkMediaPlayer.setSpeed(speed.toString())，支持变速不变调（ijkplayer 内部处理）。
+   */
+  setPlaybackSpeed(speed: number): void {
+    try {
+      this.ijk.setSpeed(speed.toString());
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed}`);
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `setPlaybackSpeed(${speed}) 失败: ${(e as Error).message}`);
+    }
+  }
+
   // ─── 事件回调注册 ───
 
   onReady(callback: () => void): void { this._onReadyCb = callback; }
