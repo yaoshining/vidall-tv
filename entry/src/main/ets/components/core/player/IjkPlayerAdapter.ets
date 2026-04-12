@@ -14,6 +14,7 @@ import type { OnVideoSizeChangedListener } from '@yaoshining/ijkplayer';
 import type { OnTimedTextListener } from '@yaoshining/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
@@ -467,8 +468,9 @@ export class IjkPlayerAdapter implements IPlayer {
       this.ijk.setSpeed(speed.toString());
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed}`);
     } catch (e) {
+      const err = e as BusinessError;
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `setPlaybackSpeed(${speed}) 失败: ${(e as Error).message}`);
+        `setPlaybackSpeed(${speed}) 失败: ${err.message ?? 'unknown error'}`);
     }
   }
 
