@@ -64,24 +64,24 @@ export function OtherIcon() {
     .objectFit(ImageFit.Contain)
 }
 
+function getSourceIconResource(type: FileSourceType): Resource {
+  switch (type) {
+    case FileSourceType.WEBDAV:    return $r('app.media.global_folder');
+    case FileSourceType.SMB:       return $r('app.media.windows');
+    case FileSourceType.ALIYUN:    return $r('app.media.aliyun_drive');
+    case FileSourceType.CLOUD_139: return $r('app.media.netdisk_139');
+    case FileSourceType.BAIDU:     return $r('app.media.baidu_netdisk');
+    case FileSourceType.CLOUD_123: return $r('app.media.drive_123');
+    case FileSourceType.CLOUD_115: return $r('app.media.netdisk_115');
+    default:                       return $r('app.media.cloud_drive');
+  }
+}
+
 @Builder
 export function SourceTypeIcon(type: FileSourceType) {
-  if (type === FileSourceType.WEBDAV) {
-    WebdavIcon()
-  } else if (type === FileSourceType.SMB) {
-    SmbIcon()
-  } else if (type === FileSourceType.ALIYUN) {
-    AliyunIcon()
-  } else if (type === FileSourceType.CLOUD_139) {
-    Cloud139Icon()
-  } else if (type === FileSourceType.BAIDU) {
-    BaiduIcon()
-  } else if (type === FileSourceType.CLOUD_123) {
-    Cloud123Icon()
-  } else if (type === FileSourceType.CLOUD_115) {
-    Cloud115Icon()
-  } else {
-    OtherIcon()
-  }
+  Image(getSourceIconResource(type))
+    .width(30)
+    .height(30)
+    .objectFit(ImageFit.Contain)
 }
 
