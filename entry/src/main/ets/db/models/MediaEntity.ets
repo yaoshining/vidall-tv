@@ -203,6 +203,8 @@ export interface MediaProgressEntry {
   episodeNumber: number;
   /** 剧集：季号（0 表示无） */
   seasonNumber: number;
+  /** 完播标记：0 = 未看完，1 = 已看完。可选（旧记录无此字段时为 undefined） */
+  isWatched?: number;
 }
 
 // ─────────────────────────────────────────────
