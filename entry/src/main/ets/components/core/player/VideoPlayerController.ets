@@ -1493,9 +1493,11 @@ export class VideoPlayerController {
 
     // ── 优先级排序：多声道 > 高码率 > 原始顺序 ──────────────────────
     // 克隆数组避免修改原始数据；只影响"路由决策"，不影响实际选轨。
+    // 排序前先归一化声道数，避免原始值（如 4/5/7）与实际解码计划（2/6/8）错位，
+    // 导致 5ch 排在 2ch 前面、但二者最终都解码为 2ch 的次优选轨问题。
     const sorted = tracks.slice().sort((a, b) => {
-      const chA = this.inferTrackChannels(a);
-      const chB = this.inferTrackChannels(b);
+      const chA = this.normalizeChannelsForSort(this.inferTrackChannels(a));
+      const chB = this.normalizeChannelsForSort(this.inferTrackChannels(b));
       if (chB !== chA) {
         return chB - chA; // 多声道优先
       }
@@ -1532,6 +1534,28 @@ export class VideoPlayerController {
       return 1;
     }
     return 2;
+  }
+
+  /**
+   * 将原始声道数归一化到实际解码计划所对应的层级，用于音轨优先级排序。
+   * 播放路径只支持 1/2/6/8 四个层级；直接用原始值（如 4/5/7）排序会导致
+   * 选出与 2ch 解码计划相同但顺序更靠前的"伪多声道"音轨。
+   *   1ch        → 1
+   *   ≤ 2ch      → 2  （包含异常值 0 或原始 2）
+   *   3 ~ 6ch    → 6  （5.1 及以下）
+   *   7ch 以上   → 8  （7.1）
+   */
+  private normalizeChannelsForSort(ch: number): number {
+    if (ch <= 1) {
+      return 1;
+    }
+    if (ch <= 2) {
+      return 2;
+    }
+    if (ch <= 6) {
+      return 6;
+    }
+    return 8;
   }
 
   private normalizeTargetChannels(channels?: number): number {

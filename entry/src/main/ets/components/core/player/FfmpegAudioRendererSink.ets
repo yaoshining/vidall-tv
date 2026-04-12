@@ -80,6 +80,8 @@ export class FfmpegAudioRendererSink {
       if (actualChannels > 2) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `createAudioRenderer ${actualChannels}ch 失败（code=${err.code}），需上层以 2ch 重新解码: ${err.message}`);
+        // enqueueWav 已打开临时 WAV 文件并入队，抛出前先清理，避免 fd/临时文件泄露。
+        await this.release();
         // 抛出专用错误，让 FfmpegPlayerAdapter 以 2ch 重新解码后重试 loadWav。
         // 不在此处用多声道 WAV 强行创建 2ch 渲染器，避免 format.channels 与实际数据不一致。
         throw new AudioRendererChannelDowngradeError(actualChannels,

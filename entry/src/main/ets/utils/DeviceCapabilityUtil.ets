@@ -463,10 +463,12 @@ export class DeviceCapabilityUtil {
     } catch (e) {
       const err = e as BusinessError;
       console.warn(
-        `${DeviceCapabilityUtil.TAG} supportsMultiChannel 查询失败，保守降级到立体声: ` +
+        `${DeviceCapabilityUtil.TAG} supportsMultiChannel 查询失败，本次降级到立体声（不缓存，下次可重试）: ` +
         `${err.message ?? ''}`
       );
-      result = false;
+      // 瞬时探测失败（如设备未就绪）：仅本次返回 false，不写入缓存，
+      // 避免偶发失败永久禁用整个会话的多声道能力。
+      return false;
     }
 
     DeviceCapabilityUtil._multiChannelSupported = result;
