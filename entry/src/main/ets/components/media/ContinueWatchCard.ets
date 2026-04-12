@@ -153,7 +153,7 @@ export struct ContinueWatchCard {
       } else {
         const typeName = FileSourceTypeLabels.getLabel(fileSource.type);
         console.warn('[ContinueWatchCard] 不支持的文件源类型: ' + fileSource.type.toString());
-        promptAction.showToast({ message: typeName + ' 暂不支持继续播放' });
+        this.getUIContext().getPromptAction().showToast({ message: typeName + ' 暂不支持继续播放' });
         return;
       }
 

@@ -86,21 +86,29 @@ export class AVPlayerAdapter implements IPlayer {
     }
   }
 
-  play(): Promise<void> {
+  async play(): Promise<void> {
     if (!this.avPlayer) {
       return Promise.reject(new Error('AVPlayer not initialized') as BusinessError);
     }
-    return this.avPlayer.play();
+    try {
+      return await this.avPlayer.play();
+    } catch (e) {
+      return Promise.reject(e as BusinessError);
+    }
   }
 
-  pause(): Promise<void> {
+  async pause(): Promise<void> {
     if (!this.avPlayer) {
       return Promise.reject(new Error('AVPlayer not initialized') as BusinessError);
     }
     if (this.avPlayer.state !== AVPlayerState.PLAYING) {
       return Promise.resolve();
     }
-    return this.avPlayer.pause();
+    try {
+      return await this.avPlayer.pause();
+    } catch (e) {
+      return Promise.reject(e as BusinessError);
+    }
   }
 
   async toggle(): Promise<void> {

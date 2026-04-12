@@ -15,7 +15,7 @@ const SUBTITLE_PROBE_BATCH_SIZE = 4;
 
 function tryDecode(bytes: Uint8Array, encoding: string): string {
   const decoder = new util.TextDecoder(encoding);
-  return decoder.decodeWithStream(bytes);
+  return decoder.decode(bytes);
 }
 
 function buildByteArrayFromString(text: string): Uint8Array | null {
@@ -176,19 +176,19 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
   // UTF-8 BOM: EF BB BF
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
     const decoder = new util.TextDecoder('utf-8', { ignoreBOM: true });
-    return decoder.decodeWithStream(bytes);
+    return decoder.decode(bytes);
   }
 
   // UTF-16 LE BOM: FF FE
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
     const decoder = new util.TextDecoder('utf-16le', { ignoreBOM: true });
-    return decoder.decodeWithStream(bytes);
+    return decoder.decode(bytes);
   }
 
   // UTF-16 BE BOM: FE FF
   if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
     const decoder = new util.TextDecoder('utf-16be', { ignoreBOM: true });
-    return decoder.decodeWithStream(bytes);
+    return decoder.decode(bytes);
   }
 
   // 启发式检测：扫描前 4KB，判断是否为合法 UTF-8

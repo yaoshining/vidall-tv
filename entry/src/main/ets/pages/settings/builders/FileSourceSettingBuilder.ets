@@ -109,7 +109,7 @@ struct FileSourceSettingBuilderComponent {
 
     // 检查 id 是否存在
     if (!fileSource.id) {
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '文件源 ID 不存在'
       } as promptAction.ShowToastOptions)
       return
@@ -117,15 +117,15 @@ struct FileSourceSettingBuilderComponent {
 
     // 根据类型跳转到对应的编辑页面
     if (fileSource.type === FileSourceType.WEBDAV) {
-      const params: ESObject = {}
+      const params: Record<string, Object> = {}
       params['fileSourceId'] = fileSource.id as Object
       this.controller.pushType(SettingType.WEBDAV_CONFIG, params as Record<string, Object>)
     } else if (fileSource.type === FileSourceType.SMB) {
-      const params: ESObject = {}
+      const params: Record<string, Object> = {}
       params['fileSourceId'] = fileSource.id as Object
       this.controller.pushType(SettingType.SMB_CONFIG, params as Record<string, Object>)
     } else {
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '暂不支持编辑该协议类型'
       } as promptAction.ShowToastOptions)
     }
@@ -266,7 +266,7 @@ struct FileSourceSettingBuilderComponent {
         }
 
         // 跳转到文件夹选择器
-        const params: ESObject = {}
+        const params: Record<string, Object> = {}
         params['sourceId'] = fileSource.id as Object
         params['baseUrl'] = baseUrl as Object
         params['username'] = config.username as Object
@@ -278,14 +278,14 @@ struct FileSourceSettingBuilderComponent {
         this.controller.pushType(SettingType.DIRECTORY_SELECTOR, params as Record<string, Object>)
       } catch (error) {
         console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
-        promptAction.showToast({
+        this.getUIContext().getPromptAction().showToast({
           message: '解析配置失败'
         } as promptAction.ShowToastOptions)
       }
     } else if (fileSource.type === FileSourceType.SMB) {
       try {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
-        const params: ESObject = {}
+        const params: Record<string, Object> = {}
         params['sourceId'] = fileSource.id as Object
         params['host'] = config.host as Object
         params['username'] = config.username as Object
@@ -295,12 +295,12 @@ struct FileSourceSettingBuilderComponent {
         this.controller.pushType(SettingType.SMB_DIRECTORY_SELECTOR, params as Record<string, Object>)
       } catch (e) {
         console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
-        promptAction.showToast({
+        this.getUIContext().getPromptAction().showToast({
           message: '解析 SMB 配置失败'
         } as promptAction.ShowToastOptions)
       }
     } else {
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '该类型暂不支持文件夹管理'
       } as promptAction.ShowToastOptions)
     }

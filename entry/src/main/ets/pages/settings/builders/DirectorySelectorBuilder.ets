@@ -296,7 +296,7 @@ struct DirectorySelectorBuilderComponent {
       const errMsg = (error as Error).message ?? String(error);
       console.error('DirectorySelector: Failed to save', errMsg)
 
-      AlertDialog.show({
+      this.getUIContext().showAlertDialog({
         title: '保存失败',
         message: '保存目录选择失败：' + errMsg,
         primaryButton: {

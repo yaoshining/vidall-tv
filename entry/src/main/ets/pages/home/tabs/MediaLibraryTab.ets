@@ -515,7 +515,7 @@ export struct MediaLibraryTab {
 
   private startOverwriteScan(): void {
     if (this.isScanning) { return; }
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '覆盖所有元数据',
       message: '「覆盖所有元数据」将重新刮削所有视频的信息，覆盖现有海报、评分、分类等数据。确定继续吗？',
       autoCancel: true,
@@ -541,7 +541,7 @@ export struct MediaLibraryTab {
       const scrapeClient = tmdbKey.length > 0 ? new ScrapeClient({ tmdbApiKey: tmdbKey }) : undefined;
 
       if (!scrapeClient) {
-        promptAction.showToast({
+        this.getUIContext().getPromptAction().showToast({
           message: '未配置 TMDB API Key，将跳过刮削'
         });
       }
@@ -555,15 +555,15 @@ export struct MediaLibraryTab {
         `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，刮削跳过 ${result.scrapeSkippedVideos} 个，耗时 ${result.elapsedMs}ms`
       );
       await this.model.reload();
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: `扫描完成：共 ${result.totalVideos} 个视频${scrapeStats}`
       });
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryTab] 扫描(${mode})异常: ${err.message}`);
-      promptAction.showToast({
-        message: `扫描失败: ` + err.message
-      });
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: `扫描失败: ` + err.message });
+      } catch (_e) {}
     } finally {
       this.isScanning = false;
     }
@@ -580,7 +580,7 @@ export struct MediaLibraryTab {
       const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
 
       if (!tmdbKey || tmdbKey.length === 0) {
-        promptAction.showToast({
+        this.getUIContext().getPromptAction().showToast({
           message: '请先配置 TMDB API Key'
         });
         return;
@@ -719,11 +719,11 @@ export struct MediaLibraryTab {
       }
 
       await this.model.reload();
-      promptAction.showToast({ message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个` });
+      this.getUIContext().getPromptAction().showToast({ message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个` });
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryTab] 刷新元数据异常: ${err.message}`);
-      promptAction.showToast({ message: '刷新失败: ' + err.message });
+      try { this.getUIContext().getPromptAction().showToast({ message: '刷新失败: ' + err.message }); } catch (_e) {}
     } finally {
       this.isScanning = false;
     }
@@ -743,7 +743,7 @@ export struct MediaLibraryTab {
       const db = FileSourceDatabase.getInstance();
       const videos = await db.getAllVideos();
       if (videos.length === 0) {
-        promptAction.showToast({ message: '暂无视频可刷新' });
+        this.getUIContext().getPromptAction().showToast({ message: '暂无视频可刷新' });
         return;
       }
 
@@ -839,13 +839,13 @@ export struct MediaLibraryTab {
       }
 
       await this.model.reload();
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: `字幕轨刷新完成：成功 ${refreshed}，跳过 ${skipped}，失败 ${failed}`
       });
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryTab] 刷新字幕轨元数据异常: ${err.message}`);
-      promptAction.showToast({ message: '刷新字幕轨失败: ' + err.message });
+      try { this.getUIContext().getPromptAction().showToast({ message: '刷新字幕轨失败: ' + err.message }); } catch (_e) {}
     } finally {
       this.isScanning = false;
     }
@@ -853,7 +853,7 @@ export struct MediaLibraryTab {
 
   private showRefreshSubtitleTrackDialog(): void {
     if (this.isScanning) { return; }
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '刷新字幕轨信息',
       message: '将重新探测媒体库视频的音轨/字幕轨信息（仅 WebDAV），可能耗时较长。是否继续？',
       autoCancel: true,

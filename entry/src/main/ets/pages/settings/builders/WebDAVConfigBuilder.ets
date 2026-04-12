@@ -100,7 +100,7 @@ struct WebDAVConfigBuilderComponent {
       }
     } catch (error) {
       console.error('Failed to load edit data:', JSON.stringify(error))
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '加载数据失败'
       } as promptAction.ShowToastOptions)
       this.controller.popType()
@@ -117,13 +117,13 @@ struct WebDAVConfigBuilderComponent {
     // 验证必填字段
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '服务器名称')
     if (!nameResult.valid) {
-      promptAction.showToast({ message: nameResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: nameResult.message })
       return
     }
 
     const urlResult = ValidationUtil.validateNotEmpty(this.serverUrl, '服务器地址')
     if (!urlResult.valid) {
-      promptAction.showToast({ message: urlResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: urlResult.message })
       return
     }
 
@@ -136,13 +136,13 @@ struct WebDAVConfigBuilderComponent {
 
     const usernameResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
     if (!usernameResult.valid) {
-      promptAction.showToast({ message: usernameResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: usernameResult.message })
       return
     }
 
     const passwordResult = ValidationUtil.validateNotEmpty(this.password, '密码')
     if (!passwordResult.valid) {
-      promptAction.showToast({ message: passwordResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: passwordResult.message })
       return
     }
 
@@ -196,9 +196,9 @@ struct WebDAVConfigBuilderComponent {
       const result = await client.testConnection()
 
       if (result.success) {
-        promptAction.showToast({ message: '连接成功' })
+        this.getUIContext().getPromptAction().showToast({ message: '连接成功' })
       } else {
-        AlertDialog.show({
+        this.getUIContext().showAlertDialog({
           title: '连接失败',
           message: result.message,
           primaryButton: {
@@ -208,7 +208,7 @@ struct WebDAVConfigBuilderComponent {
         })
       }
     } catch (error) {
-      AlertDialog.show({
+      this.getUIContext().showAlertDialog({
         title: '连接失败',
         message: '发生未知错误：' + JSON.stringify(error),
         primaryButton: {
@@ -229,38 +229,38 @@ struct WebDAVConfigBuilderComponent {
     // 验证必填字段
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '服务器名称')
     if (!nameResult.valid) {
-      promptAction.showToast({ message: nameResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: nameResult.message })
       return
     }
 
     const urlResult = ValidationUtil.validateNotEmpty(this.serverUrl, '服务器地址')
     if (!urlResult.valid) {
-      promptAction.showToast({ message: urlResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: urlResult.message })
       return
     }
 
     // 检查 URL 格式错误
     if (this.urlError) {
-      promptAction.showToast({ message: '请先修正 URL 格式错误' })
+      this.getUIContext().getPromptAction().showToast({ message: '请先修正 URL 格式错误' })
       return
     }
 
     const usernameResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
     if (!usernameResult.valid) {
-      promptAction.showToast({ message: usernameResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: usernameResult.message })
       return
     }
 
     const passwordResult = ValidationUtil.validateNotEmpty(this.password, '密码')
     if (!passwordResult.valid) {
-      promptAction.showToast({ message: passwordResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: passwordResult.message })
       return
     }
 
     // 验证端口
     const portResult = ValidationUtil.validatePort(this.port)
     if (!portResult.valid) {
-      promptAction.showToast({ message: portResult.message })
+      this.getUIContext().getPromptAction().showToast({ message: portResult.message })
       return
     }
 
@@ -328,7 +328,7 @@ struct WebDAVConfigBuilderComponent {
       }
 
       // 跳转到文件夹选择器
-      const params: ESObject = {}
+      const params: Record<string, Object> = {}
       params['sourceId'] = sourceId as Object
       params['baseUrl'] = baseUrl as Object
       params['username'] = this.username as Object
@@ -339,7 +339,7 @@ struct WebDAVConfigBuilderComponent {
 
       this.controller.pushType(SettingType.DIRECTORY_SELECTOR, params as Record<string, Object>)
     } catch (error) {
-      AlertDialog.show({
+      this.getUIContext().showAlertDialog({
         title: '保存失败',
         message: '发生错误：' + JSON.stringify(error),
         primaryButton: {
@@ -365,7 +365,6 @@ struct WebDAVConfigBuilderComponent {
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
           .id('serverNameInput')
-          .key(`serverName_${this.currentFocusIndex === 0 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 0)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
@@ -414,7 +413,6 @@ struct WebDAVConfigBuilderComponent {
             .placeholderFont({ size: 16 })
             .enabled(!this.isLoading)
             .id('serverUrlInput')
-            .key(`serverUrl_${this.currentFocusIndex === 1 ? 'focus' : 'blur'}`)
             .defaultFocus(this.currentFocusIndex === 1)
             .enterKeyType(EnterKeyType.Next)
             .onChange((value: string) => {
@@ -446,7 +444,6 @@ struct WebDAVConfigBuilderComponent {
           .type(InputType.Number)
           .enabled(!this.isLoading)
           .id('portInput')
-          .key(`port_${this.currentFocusIndex === 3 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 3)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
@@ -465,7 +462,6 @@ struct WebDAVConfigBuilderComponent {
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
           .id('usernameInput')
-          .key(`username_${this.currentFocusIndex === 4 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 4)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {
@@ -482,7 +478,6 @@ struct WebDAVConfigBuilderComponent {
           .type(InputType.Password)
           .enabled(!this.isLoading)
           .id('passwordInput')
-          .key(`password_${this.currentFocusIndex === 5 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 5)
           .enterKeyType(EnterKeyType.Done)
           .onChange((value: string) => {
@@ -498,7 +493,6 @@ struct WebDAVConfigBuilderComponent {
           .placeholderFont({ size: 16 })
           .enabled(!this.isLoading)
           .id('rootPathInput')
-          .key(`rootPath_${this.currentFocusIndex === 2 ? 'focus' : 'blur'}`)
           .defaultFocus(this.currentFocusIndex === 2)
           .enterKeyType(EnterKeyType.Next)
           .onChange((value: string) => {

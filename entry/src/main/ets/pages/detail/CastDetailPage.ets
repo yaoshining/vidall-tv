@@ -76,7 +76,7 @@ export struct CastDetailPage {
   @Local bioExpanded: boolean = false;
 
   private getCacheDir(): string {
-    return getContext().cacheDir + '/cast';
+    return getContext(this).cacheDir + '/cast';
   }
 
   private getCachePath(): string {

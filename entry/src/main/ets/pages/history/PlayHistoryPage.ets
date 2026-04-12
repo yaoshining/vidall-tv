@@ -353,12 +353,12 @@ export struct PlayHistoryPage {
 
   private async playItemAsync(item: HistoryDisplayItem, fromStart: boolean): Promise<void> {
     if (item.videoId === 0 || item.sourceId === 0) {
-      promptAction.showToast({ message: '无法找到对应视频文件' });
+      try { this.getUIContext().getPromptAction().showToast({ message: '无法找到对应视频文件' }); } catch (_e) {}
       return;
     }
     const urlResult = await this.buildPlayUrl(item.sourceId, item.filePath);
     if (urlResult === null) {
-      promptAction.showToast({ message: '无法构建播放地址' });
+      try { this.getUIContext().getPromptAction().showToast({ message: '无法构建播放地址' }); } catch (_e) {}
       return;
     }
     const param: PlayerPageParam = {
@@ -385,7 +385,7 @@ export struct PlayHistoryPage {
     const message = item.kind === 'series'
       ? `确定删除《${item.title}》的播放记录吗？\n这将清除该剧全部集数的播放进度，此操作无法撤销。`
       : `确定删除《${item.title}》的播放记录吗？此操作无法撤销。`;
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '删除播放记录',
       message,
       primaryButton: {
@@ -431,11 +431,11 @@ export struct PlayHistoryPage {
         );
       }
       emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-      promptAction.showToast({ message: '已删除播放记录' });
+      this.getUIContext().getPromptAction().showToast({ message: '已删除播放记录' });
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[PlayHistory] 删除失败 code=${err.code} msg=${err.message}`);
-      promptAction.showToast({ message: '删除失败，请重试' });
+      try { this.getUIContext().getPromptAction().showToast({ message: '删除失败，请重试' }); } catch (_e) {}
     }
   }
 
@@ -446,7 +446,7 @@ export struct PlayHistoryPage {
     if (this.historyList.length === 0) {
       return;
     }
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '清除全部记录',
       message: '确定清除所有播放历史记录吗？此操作无法撤销。',
       primaryButton: {
@@ -491,9 +491,9 @@ export struct PlayHistoryPage {
     await FileSourceDatabase.getInstance().clearAllPlayProgress();
     emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
     if (failCount > 0) {
-      promptAction.showToast({ message: `清除完成，${failCount} 条删除失败` });
+      try { this.getUIContext().getPromptAction().showToast({ message: `清除完成，${failCount} 条删除失败` }); } catch (_e) {}
     } else {
-      promptAction.showToast({ message: '已清除全部播放记录' });
+      try { this.getUIContext().getPromptAction().showToast({ message: '已清除全部播放记录' }); } catch (_e) {}
     }
   }
 
@@ -720,7 +720,7 @@ export struct PlayHistoryPage {
       }
       // 菜单键（2067）：弹出操作菜单（showActionMenu 支持 color 字段）
       if (event.keyCode === 2067) {
-        promptAction.showActionMenu({
+        this.getUIContext().getPromptAction().showActionMenu({
           title: '操作',
           buttons: [
             { text: '从头播放', color: '#FFFFFF' },

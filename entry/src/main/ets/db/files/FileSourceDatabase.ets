@@ -8,6 +8,7 @@ import {
 } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 // ─────────────────────────────────────────────
 // 用于从 raw_json 回填 origin_country_json 的最小解析接口
@@ -203,6 +204,7 @@ export class FileSourceDatabase {
 
   /** 创建 v3 全部媒体表 */
   private async createMediaTablesV3(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
     // videos
     await rdbStore.executeSql(`
       CREATE TABLE IF NOT EXISTS ${FileSourceDatabase.TABLE_VIDEOS} (
@@ -388,6 +390,11 @@ export class FileSourceDatabase {
       // 列已存在时正常忽略
     }
     console.info('FileSourceDatabase: media_progress table created');
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `createMediaTablesV3 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   /**
@@ -481,6 +488,7 @@ export class FileSourceDatabase {
    * 注意：DROP 顺序需遵守外键依赖（先子表再父表）。
    */
   private async migrateToV4(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
     const dropOrder: string[] = [
       'scrape_info', 'play_history', 'tv_episodes', 'tv_seasons',
       'videos', 'movies', 'tv_series'
@@ -490,6 +498,11 @@ export class FileSourceDatabase {
       console.info(`FileSourceDatabase: DROP TABLE ${t}`);
     }
     await this.createMediaTablesV3(rdbStore);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `migrateToV4 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   /**
@@ -497,9 +510,15 @@ export class FileSourceDatabase {
    * 复用 createMediaTablesV3 建表，避免与主建表逻辑重复定义。
    */
   private async migrateV4ToV5(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
     await rdbStore.executeSql(`DROP TABLE IF EXISTS play_history`);
     console.info(`FileSourceDatabase: DROP TABLE play_history`);
     await this.createMediaTablesV3(rdbStore);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `migrateV4ToV5 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   /**
@@ -508,6 +527,7 @@ export class FileSourceDatabase {
    * 复用 createMediaTablesV3 建表，避免与主建表逻辑重复定义。
    */
   private async migrateV5ToV6(rdbStore: relationalStore.RdbStore): Promise<void> {
+    try {
     await this.createMediaTablesV3(rdbStore);
     // 旧版本升级时 onCreate 不再执行，需在此补建 search_history 表
     await rdbStore.executeSql(
@@ -518,6 +538,11 @@ export class FileSourceDatabase {
       'UNIQUE(keyword))'
     );
     console.info(`FileSourceDatabase: CREATE TABLE search_history`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `migrateV5ToV6 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   /**
@@ -632,13 +657,9 @@ export class FileSourceDatabase {
       console.error('FileSourceDatabase: Failed to get file source by id', JSON.stringify(error));
       throw new Error('Failed to get file source by id: ' + JSON.stringify(error));
     } finally {
-      resultSet?.close();
+      try { resultSet?.close(); } catch { }
     }
   }
-
-  /**
-   * 获取所有文件源
-   */
   async getAllFileSources(): Promise<FileSource[]> {
     if (this.rdbStore === null) {
       throw new Error('Database not initialized');
@@ -661,7 +682,7 @@ export class FileSourceDatabase {
       console.error('FileSourceDatabase: Failed to get all file sources', JSON.stringify(error));
       throw new Error('Failed to get all file sources: ' + JSON.stringify(error));
     } finally {
-      resultSet?.close();
+      try { resultSet?.close(); } catch { }
     }
   }
 
@@ -669,6 +690,7 @@ export class FileSourceDatabase {
    * 从 ResultSet 解析文件源对象
    */
   private async parseFileSource(resultSet: relationalStore.ResultSet): Promise<FileSource> {
+    try {
     const id = resultSet.getLong(resultSet.getColumnIndex('id'));
     const name = resultSet.getString(resultSet.getColumnIndex('name'));
     const typeString = resultSet.getString(resultSet.getColumnIndex('type'));
@@ -693,6 +715,11 @@ export class FileSourceDatabase {
       configJson: JSON.stringify(config),
       createdAt: createdAt
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseFileSource 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   /**
@@ -753,8 +780,9 @@ export class FileSourceDatabase {
       throw new Error('Database not initialized');
     }
     const store = this.rdbStore;
-    const tx = await store.createTransaction();
+    let tx: relationalStore.Transaction | null = null;
     try {
+      tx = await store.createTransaction();
       const predicates = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_DIRECTORIES);
       predicates.equalTo('source_id', sourceId);
       await tx.delete(predicates);
@@ -770,7 +798,7 @@ export class FileSourceDatabase {
       await tx.commit();
       console.info(`FileSourceDatabase: Saved ${directories.length} directory(ies) for source ${sourceId}`);
     } catch (error) {
-      await tx.rollback();
+      if (tx !== null) { try { await tx.rollback(); } catch { } }
       console.error('FileSourceDatabase: saveDirectoriesForSource failed, rollback', JSON.stringify(error));
       throw new Error('Failed to save directories: ' + JSON.stringify(error));
     }
@@ -824,7 +852,7 @@ export class FileSourceDatabase {
       console.error('FileSourceDatabase: Failed to get directories', JSON.stringify(error));
       throw new Error('Failed to get directories: ' + JSON.stringify(error));
     } finally {
-      resultSet?.close();
+      try { resultSet?.close(); } catch { }
     }
   }
 
@@ -870,16 +898,25 @@ export class FileSourceDatabase {
     videoQueryPredicates.equalTo('source_id', sourceId);
     videoQueryPredicates.and();
     videoQueryPredicates.equalTo('directory_path', directoryPath);
-    const videoRs = await store.query(videoQueryPredicates, ['id']);
+    let videoRs: relationalStore.ResultSet | null = null;
     const videoIds: number[] = [];
-    while (videoRs.goToNextRow()) {
-      videoIds.push(videoRs.getLong(videoRs.getColumnIndex('id')));
+    try {
+      videoRs = await store.query(videoQueryPredicates, ['id']);
+      while (videoRs.goToNextRow()) {
+        videoIds.push(videoRs.getLong(videoRs.getColumnIndex('id')));
+      }
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `clearMediaAndDirectoryForDir query 失败: ${err.message}`);
+      throw new Error(err.message);
+    } finally {
+      try { videoRs?.close(); } catch { }
     }
-    videoRs.close();
 
     // 2. 在事务中执行所有删除操作，保证原子性
-    const tx = await store.createTransaction();
+    let tx: relationalStore.Transaction | null = null;
     try {
+      tx = await store.createTransaction();
       // 2a. 分批删除 scrape_info（防止超过 SQLite 999 参数上限）
       for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
         const batch = videoIds.slice(i, i + BATCH_SIZE);
@@ -911,7 +948,7 @@ export class FileSourceDatabase {
       await tx.commit();
       console.info(`[DB][clearMediaAndDirectoryForDir] dirId=${dirId} sourceId=${sourceId} path=${directoryPath} 已清理`);
     } catch (error) {
-      await tx.rollback();
+      if (tx !== null) { try { await tx.rollback(); } catch { } }
       console.error('[DB][clearMediaAndDirectoryForDir] 失败，已回滚', JSON.stringify(error));
       throw new Error('Failed to clearMediaAndDirectoryForDir: ' + JSON.stringify(error));
     }
@@ -1032,7 +1069,7 @@ export class FileSourceDatabase {
       console.error(`[FileSourceDatabase] getVideosBySourceId 失败: ${JSON.stringify(error)}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1054,7 +1091,7 @@ export class FileSourceDatabase {
       console.error(`[FileSourceDatabase] getAllVideos 失败: ${JSON.stringify(error)}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1089,6 +1126,7 @@ export class FileSourceDatabase {
   }
 
   private parseVideoEntity(rs: relationalStore.ResultSet): VideoEntity {
+    try {
     const get = (col: string): number => rs.getLong(rs.getColumnIndex(col));
     const str = (col: string): string | undefined => {
       const idx = rs.getColumnIndex(col);
@@ -1121,6 +1159,11 @@ export class FileSourceDatabase {
       updatedInLastScan: num('updated_in_last_scan'),
       scannedAt: get('scanned_at')
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseVideoEntity 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -1153,7 +1196,7 @@ export class FileSourceDatabase {
     } catch {
       return null;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1171,13 +1214,14 @@ export class FileSourceDatabase {
       console.error('[FileSourceDatabase] getAllMovies', JSON.stringify(e));
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
   /** 插入或更新电影（以 provider+provider_id 唯一），返回 id */
   async upsertMovie(e: MovieEntity): Promise<number> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
+    try {
     // 先查，有则 UPDATE，无则 INSERT OR IGNORE 保证并发安全
     const existing = await this.getMovieByProviderId(e.provider, e.providerId);
     if (existing && existing.id !== undefined) {
@@ -1222,9 +1266,15 @@ export class FileSourceDatabase {
     const newId = inserted?.id ?? -1;
     console.info(`[DB][upsertMovie] INSERT id=${newId} title="${e.title}" posterUrl=${e.posterUrl ? e.posterUrl.substring(0, 40) : 'null'}`);
     return newId;
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `upsertMovie 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   private parseMovieEntity(rs: relationalStore.ResultSet): MovieEntity {
+    try {
     const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); };
     const num = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); };
     const dbl = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getDouble(i); };
@@ -1243,6 +1293,11 @@ export class FileSourceDatabase {
       originCountryJson: str('origin_country_json'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseMovieEntity 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -1274,12 +1329,13 @@ export class FileSourceDatabase {
       console.error('[FileSourceDatabase] getAllTvSeries', JSON.stringify(e));
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
   async upsertTvSeries(e: TvSeriesEntity): Promise<number> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
+    try {
     const existing = await this.getTvSeriesByProviderId(e.provider, e.providerId);
     if (existing && existing.id !== undefined) {
       const bucket: relationalStore.ValuesBucket = {
@@ -1320,9 +1376,15 @@ export class FileSourceDatabase {
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvSeriesByProviderId(e.provider, e.providerId);
     return inserted?.id ?? -1;
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `upsertTvSeries 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   private parseTvSeriesEntity(rs: relationalStore.ResultSet): TvSeriesEntity {
+    try {
     const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); };
     const num = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); };
     const dbl = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getDouble(i); };
@@ -1341,6 +1403,11 @@ export class FileSourceDatabase {
       originCountryJson: str('origin_country_json'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseTvSeriesEntity 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -1360,6 +1427,7 @@ export class FileSourceDatabase {
 
   async upsertTvSeason(e: TvSeasonEntity): Promise<number> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
+    try {
     const existing = await this.getTvSeason(e.seriesId, e.seasonNumber);
     if (existing && existing.id !== undefined) {
       const bucket: relationalStore.ValuesBucket = {
@@ -1391,9 +1459,15 @@ export class FileSourceDatabase {
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvSeason(e.seriesId, e.seasonNumber);
     return inserted?.id ?? -1;
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `upsertTvSeason 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   private parseTvSeasonEntity(rs: relationalStore.ResultSet): TvSeasonEntity {
+    try {
     const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); };
     const num = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); };
     return {
@@ -1407,6 +1481,11 @@ export class FileSourceDatabase {
       posterUrl: str('poster_url'), posterLocalPath: str('poster_local_path'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseTvSeasonEntity 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -1461,6 +1540,7 @@ export class FileSourceDatabase {
 
   async upsertTvEpisode(e: TvEpisodeEntity): Promise<number> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
+    try {
     const existing = await this.getTvEpisode(e.seriesId, e.seasonNumber, e.episodeNumber);
     if (existing && existing.id !== undefined) {
       const bucket: relationalStore.ValuesBucket = {
@@ -1496,9 +1576,15 @@ export class FileSourceDatabase {
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvEpisode(e.seriesId, e.seasonNumber, e.episodeNumber);
     return inserted?.id ?? -1;
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `upsertTvEpisode 失败: ${err.message}`);
+      throw err;
+    }
   }
 
   private parseTvEpisodeEntity(rs: relationalStore.ResultSet): TvEpisodeEntity {
+    try {
     const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); };
     const num = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); };
     const dbl = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getDouble(i); };
@@ -1515,6 +1601,11 @@ export class FileSourceDatabase {
       stillPath: str('still_path'), stillUrl: str('still_url'),
       rawJson: str('raw_json'), scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseTvEpisodeEntity 失败: ${err.message}`);
+      throw err;
+    }
   }
 
   // ─────────────────────────────────────────────

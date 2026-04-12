@@ -22,7 +22,7 @@ struct ResourceLibrarySettingBuilderComponent {
   }
 
   private showClearApiKeyDialog(): void {
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '清除 API Key',
       message: '确定要清除已配置的 TMDB API Key 吗？',
       autoCancel: false,
@@ -44,12 +44,12 @@ struct ResourceLibrarySettingBuilderComponent {
     try {
       await AppPreferences.set(PrefKey.TMDB_API_KEY, value);
       this.tmdbApiKey = value;
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: value ? 'API Key 已保存' : 'API Key 已清除'
       });
     } catch (error) {
       console.error('[ResourceLibrarySettingBuilder] 保存失败:', JSON.stringify(error));
-      promptAction.showToast({
+      this.getUIContext().getPromptAction().showToast({
         message: '保存失败'
       });
     } finally {

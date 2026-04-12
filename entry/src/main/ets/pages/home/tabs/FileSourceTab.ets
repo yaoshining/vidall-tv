@@ -138,9 +138,11 @@ export struct FileSourceTab {
       } catch (e) {
         const err = e as BusinessError
         console.error('FileSourceTab', `解析 SMB 配置失败: code=${err.code} msg=${err.message}`)
-        this.getUIContext().getPromptAction().showToast({
-          message: '解析 SMB 配置失败'
-        } as promptAction.ShowToastOptions)
+        try {
+          this.getUIContext().getPromptAction().showToast({
+            message: '解析 SMB 配置失败'
+          } as promptAction.ShowToastOptions)
+        } catch (_toastErr) {}
       }
     } else {
       console.warn('FileSourceTab: Unsupported file source type', item.fileSource.type)

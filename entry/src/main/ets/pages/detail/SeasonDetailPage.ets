@@ -1017,7 +1017,7 @@ export struct SeasonDetailPage {
 
   /** 弹窗询问用户是否删除文件不存在的集记录 */
   private confirmDeleteEpisodeRecord(videoId: number): void {
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '文件无法播放',
       message: '视频文件可能已被删除或移动，无法打开。是否删除该集的本地记录和元数据？',
       autoCancel: true,

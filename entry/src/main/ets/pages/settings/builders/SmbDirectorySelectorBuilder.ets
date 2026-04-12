@@ -226,7 +226,7 @@ struct SmbDirectorySelectorBuilderComponent {
       const err = e as BusinessError
       const errMsg = err.message ?? String(e)
       console.error('[SmbDirSelector] 保存失败', errMsg)
-      AlertDialog.show({
+      this.getUIContext().showAlertDialog({
         title: '保存失败',
         message: '保存目录选择失败：' + errMsg,
         primaryButton: {
