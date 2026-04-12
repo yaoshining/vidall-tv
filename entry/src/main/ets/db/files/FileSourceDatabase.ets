@@ -2033,13 +2033,22 @@ export class FileSourceDatabase {
       // - episode_id IS NULL 的行（未刮削集）均保留，不纳入去重
       const SCRAPE = FileSourceDatabase.TABLE_SCRAPE_INFO;
       const VIDEOS = FileSourceDatabase.TABLE_VIDEOS;
+      // 两步 CTE：先按 episode_id 找最大 file_size，再在相同 file_size 内取最大 video_id。
+      // 避免将两字段打包成单一 rank_key（超出 SQLite 64 位整数安全范围时会转浮点，精度丢失）。
       const sql =
-        `WITH best_vid AS (` +
+        `WITH best_size AS (` +
         `  SELECT si.episode_id,` +
-        `         MAX(COALESCE(vi.file_size, 0) * 100000000 + si.video_id) AS rank_key,` +
-        `         MAX(si.video_id) AS max_vid_fallback` +
+        `         MAX(COALESCE(vi.file_size, 0)) AS max_file_size` +
         `  FROM ${SCRAPE} si` +
         `  JOIN ${VIDEOS} vi ON si.video_id = vi.id` +
+        `  WHERE si.tv_series_id = ? AND si.episode_id IS NOT NULL` +
+        `  GROUP BY si.episode_id` +
+        `), best_vid AS (` +
+        `  SELECT si.episode_id, MAX(si.video_id) AS best_video_id` +
+        `  FROM ${SCRAPE} si` +
+        `  JOIN ${VIDEOS} vi ON si.video_id = vi.id` +
+        `  JOIN best_size bs ON bs.episode_id = si.episode_id` +
+        `                    AND COALESCE(vi.file_size, 0) = bs.max_file_size` +
         `  WHERE si.tv_series_id = ? AND si.episode_id IS NOT NULL` +
         `  GROUP BY si.episode_id` +
         `)` +
@@ -2050,11 +2059,11 @@ export class FileSourceDatabase {
         `     OR EXISTS (` +
         `       SELECT 1 FROM best_vid bv` +
         `       WHERE bv.episode_id = s.episode_id` +
-        `         AND (COALESCE(v.file_size, 0) * 100000000 + s.video_id) = bv.rank_key` +
+        `         AND s.video_id = bv.best_video_id` +
         `     )` +
         `   )` +
         ` ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC`;
-      rs = await this.rdbStore.querySql(sql, [seriesId, seriesId]);
+      rs = await this.rdbStore.querySql(sql, [seriesId, seriesId, seriesId]);
       const items: MediaItem[] = [];
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
       return items;
