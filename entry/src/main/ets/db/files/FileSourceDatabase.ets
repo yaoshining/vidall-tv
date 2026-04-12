@@ -1574,6 +1574,15 @@ export class FileSourceDatabase {
     }
     // 同时确保新表（movies/tv_series/tv_seasons/tv_episodes）存在
     await this.createMediaTablesV3(rdbStore);
+    // 确保 (tv_series_id, episode_id) 索引存在，供多版本去重查询使用
+    try {
+      await rdbStore.executeSql(
+        `CREATE INDEX IF NOT EXISTS idx_scrape_info_tvs_ep` +
+        ` ON ${FileSourceDatabase.TABLE_SCRAPE_INFO}(tv_series_id, episode_id)`
+      );
+    } catch {
+      // 索引已存在时忽略
+    }
   }
 
   /**
@@ -2037,10 +2046,44 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) { return []; }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      const sql = this.mediaItemSql +
-        ' WHERE s.tv_series_id = ?' +
-        ' ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC';
-      rs = await this.rdbStore.querySql(sql, [seriesId]);
+      // 同一 episode_id 可能对应多个版本文件（如 4K 和 HDR），只保留 file_size 最大的那个
+      // 用 CTE 先聚合出每个 episode_id 应保留的 video_id（NULL 安全，避免 NOT EXISTS 的 N×N 扫描）：
+      // - COALESCE(file_size, 0) 处理 file_size 为 NULL 的情况
+      // - 同大时以 video_id 较大者（较新扫描）为准
+      // - episode_id IS NULL 的行（未刮削集）均保留，不纳入去重
+      const SCRAPE = FileSourceDatabase.TABLE_SCRAPE_INFO;
+      const VIDEOS = FileSourceDatabase.TABLE_VIDEOS;
+      // 两步 CTE：先按 episode_id 找最大 file_size，再在相同 file_size 内取最大 video_id。
+      // 避免将两字段打包成单一 rank_key（超出 SQLite 64 位整数安全范围时会转浮点，精度丢失）。
+      const sql =
+        `WITH best_size AS (` +
+        `  SELECT si.episode_id,` +
+        `         MAX(COALESCE(vi.file_size, 0)) AS max_file_size` +
+        `  FROM ${SCRAPE} si` +
+        `  JOIN ${VIDEOS} vi ON si.video_id = vi.id` +
+        `  WHERE si.tv_series_id = ? AND si.episode_id IS NOT NULL` +
+        `  GROUP BY si.episode_id` +
+        `), best_vid AS (` +
+        `  SELECT si.episode_id, MAX(si.video_id) AS best_video_id` +
+        `  FROM ${SCRAPE} si` +
+        `  JOIN ${VIDEOS} vi ON si.video_id = vi.id` +
+        `  JOIN best_size bs ON bs.episode_id = si.episode_id` +
+        `                    AND COALESCE(vi.file_size, 0) = bs.max_file_size` +
+        `  WHERE si.tv_series_id = ? AND si.episode_id IS NOT NULL` +
+        `  GROUP BY si.episode_id` +
+        `)` +
+        this.mediaItemSql +
+        ` WHERE s.tv_series_id = ?` +
+        `   AND (` +
+        `     s.episode_id IS NULL` +
+        `     OR EXISTS (` +
+        `       SELECT 1 FROM best_vid bv` +
+        `       WHERE bv.episode_id = s.episode_id` +
+        `         AND s.video_id = bv.best_video_id` +
+        `     )` +
+        `   )` +
+        ` ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC`;
+      rs = await this.rdbStore.querySql(sql, [seriesId, seriesId, seriesId]);
       const items: MediaItem[] = [];
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
       return items;
