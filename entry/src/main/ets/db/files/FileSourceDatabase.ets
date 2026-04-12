@@ -55,7 +55,7 @@ export interface SearchMediaOptions {
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 9;
+  private static readonly DB_VERSION = 10;
   private static readonly DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -375,9 +375,18 @@ export class FileSourceDatabase {
         duration_ms INTEGER NOT NULL DEFAULT 0,
         last_played_at INTEGER NOT NULL,
         episode_number INTEGER NOT NULL DEFAULT 0,
-        season_number INTEGER NOT NULL DEFAULT 0
+        season_number INTEGER NOT NULL DEFAULT 0,
+        is_watched INTEGER NOT NULL DEFAULT 0
       )
     `);
+    // 防御性补列：表已存在时补齐 is_watched（幂等，列已存在时忽略）
+    try {
+      await rdbStore.executeSql(
+        `ALTER TABLE ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} ADD COLUMN is_watched INTEGER NOT NULL DEFAULT 0`
+      );
+    } catch (e) {
+      // 列已存在时正常忽略
+    }
     console.info('FileSourceDatabase: media_progress table created');
   }
 
@@ -435,6 +444,19 @@ export class FileSourceDatabase {
         }
         currentVersion = 9;
         console.info('[DB] 已迁移到 v9：file_source_directories 新增 dir_status 列');
+      }
+      if (currentVersion < 10) {
+        // v10：media_progress 新增 is_watched 列，用于完播标记，避免删除进度记录
+        try {
+          await rdbStore.executeSql(
+            `ALTER TABLE ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} ADD COLUMN is_watched INTEGER NOT NULL DEFAULT 0`
+          );
+        } catch (e) {
+          // 列已存在时忽略（幂等）
+          console.warn('[DB] v10 ALTER TABLE is_watched: 列可能已存在，已忽略', JSON.stringify(e));
+        }
+        currentVersion = 10;
+        console.info('[DB] 已迁移到 v10：media_progress 新增 is_watched 完播标记列');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -2823,8 +2845,8 @@ export class FileSourceDatabase {
     try {
       const sql = `
         INSERT OR REPLACE INTO ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}
-          (media_key, position_ms, duration_ms, last_played_at, episode_number, season_number)
-        VALUES (?, ?, ?, ?, ?, ?)
+          (media_key, position_ms, duration_ms, last_played_at, episode_number, season_number, is_watched)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
       const args: relationalStore.ValueType[] = [
         entry.mediaKey,
@@ -2832,7 +2854,8 @@ export class FileSourceDatabase {
         entry.durationMs,
         entry.lastPlayedAt,
         entry.episodeNumber,
-        entry.seasonNumber
+        entry.seasonNumber,
+        entry.isWatched ?? 0
       ];
       await this.rdbStore.executeSql(sql, args);
       console.info(
@@ -2857,7 +2880,7 @@ export class FileSourceDatabase {
       pred.equalTo('media_key', mediaKey);
       const rs = await this.rdbStore.query(pred, [
         'media_key', 'position_ms', 'duration_ms', 'last_played_at',
-        'episode_number', 'season_number'
+        'episode_number', 'season_number', 'is_watched'
       ]);
       if (!rs.goToFirstRow()) {
         rs.close();
@@ -2869,7 +2892,8 @@ export class FileSourceDatabase {
         durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
         lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
         episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
-        seasonNumber: rs.getLong(rs.getColumnIndex('season_number'))
+        seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
+        isWatched: rs.getLong(rs.getColumnIndex('is_watched'))
       };
       rs.close();
       return entry;
@@ -2927,6 +2951,67 @@ export class FileSourceDatabase {
   }
 
   /**
+   * 将指定媒体标记为已完播（is_watched = 1）。
+   * - 若记录已存在：UPDATE，同时将 position_ms 推进到 duration_ms（完播状态）。
+   * - 若记录不存在（从未播放过）：INSERT 一条哨兵记录（is_watched = 1，时长未知为 0）。
+   * 两步操作均幂等，重复调用安全。
+   * @param mediaKey 媒体进度存储 key
+   */
+  async markAsWatched(mediaKey: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    try {
+      // 步骤 1：UPDATE 已有记录（设置完播标记，position_ms 推进到 duration_ms）
+      const updateSql =
+        `UPDATE ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` SET is_watched = 1,` +
+        `     position_ms = CASE WHEN duration_ms > 0 THEN duration_ms ELSE position_ms END,` +
+        `     last_played_at = ?` +
+        ` WHERE media_key = ?`;
+      await this.rdbStore.executeSql(updateSql, [Date.now(), mediaKey]);
+      // 步骤 2：INSERT OR IGNORE（记录不存在时插入哨兵行；若已 UPDATE 成功则 IGNORE 保留原行）
+      const insertSql =
+        `INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` (media_key, position_ms, duration_ms, last_played_at, episode_number, season_number, is_watched)` +
+        ` VALUES (?, 0, 0, ?, 0, 0, 1)`;
+      await this.rdbStore.executeSql(insertSql, [mediaKey, Date.now()]);
+      console.info(`[DB][markAsWatched] key=${mediaKey} 已标记完播`);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][markAsWatched] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
+   * 将指定剧集所有集的进度记录标记为已完播（is_watched = 1）。
+   * 仅 UPDATE 已有记录；对从未播放过的剧集，调用方应按需单独处理。
+   * @param seriesTmdbId 剧集 TMDB ID（如 "1399"），纯数字
+   */
+  async markAllSeriesWatched(seriesTmdbId: string): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    if (!/^\d+$/.test(seriesTmdbId)) {
+      console.warn(`[DB][markAllSeriesWatched] 非法 seriesTmdbId: ${seriesTmdbId}`);
+      return;
+    }
+    try {
+      const episodePrefix = `media_progress_episode_tmdb_${seriesTmdbId}_`;
+      const oldKey = `media_progress_series_tmdb_${seriesTmdbId}`;
+      const sql =
+        `UPDATE ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+        ` SET is_watched = 1, last_played_at = ?` +
+        ` WHERE media_key LIKE ? OR media_key = ?`;
+      await this.rdbStore.executeSql(sql, [Date.now(), `${episodePrefix}%`, oldKey]);
+      console.info(`[DB][markAllSeriesWatched] seriesTmdbId=${seriesTmdbId} 所有集已标记完播`);
+    } catch (error) {
+      const err = error as BusinessError;
+      console.warn(`[DB][markAllSeriesWatched] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  /**
    * 查询指定剧集最近播放的一集进度。
    * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
    */
@@ -2944,7 +3029,7 @@ export class FileSourceDatabase {
       const oldKey = `media_progress_series_tmdb_${seriesTmdbId}`;
       // 同时查新旧格式，取最近播放的一条
       const sql =
-        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
+        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number, is_watched` +
         ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
         ` WHERE media_key LIKE ? OR media_key = ?` +
         ` ORDER BY last_played_at DESC LIMIT 1`;
@@ -2957,6 +3042,7 @@ export class FileSourceDatabase {
           lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
           episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
           seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
+          isWatched: rs.getLong(rs.getColumnIndex('is_watched')),
         };
         return entry;
       }
@@ -2982,7 +3068,7 @@ export class FileSourceDatabase {
     try {
       // limit 为数字类型，不存在注入风险；默认 40 用于「继续播放」栏，历史页可传 200
       const sql =
-        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number` +
+        `SELECT media_key, position_ms, duration_ms, last_played_at, episode_number, season_number, is_watched` +
         ` FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
         ` ORDER BY last_played_at DESC LIMIT ${limit}`;
       rs = await this.rdbStore.querySql(sql);
@@ -2995,6 +3081,7 @@ export class FileSourceDatabase {
           lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
           episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
           seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
+          isWatched: rs.getLong(rs.getColumnIndex('is_watched')),
         };
         result.push(entry);
       }
@@ -3123,11 +3210,11 @@ export class FileSourceDatabase {
           `((s.media_type = 'movie' AND NOT EXISTS (` +
             `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
             `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
-            `AND mp2.position_ms > 0` +
+            `AND (mp2.position_ms > 0 OR mp2.is_watched = 1)` +
           `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND NOT EXISTS (` +
             `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
             `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
-            `AND mp2.position_ms > 0` +
+            `AND (mp2.position_ms > 0 OR mp2.is_watched = 1)` +
           `)))`
         );
       } else if (options?.watchProgress === 'partial') {

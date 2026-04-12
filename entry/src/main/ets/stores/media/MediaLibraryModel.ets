@@ -98,6 +98,29 @@ export class MediaLibraryModel {
       console.info(`[MediaLibraryModel][DIAG] recentlyAddedList=${this.recentlyAddedList.length} (series=${seriesInList} video=${videoInList})`);
       this.unwatchedList = this.recentlyAddedList; // 播放历史未实现时，未观看 = 全部
 
+      // 未观看列表：通过 searchMediaItems 查询真实未看内容（is_watched=0 且无播放进度）
+      try {
+        const unwatchedItems: MediaItem[] = await db.searchMediaItems('', {
+          watchProgress: 'unseen',
+          limit: 20
+        });
+        const unwatchedMixed: MediaListItem[] = [];
+        for (const item of unwatchedItems) {
+          const listItem: MediaListItem = {
+            kind: 'video',
+            video: item,
+            sortTs: item.scannedAt
+          };
+          unwatchedMixed.push(listItem);
+        }
+        if (unwatchedMixed.length > 0) {
+          this.unwatchedList = unwatchedMixed;
+        }
+        console.info(`[MediaLibraryModel][DIAG] unwatchedList=${this.unwatchedList.length}`);
+      } catch (e) {
+        console.warn('[MediaLibraryModel] unwatchedList 查询失败，回退到 recentlyAddedList');
+      }
+
       // 评分标签（10→5 逆序，有数量的才显示）
       const ratingBands: RatingLabel[] = [];
       const bands: number[] = [9, 8, 7, 6, 5];
