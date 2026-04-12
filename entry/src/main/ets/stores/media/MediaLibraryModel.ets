@@ -113,9 +113,8 @@ export class MediaLibraryModel {
           };
           unwatchedMixed.push(listItem);
         }
-        if (unwatchedMixed.length > 0) {
-          this.unwatchedList = unwatchedMixed;
-        }
+        unwatchedMixed.sort((a: MediaListItem, b: MediaListItem): number => b.sortTs - a.sortTs);
+        this.unwatchedList = unwatchedMixed;
         console.info(`[MediaLibraryModel][DIAG] unwatchedList=${this.unwatchedList.length}`);
       } catch (e) {
         console.warn('[MediaLibraryModel] unwatchedList 查询失败，回退到 recentlyAddedList');

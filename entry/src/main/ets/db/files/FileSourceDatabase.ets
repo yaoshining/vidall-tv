@@ -455,8 +455,17 @@ export class FileSourceDatabase {
           // 列已存在时忽略（幂等）
           console.warn('[DB] v10 ALTER TABLE is_watched: 列可能已存在，已忽略', JSON.stringify(e));
         }
+        // 回填历史完播数据：position_ms >= duration_ms * 0.95 或剩余 < 60 秒视为已看完
+        await rdbStore.executeSql(
+          `UPDATE ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
+          ` SET is_watched = 1` +
+          ` WHERE is_watched = 0 AND duration_ms > 0 AND (` +
+          `   (duration_ms - position_ms) < 60000 OR` +
+          `   CAST(position_ms AS REAL) >= CAST(duration_ms AS REAL) * 0.95` +
+          ` )`
+        );
         currentVersion = 10;
-        console.info('[DB] 已迁移到 v10：media_progress 新增 is_watched 完播标记列');
+        console.info('[DB] 已迁移到 v10：media_progress 新增 is_watched 完播标记列，并回填历史完播数据');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -3001,7 +3010,9 @@ export class FileSourceDatabase {
       const oldKey = `media_progress_series_tmdb_${seriesTmdbId}`;
       const sql =
         `UPDATE ${FileSourceDatabase.TABLE_MEDIA_PROGRESS}` +
-        ` SET is_watched = 1, last_played_at = ?` +
+        ` SET is_watched = 1,` +
+        `     position_ms = CASE WHEN duration_ms > 0 THEN duration_ms ELSE position_ms END,` +
+        `     last_played_at = ?` +
         ` WHERE media_key LIKE ? OR media_key = ?`;
       await this.rdbStore.executeSql(sql, [Date.now(), `${episodePrefix}%`, oldKey]);
       console.info(`[DB][markAllSeriesWatched] seriesTmdbId=${seriesTmdbId} 所有集已标记完播`);
