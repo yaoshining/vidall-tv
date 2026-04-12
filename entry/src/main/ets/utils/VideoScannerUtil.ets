@@ -215,22 +215,30 @@ export class WebDAVAdapter implements ISourceAdapter {
             await FileSourceDatabase.getInstance().markVideoUpdatedByPath(relativePath);
             // 文件未变化，但若从未成功刮削过，仍需补刮削
             if (existingVideo?.id !== undefined && this.scrapeClient) {
-              const existingScrape =
-                await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existingVideo.id);
-              if (!existingScrape) {
-                console.info(
-                  `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}`
-                );
-                const capturedVideoId = existingVideo.id;
-                const capturedFileName = fileName;
-                const capturedDirPath = info.directoryPath;
-                const capturedScrapeClient = this.scrapeClient;
-                const capturedMode = mode;
-                const retryTask: Promise<void> =
-                  this.doScrapeOnly(capturedVideoId, capturedFileName, capturedDirPath,
-                    capturedScrapeClient, capturedMode, info).catch(() => {});
-                processingTasks.push(retryTask);
-              } else {
+              try {
+                const existingScrape =
+                  await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existingVideo.id);
+                if (!existingScrape) {
+                  console.info(
+                    `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}`
+                  );
+                  const capturedVideoId = existingVideo.id;
+                  const capturedFileName = fileName;
+                  const capturedDirPath = info.directoryPath;
+                  const capturedScrapeClient = this.scrapeClient;
+                  const capturedMode = mode;
+                  const retryTask: Promise<void> =
+                    this.doScrapeOnly(capturedVideoId, capturedFileName, capturedDirPath,
+                      capturedScrapeClient, capturedMode, info).catch(() => {});
+                  processingTasks.push(retryTask);
+                } else {
+                  console.info(
+                    `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
+                    `lastModified=${info.lastModified ?? '未知'}`
+                  );
+                }
+              } catch {
+                // 查询失败，按已有刮削记录处理，正常跳过
                 console.info(
                   `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                   `lastModified=${info.lastModified ?? '未知'}`
@@ -334,9 +342,6 @@ export class WebDAVAdapter implements ISourceAdapter {
     mode: ScanMode,
     info: VideoFileInfo
   ): Promise<void> {
-    if (!scrapeClient) {
-      return;
-    }
     try {
       const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
       if (mode === 'incremental') {
@@ -380,8 +385,9 @@ export class WebDAVAdapter implements ISourceAdapter {
 
     console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
     const parsed = parseFileName(fileName);
-    const dirParts = directoryPath.split('/').filter((s: string) => s.length > 0);
-    const seriesHint: string | undefined = dirParts.length > 0 ? dirParts[dirParts.length - 1] : undefined;
+    const filePathParts = info.filePath.split('/').filter((s: string) => s.length > 0);
+    const parentDirParts = filePathParts.slice(0, -1);
+    const seriesHint: string | undefined = parentDirParts.length > 0 ? parentDirParts[parentDirParts.length - 1] : undefined;
 
     if (parsed.mediaType === 'movie') {
       try {
@@ -774,8 +780,8 @@ export class SMBAdapter implements ISourceAdapter {
             await this.doScrapeOnly(videoId, capturedInfo.fileName, capturedInfo.directoryPath,
               capturedScrapeClient, capturedMode, capturedInfo);
           }
-        }).catch((e: Error) => {
-          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}: ${e.message ?? String(e)}`);
+        }).catch(() => {
+          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}`);
         });
         processingTasks.push(task);
       }
@@ -790,9 +796,6 @@ export class SMBAdapter implements ISourceAdapter {
     mode: ScanMode,
     info: VideoFileInfo
   ): Promise<void> {
-    if (!scrapeClient) {
-      return;
-    }
     try {
       const existing = await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(videoId);
       if (mode === 'incremental') {
@@ -801,37 +804,37 @@ export class SMBAdapter implements ISourceAdapter {
           return;
         }
       } else if (mode === 'fix-missing') {
-      // fix-missing: scrape_info 存在且 ID 已关联，且海报不为空，才跳过
-      if (existing) {
-        const isComplete = existing.mediaType === 'movie'
-          ? existing.movieId !== undefined
-          : existing.tvSeriesId !== undefined;
-        if (isComplete) {
-          let hasPoster = false;
-          try {
-            const sdb = FileSourceDatabase.getInstance();
-            if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
-              const mov = await sdb.getMovieById(existing.movieId);
-              hasPoster = !!(mov?.posterUrl);
-            } else if (existing.tvSeriesId !== undefined) {
-              const ser = await sdb.getTvSeriesById(existing.tvSeriesId);
-              hasPoster = !!(ser?.posterUrl);
+        // fix-missing: scrape_info 存在且 ID 已关联，且海报不为空，才跳过
+        if (existing) {
+          const isComplete = existing.mediaType === 'movie'
+            ? existing.movieId !== undefined
+            : existing.tvSeriesId !== undefined;
+          if (isComplete) {
+            let hasPoster = false;
+            try {
+              const sdb = FileSourceDatabase.getInstance();
+              if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
+                const mov = await sdb.getMovieById(existing.movieId);
+                hasPoster = !!(mov?.posterUrl);
+              } else if (existing.tvSeriesId !== undefined) {
+                const ser = await sdb.getTvSeriesById(existing.tvSeriesId);
+                hasPoster = !!(ser?.posterUrl);
+              }
+            } catch {
+              hasPoster = true;
             }
-          } catch {
-            hasPoster = true;
+            if (hasPoster) {
+              console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
+              info.scrapeSkipped = true;
+              return;
+            }
+            console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 海报缺失，重新刮削 fileName=${fileName}`);
+          } else {
+            console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整（ID未关联），重新刮削 fileName=${fileName}`);
           }
-          if (hasPoster) {
-            console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据完整，跳过 fileName=${fileName}`);
-            info.scrapeSkipped = true;
-            return;
-          }
-          console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 海报缺失，重新刮削 fileName=${fileName}`);
-        } else {
-          console.info(`[VideoScanner][SMB][SCRAPE] fix-missing 元数据不完整（ID未关联），重新刮削 fileName=${fileName}`);
         }
       }
-    }
-    // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
+      // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
     } catch {
       // 查询失败继续刮削
     }
@@ -839,8 +842,9 @@ export class SMBAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][SMB][SCRAPE] 开始刮削 fileName=${fileName}`);
     const parsed = parseFileName(fileName);
     const db = FileSourceDatabase.getInstance();
-    const dirParts = directoryPath.split('/').filter((s: string) => s.length > 0);
-    const seriesHint = dirParts.length > 0 ? dirParts[dirParts.length - 1] : '';
+    const filePathParts = info.filePath.split('/').filter((s: string) => s.length > 0);
+    const parentDirParts = filePathParts.slice(0, -1);
+    const seriesHint: string | undefined = parentDirParts.length > 0 ? parentDirParts[parentDirParts.length - 1] : undefined;
 
     if (parsed.mediaType === 'movie') {
       try {

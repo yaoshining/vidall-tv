@@ -630,6 +630,9 @@ export class ScrapeClient {
 
   /**
    * 自动刮削电视剧集
+   * @param fileName 视频文件名，用于解析剧集标题/季集号
+   * @param seriesHint 可选，父目录名作为剧名搜索提示。仅当 fileName 无法解析出剧名（parsed.title 为空）时生效，
+   *                   优先级低于 parsed.title。适用于文件名格式如 `S01E01 4K.mkv` 的场景。
    * 返回 TvEpisodeScrapeBundle，每项均可能为 null（查不到时）
    */
   async autoScrapeTvEpisode(fileName: string, seriesHint?: string): Promise<TvEpisodeScrapeBundle> {
