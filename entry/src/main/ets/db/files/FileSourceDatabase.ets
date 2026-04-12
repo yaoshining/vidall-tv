@@ -3247,13 +3247,11 @@ export class FileSourceDatabase {
           `((s.media_type = 'movie' AND EXISTS (` +
             `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
             `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
-            `AND mp2.duration_ms > 0 ` +
-            `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
+            `AND (mp2.is_watched = 1 OR (mp2.duration_ms > 0 AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9))` +
           `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
             `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
             `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
-            `AND mp2.duration_ms > 0 ` +
-            `AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9` +
+            `AND (mp2.is_watched = 1 OR (mp2.duration_ms > 0 AND CAST(mp2.position_ms AS REAL) >= CAST(mp2.duration_ms AS REAL) * 0.9))` +
           `)))`
         );
       }
