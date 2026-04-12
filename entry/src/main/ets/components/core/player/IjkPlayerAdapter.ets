@@ -514,6 +514,10 @@ export class IjkPlayerAdapter implements IPlayer {
     // 必须设为 1，否则 stream_component_open 会跳过 AVMEDIA_TYPE_SUBTITLE 分支，onTimedText 永远不会触发
     this.ijk.setOptionLong(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'subtitle', '1');
 
+    // ── 变速不变调 ──
+    // 必须在 prepare 前开启，否则 setSpeed() 调用成功但播放速率不变
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'soundtouch', '1');
+
     // ── 缓冲控制 ──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'max_cached_duration', '1500');
     // infbuf=1 可能导致长播时缓冲无上限增长，增加系统回收/强杀风险。
