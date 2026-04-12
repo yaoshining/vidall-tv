@@ -1,7 +1,7 @@
 import { LengthMetrics } from "@kit.ArkUI"
 import { BusinessError } from '@kit.BasicServicesKit'
 import { WebDAVConfig } from "../../../lib/WebDAVClient"
-import { FileExplorerPage } from "../../files"
+import { FileExplorerPage, FileExplorerPageParam } from "../../files"
 import { SmbFileExplorerPage, SmbFileExplorerPageParam } from "../../files/SmbFileExplorerPage"
 import promptAction from '@ohos.promptAction'
 import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
@@ -110,11 +110,18 @@ export struct FileSourceTab {
    */
   private handleDirectoryClick(item: DirectoryItem): void {
     if (item.fileSource.type === FileSourceType.WEBDAV) {
-      const config = this.buildWebDAVConfigForDirectory(item)
-      if (config) {
+      const webdavConfig = this.buildWebDAVConfigForDirectory(item)
+      if (webdavConfig) {
+        const param: FileExplorerPageParam = {
+          config: webdavConfig,
+          dirId: item.dirId,
+          sourceId: item.fileSource.id,
+          directoryPath: item.directoryPath,
+          dirStatus: item.dirStatus
+        }
         this.pageStack.pushPath({
           name: FileExplorerPage.PAGE_NAME,
-          param: config as WebDAVConfig
+          param: param
         }, false)
       }
     } else if (item.fileSource.type === FileSourceType.SMB) {
