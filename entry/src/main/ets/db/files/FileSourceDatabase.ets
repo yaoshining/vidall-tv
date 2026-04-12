@@ -1574,6 +1574,15 @@ export class FileSourceDatabase {
     }
     // 同时确保新表（movies/tv_series/tv_seasons/tv_episodes）存在
     await this.createMediaTablesV3(rdbStore);
+    // 确保 (tv_series_id, episode_id) 索引存在，供多版本去重查询使用
+    try {
+      await rdbStore.executeSql(
+        `CREATE INDEX IF NOT EXISTS idx_scrape_info_tvs_ep` +
+        ` ON ${FileSourceDatabase.TABLE_SCRAPE_INFO}(tv_series_id, episode_id)`
+      );
+    } catch {
+      // 索引已存在时忽略
+    }
   }
 
   /**
@@ -2018,18 +2027,32 @@ export class FileSourceDatabase {
     let rs: relationalStore.ResultSet | null = null;
     try {
       // 同一 episode_id 可能对应多个版本文件（如 4K 和 HDR），只保留 file_size 最大的那个
-      // NOT EXISTS 子查询：若存在同 episode_id 且 file_size 更大（或同大但 video_id 更高）的行，则排除当前行
-      const sql = this.mediaItemSql +
+      // 用 CTE 先聚合出每个 episode_id 应保留的 video_id（NULL 安全，避免 NOT EXISTS 的 N×N 扫描）：
+      // - COALESCE(file_size, 0) 处理 file_size 为 NULL 的情况
+      // - 同大时以 video_id 较大者（较新扫描）为准
+      // - episode_id IS NULL 的行（未刮削集）均保留，不纳入去重
+      const SCRAPE = FileSourceDatabase.TABLE_SCRAPE_INFO;
+      const VIDEOS = FileSourceDatabase.TABLE_VIDEOS;
+      const sql =
+        `WITH best_vid AS (` +
+        `  SELECT si.episode_id,` +
+        `         MAX(COALESCE(vi.file_size, 0) * 100000000 + si.video_id) AS rank_key,` +
+        `         MAX(si.video_id) AS max_vid_fallback` +
+        `  FROM ${SCRAPE} si` +
+        `  JOIN ${VIDEOS} vi ON si.video_id = vi.id` +
+        `  WHERE si.tv_series_id = ? AND si.episode_id IS NOT NULL` +
+        `  GROUP BY si.episode_id` +
+        `)` +
+        this.mediaItemSql +
         ` WHERE s.tv_series_id = ?` +
-        ` AND NOT EXISTS (` +
-        `   SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} si2` +
-        `   JOIN ${FileSourceDatabase.TABLE_VIDEOS} vi2 ON si2.video_id = vi2.id` +
-        `   WHERE si2.tv_series_id = ?` +
-        `     AND si2.episode_id IS NOT NULL` +
-        `     AND si2.episode_id = s.episode_id` +
-        `     AND (vi2.file_size > v.file_size` +
-        `          OR (vi2.file_size = v.file_size AND si2.video_id > s.video_id))` +
-        ` )` +
+        `   AND (` +
+        `     s.episode_id IS NULL` +
+        `     OR EXISTS (` +
+        `       SELECT 1 FROM best_vid bv` +
+        `       WHERE bv.episode_id = s.episode_id` +
+        `         AND (COALESCE(v.file_size, 0) * 100000000 + s.video_id) = bv.rank_key` +
+        `     )` +
+        `   )` +
         ` ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC`;
       rs = await this.rdbStore.querySql(sql, [seriesId, seriesId]);
       const items: MediaItem[] = [];
