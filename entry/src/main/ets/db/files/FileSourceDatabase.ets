@@ -1519,7 +1519,7 @@ export class FileSourceDatabase {
       console.error('[DB][getEpisodesBySeriesAndSeason]', JSON.stringify(e));
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1535,7 +1535,7 @@ export class FileSourceDatabase {
       rs = await this.rdbStore.querySql(sql, [seriesId]);
       if (rs.goToFirstRow()) { return this.parseTvEpisodeEntity(rs); }
       return null;
-    } catch { return null; } finally { rs?.close(); }
+    } catch { return null; } finally { try { rs?.close(); } catch { } }
   }
 
   async upsertTvEpisode(e: TvEpisodeEntity): Promise<number> {
@@ -1579,7 +1579,7 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertTvEpisode 失败: ${err.message}`);
-      throw err;
+      throw new Error(err.message);
     }
   }
 
@@ -1604,7 +1604,7 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `parseTvEpisodeEntity 失败: ${err.message}`);
-      throw err;
+      throw new Error(err.message);
     }
   }
 
@@ -1776,7 +1776,7 @@ export class FileSourceDatabase {
       rs = await this.rdbStore.query(pred);
       if (rs.goToFirstRow()) { return this.parseScrapeInfoEntity(rs); }
       return null;
-    } catch { return null; } finally { rs?.close(); }
+    } catch { return null; } finally { try { rs?.close(); } catch { } }
   }
 
   /** 清理孤立 scrape_info（video_id 不在 videos 表中），由历史 INSERT OR REPLACE 产生 */
@@ -1831,11 +1831,12 @@ export class FileSourceDatabase {
         if (nums.indexOf(n) < 0) { nums.push(n); }
       }
       return nums;
-    } catch { return []; } finally { rs?.close(); }
+    } catch { return []; } finally { try { rs?.close(); } catch { } }
   }
 
   async upsertScrapeInfo(e: ScrapeInfoEntity): Promise<void> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
+    try {
     console.info(`[DB][upsertScrapeInfo] videoId=${e.videoId} type=${e.mediaType} movieId=${e.movieId ?? 'null'} tvSeriesId=${e.tvSeriesId ?? 'null'} episodeId=${e.episodeId ?? 'null'} title="${e.title}"`);
     // 先查 video_id 是否已有 scrape_info，有则 UPDATE（不依赖 provider+provider_id 唯一索引）
     const existing = await this.getScrapeInfoByVideoId(e.videoId);
@@ -1881,9 +1882,15 @@ export class FileSourceDatabase {
     ];
     await this.rdbStore.executeSql(sql, args);
     console.info(`[DB][upsertScrapeInfo] ✅ 写入成功 videoId=${e.videoId}`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `upsertScrapeInfo 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   private parseScrapeInfoEntity(rs: relationalStore.ResultSet): ScrapeInfoEntity {
+    try {
     const num = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); };
     const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); };
     return {
@@ -1899,6 +1906,11 @@ export class FileSourceDatabase {
       episodeNumber: num('episode_number'),
       scrapedAt: rs.getLong(rs.getColumnIndex('scraped_at'))
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseScrapeInfoEntity 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -1953,7 +1965,7 @@ export class FileSourceDatabase {
       console.error('[FileSourceDatabase] getAllMediaItems', JSON.stringify(e));
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1972,7 +1984,7 @@ export class FileSourceDatabase {
       ).join(', ');
       console.info(`[DB][getMediaItemsByType('${mediaType}')] 数量=${items.length} 有海报=${withPoster} 采样: ${sample}`);
       return items;
-    } catch (e) { console.error('[FileSourceDatabase] getMediaItemsByType', JSON.stringify(e)); return []; } finally { rs?.close(); }
+    } catch (e) { console.error('[FileSourceDatabase] getMediaItemsByType', JSON.stringify(e)); return []; } finally { try { rs?.close(); } catch { } }
   }
 
   async getMediaItemsByRating(): Promise<MediaItem[]> {
@@ -1985,7 +1997,7 @@ export class FileSourceDatabase {
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
       console.info(`[DB][getMediaItemsByRating] 数量=${items.length} (有评分的视频数)`);
       return items;
-    } catch (e) { console.error('[FileSourceDatabase] getMediaItemsByRating', JSON.stringify(e)); return []; } finally { rs?.close(); }
+    } catch (e) { console.error('[FileSourceDatabase] getMediaItemsByRating', JSON.stringify(e)); return []; } finally { try { rs?.close(); } catch { } }
   }
 
   async getDistinctReleaseYears(): Promise<string[]> {
@@ -2054,7 +2066,7 @@ export class FileSourceDatabase {
       const items: MediaItem[] = [];
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
       return items;
-    } catch { return []; } finally { rs?.close(); }
+    } catch { return []; } finally { try { rs?.close(); } catch { } }
   }
 
   async getMediaStats(): Promise<MediaStats> {
@@ -2104,6 +2116,7 @@ export class FileSourceDatabase {
   }
 
   private parseMediaItem(rs: relationalStore.ResultSet): MediaItem {
+    try {
     const L = (col: string): number => { const i = rs.getColumnIndex(col); return i >= 0 && !rs.isColumnNull(i) ? rs.getLong(i) : 0; };
     const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return i >= 0 && !rs.isColumnNull(i) ? rs.getString(i) : undefined; };
     const dbl = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return i >= 0 && !rs.isColumnNull(i) ? rs.getDouble(i) : undefined; };
@@ -2127,6 +2140,11 @@ export class FileSourceDatabase {
       posterUrl: str('poster_url'), backdropUrl: str('backdrop_url'),
       posterLocalPath: str('poster_local_path'), backdropLocalPath: str('backdrop_local_path'),
     };
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `parseMediaItem 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
   }
 
   /**
@@ -2182,7 +2200,7 @@ export class FileSourceDatabase {
       console.error('[DB][getMediaItemsByTvSeriesId]', JSON.stringify(e));
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2201,7 +2219,7 @@ export class FileSourceDatabase {
     } catch {
       return null;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2507,7 +2525,7 @@ export class FileSourceDatabase {
       console.error('[DB][getDistinctTvSeriesGroups] 查询失败', JSON.stringify(e));
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2687,9 +2705,9 @@ export class FileSourceDatabase {
       console.error('[DB][getRecentlyAddedList] 查询失败', JSON.stringify(e));
       return [];
     } finally {
-      tvRs?.close();
-      movieRs?.close();
-      unscrapedRs?.close();
+      try { tvRs?.close(); } catch { }
+      try { movieRs?.close(); } catch { }
+      try { unscrapedRs?.close(); } catch { }
     }
   }
 
@@ -2812,7 +2830,7 @@ export class FileSourceDatabase {
       console.error(`[FileSourceDatabase] getUnscrapedMediaItems 失败: ${JSON.stringify(error)}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2837,7 +2855,7 @@ export class FileSourceDatabase {
     } catch {
       return 0;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2908,7 +2926,7 @@ export class FileSourceDatabase {
       console.warn(`[DB][getPlayProgress] 查询失败 videoId=${videoId} code=${err.code} msg=${err.message}`);
       return null;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2940,7 +2958,7 @@ export class FileSourceDatabase {
       );
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -2967,7 +2985,7 @@ export class FileSourceDatabase {
       );
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3217,7 +3235,7 @@ export class FileSourceDatabase {
       console.warn(`[DB][getLatestMediaProgressBySeries] 查询失败 code=${err.code} msg=${err.message}`);
       return null;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3257,7 +3275,7 @@ export class FileSourceDatabase {
       console.warn(`[DB][getAllMediaProgress] 查询失败 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3495,7 +3513,7 @@ export class FileSourceDatabase {
       console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3535,7 +3553,7 @@ export class FileSourceDatabase {
       console.error(`[DB][getDistinctGenres] 异常 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3586,7 +3604,7 @@ export class FileSourceDatabase {
       console.error(`[DB][getDistinctGenreNames] 异常 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3652,7 +3670,7 @@ export class FileSourceDatabase {
       console.warn(`[DB][getSearchHistory] 查询失败 code=${err.code} msg=${err.message}`);
       return [];
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3726,7 +3744,7 @@ export class FileSourceDatabase {
           }
         }
       } finally {
-        movieRs?.close();
+        try { movieRs?.close(); } catch { }
       }
 
       // ── 回填 tv_series：从 raw_json.origin_country ──
@@ -3760,7 +3778,7 @@ export class FileSourceDatabase {
           }
         }
       } finally {
-        tvRs?.close();
+        try { tvRs?.close(); } catch { }
       }
 
       console.info(`[DB][backfillOriginCountry] 完成：movies=${movieUpdated} tv_series=${tvUpdated}`);
@@ -3791,7 +3809,7 @@ export class FileSourceDatabase {
       console.warn(`[DB][hasMovieOriginCountry] 失败 code=${err.code} msg=${err.message}`);
       return false;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -3816,7 +3834,7 @@ export class FileSourceDatabase {
       console.warn(`[DB][hasTvSeriesOriginCountry] 失败 code=${err.code} msg=${err.message}`);
       return false;
     } finally {
-      rs?.close();
+      try { rs?.close(); } catch { }
     }
   }
 
