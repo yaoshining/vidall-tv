@@ -14,6 +14,8 @@ import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
+import { emitter } from "@kit.BasicServicesKit"
+import { PlayerEvents } from '../../components/core/player/Constants'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -150,6 +152,8 @@ export struct SeriesDetailPage {
   /** ContinueWatchingCard 主按钮交互状态 */
   @Local focusedContinueActionKey: string = ''
   @Local hoveredContinueActionKey: string = ''
+
+  private progressRefreshCallback: () => void = () => {};
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -387,6 +391,16 @@ export struct SeriesDetailPage {
     this.refreshPlaybackState().catch(() => {
       console.warn('[SeriesDetailPage] aboutToAppear refresh failed');
     });
+    this.progressRefreshCallback = () => {
+      this.refreshPlaybackState().catch(() => {
+        console.warn('[SeriesDetailPage] progress refresh on event failed');
+      });
+    };
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, this.progressRefreshCallback);
+  }
+
+  aboutToDisappear(): void {
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId, this.progressRefreshCallback);
   }
 
   // ── 数据加载 ──────────────────────────────────
