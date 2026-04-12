@@ -1,5 +1,5 @@
 import { PlayerEvents, VideoDataType } from "./Constants";
-import { VideoData } from "./VideoData";
+import { VideoData, PresetAudioTrack } from "./VideoData";
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from "@kit.PerformanceAnalysisKit";
 import { CommonConstants } from "../../../common/constants/CommonConstants";
@@ -1490,22 +1490,48 @@ export class VideoPlayerController {
       const emptyHint: PresetAudioHint = { codecName: '', channels: 2 };
       return emptyHint;
     }
-    const first = tracks[0];
-    const mime = (first.mimeType ?? '').toLowerCase();
-    const display = first.displayName.toLowerCase();
 
-    let channels = 2;
-    if (display.includes('7.1')) {
-      channels = 8;
-    } else if (display.includes('5.1')) {
-      channels = 6;
-    } else if (display.includes('mono')) {
-      channels = 1;
-    }
+    // ── 优先级排序：多声道 > 高码率 > 原始顺序 ──────────────────────
+    // 克隆数组避免修改原始数据；只影响"路由决策"，不影响实际选轨。
+    const sorted = tracks.slice().sort((a, b) => {
+      const chA = this.inferTrackChannels(a);
+      const chB = this.inferTrackChannels(b);
+      if (chB !== chA) {
+        return chB - chA; // 多声道优先
+      }
+      const brA = a.bitrate ?? 0;
+      const brB = b.bitrate ?? 0;
+      return brB - brA; // 高码率优先
+    });
 
-    const codecName = mime.length > 0 ? mime : display;
+    const best = sorted[0];
+    const mime = (best.mimeType ?? '').toLowerCase();
+    const channels = this.inferTrackChannels(best);
+    const codecName = mime.length > 0 ? mime : best.displayName.toLowerCase();
     const hint: PresetAudioHint = { codecName, channels };
     return hint;
+  }
+
+  /**
+   * 推断音轨的实际声道数。
+   * 优先使用 `PresetAudioTrack.channels` 字段（由调用方通过 ffprobe 注入）；
+   * 字段缺失时从 displayName 关键字推断，保持向后兼容。
+   */
+  private inferTrackChannels(track: PresetAudioTrack): number {
+    if (track.channels !== undefined && track.channels > 0) {
+      return track.channels;
+    }
+    const display = track.displayName.toLowerCase();
+    if (display.includes('7.1')) {
+      return 8;
+    }
+    if (display.includes('5.1')) {
+      return 6;
+    }
+    if (display.includes('mono')) {
+      return 1;
+    }
+    return 2;
   }
 
   private normalizeTargetChannels(channels?: number): number {

@@ -61,11 +61,37 @@ export class FfmpegAudioRendererSink {
       }
     };
 
-    this.renderer = await audio.createAudioRenderer(rendererOptions);
+    // 先尝试按实际声道数创建；若设备/系统不支持多声道，自动降级到立体声。
+    let actualChannels = this.format.channels;
+    try {
+      this.renderer = await audio.createAudioRenderer(rendererOptions);
+    } catch (e) {
+      const err = e as BusinessError;
+      if (actualChannels > 2) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `createAudioRenderer ${actualChannels}ch 失败（code=${err.code}），降级为立体声: ${err.message}`);
+        actualChannels = 2;
+        const fallbackOptions: audio.AudioRendererOptions = {
+          streamInfo: {
+            samplingRate: this.mapSamplingRate(this.format.sampleRate),
+            channels: audio.AudioChannel.CHANNEL_2,
+            sampleFormat: this.mapSampleFormat(this.format.bitsPerSample),
+            encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW
+          },
+          rendererInfo: {
+            usage: audio.StreamUsage.STREAM_USAGE_MOVIE,
+            rendererFlags: 0
+          }
+        };
+        this.renderer = await audio.createAudioRenderer(fallbackOptions);
+      } else {
+        throw err;
+      }
+    }
     this.renderBufferSize = await this.renderer.getBufferSize();
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `loadWav 成功: rate=${this.format.sampleRate} ch=${this.format.channels} bits=${this.format.bitsPerSample}` +
+      `loadWav 成功: rate=${this.format.sampleRate} ch=${actualChannels}（原始=${this.format.channels}）bits=${this.format.bitsPerSample}` +
       ` queueMs=${this.getBufferedDurationMs()} buf=${this.renderBufferSize}`);
   }
 
@@ -427,14 +453,24 @@ export class FfmpegAudioRendererSink {
   }
 
   private mapChannels(channels: number): audio.AudioChannel {
-    if (channels <= 1) {
-      return audio.AudioChannel.CHANNEL_1;
+    // CHANNEL_3–CHANNEL_8 自 API 11 起支持（HarmonyOS 6.0.2 = API 16，已全量覆盖）。
+    // 不支持的声道数（如 4/5）保守映射到最近的标准值；createAudioRenderer 失败时
+    // loadWav() 内部会自动降级到立体声并记录日志。
+    switch (channels) {
+      case 1:  return audio.AudioChannel.CHANNEL_1;
+      case 2:  return audio.AudioChannel.CHANNEL_2;
+      case 3:  return audio.AudioChannel.CHANNEL_3;
+      case 4:  return audio.AudioChannel.CHANNEL_4;
+      case 5:  return audio.AudioChannel.CHANNEL_5;
+      case 6:  return audio.AudioChannel.CHANNEL_6;   // 5.1 声道
+      case 7:  return audio.AudioChannel.CHANNEL_7;
+      case 8:  return audio.AudioChannel.CHANNEL_8;   // 7.1 声道
+      default:
+        // channels > 8：系统暂无对应枚举，降级到立体声并记录日志。
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `mapChannels: 不支持的声道数 ${channels}，降级到 CHANNEL_2`);
+        return audio.AudioChannel.CHANNEL_2;
     }
-    if (channels === 2) {
-      return audio.AudioChannel.CHANNEL_2;
-    }
-    // 对 5.1/7.1 等多声道做最佳努力透传；若设备/系统不支持会在 createAudioRenderer 抛错。
-    return (channels as number) as audio.AudioChannel;
   }
 
   private mapSampleFormat(bitsPerSample: number): audio.AudioSampleFormat {

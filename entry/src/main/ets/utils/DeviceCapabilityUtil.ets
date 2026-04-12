@@ -1,3 +1,4 @@
+import { audio } from '@kit.AudioKit';
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import * as VidAllCapNapiModule from 'libvidall_core_player_napi.so';
@@ -411,5 +412,74 @@ export class DeviceCapabilityUtil {
 
     const result: IjkHwDecodeSupport = { h264, h265 };
     return result;
+  }
+
+  // ── 5. 多声道输出能力检测 ─────────────────────────────────────────
+
+  private static _multiChannelSupported: boolean | undefined = undefined;
+
+  /**
+   * 检测当前首选输出设备是否支持多声道（> 2 声道）输出。
+   *
+   * 实现原理：
+   * - 通过 AudioRoutingManager.getPreferredOutputDeviceForRendererInfoSync() 同步获取
+   *   当前影片流偏好输出设备列表，检查设备上报的 channelCounts 是否包含 > 2 的值。
+   * - API 调用失败或设备未上报声道信息时，保守返回 false（降级到立体声）。
+   *
+   * 结果整个 App 生命周期缓存一次；设备连接状态变化（如 HDMI 插拔）不会自动刷新，
+   * 建议在 onAudioOutputDeviceChange 事件中调用 clearMultiChannelCache() 重置缓存。
+   */
+  static async supportsMultiChannel(): Promise<boolean> {
+    if (DeviceCapabilityUtil._multiChannelSupported !== undefined) {
+      return DeviceCapabilityUtil._multiChannelSupported;
+    }
+
+    let result = false;
+    try {
+      const audioManager = audio.getAudioManager();
+      const routingManager = audioManager.getRoutingManager();
+
+      // 使用 STREAM_USAGE_MOVIE 渲染信息，与 FfmpegAudioRendererSink 保持一致。
+      const rendererInfo: audio.AudioRendererInfo = {
+        usage: audio.StreamUsage.STREAM_USAGE_MOVIE,
+        rendererFlags: 0
+      };
+
+      const devices = routingManager.getPreferredOutputDeviceForRendererInfoSync(rendererInfo);
+      for (let i = 0; i < devices.length; i++) {
+        const counts = devices[i].channelCounts;
+        if (counts && counts.length > 0) {
+          for (let j = 0; j < counts.length; j++) {
+            if (counts[j] > 2) {
+              result = true;
+              break;
+            }
+          }
+        }
+        if (result) {
+          break;
+        }
+      }
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(
+        `${DeviceCapabilityUtil.TAG} supportsMultiChannel 查询失败，保守降级到立体声: ` +
+        `${err.message ?? ''}`
+      );
+      result = false;
+    }
+
+    DeviceCapabilityUtil._multiChannelSupported = result;
+    console.info(
+      `${DeviceCapabilityUtil.TAG} 多声道输出支持: ${result ? '✅ 支持' : '❌ 不支持（降级立体声）'}`
+    );
+    return result;
+  }
+
+  /**
+   * 清除多声道支持缓存（如 HDMI/蓝牙音频设备插拔后调用，触发重新检测）。
+   */
+  static clearMultiChannelCache(): void {
+    DeviceCapabilityUtil._multiChannelSupported = undefined;
   }
 }
