@@ -59,6 +59,8 @@ const FFMPEG_PREVIEW_STALL_STEP_MAX_MS = 1200;
 const FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS = 400;
 const FFMPEG_PREVIEW_EXTRACT_STUCK_MS = 1500;
 const FFMPEG_PREVIEW_EXTRACT_HARD_TIMEOUT_MS = 6500;
+/** 支持的播放速率白名单；控制器层对外输入做归一化，避免后端静默降级导致 UI 显示不一致 */
+const SUPPORTED_SPEEDS: number[] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 const FFMPEG_PREVIEW_SINGLE_FRAME_INTERVAL_MS = 180;
 const FFMPEG_PREVIEW_FORCE_RESTART_INTERVAL_MS = 2200;
 const FFMPEG_PREVIEW_FORCE_RESTART_LAG_MS = 1800;
@@ -769,11 +771,17 @@ export class VideoPlayerController {
    * 速率会在 onPlayerReady 后重新应用，确保后端切换后倍速设置不丢失。
    */
   setPlaybackSpeed(speed: number): void {
-    this.playbackSpeed = speed;
-    if (this.player) {
-      this.player.setPlaybackSpeed(speed);
+    // 白名单归一化：不在支持档位的值回退到 1.0x，避免后端静默降级与 UI 显示不一致
+    const normalizedSpeed = SUPPORTED_SPEEDS.includes(speed) ? speed : 1.0;
+    if (normalizedSpeed !== speed) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `setPlaybackSpeed: speed=${speed} 不在支持列表，归一化为 1.0`);
     }
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed} backend=${this.backend}`);
+    this.playbackSpeed = normalizedSpeed;
+    if (this.player) {
+      this.player.setPlaybackSpeed(normalizedSpeed);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${normalizedSpeed} backend=${this.backend}`);
   }
 
   /**

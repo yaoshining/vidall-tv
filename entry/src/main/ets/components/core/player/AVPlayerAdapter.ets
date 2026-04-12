@@ -244,8 +244,20 @@ export class AVPlayerAdapter implements IPlayer {
       return;
     }
     const playbackSpeed = this.speedToPlaybackSpeed(speed);
-    this.avPlayer.setSpeed(playbackSpeed);
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed} enum=${playbackSpeed}`);
+    try {
+      this.avPlayer.setSpeed(playbackSpeed);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed} enum=${playbackSpeed}`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `setSpeed 异常，降级为 1.0x: code=${err.code} msg=${err.message}`);
+      // 降级：回退到正常速度，避免异常中断调用方后续流程
+      try {
+        this.avPlayer.setSpeed(media.PlaybackSpeed.SPEED_FORWARD_1_00_X);
+      } catch (_) {
+        // 降级也失败时静默忽略（播放器可能未就绪或已 release）
+      }
+    }
   }
 
   /** 将浮点速率映射到 media.PlaybackSpeed 枚举，不支持的值回退到 1.0x */
