@@ -150,11 +150,10 @@ export class FileSourceDatabase {
       // 防御性修复：确保 provider+provider_id 唯一索引已被移除（v8 起允许多文件源对应同一 TMDB 内容）
       await this.dropScrapeInfoProviderPidIndex(this.rdbStore);
 
+      // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用）
+      await this.backfillOriginCountryFromRawJson();
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
-
-      // 异步补全：将历史数据中 origin_country_json=NULL 的行从 raw_json 回填（不阻塞初始化）
-      this.backfillOriginCountryFromRawJson().catch(() => {});
     } catch (error) {
       console.error('FileSourceDatabase: Failed to initialize database', JSON.stringify(error));
       throw new Error('Failed to initialize database: ' + JSON.stringify(error));
@@ -3449,7 +3448,7 @@ export class FileSourceDatabase {
       let movieRs: relationalStore.ResultSet | null = null;
       try {
         movieRs = await this.rdbStore.querySql(
-          `SELECT id, raw_json FROM ${FileSourceDatabase.TABLE_MOVIES} WHERE raw_json IS NOT NULL AND origin_country_json IS NULL`
+          `SELECT id, raw_json FROM ${FileSourceDatabase.TABLE_MOVIES} WHERE raw_json IS NOT NULL AND (origin_country_json IS NULL OR TRIM(origin_country_json) = '' OR origin_country_json NOT LIKE '%"%')`
         );
         interface MovieRow { id: number; rawJson: string }
         const rows: MovieRow[] = [];
@@ -3484,7 +3483,7 @@ export class FileSourceDatabase {
       let tvRs: relationalStore.ResultSet | null = null;
       try {
         tvRs = await this.rdbStore.querySql(
-          `SELECT id, raw_json FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE raw_json IS NOT NULL AND origin_country_json IS NULL`
+          `SELECT id, raw_json FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE raw_json IS NOT NULL AND (origin_country_json IS NULL OR TRIM(origin_country_json) = '' OR origin_country_json NOT LIKE '%"%')`
         );
         interface TvRow { id: number; rawJson: string }
         const tvRows: TvRow[] = [];
