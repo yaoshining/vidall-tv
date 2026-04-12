@@ -50,7 +50,7 @@ export interface SearchMediaOptions {
 }
 
 /**
- * 文件源数据库管理类 — DB v6
+ * 文件源数据库管理类 — DB v10
  * 表结构：file_sources, file_source_directories, videos, scrape_info,
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */

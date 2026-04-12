@@ -87,16 +87,33 @@ export class MediaProgressStore {
   /**
    * 将媒体标记为已完播（完播重置）。
    * 不再删除进度记录，改为写入 is_watched = 1，保留完播历史。
+   * @deprecated 请使用语义明确的 markAsWatched()
    */
   static async clear(key: string): Promise<void> {
+    await MediaProgressStore.markAsWatched(key);
+  }
+
+  /**
+   * 将媒体标记为已完播，保留进度记录（is_watched = 1）。
+   */
+  static async markAsWatched(key: string): Promise<void> {
     await FileSourceDatabase.getInstance().markAsWatched(key);
   }
 
   /**
    * 将指定剧集所有集标记为已完播。
    * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
+   * @deprecated 请使用语义明确的 markAllSeriesWatched()
    */
   static async clearAllForSeries(seriesTmdbId: string): Promise<void> {
+    await MediaProgressStore.markAllSeriesWatched(seriesTmdbId);
+  }
+
+  /**
+   * 将指定剧集所有集标记为已完播（is_watched = 1）。
+   * @param seriesTmdbId 剧集 TMDB ID，如 "1399"
+   */
+  static async markAllSeriesWatched(seriesTmdbId: string): Promise<void> {
     await FileSourceDatabase.getInstance().markAllSeriesWatched(seriesTmdbId);
   }
 }
