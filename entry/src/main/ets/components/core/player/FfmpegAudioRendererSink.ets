@@ -6,6 +6,16 @@ import { CommonConstants } from '../../../common/constants/CommonConstants';
 
 const TAG = '[FfmpegAudioRendererSink]';
 
+/** 设备不支持多声道 AudioRenderer，由上层捕获后以 2ch 重新解码并重试。 */
+export class AudioRendererChannelDowngradeError extends Error {
+  readonly originalChannels: number;
+  constructor(originalChannels: number, message: string) {
+    super(message);
+    this.name = 'AudioRendererChannelDowngradeError';
+    this.originalChannels = originalChannels;
+  }
+}
+
 interface WavFormatInfo {
   sampleRate: number;
   channels: number;
@@ -69,21 +79,11 @@ export class FfmpegAudioRendererSink {
       const err = e as BusinessError;
       if (actualChannels > 2) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `createAudioRenderer ${actualChannels}ch 失败（code=${err.code}），降级为立体声: ${err.message}`);
-        actualChannels = 2;
-        const fallbackOptions: audio.AudioRendererOptions = {
-          streamInfo: {
-            samplingRate: this.mapSamplingRate(this.format.sampleRate),
-            channels: audio.AudioChannel.CHANNEL_2,
-            sampleFormat: this.mapSampleFormat(this.format.bitsPerSample),
-            encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW
-          },
-          rendererInfo: {
-            usage: audio.StreamUsage.STREAM_USAGE_MOVIE,
-            rendererFlags: 0
-          }
-        };
-        this.renderer = await audio.createAudioRenderer(fallbackOptions);
+          `createAudioRenderer ${actualChannels}ch 失败（code=${err.code}），需上层以 2ch 重新解码: ${err.message}`);
+        // 抛出专用错误，让 FfmpegPlayerAdapter 以 2ch 重新解码后重试 loadWav。
+        // 不在此处用多声道 WAV 强行创建 2ch 渲染器，避免 format.channels 与实际数据不一致。
+        throw new AudioRendererChannelDowngradeError(actualChannels,
+          `设备不支持 ${actualChannels}ch AudioRenderer，请以 2ch 重新解码`);
       } else {
         throw err;
       }
