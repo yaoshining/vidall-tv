@@ -14,6 +14,8 @@ import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
+import { emitter } from "@kit.BasicServicesKit"
+import { PlayerEvents } from '../../components/core/player/Constants'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -150,6 +152,8 @@ export struct SeriesDetailPage {
   /** ContinueWatchingCard 主按钮交互状态 */
   @Local focusedContinueActionKey: string = ''
   @Local hoveredContinueActionKey: string = ''
+
+  private progressRefreshCallback: () => void = () => {};
 
   static PAGE_NAME = 'seriesDetail'
 
@@ -347,8 +351,8 @@ export struct SeriesDetailPage {
     this.progressMap = newMap;
 
     // ── 媒体级进度：用于 ContinueWatchingCard 续播入口 ─────────────────────
-    const mKey = MediaProgressStore.seriesKey(seriesProviderId);
-    const mp = await MediaProgressStore.get(mKey);
+    // 使用新集级 key 格式查询（兼容旧格式），不再使用废弃的 seriesKey
+    const mp = await db.getLatestMediaProgressBySeries(seriesProviderId);
     this.mediaProgress = mp;
     this.hasActiveProgress = mp !== null && mp.positionMs > 0 && mp.durationMs > 0;
     this.lastEpisode = null;
@@ -387,6 +391,16 @@ export struct SeriesDetailPage {
     this.refreshPlaybackState().catch(() => {
       console.warn('[SeriesDetailPage] aboutToAppear refresh failed');
     });
+    this.progressRefreshCallback = () => {
+      this.refreshPlaybackState().catch(() => {
+        console.warn('[SeriesDetailPage] progress refresh on event failed');
+      });
+    };
+    emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, this.progressRefreshCallback);
+  }
+
+  aboutToDisappear(): void {
+    emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId, this.progressRefreshCallback);
   }
 
   // ── 数据加载 ──────────────────────────────────
@@ -992,7 +1006,11 @@ export struct SeriesDetailPage {
                 if (this.lastEpisode !== null) {
                   const pid = this.seriesEntity?.providerId ?? '';
                   if (pid.length === 0) { return; }
-                  const mKey = MediaProgressStore.seriesKey(pid);
+                  const mKey = MediaProgressStore.episodeKey(
+                    pid,
+                    this.lastEpisode.seasonNumber ?? 0,
+                    this.lastEpisode.episodeNumber ?? 0
+                  );
                   this.playEpisode(this.lastEpisode, mKey);
                 }
               })
@@ -1054,13 +1072,21 @@ export struct SeriesDetailPage {
               .onClick(() => {
                 const pid = this.seriesEntity?.providerId ?? '';
                 if (pid.length === 0) { return; }
-                const mKey = MediaProgressStore.seriesKey(pid);
                 if (this.lastEpisode !== null) {
+                  const mKey = MediaProgressStore.episodeKey(
+                    pid,
+                    this.lastEpisode.seasonNumber ?? 0,
+                    this.lastEpisode.episodeNumber ?? 0
+                  );
                   this.playEpisode(this.lastEpisode, mKey);
                   return;
                 }
                 const eps = this.group?.episodes ?? [];
-                if (eps.length > 0) { this.playEpisode(eps[0], mKey); }
+                if (eps.length > 0) {
+                  const ep = eps[0];
+                  const mKey = MediaProgressStore.episodeKey(pid, ep.seasonNumber ?? 0, ep.episodeNumber ?? 0);
+                  this.playEpisode(ep, mKey);
+                }
               })
             }
             .alignItems(VerticalAlign.Center)
