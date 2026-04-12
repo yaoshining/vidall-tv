@@ -12,6 +12,7 @@ import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { DirStatus } from "../../db/models/FileSourceEntity";
+import { FileSourceStore } from "../../stores/files/FileSourceStore";
 
 /**
  * 文件浏览页路由参数
@@ -157,15 +158,14 @@ export struct FileExplorerPage {
   }
 
   /**
-   * 确认清理已删除目录：调用 DB 清理方法后返回上一页
+   * 确认清理已删除目录：更新 FileSourceModel 缓存并返回上一页
    */
   private confirmCleanup(): void {
     this.isCleaningUp = true
     const dirId = this.cachedDirId
     const sourceId = this.cachedSourceId
     const directoryPath = this.cachedDirectoryPath
-    const db = FileSourceDatabase.getInstance()
-    db.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath)
+    FileSourceStore.getState().clearMissingDirectory(dirId, sourceId, directoryPath)
       .then((): void => {
         this.pageStack.pop(true)
       })
