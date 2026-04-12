@@ -228,7 +228,7 @@ export class WebDAVAdapter implements ISourceAdapter {
                   const capturedScrapeClient = this.scrapeClient;
                   const capturedMode = mode;
                   const retryTask: Promise<void> =
-                    this.doScrapeOnly(capturedVideoId, capturedFileName, capturedDirPath,
+                    this.doScrapeOnly(capturedVideoId, capturedFileName,
                       capturedScrapeClient, capturedMode, info).catch(() => {});
                   processingTasks.push(retryTask);
                 } else {
@@ -314,11 +314,11 @@ export class WebDAVAdapter implements ISourceAdapter {
             }
 
             if (capturedScrapeClient) {
-              await this.doScrapeOnly(videoId, fileName, capturedInfo.directoryPath,
+              await this.doScrapeOnly(videoId, fileName,
                 capturedScrapeClient, capturedMode, capturedInfo);
             }
-          }).catch((e: Error) => {
-            console.warn(`[VideoScanner][PROCESS] 视频处理异常 ${fileName}: ${e.message}`);
+          }).catch(() => {
+            console.warn(`[VideoScanner][PROCESS] 视频处理异常 ${fileName}`);
           });
           processingTasks.push(processingTask);
         }
@@ -337,7 +337,6 @@ export class WebDAVAdapter implements ISourceAdapter {
   private async doScrapeOnly(
     videoId: number,
     fileName: string,
-    directoryPath: string,
     scrapeClient: ScrapeClient,
     mode: ScanMode,
     info: VideoFileInfo
@@ -712,7 +711,7 @@ export class SMBAdapter implements ISourceAdapter {
                   const capturedScrapeClientR = this.scrapeClient;
                   const capturedModeR = mode;
                   const retryTask: Promise<void> =
-                    this.doScrapeOnly(capturedVideoId, file.name, rootPath,
+                    this.doScrapeOnly(capturedVideoId, file.name,
                       capturedScrapeClientR, capturedModeR, info).catch(() => {});
                   processingTasks.push(retryTask);
                   continue;
@@ -777,7 +776,7 @@ export class SMBAdapter implements ISourceAdapter {
           }
 
           if (capturedScrapeClient) {
-            await this.doScrapeOnly(videoId, capturedInfo.fileName, capturedInfo.directoryPath,
+            await this.doScrapeOnly(videoId, capturedInfo.fileName,
               capturedScrapeClient, capturedMode, capturedInfo);
           }
         }).catch(() => {
@@ -791,7 +790,6 @@ export class SMBAdapter implements ISourceAdapter {
   private async doScrapeOnly(
     videoId: number,
     fileName: string,
-    directoryPath: string,
     scrapeClient: ScrapeClient,
     mode: ScanMode,
     info: VideoFileInfo
@@ -858,7 +856,9 @@ export class SMBAdapter implements ISourceAdapter {
         if (existingMovie && existingMovie.id !== undefined) {
           movieId = existingMovie.id;
           console.info(`[VideoScanner][SMB][SCRAPE] 电影复用已有记录 movieId=${movieId} title="${movie.title}"`);
-          if (!existingMovie.posterUrl && movie.posterUrl) {
+          const needsUpdate = (!existingMovie.posterUrl && movie.posterUrl) ||
+            (!existingMovie.originCountryJson && movie.originCountryJson);
+          if (needsUpdate) {
             const updateEntity: MovieEntity = {
               id: existingMovie.id,
               provider: movie.provider, providerId: movie.providerId,
@@ -874,7 +874,7 @@ export class SMBAdapter implements ISourceAdapter {
               scrapedAt: Date.now()
             };
             await db.upsertMovie(updateEntity);
-            console.info(`[VideoScanner][SMB][SCRAPE] 电影复用更新 posterUrl movieId=${movieId}`);
+            console.info(`[VideoScanner][SMB][SCRAPE] 电影复用更新 posterUrl/originCountryJson movieId=${movieId}`);
           }
         } else {
           const movieEntity: MovieEntity = {
