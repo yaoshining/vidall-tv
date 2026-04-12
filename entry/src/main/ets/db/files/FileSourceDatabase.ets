@@ -9,6 +9,19 @@ import {
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 
+// ─────────────────────────────────────────────
+// 用于从 raw_json 回填 origin_country_json 的最小解析接口
+// ─────────────────────────────────────────────
+interface RawMovieJson {
+  production_countries?: RawProductionCountry[];
+}
+interface RawProductionCountry {
+  iso_3166_1: string;
+}
+interface RawTvJson {
+  origin_country?: string[];
+}
+
 /** 媒体搜索选项（用于 searchMediaItems） */
 export interface SearchMediaOptions {
   /** 媒体类型过滤：'movie' | 'tv' | 'all'，默认 'all' */
@@ -139,6 +152,9 @@ export class FileSourceDatabase {
 
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
+
+      // 异步补全：将历史数据中 origin_country_json=NULL 的行从 raw_json 回填（不阻塞初始化）
+      this.backfillOriginCountryFromRawJson().catch(() => {});
     } catch (error) {
       console.error('FileSourceDatabase: Failed to initialize database', JSON.stringify(error));
       throw new Error('Failed to initialize database: ' + JSON.stringify(error));
@@ -3408,6 +3424,100 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[DB][deleteSearchHistory] 失败 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // origin_country_json 回填（历史数据迁移修复 — Issue #142）
+  // ─────────────────────────────────────────────
+
+  /**
+   * 从 raw_json 为历史数据回填 origin_country_json。
+   *
+   * v7 迁移仅添加了列，未对已有数据赋值，导致老数据 origin_country_json=NULL，
+   * 地区筛选 LIKE 条件对 NULL 值永远不匹配，选具体地区后结果为空。
+   * 本方法在 DB init 后作为后台任务异步执行，补全全部 NULL 行。
+   */
+  private async backfillOriginCountryFromRawJson(): Promise<void> {
+    if (this.rdbStore === null) {
+      return;
+    }
+    let movieUpdated = 0;
+    let tvUpdated = 0;
+    try {
+      // ── 回填 movies：从 raw_json.production_countries[*].iso_3166_1 ──
+      let movieRs: relationalStore.ResultSet | null = null;
+      try {
+        movieRs = await this.rdbStore.querySql(
+          `SELECT id, raw_json FROM ${FileSourceDatabase.TABLE_MOVIES} WHERE raw_json IS NOT NULL AND origin_country_json IS NULL`
+        );
+        interface MovieRow { id: number; rawJson: string }
+        const rows: MovieRow[] = [];
+        while (movieRs.goToNextRow()) {
+          const id = movieRs.getLong(movieRs.getColumnIndex('id'));
+          const rawJson = movieRs.getString(movieRs.getColumnIndex('raw_json'));
+          const row: MovieRow = { id, rawJson };
+          rows.push(row);
+        }
+        for (const row of rows) {
+          try {
+            const parsed = JSON.parse(row.rawJson) as RawMovieJson;
+            const countries = parsed.production_countries;
+            if (countries && countries.length > 0) {
+              const codes: string[] = countries.map((c: RawProductionCountry): string => c.iso_3166_1);
+              const countryJson: string = JSON.stringify(codes);
+              await this.rdbStore!.executeSql(
+                `UPDATE ${FileSourceDatabase.TABLE_MOVIES} SET origin_country_json = ? WHERE id = ?`,
+                [countryJson, row.id]
+              );
+              movieUpdated++;
+            }
+          } catch (e) {
+            // 单条 raw_json 格式异常时跳过，不中止整体回填
+          }
+        }
+      } finally {
+        movieRs?.close();
+      }
+
+      // ── 回填 tv_series：从 raw_json.origin_country ──
+      let tvRs: relationalStore.ResultSet | null = null;
+      try {
+        tvRs = await this.rdbStore.querySql(
+          `SELECT id, raw_json FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE raw_json IS NOT NULL AND origin_country_json IS NULL`
+        );
+        interface TvRow { id: number; rawJson: string }
+        const tvRows: TvRow[] = [];
+        while (tvRs.goToNextRow()) {
+          const id = tvRs.getLong(tvRs.getColumnIndex('id'));
+          const rawJson = tvRs.getString(tvRs.getColumnIndex('raw_json'));
+          const row: TvRow = { id, rawJson };
+          tvRows.push(row);
+        }
+        for (const row of tvRows) {
+          try {
+            const parsed = JSON.parse(row.rawJson) as RawTvJson;
+            const countries = parsed.origin_country;
+            if (countries && countries.length > 0) {
+              const countryJson: string = JSON.stringify(countries);
+              await this.rdbStore!.executeSql(
+                `UPDATE ${FileSourceDatabase.TABLE_TV_SERIES} SET origin_country_json = ? WHERE id = ?`,
+                [countryJson, row.id]
+              );
+              tvUpdated++;
+            }
+          } catch (e) {
+            // 单条 raw_json 格式异常时跳过
+          }
+        }
+      } finally {
+        tvRs?.close();
+      }
+
+      console.info(`[DB][backfillOriginCountry] 完成：movies=${movieUpdated} tv_series=${tvUpdated}`);
+    } catch (e) {
+      const err = e as BusinessError;
+      console.warn(`[DB][backfillOriginCountry] 异常 code=${err.code} msg=${err.message}`);
     }
   }
 
