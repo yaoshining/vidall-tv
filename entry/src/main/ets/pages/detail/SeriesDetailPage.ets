@@ -351,8 +351,8 @@ export struct SeriesDetailPage {
     this.progressMap = newMap;
 
     // ── 媒体级进度：用于 ContinueWatchingCard 续播入口 ─────────────────────
-    const mKey = MediaProgressStore.seriesKey(seriesProviderId);
-    const mp = await MediaProgressStore.get(mKey);
+    // 使用新集级 key 格式查询（兼容旧格式），不再使用废弃的 seriesKey
+    const mp = await db.getLatestMediaProgressBySeries(seriesProviderId);
     this.mediaProgress = mp;
     this.hasActiveProgress = mp !== null && mp.positionMs > 0 && mp.durationMs > 0;
     this.lastEpisode = null;
@@ -1006,7 +1006,11 @@ export struct SeriesDetailPage {
                 if (this.lastEpisode !== null) {
                   const pid = this.seriesEntity?.providerId ?? '';
                   if (pid.length === 0) { return; }
-                  const mKey = MediaProgressStore.seriesKey(pid);
+                  const mKey = MediaProgressStore.episodeKey(
+                    pid,
+                    this.lastEpisode.seasonNumber ?? 0,
+                    this.lastEpisode.episodeNumber ?? 0
+                  );
                   this.playEpisode(this.lastEpisode, mKey);
                 }
               })
@@ -1068,13 +1072,21 @@ export struct SeriesDetailPage {
               .onClick(() => {
                 const pid = this.seriesEntity?.providerId ?? '';
                 if (pid.length === 0) { return; }
-                const mKey = MediaProgressStore.seriesKey(pid);
                 if (this.lastEpisode !== null) {
+                  const mKey = MediaProgressStore.episodeKey(
+                    pid,
+                    this.lastEpisode.seasonNumber ?? 0,
+                    this.lastEpisode.episodeNumber ?? 0
+                  );
                   this.playEpisode(this.lastEpisode, mKey);
                   return;
                 }
                 const eps = this.group?.episodes ?? [];
-                if (eps.length > 0) { this.playEpisode(eps[0], mKey); }
+                if (eps.length > 0) {
+                  const ep = eps[0];
+                  const mKey = MediaProgressStore.episodeKey(pid, ep.seasonNumber ?? 0, ep.episodeNumber ?? 0);
+                  this.playEpisode(ep, mKey);
+                }
               })
             }
             .alignItems(VerticalAlign.Center)
