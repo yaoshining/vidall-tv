@@ -632,22 +632,33 @@ export class ScrapeClient {
    * 自动刮削电视剧集
    * 返回 TvEpisodeScrapeBundle，每项均可能为 null（查不到时）
    */
-  async autoScrapeTvEpisode(fileName: string): Promise<TvEpisodeScrapeBundle> {
+  async autoScrapeTvEpisode(fileName: string, seriesHint?: string): Promise<TvEpisodeScrapeBundle> {
     const parsed = parseFileName(fileName);
     const empty: TvEpisodeScrapeBundle = { series: null, season: null, episode: null };
     if (parsed.mediaType !== 'tv') {
       console.warn(`[ScrapeClient] autoScrapeTvEpisode 跳过: mediaType=${parsed.mediaType} title="${parsed.title}" file=${fileName}`);
       return empty;
     }
-    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" → title="${parsed.title}" S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'} year=${parsed.year ?? '?'}`);
-    const searchTitlesLog = buildSearchTitles(parsed.title);
+    // 当文件名无法解析出剧集名时，使用父目录名作为搜索提示
+    const effectiveTitle = (parsed.title.length === 0 && seriesHint && seriesHint.length > 0)
+      ? seriesHint
+      : parsed.title;
+    if (effectiveTitle.length === 0) {
+      console.warn(`[ScrapeClient] autoScrapeTvEpisode 标题为空且无 seriesHint，跳过 file=${fileName}`);
+      return empty;
+    }
+    if (effectiveTitle !== parsed.title) {
+      console.info(`[ScrapeClient] autoScrapeTvEpisode 使用 seriesHint="${seriesHint}" 作为搜索标题（文件名无剧名）: file="${fileName}"`);
+    }
+    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" → title="${effectiveTitle}" S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'} year=${parsed.year ?? '?'}`);
+    const searchTitlesLog = buildSearchTitles(effectiveTitle);
     console.info(`[ScrapeClient] autoScrapeTvEpisode 候选标题: ${JSON.stringify(searchTitlesLog)}`);
 
     await this.acquire();
     try {
       for (const provider of this.getActiveProviders()) {
         try {
-          const searchTitles = buildSearchTitles(parsed.title);
+          const searchTitles = buildSearchTitles(effectiveTitle);
           let topSearch: TvSeriesScrapeResult | null = null;
           for (const candidate of searchTitles) {
             // 第一轮：带年份搜索（year= 参数，过滤精确）
