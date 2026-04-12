@@ -11,7 +11,9 @@
       {
         "name": "TestAbility",
         "srcEntry": "./ets/testability/TestAbility.ets",
-        "exported": true
+        "exported": true,
+        "startWindowIcon": "$media:layered_image",
+        "startWindowBackground": "{0xFFFFFFFF}"
       }
     ]
   }

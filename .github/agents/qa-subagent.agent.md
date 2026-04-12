@@ -169,3 +169,136 @@ zsh -f -c 'set -o pipefail; your_hvigor_command 2>&1 | tail -n 40; echo HVIGOR_E
 - 本地测试入口：`entry/src/test/List.test.ets`
 - 已修复历史阻塞：移除不存在的 `./WebDAV.test` 引用与调用。
 - `WebDAV` 网络相关测试应放在 `ohosTest`（设备/仪器化）侧执行，不应阻塞本地 unit 构建。
+
+### 六、集成测试执行流程（ohosTest 设备侧）
+
+**目标**：在真机或模拟器上运行完整的集成测试（涵盖网络、文件源、播放器等设备 API）。
+
+**前置条件**：
+- 设备已连接（真机或模拟器）
+- `hdc` 可用：`/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc`
+
+**执行步骤**：
+
+#### 1) 检查设备连接状态
+
+```bash
+HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
+$HDC list targets
+# 输出示例：192.168.3.85:5555（设备已连接）
+```
+
+#### 2) 编译集成测试 HAP
+
+```bash
+cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+zsh -f -c '
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+  -p module=entry@ohosTest \
+  assembleHap 2>&1 | tail -30
+'
+```
+
+**成功标志**：最后一行为 `> hvigor BUILD SUCCESSFUL in X s Y ms`
+
+**编译产物**：
+- `entry/build/default/outputs/ohosTest/entry-ohosTest-signed.hap`（已签名，用于安装）
+- `entry/build/default/outputs/ohosTest/entry-ohosTest-unsigned.hap`（仅编译产物）
+
+#### 3) 安装测试 HAP 到设备
+
+```bash
+HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
+HAP=/Users/yaoshining/DevEcoStudioProjects/VidAll_TV/entry/build/default/outputs/ohosTest/entry-ohosTest-signed.hap
+
+$HDC install "$HAP"
+# 输出示例：[Info]...msg:install bundle successfully.
+```
+
+#### 4) 启动测试框架
+
+```bash
+HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
+
+# 包名来自 AppScope/app.json5
+# 模块名来自 entry/src/ohosTest/module.json5
+$HDC shell "aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner"
+```
+
+**预期输出**：
+```
+TestFinished-ResultCode: 0
+TestFinished-ResultMsg: All tests passed
+user test finished.
+```
+
+#### 5) 收集测试日志（实时）
+
+在另一个终端启动日志收集（测试运行期间保持开启）：
+
+```bash
+HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
+
+# 收集所有日志
+$HDC shell hilog | grep -i "test\|hypium\|hjsunit\|error\|fail"
+
+# 仅收集错误和 E 级以上日志
+$HDC shell hilog -b E
+```
+
+### 七、已知问题与快速修复
+
+| 问题 | 原因 | 快速修复 |
+|------|------|---------|
+| `Schema validate failed: must have required property 'startWindowIcon'` | module.json5 缺少窗口配置 | 见下面的模板。 |
+| `must match pattern "^[$]color:..."` | 颜色值格式不对 | 使用 `{0xFFFFFFFF}` 代替 `#FFFFFF` 或 `$color:white`。 |
+| `App died, ResultCode: -1` | 测试代码异常（阶段性，暂时关闭） | 查看 hilog，或检查 List.test.ets 中是否有网络依赖（应只跑本地逻辑）。 |
+| `Task 'Debug' was not found` | hvigor 任务名错误 | 用 `assembleHap`，不用 `Debug`。 |
+
+### 八、module.json5 正确模板（ohosTest）
+
+```json5
+{
+  "module": {
+    "name": "entry_test",
+    "type": "feature",
+    "deviceTypes": [
+      "tv"
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "abilities": [
+      {
+        "name": "TestAbility",
+        "srcEntry": "./ets/testability/TestAbility.ets",
+        "exported": true,
+        "startWindowIcon": "$media:layered_image",
+        "startWindowBackground": "{0xFFFFFFFF}"
+      }
+    ]
+  }
+}
+```
+
+### 九、测试代码入口
+
+- 主入口：`entry/src/ohosTest/ets/testability/TestAbility.ets`
+- 测试套件：`entry/src/ohosTest/ets/test/List.test.ets`
+- 具体测试：
+  - `entry/src/ohosTest/ets/test/Ability.test.ets`（基础能力测试）
+  - `entry/src/ohosTest/ets/test/WebDAV.test.ets`（WebDAV 集成测试）
+
+### 十、性能与退出码
+
+- 完整编译时间：7~10 秒
+- 安装时间：2~5 秒
+- 测试运行时间：取决于用例数量（首批轻量用例预计 < 30 秒）
+
+**关键退出码**：
+- `0`：所有测试通过
+- `-1` 或非 0：测试失败或应用崩溃（查看 hilog 诊断）
