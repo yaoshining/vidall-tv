@@ -5,7 +5,7 @@ import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel } from "../../../stores/media/MediaLibraryModel"
-import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { FileSourceDatabase, MediaFilterOptions } from "../../../db/files/FileSourceDatabase"
 import { FileSourceType } from "../../../db/models/FileSourceEntity"
 import { ContinueWatchCard } from "../../../components/media/ContinueWatchCard"
 import promptAction from '@ohos.promptAction';
@@ -460,6 +460,30 @@ export struct MediaLibraryTab {
   @Local isViewAllFocused: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
 
+  // ── 筛选/排序状态 ──────────────────────────────
+  /** 已选中的类型标签（多选） */
+  @Local filterGenres: string[] = []
+  /** 已选中的年份（多选） */
+  @Local filterYears: number[] = []
+  /** 最近播放快捷筛选 */
+  @Local filterRecentlyPlayed: boolean = false
+  /** 未看完快捷筛选 */
+  @Local filterUnwatched: boolean = false
+  /** 当前排序方式 */
+  @Local filterSortBy: string = 'updated'
+  /** 可用类型列表（从 DB 动态加载） */
+  @Local availableGenres: string[] = []
+  /** 可用年份列表（从 DB 动态加载，降序） */
+  @Local availableYears: number[] = []
+  /** 当前筛选结果列表 */
+  @Local filteredList: MediaListItem[] = []
+  /** 筛选结果是否加载中 */
+  @Local isFilteredLoading: boolean = false
+  /** 是否还有更多筛选结果 */
+  @Local filterHasMore: boolean = false
+  /** 当前筛选结果分页偏移 */
+  @Local filterCurrentOffset: number = 0
+
   aboutToAppear(): void {
     FileSourceDatabase.onReady(() => {
       this.model.reload().then(() => {
@@ -486,6 +510,10 @@ export struct MediaLibraryTab {
           const mv = this.model.movies[0];
           console.info(`[MediaLibraryTab][DIAG] 第一个Movie: title="${mv.title ?? 'null'}" posterUrl=${mv.posterUrl ?? 'null'} rating=${mv.rating ?? 'null'}`);
         }
+      });
+      // 加载可用的筛选选项（类型/年份）
+      this.loadAvailableFilters().catch(() => {
+        console.warn('[MediaLibraryTab] loadAvailableFilters 失败');
       });
     });
     // 播放器退出时刷新继续播放栏
@@ -870,6 +898,145 @@ export struct MediaLibraryTab {
     });
   }
 
+  // ─────────────────────────────────────────────
+  // 筛选逻辑方法
+  // ─────────────────────────────────────────────
+
+  /** 是否有激活的筛选条件（含非默认排序） */
+  private isFilteredViewActive(): boolean {
+    return this.filterGenres.length > 0
+      || this.filterYears.length > 0
+      || this.filterRecentlyPlayed
+      || this.filterUnwatched
+      || this.filterSortBy !== 'updated';
+  }
+
+  /** 加载可用的类型/年份选项 */
+  private async loadAvailableFilters(): Promise<void> {
+    const db = FileSourceDatabase.getInstance();
+    const genres = await db.getDistinctGenreNames();
+    const years = await db.getDistinctYears();
+    this.availableGenres = genres;
+    this.availableYears = years;
+    console.info(`[MediaLibraryTab][Filter] 类型=${genres.length} 年份=${years.length}`);
+  }
+
+  /**
+   * 加载筛选结果列表。
+   * @param resetPage true = 重置分页（筛选条件变化时），false = 追加下一页
+   */
+  private async loadFilteredList(resetPage: boolean): Promise<void> {
+    if (resetPage) {
+      this.filterCurrentOffset = 0;
+      this.filteredList = [];
+    }
+    this.isFilteredLoading = true;
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const PAGE_SIZE = 20;
+      // ArkTS 约束：对象字面量不能直接作为泛型类型参数内联，先声明显式类型变量
+      const opts: MediaFilterOptions = {
+        genres: this.filterGenres.length > 0 ? this.filterGenres : undefined,
+        years: this.filterYears.length > 0 ? this.filterYears : undefined,
+        recentlyPlayed: this.filterRecentlyPlayed ? true : undefined,
+        unwatched: this.filterUnwatched ? true : undefined,
+        sortBy: this.filterSortBy === 'name' ? 'name'
+          : this.filterSortBy === 'year' ? 'year'
+          : 'updated',
+      };
+      // 多取 1 条用于判断是否有下一页
+      const items = await db.getFilteredMediaList(opts, this.filterCurrentOffset, PAGE_SIZE + 1);
+      this.filterHasMore = items.length > PAGE_SIZE;
+      const pageItems = items.slice(0, PAGE_SIZE);
+      if (resetPage) {
+        this.filteredList = pageItems;
+      } else {
+        // 追加模式：构建新数组避免直接 push 触发不了响应式
+        const newList: MediaListItem[] = [];
+        for (const it of this.filteredList) { newList.push(it); }
+        for (const it of pageItems) { newList.push(it); }
+        this.filteredList = newList;
+      }
+      this.filterCurrentOffset = this.filterCurrentOffset + pageItems.length;
+      console.info(
+        `[MediaLibraryTab][Filter] 结果数=${this.filteredList.length}` +
+        ` hasMore=${this.filterHasMore} offset=${this.filterCurrentOffset}`
+      );
+    } catch (e) {
+      console.error('[MediaLibraryTab][Filter] loadFilteredList 失败', JSON.stringify(e));
+    } finally {
+      this.isFilteredLoading = false;
+    }
+  }
+
+  /** 加载下一页筛选结果 */
+  private loadMoreFiltered(): void {
+    if (this.filterHasMore && !this.isFilteredLoading) {
+      this.loadFilteredList(false).catch(() => {});
+    }
+  }
+
+  /** 切换类型筛选 */
+  private toggleGenre(genre: string): void {
+    if (this.filterGenres.indexOf(genre) >= 0) {
+      this.filterGenres = this.filterGenres.filter((g: string): boolean => g !== genre);
+    } else {
+      const next: string[] = [...this.filterGenres, genre];
+      this.filterGenres = next;
+    }
+    this.loadFilteredList(true).catch(() => {});
+  }
+
+  /** 切换年份筛选 */
+  private toggleYear(year: number): void {
+    if (this.filterYears.indexOf(year) >= 0) {
+      this.filterYears = this.filterYears.filter((y: number): boolean => y !== year);
+    } else {
+      const next: number[] = [...this.filterYears, year];
+      this.filterYears = next;
+    }
+    this.loadFilteredList(true).catch(() => {});
+  }
+
+  /** 切换「最近播放」快速筛选 */
+  private toggleRecentlyPlayed(): void {
+    this.filterRecentlyPlayed = !this.filterRecentlyPlayed;
+    if (this.filterUnwatched && this.filterRecentlyPlayed) {
+      // 两者互斥，激活「最近播放」时关闭「未看完」
+      this.filterUnwatched = false;
+    }
+    this.loadFilteredList(true).catch(() => {});
+  }
+
+  /** 切换「未看完」快速筛选 */
+  private toggleUnwatched(): void {
+    this.filterUnwatched = !this.filterUnwatched;
+    if (this.filterRecentlyPlayed && this.filterUnwatched) {
+      // 两者互斥，激活「未看完」时关闭「最近播放」
+      this.filterRecentlyPlayed = false;
+    }
+    this.loadFilteredList(true).catch(() => {});
+  }
+
+  /** 设置排序方式 */
+  private setSortBy(sort: string): void {
+    if (this.filterSortBy === sort) { return; }
+    this.filterSortBy = sort;
+    this.loadFilteredList(true).catch(() => {});
+  }
+
+  /** 清除所有筛选条件，恢复默认视图 */
+  private clearAllFilters(): void {
+    this.filterGenres = [];
+    this.filterYears = [];
+    this.filterRecentlyPlayed = false;
+    this.filterUnwatched = false;
+    this.filterSortBy = 'updated';
+    this.filteredList = [];
+    this.filterCurrentOffset = 0;
+    this.filterHasMore = false;
+  }
+
   private getStatsText(): string {
     const s = this.model.stats;
     return `共 ${s.total} 个视频 · 电影 ${s.movies} 部 · 电视剧 ${s.tv} 部 · 其他 ${s.other} 个`;
@@ -880,6 +1047,297 @@ export struct MediaLibraryTab {
   }
 
   // ── Builders ──────────────────────────────────
+
+  // ─────────────────────────────────────────────
+  // 筛选栏 FilterBar
+  // ─────────────────────────────────────────────
+  @Builder
+  FilterBar() {
+    Column({ space: 0 }) {
+      // ── 第一行：排序 + 快速筛选 ──
+      Scroll() {
+        Row({ space: 8 }) {
+          // 排序标签
+          Text('排序:')
+            .fontSize(12).fontColor('rgba(255,255,255,0.45)')
+            .padding({ right: 4 })
+
+          // 排序按钮：最近添加
+          Text('最近添加')
+            .fontSize(13)
+            .fontColor(this.filterSortBy === 'updated' ? '#000000' : 'rgba(255,255,255,0.80)')
+            .fontWeight(this.filterSortBy === 'updated' ? FontWeight.Bold : FontWeight.Normal)
+            .backgroundColor(this.filterSortBy === 'updated' ? '#FFFFFF' : 'rgba(255,255,255,0.10)')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .borderRadius(16)
+            .focusable(true)
+            .focusOnTouch(true)
+            .border({
+              width: 2,
+              color: this.filterSortBy === 'updated' ? '#FFFFFF' : 'rgba(255,255,255,0.0)'
+            })
+            .animation({ duration: 120, curve: Curve.EaseInOut })
+            .onClick(() => { this.setSortBy('updated'); })
+
+          // 排序按钮：名称
+          Text('名称')
+            .fontSize(13)
+            .fontColor(this.filterSortBy === 'name' ? '#000000' : 'rgba(255,255,255,0.80)')
+            .fontWeight(this.filterSortBy === 'name' ? FontWeight.Bold : FontWeight.Normal)
+            .backgroundColor(this.filterSortBy === 'name' ? '#FFFFFF' : 'rgba(255,255,255,0.10)')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .borderRadius(16)
+            .focusable(true)
+            .focusOnTouch(true)
+            .border({
+              width: 2,
+              color: this.filterSortBy === 'name' ? '#FFFFFF' : 'rgba(255,255,255,0.0)'
+            })
+            .animation({ duration: 120, curve: Curve.EaseInOut })
+            .onClick(() => { this.setSortBy('name'); })
+
+          // 排序按钮：年份
+          Text('年份')
+            .fontSize(13)
+            .fontColor(this.filterSortBy === 'year' ? '#000000' : 'rgba(255,255,255,0.80)')
+            .fontWeight(this.filterSortBy === 'year' ? FontWeight.Bold : FontWeight.Normal)
+            .backgroundColor(this.filterSortBy === 'year' ? '#FFFFFF' : 'rgba(255,255,255,0.10)')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .borderRadius(16)
+            .focusable(true)
+            .focusOnTouch(true)
+            .border({
+              width: 2,
+              color: this.filterSortBy === 'year' ? '#FFFFFF' : 'rgba(255,255,255,0.0)'
+            })
+            .animation({ duration: 120, curve: Curve.EaseInOut })
+            .onClick(() => { this.setSortBy('year'); })
+
+          // 分隔线
+          Divider().vertical(true).height(18).color('rgba(255,255,255,0.20)').strokeWidth(1)
+
+          // 快速筛选：最近播放
+          Text('▶ 最近播放')
+            .fontSize(13)
+            .fontColor(this.filterRecentlyPlayed ? '#000000' : 'rgba(255,255,255,0.80)')
+            .fontWeight(this.filterRecentlyPlayed ? FontWeight.Bold : FontWeight.Normal)
+            .backgroundColor(this.filterRecentlyPlayed ? '#4A9FFF' : 'rgba(255,255,255,0.10)')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .borderRadius(16)
+            .focusable(true)
+            .focusOnTouch(true)
+            .border({
+              width: 2,
+              color: this.filterRecentlyPlayed ? '#4A9FFF' : 'rgba(255,255,255,0.0)'
+            })
+            .animation({ duration: 120, curve: Curve.EaseInOut })
+            .onClick(() => { this.toggleRecentlyPlayed(); })
+
+          // 快速筛选：未看完
+          Text('⏸ 未看完')
+            .fontSize(13)
+            .fontColor(this.filterUnwatched ? '#000000' : 'rgba(255,255,255,0.80)')
+            .fontWeight(this.filterUnwatched ? FontWeight.Bold : FontWeight.Normal)
+            .backgroundColor(this.filterUnwatched ? '#52C41A' : 'rgba(255,255,255,0.10)')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .borderRadius(16)
+            .focusable(true)
+            .focusOnTouch(true)
+            .border({
+              width: 2,
+              color: this.filterUnwatched ? '#52C41A' : 'rgba(255,255,255,0.0)'
+            })
+            .animation({ duration: 120, curve: Curve.EaseInOut })
+            .onClick(() => { this.toggleUnwatched(); })
+
+          // 清除全部筛选按钮（仅筛选激活时显示）
+          if (this.isFilteredViewActive()) {
+            Text('× 清除')
+              .fontSize(13)
+              .fontColor('#FF6B6B')
+              .backgroundColor('rgba(255,107,107,0.12)')
+              .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+              .borderRadius(16)
+              .focusable(true)
+              .focusOnTouch(true)
+              .border({ width: 2, color: 'rgba(255,107,107,0.0)' })
+              .animation({ duration: 120, curve: Curve.EaseInOut })
+              .onClick(() => { this.clearAllFilters(); })
+          }
+        }
+        .padding({ left: 16, right: 16 })
+        .alignItems(VerticalAlign.Center)
+      }
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .width('100%')
+      .margin({ top: 4, bottom: 4 })
+
+      // ── 第二行：类型筛选 chips（有类型时才显示）──
+      if (this.availableGenres.length > 0) {
+        Scroll() {
+          Row({ space: 6 }) {
+            Text('类型:')
+              .fontSize(12).fontColor('rgba(255,255,255,0.45)')
+              .padding({ right: 2 })
+
+            ForEach(this.availableGenres.slice(0, 12), (genre: string) => {
+              Text(genre)
+                .fontSize(12)
+                .fontColor(this.filterGenres.indexOf(genre) >= 0 ? '#000000' : 'rgba(255,255,255,0.75)')
+                .fontWeight(this.filterGenres.indexOf(genre) >= 0 ? FontWeight.Bold : FontWeight.Normal)
+                .backgroundColor(
+                  this.filterGenres.indexOf(genre) >= 0 ? '#FFA500' : 'rgba(255,255,255,0.08)'
+                )
+                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+                .borderRadius(14)
+                .focusable(true)
+                .focusOnTouch(true)
+                .border({
+                  width: 1.5,
+                  color: this.filterGenres.indexOf(genre) >= 0 ? '#FFA500' : 'rgba(255,255,255,0.15)'
+                })
+                .animation({ duration: 120, curve: Curve.EaseInOut })
+                .onClick(() => { this.toggleGenre(genre); })
+            }, (genre: string) => `genre_${genre}`)
+          }
+          .padding({ left: 16, right: 16 })
+          .alignItems(VerticalAlign.Center)
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .width('100%')
+        .margin({ bottom: 4 })
+      }
+
+      // ── 第三行：年份筛选 chips（有年份时才显示）──
+      if (this.availableYears.length > 0) {
+        Scroll() {
+          Row({ space: 6 }) {
+            Text('年份:')
+              .fontSize(12).fontColor('rgba(255,255,255,0.45)')
+              .padding({ right: 2 })
+
+            ForEach(this.availableYears.slice(0, 15), (year: number) => {
+              Text(String(year))
+                .fontSize(12)
+                .fontColor(this.filterYears.indexOf(year) >= 0 ? '#000000' : 'rgba(255,255,255,0.75)')
+                .fontWeight(this.filterYears.indexOf(year) >= 0 ? FontWeight.Bold : FontWeight.Normal)
+                .backgroundColor(
+                  this.filterYears.indexOf(year) >= 0 ? '#8B5CF6' : 'rgba(255,255,255,0.08)'
+                )
+                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+                .borderRadius(14)
+                .focusable(true)
+                .focusOnTouch(true)
+                .border({
+                  width: 1.5,
+                  color: this.filterYears.indexOf(year) >= 0 ? '#8B5CF6' : 'rgba(255,255,255,0.15)'
+                })
+                .animation({ duration: 120, curve: Curve.EaseInOut })
+                .onClick(() => { this.toggleYear(year); })
+            }, (year: number) => `year_${year}`)
+          }
+          .padding({ left: 16, right: 16 })
+          .alignItems(VerticalAlign.Center)
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .width('100%')
+        .margin({ bottom: 6 })
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .backgroundColor('rgba(0,0,0,0.25)')
+    .padding({ top: 8, bottom: 8 })
+    .margin({ bottom: 8 })
+  }
+
+  // ─────────────────────────────────────────────
+  // 筛选结果内容区
+  // ─────────────────────────────────────────────
+  @Builder
+  FilteredContent() {
+    Column() {
+      // 结果统计行
+      Row({ space: 8 }) {
+        Text(`筛选结果  ${this.filteredList.length}${this.filterHasMore ? '+' : ''} 项`)
+          .fontSize(13)
+          .fontColor('rgba(255,255,255,0.55)')
+          .padding({ left: 16 })
+          .layoutWeight(1)
+
+        if (this.isFilteredLoading) {
+          LoadingProgress()
+            .width(18).height(18).color('#AAAAAA')
+            .margin({ right: 16 })
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .margin({ bottom: 12 })
+
+      if (this.isFilteredLoading && this.filteredList.length === 0) {
+        // 首次加载中
+        Column() {
+          LoadingProgress().width(36).height(36).color('#AAAAAA')
+          Text('筛选中...').fontSize(13).fontColor('#888888').margin({ top: 10 })
+        }
+        .width('100%').height(240)
+        .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      } else if (this.filteredList.length === 0) {
+        // 空态
+        Column() {
+          Text('🔍').fontSize(36).margin({ bottom: 12 })
+          Text('没有符合条件的媒体').fontSize(15).fontColor('#666666')
+          Text('请尝试修改或清除筛选条件').fontSize(12).fontColor('#444444').margin({ top: 6 })
+        }
+        .width('100%').height(240)
+        .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      } else {
+        // 筛选结果网格（海报卡片自动换行）
+        Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Start }) {
+          ForEach(
+            this.filteredList,
+            (listItem: MediaListItem) => {
+              MixedCard({ listItem })
+            },
+            (listItem: MediaListItem, idx: number) => {
+              if (listItem.kind === 'series' && listItem.series !== undefined) {
+                return 'series_' + listItem.series.tvSeriesId + '_' + idx;
+              }
+              if (listItem.kind === 'video' && listItem.video !== undefined) {
+                return 'video_' + (listItem.video.id ?? idx) + '_' + idx;
+              }
+              return 'item_' + idx;
+            }
+          )
+        }
+        .padding({ left: 16, right: 16 })
+        .width('100%')
+
+        // 加载更多按钮
+        if (this.filterHasMore) {
+          Button('加载更多', { type: ButtonType.Normal, stateEffect: true })
+            .fontSize(14)
+            .fontColor('#4A9FFF')
+            .backgroundColor('rgba(74,159,255,0.12)')
+            .borderRadius(8)
+            .padding({ left: 24, right: 24, top: 10, bottom: 10 })
+            .border({ width: 1, color: 'rgba(74,159,255,0.30)' })
+            .margin({ top: 16, bottom: 16 })
+            .focusable(true)
+            .enabled(!this.isFilteredLoading)
+            .onClick(() => { this.loadMoreFiltered(); })
+            .alignSelf(ItemAlign.Center)
+        }
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
   @Builder
   ContinueWatchingSection() {
     Column() {
@@ -1080,13 +1538,21 @@ export struct MediaLibraryTab {
 
   build() {
     Column() {
-      this.ContinueWatchingSection()
-      if (this.model.isLoading) {
+      // 筛选栏（始终显示）
+      this.FilterBar()
+
+      if (this.isFilteredViewActive()) {
+        // 筛选/排序激活时：显示筛选结果视图
+        this.FilteredContent()
+      } else if (this.model.isLoading) {
+        this.ContinueWatchingSection()
         this.LoadingView()
       } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
+        this.ContinueWatchingSection()
         this.EmptyView()
         this.StatsAndScan()
       } else {
+        this.ContinueWatchingSection()
         this.RecentlyAddedSection()
         this.MoviesSection()
         this.TvShowsSection()

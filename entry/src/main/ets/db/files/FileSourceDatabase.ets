@@ -37,6 +37,22 @@ export interface SearchMediaOptions {
 }
 
 /**
+ * 媒体库筛选选项（用于 getFilteredMediaList）。
+ */
+export interface MediaFilterOptions {
+  /** 类型筛选（多选），为空数组时不过滤 */
+  genres?: string[];
+  /** 年份筛选（多选），为空数组时不过滤 */
+  years?: number[];
+  /** 最近播放：有 media_progress 记录且 position_ms > 0 */
+  recentlyPlayed?: boolean;
+  /** 未看完：有进度但 progress < duration * 0.9 */
+  unwatched?: boolean;
+  /** 排序方式：'updated'（最近添加，默认）| 'name'（名称）| 'year'（年份） */
+  sortBy?: 'updated' | 'name' | 'year';
+}
+
+/**
  * 文件源数据库管理类 — DB v6
  * 表结构：file_sources, file_source_directories, videos, scrape_info,
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
@@ -3453,6 +3469,183 @@ export class FileSourceDatabase {
       const err = e as BusinessError;
       console.warn(`[DB][hasTvSeriesOriginCountry] 失败 code=${err.code} msg=${err.message}`);
       return false;
+    } finally {
+      rs?.close();
+    }
+  }
+
+  /**
+   * 获取已有年份列表（数字形式，降序排列）。
+   * 基于 getDistinctReleaseYears() 封装，直接转换为 number[]。
+   */
+  async getDistinctYears(): Promise<number[]> {
+    const strs = await this.getDistinctReleaseYears();
+    const result: number[] = [];
+    for (const s of strs) {
+      const n = parseInt(s, 10);
+      if (!isNaN(n) && n > 0) {
+        result.push(n);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 带筛选和排序的媒体列表（电影+剧集合并），支持分页。
+   *
+   * 实现策略：
+   *   1. 基于 mediaItemSql 构建 SQL，应用筛选条件
+   *   2. 内存中按 tvSeriesId/movieId 去重（同一剧集合并为一条）
+   *   3. 按 offset/limit 分页，返回 MediaListItem[]
+   *
+   * @param options 筛选选项
+   * @param offset  分页偏移（从 0 开始）
+   * @param limit   每页条数
+   */
+  async getFilteredMediaList(options: MediaFilterOptions, offset: number, limit: number): Promise<MediaListItem[]> {
+    if (this.rdbStore === null) { return []; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      const conditions: string[] = [];
+      const params: relationalStore.ValueType[] = [];
+
+      // ── genre 多选：多个 LIKE 用 OR 合并 ──
+      const genres = options.genres;
+      if (genres !== undefined && genres.length > 0) {
+        const genreConds: string[] = [];
+        for (const g of genres) {
+          genreConds.push('COALESCE(m.genres_json, ts.genres_json) LIKE ?');
+          params.push(`%${g}%`);
+        }
+        conditions.push(`(${genreConds.join(' OR ')})`);
+      }
+
+      // ── year 多选：年份字符串前4位匹配 ──
+      const years = options.years;
+      if (years !== undefined && years.length > 0) {
+        const yearConds: string[] = [];
+        for (const y of years) {
+          yearConds.push("CAST(substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS INTEGER) = ?");
+          params.push(y);
+        }
+        conditions.push(`(${yearConds.join(' OR ')})`);
+      }
+
+      // ── 最近播放：有 media_progress 记录且 position_ms > 0 ──
+      if (options.recentlyPlayed === true) {
+        conditions.push(
+          `((s.media_type = 'movie' AND s.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.position_ms > 0` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.position_ms > 0` +
+          `)))`
+        );
+      }
+
+      // ── 未看完：有进度但 progress < duration * 0.9 ──
+      if (options.unwatched === true) {
+        conditions.push(
+          `((s.media_type = 'movie' AND s.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id ` +
+            `AND mp2.position_ms > 0 AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) < CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND EXISTS (` +
+            `SELECT 1 FROM ${FileSourceDatabase.TABLE_MEDIA_PROGRESS} mp2 ` +
+            `WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%' ` +
+            `AND mp2.position_ms > 0 AND mp2.duration_ms > 0 ` +
+            `AND CAST(mp2.position_ms AS REAL) < CAST(mp2.duration_ms AS REAL) * 0.9` +
+          `)))`
+        );
+      }
+
+      const whereClause: string = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+      // ── ORDER BY ──
+      const sortBy = options.sortBy ?? 'updated';
+      let orderClause: string;
+      if (sortBy === 'name') {
+        orderClause = ' ORDER BY COALESCE(m.title, ts.title, v.file_name) ASC';
+      } else if (sortBy === 'year') {
+        // COALESCE 中 '0000' 确保 NULL 日期在降序中排最后
+        orderClause = ' ORDER BY COALESCE(m.release_date, ts.first_air_date, \'0000\') DESC';
+      } else {
+        // 'updated'：优先 scraped_at，兜底 scanned_at（未刮削文件）
+        orderClause = ' ORDER BY COALESCE(s.scraped_at, v.scanned_at) DESC';
+      }
+
+      // 拉取足够多的原始行以覆盖分页区间（最多 2000 行），内存去重后再取 offset+limit
+      const fetchLimit = 2000;
+      const sql: string = this.mediaItemSql + whereClause + orderClause + ` LIMIT ${fetchLimit}`;
+      rs = await this.rdbStore.querySql(sql, params);
+
+      const rawItems: MediaItem[] = [];
+      while (rs.goToNextRow()) {
+        rawItems.push(this.parseMediaItem(rs));
+      }
+
+      // ── 内存去重（tvSeriesId 为主，其次 movieId，兜底 videoId） ──
+      const seen = new Set<string>();
+      const dedupedItems: MediaItem[] = [];
+      for (const item of rawItems) {
+        let dedupeKey: string;
+        if (item.tvSeriesId !== undefined) {
+          dedupeKey = `tv-${item.tvSeriesId}`;
+        } else if (item.movieId !== undefined) {
+          dedupeKey = `mv-${item.movieId}`;
+        } else {
+          dedupeKey = `vid-${item.id}`;
+        }
+        if (!seen.has(dedupeKey)) {
+          seen.add(dedupeKey);
+          dedupedItems.push(item);
+        }
+      }
+
+      // ── 分页裁剪 ──
+      const safeOffset = offset >= 0 ? offset : 0;
+      const safeLimit = limit > 0 ? limit : 20;
+      const pageItems = dedupedItems.slice(safeOffset, safeOffset + safeLimit);
+
+      // ── 构建 MediaListItem[] ──
+      const result: MediaListItem[] = [];
+      for (const item of pageItems) {
+        if (item.tvSeriesId !== undefined &&
+            (item.mediaType === 'tv' || item.mediaType === 'episode')) {
+          // 剧集 → SeriesGroup（取刮削元数据中的系列信息）
+          const group: SeriesGroup = {
+            title: item.title ?? item.fileName,
+            tvSeriesId: item.tvSeriesId,
+            posterUrl: item.posterUrl,
+            backdropUrl: item.backdropUrl,
+            posterLocalPath: item.posterLocalPath,
+            rating: item.rating,
+            episodeCount: 1,
+            episodes: [],
+            latestScannedAt: item.scannedAt
+          };
+          const listItem: MediaListItem = { kind: 'series', series: group, sortTs: item.scannedAt };
+          result.push(listItem);
+        } else {
+          // 电影或未刮削视频
+          const listItem: MediaListItem = { kind: 'video', video: item, sortTs: item.scannedAt };
+          result.push(listItem);
+        }
+      }
+
+      console.info(
+        `[DB][getFilteredMediaList] raw=${rawItems.length} deduped=${dedupedItems.length}` +
+        ` page(offset=${safeOffset},limit=${safeLimit})=${result.length}`
+      );
+      return result;
+    } catch (e) {
+      const err = e as BusinessError;
+      console.error(`[DB][getFilteredMediaList] 异常 code=${err.code} msg=${err.message}`);
+      return [];
     } finally {
       rs?.close();
     }
