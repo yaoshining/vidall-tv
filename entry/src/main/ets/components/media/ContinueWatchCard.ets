@@ -16,8 +16,9 @@
 import { ContinueWatchingItem } from '../../db/models/MediaEntity';
 import { PlayerPageParam, PlayerPage } from '../../pages/player/index';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
-import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity';
+import { FileSourceType, FileSourceTypeLabels, SMBSourceConfig } from '../../db/models/FileSourceEntity';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
+import promptAction from '@ohos.promptAction';
 
 // ─── 卡片尺寸常量 ────────────────────────────────
 const CARD_W = 320;
@@ -150,7 +151,9 @@ export struct ContinueWatchCard {
         const authHeader = client.getAuthHeaderPublic();
         httpHeader = authHeader.length > 0 ? { 'Authorization': authHeader } : {};
       } else {
+        const typeName = FileSourceTypeLabels.getLabel(fileSource.type);
         console.warn('[ContinueWatchCard] 不支持的文件源类型: ' + fileSource.type.toString());
+        promptAction.showToast({ message: typeName + ' 暂不支持继续播放' });
         return;
       }
 
