@@ -584,18 +584,32 @@ interface AspectRatioOption {
   mode: AspectRatioMode;
 }
 
+interface SpeedOption {
+  label: string;
+  speed: number;
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
   @Require onOpenSubtitleSelector: () => void
-  @State selectedPlaybackRateIndex: number = 1
+  @State selectedPlaybackRateIndex: number = 2
   @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
   @State private arFocusedIndex: number = -1
+  @State private speedFocusedIndex: number = -1
   private readonly aspectRatioOptions: AspectRatioOption[] = [
     { label: '适应', mode: AspectRatioMode.FIT },
     { label: '填充', mode: AspectRatioMode.FILL },
     { label: '拉伸', mode: AspectRatioMode.STRETCH },
+  ]
+  private readonly speedOptions: SpeedOption[] = [
+    { label: '0.5x', speed: 0.5 },
+    { label: '0.75x', speed: 0.75 },
+    { label: '1.0x', speed: 1.0 },
+    { label: '1.25x', speed: 1.25 },
+    { label: '1.5x', speed: 1.5 },
+    { label: '2.0x', speed: 2.0 },
   ]
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
@@ -605,10 +619,22 @@ export struct PlayerSettingsDialog {
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
     this.currentAspectRatioMode = this.videoController.aspectRatioMode;
     this.arFocusedIndex = -1;
+    this.speedFocusedIndex = -1;
+    // 从控制器同步当前播放速率，找到匹配的 index（默认回退到 1.0x = index 2）
+    const currentSpeed = this.videoController.playbackSpeed;
+    let matchIdx = 2;
+    for (let i = 0; i < this.speedOptions.length; i++) {
+      if (this.speedOptions[i].speed === currentSpeed) {
+        matchIdx = i;
+        break;
+      }
+    }
+    this.selectedPlaybackRateIndex = matchIdx;
   }
 
   aboutToDisappear(): void {
     this.arFocusedIndex = -1;
+    this.speedFocusedIndex = -1;
   }
 
   @Builder
@@ -640,19 +666,38 @@ export struct PlayerSettingsDialog {
               .alignSelf(ItemAlign.Start)
 
             Row({ space: 12 }) {
-              Row() {
-                this.SettingsChip('0.75x', this.selectedPlaybackRateIndex === 0)
-              }
-              .onClick(() => {
-                this.selectedPlaybackRateIndex = 0
-              })
-
-              Row() {
-                this.SettingsChip('1.0x', this.selectedPlaybackRateIndex === 1)
-              }
-              .onClick(() => {
-                this.selectedPlaybackRateIndex = 1
-              })
+              ForEach(this.speedOptions, (opt: SpeedOption, idx: number) => {
+                Row() {
+                  Text(opt.label)
+                    .fontSize(26)
+                    .fontColor(this.selectedPlaybackRateIndex === idx ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(this.selectedPlaybackRateIndex === idx
+                      ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius("50%")
+                    .border({
+                      width: this.selectedPlaybackRateIndex === idx ? 2 : 1,
+                      color: this.selectedPlaybackRateIndex === idx ? '#fffefe' : '#45ffffff'
+                    })
+                    .shadow({
+                      radius: this.selectedPlaybackRateIndex === idx ? 8 : 0,
+                      color: this.selectedPlaybackRateIndex === idx ? '#33597FB8' : '#00ffffff'
+                    })
+                }
+                .focusable(true)
+                .onFocus(() => { this.speedFocusedIndex = idx })
+                .onBlur(() => { this.speedFocusedIndex = -1 })
+                .borderRadius(99)
+                .padding(this.speedFocusedIndex === idx ? 2 : 0)
+                .border({
+                  width: this.speedFocusedIndex === idx ? 2 : 0,
+                  color: this.speedFocusedIndex === idx ? '#4D9FFF' : Color.Transparent
+                })
+                .onClick(() => {
+                  this.selectedPlaybackRateIndex = idx
+                  this.videoController.setPlaybackSpeed(opt.speed)
+                })
+              }, (opt: SpeedOption) => opt.speed.toString())
             }
             .justifyContent(FlexAlign.Start)
             .width('100%')

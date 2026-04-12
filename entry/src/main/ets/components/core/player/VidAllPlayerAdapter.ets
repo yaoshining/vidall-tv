@@ -686,6 +686,15 @@ export class VidAllPlayerAdapter implements IPlayer {
   setSubtitleDelay(_delayMs: number): void {
   }
 
+  /**
+   * VidAllPlayerAdapter（Native NAPI）当前 bridge 接口尚未暴露 setSpeed。
+   * 降级处理：打印警告日志，不崩溃。后续 C++ 接口扩展后可在此接入。
+   */
+  setPlaybackSpeed(speed: number): void {
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+      `setPlaybackSpeed(${speed}) 在 native 后端暂不支持（NAPI bridge 尚未实现），已跳过`);
+  }
+
   onReady(callback: () => void): void {
     this._onReadyCb = callback;
   }

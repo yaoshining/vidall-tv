@@ -57,6 +57,13 @@ export interface IPlayer {
    */
   setSubtitleDelay(delayMs: number): void;
 
+  /**
+   * 设置播放速率（倍速）。
+   * 支持档位：0.5 / 0.75 / 1.0 / 1.25 / 1.5 / 2.0。
+   * 不支持的后端实现为空桩，打印警告日志，不抛异常。
+   */
+  setPlaybackSpeed(speed: number): void;
+
   // ─── 事件回调 ───
   onReady(callback: () => void): void;
   onPlay(callback: () => void): void;

@@ -14,6 +14,7 @@ import type { OnVideoSizeChangedListener } from '@yaoshining/ijkplayer';
 import type { OnTimedTextListener } from '@yaoshining/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
@@ -458,6 +459,21 @@ export class IjkPlayerAdapter implements IPlayer {
       `setSubtitleDelay: 延迟已由 VideoPlayerController 层处理`);
   }
 
+  /**
+   * 设置播放速率。
+   * 直接调用 IjkMediaPlayer.setSpeed(speed.toString())，支持变速不变调（ijkplayer 内部处理）。
+   */
+  setPlaybackSpeed(speed: number): void {
+    try {
+      this.ijk.setSpeed(speed.toString());
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `setPlaybackSpeed: speed=${speed}`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `setPlaybackSpeed(${speed}) 失败: ${err.message ?? 'unknown error'}`);
+    }
+  }
+
   // ─── 事件回调注册 ───
 
   onReady(callback: () => void): void { this._onReadyCb = callback; }
@@ -499,6 +515,10 @@ export class IjkPlayerAdapter implements IPlayer {
     // ── 字幕解码开关 ──
     // 必须设为 1，否则 stream_component_open 会跳过 AVMEDIA_TYPE_SUBTITLE 分支，onTimedText 永远不会触发
     this.ijk.setOptionLong(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'subtitle', '1');
+
+    // ── 变速不变调 ──
+    // 必须在 prepare 前开启，否则 setSpeed() 调用成功但播放速率不变
+    this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'soundtouch', '1');
 
     // ── 缓冲控制 ──
     this.ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, 'max_cached_duration', '1500');

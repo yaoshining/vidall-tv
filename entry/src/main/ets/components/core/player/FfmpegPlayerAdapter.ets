@@ -156,6 +156,15 @@ export class FfmpegPlayerAdapter implements IPlayer {
   setSubtitleDelay(_delayMs: number): void {
   }
 
+  /**
+   * FfmpegPlayerAdapter 不支持运行时倍速设置（纯音频渲染路径无变速能力）。
+   * 降级处理：打印警告日志，不崩溃。
+   */
+  setPlaybackSpeed(speed: number): void {
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+      `setPlaybackSpeed(${speed}) 在 ffmpeg 后端暂不支持，已跳过`);
+  }
+
   onReady(callback: () => void): void {
     this._onReadyCb = callback;
   }
