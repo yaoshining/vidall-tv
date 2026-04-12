@@ -134,6 +134,11 @@ export struct FileExplorerPage {
     }
     .onReady((context) => {
       const param = context.pathInfo.param as FileExplorerPageParam
+      if (!param || !param.config) {
+        console.error('[FileExplorerPage] onReady: 路由参数为空，无法初始化')
+        IBestToast.show('页面参数缺失，请重新进入')
+        return
+      }
       this.client = new WebDAVClient(param.config)
       this.cachedDirId = param.dirId ?? 0
       this.cachedSourceId = param.sourceId ?? 0
@@ -161,6 +166,12 @@ export struct FileExplorerPage {
    * 确认清理已删除目录：更新 FileSourceModel 缓存并返回上一页
    */
   private confirmCleanup(): void {
+    // 必填字段校验，防止误删
+    if (this.cachedDirId <= 0 || this.cachedSourceId <= 0 || this.cachedDirectoryPath.length === 0) {
+      console.error('[FileExplorerPage][confirmCleanup] 参数不完整，中止清理')
+      IBestToast.show('目录信息不完整，无法清理')
+      return
+    }
     this.isCleaningUp = true
     const dirId = this.cachedDirId
     const sourceId = this.cachedSourceId
@@ -172,8 +183,8 @@ export struct FileExplorerPage {
       .catch((): void => {
         console.error('[FileExplorerPage][confirmCleanup] 清理失败')
         IBestToast.show('清理失败，请重试')
+        // 保持 Dialog 打开，允许用户重试
         this.isCleaningUp = false
-        this.showMissingDirDialog = false
       })
   }
 
