@@ -2017,10 +2017,21 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) { return []; }
     let rs: relationalStore.ResultSet | null = null;
     try {
+      // 同一 episode_id 可能对应多个版本文件（如 4K 和 HDR），只保留 file_size 最大的那个
+      // NOT EXISTS 子查询：若存在同 episode_id 且 file_size 更大（或同大但 video_id 更高）的行，则排除当前行
       const sql = this.mediaItemSql +
-        ' WHERE s.tv_series_id = ?' +
-        ' ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC';
-      rs = await this.rdbStore.querySql(sql, [seriesId]);
+        ` WHERE s.tv_series_id = ?` +
+        ` AND NOT EXISTS (` +
+        `   SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} si2` +
+        `   JOIN ${FileSourceDatabase.TABLE_VIDEOS} vi2 ON si2.video_id = vi2.id` +
+        `   WHERE si2.tv_series_id = ?` +
+        `     AND si2.episode_id IS NOT NULL` +
+        `     AND si2.episode_id = s.episode_id` +
+        `     AND (vi2.file_size > v.file_size` +
+        `          OR (vi2.file_size = v.file_size AND si2.video_id > s.video_id))` +
+        ` )` +
+        ` ORDER BY COALESCE(s.season_number, 0) ASC, COALESCE(s.episode_number, 0) ASC`;
+      rs = await this.rdbStore.querySql(sql, [seriesId, seriesId]);
       const items: MediaItem[] = [];
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
       return items;
