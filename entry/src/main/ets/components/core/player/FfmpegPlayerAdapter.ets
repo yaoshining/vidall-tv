@@ -3,7 +3,7 @@ import { VideoData } from './VideoData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import { FfmpegAudioDecodeResult, FfmpegAudioDecodeUtil } from '../../../utils/FfmpegAudioDecodeUtil';
-import { FfmpegAudioRendererSink } from './FfmpegAudioRendererSink';
+import { FfmpegAudioRendererSink, AudioRendererChannelDowngradeError } from './FfmpegAudioRendererSink';
 import { FfprobeUtil } from '../../../utils/FfprobeUtil';
 
 const TAG = '[FfmpegPlayerAdapter]';
@@ -327,7 +327,24 @@ export class FfmpegPlayerAdapter implements IPlayer {
     }
 
     if (!this._sinkReady) {
-      await this._audioSink.loadWav(result.outputPath);
+      try {
+        await this._audioSink.loadWav(result.outputPath);
+      } catch (e) {
+        if (e instanceof AudioRendererChannelDowngradeError && this._decodeChannels > 2) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `AudioRenderer 不支持 ${(e as AudioRendererChannelDowngradeError).originalChannels}ch，以 2ch 重新解码并重试`);
+          this._decodeChannels = 2;
+          result = await this.decodeSegmentWithChannels(startMs, this._decodeChannels);
+          if (!result.success) {
+            const retryErr = new Error(result.errorMessage ?? 'ffmpeg 2ch 降级解码失败');
+            this._onErrorCb?.(retryErr);
+            throw retryErr;
+          }
+          await this._audioSink.loadWav(result.outputPath);
+        } else {
+          throw e;
+        }
+      }
       this._sinkReady = true;
       this._audioSink.markInputCompleted(false);
     } else {

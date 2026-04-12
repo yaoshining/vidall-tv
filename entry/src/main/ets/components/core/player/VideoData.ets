@@ -10,6 +10,17 @@ export interface PresetAudioTrack {
   language?: string;
   /** MIME 类型，如 "audio/eac3" */
   mimeType?: string;
+  /**
+   * 声道数，如 2（立体声）、6（5.1）、8（7.1）。
+   * 由调用方按 ffprobe 结果注入，用于音频路由优先级排序。
+   * 未注入时 readPresetAudioHint 会从 displayName 关键字推断。
+   */
+  channels?: number;
+  /**
+   * 音频码率（bps），由调用方按 ffprobe 结果注入。
+   * 用于同声道数下的高质量轨道优先选择（高码率优先）。
+   */
+  bitrate?: number;
 }
 
 /**
