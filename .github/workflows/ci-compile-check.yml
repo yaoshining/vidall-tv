@@ -83,9 +83,13 @@ jobs:
           fi
 
           # 解压 linux 目录下所有 x64 SDK 组件（不仅是 native），以便拿到 hvigor/toolchains。
-          ZIP_LIST=$(find -L ohos-sdk/linux -maxdepth 3 -type f -name "*-linux-*-*.zip" | tr '\n' ' ')
+          ZIP_LIST=$(find -L ohos-sdk/linux -type f -name "*-linux-*.zip" | tr '\n' ' ')
           if [[ -z "$ZIP_LIST" ]]; then
-            echo "No linux x64 SDK component zip found"
+            ZIP_LIST=$(find -L ohos-sdk/linux -type f -name "*.zip" | tr '\n' ' ')
+          fi
+
+          if [[ -z "$ZIP_LIST" ]]; then
+            echo "No SDK component zip found under linux directory"
             find -L ohos-sdk/linux -maxdepth 4 -type f | head -80
             exit 1
           fi
