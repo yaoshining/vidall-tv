@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/ohos-sdk
-          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-v1
+          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-v2
           restore-keys: |
             ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-
 
@@ -101,24 +101,16 @@ jobs:
             unzip -q -o "$zip_file" -d ohos-sdk/linux/
           done
 
-          NATIVE_DIR=$(find -L ohos-sdk/linux -type d -name "native" | head -1)
-          if [[ -z "$NATIVE_DIR" ]]; then
-            echo "native directory not found after SDK extraction"
-            find -L ohos-sdk/linux -maxdepth 5 -type d | head -120
-            exit 1
-          fi
-          mkdir -p "ohos-sdk/linux/${OHOS_SDK_API_DIR}"
-          if [[ "$NATIVE_DIR" != "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native" ]]; then
-            rm -rf "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native" || true
-            mv "$NATIVE_DIR" "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native"
-          fi
+          test -d "ohos-sdk/linux/native"
+          test -d "ohos-sdk/linux/toolchains"
+          test -d "ohos-sdk/linux/ets"
 
       - name: Save OHOS SDK Cache
         if: always() && steps.cache-sdk-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/ohos-sdk
-          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-v1
+          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-v2
 
       - name: Prepare Environment
         shell: bash
@@ -126,8 +118,8 @@ jobs:
           set -euo pipefail
           ln -sf "${{ runner.temp }}/ohos-sdk" "${{ github.workspace }}/../ohos-sdk"
           echo "DEVECO_SDK_HOME=${{ github.workspace }}/../ohos-sdk" >> "$GITHUB_ENV"
-          echo "OHOS_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
-          echo "HARMONY_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
+          echo "OHOS_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux" >> "$GITHUB_ENV"
+          echo "HARMONY_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux" >> "$GITHUB_ENV"
 
       - name: Install Hvigor Toolchain
         shell: bash
@@ -147,6 +139,8 @@ jobs:
         run: |
           set -euo pipefail
           test -f "$OHOS_SDK_HOME/native/build/cmake/ohos.toolchain.cmake"
+          test -d "$OHOS_SDK_HOME/ets"
+          test -d "$OHOS_SDK_HOME/toolchains"
           ls -la "$OHOS_SDK_HOME/native" | head -20
 
       - name: Sync Project
