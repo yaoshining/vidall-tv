@@ -80,10 +80,10 @@ jobs:
             ln -s "$(realpath "$LINUX_DIR")" ohos-sdk/linux
           fi
 
-          NATIVE_ZIP=$(find ohos-sdk/linux -name "native-linux-x64-*-Release.zip" | head -1)
+          NATIVE_ZIP=$(find -L ohos-sdk/linux -name "native-linux-x64-*.zip" | head -1)
           if [[ -z "$NATIVE_ZIP" ]]; then
             echo "native zip not found in downloaded SDK"
-            find ohos-sdk/linux -maxdepth 3 -type f | head -40
+            find -L ohos-sdk/linux -maxdepth 4 -type f | head -80
             exit 1
           fi
           unzip -q "$NATIVE_ZIP" -d ohos-sdk/linux/
