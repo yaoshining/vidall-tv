@@ -82,16 +82,29 @@ jobs:
             ln -s "$(realpath "$LINUX_DIR")" ohos-sdk/linux
           fi
 
-          NATIVE_ZIP=$(find -L ohos-sdk/linux -name "native-linux-x64-*.zip" | head -1)
-          if [[ -z "$NATIVE_ZIP" ]]; then
-            echo "native zip not found in downloaded SDK"
+          # 解压 linux 目录下所有 x64 SDK 组件（不仅是 native），以便拿到 hvigor/toolchains。
+          ZIP_LIST=$(find -L ohos-sdk/linux -maxdepth 3 -type f -name "*-linux-*-*.zip" | tr '\n' ' ')
+          if [[ -z "$ZIP_LIST" ]]; then
+            echo "No linux x64 SDK component zip found"
             find -L ohos-sdk/linux -maxdepth 4 -type f | head -80
             exit 1
           fi
-          unzip -q "$NATIVE_ZIP" -d ohos-sdk/linux/
+
+          for zip_file in $ZIP_LIST; do
+            echo "Extract SDK component: $zip_file"
+            unzip -q -o "$zip_file" -d ohos-sdk/linux/
+          done
+
+          NATIVE_DIR=$(find -L ohos-sdk/linux -type d -name "native" | head -1)
+          if [[ -z "$NATIVE_DIR" ]]; then
+            echo "native directory not found after SDK extraction"
+            find -L ohos-sdk/linux -maxdepth 5 -type d | head -120
+            exit 1
+          fi
           mkdir -p "ohos-sdk/linux/${OHOS_SDK_API_DIR}"
-          if [[ -d ohos-sdk/linux/native ]]; then
-            mv ohos-sdk/linux/native "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native"
+          if [[ "$NATIVE_DIR" != "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native" ]]; then
+            rm -rf "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native" || true
+            mv "$NATIVE_DIR" "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native"
           fi
 
       - name: Save OHOS SDK Cache
@@ -115,24 +128,59 @@ jobs:
         run: |
           set -euo pipefail
 
-          CANDIDATES=(
+          CANDIDATE_JS=(
             "$GITHUB_WORKSPACE/hvigor/hvigor-wrapper.js"
             "$GITHUB_WORKSPACE/hvigor/hvigorw.js"
             "$DEVECO_SDK_HOME/tools/hvigor/bin/hvigorw.js"
             "$DEVECO_SDK_HOME/toolchains/hvigor/bin/hvigorw.js"
+            "$DEVECO_SDK_HOME/linux/tools/hvigor/bin/hvigorw.js"
+            "$DEVECO_SDK_HOME/linux/toolchains/hvigor/bin/hvigorw.js"
+            "$OHOS_SDK_HOME/tools/hvigor/bin/hvigorw.js"
             "$OHOS_SDK_HOME/toolchains/hvigor/bin/hvigorw.js"
           )
 
+          CANDIDATE_BIN=(
+            "$GITHUB_WORKSPACE/hvigorw"
+            "$DEVECO_SDK_HOME/tools/hvigor/bin/hvigorw"
+            "$DEVECO_SDK_HOME/toolchains/hvigor/bin/hvigorw"
+            "$DEVECO_SDK_HOME/linux/tools/hvigor/bin/hvigorw"
+            "$DEVECO_SDK_HOME/linux/toolchains/hvigor/bin/hvigorw"
+            "$OHOS_SDK_HOME/tools/hvigor/bin/hvigorw"
+            "$OHOS_SDK_HOME/toolchains/hvigor/bin/hvigorw"
+          )
+
+          HVIGOR_TYPE=""
           HVIGOR_ENTRY=""
-          for candidate in "${CANDIDATES[@]}"; do
+          for candidate in "${CANDIDATE_JS[@]}"; do
             if [[ -f "$candidate" ]]; then
+              HVIGOR_TYPE="node"
               HVIGOR_ENTRY="$candidate"
               break
             fi
           done
 
           if [[ -z "$HVIGOR_ENTRY" ]]; then
+            for candidate in "${CANDIDATE_BIN[@]}"; do
+              if [[ -f "$candidate" ]]; then
+                HVIGOR_TYPE="bin"
+                HVIGOR_ENTRY="$candidate"
+                break
+              fi
+            done
+          fi
+
+          if [[ -z "$HVIGOR_ENTRY" ]]; then
             HVIGOR_ENTRY=$(find "$GITHUB_WORKSPACE" "$DEVECO_SDK_HOME" "$OHOS_SDK_HOME" -type f \( -name "hvigorw.js" -o -name "hvigor-wrapper.js" \) | head -1 || true)
+            if [[ -n "$HVIGOR_ENTRY" ]]; then
+              HVIGOR_TYPE="node"
+            fi
+          fi
+
+          if [[ -z "$HVIGOR_ENTRY" ]]; then
+            HVIGOR_ENTRY=$(find "$GITHUB_WORKSPACE" "$DEVECO_SDK_HOME" "$OHOS_SDK_HOME" -type f -name "hvigorw" | head -1 || true)
+            if [[ -n "$HVIGOR_ENTRY" ]]; then
+              HVIGOR_TYPE="bin"
+            fi
           fi
 
           if [[ -z "$HVIGOR_ENTRY" ]]; then
@@ -144,7 +192,8 @@ jobs:
             exit 1
           fi
 
-          echo "Resolved hvigor entry: $HVIGOR_ENTRY"
+          echo "Resolved hvigor entry: $HVIGOR_ENTRY ($HVIGOR_TYPE)"
+          echo "HVIGOR_TYPE=$HVIGOR_TYPE" >> "$GITHUB_ENV"
           echo "HVIGOR_ENTRY=$HVIGOR_ENTRY" >> "$GITHUB_ENV"
 
       - name: Verify toolchain
@@ -159,16 +208,31 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          node "$HVIGOR_ENTRY" \
-          --sync -p product=default --analyze=normal --parallel --incremental --daemon
+          if [[ "$HVIGOR_TYPE" == "node" ]]; then
+            node "$HVIGOR_ENTRY" \
+            --sync -p product=default --analyze=normal --parallel --incremental --daemon
+          else
+            chmod +x "$HVIGOR_ENTRY" || true
+            "$HVIGOR_ENTRY" \
+            --sync -p product=default --analyze=normal --parallel --incremental --daemon
+          fi
 
       - name: Unit Test Build Check
         shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          node "$HVIGOR_ENTRY" \
-          --mode module -p module=entry@default \
-          -p unit.test.replace.page=../../../.test/testability/pages/Index \
-          -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
+          if [[ "$HVIGOR_TYPE" == "node" ]]; then
+            node "$HVIGOR_ENTRY" \
+            --mode module -p module=entry@default \
+            -p unit.test.replace.page=../../../.test/testability/pages/Index \
+            -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+            -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
+          else
+            chmod +x "$HVIGOR_ENTRY" || true
+            "$HVIGOR_ENTRY" \
+            --mode module -p module=entry@default \
+            -p unit.test.replace.page=../../../.test/testability/pages/Index \
+            -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+            -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
+          fi
