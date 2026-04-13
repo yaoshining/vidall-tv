@@ -1,7 +1,7 @@
 name: CI Compile Check
 
 env:
-  OHOS_SDK_URL: https://repo.huaweicloud.com/harmonyos/os/5.1.1-Release/ohos-sdk-windows_linux-public.tar.gz
+  OHOS_SDK_URL: https://repo.huaweicloud.com/harmonyos/os/5.1.0-Release/ohos-sdk-windows_linux-public.tar.gz
   OHOS_SDK_API_DIR: '12'
 
 on:
@@ -41,7 +41,28 @@ jobs:
           set -euo pipefail
           mkdir -p "${{ runner.temp }}/ohos-sdk"
           cd "${{ runner.temp }}"
-          wget -q -O sdk.tar.gz "${OHOS_SDK_URL}"
+
+          CANDIDATE_URLS=(
+            "${OHOS_SDK_URL}"
+            "https://repo.huaweicloud.com/harmonyos/os/5.0.3-Release/ohos-sdk-windows_linux-public.tar.gz"
+            "https://repo.huaweicloud.com/harmonyos/os/5.0.0-Release/ohos-sdk-windows_linux-public.tar.gz"
+          )
+
+          DOWNLOADED=0
+          for url in "${CANDIDATE_URLS[@]}"; do
+            echo "Try download SDK from: $url"
+            if wget -q -O sdk.tar.gz "$url"; then
+              DOWNLOADED=1
+              echo "Downloaded SDK from: $url"
+              break
+            fi
+          done
+
+          if [[ "$DOWNLOADED" -ne 1 ]]; then
+            echo "Failed to download OHOS SDK from all candidate URLs"
+            exit 1
+          fi
+
           tar -xzf sdk.tar.gz --wildcards "*/linux/*" -C ohos-sdk/ --strip-components=1 2>/dev/null \
             || tar -xzf sdk.tar.gz -C ohos-sdk/
 
