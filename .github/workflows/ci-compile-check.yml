@@ -133,6 +133,7 @@ jobs:
           set -euo pipefail
 
           CANDIDATE_JS=(
+            "$GITHUB_WORKSPACE/hvigorw.js"
             "$GITHUB_WORKSPACE/hvigor/hvigor-wrapper.js"
             "$GITHUB_WORKSPACE/hvigor/hvigorw.js"
             "$DEVECO_SDK_HOME/tools/hvigor/bin/hvigorw.js"
