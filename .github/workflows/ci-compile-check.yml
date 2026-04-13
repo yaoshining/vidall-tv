@@ -110,6 +110,43 @@ jobs:
           echo "OHOS_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
           echo "HARMONY_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
 
+      - name: Resolve Hvigor Entry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CANDIDATES=(
+            "$GITHUB_WORKSPACE/hvigor/hvigor-wrapper.js"
+            "$GITHUB_WORKSPACE/hvigor/hvigorw.js"
+            "$DEVECO_SDK_HOME/tools/hvigor/bin/hvigorw.js"
+            "$DEVECO_SDK_HOME/toolchains/hvigor/bin/hvigorw.js"
+            "$OHOS_SDK_HOME/toolchains/hvigor/bin/hvigorw.js"
+          )
+
+          HVIGOR_ENTRY=""
+          for candidate in "${CANDIDATES[@]}"; do
+            if [[ -f "$candidate" ]]; then
+              HVIGOR_ENTRY="$candidate"
+              break
+            fi
+          done
+
+          if [[ -z "$HVIGOR_ENTRY" ]]; then
+            HVIGOR_ENTRY=$(find "$GITHUB_WORKSPACE" "$DEVECO_SDK_HOME" "$OHOS_SDK_HOME" -type f \( -name "hvigorw.js" -o -name "hvigor-wrapper.js" \) | head -1 || true)
+          fi
+
+          if [[ -z "$HVIGOR_ENTRY" ]]; then
+            echo "Cannot find hvigor entry script."
+            echo "Searched in:"
+            echo "  - $GITHUB_WORKSPACE"
+            echo "  - $DEVECO_SDK_HOME"
+            echo "  - $OHOS_SDK_HOME"
+            exit 1
+          fi
+
+          echo "Resolved hvigor entry: $HVIGOR_ENTRY"
+          echo "HVIGOR_ENTRY=$HVIGOR_ENTRY" >> "$GITHUB_ENV"
+
       - name: Verify toolchain
         shell: bash
         run: |
@@ -122,7 +159,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          node ./hvigor/hvigor-wrapper.js \
+          node "$HVIGOR_ENTRY" \
           --sync -p product=default --analyze=normal --parallel --incremental --daemon
 
       - name: Unit Test Build Check
@@ -130,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          node ./hvigor/hvigor-wrapper.js \
+          node "$HVIGOR_ENTRY" \
           --mode module -p module=entry@default \
           -p unit.test.replace.page=../../../.test/testability/pages/Index \
           -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
