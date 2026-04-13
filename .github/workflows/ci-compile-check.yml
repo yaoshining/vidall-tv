@@ -1,5 +1,9 @@
 name: CI Compile Check
 
+env:
+  OHOS_SDK_URL: https://repo.huaweicloud.com/harmonyos/os/5.1.1-Release/ohos-sdk-windows_linux-public.tar.gz
+  OHOS_SDK_API_DIR: '12'
+
 on:
   pull_request:
     branches:
@@ -11,56 +15,78 @@ on:
 
 jobs:
   compile-check:
-    runs-on: [self-hosted, macOS]
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Environment
-        shell: zsh
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache OHOS SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ohos-sdk
+          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-${{ hashFiles('.github/workflows/ci-compile-check.yml') }}
+
+      - name: Download and Extract OHOS SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -d "/Applications/DevEco-Studio.app/Contents/sdk" ]]; then
-            echo "DevEco SDK not found on runner."
+          mkdir -p "${{ runner.temp }}/ohos-sdk"
+          cd "${{ runner.temp }}"
+          wget -q -O sdk.tar.gz "${OHOS_SDK_URL}"
+          tar -xzf sdk.tar.gz --wildcards "*/linux/*" -C ohos-sdk/ --strip-components=1 2>/dev/null \
+            || tar -xzf sdk.tar.gz -C ohos-sdk/
+
+          NATIVE_ZIP=$(find ohos-sdk/linux -name "native-linux-x64-*-Release.zip" | head -1)
+          if [[ -z "$NATIVE_ZIP" ]]; then
+            echo "native zip not found in downloaded SDK"
             exit 1
           fi
-          if [[ ! -x "/Applications/DevEco-Studio.app/Contents/tools/node/bin/node" ]]; then
-            echo "DevEco Node not found on runner."
-            exit 1
+          unzip -q "$NATIVE_ZIP" -d ohos-sdk/linux/
+          mkdir -p "ohos-sdk/linux/${OHOS_SDK_API_DIR}"
+          if [[ -d ohos-sdk/linux/native ]]; then
+            mv ohos-sdk/linux/native "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native"
           fi
-          if [[ ! -f "/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js" ]]; then
-            echo "hvigorw.js not found on runner."
-            exit 1
-          fi
-          echo "DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk" >> "$GITHUB_ENV"
-          echo "OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony" >> "$GITHUB_ENV"
-          echo "HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony" >> "$GITHUB_ENV"
+
+      - name: Prepare Environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -sf "${{ runner.temp }}/ohos-sdk" "${{ github.workspace }}/../ohos-sdk"
+          echo "DEVECO_SDK_HOME=${{ github.workspace }}/../ohos-sdk" >> "$GITHUB_ENV"
+          echo "OHOS_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
+          echo "HARMONY_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$OHOS_SDK_HOME/native/build/cmake/ohos.toolchain.cmake"
+          ls -la "$OHOS_SDK_HOME/native" | head -20
 
       - name: Sync Project
-        shell: zsh
+        shell: bash
         run: |
           set -euo pipefail
-          zsh -f -c 'cd "$GITHUB_WORKSPACE" && \
-          export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
-          export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
-          export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
-          /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
-          /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
-          --sync -p product=default --analyze=normal --parallel --incremental --daemon'
+          cd "$GITHUB_WORKSPACE"
+          node ./hvigor/hvigor-wrapper.js \
+          --sync -p product=default --analyze=normal --parallel --incremental --daemon
 
       - name: Unit Test Build Check
-        shell: zsh
+        shell: bash
         run: |
           set -euo pipefail
-          zsh -f -c 'cd "$GITHUB_WORKSPACE" && \
-          export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
-          export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
-          export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
-          /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
-          /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+          cd "$GITHUB_WORKSPACE"
+          node ./hvigor/hvigor-wrapper.js \
           --mode module -p module=entry@default \
           -p unit.test.replace.page=../../../.test/testability/pages/Index \
           -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon'
+          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
