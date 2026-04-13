@@ -3,6 +3,8 @@ name: CI Compile Check
 env:
   OHOS_SDK_URL: https://repo.huaweicloud.com/harmonyos/os/5.1.0-Release/ohos-sdk-windows_linux-public.tar.gz
   OHOS_SDK_API_DIR: '12'
+  HVIGOR_NPM_REGISTRY: https://repo.harmonyos.com/npm/
+  HVIGOR_VERSION: '6.22.3'
 
 on:
   pull_request:
@@ -127,78 +129,17 @@ jobs:
           echo "OHOS_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
           echo "HARMONY_SDK_HOME=${{ github.workspace }}/../ohos-sdk/linux/${OHOS_SDK_API_DIR}" >> "$GITHUB_ENV"
 
-      - name: Resolve Hvigor Entry
+      - name: Install Hvigor Toolchain
         shell: bash
         run: |
           set -euo pipefail
-
-          CANDIDATE_JS=(
-            "$GITHUB_WORKSPACE/hvigorw.js"
-            "$GITHUB_WORKSPACE/hvigor/hvigor-wrapper.js"
-            "$GITHUB_WORKSPACE/hvigor/hvigorw.js"
-            "$DEVECO_SDK_HOME/tools/hvigor/bin/hvigorw.js"
-            "$DEVECO_SDK_HOME/toolchains/hvigor/bin/hvigorw.js"
-            "$DEVECO_SDK_HOME/linux/tools/hvigor/bin/hvigorw.js"
-            "$DEVECO_SDK_HOME/linux/toolchains/hvigor/bin/hvigorw.js"
-            "$OHOS_SDK_HOME/tools/hvigor/bin/hvigorw.js"
-            "$OHOS_SDK_HOME/toolchains/hvigor/bin/hvigorw.js"
-          )
-
-          CANDIDATE_BIN=(
-            "$GITHUB_WORKSPACE/hvigorw"
-            "$DEVECO_SDK_HOME/tools/hvigor/bin/hvigorw"
-            "$DEVECO_SDK_HOME/toolchains/hvigor/bin/hvigorw"
-            "$DEVECO_SDK_HOME/linux/tools/hvigor/bin/hvigorw"
-            "$DEVECO_SDK_HOME/linux/toolchains/hvigor/bin/hvigorw"
-            "$OHOS_SDK_HOME/tools/hvigor/bin/hvigorw"
-            "$OHOS_SDK_HOME/toolchains/hvigor/bin/hvigorw"
-          )
-
-          HVIGOR_TYPE=""
-          HVIGOR_ENTRY=""
-          for candidate in "${CANDIDATE_JS[@]}"; do
-            if [[ -f "$candidate" ]]; then
-              HVIGOR_TYPE="node"
-              HVIGOR_ENTRY="$candidate"
-              break
-            fi
-          done
-
-          if [[ -z "$HVIGOR_ENTRY" ]]; then
-            for candidate in "${CANDIDATE_BIN[@]}"; do
-              if [[ -f "$candidate" ]]; then
-                HVIGOR_TYPE="bin"
-                HVIGOR_ENTRY="$candidate"
-                break
-              fi
-            done
-          fi
-
-          if [[ -z "$HVIGOR_ENTRY" ]]; then
-            HVIGOR_ENTRY=$(find "$GITHUB_WORKSPACE" "$DEVECO_SDK_HOME" "$OHOS_SDK_HOME" -type f \( -name "hvigorw.js" -o -name "hvigor-wrapper.js" \) | head -1 || true)
-            if [[ -n "$HVIGOR_ENTRY" ]]; then
-              HVIGOR_TYPE="node"
-            fi
-          fi
-
-          if [[ -z "$HVIGOR_ENTRY" ]]; then
-            HVIGOR_ENTRY=$(find "$GITHUB_WORKSPACE" "$DEVECO_SDK_HOME" "$OHOS_SDK_HOME" -type f -name "hvigorw" | head -1 || true)
-            if [[ -n "$HVIGOR_ENTRY" ]]; then
-              HVIGOR_TYPE="bin"
-            fi
-          fi
-
-          if [[ -z "$HVIGOR_ENTRY" ]]; then
-            echo "Cannot find hvigor entry script."
-            echo "Searched in:"
-            echo "  - $GITHUB_WORKSPACE"
-            echo "  - $DEVECO_SDK_HOME"
-            echo "  - $OHOS_SDK_HOME"
-            exit 1
-          fi
-
-          echo "Resolved hvigor entry: $HVIGOR_ENTRY ($HVIGOR_TYPE)"
-          echo "HVIGOR_TYPE=$HVIGOR_TYPE" >> "$GITHUB_ENV"
+          cd "$GITHUB_WORKSPACE"
+          npm install --no-save --registry "$HVIGOR_NPM_REGISTRY" \
+            "@ohos/hvigor@$HVIGOR_VERSION" \
+            "@ohos/hvigor-ohos-plugin@$HVIGOR_VERSION"
+          HVIGOR_ENTRY="$GITHUB_WORKSPACE/node_modules/@ohos/hvigor/bin/hvigor.js"
+          test -f "$HVIGOR_ENTRY"
+          echo "Resolved hvigor entry: $HVIGOR_ENTRY"
           echo "HVIGOR_ENTRY=$HVIGOR_ENTRY" >> "$GITHUB_ENV"
 
       - name: Verify toolchain
@@ -213,31 +154,16 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          if [[ "$HVIGOR_TYPE" == "node" ]]; then
-            node "$HVIGOR_ENTRY" \
-            --sync -p product=default --analyze=normal --parallel --incremental --daemon
-          else
-            chmod +x "$HVIGOR_ENTRY" || true
-            "$HVIGOR_ENTRY" \
-            --sync -p product=default --analyze=normal --parallel --incremental --daemon
-          fi
+          node "$HVIGOR_ENTRY" \
+          --sync -p product=default --analyze=normal --parallel --incremental --daemon
 
       - name: Unit Test Build Check
         shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          if [[ "$HVIGOR_TYPE" == "node" ]]; then
-            node "$HVIGOR_ENTRY" \
-            --mode module -p module=entry@default \
-            -p unit.test.replace.page=../../../.test/testability/pages/Index \
-            -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-            -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
-          else
-            chmod +x "$HVIGOR_ENTRY" || true
-            "$HVIGOR_ENTRY" \
-            --mode module -p module=entry@default \
-            -p unit.test.replace.page=../../../.test/testability/pages/Index \
-            -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-            -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
-          fi
+          node "$HVIGOR_ENTRY" \
+          --mode module -p module=entry@default \
+          -p unit.test.replace.page=../../../.test/testability/pages/Index \
+          -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
