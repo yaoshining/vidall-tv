@@ -27,15 +27,17 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Cache OHOS SDK
-        id: cache-sdk
-        uses: actions/cache@v4
+      - name: Restore OHOS SDK Cache
+        id: cache-sdk-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/ohos-sdk
-          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-${{ hashFiles('.github/workflows/ci-compile-check.yml') }}
+          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-v1
+          restore-keys: |
+            ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-
 
       - name: Download and Extract OHOS SDK
-        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        if: steps.cache-sdk-restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -91,6 +93,13 @@ jobs:
           if [[ -d ohos-sdk/linux/native ]]; then
             mv ohos-sdk/linux/native "ohos-sdk/linux/${OHOS_SDK_API_DIR}/native"
           fi
+
+      - name: Save OHOS SDK Cache
+        if: always() && steps.cache-sdk-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ohos-sdk
+          key: ohos-sdk-linux-${{ env.OHOS_SDK_API_DIR }}-v1
 
       - name: Prepare Environment
         shell: bash
