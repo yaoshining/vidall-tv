@@ -1,0 +1,66 @@
+name: CI Compile Check
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  compile-check:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare Environment
+        shell: zsh
+        run: |
+          set -euo pipefail
+          if [[ ! -d "/Applications/DevEco-Studio.app/Contents/sdk" ]]; then
+            echo "DevEco SDK not found on runner."
+            exit 1
+          fi
+          if [[ ! -x "/Applications/DevEco-Studio.app/Contents/tools/node/bin/node" ]]; then
+            echo "DevEco Node not found on runner."
+            exit 1
+          fi
+          if [[ ! -f "/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js" ]]; then
+            echo "hvigorw.js not found on runner."
+            exit 1
+          fi
+          echo "DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk" >> "$GITHUB_ENV"
+          echo "OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony" >> "$GITHUB_ENV"
+          echo "HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony" >> "$GITHUB_ENV"
+
+      - name: Sync Project
+        shell: zsh
+        run: |
+          set -euo pipefail
+          zsh -f -c 'cd "$GITHUB_WORKSPACE" && \
+          export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+          export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+          export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+          /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+          /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+          --sync -p product=default --analyze=normal --parallel --incremental --daemon'
+
+      - name: Unit Test Build Check
+        shell: zsh
+        run: |
+          set -euo pipefail
+          zsh -f -c 'cd "$GITHUB_WORKSPACE" && \
+          export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+          export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+          export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+          /Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+          /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+          --mode module -p module=entry@default \
+          -p unit.test.replace.page=../../../.test/testability/pages/Index \
+          -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon'
