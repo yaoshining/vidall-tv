@@ -63,12 +63,27 @@ jobs:
             exit 1
           fi
 
-          tar -xzf sdk.tar.gz --wildcards "*/linux/*" -C ohos-sdk/ --strip-components=1 2>/dev/null \
-            || tar -xzf sdk.tar.gz -C ohos-sdk/
+          # 先完整解压，再自动探测 linux 目录，避免不同版本压缩包目录结构差异导致失败。
+          tar -xzf sdk.tar.gz -C ohos-sdk/
+
+          LINUX_DIR=$(find ohos-sdk -type d -name "linux" | head -1)
+          if [[ -z "$LINUX_DIR" ]]; then
+            echo "linux directory not found in SDK archive"
+            find ohos-sdk -maxdepth 4 -type d | head -40
+            exit 1
+          fi
+          echo "Detected SDK linux dir: $LINUX_DIR"
+
+          # 统一为固定路径，后续步骤始终使用 ohos-sdk/linux。
+          if [[ "$LINUX_DIR" != "ohos-sdk/linux" ]]; then
+            rm -rf ohos-sdk/linux || true
+            ln -s "$(realpath "$LINUX_DIR")" ohos-sdk/linux
+          fi
 
           NATIVE_ZIP=$(find ohos-sdk/linux -name "native-linux-x64-*-Release.zip" | head -1)
           if [[ -z "$NATIVE_ZIP" ]]; then
             echo "native zip not found in downloaded SDK"
+            find ohos-sdk/linux -maxdepth 3 -type f | head -40
             exit 1
           fi
           unzip -q "$NATIVE_ZIP" -d ohos-sdk/linux/
