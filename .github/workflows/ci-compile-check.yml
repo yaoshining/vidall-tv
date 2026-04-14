@@ -194,18 +194,19 @@ jobs:
 
           page = Path('entry/.test/testability/pages/Index.ets')
           page.parent.mkdir(parents=True, exist_ok=True)
-          page.write_text("""@Entry
-@Component
-struct Index {
-  build() {
-    Column() {
-      Text('Unit Test Entry')
-    }
-    .width('100%')
-    .height('100%')
-  }
-}
-""")
+          page.write_text(
+              "@Entry\n"
+              "@Component\n"
+              "struct Index {\n"
+              "  build() {\n"
+              "    Column() {\n"
+              "      Text('Unit Test Entry')\n"
+              "    }\n"
+              "    .width('100%')\n"
+              "    .height('100%')\n"
+              "  }\n"
+              "}\n"
+          )
           print(f'Prepared {page}')
           PY
           test -f "$GITHUB_WORKSPACE/entry/.test/testability/pages/Index.ets"
