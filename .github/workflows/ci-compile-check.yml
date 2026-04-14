@@ -662,13 +662,16 @@ jobs:
           cd "$SITE_DIR"
           touch .nojekyll
 
-          if [[ -d "$SITE_DIR/latest/history" ]]; then
+          if [[ -d "$SITE_DIR/history" ]]; then
             rm -rf "$ALLURE_RESULTS_DIR/history"
-            cp -R "$SITE_DIR/latest/history" "$ALLURE_RESULTS_DIR/history"
+            cp -R "$SITE_DIR/history" "$ALLURE_RESULTS_DIR/history"
           fi
 
           rm -rf "$ALLURE_REPORT_DIR"
           npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
+
+          find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "runs" -exec rm -rf {} +
+          cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/"
 
           mkdir -p runs latest
           RUN_DIR="runs/run-${GITHUB_RUN_NUMBER}"
@@ -717,7 +720,7 @@ jobs:
             '<html lang="zh-CN">',
             '<head>',
             '  <meta charset="UTF-8" />',
-            '  <title>VidAll TV Test Reports</title>',
+            '  <title>VidAll TV Test Reports Archive</title>',
             '  <style>',
             '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }',
             '    .hero { background: linear-gradient(135deg, #0f172a, #2563eb); color: white; padding: 28px 32px; }',
@@ -730,11 +733,12 @@ jobs:
             '</head>',
             '<body>',
             '  <div class="hero">',
-            '    <h1>VidAll TV Test Reports</h1>',
-            '    <p>历史报告索引页。最新报告见 <a style="color:#bfdbfe" href="latest/index.html">latest/index.html</a></p>',
+            '    <h1>VidAll TV Test Reports Archive</h1>',
+            '    <p>首页已切换为官方 Allure 报告。历史列表见本页。</p>',
             '  </div>',
             '  <div class="container">',
             '    <div class="card">',
+            '      <p><a href="../index.html">返回最新 Allure 报告</a></p>',
             '      <h2>Run History</h2>',
             '      <table>',
             '        <thead><tr><th>Run</th><th>Status</th><th>Branch</th><th>Commit</th><th>Generated At</th></tr></thead>',
@@ -747,8 +751,11 @@ jobs:
             '</body>',
             '</html>'
           ])
-          (site / 'index.html').write_text(index_html, encoding='utf-8')
-          (site / '404.html').write_text(index_html, encoding='utf-8')
+          archive_dir = site / 'history-list'
+          archive_dir.mkdir(parents=True, exist_ok=True)
+          (archive_dir / 'index.html').write_text(index_html, encoding='utf-8')
+          if (site / 'index.html').exists():
+            (site / '404.html').write_text((site / 'index.html').read_text(encoding='utf-8'), encoding='utf-8')
           PY
 
           git config user.name "github-actions[bot]"
@@ -776,6 +783,8 @@ jobs:
             echo "- Publish branch: ${REPORTS_BRANCH}"
             echo "- If GitHub Pages is enabled for this repository, the site will be served from:"
             echo "  https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
+            echo "- Official Allure homepage: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
+            echo "- Archive list: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/history-list/"
             echo "- First-time setup: Settings -> Pages -> Deploy from a branch -> ${REPORTS_BRANCH} /(root)"
           } >> "$GITHUB_STEP_SUMMARY"
 
