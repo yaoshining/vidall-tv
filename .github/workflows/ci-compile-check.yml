@@ -286,8 +286,14 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE/.ci/reports"
+          set -o pipefail
           node "$HVIGOR_ENTRY" \
-          --sync -p product=default --analyze=normal --parallel --incremental --daemon
+          --sync -p product=default --analyze=normal --parallel --incremental --daemon \
+          2>&1 | tee "$GITHUB_WORKSPACE/.ci/reports/sync-project.log"
+          sync_status=${PIPESTATUS[0]}
+          echo "SYNC_PROJECT_EXIT_CODE=$sync_status" >> "$GITHUB_ENV"
+          exit $sync_status
 
       - name: Prepare Unit Test Page Template
         shell: bash
@@ -321,8 +327,56 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE/.ci/reports"
+          set -o pipefail
           node "$HVIGOR_ENTRY" \
           --mode module -p module=entry@default \
           -p unit.test.replace.page=../../../.test/testability/pages/Index \
           -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon
+          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon \
+          2>&1 | tee "$GITHUB_WORKSPACE/.ci/reports/unit-test-build.log"
+          unit_test_status=${PIPESTATUS[0]}
+          echo "UNIT_TEST_BUILD_EXIT_CODE=$unit_test_status" >> "$GITHUB_ENV"
+          exit $unit_test_status
+
+      - name: Generate CI Summary Report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/.ci/reports"
+          sync_status="${SYNC_PROJECT_EXIT_CODE:-unknown}"
+          unit_test_status="${UNIT_TEST_BUILD_EXIT_CODE:-unknown}"
+          overall_status="${{ job.status }}"
+
+          cat > "$GITHUB_WORKSPACE/.ci/reports/ci-summary.md" <<EOF
+          # CI Compile Check Report
+
+          - Job status: ${overall_status}
+          - Sync Project exit code: ${sync_status}
+          - Unit Test Build exit code: ${unit_test_status}
+
+          ## Included artifacts
+          - sync-project.log
+          - unit-test-build.log
+          EOF
+
+          {
+            echo "## CI Compile Check Report"
+            echo ""
+            echo "- Job status: ${overall_status}"
+            echo "- Sync Project exit code: ${sync_status}"
+            echo "- Unit Test Build exit code: ${unit_test_status}"
+            echo ""
+            echo "Detailed logs are available in the uploaded artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CI Report Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-compile-report-${{ github.run_number }}
+          path: |
+            ${{ github.workspace }}/.ci/reports/**
+          if-no-files-found: warn
+          retention-days: 14
