@@ -164,6 +164,48 @@ tasks --mode module -p module=entry@default'
 zsh -f -c 'set -o pipefail; your_hvigor_command 2>&1 | tail -n 40; echo HVIGOR_EXIT:${pipestatus[1]}'
 ```
 
+### 四点五、公共 runner 编译与单测流程（GitHub Actions / Ubuntu）
+
+**适用场景**：需要在 GitHub 公共 runner 上验证“能否编译”和“本地单测链路是否健康”时。
+
+#### 已验证公共 runner 基线
+
+- Runner：`ubuntu-22.04`
+- Node：`20`
+- Java：`17`（仅在生成 Allure 报告时需要）
+- 公共 SDK：优先使用可公开下载的 OpenHarmony 5.1.x SDK，而不是仓库本地的 HarmonyOS 6.0.2 私有环境
+- hvigor 包源：`https://repo.harmonyos.com/npm/`
+
+#### 标准执行步骤（公共 runner）
+
+1) **恢复或下载 SDK**
+- 从公开源下载 `ohos-sdk-windows_linux-public.tar.gz`
+- 校验 sha256，解压后自动探测 `linux` 目录
+- 将 `ets`、`native`、`toolchains`（以及存在时的 `js`、`previewer`）整理到 `<sdk根>/<api目录>/<component>` 结构
+
+2) **准备 CI 环境变量**
+- 设置：`DEVECO_SDK_HOME`、`OHOS_BASE_SDK_HOME`、`OHOS_SDK_HOME`、`HARMONY_SDK_HOME`
+- 显式改写根目录 `local.properties`，避免旧的 `sdk.dir` 抢占优先级
+
+3) **仅在 CI 中切换编译基线**
+- 将 `build-profile.json5` 中的 `targetSdkVersion`、`compileSdkVersion`、`compatibleSdkVersion` 和 `runtimeOS` 临时替换为公共 runner 可编译的 OpenHarmony 基线
+- 这一步只用于 CI 编译检查，不回写产品需求里的真实 SDK 策略
+
+4) **安装 hvigor 与恢复 Harmony 依赖**
+- 使用官方 npm 源安装 `@ohos/hvigor` 与 `@ohos/hvigor-ohos-plugin`
+- 依据 `oh-package-lock.json5` 恢复依赖，并结合缓存目录减少 503 或网络抖动影响
+
+5) **执行单测构建链路验证**
+- 使用 `UnitTestBuild`，不要直接执行不存在的 `UnitTest`
+- 保留参数：`-p unit.test.replace.page=../../../.test/testability/pages/Index`
+- 需要时先生成或确保存在 `entry/.test/testability/pages/Index.ets` 与 `entry/src/ohosTest/resources/base/profile/main_pages.json`
+
+#### 公共 runner 成功判定
+
+- hvigor 进程退出码为 `0`
+- 输出包含 `BUILD SUCCESSFUL`
+- 若只是 `tail` 成功、但 hvigor 实际失败，不能算通过；必要时用 `pipefail` 和 `pipestatus` 取真实退出码
+
 ### 五、当前测试入口注意点
 
 - 本地测试入口：`entry/src/test/List.test.ets`
