@@ -688,6 +688,7 @@ jobs:
           git add .
           git commit -m "更新: 保存测试报告 #${GITHUB_RUN_NUMBER}" || echo "No report history changes to commit"
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "History branch push skipped"
+          rm -rf "$SITE_DIR/.git"
 
       - name: Inspect EdgeOne Build Directory
         if: always() && env.EDGEONE_READY == 'true'
