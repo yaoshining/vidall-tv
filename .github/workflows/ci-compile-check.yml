@@ -348,9 +348,12 @@ jobs:
           sync_status="${SYNC_PROJECT_EXIT_CODE:-unknown}"
           unit_test_status="${UNIT_TEST_BUILD_EXIT_CODE:-unknown}"
           overall_status="${{ job.status }}"
+          export REPORT_SYNC_STATUS="$sync_status"
+          export REPORT_UNIT_STATUS="$unit_test_status"
+          export REPORT_OVERALL_STATUS="$overall_status"
 
           cat > "$GITHUB_WORKSPACE/.ci/reports/ci-summary.md" <<EOF
-          # CI Compile Check Report
+          # Allure Style CI Report
 
           - Job status: ${overall_status}
           - Sync Project exit code: ${sync_status}
@@ -359,18 +362,30 @@ jobs:
           ## Included artifacts
           - sync-project.log
           - unit-test-build.log
-          - ci-summary.html
+          - allure-style-report.html
           EOF
 
           python3 - <<'PY'
+          import datetime
           import html
           import os
           from pathlib import Path
 
           reports = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'reports'
-          sync_status = os.environ.get('SYNC_PROJECT_EXIT_CODE', 'unknown')
-          unit_status = os.environ.get('UNIT_TEST_BUILD_EXIT_CODE', 'unknown')
-          overall_status = '${{ job.status }}'
+          sync_status = os.environ.get('REPORT_SYNC_STATUS', 'unknown')
+          unit_status = os.environ.get('REPORT_UNIT_STATUS', 'unknown')
+          overall_status = os.environ.get('REPORT_OVERALL_STATUS', 'unknown')
+          run_number = os.environ.get('GITHUB_RUN_NUMBER', 'local')
+          branch = os.environ.get('GITHUB_REF_NAME', 'unknown')
+          sha = os.environ.get('GITHUB_SHA', 'unknown')[:7]
+          generated_at = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+          def state_for(code: str) -> str:
+            if code == '0':
+              return 'passed'
+            if code == 'unknown':
+              return 'unknown'
+            return 'failed'
 
           def read_text(name: str) -> str:
             path = reports / name
@@ -378,54 +393,98 @@ jobs:
               return html.escape(path.read_text(encoding='utf-8', errors='ignore')[-20000:])
             return 'No log captured.'
 
-          html_lines = [
+          checks = [
+            ('Sync Project', state_for(sync_status), sync_status),
+            ('Unit Test Build', state_for(unit_status), unit_status)
+          ]
+          passed = sum(1 for _, state, _ in checks if state == 'passed')
+          failed = sum(1 for _, state, _ in checks if state == 'failed')
+          unknown = sum(1 for _, state, _ in checks if state == 'unknown')
+
+          rows = []
+          for name, state, code in checks:
+            badge_class = 'passed' if state == 'passed' else ('failed' if state == 'failed' else 'unknown')
+            rows.append(
+              f'<tr><td>{html.escape(name)}</td><td><span class="badge {badge_class}">{html.escape(state.upper())}</span></td><td>{html.escape(code)}</td></tr>'
+            )
+
+          html_report = '\n'.join([
             '<!DOCTYPE html>',
             '<html lang="zh-CN">',
             '<head>',
             '  <meta charset="UTF-8" />',
-            '  <title>CI Compile Check Report</title>',
+            '  <title>Allure Style CI Report</title>',
             '  <style>',
-            '    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 24px; background: #0b1020; color: #e5e7eb; }',
-            '    h1, h2 { color: #fff; }',
-            '    .cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 24px; }',
-            '    .card { background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 14px 16px; min-width: 220px; }',
-            '    .ok { color: #22c55e; }',
-            '    pre { background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 14px; overflow: auto; white-space: pre-wrap; word-break: break-word; }',
-            '    .muted { color: #9ca3af; }',
+            '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }',
+            '    .hero { background: linear-gradient(135deg, #6d28d9, #2563eb); color: white; padding: 28px 32px; }',
+            '    .hero h1 { margin: 0 0 8px; font-size: 28px; }',
+            '    .container { padding: 24px 32px 40px; }',
+            '    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 18px; }',
+            '    .card { background: white; border-radius: 14px; padding: 16px 18px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08); }',
+            '    .label { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }',
+            '    .value { font-size: 26px; font-weight: 700; margin-top: 6px; }',
+            '    .table-wrap, .log-wrap { background: white; border-radius: 14px; padding: 18px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08); margin-top: 16px; }',
+            '    table { width: 100%; border-collapse: collapse; }',
+            '    th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #e5e7eb; }',
+            '    .badge { display: inline-block; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }',
+            '    .passed { background: #dcfce7; color: #166534; }',
+            '    .failed { background: #fee2e2; color: #991b1b; }',
+            '    .unknown { background: #fef3c7; color: #92400e; }',
+            '    details { margin-top: 12px; }',
+            '    summary { cursor: pointer; font-weight: 600; }',
+            '    pre { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 14px; overflow: auto; white-space: pre-wrap; word-break: break-word; }',
             '  </style>',
             '</head>',
             '<body>',
-            '  <h1>CI Compile Check Report</h1>',
-            '  <div class="cards">',
-            f'    <div class="card"><div class="muted">Job Status</div><div class="ok">{html.escape(overall_status)}</div></div>',
-            f'    <div class="card"><div class="muted">Sync Exit Code</div><div>{html.escape(sync_status)}</div></div>',
-            f'    <div class="card"><div class="muted">Unit Test Build Exit Code</div><div>{html.escape(unit_status)}</div></div>',
+            f'  <div class="hero"><h1>Allure Style CI Report</h1><div>Run #{html.escape(run_number)} · {html.escape(branch)} · {html.escape(sha)} · {html.escape(generated_at)}</div></div>',
+            '  <div class="container">',
+            '    <div class="grid">',
+            f'      <div class="card"><div class="label">Overall Status</div><div class="value">{html.escape(overall_status.upper())}</div></div>',
+            f'      <div class="card"><div class="label">Passed Checks</div><div class="value">{passed}</div></div>',
+            f'      <div class="card"><div class="label">Failed Checks</div><div class="value">{failed}</div></div>',
+            f'      <div class="card"><div class="label">Unknown Checks</div><div class="value">{unknown}</div></div>',
+            '    </div>',
+            '    <div class="table-wrap">',
+            '      <h2>Checks Overview</h2>',
+            '      <table>',
+            '        <thead><tr><th>Check</th><th>Status</th><th>Exit Code</th></tr></thead>',
+            '        <tbody>',
+            *rows,
+            '        </tbody>',
+            '      </table>',
+            '    </div>',
+            '    <div class="log-wrap">',
+            '      <h2>Execution Logs</h2>',
+            '      <details open><summary>Sync Project Log</summary>',
+            f'        <pre>{read_text("sync-project.log")}</pre>',
+            '      </details>',
+            '      <details><summary>Unit Test Build Log</summary>',
+            f'        <pre>{read_text("unit-test-build.log")}</pre>',
+            '      </details>',
+            '    </div>',
             '  </div>',
-            '  <h2>Sync Project Log</h2>',
-            f'  <pre>{read_text("sync-project.log")}</pre>',
-            '  <h2>Unit Test Build Log</h2>',
-            f'  <pre>{read_text("unit-test-build.log")}</pre>',
             '</body>',
             '</html>'
-          ]
-          (reports / 'ci-summary.html').write_text('\n'.join(html_lines), encoding='utf-8')
+          ])
+          (reports / 'allure-style-report.html').write_text(html_report, encoding='utf-8')
+          (reports / 'ci-summary.html').write_text(html_report, encoding='utf-8')
           PY
 
           {
-            echo "## CI Compile Check Report"
+            echo "## Allure Style CI Report"
             echo ""
             echo "- Job status: ${overall_status}"
             echo "- Sync Project exit code: ${sync_status}"
             echo "- Unit Test Build exit code: ${unit_test_status}"
             echo ""
-            echo "HTML report has been uploaded in the artifact bundle."
+            echo "Allure-style HTML report has been uploaded in the artifact bundle."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload CI Report Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-compile-report-${{ github.run_number }}
+          name: allure-style-ci-report-${{ github.run_number }}
           path: |
             ${{ github.workspace }}/.ci/reports/**
           if-no-files-found: warn
