@@ -10,6 +10,10 @@ env:
   NODE_VERSION: "20"
   EDGEONE_PROJECT_NAME: "vidall-tv-test"
   EDGEONE_READY: "false"
+  REPORTS_BRANCH: "edgeone-report-history"
+
+permissions:
+  contents: write
 
 on:
   pull_request:
@@ -414,11 +418,14 @@ jobs:
           - sync-project.log
           - unit-test-build.log
           - allure-style-report.html
+          - junit-report.xml
+          - meta.json
           EOF
 
           python3 - <<'PY'
           import datetime
           import html
+          import json
           import os
           from pathlib import Path
 
@@ -520,6 +527,34 @@ jobs:
           (reports / 'allure-style-report.html').write_text(html_report, encoding='utf-8')
           (reports / 'ci-summary.html').write_text(html_report, encoding='utf-8')
           (reports / 'index.html').write_text(html_report, encoding='utf-8')
+
+          junit_lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            f'<testsuite name="VidAll TV CI" tests="2" failures="{failed}" errors="0" skipped="{unknown}">'
+          ]
+          for name, state, code in checks:
+            junit_lines.append(f'  <testcase classname="ci.compile" name="{html.escape(name)}">')
+            if state == 'failed':
+              junit_lines.append(f'    <failure message="exit code {html.escape(code)}">{html.escape(name)} failed with exit code {html.escape(code)}</failure>')
+            elif state == 'unknown':
+              junit_lines.append(f'    <skipped message="unknown status">{html.escape(name)} status unknown</skipped>')
+            junit_lines.append('  </testcase>')
+          junit_lines.append('</testsuite>')
+          (reports / 'junit-report.xml').write_text('\n'.join(junit_lines), encoding='utf-8')
+
+          metadata = {
+            'run_number': run_number,
+            'branch': branch,
+            'sha': sha,
+            'generated_at': generated_at,
+            'overall_status': overall_status,
+            'sync_exit_code': sync_status,
+            'unit_test_exit_code': unit_status,
+            'passed': passed,
+            'failed': failed,
+            'unknown': unknown
+          }
+          (reports / 'meta.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
 
           {
@@ -544,13 +579,120 @@ jobs:
             echo "EDGEONE_READY=false" >> "$GITHUB_ENV"
           fi
 
+      - name: Prepare Historical Report Site
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SITE_DIR="$GITHUB_WORKSPACE/.edgeone-site"
+          REPORTS_DIR="$GITHUB_WORKSPACE/.ci/reports"
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          rm -rf "$SITE_DIR"
+          if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+            echo "Loaded existing history branch: $REPORTS_BRANCH"
+          else
+            mkdir -p "$SITE_DIR"
+            cd "$SITE_DIR"
+            git init
+            git checkout -b "$REPORTS_BRANCH"
+          fi
+
+          cd "$SITE_DIR"
+          touch .nojekyll
+          mkdir -p runs latest
+          RUN_DIR="runs/run-${GITHUB_RUN_NUMBER}"
+          rm -rf "$RUN_DIR" latest/*
+          mkdir -p "$RUN_DIR"
+          cp -R "$REPORTS_DIR/." "$RUN_DIR/"
+          cp -R "$REPORTS_DIR/." latest/
+
+          export EDGEONE_SITE_DIR="$SITE_DIR"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          site = Path(os.environ['EDGEONE_SITE_DIR'])
+          runs_dir = site / 'runs'
+          entries = []
+          for meta_path in runs_dir.glob('*/meta.json'):
+            try:
+              meta = json.loads(meta_path.read_text(encoding='utf-8'))
+            except Exception:
+              continue
+            folder = meta_path.parent.name
+            meta['folder'] = folder
+            entries.append(meta)
+
+          def run_sort_key(item):
+            try:
+              return int(str(item.get('run_number', '0')))
+            except ValueError:
+              return 0
+
+          entries.sort(key=run_sort_key, reverse=True)
+          rows = []
+          for item in entries:
+            status = str(item.get('overall_status', 'unknown')).upper()
+            run_number = str(item.get('run_number', 'unknown'))
+            rows.append(
+              f"<tr><td><a href='runs/{item['folder']}/index.html'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>"
+            )
+
+          index_html = '\n'.join([
+            '<!DOCTYPE html>',
+            '<html lang="zh-CN">',
+            '<head>',
+            '  <meta charset="UTF-8" />',
+            '  <title>VidAll TV Test Reports</title>',
+            '  <style>',
+            '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }',
+            '    .hero { background: linear-gradient(135deg, #0f172a, #2563eb); color: white; padding: 28px 32px; }',
+            '    .container { padding: 24px 32px 40px; }',
+            '    .card { background: white; border-radius: 14px; padding: 18px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08); }',
+            '    table { width: 100%; border-collapse: collapse; }',
+            '    th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #e5e7eb; }',
+            '    a { color: #2563eb; text-decoration: none; }',
+            '  </style>',
+            '</head>',
+            '<body>',
+            '  <div class="hero">',
+            '    <h1>VidAll TV Test Reports</h1>',
+            '    <p>历史报告索引页。最新报告见 <a style="color:#bfdbfe" href="latest/index.html">latest/index.html</a></p>',
+            '  </div>',
+            '  <div class="container">',
+            '    <div class="card">',
+            '      <h2>Run History</h2>',
+            '      <table>',
+            '        <thead><tr><th>Run</th><th>Status</th><th>Branch</th><th>Commit</th><th>Generated At</th></tr></thead>',
+            '        <tbody>',
+            *rows,
+            '        </tbody>',
+            '      </table>',
+            '    </div>',
+            '  </div>',
+            '</body>',
+            '</html>'
+          ])
+          (site / 'index.html').write_text(index_html, encoding='utf-8')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "更新: 保存测试报告 #${GITHUB_RUN_NUMBER}" || echo "No report history changes to commit"
+          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "History branch push skipped"
+
       - name: Publish Report to EdgeOne Pages
         if: always() && env.EDGEONE_READY == 'true'
         uses: TencentEdgeOne/edgeone-pages-action@v1
         with:
           token: ${{ secrets.EDGEONE_TOKEN }}
           project-name: ${{ env.EDGEONE_PROJECT_NAME }}
-          build-path: ${{ github.workspace }}/.ci/reports
+          build-path: ${{ github.workspace }}/.edgeone-site
           node-version: ${{ env.NODE_VERSION }}
 
       - name: EdgeOne Publish Notice
