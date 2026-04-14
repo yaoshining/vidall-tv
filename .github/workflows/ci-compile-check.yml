@@ -519,6 +519,7 @@ jobs:
           ])
           (reports / 'allure-style-report.html').write_text(html_report, encoding='utf-8')
           (reports / 'ci-summary.html').write_text(html_report, encoding='utf-8')
+          (reports / 'index.html').write_text(html_report, encoding='utf-8')
           PY
 
           {
