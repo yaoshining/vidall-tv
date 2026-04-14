@@ -176,6 +176,13 @@ jobs:
           test -d "$OHOS_SDK_HOME/toolchains"
           ls -la "$OHOS_SDK_HOME/native" | head -20
 
+      - name: Restore Harmony Dependency Cache
+        id: cache-ohpm-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.ci/ohpm-cache
+          key: ohpm-cache-${{ runner.os }}-${{ hashFiles('oh-package-lock.json5') }}
+
       - name: Restore Harmony Dependencies
         shell: bash
         run: |
@@ -185,8 +192,28 @@ jobs:
           import json
           import shutil
           import tarfile
+          import time
           import urllib.request
           from pathlib import Path
+          from urllib.error import HTTPError, URLError
+
+          def download_with_retry(url: str, archive_path: Path) -> None:
+            last_error = None
+            for attempt in range(1, 6):
+              try:
+                print(f'Downloading {url} (attempt {attempt}/5)')
+                with urllib.request.urlopen(url, timeout=90) as response:
+                  archive_path.write_bytes(response.read())
+                if archive_path.exists() and archive_path.stat().st_size > 0:
+                  return
+              except (HTTPError, URLError, TimeoutError, ConnectionResetError) as err:
+                last_error = err
+                if archive_path.exists():
+                  archive_path.unlink()
+                print(f'Download failed: {err}')
+                if attempt < 5:
+                  time.sleep(attempt * 5)
+            raise RuntimeError(f'Failed to download {url}: {last_error}')
 
           root = Path('.')
           lock_path = root / 'oh-package-lock.json5'
@@ -214,8 +241,10 @@ jobs:
               archive_name = resolved.split('/')[-1]
               archive_path = cache_dir / archive_name
               if not archive_path.exists():
-                print(f'Downloading {package_name} from {resolved}')
-                urllib.request.urlretrieve(resolved, archive_path)
+                print(f'Preparing to download {package_name} from {resolved}')
+                download_with_retry(resolved, archive_path)
+              else:
+                print(f'Using cached archive for {package_name}: {archive_path}')
             else:
               archive_path = (root / resolved).resolve()
               print(f'Using local archive for {package_name}: {archive_path}')
@@ -244,6 +273,13 @@ jobs:
             print(f'Restored {package_name} -> {dest_dir}')
           PY
           test -d "$GITHUB_WORKSPACE/oh_modules/@ibestservices/ibest-ui"
+
+      - name: Save Harmony Dependency Cache
+        if: always() && steps.cache-ohpm-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.ci/ohpm-cache
+          key: ohpm-cache-${{ runner.os }}-${{ hashFiles('oh-package-lock.json5') }}
 
       - name: Sync Project
         shell: bash
