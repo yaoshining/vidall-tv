@@ -63,6 +63,24 @@ export struct ContinueWatchCard {
     return `第${this.item.seasonNumber}季 第${this.item.episodeNumber}集`;
   }
 
+  private buildPlayerTitle(): string {
+    if (this.item.kind !== 'series') {
+      return this.item.title;
+    }
+    const sn = this.item.seasonNumber;
+    const en = this.item.episodeNumber;
+    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
+      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+    const seasonLabel = sn <= 0 ? '特别篇'
+      : (sn < chineseNums.length ? `第${chineseNums[sn]}季` : `第${sn}季`);
+    const code = `S${sn}:E${en}`;
+    const epName = (this.item.episodeTitle ?? '').trim();
+    if (epName.length > 0) {
+      return `${this.item.title} ${seasonLabel}-${code}-${epName}`;
+    }
+    return `${this.item.title} ${seasonLabel}-${code}`;
+  }
+
   private getSubtitle(): string {
     return `${this.item.positionFormatted} / ${this.item.durationFormatted}`;
   }
@@ -161,7 +179,7 @@ export struct ContinueWatchCard {
         videoId: this.item.videoId,
         url: fullUrl,
         httpHeader,
-        title: this.item.title,
+        title: this.buildPlayerTitle(),
         durationHintMs: this.item.durationMs > 0 ? this.item.durationMs : undefined,
         mediaKey: this.item.mediaKey,
         startPositionMs: this.item.startPositionMs,
