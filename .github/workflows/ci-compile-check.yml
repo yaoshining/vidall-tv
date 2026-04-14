@@ -9,10 +9,7 @@ env:
   HVIGOR_VERSION: "6.22.3"
   NODE_VERSION: "20"
   ALLURE_VERSION: "2.34.1"
-  EDGEONE_PROJECT_NAME: "vidall-tv-test"
-  EDGEONE_PUBLIC_PROJECT_NAME: ""
-  EDGEONE_READY: "false"
-  REPORTS_BRANCH: "edgeone-report-history"
+  REPORTS_BRANCH: "gh-pages"
 
 permissions:
   contents: write
@@ -639,18 +636,6 @@ jobs:
             echo "Allure-style HTML report has been uploaded in the artifact bundle."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Check EdgeOne Publish Readiness
-        if: always()
-        shell: bash
-        env:
-          EDGEONE_TOKEN: ${{ secrets.EDGEONE_TOKEN }}
-        run: |
-          if [[ -n "$EDGEONE_TOKEN" ]]; then
-            echo "EDGEONE_READY=true" >> "$GITHUB_ENV"
-          else
-            echo "EDGEONE_READY=false" >> "$GITHUB_ENV"
-          fi
-
       - name: Prepare Historical Report Site
         if: always()
         shell: bash
@@ -658,7 +643,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          SITE_DIR="$GITHUB_WORKSPACE/edgeone-site"
+          SITE_DIR="$GITHUB_WORKSPACE/pages-site"
           REPORTS_DIR="$GITHUB_WORKSPACE/.ci/reports"
           ALLURE_RESULTS_DIR="$GITHUB_WORKSPACE/.ci/allure-results"
           ALLURE_REPORT_DIR="$GITHUB_WORKSPACE/.ci/allure-report"
@@ -694,13 +679,13 @@ jobs:
           cp -R "$REPORTS_DIR/." "$RUN_DIR/artifacts/"
           cp -R "$REPORTS_DIR/." latest/artifacts/
 
-          export EDGEONE_SITE_DIR="$SITE_DIR"
+          export PAGES_SITE_DIR="$SITE_DIR"
           python3 - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          site = Path(os.environ['EDGEONE_SITE_DIR'])
+          site = Path(os.environ['PAGES_SITE_DIR'])
           runs_dir = site / 'runs'
           entries = []
           for meta_path in runs_dir.glob('*/meta.json'):
@@ -773,63 +758,25 @@ jobs:
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "History branch push skipped"
           rm -rf "$SITE_DIR/.git"
 
-      - name: Inspect EdgeOne Build Directory
-        if: always() && env.EDGEONE_READY == 'true'
+      - name: Inspect Pages Build Directory
+        if: always()
         shell: bash
         run: |
-          echo "Inspecting edgeone-site directory"
-          find "$GITHUB_WORKSPACE/edgeone-site" -maxdepth 3 | sort | sed -n '1,120p'
+          echo "Inspecting GitHub Pages site directory"
+          find "$GITHUB_WORKSPACE/pages-site" -maxdepth 3 | sort | sed -n '1,120p'
 
-      - name: Publish Report to EdgeOne Pages
-        if: always() && env.EDGEONE_READY == 'true'
-        uses: TencentEdgeOne/edgeone-pages-action@v1
-        with:
-          token: ${{ secrets.EDGEONE_TOKEN }}
-          project-name: ${{ env.EDGEONE_PROJECT_NAME }}
-          build-path: ${{ github.workspace }}/edgeone-site
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Publish Report to EdgeOne Public Project
-        if: always() && env.EDGEONE_READY == 'true' && env.EDGEONE_PUBLIC_PROJECT_NAME != '' && env.EDGEONE_PUBLIC_PROJECT_NAME != env.EDGEONE_PROJECT_NAME
-        continue-on-error: true
-        uses: TencentEdgeOne/edgeone-pages-action@v1
-        with:
-          token: ${{ secrets.EDGEONE_TOKEN }}
-          project-name: ${{ env.EDGEONE_PUBLIC_PROJECT_NAME }}
-          build-path: ${{ github.workspace }}/edgeone-site
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: EdgeOne Access Summary
-        if: always() && env.EDGEONE_READY == 'true'
+      - name: GitHub Pages Publish Summary
+        if: always()
         shell: bash
         run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
           {
-            echo "## EdgeOne Publish"
+            echo "## GitHub Pages Publish"
             echo ""
-            echo "- Deployment status: success"
-            echo "- Primary project: ${EDGEONE_PROJECT_NAME}"
-            if [[ -n "${EDGEONE_PUBLIC_PROJECT_NAME:-}" ]]; then
-              echo "- Public project: ${EDGEONE_PUBLIC_PROJECT_NAME}"
-            fi
-            if [[ -n "${EDGEONE_DEPLOY_URL:-}" ]]; then
-              echo "- Live URL: ${EDGEONE_DEPLOY_URL}"
-            else
-              echo "- Live URL: see the Publish Report to EdgeOne Pages step log for EDGEONE_DEPLOY_URL"
-            fi
-            echo "- Note: EdgeOne currently returns a signed access link. Opening the bare domain directly may show 404 or authorization required."
-            echo "- For a stable public address, switch the project to public access or bind a custom domain in EdgeOne Pages."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: EdgeOne Publish Notice
-        if: always() && env.EDGEONE_READY != 'true'
-        shell: bash
-        run: |
-          {
-            echo "## EdgeOne Publish"
-            echo ""
-            echo "- Skipped because EDGEONE_TOKEN is unavailable in this run."
-            echo "- Target project: ${EDGEONE_PROJECT_NAME}"
-            echo "- Event: ${GITHUB_EVENT_NAME}"
+            echo "- Publish branch: ${REPORTS_BRANCH}"
+            echo "- If GitHub Pages is enabled for this repository, the site will be served from:"
+            echo "  https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
+            echo "- First-time setup: Settings -> Pages -> Deploy from a branch -> ${REPORTS_BRANCH} /(root)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload CI Report Artifacts
