@@ -587,7 +587,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          SITE_DIR="$GITHUB_WORKSPACE/.edgeone-site"
+          SITE_DIR="$GITHUB_WORKSPACE/edgeone-site"
           REPORTS_DIR="$GITHUB_WORKSPACE/.ci/reports"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
@@ -688,13 +688,20 @@ jobs:
           git commit -m "更新: 保存测试报告 #${GITHUB_RUN_NUMBER}" || echo "No report history changes to commit"
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "History branch push skipped"
 
+      - name: Inspect EdgeOne Build Directory
+        if: always() && env.EDGEONE_READY == 'true'
+        shell: bash
+        run: |
+          echo "Inspecting edgeone-site directory"
+          find "$GITHUB_WORKSPACE/edgeone-site" -maxdepth 3 | sort | sed -n '1,120p'
+
       - name: Publish Report to EdgeOne Pages
         if: always() && env.EDGEONE_READY == 'true'
         uses: TencentEdgeOne/edgeone-pages-action@v1
         with:
           token: ${{ secrets.EDGEONE_TOKEN }}
           project-name: ${{ env.EDGEONE_PROJECT_NAME }}
-          build-path: ${{ github.workspace }}/.edgeone-site
+          build-path: ${{ github.workspace }}/edgeone-site
           node-version: ${{ env.NODE_VERSION }}
 
       - name: EdgeOne Access Summary
