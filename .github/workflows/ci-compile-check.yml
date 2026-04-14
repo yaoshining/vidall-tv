@@ -2,11 +2,11 @@ name: CI Compile Check
 
 env:
   OHOS_SDK_URL: https://repo.huaweicloud.com/harmonyos/os/5.1.0-Release/ohos-sdk-windows_linux-public.tar.gz
-  OHOS_SDK_API_DIR: '18'
-  CI_COMPILE_SDK_VERSION: '5.1.0(18)'
+  OHOS_SDK_API_DIR: "18"
+  CI_COMPILE_SDK_VERSION: "5.1.0(18)"
   CI_RUNTIME_OS: OpenHarmony
   HVIGOR_NPM_REGISTRY: https://repo.harmonyos.com/npm/
-  HVIGOR_VERSION: '6.22.3'
+  HVIGOR_VERSION: "6.22.3"
 
 on:
   pull_request:
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Restore OHOS SDK Cache
         id: cache-sdk-restore
@@ -138,18 +138,18 @@ jobs:
           # 公共 runner 无法直接获取 HarmonyOS 6.0.2 私有 SDK，这里仅在 CI 中
           # 切换到可公开下载的 OpenHarmony 做编译检查，不影响仓库源码。
           python3 - <<'PY'
-import os
-from pathlib import Path
+          import os
+          from pathlib import Path
 
-ci_sdk = os.environ['CI_COMPILE_SDK_VERSION']
-ci_runtime = os.environ['CI_RUNTIME_OS']
-p = Path('build-profile.json5')
-s = p.read_text()
-s = s.replace('"targetSdkVersion": "6.0.2(22)"', f'"targetSdkVersion": "{ci_sdk}",\n        "compileSdkVersion": "{ci_sdk}"')
-s = s.replace('"compatibleSdkVersion": "5.1.1(19)"', f'"compatibleSdkVersion": "{ci_sdk}"')
-s = s.replace('"runtimeOS": "HarmonyOS"', f'"runtimeOS": "{ci_runtime}"')
-p.write_text(s)
-PY
+          ci_sdk = os.environ['CI_COMPILE_SDK_VERSION']
+          ci_runtime = os.environ['CI_RUNTIME_OS']
+          p = Path('build-profile.json5')
+          s = p.read_text()
+          s = s.replace('"targetSdkVersion": "6.0.2(22)"', f'"targetSdkVersion": "{ci_sdk}",\n        "compileSdkVersion": "{ci_sdk}"')
+          s = s.replace('"compatibleSdkVersion": "5.1.1(19)"', f'"compatibleSdkVersion": "{ci_sdk}"')
+          s = s.replace('"runtimeOS": "HarmonyOS"', f'"runtimeOS": "{ci_runtime}"')
+          p.write_text(s)
+          PY
 
           grep -n "targetSdkVersion\|compileSdkVersion\|compatibleSdkVersion\|runtimeOS" build-profile.json5
           cat "$GITHUB_WORKSPACE/local.properties"
