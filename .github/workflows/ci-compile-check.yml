@@ -9,6 +9,7 @@ env:
   HVIGOR_VERSION: "6.22.3"
   NODE_VERSION: "20"
   EDGEONE_PROJECT_NAME: "vidall-tv-test"
+  EDGEONE_PUBLIC_PROJECT_NAME: "vidall-reports"
   EDGEONE_READY: "false"
   REPORTS_BRANCH: "edgeone-report-history"
 
@@ -704,6 +705,15 @@ jobs:
           build-path: ${{ github.workspace }}/edgeone-site
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Publish Report to EdgeOne Public Project
+        if: always() && env.EDGEONE_READY == 'true' && env.EDGEONE_PUBLIC_PROJECT_NAME != env.EDGEONE_PROJECT_NAME
+        uses: TencentEdgeOne/edgeone-pages-action@v1
+        with:
+          token: ${{ secrets.EDGEONE_TOKEN }}
+          project-name: ${{ env.EDGEONE_PUBLIC_PROJECT_NAME }}
+          build-path: ${{ github.workspace }}/edgeone-site
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: EdgeOne Access Summary
         if: always() && env.EDGEONE_READY == 'true'
         shell: bash
@@ -712,6 +722,8 @@ jobs:
             echo "## EdgeOne Publish"
             echo ""
             echo "- Deployment status: success"
+            echo "- Primary project: ${EDGEONE_PROJECT_NAME}"
+            echo "- Public project: ${EDGEONE_PUBLIC_PROJECT_NAME}"
             if [[ -n "${EDGEONE_DEPLOY_URL:-}" ]]; then
               echo "- Live URL: ${EDGEONE_DEPLOY_URL}"
             else
