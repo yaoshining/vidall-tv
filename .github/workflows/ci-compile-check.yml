@@ -8,6 +8,7 @@ env:
   HVIGOR_NPM_REGISTRY: https://repo.harmonyos.com/npm/
   HVIGOR_VERSION: "6.22.3"
   NODE_VERSION: "20"
+  ALLURE_VERSION: "2.34.1"
   EDGEONE_PROJECT_NAME: "vidall-tv-test"
   EDGEONE_PUBLIC_PROJECT_NAME: "vidall-reports"
   EDGEONE_READY: "false"
@@ -38,6 +39,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Java for Allure
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Restore OHOS SDK Cache
         id: cache-sdk-restore
@@ -425,9 +432,11 @@ jobs:
 
           python3 - <<'PY'
           import datetime
+          import hashlib
           import html
           import json
           import os
+          import uuid
           from pathlib import Path
 
           reports = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'reports'
@@ -557,6 +566,67 @@ jobs:
             'unknown': unknown
           }
           (reports / 'meta.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
+
+          allure_results = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'allure-results'
+          allure_results.mkdir(parents=True, exist_ok=True)
+          (allure_results / 'environment.properties').write_text(
+            f'Branch={branch}\nCommit={sha}\nRun={run_number}\nOverallStatus={overall_status}\n',
+            encoding='utf-8'
+          )
+          executor = {
+            'name': 'GitHub Actions',
+            'type': 'github',
+            'url': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}",
+            'buildOrder': int(run_number) if str(run_number).isdigit() else 0,
+            'buildName': f'Run #{run_number}',
+            'buildUrl': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}",
+            'reportName': 'VidAll TV CI Allure Report'
+          }
+          (allure_results / 'executor.json').write_text(json.dumps(executor, ensure_ascii=False, indent=2), encoding='utf-8')
+
+          for name, state, code, log_name in [
+            ('Sync Project', state_for(sync_status), sync_status, 'sync-project.log'),
+            ('Unit Test Build', state_for(unit_status), unit_status, 'unit-test-build.log')
+          ]:
+            attachment_source = f"{uuid.uuid4()}-attachment.txt"
+            log_path = reports / log_name
+            attachment_text = log_path.read_text(encoding='utf-8', errors='ignore') if log_path.exists() else 'No log captured.'
+            (allure_results / attachment_source).write_text(attachment_text, encoding='utf-8')
+            result_status = 'passed' if state == 'passed' else ('failed' if state == 'failed' else 'skipped')
+            history_id = hashlib.md5(name.encode('utf-8')).hexdigest()
+            result = {
+              'uuid': str(uuid.uuid4()),
+              'historyId': history_id,
+              'testCaseId': history_id,
+              'name': name,
+              'fullName': f'ci.compile::{name}',
+              'status': result_status,
+              'stage': 'finished',
+              'statusDetails': {
+                'message': f'Exit code: {code}'
+              },
+              'attachments': [
+                {
+                  'name': log_name,
+                  'source': attachment_source,
+                  'type': 'text/plain'
+                }
+              ],
+              'labels': [
+                {'name': 'suite', 'value': 'CI Compile Check'},
+                {'name': 'framework', 'value': 'GitHub Actions'},
+                {'name': 'host', 'value': 'ubuntu-22.04'}
+              ],
+              'parameters': [
+                {'name': 'branch', 'value': branch},
+                {'name': 'sha', 'value': sha},
+                {'name': 'run_number', 'value': str(run_number)}
+              ]
+            }
+            (allure_results / f"{uuid.uuid4()}-result.json").write_text(
+              json.dumps(result, ensure_ascii=False, indent=2),
+              encoding='utf-8'
+            )
           PY
 
           {
@@ -590,6 +660,8 @@ jobs:
           set -euo pipefail
           SITE_DIR="$GITHUB_WORKSPACE/edgeone-site"
           REPORTS_DIR="$GITHUB_WORKSPACE/.ci/reports"
+          ALLURE_RESULTS_DIR="$GITHUB_WORKSPACE/.ci/allure-results"
+          ALLURE_REPORT_DIR="$GITHUB_WORKSPACE/.ci/allure-report"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           rm -rf "$SITE_DIR"
@@ -604,12 +676,23 @@ jobs:
 
           cd "$SITE_DIR"
           touch .nojekyll
+
+          if [[ -d "$SITE_DIR/latest/history" ]]; then
+            rm -rf "$ALLURE_RESULTS_DIR/history"
+            cp -R "$SITE_DIR/latest/history" "$ALLURE_RESULTS_DIR/history"
+          fi
+
+          rm -rf "$ALLURE_REPORT_DIR"
+          npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
+
           mkdir -p runs latest
           RUN_DIR="runs/run-${GITHUB_RUN_NUMBER}"
           rm -rf "$RUN_DIR" latest/*
-          mkdir -p "$RUN_DIR"
-          cp -R "$REPORTS_DIR/." "$RUN_DIR/"
-          cp -R "$REPORTS_DIR/." latest/
+          mkdir -p "$RUN_DIR/artifacts" latest/artifacts
+          cp -R "$ALLURE_REPORT_DIR/." "$RUN_DIR/"
+          cp -R "$ALLURE_REPORT_DIR/." latest/
+          cp -R "$REPORTS_DIR/." "$RUN_DIR/artifacts/"
+          cp -R "$REPORTS_DIR/." latest/artifacts/
 
           export EDGEONE_SITE_DIR="$SITE_DIR"
           python3 - <<'PY'
