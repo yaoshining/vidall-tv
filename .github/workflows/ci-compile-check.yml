@@ -359,7 +359,57 @@ jobs:
           ## Included artifacts
           - sync-project.log
           - unit-test-build.log
+          - ci-summary.html
           EOF
+
+          python3 - <<'PY'
+          import html
+          import os
+          from pathlib import Path
+
+          reports = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'reports'
+          sync_status = os.environ.get('SYNC_PROJECT_EXIT_CODE', 'unknown')
+          unit_status = os.environ.get('UNIT_TEST_BUILD_EXIT_CODE', 'unknown')
+          overall_status = '${{ job.status }}'
+
+          def read_text(name: str) -> str:
+            path = reports / name
+            if path.exists():
+              return html.escape(path.read_text(encoding='utf-8', errors='ignore')[-20000:])
+            return 'No log captured.'
+
+          html_lines = [
+            '<!DOCTYPE html>',
+            '<html lang="zh-CN">',
+            '<head>',
+            '  <meta charset="UTF-8" />',
+            '  <title>CI Compile Check Report</title>',
+            '  <style>',
+            '    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 24px; background: #0b1020; color: #e5e7eb; }',
+            '    h1, h2 { color: #fff; }',
+            '    .cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 24px; }',
+            '    .card { background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 14px 16px; min-width: 220px; }',
+            '    .ok { color: #22c55e; }',
+            '    pre { background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 14px; overflow: auto; white-space: pre-wrap; word-break: break-word; }',
+            '    .muted { color: #9ca3af; }',
+            '  </style>',
+            '</head>',
+            '<body>',
+            '  <h1>CI Compile Check Report</h1>',
+            '  <div class="cards">',
+            f'    <div class="card"><div class="muted">Job Status</div><div class="ok">{html.escape(overall_status)}</div></div>',
+            f'    <div class="card"><div class="muted">Sync Exit Code</div><div>{html.escape(sync_status)}</div></div>',
+            f'    <div class="card"><div class="muted">Unit Test Build Exit Code</div><div>{html.escape(unit_status)}</div></div>',
+            '  </div>',
+            '  <h2>Sync Project Log</h2>',
+            f'  <pre>{read_text("sync-project.log")}</pre>',
+            '  <h2>Unit Test Build Log</h2>',
+            f'  <pre>{read_text("unit-test-build.log")}</pre>',
+            '</body>',
+            '</html>'
+          ]
+          (reports / 'ci-summary.html').write_text('\n'.join(html_lines), encoding='utf-8')
+          PY
 
           {
             echo "## CI Compile Check Report"
@@ -368,7 +418,7 @@ jobs:
             echo "- Sync Project exit code: ${sync_status}"
             echo "- Unit Test Build exit code: ${unit_test_status}"
             echo ""
-            echo "Detailed logs are available in the uploaded artifact."
+            echo "HTML report has been uploaded in the artifact bundle."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload CI Report Artifacts
