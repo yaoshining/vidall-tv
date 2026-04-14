@@ -40,7 +40,9 @@ jobs:
       NODE_BIN: /Applications/DevEco-Studio.app/Contents/tools/node/bin/node
       HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
       HDC_BIN: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
-      BUNDLE_NAME: com.yao.vidalltv
+      PROD_BUNDLE_NAME: com.yao.vidalltv
+      TEST_BUNDLE_NAME: com.yao.vidalltv.itest
+      BUNDLE_NAME: com.yao.vidalltv.itest
       TEST_MODULE: entry_test
 
     steps:
@@ -64,6 +66,27 @@ jobs:
             echo "- Runner: $RUNNER_NAME"
             echo "- Workspace: $GITHUB_WORKSPACE"
             echo "- SDK: $OHOS_SDK_HOME"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare test-only bundle name
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          app_scope = Path('AppScope/app.json5')
+          data = json.loads(app_scope.read_text(encoding='utf-8'))
+          data['app']['bundleName'] = os.environ['TEST_BUNDLE_NAME']
+          app_scope.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(app_scope.read_text(encoding='utf-8'))
+          PY
+
+          {
+            echo "- Production bundle kept untouched in normal builds: $PROD_BUNDLE_NAME"
+            echo "- Integration-test-only bundle: $TEST_BUNDLE_NAME"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Detect target device
@@ -184,6 +207,7 @@ jobs:
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
+          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$TEST_BUNDLE_NAME" > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$TEST_HAP" 2>&1 | tee "$LOG_DIR/install-test.log"
 
@@ -207,6 +231,13 @@ jobs:
 
           echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
           echo "- 设备侧测试已完成，ResultCode=0" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup test application
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$TEST_BUNDLE_NAME" > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
 
       - name: Stop hilog capture
         if: always()
