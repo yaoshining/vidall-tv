@@ -96,6 +96,116 @@ jobs:
             echo "- Integration-test-only bundle: $TEST_BUNDLE_NAME"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Restore Harmony dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python3 - <<'PY'
+          import json
+          import shutil
+          import tarfile
+          import time
+          import urllib.request
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+
+          def download_with_retry(url: str, archive_path: Path) -> None:
+            last_error = None
+            for attempt in range(1, 6):
+              try:
+                print(f'Downloading {url} (attempt {attempt}/5)')
+                with urllib.request.urlopen(url, timeout=90) as response:
+                  archive_path.write_bytes(response.read())
+                if archive_path.exists() and archive_path.stat().st_size > 0:
+                  return
+              except (HTTPError, URLError, TimeoutError, ConnectionResetError) as err:
+                last_error = err
+                if archive_path.exists():
+                  archive_path.unlink()
+                print(f'Download failed: {err}')
+                if attempt < 5:
+                  time.sleep(attempt * 5)
+            raise RuntimeError(f'Failed to download {url}: {last_error}')
+
+          def safe_extract_archive(archive_path: Path, dest_dir: Path) -> None:
+            root = dest_dir.resolve()
+            with tarfile.open(archive_path, 'r:gz') as tar:
+              for member in tar.getmembers():
+                member_path = Path(member.name)
+                if member.issym() or member.islnk() or member_path.is_absolute() or '..' in member_path.parts:
+                  raise RuntimeError(f'Unsafe archive member: {member.name}')
+
+                target_path = (root / member.name).resolve()
+                try:
+                  target_path.relative_to(root)
+                except ValueError as err:
+                  raise RuntimeError(f'Unsafe archive member: {member.name}') from err
+
+                if member.isdir():
+                  target_path.mkdir(parents=True, exist_ok=True)
+                  continue
+
+                if not member.isfile():
+                  continue
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                source = tar.extractfile(member)
+                if source is None:
+                  continue
+                with source, open(target_path, 'wb') as out_file:
+                  shutil.copyfileobj(source, out_file)
+
+          root = Path('.')
+          lock = json.loads((root / 'oh-package-lock.json5').read_text(encoding='utf-8'))
+          packages = lock.get('packages', {})
+          specifiers = lock.get('specifiers', {})
+
+          oh_modules_dir = root / 'oh_modules'
+          cache_dir = root / '.ci' / 'ohpm-cache'
+          extract_dir = cache_dir / 'extract'
+          oh_modules_dir.mkdir(parents=True, exist_ok=True)
+          cache_dir.mkdir(parents=True, exist_ok=True)
+          extract_dir.mkdir(parents=True, exist_ok=True)
+
+          for resolved_key in specifiers.values():
+            package_meta = packages.get(resolved_key)
+            if not package_meta:
+              continue
+            package_name = package_meta.get('name', '')
+            resolved = package_meta.get('resolved', '')
+            if len(package_name) == 0 or not resolved.endswith('.har'):
+              continue
+
+            if resolved.startswith('http://') or resolved.startswith('https://'):
+              archive_name = resolved.split('/')[-1]
+              archive_path = cache_dir / archive_name
+              if not archive_path.exists():
+                download_with_retry(resolved, archive_path)
+            else:
+              archive_path = (root / resolved).resolve()
+
+            if not archive_path.exists():
+              raise FileNotFoundError(f'Archive not found for {package_name}: {archive_path}')
+
+            target_dir = oh_modules_dir / package_name
+            temp_dir = extract_dir / package_name.replace('/', '__')
+            if target_dir.exists():
+              shutil.rmtree(target_dir)
+            if temp_dir.exists():
+              shutil.rmtree(temp_dir)
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            safe_extract_archive(archive_path, temp_dir)
+            source_dir = temp_dir / 'package'
+            if not source_dir.exists():
+              source_dir = temp_dir
+            shutil.copytree(source_dir, target_dir)
+            print(f'Restored {package_name} -> {target_dir}')
+          PY
+
+          find "$GITHUB_WORKSPACE/oh_modules" -maxdepth 2 -mindepth 1 | head -50
+
       - name: Detect target device
         shell: bash
         run: |
@@ -106,7 +216,7 @@ jobs:
           TARGET_INPUT='${{ inputs.deviceSerial }}'
           AVAILABLE_TARGETS=$("$HDC_BIN" list targets | awk 'NF {print $1}')
           if [[ -z "$AVAILABLE_TARGETS" ]]; then
-            echo "未检测到可用 HarmonyOS 设备，请先连接 TV 真机或模拟器。"
+            echo "未检测到可用 HarmonyOS TV 真机，请先连接测试设备。"
             exit 1
           fi
 
