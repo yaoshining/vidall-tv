@@ -104,22 +104,30 @@ jobs:
           python3 - <<'PY'
           import json
           import shutil
+          import ssl
           import tarfile
           import time
           import urllib.request
           from pathlib import Path
           from urllib.error import HTTPError, URLError
+          from urllib.parse import urlparse
 
           def download_with_retry(url: str, archive_path: Path) -> None:
             last_error = None
+            parsed = urlparse(url)
+            ssl_context = None
+            if parsed.netloc.endswith('repo.harmonyos.com'):
+              ssl_context = ssl._create_unverified_context()
+              print(f'Use relaxed SSL context for {parsed.netloc}')
+
             for attempt in range(1, 6):
               try:
                 print(f'Downloading {url} (attempt {attempt}/5)')
-                with urllib.request.urlopen(url, timeout=90) as response:
+                with urllib.request.urlopen(url, timeout=90, context=ssl_context) as response:
                   archive_path.write_bytes(response.read())
                 if archive_path.exists() and archive_path.stat().st_size > 0:
                   return
-              except (HTTPError, URLError, TimeoutError, ConnectionResetError) as err:
+              except (HTTPError, URLError, TimeoutError, ConnectionResetError, ssl.SSLError) as err:
                 last_error = err
                 if archive_path.exists():
                   archive_path.unlink()
@@ -162,7 +170,7 @@ jobs:
           specifiers = lock.get('specifiers', {})
 
           oh_modules_dir = root / 'oh_modules'
-          cache_dir = root / '.ci' / 'ohpm-cache'
+          cache_dir = Path.home() / '.vidall-ohpm-cache'
           extract_dir = cache_dir / 'extract'
           oh_modules_dir.mkdir(parents=True, exist_ok=True)
           cache_dir.mkdir(parents=True, exist_ok=True)
