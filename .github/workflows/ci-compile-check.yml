@@ -532,7 +532,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check EdgeOne Publish Readiness
-        if: always() && github.event_name != 'pull_request'
+        if: always()
         shell: bash
         env:
           EDGEONE_TOKEN: ${{ secrets.EDGEONE_TOKEN }}
@@ -544,7 +544,7 @@ jobs:
           fi
 
       - name: Publish Report to EdgeOne Pages
-        if: always() && github.event_name != 'pull_request' && env.EDGEONE_READY == 'true'
+        if: always() && env.EDGEONE_READY == 'true'
         uses: TencentEdgeOne/edgeone-pages-action@v1
         with:
           token: ${{ secrets.EDGEONE_TOKEN }}
@@ -553,14 +553,15 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: EdgeOne Publish Notice
-        if: always() && github.event_name != 'pull_request' && env.EDGEONE_READY != 'true'
+        if: always() && env.EDGEONE_READY != 'true'
         shell: bash
         run: |
           {
             echo "## EdgeOne Publish"
             echo ""
-            echo "- Skipped because secret EDGEONE_TOKEN is not configured yet."
+            echo "- Skipped because EDGEONE_TOKEN is unavailable in this run."
             echo "- Target project: ${EDGEONE_PROJECT_NAME}"
+            echo "- Event: ${GITHUB_EVENT_NAME}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload CI Report Artifacts
