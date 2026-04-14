@@ -676,6 +676,7 @@ jobs:
           npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
 
           find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "runs" -exec rm -rf {} +
+          cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/"
 
           mkdir -p runs latest
           RUN_DIR="runs/run-${GITHUB_RUN_NUMBER}"
@@ -742,6 +743,7 @@ jobs:
             'generated_at': '-'
           }
 
+          add_cache_busting(site / 'index.html', current_run_number)
           add_cache_busting(site / 'latest' / 'index.html', current_run_number)
           add_cache_busting(site / 'runs' / latest_entry['folder'] / 'index.html', str(latest_entry.get('run_number', current_run_number)))
 
@@ -754,33 +756,7 @@ jobs:
               f"<tr><td><a href='{report_href}'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>"
             )
 
-          latest_href = f"runs/{latest_entry['folder']}/index.html?v={latest_entry.get('run_number', current_run_number)}"
-          landing_html = '\n'.join([
-            '<!DOCTYPE html>',
-            '<html lang="zh-CN">',
-            '<head>',
-            '  <meta charset="UTF-8" />',
-            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
-            '  <meta http-equiv="Pragma" content="no-cache" />',
-            '  <meta http-equiv="Expires" content="0" />',
-            '  <meta http-equiv="refresh" content="0; url=' + latest_href + '" />',
-            '  <title>VidAll TV Test Reports</title>',
-            '  <style>',
-            '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #0f172a; color: #e5eefb; display: flex; align-items: center; justify-content: center; min-height: 100vh; }',
-            '    .card { width: min(720px, 92vw); background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 16px; padding: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); }',
-            '    a { color: #60a5fa; text-decoration: none; }',
-            '  </style>',
-            '</head>',
-            '<body>',
-            '  <div class="card">',
-            '    <h1>VidAll TV Test Reports</h1>',
-            f'    <p>正在跳转到最新报告：<a href="{latest_href}">Run #{latest_entry.get("run_number", current_run_number)}</a></p>',
-            '    <p><a href="history-list/index.html">查看历史报告列表</a></p>',
-            '  </div>',
-            '</body>',
-            '</html>'
-          ])
-
+          latest_href = f"../runs/{latest_entry['folder']}/index.html?v={latest_entry.get('run_number', current_run_number)}"
           index_html = '\n'.join([
             '<!DOCTYPE html>',
             '<html lang="zh-CN">',
@@ -807,7 +783,7 @@ jobs:
             '  </div>',
             '  <div class="container">',
             '    <div class="card">',
-            f'      <p><a href="../{latest_href}">打开最新 Allure 报告</a></p>',
+            f'      <p><a href="{latest_href}">打开最新 Allure 报告</a></p>',
             '      <h2>Run History</h2>',
             '      <table>',
             '        <thead><tr><th>Run</th><th>Status</th><th>Branch</th><th>Commit</th><th>Generated At</th></tr></thead>',
@@ -823,8 +799,8 @@ jobs:
           archive_dir = site / 'history-list'
           archive_dir.mkdir(parents=True, exist_ok=True)
           (archive_dir / 'index.html').write_text(index_html, encoding='utf-8')
-          (site / 'index.html').write_text(landing_html, encoding='utf-8')
-          (site / '404.html').write_text(landing_html, encoding='utf-8')
+          if (site / 'index.html').exists():
+            (site / '404.html').write_text((site / 'index.html').read_text(encoding='utf-8'), encoding='utf-8')
           (site / 'latest.json').write_text(json.dumps(latest_entry, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
 
