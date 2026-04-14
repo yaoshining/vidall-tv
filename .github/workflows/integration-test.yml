@@ -17,6 +17,11 @@ on:
           - I
           - W
           - E
+      runnerLabel:
+        description: 指定测试机 runner 标签
+        required: true
+        default: harmonyos-tv-test
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ jobs:
     runs-on:
       - self-hosted
       - macOS
+      - ${{ inputs.runnerLabel }}
     timeout-minutes: 45
 
     env:
@@ -64,6 +70,7 @@ jobs:
           {
             echo "## 集成测试环境"
             echo "- Runner: $RUNNER_NAME"
+            echo "- Required Label: ${{ inputs.runnerLabel }}"
             echo "- Workspace: $GITHUB_WORKSPACE"
             echo "- SDK: $OHOS_SDK_HOME"
           } >> "$GITHUB_STEP_SUMMARY"
