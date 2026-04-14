@@ -695,6 +695,23 @@ jobs:
           build-path: ${{ github.workspace }}/.edgeone-site
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: EdgeOne Access Summary
+        if: always() && env.EDGEONE_READY == 'true'
+        shell: bash
+        run: |
+          {
+            echo "## EdgeOne Publish"
+            echo ""
+            echo "- Deployment status: success"
+            if [[ -n "${EDGEONE_DEPLOY_URL:-}" ]]; then
+              echo "- Live URL: ${EDGEONE_DEPLOY_URL}"
+            else
+              echo "- Live URL: see the Publish Report to EdgeOne Pages step log for EDGEONE_DEPLOY_URL"
+            fi
+            echo "- Note: EdgeOne currently returns a signed access link. Opening the bare domain directly may show 404 or authorization required."
+            echo "- For a stable public address, switch the project to public access or bind a custom domain in EdgeOne Pages."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: EdgeOne Publish Notice
         if: always() && env.EDGEONE_READY != 'true'
         shell: bash
