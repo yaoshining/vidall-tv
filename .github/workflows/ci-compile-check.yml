@@ -176,6 +176,75 @@ jobs:
           test -d "$OHOS_SDK_HOME/toolchains"
           ls -la "$OHOS_SDK_HOME/native" | head -20
 
+      - name: Restore Harmony Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python3 - <<'PY'
+          import json
+          import shutil
+          import tarfile
+          import urllib.request
+          from pathlib import Path
+
+          root = Path('.')
+          lock_path = root / 'oh-package-lock.json5'
+          lock = json.loads(lock_path.read_text())
+          packages = lock.get('packages', {})
+          specifiers = lock.get('specifiers', {})
+
+          oh_modules_dir = root / 'oh_modules'
+          cache_dir = root / '.ci' / 'ohpm-cache'
+          extract_dir = cache_dir / 'extract'
+          oh_modules_dir.mkdir(parents=True, exist_ok=True)
+          cache_dir.mkdir(parents=True, exist_ok=True)
+          extract_dir.mkdir(parents=True, exist_ok=True)
+
+          for resolved_key in specifiers.values():
+            package_meta = packages.get(resolved_key)
+            if not package_meta:
+              continue
+            package_name = package_meta.get('name', '')
+            resolved = package_meta.get('resolved', '')
+            if len(package_name) == 0 or not resolved.endswith('.har'):
+              continue
+
+            if resolved.startswith('http://') or resolved.startswith('https://'):
+              archive_name = resolved.split('/')[-1]
+              archive_path = cache_dir / archive_name
+              if not archive_path.exists():
+                print(f'Downloading {package_name} from {resolved}')
+                urllib.request.urlretrieve(resolved, archive_path)
+            else:
+              archive_path = (root / resolved).resolve()
+              print(f'Using local archive for {package_name}: {archive_path}')
+
+            if not archive_path.exists():
+              raise FileNotFoundError(f'Archive not found for {package_name}: {archive_path}')
+
+            safe_name = package_name.replace('/', '__').replace('@', '')
+            package_extract_dir = extract_dir / safe_name
+            if package_extract_dir.exists():
+              shutil.rmtree(package_extract_dir)
+            package_extract_dir.mkdir(parents=True, exist_ok=True)
+
+            with tarfile.open(archive_path, 'r:gz') as tar:
+              tar.extractall(package_extract_dir)
+
+            source_dir = package_extract_dir / 'package'
+            if not source_dir.exists():
+              raise FileNotFoundError(f'Extracted package dir missing for {package_name}')
+
+            dest_dir = oh_modules_dir / package_name
+            dest_dir.parent.mkdir(parents=True, exist_ok=True)
+            if dest_dir.exists():
+              shutil.rmtree(dest_dir)
+            shutil.copytree(source_dir, dest_dir)
+            print(f'Restored {package_name} -> {dest_dir}')
+          PY
+          test -d "$GITHUB_WORKSPACE/oh_modules/@ibestservices/ibest-ui"
+
       - name: Sync Project
         shell: bash
         run: |
