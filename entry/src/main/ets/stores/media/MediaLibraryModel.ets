@@ -1,5 +1,5 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
-import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ContinueWatchingItem, TvSeriesEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
+import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ContinueWatchingItem, TvSeriesEntity, TvEpisodeEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
 import { millisecondsToTime } from '../../utils/TimeUtil';
 
 export interface YearGroup {
@@ -289,6 +289,8 @@ export class MediaLibraryModel {
           const mi: MediaItem | undefined = episodeMap.get(epKey);
           if (mi !== undefined) {
             const ratio: number = entry.positionMs / entry.durationMs;
+            const epEntity: TvEpisodeEntity | null =
+              await db.getTvEpisode(tvSeriesDbId, entry.seasonNumber, entry.episodeNumber);
             const cwi: ContinueWatchingItem = {
               mediaKey: key,
               title: mi.title ?? mi.fileName,
@@ -303,7 +305,7 @@ export class MediaLibraryModel {
               lastPlayedAt: entry.lastPlayedAt,
               seasonNumber: entry.seasonNumber,
               episodeNumber: entry.episodeNumber,
-              episodeTitle: '',
+              episodeTitle: (epEntity?.title ?? '').trim(),
               videoId: mi.id,
               tvSeriesId: tvSeriesDbId,
               startPositionMs: entry.positionMs,
@@ -345,6 +347,8 @@ export class MediaLibraryModel {
           const mi: MediaItem | undefined = episodeMap.get(epKey);
           if (mi !== undefined) {
             const ratio: number = entry.positionMs / entry.durationMs;
+            const epEntity: TvEpisodeEntity | null =
+              await db.getTvEpisode(tvSeriesDbId, entry.seasonNumber, entry.episodeNumber);
             const cwi: ContinueWatchingItem = {
               mediaKey: key,
               title: mi.title ?? mi.fileName,
@@ -359,7 +363,7 @@ export class MediaLibraryModel {
               lastPlayedAt: entry.lastPlayedAt,
               seasonNumber: entry.seasonNumber,
               episodeNumber: entry.episodeNumber,
-              episodeTitle: '',
+              episodeTitle: (epEntity?.title ?? '').trim(),
               videoId: mi.id,
               tvSeriesId: tvSeriesDbId,
               startPositionMs: entry.positionMs,
