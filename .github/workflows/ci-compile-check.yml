@@ -184,6 +184,32 @@ jobs:
           node "$HVIGOR_ENTRY" \
           --sync -p product=default --analyze=normal --parallel --incremental --daemon
 
+      - name: Prepare Unit Test Page Template
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          page = Path('entry/.test/testability/pages/Index.ets')
+          page.parent.mkdir(parents=True, exist_ok=True)
+          page.write_text("""@Entry
+@Component
+struct Index {
+  build() {
+    Column() {
+      Text('Unit Test Entry')
+    }
+    .width('100%')
+    .height('100%')
+  }
+}
+""")
+          print(f'Prepared {page}')
+          PY
+          test -f "$GITHUB_WORKSPACE/entry/.test/testability/pages/Index.ets"
+
       - name: Unit Test Build Check
         shell: bash
         run: |
