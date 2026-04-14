@@ -156,8 +156,13 @@ jobs:
           # 公共 SDK 压缩包解开后是平铺结构，hvigor 在 OpenHarmony 模式下需要
           # <sdk.dir>/<api>/<component> 的目录布局；这一步在 cache hit 时也必须执行。
           mkdir -p "$CI_SDK_ROOT/${OHOS_SDK_API_DIR}"
-          for component in ets js native previewer toolchains; do
+          for component in ets native toolchains; do
             ln -sfn "$(realpath "${{ runner.temp }}/ohos-sdk/linux/$component")" "$CI_SDK_ROOT/${OHOS_SDK_API_DIR}/$component"
+          done
+          for optional_component in js previewer; do
+            if [[ -d "${{ runner.temp }}/ohos-sdk/linux/$optional_component" ]]; then
+              ln -sfn "$(realpath "${{ runner.temp }}/ohos-sdk/linux/$optional_component")" "$CI_SDK_ROOT/${OHOS_SDK_API_DIR}/$optional_component"
+            fi
           done
 
           echo "DEVECO_SDK_HOME=$CI_SDK_ROOT" >> "$GITHUB_ENV"
