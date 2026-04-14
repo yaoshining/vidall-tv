@@ -1,0 +1,265 @@
+name: Integration Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      deviceSerial:
+        description: 指定设备序列号；留空则自动选择首个在线设备
+        required: false
+        type: string
+      logLevel:
+        description: hilog 日志级别
+        required: true
+        default: I
+        type: choice
+        options:
+          - D
+          - I
+          - W
+          - E
+      runnerLabel:
+        description: 指定测试机 runner 标签
+        required: true
+        default: harmonyos-tv-test
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harmonyos-device-integration-test
+  cancel-in-progress: false
+
+jobs:
+  integration-test:
+    name: Build and run on self-hosted device
+    runs-on:
+      - self-hosted
+      - macOS
+      - ${{ inputs.runnerLabel }}
+    timeout-minutes: 45
+
+    env:
+      DEVECO_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk
+      OHOS_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+      HARMONY_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+      NODE_BIN: /Applications/DevEco-Studio.app/Contents/tools/node/bin/node
+      HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
+      HDC_BIN: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
+      PROD_BUNDLE_NAME: com.yao.vidalltv
+      TEST_BUNDLE_NAME: com.yao.vidalltv.itest
+      BUNDLE_NAME: com.yao.vidalltv.itest
+      TEST_MODULE: entry_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify self-hosted runner environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$NODE_BIN"
+          test -f "$HVIGOR_WRAPPER"
+          test -x "$HDC_BIN"
+          test -d "$OHOS_SDK_HOME/toolchains"
+
+          printf 'sdk.dir=%s\n' "$DEVECO_SDK_HOME" > "$GITHUB_WORKSPACE/local.properties"
+          mkdir -p "$GITHUB_WORKSPACE/.ci/integration"
+
+          {
+            echo "## 集成测试环境"
+            echo "- Runner: $RUNNER_NAME"
+            echo "- Required Label: ${{ inputs.runnerLabel }}"
+            echo "- Workspace: $GITHUB_WORKSPACE"
+            echo "- SDK: $OHOS_SDK_HOME"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare test-only bundle name
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          app_scope = Path('AppScope/app.json5')
+          data = json.loads(app_scope.read_text(encoding='utf-8'))
+          data['app']['bundleName'] = os.environ['TEST_BUNDLE_NAME']
+          app_scope.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(app_scope.read_text(encoding='utf-8'))
+          PY
+
+          {
+            echo "- Production bundle kept untouched in normal builds: $PROD_BUNDLE_NAME"
+            echo "- Integration-test-only bundle: $TEST_BUNDLE_NAME"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Detect target device
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+          "$HDC_BIN" list targets | tee "$LOG_DIR/hdc-targets.log"
+
+          TARGET_INPUT='${{ inputs.deviceSerial }}'
+          AVAILABLE_TARGETS=$("$HDC_BIN" list targets | awk 'NF {print $1}')
+          if [[ -z "$AVAILABLE_TARGETS" ]]; then
+            echo "未检测到可用 HarmonyOS 设备，请先连接 TV 真机或模拟器。"
+            exit 1
+          fi
+
+          if [[ -n "$TARGET_INPUT" ]]; then
+            if ! printf '%s\n' "$AVAILABLE_TARGETS" | grep -Fxq "$TARGET_INPUT"; then
+              echo "指定设备不在线: $TARGET_INPUT"
+              exit 1
+            fi
+            DEVICE_SERIAL="$TARGET_INPUT"
+          else
+            DEVICE_SERIAL=$(printf '%s\n' "$AVAILABLE_TARGETS" | head -n 1)
+          fi
+
+          echo "DEVICE_SERIAL=$DEVICE_SERIAL" >> "$GITHUB_ENV"
+          echo "- Device: $DEVICE_SERIAL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sync project
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            --sync \
+            -p product=default \
+            --analyze=normal \
+            --parallel \
+            --incremental \
+            --daemon 2>&1 | tee "$LOG_DIR/sync-project.log"
+
+          STATUS=${PIPESTATUS[0]}
+          if [[ "$STATUS" -ne 0 ]]; then
+            echo "项目同步失败，退出码: $STATUS"
+            exit "$STATUS"
+          fi
+
+      - name: Build application HAP
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            --mode module \
+            -p module=entry@default \
+            -p product=default \
+            assembleHap 2>&1 | tee "$LOG_DIR/assemble-app.log"
+
+          STATUS=${PIPESTATUS[0]}
+          if [[ "$STATUS" -ne 0 ]]; then
+            echo "应用 HAP 构建失败，退出码: $STATUS"
+            exit "$STATUS"
+          fi
+
+      - name: Build ohosTest HAP
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            -p module=entry@ohosTest \
+            assembleHap 2>&1 | tee "$LOG_DIR/assemble-ohosTest.log"
+
+          STATUS=${PIPESTATUS[0]}
+          if [[ "$STATUS" -ne 0 ]]; then
+            echo "ohosTest HAP 构建失败，退出码: $STATUS"
+            exit "$STATUS"
+          fi
+
+      - name: Resolve HAP outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+
+          APP_HAP=$(find "$GITHUB_WORKSPACE/entry/build" -type f \( -name '*default-signed.hap' -o -name '*entry-signed.hap' \) | head -n 1)
+          TEST_HAP=$(find "$GITHUB_WORKSPACE/entry/build" -type f -name '*ohosTest-signed.hap' | head -n 1)
+
+          if [[ -z "$APP_HAP" || -z "$TEST_HAP" ]]; then
+            echo "未找到待安装的 HAP 产物"
+            find "$GITHUB_WORKSPACE/entry/build" -type f -name '*.hap' | tee "$LOG_DIR/hap-files.log"
+            exit 1
+          fi
+
+          echo "APP_HAP=$APP_HAP" >> "$GITHUB_ENV"
+          echo "TEST_HAP=$TEST_HAP" >> "$GITHUB_ENV"
+
+          {
+            echo "- App HAP: $APP_HAP"
+            echo "- Test HAP: $TEST_HAP"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start hilog capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+          nohup "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" > "$LOG_DIR/device.hilog" 2>&1 &
+          echo "HILOG_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Install application and test HAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+
+          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$TEST_BUNDLE_NAME" > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
+          "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
+          "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$TEST_HAP" 2>&1 | tee "$LOG_DIR/install-test.log"
+
+      - name: Run device integration tests
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+          TEST_CMD="aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner"
+
+          echo "执行命令: $TEST_CMD" | tee "$LOG_DIR/test-command.log"
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD" 2>&1 | tee "$LOG_DIR/aa-test.log"
+
+          STATUS=${PIPESTATUS[0]}
+          if [[ "$STATUS" -ne 0 ]]; then
+            echo "集成测试命令执行失败，退出码: $STATUS"
+            exit "$STATUS"
+          fi
+
+          grep -q 'TestFinished-ResultCode: 0' "$LOG_DIR/aa-test.log"
+
+          echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 设备侧测试已完成，ResultCode=0" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup test application
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$TEST_BUNDLE_NAME" > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
+
+      - name: Stop hilog capture
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "${HILOG_PID:-}" ]]; then
+            kill "$HILOG_PID" >/dev/null 2>&1 || true
+          fi
+
+      - name: Upload integration artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-artifacts
+          path: |
+            ${{ github.workspace }}/.ci/integration
+          if-no-files-found: warn
