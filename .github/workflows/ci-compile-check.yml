@@ -7,6 +7,7 @@ env:
   CI_RUNTIME_OS: OpenHarmony
   HVIGOR_NPM_REGISTRY: https://repo.harmonyos.com/npm/
   HVIGOR_VERSION: "6.22.3"
+  NODE_VERSION: "20"
 
 on:
   pull_request:
@@ -29,7 +30,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Restore OHOS SDK Cache
         id: cache-sdk-restore
@@ -48,20 +49,41 @@ jobs:
           mkdir -p "${{ runner.temp }}/ohos-sdk"
           cd "${{ runner.temp }}"
 
-          CANDIDATE_URLS=(
-            "${OHOS_SDK_URL}"
-            "https://repo.huaweicloud.com/harmonyos/os/5.0.3-Release/ohos-sdk-windows_linux-public.tar.gz"
-            "https://repo.huaweicloud.com/harmonyos/os/5.0.0-Release/ohos-sdk-windows_linux-public.tar.gz"
+          CANDIDATE_SDKS=(
+            "${OHOS_SDK_URL}|5.1.0(18)|18"
+            "https://repo.huaweicloud.com/harmonyos/os/5.0.3-Release/ohos-sdk-windows_linux-public.tar.gz|5.0.3(18)|18"
+            "https://repo.huaweicloud.com/harmonyos/os/5.0.0-Release/ohos-sdk-windows_linux-public.tar.gz|5.0.0(18)|18"
           )
 
           DOWNLOADED=0
-          for url in "${CANDIDATE_URLS[@]}"; do
+          for candidate in "${CANDIDATE_SDKS[@]}"; do
+            IFS='|' read -r url sdk_version api_dir <<< "$candidate"
             echo "Try download SDK from: $url"
-            if wget -q -O sdk.tar.gz "$url"; then
-              DOWNLOADED=1
-              echo "Downloaded SDK from: $url"
-              break
+
+            if ! wget -q -O sdk.tar.gz "$url"; then
+              echo "Download failed for: $url"
+              continue
             fi
+
+            if ! wget -q -O sdk.tar.gz.sha256 "${url}.sha256"; then
+              echo "Checksum file missing for: $url"
+              rm -f sdk.tar.gz sdk.tar.gz.sha256
+              continue
+            fi
+
+            expected_sha=$(awk '{print $1}' sdk.tar.gz.sha256 | tr -d '\r')
+            actual_sha=$(shasum -a 256 sdk.tar.gz | awk '{print $1}')
+            if [[ -z "$expected_sha" || "$actual_sha" != "$expected_sha" ]]; then
+              echo "Checksum verify failed for: $url"
+              rm -f sdk.tar.gz sdk.tar.gz.sha256
+              continue
+            fi
+
+            DOWNLOADED=1
+            echo "Downloaded SDK from: $url"
+            echo "CI_COMPILE_SDK_VERSION=$sdk_version" >> "$GITHUB_ENV"
+            echo "OHOS_SDK_API_DIR=$api_dir" >> "$GITHUB_ENV"
+            break
           done
 
           if [[ "$DOWNLOADED" -ne 1 ]]; then
@@ -108,7 +130,7 @@ jobs:
           test -d "ohos-sdk/linux/ets"
 
       - name: Save OHOS SDK Cache
-        if: always() && steps.cache-sdk-restore.outputs.cache-hit != 'true'
+        if: success() && steps.cache-sdk-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/ohos-sdk
@@ -215,6 +237,34 @@ jobs:
                   time.sleep(attempt * 5)
             raise RuntimeError(f'Failed to download {url}: {last_error}')
 
+          def safe_extract_archive(archive_path: Path, dest_dir: Path) -> None:
+            root = dest_dir.resolve()
+            with tarfile.open(archive_path, 'r:gz') as tar:
+              for member in tar.getmembers():
+                member_path = Path(member.name)
+                if member.issym() or member.islnk() or member_path.is_absolute() or '..' in member_path.parts:
+                  raise RuntimeError(f'Unsafe archive member: {member.name}')
+
+                target_path = (root / member.name).resolve()
+                try:
+                  target_path.relative_to(root)
+                except ValueError as err:
+                  raise RuntimeError(f'Unsafe archive member: {member.name}') from err
+
+                if member.isdir():
+                  target_path.mkdir(parents=True, exist_ok=True)
+                  continue
+
+                if not member.isfile():
+                  continue
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                source = tar.extractfile(member)
+                if source is None:
+                  continue
+                with source, open(target_path, 'wb') as out_file:
+                  shutil.copyfileobj(source, out_file)
+
           root = Path('.')
           lock_path = root / 'oh-package-lock.json5'
           lock = json.loads(lock_path.read_text())
@@ -258,8 +308,7 @@ jobs:
               shutil.rmtree(package_extract_dir)
             package_extract_dir.mkdir(parents=True, exist_ok=True)
 
-            with tarfile.open(archive_path, 'r:gz') as tar:
-              tar.extractall(package_extract_dir)
+            safe_extract_archive(archive_path, package_extract_dir)
 
             source_dir = package_extract_dir / 'package'
             if not source_dir.exists():
@@ -275,7 +324,7 @@ jobs:
           test -d "$GITHUB_WORKSPACE/oh_modules/@ibestservices/ibest-ui"
 
       - name: Save Harmony Dependency Cache
-        if: always() && steps.cache-ohpm-restore.outputs.cache-hit != 'true'
+        if: success() && steps.cache-ohpm-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.ci/ohpm-cache
