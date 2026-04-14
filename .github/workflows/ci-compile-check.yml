@@ -8,6 +8,8 @@ env:
   HVIGOR_NPM_REGISTRY: https://repo.harmonyos.com/npm/
   HVIGOR_VERSION: "6.22.3"
   NODE_VERSION: "20"
+  EDGEONE_PROJECT_NAME: "vidall-tv-test"
+  EDGEONE_READY: "false"
 
 on:
   pull_request:
@@ -527,6 +529,38 @@ jobs:
             echo "- Unit Test Build exit code: ${unit_test_status}"
             echo ""
             echo "Allure-style HTML report has been uploaded in the artifact bundle."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check EdgeOne Publish Readiness
+        if: always() && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          EDGEONE_TOKEN: ${{ secrets.EDGEONE_TOKEN }}
+        run: |
+          if [[ -n "$EDGEONE_TOKEN" ]]; then
+            echo "EDGEONE_READY=true" >> "$GITHUB_ENV"
+          else
+            echo "EDGEONE_READY=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Publish Report to EdgeOne Pages
+        if: always() && github.event_name != 'pull_request' && env.EDGEONE_READY == 'true'
+        uses: TencentEdgeOne/edgeone-pages-action@v1
+        with:
+          token: ${{ secrets.EDGEONE_TOKEN }}
+          project-name: ${{ env.EDGEONE_PROJECT_NAME }}
+          build-path: ${{ github.workspace }}/.ci/reports
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: EdgeOne Publish Notice
+        if: always() && github.event_name != 'pull_request' && env.EDGEONE_READY != 'true'
+        shell: bash
+        run: |
+          {
+            echo "## EdgeOne Publish"
+            echo ""
+            echo "- Skipped because secret EDGEONE_TOKEN is not configured yet."
+            echo "- Target project: ${EDGEONE_PROJECT_NAME}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload CI Report Artifacts
