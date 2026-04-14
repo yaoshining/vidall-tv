@@ -676,7 +676,6 @@ jobs:
           npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
 
           find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "runs" -exec rm -rf {} +
-          cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/"
 
           mkdir -p runs latest
           RUN_DIR="runs/run-${GITHUB_RUN_NUMBER}"
@@ -686,14 +685,22 @@ jobs:
           cp -R "$ALLURE_REPORT_DIR/." latest/
           cp -R "$REPORTS_DIR/." "$RUN_DIR/artifacts/"
           cp -R "$REPORTS_DIR/." latest/artifacts/
+          if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
+            mkdir -p "$SITE_DIR/history"
+            rm -rf "$SITE_DIR/history"/*
+            cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/history/"
+          fi
 
           export PAGES_SITE_DIR="$SITE_DIR"
+          export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
           python3 - <<'PY'
           import json
           import os
+          import re
           from pathlib import Path
 
           site = Path(os.environ['PAGES_SITE_DIR'])
+          current_run_number = os.environ['CURRENT_RUN_NUMBER']
           runs_dir = site / 'runs'
           entries = []
           for meta_path in runs_dir.glob('*/meta.json'):
@@ -711,20 +718,77 @@ jobs:
             except ValueError:
               return 0
 
+          def add_cache_busting(index_path: Path, version: str) -> None:
+            if not index_path.exists():
+              return
+            text = index_path.read_text(encoding='utf-8')
+            meta_block = '\n'.join([
+              '    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">',
+              '    <meta http-equiv="Pragma" content="no-cache">',
+              '    <meta http-equiv="Expires" content="0">'
+            ])
+            if 'http-equiv="Cache-Control"' not in text and '</head>' in text:
+              text = text.replace('</head>', f'{meta_block}\n</head>', 1)
+            text = re.sub(r'((?:href|src)="(?!https?://|data:)([^"?#]+\.(?:css|js|json|png|svg|ico)))"', rf'\1?v={version}"', text)
+            index_path.write_text(text, encoding='utf-8')
+
           entries.sort(key=run_sort_key, reverse=True)
+          latest_entry = entries[0] if entries else {
+            'folder': f'run-{current_run_number}',
+            'run_number': current_run_number,
+            'overall_status': 'unknown',
+            'branch': '-',
+            'sha': '-',
+            'generated_at': '-'
+          }
+
+          add_cache_busting(site / 'latest' / 'index.html', current_run_number)
+          add_cache_busting(site / 'runs' / latest_entry['folder'] / 'index.html', str(latest_entry.get('run_number', current_run_number)))
+
           rows = []
           for item in entries:
             status = str(item.get('overall_status', 'unknown')).upper()
             run_number = str(item.get('run_number', 'unknown'))
+            report_href = f"../runs/{item['folder']}/index.html?v={run_number}"
             rows.append(
-              f"<tr><td><a href='runs/{item['folder']}/index.html'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>"
+              f"<tr><td><a href='{report_href}'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>"
             )
+
+          latest_href = f"runs/{latest_entry['folder']}/index.html?v={latest_entry.get('run_number', current_run_number)}"
+          landing_html = '\n'.join([
+            '<!DOCTYPE html>',
+            '<html lang="zh-CN">',
+            '<head>',
+            '  <meta charset="UTF-8" />',
+            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
+            '  <meta http-equiv="Pragma" content="no-cache" />',
+            '  <meta http-equiv="Expires" content="0" />',
+            '  <meta http-equiv="refresh" content="0; url=' + latest_href + '" />',
+            '  <title>VidAll TV Test Reports</title>',
+            '  <style>',
+            '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #0f172a; color: #e5eefb; display: flex; align-items: center; justify-content: center; min-height: 100vh; }',
+            '    .card { width: min(720px, 92vw); background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 16px; padding: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); }',
+            '    a { color: #60a5fa; text-decoration: none; }',
+            '  </style>',
+            '</head>',
+            '<body>',
+            '  <div class="card">',
+            '    <h1>VidAll TV Test Reports</h1>',
+            f'    <p>正在跳转到最新报告：<a href="{latest_href}">Run #{latest_entry.get("run_number", current_run_number)}</a></p>',
+            '    <p><a href="history-list/index.html">查看历史报告列表</a></p>',
+            '  </div>',
+            '</body>',
+            '</html>'
+          ])
 
           index_html = '\n'.join([
             '<!DOCTYPE html>',
             '<html lang="zh-CN">',
             '<head>',
             '  <meta charset="UTF-8" />',
+            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
+            '  <meta http-equiv="Pragma" content="no-cache" />',
+            '  <meta http-equiv="Expires" content="0" />',
             '  <title>VidAll TV Test Reports Archive</title>',
             '  <style>',
             '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }',
@@ -739,11 +803,11 @@ jobs:
             '<body>',
             '  <div class="hero">',
             '    <h1>VidAll TV Test Reports Archive</h1>',
-            '    <p>首页已切换为官方 Allure 报告。历史列表见本页。</p>',
+            '    <p>最新报告使用带版本号的独立链接，减少 CDN 缓存影响。</p>',
             '  </div>',
             '  <div class="container">',
             '    <div class="card">',
-            '      <p><a href="../index.html">返回最新 Allure 报告</a></p>',
+            f'      <p><a href="../{latest_href}">打开最新 Allure 报告</a></p>',
             '      <h2>Run History</h2>',
             '      <table>',
             '        <thead><tr><th>Run</th><th>Status</th><th>Branch</th><th>Commit</th><th>Generated At</th></tr></thead>',
@@ -759,8 +823,9 @@ jobs:
           archive_dir = site / 'history-list'
           archive_dir.mkdir(parents=True, exist_ok=True)
           (archive_dir / 'index.html').write_text(index_html, encoding='utf-8')
-          if (site / 'index.html').exists():
-            (site / '404.html').write_text((site / 'index.html').read_text(encoding='utf-8'), encoding='utf-8')
+          (site / 'index.html').write_text(landing_html, encoding='utf-8')
+          (site / '404.html').write_text(landing_html, encoding='utf-8')
+          (site / 'latest.json').write_text(json.dumps(latest_entry, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
 
           git config user.name "github-actions[bot]"
@@ -788,7 +853,8 @@ jobs:
             echo "- Publish branch: ${REPORTS_BRANCH}"
             echo "- If GitHub Pages is enabled for this repository, the site will be served from:"
             echo "  https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
-            echo "- Official Allure homepage: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
+            echo "- Latest report entry: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
+            echo "- Versioned run page: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/runs/run-${GITHUB_RUN_NUMBER}/index.html?v=${GITHUB_RUN_NUMBER}"
             echo "- Archive list: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/history-list/"
             echo "- First-time setup: Settings -> Pages -> Deploy from a branch -> ${REPORTS_BRANCH} /(root)"
           } >> "$GITHUB_STEP_SUMMARY"
