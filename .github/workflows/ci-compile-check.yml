@@ -527,6 +527,7 @@ jobs:
           (reports / 'allure-style-report.html').write_text(html_report, encoding='utf-8')
           (reports / 'ci-summary.html').write_text(html_report, encoding='utf-8')
           (reports / 'index.html').write_text(html_report, encoding='utf-8')
+          (reports / '404.html').write_text(html_report, encoding='utf-8')
 
           junit_lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
@@ -678,6 +679,7 @@ jobs:
             '</html>'
           ])
           (site / 'index.html').write_text(index_html, encoding='utf-8')
+          (site / '404.html').write_text(index_html, encoding='utf-8')
           PY
 
           git config user.name "github-actions[bot]"
