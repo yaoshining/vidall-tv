@@ -53,6 +53,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Restore signing certificates
+        shell: bash
+        env:
+          SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
+          SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
+          SIGNING_PROFILE_BASE64: ${{ secrets.SIGNING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          # 从 build-profile.json5 提取证书路径，将 Secret 解码还原到对应位置
+          python3 - <<'PY'
+          import re, json, base64, os, sys
+          from pathlib import Path
+
+          content = Path('build-profile.json5').read_text(encoding='utf-8')
+          content = re.sub(r',(\s*[}\]])', r'\1', content)
+          content = re.sub(r'//[^\n]*', '', content)
+          data = json.loads(content)
+
+          signing_configs = data['app']['signingConfigs']
+          default_config = next((c for c in signing_configs if c['name'] == 'default'), None)
+          if not default_config:
+              print('ERROR: No default signing config found', file=sys.stderr)
+              sys.exit(1)
+
+          material = default_config['material']
+          mapping = {
+              'certpath':  ('SIGNING_CERT_BASE64',    material.get('certpath', '')),
+              'storeFile': ('SIGNING_P12_BASE64',     material.get('storeFile', '')),
+              'profile':   ('SIGNING_PROFILE_BASE64', material.get('profile', '')),
+          }
+
+          missing_secrets = []
+          for key, (env_var, dest_path) in mapping.items():
+              b64 = os.environ.get(env_var, '').strip()
+              if not b64:
+                  missing_secrets.append(env_var)
+                  continue
+              dest = Path(dest_path)
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              dest.write_bytes(base64.b64decode(b64))
+              dest.chmod(0o600)
+              print(f'还原证书: {key} -> {dest_path}')
+
+          if missing_secrets:
+              print(f'WARNING: 以下 Secret 未配置，跳过还原: {missing_secrets}')
+              print('若签名证书已预装在 runner 上，可忽略此警告')
+          PY
+
       - name: Verify self-hosted runner environment
         shell: bash
         run: |
@@ -86,7 +134,7 @@ jobs:
                   missing.append(f'{key}: {path}')
 
           if missing:
-              print('ERROR: 以下签名证书文件缺失（CI runner 签名环境未就绪）:', file=sys.stderr)
+              print('ERROR: 以下签名证书文件缺失（请配置 SIGNING_CERT_BASE64 / SIGNING_P12_BASE64 / SIGNING_PROFILE_BASE64 Secrets，或将证书预装到 runner）:', file=sys.stderr)
               for m in missing:
                   print(f'  {m}', file=sys.stderr)
               sys.exit(1)
