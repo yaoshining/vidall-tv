@@ -929,24 +929,12 @@ jobs:
 
           # ── _headers：告知 EdgeOne/CDN 不缓存任何页面 ──────────────────────
           # 注意：Allure 的 app.js/app.css 没有 content hash，无法安全设置 immutable
-          # /unit/* 和 /integration/* 的 * 在 Netlify/EdgeOne 中匹配含 / 的嵌套路径
-          # 规则后匹配覆盖，因此统一在最后用通配符覆盖所有子路径
+          # Netlify/EdgeOne 的 * 不跨路径分隔符，/unit/* 无法覆盖 unit/data/*.json 等子目录
+          # 使用 /* 全局兜底，覆盖所有路径（包括 Allure data/ test-cases/ 等嵌套子目录）
           headers_content = '\n'.join([
             '# EdgeOne Pages / Netlify 兼容的 HTTP 响应头配置',
             '# 所有页面不缓存（Allure 静态资源无 content hash，Portal/JSON 随 CI 变化）',
-            '/index.html',
-            '  Cache-Control: no-cache, no-store, must-revalidate',
-            '  Pragma: no-cache',
-            '/404.html',
-            '  Cache-Control: no-cache, no-store, must-revalidate',
-            '  Pragma: no-cache',
-            '/*.json',
-            '  Cache-Control: no-cache, no-store, must-revalidate',
-            '  Pragma: no-cache',
-            '/unit/*',
-            '  Cache-Control: no-cache, no-store, must-revalidate',
-            '  Pragma: no-cache',
-            '/integration/*',
+            '/*',
             '  Cache-Control: no-cache, no-store, must-revalidate',
             '  Pragma: no-cache',
           ])
