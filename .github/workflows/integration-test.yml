@@ -294,6 +294,11 @@ jobs:
         run: |
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+
+          # 启动 hdc 服务端，确保设备发现正常（幂等：已运行时无副作用）
+          "$HDC_BIN" start || true
+          sleep 2
+
           "$HDC_BIN" list targets | tee "$LOG_DIR/hdc-targets.log"
 
           TARGET_INPUT='${{ inputs.deviceSerial }}'
