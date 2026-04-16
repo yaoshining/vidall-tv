@@ -13,7 +13,7 @@ export default function webdavTest() {
   const webdavHost = getTestParam('WEBDAV_HOST', '192.168.3.59:5445')
   const webdavUser = getTestParam('WEBDAV_USERNAME', 'yao')
   const webdavPass = getTestParam('WEBDAV_PASSWORD', 'ys198756')
-  const webdavPath = getTestParam('WEBDAV_PATH', '/dav')
+  const webdavPath = getTestParam('WEBDAV_PATH', '/')
 
   describe('WebDAV_client_tests', () => {
 

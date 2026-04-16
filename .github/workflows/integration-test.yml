@@ -363,7 +363,7 @@ jobs:
           TEST_CMD="$TEST_CMD -e WEBDAV_HOST '${WEBDAV_HOST:-}'"
           TEST_CMD="$TEST_CMD -e WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
           TEST_CMD="$TEST_CMD -e WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
-          TEST_CMD="$TEST_CMD -e WEBDAV_PATH '${WEBDAV_PATH:-/dav}'"
+          TEST_CMD="$TEST_CMD -e WEBDAV_PATH '${WEBDAV_PATH:-/}'"
 
           echo "执行命令: aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner [+env params]" | tee "$LOG_DIR/test-command.log"
           "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD" 2>&1 | tee "$LOG_DIR/aa-test.log"
