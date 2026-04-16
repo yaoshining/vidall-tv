@@ -48,6 +48,7 @@ jobs:
       HDC_BIN: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
       BUNDLE_NAME: com.yao.vidalltv
       TEST_MODULE: entry_test
+      JAVA_HOME: /Applications/DevEco-Studio.app/Contents/jbr/Contents/Home
 
     steps:
       - name: Checkout
