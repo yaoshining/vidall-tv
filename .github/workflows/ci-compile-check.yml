@@ -675,7 +675,7 @@ jobs:
           rm -rf "$ALLURE_REPORT_DIR"
           npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
 
-          find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "runs" -exec rm -rf {} +
+          find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "runs" ! -name "integration" -exec rm -rf {} +
           cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/"
 
           mkdir -p runs latest
