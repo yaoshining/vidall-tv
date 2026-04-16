@@ -840,7 +840,7 @@ jobs:
           (unit_site / 'latest.json').write_text(json.dumps(latest_entry, ensure_ascii=False, indent=2), encoding='utf-8')
 
           # ── portal index.html ─────────────────────────────────────────────
-          def load_status(json_path: Path) -> dict:
+          def load_status(json_path: Path) -> 'dict | None':
             if json_path.exists():
               try:
                 return json.loads(json_path.read_text(encoding='utf-8'))
@@ -848,7 +848,7 @@ jobs:
                 pass
             return None
 
-          def status_badge(s: dict | None) -> str:
+          def status_badge(s: 'dict | None') -> tuple:
             if s is None:
               return '🔄', '#8b949e', '尚未运行'
             st = s.get('status', 'unknown')
@@ -859,7 +859,7 @@ jobs:
             else:
               return '❌', '#f85149', '存在失败'
 
-          def render_card(title: str, s: dict | None, report_href: str, archive_href: str) -> str:
+          def render_card(title: str, s: 'dict | None', report_href: str, archive_href: str) -> str:
             icon, color, label = status_badge(s)
             if s:
               p, f, t = s.get('passed', 0), s.get('failed', 0), s.get('total', 0)
@@ -905,6 +905,7 @@ jobs:
             '  <meta http-equiv="Expires" content="0" />',
             '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
             '  <title>VidAll TV · 测试报告总览</title>',
+            '  <script src="https://cdn.tailwindcss.com"></script>',
             '</head>',
             '<body style="margin:0;background:#0d1117;color:#e6edf3;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;">',
             '  <div style="max-width:860px;margin:0 auto;padding:40px 20px;">',
