@@ -926,6 +926,32 @@ jobs:
           ])
           (site / 'index.html').write_text(portal_html, encoding='utf-8')
           (site / '404.html').write_text(portal_html, encoding='utf-8')
+
+          # ── _headers：告知 EdgeOne/CDN 不缓存动态页面和状态 JSON ──────────
+          headers_content = '\n'.join([
+            '# EdgeOne Pages / Netlify 兼容的 HTTP 响应头配置',
+            '/index.html',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
+            '/404.html',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
+            '/*.json',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
+            '/unit/index.html',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
+            '/integration/index.html',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
+            '# 其余静态资源（JS/CSS/图片）可正常缓存',
+            '/unit/*',
+            '  Cache-Control: public, max-age=604800, immutable',
+            '/integration/*',
+            '  Cache-Control: public, max-age=604800, immutable',
+          ])
+          (site / '_headers').write_text(headers_content + '\n', encoding='utf-8')
           PY
 
           git config user.name "github-actions[bot]"
