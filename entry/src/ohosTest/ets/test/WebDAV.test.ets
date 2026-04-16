@@ -13,6 +13,7 @@ export default function webdavTest() {
   const webdavHost = getTestParam('WEBDAV_HOST', '192.168.3.59:5445')
   const webdavUser = getTestParam('WEBDAV_USERNAME', 'yao')
   const webdavPass = getTestParam('WEBDAV_PASSWORD', 'ys198756')
+  const webdavPath = getTestParam('WEBDAV_PATH', '/dav')
 
   describe('WebDAV_client_tests', () => {
 
@@ -21,7 +22,7 @@ export default function webdavTest() {
      */
     it('http_connect_success', 0, async () => {
       const config: WebDAVConfig = {
-        baseUrl: `http://${webdavHost}/dav`,
+        baseUrl: `http://${webdavHost}${webdavPath}`,
         username: webdavUser,
         password: webdavPass
       }
@@ -36,7 +37,7 @@ export default function webdavTest() {
      */
     it('http_list_directory', 0, async () => {
       const config: WebDAVConfig = {
-        baseUrl: `http://${webdavHost}/dav`,
+        baseUrl: `http://${webdavHost}${webdavPath}`,
         username: webdavUser,
         password: webdavPass
       }
@@ -102,7 +103,7 @@ export default function webdavTest() {
      */
     it('http_url_parse', 0, () => {
       const config: WebDAVConfig = {
-        baseUrl: `http://${webdavHost}/dav`,
+        baseUrl: `http://${webdavHost}${webdavPath}`,
         username: webdavUser,
         password: webdavPass
       }
