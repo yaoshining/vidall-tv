@@ -46,9 +46,7 @@ jobs:
       NODE_BIN: /Applications/DevEco-Studio.app/Contents/tools/node/bin/node
       HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
       HDC_BIN: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
-      PROD_BUNDLE_NAME: com.yao.vidalltv
-      TEST_BUNDLE_NAME: com.yao.vidalltv.itest
-      BUNDLE_NAME: com.yao.vidalltv.itest
+      BUNDLE_NAME: com.yao.vidalltv
       TEST_MODULE: entry_test
 
     steps:
@@ -64,6 +62,38 @@ jobs:
           test -x "$HDC_BIN"
           test -d "$OHOS_SDK_HOME/toolchains"
 
+          # 校验 default signing config 证书文件是否存在
+          python3 - <<'PY'
+          import re, json, sys
+          from pathlib import Path
+
+          content = Path('build-profile.json5').read_text(encoding='utf-8')
+          content = re.sub(r',(\s*[}\]])', r'\1', content)
+          content = re.sub(r'//[^\n]*', '', content)
+          data = json.loads(content)
+
+          signing_configs = data['app']['signingConfigs']
+          default_config = next((c for c in signing_configs if c['name'] == 'default'), None)
+          if not default_config:
+              print('ERROR: No default signing config found in build-profile.json5', file=sys.stderr)
+              sys.exit(1)
+
+          material = default_config['material']
+          missing = []
+          for key in ['certpath', 'storeFile', 'profile']:
+              path = material.get(key, '')
+              if not path or not Path(path).exists():
+                  missing.append(f'{key}: {path}')
+
+          if missing:
+              print('ERROR: 以下签名证书文件缺失（CI runner 签名环境未就绪）:', file=sys.stderr)
+              for m in missing:
+                  print(f'  {m}', file=sys.stderr)
+              sys.exit(1)
+
+          print('签名证书文件校验通过')
+          PY
+
           printf 'sdk.dir=%s\n' "$DEVECO_SDK_HOME" > "$GITHUB_WORKSPACE/local.properties"
           mkdir -p "$GITHUB_WORKSPACE/.ci/integration"
 
@@ -73,27 +103,6 @@ jobs:
             echo "- Required Label: ${{ inputs.runnerLabel }}"
             echo "- Workspace: $GITHUB_WORKSPACE"
             echo "- SDK: $OHOS_SDK_HOME"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Prepare test-only bundle name
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          app_scope = Path('AppScope/app.json5')
-          data = json.loads(app_scope.read_text(encoding='utf-8'))
-          data['app']['bundleName'] = os.environ['TEST_BUNDLE_NAME']
-          app_scope.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-          print(app_scope.read_text(encoding='utf-8'))
-          PY
-
-          {
-            echo "- Production bundle kept untouched in normal builds: $PROD_BUNDLE_NAME"
-            echo "- Integration-test-only bundle: $TEST_BUNDLE_NAME"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore Harmony dependencies
@@ -253,7 +262,7 @@ jobs:
             --analyze=normal \
             --parallel \
             --incremental \
-            --daemon 2>&1 | tee "$LOG_DIR/sync-project.log"
+            --no-daemon 2>&1 | tee "$LOG_DIR/sync-project.log"
 
           STATUS=${PIPESTATUS[0]}
           if [[ "$STATUS" -ne 0 ]]; then
@@ -271,6 +280,7 @@ jobs:
             --mode module \
             -p module=entry@default \
             -p product=default \
+            --no-daemon \
             assembleHap 2>&1 | tee "$LOG_DIR/assemble-app.log"
 
           STATUS=${PIPESTATUS[0]}
@@ -287,6 +297,7 @@ jobs:
 
           "$NODE_BIN" "$HVIGOR_WRAPPER" \
             -p module=entry@ohosTest \
+            --no-daemon \
             assembleHap 2>&1 | tee "$LOG_DIR/assemble-ohosTest.log"
 
           STATUS=${PIPESTATUS[0]}
@@ -301,12 +312,14 @@ jobs:
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          APP_HAP=$(find "$GITHUB_WORKSPACE/entry/build" -type f \( -name '*default-signed.hap' -o -name '*entry-signed.hap' \) | head -n 1)
-          TEST_HAP=$(find "$GITHUB_WORKSPACE/entry/build" -type f -name '*ohosTest-signed.hap' | head -n 1)
+          APP_HAP="$GITHUB_WORKSPACE/entry/build/default/outputs/default/entry-default-signed.hap"
+          TEST_HAP="$GITHUB_WORKSPACE/entry/build/default/outputs/ohosTest/entry-ohosTest-signed.hap"
 
-          if [[ -z "$APP_HAP" || -z "$TEST_HAP" ]]; then
-            echo "未找到待安装的 HAP 产物"
+          if [[ ! -f "$APP_HAP" ]] || [[ ! -f "$TEST_HAP" ]]; then
+            echo "预期路径 HAP 不存在，执行 find 兜底..."
             find "$GITHUB_WORKSPACE/entry/build" -type f -name '*.hap' | tee "$LOG_DIR/hap-files.log"
+            [[ ! -f "$APP_HAP" ]] && echo "未找到 app HAP: $APP_HAP"
+            [[ ! -f "$TEST_HAP" ]] && echo "未找到 test HAP: $TEST_HAP"
             exit 1
           fi
 
@@ -332,18 +345,25 @@ jobs:
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$TEST_BUNDLE_NAME" > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
+          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$BUNDLE_NAME" > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$TEST_HAP" 2>&1 | tee "$LOG_DIR/install-test.log"
 
       - name: Run device integration tests
         shell: bash
+        env:
+          WEBDAV_HOST: ${{ secrets.WEBDAV_HOST }}
+          WEBDAV_USERNAME: ${{ secrets.WEBDAV_USERNAME }}
+          WEBDAV_PASSWORD: ${{ secrets.WEBDAV_PASSWORD }}
         run: |
           set -o pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
           TEST_CMD="aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner"
+          TEST_CMD="$TEST_CMD -e WEBDAV_HOST '${WEBDAV_HOST:-}'"
+          TEST_CMD="$TEST_CMD -e WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
+          TEST_CMD="$TEST_CMD -e WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
 
-          echo "执行命令: $TEST_CMD" | tee "$LOG_DIR/test-command.log"
+          echo "执行命令: aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner [+env params]" | tee "$LOG_DIR/test-command.log"
           "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD" 2>&1 | tee "$LOG_DIR/aa-test.log"
 
           STATUS=${PIPESTATUS[0]}
@@ -352,17 +372,24 @@ jobs:
             exit "$STATUS"
           fi
 
-          grep -q 'TestFinished-ResultCode: 0' "$LOG_DIR/aa-test.log"
-
           echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
-          echo "- 设备侧测试已完成，ResultCode=0" >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'TestFinished-ResultCode: 0' "$LOG_DIR/aa-test.log"; then
+            echo "- ✅ 集成测试通过，ResultCode=0" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ❌ 集成测试失败，TestFinished-ResultCode 非 0" >> "$GITHUB_STEP_SUMMARY"
+            echo '### 最近设备日志（末 50 行）' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -50 "$LOG_DIR/device.hilog" >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Cleanup test application
         if: always()
         shell: bash
         run: |
           set +e
-          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$TEST_BUNDLE_NAME" > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
+          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$BUNDLE_NAME" > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
 
       - name: Stop hilog capture
         if: always()

@@ -1,7 +1,19 @@
 import { describe, it, expect } from '@ohos/hypium'
 import { WebDAVClient, WebDAVConfig, TestConnectionResult } from '../../../main/ets/lib/WebDAVClient'
+import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry'
+
+function getTestParam(key: string, fallback: string): string {
+  const args = abilityDelegatorRegistry.getArguments()
+  const val: string = args.parameters[key]
+  return (val !== undefined && val.length > 0) ? val : fallback
+}
 
 export default function webdavTest() {
+  // 凭据从 `aa test -e KEY VALUE` 注入（CI via GitHub Secrets），本地开发使用 fallback 默认值
+  const webdavHost = getTestParam('WEBDAV_HOST', '192.168.3.59:5445')
+  const webdavUser = getTestParam('WEBDAV_USERNAME', 'yao')
+  const webdavPass = getTestParam('WEBDAV_PASSWORD', 'ys198756')
+
   describe('WebDAV_client_tests', () => {
 
     /**
@@ -9,9 +21,9 @@ export default function webdavTest() {
      */
     it('http_connect_success', 0, async () => {
       const config: WebDAVConfig = {
-        baseUrl: 'http://192.168.3.59:5445/dav',
-        username: 'yao',
-        password: 'ys198756'
+        baseUrl: `http://${webdavHost}/dav`,
+        username: webdavUser,
+        password: webdavPass
       }
       const client = new WebDAVClient(config)
       const result: TestConnectionResult = await client.testConnection()
@@ -24,9 +36,9 @@ export default function webdavTest() {
      */
     it('http_list_directory', 0, async () => {
       const config: WebDAVConfig = {
-        baseUrl: 'http://192.168.3.59:5445/dav',
-        username: 'yao',
-        password: 'ys198756'
+        baseUrl: `http://${webdavHost}/dav`,
+        username: webdavUser,
+        password: webdavPass
       }
       const client = new WebDAVClient(config)
       const resources = await client.listDirectory('/')
@@ -90,9 +102,9 @@ export default function webdavTest() {
      */
     it('http_url_parse', 0, () => {
       const config: WebDAVConfig = {
-        baseUrl: 'http://192.168.3.59:5445/dav',
-        username: 'yao',
-        password: 'ys198756'
+        baseUrl: `http://${webdavHost}/dav`,
+        username: webdavUser,
+        password: webdavPass
       }
       const client = new WebDAVClient(config)
       console.info(`[Test] http_url_parse: getFullUrl=${client.getFullUrl('/nas')}`)
