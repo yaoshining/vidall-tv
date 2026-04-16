@@ -2,6 +2,8 @@ import timeUtilTest from './TimeUtil.test';
 import settingsControllerTest from './SettingsController.test';
 import validationUtilTest from './ValidationUtil.test';
 import scrapeClientTest from './ScrapeClient.test';
+import debounceUtilTest from './DebounceUtil.test';
+import videoDataTest from './VideoData.test';
 import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
 import subtitleBridgeAdapterTest from './SubtitleBridgeAdapter.test';
 import webDAVClientUtilsTest from './WebDAVClientUtils.test';
@@ -13,6 +15,8 @@ export default function testsuite() {
   settingsControllerTest();
   validationUtilTest();
   scrapeClientTest();
+  debounceUtilTest();
+  videoDataTest();
   ijkSubtitleBridgeTest();
   subtitleBridgeAdapterTest();
   webDAVClientUtilsTest();

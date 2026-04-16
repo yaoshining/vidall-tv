@@ -1,5 +1,5 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
-import { ScrapeClient, TmdbProvider, parseFileName, ParsedFileName } from '../main/ets/lib/ScrapeClient';
+import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName } from '../main/ets/lib/ScrapeClient';
 
 export default function scrapeClientTest() {
   describe('ScrapeClient', () => {
@@ -234,18 +234,51 @@ export default function scrapeClientTest() {
     });
 
     /**
-     * 测试用例 19：测试 autoScrapeTvEpisode 返回 empty（无网络）
+     * 测试用例 20：英文电影文件名边界 - 带发布组标记
      */
-    it('should return empty result for autoScrapeTvEpisode with invalid key', 0, async () => {
-      const client = new ScrapeClient({ tmdbApiKey: 'invalid_key' });
+    it('应解析 The.Dark.Knight.2008.1080p.BluRay.x264-YIFY.mkv', 0, () => {
+      const query: ParsedFileName = parseFileName('The.Dark.Knight.2008.1080p.BluRay.x264-YIFY.mkv');
+      expect(query.title).assertEqual('The Dark Knight');
+      expect(query.year).assertEqual(2008);
+    });
 
-      try {
-        const result = await client.autoScrapeTvEpisode('Game.of.Thrones.S07E01.mkv');
-        // series 为 null 或不为 null 均可
-        expect(result !== undefined).assertTrue();
-      } catch (e) {
-        expect(true).assertTrue();
-      }
+    /**
+     * 测试用例 21：电视剧文件名边界 - 含发布组标记
+     */
+    it('应解析 Breaking.Bad.S01E01.1080p.BluRay-GROUP.mkv', 0, () => {
+      const query: ParsedFileName = parseFileName('Breaking.Bad.S01E01.1080p.BluRay-GROUP.mkv');
+      expect(query.title).assertEqual('Breaking Bad');
+      expect(query.seasonNumber).assertEqual(1);
+      expect(query.episodeNumber).assertEqual(1);
+    });
+
+    /**
+     * 测试用例 22：纯中文文件名无年份
+     */
+    it('应解析纯中文文件名 流浪地球.4K.mkv', 0, () => {
+      const query: ParsedFileName = parseFileName('流浪地球.4K.mkv');
+      expect(query.title).assertEqual('流浪地球');
+      expect(query.year).assertUndefined();
+    });
+  });
+
+  describe('buildSearchTitles', () => {
+    it('中英混合标题只返回英文部分', 0, () => {
+      const titles: string[] = buildSearchTitles('流浪地球 The Wandering Earth');
+      expect(titles.length).assertLarger(0);
+      expect(titles[0].trim()).assertEqual('The Wandering Earth');
+    });
+
+    it('纯中文标题返回中文', 0, () => {
+      const titles: string[] = buildSearchTitles('流浪地球');
+      expect(titles.length).assertLarger(0);
+      expect(titles[0]).assertEqual('流浪地球');
+    });
+
+    it('纯英文标题返回英文', 0, () => {
+      const titles: string[] = buildSearchTitles('The Dark Knight');
+      expect(titles.length).assertLarger(0);
+      expect(titles[0]).assertEqual('The Dark Knight');
     });
   });
 }
