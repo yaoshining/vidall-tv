@@ -425,6 +425,22 @@ jobs:
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PATH '${WEBDAV_PATH:-/}'"
 
+          # 验证设备连接是否仍然有效（hdc install 后 hidumper 可能导致连接失效）
+          echo "验证设备连接: $DEVICE_SERIAL"
+          if ! "$HDC_BIN" -t "$DEVICE_SERIAL" shell "echo __hdc_ok__" 2>/dev/null | grep -q "__hdc_ok__"; then
+            echo "设备连接失效，重启 hdc 守护进程..."
+            "$HDC_BIN" kill || true
+            sleep 3
+            "$HDC_BIN" start || true
+            sleep 3
+            if ! "$HDC_BIN" -t "$DEVICE_SERIAL" shell "echo __hdc_ok__" 2>/dev/null | grep -q "__hdc_ok__"; then
+              echo "重连失败，当前可用设备："
+              "$HDC_BIN" list targets
+              exit 1
+            fi
+            echo "设备重连成功"
+          fi
+
           # hilog 采集在安装完成、hidumper 噪音消散之后再启动，确保采集到 aa test 的完整日志
           "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" || true
           "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -r" || true
