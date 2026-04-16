@@ -418,7 +418,12 @@ jobs:
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$BUNDLE_NAME" > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
+          # 只卸载旧的 entry_test feature 模块（不卸载主 app，保留用户开发数据）
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell \
+            "bm uninstall -n $BUNDLE_NAME -m $TEST_MODULE" \
+            > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
+
+          # 更新主 app（-r = replace，不清数据）；若首次安装同样有效
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$TEST_HAP" 2>&1 | tee "$LOG_DIR/install-test.log"
           # 等待 hdc install 的后台 hidumper 采集完成，避免干扰后续 hilog 流
@@ -494,7 +499,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$BUNDLE_NAME" > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
+          # 只卸载 entry_test feature 模块，不卸载主 app，保留用户开发数据
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell \
+            "bm uninstall -n $BUNDLE_NAME -m $TEST_MODULE" \
+            > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
 
       - name: Upload integration artifacts
         if: always()
