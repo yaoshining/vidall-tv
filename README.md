@@ -1,109 +1,64 @@
 # VidAll TV
 
-面向家庭大屏的 HarmonyOS TV 视频播放器。挂载 WebDAV 远程影音库，自动刮削元数据，原生支持内嵌字幕与多轨道切换，仅用遥控器搞定。
+VidAll TV 是一款面向 HarmonyOS TV 的家庭影视播放器与媒体管理应用，围绕远程文件源接入、媒体扫描、元数据整理、大屏浏览和视频播放构建。当前仓库已实现 WebDAV 与 SMB 文件源接入，并提供搜索、播放历史、详情页、字幕与音轨切换等能力。
 
----
+## 当前状态
 
-## 功能特性
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 🌐 WebDAV 文件源 | 已实现 | 支持连接测试、目录选择、递归扫描、流式播放 |
+| 🗂️ SMB 文件源 | 已实现 | 支持连接测试、目录浏览、扫描、播放；播放链路使用 SMB 代理 |
+| 🎞️ 媒体库 | 已实现 | 海报墙展示电影与剧集，支持详情页与继续观看 |
+| 🎭 元数据刮削 | 已实现 | 接入 TMDB，用于电影、剧集、演员等信息展示 |
+| 🔎 搜索 | 已实现 | 支持库内搜索与结果页浏览 |
+| 🎬 播放器 | 已实现 | AVPlayer、IJKPlayer、原生桥接能力协同工作 |
+| ✨ AI 画质增强 | 已实现 | 基于 VPE，当前仅在 AVPlayer 路径可用 |
+
+## 功能概览
 
 | 功能 | 说明 |
 |---|---|
-| 🎬 视频播放 | AVPlayer 主链 + IJKPlayer 兜底，覆盖 mp4 / mkv 等主流格式 |
-| 🌐 WebDAV 文件源 | 基于 libcurl 的 HTTPS WebDAV，兼容 PikPak、群晖、Alist 等 |
-| 🔍 视频扫描 | 递归扫描配置目录，自动去重，支持深度限制 |
-| 🎭 元数据刮削 | 接入 TMDB API，自动匹配海报、简介、类型、年份 |
-| 💬 字幕 | 内嵌字幕（ASS/SRT，含简/繁体标注）优先 + 外挂 SRT/ASS/VTT 兜底，支持延迟调节，seek 后 ≤200ms 恢复 |
-| 🎵 音轨切换 | 多音频轨道实时切换，显示语言与编码信息 |
-| ✨ AI 画质增强 | 接入鸿蒙 VideoProcessingEngine（VPE），低/中/高三档，按需开关 |
-| 🏠 TV 端交互 | 遥控器焦点导航，大屏排版优化 |
-
----
+| 🧩 远程文件源 | 管理 WebDAV、SMB 文件源与扫描目录 |
+| 🔍 视频扫描 | 递归扫描视频文件，支持深度限制、去重与目录状态跟踪 |
+| 🏷️ 媒体整理 | 将本地扫描结果与 TMDB 元数据关联，生成电影与剧集视图 |
+| 🖼️ 媒体库浏览 | 首页海报墙、详情页、文件浏览器、搜索结果页 |
+| ▶️ 视频播放 | 支持播放、暂停、跳转、续播、字幕切换、音轨切换 |
+| 🕘 播放历史 | 保存播放进度、继续观看入口、历史记录页 |
+| 🛋️ 大屏交互 | 适配遥控器焦点导航与电视端布局 |
 
 ## 文件源协议支持
 
 | 协议 | 状态 | 说明 |
 |---|---|---|
-| WebDAV | ✅ 已实现 | 支持 HTTP/HTTPS，自签名证书，完整目录扫描；基于 libcurl NAPI |
-| SMB/CIFS | 🚧 架构就绪 | `SMBAdapter` + `SMBConfigBuilder` + NAPI 桩完整；Native libsmb2 待交叉编译后启用 |
-| NFS | ⏳ 计划中 | 预留扩展接口（`ISourceAdapter`），待 Phase 3 实现 |
-| 阿里云盘 | ⏳ 计划中 | — |
-| 百度网盘 | ⏳ 计划中 | — |
-
-> **关于 SMB 状态**：UI 配置表单、适配器层、NAPI 桩函数均已就绪（含 `VIDALL_HAS_LIBSMB2` 编译守卫）。
-> 待 libsmb2 完成 ARM64 交叉编译后，将 `.so` 放入 `entry/libs/arm64-v8a/` 并以 `-DVIDALL_ENABLE_LIBSMB2=ON` 构建即可激活。
-> 详见后续将补充的 SMB 协议设计文档（当前仓库暂未提供独立文档文件）。
-
----
+| 🌐 WebDAV | 已实现 | 支持 HTTP/HTTPS、目录选择、远程扫描、鉴权请求 |
+| 🗂️ SMB/CIFS | 已实现 | 支持连接测试、目录浏览、扫描、播放；部分链路经本地 HTTP 代理接入播放器 |
+| 📦 NFS | 计划中 | 暂未实现 |
+| ☁️ 其他网盘协议 | 计划中 | 预留扩展空间，当前仓库未落地 |
 
 ## 技术架构
 
-整体分为 ArkTS UI 层与 C++ Native 层，通过 NAPI 桥接：
+项目主要由三层组成：
 
-```
-┌─────────────────────────────────────────────┐
-│              ArkTS UI 层                    │
-│  pages/  components/  utils/  lib/          │
-└──────────────────┬──────────────────────────┘
-                   │ NAPI
-┌──────────────────▼──────────────────────────┐
-│           C++ Native 层                     │
-│  vidall_core_player_napi.cpp                │
-│  ├── ffprobe  媒体信息探测                  │
-│  ├── VPE     VideoProcessingEngine 画质增强 │
-│  ├── webdavRequest  libcurl HTTPS 请求      │
-│  ├── downloadToFile  libcurl 文件下载       │
-│  └── SmbTestConnection / SmbListDirectory  │
-│           libsmb2 桩（VIDALL_HAS_LIBSMB2） │
-└──────────────────┬──────────────────────────┘
-                   │
-        libffmpeg.so / libcurl.so / libvideo_processing.so
-```
+1. ArkTS UI 与业务层：负责页面、交互、状态管理、文件源配置、媒体库展示与播放控制。
+2. 原生桥接层：通过 NAPI 暴露 WebDAV、SMB、播放器、VPE 等原生能力给 ArkTS 调用。
+3. 本地数据层：使用关系型数据库保存文件源、扫描结果、刮削结果、搜索历史与播放进度。
 
-### 播放器分层
+当前关键实现包括：
 
-```
-VideoPlayerController (ArkTS)
-  ├── AVPlayerAdapter         ← HarmonyOS 原生，主链
-  │     └── VPE 画质增强管线（AVPlayer → VPE → XComponent）
-  └── IjkPlayerAdapter        ← IJKPlayer，兜底
-
-字幕适配层（统一接口 ISubtitleBridgeAdapter）
-  ├── AvSubtitleBridgeAdapter   ← AVPlayer 内嵌 + 外置字幕
-  ├── IjkSubtitleBridgeAdapter  ← ijk 内嵌字幕（onTimedText 实时回调，ASS/SRT）+ 外置字幕
-  └── NoSubtitleBridgeAdapter   ← 无字幕回退
-```
-
-### VPE 画质增强管线
-
-```
-AVPlayer（解码输出）
-  └──► VPE 输入 Surface（VideoProcessingEngine）
-         └──► XComponent 显示
-```
-
-VPE 仅在 AVPlayer 后端下生效，IJKPlayer 路径不经过 VPE。
-
-### WebDAV 请求链
-
-所有 WebDAV 网络请求在 C++ 工作线程执行，不阻塞 UI：
-
-```
-WebDAVClient.sendViaNative()
-  └── await webdavRequest(url, headers, tlsPolicy)
-        └── C++ RunCurlRequest()（工作线程，不阻塞 UI）
-```
-
----
+- WebDAVClient：远程 WebDAV 请求、目录读取、播放 URL 构建
+- SMBClient：SMB 连接测试、目录浏览、SMB URL 构建
+- VideoScannerUtil：按文件源与目录递归扫描视频
+- VideoInfoUtil / FfprobeUtil：补充媒体信息探测与轨道信息整理
+- VideoPlayerController：协调 AVPlayer、IJKPlayer、字幕桥接与 AI 画质增强
+- FileSourceDatabase：管理 file_sources、videos、scrape_info、movies、tv_series、play_progress 等表
 
 ## 环境要求
 
 | 项目 | 要求 |
 |---|---|
-| HarmonyOS SDK | 6.0.2（API 22），兼容 5.1.1（API 19） |
 | DevEco Studio | 5.x 及以上 |
-| 目标设备 | HarmonyOS TV（支持 XComponent 与 Media Kit） |
-
----
+| HarmonyOS SDK | 6.0.2（API 22），兼容 5.1.1（API 19） |
+| 目标设备 | HarmonyOS TV 或兼容大屏设备 |
 
 ## 快速开始
 
@@ -114,147 +69,120 @@ git clone https://github.com/yaoshining/vidall-tv.git
 cd VidAll_TV
 ```
 
-### 2. 配置 TMDB API Key（可选，用于元数据刮削）
+### 2. 使用 DevEco Studio 打开工程
 
-在 `entry/src/main/resources/rawfile/` 下创建 `tmdb_config.json`：
+1. 打开 DevEco Studio。
+2. 选择 File -> Open。
+3. 选择项目根目录。
+4. 等待 hvigor 同步完成。
 
-```json
-{ "api_key": "YOUR_TMDB_API_KEY" }
-```
+### 3. 运行到设备
 
-### 3. 用 DevEco Studio 打开并运行
+1. 连接 HarmonyOS TV 设备或模拟器。
+2. 选择 entry 模块运行。
+3. 首次启动后进入首页即可开始配置文件源。
 
-1. 打开 DevEco Studio → **File → Open** → 选择项目根目录
-2. 等待 hvigor 同步完成
-3. 连接 HarmonyOS TV 设备或启动模拟器
-4. 点击 **Run 'entry'**
+### 4. 配置 TMDB API Key（可选）
 
-### 4. 添加 WebDAV 文件源
+应用内可通过“设置 -> 资源库 -> TMDB API Key”配置刮削所需的 API Key。未配置时，媒体库仍可使用本地扫描与基础播放能力。
 
-1. 进入「设置」→「文件源管理」→「添加 WebDAV」
-2. 填写服务器地址、用户名、密码（支持 http/https）
-3. 选择要扫描的目录
-4. 返回首页等待扫描完成
+### 5. 添加文件源
 
----
+当前支持两类文件源：
+
+- WebDAV：填写地址、端口、账号、密码并选择扫描目录
+- SMB：填写主机、共享名、账号、密码并选择扫描目录
 
 ## 目录结构
 
-```
+```text
 VidAll_TV/
+├── docs/                             # 协议与设计文档
 ├── entry/
 │   └── src/main/
-│       ├── cpp/                          # C++ NAPI 层
-│       │   ├── vidall_core_player_napi.cpp
-│       │   └── types/libvidall_core_player_napi/
-│       │       └── index.d.ts           # NAPI TypeScript 类型声明
-│       └── ets/
-│           ├── components/core/player/  # 播放器核心
-│           │   ├── VideoPlayerController.ets
-│           │   ├── AVPlayerAdapter.ets
-│           │   ├── IjkPlayerAdapter.ets
-│           │   ├── SubtitleBridgeAdapter.ets  # 统一字幕适配层
-│           │   └── SubtitleRenderer.ets       # SRT/ASS/VTT 渲染
-│           ├── db/                      # 数据库（RelationalStore）
-│           │   └── FileSourceDatabase.ets
-│           ├── lib/                     # 底层库
-│           │   ├── WebDAVClient.ets     # WebDAV 客户端（libcurl）
-│           │   └── ScrapeClient.ets     # TMDB 刮削客户端
-│           ├── pages/                   # 页面
-│           │   ├── home/                # 首页（媒体库、文件源）
-│           │   ├── player/              # 播放器页面
-│           │   ├── detail/              # 影片/剧集详情
-│           │   └── settings/            # 设置页
-│           └── utils/                   # 工具类
-│               ├── VideoScannerUtil.ets
-│               ├── VideoInfoUtil.ets
-│               ├── FfprobeUtil.ets
-│               ├── VpeEnhancerUtil.ets  # VPE 画质增强工具
-│               └── DeviceCapabilityUtil.ets
-└── entry/src/test/                      # 本地单元测试
-    ├── List.test.ets                    # 测试套件入口
-    ├── WebDAVClientUtils.test.ets       # TLS 工具函数测试（30 个用例）
-    ├── ScrapeClient.test.ets
-    └── ...
+│       ├── cpp/                      # C++ NAPI 与原生桥接
+│       ├── ets/
+│       │   ├── components/core/player/   # 播放器核心与字幕桥接
+│       │   ├── db/                        # 数据库与实体模型
+│       │   ├── lib/                       # WebDAV / SMB / 刮削客户端
+│       │   ├── pages/                     # 首页、设置、搜索、详情、历史、播放器页面
+│       │   └── utils/                     # 扫描、媒体信息、偏好设置等工具
+│       └── resources/
+├── entry/src/test/                  # 本地单元测试
+├── package/                         # 本地依赖 HAR 包
+└── .plans/soft-copyright/           # 软著材料与导出脚本
 ```
 
----
+## 数据存储
 
-## 数据库模型
+当前数据库围绕以下核心数据组织：
 
-| 表 | 说明 |
-|---|---|
-| `file_sources` | 文件源配置（WebDAV 等） |
-| `file_source_directories` | 每个文件源的扫描目录 |
-| `videos` | 扫描到的视频文件 |
-| `scrape_info` | 刮削元数据 |
-| `movies` | 电影信息 |
-| `tv_series` / `tv_seasons` / `tv_episodes` | 剧集信息 |
-| `play_progress` | 播放进度记录 |
-
----
-
-## TLS 与证书策略
-
-WebDAV 连接默认使用 `allow_self_signed` 策略，兼容家庭 NAS、代理环境与自签名证书。企业场景如需严格校验，在文件源配置中指定：
-
-```json
-{ "tlsCertPolicy": "strict" }
-```
-
-TLS 错误会写入审计日志：
-
-```bash
-hdc shell hilog | grep VidAll_TLS_Audit
-```
-
----
-
-## 已知限制
-
-| 问题 | 原因 | 状态 |
-|---|---|---|
-| AC-3/DTS 音频无法播放 | AVPlayer 不内置 AC-3 解码器 | 规划引入 FFmpeg NAPI |
-| SMB 文件源实际连接 | UI+适配器已就绪，libsmb2 Native 层待交叉编译启用 | 见 [docs/smb-protocol.md](docs/smb-protocol.md) |
-| NFS 文件源 | 尚未实现，预留扩展接口 | Phase 3 计划中 |
-| AVMetadataExtractor 不支持远程 URL | API 20 起才有 `setUrlSource` | 待 SDK 升级 |
-| 帧率显示偶有 ×100（如 2397） | AVPlayer 内部单位问题 | 已在 VideoInfoUtil 修正 |
-| VPE 画质增强仅支持 AVPlayer 后端 | IJKPlayer 渲染机制不兼容 VPE 管线 | 设计限制，不影响 ijk 正常播放 |
-| AVPlayer 内嵌字幕轨道元信息（语言/MIME）可能为空 | `getTrackDescription()` 返回字段不稳定 | 规划 #63 增强识别链路 |
-| IJKPlayer 内嵌字幕 ASS Dialogue 行头部字节损坏 | `rect->ass` 在 HarmonyOS 上"Dialogue"关键字被乱码替换，已在 ArkTS 侧用 `": "` 定位绕过 | 已修复 |
-| IJKPlayer 内嵌字幕简/繁体标注依赖 MKV title 字段 | 无 title 的轨道只显示语言名，无法区分简繁 | 设计限制 |
-
----
+- file_sources：文件源配置
+- file_source_directories：文件源对应扫描目录
+- videos：扫描到的视频文件
+- scrape_info：扫描结果与刮削数据的关联桥表
+- movies / tv_series / tv_seasons / tv_episodes：媒体库实体
+- play_progress / media_progress：播放进度与媒体级续播信息
+- search_history：搜索历史
 
 ## 开发与测试
 
-### 本地单元测试（无需设备）
+### 本地单测构建
 
 ```bash
-export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk
-export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
-
-# 首次运行前需生成测试模板文件（之后无需重复）
-node /Applications/DevEco-Studio.app/Contents/tools/hvigor/hvigor-ohos-plugin/node_modules/@ohos/coverage/lib/src/commandLine/localTest/fileOperte.js
-
-# 构建单测
-node /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
-  --mode module -p module=entry@default \
-  -p unit.test.replace.page=../../../.test/testability/pages/Index \
-  -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-  -p buildRoot=.test UnitTestBuild --parallel --incremental
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default \
+-p unit.test.replace.page=../../../.test/testability/pages/Index \
+-p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+-p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon'
 ```
 
-### 编译验证
+### 同步工程
 
 ```bash
-node /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
-  --mode module -p module=entry@default -p product=default assembleHap --parallel
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--sync -p product=default --analyze=normal --parallel --incremental --daemon'
 ```
 
----
+### 编译 HAP
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default -p product=default assembleHap --analyze=normal --parallel --incremental --daemon'
+```
+
+## 相关文档
+
+- [docs/webdav-libcurl.md](docs/webdav-libcurl.md)
+- [docs/smb-protocol.md](docs/smb-protocol.md)
+- [docs/metadata-scraping.md](docs/metadata-scraping.md)
+- [.plans/soft-copyright/plan-softCopyrightExportSummary.md](.plans/soft-copyright/plan-softCopyrightExportSummary.md)
+
+## 已知限制
+
+| 问题 | 说明 |
+|---|---|
+| AC-3 / DTS 兼容性有限 | AVPlayer 对部分音频格式支持不足，个别资源需要回退或后续增强 |
+| VPE 仅支持 AVPlayer 路径 | IJKPlayer 与 SMB 相关回退链路不走 VPE |
+| SMB 媒体信息预探测能力有限 | 部分 SMB 资源的轨道信息依赖播放阶段或额外探测逻辑 |
+| 运行效果依赖设备能力 | 不同电视设备在解码、VPE、字幕轨信息上存在差异 |
 
 ## 许可证
 
-本项目仅供个人学习与家庭使用。
+本项目当前以个人学习、家庭影音场景验证为主，未提供独立开源许可证文本。
 
