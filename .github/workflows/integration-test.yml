@@ -418,11 +418,6 @@ jobs:
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          # 只卸载旧的 entry_test feature 模块（不卸载主 app，保留用户开发数据）
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell \
-            "bm uninstall -n $BUNDLE_NAME -m $TEST_MODULE" \
-            > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
-
           # 只在主 app 未安装时才安装（避免覆盖开发者通过 IDE 安装的版本）
           if "$HDC_BIN" -t "$DEVICE_SERIAL" shell "bm dump -n $BUNDLE_NAME 2>/dev/null" \
               | grep -q "bundle name"; then
@@ -499,16 +494,6 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-
-      - name: Cleanup test application
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          # 只卸载 entry_test feature 模块，不卸载主 app，保留用户开发数据
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell \
-            "bm uninstall -n $BUNDLE_NAME -m $TEST_MODULE" \
-            > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
 
       - name: Upload integration artifacts
         if: always()
