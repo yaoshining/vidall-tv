@@ -647,6 +647,173 @@ jobs:
           destination_dir: integration
           keep_files: true
 
+      - name: Update integration-status.json and portal
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ALLURE_REPORT="$GITHUB_WORKSPACE/allure-history"
+          REPORTS_BRANCH="gh-pages"
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          SITE_DIR="$GITHUB_WORKSPACE/pages-site-portal"
+
+          rm -rf "$SITE_DIR"
+          if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+            echo "Re-cloned gh-pages for portal update"
+          else
+            mkdir -p "$SITE_DIR"
+            cd "$SITE_DIR" && git init && git checkout -b "$REPORTS_BRANCH"
+          fi
+
+          export ALLURE_REPORT_DIR_ENV="$ALLURE_REPORT"
+          export PAGES_SITE_DIR="$SITE_DIR"
+          export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+          export GITHUB_RUN_URL_ENV="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          python3 - <<'PY'
+          import json, re
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          site = Path(os.environ['PAGES_SITE_DIR'])
+          current_run_number = os.environ['CURRENT_RUN_NUMBER']
+          allure_report_dir = Path(os.environ['ALLURE_REPORT_DIR_ENV'])
+          run_url = os.environ['GITHUB_RUN_URL_ENV']
+
+          # ── integration-status.json ───────────────────────────────────────
+          passed, failed, total = 0, 0, 0
+          summary_path = allure_report_dir / 'widgets' / 'summary.json'
+          if summary_path.exists():
+            try:
+              summary = json.loads(summary_path.read_text(encoding='utf-8'))
+              stat = summary.get('statistic', {})
+              passed = int(stat.get('passed', 0))
+              failed = int(stat.get('failed', 0)) + int(stat.get('broken', 0))
+              total  = int(stat.get('total', 0))
+            except Exception:
+              pass
+
+          if failed == 0 and total > 0:
+            suite_status = 'passed'
+          elif failed > 0 and passed > 0:
+            suite_status = 'partial'
+          elif total == 0:
+            suite_status = 'passed'
+          else:
+            suite_status = 'failed'
+
+          intg_status_data = {
+            'suite': 'integration',
+            'status': suite_status,
+            'passed': passed,
+            'failed': failed,
+            'total': total,
+            'run_number': current_run_number,
+            'run_url': run_url,
+            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+          }
+          (site / 'integration-status.json').write_text(
+            json.dumps(intg_status_data, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+
+          # ── portal index.html ─────────────────────────────────────────────
+          def load_status(json_path):
+            if json_path.exists():
+              try:
+                return json.loads(json_path.read_text(encoding='utf-8'))
+              except Exception:
+                pass
+            return None
+
+          def status_badge(s):
+            if s is None:
+              return '🔄', '#8b949e', '尚未运行'
+            st = s.get('status', 'unknown')
+            if st == 'passed':
+              return '✅', '#3fb950', '全部通过'
+            elif st == 'partial':
+              return '⚠️', '#d29922', '部分失败'
+            else:
+              return '❌', '#f85149', '存在失败'
+
+          def render_card(title, s, report_href, archive_href):
+            icon, color, label = status_badge(s)
+            if s:
+              p, f, t = s.get('passed', 0), s.get('failed', 0), s.get('total', 0)
+              rate = f'{p} / {t}'
+              run_info = f'Run #{s.get("run_number", "-")} &nbsp;·&nbsp; {s.get("timestamp", "-")[:10]}'
+            else:
+              rate = '—'
+              run_info = '暂无记录'
+            return '\n'.join([
+              '  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;">',
+              f'    <div style="font-size:1.1rem;font-weight:600;color:#e6edf3;">{title}</div>',
+              f'    <div style="font-size:2rem;">{icon} <span style="font-size:1rem;color:{color};font-weight:500;">{label}</span></div>',
+              f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">用例通过</span></div>',
+              f'    <div style="font-size:0.85rem;color:#8b949e;">{run_info}</div>',
+              '    <div style="display:flex;gap:10px;margin-top:4px;">',
+              f'      <a href="{report_href}" style="background:#238636;color:#fff;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;font-weight:500;">查看报告</a>',
+              f'      <a href="{archive_href}" style="background:#21262d;color:#58a6ff;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">历史记录</a>',
+              '    </div>',
+              '  </div>',
+            ])
+
+          unit_st = load_status(site / 'unit-status.json')
+          intg_st = load_status(site / 'integration-status.json')
+
+          unit_card = render_card(
+            '单元测试', unit_st,
+            report_href='unit/index.html',
+            archive_href='unit/history-list/index.html',
+          )
+          intg_card = render_card(
+            '集成测试', intg_st,
+            report_href='integration/index.html',
+            archive_href='integration/history-list/index.html',
+          )
+
+          portal_html = '\n'.join([
+            '<!DOCTYPE html>',
+            '<html lang="zh-CN">',
+            '<head>',
+            '  <meta charset="UTF-8" />',
+            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
+            '  <meta http-equiv="Pragma" content="no-cache" />',
+            '  <meta http-equiv="Expires" content="0" />',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+            '  <title>VidAll TV · 测试报告总览</title>',
+            '</head>',
+            '<body style="margin:0;background:#0d1117;color:#e6edf3;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;">',
+            '  <div style="max-width:860px;margin:0 auto;padding:40px 20px;">',
+            '    <div style="margin-bottom:32px;">',
+            '      <h1 style="margin:0 0 6px;font-size:1.6rem;font-weight:700;color:#e6edf3;">VidAll TV 测试报告</h1>',
+            '      <p style="margin:0;color:#8b949e;font-size:0.9rem;">单元测试 · 集成测试 · 统一入口</p>',
+            '    </div>',
+            '    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">',
+            unit_card,
+            intg_card,
+            '    </div>',
+            '    <p style="margin-top:32px;font-size:0.8rem;color:#484f58;text-align:center;">',
+            f'      由 GitHub Actions 自动生成 · Run #{current_run_number}',
+            '    </p>',
+            '  </div>',
+            '</body>',
+            '</html>',
+          ])
+          (site / 'index.html').write_text(portal_html, encoding='utf-8')
+          (site / '404.html').write_text(portal_html, encoding='utf-8')
+          PY
+
+          cd "$SITE_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add integration-status.json index.html 404.html || true
+          git commit -m "更新: 集成测试报告状态 #${GITHUB_RUN_NUMBER}" || echo "No portal changes to commit"
+          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "Portal push skipped"
+          rm -rf "$SITE_DIR/.git"
 
       - name: Upload integration artifacts
         if: always()

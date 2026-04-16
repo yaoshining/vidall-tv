@@ -667,42 +667,87 @@ jobs:
           cd "$SITE_DIR"
           touch .nojekyll
 
-          if [[ -d "$SITE_DIR/history" ]]; then
+          if [[ -d "$SITE_DIR/unit/history" ]]; then
             rm -rf "$ALLURE_RESULTS_DIR/history"
-            cp -R "$SITE_DIR/history" "$ALLURE_RESULTS_DIR/history"
+            cp -R "$SITE_DIR/unit/history" "$ALLURE_RESULTS_DIR/history"
           fi
 
           rm -rf "$ALLURE_REPORT_DIR"
           npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
 
-          find "$SITE_DIR" -mindepth 1 -maxdepth 1 ! -name ".git" ! -name "runs" ! -name "integration" -exec rm -rf {} +
-          cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/"
+          mkdir -p "$SITE_DIR/unit"
+          find "$SITE_DIR/unit" -mindepth 1 -maxdepth 1 ! -name "runs" -exec rm -rf {} +
+          cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/unit/"
 
-          mkdir -p runs latest
-          RUN_DIR="runs/run-${GITHUB_RUN_NUMBER}"
-          rm -rf "$RUN_DIR" latest/*
-          mkdir -p "$RUN_DIR/artifacts" latest/artifacts
+          mkdir -p unit/runs unit/latest
+          RUN_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
+          rm -rf "$RUN_DIR" unit/latest/*
+          mkdir -p "$RUN_DIR/artifacts" unit/latest/artifacts
           cp -R "$ALLURE_REPORT_DIR/." "$RUN_DIR/"
-          cp -R "$ALLURE_REPORT_DIR/." latest/
+          cp -R "$ALLURE_REPORT_DIR/." unit/latest/
           cp -R "$REPORTS_DIR/." "$RUN_DIR/artifacts/"
-          cp -R "$REPORTS_DIR/." latest/artifacts/
+          cp -R "$REPORTS_DIR/." unit/latest/artifacts/
           if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
-            mkdir -p "$SITE_DIR/history"
-            rm -rf "$SITE_DIR/history"/*
-            cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/history/"
+            mkdir -p "$SITE_DIR/unit/history"
+            rm -rf "$SITE_DIR/unit/history"/*
+            cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/unit/history/"
           fi
 
           export PAGES_SITE_DIR="$SITE_DIR"
           export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+          export ALLURE_REPORT_DIR_ENV="$ALLURE_REPORT_DIR"
+          export GITHUB_RUN_URL_ENV="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python3 - <<'PY'
           import json
           import os
           import re
+          from datetime import datetime, timezone
           from pathlib import Path
 
           site = Path(os.environ['PAGES_SITE_DIR'])
+          unit_site = site / 'unit'
           current_run_number = os.environ['CURRENT_RUN_NUMBER']
-          runs_dir = site / 'runs'
+          allure_report_dir = Path(os.environ['ALLURE_REPORT_DIR_ENV'])
+          run_url = os.environ['GITHUB_RUN_URL_ENV']
+
+          # ── unit-status.json ──────────────────────────────────────────────
+          passed, failed, total = 0, 0, 0
+          summary_path = allure_report_dir / 'widgets' / 'summary.json'
+          if summary_path.exists():
+            try:
+              summary = json.loads(summary_path.read_text(encoding='utf-8'))
+              stat = summary.get('statistic', {})
+              passed = int(stat.get('passed', 0))
+              failed = int(stat.get('failed', 0)) + int(stat.get('broken', 0))
+              total  = int(stat.get('total', 0))
+            except Exception:
+              pass
+
+          if failed == 0 and total > 0:
+            suite_status = 'passed'
+          elif failed > 0 and passed > 0:
+            suite_status = 'partial'
+          elif total == 0:
+            suite_status = 'passed'
+          else:
+            suite_status = 'failed'
+
+          unit_status_data = {
+            'suite': 'unit',
+            'status': suite_status,
+            'passed': passed,
+            'failed': failed,
+            'total': total,
+            'run_number': current_run_number,
+            'run_url': run_url,
+            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+          }
+          (site / 'unit-status.json').write_text(
+            json.dumps(unit_status_data, ensure_ascii=False, indent=2), encoding='utf-8'
+          )
+
+          # ── unit run history ──────────────────────────────────────────────
+          runs_dir = unit_site / 'runs'
           entries = []
           for meta_path in runs_dir.glob('*/meta.json'):
             try:
@@ -743,9 +788,9 @@ jobs:
             'generated_at': '-'
           }
 
-          add_cache_busting(site / 'index.html', current_run_number)
-          add_cache_busting(site / 'latest' / 'index.html', current_run_number)
-          add_cache_busting(site / 'runs' / latest_entry['folder'] / 'index.html', str(latest_entry.get('run_number', current_run_number)))
+          add_cache_busting(unit_site / 'index.html', current_run_number)
+          add_cache_busting(unit_site / 'latest' / 'index.html', current_run_number)
+          add_cache_busting(unit_site / 'runs' / latest_entry['folder'] / 'index.html', str(latest_entry.get('run_number', current_run_number)))
 
           rows = []
           for item in entries:
@@ -756,8 +801,101 @@ jobs:
               f"<tr><td><a href='{report_href}'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>"
             )
 
-          latest_href = f"../runs/{latest_entry['folder']}/index.html?v={latest_entry.get('run_number', current_run_number)}"
-          index_html = '\n'.join([
+          latest_href = f"runs/{latest_entry['folder']}/index.html?v={latest_entry.get('run_number', current_run_number)}"
+          unit_archive_html = '\n'.join([
+            '<!DOCTYPE html>',
+            '<html lang="zh-CN">',
+            '<head>',
+            '  <meta charset="UTF-8" />',
+            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
+            '  <title>VidAll TV 单元测试报告历史</title>',
+            '  <style>',
+            '    body { font-family: Inter, -apple-system, sans-serif; margin: 0; background: #0d1117; color: #e6edf3; }',
+            '    .hero { background: #161b22; border-bottom: 1px solid #30363d; padding: 24px 32px; }',
+            '    .container { padding: 24px 32px 40px; }',
+            '    table { width: 100%; border-collapse: collapse; }',
+            '    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #30363d; }',
+            '    a { color: #58a6ff; text-decoration: none; }',
+            '  </style>',
+            '</head>',
+            '<body>',
+            '  <div class="hero">',
+            '    <h2 style="margin:0">单元测试报告历史</h2>',
+            f'    <p><a href="{latest_href}">打开最新 Allure 报告 ↗</a> &nbsp;|&nbsp; <a href="../">← 返回总览</a></p>',
+            '  </div>',
+            '  <div class="container">',
+            '    <table>',
+            '      <thead><tr><th>Run</th><th>状态</th><th>分支</th><th>Commit</th><th>时间</th></tr></thead>',
+            '      <tbody>',
+            *rows,
+            '      </tbody>',
+            '    </table>',
+            '  </div>',
+            '</body>',
+            '</html>'
+          ])
+          unit_archive_dir = unit_site / 'history-list'
+          unit_archive_dir.mkdir(parents=True, exist_ok=True)
+          (unit_archive_dir / 'index.html').write_text(unit_archive_html, encoding='utf-8')
+          (unit_site / 'latest.json').write_text(json.dumps(latest_entry, ensure_ascii=False, indent=2), encoding='utf-8')
+
+          # ── portal index.html ─────────────────────────────────────────────
+          def load_status(json_path: Path) -> dict:
+            if json_path.exists():
+              try:
+                return json.loads(json_path.read_text(encoding='utf-8'))
+              except Exception:
+                pass
+            return None
+
+          def status_badge(s: dict | None) -> str:
+            if s is None:
+              return '🔄', '#8b949e', '尚未运行'
+            st = s.get('status', 'unknown')
+            if st == 'passed':
+              return '✅', '#3fb950', '全部通过'
+            elif st == 'partial':
+              return '⚠️', '#d29922', '部分失败'
+            else:
+              return '❌', '#f85149', '存在失败'
+
+          def render_card(title: str, s: dict | None, report_href: str, archive_href: str) -> str:
+            icon, color, label = status_badge(s)
+            if s:
+              p, f, t = s.get('passed', 0), s.get('failed', 0), s.get('total', 0)
+              rate = f'{p} / {t}'
+              run_info = f'Run #{s.get("run_number", "-")} &nbsp;·&nbsp; {s.get("timestamp", "-")[:10]}'
+            else:
+              rate = '—'
+              run_info = '暂无记录'
+            return '\n'.join([
+              '  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;">',
+              f'    <div style="font-size:1.1rem;font-weight:600;color:#e6edf3;">{title}</div>',
+              f'    <div style="font-size:2rem;">{icon} <span style="font-size:1rem;color:{color};font-weight:500;">{label}</span></div>',
+              f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">用例通过</span></div>',
+              f'    <div style="font-size:0.85rem;color:#8b949e;">{run_info}</div>',
+              f'    <div style="display:flex;gap:10px;margin-top:4px;">',
+              f'      <a href="{report_href}" style="background:#238636;color:#fff;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;font-weight:500;">查看报告</a>',
+              f'      <a href="{archive_href}" style="background:#21262d;color:#58a6ff;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">历史记录</a>',
+              '    </div>',
+              '  </div>',
+            ])
+
+          unit_st   = load_status(site / 'unit-status.json')
+          intg_st   = load_status(site / 'integration-status.json')
+
+          unit_card = render_card(
+            '单元测试', unit_st,
+            report_href='unit/index.html',
+            archive_href='unit/history-list/index.html',
+          )
+          intg_card = render_card(
+            '集成测试', intg_st,
+            report_href='integration/index.html',
+            archive_href='integration/history-list/index.html',
+          )
+
+          portal_html = '\n'.join([
             '<!DOCTYPE html>',
             '<html lang="zh-CN">',
             '<head>',
@@ -765,43 +903,28 @@ jobs:
             '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
             '  <meta http-equiv="Pragma" content="no-cache" />',
             '  <meta http-equiv="Expires" content="0" />',
-            '  <title>VidAll TV Test Reports Archive</title>',
-            '  <style>',
-            '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }',
-            '    .hero { background: linear-gradient(135deg, #0f172a, #2563eb); color: white; padding: 28px 32px; }',
-            '    .container { padding: 24px 32px 40px; }',
-            '    .card { background: white; border-radius: 14px; padding: 18px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08); }',
-            '    table { width: 100%; border-collapse: collapse; }',
-            '    th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #e5e7eb; }',
-            '    a { color: #2563eb; text-decoration: none; }',
-            '  </style>',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+            '  <title>VidAll TV · 测试报告总览</title>',
             '</head>',
-            '<body>',
-            '  <div class="hero">',
-            '    <h1>VidAll TV Test Reports Archive</h1>',
-            '    <p>最新报告使用带版本号的独立链接，减少 CDN 缓存影响。</p>',
-            '  </div>',
-            '  <div class="container">',
-            '    <div class="card">',
-            f'      <p><a href="{latest_href}">打开最新 Allure 报告</a></p>',
-            '      <h2>Run History</h2>',
-            '      <table>',
-            '        <thead><tr><th>Run</th><th>Status</th><th>Branch</th><th>Commit</th><th>Generated At</th></tr></thead>',
-            '        <tbody>',
-            *rows,
-            '        </tbody>',
-            '      </table>',
+            '<body style="margin:0;background:#0d1117;color:#e6edf3;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;">',
+            '  <div style="max-width:860px;margin:0 auto;padding:40px 20px;">',
+            '    <div style="margin-bottom:32px;">',
+            '      <h1 style="margin:0 0 6px;font-size:1.6rem;font-weight:700;color:#e6edf3;">VidAll TV 测试报告</h1>',
+            '      <p style="margin:0;color:#8b949e;font-size:0.9rem;">单元测试 · 集成测试 · 统一入口</p>',
             '    </div>',
+            '    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">',
+            unit_card,
+            intg_card,
+            '    </div>',
+            '    <p style="margin-top:32px;font-size:0.8rem;color:#484f58;text-align:center;">',
+            f'      由 GitHub Actions 自动生成 · Run #{current_run_number}',
+            '    </p>',
             '  </div>',
             '</body>',
-            '</html>'
+            '</html>',
           ])
-          archive_dir = site / 'history-list'
-          archive_dir.mkdir(parents=True, exist_ok=True)
-          (archive_dir / 'index.html').write_text(index_html, encoding='utf-8')
-          if (site / 'index.html').exists():
-            (site / '404.html').write_text((site / 'index.html').read_text(encoding='utf-8'), encoding='utf-8')
-          (site / 'latest.json').write_text(json.dumps(latest_entry, ensure_ascii=False, indent=2), encoding='utf-8')
+          (site / 'index.html').write_text(portal_html, encoding='utf-8')
+          (site / '404.html').write_text(portal_html, encoding='utf-8')
           PY
 
           git config user.name "github-actions[bot]"
@@ -830,8 +953,8 @@ jobs:
             echo "- If GitHub Pages is enabled for this repository, the site will be served from:"
             echo "  https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
             echo "- Latest report entry: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
-            echo "- Versioned run page: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/runs/run-${GITHUB_RUN_NUMBER}/index.html?v=${GITHUB_RUN_NUMBER}"
-            echo "- Archive list: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/history-list/"
+            echo "- Versioned run page: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/unit/runs/run-${GITHUB_RUN_NUMBER}/index.html?v=${GITHUB_RUN_NUMBER}"
+            echo "- Archive list: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/unit/history-list/"
             echo "- First-time setup: Settings -> Pages -> Deploy from a branch -> ${REPORTS_BRANCH} /(root)"
           } >> "$GITHUB_STEP_SUMMARY"
 
