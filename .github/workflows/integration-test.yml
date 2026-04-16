@@ -24,7 +24,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: harmonyos-device-integration-test
@@ -49,10 +49,18 @@ jobs:
       BUNDLE_NAME: com.yao.vidalltv
       TEST_MODULE: entry_test
       JAVA_HOME: /Applications/DevEco-Studio.app/Contents/jbr/Contents/Home
+      ALLURE_VERSION: "2.34.1"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Java for Allure
+        if: always()
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Restore signing certificates
         shell: bash
@@ -495,6 +503,338 @@ jobs:
             exit 1
           fi
 
+      - name: Generate Allure Results
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
+          ALLURE_RESULTS="$GITHUB_WORKSPACE/.ci/allure-results"
+          mkdir -p "$ALLURE_RESULTS"
+
+          python3 - <<'PY'
+          import json, os, re, uuid
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          log_dir = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'integration'
+          results_dir = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'allure-results'
+          results_dir.mkdir(parents=True, exist_ok=True)
+
+          aa_log = log_dir / 'aa-test.log'
+          log_text = aa_log.read_text(encoding='utf-8', errors='replace') if aa_log.exists() else ''
+
+          now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+          labels = [
+            {'name': 'suite',        'value': 'Integration Tests'},
+            {'name': 'parentSuite',  'value': 'Device Tests'},
+            {'name': 'tag',          'value': 'integration'},
+          ]
+
+          # Parse hypium / OpenHarmonyTestRunner output
+          # Patterns: "[pass] testCaseName" / "[fail] testCaseName"
+          # Also handle "OHOS_REPORT_RESULT_CODE: 0/-2" with associated test name
+          cases = []
+
+          # Pattern 1: [pass]/[fail] lines (hypium text format)
+          for line in log_text.splitlines():
+            m_pass = re.match(r'\[pass\]\s+(\S+)', line)
+            m_fail = re.match(r'\[fail\]\s+(\S+)', line)
+            if m_pass:
+              cases.append({'name': m_pass.group(1), 'status': 'passed', 'message': ''})
+            elif m_fail:
+              msg = line[m_fail.end():].strip()
+              cases.append({'name': m_fail.group(1), 'status': 'failed', 'message': msg})
+
+          # Pattern 2: OHOS_REPORT style (if pattern 1 yielded nothing)
+          if not cases:
+            test_name = None
+            for line in log_text.splitlines():
+              m = re.match(r'OHOS_REPORT_STATUS:\s+test=(.+)', line)
+              if m:
+                test_name = m.group(1).strip()
+              rc = re.match(r'OHOS_REPORT_RESULT_CODE:\s+(-?\d+)', line)
+              if rc and test_name:
+                code = int(rc.group(1))
+                status = 'passed' if code == 0 else 'failed'
+                cases.append({'name': test_name, 'status': status, 'message': ''})
+                test_name = None
+
+          # Fallback: one summary result based on overall ResultCode
+          if not cases:
+            overall_pass = 'TestFinished-ResultCode: 0' in log_text
+            status = 'passed' if overall_pass else 'failed'
+            msg = '' if overall_pass else (
+              next((l for l in log_text.splitlines() if 'TestFinished-ResultMsg' in l), 'Unknown failure')
+            )
+            cases.append({'name': 'IntegrationTestSuite', 'status': status, 'message': msg})
+
+          for i, case in enumerate(cases):
+            result_uuid = str(uuid.uuid4())
+            result = {
+              'uuid': result_uuid,
+              'historyId': str(uuid.uuid5(uuid.NAMESPACE_DNS, case['name'])),
+              'name': case['name'],
+              'status': case['status'],
+              'start': now_ms + i,
+              'stop': now_ms + i + 1,
+              'labels': labels,
+            }
+            if case['status'] == 'failed' and case['message']:
+              result['statusDetails'] = {'message': case['message']}
+            (results_dir / f'{result_uuid}-result.json').write_text(
+              json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8'
+            )
+
+          print(f"Generated {len(cases)} Allure result(s) in {results_dir}")
+          PY
+
+          # environment.properties
+          cat > "$ALLURE_RESULTS/environment.properties" <<EOF
+          BUNDLE_NAME=${BUNDLE_NAME}
+          TEST_MODULE=${TEST_MODULE}
+          DEVICE_SERIAL=${DEVICE_SERIAL:-unknown}
+          BRANCH=${GITHUB_REF_NAME}
+          SHA=${GITHUB_SHA}
+          EOF
+
+          # executor.json
+          python3 -c "
+          import json, os
+          data = {
+            'name': 'GitHub Actions',
+            'type': 'github',
+            'buildName': 'Run #' + os.environ.get('GITHUB_RUN_NUMBER', ''),
+            'buildUrl': 'https://github.com/' + os.environ.get('GITHUB_REPOSITORY', '') + '/actions/runs/' + os.environ.get('GITHUB_RUN_ID', ''),
+            'reportName': 'VidAll TV Integration Tests Allure Report',
+          }
+          print(json.dumps(data, ensure_ascii=False, indent=2))
+          " > "$ALLURE_RESULTS/executor.json"
+
+      - name: Generate Allure HTML Report
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ALLURE_RESULTS_DIR="$GITHUB_WORKSPACE/.ci/allure-results"
+          ALLURE_REPORT_DIR="$GITHUB_WORKSPACE/.ci/allure-report"
+          SITE_DIR="$GITHUB_WORKSPACE/pages-site"
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          REPORTS_BRANCH="gh-pages"
+
+          # 尝试拉取 gh-pages 历史趋势数据
+          rm -rf "$SITE_DIR"
+          if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+            if [[ -d "$SITE_DIR/integration/history" ]]; then
+              mkdir -p "$ALLURE_RESULTS_DIR/history"
+              cp -R "$SITE_DIR/integration/history/." "$ALLURE_RESULTS_DIR/history/"
+              echo "Restored integration history from gh-pages"
+            fi
+          else
+            mkdir -p "$SITE_DIR"
+            cd "$SITE_DIR"
+            git init
+            git checkout -b "$REPORTS_BRANCH"
+            cd "$GITHUB_WORKSPACE"
+          fi
+
+          rm -rf "$ALLURE_REPORT_DIR"
+          npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
+          echo "Allure HTML report generated at $ALLURE_REPORT_DIR"
+
+      - name: Publish integration report to gh-pages
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ALLURE_REPORT_DIR="$GITHUB_WORKSPACE/.ci/allure-report"
+          SITE_DIR="$GITHUB_WORKSPACE/pages-site"
+          REPORTS_BRANCH="gh-pages"
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # pages-site 可能已在上一步克隆好，若不存在则重新克隆
+          if [[ ! -d "$SITE_DIR/.git" ]]; then
+            rm -rf "$SITE_DIR"
+            if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+              echo "Re-cloned gh-pages"
+            else
+              mkdir -p "$SITE_DIR"
+              cd "$SITE_DIR" && git init && git checkout -b "$REPORTS_BRANCH" && cd "$GITHUB_WORKSPACE"
+            fi
+          fi
+
+          cd "$SITE_DIR"
+          touch .nojekyll
+
+          # 写入 integration/ 子目录（不删除根目录单测内容）
+          INTEGRATION_DIR="$SITE_DIR/integration"
+          rm -rf "$INTEGRATION_DIR"
+          mkdir -p "$INTEGRATION_DIR"
+          cp -R "$ALLURE_REPORT_DIR/." "$INTEGRATION_DIR/"
+
+          # 保存历史 run
+          RUN_DIR="$INTEGRATION_DIR/runs/run-${GITHUB_RUN_NUMBER}"
+          mkdir -p "$RUN_DIR"
+          cp -R "$ALLURE_REPORT_DIR/." "$RUN_DIR/"
+
+          # 保存 Allure history 趋势（供下次使用）
+          if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
+            # 更新 integration/history（供 generate 步骤使用）
+            :  # history 已在 integration/ 内
+          fi
+
+          # 生成 run meta.json（供 landing page 使用）
+          python3 -c "
+          import json, os
+          from datetime import datetime, timezone
+          meta = {
+            'run_number': os.environ.get('GITHUB_RUN_NUMBER', ''),
+            'overall_status': 'passed' if True else 'failed',
+            'branch': os.environ.get('GITHUB_REF_NAME', ''),
+            'sha': os.environ.get('GITHUB_SHA', '')[:7],
+            'generated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+            'type': 'integration',
+          }
+          print(json.dumps(meta, ensure_ascii=False, indent=2))
+          " > "$RUN_DIR/meta.json"
+
+          # 解析实际测试结果来确定 overall_status
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          run_dir = Path(os.environ['GITHUB_WORKSPACE']) / 'pages-site' / 'integration' / 'runs' / f"run-{os.environ.get('GITHUB_RUN_NUMBER', '')}"
+          meta_path = run_dir / 'meta.json'
+          meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+
+          aa_log = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'integration' / 'aa-test.log'
+          log_text = aa_log.read_text(encoding='utf-8', errors='replace') if aa_log.exists() else ''
+          meta['overall_status'] = 'passed' if 'TestFinished-ResultCode: 0' in log_text else 'failed'
+          meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+          print(f"Updated meta.json: overall_status={meta['overall_status']}")
+          PY
+
+          # 生成共享 landing page（双分区：单测 + 集成测试）
+          export PAGES_SITE_DIR="$SITE_DIR"
+          export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          site = Path(os.environ['PAGES_SITE_DIR'])
+          current_run = os.environ['CURRENT_RUN_NUMBER']
+
+          def load_entries(runs_dir: Path, report_type: str):
+            entries = []
+            if not runs_dir.exists():
+              return entries
+            for meta_path in runs_dir.glob('*/meta.json'):
+              try:
+                meta = json.loads(meta_path.read_text(encoding='utf-8'))
+              except Exception:
+                continue
+              meta['folder'] = meta_path.parent.name
+              meta['type'] = report_type
+              entries.append(meta)
+            entries.sort(key=lambda x: int(str(x.get('run_number', '0'))) if str(x.get('run_number', '0')).isdigit() else 0, reverse=True)
+            return entries
+
+          unit_entries = load_entries(site / 'runs', 'unit')
+          integ_entries = load_entries(site / 'integration' / 'runs', 'integration')
+
+          def make_rows(entries, base_path):
+            rows = []
+            for item in entries:
+              status = str(item.get('overall_status', 'unknown')).upper()
+              run_number = str(item.get('run_number', 'unknown'))
+              href = f"{base_path}/{item['folder']}/index.html?v={run_number}"
+              rows.append(f"<tr><td><a href='{href}'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>")
+            return rows
+
+          unit_rows = make_rows(unit_entries, 'runs')
+          integ_rows = make_rows(integ_entries, 'integration/runs')
+
+          unit_latest_href = f"runs/{unit_entries[0]['folder']}/index.html?v={unit_entries[0].get('run_number', current_run)}" if unit_entries else "#"
+          integ_latest_href = f"integration/runs/{integ_entries[0]['folder']}/index.html?v={integ_entries[0].get('run_number', current_run)}" if integ_entries else "integration/index.html"
+
+          unit_empty = '<tr><td colspan="5" style="text-align:center;color:#9ca3af">暂无记录</td></tr>' if not unit_rows else ''
+          integ_empty = '<tr><td colspan="5" style="text-align:center;color:#9ca3af">暂无记录</td></tr>' if not integ_rows else ''
+
+          html = '\n'.join([
+            '<!DOCTYPE html>',
+            '<html lang="zh-CN">',
+            '<head>',
+            '  <meta charset="UTF-8" />',
+            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
+            '  <title>VidAll TV Test Reports</title>',
+            '  <style>',
+            '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; margin:0; background:#f5f7fb; color:#1f2937; }',
+            '    .hero { background: linear-gradient(135deg, #0f172a, #2563eb); color:white; padding:28px 32px; }',
+            '    .hero h1 { margin:0 0 6px; font-size:1.6rem; }',
+            '    .container { padding:24px 32px 40px; display:grid; grid-template-columns:1fr 1fr; gap:24px; }',
+            '    @media (max-width:900px) { .container { grid-template-columns:1fr; } }',
+            '    .card { background:white; border-radius:14px; padding:18px 20px; box-shadow:0 4px 16px rgba(15,23,42,.08); }',
+            '    .card h2 { margin:0 0 4px; font-size:1.1rem; }',
+            '    .card .latest { margin:0 0 14px; font-size:.875rem; }',
+            '    table { width:100%; border-collapse:collapse; font-size:.875rem; }',
+            '    th,td { text-align:left; padding:9px 8px; border-bottom:1px solid #e5e7eb; }',
+            '    th { color:#6b7280; font-weight:600; }',
+            '    a { color:#2563eb; text-decoration:none; }',
+            '    .badge-unit { background:#dbeafe; color:#1d4ed8; border-radius:4px; padding:2px 7px; font-size:.75rem; }',
+            '    .badge-integ { background:#dcfce7; color:#15803d; border-radius:4px; padding:2px 7px; font-size:.75rem; }',
+            '  </style>',
+            '</head>',
+            '<body>',
+            '  <div class="hero"><h1>VidAll TV Test Reports</h1><p style="margin:0;opacity:.8">单元测试 · 集成测试 · 历史记录</p></div>',
+            '  <div class="container">',
+            '    <div class="card">',
+            '      <h2>🧪 单元测试报告 <span class="badge-unit">Unit</span></h2>',
+            f'     <p class="latest"><a href="{unit_latest_href}">打开最新报告 →</a></p>',
+            '      <table><thead><tr><th>Run</th><th>状态</th><th>分支</th><th>Commit</th><th>时间</th></tr></thead><tbody>',
+            *unit_rows,
+            unit_empty,
+            '      </tbody></table>',
+            '    </div>',
+            '    <div class="card">',
+            '      <h2>📱 集成测试报告 <span class="badge-integ">Integration</span></h2>',
+            f'     <p class="latest"><a href="{integ_latest_href}">打开最新报告 →</a></p>',
+            '      <table><thead><tr><th>Run</th><th>状态</th><th>分支</th><th>Commit</th><th>时间</th></tr></thead><tbody>',
+            *integ_rows,
+            integ_empty,
+            '      </tbody></table>',
+            '    </div>',
+            '  </div>',
+            '</body>',
+            '</html>',
+          ])
+
+          landing = site / 'history-list'
+          landing.mkdir(parents=True, exist_ok=True)
+          (landing / 'index.html').write_text(html, encoding='utf-8')
+          print(f"Landing page written: unit={len(unit_entries)} runs, integration={len(integ_entries)} runs")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "更新: 保存集成测试报告 #${GITHUB_RUN_NUMBER}" || echo "No changes to commit"
+          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "gh-pages push skipped"
+          rm -rf "$SITE_DIR/.git"
+
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          {
+            echo "## GitHub Pages - Integration Test Report"
+            echo "- 最新报告: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/integration/"
+            echo "- 当前 run: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/integration/runs/run-${GITHUB_RUN_NUMBER}/"
+            echo "- 双分区入口: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/history-list/"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
       - name: Upload integration artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -502,4 +842,5 @@ jobs:
           name: integration-test-artifacts
           path: |
             ${{ github.workspace }}/.ci/integration
+            ${{ github.workspace }}/.ci/allure-results
           if-no-files-found: warn
