@@ -59,46 +59,53 @@ jobs:
           SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
           SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
           SIGNING_PROFILE_BASE64: ${{ secrets.SIGNING_PROFILE_BASE64 }}
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
           set -euo pipefail
-          # 从 build-profile.json5 提取证书路径，将 Secret 解码还原到对应位置
+          # 证书写入 runner 可写目录，再 patch build-profile.json5 的路径
           python3 - <<'PY'
           import re, json, base64, os, sys
           from pathlib import Path
 
-          content = Path('build-profile.json5').read_text(encoding='utf-8')
-          content = re.sub(r',(\s*[}\]])', r'\1', content)
-          content = re.sub(r'//[^\n]*', '', content)
-          data = json.loads(content)
+          cert_dir = Path(os.environ['RUNNER_TEMP']) / 'signing'
+          cert_dir.mkdir(parents=True, exist_ok=True)
 
-          signing_configs = data['app']['signingConfigs']
-          default_config = next((c for c in signing_configs if c['name'] == 'default'), None)
-          if not default_config:
-              print('ERROR: No default signing config found', file=sys.stderr)
-              sys.exit(1)
-
-          material = default_config['material']
-          mapping = {
-              'certpath':  ('SIGNING_CERT_BASE64',    material.get('certpath', '')),
-              'storeFile': ('SIGNING_P12_BASE64',     material.get('storeFile', '')),
-              'profile':   ('SIGNING_PROFILE_BASE64', material.get('profile', '')),
+          secrets = {
+              'certpath':  ('SIGNING_CERT_BASE64',    'default.cer'),
+              'storeFile': ('SIGNING_P12_BASE64',     'default.p12'),
+              'profile':   ('SIGNING_PROFILE_BASE64', 'default.p7b'),
           }
 
           missing_secrets = []
-          for key, (env_var, dest_path) in mapping.items():
+          new_paths = {}
+          for key, (env_var, filename) in secrets.items():
               b64 = os.environ.get(env_var, '').strip()
               if not b64:
                   missing_secrets.append(env_var)
                   continue
-              dest = Path(dest_path)
-              dest.parent.mkdir(parents=True, exist_ok=True)
+              dest = cert_dir / filename
               dest.write_bytes(base64.b64decode(b64))
               dest.chmod(0o600)
-              print(f'还原证书: {key} -> {dest_path}')
+              new_paths[key] = str(dest)
+              print(f'还原证书: {key} -> {dest}')
 
           if missing_secrets:
               print(f'WARNING: 以下 Secret 未配置，跳过还原: {missing_secrets}')
               print('若签名证书已预装在 runner 上，可忽略此警告')
+              sys.exit(0)
+
+          # 将 build-profile.json5 中 default signing config 的路径替换为新路径
+          bp_path = Path('build-profile.json5')
+          content = bp_path.read_text(encoding='utf-8')
+          for key, new_path in new_paths.items():
+              # 匹配 "certpath": "旧路径" 等字段，替换值
+              content = re.sub(
+                  rf'("{key}"\s*:\s*)"[^"]*"',
+                  rf'\1"{new_path}"',
+                  content
+              )
+          bp_path.write_text(content, encoding='utf-8')
+          print('build-profile.json5 证书路径已更新')
           PY
 
       - name: Verify self-hosted runner environment
