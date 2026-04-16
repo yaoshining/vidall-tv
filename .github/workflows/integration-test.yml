@@ -397,21 +397,6 @@ jobs:
             echo "- Test HAP: $TEST_HAP"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Start hilog capture
-        shell: bash
-        run: |
-          set -euo pipefail
-          LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
-          # 先设置日志最低级别（一次性命令，执行后自动退出）
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" || true
-          # 清空设备侧 hilog 缓冲区，确保采集到本次测试的完整日志
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -r" || true
-          # 后台流式采集（不带 -b，才会真正输出日志流）
-          nohup "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog" > "$LOG_DIR/device.hilog" 2>&1 &
-          echo "HILOG_PID=$!" >> "$GITHUB_ENV"
-          # 给 hdc shell 连接建立留足时间，避免 aa test 比 hilog 先启动
-          sleep 2
-
       - name: Install application and test HAP
         shell: bash
         run: |
@@ -421,6 +406,8 @@ jobs:
           "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$BUNDLE_NAME" > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$TEST_HAP" 2>&1 | tee "$LOG_DIR/install-test.log"
+          # 等待 hdc install 的后台 hidumper 采集完成，避免干扰后续 hilog 流
+          sleep 5
 
       - name: Run device integration tests
         shell: bash
@@ -438,23 +425,29 @@ jobs:
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PATH '${WEBDAV_PATH:-/}'"
 
+          # hilog 采集在安装完成、hidumper 噪音消散之后再启动，确保采集到 aa test 的完整日志
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" || true
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -r" || true
+          nohup "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog" > "$LOG_DIR/device.hilog" 2>&1 &
+          HILOG_PID=$!
+          sleep 2
+
           echo "执行命令: aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner [+env params]" | tee "$LOG_DIR/test-command.log"
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD" 2>&1 | tee "$LOG_DIR/aa-test.log"
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD" 2>&1 | tee "$LOG_DIR/aa-test.log" || true
 
-          STATUS=${PIPESTATUS[0]}
-          if [[ "$STATUS" -ne 0 ]]; then
-            echo "集成测试命令执行失败，退出码: $STATUS"
-            exit "$STATUS"
-          fi
+          # 等待崩溃日志写入缓冲区后再停止 hilog
+          sleep 3
+          kill "$HILOG_PID" >/dev/null 2>&1 || true
 
-          echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
           if grep -q 'TestFinished-ResultCode: 0' "$LOG_DIR/aa-test.log"; then
+            echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
             echo "- ✅ 集成测试通过，ResultCode=0" >> "$GITHUB_STEP_SUMMARY"
           else
+            echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
             echo "- ❌ 集成测试失败，TestFinished-ResultCode 非 0" >> "$GITHUB_STEP_SUMMARY"
-            echo '### 最近设备日志（末 50 行）' >> "$GITHUB_STEP_SUMMARY"
+            echo '### 最近设备日志（末 100 行）' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -50 "$LOG_DIR/device.hilog" >> "$GITHUB_STEP_SUMMARY" || true
+            tail -100 "$LOG_DIR/device.hilog" >> "$GITHUB_STEP_SUMMARY" || true
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
@@ -465,15 +458,6 @@ jobs:
         run: |
           set +e
           "$HDC_BIN" -t "$DEVICE_SERIAL" uninstall "$BUNDLE_NAME" > "$GITHUB_WORKSPACE/.ci/integration/uninstall-test-app.log" 2>&1 || true
-
-      - name: Stop hilog capture
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          if [[ -n "${HILOG_PID:-}" ]]; then
-            kill "$HILOG_PID" >/dev/null 2>&1 || true
-          fi
 
       - name: Upload integration artifacts
         if: always()
