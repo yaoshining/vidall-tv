@@ -1,11 +1,13 @@
 import TestRunner from '@ohos.application.testRunner';
 import AbilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
+import UIAbility from '@ohos.app.ability.UIAbility';
+import type Want from '@ohos.app.ability.Want';
 
 let abilityDelegator: AbilityDelegatorRegistry.AbilityDelegator;
 let abilityDelegatorArguments: AbilityDelegatorRegistry.AbilityDelegatorArgs;
 
-async function onAbilityCreate(moduleName: string): Promise<void> {
-  console.log(`onAbilityCreate moduleName=${moduleName}`);
+function onAbilityCreate(_ability: UIAbility): void {
+  console.log('onAbilityCreate');
 }
 
 export default class OpenHarmonyTestRunner implements TestRunner {
@@ -15,7 +17,7 @@ export default class OpenHarmonyTestRunner implements TestRunner {
     console.info('OpenHarmonyTestRunner OnPrepare');
   }
 
-  async onRun(): Promise<void> {
+  onRun(): void {
     console.log('OpenHarmonyTestRunner onRun run');
     abilityDelegator = AbilityDelegatorRegistry.getAbilityDelegator();
     abilityDelegatorArguments = AbilityDelegatorRegistry.getArguments();
@@ -29,7 +31,7 @@ export default class OpenHarmonyTestRunner implements TestRunner {
 
     abilityDelegator.addAbilityMonitor(lMonitor, () => {});
 
-    const want = {
+    const want: Want = {
       bundleName: bundleName,
       abilityName: testAbilityName,
     };
