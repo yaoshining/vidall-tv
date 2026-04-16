@@ -291,13 +291,22 @@ jobs:
 
       - name: Detect target device
         shell: bash
+        env:
+          DEVICE_IP: ${{ secrets.DEVICE_IP }}
         run: |
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          # 启动 hdc 服务端，确保设备发现正常（幂等：已运行时无副作用）
+          # 启动 hdc 服务端（幂等：已运行时无副作用）
           "$HDC_BIN" start || true
           sleep 2
+
+          # 通过 TCP/IP 连接设备（连接在 hdc server 重启后会丢失，每次需重建）
+          if [[ -n "${DEVICE_IP:-}" ]]; then
+            echo "尝试 tconn: ${DEVICE_IP}:5555"
+            "$HDC_BIN" tconn "${DEVICE_IP}:5555" || true
+            sleep 2
+          fi
 
           "$HDC_BIN" list targets | tee "$LOG_DIR/hdc-targets.log"
 
