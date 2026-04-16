@@ -764,14 +764,19 @@ jobs:
           unit_st = load_status(site / 'unit-status.json')
           intg_st = load_status(site / 'integration-status.json')
 
+          unit_run_num  = unit_st.get('run_number', '') if unit_st else ''
+          intg_run_num  = intg_st.get('run_number', '') if intg_st else ''
+          unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
+          intg_report_href = f'integration/runs/run-{intg_run_num}/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
+
           unit_card = render_card(
             '单元测试', unit_st,
-            report_href='unit/index.html',
+            report_href=unit_report_href,
             archive_href='unit/history-list/index.html',
           )
           intg_card = render_card(
             '集成测试', intg_st,
-            report_href='integration/index.html',
+            report_href=intg_report_href,
             archive_href='integration/history-list/index.html',
           )
 
