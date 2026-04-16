@@ -8,6 +8,10 @@
     ],
     "deliveryWithInstall": true,
     "installationFree": false,
+    "testRunner": {
+      "name": "OpenHarmonyTestRunner",
+      "srcPath": "testrunner"
+    },
     "abilities": [
       {
         "name": "TestAbility",
