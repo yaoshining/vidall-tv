@@ -60,12 +60,13 @@ jobs:
           SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
           SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
           SIGNING_PROFILE_BASE64: ${{ secrets.SIGNING_PROFILE_BASE64 }}
+          SIGNING_MATERIAL_BASE64: ${{ secrets.SIGNING_MATERIAL_BASE64 }}
           RUNNER_TEMP: ${{ runner.temp }}
         run: |
           set -euo pipefail
-          # 证书写入 runner 可写目录，再 patch build-profile.json5 的路径
+          # 证书写入 runner 可写目录，同时还原 material/ 目录，再 patch build-profile.json5 的路径
           python3 - <<'PY'
-          import re, json, base64, os, sys
+          import re, json, base64, os, sys, tarfile, io
           from pathlib import Path
 
           cert_dir = Path(os.environ['RUNNER_TEMP']) / 'signing'
@@ -90,6 +91,16 @@ jobs:
               new_paths[key] = str(dest)
               print(f'还原证书: {key} -> {dest}')
 
+          # 还原 material/ 目录（hvigor 签名工具必需）
+          material_b64 = os.environ.get('SIGNING_MATERIAL_BASE64', '').strip()
+          if material_b64:
+              tar_bytes = base64.b64decode(material_b64)
+              with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode='r:gz') as tf:
+                  tf.extractall(cert_dir)
+              print(f'还原 material 目录 -> {cert_dir}/material')
+          else:
+              missing_secrets.append('SIGNING_MATERIAL_BASE64')
+
           if missing_secrets:
               print(f'WARNING: 以下 Secret 未配置，跳过还原: {missing_secrets}')
               print('若签名证书已预装在 runner 上，可忽略此警告')
@@ -99,7 +110,6 @@ jobs:
           bp_path = Path('build-profile.json5')
           content = bp_path.read_text(encoding='utf-8')
           for key, new_path in new_paths.items():
-              # 匹配 "certpath": "旧路径" 等字段，替换值
               content = re.sub(
                   rf'("{key}"\s*:\s*)"[^"]*"',
                   rf'\1"{new_path}"',
