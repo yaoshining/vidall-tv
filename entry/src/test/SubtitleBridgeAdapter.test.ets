@@ -40,6 +40,7 @@ class MockPlayer implements IPlayer {
     return Promise.resolve();
   }
   setSubtitleDelay(_delayMs: number): void {}
+  setPlaybackSpeed(_speed: number): void {}
 
   onReady(_callback: () => void): void {}
   onPlay(_callback: () => void): void {}
