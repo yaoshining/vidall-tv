@@ -807,9 +807,12 @@ jobs:
           (site / 'index.html').write_text(portal_html, encoding='utf-8')
           (site / '404.html').write_text(portal_html, encoding='utf-8')
 
-          # ── _headers：告知 EdgeOne/CDN 不缓存动态页面和状态 JSON ──────────
+          # ── _headers：告知 EdgeOne/CDN 不缓存任何页面 ──────────────────────
+          # 注意：Allure 的 app.js/app.css 没有 content hash，无法安全设置 immutable
+          # /unit/* 和 /integration/* 的 * 在 Netlify/EdgeOne 中匹配含 / 的嵌套路径
           headers_content = '\n'.join([
             '# EdgeOne Pages / Netlify 兼容的 HTTP 响应头配置',
+            '# 所有页面不缓存（Allure 静态资源无 content hash，Portal/JSON 随 CI 变化）',
             '/index.html',
             '  Cache-Control: no-cache, no-store, must-revalidate',
             '  Pragma: no-cache',
@@ -819,17 +822,12 @@ jobs:
             '/*.json',
             '  Cache-Control: no-cache, no-store, must-revalidate',
             '  Pragma: no-cache',
-            '/unit/index.html',
-            '  Cache-Control: no-cache, no-store, must-revalidate',
-            '  Pragma: no-cache',
-            '/integration/index.html',
-            '  Cache-Control: no-cache, no-store, must-revalidate',
-            '  Pragma: no-cache',
-            '# 其余静态资源（JS/CSS/图片）可正常缓存',
             '/unit/*',
-            '  Cache-Control: public, max-age=604800, immutable',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
             '/integration/*',
-            '  Cache-Control: public, max-age=604800, immutable',
+            '  Cache-Control: no-cache, no-store, must-revalidate',
+            '  Pragma: no-cache',
           ])
           (site / '_headers').write_text(headers_content + '\n', encoding='utf-8')
           PY
