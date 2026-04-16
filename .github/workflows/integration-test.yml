@@ -297,7 +297,8 @@ jobs:
           "$HDC_BIN" list targets | tee "$LOG_DIR/hdc-targets.log"
 
           TARGET_INPUT='${{ inputs.deviceSerial }}'
-          AVAILABLE_TARGETS=$("$HDC_BIN" list targets | awk 'NF {print $1}')
+          # 过滤掉 hdc 的占位行（[Empty]、空行），只保留真实设备串号
+          AVAILABLE_TARGETS=$("$HDC_BIN" list targets | grep -v '^\[' | awk 'NF {print $1}')
           if [[ -z "$AVAILABLE_TARGETS" ]]; then
             echo "未检测到可用 HarmonyOS TV 真机，请先连接测试设备。"
             exit 1
@@ -433,12 +434,18 @@ jobs:
             sleep 3
             "$HDC_BIN" start || true
             sleep 3
+            # 重建后重新探测真实设备串号（过滤 hdc 占位行 [Empty]）
+            NEW_SERIAL=$("$HDC_BIN" list targets | grep -v '^\[' | awk 'NF {print $1}' | head -n 1)
+            if [[ -n "$NEW_SERIAL" ]]; then
+              echo "重新检测到设备: $NEW_SERIAL（原 DEVICE_SERIAL=$DEVICE_SERIAL）"
+              DEVICE_SERIAL="$NEW_SERIAL"
+            fi
             if ! "$HDC_BIN" -t "$DEVICE_SERIAL" shell "echo __hdc_ok__" 2>/dev/null | grep -q "__hdc_ok__"; then
               echo "重连失败，当前可用设备："
               "$HDC_BIN" list targets
               exit 1
             fi
-            echo "设备重连成功"
+            echo "设备重连成功: $DEVICE_SERIAL"
           fi
 
           # hilog 采集在安装完成、hidumper 噪音消散之后再启动，确保采集到 aa test 的完整日志
