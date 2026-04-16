@@ -423,8 +423,14 @@ jobs:
             "bm uninstall -n $BUNDLE_NAME -m $TEST_MODULE" \
             > "$LOG_DIR/uninstall-old-test-app.log" 2>&1 || true
 
-          # 更新主 app（-r = replace，不清数据）；若首次安装同样有效
-          "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
+          # 只在主 app 未安装时才安装（避免覆盖开发者通过 IDE 安装的版本）
+          if "$HDC_BIN" -t "$DEVICE_SERIAL" shell "bm dump -n $BUNDLE_NAME 2>/dev/null" \
+              | grep -q "bundle name"; then
+            echo "主 app 已安装，跳过安装主 HAP（保留开发者版本）"
+          else
+            echo "主 app 未安装，执行首次安装..."
+            "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$APP_HAP" 2>&1 | tee "$LOG_DIR/install-app.log"
+          fi
           "$HDC_BIN" -t "$DEVICE_SERIAL" install -r "$TEST_HAP" 2>&1 | tee "$LOG_DIR/install-test.log"
           # 等待 hdc install 的后台 hidumper 采集完成，避免干扰后续 hilog 流
           sleep 5
