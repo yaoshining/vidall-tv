@@ -402,8 +402,15 @@ jobs:
         run: |
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
-          nohup "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" > "$LOG_DIR/device.hilog" 2>&1 &
+          # 先设置日志最低级别（一次性命令，执行后自动退出）
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" || true
+          # 清空设备侧 hilog 缓冲区，确保采集到本次测试的完整日志
+          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -r" || true
+          # 后台流式采集（不带 -b，才会真正输出日志流）
+          nohup "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog" > "$LOG_DIR/device.hilog" 2>&1 &
           echo "HILOG_PID=$!" >> "$GITHUB_ENV"
+          # 给 hdc shell 连接建立留足时间，避免 aa test 比 hilog 先启动
+          sleep 2
 
       - name: Install application and test HAP
         shell: bash
