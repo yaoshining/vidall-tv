@@ -613,15 +613,29 @@ jobs:
           path: gh-pages
 
       - name: Generate Allure Report
-        uses: simple-elf/allure-report-action@v1.9
         if: always()
-        id: allure-report
-        with:
-          allure_results: .ci/allure-results
-          gh_pages: gh-pages
-          subfolder: integration
-          allure_history: allure-history
-          keep_reports: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          ALLURE_RESULTS="$GITHUB_WORKSPACE/.ci/allure-results"
+          ALLURE_REPORT="$GITHUB_WORKSPACE/allure-history"
+
+          # 复制历史趋势数据（支持 Trend/Retries 图表）
+          if [[ -d "$GITHUB_WORKSPACE/gh-pages/integration/history" ]]; then
+            mkdir -p "$ALLURE_RESULTS/history"
+            cp -R "$GITHUB_WORKSPACE/gh-pages/integration/history/." "$ALLURE_RESULTS/history/"
+            echo "Restored history from gh-pages/integration/history"
+          fi
+
+          # 确保 java 可用（allure-commandline 需要 JRE）
+          export PATH="$JAVA_HOME/bin:$PATH"
+          java -version
+
+          # 使用 node 自带的 npx 生成 Allure HTML 报告
+          NPX_BIN="$(dirname "$NODE_BIN")/npx"
+          "$NPX_BIN" --yes "allure-commandline@2.34.1" \
+            generate "$ALLURE_RESULTS" --clean -o "$ALLURE_REPORT"
+          echo "Report generated at $ALLURE_REPORT"
 
       - name: Publish integration report to gh-pages
         uses: peaceiris/actions-gh-pages@v3
