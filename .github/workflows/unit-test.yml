@@ -119,6 +119,19 @@ jobs:
           cd "$SITE_DIR"
           touch .nojekyll
 
+          # 确保 vendor 文件存在（首次部署或文件被意外删除时重新下载）
+          mkdir -p vendor
+          if [ ! -s vendor/tailwind.js ]; then
+            echo "下载 tailwind.js..."
+            curl -fsSL "https://cdn.tailwindcss.com/3.4.17" -o vendor/tailwind.js || \
+            curl -fsSL "https://cdn.bootcdn.net/ajax/libs/tailwindcss/3.4.1/tailwind.min.js" -o vendor/tailwind.js
+          fi
+          if [ ! -s vendor/echarts.min.js ]; then
+            echo "下载 echarts.min.js..."
+            curl -fsSL "https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js" -o vendor/echarts.min.js || \
+            curl -fsSL "https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js" -o vendor/echarts.min.js
+          fi
+
           # 写 unit-status.json
           cat > unit-status.json <<JSON
           {

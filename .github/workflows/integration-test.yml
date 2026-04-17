@@ -898,10 +898,21 @@ jobs:
           print(f'integration/history-list/index.html 已生成（{len(intg_hist_for_page)} 条）')
           PY
 
+          # 确保 vendor 文件存在
+          mkdir -p "$SITE_DIR/vendor"
+          if [ ! -s "$SITE_DIR/vendor/tailwind.js" ]; then
+            curl -fsSL "https://cdn.tailwindcss.com/3.4.17" -o "$SITE_DIR/vendor/tailwind.js" || \
+            curl -fsSL "https://cdn.bootcdn.net/ajax/libs/tailwindcss/3.4.1/tailwind.min.js" -o "$SITE_DIR/vendor/tailwind.js"
+          fi
+          if [ ! -s "$SITE_DIR/vendor/echarts.min.js" ]; then
+            curl -fsSL "https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js" -o "$SITE_DIR/vendor/echarts.min.js" || \
+            curl -fsSL "https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js" -o "$SITE_DIR/vendor/echarts.min.js"
+          fi
+
           cd "$SITE_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add integration-status.json integration/integration-history.json integration/history-list/index.html index.html 404.html _headers || true
+          git add integration-status.json integration/integration-history.json integration/history-list/index.html index.html 404.html _headers vendor/ || true
           git commit -m "更新: 集成测试报告状态 #${GITHUB_RUN_NUMBER}" || echo "No portal changes to commit"
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "Portal push skipped"
           rm -rf "$SITE_DIR/.git"
