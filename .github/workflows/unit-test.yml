@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   unit-test:
-    name: UnitTestBuild（iMac self-hosted）
+    name: 单元测试（iMac self-hosted）
     runs-on:
       - self-hosted
       - macOS
@@ -42,7 +42,7 @@ jobs:
           cd "$WORK_DIR"
           git pull
 
-      - name: UnitTestBuild
+      - name: 执行单元测试
         shell: bash
         env:
           RUNNER_TEMP: ${{ runner.temp }}
@@ -52,17 +52,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP"
           "$NODE_BIN" "$HVIGOR_WRAPPER" \
             --mode module -p module=entry@default \
-            -p unit.test.replace.page=../../../.test/testability/pages/Index \
-            -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-            -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --no-daemon \
-            2>&1 | tee "$RUNNER_TEMP/unit-test-build.log"
+            test --no-daemon \
+            2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           exit ${PIPESTATUS[0]}
 
-      - name: 上传构建日志
+      - name: 上传测试日志
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-build-log-${{ github.run_number }}
-          path: ${{ runner.temp }}/unit-test-build.log
+          name: unit-test-log-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/unit-test.log
+            ${{ env.WORK_DIR }}/entry/.test/default/outputs/test/reports/
           if-no-files-found: warn
           retention-days: 7
