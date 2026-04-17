@@ -580,10 +580,28 @@ jobs:
           PY
           export SITE_DIR="$SITE_DIR"
 
-          # 清理旧 runs，只保留最近 10 次（避免 gh-pages 无限膨胀导致 push HTTP 400）
+          # 清理旧 runs：
+          #   Step 1：先删除不在 unit-history.json 中的孤儿 runs（保护有效历史记录）
+          #   Step 2：再按数量保留最近 20 次（避免 gh-pages 无限膨胀导致 push HTTP 400）
           # 注意：macOS bash 3.2 无 mapfile，BSD head 不支持负行号，需用 POSIX 写法
           if [ -d "unit/runs" ]; then
-            KEEP=10
+            KEEP=20
+            # Step 1：找出 unit-history.json 中记录的合法 run numbers，删除孤儿
+            if [ -f "unit/unit-history.json" ]; then
+              VALID_RUNS=$(python3 -c "import json;d=json.load(open('unit/unit-history.json'));print(' '.join(str(e['run_number']) for e in d if 'run_number' in e))" 2>/dev/null || true)
+              for run_dir in $(ls -1d unit/runs/run-* 2>/dev/null); do
+                run_num=$(echo "$run_dir" | sed 's|unit/runs/run-||')
+                is_valid=0
+                for v in $VALID_RUNS; do
+                  if [ "$run_num" = "$v" ]; then is_valid=1; break; fi
+                done
+                if [ "$is_valid" = "0" ]; then
+                  echo "删除孤儿 run（不在历史中）: $run_dir"
+                  rm -rf "$run_dir"
+                fi
+              done
+            fi
+            # Step 2：超出 KEEP 时，按编号从小到大删除最旧的
             TOTAL_RUNS=$(ls -1d unit/runs/run-* 2>/dev/null | wc -l | tr -d ' ')
             if [ "$TOTAL_RUNS" -gt "$KEEP" ]; then
               DELETE_COUNT=$((TOTAL_RUNS - KEEP))
