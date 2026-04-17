@@ -1,9 +1,10 @@
 import { describe, it, expect } from '@ohos/hypium';
+import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
 
 /**
- * FileSourceDatabase 集成测试（运行在 UnitTestBuild，context 来自 TestAbility.globalThis）
+ * FileSourceDatabase 集成测试（运行在 UnitTestBuild，context 通过 abilityDelegatorRegistry 获取）
  *
  * 测试目标：
  *   1. init() 并发安全 — 多次并发调用不会触发双初始化 (SIGBUS 崩溃回归场景)
@@ -19,7 +20,7 @@ export default function fileSourceDatabaseTest() {
      * 修复后：initPromise 保证只有一路执行 doInit，其余复用 Promise
      */
     it('concurrent_init_does_not_crash', 0, async () => {
-      const ctx = globalThis.abilityContext as Context;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       const db = FileSourceDatabase.getInstance(ctx);
       // 5 路同时触发，全部应 resolve
       const results = await Promise.allSettled([
@@ -33,7 +34,7 @@ export default function fileSourceDatabaseTest() {
      * init() 幂等性 — 多次串行调用正常
      */
     it('sequential_init_is_idempotent', 0, async () => {
-      const ctx = globalThis.abilityContext as Context;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       const db = FileSourceDatabase.getInstance(ctx);
       await db.init();
       await db.init();
@@ -48,7 +49,7 @@ export default function fileSourceDatabaseTest() {
      * 初始化后 getAllFileSources 返回数组（空也算通过，关键是不抛异常）
      */
     it('get_all_file_sources_returns_array', 0, async () => {
-      const ctx = globalThis.abilityContext as Context;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       const db = FileSourceDatabase.getInstance(ctx);
       await db.init();
       const sources = await db.getAllFileSources();

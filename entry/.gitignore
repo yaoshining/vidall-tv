@@ -4,8 +4,3 @@
 /build
 /.cxx
 /.test
-# 保留 UnitTestBuild 的手动维护源文件（TestAbility 需要暴露 Context 给集成测试）
-!/.test/testability/
-!/.test/testability/TestAbility.ets
-!/.test/testability/pages/
-!/.test/testability/pages/Index.ets
