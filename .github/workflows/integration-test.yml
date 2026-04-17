@@ -719,6 +719,26 @@ jobs:
             json.dumps(intg_status_data, ensure_ascii=False, indent=2), encoding='utf-8'
           )
 
+          # ── 更新 integration-history.json ─────────────────────────────────
+          intg_hist_path = site / 'integration' / 'integration-history.json'
+          try:
+              intg_hist = json.loads(intg_hist_path.read_text(encoding='utf-8')) if intg_hist_path.exists() else []
+          except Exception:
+              intg_hist = []
+          intg_hist.append({
+              'run_number': current_run_number,
+              'timestamp':  intg_status_data['timestamp'],
+              'status':     'pass' if suite_status == 'passed' else 'fail',
+              'passed':     passed,
+              'failed':     failed,
+              'total':      total,
+              'report_href': f'integration/index.html?v={current_run_number}',
+          })
+          intg_hist = intg_hist[-30:]
+          intg_hist_path.parent.mkdir(parents=True, exist_ok=True)
+          intg_hist_path.write_text(json.dumps(intg_hist, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(f'integration-history.json 已更新（{len(intg_hist)} 条）')
+
           # ── portal index.html ─────────────────────────────────────────────
           def load_status(json_path):
             if json_path.exists():
@@ -767,7 +787,7 @@ jobs:
           unit_run_num  = unit_st.get('run_number', '') if unit_st else ''
           intg_run_num  = intg_st.get('run_number', '') if intg_st else ''
           unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
-          intg_report_href = f'integration/runs/run-{intg_run_num}/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
+          intg_report_href = f'integration/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
 
           unit_card = render_card(
             '单元测试', unit_st,
@@ -821,12 +841,67 @@ jobs:
             '  Pragma: no-cache',
           ])
           (site / '_headers').write_text(headers_content + '\n', encoding='utf-8')
+
+          # ── 生成 integration/history-list/index.html（TailwindCSS 深色风格）──
+          intg_hl_dir = site / 'integration' / 'history-list'
+          intg_hl_dir.mkdir(parents=True, exist_ok=True)
+          intg_hist_for_page = list(reversed(intg_hist))
+          intg_rows = ''
+          for h in intg_hist_for_page:
+              rn   = h.get('run_number', '-')
+              ts   = h.get('timestamp', '')[:19].replace('T', ' ')
+              st   = h.get('status', 'fail')
+              pa   = h.get('passed', 0)
+              fa   = h.get('failed', 0)
+              tot  = h.get('total', 0)
+              href = h.get('report_href', '#')
+              badge = ('<span class="px-2 py-0.5 rounded text-xs font-semibold bg-green-900 text-green-300">通过</span>'
+                       if st == 'pass' else
+                       '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-900 text-red-300">失败</span>')
+              intg_rows += (
+                  '<tr class="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">'
+                  f'<td class="py-3 px-4 text-gray-300 font-mono">#{rn}</td>'
+                  f'<td class="py-3 px-4 text-gray-400 text-sm">{ts}</td>'
+                  f'<td class="py-3 px-4">{badge}</td>'
+                  f'<td class="py-3 px-4 text-gray-300 text-sm">{pa}/{tot}'
+                  + (f' <span class="text-red-400">({fa}失败)</span>' if fa else '') + '</td>'
+                  f'<td class="py-3 px-4"><a href="../../{href}" class="text-blue-400 hover:underline text-sm">查看报告</a></td>'
+                  '</tr>'
+              )
+          if not intg_rows:
+              intg_rows = '<tr><td colspan="5" class="py-8 text-center text-gray-500">暂无历史记录</td></tr>'
+          intg_hl_html = (
+              '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n'
+              '  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
+              '  <title>集成测试历史记录</title>\n'
+              '  <script src="../../vendor/tailwind.js"></script>\n'
+              '</head>\n<body class="bg-gray-950 text-gray-200 min-h-screen font-sans">\n'
+              '  <div class="max-w-5xl mx-auto px-4 py-10">\n'
+              '    <div class="mb-8">\n'
+              '      <a href="../../index.html" class="text-blue-400 text-sm hover:underline">← 报告首页</a>\n'
+              '      <h1 class="mt-3 text-2xl font-bold text-gray-100">集成测试历史记录</h1>\n'
+              f'      <p class="mt-1 text-gray-400 text-sm">最近 {len(intg_hist_for_page)} 次运行</p>\n'
+              '    </div>\n'
+              '    <div class="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">\n'
+              '      <table class="w-full text-left">\n        <thead>\n'
+              '          <tr class="border-b border-gray-800 bg-gray-900">\n'
+              '            <th class="py-3 px-4 text-gray-400 font-medium text-sm">Run</th>\n'
+              '            <th class="py-3 px-4 text-gray-400 font-medium text-sm">时间</th>\n'
+              '            <th class="py-3 px-4 text-gray-400 font-medium text-sm">状态</th>\n'
+              '            <th class="py-3 px-4 text-gray-400 font-medium text-sm">通过 / 总计</th>\n'
+              '            <th class="py-3 px-4 text-gray-400 font-medium text-sm">报告</th>\n'
+              '          </tr>\n        </thead>\n'
+              f'        <tbody>{intg_rows}</tbody>\n'
+              '      </table>\n    </div>\n  </div>\n</body></html>'
+          )
+          (intg_hl_dir / 'index.html').write_text(intg_hl_html, encoding='utf-8')
+          print(f'integration/history-list/index.html 已生成（{len(intg_hist_for_page)} 条）')
           PY
 
           cd "$SITE_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add integration-status.json index.html 404.html _headers || true
+          git add integration-status.json integration/integration-history.json integration/history-list/index.html index.html 404.html _headers || true
           git commit -m "更新: 集成测试报告状态 #${GITHUB_RUN_NUMBER}" || echo "No portal changes to commit"
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "Portal push skipped"
           rm -rf "$SITE_DIR/.git"
