@@ -72,12 +72,23 @@ jobs:
           SITE_DIR="$RUNNER_TEMP/gh-pages-site"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          # 解析测试结果
-          TESTS_LINE=$(grep "Tests run:" "$TEST_LOG" 2>/dev/null | tail -1 || echo "")
-          PASSED=$(echo "$TESTS_LINE" | grep -oE 'Pass: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-          FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-          TOTAL=$(echo "$TESTS_LINE"  | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-          if [ "$FAILED" = "0" ] && [ "$TOTAL" != "0" ]; then STATUS="passed"; elif [ "$FAILED" != "0" ]; then STATUS="partial"; else STATUS="failed"; fi
+          # 解析测试结果（从 test_result.txt 读取，比日志解析更可靠）
+          RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
+          if [ -f "$RESULT_TXT" ]; then
+            TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1)
+            PASSED=$(echo "$TESTS_LINE" | grep -oE 'Pass: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+            FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+            TOTAL=$(echo "$TESTS_LINE"  | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          else
+            echo "警告：test_result.txt 未找到，回退到日志解析"
+            TESTS_LINE=$(grep "Tests run:" "$TEST_LOG" 2>/dev/null | tail -1 || echo "")
+            PASSED=$(echo "$TESTS_LINE" | grep -oE 'Pass: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+            FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+            TOTAL=$(echo "$TESTS_LINE"  | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          fi
+          if [ "$FAILED" = "0" ] && [ "$TOTAL" != "0" ]; then STATUS="passed"
+          elif [ "$FAILED" != "0" ]; then STATUS="partial"
+          else STATUS="failed"; fi
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # clone gh-pages
@@ -184,7 +195,8 @@ jobs:
           unit_run_num = unit_st.get('run_number','') if unit_st else ''
           intg_run_num = intg_st.get('run_number','') if intg_st else ''
           unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
-          intg_report_href = f'integration/runs/run-{intg_run_num}/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
+          # integration 报告直接放 integration/index.html（无 runs/ 子目录）
+          intg_report_href = f'integration/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
 
           portal_html = '\n'.join([
             '<!DOCTYPE html>','<html lang="zh-CN">','<head>',
