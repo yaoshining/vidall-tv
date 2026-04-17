@@ -328,12 +328,14 @@ jobs:
           export SITE_DIR="$SITE_DIR"
 
           # 清理旧 runs，只保留最近 10 次（避免 gh-pages 无限膨胀导致 push HTTP 400）
+          # 注意：macOS bash 3.2 无 mapfile，BSD head 不支持负行号，需用 POSIX 写法
           if [ -d "unit/runs" ]; then
             KEEP=10
-            mapfile -t OLD_RUNS < <(ls -1d unit/runs/run-* 2>/dev/null | sort -t- -k2 -n | head -n -"$KEEP")
-            if [ ${#OLD_RUNS[@]} -gt 0 ]; then
-              echo "清理旧 runs：${OLD_RUNS[*]}"
-              rm -rf "${OLD_RUNS[@]}"
+            TOTAL_RUNS=$(ls -1d unit/runs/run-* 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$TOTAL_RUNS" -gt "$KEEP" ]; then
+              DELETE_COUNT=$((TOTAL_RUNS - KEEP))
+              echo "清理最旧的 $DELETE_COUNT 个 runs（共 $TOTAL_RUNS 个，保留 $KEEP 个）"
+              ls -1d unit/runs/run-* 2>/dev/null | sort -t- -k2 -n | head -n "$DELETE_COUNT" | xargs rm -rf
             fi
           fi
 
