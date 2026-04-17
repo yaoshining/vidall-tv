@@ -8,10 +8,11 @@
  *   aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner  *     -s WEBDAV_HOST 192.168.3.59:5445  *     -s WEBDAV_USERNAME yao  *     -s WEBDAV_PASSWORD ys198756  *     -s SKIP_SMB_TESTS true
  */
 
-import { describe, it, expect } from "@ohos/hypium"
+import { describe, it, expect, beforeAll } from "@ohos/hypium"
 import { Driver, Component, ON } from "@kit.TestKit"
 import { KeyCode } from "@kit.InputKit"
 import abilityDelegatorRegistry from "@ohos.app.ability.abilityDelegatorRegistry"
+import type Want from "@ohos.app.ability.Want"
 
 function getTestParam(key: string, fallback: string): string {
   try {
@@ -34,13 +35,23 @@ export default function fileSourceUiTest() {
   const webdavPass = getTestParam("WEBDAV_PASSWORD", "ys198756")
   const serverName = "UITest_WebDAV_" + Date.now().toString().slice(-6)
 
+  let driver = Driver.create()
+
   describe("文件源管理UI测试", () => {
+
+    beforeAll(async () => {
+      // 启动主 App，让 UI 准备好
+      const delegator = abilityDelegatorRegistry.getAbilityDelegator()
+      const want: Want = { bundleName: 'com.yao.vidalltv', abilityName: 'EntryAbility' }
+      await delegator.startAbility(want)
+      driver = Driver.create()
+      await driver.delayMs(3000)
+    })
 
     /**
      * 导航至设置页并验证文件源菜单可见
      */
     it("导航至设置页文件源菜单可见", 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(1000)
       try {
         const settingsBtn = await driver.waitForComponent(ON.text("设置"), WAIT_SHORT)
@@ -69,7 +80,6 @@ export default function fileSourceUiTest() {
      * 打开添加文件源弹层并验证 WebDAV/SMB 选项可见
      */
     it("添加文件源弹层显示协议选项", 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const addBtn = await driver.waitForComponent(ON.text("添加文件源"), WAIT_SHORT)
@@ -95,7 +105,6 @@ export default function fileSourceUiTest() {
      * 选择 WebDAV 进入配置表单并验证所有输入字段可见
      */
     it("WebDAV配置表单字段全部可见", 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const webdavOption = await driver.waitForComponent(ON.text("WebDAV / Alist"), WAIT_SHORT)
@@ -124,7 +133,6 @@ export default function fileSourceUiTest() {
      * 填写 WebDAV 表单并触发测试连接，验证出现连接结果 toast
      */
     it("填写WebDAV表单并触发测试连接出现响应", 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const nameInput = await driver.waitForComponent(ON.id("serverNameInput"), WAIT_SHORT)
@@ -204,7 +212,6 @@ export default function fileSourceUiTest() {
      * 点击保存后返回文件源列表并验证新增卡片
      */
     it("保存WebDAV文件源后列表出现新卡片", 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const saveBtn = await driver.waitForComponent(ON.text("保存"), WAIT_SHORT)
@@ -233,7 +240,6 @@ export default function fileSourceUiTest() {
         expect(true).assertTrue()
         return
       }
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const addBtn = await driver.waitForComponent(ON.text("添加文件源"), WAIT_SHORT)
@@ -259,7 +265,6 @@ export default function fileSourceUiTest() {
      * 目录选择器弹层可打开并显示根目录内容
      */
     it("目录选择器弹层可打开显示内容", 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         let folderSelector: Component | null = null

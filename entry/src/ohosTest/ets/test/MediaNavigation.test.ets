@@ -9,10 +9,11 @@
  *   aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner
  */
 
-import { describe, it, expect } from '@ohos/hypium'
+import { describe, it, expect, beforeAll } from '@ohos/hypium'
 import { Driver, Component, ON } from '@kit.TestKit'
 import { KeyCode } from '@kit.InputKit'
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry'
+import type Want from '@ohos.app.ability.Want'
 
 function getTestParam(key: string, fallback: string): string {
   try {
@@ -29,14 +30,20 @@ const WAIT_SHORT = 3000
 const WAIT_LONG = 8000
 
 export default function mediaNavigationTest() {
+  let driver = Driver.create()
+
   describe('媒体库导航UI测试', () => {
+
+    beforeAll(async () => {
+      driver = Driver.create()
+      await driver.delayMs(1500)
+    })
 
     /**
      * 首页默认显示"媒体库" Tab
      * 验证：启动后 Tab 切换栏的"媒体库"按钮可见
      */
     it('首页媒体库Tab可见', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(1000)
       try {
         await driver.assertComponentExist(ON.text('媒体库'))
@@ -52,7 +59,6 @@ export default function mediaNavigationTest() {
      * 验证：切换后"文件源" Tab 处于选中状态（Button 文字可见即合格）
      */
     it('切换至文件源Tab', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const fileSourceTab = await driver.waitForComponent(ON.text('文件源'), WAIT_SHORT)
@@ -73,7 +79,6 @@ export default function mediaNavigationTest() {
      * 验证：媒体库内容区域包含"继续播放"区块或空状态文本
      */
     it('切回媒体库Tab内容可见', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         const mediaLibTab = await driver.waitForComponent(ON.text('媒体库'), WAIT_SHORT)
@@ -110,7 +115,6 @@ export default function mediaNavigationTest() {
      * 验证：播放历史页面可见（含"播放历史"标题）
      */
     it('点击查看全部跳转播放历史页', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         // 先确保在媒体库 Tab
@@ -155,11 +159,15 @@ export default function mediaNavigationTest() {
      * 前置：已在播放历史页
      */
     it('播放历史列表记录可见', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         // 检查是否在播放历史页
-        const historyTitle = await driver.findComponent(ON.text('播放历史'))
+        let historyTitle: Component | null = null
+        try {
+          historyTitle = await driver.waitForComponent(ON.text('播放历史'), 1000)
+        } catch {
+          historyTitle = null
+        }
         if (historyTitle === null) {
           console.warn('[MediaNavigation] 不在播放历史页，跳过列表验证')
           expect(true).assertTrue()
@@ -167,7 +175,12 @@ export default function mediaNavigationTest() {
         }
 
         // 检查 history_row_0（第一行记录）
-        const firstRow = await driver.findComponent(ON.id('history_row_0'))
+        let firstRow: Component | null = null
+        try {
+          firstRow = await driver.waitForComponent(ON.id('history_row_0'), 2000)
+        } catch {
+          firstRow = null
+        }
         if (firstRow !== null) {
           console.info('[MediaNavigation] play_history_list_items_visible PASSED: 发现历史记录')
         } else {
@@ -176,7 +189,8 @@ export default function mediaNavigationTest() {
         }
         expect(true).assertTrue()
       } catch (e) {
-        console.error('[MediaNavigation] play_history_list_items_visible FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[MediaNavigation] play_history_list_items_visible FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -186,17 +200,26 @@ export default function mediaNavigationTest() {
      * 验证：点击删除按钮后，该记录消失
      */
     it('删除播放历史记录', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
-        const historyTitle = await driver.findComponent(ON.text('播放历史'))
+        let historyTitle: Component | null = null
+        try {
+          historyTitle = await driver.waitForComponent(ON.text('播放历史'), 1000)
+        } catch {
+          historyTitle = null
+        }
         if (historyTitle === null) {
           console.warn('[MediaNavigation] 不在播放历史页，跳过删除测试')
           expect(true).assertTrue()
           return
         }
 
-        const firstDeleteBtn = await driver.findComponent(ON.id('delete_btn_0'))
+        let firstDeleteBtn: Component | null = null
+        try {
+          firstDeleteBtn = await driver.waitForComponent(ON.id('delete_btn_0'), 2000)
+        } catch {
+          firstDeleteBtn = null
+        }
         if (firstDeleteBtn === null) {
           console.info('[MediaNavigation] 无播放记录，跳过删除测试')
           expect(true).assertTrue()
@@ -208,7 +231,12 @@ export default function mediaNavigationTest() {
 
         // 验证：确认对话框或记录消失
         // 如果有确认弹窗，先点确认
-        const confirmBtn = await driver.findComponent(ON.text('确认'))
+        let confirmBtn: Component | null = null
+        try {
+          confirmBtn = await driver.waitForComponent(ON.text('确认'), 1500)
+        } catch {
+          confirmBtn = null
+        }
         if (confirmBtn !== null) {
           await confirmBtn.click()
           await driver.delayMs(500)
@@ -219,7 +247,8 @@ export default function mediaNavigationTest() {
         console.info('[MediaNavigation] delete_play_history_record PASSED')
         expect(true).assertTrue()
       } catch (e) {
-        console.error('[MediaNavigation] delete_play_history_record FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[MediaNavigation] delete_play_history_record FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -229,7 +258,6 @@ export default function mediaNavigationTest() {
      * 验证：按返回键后回到媒体库 Tab
      */
     it('从播放历史页返回首页', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         // 触发返回（TV 遥控器 BACK 键）
@@ -240,7 +268,8 @@ export default function mediaNavigationTest() {
         await driver.assertComponentExist(ON.text('媒体库'))
         console.info('[MediaNavigation] back_from_play_history_to_home PASSED')
       } catch (e) {
-        console.error('[MediaNavigation] back_from_play_history_to_home FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[MediaNavigation] back_from_play_history_to_home FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })

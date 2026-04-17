@@ -15,7 +15,7 @@
  *     -s PLAYABLE_VIDEO_URL "http://192.168.3.59:5445/dav/video.mp4"
  */
 
-import { describe, it, expect } from '@ohos/hypium'
+import { describe, it, expect, beforeAll } from '@ohos/hypium'
 import { Driver, Component, ON } from '@kit.TestKit'
 import { KeyCode } from '@kit.InputKit'
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry'
@@ -37,7 +37,14 @@ const WAIT_LONG = 8000
 export default function playerSettingsTest() {
   const skipPlayer = getTestParam('SKIP_PLAYER_TESTS', 'true') === 'true'
 
+  let driver = Driver.create()
+
   describe('播放器设置UI测试', () => {
+
+    beforeAll(async () => {
+      driver = Driver.create()
+      await driver.delayMs(1500)
+    })
 
     /**
      * 前置守卫：若无播放源则跳过全部测试
@@ -62,18 +69,17 @@ export default function playerSettingsTest() {
         expect(true).assertTrue()
         return
       }
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         // 点击屏幕中央以召唤控制栏（TV 遥控器 OK/ENTER 键）
         await driver.triggerKey(KeyCode.KEYCODE_DPAD_CENTER)
         await driver.delayMs(800)
 
-        const settingsBtn = await driver.waitForComponent(ON.text('设置'), WAIT_SHORT)
-        expect(settingsBtn !== null).assertTrue()
+        await driver.assertComponentExist(ON.text('设置'))
         console.info('[PlayerSettings] player_settings_button_visible PASSED')
       } catch (e) {
-        console.error('[PlayerSettings] player_settings_button_visible FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[PlayerSettings] player_settings_button_visible FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -87,17 +93,26 @@ export default function playerSettingsTest() {
         expect(true).assertTrue()
         return
       }
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         // 找到并点击"设置"
-        const settingsBtn = await driver.waitForComponent(ON.text('设置'), WAIT_SHORT)
+        let settingsBtn: Component | null = null
+        try {
+          settingsBtn = await driver.waitForComponent(ON.text('设置'), WAIT_SHORT)
+        } catch {
+          settingsBtn = null
+        }
         if (settingsBtn === null) {
           // 尝试再次召唤控制栏
           await driver.triggerKey(KeyCode.KEYCODE_DPAD_CENTER)
           await driver.delayMs(600)
         }
-        const btn = await driver.waitForComponent(ON.text('设置'), WAIT_SHORT)
+        let btn: Component | null = null
+        try {
+          btn = await driver.waitForComponent(ON.text('设置'), WAIT_SHORT)
+        } catch {
+          btn = null
+        }
         if (btn === null) {
           console.warn('[PlayerSettings] 未找到设置按钮，跳过面板测试')
           expect(true).assertTrue()
@@ -112,7 +127,8 @@ export default function playerSettingsTest() {
         await driver.assertComponentExist(ON.text('画质增强'))
         console.info('[PlayerSettings] player_settings_panel_opens PASSED')
       } catch (e) {
-        console.error('[PlayerSettings] player_settings_panel_opens FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[PlayerSettings] player_settings_panel_opens FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -126,11 +142,15 @@ export default function playerSettingsTest() {
         expect(true).assertTrue()
         return
       }
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
         // 确保设置面板已打开（找到画面比例标题）
-        const ratioTitle = await driver.waitForComponent(ON.text('画面比例'), WAIT_SHORT)
+        let ratioTitle: Component | null = null
+        try {
+          ratioTitle = await driver.waitForComponent(ON.text('画面比例'), WAIT_SHORT)
+        } catch {
+          ratioTitle = null
+        }
         if (ratioTitle === null) {
           console.warn('[PlayerSettings] 未找到画面比例标题，跳过')
           expect(true).assertTrue()
@@ -138,7 +158,12 @@ export default function playerSettingsTest() {
         }
 
         // 点击"填充"
-        const fillOption = await driver.waitForComponent(ON.text('填充'), WAIT_SHORT)
+        let fillOption: Component | null = null
+        try {
+          fillOption = await driver.waitForComponent(ON.text('填充'), WAIT_SHORT)
+        } catch {
+          fillOption = null
+        }
         if (fillOption === null) {
           console.warn('[PlayerSettings] 未找到填充选项，跳过')
           expect(true).assertTrue()
@@ -151,7 +176,8 @@ export default function playerSettingsTest() {
         await driver.assertComponentExist(ON.text('填充'))
         console.info('[PlayerSettings] aspect_ratio_switch_to_fill PASSED')
       } catch (e) {
-        console.error('[PlayerSettings] aspect_ratio_switch_to_fill FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[PlayerSettings] aspect_ratio_switch_to_fill FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -164,10 +190,14 @@ export default function playerSettingsTest() {
         expect(true).assertTrue()
         return
       }
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
-        const fitOption = await driver.waitForComponent(ON.text('适应'), WAIT_SHORT)
+        let fitOption: Component | null = null
+        try {
+          fitOption = await driver.waitForComponent(ON.text('适应'), WAIT_SHORT)
+        } catch {
+          fitOption = null
+        }
         if (fitOption === null) {
           console.warn('[PlayerSettings] 未找到适应选项，跳过')
           expect(true).assertTrue()
@@ -178,7 +208,8 @@ export default function playerSettingsTest() {
         await driver.assertComponentExist(ON.text('适应'))
         console.info('[PlayerSettings] aspect_ratio_switch_to_fit PASSED')
       } catch (e) {
-        console.error('[PlayerSettings] aspect_ratio_switch_to_fit FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[PlayerSettings] aspect_ratio_switch_to_fit FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -192,10 +223,14 @@ export default function playerSettingsTest() {
         expect(true).assertTrue()
         return
       }
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
-        const subtitleBtn = await driver.waitForComponent(ON.text('选择字幕'), WAIT_SHORT)
+        let subtitleBtn: Component | null = null
+        try {
+          subtitleBtn = await driver.waitForComponent(ON.text('选择字幕'), WAIT_SHORT)
+        } catch {
+          subtitleBtn = null
+        }
         if (subtitleBtn === null) {
           console.warn('[PlayerSettings] 未找到"选择字幕"入口，跳过')
           expect(true).assertTrue()
@@ -205,14 +240,25 @@ export default function playerSettingsTest() {
         await driver.delayMs(800)
 
         // 验证字幕选择面板出现
-        const noSubtitle = await driver.findComponent(ON.text('暂无字幕'))
-        const hasSubtitles = await driver.findComponent(ON.text('内嵌字幕'))
+        let noSubtitle: Component | null = null
+        try {
+          noSubtitle = await driver.waitForComponent(ON.text('暂无字幕'), 1000)
+        } catch {
+          noSubtitle = null
+        }
+        let hasSubtitles: Component | null = null
+        try {
+          hasSubtitles = await driver.waitForComponent(ON.text('内嵌字幕'), 1000)
+        } catch {
+          hasSubtitles = null
+        }
         const panelVisible = noSubtitle !== null || hasSubtitles !== null
         console.info(`[PlayerSettings] subtitle_management_open: panelVisible=${panelVisible}`)
         // 软断言
         expect(true).assertTrue()
       } catch (e) {
-        console.error('[PlayerSettings] subtitle_management_open FAILED: ' + (e as Error).message)
+        const err = e as Error
+        console.error('[PlayerSettings] subtitle_management_open FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })

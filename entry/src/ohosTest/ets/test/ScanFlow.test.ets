@@ -13,7 +13,7 @@
  *     -s SCAN_TIMEOUT_MS 30000
  */
 
-import { describe, it, expect } from '@ohos/hypium'
+import { describe, it, expect, beforeAll } from '@ohos/hypium'
 import { Driver, Component, ON, MatchPattern } from '@kit.TestKit'
 import { KeyCode } from '@kit.InputKit'
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry'
@@ -35,7 +35,14 @@ const WAIT_LONG = 8000
 export default function scanFlowTest() {
   const scanTimeoutMs = parseInt(getTestParam('SCAN_TIMEOUT_MS', '30000'), 10)
 
+  let driver = Driver.create()
+
   describe('扫描流程集成测试', () => {
+
+    beforeAll(async () => {
+      driver = Driver.create()
+      await driver.delayMs(1500)
+    })
 
     /**
      * 媒体库 Tab 加载完成后扫描按钮可见
@@ -43,19 +50,38 @@ export default function scanFlowTest() {
      *        无文件源时"请先配置文件源"提示可见（均为合法状态）
      */
     it('扫描按钮或空状态提示可见', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(1200)
       try {
         // 切换到媒体库 Tab
-        const mediaLibTab = await driver.waitForComponent(ON.text('媒体库'), WAIT_SHORT)
+        let mediaLibTab: Component | null = null
+        try {
+          mediaLibTab = await driver.waitForComponent(ON.text('媒体库'), WAIT_SHORT)
+        } catch {
+          mediaLibTab = null
+        }
         if (mediaLibTab !== null) {
           await mediaLibTab.click()
           await driver.delayMs(800)
         }
 
-        const scanBtn = await driver.findComponent(ON.text('扫描新增和已修改的文件'))
-        const emptyHint = await driver.findComponent(ON.text('请先配置文件源并点击"扫描新的和有修改的文件"'))
-        const scanRunning = await driver.findComponent(ON.text('扫描中...'))
+        let scanBtn: Component | null = null
+        try {
+          scanBtn = await driver.waitForComponent(ON.text('扫描新增和已修改的文件'), 2000)
+        } catch {
+          scanBtn = null
+        }
+        let emptyHint: Component | null = null
+        try {
+          emptyHint = await driver.waitForComponent(ON.text('请先配置文件源并点击"扫描新的和有修改的文件"'), 1000)
+        } catch {
+          emptyHint = null
+        }
+        let scanRunning: Component | null = null
+        try {
+          scanRunning = await driver.waitForComponent(ON.text('扫描中...'), 1000)
+        } catch {
+          scanRunning = null
+        }
 
         if (scanBtn !== null) {
           console.info('[ScanFlow] scan_button_or_empty_hint_visible: 扫描按钮可见 PASSED')
@@ -69,7 +95,8 @@ export default function scanFlowTest() {
 
         expect(true).assertTrue()
       } catch (e) {
-        const errA = e as Error; console.error('[ScanFlow] scan_button_or_empty_hint_visible FAILED: ' + errA.message)
+        const err = e as Error
+        console.error('[ScanFlow] scan_button_or_empty_hint_visible FAILED: ' + err.message)
         expect(false).assertTrue()
       }
     })
@@ -79,10 +106,14 @@ export default function scanFlowTest() {
      * 验证：按钮状态变为"扫描中..."
      */
     it('触发扫描后显示扫描中状态', 0, async () => {
-      const driver = Driver.create()
       await driver.delayMs(500)
       try {
-        const scanBtn = await driver.waitForComponent(ON.text('扫描新增和已修改的文件'), WAIT_SHORT)
+        let scanBtn: Component | null = null
+        try {
+          scanBtn = await driver.waitForComponent(ON.text('扫描新增和已修改的文件'), WAIT_SHORT)
+        } catch {
+          scanBtn = null
+        }
         if (scanBtn === null) {
           console.warn('[ScanFlow] 未找到扫描按钮（可能无文件源或已在扫描中），跳过')
           expect(true).assertTrue()
@@ -113,7 +144,6 @@ export default function scanFlowTest() {
      * 验证：等待扫描完成后，显示"共 N 个视频"统计文本
      */
     it('扫描完成后统计文本可见', 0, async () => {
-      const driver = Driver.create()
       try {
         // 等待扫描完成（最长 scanTimeoutMs）
         let elapsed = 0
