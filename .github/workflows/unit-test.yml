@@ -218,28 +218,28 @@ jobs:
             RUN_PASSED="${PASSED}" RUN_FAILED="${FAILED}" RUN_TOTAL="${TOTAL}" \
             RUN_TIMESTAMP="${TIMESTAMP}" RUN_REPORT_DIR_ENV="${RUN_REPORT_DIR}"
           python3 - <<'PY'
-import json, os
-from pathlib import Path
+          import json, os
+          from pathlib import Path
 
-site        = Path(os.environ['SITE_DIR'])
-run_number  = int(os.environ['RUN_NUMBER'])
-run_status  = os.environ['RUN_STATUS']
-run_passed  = int(os.environ['RUN_PASSED'])
-run_failed  = int(os.environ['RUN_FAILED'])
-run_total   = int(os.environ['RUN_TOTAL'])
-run_ts      = os.environ['RUN_TIMESTAMP']
-run_dir     = site / os.environ['RUN_REPORT_DIR_ENV']
-cov_dir     = run_dir / 'coverage'
+          site        = Path(os.environ['SITE_DIR'])
+          run_number  = int(os.environ['RUN_NUMBER'])
+          run_status  = os.environ['RUN_STATUS']
+          run_passed  = int(os.environ['RUN_PASSED'])
+          run_failed  = int(os.environ['RUN_FAILED'])
+          run_total   = int(os.environ['RUN_TOTAL'])
+          run_ts      = os.environ['RUN_TIMESTAMP']
+          run_dir     = site / os.environ['RUN_REPORT_DIR_ENV']
+          cov_dir     = run_dir / 'coverage'
 
-# ─── 1. 从 istanbul coverage-summary.json 生成 coverageReport.json ───────
-cov_report = None
-cov_summary = cov_dir / 'detail' / 'coverage-summary.json'
-if cov_summary.exists():
-    try:
-        raw    = json.loads(cov_summary.read_text(encoding='utf-8'))
-        totals = raw.get('total', {})
-        files  = []
-        for fp, data in raw.items():
+          # ─── 1. 从 istanbul coverage-summary.json 生成 coverageReport.json ───────
+          cov_report = None
+          cov_summary = cov_dir / 'detail' / 'coverage-summary.json'
+          if cov_summary.exists():
+          try:
+          raw    = json.loads(cov_summary.read_text(encoding='utf-8'))
+          totals = raw.get('total', {})
+          files  = []
+          for fp, data in raw.items():
             if fp == 'total':
                 continue
             parts = fp.replace('\\', '/').split('/')
@@ -249,146 +249,146 @@ if cov_summary.exists():
                 'functions': data.get('functions', {}),
                 'branches':  data.get('branches', {}),
             }})
-        cov_report = {
+          cov_report = {
             'summary': {
                 'lines':     totals.get('lines', {}),
                 'functions': totals.get('functions', {}),
                 'branches':  totals.get('branches', {}),
             },
             'files': files,
-        }
-        cov_dir.mkdir(parents=True, exist_ok=True)
-        (cov_dir / 'coverageReport.json').write_text(
+          }
+          cov_dir.mkdir(parents=True, exist_ok=True)
+          (cov_dir / 'coverageReport.json').write_text(
             json.dumps(cov_report, ensure_ascii=False, indent=2), encoding='utf-8')
-        print(f'coverageReport.json 已生成（{len(files)} 个文件）')
-    except Exception as e:
-        print(f'coverageReport.json 生成失败: {e}')
+          print(f'coverageReport.json 已生成（{len(files)} 个文件）')
+          except Exception as e:
+          print(f'coverageReport.json 生成失败: {e}')
 
-# ─── 2. 更新 unit-history.json ───────────────────────────────────────────
-hist_path = site / 'unit' / 'unit-history.json'
-try:
-    history = json.loads(hist_path.read_text(encoding='utf-8')) if hist_path.exists() else []
-except Exception:
-    history = []
-entry: dict = {
-    'run_number':  run_number,
-    'timestamp':   run_ts,
-    'status':      'pass' if run_status == 'passed' else 'fail',
-    'passed':      run_passed,
-    'failed':      run_failed,
-    'total':       run_total,
-    'report_href': f'unit/runs/run-{run_number}/index.html',
-}
-if cov_report is not None:
-    entry['coverage_href'] = f'unit/runs/run-{run_number}/coverage/index.html'
-history.append(entry)
-history = history[-30:]
-hist_path.parent.mkdir(parents=True, exist_ok=True)
-hist_path.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'unit-history.json 已更新（{len(history)} 条）')
+          # ─── 2. 更新 unit-history.json ───────────────────────────────────────────
+          hist_path = site / 'unit' / 'unit-history.json'
+          try:
+          history = json.loads(hist_path.read_text(encoding='utf-8')) if hist_path.exists() else []
+          except Exception:
+          history = []
+          entry: dict = {
+          'run_number':  run_number,
+          'timestamp':   run_ts,
+          'status':      'pass' if run_status == 'passed' else 'fail',
+          'passed':      run_passed,
+          'failed':      run_failed,
+          'total':       run_total,
+          'report_href': f'unit/runs/run-{run_number}/index.html',
+          }
+          if cov_report is not None:
+          entry['coverage_href'] = f'unit/runs/run-{run_number}/coverage/index.html'
+          history.append(entry)
+          history = history[-30:]
+          hist_path.parent.mkdir(parents=True, exist_ok=True)
+          hist_path.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(f'unit-history.json 已更新（{len(history)} 条）')
 
-# ─── 3. 更新 coverage-history.json ──────────────────────────────────────
-cov_hist: list = []
-cov_hist_path = site / 'unit' / 'coverage-history.json'
-if cov_report is not None:
-    try:
-        cov_hist = json.loads(cov_hist_path.read_text(encoding='utf-8')) if cov_hist_path.exists() else []
-    except Exception:
-        cov_hist = []
-    cov_hist.append({
-        'run_number':    run_number,
-        'timestamp':     run_ts,
-        'lines_pct':     cov_report['summary']['lines'].get('pct', 0),
-        'functions_pct': cov_report['summary']['functions'].get('pct', 0),
-        'branches_pct':  cov_report['summary']['branches'].get('pct', 0),
-    })
-    cov_hist = cov_hist[-30:]
-    cov_hist_path.parent.mkdir(parents=True, exist_ok=True)
-    cov_hist_path.write_text(json.dumps(cov_hist, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f'coverage-history.json 已更新（{len(cov_hist)} 条）')
+          # ─── 3. 更新 coverage-history.json ──────────────────────────────────────
+          cov_hist: list = []
+          cov_hist_path = site / 'unit' / 'coverage-history.json'
+          if cov_report is not None:
+          try:
+          cov_hist = json.loads(cov_hist_path.read_text(encoding='utf-8')) if cov_hist_path.exists() else []
+          except Exception:
+          cov_hist = []
+          cov_hist.append({
+          'run_number':    run_number,
+          'timestamp':     run_ts,
+          'lines_pct':     cov_report['summary']['lines'].get('pct', 0),
+          'functions_pct': cov_report['summary']['functions'].get('pct', 0),
+          'branches_pct':  cov_report['summary']['branches'].get('pct', 0),
+          })
+          cov_hist = cov_hist[-30:]
+          cov_hist_path.parent.mkdir(parents=True, exist_ok=True)
+          cov_hist_path.write_text(json.dumps(cov_hist, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(f'coverage-history.json 已更新（{len(cov_hist)} 条）')
 
-# ─── 4. 生成 coverage/index.html ─────────────────────────────────────────
-if cov_report is not None:
-    cov_hist_json = json.dumps(cov_hist, ensure_ascii=False)
-    html = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <title>覆盖率 · Run #""" + str(run_number) + """</title>
-  <script src="../../../../vendor/tailwind.js"></script>
-  <script src="../../../../vendor/echarts.min.js"></script>
-</head>
-<body class="bg-gray-950 text-gray-200 min-h-screen font-sans">
-  <div class="max-w-5xl mx-auto px-4 py-10">
-    <div class="mb-8">
-      <a href="../../index.html" class="text-blue-400 text-sm hover:underline">← 报告首页</a>
-      <h1 class="mt-3 text-2xl font-bold text-gray-100">覆盖率报告</h1>
-      <p class="mt-1 text-gray-400 text-sm">Run #""" + str(run_number) + """</p>
-    </div>
-    <div id="metrics" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"></div>
-    <div class="mb-8 bg-gray-900 rounded-xl p-4">
-      <h2 class="text-base font-semibold text-gray-300 mb-3">文件覆盖率（行）</h2>
-      <div id="bar-chart" style="height:320px"></div>
-    </div>
-    <div id="trend-wrap" class="mb-8 bg-gray-900 rounded-xl p-4" style="display:none">
-      <h2 class="text-base font-semibold text-gray-300 mb-3">历史趋势</h2>
-      <div id="trend-chart" style="height:220px"></div>
-    </div>
-    <div class="mt-8 pt-6 border-t border-gray-800 text-sm">
-      <a href="detail/index.html" class="text-blue-400 hover:underline">📋 查看详细行级覆盖率报告 →</a>
-    </div>
-  </div>
-<script>
-(function(){
-  var hist=""" + cov_hist_json + """;
-  fetch('./coverageReport.json').then(function(r){return r.json();}).then(function(d){
-    var sm=d.summary||{};
-    var defs=[{label:'行覆盖率',key:'lines'},{label:'函数覆盖率',key:'functions'},{label:'分支覆盖率',key:'branches'}];
-    document.getElementById('metrics').innerHTML=defs.map(function(m){
-      var info=sm[m.key]||{};var pct=+(info.pct||0);
-      var col=pct>=80?'text-green-400':pct>=50?'text-yellow-400':'text-red-400';
-      var bd =pct>=80?'border-green-800':pct>=50?'border-yellow-800':'border-red-800';
-      return '<div class="bg-gray-900 border '+bd+' rounded-xl p-5">'
-        +'<div class="text-gray-400 text-sm mb-1">'+m.label+'</div>'
-        +'<div class="text-3xl font-bold '+col+'">'+pct.toFixed(1)+'%</div>'
-        +'<div class="text-gray-500 text-xs mt-1">'+(info.covered||0)+' / '+(info.total||0)+'</div>'
-        +'</div>';
-    }).join('');
-    var files=(d.files||[]).filter(function(f){return f.summary&&f.summary.lines;});
-    if(files.length){
-      var names=files.map(function(f){return f.path;});
-      var vals=files.map(function(f){return+(f.summary.lines.pct||0);});
-      var colors=vals.map(function(v){return v>=80?'#4ade80':v>=50?'#facc15':'#f87171';});
-      var bar=echarts.init(document.getElementById('bar-chart'),null,{renderer:'svg'});
-      bar.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
-        grid:{left:'30%',right:'5%',top:'3%',bottom:'3%',containLabel:false},
-        xAxis:{type:'value',max:100,axisLabel:{color:'#9ca3af',formatter:'{value}%'},splitLine:{lineStyle:{color:'#374151'}}},
-        yAxis:{type:'category',data:names,axisLabel:{color:'#d1d5db',fontSize:11}},
-        series:[{type:'bar',data:vals.map(function(v,i){return{value:v,itemStyle:{color:colors[i]}};})
+          # ─── 4. 生成 coverage/index.html ─────────────────────────────────────────
+          if cov_report is not None:
+          cov_hist_json = json.dumps(cov_hist, ensure_ascii=False)
+          html = """<!DOCTYPE html>
+          <html lang="zh-CN">
+          <head>
+          <meta charset="UTF-8">
+          <title>覆盖率 · Run #""" + str(run_number) + """</title>
+          <script src="../../../../vendor/tailwind.js"></script>
+          <script src="../../../../vendor/echarts.min.js"></script>
+          </head>
+          <body class="bg-gray-950 text-gray-200 min-h-screen font-sans">
+          <div class="max-w-5xl mx-auto px-4 py-10">
+          <div class="mb-8">
+          <a href="../../index.html" class="text-blue-400 text-sm hover:underline">← 报告首页</a>
+          <h1 class="mt-3 text-2xl font-bold text-gray-100">覆盖率报告</h1>
+          <p class="mt-1 text-gray-400 text-sm">Run #""" + str(run_number) + """</p>
+          </div>
+          <div id="metrics" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"></div>
+          <div class="mb-8 bg-gray-900 rounded-xl p-4">
+          <h2 class="text-base font-semibold text-gray-300 mb-3">文件覆盖率（行）</h2>
+          <div id="bar-chart" style="height:320px"></div>
+          </div>
+          <div id="trend-wrap" class="mb-8 bg-gray-900 rounded-xl p-4" style="display:none">
+          <h2 class="text-base font-semibold text-gray-300 mb-3">历史趋势</h2>
+          <div id="trend-chart" style="height:220px"></div>
+          </div>
+          <div class="mt-8 pt-6 border-t border-gray-800 text-sm">
+          <a href="detail/index.html" class="text-blue-400 hover:underline">📋 查看详细行级覆盖率报告 →</a>
+          </div>
+          </div>
+          <script>
+          (function(){
+          var hist=""" + cov_hist_json + """;
+          fetch('./coverageReport.json').then(function(r){return r.json();}).then(function(d){
+          var sm=d.summary||{};
+          var defs=[{label:'行覆盖率',key:'lines'},{label:'函数覆盖率',key:'functions'},{label:'分支覆盖率',key:'branches'}];
+          document.getElementById('metrics').innerHTML=defs.map(function(m){
+          var info=sm[m.key]||{};var pct=+(info.pct||0);
+          var col=pct>=80?'text-green-400':pct>=50?'text-yellow-400':'text-red-400';
+          var bd =pct>=80?'border-green-800':pct>=50?'border-yellow-800':'border-red-800';
+          return '<div class="bg-gray-900 border '+bd+' rounded-xl p-5">'
+          +'<div class="text-gray-400 text-sm mb-1">'+m.label+'</div>'
+          +'<div class="text-3xl font-bold '+col+'">'+pct.toFixed(1)+'%</div>'
+          +'<div class="text-gray-500 text-xs mt-1">'+(info.covered||0)+' / '+(info.total||0)+'</div>'
+          +'</div>';
+          }).join('');
+          var files=(d.files||[]).filter(function(f){return f.summary&&f.summary.lines;});
+          if(files.length){
+          var names=files.map(function(f){return f.path;});
+          var vals=files.map(function(f){return+(f.summary.lines.pct||0);});
+          var colors=vals.map(function(v){return v>=80?'#4ade80':v>=50?'#facc15':'#f87171';});
+          var bar=echarts.init(document.getElementById('bar-chart'),null,{renderer:'svg'});
+          bar.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+          grid:{left:'30%',right:'5%',top:'3%',bottom:'3%',containLabel:false},
+          xAxis:{type:'value',max:100,axisLabel:{color:'#9ca3af',formatter:'{value}%'},splitLine:{lineStyle:{color:'#374151'}}},
+          yAxis:{type:'category',data:names,axisLabel:{color:'#d1d5db',fontSize:11}},
+          series:[{type:'bar',data:vals.map(function(v,i){return{value:v,itemStyle:{color:colors[i]}};})
           ,label:{show:true,position:'right',formatter:'{c}%',color:'#9ca3af'}}]});
-    }
-    if(hist&&hist.length>=2){
-      document.getElementById('trend-wrap').style.display='';
-      var runs=hist.map(function(h){return'#'+h.run_number;});
-      var trend=echarts.init(document.getElementById('trend-chart'),null,{renderer:'svg'});
-      trend.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
-        legend:{data:['行','函数','分支'],textStyle:{color:'#9ca3af'}},
-        grid:{left:'4%',right:'4%',top:'15%',bottom:'8%',containLabel:true},
-        xAxis:{type:'category',data:runs,axisLabel:{color:'#9ca3af'}},
-        yAxis:{type:'value',max:100,axisLabel:{color:'#9ca3af',formatter:'{value}%'},splitLine:{lineStyle:{color:'#374151'}}},
-        series:[
+          }
+          if(hist&&hist.length>=2){
+          document.getElementById('trend-wrap').style.display='';
+          var runs=hist.map(function(h){return'#'+h.run_number;});
+          var trend=echarts.init(document.getElementById('trend-chart'),null,{renderer:'svg'});
+          trend.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+          legend:{data:['行','函数','分支'],textStyle:{color:'#9ca3af'}},
+          grid:{left:'4%',right:'4%',top:'15%',bottom:'8%',containLabel:true},
+          xAxis:{type:'category',data:runs,axisLabel:{color:'#9ca3af'}},
+          yAxis:{type:'value',max:100,axisLabel:{color:'#9ca3af',formatter:'{value}%'},splitLine:{lineStyle:{color:'#374151'}}},
+          series:[
           {name:'行',  type:'line',smooth:true,data:hist.map(function(h){return h.lines_pct;}),itemStyle:{color:'#4ade80'},lineStyle:{color:'#4ade80'}},
           {name:'函数',type:'line',smooth:true,data:hist.map(function(h){return h.functions_pct;}),itemStyle:{color:'#60a5fa'},lineStyle:{color:'#60a5fa'}},
           {name:'分支',type:'line',smooth:true,data:hist.map(function(h){return h.branches_pct;}),itemStyle:{color:'#f59e0b'},lineStyle:{color:'#f59e0b'}}
-        ]});
-    }
-  }).catch(function(e){console.error('覆盖率数据加载失败',e);});
-})();
-</script>
-</body></html>"""
-    cov_dir.mkdir(parents=True, exist_ok=True)
-    (cov_dir / 'index.html').write_text(html, encoding='utf-8')
-    print('coverage/index.html 已生成')
+          ]});
+          }
+          }).catch(function(e){console.error('覆盖率数据加载失败',e);});
+          })();
+          </script>
+          </body></html>"""
+          cov_dir.mkdir(parents=True, exist_ok=True)
+          (cov_dir / 'index.html').write_text(html, encoding='utf-8')
+          print('coverage/index.html 已生成')
           PY
 
           # 回写 Allure history 到 gh-pages（供下次 run 使用趋势图）
@@ -410,65 +410,65 @@ if cov_report is not None:
           # 生成 unit/history-list/index.html（TailwindCSS 深色风格，读 unit-history.json）
           mkdir -p unit/history-list
           python3 - <<'PY'
-import json, os
-from pathlib import Path
+          import json, os
+          from pathlib import Path
 
-site     = Path(os.environ['SITE_DIR'])
-hist_p   = site / 'unit' / 'unit-history.json'
-try:
-    history = json.loads(hist_p.read_text(encoding='utf-8')) if hist_p.exists() else []
-except Exception:
-    history = []
-history  = list(reversed(history))
+          site     = Path(os.environ['SITE_DIR'])
+          hist_p   = site / 'unit' / 'unit-history.json'
+          try:
+          history = json.loads(hist_p.read_text(encoding='utf-8')) if hist_p.exists() else []
+          except Exception:
+          history = []
+          history  = list(reversed(history))
 
-rows = ''
-for h in history:
-    rn   = h.get('run_number', '-')
-    ts   = h.get('timestamp', '')[:19].replace('T', ' ')
-    st   = h.get('status', 'fail')
-    pa   = h.get('passed', 0)
-    fa   = h.get('failed', 0)
-    tot  = h.get('total', 0)
-    href = h.get('report_href', '#')
-    cov  = h.get('coverage_href', '')
-    badge = ('<span class="px-2 py-0.5 rounded text-xs font-semibold bg-green-900 text-green-300">通过</span>'
+          rows = ''
+          for h in history:
+          rn   = h.get('run_number', '-')
+          ts   = h.get('timestamp', '')[:19].replace('T', ' ')
+          st   = h.get('status', 'fail')
+          pa   = h.get('passed', 0)
+          fa   = h.get('failed', 0)
+          tot  = h.get('total', 0)
+          href = h.get('report_href', '#')
+          cov  = h.get('coverage_href', '')
+          badge = ('<span class="px-2 py-0.5 rounded text-xs font-semibold bg-green-900 text-green-300">通过</span>'
              if st == 'pass' else
              '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-900 text-red-300">失败</span>')
-    cov_link = (f'<a href="../../{cov}" class="text-blue-400 hover:underline text-xs">覆盖率</a>'
+          cov_link = (f'<a href="../../{cov}" class="text-blue-400 hover:underline text-xs">覆盖率</a>'
                 if cov else '<span class="text-gray-700 text-xs">—</span>')
-    rows += (
-        '<tr class="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">'
-        f'<td class="py-3 px-4 text-gray-300 font-mono">#{rn}</td>'
-        f'<td class="py-3 px-4 text-gray-400 text-sm">{ts}</td>'
-        f'<td class="py-3 px-4">{badge}</td>'
-        f'<td class="py-3 px-4 text-gray-300 text-sm">{pa}/{tot}'
-        + (f' <span class="text-red-400">({fa}失败)</span>' if fa else '') + '</td>'
-        f'<td class="py-3 px-4"><a href="../../{href}" class="text-blue-400 hover:underline text-sm">查看报告</a></td>'
-        f'<td class="py-3 px-4">{cov_link}</td>'
-        '</tr>'
-    )
+          rows += (
+          '<tr class="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">'
+          f'<td class="py-3 px-4 text-gray-300 font-mono">#{rn}</td>'
+          f'<td class="py-3 px-4 text-gray-400 text-sm">{ts}</td>'
+          f'<td class="py-3 px-4">{badge}</td>'
+          f'<td class="py-3 px-4 text-gray-300 text-sm">{pa}/{tot}'
+          + (f' <span class="text-red-400">({fa}失败)</span>' if fa else '') + '</td>'
+          f'<td class="py-3 px-4"><a href="../../{href}" class="text-blue-400 hover:underline text-sm">查看报告</a></td>'
+          f'<td class="py-3 px-4">{cov_link}</td>'
+          '</tr>'
+          )
 
-if not rows:
-    rows = '<tr><td colspan="6" class="py-8 text-center text-gray-500">暂无历史记录</td></tr>'
+          if not rows:
+          rows = '<tr><td colspan="6" class="py-8 text-center text-gray-500">暂无历史记录</td></tr>'
 
-html = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>单元测试历史记录</title>
-  <script src="../../vendor/tailwind.js"></script>
-</head>
-<body class="bg-gray-950 text-gray-200 min-h-screen font-sans">
-  <div class="max-w-5xl mx-auto px-4 py-10">
-    <div class="mb-8">
-      <a href="../../index.html" class="text-blue-400 text-sm hover:underline">← 报告首页</a>
-      <h1 class="mt-3 text-2xl font-bold text-gray-100">单元测试历史记录</h1>
-      <p class="mt-1 text-gray-400 text-sm">最近 """ + str(len(history)) + """ 次运行</p>
-    </div>
-    <div class="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
-      <table class="w-full text-left">
-        <thead>
+          html = """<!DOCTYPE html>
+          <html lang="zh-CN">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>单元测试历史记录</title>
+          <script src="../../vendor/tailwind.js"></script>
+          </head>
+          <body class="bg-gray-950 text-gray-200 min-h-screen font-sans">
+          <div class="max-w-5xl mx-auto px-4 py-10">
+          <div class="mb-8">
+          <a href="../../index.html" class="text-blue-400 text-sm hover:underline">← 报告首页</a>
+          <h1 class="mt-3 text-2xl font-bold text-gray-100">单元测试历史记录</h1>
+          <p class="mt-1 text-gray-400 text-sm">最近 """ + str(len(history)) + """ 次运行</p>
+          </div>
+          <div class="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
+          <table class="w-full text-left">
+          <thead>
           <tr class="border-b border-gray-800 bg-gray-900">
             <th class="py-3 px-4 text-gray-400 font-medium text-sm">Run</th>
             <th class="py-3 px-4 text-gray-400 font-medium text-sm">时间</th>
@@ -477,15 +477,15 @@ html = """<!DOCTYPE html>
             <th class="py-3 px-4 text-gray-400 font-medium text-sm">报告</th>
             <th class="py-3 px-4 text-gray-400 font-medium text-sm">覆盖率</th>
           </tr>
-        </thead>
-        <tbody>""" + rows + """</tbody>
-      </table>
-    </div>
-  </div>
-</body></html>"""
+          </thead>
+          <tbody>""" + rows + """</tbody>
+          </table>
+          </div>
+          </div>
+          </body></html>"""
 
-(site / 'unit' / 'history-list' / 'index.html').write_text(html, encoding='utf-8')
-print(f'unit/history-list/index.html 已生成（{len(history)} 条）')
+          (site / 'unit' / 'history-list' / 'index.html').write_text(html, encoding='utf-8')
+          print(f'unit/history-list/index.html 已生成（{len(history)} 条）')
           PY
 
           # 重新生成门户 index.html
