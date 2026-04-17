@@ -7,9 +7,11 @@ import videoDataTest from './VideoData.test';
 import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
 import subtitleBridgeAdapterTest from './SubtitleBridgeAdapter.test';
 import webDAVClientUtilsTest from './WebDAVClientUtils.test';
+// 需要真实 Context 和 .so 的集成测试放在 UnitTestBuild 侧（entry 模块本身，包含 native .so）
+// ohosTest(entry_test HAP) 不包含 .so，不能 import VideoScannerUtil / WebDAVClient
+import fileSourceDatabaseTest from './FileSourceDatabase.test';
+import videoScannerTest from './VideoScanner.test';
 
-// FileSourceDatabase 需要真实 Context，已移至 ohosTest 侧（仪器化测试）
-// WebDAV 集成测试（需要网络）已移至 ohosTest/ets/test/WebDAV.test.ets（仪器化测试）
 export default function testsuite() {
   timeUtilTest();
   settingsControllerTest();
@@ -20,4 +22,7 @@ export default function testsuite() {
   ijkSubtitleBridgeTest();
   subtitleBridgeAdapterTest();
   webDAVClientUtilsTest();
+  // 集成测试：需要设备上的真实 Context（由 TestAbility.onCreate 设置到 globalThis）
+  fileSourceDatabaseTest();
+  videoScannerTest();
 }
