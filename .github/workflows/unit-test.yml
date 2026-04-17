@@ -327,9 +327,20 @@ jobs:
           PY
           export SITE_DIR="$SITE_DIR"
 
-          # 推送 gh-pages（最多重试 3 次）
+          # 清理旧 runs，只保留最近 10 次（避免 gh-pages 无限膨胀导致 push HTTP 400）
+          if [ -d "unit/runs" ]; then
+            KEEP=10
+            mapfile -t OLD_RUNS < <(ls -1d unit/runs/run-* 2>/dev/null | sort -t- -k2 -n | head -n -"$KEEP")
+            if [ ${#OLD_RUNS[@]} -gt 0 ]; then
+              echo "清理旧 runs：${OLD_RUNS[*]}"
+              rm -rf "${OLD_RUNS[@]}"
+            fi
+          fi
+
+          # 推送 gh-pages（最多重试 3 次，增大 postBuffer 避免 HTTP 400）
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config http.postBuffer 524288000
           git add .
           git commit -m "单元测试报告 #${GITHUB_RUN_NUMBER} (${STATUS}: ${PASSED}/${TOTAL})" || echo "无变更"
           for attempt in 1 2 3; do
