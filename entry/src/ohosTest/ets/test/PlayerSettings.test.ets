@@ -19,6 +19,7 @@ import { describe, it, expect, beforeAll } from '@ohos/hypium'
 import { Driver, Component, ON } from '@kit.TestKit'
 import { KeyCode } from '@kit.InputKit'
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry'
+import type Want from '@ohos.app.ability.Want'
 
 function getTestParam(key: string, fallback: string): string {
   try {
@@ -42,8 +43,21 @@ export default function playerSettingsTest() {
   describe('播放器设置UI测试', () => {
 
     beforeAll(async () => {
+      if (skipPlayer) {
+        console.info('[PlayerSettings] SKIP_PLAYER_TESTS=true，跳过 UI 测试初始化')
+        return
+      }
+      // 将主 App 拉到前台（测试运行器启动时会覆盖主 App 窗口）
+      // 已知限制：delegator.startAbility 可能触发 libffmpeg.so OpenSSL 并发崩溃
+      try {
+        const delegator = abilityDelegatorRegistry.getAbilityDelegator()
+        const want: Want = { bundleName: 'com.yao.vidalltv', abilityName: 'EntryAbility' }
+        await delegator.startAbility(want)
+      } catch (e) {
+        console.warn('[PlayerSettings] startAbility failed, continuing: ' + (e as Error).message)
+      }
       driver = Driver.create()
-      await driver.delayMs(1500)
+      await driver.delayMs(5000)
     })
 
     /**
