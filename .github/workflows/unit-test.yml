@@ -17,6 +17,9 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  REPORTS_BRANCH: "gh-pages"
+
 jobs:
   unit-test:
     name: 单元测试（iMac self-hosted）
@@ -56,28 +59,170 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           exit ${PIPESTATUS[0]}
 
-      - name: 收集测试报告
+      - name: 发布报告到 gh-pages
         if: always()
         shell: bash
         env:
           RUNNER_TEMP: ${{ runner.temp }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           REPORT_SRC="$WORK_DIR/entry/.test/default/outputs/test/reports"
-          REPORT_DST="$RUNNER_TEMP/test-reports"
-          if [ -d "$REPORT_SRC" ]; then
-            cp -r "$REPORT_SRC" "$REPORT_DST"
-            echo "报告已复制到 $REPORT_DST"
+          TEST_LOG="$RUNNER_TEMP/unit-test.log"
+          SITE_DIR="$RUNNER_TEMP/gh-pages-site"
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # 解析测试结果
+          TESTS_LINE=$(grep "Tests run:" "$TEST_LOG" 2>/dev/null | tail -1 || echo "")
+          PASSED=$(echo "$TESTS_LINE" | grep -oE 'Pass: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          TOTAL=$(echo "$TESTS_LINE"  | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          if [ "$FAILED" = "0" ] && [ "$TOTAL" != "0" ]; then STATUS="passed"; elif [ "$FAILED" != "0" ]; then STATUS="partial"; else STATUS="failed"; fi
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # clone gh-pages
+          rm -rf "$SITE_DIR"
+          if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+            echo "已加载现有 gh-pages 分支"
           else
-            echo "未找到报告目录：$REPORT_SRC"
+            mkdir -p "$SITE_DIR" && cd "$SITE_DIR"
+            git init && git checkout -b "$REPORTS_BRANCH"
           fi
+          cd "$SITE_DIR"
+          touch .nojekyll
+
+          # 写 unit-status.json
+          cat > unit-status.json <<JSON
+          {
+            "status": "${STATUS}",
+            "passed": ${PASSED},
+            "failed": ${FAILED},
+            "total": ${TOTAL},
+            "run_number": "${GITHUB_RUN_NUMBER}",
+            "timestamp": "${TIMESTAMP}",
+            "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          }
+          JSON
+
+          # 复制 HTML 报告到 unit/runs/run-N/
+          RUN_REPORT_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
+          mkdir -p "$RUN_REPORT_DIR"
+          if [ -d "$REPORT_SRC" ]; then
+            cp -r "$REPORT_SRC/." "$RUN_REPORT_DIR/"
+            echo "报告已复制到 $RUN_REPORT_DIR"
+          else
+            echo "警告：未找到 HTML 报告目录 $REPORT_SRC"
+          fi
+
+          # 更新 unit/index.html 重定向到最新 run
+          mkdir -p unit
+          cat > unit/index.html <<HTML
+          <!DOCTYPE html>
+          <html><head><meta charset="UTF-8">
+          <meta http-equiv="refresh" content="0;url=runs/run-${GITHUB_RUN_NUMBER}/index.html">
+          </head><body>正在跳转到最新报告...</body></html>
+          HTML
+
+          # 生成 unit/history-list/index.html
+          mkdir -p unit/history-list
+          export SITE_DIR="$SITE_DIR"
+          python3 - <<'PY'
+          import os, json
+          from pathlib import Path
+          site = Path(os.environ['SITE_DIR'])
+          runs_dir = site / 'unit' / 'runs'
+          runs = sorted([d.name for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith('run-')], reverse=True) if runs_dir.exists() else []
+          rows = ''.join(f'<tr><td><a href="../{r}/index.html">{r}</a></td></tr>' for r in runs)
+          html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><title>单元测试历史</title></head><body><h1>单元测试历史记录</h1><table>{rows}</table></body></html>'
+          (site / 'unit' / 'history-list' / 'index.html').write_text(html, encoding='utf-8')
+          PY
+
+          # 重新生成门户 index.html
+          export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
+          export GITHUB_RUN_URL_ENV="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          site = Path(os.environ['SITE_DIR'])
+
+          def load_status(p):
+            try: return json.loads(p.read_text(encoding='utf-8')) if p.exists() else None
+            except: return None
+
+          def status_badge(s):
+            if s is None: return '🔄', '#8b949e', '尚未运行'
+            st = s.get('status', 'unknown')
+            if st == 'passed': return '✅', '#3fb950', '全部通过'
+            elif st == 'partial': return '⚠️', '#d29922', '部分失败'
+            else: return '❌', '#f85149', '存在失败'
+
+          def render_card(title, s, report_href, archive_href):
+            icon, color, label = status_badge(s)
+            if s:
+              p, f, t = s.get('passed',0), s.get('failed',0), s.get('total',0)
+              rate = f'{p} / {t}'
+              run_info = f'Run #{s.get("run_number","-")} &nbsp;·&nbsp; {s.get("timestamp","-")[:10]}'
+            else:
+              rate = '—'; run_info = '暂无记录'
+            return '\n'.join([
+              '  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;">',
+              f'    <div style="font-size:1.1rem;font-weight:600;color:#e6edf3;">{title}</div>',
+              f'    <div style="font-size:2rem;">{icon} <span style="font-size:1rem;color:{color};font-weight:500;">{label}</span></div>',
+              f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">用例通过</span></div>',
+              f'    <div style="font-size:0.85rem;color:#8b949e;">{run_info}</div>',
+              '    <div style="display:flex;gap:10px;margin-top:4px;">',
+              f'      <a href="{report_href}" style="background:#238636;color:#fff;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;font-weight:500;">查看报告</a>',
+              f'      <a href="{archive_href}" style="background:#21262d;color:#58a6ff;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">历史记录</a>',
+              '    </div>',
+              '  </div>',
+            ])
+
+          unit_st = load_status(site / 'unit-status.json')
+          intg_st = load_status(site / 'integration-status.json')
+          unit_run_num = unit_st.get('run_number','') if unit_st else ''
+          intg_run_num = intg_st.get('run_number','') if intg_st else ''
+          unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
+          intg_report_href = f'integration/runs/run-{intg_run_num}/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
+
+          portal_html = '\n'.join([
+            '<!DOCTYPE html>','<html lang="zh-CN">','<head>',
+            '  <meta charset="UTF-8" />',
+            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
+            '  <meta http-equiv="Pragma" content="no-cache" />','  <meta http-equiv="Expires" content="0" />',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+            '  <title>VidAll TV · 测试报告总览</title>','</head>',
+            '<body style="margin:0;background:#0d1117;color:#e6edf3;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;">',
+            '  <div style="max-width:860px;margin:0 auto;padding:40px 20px;">',
+            '    <div style="margin-bottom:32px;">',
+            '      <h1 style="margin:0 0 6px;font-size:1.6rem;font-weight:700;color:#e6edf3;">VidAll TV 测试报告</h1>',
+            '      <p style="margin:0;color:#8b949e;font-size:0.9rem;">单元测试 · 集成测试 · 统一入口</p>',
+            '    </div>',
+            '    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">',
+            render_card('单元测试', unit_st, unit_report_href, 'unit/history-list/index.html'),
+            render_card('集成测试', intg_st, intg_report_href, 'integration/history-list/index.html'),
+            '    </div>',
+            f'    <p style="margin-top:32px;font-size:0.8rem;color:#484f58;text-align:center;">由 GitHub Actions 自动生成 · Run #{os.environ["CURRENT_RUN_NUMBER"]}</p>',
+            '  </div>','</body>','</html>',
+          ])
+          (site / 'index.html').write_text(portal_html, encoding='utf-8')
+          (site / '404.html').write_text(portal_html, encoding='utf-8')
+          PY
+          export SITE_DIR="$SITE_DIR"
+
+          # 推送 gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "单元测试报告 #${GITHUB_RUN_NUMBER} (${STATUS}: ${PASSED}/${TOTAL})" || echo "无变更"
+          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" --force
 
       - name: 上传测试产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-results-${{ github.run_number }}
-          path: |
-            ${{ runner.temp }}/unit-test.log
-            ${{ runner.temp }}/test-reports/
+          path: ${{ runner.temp }}/unit-test.log
           if-no-files-found: warn
           retention-days: 7
