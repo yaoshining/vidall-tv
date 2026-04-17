@@ -696,4 +696,3 @@ jobs:
   unit-test:
     needs: compile-check
     uses: ./.github/workflows/unit-test.yml
-    continue-on-error: true
