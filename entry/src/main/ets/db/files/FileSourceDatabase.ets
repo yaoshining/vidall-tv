@@ -77,6 +77,8 @@ export class FileSourceDatabase {
   // 数据库存储
   private rdbStore: relationalStore.RdbStore | null = null;
   private context: Context | null = null;
+  // 防止并发初始化：保存正在进行的 init Promise，供后续调用方直接等待
+  private initPromise: Promise<void> | null = null;
 
   private constructor() {
   }
@@ -102,17 +104,31 @@ export class FileSourceDatabase {
       return; // 已经初始化
     }
 
+    // 防止并发调用：若已有正在进行的 init，直接等待其完成
+    if (this.initPromise !== null) {
+      return this.initPromise;
+    }
+
     if (this.context === null) {
       throw new Error('Context is not set');
     }
 
+    this.initPromise = this.doInit(this.context);
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  private async doInit(ctx: Context): Promise<void> {
     try {
       const config: relationalStore.StoreConfig = {
         name: FileSourceDatabase.DB_NAME,
         securityLevel: relationalStore.SecurityLevel.S1
       };
 
-      this.rdbStore = await relationalStore.getRdbStore(this.context, config);
+      this.rdbStore = await relationalStore.getRdbStore(ctx, config);
 
       // ── 手动版本管理（PRAGMA user_version）──
       // 读取当前版本
