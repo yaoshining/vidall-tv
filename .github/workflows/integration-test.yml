@@ -959,7 +959,7 @@ jobs:
           cd "$SITE_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add integration-status.json integration/integration-history.json integration/history-list/index.html index.html 404.html _headers vendor/ || true
+          git add integration-status.json integration/integration-history.json integration/history-list/index.html integration/runs/ index.html 404.html _headers vendor/ || true
           git commit -m "更新: 集成测试报告状态 #${GITHUB_RUN_NUMBER}" || echo "No portal changes to commit"
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "Portal push skipped"
           rm -rf "$SITE_DIR/.git"
