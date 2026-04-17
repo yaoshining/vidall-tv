@@ -1,0 +1,62 @@
+name: 单元测试（iMac）
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: harmonyos-unit-test
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  unit-test:
+    name: UnitTestBuild（iMac self-hosted）
+    runs-on:
+      - self-hosted
+      - macOS
+      - harmonyos-tv-test
+    timeout-minutes: 15
+
+    env:
+      DEVECO_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk
+      OHOS_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+      HARMONY_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+      NODE_BIN: /Applications/DevEco-Studio.app/Contents/tools/node/bin/node
+      HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
+      WORK_DIR: /Users/shiningyao/DevecostudioProjects/vidall-tv
+
+    steps:
+      - name: 同步最新代码（git pull）
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$WORK_DIR"
+          git pull
+
+      - name: UnitTestBuild
+        shell: bash
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          set -o pipefail
+          cd "$WORK_DIR"
+          mkdir -p "$RUNNER_TEMP"
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            --mode module -p module=entry@default \
+            -p unit.test.replace.page=../../../.test/testability/pages/Index \
+            -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
+            -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --no-daemon \
+            2>&1 | tee "$RUNNER_TEMP/unit-test-build.log"
+          exit ${PIPESTATUS[0]}
+
+      - name: 上传构建日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-build-log-${{ github.run_number }}
+          path: ${{ runner.temp }}/unit-test-build.log
+          if-no-files-found: warn
+          retention-days: 7

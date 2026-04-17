@@ -1,4 +1,4 @@
-name: CI Compile Check
+name: CI 编译检查
 
 env:
   OHOS_SDK_URL: https://repo.huaweicloud.com/harmonyos/os/5.1.0-Release/ohos-sdk-windows_linux-public.tar.gz
@@ -8,7 +8,6 @@ env:
   HVIGOR_NPM_REGISTRY: https://repo.harmonyos.com/npm/
   HVIGOR_VERSION: "6.22.3"
   NODE_VERSION: "20"
-  ALLURE_VERSION: "2.34.1"
   REPORTS_BRANCH: "gh-pages"
 
 permissions:
@@ -36,12 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Java for Allure
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
 
       - name: Restore OHOS SDK Cache
         id: cache-sdk-restore
@@ -360,50 +353,6 @@ jobs:
           echo "SYNC_PROJECT_EXIT_CODE=$sync_status" >> "$GITHUB_ENV"
           exit $sync_status
 
-      - name: Prepare Unit Test Page Template
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          python3 - <<'PY'
-          from pathlib import Path
-
-          page = Path('entry/.test/testability/pages/Index.ets')
-          page.parent.mkdir(parents=True, exist_ok=True)
-          page.write_text(
-              "@Entry\n"
-              "@Component\n"
-              "struct Index {\n"
-              "  build() {\n"
-              "    Column() {\n"
-              "      Text('Unit Test Entry')\n"
-              "    }\n"
-              "    .width('100%')\n"
-              "    .height('100%')\n"
-              "  }\n"
-              "}\n"
-          )
-          print(f'Prepared {page}')
-          PY
-          test -f "$GITHUB_WORKSPACE/entry/.test/testability/pages/Index.ets"
-
-      - name: Unit Test Build Check
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          mkdir -p "$GITHUB_WORKSPACE/.ci/reports"
-          set -o pipefail
-          node "$HVIGOR_ENTRY" \
-          --mode module -p module=entry@default \
-          -p unit.test.replace.page=../../../.test/testability/pages/Index \
-          -p product=default -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-          -p buildRoot=.test UnitTestBuild --analyze=normal --parallel --incremental --daemon \
-          2>&1 | tee "$GITHUB_WORKSPACE/.ci/reports/unit-test-build.log"
-          unit_test_status=${PIPESTATUS[0]}
-          echo "UNIT_TEST_BUILD_EXIT_CODE=$unit_test_status" >> "$GITHUB_ENV"
-          exit $unit_test_status
-
       - name: Generate CI Summary Report
         if: always()
         shell: bash
@@ -411,22 +360,18 @@ jobs:
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/.ci/reports"
           sync_status="${SYNC_PROJECT_EXIT_CODE:-unknown}"
-          unit_test_status="${UNIT_TEST_BUILD_EXIT_CODE:-unknown}"
           overall_status="${{ job.status }}"
           export REPORT_SYNC_STATUS="$sync_status"
-          export REPORT_UNIT_STATUS="$unit_test_status"
           export REPORT_OVERALL_STATUS="$overall_status"
 
           cat > "$GITHUB_WORKSPACE/.ci/reports/ci-summary.md" <<EOF
-          # Allure Style CI Report
+          # CI Compile Check Report
 
           - Job status: ${overall_status}
           - Sync Project exit code: ${sync_status}
-          - Unit Test Build exit code: ${unit_test_status}
 
           ## Included artifacts
           - sync-project.log
-          - unit-test-build.log
           - allure-style-report.html
           - junit-report.xml
           - meta.json
@@ -434,16 +379,13 @@ jobs:
 
           python3 - <<'PY'
           import datetime
-          import hashlib
           import html
           import json
           import os
-          import uuid
           from pathlib import Path
 
           reports = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'reports'
           sync_status = os.environ.get('REPORT_SYNC_STATUS', 'unknown')
-          unit_status = os.environ.get('REPORT_UNIT_STATUS', 'unknown')
           overall_status = os.environ.get('REPORT_OVERALL_STATUS', 'unknown')
           run_number = os.environ.get('GITHUB_RUN_NUMBER', 'local')
           branch = os.environ.get('GITHUB_REF_NAME', 'unknown')
@@ -465,7 +407,6 @@ jobs:
 
           checks = [
             ('Sync Project', state_for(sync_status), sync_status),
-            ('Unit Test Build', state_for(unit_status), unit_status)
           ]
           passed = sum(1 for _, state, _ in checks if state == 'passed')
           failed = sum(1 for _, state, _ in checks if state == 'failed')
@@ -483,7 +424,7 @@ jobs:
             '<html lang="zh-CN">',
             '<head>',
             '  <meta charset="UTF-8" />',
-            '  <title>Allure Style CI Report</title>',
+            '  <title>CI Compile Check Report</title>',
             '  <style>',
             '    body { font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }',
             '    .hero { background: linear-gradient(135deg, #6d28d9, #2563eb); color: white; padding: 28px 32px; }',
@@ -506,7 +447,7 @@ jobs:
             '  </style>',
             '</head>',
             '<body>',
-            f'  <div class="hero"><h1>Allure Style CI Report</h1><div>Run #{html.escape(run_number)} · {html.escape(branch)} · {html.escape(sha)} · {html.escape(generated_at)}</div></div>',
+            f'  <div class="hero"><h1>CI Compile Check Report</h1><div>Run #{html.escape(run_number)} · {html.escape(branch)} · {html.escape(sha)} · {html.escape(generated_at)}</div></div>',
             '  <div class="container">',
             '    <div class="grid">',
             f'      <div class="card"><div class="label">Overall Status</div><div class="value">{html.escape(overall_status.upper())}</div></div>',
@@ -528,9 +469,6 @@ jobs:
             '      <details open><summary>Sync Project Log</summary>',
             f'        <pre>{read_text("sync-project.log")}</pre>',
             '      </details>',
-            '      <details><summary>Unit Test Build Log</summary>',
-            f'        <pre>{read_text("unit-test-build.log")}</pre>',
-            '      </details>',
             '    </div>',
             '  </div>',
             '</body>',
@@ -539,11 +477,10 @@ jobs:
           (reports / 'allure-style-report.html').write_text(html_report, encoding='utf-8')
           (reports / 'ci-summary.html').write_text(html_report, encoding='utf-8')
           (reports / 'index.html').write_text(html_report, encoding='utf-8')
-          (reports / '404.html').write_text(html_report, encoding='utf-8')
 
           junit_lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
-            f'<testsuite name="VidAll TV CI" tests="2" failures="{failed}" errors="0" skipped="{unknown}">'
+            f'<testsuite name="VidAll TV CI" tests="1" failures="{failed}" errors="0" skipped="{unknown}">'
           ]
           for name, state, code in checks:
             junit_lines.append(f'  <testcase classname="ci.compile" name="{html.escape(name)}">')
@@ -562,83 +499,20 @@ jobs:
             'generated_at': generated_at,
             'overall_status': overall_status,
             'sync_exit_code': sync_status,
-            'unit_test_exit_code': unit_status,
             'passed': passed,
             'failed': failed,
             'unknown': unknown
           }
           (reports / 'meta.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
-
-          allure_results = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'allure-results'
-          allure_results.mkdir(parents=True, exist_ok=True)
-          (allure_results / 'environment.properties').write_text(
-            f'Branch={branch}\nCommit={sha}\nRun={run_number}\nOverallStatus={overall_status}\n',
-            encoding='utf-8'
-          )
-          executor = {
-            'name': 'GitHub Actions',
-            'type': 'github',
-            'url': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}",
-            'buildOrder': int(run_number) if str(run_number).isdigit() else 0,
-            'buildName': f'Run #{run_number}',
-            'buildUrl': f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{os.environ.get('GITHUB_RUN_ID', '')}",
-            'reportName': 'VidAll TV CI Allure Report'
-          }
-          (allure_results / 'executor.json').write_text(json.dumps(executor, ensure_ascii=False, indent=2), encoding='utf-8')
-
-          for name, state, code, log_name in [
-            ('Sync Project', state_for(sync_status), sync_status, 'sync-project.log'),
-            ('Unit Test Build', state_for(unit_status), unit_status, 'unit-test-build.log')
-          ]:
-            attachment_source = f"{uuid.uuid4()}-attachment.txt"
-            log_path = reports / log_name
-            attachment_text = log_path.read_text(encoding='utf-8', errors='ignore') if log_path.exists() else 'No log captured.'
-            (allure_results / attachment_source).write_text(attachment_text, encoding='utf-8')
-            result_status = 'passed' if state == 'passed' else ('failed' if state == 'failed' else 'skipped')
-            history_id = hashlib.md5(name.encode('utf-8')).hexdigest()
-            result = {
-              'uuid': str(uuid.uuid4()),
-              'historyId': history_id,
-              'testCaseId': history_id,
-              'name': name,
-              'fullName': f'ci.compile::{name}',
-              'status': result_status,
-              'stage': 'finished',
-              'statusDetails': {
-                'message': f'Exit code: {code}'
-              },
-              'attachments': [
-                {
-                  'name': log_name,
-                  'source': attachment_source,
-                  'type': 'text/plain'
-                }
-              ],
-              'labels': [
-                {'name': 'suite', 'value': 'CI Compile Check'},
-                {'name': 'framework', 'value': 'GitHub Actions'},
-                {'name': 'host', 'value': 'ubuntu-22.04'}
-              ],
-              'parameters': [
-                {'name': 'branch', 'value': branch},
-                {'name': 'sha', 'value': sha},
-                {'name': 'run_number', 'value': str(run_number)}
-              ]
-            }
-            (allure_results / f"{uuid.uuid4()}-result.json").write_text(
-              json.dumps(result, ensure_ascii=False, indent=2),
-              encoding='utf-8'
-            )
           PY
 
           {
-            echo "## Allure Style CI Report"
+            echo "## CI Compile Check Report"
             echo ""
             echo "- Job status: ${overall_status}"
             echo "- Sync Project exit code: ${sync_status}"
-            echo "- Unit Test Build exit code: ${unit_test_status}"
             echo ""
-            echo "Allure-style HTML report has been uploaded in the artifact bundle."
+            echo "CI report has been uploaded in the artifact bundle."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare Historical Report Site
@@ -650,8 +524,6 @@ jobs:
           set -euo pipefail
           SITE_DIR="$GITHUB_WORKSPACE/pages-site"
           REPORTS_DIR="$GITHUB_WORKSPACE/.ci/reports"
-          ALLURE_RESULTS_DIR="$GITHUB_WORKSPACE/.ci/allure-results"
-          ALLURE_REPORT_DIR="$GITHUB_WORKSPACE/.ci/allure-report"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           rm -rf "$SITE_DIR"
@@ -667,177 +539,18 @@ jobs:
           cd "$SITE_DIR"
           touch .nojekyll
 
-          if [[ -d "$SITE_DIR/unit/history" ]]; then
-            rm -rf "$ALLURE_RESULTS_DIR/history"
-            cp -R "$SITE_DIR/unit/history" "$ALLURE_RESULTS_DIR/history"
-          fi
-
-          rm -rf "$ALLURE_REPORT_DIR"
-          npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
-
-          mkdir -p "$SITE_DIR/unit"
-          find "$SITE_DIR/unit" -mindepth 1 -maxdepth 1 ! -name "runs" -exec rm -rf {} +
-          cp -R "$ALLURE_REPORT_DIR/." "$SITE_DIR/unit/"
-
-          mkdir -p unit/runs unit/latest
-          RUN_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
-          rm -rf "$RUN_DIR" unit/latest/*
-          mkdir -p "$RUN_DIR/artifacts" unit/latest/artifacts
-          cp -R "$ALLURE_REPORT_DIR/." "$RUN_DIR/"
-          cp -R "$ALLURE_REPORT_DIR/." unit/latest/
-          cp -R "$REPORTS_DIR/." "$RUN_DIR/artifacts/"
-          cp -R "$REPORTS_DIR/." unit/latest/artifacts/
-          if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
-            mkdir -p "$SITE_DIR/unit/history"
-            rm -rf "$SITE_DIR/unit/history"/*
-            cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/unit/history/"
-          fi
-
           export PAGES_SITE_DIR="$SITE_DIR"
           export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
-          export ALLURE_REPORT_DIR_ENV="$ALLURE_REPORT_DIR"
           export GITHUB_RUN_URL_ENV="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python3 - <<'PY'
           import json
           import os
-          import re
           from datetime import datetime, timezone
           from pathlib import Path
 
           site = Path(os.environ['PAGES_SITE_DIR'])
-          unit_site = site / 'unit'
           current_run_number = os.environ['CURRENT_RUN_NUMBER']
-          allure_report_dir = Path(os.environ['ALLURE_REPORT_DIR_ENV'])
           run_url = os.environ['GITHUB_RUN_URL_ENV']
-
-          # ── unit-status.json ──────────────────────────────────────────────
-          passed, failed, total = 0, 0, 0
-          summary_path = allure_report_dir / 'widgets' / 'summary.json'
-          if summary_path.exists():
-            try:
-              summary = json.loads(summary_path.read_text(encoding='utf-8'))
-              stat = summary.get('statistic', {})
-              passed = int(stat.get('passed', 0))
-              failed = int(stat.get('failed', 0)) + int(stat.get('broken', 0))
-              total  = int(stat.get('total', 0))
-            except Exception:
-              pass
-
-          if failed == 0 and total > 0:
-            suite_status = 'passed'
-          elif failed > 0 and passed > 0:
-            suite_status = 'partial'
-          elif total == 0:
-            suite_status = 'passed'
-          else:
-            suite_status = 'failed'
-
-          unit_status_data = {
-            'suite': 'unit',
-            'status': suite_status,
-            'passed': passed,
-            'failed': failed,
-            'total': total,
-            'run_number': current_run_number,
-            'run_url': run_url,
-            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-          }
-          (site / 'unit-status.json').write_text(
-            json.dumps(unit_status_data, ensure_ascii=False, indent=2), encoding='utf-8'
-          )
-
-          # ── unit run history ──────────────────────────────────────────────
-          runs_dir = unit_site / 'runs'
-          entries = []
-          for meta_path in runs_dir.glob('*/meta.json'):
-            try:
-              meta = json.loads(meta_path.read_text(encoding='utf-8'))
-            except Exception:
-              continue
-            folder = meta_path.parent.name
-            meta['folder'] = folder
-            entries.append(meta)
-
-          def run_sort_key(item):
-            try:
-              return int(str(item.get('run_number', '0')))
-            except ValueError:
-              return 0
-
-          def add_cache_busting(index_path: Path, version: str) -> None:
-            if not index_path.exists():
-              return
-            text = index_path.read_text(encoding='utf-8')
-            meta_block = '\n'.join([
-              '    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">',
-              '    <meta http-equiv="Pragma" content="no-cache">',
-              '    <meta http-equiv="Expires" content="0">'
-            ])
-            if 'http-equiv="Cache-Control"' not in text and '</head>' in text:
-              text = text.replace('</head>', f'{meta_block}\n</head>', 1)
-            text = re.sub(r'((?:href|src)="(?!https?://|data:)([^"?#]+\.(?:css|js|json|png|svg|ico)))"', rf'\1?v={version}"', text)
-            index_path.write_text(text, encoding='utf-8')
-
-          entries.sort(key=run_sort_key, reverse=True)
-          latest_entry = entries[0] if entries else {
-            'folder': f'run-{current_run_number}',
-            'run_number': current_run_number,
-            'overall_status': 'unknown',
-            'branch': '-',
-            'sha': '-',
-            'generated_at': '-'
-          }
-
-          add_cache_busting(unit_site / 'index.html', current_run_number)
-          add_cache_busting(unit_site / 'latest' / 'index.html', current_run_number)
-          add_cache_busting(unit_site / 'runs' / latest_entry['folder'] / 'index.html', str(latest_entry.get('run_number', current_run_number)))
-
-          rows = []
-          for item in entries:
-            status = str(item.get('overall_status', 'unknown')).upper()
-            run_number = str(item.get('run_number', 'unknown'))
-            report_href = f"../runs/{item['folder']}/index.html?v={run_number}"
-            rows.append(
-              f"<tr><td><a href='{report_href}'>Run #{run_number}</a></td><td>{status}</td><td>{item.get('branch', '-')}</td><td>{item.get('sha', '-')}</td><td>{item.get('generated_at', '-')}</td></tr>"
-            )
-
-          latest_href = f"runs/{latest_entry['folder']}/index.html?v={latest_entry.get('run_number', current_run_number)}"
-          unit_archive_html = '\n'.join([
-            '<!DOCTYPE html>',
-            '<html lang="zh-CN">',
-            '<head>',
-            '  <meta charset="UTF-8" />',
-            '  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />',
-            '  <title>VidAll TV 单元测试报告历史</title>',
-            '  <style>',
-            '    body { font-family: Inter, -apple-system, sans-serif; margin: 0; background: #0d1117; color: #e6edf3; }',
-            '    .hero { background: #161b22; border-bottom: 1px solid #30363d; padding: 24px 32px; }',
-            '    .container { padding: 24px 32px 40px; }',
-            '    table { width: 100%; border-collapse: collapse; }',
-            '    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #30363d; }',
-            '    a { color: #58a6ff; text-decoration: none; }',
-            '  </style>',
-            '</head>',
-            '<body>',
-            '  <div class="hero">',
-            '    <h2 style="margin:0">单元测试报告历史</h2>',
-            f'    <p><a href="{latest_href}">打开最新 Allure 报告 ↗</a> &nbsp;|&nbsp; <a href="../">← 返回总览</a></p>',
-            '  </div>',
-            '  <div class="container">',
-            '    <table>',
-            '      <thead><tr><th>Run</th><th>状态</th><th>分支</th><th>Commit</th><th>时间</th></tr></thead>',
-            '      <tbody>',
-            *rows,
-            '      </tbody>',
-            '    </table>',
-            '  </div>',
-            '</body>',
-            '</html>'
-          ])
-          unit_archive_dir = unit_site / 'history-list'
-          unit_archive_dir.mkdir(parents=True, exist_ok=True)
-          (unit_archive_dir / 'index.html').write_text(unit_archive_html, encoding='utf-8')
-          (unit_site / 'latest.json').write_text(json.dumps(latest_entry, ensure_ascii=False, indent=2), encoding='utf-8')
 
           # ── portal index.html ─────────────────────────────────────────────
           def load_status(json_path: Path) -> 'dict | None':
@@ -932,13 +645,9 @@ jobs:
           (site / 'index.html').write_text(portal_html, encoding='utf-8')
           (site / '404.html').write_text(portal_html, encoding='utf-8')
 
-          # ── _headers：告知 EdgeOne/CDN 不缓存任何页面 ──────────────────────
-          # 注意：Allure 的 app.js/app.css 没有 content hash，无法安全设置 immutable
-          # Netlify/EdgeOne 的 * 不跨路径分隔符，/unit/* 无法覆盖 unit/data/*.json 等子目录
-          # 使用 /* 全局兜底，覆盖所有路径（包括 Allure data/ test-cases/ 等嵌套子目录）
           headers_content = '\n'.join([
             '# EdgeOne Pages / Netlify 兼容的 HTTP 响应头配置',
-            '# 所有页面不缓存（Allure 静态资源无 content hash，Portal/JSON 随 CI 变化）',
+            '# 所有页面不缓存（Portal/JSON 随 CI 变化）',
             '/*',
             '  Cache-Control: no-cache, no-store, must-revalidate',
             '  Pragma: no-cache',
@@ -969,11 +678,8 @@ jobs:
             echo "## GitHub Pages Publish"
             echo ""
             echo "- Publish branch: ${REPORTS_BRANCH}"
-            echo "- If GitHub Pages is enabled for this repository, the site will be served from:"
+            echo "- If GitHub Pages is enabled for this repository, the portal will be served from:"
             echo "  https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
-            echo "- Latest report entry: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/"
-            echo "- Versioned run page: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/unit/runs/run-${GITHUB_RUN_NUMBER}/index.html?v=${GITHUB_RUN_NUMBER}"
-            echo "- Archive list: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/unit/history-list/"
             echo "- First-time setup: Settings -> Pages -> Deploy from a branch -> ${REPORTS_BRANCH} /(root)"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -986,3 +692,8 @@ jobs:
             ${{ github.workspace }}/.ci/reports/**
           if-no-files-found: warn
           retention-days: 14
+
+  unit-test:
+    needs: compile-check
+    uses: ./.github/workflows/unit-test.yml
+    continue-on-error: true
