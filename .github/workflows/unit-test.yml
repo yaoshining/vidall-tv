@@ -56,13 +56,28 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           exit ${PIPESTATUS[0]}
 
-      - name: 上传测试日志
+      - name: 收集测试报告
+        if: always()
+        shell: bash
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          REPORT_SRC="$WORK_DIR/entry/.test/default/outputs/test/reports"
+          REPORT_DST="$RUNNER_TEMP/test-reports"
+          if [ -d "$REPORT_SRC" ]; then
+            cp -r "$REPORT_SRC" "$REPORT_DST"
+            echo "报告已复制到 $REPORT_DST"
+          else
+            echo "未找到报告目录：$REPORT_SRC"
+          fi
+
+      - name: 上传测试产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-log-${{ github.run_number }}
+          name: unit-test-results-${{ github.run_number }}
           path: |
             ${{ runner.temp }}/unit-test.log
-            ${{ env.WORK_DIR }}/entry/.test/default/outputs/test/reports/
+            ${{ runner.temp }}/test-reports/
           if-no-files-found: warn
           retention-days: 7
