@@ -349,10 +349,3 @@ jobs:
           path: ${{ runner.temp }}/unit-test.log
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Allure Report 摘要（PR 评论）
-        if: always() && github.event_name == 'pull_request'
-        uses: allure-framework/allure-report@v0
-        with:
-          report-directory: ${{ runner.temp }}/allure-report
-          github-token: ${{ secrets.GITHUB_TOKEN }}
