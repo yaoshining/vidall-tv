@@ -126,7 +126,12 @@ export default function subtitleBridgeAdapterTest() {
     it('decodeSubtitlePayload: ArrayBuffer UTF-8 中文字幕可正确解码', 0, (done: () => void) => {
       const source = '因为彼此 我们都受尽了折磨';
       const utf8 = buffer.from(source, 'utf-8');
-      const arrayBuffer = utf8.buffer.slice(utf8.byteOffset, utf8.byteOffset + utf8.length) as ArrayBuffer;
+      // 手动拷贝，避免 buffer.slice 在测试环境返回共享视图
+      const arrayBuffer = new ArrayBuffer(utf8.length);
+      const view = new Uint8Array(arrayBuffer);
+      for (let i = 0; i < utf8.length; i++) {
+        view[i] = utf8[i];
+      }
 
       const decoded = decodeSubtitlePayload(arrayBuffer);
 

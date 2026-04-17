@@ -14,12 +14,62 @@ const TAG = '[SubtitleBridgeAdapter]';
 const MAX_SUBTITLE_PROBE_CANDIDATES = 12;
 const SUBTITLE_PROBE_BATCH_SIZE = 4;
 
+/**
+ * 纯 JS UTF-8 解码兜底实现。
+ * 在 @ohos.buffer 和 util.TextDecoder 都返回空字符串的环境（如部分 CI mock）下保底。
+ */
+function decodeUtf8Fallback(bytes: Uint8Array): string {
+  let result = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const b0 = bytes[i];
+    if (b0 < 0x80) {
+      result += String.fromCharCode(b0);
+      i += 1;
+    } else if ((b0 & 0xE0) === 0xC0 && i + 1 < bytes.length) {
+      const cp = ((b0 & 0x1F) << 6) | (bytes[i + 1] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 2;
+    } else if ((b0 & 0xF0) === 0xE0 && i + 2 < bytes.length) {
+      const cp = ((b0 & 0x0F) << 12) | ((bytes[i + 1] & 0x3F) << 6) | (bytes[i + 2] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 3;
+    } else if ((b0 & 0xF8) === 0xF0 && i + 3 < bytes.length) {
+      const cp = ((b0 & 0x07) << 18) | ((bytes[i + 1] & 0x3F) << 12) |
+        ((bytes[i + 2] & 0x3F) << 6) | (bytes[i + 3] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 4;
+    } else {
+      result += String.fromCharCode(0xFFFD);
+      i += 1;
+    }
+  }
+  return result;
+}
+
 function tryDecode(bytes: Uint8Array, encoding: string): string {
-  // UTF-8 用 @ohos.buffer 解码：在本地测试 mock 与真机上均稳定工作。
-  // util.TextDecoder.decode(Uint8Array) 在本地测试 mock 中返回空字符串，故此处绕过。
   if (encoding === 'utf-8' || encoding === 'utf8') {
-    const buf = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    return buf.toString('utf-8');
+    // 三层降级：@ohos.buffer → util.TextDecoder → 纯 JS 兜底
+    try {
+      const buf = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const result = buf.toString('utf-8');
+      if (result.length > 0) {
+        return result;
+      }
+    } catch (e) {
+      // fall through
+    }
+    try {
+      const decoder = new util.TextDecoder('utf-8');
+      const ab: ArrayBuffer = toExactArrayBuffer(bytes);
+      const result = decoder.decode(ab as ESObject as Uint8Array);
+      if (result.length > 0) {
+        return result;
+      }
+    } catch (e) {
+      // fall through
+    }
+    return decodeUtf8Fallback(bytes);
   }
   const decoder = new util.TextDecoder(encoding);
   const ab: ArrayBuffer = toExactArrayBuffer(bytes);

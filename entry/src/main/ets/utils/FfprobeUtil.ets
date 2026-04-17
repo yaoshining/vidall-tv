@@ -345,6 +345,37 @@ export class FfprobeUtil {
   private static activeProbeCount: number = 0;
   private static pendingProbeResolvers: Array<() => void> = [];
 
+  /**
+   * 首次 ffprobe 调用完成后 resolve，用于防止多个 FFRT 线程并发初始化 OpenSSL。
+   * 根因：FFmpeg 的 OPENSSL_init_ssl → OPENSSL_LH_insert 在 FFRT 多线程环境下存在竞争，
+   * 需要确保首次 ffprobe 在单一 FFRT 线程上完成后，后续调用才能并发执行。
+   */
+  private static opensslReadyPromise: Promise<void> | null = null;
+  private static opensslReadyResolve: (() => void) | null = null;
+
+  /**
+   * 确保 OpenSSL 在 FFRT 线程中已完成单次初始化，避免并发导致 SIGSEGV。
+   * 首次调用：创建 ready promise，立即返回 true（本次调用将完成初始化）。
+   * 后续调用：等待 ready promise resolve 后返回 false。
+   */
+  private static async ensureOpensslReady(): Promise<boolean> {
+    if (FfprobeUtil.opensslReadyPromise === null) {
+      FfprobeUtil.opensslReadyPromise = new Promise<void>((resolve) => {
+        FfprobeUtil.opensslReadyResolve = resolve;
+      });
+      return true;
+    }
+    await FfprobeUtil.opensslReadyPromise;
+    return false;
+  }
+
+  private static signalOpensslReady(): void {
+    if (FfprobeUtil.opensslReadyResolve !== null) {
+      FfprobeUtil.opensslReadyResolve();
+      FfprobeUtil.opensslReadyResolve = null;
+    }
+  }
+
   private static async acquireProbeSlot(): Promise<void> {
     if (FfprobeUtil.activeProbeCount < FfprobeUtil.MAX_CONCURRENT_PROBES) {
       FfprobeUtil.activeProbeCount += 1;
@@ -423,6 +454,8 @@ export class FfprobeUtil {
     });
     console.info(`[FfprobeUtil] 命令: ${safeCommands.join(' ')}`);
 
+    // 确保 OpenSSL 单线程完成初始化后再并发，防止 FFRT 多线程竞争导致 SIGSEGV
+    const isInitProbe = await FfprobeUtil.ensureOpensslReady();
     await FfprobeUtil.acquireProbeSlot();
     try {
       const outputJson = await getVidAllCorePlayerNapi().ffprobe(url, headersStr, timeoutMs);
@@ -435,6 +468,9 @@ export class FfprobeUtil {
       return FfprobeUtil.buildErrorResult(url, message);
     } finally {
       FfprobeUtil.releaseProbeSlot();
+      if (isInitProbe) {
+        FfprobeUtil.signalOpensslReady();
+      }
     }
   }
 
