@@ -677,6 +677,27 @@ jobs:
           export CURRENT_RUN_NUMBER="${GITHUB_RUN_NUMBER}"
           export GITHUB_RUN_URL_ENV="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
+          # 将当前集成测试报告归档到 integration/runs/run-N/（用于历史追溯）
+          INTG_SRC="$SITE_DIR/integration"
+          INTG_RUN_DIR="$SITE_DIR/integration/runs/run-${GITHUB_RUN_NUMBER}"
+          if [ -d "$INTG_SRC" ]; then
+            mkdir -p "$INTG_RUN_DIR"
+            # 复制所有内容，但排除 runs/ 子目录（避免嵌套膨胀）
+            rsync -a --exclude='runs/' "$INTG_SRC/" "$INTG_RUN_DIR/"
+            echo "已将集成报告归档至 $INTG_RUN_DIR"
+          fi
+
+          # 清理旧的集成 runs，保留最近 10 次
+          if [ -d "$SITE_DIR/integration/runs" ]; then
+            INTG_KEEP=10
+            INTG_TOTAL=$(ls -1d "$SITE_DIR/integration/runs/run-"* 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$INTG_TOTAL" -gt "$INTG_KEEP" ]; then
+              INTG_DEL=$((INTG_TOTAL - INTG_KEEP))
+              echo "清理集成测试最旧的 $INTG_DEL 个 runs（共 $INTG_TOTAL 个，保留 $INTG_KEEP 个）"
+              ls -1d "$SITE_DIR/integration/runs/run-"* 2>/dev/null | sort -t- -k2 -n | head -n "$INTG_DEL" | xargs rm -rf
+            fi
+          fi
+
           python3 - <<'PY'
           import json
           import os
@@ -753,7 +774,7 @@ jobs:
               'passed':     passed,
               'failed':     failed,
               'total':      total,
-              'report_href': f'integration/index.html?v={current_run_number}',
+              'report_href': f'integration/runs/run-{current_run_number}/index.html',
           })
           intg_hist = intg_hist[-30:]
           intg_hist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -812,7 +833,7 @@ jobs:
           intg_run_num  = intg_st.get('run_number', '') if intg_st else ''
           unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
           unit_coverage_href = f'unit/runs/run-{unit_run_num}/coverage/index.html?v={unit_run_num}' if unit_run_num else None
-          intg_report_href = f'integration/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
+          intg_report_href = f'integration/runs/run-{intg_run_num}/index.html' if intg_run_num else 'integration/index.html'
 
           unit_card = render_card(
             '单元测试', unit_st,
