@@ -26,6 +26,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: harmonyos-device-integration-test
   cancel-in-progress: false
