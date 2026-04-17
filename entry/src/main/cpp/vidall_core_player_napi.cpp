@@ -1214,11 +1214,11 @@ raw_pkt_parse:
     if (text.empty()) continue;
 
     // OOM guard：超过上限时终止，避免超大文件耗尽内存
+    // 注意：pkt 在上方第 1212 行已经 av_packet_unref，此处只 break，不重复 unref
     if (subPkts >= MAX_SUBTITLE_ENTRIES || json.size() >= MAX_JSON_BYTES) {
       OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "ExtractSub",
                    "extractSub cap reached entries=%lld jsonBytes=%zu, stopping",
                    (long long)subPkts, json.size());
-      av_packet_unref(pkt);
       break;
     }
 
