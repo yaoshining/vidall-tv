@@ -16,6 +16,8 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
+  checks: write
 
 env:
   REPORTS_BRANCH: "gh-pages"
@@ -65,7 +67,7 @@ jobs:
         env:
           RUNNER_TEMP: ${{ runner.temp }}
           GH_TOKEN: ${{ github.token }}
-          ALLURE_VERSION: "2.24.1"
+          ALLURE_VERSION: "3"
         run: |
           set -euo pipefail
           REPORT_SRC="$WORK_DIR/entry/.test/default/outputs/test/reports"
@@ -182,16 +184,21 @@ jobs:
           print(f"已生成 {len(test_cases)} 条 allure-results JSON")
           PY
 
-          # 复制 Allure history（用于历史趋势图）
-          if [[ -d "$SITE_DIR/unit/history" ]]; then
-            echo "复制历史 trend 数据..."
+          # 复制 Allure history（Allure 3 格式；跳过旧 Allure 2 history 避免不兼容）
+          # Allure 3 history 文件包含 history-trend.json，Allure 2 格式不含此文件
+          if [[ -d "$SITE_DIR/unit/history" ]] && [[ -f "$SITE_DIR/unit/history/history-trend.json" ]]; then
+            echo "复制 Allure 3 历史 trend 数据..."
             cp -R "$SITE_DIR/unit/history" "$ALLURE_RESULTS_DIR/history"
+          else
+            echo "未找到 Allure 3 兼容 history，从本次开始建立新趋势图"
+            # 清除旧 Allure 2 history，避免污染
+            rm -rf "$SITE_DIR/unit/history"
           fi
 
-          # 生成 Allure HTML 报告
-          echo "生成 Allure HTML 报告..."
+          # 生成 Allure 3 HTML 报告
+          echo "生成 Allure 3 HTML 报告（@allurereport/cli@${ALLURE_VERSION}）..."
           rm -rf "$ALLURE_REPORT_DIR"
-          npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
+          npx --yes "@allurereport/cli@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --output "$ALLURE_REPORT_DIR"
 
           # 复制 Allure 报告到 unit/runs/run-N/
           RUN_REPORT_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
@@ -342,3 +349,10 @@ jobs:
           path: ${{ runner.temp }}/unit-test.log
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Allure Report 摘要（PR 评论）
+        if: always() && github.event_name == 'pull_request'
+        uses: allure-framework/allure-report@v0
+        with:
+          report-directory: ${{ runner.temp }}/allure-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
