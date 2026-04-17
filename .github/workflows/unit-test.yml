@@ -319,7 +319,6 @@ jobs:
             render_card('单元测试', unit_st, unit_report_href, 'unit/history-list/index.html', unit_coverage_href),
             render_card('集成测试', intg_st, intg_report_href, 'integration/history-list/index.html'),
             '    </div>',
-            f'    <p style="margin-top:32px;font-size:0.8rem;color:#484f58;text-align:center;">由 GitHub Actions 自动生成 · Run #{os.environ["CURRENT_RUN_NUMBER"]}</p>',
             '  </div>','</body>','</html>',
           ])
           (site / 'index.html').write_text(portal_html, encoding='utf-8')
