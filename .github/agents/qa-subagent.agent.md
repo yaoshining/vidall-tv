@@ -123,7 +123,26 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 --sync -p product=default --analyze=normal --parallel --incremental --daemon'
 ```
 
-2) 本地单测构建（当前可用）
+2) 本地单测**真实执行**（推荐，无需设备，输出测试结果和 HTML 报告）
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default \
+test --no-daemon'
+```
+
+执行后输出类似：`Tests run: 123, Failure: 0, Error: 0, Pass: 123, Ignore: 0`
+HTML 报告位于：`entry/.test/default/outputs/test/reports/index.html`
+文本结果位于：`entry/.test/default/intermediates/test/coverage_data/test_result.txt`
+
+可加 `-p coverage=true` 开启覆盖率；可加 `-p scope=套件名#用例名` 只跑单个用例。
+
+2b) 本地单测**仅编译**（不执行，只验证编译链路）
 
 ```bash
 zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
@@ -152,8 +171,10 @@ tasks --mode module -p module=entry@default'
 
 ### 三、已确认事实（避免重复踩坑）
 
-- `UnitTestBuild` 可成功，用于验证本地单测编译链路。
+- `hvigorw test --mode module -p module=entry@default` 可**真实执行单测**，无需设备，hypium 框架在本地 Node.js 运行时中运行，输出 pass/fail 结果和 HTML 报告。
+- `UnitTestBuild` 只编译不执行，用于验证编译链路；`hvigorw test` 才是完整执行单测的正确命令。
 - `UnitTest` 任务在当前项目参数下不存在（直接执行会报 `Task ['UnitTest'] was not found`）。
+- `util.TextDecoder.decode()` 在本地测试模式下只接受 `ArrayBuffer`，不接受 `Uint8Array`；需用 `toExactArrayBuffer(bytes)` 转换后再传入，否则返回空字符串。
 - 用 `... | tail` 时，`$?` 取到的是 `tail` 退出码，不是 hvigor 退出码。
 
 ### 四、退出码采集规范

@@ -2,6 +2,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
+import buffer from '@ohos.buffer';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import { FfprobeUtil, type FfprobeTrack } from '../../../utils/FfprobeUtil';
 import { VideoData } from './VideoData';
@@ -14,8 +15,15 @@ const MAX_SUBTITLE_PROBE_CANDIDATES = 12;
 const SUBTITLE_PROBE_BATCH_SIZE = 4;
 
 function tryDecode(bytes: Uint8Array, encoding: string): string {
+  // UTF-8 用 @ohos.buffer 解码：在本地测试 mock 与真机上均稳定工作。
+  // util.TextDecoder.decode(Uint8Array) 在本地测试 mock 中返回空字符串，故此处绕过。
+  if (encoding === 'utf-8' || encoding === 'utf8') {
+    const buf = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return buf.toString('utf-8');
+  }
   const decoder = new util.TextDecoder(encoding);
-  return decoder.decode(bytes);
+  const ab: ArrayBuffer = toExactArrayBuffer(bytes);
+  return decoder.decode(ab as ESObject as Uint8Array);
 }
 
 function buildByteArrayFromString(text: string): Uint8Array | null {
@@ -175,20 +183,22 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
 
   // UTF-8 BOM: EF BB BF
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-    const decoder = new util.TextDecoder('utf-8', { ignoreBOM: true });
-    return decoder.decode(bytes);
+    const buf = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return buf.toString('utf-8').replace(/^\uFEFF/, '');
   }
 
   // UTF-16 LE BOM: FF FE
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
     const decoder = new util.TextDecoder('utf-16le', { ignoreBOM: true });
-    return decoder.decode(bytes);
+    const ab: ArrayBuffer = toExactArrayBuffer(bytes);
+    return decoder.decode(ab as ESObject as Uint8Array);
   }
 
   // UTF-16 BE BOM: FE FF
   if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
     const decoder = new util.TextDecoder('utf-16be', { ignoreBOM: true });
-    return decoder.decode(bytes);
+    const ab: ArrayBuffer = toExactArrayBuffer(bytes);
+    return decoder.decode(ab as ESObject as Uint8Array);
   }
 
   // 启发式检测：扫描前 4KB，判断是否为合法 UTF-8

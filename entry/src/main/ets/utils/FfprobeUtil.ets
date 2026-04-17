@@ -922,17 +922,17 @@ export class FfprobeUtil {
     let label = '';
     if (langName && codecDisplay) {
       label = isSemanticTier3
-        ? `${langName}(${codecDisplay}) ${tier3}`
-        : `${langName}(${codecDisplay})`;
+        ? `${langName} (${codecDisplay}) ${tier3}`
+        : `${langName} (${codecDisplay})`;
     } else if (langName) {
       label = langName;
     } else if (codecDisplay) {
-      label = `字幕(${codecDisplay})`;
+      label = `字幕 ${num} (${codecDisplay})`;
     } else {
-      label = '字幕';
+      label = `字幕 ${num}`;
     }
 
-    return `${num} ${label}`;
+    return label;
   }
 }
 
