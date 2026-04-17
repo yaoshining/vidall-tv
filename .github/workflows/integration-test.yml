@@ -618,26 +618,28 @@ jobs:
       - name: Generate Allure Report
         if: always()
         shell: bash
+        env:
+          ALLURE_VERSION: "3.6.0"
         run: |
           set -euo pipefail
           ALLURE_RESULTS="$GITHUB_WORKSPACE/.ci/allure-results"
           ALLURE_REPORT="$GITHUB_WORKSPACE/allure-history"
 
-          # 复制历史趋势数据（支持 Trend/Retries 图表）
-          if [[ -d "$GITHUB_WORKSPACE/gh-pages/integration/history" ]]; then
+          # 复制历史趋势数据（Allure 3 格式：需包含 history-trend.json）
+          if [[ -d "$GITHUB_WORKSPACE/gh-pages/integration/history" ]] && \
+             [[ -f "$GITHUB_WORKSPACE/gh-pages/integration/history/history-trend.json" ]]; then
             mkdir -p "$ALLURE_RESULTS/history"
             cp -R "$GITHUB_WORKSPACE/gh-pages/integration/history/." "$ALLURE_RESULTS/history/"
-            echo "Restored history from gh-pages/integration/history"
+            echo "Restored Allure 3 history from gh-pages/integration/history"
+          else
+            echo "未找到 Allure 3 兼容 history，从本次开始建立新趋势图"
+            rm -rf "$ALLURE_RESULTS/history"
           fi
 
-          # 确保 java 可用（allure-commandline 需要 JRE）
-          export PATH="$JAVA_HOME/bin:$PATH"
-          java -version
-
-          # 使用 node 自带的 npx 生成 Allure HTML 报告
+          # Allure 3 基于 Node.js，无需 Java
           NPX_BIN="$(dirname "$NODE_BIN")/npx"
-          "$NPX_BIN" --yes "allure-commandline@2.34.1" \
-            generate "$ALLURE_RESULTS" --clean -o "$ALLURE_REPORT"
+          echo "生成 Allure 3 HTML 报告（allure@${ALLURE_VERSION}）..."
+          "$NPX_BIN" --yes "allure@${ALLURE_VERSION}" generate "$ALLURE_RESULTS" --output "$ALLURE_REPORT"
           echo "Report generated at $ALLURE_REPORT"
 
       - name: Publish integration report to gh-pages
@@ -687,17 +689,33 @@ jobs:
           run_url = os.environ['GITHUB_RUN_URL_ENV']
 
           # ── integration-status.json ───────────────────────────────────────
+          # 直接从 allure-results *-result.json 计数（兼容 Allure 2/3，无需 widgets/summary.json）
           passed, failed, total = 0, 0, 0
-          summary_path = allure_report_dir / 'widgets' / 'summary.json'
-          if summary_path.exists():
+          allure_results_dir = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'allure-results'
+          for result_file in allure_results_dir.glob('*-result.json'):
             try:
-              summary = json.loads(summary_path.read_text(encoding='utf-8'))
-              stat = summary.get('statistic', {})
-              passed = int(stat.get('passed', 0))
-              failed = int(stat.get('failed', 0)) + int(stat.get('broken', 0))
-              total  = int(stat.get('total', 0))
+              data = json.loads(result_file.read_text(encoding='utf-8'))
+              status = data.get('status', '')
+              total += 1
+              if status == 'passed':
+                passed += 1
+              elif status in ('failed', 'broken'):
+                failed += 1
             except Exception:
               pass
+          # 兜底：如果 allure-results 目录不存在或为空，尝试旧的 widgets/summary.json（Allure 2）
+          if total == 0:
+            summary_path = allure_report_dir / 'widgets' / 'summary.json'
+            if summary_path.exists():
+              try:
+                summary = json.loads(summary_path.read_text(encoding='utf-8'))
+                stat = summary.get('statistic', {})
+                passed = int(stat.get('passed', 0))
+                failed = int(stat.get('failed', 0)) + int(stat.get('broken', 0))
+                total  = int(stat.get('total', 0))
+              except Exception:
+                pass
+          print(f'统计结果: passed={passed}, failed={failed}, total={total}')
 
           if failed == 0 and total > 0:
             suite_status = 'passed'
@@ -762,7 +780,7 @@ jobs:
             else:
               return '❌', '#f85149', '存在失败'
 
-          def render_card(title, s, report_href, archive_href):
+          def render_card(title, s, report_href, archive_href, coverage_href=None):
             icon, color, label = status_badge(s)
             if s:
               p, f, t = s.get('passed', 0), s.get('failed', 0), s.get('total', 0)
@@ -771,18 +789,21 @@ jobs:
             else:
               rate = '—'
               run_info = '暂无记录'
-            return '\n'.join([
+            cov_btn = (f'      <a href="{coverage_href}" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">覆盖率报告</a>'
+                       if coverage_href else '')
+            return '\n'.join(filter(None, [
               '  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;">',
               f'    <div style="font-size:1.1rem;font-weight:600;color:#e6edf3;">{title}</div>',
               f'    <div style="font-size:2rem;">{icon} <span style="font-size:1rem;color:{color};font-weight:500;">{label}</span></div>',
               f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">用例通过</span></div>',
               f'    <div style="font-size:0.85rem;color:#8b949e;">{run_info}</div>',
-              '    <div style="display:flex;gap:10px;margin-top:4px;">',
+              '    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">',
               f'      <a href="{report_href}" style="background:#238636;color:#fff;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;font-weight:500;">查看报告</a>',
               f'      <a href="{archive_href}" style="background:#21262d;color:#58a6ff;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">历史记录</a>',
+              cov_btn,
               '    </div>',
               '  </div>',
-            ])
+            ]))
 
           unit_st = load_status(site / 'unit-status.json')
           intg_st = load_status(site / 'integration-status.json')
@@ -790,12 +811,14 @@ jobs:
           unit_run_num  = unit_st.get('run_number', '') if unit_st else ''
           intg_run_num  = intg_st.get('run_number', '') if intg_st else ''
           unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
+          unit_coverage_href = f'unit/runs/run-{unit_run_num}/coverage/index.html?v={unit_run_num}' if unit_run_num else None
           intg_report_href = f'integration/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
 
           unit_card = render_card(
             '单元测试', unit_st,
             report_href=unit_report_href,
             archive_href='unit/history-list/index.html',
+            coverage_href=unit_coverage_href,
           )
           intg_card = render_card(
             '集成测试', intg_st,
