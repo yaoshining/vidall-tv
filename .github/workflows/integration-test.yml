@@ -874,7 +874,7 @@ jobs:
               '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n'
               '  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
               '  <title>集成测试历史记录</title>\n'
-              '  <script src="../../vendor/tailwind.js"></script>\n'
+              '  <script src="https://cdn.tailwindcss.com/3.4.17"></script>\n'
               '</head>\n<body class="bg-gray-950 text-gray-200 min-h-screen font-sans">\n'
               '  <div class="max-w-5xl mx-auto px-4 py-10">\n'
               '    <div class="mb-8">\n'
