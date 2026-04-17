@@ -42,10 +42,13 @@ jobs:
     steps:
       - name: 同步最新代码（git pull）
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd "$WORK_DIR"
-          git pull
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git pull "$REPO_URL" HEAD
 
       - name: 执行单元测试
         shell: bash
