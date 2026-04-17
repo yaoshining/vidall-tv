@@ -65,11 +65,14 @@ jobs:
         env:
           RUNNER_TEMP: ${{ runner.temp }}
           GH_TOKEN: ${{ github.token }}
+          ALLURE_VERSION: "2.24.1"
         run: |
           set -euo pipefail
           REPORT_SRC="$WORK_DIR/entry/.test/default/outputs/test/reports"
           TEST_LOG="$RUNNER_TEMP/unit-test.log"
           SITE_DIR="$RUNNER_TEMP/gh-pages-site"
+          ALLURE_RESULTS_DIR="$RUNNER_TEMP/allure-results"
+          ALLURE_REPORT_DIR="$RUNNER_TEMP/allure-report"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           # 解析测试结果（从 test_result.txt 读取，比日志解析更可靠）
@@ -124,14 +127,90 @@ jobs:
           }
           JSON
 
-          # 复制 HTML 报告到 unit/runs/run-N/
+          # 生成 allure-results JSON（逐条解析 test_result.txt）
+          mkdir -p "$ALLURE_RESULTS_DIR"
+          export RESULT_TXT ALLURE_RESULTS_DIR GITHUB_RUN_NUMBER GITHUB_REPOSITORY GITHUB_RUN_ID
+          python3 - <<'PY'
+          import json, os, uuid
+          from pathlib import Path
+          from datetime import datetime, timezone
+          result_txt  = Path(os.environ['RESULT_TXT'])
+          allure_dir  = Path(os.environ['ALLURE_RESULTS_DIR'])
+          run_number  = os.environ['GITHUB_RUN_NUMBER']
+          repo        = os.environ['GITHUB_REPOSITORY']
+          run_id      = os.environ['GITHUB_RUN_ID']
+          now_ms      = int(datetime.now(timezone.utc).timestamp() * 1000)
+          current_suite = 'unit'
+          pending: dict = {}
+          test_cases: list = []
+          if result_txt.exists():
+            for line in result_txt.read_text(encoding='utf-8').splitlines():
+              if line.startswith('class='):
+                current_suite = line[6:].strip()
+              elif line.startswith('test='):
+                pending = {'suite': current_suite, 'name': line[5:].strip(), 'status': 'broken'}
+              elif line.startswith('result=') and pending:
+                r = line[7:].strip()
+                if r == 'Success':  pending['status'] = 'passed'
+                elif r == 'Failure': pending['status'] = 'failed'
+                else:                pending['status'] = 'broken'
+                test_cases.append(pending)
+                pending = {}
+          for tc in test_cases:
+            hid = f"{tc['suite']}#{tc['name']}"
+            res: dict = {
+              'uuid': str(uuid.uuid4()),
+              'historyId': hid, 'testCaseId': hid,
+              'name': tc['name'],
+              'fullName': f"{tc['suite']}#{tc['name']}",
+              'status': tc['status'],
+              'stage': 'finished',
+              'start': now_ms, 'stop': now_ms,
+              'labels': [
+                {'name': 'suite',      'value': tc['suite']},
+                {'name': 'framework',  'value': 'hvigorw / hypium'},
+                {'name': 'host',       'value': 'iMac self-hosted runner'},
+              ],
+              'links': [
+                {'name': f'Actions #{run_number}',
+                 'url':  f'https://github.com/{repo}/actions/runs/{run_id}',
+                 'type': 'link'},
+              ],
+            }
+            (allure_dir / f"{res['uuid']}-result.json").write_text(
+              json.dumps(res, ensure_ascii=False), encoding='utf-8')
+          print(f"已生成 {len(test_cases)} 条 allure-results JSON")
+          PY
+
+          # 复制 Allure history（用于历史趋势图）
+          if [[ -d "$SITE_DIR/unit/history" ]]; then
+            echo "复制历史 trend 数据..."
+            cp -R "$SITE_DIR/unit/history" "$ALLURE_RESULTS_DIR/history"
+          fi
+
+          # 生成 Allure HTML 报告
+          echo "生成 Allure HTML 报告..."
+          rm -rf "$ALLURE_REPORT_DIR"
+          npx --yes "allure-commandline@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --clean -o "$ALLURE_REPORT_DIR"
+
+          # 复制 Allure 报告到 unit/runs/run-N/
           RUN_REPORT_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
           mkdir -p "$RUN_REPORT_DIR"
+          cp -R "$ALLURE_REPORT_DIR/." "$RUN_REPORT_DIR/"
+          echo "Allure 报告已复制到 $RUN_REPORT_DIR"
+
+          # 覆盖率报告放 unit/runs/run-N/coverage/（补充）
           if [ -d "$REPORT_SRC" ]; then
-            cp -r "$REPORT_SRC/." "$RUN_REPORT_DIR/"
-            echo "报告已复制到 $RUN_REPORT_DIR"
-          else
-            echo "警告：未找到 HTML 报告目录 $REPORT_SRC"
+            mkdir -p "$RUN_REPORT_DIR/coverage"
+            cp -r "$REPORT_SRC/." "$RUN_REPORT_DIR/coverage/"
+            echo "覆盖率报告已复制到 $RUN_REPORT_DIR/coverage/"
+          fi
+
+          # 回写 Allure history 到 gh-pages（供下次 run 使用趋势图）
+          if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
+            mkdir -p "$SITE_DIR/unit/history"
+            rm -rf "$SITE_DIR/unit/history"/*
+            cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/unit/history/"
           fi
 
           # 更新 unit/index.html 重定向到最新 run
@@ -143,17 +222,22 @@ jobs:
           </head><body>正在跳转到最新报告...</body></html>
           HTML
 
-          # 生成 unit/history-list/index.html
+          # 生成 unit/history-list/index.html（修复链接缺 runs/ 层）
           mkdir -p unit/history-list
           export SITE_DIR="$SITE_DIR"
           python3 - <<'PY'
-          import os, json
+          import os
           from pathlib import Path
           site = Path(os.environ['SITE_DIR'])
           runs_dir = site / 'unit' / 'runs'
-          runs = sorted([d.name for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith('run-')], reverse=True) if runs_dir.exists() else []
-          rows = ''.join(f'<tr><td><a href="../{r}/index.html">{r}</a></td></tr>' for r in runs)
-          html = f'<!DOCTYPE html><html><head><meta charset="UTF-8"><title>单元测试历史</title></head><body><h1>单元测试历史记录</h1><table>{rows}</table></body></html>'
+          runs = sorted(
+            [d.name for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith('run-')],
+            reverse=True) if runs_dir.exists() else []
+          rows = ''.join(f'<tr><td><a href="../runs/{r}/index.html">{r}</a></td></tr>' for r in runs)
+          html = (
+            '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>单元测试历史</title></head>'
+            f'<body><h1>单元测试历史记录</h1><table>{rows}</table></body></html>'
+          )
           (site / 'unit' / 'history-list' / 'index.html').write_text(html, encoding='utf-8')
           PY
 
@@ -178,7 +262,7 @@ jobs:
             elif st == 'partial': return '⚠️', '#d29922', '部分失败'
             else: return '❌', '#f85149', '存在失败'
 
-          def render_card(title, s, report_href, archive_href):
+          def render_card(title, s, report_href, archive_href, coverage_href=None):
             icon, color, label = status_badge(s)
             if s:
               p, f, t = s.get('passed',0), s.get('failed',0), s.get('total',0)
@@ -186,24 +270,28 @@ jobs:
               run_info = f'Run #{s.get("run_number","-")} &nbsp;·&nbsp; {s.get("timestamp","-")[:10]}'
             else:
               rate = '—'; run_info = '暂无记录'
-            return '\n'.join([
+            cov_btn = (f'      <a href="{coverage_href}" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">覆盖率报告</a>'
+                       if coverage_href else '')
+            return '\n'.join(filter(None, [
               '  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;">',
               f'    <div style="font-size:1.1rem;font-weight:600;color:#e6edf3;">{title}</div>',
               f'    <div style="font-size:2rem;">{icon} <span style="font-size:1rem;color:{color};font-weight:500;">{label}</span></div>',
               f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">用例通过</span></div>',
               f'    <div style="font-size:0.85rem;color:#8b949e;">{run_info}</div>',
-              '    <div style="display:flex;gap:10px;margin-top:4px;">',
+              '    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">',
               f'      <a href="{report_href}" style="background:#238636;color:#fff;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;font-weight:500;">查看报告</a>',
               f'      <a href="{archive_href}" style="background:#21262d;color:#58a6ff;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">历史记录</a>',
+              cov_btn,
               '    </div>',
               '  </div>',
-            ])
+            ]))
 
           unit_st = load_status(site / 'unit-status.json')
           intg_st = load_status(site / 'integration-status.json')
           unit_run_num = unit_st.get('run_number','') if unit_st else ''
           intg_run_num = intg_st.get('run_number','') if intg_st else ''
-          unit_report_href = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
+          unit_report_href   = f'unit/runs/run-{unit_run_num}/index.html?v={unit_run_num}' if unit_run_num else 'unit/index.html'
+          unit_coverage_href = f'unit/runs/run-{unit_run_num}/coverage/index.html?v={unit_run_num}' if unit_run_num else None
           # integration 报告直接放 integration/index.html（无 runs/ 子目录）
           intg_report_href = f'integration/index.html?v={intg_run_num}' if intg_run_num else 'integration/index.html'
 
@@ -221,7 +309,7 @@ jobs:
             '      <p style="margin:0;color:#8b949e;font-size:0.9rem;">单元测试 · 集成测试 · 统一入口</p>',
             '    </div>',
             '    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">',
-            render_card('单元测试', unit_st, unit_report_href, 'unit/history-list/index.html'),
+            render_card('单元测试', unit_st, unit_report_href, 'unit/history-list/index.html', unit_coverage_href),
             render_card('集成测试', intg_st, intg_report_href, 'integration/history-list/index.html'),
             '    </div>',
             f'    <p style="margin-top:32px;font-size:0.8rem;color:#484f58;text-align:center;">由 GitHub Actions 自动生成 · Run #{os.environ["CURRENT_RUN_NUMBER"]}</p>',
