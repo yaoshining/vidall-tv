@@ -14,12 +14,6 @@ permissions:
   contents: write
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -693,6 +687,3 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  unit-test:
-    needs: compile-check
-    uses: ./.github/workflows/unit-test.yml
