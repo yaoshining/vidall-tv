@@ -91,11 +91,20 @@ jobs:
           else STATUS="failed"; fi
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          # clone gh-pages
+          # clone gh-pages（最多重试 3 次，规避 macOS LibreSSL 偶发 SSL 握手失败）
           rm -rf "$SITE_DIR"
-          if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
-            echo "已加载现有 gh-pages 分支"
-          else
+          CLONED=false
+          for attempt in 1 2 3; do
+            if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+              echo "已加载现有 gh-pages 分支（第 $attempt 次尝试）"
+              CLONED=true
+              break
+            fi
+            echo "clone 第 $attempt 次失败，${attempt}0 秒后重试..."
+            sleep $((attempt * 10))
+          done
+          if [ "$CLONED" = "false" ]; then
+            echo "gh-pages 分支不存在，初始化新分支"
             mkdir -p "$SITE_DIR" && cd "$SITE_DIR"
             git init && git checkout -b "$REPORTS_BRANCH"
           fi
@@ -223,12 +232,19 @@ jobs:
           PY
           export SITE_DIR="$SITE_DIR"
 
-          # 推送 gh-pages
+          # 推送 gh-pages（最多重试 3 次）
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "单元测试报告 #${GITHUB_RUN_NUMBER} (${STATUS}: ${PASSED}/${TOTAL})" || echo "无变更"
-          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" --force
+          for attempt in 1 2 3; do
+            if git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" --force; then
+              echo "gh-pages 推送成功（第 $attempt 次尝试）"
+              break
+            fi
+            echo "push 第 $attempt 次失败，${attempt}0 秒后重试..."
+            sleep $((attempt * 10))
+          done
 
       - name: 上传测试产物
         if: always()
