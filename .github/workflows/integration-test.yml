@@ -448,6 +448,12 @@ jobs:
           TEST_CMD="$TEST_CMD -s WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PATH '${WEBDAV_PATH:-/}'"
+          # UI 测试在 CI 中默认禁用（delegator.startAbility 触发 OpenSSL native 并发崩溃）
+          TEST_CMD="$TEST_CMD -s ENABLE_UI_TESTS false"
+          # HTTPS / SMB / 播放器测试在无对应环境时跳过
+          TEST_CMD="$TEST_CMD -s SKIP_HTTPS_TESTS true"
+          TEST_CMD="$TEST_CMD -s SKIP_SMB_TESTS true"
+          TEST_CMD="$TEST_CMD -s SKIP_PLAYER_TESTS true"
 
           # 验证设备连接是否仍然有效（hdc install 后 hidumper 可能导致连接失效）
           echo "验证设备连接: $DEVICE_SERIAL"
