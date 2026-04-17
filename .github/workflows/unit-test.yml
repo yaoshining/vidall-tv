@@ -67,7 +67,7 @@ jobs:
         env:
           RUNNER_TEMP: ${{ runner.temp }}
           GH_TOKEN: ${{ github.token }}
-          ALLURE_VERSION: "3"
+          ALLURE_VERSION: "3.6.0"
         run: |
           set -euo pipefail
           REPORT_SRC="$WORK_DIR/entry/.test/default/outputs/test/reports"
@@ -196,9 +196,9 @@ jobs:
           fi
 
           # 生成 Allure 3 HTML 报告
-          echo "生成 Allure 3 HTML 报告（@allurereport/cli@${ALLURE_VERSION}）..."
+          echo "生成 Allure 3 HTML 报告（allure@${ALLURE_VERSION}）..."
           rm -rf "$ALLURE_REPORT_DIR"
-          npx --yes "@allurereport/cli@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --output "$ALLURE_REPORT_DIR"
+          npx --yes "allure@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --output "$ALLURE_REPORT_DIR"
 
           # 复制 Allure 报告到 unit/runs/run-N/
           RUN_REPORT_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
