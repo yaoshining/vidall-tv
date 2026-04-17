@@ -341,14 +341,17 @@ function maskUrlForLog(url: string): string {
 }
 
 export class FfprobeUtil {
-  private static readonly MAX_CONCURRENT_PROBES: number = 2;
+  /**
+   * OpenSSL 在 FFRT 多线程环境下整个 SSL 生命周期（init/use/free）均不安全。
+   * 必须串行执行（=1），否则并发时 SSL_free / X509_free / ASN1_OBJECT_free 会竞争全局状态导致 SIGSEGV。
+   * 若后续升级 FFmpeg 并修复 OpenSSL 线程安全问题，可提升此值。
+   */
+  private static readonly MAX_CONCURRENT_PROBES: number = 1;
   private static activeProbeCount: number = 0;
   private static pendingProbeResolvers: Array<() => void> = [];
 
   /**
-   * 首次 ffprobe 调用完成后 resolve，用于防止多个 FFRT 线程并发初始化 OpenSSL。
-   * 根因：FFmpeg 的 OPENSSL_init_ssl → OPENSSL_LH_insert 在 FFRT 多线程环境下存在竞争，
-   * 需要确保首次 ffprobe 在单一 FFRT 线程上完成后，后续调用才能并发执行。
+   * opensslReadyPromise 保留兼容（MAX_CONCURRENT_PROBES=1 时此机制冗余但无副作用）。
    */
   private static opensslReadyPromise: Promise<void> | null = null;
   private static opensslReadyResolve: (() => void) | null = null;
