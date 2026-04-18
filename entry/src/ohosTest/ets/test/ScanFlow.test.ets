@@ -15,7 +15,6 @@
 
 import { describe, it, expect, beforeAll } from '@ohos/hypium'
 import { Driver, Component, ON, MatchPattern } from '@kit.TestKit'
-import { KeyCode } from '@kit.InputKit'
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry'
 import type Want from '@ohos.app.ability.Want'
 
@@ -31,13 +30,12 @@ function getTestParam(key: string, fallback: string): string {
 }
 
 const WAIT_SHORT = 3000
-const WAIT_LONG = 8000
 
 export default function scanFlowTest() {
   const enableUiTests = getTestParam('ENABLE_UI_TESTS', 'false') === 'true'
   const scanTimeoutMs = parseInt(getTestParam('SCAN_TIMEOUT_MS', '30000'), 10)
 
-  let driver = Driver.create()
+  let driver!: Driver
 
   describe('扫描流程集成测试', () => {
 

@@ -27,11 +27,10 @@ function getTestParam(key: string, fallback: string): string {
 }
 
 const WAIT_SHORT = 3000
-const WAIT_LONG = 8000
 
 export default function mediaNavigationTest() {
   const enableUiTests = getTestParam('ENABLE_UI_TESTS', 'false') === 'true'
-  let driver = Driver.create()
+  let driver!: Driver
 
   describe('媒体库导航UI测试', () => {
 

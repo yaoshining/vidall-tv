@@ -5,14 +5,15 @@
  * 覆盖：打开设置面板、画面比例切换、字幕管理入口、画质增强入口
  *
  * 注意：播放器设置需要处于播放中状态才能触发。
- * 这些测试依赖以下参数提供可播放的视频文件：
- *   -s PLAYABLE_VIDEO_URL http://your-nas/video.mp4
+ * 当前测试仅在外部已满足该前置条件时执行 UI 检查，
+ * 不负责读取 PLAYABLE_VIDEO_URL，也不负责拉起页面并启动播放。
+ *
+ * 当前使用的测试参数：
  *   -s SKIP_PLAYER_TESTS true  （默认跳过，需设备连接时手动开启）
  *
  * 运行方式：
  *   aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner \
- *     -s SKIP_PLAYER_TESTS false \
- *     -s PLAYABLE_VIDEO_URL "http://192.168.3.59:5445/dav/video.mp4"
+ *     -s SKIP_PLAYER_TESTS false
  */
 
 import { describe, it, expect, beforeAll } from '@ohos/hypium'
@@ -33,12 +34,11 @@ function getTestParam(key: string, fallback: string): string {
 }
 
 const WAIT_SHORT = 3000
-const WAIT_LONG = 8000
 
 export default function playerSettingsTest() {
   const skipPlayer = getTestParam('SKIP_PLAYER_TESTS', 'true') === 'true'
 
-  let driver = Driver.create()
+  let driver!: Driver
 
   describe('播放器设置UI测试', () => {
 

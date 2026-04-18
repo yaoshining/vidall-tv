@@ -5,12 +5,15 @@
  * 覆盖：添加 WebDAV 源、添加 SMB 源、测试连接、目录选择器
  *
  * 运行方式：
- *   aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner  *     -s WEBDAV_HOST 192.168.3.59:5445  *     -s WEBDAV_USERNAME yao  *     -s WEBDAV_PASSWORD ys198756  *     -s SKIP_SMB_TESTS true
+ *   aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner \
+ *     -s WEBDAV_HOST 192.168.3.59:5445 \
+ *     -s WEBDAV_USERNAME your_username \
+ *     -s WEBDAV_PASSWORD your_password \
+ *     -s SKIP_SMB_TESTS true
  */
 
 import { describe, it, expect, beforeAll } from "@ohos/hypium"
 import { Driver, Component, ON } from "@kit.TestKit"
-import { KeyCode } from "@kit.InputKit"
 import abilityDelegatorRegistry from "@ohos.app.ability.abilityDelegatorRegistry"
 import type Want from "@ohos.app.ability.Want"
 
@@ -31,12 +34,12 @@ const WAIT_LONG = 10000
 export default function fileSourceUiTest() {
   const enableUiTests = getTestParam("ENABLE_UI_TESTS", "false") === "true"
   const skipSmb = getTestParam("SKIP_SMB_TESTS", "true") === "true"
-  const webdavHost = getTestParam("WEBDAV_HOST", "192.168.3.59:5445")
-  const webdavUser = getTestParam("WEBDAV_USERNAME", "yao")
-  const webdavPass = getTestParam("WEBDAV_PASSWORD", "ys198756")
+  const webdavHost = getTestParam("WEBDAV_HOST", "")
+  const webdavUser = getTestParam("WEBDAV_USERNAME", "")
+  const webdavPass = getTestParam("WEBDAV_PASSWORD", "")
   const serverName = "UITest_WebDAV_" + Date.now().toString().slice(-6)
 
-  let driver = Driver.create()
+  let driver!: Driver
 
   describe("文件源管理UI测试", () => {
 
