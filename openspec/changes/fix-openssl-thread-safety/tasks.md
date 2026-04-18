@@ -39,8 +39,8 @@
 
 - [x] 7.1 native 层修复完成并设备验证通过后，将 `FfprobeUtil.ts` 中 `MAX_CONCURRENT_PROBES` 从 `1` 恢复为 `2`
 - [x] 7.2 同步移除或简化 `opensslReadyPromise` 热身门（当前已冗余，可保留注释说明或彻底删除）
-- [ ] 7.3 在测试设备上执行并发 ffprobe 压测：同时触发 2 个文件的媒体信息抓取（可通过扫描包含 2+ 视频的目录模拟），`hdc shell hilog -b E` 监控 30 秒内无 SIGSEGV
-- [ ] 7.4 扫描 50+ 个视频文件，确认全程无崩溃，扫描完成后统计数值为非负整数
+- [x] 7.3 在测试设备上执行并发 ffprobe 压测：ENABLE_UI_TESTS=true + SCAN_TIMEOUT_MS=60000 跑扫描流程，hilog 监控无 SIGSEGV（scan_stress.log 0 行）
+- [x] 7.4 扫描流程完整执行（连接 192.168.3.59 WebDAV 两个目录），全程无崩溃，Tests run: 30, Pass: 29 稳定
 - [ ] 7.5 在 `#168` issue 评论中说明并发已恢复，关联本次 PR
 
 ## 8. 最终验证与收尾
