@@ -13,6 +13,7 @@
 .plans
 .DS_Store
 /.ai
+/.roo/.env
 /docs
 /scripts
 .worktrees/
