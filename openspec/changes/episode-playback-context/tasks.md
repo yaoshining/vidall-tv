@@ -30,10 +30,15 @@
 
 ## 6. EpisodeListPanel UI 组件
 
+> 严格按照 design.md「EpisodeListPanel 设计规范」章节实现，所有尺寸用 vp（禁止 px 绝对值）。
+
 - [ ] 6.1 创建 `entry/src/main/ets/components/core/player/EpisodeListPanel.ets`，使用 `LazyForEach` 渲染集数列表，接收 `context: MediaLibraryContext` 和 `onSelect: (item: PlaybackContextItem) => void`
-- [ ] 6.2 实现集数条目：显示集号、标题、已看标记（`isWatched`）
-- [ ] 6.3 高亮当前正在播放的集（基于 `context.currentIndex`）
-- [ ] 6.4 实现 TV 遥控器焦点管理（上下键导航，边界不越出列表）
+- [ ] 6.2 实现集数卡片：当前集宽度 210vp（高亮描边 `#A9F4FF` 4vp）、普通集 256vp、圆角 26vp、间距 48vp；最右侧 edgeCard 168vp 截断提示翻页
+- [ ] 6.3 实现集数标签：fontSize=24vp, fontWeight=700, fill=`#F0F4F9`，高度 28vp，居中
+- [ ] 6.4 实现分页范围条：每页6集，条目格式"1-6/7-12"，激活项 `#F3F7FB`，非激活 `#D5DDE8`，下划线高3vp 圆角2vp
+- [ ] 6.5 实现 pagerPill 胶囊（76×34vp, cornerRadius=18vp, 半透明白）：焦点在分页条时显示
+- [ ] 6.6 实现焦点环（42×42vp 椭圆，inside stroke 5vp `#FFFFFF`）叠加在焦点卡片角
+- [ ] 6.7 实现 TV 遥控器焦点管理（上下键导航，边界不越出列表；左右键在卡片间切换，到边缘时触发翻页）
 
 ## 7. PlayerSettingsDialog 集成
 
