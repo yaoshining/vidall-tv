@@ -6,6 +6,7 @@ export interface PlaybackContextItem {
   videoPath: string;
   title: string;
   index: number;
+  posterPath?: string;  // 集的封面图本地路径（可选）
 }
 
 // 播放上下文抽象基类
@@ -61,7 +62,8 @@ export class MediaLibraryContext extends PlaybackContext {
       const item: PlaybackContextItem = {
         videoPath: ep.filePath,
         title: ep.title ?? ep.fileName,
-        index: i
+        index: i,
+        posterPath: ep.posterLocalPath ?? undefined,
       };
       mapped.push(item);
     }

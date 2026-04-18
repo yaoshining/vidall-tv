@@ -90,23 +90,6 @@ export struct EpisodeListPanel {
     return item.index === this.context.currentIndex
   }
 
-  /**
-   * 计算卡片宽度：
-   * - 当前播放集：210vp（高亮缩窄）
-   * - 最后一张且下一页存在（edgeCard）：168vp（截断暗示更多内容）
-   * - 普通集：256vp
-   */
-  private getCardWidth(item: PlaybackContextItem, index: number): number {
-    const pageItems = this.getPageItems()
-    if (index === pageItems.length - 1 && this.currentPage < this.getTotalPages() - 1) {
-      return 168
-    }
-    if (this.isCurrentItem(item)) {
-      return 210
-    }
-    return 256
-  }
-
   private buildPageRange(): number[] {
     const total = this.getTotalPages()
     const result: number[] = []
@@ -124,31 +107,33 @@ export struct EpisodeListPanel {
 
   @Builder
   EpisodeCard(item: PlaybackContextItem, index: number) {
-    Stack({ alignContent: Alignment.BottomEnd }) {
-      // 卡片主体
-      Column() {
-        Text(`第${item.index + 1}集`)
-          .height(28)
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#F0F4F9')
-          .textAlign(TextAlign.Center)
+    Column({ space: 8 }) {
+      // 海报卡片主体
+      Stack({ alignContent: Alignment.BottomEnd }) {
+        Image(item.posterPath ? item.posterPath : $r('app.media.empty_folder'))
           .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Cover)
+
+        // 焦点环：叠加在右下角，仅当前焦点卡片显示
+        if (this.isFocusRingVisible(index)) {
+          Ellipse()
+            .width(42)
+            .height(42)
+            .stroke('#FFFFFF')
+            .strokeWidth(5)
+            .fill(Color.Transparent)
+            .margin({ right: 6, bottom: 6 })
+        }
       }
-      .width(this.getCardWidth(item, index))
-      .height(136)
+      .width(220)
+      .height(140)
       .borderRadius(26)
-      .backgroundColor(
-        this.isCurrentItem(item)
-          ? 'rgba(169, 244, 255, 0.15)'
-          : 'rgba(255, 255, 255, 0.1)'
-      )
       .border(
         this.isCurrentItem(item)
           ? { width: 4, color: '#A9F4FF', style: BorderStyle.Solid }
           : { width: 0, color: Color.Transparent, style: BorderStyle.Solid }
       )
-      .justifyContent(FlexAlign.Center)
       .clip(true)
       .focusable(true)
       .onFocus(() => {
@@ -159,17 +144,14 @@ export struct EpisodeListPanel {
         this.onSelect(item)
       })
 
-      // 焦点环：叠加在右下角，仅当前焦点卡片显示
-      if (this.isFocusRingVisible(index)) {
-        Ellipse()
-          .width(42)
-          .height(42)
-          .stroke('#FFFFFF')
-          .strokeWidth(5)
-          .fill(Color.Transparent)
-          .margin({ right: 6, bottom: 6 })
-      }
+      // 集名
+      Text(item.title)
+        .fontSize(22)
+        .fontColor('#F0F4F9')
+        .textAlign(TextAlign.Center)
+        .width(220)
     }
+    .alignItems(HorizontalAlign.Center)
   }
 
   // ── build ─────────────────────────────────────────────────────────────────
@@ -199,7 +181,7 @@ export struct EpisodeListPanel {
       .listDirection(Axis.Horizontal)
       .scrollBar(BarState.Off)
       .width('100%')
-      .height(160)
+      .height(200)
       .onKeyEvent((event: KeyEvent) => {
         if (event.type !== KeyType.Down) {
           return
@@ -265,33 +247,31 @@ export struct EpisodeListPanel {
               .onClick(() => {
                 this.goToPage(pageIdx)
               })
+              .onKeyEvent((event: KeyEvent) => {
+                if (event.type !== KeyType.Down) {
+                  return
+                }
+                if (event.keyCode === KeyCode.KEYCODE_ENTER || event.keyCode === KeyCode.KEYCODE_DPAD_CENTER) {
+                  this.goToPage(pageIdx)
+                } else if (event.keyCode === KeyCode.KEYCODE_DPAD_UP) {
+                  this.isPageBarFocused = false
+                } else if (event.keyCode === KeyCode.KEYCODE_DPAD_LEFT && this.pageBarFocusedIndex > 0) {
+                  this.pageBarFocusedIndex = this.pageBarFocusedIndex - 1
+                  this.goToPage(this.pageBarFocusedIndex)
+                } else if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT && this.pageBarFocusedIndex < this.getTotalPages() - 1) {
+                  this.pageBarFocusedIndex = this.pageBarFocusedIndex + 1
+                  this.goToPage(this.pageBarFocusedIndex)
+                }
+              })
             },
             (pageIdx: number) => pageIdx.toString()
           )
         }
         .margin({ top: 32 })
         .alignSelf(ItemAlign.Start)
-        .onKeyEvent((event: KeyEvent) => {
-          if (event.type !== KeyType.Down) {
-            return
-          }
-          if (event.keyCode === KeyCode.KEYCODE_DPAD_UP) {
-            // 向上回到卡片区
-            this.isPageBarFocused = false
-          } else if (event.keyCode === KeyCode.KEYCODE_DPAD_LEFT && this.pageBarFocusedIndex > 0) {
-            this.pageBarFocusedIndex = this.pageBarFocusedIndex - 1
-            this.goToPage(this.pageBarFocusedIndex)
-          } else if (
-            event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT &&
-            this.pageBarFocusedIndex < this.getTotalPages() - 1
-          ) {
-            this.pageBarFocusedIndex = this.pageBarFocusedIndex + 1
-            this.goToPage(this.pageBarFocusedIndex)
-          }
-        })
       }
     }
-    .backgroundColor('#0B1020')
+    .backgroundColor(Color.Transparent)
     .width('100%')
     .padding({ top: 40, bottom: 40, left: 84 })
     .alignItems(HorizontalAlign.Start)
