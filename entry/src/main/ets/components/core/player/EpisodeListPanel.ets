@@ -110,7 +110,7 @@ export struct EpisodeListPanel {
     Column({ space: 8 }) {
       // 海报卡片主体
       Stack({ alignContent: Alignment.BottomEnd }) {
-        Image(item.posterPath ? item.posterPath : $r('app.media.empty_folder'))
+        Image(item.thumbnailUrl ? item.thumbnailUrl : $r('app.media.empty_folder'))
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Cover)

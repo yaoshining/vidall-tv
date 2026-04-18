@@ -3,7 +3,7 @@ import {
   PlaybackContext, PlaybackContextItem,
   MediaLibraryContext, FileExplorerContext, BuildItemsResult
 } from '../../main/ets/components/core/player/PlaybackContext';
-import { MediaItem } from '../../main/ets/db/models/MediaEntity';
+import { MediaItem, TvEpisodeEntity } from '../../main/ets/db/models/MediaEntity';
 
 // 用于测试的具体实现类（不测试具体播放逻辑，只验证基类导航方法）
 class TestPlaybackContext extends PlaybackContext {
@@ -41,6 +41,10 @@ function makeItems(count: number): PlaybackContextItem[] {
     result.push(item);
   }
   return result;
+}
+
+interface PlaybackContextItemWithThumbnail extends PlaybackContextItem {
+  thumbnailUrl?: string;
 }
 
 export default function PlaybackContextTest() {
@@ -228,6 +232,49 @@ export default function PlaybackContextTest() {
       const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 1, '/ep1.mkv');
       expect(result.items.length).assertEqual(1);
       expect(result.items[0].title).assertEqual('ep1.mkv');
+    });
+
+    it('buildItems 优先使用剧集 stillUrl 填充缩略图字段且不再依赖 posterLocalPath', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1, episodeNumber: 1,
+          title: 'EP1', posterLocalPath: '/series-poster.jpg'
+        },
+      ];
+      const episodeEntities: TvEpisodeEntity[] = [
+        {
+          seriesId: 1, provider: 'tmdb', providerId: 'ep1',
+          seasonNumber: 1, episodeNumber: 1, scrapedAt: 0,
+          stillUrl: 'https://image.tmdb.org/t/p/w342/still-ep1.jpg'
+        },
+      ];
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/ep1.mkv', episodeEntities);
+      const firstItem = result.items[0] as PlaybackContextItemWithThumbnail;
+
+      expect(firstItem.thumbnailUrl).assertEqual('https://image.tmdb.org/t/p/w342/still-ep1.jpg');
+      expect(JSON.stringify(firstItem).indexOf('posterPath')).assertEqual(-1);
+    });
+
+    it('buildItems 在 stillUrl 缺失时使用 stillPath 生成与季详情页一致的缩略图 URL', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1, episodeNumber: 1,
+          title: 'EP1'
+        },
+      ];
+      const episodeEntities: TvEpisodeEntity[] = [
+        {
+          seriesId: 1, provider: 'tmdb', providerId: 'ep1',
+          seasonNumber: 1, episodeNumber: 1, scrapedAt: 0,
+          stillPath: '/still-ep1.jpg'
+        },
+      ];
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/ep1.mkv', episodeEntities);
+      const firstItem = result.items[0] as PlaybackContextItemWithThumbnail;
+
+      expect(firstItem.thumbnailUrl).assertEqual('https://image.tmdb.org/t/p/w342/still-ep1.jpg');
     });
 
   });

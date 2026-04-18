@@ -1,12 +1,19 @@
 import { FileSourceDatabase } from '../../../db/files/FileSourceDatabase';
-import { MediaItem } from '../../../db/models/MediaEntity';
+import { MediaItem, TvEpisodeEntity } from '../../../db/models/MediaEntity';
+
+function tmdbImageUrl(path: string | undefined, width: string): string {
+  if (path === undefined || path.length === 0) {
+    return '';
+  }
+  return `https://image.tmdb.org/t/p/${width}${path}`;
+}
 
 // 播放上下文条目接口
 export interface PlaybackContextItem {
   videoPath: string;
   title: string;
   index: number;
-  posterPath?: string;      // 集的封面图本地路径（可选）
+  thumbnailUrl?: string;    // 集缩略图 URL（优先 stillUrl/stillPath）
   episodeNumber?: number;   // 集号（如 1, 2, 3...）
 }
 
@@ -53,18 +60,21 @@ export class MediaLibraryContext extends PlaybackContext {
   static buildItems(
     allItems: MediaItem[],
     seasonNumber: number,
-    currentVideoPath: string
+    currentVideoPath: string,
+    episodeEntities: TvEpisodeEntity[] = []
   ): BuildItemsResult {
     const seasonItems = allItems.filter(item => item.seasonNumber === seasonNumber);
+    const episodeEntityByNumber = MediaLibraryContext.buildEpisodeEntityByNumber(episodeEntities);
 
     const mapped: PlaybackContextItem[] = [];
     for (let i = 0; i < seasonItems.length; i++) {
       const ep = seasonItems[i];
+      const episodeEntity = MediaLibraryContext.findEpisodeEntity(ep, i, episodeEntities, episodeEntityByNumber);
       const item: PlaybackContextItem = {
         videoPath: ep.filePath,
         title: ep.title ?? ep.fileName,
         index: i,
-        posterPath: ep.posterLocalPath ?? undefined,
+        thumbnailUrl: MediaLibraryContext.getEpisodeThumbnailUrl(episodeEntity),
         episodeNumber: ep.episodeNumber ?? undefined,
       };
       mapped.push(item);
@@ -94,7 +104,8 @@ export class MediaLibraryContext extends PlaybackContext {
     currentVideoPath: string
   ): Promise<MediaLibraryContext> {
     const allItems = await db.getMediaItemsByTvSeriesId(seriesId);
-    const buildResult = MediaLibraryContext.buildItems(allItems, seasonNumber, currentVideoPath);
+    const episodeEntities = await db.getEpisodesBySeriesAndSeason(seriesId, seasonNumber);
+    const buildResult = MediaLibraryContext.buildItems(allItems, seasonNumber, currentVideoPath, episodeEntities);
 
     const ctx = new MediaLibraryContext();
     ctx.seriesId = seriesId;
@@ -103,6 +114,46 @@ export class MediaLibraryContext extends PlaybackContext {
     ctx.items = buildResult.items;
     ctx.currentIndex = buildResult.currentIndex;
     return ctx;
+  }
+
+  private static buildEpisodeEntityByNumber(episodeEntities: TvEpisodeEntity[]): Map<number, TvEpisodeEntity> {
+    const result = new Map<number, TvEpisodeEntity>();
+    for (let i = 0; i < episodeEntities.length; i++) {
+      const entity = episodeEntities[i];
+      result.set(entity.episodeNumber, entity);
+    }
+    return result;
+  }
+
+  private static findEpisodeEntity(
+    item: MediaItem,
+    index: number,
+    episodeEntities: TvEpisodeEntity[],
+    episodeEntityByNumber: Map<number, TvEpisodeEntity>
+  ): TvEpisodeEntity | undefined {
+    if (item.episodeNumber !== undefined) {
+      const matchedEntity = episodeEntityByNumber.get(item.episodeNumber);
+      if (matchedEntity !== undefined) {
+        return matchedEntity;
+      }
+    }
+    if (index >= 0 && index < episodeEntities.length) {
+      return episodeEntities[index];
+    }
+    return undefined;
+  }
+
+  private static getEpisodeThumbnailUrl(entity: TvEpisodeEntity | undefined): string | undefined {
+    if (entity === undefined) {
+      return undefined;
+    }
+    if (entity.stillUrl !== undefined && entity.stillUrl.length > 0) {
+      return entity.stillUrl;
+    }
+    if (entity.stillPath !== undefined && entity.stillPath.length > 0) {
+      return tmdbImageUrl(entity.stillPath, 'w342');
+    }
+    return undefined;
   }
 
   jumpTo(index: number): PlaybackContextItem | null {
