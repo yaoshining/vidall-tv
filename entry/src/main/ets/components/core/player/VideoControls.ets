@@ -868,7 +868,7 @@ export struct PlayerSettingsDialog {
       .scrollBar(BarState.Off)
       .width('100%')
       .height('55%')
-      .backgroundColor('rgba(9,14,25,0.92)')
+      .backgroundColor(Color.Transparent)
       .borderRadius({ topLeft: 24, topRight: 24 })
       .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
     }

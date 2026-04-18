@@ -145,11 +145,13 @@ export struct EpisodeListPanel {
       })
 
       // 集名
-      Text(item.title)
+      Text('第' + (item.episodeNumber ?? (item.index + 1)).toString() + '集')
         .fontSize(22)
         .fontColor('#F0F4F9')
         .textAlign(TextAlign.Center)
         .width(220)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .alignItems(HorizontalAlign.Center)
   }

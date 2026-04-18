@@ -6,7 +6,8 @@ export interface PlaybackContextItem {
   videoPath: string;
   title: string;
   index: number;
-  posterPath?: string;  // 集的封面图本地路径（可选）
+  posterPath?: string;      // 集的封面图本地路径（可选）
+  episodeNumber?: number;   // 集号（如 1, 2, 3...）
 }
 
 // 播放上下文抽象基类
@@ -64,6 +65,7 @@ export class MediaLibraryContext extends PlaybackContext {
         title: ep.title ?? ep.fileName,
         index: i,
         posterPath: ep.posterLocalPath ?? undefined,
+        episodeNumber: ep.episodeNumber ?? undefined,
       };
       mapped.push(item);
     }
