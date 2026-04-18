@@ -1,4 +1,5 @@
 import timeUtilTest from './TimeUtil.test';
+import playbackContextTest from './ets/PlaybackContextTest';
 import settingsControllerTest from './SettingsController.test';
 import validationUtilTest from './ValidationUtil.test';
 import scrapeClientTest from './ScrapeClient.test';
@@ -14,6 +15,7 @@ import videoScannerTest from './VideoScanner.test';
 
 export default function testsuite() {
   timeUtilTest();
+  playbackContextTest();
   settingsControllerTest();
   validationUtilTest();
   scrapeClientTest();
