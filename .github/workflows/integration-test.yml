@@ -447,7 +447,7 @@ jobs:
           TEST_CMD="$TEST_CMD -s WEBDAV_HOST '${WEBDAV_HOST:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
-          TEST_CMD="$TEST_CMD -s WEBDAV_PATH '${WEBDAV_PATH:-/}'"
+          TEST_CMD="$TEST_CMD -s WEBDAV_PATH '${WEBDAV_PATH:-/dav}'"
           # UI 测试默认禁用（CI 无连接设备；有设备时可设 ENABLE_UI_TESTS=true）
           # native 层 OpenSSL 竞态已于 PR #169 修复，设备环境下可正常运行 29/30 用例
           TEST_CMD="$TEST_CMD -s ENABLE_UI_TESTS false"

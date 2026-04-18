@@ -31,10 +31,11 @@ const PROPFIND_BODY =
 
 export default function webdavTest() {
   // 凭据通过 aa test -s KEY VALUE 注入（CI 由 GitHub Secrets 提供），本地开发使用 fallback
+  // 5445 是 Synology HTTP WebDAV 端口，/dav 是 WebDAV 根路径（/ 是 Web UI 登录页）
   const webdavHost = getTestParam('WEBDAV_HOST', '192.168.3.59:5445')
   const webdavUser = getTestParam('WEBDAV_USERNAME', 'yao')
   const webdavPass = getTestParam('WEBDAV_PASSWORD', 'ys198756')
-  const webdavPath = getTestParam('WEBDAV_PATH', '/')
+  const webdavPath = getTestParam('WEBDAV_PATH', '/dav')
   const skipHttpsTests = getTestParam('SKIP_HTTPS_TESTS', 'true') === 'true'
 
   describe('WebDAV_protocol_tests', () => {
