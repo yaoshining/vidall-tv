@@ -47,4 +47,4 @@
 
 - [x] 8.1 以 `ENABLE_UI_TESTS=true` 跑全量 29 个 UI 用例，确认全部执行真实断言并通过（3 轮稳定：Tests run: 30, Failure: 1, Error: 0, Pass: 29）
 - [x] 8.2 更新 `integration-test.yml` 注释，说明 `ENABLE_UI_TESTS=false` 是 CI 无设备环境的默认值，有设备时可设为 true，并注明 OpenSSL 竞态已修复
-- [ ] 8.3 提交代码，PR 描述关联 #169 和 #168，并在两个 issue 评论中说明修复已合并
+- [x] 8.3 提交代码，PR 描述关联 #169 和 #168，并在两个 issue 评论中说明修复已合并
