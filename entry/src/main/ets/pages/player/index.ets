@@ -6,6 +6,7 @@ import {
   type PlayerBackend,
   type UnsupportedFormatFallback
 } from "../../components/core/player/VideoPlayerController";
+import { PlaybackContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
@@ -49,6 +50,11 @@ export interface PlayerPageParam {
    * 若未设置或为 0，则回退到 media_progress 同季同集匹配 seek 逻辑。
    */
   startPositionMs?: number;
+  /**
+   * 播放上下文（可选）。携带当季集列表及当前集索引，供播放器内连播/上下集跳转使用。
+   * 由 SeasonDetailPage / SeriesDetailPage 在 playEpisode() 中构建并传入。
+   */
+  playbackContext?: PlaybackContext;
 }
 
 @ComponentV2
@@ -391,6 +397,11 @@ export struct PlayerPage {
               }).catch(() => {});
             });
           }
+        }
+
+        // 播放上下文：有则传递给播放器控制器，供后续连播/跳集逻辑使用
+        if (pageParam.playbackContext !== undefined) {
+          this.videoPlayerController.playbackContext = pageParam.playbackContext;
         }
       }
     })

@@ -13,6 +13,7 @@ import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from '../../components/core/player/Constants'
+import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -986,6 +987,18 @@ export struct SeasonDetailPage {
       const mKey = (seriesProviderId.length > 0 && episodeNum > 0)
         ? MediaProgressStore.episodeKey(seriesProviderId, episodeSeason, episodeNum)
         : undefined;
+
+      // 构建播放上下文：查询当季集列表并定位当前集，供播放器内连播使用
+      const seriesDbId = this.seriesEntity?.id ?? 0;
+      let playbackContext: MediaLibraryContext | undefined = undefined;
+      if (seriesDbId > 0) {
+        try {
+          playbackContext = await MediaLibraryContext.build(db, seriesDbId, episodeSeason, episode.filePath);
+        } catch (e) {
+          console.warn('[SeasonDetailPage] MediaLibraryContext.build 失败，跳过: ' + JSON.stringify(e));
+        }
+      }
+
       const param: PlayerPageParam = {
         // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
         url: fullUrl,
@@ -999,7 +1012,8 @@ export struct SeasonDetailPage {
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mKey,
-        startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
+        startPositionMs: startPositionMs > 0 ? startPositionMs : undefined,
+        playbackContext
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
         if (popInfo.result !== null && popInfo.result !== undefined) {

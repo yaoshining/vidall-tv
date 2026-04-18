@@ -16,6 +16,7 @@ import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/pla
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from '../../components/core/player/Constants'
+import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
 
 // ─────────────────────────────────────────────
 // TMDB 图片 URL 工具
@@ -790,6 +791,19 @@ export struct SeriesDetailPage {
       }
 
       const episodeName = await this.resolveEpisodeName(db, episode);
+
+      // 构建播放上下文：查询当季集列表并定位当前集，供播放器内连播使用
+      const seriesDbId = this.seriesEntity?.id ?? 0;
+      const episodeSeasonNum = episode.seasonNumber ?? 0;
+      let playbackContext: MediaLibraryContext | undefined = undefined;
+      if (seriesDbId > 0) {
+        try {
+          playbackContext = await MediaLibraryContext.build(db, seriesDbId, episodeSeasonNum, episode.filePath);
+        } catch (e) {
+          console.warn('[SeriesDetailPage] MediaLibraryContext.build 失败，跳过: ' + JSON.stringify(e));
+        }
+      }
+
       const param: PlayerPageParam = {
         // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
         url: fullUrl,
@@ -802,7 +816,8 @@ export struct SeriesDetailPage {
         episodeNumber: episode.episodeNumber ?? 0,
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
-        mediaKey: mediaKey
+        mediaKey: mediaKey,
+        playbackContext
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
         if (popInfo.result !== null && popInfo.result !== undefined) {
