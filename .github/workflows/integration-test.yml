@@ -536,33 +536,35 @@ jobs:
           ]
 
           # Parse hypium / OpenHarmonyTestRunner output
-          # Patterns: "[pass] testCaseName" / "[fail] testCaseName"
-          # Also handle "OHOS_REPORT_RESULT_CODE: 0/-2" with associated test name
+          # Pattern 1: "[pass] testCaseName" / "[fail] testCaseName" (hypium text, may have prefix)
+          # Pattern 2: OHOS_REPORT_STATUS: test=xxx + OHOS_REPORT_STATUS_CODE: 0/-2
           cases = []
 
-          # Pattern 1: [pass]/[fail] lines (hypium text format)
+          # Pattern 1: [pass]/[fail] lines; use re.search to handle prefixes like "[Hypium] "
           for line in log_text.splitlines():
-            m_pass = re.match(r'\[pass\]\s+(\S+)', line)
-            m_fail = re.match(r'\[fail\]\s+(\S+)', line)
+            m_pass = re.search(r'\[pass\]\s+(\S+)', line)
+            m_fail = re.search(r'\[fail\]\s+(\S+)', line)
             if m_pass:
               cases.append({'name': m_pass.group(1), 'status': 'passed', 'message': ''})
             elif m_fail:
               msg = line[m_fail.end():].strip()
               cases.append({'name': m_fail.group(1), 'status': 'failed', 'message': msg})
 
-          # Pattern 2: OHOS_REPORT style (if pattern 1 yielded nothing)
+          # Pattern 2: OHOS_REPORT style (OpenHarmonyTestRunner per-test result)
+          # OHOS_REPORT_STATUS_CODE: 1 = test started (skip), 0 = passed, -2 = failed
           if not cases:
             test_name = None
             for line in log_text.splitlines():
               m = re.match(r'OHOS_REPORT_STATUS:\s+test=(.+)', line)
               if m:
                 test_name = m.group(1).strip()
-              rc = re.match(r'OHOS_REPORT_RESULT_CODE:\s+(-?\d+)', line)
+              rc = re.match(r'OHOS_REPORT_STATUS_CODE:\s+(-?\d+)', line)
               if rc and test_name:
                 code = int(rc.group(1))
-                status = 'passed' if code == 0 else 'failed'
-                cases.append({'name': test_name, 'status': status, 'message': ''})
-                test_name = None
+                if code != 1:  # 1 = started event, not a final result
+                  status = 'passed' if code == 0 else 'failed'
+                  cases.append({'name': test_name, 'status': status, 'message': ''})
+                  test_name = None
 
           # Fallback: one summary result based on overall ResultCode
           if not cases:
