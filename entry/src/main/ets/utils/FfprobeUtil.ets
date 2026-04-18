@@ -342,11 +342,11 @@ function maskUrlForLog(url: string): string {
 
 export class FfprobeUtil {
   /**
-   * native 层（vidall_core_player_napi.cpp）已通过 g_ffmpegNetworkMutex 串行化
-   * libavformat 网络生命周期，消除了 OpenSSL 多线程竞态 SIGSEGV（#169 修复）。
-   * 此处恢复为 2（原设计值），允许最多 2 个并发 ffprobe 操作。
+   * native 层通过 g_ffmpegNetworkMutex 串行化 avformat_open_input → close_input，
+   * 实际每次只有一个 libavformat 网络操作并发执行（#169 修复）。
+   * ArkTS 层上限保持与 native 行为一致，避免第二个 slot 占用 worker 线程空转等锁。
    */
-  private static readonly MAX_CONCURRENT_PROBES: number = 2;
+  private static readonly MAX_CONCURRENT_PROBES: number = 1;
   private static activeProbeCount: number = 0;
   private static pendingProbeResolvers: Array<() => void> = [];
 

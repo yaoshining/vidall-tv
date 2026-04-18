@@ -14,7 +14,7 @@
 ## 3. Native 层：模块卸载时安全清理
 
 - [x] 3.1 在 `vidall_core_player_napi.cpp` 新增 `__attribute__((destructor)) static void OnNapiModuleUnload()` 函数
-- [x] 3.2 函数内将 `g_avNetworkReady` 置为 false，等待一个短暂 guard 周期后调用 `avformat_network_deinit()`
+- [x] 3.2 函数内先获取 `g_ffmpegNetworkMutex`（等待 in-flight worker 结束），再将 `g_avNetworkReady` 置为 false 并立即调用 `avformat_network_deinit()`
 - [x] 3.3 在 `EnsureAvNetworkInit()` 的调用点前检查 `g_avNetworkReady`，若为 false 则 worker 提前返回错误消息
 
 ## 4. 编译验证

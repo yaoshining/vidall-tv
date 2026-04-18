@@ -677,8 +677,13 @@ static std::mutex g_ffmpegNetworkMutex;
 
 static void EnsureAvNetworkInit() {
   std::call_once(g_avNetworkInitFlag, []() {
-    avformat_network_init();
-    g_avNetworkReady.store(true);
+    int ret = avformat_network_init();
+    if (ret >= 0) {
+      g_avNetworkReady.store(true);
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, "EnsureAvNetworkInit",
+                   "avformat_network_init failed: %d", ret);
+    }
   });
 }
 
@@ -5191,7 +5196,9 @@ static napi_value Init(napi_env env, napi_value exports) {
 }
 
 // NAPI 模块卸载时安全清理 libavformat 网络层（仅在已成功初始化时调用）
+// 先获取 g_ffmpegNetworkMutex，确保所有 in-flight avformat_open/close 结束后再 deinit
 __attribute__((destructor)) static void OnNapiModuleUnload() {
+  std::lock_guard<std::mutex> lock(g_ffmpegNetworkMutex);
   if (g_avNetworkReady.exchange(false)) {
     avformat_network_deinit();
   }
