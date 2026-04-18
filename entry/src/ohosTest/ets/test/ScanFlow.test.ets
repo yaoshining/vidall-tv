@@ -33,6 +33,7 @@ const WAIT_SHORT = 3000
 
 export default function scanFlowTest() {
   const enableUiTests = getTestParam('ENABLE_UI_TESTS', 'false') === 'true'
+  const skipScanTests = getTestParam('SKIP_SCAN_TESTS', 'false') === 'true'
   const scanTimeoutMs = parseInt(getTestParam('SCAN_TIMEOUT_MS', '30000'), 10)
 
   let driver!: Driver
@@ -40,8 +41,8 @@ export default function scanFlowTest() {
   describe('扫描流程集成测试', () => {
 
     beforeAll(async () => {
-      if (!enableUiTests) {
-        console.info('[ScanFlow] ENABLE_UI_TESTS=false，跳过 UI 测试初始化')
+      if (!enableUiTests || skipScanTests) {
+        console.info('[ScanFlow] UI 测试已禁用或 SKIP_SCAN_TESTS=true，跳过扫描测试初始化')
         return
       }
       // 将主 App 拉到前台（测试运行器启动时会覆盖主 App 窗口）
@@ -63,7 +64,7 @@ export default function scanFlowTest() {
      *        无文件源时"请先配置文件源"提示可见（均为合法状态）
      */
     it('扫描按钮或空状态提示可见', 0, async () => {
-      if (!enableUiTests) { expect(true).assertTrue(); return }
+      if (!enableUiTests || skipScanTests) { expect(true).assertTrue(); return }
       await driver.delayMs(1200)
       try {
         // 切换到媒体库 Tab
@@ -120,7 +121,7 @@ export default function scanFlowTest() {
      * 验证：按钮状态变为"扫描中..."
      */
     it('触发扫描后显示扫描中状态', 0, async () => {
-      if (!enableUiTests) { expect(true).assertTrue(); return }
+      if (!enableUiTests || skipScanTests) { expect(true).assertTrue(); return }
       await driver.delayMs(500)
       try {
         let scanBtn: Component | null = null
@@ -159,7 +160,7 @@ export default function scanFlowTest() {
      * 验证：等待扫描完成后，显示"共 N 个视频"统计文本
      */
     it('扫描完成后统计文本可见', 0, async () => {
-      if (!enableUiTests) { expect(true).assertTrue(); return }
+      if (!enableUiTests || skipScanTests) { expect(true).assertTrue(); return }
       try {
         // 等待扫描完成（最长 scanTimeoutMs）
         let elapsed = 0
