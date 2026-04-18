@@ -448,7 +448,8 @@ jobs:
           TEST_CMD="$TEST_CMD -s WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PATH '${WEBDAV_PATH:-/}'"
-          # UI 测试在 CI 中默认禁用（delegator.startAbility 触发 OpenSSL native 并发崩溃）
+          # UI 测试默认禁用（CI 无连接设备；有设备时可设 ENABLE_UI_TESTS=true）
+          # native 层 OpenSSL 竞态已于 PR #169 修复，设备环境下可正常运行 29/30 用例
           TEST_CMD="$TEST_CMD -s ENABLE_UI_TESTS false"
           # HTTPS / SMB / 扫描 / 播放器测试在无对应环境时跳过
           TEST_CMD="$TEST_CMD -s SKIP_HTTPS_TESTS true"

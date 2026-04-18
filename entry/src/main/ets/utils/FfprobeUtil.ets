@@ -342,42 +342,13 @@ function maskUrlForLog(url: string): string {
 
 export class FfprobeUtil {
   /**
-   * OpenSSL 在 FFRT 多线程环境下整个 SSL 生命周期（init/use/free）均不安全。
-   * 必须串行执行（=1），否则并发时 SSL_free / X509_free / ASN1_OBJECT_free 会竞争全局状态导致 SIGSEGV。
-   * 若后续升级 FFmpeg 并修复 OpenSSL 线程安全问题，可提升此值。
+   * native 层通过 g_ffmpegNetworkMutex 串行化 avformat_open_input → close_input，
+   * 实际每次只有一个 libavformat 网络操作并发执行（#169 修复）。
+   * ArkTS 层上限保持与 native 行为一致，避免第二个 slot 占用 worker 线程空转等锁。
    */
   private static readonly MAX_CONCURRENT_PROBES: number = 1;
   private static activeProbeCount: number = 0;
   private static pendingProbeResolvers: Array<() => void> = [];
-
-  /**
-   * opensslReadyPromise 保留兼容（MAX_CONCURRENT_PROBES=1 时此机制冗余但无副作用）。
-   */
-  private static opensslReadyPromise: Promise<void> | null = null;
-  private static opensslReadyResolve: (() => void) | null = null;
-
-  /**
-   * 确保 OpenSSL 在 FFRT 线程中已完成单次初始化，避免并发导致 SIGSEGV。
-   * 首次调用：创建 ready promise，立即返回 true（本次调用将完成初始化）。
-   * 后续调用：等待 ready promise resolve 后返回 false。
-   */
-  private static async ensureOpensslReady(): Promise<boolean> {
-    if (FfprobeUtil.opensslReadyPromise === null) {
-      FfprobeUtil.opensslReadyPromise = new Promise<void>((resolve) => {
-        FfprobeUtil.opensslReadyResolve = resolve;
-      });
-      return true;
-    }
-    await FfprobeUtil.opensslReadyPromise;
-    return false;
-  }
-
-  private static signalOpensslReady(): void {
-    if (FfprobeUtil.opensslReadyResolve !== null) {
-      FfprobeUtil.opensslReadyResolve();
-      FfprobeUtil.opensslReadyResolve = null;
-    }
-  }
 
   private static async acquireProbeSlot(): Promise<void> {
     if (FfprobeUtil.activeProbeCount < FfprobeUtil.MAX_CONCURRENT_PROBES) {
@@ -457,8 +428,7 @@ export class FfprobeUtil {
     });
     console.info(`[FfprobeUtil] 命令: ${safeCommands.join(' ')}`);
 
-    // 确保 OpenSSL 单线程完成初始化后再并发，防止 FFRT 多线程竞争导致 SIGSEGV
-    const isInitProbe = await FfprobeUtil.ensureOpensslReady();
+    // 并发限制：最多 MAX_CONCURRENT_PROBES 个并行探测（native 层已处理线程安全）
     await FfprobeUtil.acquireProbeSlot();
     try {
       const outputJson = await getVidAllCorePlayerNapi().ffprobe(url, headersStr, timeoutMs);
@@ -471,9 +441,6 @@ export class FfprobeUtil {
       return FfprobeUtil.buildErrorResult(url, message);
     } finally {
       FfprobeUtil.releaseProbeSlot();
-      if (isInitProbe) {
-        FfprobeUtil.signalOpensslReady();
-      }
     }
   }
 
