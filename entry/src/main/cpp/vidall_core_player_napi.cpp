@@ -665,6 +665,23 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
   return json;
 }
 
+// ============================================================================
+// libavformat / OpenSSL 线程安全保护（修复 SIGSEGV #169）
+// g_avNetworkInitFlag: 保证全进程只调用一次 avformat_network_init()
+// g_avNetworkReady:    模块卸载时设为 false，防止 deinit 后 worker 继续使用
+// g_ffmpegNetworkMutex: 串行化 avformat open→close 完整生命周期，防止 SSL_free 竞态
+// ============================================================================
+static std::once_flag g_avNetworkInitFlag;
+static std::atomic<bool> g_avNetworkReady{false};
+static std::mutex g_ffmpegNetworkMutex;
+
+static void EnsureAvNetworkInit() {
+  std::call_once(g_avNetworkInitFlag, []() {
+    avformat_network_init();
+    g_avNetworkReady.store(true);
+  });
+}
+
 static bool RunFfprobe(
   const std::string &url,
   const std::string &headerLines,
@@ -672,7 +689,11 @@ static bool RunFfprobe(
   std::string &jsonResult,
   std::string &errorMessage
 ) {
-  avformat_network_init();
+  EnsureAvNetworkInit();
+  if (!g_avNetworkReady.load()) {
+    errorMessage = "ffprobe: libavformat network layer unavailable";
+    return false;
+  }
 
   ProbeInterruptContext interruptContext;
   interruptContext.startTimeUs = av_gettime_relative();
@@ -692,6 +713,7 @@ static bool RunFfprobe(
     av_dict_set(&options, "headers", headerLines.c_str(), 0);
   }
 
+  std::lock_guard<std::mutex> ffNetLock(g_ffmpegNetworkMutex);
   int openResult = avformat_open_input(&formatContext, url.c_str(), nullptr, &options);
   av_dict_free(&options);
   if (openResult < 0) {
@@ -874,7 +896,11 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   ExtractSubAsyncContext *ctx = static_cast<ExtractSubAsyncContext *>(data);
   if (ctx == nullptr) return;
 
-  avformat_network_init();
+  EnsureAvNetworkInit();
+  if (!g_avNetworkReady.load()) {
+    ctx->errorMessage = "extractSub: libavformat network layer unavailable";
+    return;
+  }
 
   // find_stream_info 阶段给 10s 超时（足够探测流信息），读包阶段单独计时
   ProbeInterruptContext interruptCtx;
@@ -897,6 +923,7 @@ static void ExecuteExtractSubAsync(napi_env env, void *data) {
   av_dict_set(&options, "probesize", "65536", 0);
   av_dict_set(&options, "analyzeduration", "0", 0);
 
+  std::lock_guard<std::mutex> ffNetLock(g_ffmpegNetworkMutex);
   int ret = avformat_open_input(&formatCtx, ctx->url.c_str(), nullptr, &options);
   av_dict_free(&options);
   if (ret < 0) {
@@ -5161,6 +5188,13 @@ static napi_value Init(napi_env env, napi_value exports) {
   }
 
   return exports;
+}
+
+// NAPI 模块卸载时安全清理 libavformat 网络层（仅在已成功初始化时调用）
+__attribute__((destructor)) static void OnNapiModuleUnload() {
+  if (g_avNetworkReady.exchange(false)) {
+    avformat_network_deinit();
+  }
 }
 
 } // namespace

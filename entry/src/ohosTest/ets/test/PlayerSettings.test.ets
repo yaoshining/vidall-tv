@@ -48,7 +48,6 @@ export default function playerSettingsTest() {
         return
       }
       // 将主 App 拉到前台（测试运行器启动时会覆盖主 App 窗口）
-      // 已知限制：delegator.startAbility 可能触发 libffmpeg.so OpenSSL 并发崩溃
       try {
         const delegator = abilityDelegatorRegistry.getAbilityDelegator()
         const want: Want = { bundleName: 'com.yao.vidalltv', abilityName: 'EntryAbility' }
