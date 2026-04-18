@@ -399,10 +399,8 @@ export struct PlayerPage {
           }
         }
 
-        // 播放上下文：有则传递给播放器控制器，供后续连播/跳集逻辑使用
-        if (pageParam.playbackContext !== undefined) {
-          this.videoPlayerController.playbackContext = pageParam.playbackContext;
-        }
+        // 播放上下文：始终更新，无值时显式置 undefined，避免同一实例复用时旧值残留
+        this.videoPlayerController.playbackContext = pageParam.playbackContext;
       }
     })
     .onBackPressed(() => {

@@ -796,7 +796,8 @@ export struct SeriesDetailPage {
       const seriesDbId = this.seriesEntity?.id ?? 0;
       const episodeSeasonNum = episode.seasonNumber ?? 0;
       let playbackContext: MediaLibraryContext | undefined = undefined;
-      if (seriesDbId > 0) {
+      // episodeSeasonNum=0 表示 seasonNumber 缺失，跳过无意义的 DB 查询
+      if (seriesDbId > 0 && episodeSeasonNum > 0) {
         try {
           playbackContext = await MediaLibraryContext.build(db, seriesDbId, episodeSeasonNum, episode.filePath);
         } catch (e) {

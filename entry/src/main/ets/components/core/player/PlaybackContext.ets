@@ -29,6 +29,12 @@ export abstract class PlaybackContext {
   abstract jumpTo(index: number): PlaybackContextItem | null;
 }
 
+// buildItems 辅助方法返回类型（不依赖 DB，可在单测中直接调用）
+export interface BuildItemsResult {
+  items: PlaybackContextItem[];
+  currentIndex: number;
+}
+
 // 媒体库播放上下文：基于剧集数据库加载当季集列表
 @ObservedV2
 export class MediaLibraryContext extends PlaybackContext {
@@ -37,6 +43,40 @@ export class MediaLibraryContext extends PlaybackContext {
   @Trace seriesId: number = 0;
   @Trace seasonNumber: number = 0;
   @Trace episodes: MediaItem[] = [];
+
+  /**
+   * 纯函数辅助方法：从所有剧集中按 seasonNumber 过滤并定位 currentIndex。
+   * 不依赖 DB，可在单测中直接调用。
+   */
+  static buildItems(
+    allItems: MediaItem[],
+    seasonNumber: number,
+    currentVideoPath: string
+  ): BuildItemsResult {
+    const seasonItems = allItems.filter(item => item.seasonNumber === seasonNumber);
+
+    const mapped: PlaybackContextItem[] = [];
+    for (let i = 0; i < seasonItems.length; i++) {
+      const ep = seasonItems[i];
+      const item: PlaybackContextItem = {
+        videoPath: ep.filePath,
+        title: ep.title ?? ep.fileName,
+        index: i
+      };
+      mapped.push(item);
+    }
+
+    let foundIndex = 0;
+    for (let i = 0; i < mapped.length; i++) {
+      if (mapped[i].videoPath === currentVideoPath) {
+        foundIndex = i;
+        break;
+      }
+    }
+
+    const result: BuildItemsResult = { items: mapped, currentIndex: foundIndex };
+    return result;
+  }
 
   /**
    * 工厂方法：查询数据库获取当季所有剧集并定位 currentIndex。
@@ -50,34 +90,14 @@ export class MediaLibraryContext extends PlaybackContext {
     currentVideoPath: string
   ): Promise<MediaLibraryContext> {
     const allItems = await db.getMediaItemsByTvSeriesId(seriesId);
-    const seasonItems = allItems.filter(item => item.seasonNumber === seasonNumber);
+    const buildResult = MediaLibraryContext.buildItems(allItems, seasonNumber, currentVideoPath);
 
     const ctx = new MediaLibraryContext();
     ctx.seriesId = seriesId;
     ctx.seasonNumber = seasonNumber;
-    ctx.episodes = seasonItems;
-
-    const mapped: PlaybackContextItem[] = [];
-    for (let i = 0; i < seasonItems.length; i++) {
-      const ep = seasonItems[i];
-      const item: PlaybackContextItem = {
-        videoPath: ep.filePath,
-        title: ep.title ?? ep.fileName,
-        index: i
-      };
-      mapped.push(item);
-    }
-    ctx.items = mapped;
-
-    // 定位当前集
-    let foundIndex = 0;
-    for (let i = 0; i < mapped.length; i++) {
-      if (mapped[i].videoPath === currentVideoPath) {
-        foundIndex = i;
-        break;
-      }
-    }
-    ctx.currentIndex = foundIndex;
+    ctx.episodes = allItems.filter(item => item.seasonNumber === seasonNumber);
+    ctx.items = buildResult.items;
+    ctx.currentIndex = buildResult.currentIndex;
     return ctx;
   }
 

@@ -1,8 +1,9 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   PlaybackContext, PlaybackContextItem,
-  MediaLibraryContext, FileExplorerContext
+  MediaLibraryContext, FileExplorerContext, BuildItemsResult
 } from '../../main/ets/components/core/player/PlaybackContext';
+import { MediaItem } from '../../main/ets/db/models/MediaEntity';
 
 // 用于测试的具体实现类（不测试具体播放逻辑，只验证基类导航方法）
 class TestPlaybackContext extends PlaybackContext {
@@ -100,7 +101,7 @@ export default function PlaybackContextTest() {
   // ─────────────────────────────────────────────
   describe('MediaLibraryContextTest', () => {
 
-    it('工厂方法从 DB 加载当前季剧集', 0, () => {
+    it('MediaLibraryContext 实例化与导航', 0, () => {
       // 用直接构造模拟 build() 产出，验证 currentIndex 定位逻辑
       const ctx = new MediaLibraryContext();
       ctx.items = makeItems(4);
@@ -161,6 +162,72 @@ export default function PlaybackContextTest() {
       const result = ctx.jumpToNext();
       expect(result === null).assertTrue();
       expect(ctx.currentIndex).assertEqual(ctx.items.length - 1);
+    });
+
+    // ── buildItems 辅助方法测试（不依赖 DB）──
+    it('buildItems 按 seasonNumber 过滤并定位 currentIndex', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1, title: 'EP1'
+        },
+        {
+          id: 2, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep2.mkv', fileName: 'ep2.mkv', seasonNumber: 1, title: 'EP2'
+        },
+        {
+          id: 3, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s2ep1.mkv', fileName: 's2ep1.mkv', seasonNumber: 2, title: 'S2EP1'
+        },
+      ];
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 1, '/ep2.mkv');
+      // 只保留 season=1 的 2 集
+      expect(result.items.length).assertEqual(2);
+      // currentVideoPath='/ep2.mkv' 对应 index=1
+      expect(result.currentIndex).assertEqual(1);
+      expect(result.items[0].videoPath).assertEqual('/ep1.mkv');
+      expect(result.items[1].videoPath).assertEqual('/ep2.mkv');
+    });
+
+    it('buildItems currentVideoPath 不存在时 currentIndex 默认为 0', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1
+        },
+        {
+          id: 2, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep2.mkv', fileName: 'ep2.mkv', seasonNumber: 1
+        },
+      ];
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 1, '/not-exist.mkv');
+      expect(result.items.length).assertEqual(2);
+      expect(result.currentIndex).assertEqual(0);
+    });
+
+    it('buildItems season 不存在时返回空列表', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1
+        },
+      ];
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 99, '/ep1.mkv');
+      expect(result.items.length).assertEqual(0);
+      expect(result.currentIndex).assertEqual(0);
+    });
+
+    it('buildItems title 为 undefined 时回退到 fileName', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1
+          // title 未设置
+        },
+      ];
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 1, '/ep1.mkv');
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].title).assertEqual('ep1.mkv');
     });
 
   });

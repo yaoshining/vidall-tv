@@ -991,7 +991,8 @@ export struct SeasonDetailPage {
       // 构建播放上下文：查询当季集列表并定位当前集，供播放器内连播使用
       const seriesDbId = this.seriesEntity?.id ?? 0;
       let playbackContext: MediaLibraryContext | undefined = undefined;
-      if (seriesDbId > 0) {
+      // episodeSeason=0 表示 seasonNumber 缺失，跳过无意义的 DB 查询
+      if (seriesDbId > 0 && episodeSeason > 0) {
         try {
           playbackContext = await MediaLibraryContext.build(db, seriesDbId, episodeSeason, episode.filePath);
         } catch (e) {
