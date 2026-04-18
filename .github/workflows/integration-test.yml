@@ -981,3 +981,12 @@ jobs:
             ${{ github.workspace }}/.ci/integration
             ${{ github.workspace }}/.ci/allure-results
           if-no-files-found: warn
+
+      - name: Cleanup peaceiris/actions-gh-pages temp dirs
+        if: always()
+        shell: bash
+        run: |
+          # peaceiris/actions-gh-pages@v3 在 self-hosted runner 的 $HOME 下
+          # 遗留 actions_github_pages_<run_id> 临时目录，需手动清理
+          find "$HOME" -maxdepth 1 -type d -name "actions_github_pages_*" -exec rm -rf {} + 2>/dev/null || true
+          echo "Cleaned up actions_github_pages_* temp dirs"
