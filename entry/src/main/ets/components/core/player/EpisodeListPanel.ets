@@ -1,34 +1,78 @@
 import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
 import { KeyCode } from '@kit.InputKit'
 
-// ── LazyForEach DataSource ──────────────────────────────────────────────────
+const FIRST_PAGE_SIZE: number = 6
 
-class EpisodeDataSource implements IDataSource {
-  private dataArray: PlaybackContextItem[] = []
-  private listeners: DataChangeListener[] = []
+export interface EpisodePageRange {
+  pageIndex: number
+  startIndex: number
+  endIndexExclusive: number
+  label: string
+}
 
-  constructor(items: PlaybackContextItem[]) {
-    this.dataArray = items
+export function buildEpisodePageRanges(totalCount: number): EpisodePageRange[] {
+  const result: EpisodePageRange[] = []
+  if (totalCount <= 0) {
+    return result
   }
 
-  totalCount(): number {
-    return this.dataArray.length
+  const firstPageEnd = Math.min(FIRST_PAGE_SIZE, totalCount)
+  const firstRange: EpisodePageRange = {
+    pageIndex: 0,
+    startIndex: 0,
+    endIndexExclusive: firstPageEnd,
+    label: `1-${firstPageEnd}`
+  }
+  result.push(firstRange)
+
+  if (totalCount > FIRST_PAGE_SIZE) {
+    const secondRange: EpisodePageRange = {
+      pageIndex: 1,
+      startIndex: FIRST_PAGE_SIZE,
+      endIndexExclusive: totalCount,
+      label: `${FIRST_PAGE_SIZE + 1}-${totalCount}`
+    }
+    result.push(secondRange)
   }
 
-  getData(index: number): Object {
-    return this.dataArray[index]
-  }
+  return result
+}
 
-  registerDataChangeListener(listener: DataChangeListener): void {
-    this.listeners.push(listener)
+export function getEpisodePageItems(items: PlaybackContextItem[], page: number): PlaybackContextItem[] {
+  const ranges = buildEpisodePageRanges(items.length)
+  if (page < 0 || page >= ranges.length) {
+    return []
   }
+  const range = ranges[page]
+  return items.slice(range.startIndex, range.endIndexExclusive)
+}
 
-  unregisterDataChangeListener(listener: DataChangeListener): void {
-    const pos = this.listeners.indexOf(listener)
-    if (pos >= 0) {
-      this.listeners.splice(pos, 1)
+export function getEpisodeItemRenderKey(item: PlaybackContextItem): string {
+  if (item.videoPath.length > 0) {
+    return item.videoPath
+  }
+  return item.index.toString()
+}
+
+function getEpisodePageIndex(currentIndex: number, totalCount: number): number {
+  const ranges = buildEpisodePageRanges(totalCount)
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i]
+    if (currentIndex >= range.startIndex && currentIndex < range.endIndexExclusive) {
+      return range.pageIndex
     }
   }
+  return 0
+}
+
+function getEpisodeFocusIndex(currentIndex: number, totalCount: number): number {
+  const ranges = buildEpisodePageRanges(totalCount)
+  const pageIndex = getEpisodePageIndex(currentIndex, totalCount)
+  if (pageIndex < 0 || pageIndex >= ranges.length) {
+    return 0
+  }
+  const range = ranges[pageIndex]
+  return currentIndex - range.startIndex
 }
 
 // ── EpisodeListPanel ────────────────────────────────────────────────────────
@@ -42,32 +86,26 @@ export struct EpisodeListPanel {
   @State private focusedCardIndex: number = 0
   @State private isPageBarFocused: boolean = false
   @State private pageBarFocusedIndex: number = 0
-  @State private dataSource: EpisodeDataSource = new EpisodeDataSource([])
-
-  private readonly PAGE_SIZE: number = 6
 
   aboutToAppear(): void {
-    // 定位到当前播放集所在分页
     const currentIdx = this.context.currentIndex
-    this.currentPage = Math.floor(currentIdx / this.PAGE_SIZE)
-    this.focusedCardIndex = currentIdx % this.PAGE_SIZE
-    this.dataSource = new EpisodeDataSource(this.getPageItems())
+    this.currentPage = getEpisodePageIndex(currentIdx, this.context.items.length)
+    this.focusedCardIndex = getEpisodeFocusIndex(currentIdx, this.context.items.length)
+    this.pageBarFocusedIndex = this.currentPage
   }
 
   // ── 数据辅助方法 ───────────────────────────────────────────────────────────
 
+  private getPageRanges(): EpisodePageRange[] {
+    return buildEpisodePageRanges(this.context.items.length)
+  }
+
   private getTotalPages(): number {
-    return Math.max(1, Math.ceil(this.context.items.length / this.PAGE_SIZE))
+    return Math.max(1, this.getPageRanges().length)
   }
 
   private getPageItems(): PlaybackContextItem[] {
-    const start = this.currentPage * this.PAGE_SIZE
-    const end = Math.min(start + this.PAGE_SIZE, this.context.items.length)
-    const result: PlaybackContextItem[] = []
-    for (let i = start; i < end; i++) {
-      result.push(this.context.items[i])
-    }
-    return result
+    return getEpisodePageItems(this.context.items, this.currentPage)
   }
 
   private goToPage(page: number): void {
@@ -77,13 +115,15 @@ export struct EpisodeListPanel {
     }
     this.currentPage = page
     this.focusedCardIndex = 0
-    this.dataSource = new EpisodeDataSource(this.getPageItems())
+    this.pageBarFocusedIndex = page
   }
 
   private getPageLabel(page: number): string {
-    const start = page * this.PAGE_SIZE + 1
-    const end = Math.min((page + 1) * this.PAGE_SIZE, this.context.items.length)
-    return `${start}-${end}`
+    const ranges = this.getPageRanges()
+    if (page < 0 || page >= ranges.length) {
+      return ''
+    }
+    return ranges[page].label
   }
 
   private isCurrentItem(item: PlaybackContextItem): boolean {
@@ -91,7 +131,7 @@ export struct EpisodeListPanel {
   }
 
   private buildPageRange(): number[] {
-    const total = this.getTotalPages()
+    const total = this.getPageRanges().length
     const result: number[] = []
     for (let i = 0; i < total; i++) {
       result.push(i)
@@ -168,16 +208,16 @@ export struct EpisodeListPanel {
         .margin({ bottom: 32 })
         .alignSelf(ItemAlign.Start)
 
-      // 集数卡片横向列表（LazyForEach + 遥控器键盘处理）
+      // 集数卡片横向列表
       List({ space: 48 }) {
-        LazyForEach(
-          this.dataSource,
-          (item: Object, index: number) => {
+        ForEach(
+          this.getPageItems(),
+          (item: PlaybackContextItem, index: number) => {
             ListItem() {
-              this.EpisodeCard(item as PlaybackContextItem, index)
+              this.EpisodeCard(item, index)
             }
           },
-          (item: Object, index: number) => index.toString()
+          (item: PlaybackContextItem): string => getEpisodeItemRenderKey(item)
         )
       }
       .listDirection(Axis.Horizontal)
@@ -258,11 +298,9 @@ export struct EpisodeListPanel {
                 } else if (event.keyCode === KeyCode.KEYCODE_DPAD_UP) {
                   this.isPageBarFocused = false
                 } else if (event.keyCode === KeyCode.KEYCODE_DPAD_LEFT && this.pageBarFocusedIndex > 0) {
-                  this.pageBarFocusedIndex = this.pageBarFocusedIndex - 1
-                  this.goToPage(this.pageBarFocusedIndex)
+                  this.goToPage(pageIdx - 1)
                 } else if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT && this.pageBarFocusedIndex < this.getTotalPages() - 1) {
-                  this.pageBarFocusedIndex = this.pageBarFocusedIndex + 1
-                  this.goToPage(this.pageBarFocusedIndex)
+                  this.goToPage(pageIdx + 1)
                 }
               })
             },
