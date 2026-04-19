@@ -82,6 +82,13 @@ export default function EpisodeListPanelTest() {
       expect(styleState.scale).assertEqual(1.03)
     })
 
+    it('聚焦样式保持卡片默认布局 footprint，不依赖更大包裹层', 0, () => {
+      const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, false)
+
+      expect(styleState.layoutWidth).assertEqual(220)
+      expect(styleState.layoutHeight).assertEqual(140)
+    })
+
     it('分页 tab 的聚焦态与当前页态可以并存', 0, () => {
       const styleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(true, true)
 

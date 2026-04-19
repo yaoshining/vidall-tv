@@ -2,6 +2,10 @@ import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
 import { KeyCode } from '@kit.InputKit'
 
 const FIRST_PAGE_SIZE: number = 6
+const EPISODE_CARD_WIDTH: number = 220
+const EPISODE_CARD_HEIGHT: number = 140
+const EPISODE_CARD_RADIUS: number = 26
+const EPISODE_CARD_INNER_OUTLINE_INSET: number = 10
 
 export interface EpisodePageRange {
   pageIndex: number
@@ -23,6 +27,10 @@ export interface EpisodeCardStyleState {
   focusOutlineColor: string
   currentOutlineWidth: number
   currentOutlineColor: string
+  layoutWidth: number
+  layoutHeight: number
+  borderRadius: number
+  currentInnerOutlineInset: number
 }
 
 export interface EpisodePageTabStyleState {
@@ -114,7 +122,11 @@ export function getEpisodeCardStyleState(isFocused: boolean, isCurrent: boolean)
     focusOutlineWidth: isFocused ? 2 : 0,
     focusOutlineColor: isFocused ? '#FFFFFF' : '#00000000',
     currentOutlineWidth: isCurrent ? 2 : 0,
-    currentOutlineColor: isCurrent ? '#A9F4FF' : '#00000000'
+    currentOutlineColor: isCurrent ? '#A9F4FF' : '#00000000',
+    layoutWidth: EPISODE_CARD_WIDTH,
+    layoutHeight: EPISODE_CARD_HEIGHT,
+    borderRadius: EPISODE_CARD_RADIUS,
+    currentInnerOutlineInset: isFocused && isCurrent ? EPISODE_CARD_INNER_OUTLINE_INSET : 0
   }
   return styleState
 }
@@ -211,36 +223,36 @@ export struct EpisodeListPanel {
   EpisodeCard(item: PlaybackContextItem, index: number) {
     Column({ space: 8 }) {
       Stack({ alignContent: Alignment.Center }) {
-        Stack({ alignContent: Alignment.BottomEnd }) {
-          Image(item.thumbnailUrl ? item.thumbnailUrl : $r('app.media.empty_folder'))
-            .width('100%')
-            .height('100%')
-            .objectFit(ImageFit.Cover)
-        }
-        .width(220)
-        .height(140)
-        .borderRadius(26)
-        .border({
-          width: this.getCardStyleState(item, index).currentOutlineWidth,
-          color: this.getCardStyleState(item, index).currentOutlineColor,
-          style: BorderStyle.Solid
-        })
-        .clip(true)
+        Image(item.thumbnailUrl ? item.thumbnailUrl : $r('app.media.empty_folder'))
+          .width('100%')
+          .height('100%')
+          .objectFit(ImageFit.Cover)
 
-        if (this.getCardStyleState(item, index).showFocusOutline) {
+        if (this.getCardStyleState(item, index).showCurrentOutline && this.getCardStyleState(item, index).showFocusOutline) {
           Row()
-            .width(228)
-            .height(148)
-            .borderRadius(30)
+            .width(this.getCardStyleState(item, index).layoutWidth - this.getCardStyleState(item, index).currentInnerOutlineInset * 2)
+            .height(this.getCardStyleState(item, index).layoutHeight - this.getCardStyleState(item, index).currentInnerOutlineInset * 2)
+            .borderRadius(this.getCardStyleState(item, index).borderRadius - this.getCardStyleState(item, index).currentInnerOutlineInset / 2)
             .border({
-              width: this.getCardStyleState(item, index).focusOutlineWidth,
-              color: this.getCardStyleState(item, index).focusOutlineColor,
+              width: this.getCardStyleState(item, index).currentOutlineWidth,
+              color: this.getCardStyleState(item, index).currentOutlineColor,
               style: BorderStyle.Solid
             })
         }
       }
-      .width(228)
-      .height(148)
+      .width(this.getCardStyleState(item, index).layoutWidth)
+      .height(this.getCardStyleState(item, index).layoutHeight)
+      .borderRadius(this.getCardStyleState(item, index).borderRadius)
+      .border({
+        width: this.getCardStyleState(item, index).showFocusOutline
+          ? this.getCardStyleState(item, index).focusOutlineWidth
+          : this.getCardStyleState(item, index).currentOutlineWidth,
+        color: this.getCardStyleState(item, index).showFocusOutline
+          ? this.getCardStyleState(item, index).focusOutlineColor
+          : this.getCardStyleState(item, index).currentOutlineColor,
+        style: BorderStyle.Solid
+      })
+      .clip(true)
       .scale({ x: this.getCardStyleState(item, index).scale, y: this.getCardStyleState(item, index).scale })
       .shadow({
         radius: this.getCardStyleState(item, index).shadowRadius,
@@ -262,7 +274,7 @@ export struct EpisodeListPanel {
         .fontSize(22)
         .fontColor('#F0F4F9')
         .textAlign(TextAlign.Center)
-        .width(220)
+        .width(this.getCardStyleState(item, index).layoutWidth)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
