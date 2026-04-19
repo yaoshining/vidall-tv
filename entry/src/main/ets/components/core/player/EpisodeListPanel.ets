@@ -10,6 +10,32 @@ export interface EpisodePageRange {
   label: string
 }
 
+export interface EpisodeCardStyleState {
+  isFocused: boolean
+  isCurrent: boolean
+  showFocusOutline: boolean
+  showCurrentOutline: boolean
+  showLegacyFocusRing: boolean
+  scale: number
+  shadowRadius: number
+  shadowColor: string
+  focusOutlineWidth: number
+  focusOutlineColor: string
+  currentOutlineWidth: number
+  currentOutlineColor: string
+}
+
+export interface EpisodePageTabStyleState {
+  isFocused: boolean
+  isCurrentPage: boolean
+  showFocusPill: boolean
+  showCurrentUnderline: boolean
+  labelColor: string
+  focusPillBackgroundColor: string
+  focusPillBorderColor: string
+  focusPillBorderWidth: number
+}
+
 export function buildEpisodePageRanges(totalCount: number): EpisodePageRange[] {
   const result: EpisodePageRange[] = []
   if (totalCount <= 0) {
@@ -73,6 +99,38 @@ function getEpisodeFocusIndex(currentIndex: number, totalCount: number): number 
   }
   const range = ranges[pageIndex]
   return currentIndex - range.startIndex
+}
+
+export function getEpisodeCardStyleState(isFocused: boolean, isCurrent: boolean): EpisodeCardStyleState {
+  const styleState: EpisodeCardStyleState = {
+    isFocused,
+    isCurrent,
+    showFocusOutline: isFocused,
+    showCurrentOutline: isCurrent,
+    showLegacyFocusRing: false,
+    scale: isFocused ? 1.03 : 1,
+    shadowRadius: isFocused ? 18 : 0,
+    shadowColor: isFocused ? '#33000000' : '#00000000',
+    focusOutlineWidth: isFocused ? 2 : 0,
+    focusOutlineColor: isFocused ? '#FFFFFF' : '#00000000',
+    currentOutlineWidth: isCurrent ? 2 : 0,
+    currentOutlineColor: isCurrent ? '#A9F4FF' : '#00000000'
+  }
+  return styleState
+}
+
+export function getEpisodePageTabStyleState(isFocused: boolean, isCurrentPage: boolean): EpisodePageTabStyleState {
+  const styleState: EpisodePageTabStyleState = {
+    isFocused,
+    isCurrentPage,
+    showFocusPill: isFocused,
+    showCurrentUnderline: isCurrentPage,
+    labelColor: isCurrentPage ? '#F3F7FB' : '#D5DDE8',
+    focusPillBackgroundColor: isFocused ? '#FFFFFF33' : '#00000000',
+    focusPillBorderColor: isFocused ? '#FFFFFFCC' : '#00000000',
+    focusPillBorderWidth: isFocused ? 2 : 0
+  }
+  return styleState
 }
 
 // ── EpisodeListPanel ────────────────────────────────────────────────────────
@@ -139,8 +197,12 @@ export struct EpisodeListPanel {
     return result
   }
 
-  private isFocusRingVisible(index: number): boolean {
-    return this.focusedCardIndex === index && !this.isPageBarFocused
+  private getCardStyleState(item: PlaybackContextItem, index: number): EpisodeCardStyleState {
+    return getEpisodeCardStyleState(this.focusedCardIndex === index && !this.isPageBarFocused, this.isCurrentItem(item))
+  }
+
+  private getPageTabStyleState(pageIdx: number): EpisodePageTabStyleState {
+    return getEpisodePageTabStyleState(this.isPageBarFocused && this.pageBarFocusedIndex === pageIdx, this.currentPage === pageIdx)
   }
 
   // ── 卡片 Builder ──────────────────────────────────────────────────────────
@@ -148,33 +210,44 @@ export struct EpisodeListPanel {
   @Builder
   EpisodeCard(item: PlaybackContextItem, index: number) {
     Column({ space: 8 }) {
-      // 海报卡片主体
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        Image(item.thumbnailUrl ? item.thumbnailUrl : $r('app.media.empty_folder'))
-          .width('100%')
-          .height('100%')
-          .objectFit(ImageFit.Cover)
+      Stack({ alignContent: Alignment.Center }) {
+        Stack({ alignContent: Alignment.BottomEnd }) {
+          Image(item.thumbnailUrl ? item.thumbnailUrl : $r('app.media.empty_folder'))
+            .width('100%')
+            .height('100%')
+            .objectFit(ImageFit.Cover)
+        }
+        .width(220)
+        .height(140)
+        .borderRadius(26)
+        .border({
+          width: this.getCardStyleState(item, index).currentOutlineWidth,
+          color: this.getCardStyleState(item, index).currentOutlineColor,
+          style: BorderStyle.Solid
+        })
+        .clip(true)
 
-        // 焦点环：叠加在右下角，仅当前焦点卡片显示
-        if (this.isFocusRingVisible(index)) {
-          Ellipse()
-            .width(42)
-            .height(42)
-            .stroke('#FFFFFF')
-            .strokeWidth(5)
-            .fill(Color.Transparent)
-            .margin({ right: 6, bottom: 6 })
+        if (this.getCardStyleState(item, index).showFocusOutline) {
+          Row()
+            .width(228)
+            .height(148)
+            .borderRadius(30)
+            .border({
+              width: this.getCardStyleState(item, index).focusOutlineWidth,
+              color: this.getCardStyleState(item, index).focusOutlineColor,
+              style: BorderStyle.Solid
+            })
         }
       }
-      .width(220)
-      .height(140)
-      .borderRadius(26)
-      .border(
-        this.isCurrentItem(item)
-          ? { width: 4, color: '#A9F4FF', style: BorderStyle.Solid }
-          : { width: 0, color: Color.Transparent, style: BorderStyle.Solid }
-      )
-      .clip(true)
+      .width(228)
+      .height(148)
+      .scale({ x: this.getCardStyleState(item, index).scale, y: this.getCardStyleState(item, index).scale })
+      .shadow({
+        radius: this.getCardStyleState(item, index).shadowRadius,
+        color: this.getCardStyleState(item, index).shadowColor,
+        offsetX: 0,
+        offsetY: 8
+      })
       .focusable(true)
       .onFocus(() => {
         this.focusedCardIndex = index
@@ -252,24 +325,27 @@ export struct EpisodeListPanel {
             this.buildPageRange(),
             (pageIdx: number) => {
               Stack() {
-                // pagerPill 胶囊：焦点在分页条时显示
-                if (this.isPageBarFocused && this.pageBarFocusedIndex === pageIdx) {
+                if (this.getPageTabStyleState(pageIdx).showFocusPill) {
                   Row()
                     .width(76)
                     .height(34)
                     .borderRadius(18)
-                    .backgroundColor('#FFFFFF26')
-                    .border({ width: 2, color: '#FFFFFF66', style: BorderStyle.Solid })
+                    .backgroundColor(this.getPageTabStyleState(pageIdx).focusPillBackgroundColor)
+                    .border({
+                      width: this.getPageTabStyleState(pageIdx).focusPillBorderWidth,
+                      color: this.getPageTabStyleState(pageIdx).focusPillBorderColor,
+                      style: BorderStyle.Solid
+                    })
                 }
 
                 // 分页标签 + 激活下划线
                 Column({ space: 6 }) {
                   Text(this.getPageLabel(pageIdx))
                     .fontSize(22)
-                    .fontColor(this.currentPage === pageIdx ? '#F3F7FB' : '#D5DDE8')
+                    .fontColor(this.getPageTabStyleState(pageIdx).labelColor)
                     .fontWeight(FontWeight.Bold)
 
-                  if (this.currentPage === pageIdx) {
+                  if (this.getPageTabStyleState(pageIdx).showCurrentUnderline) {
                     Row()
                       .width(84)
                       .height(3)

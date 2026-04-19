@@ -2,7 +2,11 @@ import { describe, it, expect } from '@ohos/hypium'
 import {
   buildEpisodePageRanges,
   getEpisodePageItems,
-  getEpisodeItemRenderKey
+  getEpisodeItemRenderKey,
+  getEpisodeCardStyleState,
+  getEpisodePageTabStyleState,
+  EpisodeCardStyleState,
+  EpisodePageTabStyleState
 } from '../main/ets/components/core/player/EpisodeListPanel'
 import { PlaybackContextItem } from '../main/ets/components/core/player/PlaybackContext'
 
@@ -56,6 +60,35 @@ export default function EpisodeListPanelTest() {
 
       expect(ranges.length).assertEqual(1)
       expect(ranges[0].label).assertEqual('1-6')
+    })
+  })
+
+  describe('EpisodeListPanel style states', () => {
+    it('聚焦卡片时不再显示右下角圆圈，改为整卡焦点态', 0, () => {
+      const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, false)
+
+      expect(styleState.showLegacyFocusRing).assertFalse()
+      expect(styleState.showFocusOutline).assertTrue()
+      expect(styleState.showCurrentOutline).assertFalse()
+      expect(styleState.scale).assertEqual(1.03)
+    })
+
+    it('当前播放项与聚焦项叠加时保留双重语义', 0, () => {
+      const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, true)
+
+      expect(styleState.showLegacyFocusRing).assertFalse()
+      expect(styleState.showFocusOutline).assertTrue()
+      expect(styleState.showCurrentOutline).assertTrue()
+      expect(styleState.scale).assertEqual(1.03)
+    })
+
+    it('分页 tab 的聚焦态与当前页态可以并存', 0, () => {
+      const styleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(true, true)
+
+      expect(styleState.showFocusPill).assertTrue()
+      expect(styleState.showCurrentUnderline).assertTrue()
+      expect(styleState.isCurrentPage).assertTrue()
+      expect(styleState.isFocused).assertTrue()
     })
   })
 }
