@@ -2,17 +2,20 @@ import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
 import { KeyCode } from '@kit.InputKit'
 
 const FIRST_PAGE_SIZE: number = 6
-const EPISODE_CARD_WIDTH: number = 184
-const EPISODE_CARD_HEIGHT: number = 68
-const EPISODE_CARD_RADIUS: number = 22
-const EPISODE_CARD_THUMBNAIL_WIDTH: number = 64
-const EPISODE_CARD_THUMBNAIL_HEIGHT: number = 40
-const EPISODE_CARD_THUMBNAIL_RADIUS: number = 12
+const EPISODE_SECTION_TITLE_FONT_SIZE: number = 32
+const EPISODE_SECTION_TITLE_LEFT_MARGIN: number = 0
+const EPISODE_SECTION_TITLE_BOTTOM_MARGIN: number = 12
+const EPISODE_CARD_WIDTH: number = 200
+const EPISODE_CARD_HEIGHT: number = 130
+const EPISODE_CARD_RADIUS: number = 20
+const EPISODE_CARD_THUMBNAIL_WIDTH: number = 184
+const EPISODE_CARD_THUMBNAIL_HEIGHT: number = 84
+const EPISODE_CARD_THUMBNAIL_RADIUS: number = 16
 const EPISODE_CARD_CONTENT_GAP: number = 10
 const EPISODE_CARD_HORIZONTAL_PADDING: number = 8
-const EPISODE_CARD_RIGHT_PADDING: number = 12
-const EPISODE_CARD_VERTICAL_PADDING: number = 10
-const EPISODE_CARD_LABEL_FONT_SIZE: number = 18
+const EPISODE_CARD_RIGHT_PADDING: number = 8
+const EPISODE_CARD_VERTICAL_PADDING: number = 8
+const EPISODE_CARD_LABEL_FONT_SIZE: number = 20
 const EPISODE_CARD_SCALE_FOCUSED: number = 1.04
 const EPISODE_TAB_SCALE_FOCUSED: number = 1.04
 const EPISODE_PAGE_TAB_HORIZONTAL_PADDING: number = 16
@@ -38,6 +41,7 @@ export interface EpisodeCardStyleState {
   isFocused: boolean
   isHovered: boolean
   isCurrent: boolean
+  useVerticalLayout: boolean
   showFocusOutline: boolean
   showCurrentOutline: boolean
   showLegacyFocusRing: boolean
@@ -65,6 +69,12 @@ export interface EpisodeCardStyleState {
   rightPadding: number
   verticalPadding: number
   labelFontSize: number
+}
+
+export interface EpisodeSectionTitleStyleState {
+  fontSize: number
+  leftMargin: number
+  bottomMargin: number
 }
 
 export interface EpisodePageTabStyleState {
@@ -160,6 +170,7 @@ export function getEpisodeCardStyleState(isFocused: boolean, isCurrent: boolean,
     isFocused,
     isHovered,
     isCurrent,
+    useVerticalLayout: true,
     showFocusOutline: false,
     showCurrentOutline: false,
     showLegacyFocusRing: false,
@@ -187,6 +198,15 @@ export function getEpisodeCardStyleState(isFocused: boolean, isCurrent: boolean,
     rightPadding: EPISODE_CARD_RIGHT_PADDING,
     verticalPadding: EPISODE_CARD_VERTICAL_PADDING,
     labelFontSize: EPISODE_CARD_LABEL_FONT_SIZE
+  }
+  return styleState
+}
+
+export function getEpisodeSectionTitleStyleState(): EpisodeSectionTitleStyleState {
+  const styleState: EpisodeSectionTitleStyleState = {
+    fontSize: EPISODE_SECTION_TITLE_FONT_SIZE,
+    leftMargin: EPISODE_SECTION_TITLE_LEFT_MARGIN,
+    bottomMargin: EPISODE_SECTION_TITLE_BOTTOM_MARGIN
   }
   return styleState
 }
@@ -348,12 +368,22 @@ export struct EpisodeListPanel {
 
   @Builder
   EpisodeCard(item: PlaybackContextItem, index: number) {
-    Row({ space: this.getCardStyleState(item, index).contentGap }) {
-      Stack({ alignContent: Alignment.Center }) {
+    Column({ space: this.getCardStyleState(item, index).contentGap }) {
+      Stack({ alignContent: Alignment.BottomEnd }) {
         Image(item.thumbnailUrl ? item.thumbnailUrl : $r('app.media.empty_folder'))
-          .width(this.getCardStyleState(item, index).thumbnailWidth)
-          .height(this.getCardStyleState(item, index).thumbnailHeight)
+          .width('100%')
+          .height('100%')
           .objectFit(ImageFit.Cover)
+
+        if (this.getCardStyleState(item, index).showWaveIcon) {
+          Row() {
+            this.PlayingWaveIcon()
+          }
+          .padding({ left: 8, right: 8, top: 6, bottom: 6 })
+          .backgroundColor('rgba(6, 14, 24, 0.58)')
+          .borderRadius(12)
+          .margin({ right: 8, bottom: 8 })
+        }
       }
       .width(this.getCardStyleState(item, index).thumbnailWidth)
       .height(this.getCardStyleState(item, index).thumbnailHeight)
@@ -366,21 +396,14 @@ export struct EpisodeListPanel {
         offsetY: 2
       })
 
-      Row({ space: 6 }) {
-        Text('第' + (item.episodeNumber ?? (item.index + 1)).toString() + '集')
-          .fontSize(this.getCardStyleState(item, index).labelFontSize)
-          .fontWeight(this.isCurrentItem(item) ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(this.getCardStyleState(item, index).labelColor)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        if (this.getCardStyleState(item, index).showWaveIcon) {
-          this.PlayingWaveIcon()
-        }
-      }
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.Start)
-      .alignItems(VerticalAlign.Center)
+      Text('第' + (item.episodeNumber ?? (item.index + 1)).toString() + '集')
+        .fontSize(this.getCardStyleState(item, index).labelFontSize)
+        .fontWeight(this.isCurrentItem(item) ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(this.getCardStyleState(item, index).labelColor)
+        .textAlign(TextAlign.Center)
+        .width(this.getCardStyleState(item, index).thumbnailWidth)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .width(this.getCardStyleState(item, index).layoutWidth)
     .height(this.getCardStyleState(item, index).layoutHeight)
@@ -410,7 +433,7 @@ export struct EpisodeListPanel {
     .onClick(() => {
       this.onSelect(item)
     })
-    .alignItems(VerticalAlign.Center)
+    .alignItems(HorizontalAlign.Center)
   }
 
   // ── build ─────────────────────────────────────────────────────────────────
@@ -419,10 +442,13 @@ export struct EpisodeListPanel {
     Column({ space: 0 }) {
       // 标题行
       Text('选集')
-        .fontSize(56)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#F3F6FB')
-        .margin({ bottom: 32 })
+        .fontSize(getEpisodeSectionTitleStyleState().fontSize)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#EFF2FB')
+        .margin({
+          left: getEpisodeSectionTitleStyleState().leftMargin,
+          bottom: getEpisodeSectionTitleStyleState().bottomMargin
+        })
         .alignSelf(ItemAlign.Start)
 
       // 集数卡片横向列表
@@ -440,7 +466,7 @@ export struct EpisodeListPanel {
       .listDirection(Axis.Horizontal)
       .scrollBar(BarState.Off)
       .width('100%')
-      .height(92)
+      .height(154)
       .onKeyEvent((event: KeyEvent) => {
         if (event.type !== KeyType.Down) {
           return

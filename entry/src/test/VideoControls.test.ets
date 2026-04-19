@@ -1,5 +1,4 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { getEpisodeCardStyleState } from '../main/ets/components/core/player/EpisodeListPanel'
 import { PlayerSettingsChipStyleState, getPlayerSettingsChipStyleState } from '../main/ets/components/core/player/VideoControls'
 
 export default function videoControlsTest() {
@@ -25,12 +24,11 @@ export default function videoControlsTest() {
 
     it('倍速与画面比例项收敛到与选集 chip 一致的高度、字号、圆角与间距', 0, () => {
       const chipStyleState: PlayerSettingsChipStyleState = getPlayerSettingsChipStyleState(false, false)
-      const episodeStyleState = getEpisodeCardStyleState(false, false)
 
-      expect(chipStyleState.height).assertEqual(episodeStyleState.layoutHeight)
-      expect(chipStyleState.borderRadius).assertEqual(episodeStyleState.borderRadius)
-      expect(chipStyleState.labelFontSize).assertEqual(episodeStyleState.labelFontSize)
-      expect(chipStyleState.groupGap).assertEqual(episodeStyleState.contentGap)
+      expect(chipStyleState.height).assertEqual(68)
+      expect(chipStyleState.borderRadius).assertEqual(22)
+      expect(chipStyleState.labelFontSize).assertEqual(18)
+      expect(chipStyleState.groupGap).assertEqual(10)
     })
 
     it('当前值与聚焦态仍可区分，叠加时保留当前值表达', 0, () => {

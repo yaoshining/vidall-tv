@@ -3,8 +3,10 @@ import {
   buildEpisodePageRanges,
   getEpisodePageItems,
   getEpisodeItemRenderKey,
+  getEpisodeSectionTitleStyleState,
   getEpisodeCardStyleState,
   getEpisodePageTabStyleState,
+  EpisodeSectionTitleStyleState,
   EpisodeCardStyleState,
   EpisodePageTabStyleState
 } from '../main/ets/components/core/player/EpisodeListPanel'
@@ -64,6 +66,14 @@ export default function EpisodeListPanelTest() {
   })
 
   describe('EpisodeListPanel style states', () => {
+    it('选集标题收敛为与下方设置分组一致的 section title 节奏', 0, () => {
+      const titleStyleState: EpisodeSectionTitleStyleState = getEpisodeSectionTitleStyleState()
+
+      expect(titleStyleState.fontSize).assertEqual(32)
+      expect(titleStyleState.leftMargin).assertEqual(0)
+      expect(titleStyleState.bottomMargin).assertEqual(12)
+    })
+
     it('聚焦卡片时使用整项 scale 提亮，不再依赖边框语义', 0, () => {
       const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, false)
 
@@ -94,19 +104,28 @@ export default function EpisodeListPanelTest() {
       expect(styleState.scale).assertEqual(1.04)
     })
 
-    it('选集项收敛为紧凑 chip 尺寸与字号', 0, () => {
+    it('选集项恢复为上图下字布局，并回到更易读的中号卡片尺寸', 0, () => {
       const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(false, false)
 
-      expect(styleState.layoutWidth).assertEqual(184)
-      expect(styleState.layoutHeight).assertEqual(68)
-      expect(styleState.borderRadius).assertEqual(22)
-      expect(styleState.thumbnailWidth).assertEqual(64)
-      expect(styleState.thumbnailHeight).assertEqual(40)
-      expect(styleState.labelFontSize).assertEqual(18)
+      expect(styleState.useVerticalLayout).assertTrue()
+      expect(styleState.layoutWidth).assertEqual(200)
+      expect(styleState.layoutHeight).assertEqual(130)
+      expect(styleState.borderRadius).assertEqual(20)
+      expect(styleState.thumbnailWidth).assertEqual(184)
+      expect(styleState.thumbnailHeight).assertEqual(84)
+      expect(styleState.labelFontSize).assertEqual(20)
       expect(styleState.contentGap).assertEqual(10)
       expect(styleState.horizontalPadding).assertEqual(8)
-      expect(styleState.rightPadding).assertEqual(12)
-      expect(styleState.verticalPadding).assertEqual(10)
+      expect(styleState.rightPadding).assertEqual(8)
+      expect(styleState.verticalPadding).assertEqual(8)
+      expect(styleState.layoutWidth > 184).assertTrue()
+      expect(styleState.layoutWidth < 220).assertTrue()
+      expect(styleState.layoutHeight > 68).assertTrue()
+      expect(styleState.layoutHeight < 140).assertTrue()
+      expect(styleState.thumbnailWidth > 64).assertTrue()
+      expect(styleState.thumbnailHeight > 40).assertTrue()
+      expect(styleState.labelFontSize > 18).assertTrue()
+      expect(styleState.labelFontSize < 22).assertTrue()
     })
 
     it('分页 tab 改为无边框 chip 风格，当前页与聚焦态仍可区分', 0, () => {
