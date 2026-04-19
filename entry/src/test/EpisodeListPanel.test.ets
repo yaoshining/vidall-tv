@@ -64,38 +64,73 @@ export default function EpisodeListPanelTest() {
   })
 
   describe('EpisodeListPanel style states', () => {
-    it('聚焦卡片时不再显示右下角圆圈，改为整卡焦点态', 0, () => {
+    it('聚焦卡片时使用整项 scale 提亮，不再依赖边框语义', 0, () => {
       const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, false)
 
       expect(styleState.showLegacyFocusRing).assertFalse()
-      expect(styleState.showFocusOutline).assertTrue()
+      expect(styleState.showFocusOutline).assertFalse()
       expect(styleState.showCurrentOutline).assertFalse()
-      expect(styleState.scale).assertEqual(1.03)
+      expect(styleState.scale).assertEqual(1.04)
+      expect(styleState.focusBorderWidth).assertEqual(0)
+      expect(styleState.currentBorderWidth).assertEqual(0)
     })
 
-    it('当前播放项与聚焦项叠加时保留双重语义', 0, () => {
+    it('hover 卡片时也沿用同一套放大语义', 0, () => {
+      const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(false, false, true)
+
+      expect(styleState.scale).assertEqual(1.04)
+      expect(styleState.focusBorderWidth).assertEqual(0)
+      expect(styleState.currentBorderWidth).assertEqual(0)
+    })
+
+    it('当前播放项与聚焦项叠加时保留波形图与放大效果', 0, () => {
       const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, true)
 
       expect(styleState.showLegacyFocusRing).assertFalse()
-      expect(styleState.showFocusOutline).assertTrue()
-      expect(styleState.showCurrentOutline).assertTrue()
-      expect(styleState.scale).assertEqual(1.03)
+      expect(styleState.showFocusOutline).assertFalse()
+      expect(styleState.showCurrentOutline).assertFalse()
+      expect(styleState.showWaveIcon).assertTrue()
+      expect(styleState.waveBarCount).assertEqual(3)
+      expect(styleState.scale).assertEqual(1.04)
     })
 
-    it('聚焦样式保持卡片默认布局 footprint，不依赖更大包裹层', 0, () => {
-      const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(true, false)
+    it('选集项收敛为紧凑 chip 尺寸与字号', 0, () => {
+      const styleState: EpisodeCardStyleState = getEpisodeCardStyleState(false, false)
 
-      expect(styleState.layoutWidth).assertEqual(220)
-      expect(styleState.layoutHeight).assertEqual(140)
+      expect(styleState.layoutWidth).assertEqual(184)
+      expect(styleState.layoutHeight).assertEqual(68)
+      expect(styleState.borderRadius).assertEqual(22)
+      expect(styleState.thumbnailWidth).assertEqual(64)
+      expect(styleState.thumbnailHeight).assertEqual(40)
+      expect(styleState.labelFontSize).assertEqual(18)
+      expect(styleState.contentGap).assertEqual(10)
+      expect(styleState.horizontalPadding).assertEqual(8)
+      expect(styleState.rightPadding).assertEqual(12)
+      expect(styleState.verticalPadding).assertEqual(10)
     })
 
-    it('分页 tab 的聚焦态与当前页态可以并存', 0, () => {
+    it('分页 tab 改为无边框 chip 风格，当前页与聚焦态仍可区分', 0, () => {
       const styleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(true, true)
 
-      expect(styleState.showFocusPill).assertTrue()
+      expect(styleState.showFocusPill).assertFalse()
+      expect(styleState.showFocusBackground).assertTrue()
       expect(styleState.showCurrentUnderline).assertTrue()
       expect(styleState.isCurrentPage).assertTrue()
       expect(styleState.isFocused).assertTrue()
+      expect(styleState.focusBorderWidth).assertEqual(0)
+      expect(styleState.scale).assertEqual(1.04)
+      expect(styleState.borderRadius).assertEqual(20)
+      expect(styleState.fontSize).assertEqual(18)
+      expect(styleState.horizontalPadding).assertEqual(16)
+      expect(styleState.verticalPadding).assertEqual(8)
+    })
+
+    it('分页 tab 在 hover 时同样使用 scale 而不是边框', 0, () => {
+      const styleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(false, false, true)
+
+      expect(styleState.showFocusBackground).assertTrue()
+      expect(styleState.focusBorderWidth).assertEqual(0)
+      expect(styleState.scale).assertEqual(1.04)
     })
   })
 }
