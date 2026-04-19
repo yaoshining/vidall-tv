@@ -576,7 +576,7 @@ export struct EpisodeListPanel {
     }
     .backgroundColor(Color.Transparent)
     .width('100%')
-    .padding({ top: 40, bottom: 40, left: 84 })
+    .padding({ top: 40, bottom: 40, left: 26 })
     .alignItems(HorizontalAlign.Start)
   }
 }
