@@ -16,6 +16,7 @@
 import { ContinueWatchingItem } from '../../db/models/MediaEntity';
 import { PlayerPageParam, PlayerPage } from '../../pages/player/index';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
+import { MediaLibraryContext } from '../core/player/PlaybackContext';
 import { FileSourceType, FileSourceTypeLabels, SMBSourceConfig } from '../../db/models/FileSourceEntity';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
@@ -187,6 +188,20 @@ export struct ContinueWatchCard {
         seasonNumber: this.item.seasonNumber,
         episodeNumber: this.item.episodeNumber
       };
+      if (this.item.kind === 'series' && this.item.tvSeriesId > 0 && this.item.seasonNumber > 0) {
+        try {
+          const playbackCtx = await MediaLibraryContext.build(
+            db,
+            this.item.tvSeriesId,
+            this.item.seasonNumber,
+            this.item.filePath
+          );
+          param.playbackContext = playbackCtx;
+        } catch (e) {
+          // 构建失败不阻断播放，playbackContext 保持 undefined
+          console.warn('[ContinueWatchCard] 构建 playbackContext 失败');
+        }
+      }
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
       console.error('[ContinueWatchCard] buildAndPlay 失败', JSON.stringify(e));

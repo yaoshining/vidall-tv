@@ -4,6 +4,8 @@ import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
+import { EpisodeListPanel } from './EpisodeListPanel'
+import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
 
 @ComponentV2
 struct VideoControls {
@@ -589,6 +591,67 @@ interface SpeedOption {
   speed: number;
 }
 
+const PLAYER_SETTINGS_CHIP_HEIGHT: number = 68
+const PLAYER_SETTINGS_CHIP_RADIUS: number = 22
+const PLAYER_SETTINGS_CHIP_FONT_SIZE: number = 18
+const PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING: number = 18
+const PLAYER_SETTINGS_CHIP_VERTICAL_PADDING: number = 10
+const PLAYER_SETTINGS_CHIP_GAP: number = 10
+const PLAYER_SETTINGS_CHIP_SCALE_FOCUSED: number = 1.04
+
+export interface PlayerSettingsChipStyleState {
+  isFocused: boolean
+  isHovered: boolean
+  isSelected: boolean
+  showFocusOutline: boolean
+  showSelectedOutline: boolean
+  showWaveIcon: boolean
+  scale: number
+  shadowRadius: number
+  shadowColor: string
+  backgroundColor: string
+  labelColor: string
+  focusBorderWidth: number
+  selectedBorderWidth: number
+  height: number
+  borderRadius: number
+  labelFontSize: number
+  horizontalPadding: number
+  verticalPadding: number
+  groupGap: number
+}
+
+export function getPlayerSettingsChipStyleState(
+  isFocused: boolean,
+  isSelected: boolean,
+  isHovered: boolean = false
+): PlayerSettingsChipStyleState {
+  const isEmphasized = isFocused || isHovered
+  const styleState: PlayerSettingsChipStyleState = {
+    isFocused,
+    isHovered,
+    isSelected,
+    showFocusOutline: false,
+    showSelectedOutline: false,
+    showWaveIcon: false,
+    scale: isEmphasized ? PLAYER_SETTINGS_CHIP_SCALE_FOCUSED : 1,
+    shadowRadius: isEmphasized ? 12 : 0,
+    shadowColor: isEmphasized ? '#386EA8E0' : '#00000000',
+    backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.28)' :
+      isEmphasized ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.12)',
+    labelColor: isSelected ? '#F9FCFF' : isEmphasized ? '#F3F7FF' : '#E8EDF5',
+    focusBorderWidth: 0,
+    selectedBorderWidth: 0,
+    height: PLAYER_SETTINGS_CHIP_HEIGHT,
+    borderRadius: PLAYER_SETTINGS_CHIP_RADIUS,
+    labelFontSize: PLAYER_SETTINGS_CHIP_FONT_SIZE,
+    horizontalPadding: PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING,
+    verticalPadding: PLAYER_SETTINGS_CHIP_VERTICAL_PADDING,
+    groupGap: PLAYER_SETTINGS_CHIP_GAP
+  }
+  return styleState
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
@@ -598,6 +661,8 @@ export struct PlayerSettingsDialog {
   @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
   @State private arFocusedIndex: number = -1
   @State private speedFocusedIndex: number = -1
+  @State private arHoveredIndex: number = -1
+  @State private speedHoveredIndex: number = -1
   private readonly aspectRatioOptions: AspectRatioOption[] = [
     { label: '适应', mode: AspectRatioMode.FIT },
     { label: '填充', mode: AspectRatioMode.FILL },
@@ -620,6 +685,8 @@ export struct PlayerSettingsDialog {
     this.currentAspectRatioMode = this.videoController.aspectRatioMode;
     this.arFocusedIndex = -1;
     this.speedFocusedIndex = -1;
+    this.arHoveredIndex = -1;
+    this.speedHoveredIndex = -1;
     // 从控制器同步当前播放速率，找到匹配的 index（默认回退到 1.0x = index 2）
     const currentSpeed = this.videoController.playbackSpeed;
     let matchIdx = 2;
@@ -635,6 +702,17 @@ export struct PlayerSettingsDialog {
   aboutToDisappear(): void {
     this.arFocusedIndex = -1;
     this.speedFocusedIndex = -1;
+    this.arHoveredIndex = -1;
+    this.speedHoveredIndex = -1;
+  }
+
+  /** 当 playbackContext 是媒体库上下文时返回，否则返回 undefined */
+  private getMediaLibraryContext(): MediaLibraryContext | undefined {
+    const ctx = this.videoController.playbackContext
+    if (ctx !== undefined && ctx.contextType === 'media_library') {
+      return ctx as MediaLibraryContext
+    }
+    return undefined
   }
 
   @Builder
@@ -649,6 +727,41 @@ export struct PlayerSettingsDialog {
       .shadow({ radius: selected ? 8 : 0, color: selected ? '#33597FB8' : '#00ffffff' })
   }
 
+  @Builder
+  private SelectionOptionChip(label: string, styleState: PlayerSettingsChipStyleState) {
+    Row() {
+      Text(label)
+        .fontSize(styleState.labelFontSize)
+        .fontColor(styleState.labelColor)
+        .fontWeight(styleState.isSelected ? FontWeight.Medium : FontWeight.Regular)
+        .maxLines(1)
+    }
+    .height(styleState.height)
+    .padding({ left: styleState.horizontalPadding, right: styleState.horizontalPadding })
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(styleState.backgroundColor)
+    .borderRadius(styleState.borderRadius)
+    .shadow({ radius: styleState.shadowRadius, color: styleState.shadowColor })
+    .scale({ x: styleState.scale, y: styleState.scale })
+    .animation({ duration: 180, curve: Curve.EaseInOut })
+  }
+
+  private getSpeedChipStyleState(idx: number): PlayerSettingsChipStyleState {
+    return getPlayerSettingsChipStyleState(
+      this.speedFocusedIndex === idx,
+      this.selectedPlaybackRateIndex === idx,
+      this.speedHoveredIndex === idx
+    )
+  }
+
+  private getAspectRatioChipStyleState(idx: number): PlayerSettingsChipStyleState {
+    return getPlayerSettingsChipStyleState(
+      this.arFocusedIndex === idx,
+      this.currentAspectRatioMode === this.aspectRatioOptions[idx].mode,
+      this.arHoveredIndex === idx
+    )
+  }
+
   build() {
     Stack({ alignContent: Alignment.BottomStart }) {
       Column()
@@ -657,191 +770,174 @@ export struct PlayerSettingsDialog {
         .backgroundColor(Color.Transparent)
 
       Scroll() {
-        Column({ space: 28 }) {
-          Column({ space: 12 }) {
-            Text('倍速播放')
-              .fontSize(32)
-              .fontColor('#EFF2FB')
-              .fontWeight(FontWeight.Medium)
-              .alignSelf(ItemAlign.Start)
-
-            Row({ space: 12 }) {
-              ForEach(this.speedOptions, (opt: SpeedOption, idx: number) => {
-                Row() {
-                  Text(opt.label)
-                    .fontSize(26)
-                    .fontColor(this.selectedPlaybackRateIndex === idx ? '#F3F7FF' : '#D7DCE7')
-                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                    .backgroundColor(this.selectedPlaybackRateIndex === idx
-                      ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                    .borderRadius("50%")
-                    .border({
-                      width: this.selectedPlaybackRateIndex === idx ? 2 : 1,
-                      color: this.selectedPlaybackRateIndex === idx ? '#fffefe' : '#45ffffff'
-                    })
-                    .shadow({
-                      radius: this.selectedPlaybackRateIndex === idx ? 8 : 0,
-                      color: this.selectedPlaybackRateIndex === idx ? '#33597FB8' : '#00ffffff'
-                    })
-                }
-                .focusable(true)
-                .onFocus(() => { this.speedFocusedIndex = idx })
-                .onBlur(() => { this.speedFocusedIndex = -1 })
-                .borderRadius(99)
-                .padding(this.speedFocusedIndex === idx ? 2 : 0)
-                .border({
-                  width: this.speedFocusedIndex === idx ? 2 : 0,
-                  color: this.speedFocusedIndex === idx ? '#4D9FFF' : Color.Transparent
-                })
-                .onClick(() => {
-                  this.selectedPlaybackRateIndex = idx
-                  this.videoController.setPlaybackSpeed(opt.speed)
-                })
-              }, (opt: SpeedOption) => opt.speed.toString())
-            }
-            .justifyContent(FlexAlign.Start)
-            .width('100%')
-          }
-
-
-          Column({ space: 12 }) {
-            Text('画面比例')
-              .fontSize(32)
-              .fontColor('#EFF2FB')
-              .fontWeight(FontWeight.Medium)
-              .alignSelf(ItemAlign.Start)
-
-            Row({ space: 12 }) {
-              ForEach(this.aspectRatioOptions, (opt: AspectRatioOption, idx: number) => {
-                Row() {
-                  Text(opt.label)
-                    .fontSize(26)
-                    .fontColor(this.currentAspectRatioMode === opt.mode ? '#F3F7FF' : '#D7DCE7')
-                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                    .backgroundColor(this.currentAspectRatioMode === opt.mode
-                      ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                    .borderRadius("50%")
-                    .border({
-                      width: this.currentAspectRatioMode === opt.mode ? 2 : 1,
-                      color: this.currentAspectRatioMode === opt.mode ? '#fffefe' : '#45ffffff'
-                    })
-                    .shadow({
-                      radius: this.currentAspectRatioMode === opt.mode ? 8 : 0,
-                      color: this.currentAspectRatioMode === opt.mode ? '#33597FB8' : '#00ffffff'
-                    })
-                }
-                .focusable(true)
-                .onFocus(() => { this.arFocusedIndex = idx })
-                .onBlur(() => { this.arFocusedIndex = -1 })
-                .borderRadius(99)
-                .padding(this.arFocusedIndex === idx ? 2 : 0)
-                .border({
-                  width: this.arFocusedIndex === idx ? 2 : 0,
-                  color: this.arFocusedIndex === idx ? '#4D9FFF' : Color.Transparent
-                })
-                .onClick(() => {
-                  this.currentAspectRatioMode = opt.mode
-                  this.videoController.setAspectRatioMode(opt.mode)
-                })
-              }, (opt: AspectRatioOption) => opt.mode.toString())
-            }
-            .justifyContent(FlexAlign.Start)
-            .width('100%')
-          }
-
-          Column({ space: 12 }) {
-            Text('字幕管理')
-              .fontSize(32)
-              .fontColor('#EFF2FB')
-              .fontWeight(FontWeight.Medium)
-              .alignSelf(ItemAlign.Start)
-
-            Row() {
-              this.SettingsChip('选择字幕', this.videoController.activeSubtitleIndex >= 0)
-            }
-            .onClick(() => {
-              this.onOpenSubtitleSelector()
+        Column({ space: 0 }) {
+          // ── 选集区域（仅 MediaLibraryContext 时显示）────────────────────────
+          if (this.getMediaLibraryContext() !== undefined) {
+            EpisodeListPanel({
+              context: this.getMediaLibraryContext() as MediaLibraryContext,
+              onSelect: (item: PlaybackContextItem) => {
+                this.videoController.playbackContext?.jumpTo(item.index)
+                this.controller.close()
+              }
             })
           }
 
-          if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.videoController.backend === 'avplayer') {
+          // ── 倍速播放 & 其他设置 ─────────────────────────────────────────────
+          Column({ space: 28 }) {
             Column({ space: 12 }) {
-              Text('画质增强')
+              Text('倍速播放')
                 .fontSize(32)
                 .fontColor('#EFF2FB')
                 .fontWeight(FontWeight.Medium)
                 .alignSelf(ItemAlign.Start)
 
-              Row({ space: 12 }) {
-                // 直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
-                Text('关闭')
-                  .fontSize(26)
-                  .fontColor(!this.aiEnhanceOn ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(!this.aiEnhanceOn ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius(99)
-                  .border({ width: !this.aiEnhanceOn ? 2 : 1, color: !this.aiEnhanceOn ? '#fffefe' : '#45ffffff' })
-                  .onClick(() => {
-                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击关闭');
-                    this.aiEnhanceOn = false;
-                    this.videoController.disableAiEnhance();
+              Row({ space: PLAYER_SETTINGS_CHIP_GAP }) {
+                ForEach(this.speedOptions, (opt: SpeedOption, idx: number) => {
+                  Row() {
+                    this.SelectionOptionChip(opt.label, this.getSpeedChipStyleState(idx))
+                  }
+                  .focusable(true)
+                  .onFocus(() => { this.speedFocusedIndex = idx })
+                  .onBlur(() => { this.speedFocusedIndex = -1 })
+                  .onHover((isHover: boolean) => {
+                    this.speedHoveredIndex = isHover ? idx : -1
                   })
-
-                Text('低')
-                  .fontSize(26)
-                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius(99)
-                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#fffefe' : '#45ffffff' })
                   .onClick(() => {
-                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击低');
-                    this.aiEnhanceOn = true;
-                    this.aiEnhanceQuality = 'low';
-                    this.videoController.setAiEnhance('low');
+                    this.selectedPlaybackRateIndex = idx
+                    this.videoController.setPlaybackSpeed(opt.speed)
                   })
-
-                Text('中')
-                  .fontSize(26)
-                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius(99)
-                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#fffefe' : '#45ffffff' })
-                  .onClick(() => {
-                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击中');
-                    this.aiEnhanceOn = true;
-                    this.aiEnhanceQuality = 'medium';
-                    this.videoController.setAiEnhance('medium');
-                  })
-
-                Text('高')
-                  .fontSize(26)
-                  .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius(99)
-                  .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#fffefe' : '#45ffffff' })
-                  .onClick(() => {
-                    hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击高');
-                    this.aiEnhanceOn = true;
-                    this.aiEnhanceQuality = 'high';
-                    this.videoController.setAiEnhance('high');
-                  })
+                }, (opt: SpeedOption) => opt.speed.toString())
               }
               .justifyContent(FlexAlign.Start)
               .width('100%')
             }
+
+
+            Column({ space: 12 }) {
+              Text('画面比例')
+                .fontSize(32)
+                .fontColor('#EFF2FB')
+                .fontWeight(FontWeight.Medium)
+                .alignSelf(ItemAlign.Start)
+
+              Row({ space: PLAYER_SETTINGS_CHIP_GAP }) {
+                ForEach(this.aspectRatioOptions, (opt: AspectRatioOption, idx: number) => {
+                  Row() {
+                    this.SelectionOptionChip(opt.label, this.getAspectRatioChipStyleState(idx))
+                  }
+                  .focusable(true)
+                  .onFocus(() => { this.arFocusedIndex = idx })
+                  .onBlur(() => { this.arFocusedIndex = -1 })
+                  .onHover((isHover: boolean) => {
+                    this.arHoveredIndex = isHover ? idx : -1
+                  })
+                  .onClick(() => {
+                    this.currentAspectRatioMode = opt.mode
+                    this.videoController.setAspectRatioMode(opt.mode)
+                  })
+                }, (opt: AspectRatioOption) => opt.mode.toString())
+              }
+              .justifyContent(FlexAlign.Start)
+              .width('100%')
+            }
+
+            Column({ space: 12 }) {
+              Text('字幕管理')
+                .fontSize(32)
+                .fontColor('#EFF2FB')
+                .fontWeight(FontWeight.Medium)
+                .alignSelf(ItemAlign.Start)
+
+              Row() {
+                this.SettingsChip('选择字幕', this.videoController.activeSubtitleIndex >= 0)
+              }
+              .onClick(() => {
+                this.onOpenSubtitleSelector()
+              })
+            }
+
+            if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.videoController.backend === 'avplayer') {
+              Column({ space: 12 }) {
+                Text('画质增强')
+                  .fontSize(32)
+                  .fontColor('#EFF2FB')
+                  .fontWeight(FontWeight.Medium)
+                  .alignSelf(ItemAlign.Start)
+
+                Row({ space: 12 }) {
+                  // 直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题
+                  Text('关闭')
+                    .fontSize(26)
+                    .fontColor(!this.aiEnhanceOn ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(!this.aiEnhanceOn ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius(99)
+                    .border({ width: !this.aiEnhanceOn ? 2 : 1, color: !this.aiEnhanceOn ? '#fffefe' : '#45ffffff' })
+                    .onClick(() => {
+                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击关闭');
+                      this.aiEnhanceOn = false;
+                      this.videoController.disableAiEnhance();
+                    })
+
+                  Text('低')
+                    .fontSize(26)
+                    .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius(99)
+                    .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#fffefe' : '#45ffffff' })
+                    .onClick(() => {
+                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击低');
+                      this.aiEnhanceOn = true;
+                      this.aiEnhanceQuality = 'low';
+                      this.videoController.setAiEnhance('low');
+                    })
+
+                  Text('中')
+                    .fontSize(26)
+                    .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius(99)
+                    .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#fffefe' : '#45ffffff' })
+                    .onClick(() => {
+                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击中');
+                      this.aiEnhanceOn = true;
+                      this.aiEnhanceQuality = 'medium';
+                      this.videoController.setAiEnhance('medium');
+                    })
+
+                  Text('高')
+                    .fontSize(26)
+                    .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#F3F7FF' : '#D7DCE7')
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+                    .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .borderRadius(99)
+                    .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#fffefe' : '#45ffffff' })
+                    .onClick(() => {
+                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击高');
+                      this.aiEnhanceOn = true;
+                      this.aiEnhanceQuality = 'high';
+                      this.videoController.setAiEnhance('high');
+                    })
+                }
+                .justifyContent(FlexAlign.Start)
+                .width('100%')
+              }
+            }
           }
+          .padding({ left: 26, right: 26, top: 18, bottom: 28 })
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
         }
-        .padding({ left: 26, right: 26, top: 18, bottom: 28 })
         .alignItems(HorizontalAlign.Start)
         .width('100%')
       }
       .scrollBar(BarState.Off)
       .width('100%')
-      .height('50%')
-      .backgroundColor('#090E1922')
+      .height('55%')
+      .backgroundColor(Color.Transparent)
+      .borderRadius({ topLeft: 24, topRight: 24 })
       .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
     }
     .width('100%')
