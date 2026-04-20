@@ -208,6 +208,17 @@ export class VideoPlayerController {
   @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
   /** 当前播放速率，默认 1.0（正常速度）。支持档位：0.5/0.75/1.0/1.25/1.5/2.0 */
   @Trace playbackSpeed: number = 1.0;
+  /** 复用同一 XComponent 切源时缓存的 IJK context */
+  private cachedIjkContext?: object;
+  private cachedIjkComponentId: string = '';
+  /** 复用同一 XComponent 切源时缓存的 native context */
+  private cachedNativeContext?: object;
+  private cachedNativeComponentId: string = '';
+  private pendingReloadToken: number = 0;
+  private activeReloadToken: number = 0;
+  private reloadTimeoutId?: number;
+  private pendingReloadResolve?: () => void;
+  private pendingReloadReject?: (error: Error) => void;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private currentVideoData?: VideoData;
   private timeToSeek = -1
@@ -503,6 +514,7 @@ export class VideoPlayerController {
         return;
       }
       this.onPlayerReady();
+      this.resolvePendingReload();
     });
     adapter.onPlay(() => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -624,6 +636,7 @@ export class VideoPlayerController {
       }
       this.isLoading = false;
       this.lastErrorMessage = this.normalizePlayerError(error.message);
+      this.rejectPendingReload(new Error(error.message));
     });
     adapter.onBuffering((isBuffering: boolean) => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -735,6 +748,7 @@ export class VideoPlayerController {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `init 失败: code=${err.code} msg=${err.message}`);
+        this.rejectPendingReload(new Error(err.message));
       }
     }
   }
@@ -1293,6 +1307,8 @@ export class VideoPlayerController {
       return;
     }
     const ijkAdapter = this.player as IjkPlayerAdapter;
+    this.cachedIjkContext = context;
+    this.cachedIjkComponentId = xComponentId;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `setIjkContext: 绑定 XComponent id=${xComponentId}，开始完整 init 流程...`);
     // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 前调用 setContext
@@ -1319,6 +1335,7 @@ export class VideoPlayerController {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `setIjkContext init 失败: ${err.message}`);
+        this.rejectPendingReload(new Error(err.message));
       }
     }
   }
@@ -1339,6 +1356,8 @@ export class VideoPlayerController {
       return;
     }
     const nativeAdapter = this.player as VidAllPlayerAdapter;
+    this.cachedNativeContext = context;
+    this.cachedNativeComponentId = xComponentId;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
     this.startNativeReadyGuard(this.playbackSessionId);
@@ -1356,6 +1375,7 @@ export class VideoPlayerController {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `setNativeContext init 失败: ${err.message}`);
+        this.rejectPendingReload(new Error(err.message));
         this.fallbackNativeToIjk('native_init_error', 'native 初始化失败，已自动回退到 IJK 播放', err.message);
       }
     }
@@ -1363,6 +1383,74 @@ export class VideoPlayerController {
 
   setNativeSeekDiagLogEnabled(enabled: boolean): void {
     this.nativeSeekDiagLogEnabled = enabled;
+  }
+
+  async reloadSource(videoData: VideoData, autoPlay: boolean = true): Promise<void> {
+    if (this.surfaceId.length === 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'reloadSource: surfaceId 为空，忽略切源请求');
+      throw new Error('reloadSource requires surfaceId');
+    }
+    this.clearPendingReloadState();
+    const reloadToken = this.pendingReloadToken + 1;
+    this.pendingReloadToken = reloadToken;
+    this.activeReloadToken = reloadToken;
+    const reloadPromise = new Promise<void>((resolve, reject) => {
+      this.pendingReloadResolve = resolve;
+      this.pendingReloadReject = reject;
+      this.reloadTimeoutId = setTimeout(() => {
+        if (reloadToken !== this.activeReloadToken) {
+          return;
+        }
+        this.rejectPendingReload(new Error('reloadSource prepared timeout'));
+      }, 15000);
+    });
+    try {
+      await this.initPlayer(videoData, this.surfaceId);
+      if (this.backend === 'ijkplayer') {
+        if (this.cachedIjkContext === undefined || this.cachedIjkComponentId.length === 0) {
+          throw new Error('reloadSource missing ijk context');
+        }
+        await this.setIjkContext(this.cachedIjkContext, this.cachedIjkComponentId);
+      } else if (this.backend === 'native') {
+        if (this.cachedNativeContext === undefined || this.cachedNativeComponentId.length === 0) {
+          throw new Error('reloadSource missing native context');
+        }
+        await this.setNativeContext(this.cachedNativeContext, this.cachedNativeComponentId);
+      }
+      await reloadPromise;
+      if (autoPlay) {
+        await this.play();
+      }
+    } catch (error) {
+      const reloadError = error instanceof Error ? error : new Error(String(error));
+      this.rejectPendingReload(reloadError);
+      throw reloadError;
+    }
+  }
+
+  private clearPendingReloadState(): void {
+    if (this.reloadTimeoutId !== undefined) {
+      clearTimeout(this.reloadTimeoutId);
+      this.reloadTimeoutId = undefined;
+    }
+    this.pendingReloadResolve = undefined;
+    this.pendingReloadReject = undefined;
+  }
+
+  private resolvePendingReload(): void {
+    const resolve = this.pendingReloadResolve;
+    this.clearPendingReloadState();
+    if (resolve !== undefined) {
+      resolve();
+    }
+  }
+
+  private rejectPendingReload(error: Error): void {
+    const reject = this.pendingReloadReject;
+    this.clearPendingReloadState();
+    if (reject !== undefined) {
+      reject(error);
+    }
   }
 
   /**
@@ -1922,6 +2010,7 @@ export class VideoPlayerController {
   }
 
   async release(): Promise<void> {
+    this.rejectPendingReload(new Error('player released'));
     this.clearNativeReadyGuardTimer();
     this.stopProgressTimer();
     this.saveProgressNow();
@@ -2458,4 +2547,3 @@ export class VideoPlayerController {
   }
 
 }
-

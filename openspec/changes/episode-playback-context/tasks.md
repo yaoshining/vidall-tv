@@ -10,4 +10,4 @@
 
 ## Remaining Implementation Gap
 
-- [ ] 让播放器设置面板中的 `选集` 在选择其他剧集后真正切换当前播放 URL，并使播放器实际播放源与 `playbackContext.currentIndex` 保持一致。
+- [x] 让播放器设置面板中的 `选集` 在选择其他剧集后真正切换当前播放 URL，并使播放器实际播放源与 `playbackContext.currentIndex` 保持一致。

@@ -15,6 +15,10 @@ export interface PlaybackContextItem {
   index: number;
   thumbnailUrl?: string;    // 集缩略图 URL（优先 stillUrl/stillPath）
   episodeNumber?: number;   // 集号（如 1, 2, 3...）
+  seasonNumber?: number;    // 季号（用于播放器内选集切源）
+  sourceId?: number;        // 文件源 ID（用于重建真实播放 URL）
+  videoId?: number;         // videos 表主键（用于切换后续播进度上下文）
+  durationMs?: number;      // 已探测时长（用于切换时透传 durationHint）
 }
 
 // 播放上下文抽象基类
@@ -75,7 +79,11 @@ export class MediaLibraryContext extends PlaybackContext {
         title: ep.title ?? ep.fileName,
         index: i,
         thumbnailUrl: MediaLibraryContext.getEpisodeThumbnailUrl(episodeEntity),
+        seasonNumber: ep.seasonNumber ?? undefined,
         episodeNumber: ep.episodeNumber ?? undefined,
+        sourceId: ep.sourceId,
+        videoId: ep.id,
+        durationMs: ep.durationMs ?? undefined,
       };
       mapped.push(item);
     }

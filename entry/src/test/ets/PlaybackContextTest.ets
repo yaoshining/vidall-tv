@@ -234,6 +234,26 @@ export default function PlaybackContextTest() {
       expect(result.items[0].title).assertEqual('ep1.mkv');
     });
 
+    it('buildItems 保留播放器切源所需的剧集元数据', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 9, sourceId: 3, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep9.mkv', fileName: 'ep9.mkv', seasonNumber: 2, episodeNumber: 9,
+          durationMs: 2520000, title: '第九集',
+          audioTracksJson: '[{\"trackIndex\":0}]',
+          videoCodec: 'h264'
+        }
+      ];
+
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 2, '/ep9.mkv');
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].videoId).assertEqual(9);
+      expect(result.items[0].sourceId).assertEqual(3);
+      expect(result.items[0].seasonNumber).assertEqual(2);
+      expect(result.items[0].episodeNumber).assertEqual(9);
+      expect(result.items[0].durationMs).assertEqual(2520000);
+    });
+
     it('buildItems 优先使用剧集 stillUrl 填充缩略图字段且不再依赖 posterLocalPath', 0, () => {
       const fakeItems: MediaItem[] = [
         {
