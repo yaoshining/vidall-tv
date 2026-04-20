@@ -21,11 +21,14 @@ function buildSelectedEpisode(index: number): PlaybackContextItem {
 }
 
 function buildResolvedSource(url: string): ResolvedEpisodePlaybackSource {
-  return {
+  const httpHeader = {} as Record<string, string>
+  httpHeader.Authorization = 'Basic token'
+  const resolvedSource: ResolvedEpisodePlaybackSource = {
     url,
-    httpHeader: { Authorization: 'Basic token' },
+    httpHeader,
     durationHintMs: 1800000
   }
+  return resolvedSource
 }
 
 export default function playerPageTest() {
