@@ -74,9 +74,10 @@ export class MediaLibraryContext extends PlaybackContext {
     for (let i = 0; i < seasonItems.length; i++) {
       const ep = seasonItems[i];
       const episodeEntity = MediaLibraryContext.findEpisodeEntity(ep, i, episodeEntities, episodeEntityByNumber);
+      const displayTitle = MediaLibraryContext.getEpisodeDisplayTitle(ep, episodeEntity);
       const item: PlaybackContextItem = {
         videoPath: ep.filePath,
-        title: ep.title ?? ep.fileName,
+        title: displayTitle,
         index: i,
         thumbnailUrl: MediaLibraryContext.getEpisodeThumbnailUrl(episodeEntity),
         seasonNumber: ep.seasonNumber ?? undefined,
@@ -149,6 +150,26 @@ export class MediaLibraryContext extends PlaybackContext {
       return episodeEntities[index];
     }
     return undefined;
+  }
+
+  private static getEpisodeDisplayTitle(item: MediaItem, entity: TvEpisodeEntity | undefined): string {
+    const entityTitle = (entity?.title ?? '').trim();
+    if (entityTitle.length > 0) {
+      return entityTitle;
+    }
+    const episodeNumber = item.episodeNumber ?? 0;
+    if (episodeNumber > 0) {
+      return `第${episodeNumber}集`;
+    }
+    const title = (item.title ?? '').trim();
+    if (title.length > 0) {
+      return title;
+    }
+    const fileName = (item.fileName ?? '').trim();
+    if (fileName.length > 0) {
+      return fileName;
+    }
+    return '未知集名';
   }
 
   private static getEpisodeThumbnailUrl(entity: TvEpisodeEntity | undefined): string | undefined {

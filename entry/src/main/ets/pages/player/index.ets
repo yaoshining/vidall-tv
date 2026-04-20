@@ -88,10 +88,14 @@ export function buildMediaLibraryEpisodeSwitchParam(
   const mediaKey = (seriesProviderId.length > 0 && seasonNumber > 0 && episodeNumber > 0)
     ? MediaProgressStore.episodeKey(seriesProviderId, seasonNumber, episodeNumber)
     : undefined;
+  const itemTitle = selectedItem.title.trim();
+  const playerTitle = itemTitle.length > 0
+    ? itemTitle
+    : (episodeNumber > 0 ? `第${episodeNumber}集` : currentParam.title);
   const nextParam: PlayerPageParam = {
     url: resolvedSource.url,
     httpHeader: resolvedSource.httpHeader,
-    title: selectedItem.title,
+    title: playerTitle,
     durationHintMs: resolvedSource.durationHintMs,
     videoId: selectedItem.videoId,
     seriesProviderId,

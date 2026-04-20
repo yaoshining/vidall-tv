@@ -297,6 +297,41 @@ export default function PlaybackContextTest() {
       expect(firstItem.thumbnailUrl).assertEqual('https://image.tmdb.org/t/p/w342/still-ep1.jpg');
     });
 
+    it('buildItems 优先使用集标题而不是剧级标题作为播放器展示标题', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 11, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s1e2.mkv', fileName: 's1e2.mkv', seasonNumber: 1, episodeNumber: 2,
+          title: '长夜余火'
+        },
+      ];
+      const episodeEntities: TvEpisodeEntity[] = [
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-2',
+          seasonNumber: 1, episodeNumber: 2, scrapedAt: 0,
+          title: '突围'
+        },
+      ];
+
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/s1e2.mkv', episodeEntities);
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].title).assertEqual('突围');
+    });
+
+    it('buildItems 在缺少合适集标题时回退为第X集而不是剧名', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 12, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s1e7.mkv', fileName: 's1e7.mkv', seasonNumber: 1, episodeNumber: 7,
+          title: '长夜余火'
+        },
+      ];
+
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/s1e7.mkv');
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].title).assertEqual('第7集');
+    });
+
   });
 
   // ─────────────────────────────────────────────
