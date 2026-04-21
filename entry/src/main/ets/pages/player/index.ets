@@ -301,6 +301,9 @@ export struct PlayerPage {
     this.currentMediaKey = '';
     this.currentMediaSeason = 0;
     this.currentMediaEpisode = 0;
+    this.currentMediaKey = pageParam.mediaKey ?? '';
+    this.currentMediaSeason = pageParam.seasonNumber ?? 0;
+    this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
     this.showResumeDialog = false;
     this.pendingSeekMs = -1;
     if (pageParam.videoId !== undefined && pageParam.videoId > 0) {

@@ -2,11 +2,27 @@ import { describe, it, expect } from '@ohos/hypium'
 import {
   buildMediaLibraryEpisodeSwitchParam,
   commitMediaLibraryEpisodeSwitch,
+  PlayerPage,
   PlayerPageParam,
   ResolvedEpisodePlaybackSource
 } from '../main/ets/pages/player/index'
 import { MediaLibraryContext, FileExplorerContext, PlaybackContextItem } from '../main/ets/components/core/player/PlaybackContext'
 import { MediaItem, TvEpisodeEntity } from '../main/ets/db/models/MediaEntity'
+
+interface PlayerPageAccessor {
+  applyPlayerPageParam(pageParam: PlayerPageParam): void
+  persistCurrentPlaybackState(): void
+  currentMediaKey: string
+  currentMediaSeason: number
+  currentMediaEpisode: number
+  videoPlayerController: PlayerPageControllerAccessor
+}
+
+interface PlayerPageControllerAccessor {
+  currentTime: number
+  duration: number
+  saveProgressNow(): void
+}
 
 function buildSelectedEpisode(index: number): PlaybackContextItem {
   return {
@@ -32,8 +48,44 @@ function buildResolvedSource(url: string): ResolvedEpisodePlaybackSource {
   return resolvedSource
 }
 
+function buildPlayerPageAccessor(): PlayerPageAccessor {
+  return new PlayerPage() as Object as PlayerPageAccessor
+}
+
 export default function playerPageTest() {
   describe('PlayerPage episode switching', () => {
+    it('初次进入播放器时会用 pageParam 初始化媒体级进度标识', 0, () => {
+      const page = buildPlayerPageAccessor()
+      const pageParam: PlayerPageParam = {
+        url: 'https://example.com/s01e03.mkv',
+        title: '第3集',
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e3',
+        seasonNumber: 1,
+        episodeNumber: 3
+      }
+
+      page.applyPlayerPageParam(pageParam)
+
+      expect(page.currentMediaKey).assertEqual('media_progress_episode_tmdb_tmdb-9527_s1_e3')
+      expect(page.currentMediaSeason).assertEqual(1)
+      expect(page.currentMediaEpisode).assertEqual(3)
+    })
+
+    it('初次进入播放器且存在 mediaKey 时不会因空 key 跳过媒体级进度保存链路', 0, () => {
+      const page = buildPlayerPageAccessor()
+      const mediaKey = 'media_progress_episode_tmdb_tmdb-9527_s1_e3'
+      page.applyPlayerPageParam({
+        url: 'https://example.com/s01e03.mkv',
+        title: '第3集',
+        mediaKey,
+        seasonNumber: 1,
+        episodeNumber: 3
+      })
+
+      expect(page.currentMediaKey.length > 0).assertTrue()
+      expect(page.currentMediaKey).assertEqual(mediaKey)
+    })
+
     it('媒体库选集会生成新的播放参数，并在提交后让 currentIndex 与所选播放源对齐', 0, () => {
       const context = new MediaLibraryContext()
       context.items = [buildSelectedEpisode(0), buildSelectedEpisode(1), buildSelectedEpisode(2)]
@@ -69,6 +121,37 @@ export default function playerPageTest() {
       const committedItem = commitMediaLibraryEpisodeSwitch(context, context.items[2])
       expect(committedItem !== null).assertTrue()
       expect(context.currentIndex).assertEqual(2)
+    })
+
+    it('媒体库切集生成的新参数仍可更新媒体级进度标识', 0, () => {
+      const page = buildPlayerPageAccessor()
+      const context = new MediaLibraryContext()
+      context.items = [buildSelectedEpisode(0), buildSelectedEpisode(1), buildSelectedEpisode(2)]
+      context.currentIndex = 0
+
+      const currentParam: PlayerPageParam = {
+        url: 'https://example.com/current.mkv',
+        title: '当前播放',
+        seriesProviderId: 'tmdb-9527',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        playbackContext: context
+      }
+
+      const nextParam = buildMediaLibraryEpisodeSwitchParam(
+        currentParam,
+        context,
+        context.items[1],
+        buildResolvedSource('https://example.com/s01e02.mkv')
+      )
+
+      expect(nextParam !== null).assertTrue()
+      if (nextParam !== null) {
+        page.applyPlayerPageParam(nextParam)
+        expect(page.currentMediaKey).assertEqual('media_progress_episode_tmdb_tmdb-9527_s1_e2')
+        expect(page.currentMediaSeason).assertEqual(1)
+        expect(page.currentMediaEpisode).assertEqual(2)
+      }
     })
 
     it('非 media_library 场景不会生成播放器切源参数', 0, () => {
