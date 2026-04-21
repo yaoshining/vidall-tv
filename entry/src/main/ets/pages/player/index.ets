@@ -93,7 +93,7 @@ function buildEpisodeSwitchPlayerTitle(
   const currentCodeMarker = `-${buildPlayerEpisodeCode(currentSeasonNumber, currentEpisodeNumber)}-`;
   const currentCodeIndex = currentTitle.indexOf(currentCodeMarker);
   if (currentCodeIndex < 0) {
-    return nextEpisodeTitle;
+    return currentTitle;
   }
   const titlePrefix = currentTitle.substring(0, currentCodeIndex);
   const nextCode = buildPlayerEpisodeCode(seasonNumber, episodeNumber);

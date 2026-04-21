@@ -225,6 +225,7 @@ export default function playerPageTest() {
         buildResolvedSource('https://example.com/s01e02.mkv')
       )
 
+      expect(context.items[1].title).assertEqual('突围')
       expect(nextParam !== null).assertTrue()
       if (nextParam !== null) {
         expect(nextParam.title).assertEqual('长夜余火 第一季-S1:E2-突围')
@@ -267,10 +268,66 @@ export default function playerPageTest() {
         buildResolvedSource('https://example.com/s01e02.mkv')
       )
 
+      expect(context.items[1].title).assertEqual('第2集')
       expect(nextParam !== null).assertTrue()
       if (nextParam !== null) {
         expect(nextParam.title).assertEqual('长夜余火 第一季-S1:E2-第2集')
         expect(nextParam.title === '第2集').assertFalse()
+        expect(nextParam.url).assertEqual('https://example.com/s01e02.mkv')
+      }
+    })
+
+    it('媒体库切集后当前标题缺少季集编码时优先保留当前标题', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 101, sourceId: 201, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/series/s01e01.mkv', fileName: 's01e01.mkv', seasonNumber: 1, episodeNumber: 1,
+          title: '长夜余火'
+        },
+        {
+          id: 102, sourceId: 202, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/series/s01e02.mkv', fileName: 's01e02.mkv', seasonNumber: 1, episodeNumber: 2,
+          title: '长夜余火'
+        }
+      ]
+      const episodeEntities: TvEpisodeEntity[] = [
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-1',
+          seasonNumber: 1, episodeNumber: 1, scrapedAt: 0,
+          title: '启程'
+        },
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-2',
+          seasonNumber: 1, episodeNumber: 2, scrapedAt: 0,
+          title: '突围'
+        }
+      ]
+      const buildResult = MediaLibraryContext.buildItems(fakeItems, 1, '/series/s01e01.mkv', episodeEntities)
+      const context = new MediaLibraryContext()
+      context.items = buildResult.items
+      context.currentIndex = buildResult.currentIndex
+
+      const currentParam: PlayerPageParam = {
+        url: 'https://example.com/current.mkv',
+        title: '长夜余火 第一季',
+        seriesProviderId: 'tmdb-9527',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        playbackContext: context
+      }
+
+      const nextParam = buildMediaLibraryEpisodeSwitchParam(
+        currentParam,
+        context,
+        context.items[1],
+        buildResolvedSource('https://example.com/s01e02.mkv')
+      )
+
+      expect(context.items[1].title).assertEqual('突围')
+      expect(nextParam !== null).assertTrue()
+      if (nextParam !== null) {
+        expect(nextParam.title).assertEqual('长夜余火 第一季')
+        expect(nextParam.title === '突围').assertFalse()
         expect(nextParam.url).assertEqual('https://example.com/s01e02.mkv')
       }
     })
