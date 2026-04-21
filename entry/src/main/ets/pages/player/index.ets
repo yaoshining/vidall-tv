@@ -69,6 +69,37 @@ export interface ResolvedEpisodePlaybackSource {
   startPositionMs?: number;
 }
 
+function buildPlayerEpisodeCode(seasonNumber: number, episodeNumber: number): string {
+  const sn = seasonNumber > 0 ? seasonNumber : 0;
+  const en = episodeNumber > 0 ? episodeNumber : 0;
+  return `S${sn}:E${en}`;
+}
+
+function buildEpisodeSwitchPlayerTitle(
+  currentParam: PlayerPageParam,
+  episodeTitle: string,
+  seasonNumber: number,
+  episodeNumber: number
+): string | undefined {
+  const nextEpisodeTitle = episodeTitle.length > 0
+    ? episodeTitle
+    : (episodeNumber > 0 ? `第${episodeNumber}集` : currentParam.title);
+  const currentTitle = (currentParam.title ?? '').trim();
+  if (currentTitle.length === 0) {
+    return nextEpisodeTitle;
+  }
+  const currentSeasonNumber = currentParam.seasonNumber ?? 0;
+  const currentEpisodeNumber = currentParam.episodeNumber ?? 0;
+  const currentCodeMarker = `-${buildPlayerEpisodeCode(currentSeasonNumber, currentEpisodeNumber)}-`;
+  const currentCodeIndex = currentTitle.indexOf(currentCodeMarker);
+  if (currentCodeIndex < 0) {
+    return nextEpisodeTitle;
+  }
+  const titlePrefix = currentTitle.substring(0, currentCodeIndex);
+  const nextCode = buildPlayerEpisodeCode(seasonNumber, episodeNumber);
+  return `${titlePrefix}-${nextCode}-${nextEpisodeTitle}`;
+}
+
 export function buildMediaLibraryEpisodeSwitchParam(
   currentParam: PlayerPageParam,
   playbackContext: PlaybackContext | undefined,
@@ -89,9 +120,7 @@ export function buildMediaLibraryEpisodeSwitchParam(
     ? MediaProgressStore.episodeKey(seriesProviderId, seasonNumber, episodeNumber)
     : undefined;
   const itemTitle = selectedItem.title.trim();
-  const playerTitle = itemTitle.length > 0
-    ? itemTitle
-    : (episodeNumber > 0 ? `第${episodeNumber}集` : currentParam.title);
+  const playerTitle = buildEpisodeSwitchPlayerTitle(currentParam, itemTitle, seasonNumber, episodeNumber);
   const nextParam: PlayerPageParam = {
     url: resolvedSource.url,
     httpHeader: resolvedSource.httpHeader,

@@ -179,7 +179,7 @@ export default function playerPageTest() {
       expect(fileExplorerContext.currentIndex).assertEqual(0)
     })
 
-    it('媒体库切集后标题优先使用集标题而不是剧级标题', 0, () => {
+    it('媒体库切集后标题保持详情页的完整格式', 0, () => {
       const fakeItems: MediaItem[] = [
         {
           id: 101, sourceId: 201, directoryPath: '/tv', scannedAt: 0,
@@ -211,7 +211,7 @@ export default function playerPageTest() {
 
       const currentParam: PlayerPageParam = {
         url: 'https://example.com/current.mkv',
-        title: '长夜余火 第一季-E01-启程',
+        title: '长夜余火 第一季-S1:E1-启程',
         seriesProviderId: 'tmdb-9527',
         seasonNumber: 1,
         episodeNumber: 1,
@@ -227,13 +227,13 @@ export default function playerPageTest() {
 
       expect(nextParam !== null).assertTrue()
       if (nextParam !== null) {
-        expect(nextParam.title).assertEqual('突围')
-        expect(nextParam.title === '长夜余火').assertFalse()
+        expect(nextParam.title).assertEqual('长夜余火 第一季-S1:E2-突围')
+        expect(nextParam.title === '突围').assertFalse()
         expect(nextParam.url).assertEqual('https://example.com/s01e02.mkv')
       }
     })
 
-    it('媒体库切集后缺少集标题时回退为第X集', 0, () => {
+    it('媒体库切集后缺少集标题时仍保持完整标题格式并回退为第X集', 0, () => {
       const fakeItems: MediaItem[] = [
         {
           id: 101, sourceId: 201, directoryPath: '/tv', scannedAt: 0,
@@ -253,7 +253,7 @@ export default function playerPageTest() {
 
       const currentParam: PlayerPageParam = {
         url: 'https://example.com/current.mkv',
-        title: '长夜余火 第一季-E01-启程',
+        title: '长夜余火 第一季-S1:E1-启程',
         seriesProviderId: 'tmdb-9527',
         seasonNumber: 1,
         episodeNumber: 1,
@@ -269,8 +269,8 @@ export default function playerPageTest() {
 
       expect(nextParam !== null).assertTrue()
       if (nextParam !== null) {
-        expect(nextParam.title).assertEqual('第2集')
-        expect(nextParam.title === '长夜余火').assertFalse()
+        expect(nextParam.title).assertEqual('长夜余火 第一季-S1:E2-第2集')
+        expect(nextParam.title === '第2集').assertFalse()
         expect(nextParam.url).assertEqual('https://example.com/s01e02.mkv')
       }
     })
