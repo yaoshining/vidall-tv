@@ -57,14 +57,8 @@
 
 ## Remaining Gap
 
-### 选集后真正切换播放 URL
+### 已实现：选集后真正切换播放 URL
 
-当前唯一剩余的真实实现缺口是：当用户在 `选集` 区块里选择其他剧集时，播放器必须真正切换到所选条目的播放 URL，而不是只更新 `currentIndex`。
-
-后续实现需要补齐的链路是：
-1. 从 `PlaybackContextItem.videoPath` 生成播放器可用的新播放源
-2. 让 `VideoPlayerController` 重新载入该播放源
-3. 让播放器当前播放源、页面状态和 `playbackContext.currentIndex` 保持一致
-4. 在切换成功后再关闭设置面板，避免出现索引已变但实际仍播放旧 URL 的状态
+当前实现已经补齐该链路：当用户在 `选集` 区块里选择其他剧集时，播放器会先从 `PlaybackContextItem.videoPath` 解析出新的播放源，再调用 `VideoPlayerController.reloadSource` 重新载入；切换成功后同步页面状态与 `playbackContext.currentIndex`，避免索引已变但实际仍播放旧 URL 的状态。
 
 除这条链路外，本 change 的其余文档目标都已经与当前实现对齐。
