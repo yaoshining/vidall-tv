@@ -12,16 +12,56 @@ import { MediaItem, TvEpisodeEntity } from '../main/ets/db/models/MediaEntity'
 interface PlayerPageAccessor {
   applyPlayerPageParam(pageParam: PlayerPageParam): void
   persistCurrentPlaybackState(): void
+  resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null>
+  handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean>
+  resumePlaybackForParam(pageParam: PlayerPageParam): void
   currentMediaKey: string
   currentMediaSeason: number
   currentMediaEpisode: number
+  currentPageParam?: PlayerPageParam
+  episodeSwitching: boolean
+  showResumeDialog: boolean
+  pendingSeekMs: number
+  videoData?: PlayerPageVideoDataAccessor
   videoPlayerController: PlayerPageControllerAccessor
+}
+
+interface PlayerPageVideoDataAccessor {
+  videoSrc: string
+}
+
+interface PlayerPageProgressContextAccessor {
+  videoId: number
+  seriesProviderId: string
+  seasonNumber: number
+  episodeNumber: number
+  positionMs: number
+  durationMs: number
+  updatedAt: number
 }
 
 interface PlayerPageControllerAccessor {
   currentTime: number
   duration: number
+  playbackContext?: MediaLibraryContext
+  progressContext: PlayerPageProgressContextAccessor | null
   saveProgressNow(): void
+  reloadSource(videoData: PlayerPageVideoDataAccessor, autoPlay: boolean): Promise<void>
+}
+
+class TestPlayerPageController implements PlayerPageControllerAccessor {
+  currentTime: number = 120000
+  duration: number = 1800000
+  playbackContext?: MediaLibraryContext
+  progressContext: PlayerPageProgressContextAccessor | null = null
+
+  constructor(context: MediaLibraryContext) {
+    this.playbackContext = context
+  }
+
+  saveProgressNow(): void {}
+
+  async reloadSource(_videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {}
 }
 
 function buildSelectedEpisode(index: number): PlaybackContextItem {
@@ -50,6 +90,29 @@ function buildResolvedSource(url: string): ResolvedEpisodePlaybackSource {
 
 function buildPlayerPageAccessor(): PlayerPageAccessor {
   return new PlayerPage() as Object as PlayerPageAccessor
+}
+
+function buildEpisodeSwitchContext(currentIndex: number = 0): MediaLibraryContext {
+  const context = new MediaLibraryContext()
+  context.items = [buildSelectedEpisode(0), buildSelectedEpisode(1), buildSelectedEpisode(2)]
+  context.currentIndex = currentIndex
+  return context
+}
+
+function buildEpisodeSwitchParam(context: MediaLibraryContext): PlayerPageParam {
+  const pageParam: PlayerPageParam = {
+    url: 'https://example.com/current.mkv',
+    title: '长夜余火 第一季-S1:E1-启程',
+    seriesProviderId: 'tmdb-9527',
+    seasonNumber: 1,
+    episodeNumber: 1,
+    playbackContext: context
+  }
+  return pageParam
+}
+
+function buildEpisodeSwitchController(context: MediaLibraryContext): PlayerPageControllerAccessor {
+  return new TestPlayerPageController(context)
 }
 
 export default function playerPageTest() {
@@ -330,6 +393,20 @@ export default function playerPageTest() {
         expect(nextParam.title === '突围').assertFalse()
         expect(nextParam.url).assertEqual('https://example.com/s01e02.mkv')
       }
+    })
+
+    it('点击当前播放集数时即使无法解析播放源也只返回关闭弹层结果', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      const page = buildPlayerPageAccessor()
+      page.videoPlayerController = buildEpisodeSwitchController(context)
+      page.currentPageParam = buildEpisodeSwitchParam(context)
+
+      const didSwitch = await page.handleEpisodeSelect(context.items[0])
+
+      expect(didSwitch).assertTrue()
+      expect(context.currentIndex).assertEqual(0)
+      expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(1)
+      expect(page.videoPlayerController.progressContext === null).assertTrue()
     })
   })
 }
