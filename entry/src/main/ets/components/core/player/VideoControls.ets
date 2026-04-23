@@ -657,6 +657,7 @@ export struct PlayerSettingsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
   @Require onOpenSubtitleSelector: () => void
+  @Require onEpisodeSelect: (item: PlaybackContextItem) => Promise<boolean>
   @State selectedPlaybackRateIndex: number = 2
   @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
   @State private arFocusedIndex: number = -1
@@ -776,8 +777,11 @@ export struct PlayerSettingsDialog {
             EpisodeListPanel({
               context: this.getMediaLibraryContext() as MediaLibraryContext,
               onSelect: (item: PlaybackContextItem) => {
-                this.videoController.playbackContext?.jumpTo(item.index)
-                this.controller.close()
+                this.onEpisodeSelect(item).then((didSwitch: boolean) => {
+                  if (didSwitch) {
+                    this.controller.close()
+                  }
+                }).catch(() => {})
               }
             })
           }

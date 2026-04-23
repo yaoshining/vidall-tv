@@ -6,7 +6,7 @@ import {
   type PlayerBackend,
   type UnsupportedFormatFallback
 } from "../../components/core/player/VideoPlayerController";
-import { PlaybackContext } from "../../components/core/player/PlaybackContext";
+import { PlaybackContext, PlaybackContextItem, MediaLibraryContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
@@ -14,6 +14,9 @@ import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
 import { emitter } from "@kit.BasicServicesKit";
 import { SubtitleSegment } from "../../components/core/player/SubtitleRenderer";
+import { WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
+import { FileSourceType, SMBSourceConfig, WebDAVSourceConfig } from "../../db/models/FileSourceEntity";
+import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -57,11 +60,106 @@ export interface PlayerPageParam {
   playbackContext?: PlaybackContext;
 }
 
+export interface ResolvedEpisodePlaybackSource {
+  url: string;
+  httpHeader?: Record<string, string>;
+  durationHintMs?: number;
+  presetAudioTracks?: PresetAudioTrack[];
+  presetSubtitleTracks?: PresetSubtitleTrack[];
+  startPositionMs?: number;
+}
+
+function buildPlayerEpisodeCode(seasonNumber: number, episodeNumber: number): string {
+  const sn = seasonNumber > 0 ? seasonNumber : 0;
+  const en = episodeNumber > 0 ? episodeNumber : 0;
+  return `S${sn}:E${en}`;
+}
+
+function buildEpisodeSwitchPlayerTitle(
+  currentParam: PlayerPageParam,
+  episodeTitle: string,
+  seasonNumber: number,
+  episodeNumber: number
+): string | undefined {
+  const nextEpisodeTitle = episodeTitle.length > 0
+    ? episodeTitle
+    : (episodeNumber > 0 ? `第${episodeNumber}集` : currentParam.title);
+  const currentTitle = (currentParam.title ?? '').trim();
+  if (currentTitle.length === 0) {
+    return nextEpisodeTitle;
+  }
+  const currentSeasonNumber = currentParam.seasonNumber ?? 0;
+  const currentEpisodeNumber = currentParam.episodeNumber ?? 0;
+  const currentCodeMarker = `-${buildPlayerEpisodeCode(currentSeasonNumber, currentEpisodeNumber)}-`;
+  const currentCodeIndex = currentTitle.indexOf(currentCodeMarker);
+  if (currentCodeIndex < 0) {
+    return currentTitle;
+  }
+  const titlePrefix = currentTitle.substring(0, currentCodeIndex);
+  const nextCode = buildPlayerEpisodeCode(seasonNumber, episodeNumber);
+  return `${titlePrefix}-${nextCode}-${nextEpisodeTitle}`;
+}
+
+export function buildMediaLibraryEpisodeSwitchParam(
+  currentParam: PlayerPageParam,
+  playbackContext: PlaybackContext | undefined,
+  selectedItem: PlaybackContextItem,
+  resolvedSource: ResolvedEpisodePlaybackSource
+): PlayerPageParam | null {
+  if (playbackContext === undefined || playbackContext.contextType !== 'media_library') {
+    return null;
+  }
+  const mediaLibraryContext = playbackContext as MediaLibraryContext;
+  if (selectedItem.index < 0 || selectedItem.index >= mediaLibraryContext.items.length) {
+    return null;
+  }
+  const seasonNumber = selectedItem.seasonNumber ?? currentParam.seasonNumber ?? 0;
+  const episodeNumber = selectedItem.episodeNumber ?? currentParam.episodeNumber ?? 0;
+  const seriesProviderId = currentParam.seriesProviderId ?? '';
+  const mediaKey = (seriesProviderId.length > 0 && seasonNumber > 0 && episodeNumber > 0)
+    ? MediaProgressStore.episodeKey(seriesProviderId, seasonNumber, episodeNumber)
+    : undefined;
+  const itemTitle = selectedItem.title.trim();
+  const playerTitle = buildEpisodeSwitchPlayerTitle(currentParam, itemTitle, seasonNumber, episodeNumber);
+  const nextParam: PlayerPageParam = {
+    url: resolvedSource.url,
+    httpHeader: resolvedSource.httpHeader,
+    title: playerTitle,
+    durationHintMs: resolvedSource.durationHintMs,
+    videoId: selectedItem.videoId,
+    seriesProviderId,
+    seasonNumber,
+    episodeNumber,
+    preferredBackend: currentParam.preferredBackend,
+    unsupportedFormatFallback: currentParam.unsupportedFormatFallback,
+    presetAudioTracks: resolvedSource.presetAudioTracks,
+    presetSubtitleTracks: resolvedSource.presetSubtitleTracks,
+    mediaKey,
+    startPositionMs: resolvedSource.startPositionMs,
+    playbackContext: mediaLibraryContext
+  };
+  return nextParam;
+}
+
+export function commitMediaLibraryEpisodeSwitch(
+  playbackContext: PlaybackContext | undefined,
+  selectedItem: PlaybackContextItem
+): PlaybackContextItem | null {
+  if (playbackContext === undefined || playbackContext.contextType !== 'media_library') {
+    return null;
+  }
+  const mediaLibraryContext = playbackContext as MediaLibraryContext;
+  return mediaLibraryContext.jumpTo(selectedItem.index);
+}
+
 @ComponentV2
 export struct PlayerPage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   private videoPlayerController = new VideoPlayerController()
   private videoData?: VideoData
+  private currentPageParam?: PlayerPageParam
+  private pageParamToken: number = 0
+  private episodeSwitching: boolean = false
   @Local isBackPressedOnce: boolean = false
   /** 续播提示弹窗 */
   @Local showResumeDialog: boolean = false
@@ -109,6 +207,328 @@ export struct PlayerPage {
   /** 格式化毫秒为 MM:SS 或 HH:MM:SS */
   private formatTime(ms: number): string {
     return millisecondsToTime(ms);
+  }
+
+  private buildVideoDataFromParam(pageParam: PlayerPageParam): VideoData | undefined {
+    let nextVideoData: VideoData | undefined = undefined;
+    if (pageParam.url) {
+      nextVideoData = {
+        type: VideoDataType.URL,
+        videoSrc: pageParam.url
+      };
+    } else if (pageParam.fileUrl) {
+      nextVideoData = {
+        type: VideoDataType.FILE_URI,
+        videoSrc: pageParam.fileUrl
+      };
+    }
+    if (nextVideoData === undefined) {
+      return undefined;
+    }
+    nextVideoData.httpHeader = pageParam.httpHeader;
+    nextVideoData.name = pageParam.title;
+    if (pageParam.durationHintMs !== undefined && pageParam.durationHintMs > 0) {
+      nextVideoData.durationHintMs = pageParam.durationHintMs;
+    }
+    if (pageParam.presetAudioTracks && pageParam.presetAudioTracks.length > 0) {
+      nextVideoData.presetAudioTracks = pageParam.presetAudioTracks;
+    }
+    if (pageParam.presetSubtitleTracks && pageParam.presetSubtitleTracks.length > 0) {
+      nextVideoData.presetSubtitleTracks = pageParam.presetSubtitleTracks;
+    }
+    return nextVideoData;
+  }
+
+  private buildProgressContext(pageParam: PlayerPageParam): PlayProgressEntity {
+    const ctx: PlayProgressEntity = {
+      videoId: pageParam.videoId ?? 0,
+      seriesProviderId: pageParam.seriesProviderId ?? '',
+      seasonNumber: pageParam.seasonNumber ?? 0,
+      episodeNumber: pageParam.episodeNumber ?? 0,
+      positionMs: 0,
+      durationMs: 0,
+      updatedAt: 0
+    };
+    return ctx;
+  }
+
+  private resumePlaybackForParam(pageParam: PlayerPageParam): void {
+    const mediaKey = pageParam.mediaKey ?? '';
+    if (mediaKey.length > 0) {
+      const directStart = pageParam.startPositionMs ?? 0;
+      if (directStart > 0) {
+        this.videoPlayerController.seek(directStart).catch(() => {});
+        return;
+      }
+      MediaProgressStore.get(mediaKey).then((saved) => {
+        if (saved !== null && saved.positionMs > 0
+            && saved.seasonNumber === this.currentMediaSeason
+            && saved.episodeNumber === this.currentMediaEpisode) {
+          const dur = this.videoPlayerController.duration;
+          const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
+          if (!isNearEnd) {
+            this.videoPlayerController.seek(saved.positionMs).catch(() => {});
+          } else {
+            MediaProgressStore.clear(mediaKey).catch(() => {});
+          }
+        } else {
+          this.videoPlayerController.play().catch(() => {});
+        }
+      }).catch(() => {
+        this.videoPlayerController.play().catch(() => {});
+      });
+      return;
+    }
+    this.videoPlayerController.play().catch(() => {});
+  }
+
+  private registerPreparedResume(pageParam: PlayerPageParam, token: number): void {
+    emitter.once(PlayerEvents.PREPARED, () => {
+      if (token !== this.pageParamToken) {
+        return;
+      }
+      const mediaKey = pageParam.mediaKey ?? '';
+      if (mediaKey.length > 0) {
+        this.resumePlaybackForParam(pageParam);
+        return;
+      }
+      const videoId = pageParam.videoId ?? 0;
+      FileSourceDatabase.getInstance().getPlayProgress(videoId).then((saved) => {
+        if (token !== this.pageParamToken) {
+          return;
+        }
+        if (saved !== null && saved.positionMs > 0) {
+          const dur = this.videoPlayerController.duration;
+          const isWatched = dur > 0 && saved.positionMs >= dur * 0.95;
+          this.savedPositionMs = saved.positionMs;
+          this.totalDurationMs = dur > 0 ? dur : saved.durationMs;
+          if (isWatched) {
+            this.pendingSeekMs = 0;
+          } else {
+            this.pendingSeekMs = saved.positionMs;
+          }
+          this.showResumeDialog = true;
+        }
+      }).catch(() => {});
+    });
+  }
+
+  private applyPlayerPageParam(pageParam: PlayerPageParam): void {
+    this.currentPageParam = pageParam;
+    this.pageParamToken += 1;
+    const token = this.pageParamToken;
+    if (pageParam.preferredBackend) {
+      this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
+        ? 'ijkplayer'
+        : pageParam.preferredBackend;
+    }
+    if (pageParam.unsupportedFormatFallback) {
+      this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
+    }
+    this.videoData = this.buildVideoDataFromParam(pageParam);
+    this.videoPlayerController.progressContext = null;
+    this.currentMediaKey = '';
+    this.currentMediaSeason = 0;
+    this.currentMediaEpisode = 0;
+    this.currentMediaKey = pageParam.mediaKey ?? '';
+    this.currentMediaSeason = pageParam.seasonNumber ?? 0;
+    this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
+    this.showResumeDialog = false;
+    this.pendingSeekMs = -1;
+    if (pageParam.videoId !== undefined && pageParam.videoId > 0) {
+      this.videoPlayerController.progressContext = this.buildProgressContext(pageParam);
+      this.registerPreparedResume(pageParam, token);
+    }
+    this.videoPlayerController.playbackContext = pageParam.playbackContext;
+  }
+
+  private persistCurrentPlaybackState(): void {
+    this.videoPlayerController.saveProgressNow();
+    if (this.currentMediaKey.length === 0) {
+      return;
+    }
+    const posMs = this.videoPlayerController.currentTime;
+    const durMs = this.videoPlayerController.duration;
+    if (durMs <= 0) {
+      return;
+    }
+    if (MediaProgressStore.isNearEnd(posMs, durMs)) {
+      MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
+      return;
+    }
+    if (posMs > 0) {
+      MediaProgressStore.save(
+        this.currentMediaKey,
+        posMs,
+        durMs,
+        this.currentMediaSeason,
+        this.currentMediaEpisode
+      ).catch(() => {});
+    }
+  }
+
+  private async resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
+    if (item.sourceId === undefined || item.sourceId <= 0) {
+      return null;
+    }
+    const db = FileSourceDatabase.getInstance();
+    const fileSource = await db.getFileSourceById(item.sourceId);
+    if (fileSource === null) {
+      return null;
+    }
+    let url = '';
+    let httpHeader: Record<string, string> | undefined = undefined;
+    if (fileSource.type === FileSourceType.SMB) {
+      const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
+      const port = smbConfig.port ?? 445;
+      const user = encodeURIComponent(smbConfig.username);
+      const pass = encodeURIComponent(smbConfig.password);
+      const encodedPath = item.videoPath.split('/').map((seg: string): string => {
+        if (seg.length === 0) {
+          return '';
+        }
+        let decoded = seg;
+        try {
+          decoded = decodeURIComponent(seg);
+        } catch {
+          decoded = seg;
+        }
+        return encodeURIComponent(decoded);
+      }).join('/');
+      url = `smb://${user}:${pass}@${smbConfig.host}:${port}${encodedPath}`;
+    } else if (fileSource.type === FileSourceType.WEBDAV) {
+      const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig;
+      const protocol = config.protocol ?? 'http';
+      const host = config.url ?? '';
+      const port = config.port ?? (protocol === 'https' ? 443 : 80);
+      const rootPath = (config.rootPath ?? '').replace(/\/$/, '');
+      const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
+      const webdavConfig: WebDAVConfig = {
+        baseUrl,
+        username: config.username ?? '',
+        password: config.password ?? '',
+        timeout: 30000
+      };
+      const client = new WebDAVClient(webdavConfig);
+      url = client.getFullUrl(item.videoPath);
+      const authHeader = client.getAuthHeaderPublic();
+      if (authHeader.length > 0) {
+        httpHeader = { 'Authorization': authHeader };
+      }
+    } else {
+      return null;
+    }
+
+    const videoEntity = await db.getVideoByPath(item.videoPath);
+    let durationHintMs = item.durationMs ?? 0;
+    let presetAudioTracks: PresetAudioTrack[] | undefined = undefined;
+    let presetSubtitleTracks: PresetSubtitleTrack[] | undefined = undefined;
+    if (videoEntity !== null) {
+      durationHintMs = videoEntity.durationMs ?? durationHintMs;
+      if (videoEntity.audioTracksJson !== undefined && videoEntity.audioTracksJson !== null &&
+          videoEntity.audioTracksJson.length > 0) {
+        const audioTracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
+        const mappedAudioTracks = FfprobeUtil.toPresetAudioTracks(audioTracks);
+        if (mappedAudioTracks.length > 0) {
+          presetAudioTracks = mappedAudioTracks;
+        }
+      }
+      if (videoEntity.subtitleTracksJson !== undefined && videoEntity.subtitleTracksJson !== null &&
+          videoEntity.subtitleTracksJson.length > 0) {
+        const subtitleTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
+        const mappedSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(subtitleTracks);
+        if (mappedSubtitleTracks.length > 0) {
+          presetSubtitleTracks = mappedSubtitleTracks;
+        }
+      }
+    }
+
+    let startPositionMs = 0;
+    const progressVideoId = item.videoId ?? videoEntity?.id ?? 0;
+    if (progressVideoId > 0) {
+      const savedProgress = await db.getPlayProgress(progressVideoId);
+      if (savedProgress !== null && savedProgress.positionMs > 0) {
+        const isWatched = savedProgress.durationMs > 0
+          && savedProgress.positionMs >= savedProgress.durationMs * 0.95;
+        if (!isWatched) {
+          startPositionMs = savedProgress.positionMs;
+        }
+      }
+    }
+    const resolvedSource: ResolvedEpisodePlaybackSource = {
+      url,
+      httpHeader,
+      durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
+      presetAudioTracks,
+      presetSubtitleTracks,
+      startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
+    };
+    return resolvedSource;
+  }
+
+  private async handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
+    const currentParam = this.currentPageParam;
+    if (currentParam === undefined || this.episodeSwitching) {
+      return false;
+    }
+    const playbackContext = this.videoPlayerController.playbackContext;
+    if (playbackContext !== undefined && playbackContext.contextType === 'media_library') {
+      const mediaLibraryContext = playbackContext as MediaLibraryContext;
+      if (item.index === mediaLibraryContext.currentIndex) {
+        return true;
+      }
+    }
+    this.episodeSwitching = true;
+    const previousProgressContext = this.videoPlayerController.progressContext;
+    const previousPageParamToken = this.pageParamToken;
+    this.pageParamToken += 1;
+    let keepNextPageParamToken = false;
+    try {
+      const resolvedSource = await this.resolveEpisodePlaybackSource(item);
+      if (resolvedSource === null) {
+        return false;
+      }
+      const nextParam = buildMediaLibraryEpisodeSwitchParam(
+        currentParam,
+        playbackContext,
+        item,
+        resolvedSource
+      );
+      if (nextParam === null) {
+        return false;
+      }
+      const nextVideoData = this.buildVideoDataFromParam(nextParam);
+      if (nextVideoData === undefined) {
+        return false;
+      }
+      this.persistCurrentPlaybackState();
+      this.videoPlayerController.progressContext = nextParam.videoId !== undefined && nextParam.videoId > 0
+        ? this.buildProgressContext(nextParam)
+        : null;
+      await this.videoPlayerController.reloadSource(nextVideoData, false);
+      if (commitMediaLibraryEpisodeSwitch(playbackContext, item) === null) {
+        this.videoPlayerController.progressContext = previousProgressContext;
+        return false;
+      }
+      this.currentPageParam = nextParam;
+      this.videoData = nextVideoData;
+      this.currentMediaKey = nextParam.mediaKey ?? '';
+      this.currentMediaSeason = nextParam.seasonNumber ?? 0;
+      this.currentMediaEpisode = nextParam.episodeNumber ?? 0;
+      this.showResumeDialog = false;
+      this.pendingSeekMs = -1;
+      keepNextPageParamToken = true;
+      this.resumePlaybackForParam(nextParam);
+      return true;
+    } catch {
+      this.videoPlayerController.progressContext = previousProgressContext;
+      return false;
+    } finally {
+      if (!keepNextPageParamToken) {
+        this.pageParamToken = previousPageParamToken;
+      }
+      this.episodeSwitching = false;
+    }
   }
 
   @Builder
@@ -166,6 +586,7 @@ export struct PlayerPage {
           VideoPlayer({
             controller: this.videoPlayerController,
             data: this.videoData,
+            onEpisodeSelect: (item: PlaybackContextItem) => this.handleEpisodeSelect(item),
             autoPlay: true
           })
             .width('100%')
@@ -300,107 +721,7 @@ export struct PlayerPage {
 
       let pageParam = context.pathInfo.param as PlayerPageParam
       if (pageParam) {
-        if (pageParam.preferredBackend) {
-          this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
-            ? 'ijkplayer'
-            : pageParam.preferredBackend;
-        }
-        if (pageParam.unsupportedFormatFallback) {
-          this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
-        }
-
-        if (pageParam.url) {
-          this.videoData = {
-            type: VideoDataType.URL,
-            videoSrc: pageParam.url
-          }
-        } else if (pageParam.fileUrl) {
-          this.videoData = {
-            type: VideoDataType.FILE_URI,
-            videoSrc: pageParam.fileUrl
-          }
-        }
-        if (this.videoData) {
-          this.videoData.httpHeader = pageParam.httpHeader
-          this.videoData.name = pageParam.title
-          if (pageParam.durationHintMs !== undefined && pageParam.durationHintMs > 0) {
-            this.videoData.durationHintMs = pageParam.durationHintMs
-          }
-          if (pageParam.presetAudioTracks && pageParam.presetAudioTracks.length > 0) {
-            this.videoData.presetAudioTracks = pageParam.presetAudioTracks
-          }
-          if (pageParam.presetSubtitleTracks && pageParam.presetSubtitleTracks.length > 0) {
-            this.videoData.presetSubtitleTracks = pageParam.presetSubtitleTracks
-          }
-        }
-
-        // 设置进度上下文（有 videoId 才启用进度功能）
-        if (pageParam.videoId !== undefined && pageParam.videoId > 0) {
-          const ctx: PlayProgressEntity = {
-            videoId: pageParam.videoId,
-            seriesProviderId: pageParam.seriesProviderId ?? '',
-            seasonNumber: pageParam.seasonNumber ?? 0,
-            episodeNumber: pageParam.episodeNumber ?? 0,
-            positionMs: 0,
-            durationMs: 0,
-            updatedAt: 0
-          };
-          this.videoPlayerController.progressContext = ctx;
-
-          const mKey = pageParam.mediaKey ?? '';
-          if (mKey.length > 0) {
-            // ── 媒体级入口：直接 seek，不弹续播弹窗 ──────────────────────
-            this.currentMediaKey = mKey;
-            this.currentMediaSeason = pageParam.seasonNumber ?? 0;
-            this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
-            emitter.once(PlayerEvents.PREPARED, () => {
-              // 优先使用调用方从 play_progress 查到的集内起播位置（精确、不跨集）
-              const directStart = pageParam.startPositionMs ?? 0;
-              if (directStart > 0) {
-                this.videoPlayerController.seek(directStart).catch(() => {});
-                return;
-              }
-              // 回退：读 media_progress，但必须与当前季/集完全匹配，防止跨集乱 seek
-              MediaProgressStore.get(this.currentMediaKey).then((saved) => {
-                if (saved !== null && saved.positionMs > 0
-                    && saved.seasonNumber === this.currentMediaSeason
-                    && saved.episodeNumber === this.currentMediaEpisode) {
-                  const dur = this.videoPlayerController.duration;
-                  const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
-                  if (!isNearEnd) {
-                    this.videoPlayerController.seek(saved.positionMs).catch(() => {});
-                  } else {
-                    // 进程被杀前已近结尾，清除残留进度避免详情页仍显示"继续播放"
-                    MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
-                  }
-                }
-              }).catch(() => {});
-            });
-          } else {
-            // ── 文件级入口：显示续播弹窗（原有逻辑不变）────────────────────
-            emitter.once(PlayerEvents.PREPARED, () => {
-              const videoId = pageParam.videoId ?? 0;
-              FileSourceDatabase.getInstance().getPlayProgress(videoId).then((saved) => {
-                if (saved !== null && saved.positionMs > 0) {
-                  const dur = this.videoPlayerController.duration;
-                  const isWatched = dur > 0 && saved.positionMs >= dur * 0.95;
-                  this.savedPositionMs = saved.positionMs;
-                  this.totalDurationMs = dur > 0 ? dur : saved.durationMs;
-                  if (isWatched) {
-                    // 视为看完，默认从头，仍弹提示
-                    this.pendingSeekMs = 0;
-                  } else {
-                    this.pendingSeekMs = saved.positionMs;
-                  }
-                  this.showResumeDialog = true;
-                }
-              }).catch(() => {});
-            });
-          }
-        }
-
-        // 播放上下文：始终更新，无值时显式置 undefined，避免同一实例复用时旧值残留
-        this.videoPlayerController.playbackContext = pageParam.playbackContext;
+        this.applyPlayerPageParam(pageParam);
       }
     })
     .onBackPressed(() => {

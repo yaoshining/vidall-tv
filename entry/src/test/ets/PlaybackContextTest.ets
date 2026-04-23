@@ -234,6 +234,26 @@ export default function PlaybackContextTest() {
       expect(result.items[0].title).assertEqual('ep1.mkv');
     });
 
+    it('buildItems 保留播放器切源所需的剧集元数据', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 9, sourceId: 3, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep9.mkv', fileName: 'ep9.mkv', seasonNumber: 2, episodeNumber: 9,
+          durationMs: 2520000, title: '第九集',
+          audioTracksJson: '[{\"trackIndex\":0}]',
+          videoCodec: 'h264'
+        }
+      ];
+
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 2, '/ep9.mkv');
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].videoId).assertEqual(9);
+      expect(result.items[0].sourceId).assertEqual(3);
+      expect(result.items[0].seasonNumber).assertEqual(2);
+      expect(result.items[0].episodeNumber).assertEqual(9);
+      expect(result.items[0].durationMs).assertEqual(2520000);
+    });
+
     it('buildItems 优先使用剧集 stillUrl 填充缩略图字段且不再依赖 posterLocalPath', 0, () => {
       const fakeItems: MediaItem[] = [
         {
@@ -275,6 +295,41 @@ export default function PlaybackContextTest() {
       const firstItem = result.items[0] as PlaybackContextItemWithThumbnail;
 
       expect(firstItem.thumbnailUrl).assertEqual('https://image.tmdb.org/t/p/w342/still-ep1.jpg');
+    });
+
+    it('buildItems 优先使用集标题而不是剧级标题作为播放器展示标题', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 11, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s1e2.mkv', fileName: 's1e2.mkv', seasonNumber: 1, episodeNumber: 2,
+          title: '长夜余火'
+        },
+      ];
+      const episodeEntities: TvEpisodeEntity[] = [
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-2',
+          seasonNumber: 1, episodeNumber: 2, scrapedAt: 0,
+          title: '突围'
+        },
+      ];
+
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/s1e2.mkv', episodeEntities);
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].title).assertEqual('突围');
+    });
+
+    it('buildItems 在缺少合适集标题时回退为第X集而不是剧名', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 12, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s1e7.mkv', fileName: 's1e7.mkv', seasonNumber: 1, episodeNumber: 7,
+          title: '长夜余火'
+        },
+      ];
+
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/s1e7.mkv');
+      expect(result.items.length).assertEqual(1);
+      expect(result.items[0].title).assertEqual('第7集');
     });
 
   });

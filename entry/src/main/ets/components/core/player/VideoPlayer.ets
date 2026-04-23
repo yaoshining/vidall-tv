@@ -5,6 +5,7 @@ import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
+import { PlaybackContextItem } from "./PlaybackContext"
 
 @ComponentV2
 export struct VideoPlayer {
@@ -14,6 +15,7 @@ export struct VideoPlayer {
   private ijkInitTimer?: number
   @Require @Param controller: VideoPlayerController
   @Require @Param data: VideoData
+  @Require @Param onEpisodeSelect: (item: PlaybackContextItem) => Promise<boolean>
   @Local controlsOpened: boolean = false
   @Param autoPlay: boolean = false
   /** 镜像 controller.backend，用于驱动多后端分支重建 */
@@ -123,7 +125,8 @@ export struct VideoPlayer {
       onOpenSubtitleSelector: () => {
         this.settingsDialogController.close()
         this.subtitleSelectorDialogController.open()
-      }
+      },
+      onEpisodeSelect: (item: PlaybackContextItem) => this.onEpisodeSelect(item)
     }),
     customStyle: true,
     backgroundColor: Color.Transparent,
