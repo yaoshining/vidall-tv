@@ -415,7 +415,7 @@ export default function scrapeClientTest() {
       client.registerProvider(fake);
 
       let settled = false;
-      const pending = client.autoScrapeMovie('Blocking.Title.2024.mkv').then((result) => {
+      const pending = client.autoScrapeMovie('Blocking.Title.2024.1080p.mkv').then((result) => {
         settled = true;
         return result;
       }).catch(() => {
@@ -423,7 +423,7 @@ export default function scrapeClientTest() {
         return null;
       });
 
-      await Promise.resolve();
+      await flushMicrotasksUntil(() => fake.getCallCount('searchMovie') === 1);
       expect(settled).assertFalse();
       expect(fake.getCallCount('searchMovie')).assertEqual(1);
       const searchCall = fake.getLastCall('searchMovie');
