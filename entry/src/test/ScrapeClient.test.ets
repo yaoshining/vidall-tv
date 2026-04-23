@@ -1,5 +1,6 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
-import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName } from '../main/ets/lib/ScrapeClient';
+import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName, MovieScrapeResult } from '../main/ets/lib/ScrapeClient';
+import { ScriptedFakeScrapeProvider, createDeferred, createMovieScrapeResult } from './helpers/ScrapeClientFakeProvider';
 
 export default function scrapeClientTest() {
   describe('ScrapeClient', () => {
@@ -281,4 +282,59 @@ export default function scrapeClientTest() {
       expect(titles[0]).assertEqual('The Dark Knight');
     });
   });
+
+
+  describe('ScriptedFakeScrapeProvider', () => {
+    it('should work with ScrapeClient.registerProvider for immediate success', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-success');
+      fake.enqueueSearchMovieResults([createMovieScrapeResult('fake-success', 'Immediate Success Movie', 'movie-1')]);
+      fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-success', 'Immediate Success Movie', 'movie-1'));
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeMovie('Immediate.Success.Movie.2024.mkv');
+      expect(result !== null).assertTrue();
+      if (result !== null) {
+        expect(result.provider).assertEqual('fake-success');
+        expect(result.title).assertEqual('Immediate Success Movie');
+        expect(result.providerId).assertEqual('movie-1');
+      }
+    });
+
+    it('should surface scripted failure', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-failure');
+      fake.enqueueSearchMovieThrow('scripted search failure');
+
+      let errorMessage = '';
+      try {
+        await fake.searchMovie('Any Title', undefined, 'zh-CN');
+      } catch (e) {
+        errorMessage = e instanceof Error ? e.message : String(e);
+      }
+
+      expect(errorMessage).assertEqual('scripted search failure');
+    });
+
+    it('should keep scripted deferred search pending until released', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-blocking');
+      const deferred = createDeferred<MovieScrapeResult[]>();
+      fake.enqueueSearchMovieDeferred(deferred);
+
+      let settled = false;
+      const pending = fake.searchMovie('Blocking Title', undefined, 'zh-CN').then(() => {
+        settled = true;
+      }).catch(() => {
+        settled = true;
+      });
+
+      await Promise.resolve();
+      expect(settled).assertFalse();
+
+      deferred.resolve([]);
+      await pending;
+      expect(settled).assertTrue();
+    });
+  });
+
 }
