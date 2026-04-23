@@ -70,11 +70,11 @@ class TestPlayerPageController implements PlayerPageControllerAccessor {
 }
 
 interface EpisodeSelectNoOpSideEffectCalls {
-  resolveEpisodePlaybackSource: number
   persistCurrentPlaybackState: number
   reloadSource: number
   resumePlaybackForParam: number
   saveProgressNow: number
+  play: number
 }
 
 interface PlayerPageCurrentEpisodeHelperAccessor extends PlayerPageAccessor {
@@ -95,10 +95,19 @@ class SpyEpisodeSwitchController extends TestPlayerPageController {
 
   saveProgressNow(): void {
     this.calls.saveProgressNow += 1
+    this.calls.persistCurrentPlaybackState += 1
+    throw new Error('当前集点击不应进入 persistCurrentPlaybackState')
   }
 
   async reloadSource(_videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {
     this.calls.reloadSource += 1
+    throw new Error('当前集点击不应进入 reloadSource')
+  }
+
+  play(): Promise<void> {
+    this.calls.play += 1
+    this.calls.resumePlaybackForParam += 1
+    throw new Error('当前集点击不应进入 resumePlaybackForParam')
   }
 }
 
@@ -435,17 +444,24 @@ export default function playerPageTest() {
 
     it('播放器内点击当前集数时只关闭弹层且不触发切集链路', 0, async () => {
       const context = buildEpisodeSwitchContext(0)
+      // 若误入 resolveEpisodePlaybackSource，sourceId <= 0 会导致 handleEpisodeSelect 返回 false
       context.items[0].sourceId = 0
       const calls: EpisodeSelectNoOpSideEffectCalls = {
-        resolveEpisodePlaybackSource: 0,
         persistCurrentPlaybackState: 0,
         reloadSource: 0,
         resumePlaybackForParam: 0,
-        saveProgressNow: 0
+        saveProgressNow: 0,
+        play: 0
       }
       const page = buildPlayerPageAccessor()
       page.videoPlayerController = new SpyEpisodeSwitchController(context, calls)
-      page.currentPageParam = buildEpisodeSwitchParam(context)
+      page.currentPageParam = {
+        url: 'https://example.com/current.mkv',
+        title: '长夜余火 第一季-S1:E1-启程',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        playbackContext: context
+      }
 
       const didSwitch = await page.handleEpisodeSelect(context.items[0])
 
@@ -453,8 +469,11 @@ export default function playerPageTest() {
       expect(context.currentIndex).assertEqual(0)
       expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(1)
       expect(page.videoPlayerController.progressContext === null).assertTrue()
+      expect(calls.persistCurrentPlaybackState).assertEqual(0)
       expect(calls.reloadSource).assertEqual(0)
+      expect(calls.resumePlaybackForParam).assertEqual(0)
       expect(calls.saveProgressNow).assertEqual(0)
+      expect(calls.play).assertEqual(0)
     })
 
     it('当前集短路判断保持在 handleEpisodeSelect 内，不额外新增 helper', 0, () => {
