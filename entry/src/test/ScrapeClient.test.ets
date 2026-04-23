@@ -108,7 +108,7 @@ export default function scrapeClientTest() {
       const searchCall = fake.getLastCall('searchMovie');
       expect(searchCall !== null).assertTrue();
       if (searchCall !== null) {
-        expect(searchCall.title).assertEqual('NonExistentMovie9999');
+        expect(searchCall.title).assertEqual('NonExistentMovie9999 2099');
         expect(searchCall.year).assertEqual(2099);
         expect(searchCall.language).assertEqual('zh-CN');
       }
@@ -367,7 +367,7 @@ export default function scrapeClientTest() {
       const searchCall = fake.getLastCall('searchMovie');
       expect(searchCall !== null).assertTrue();
       if (searchCall !== null) {
-        expect(searchCall.title).assertEqual('Immediate Success Movie');
+        expect(searchCall.title).assertEqual('Immediate Success Movie 2024');
         expect(searchCall.year).assertEqual(2024);
         expect(searchCall.language).assertEqual('zh-CN');
       }
@@ -400,7 +400,7 @@ export default function scrapeClientTest() {
       const searchCall = fake.getLastCall('searchMovie');
       expect(searchCall !== null).assertTrue();
       if (searchCall !== null) {
-        expect(searchCall.title).assertEqual('Any Title');
+        expect(searchCall.title).assertEqual('Any Title 2024');
         expect(searchCall.year).assertEqual(2024);
         expect(searchCall.language).assertEqual('zh-CN');
       }
