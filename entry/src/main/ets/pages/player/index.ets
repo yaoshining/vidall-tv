@@ -477,15 +477,6 @@ export struct PlayerPage {
       if (item.index === mediaLibraryContext.currentIndex) {
         return true;
       }
-      const currentSeasonNumber = currentParam.seasonNumber ?? 0;
-      const currentEpisodeNumber = currentParam.episodeNumber ?? 0;
-      if (currentSeasonNumber > 0 && currentEpisodeNumber > 0) {
-        const selectedSeasonNumber = item.seasonNumber ?? currentSeasonNumber;
-        const selectedEpisodeNumber = item.episodeNumber ?? 0;
-        if (selectedSeasonNumber === currentSeasonNumber && selectedEpisodeNumber === currentEpisodeNumber) {
-          return true;
-        }
-      }
     }
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;

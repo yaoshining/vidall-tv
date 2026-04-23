@@ -54,6 +54,14 @@ interface PlayerPageControllerAccessor {
   reloadSource(videoData: PlayerPageVideoDataAccessor, autoPlay: boolean): Promise<void>
 }
 
+interface PlayerPageControllerPlaybackAccessor extends PlayerPageControllerAccessor {
+  play(): Promise<void>
+}
+
+interface BoundHandleEpisodeSelectMethod {
+  bind(target: Object): (item: PlaybackContextItem) => Promise<boolean>
+}
+
 class TestPlayerPageController implements PlayerPageControllerAccessor {
   currentTime: number = 120000
   duration: number = 1800000
@@ -108,6 +116,94 @@ class SpyEpisodeSwitchController extends TestPlayerPageController {
     this.calls.play += 1
     this.calls.resumePlaybackForParam += 1
     throw new Error('当前集点击不应进入 resumePlaybackForParam')
+  }
+}
+
+class CountingEpisodeSwitchController extends TestPlayerPageController implements PlayerPageControllerPlaybackAccessor {
+  private calls: EpisodeSelectNoOpSideEffectCalls
+  lastVideoSrc: string = ''
+
+  constructor(context: MediaLibraryContext, calls: EpisodeSelectNoOpSideEffectCalls) {
+    super(context)
+    this.calls = calls
+  }
+
+  saveProgressNow(): void {
+    this.calls.saveProgressNow += 1
+    this.calls.persistCurrentPlaybackState += 1
+  }
+
+  async reloadSource(videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {
+    this.calls.reloadSource += 1
+    this.lastVideoSrc = videoData.videoSrc
+  }
+
+  play(): Promise<void> {
+    this.calls.play += 1
+    this.calls.resumePlaybackForParam += 1
+    return Promise.resolve()
+  }
+}
+
+class TestEpisodeSwitchPage {
+  currentPageParam?: PlayerPageParam
+  episodeSwitching: boolean = false
+  showResumeDialog: boolean = false
+  pendingSeekMs: number = -1
+  currentMediaKey: string = ''
+  currentMediaSeason: number = 0
+  currentMediaEpisode: number = 0
+  videoData?: PlayerPageVideoDataAccessor
+  videoPlayerController: PlayerPageControllerPlaybackAccessor
+  private readonly handleEpisodeSelectImpl: (item: PlaybackContextItem) => Promise<boolean>
+  private readonly resolvedSourceUrl: string
+
+  constructor(context: MediaLibraryContext, calls: EpisodeSelectNoOpSideEffectCalls, resolvedSourceUrl: string) {
+    const page = buildPlayerPageAccessor()
+    const handleEpisodeSelect = page.handleEpisodeSelect as Object as BoundHandleEpisodeSelectMethod
+    this.handleEpisodeSelectImpl = handleEpisodeSelect.bind(this as Object)
+    this.videoPlayerController = new CountingEpisodeSwitchController(context, calls)
+    this.resolvedSourceUrl = resolvedSourceUrl
+  }
+
+  handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
+    return this.handleEpisodeSelectImpl(item)
+  }
+
+  persistCurrentPlaybackState(): void {
+    this.videoPlayerController.saveProgressNow()
+  }
+
+  async resolveEpisodePlaybackSource(_item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
+    return buildResolvedSource(this.resolvedSourceUrl)
+  }
+
+  buildVideoDataFromParam(pageParam: PlayerPageParam): PlayerPageVideoDataAccessor | undefined {
+    const url = pageParam.url ?? ''
+    if (url.length === 0) {
+      return undefined
+    }
+    const videoData: PlayerPageVideoDataAccessor = {
+      videoSrc: url
+    }
+    return videoData
+  }
+
+  buildProgressContext(pageParam: PlayerPageParam): PlayerPageProgressContextAccessor {
+    const progressContext: PlayerPageProgressContextAccessor = {
+      videoId: pageParam.videoId ?? 0,
+      seriesProviderId: pageParam.seriesProviderId ?? '',
+      seasonNumber: pageParam.seasonNumber ?? 0,
+      episodeNumber: pageParam.episodeNumber ?? 0,
+      positionMs: 0,
+      durationMs: 0,
+      updatedAt: 0
+    }
+    return progressContext
+  }
+
+  resumePlaybackForParam(_pageParam: PlayerPageParam): void {
+    this.videoPlayerController.play().catch(() => {})
   }
 }
 
@@ -474,6 +570,45 @@ export default function playerPageTest() {
       expect(calls.resumePlaybackForParam).assertEqual(0)
       expect(calls.saveProgressNow).assertEqual(0)
       expect(calls.play).assertEqual(0)
+    })
+
+    it('index 不同但季集元数据相同且资源不同时仍会继续切换', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      context.items[1].seasonNumber = 1
+      context.items[1].episodeNumber = 1
+      context.items[1].title = '启程-B'
+      context.items[1].videoPath = '/series/s01e01-alt.mkv'
+      context.items[1].videoId = 301
+      const calls: EpisodeSelectNoOpSideEffectCalls = {
+        persistCurrentPlaybackState: 0,
+        reloadSource: 0,
+        resumePlaybackForParam: 0,
+        saveProgressNow: 0,
+        play: 0
+      }
+      const page = new TestEpisodeSwitchPage(context, calls, 'https://example.com/s01e01-alt.mkv')
+      const controller = page.videoPlayerController as Object as CountingEpisodeSwitchController
+      page.currentPageParam = {
+        url: 'https://example.com/current.mkv',
+        title: '长夜余火 第一季-S1:E1-启程',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        playbackContext: context
+      }
+
+      const didSwitch = await page.handleEpisodeSelect(context.items[1])
+
+      expect(didSwitch).assertTrue()
+      expect(context.currentIndex).assertEqual(1)
+      expect(controller.lastVideoSrc).assertEqual('https://example.com/s01e01-alt.mkv')
+      expect(page.currentPageParam?.url ?? '').assertEqual('https://example.com/s01e01-alt.mkv')
+      expect(page.currentPageParam?.videoId ?? 0).assertEqual(301)
+      expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(1)
+      expect(calls.persistCurrentPlaybackState).assertEqual(1)
+      expect(calls.reloadSource).assertEqual(1)
+      expect(calls.resumePlaybackForParam).assertEqual(1)
+      expect(calls.saveProgressNow).assertEqual(1)
+      expect(calls.play).assertEqual(1)
     })
 
     it('当前集短路判断保持在 handleEpisodeSelect 内，不额外新增 helper', 0, () => {
