@@ -85,17 +85,26 @@ export default function scrapeClientTest() {
     });
 
     /**
-     * 测试用例 8：测试 autoScrapeMovie 无效 key（不应崩溃）
+     * 测试用例 8：测试 autoScrapeMovie 搜索失败时的稳定容错结果（fake failure）
      */
-    it('should handle autoScrapeMovie network failure gracefully', 0, async () => {
-      const client = new ScrapeClient({ tmdbApiKey: 'invalid_key_for_test' });
+    it('should handle autoScrapeMovie search failure deterministically with fake provider', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-network-failure');
+      fake.enqueueSearchMovieThrow('simulated search failure');
 
-      try {
-        const result = await client.autoScrapeMovie('NonExistentMovie9999.2099.mkv');
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
 
-        expect(result === null || result !== null).assertTrue();
-      } catch (e) {
-        expect(true).assertTrue();
+      const result = await client.autoScrapeMovie('NonExistentMovie9999.2099.mkv');
+
+      expect(result).assertEqual(null);
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      expect(fake.getCallCount('fetchMovieDetail')).assertEqual(0);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('NonExistentMovie9999');
+        expect(searchCall.year).assertEqual(2099);
+        expect(searchCall.language).assertEqual('zh-CN');
       }
     });
 
