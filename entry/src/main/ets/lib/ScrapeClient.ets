@@ -582,14 +582,17 @@ export class TmdbProvider implements IScrapeProvider {
 
 export interface ScrapeClientConfig {
   tmdbApiKey?: string;
+  scrapeConcurrency?: number;
 }
 
 export class ScrapeClient {
   private providers: Map<string, IScrapeProvider> = new Map();
   private runningCount: number = 0;
   private waitQueue: Array<() => void> = [];
+  private readonly scrapeConcurrencyOverride?: number;
 
   constructor(config: ScrapeClientConfig) {
+    this.scrapeConcurrencyOverride = config.scrapeConcurrency;
     if (config.tmdbApiKey && config.tmdbApiKey.trim().length > 0) {
       this.registerProvider(new TmdbProvider(config.tmdbApiKey));
     }
@@ -762,7 +765,7 @@ export class ScrapeClient {
   }
 
   private async acquire(): Promise<void> {
-    const maxConcurrent = await AppPreferences.getNumber(PrefKey.SCRAPE_CONCURRENCY, 2);
+    const maxConcurrent = this.scrapeConcurrencyOverride ?? await AppPreferences.getNumber(PrefKey.SCRAPE_CONCURRENCY, 2);
     if (this.runningCount < maxConcurrent) {
       this.runningCount++;
       return Promise.resolve();

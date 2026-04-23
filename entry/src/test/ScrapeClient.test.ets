@@ -179,7 +179,7 @@ export default function scrapeClientTest() {
       fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-concurrency', 'Second Movie Result', 'movie-2'));
       fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-concurrency', 'Third Movie Result', 'movie-3'));
 
-      const client = new ScrapeClient({});
+      const client = new ScrapeClient({ scrapeConcurrency: 2 });
       client.registerProvider(fake);
 
       const p1 = client.autoScrapeMovie('First.Movie.(2020).mkv');
