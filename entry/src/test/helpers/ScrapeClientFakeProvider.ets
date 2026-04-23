@@ -30,6 +30,16 @@ export interface DeferOutcome<T> {
 
 export type ScriptedOutcome<T> = ReturnOutcome<T> | ThrowOutcome | DeferOutcome<T>;
 
+export interface ProviderCallRecord {
+  method: string;
+  title?: string;
+  year?: number;
+  language?: string;
+  providerId?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+}
+
 class DeferredImpl<T> implements Deferred<T> {
   promise: Promise<T>;
   private resolveFn: (value: T) => void = (_value: T): void => {};
@@ -219,6 +229,7 @@ export function createTvEpisodeScrapeResult(provider: string, seasonNumber: numb
 export class ScriptedFakeScrapeProvider implements IScrapeProvider {
   readonly id: string;
   private configured: boolean = true;
+  private callLog: ProviderCallRecord[] = [];
   private searchMovieScript: ScriptedOutcome<MovieScrapeResult[]>[] = [];
   private searchTvScript: ScriptedOutcome<TvSeriesScrapeResult[]>[] = [];
   private fetchMovieDetailScript: ScriptedOutcome<MovieScrapeResult | null>[] = [];
@@ -330,34 +341,61 @@ export class ScriptedFakeScrapeProvider implements IScrapeProvider {
     return this.configured;
   }
 
-  async searchMovie(_title: string, _year?: number, _language?: string): Promise<MovieScrapeResult[]> {
-    return await this.runScript(this.searchMovieScript, []);
+  getCallCount(method: string): number {
+    return this.callLog.filter((call: ProviderCallRecord) => call.method === method).length;
   }
 
-  async searchTv(_title: string, _year?: number, _language?: string): Promise<TvSeriesScrapeResult[]> {
-    return await this.runScript(this.searchTvScript, []);
+  getLastCall(method: string): ProviderCallRecord | null {
+    for (let index = this.callLog.length - 1; index >= 0; index--) {
+      const call = this.callLog[index];
+      if (call.method === method) {
+        return call;
+      }
+    }
+    return null;
   }
 
-  async fetchMovieDetail(_providerId: string, _language?: string): Promise<MovieScrapeResult | null> {
-    return await this.runScript(this.fetchMovieDetailScript, null);
+  async searchMovie(title: string, year?: number, language?: string): Promise<MovieScrapeResult[]> {
+    this.recordCall({ method: 'searchMovie', title, year, language });
+    return await this.runScript('searchMovie', this.searchMovieScript);
   }
 
-  async fetchTvSeriesDetail(_providerId: string, _language?: string): Promise<TvSeriesScrapeResult | null> {
-    return await this.runScript(this.fetchTvSeriesDetailScript, null);
+  async searchTv(title: string, year?: number, language?: string): Promise<TvSeriesScrapeResult[]> {
+    this.recordCall({ method: 'searchTv', title, year, language });
+    return await this.runScript('searchTv', this.searchTvScript);
   }
 
-  async fetchSeason(_seriesProviderId: string, _seasonNumber: number, _language?: string): Promise<TvSeasonScrapeResult | null> {
-    return await this.runScript(this.fetchSeasonScript, null);
+  async fetchMovieDetail(providerId: string, language?: string): Promise<MovieScrapeResult | null> {
+    this.recordCall({ method: 'fetchMovieDetail', providerId, language });
+    return await this.runScript('fetchMovieDetail', this.fetchMovieDetailScript);
   }
 
-  async fetchEpisode(_seriesProviderId: string, _seasonNumber: number, _episodeNumber: number, _language?: string): Promise<TvEpisodeScrapeResult | null> {
-    return await this.runScript(this.fetchEpisodeScript, null);
+  async fetchTvSeriesDetail(providerId: string, language?: string): Promise<TvSeriesScrapeResult | null> {
+    this.recordCall({ method: 'fetchTvSeriesDetail', providerId, language });
+    return await this.runScript('fetchTvSeriesDetail', this.fetchTvSeriesDetailScript);
   }
 
-  private async runScript<T>(script: ScriptedOutcome<T>[], fallback: T): Promise<T> {
+  async fetchSeason(seriesProviderId: string, seasonNumber: number, language?: string): Promise<TvSeasonScrapeResult | null> {
+    this.recordCall({ method: 'fetchSeason', providerId: seriesProviderId, seasonNumber, language });
+    return await this.runScript('fetchSeason', this.fetchSeasonScript);
+  }
+
+  async fetchEpisode(seriesProviderId: string, seasonNumber: number, episodeNumber: number, language?: string): Promise<TvEpisodeScrapeResult | null> {
+    this.recordCall({ method: 'fetchEpisode', providerId: seriesProviderId, seasonNumber, episodeNumber, language });
+    return await this.runScript('fetchEpisode', this.fetchEpisodeScript);
+  }
+
+  private recordCall(call: ProviderCallRecord): void {
+    this.callLog.push(call);
+  }
+
+  private async runScript<T>(method: string, script: ScriptedOutcome<T>[]): Promise<T> {
+    if (!this.configured) {
+      throw new Error(`ScriptedFakeScrapeProvider(${this.id}) is not configured for ${method}`);
+    }
     const step = script.length > 0 ? script.shift() : undefined;
     if (step === undefined) {
-      return fallback;
+      throw new Error(`ScriptedFakeScrapeProvider(${this.id}) missing ${method} script outcome`);
     }
     if (step.kind === 'return') {
       return step.value;

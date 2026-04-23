@@ -300,20 +300,47 @@ export default function scrapeClientTest() {
         expect(result.title).assertEqual('Immediate Success Movie');
         expect(result.providerId).assertEqual('movie-1');
       }
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Immediate Success Movie');
+        expect(searchCall.year).assertEqual(2024);
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
+    });
+
+    it('should throw when scripted searchMovie is exhausted', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-empty');
+
+      let rejected = false;
+      await fake.searchMovie('Missing Title', undefined, 'zh-CN').then(() => {
+        rejected = false;
+      }).catch(() => {
+        rejected = true;
+      });
+
+      expect(rejected).assertTrue();
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
     });
 
     it('should surface scripted failure', 0, async () => {
       const fake = new ScriptedFakeScrapeProvider('fake-failure');
       fake.enqueueSearchMovieThrow('scripted search failure');
 
-      let errorMessage = '';
-      try {
-        await fake.searchMovie('Any Title', undefined, 'zh-CN');
-      } catch (e) {
-        errorMessage = e instanceof Error ? e.message : String(e);
-      }
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
 
-      expect(errorMessage).assertEqual('scripted search failure');
+      const result = await client.autoScrapeMovie('Any.Title.2024.mkv');
+      expect(result).assertEqual(null);
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Any Title');
+        expect(searchCall.year).assertEqual(2024);
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
     });
 
     it('should keep scripted deferred search pending until released', 0, async () => {
@@ -321,19 +348,33 @@ export default function scrapeClientTest() {
       const deferred = createDeferred<MovieScrapeResult[]>();
       fake.enqueueSearchMovieDeferred(deferred);
 
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
       let settled = false;
-      const pending = fake.searchMovie('Blocking Title', undefined, 'zh-CN').then(() => {
+      const pending = client.autoScrapeMovie('Blocking.Title.2024.mkv').then((result) => {
         settled = true;
+        return result;
       }).catch(() => {
         settled = true;
+        return null;
       });
 
       await Promise.resolve();
       expect(settled).assertFalse();
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Blocking Title');
+        expect(searchCall.year).assertEqual(2024);
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
 
       deferred.resolve([]);
-      await pending;
+      const result = await pending;
       expect(settled).assertTrue();
+      expect(result).assertEqual(null);
     });
   });
 
