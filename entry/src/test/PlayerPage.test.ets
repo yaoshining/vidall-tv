@@ -6,7 +6,12 @@ import {
   PlayerPageParam,
   ResolvedEpisodePlaybackSource
 } from '../main/ets/pages/player/index'
-import { MediaLibraryContext, FileExplorerContext, PlaybackContextItem } from '../main/ets/components/core/player/PlaybackContext'
+import {
+  MediaLibraryContext,
+  FileExplorerContext,
+  PlaybackContext,
+  PlaybackContextItem
+} from '../main/ets/components/core/player/PlaybackContext'
 import { MediaItem, TvEpisodeEntity } from '../main/ets/db/models/MediaEntity'
 
 interface PlayerPageAccessor {
@@ -62,6 +67,39 @@ class TestPlayerPageController implements PlayerPageControllerAccessor {
   saveProgressNow(): void {}
 
   async reloadSource(_videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {}
+}
+
+interface EpisodeSelectNoOpSideEffectCalls {
+  resolveEpisodePlaybackSource: number
+  persistCurrentPlaybackState: number
+  reloadSource: number
+  resumePlaybackForParam: number
+  saveProgressNow: number
+}
+
+interface PlayerPageCurrentEpisodeHelperAccessor extends PlayerPageAccessor {
+  isCurrentMediaLibraryEpisodeSelection?: (
+    currentParam: PlayerPageParam,
+    playbackContext: PlaybackContext | undefined,
+    item: PlaybackContextItem
+  ) => boolean
+}
+
+class SpyEpisodeSwitchController extends TestPlayerPageController {
+  private calls: EpisodeSelectNoOpSideEffectCalls
+
+  constructor(context: MediaLibraryContext, calls: EpisodeSelectNoOpSideEffectCalls) {
+    super(context)
+    this.calls = calls
+  }
+
+  saveProgressNow(): void {
+    this.calls.saveProgressNow += 1
+  }
+
+  async reloadSource(_videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {
+    this.calls.reloadSource += 1
+  }
 }
 
 function buildSelectedEpisode(index: number): PlaybackContextItem {
@@ -395,10 +433,18 @@ export default function playerPageTest() {
       }
     })
 
-    it('点击当前播放集数时即使无法解析播放源也只返回关闭弹层结果', 0, async () => {
+    it('播放器内点击当前集数时只关闭弹层且不触发切集链路', 0, async () => {
       const context = buildEpisodeSwitchContext(0)
+      context.items[0].sourceId = 0
+      const calls: EpisodeSelectNoOpSideEffectCalls = {
+        resolveEpisodePlaybackSource: 0,
+        persistCurrentPlaybackState: 0,
+        reloadSource: 0,
+        resumePlaybackForParam: 0,
+        saveProgressNow: 0
+      }
       const page = buildPlayerPageAccessor()
-      page.videoPlayerController = buildEpisodeSwitchController(context)
+      page.videoPlayerController = new SpyEpisodeSwitchController(context, calls)
       page.currentPageParam = buildEpisodeSwitchParam(context)
 
       const didSwitch = await page.handleEpisodeSelect(context.items[0])
@@ -407,6 +453,14 @@ export default function playerPageTest() {
       expect(context.currentIndex).assertEqual(0)
       expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(1)
       expect(page.videoPlayerController.progressContext === null).assertTrue()
+      expect(calls.reloadSource).assertEqual(0)
+      expect(calls.saveProgressNow).assertEqual(0)
+    })
+
+    it('当前集短路判断保持在 handleEpisodeSelect 内，不额外新增 helper', 0, () => {
+      const page = buildPlayerPageAccessor() as Object as PlayerPageCurrentEpisodeHelperAccessor
+
+      expect(page.isCurrentMediaLibraryEpisodeSelection === undefined).assertTrue()
     })
   })
 }

@@ -466,36 +466,26 @@ export struct PlayerPage {
     return resolvedSource;
   }
 
-  private isCurrentMediaLibraryEpisodeSelection(
-    currentParam: PlayerPageParam,
-    playbackContext: PlaybackContext | undefined,
-    item: PlaybackContextItem
-  ): boolean {
-    if (playbackContext === undefined || playbackContext.contextType !== 'media_library') {
-      return false;
-    }
-    const mediaLibraryContext = playbackContext as MediaLibraryContext;
-    if (item.index === mediaLibraryContext.currentIndex) {
-      return true;
-    }
-    const currentSeasonNumber = currentParam.seasonNumber ?? 0;
-    const currentEpisodeNumber = currentParam.episodeNumber ?? 0;
-    if (currentSeasonNumber <= 0 || currentEpisodeNumber <= 0) {
-      return false;
-    }
-    const selectedSeasonNumber = item.seasonNumber ?? currentSeasonNumber;
-    const selectedEpisodeNumber = item.episodeNumber ?? 0;
-    return selectedSeasonNumber === currentSeasonNumber && selectedEpisodeNumber === currentEpisodeNumber;
-  }
-
   private async handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
     const currentParam = this.currentPageParam;
     if (currentParam === undefined || this.episodeSwitching) {
       return false;
     }
     const playbackContext = this.videoPlayerController.playbackContext;
-    if (this.isCurrentMediaLibraryEpisodeSelection(currentParam, playbackContext, item)) {
-      return true;
+    if (playbackContext !== undefined && playbackContext.contextType === 'media_library') {
+      const mediaLibraryContext = playbackContext as MediaLibraryContext;
+      if (item.index === mediaLibraryContext.currentIndex) {
+        return true;
+      }
+      const currentSeasonNumber = currentParam.seasonNumber ?? 0;
+      const currentEpisodeNumber = currentParam.episodeNumber ?? 0;
+      if (currentSeasonNumber > 0 && currentEpisodeNumber > 0) {
+        const selectedSeasonNumber = item.seasonNumber ?? currentSeasonNumber;
+        const selectedEpisodeNumber = item.episodeNumber ?? 0;
+        if (selectedSeasonNumber === currentSeasonNumber && selectedEpisodeNumber === currentEpisodeNumber) {
+          return true;
+        }
+      }
     }
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;
