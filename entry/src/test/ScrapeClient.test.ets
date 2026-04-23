@@ -100,7 +100,7 @@ export default function scrapeClientTest() {
       const client = new ScrapeClient({});
       client.registerProvider(fake);
 
-      const result = await client.autoScrapeMovie('NonExistentMovie9999.2099.mkv');
+      const result = await client.autoScrapeMovie('NonExistentMovie9999.2099.1080p.mkv');
 
       expect(result).assertEqual(null);
       expect(fake.getCallCount('searchMovie')).assertEqual(1);
@@ -108,7 +108,7 @@ export default function scrapeClientTest() {
       const searchCall = fake.getLastCall('searchMovie');
       expect(searchCall !== null).assertTrue();
       if (searchCall !== null) {
-        expect(searchCall.title).assertEqual('NonExistentMovie9999 2099');
+        expect(searchCall.title).assertEqual('NonExistentMovie9999');
         expect(searchCall.year).assertEqual(2099);
         expect(searchCall.language).assertEqual('zh-CN');
       }
@@ -356,7 +356,7 @@ export default function scrapeClientTest() {
       const client = new ScrapeClient({});
       client.registerProvider(fake);
 
-      const result = await client.autoScrapeMovie('Immediate.Success.Movie.2024.mkv');
+      const result = await client.autoScrapeMovie('Immediate.Success.Movie.2024.1080p.mkv');
       expect(result !== null).assertTrue();
       if (result !== null) {
         expect(result.provider).assertEqual('fake-success');
@@ -367,7 +367,7 @@ export default function scrapeClientTest() {
       const searchCall = fake.getLastCall('searchMovie');
       expect(searchCall !== null).assertTrue();
       if (searchCall !== null) {
-        expect(searchCall.title).assertEqual('Immediate Success Movie 2024');
+        expect(searchCall.title).assertEqual('Immediate Success Movie');
         expect(searchCall.year).assertEqual(2024);
         expect(searchCall.language).assertEqual('zh-CN');
       }
@@ -394,13 +394,13 @@ export default function scrapeClientTest() {
       const client = new ScrapeClient({});
       client.registerProvider(fake);
 
-      const result = await client.autoScrapeMovie('Any.Title.2024.mkv');
+      const result = await client.autoScrapeMovie('Any.Title.2024.1080p.mkv');
       expect(result).assertEqual(null);
       expect(fake.getCallCount('searchMovie')).assertEqual(1);
       const searchCall = fake.getLastCall('searchMovie');
       expect(searchCall !== null).assertTrue();
       if (searchCall !== null) {
-        expect(searchCall.title).assertEqual('Any Title 2024');
+        expect(searchCall.title).assertEqual('Any Title');
         expect(searchCall.year).assertEqual(2024);
         expect(searchCall.language).assertEqual('zh-CN');
       }
