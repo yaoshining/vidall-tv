@@ -55,10 +55,10 @@
 - 无刮削信息的文件仍保留在数据库与文件浏览器路径中，不进入媒体库海报墙
 - 已有刮削信息但缺少海报的条目仍然保留，由 UI 用标题兜底展示
 
-## Remaining Gap
+## Completion Notes
 
-### 已实现：选集后真正切换播放 URL
+### 已完成：选集后真正切换播放 URL
 
 当前实现已经补齐该链路：当用户在 `选集` 区块里选择其他剧集时，播放器会先从 `PlaybackContextItem.videoPath` 解析出新的播放源，再调用 `VideoPlayerController.reloadSource` 重新载入；切换成功后同步页面状态与 `playbackContext.currentIndex`，避免索引已变但实际仍播放旧 URL 的状态。
 
-除这条链路外，本 change 的其余文档目标都已经与当前实现对齐。
+本 change 不再存在 Remaining Gap，现有文档与实现已对齐，可进入归档状态。
