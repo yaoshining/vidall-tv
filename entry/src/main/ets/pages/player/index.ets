@@ -480,6 +480,9 @@ export struct PlayerPage {
     }
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;
+    const previousPageParamToken = this.pageParamToken;
+    this.pageParamToken += 1;
+    let keepNextPageParamToken = false;
     try {
       const resolvedSource = await this.resolveEpisodePlaybackSource(item);
       if (resolvedSource === null) {
@@ -514,12 +517,16 @@ export struct PlayerPage {
       this.currentMediaEpisode = nextParam.episodeNumber ?? 0;
       this.showResumeDialog = false;
       this.pendingSeekMs = -1;
+      keepNextPageParamToken = true;
       this.resumePlaybackForParam(nextParam);
       return true;
     } catch {
       this.videoPlayerController.progressContext = previousProgressContext;
       return false;
     } finally {
+      if (!keepNextPageParamToken) {
+        this.pageParamToken = previousPageParamToken;
+      }
       this.episodeSwitching = false;
     }
   }

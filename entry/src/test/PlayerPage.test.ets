@@ -13,6 +13,8 @@ import {
   PlaybackContextItem
 } from '../main/ets/components/core/player/PlaybackContext'
 import { MediaItem, TvEpisodeEntity } from '../main/ets/db/models/MediaEntity'
+import { PlayerEvents } from '../main/ets/components/core/player/Constants'
+import { emitter } from '@kit.BasicServicesKit'
 
 interface PlayerPageAccessor {
   applyPlayerPageParam(pageParam: PlayerPageParam): void
@@ -62,6 +64,10 @@ interface BoundHandleEpisodeSelectMethod {
   bind(target: Object): (item: PlaybackContextItem) => Promise<boolean>
 }
 
+interface BoundRegisterPreparedResumeMethod {
+  bind(target: Object): (pageParam: PlayerPageParam, token: number) => void
+}
+
 class TestPlayerPageController implements PlayerPageControllerAccessor {
   currentTime: number = 120000
   duration: number = 1800000
@@ -91,6 +97,17 @@ interface PlayerPageCurrentEpisodeHelperAccessor extends PlayerPageAccessor {
     playbackContext: PlaybackContext | undefined,
     item: PlaybackContextItem
   ) => boolean
+}
+
+interface PreparedResumeCall {
+  mediaKey: string
+  seasonNumber: number
+  episodeNumber: number
+}
+
+interface PlayerPagePreparedResumeBindingAccessor {
+  handleEpisodeSelect: BoundHandleEpisodeSelectMethod
+  registerPreparedResume: BoundRegisterPreparedResumeMethod
 }
 
 class SpyEpisodeSwitchController extends TestPlayerPageController {
@@ -142,6 +159,109 @@ class CountingEpisodeSwitchController extends TestPlayerPageController implement
     this.calls.play += 1
     this.calls.resumePlaybackForParam += 1
     return Promise.resolve()
+  }
+}
+
+class PreparedResumeIsolationController extends TestPlayerPageController implements PlayerPageControllerPlaybackAccessor {
+  play(): Promise<void> {
+    return Promise.resolve()
+  }
+}
+
+class PreparedResumeListenerPage {
+  pageParamToken: number = 0
+  currentMediaSeason: number = 0
+  currentMediaEpisode: number = 0
+  showResumeDialog: boolean = false
+  pendingSeekMs: number = -1
+  savedPositionMs: number = 0
+  totalDurationMs: number = 0
+  videoPlayerController: PlayerPageControllerPlaybackAccessor
+  resumeCalls: PreparedResumeCall[] = []
+  private readonly registerPreparedResumeImpl: (pageParam: PlayerPageParam, token: number) => void
+
+  constructor(context: MediaLibraryContext) {
+    const page = buildPlayerPageAccessor() as Object as PlayerPagePreparedResumeBindingAccessor
+    this.registerPreparedResumeImpl = page.registerPreparedResume.bind(this as Object)
+    this.videoPlayerController = new PreparedResumeIsolationController(context)
+  }
+
+  registerPreparedResume(pageParam: PlayerPageParam, token: number): void {
+    this.registerPreparedResumeImpl(pageParam, token)
+  }
+
+  resumePlaybackForParam(pageParam: PlayerPageParam): void {
+    const call: PreparedResumeCall = {
+      mediaKey: pageParam.mediaKey ?? '',
+      seasonNumber: pageParam.seasonNumber ?? 0,
+      episodeNumber: pageParam.episodeNumber ?? 0
+    }
+    this.resumeCalls.push(call)
+  }
+}
+
+class EpisodeSwitchTokenPage {
+  currentPageParam?: PlayerPageParam
+  episodeSwitching: boolean = false
+  showResumeDialog: boolean = false
+  pendingSeekMs: number = -1
+  currentMediaKey: string = ''
+  currentMediaSeason: number = 0
+  currentMediaEpisode: number = 0
+  pageParamToken: number = 0
+  videoData?: PlayerPageVideoDataAccessor
+  videoPlayerController: PlayerPageControllerPlaybackAccessor
+  observedResolveToken: number = -1
+  private readonly handleEpisodeSelectImpl: (item: PlaybackContextItem) => Promise<boolean>
+  private readonly resolvedSourceUrl: string
+
+  constructor(context: MediaLibraryContext, resolvedSourceUrl: string) {
+    const page = buildPlayerPageAccessor()
+    const handleEpisodeSelect = page.handleEpisodeSelect as Object as BoundHandleEpisodeSelectMethod
+    this.handleEpisodeSelectImpl = handleEpisodeSelect.bind(this as Object)
+    this.videoPlayerController = new PreparedResumeIsolationController(context)
+    this.resolvedSourceUrl = resolvedSourceUrl
+  }
+
+  handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
+    return this.handleEpisodeSelectImpl(item)
+  }
+
+  persistCurrentPlaybackState(): void {
+    this.videoPlayerController.saveProgressNow()
+  }
+
+  async resolveEpisodePlaybackSource(_item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
+    this.observedResolveToken = this.pageParamToken
+    return buildResolvedSource(this.resolvedSourceUrl)
+  }
+
+  buildVideoDataFromParam(pageParam: PlayerPageParam): PlayerPageVideoDataAccessor | undefined {
+    const url = pageParam.url ?? ''
+    if (url.length === 0) {
+      return undefined
+    }
+    const videoData: PlayerPageVideoDataAccessor = {
+      videoSrc: url
+    }
+    return videoData
+  }
+
+  buildProgressContext(pageParam: PlayerPageParam): PlayerPageProgressContextAccessor {
+    const progressContext: PlayerPageProgressContextAccessor = {
+      videoId: pageParam.videoId ?? 0,
+      seriesProviderId: pageParam.seriesProviderId ?? '',
+      seasonNumber: pageParam.seasonNumber ?? 0,
+      episodeNumber: pageParam.episodeNumber ?? 0,
+      positionMs: 0,
+      durationMs: 0,
+      updatedAt: 0
+    }
+    return progressContext
+  }
+
+  resumePlaybackForParam(_pageParam: PlayerPageParam): void {
+    this.videoPlayerController.play().catch(() => {})
   }
 }
 
@@ -609,6 +729,48 @@ export default function playerPageTest() {
       expect(calls.resumePlaybackForParam).assertEqual(1)
       expect(calls.saveProgressNow).assertEqual(1)
       expect(calls.play).assertEqual(1)
+    })
+
+    it('旧 pageParam 的 PREPARED 一次性监听在 token 失效后不会续播', 0, () => {
+      emitter.off(PlayerEvents.PREPARED.eventId)
+      const context = buildEpisodeSwitchContext(0)
+      const page = new PreparedResumeListenerPage(context)
+      page.pageParamToken = 2
+      page.registerPreparedResume({
+        url: 'https://example.com/current.mkv',
+        title: '长夜余火 第一季-S1:E1-启程',
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e1',
+        seriesProviderId: 'tmdb-9527',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        videoId: 101,
+        playbackContext: context
+      }, 1)
+
+      emitter.emit(PlayerEvents.PREPARED)
+      expect(page.resumeCalls.length).assertEqual(0)
+      emitter.off(PlayerEvents.PREPARED.eventId)
+    })
+
+    it('handleEpisodeSelect 会在解析新播放源前推进 pageParamToken', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      const page = new EpisodeSwitchTokenPage(context, 'https://example.com/s01e02.mkv')
+      page.pageParamToken = 7
+      page.currentPageParam = {
+        url: 'https://example.com/current.mkv',
+        title: '长夜余火 第一季-S1:E1-启程',
+        seriesProviderId: 'tmdb-9527',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        playbackContext: context
+      }
+
+      const didSwitch = await page.handleEpisodeSelect(context.items[1])
+
+      expect(didSwitch).assertTrue()
+      expect(page.observedResolveToken).assertEqual(8)
+      expect(page.pageParamToken).assertEqual(8)
+      expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(2)
     })
 
     it('当前集短路判断保持在 handleEpisodeSelect 内，不额外新增 helper', 0, () => {
