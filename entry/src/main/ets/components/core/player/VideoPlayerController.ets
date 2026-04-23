@@ -1390,7 +1390,7 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'reloadSource: surfaceId 为空，忽略切源请求');
       throw new Error('reloadSource requires surfaceId');
     }
-    this.clearPendingReloadState();
+    this.rejectPendingReload(new Error('reload superseded'));
     const reloadToken = this.pendingReloadToken + 1;
     this.pendingReloadToken = reloadToken;
     this.activeReloadToken = reloadToken;
@@ -1451,6 +1451,13 @@ export class VideoPlayerController {
     if (reject !== undefined) {
       reject(error);
     }
+  }
+
+  private clearCachedXComponentState(): void {
+    this.cachedIjkContext = undefined;
+    this.cachedIjkComponentId = '';
+    this.cachedNativeContext = undefined;
+    this.cachedNativeComponentId = '';
   }
 
   /**
@@ -2011,6 +2018,7 @@ export class VideoPlayerController {
 
   async release(): Promise<void> {
     this.rejectPendingReload(new Error('player released'));
+    this.clearCachedXComponentState();
     this.clearNativeReadyGuardTimer();
     this.stopProgressTimer();
     this.saveProgressNow();
