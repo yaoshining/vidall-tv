@@ -1,5 +1,12 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
-import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName } from '../main/ets/lib/ScrapeClient';
+import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName, MovieScrapeResult } from '../main/ets/lib/ScrapeClient';
+import { ScriptedFakeScrapeProvider, createDeferred, createMovieScrapeResult } from './helpers/ScrapeClientFakeProvider';
+
+async function flushMicrotasksUntil(predicate: () => boolean, rounds: number = 12): Promise<void> {
+  for (let index = 0; index < rounds && !predicate(); index++) {
+    await Promise.resolve();
+  }
+}
 
 export default function scrapeClientTest() {
   describe('ScrapeClient', () => {
@@ -84,17 +91,26 @@ export default function scrapeClientTest() {
     });
 
     /**
-     * 测试用例 8：测试 autoScrapeMovie 无效 key（不应崩溃）
+     * 测试用例 8：测试 autoScrapeMovie 搜索失败时的稳定容错结果（fake failure）
      */
-    it('should handle autoScrapeMovie network failure gracefully', 0, async () => {
-      const client = new ScrapeClient({ tmdbApiKey: 'invalid_key_for_test' });
+    it('should handle autoScrapeMovie search failure deterministically with fake provider', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-network-failure');
+      fake.enqueueSearchMovieThrow('simulated search failure');
 
-      try {
-        const result = await client.autoScrapeMovie('NonExistentMovie9999.2099.mkv');
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
 
-        expect(result === null || result !== null).assertTrue();
-      } catch (e) {
-        expect(true).assertTrue();
+      const result = await client.autoScrapeMovie('NonExistentMovie9999.2099.1080p.mkv');
+
+      expect(result).assertEqual(null);
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      expect(fake.getCallCount('fetchMovieDetail')).assertEqual(0);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('NonExistentMovie9999');
+        expect(searchCall.year).assertEqual(2099);
+        expect(searchCall.language).assertEqual('zh-CN');
       }
     });
 
@@ -151,21 +167,69 @@ export default function scrapeClientTest() {
      * 测试用例 13：测试并发电影刮削请求
      */
     it('should handle concurrent autoScrapeMovie requests', 0, async () => {
-      const client = new ScrapeClient({ tmdbApiKey: 'test_key' });
+      const fake = new ScriptedFakeScrapeProvider('fake-concurrency');
+      const deferred1 = createDeferred<MovieScrapeResult[]>();
+      const deferred2 = createDeferred<MovieScrapeResult[]>();
+      const deferred3 = createDeferred<MovieScrapeResult[]>();
 
-      const promises = [
-        client.autoScrapeMovie('Movie1.2020.mkv'),
-        client.autoScrapeMovie('Movie2.2021.mkv'),
-        client.autoScrapeMovie('Movie3.2022.mkv')
-      ];
+      fake.enqueueSearchMovieDeferred(deferred1);
+      fake.enqueueSearchMovieDeferred(deferred2);
+      fake.enqueueSearchMovieDeferred(deferred3);
+      fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-concurrency', 'First Movie Result', 'movie-1'));
+      fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-concurrency', 'Second Movie Result', 'movie-2'));
+      fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-concurrency', 'Third Movie Result', 'movie-3'));
 
-      try {
-        const results = await Promise.allSettled(promises);
+      const client = new ScrapeClient({ scrapeConcurrency: 2 });
+      client.registerProvider(fake);
 
-        expect(results.length).assertEqual(3);
-      } catch (e) {
-        expect(false).assertTrue();
+      const p1 = client.autoScrapeMovie('First.Movie.(2020).mkv');
+      const p2 = client.autoScrapeMovie('Second.Movie.(2021).mkv');
+      const p3 = client.autoScrapeMovie('Third.Movie.(2022).mkv');
+
+      await flushMicrotasksUntil(() => fake.getCallCount('searchMovie') === 2);
+      expect(fake.getCallCount('searchMovie')).assertEqual(2);
+      expect(fake.getCallCount('fetchMovieDetail')).assertEqual(0);
+
+      deferred1.resolve([createMovieScrapeResult('fake-concurrency', 'First Movie Result', 'movie-1')]);
+      const result1 = await p1;
+      expect(result1 !== null).assertTrue();
+      if (result1 !== null) {
+        expect(result1.provider).assertEqual('fake-concurrency');
+        expect(result1.title).assertEqual('First Movie Result');
+        expect(result1.providerId).assertEqual('movie-1');
       }
+
+      await flushMicrotasksUntil(() => fake.getCallCount('searchMovie') === 3);
+      expect(fake.getCallCount('searchMovie')).assertEqual(3);
+      const thirdSearchCall = fake.getLastCall('searchMovie');
+      expect(thirdSearchCall !== null).assertTrue();
+      if (thirdSearchCall !== null) {
+        expect(thirdSearchCall.title).assertEqual('Third Movie');
+        expect(thirdSearchCall.year).assertEqual(2022);
+        expect(thirdSearchCall.language).assertEqual('zh-CN');
+      }
+
+      deferred2.resolve([createMovieScrapeResult('fake-concurrency', 'Second Movie Result', 'movie-2')]);
+      deferred3.resolve([createMovieScrapeResult('fake-concurrency', 'Third Movie Result', 'movie-3')]);
+
+      const results = await Promise.all([p1, p2, p3]);
+      expect(results.length).assertEqual(3);
+      expect(results[0] !== null).assertTrue();
+      expect(results[1] !== null).assertTrue();
+      expect(results[2] !== null).assertTrue();
+      if (results[0] !== null) {
+        expect(results[0].title).assertEqual('First Movie Result');
+        expect(results[0].providerId).assertEqual('movie-1');
+      }
+      if (results[1] !== null) {
+        expect(results[1].title).assertEqual('Second Movie Result');
+        expect(results[1].providerId).assertEqual('movie-2');
+      }
+      if (results[2] !== null) {
+        expect(results[2].title).assertEqual('Third Movie Result');
+        expect(results[2].providerId).assertEqual('movie-3');
+      }
+      expect(fake.getCallCount('fetchMovieDetail')).assertEqual(3);
     });
 
     /**
@@ -281,4 +345,100 @@ export default function scrapeClientTest() {
       expect(titles[0]).assertEqual('The Dark Knight');
     });
   });
+
+
+  describe('ScriptedFakeScrapeProvider', () => {
+    it('should work with ScrapeClient.registerProvider for immediate success', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-success');
+      fake.enqueueSearchMovieResults([createMovieScrapeResult('fake-success', 'Immediate Success Movie', 'movie-1')]);
+      fake.enqueueFetchMovieDetailResult(createMovieScrapeResult('fake-success', 'Immediate Success Movie', 'movie-1'));
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeMovie('Immediate.Success.Movie.2024.1080p.mkv');
+      expect(result !== null).assertTrue();
+      if (result !== null) {
+        expect(result.provider).assertEqual('fake-success');
+        expect(result.title).assertEqual('Immediate Success Movie');
+        expect(result.providerId).assertEqual('movie-1');
+      }
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Immediate Success Movie');
+        expect(searchCall.year).assertEqual(2024);
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
+    });
+
+    it('should throw when scripted searchMovie is exhausted', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-empty');
+
+      let rejected = false;
+      await fake.searchMovie('Missing Title', undefined, 'zh-CN').then(() => {
+        rejected = false;
+      }).catch(() => {
+        rejected = true;
+      });
+
+      expect(rejected).assertTrue();
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+    });
+
+    it('should surface scripted failure', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-failure');
+      fake.enqueueSearchMovieThrow('scripted search failure');
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeMovie('Any.Title.2024.1080p.mkv');
+      expect(result).assertEqual(null);
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Any Title');
+        expect(searchCall.year).assertEqual(2024);
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
+    });
+
+    it('should keep scripted deferred search pending until released', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-blocking');
+      const deferred = createDeferred<MovieScrapeResult[]>();
+      fake.enqueueSearchMovieDeferred(deferred);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      let settled = false;
+      const pending = client.autoScrapeMovie('Blocking.Title.2024.1080p.mkv').then((result) => {
+        settled = true;
+        return result;
+      }).catch(() => {
+        settled = true;
+        return null;
+      });
+
+      await flushMicrotasksUntil(() => fake.getCallCount('searchMovie') === 1);
+      expect(settled).assertFalse();
+      expect(fake.getCallCount('searchMovie')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchMovie');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Blocking Title');
+        expect(searchCall.year).assertEqual(2024);
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
+
+      deferred.resolve([]);
+      const result = await pending;
+      expect(settled).assertTrue();
+      expect(result).assertEqual(null);
+    });
+  });
+
 }
