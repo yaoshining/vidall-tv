@@ -1,6 +1,11 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
 import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName, MovieScrapeResult } from '../main/ets/lib/ScrapeClient';
-import { ScriptedFakeScrapeProvider, createDeferred, createMovieScrapeResult } from './helpers/ScrapeClientFakeProvider';
+import {
+  ScriptedFakeScrapeProvider,
+  createDeferred,
+  createMovieScrapeResult,
+  createTvSeriesScrapeResult
+} from './helpers/ScrapeClientFakeProvider';
 
 async function flushMicrotasksUntil(predicate: () => boolean, rounds: number = 12): Promise<void> {
   for (let index = 0; index < rounds && !predicate(); index++) {
@@ -230,6 +235,26 @@ export default function scrapeClientTest() {
         expect(results[2].providerId).assertEqual('movie-3');
       }
       expect(fake.getCallCount('fetchMovieDetail')).assertEqual(3);
+    });
+
+    it('should use preclassified tv result and series hint for weak semantic filenames', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-tv-hint');
+      fake.enqueueSearchTvResults([createTvSeriesScrapeResult('fake-tv-hint', '狂飙', 'tv-1')]);
+      fake.enqueueFetchTvSeriesDetailResult(createTvSeriesScrapeResult('fake-tv-hint', '狂飙', 'tv-1'));
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeTvEpisode('19 4K.mp4', '狂飙', 'tv');
+
+      expect(result.series !== null).assertTrue();
+      expect(fake.getCallCount('searchTv')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchTv');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('狂飙');
+        expect(searchCall.language).assertEqual('zh-CN');
+      }
     });
 
     /**
