@@ -102,6 +102,20 @@ function classifyVideoScrapeTarget(fileName: string, filePath: string): MediaTyp
   );
 }
 
+async function clearStaleScrapeAssociationsForOverwrite(
+  videoId: number,
+  mode: ScanMode,
+  fileName: string,
+  logPrefix: string,
+  reason: string
+): Promise<void> {
+  if (mode !== 'overwrite') {
+    return;
+  }
+  await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(videoId);
+  console.info(`${logPrefix} overwrite 已清理旧刮削关联 fileName=${fileName} reason=${reason}`);
+}
+
 // ─────────────────────────────────────────────
 // 适配器接口
 // ─────────────────────────────────────────────
@@ -409,6 +423,13 @@ export class WebDAVAdapter implements ISourceAdapter {
     const classification = classifyVideoScrapeTarget(fileName, info.filePath);
     const seriesHint = extractSeriesHintFromFilePath(info.filePath);
     if (classification.mediaType === 'unknown') {
+      await clearStaleScrapeAssociationsForOverwrite(
+        videoId,
+        mode,
+        fileName,
+        '[VideoScanner][SCRAPE]',
+        `unknown:${classification.reason ?? 'unknown'}`
+      );
       info.scrapeSkipped = true;
       console.info(
         `[VideoScanner][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
@@ -421,6 +442,13 @@ export class WebDAVAdapter implements ISourceAdapter {
       try {
         const movie = await scrapeClient.autoScrapeMovie(fileName);
         if (!movie) {
+          await clearStaleScrapeAssociationsForOverwrite(
+            videoId,
+            mode,
+            fileName,
+            '[VideoScanner][SCRAPE]',
+            'movie-scrape-empty'
+          );
           console.warn(`[VideoScanner][SCRAPE] 电影刮削无结果 ${fileName}`);
           return;
         }
@@ -475,6 +503,13 @@ export class WebDAVAdapter implements ISourceAdapter {
         await db.upsertScrapeInfo(movieScrapeInfo);
         console.info(`[VideoScanner][SCRAPE] scrape_info 落库 videoId=${videoId} movieId=${movieId}`);
       } catch (e) {
+        await clearStaleScrapeAssociationsForOverwrite(
+          videoId,
+          mode,
+          fileName,
+          '[VideoScanner][SCRAPE]',
+          'movie-scrape-exception'
+        );
         const err = e as Error;
         console.warn(`[VideoScanner][SCRAPE] 电影刮削异常 ${fileName}: ${err.message}`);
       }
@@ -482,6 +517,13 @@ export class WebDAVAdapter implements ISourceAdapter {
       try {
         const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
         if (!result.series) {
+          await clearStaleScrapeAssociationsForOverwrite(
+            videoId,
+            mode,
+            fileName,
+            '[VideoScanner][SCRAPE]',
+            'tv-scrape-empty'
+          );
           console.warn(`[VideoScanner][SCRAPE] 剧集刮削无结果 ${fileName}`);
           return;
         }
@@ -567,6 +609,13 @@ export class WebDAVAdapter implements ISourceAdapter {
           `S${scrapeSeasonNumber ?? '?'}E${scrapeEpisodeNumber ?? '?'}`
         );
       } catch (e) {
+        await clearStaleScrapeAssociationsForOverwrite(
+          videoId,
+          mode,
+          fileName,
+          '[VideoScanner][SCRAPE]',
+          'tv-scrape-exception'
+        );
         const err = e as Error;
         console.warn(`[VideoScanner][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
       }
@@ -876,6 +925,13 @@ export class SMBAdapter implements ISourceAdapter {
     const classification = classifyVideoScrapeTarget(fileName, info.filePath);
     const seriesHint = extractSeriesHintFromFilePath(info.filePath);
     if (classification.mediaType === 'unknown') {
+      await clearStaleScrapeAssociationsForOverwrite(
+        videoId,
+        mode,
+        fileName,
+        '[VideoScanner][SMB][SCRAPE]',
+        `unknown:${classification.reason ?? 'unknown'}`
+      );
       info.scrapeSkipped = true;
       console.info(
         `[VideoScanner][SMB][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
@@ -888,6 +944,13 @@ export class SMBAdapter implements ISourceAdapter {
       try {
         const movie = await scrapeClient.autoScrapeMovie(fileName);
         if (!movie) {
+          await clearStaleScrapeAssociationsForOverwrite(
+            videoId,
+            mode,
+            fileName,
+            '[VideoScanner][SMB][SCRAPE]',
+            'movie-scrape-empty'
+          );
           console.warn(`[VideoScanner][SMB][SCRAPE] 电影刮削无结果 ${fileName}`);
           return;
         }
@@ -940,6 +1003,13 @@ export class SMBAdapter implements ISourceAdapter {
         await db.upsertScrapeInfo(smScrapeInfo);
         console.info(`[VideoScanner][SMB][SCRAPE] movie scrape_info 落库 videoId=${videoId} movieId=${movieId}`);
       } catch (e) {
+        await clearStaleScrapeAssociationsForOverwrite(
+          videoId,
+          mode,
+          fileName,
+          '[VideoScanner][SMB][SCRAPE]',
+          'movie-scrape-exception'
+        );
         const err = e as Error;
         console.warn(`[VideoScanner][SMB][SCRAPE] 电影刮削异常 ${fileName}: ${err.message}`);
       }
@@ -947,6 +1017,13 @@ export class SMBAdapter implements ISourceAdapter {
       try {
         const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
         if (!result.series) {
+          await clearStaleScrapeAssociationsForOverwrite(
+            videoId,
+            mode,
+            fileName,
+            '[VideoScanner][SMB][SCRAPE]',
+            'tv-scrape-empty'
+          );
           console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削无结果 ${fileName}`);
           return;
         }
@@ -1029,6 +1106,13 @@ export class SMBAdapter implements ISourceAdapter {
           `S${scrapeSeasonNumber ?? '?'}E${scrapeEpisodeNumber ?? '?'}`
         );
       } catch (e) {
+        await clearStaleScrapeAssociationsForOverwrite(
+          videoId,
+          mode,
+          fileName,
+          '[VideoScanner][SMB][SCRAPE]',
+          'tv-scrape-exception'
+        );
         const err = e as Error;
         console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
       }

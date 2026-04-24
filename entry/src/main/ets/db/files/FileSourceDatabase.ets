@@ -163,6 +163,8 @@ export class FileSourceDatabase {
 
       // 防御性 schema 兼容：补齐 movies/tv_series origin_country_json 列（v7 新增，幂等）
       await this.ensureOriginCountrySchema(this.rdbStore);
+      // 防御性 schema 兼容：补齐 tv_series 历史缺失列，避免旧库在读取详情时因列漂移失败
+      await this.ensureTvSeriesSchema(this.rdbStore);
 
       // 防御性修复：确保 provider+provider_id 唯一索引已被移除（v8 起允许多文件源对应同一 TMDB 内容）
       await this.dropScrapeInfoProviderPidIndex(this.rdbStore);
@@ -174,6 +176,38 @@ export class FileSourceDatabase {
     } catch (error) {
       console.error('FileSourceDatabase: Failed to initialize database', JSON.stringify(error));
       throw new Error('Failed to initialize database: ' + JSON.stringify(error));
+    }
+  }
+
+  private async getLastInsertedRowId(): Promise<number> {
+    if (this.rdbStore === null) { return -1; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.rdbStore.querySql('SELECT last_insert_rowid() AS id');
+      if (rs.goToFirstRow()) {
+        return rs.getLong(rs.getColumnIndex('id'));
+      }
+      return -1;
+    } catch {
+      return -1;
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
+  private async querySingleId(sql: string, args: relationalStore.ValueType[]): Promise<number> {
+    if (this.rdbStore === null) { return -1; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.rdbStore.querySql(sql, args);
+      if (rs.goToFirstRow()) {
+        return rs.getLong(rs.getColumnIndex('id'));
+      }
+      return -1;
+    } catch {
+      return -1;
+    } finally {
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1033,7 +1067,11 @@ export class FileSourceDatabase {
       ];
       await this.rdbStore.executeSql(sql, args);
       const inserted = await this.getVideoByPath(entity.filePath);
-      const rowId = inserted?.id ?? -1;
+      const fallbackId = await this.querySingleId(
+        `SELECT id FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`,
+        [entity.filePath]
+      );
+      const rowId = inserted?.id ?? (fallbackId > 0 ? fallbackId : await this.getLastInsertedRowId());
       console.info(`[FileSourceDatabase] upsertVideo INSERT id=${rowId} path=${entity.filePath}`);
       return rowId;
     } catch (error) {
@@ -1047,22 +1085,21 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) {
       throw new Error('Database not initialized');
     }
+    let rs: relationalStore.ResultSet | null = null;
     try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_VIDEOS);
-      pred.equalTo('file_path', filePath);
-      let rs: relationalStore.ResultSet | null = null;
-      try {
-        rs = await this.rdbStore.query(pred);
-        if (rs.goToFirstRow()) {
-          return this.parseVideoEntity(rs);
-        }
-        return null;
-      } finally {
-        rs?.close();
+      rs = await this.rdbStore.querySql(
+        `SELECT * FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`,
+        [filePath]
+      );
+      if (rs.goToFirstRow()) {
+        return this.parseVideoEntity(rs);
       }
+      return null;
     } catch (error) {
       console.error(`[FileSourceDatabase] getVideoByPath 失败: ${JSON.stringify(error)}`);
       return null;
+    } finally {
+      try { rs?.close(); } catch { }
     }
   }
 
@@ -1322,13 +1359,18 @@ export class FileSourceDatabase {
 
   async getTvSeriesByProviderId(provider: string, providerId: string): Promise<TvSeriesEntity | null> {
     if (this.rdbStore === null) { return null; }
+    let rs: relationalStore.ResultSet | null = null;
     try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
-      pred.equalTo('provider', provider).and().equalTo('provider_id', providerId);
-      const rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) { const e = this.parseTvSeriesEntity(rs); rs.close(); return e; }
-      rs.close(); return null;
-    } catch { return null; }
+      rs = await this.rdbStore.querySql(
+        `SELECT * FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ? LIMIT 1`,
+        [provider, providerId]
+      );
+      if (rs.goToFirstRow()) { return this.parseTvSeriesEntity(rs); }
+      return null;
+    } catch (e) {
+      console.error(`[DB][getTvSeriesByProviderId] provider=${provider} providerId=${providerId} 查询失败: ${JSON.stringify(e)}`);
+      return null;
+    } finally { try { rs?.close(); } catch { } }
   }
 
   /** 批量获取所有剧集，供播放历史等场景一次性加载 */
@@ -1372,26 +1414,101 @@ export class FileSourceDatabase {
       await this.rdbStore.update(bucket, pred);
       return existing.id;
     }
-    const sql = `
-      INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_TV_SERIES}
-        (provider, provider_id, title, original_title, overview, first_air_date, rating,
-         vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
-         poster_local_path, backdrop_local_path, genres_json, cast_json,
-         number_of_seasons, original_language, origin_country_json, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `;
-    const args: relationalStore.ValueType[] = [
-      e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
-      e.firstAirDate ?? null, e.rating ?? null, e.voteCount ?? null,
-      e.posterPath ?? null, e.backdropPath ?? null, e.posterUrl ?? null,
-      e.backdropUrl ?? null, e.posterLocalPath ?? null, e.backdropLocalPath ?? null,
-      e.genresJson ?? null, e.castJson ?? null,
-      e.numberOfSeasons !== undefined ? e.numberOfSeasons : null,
-      e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
-    ];
+    const columns: string[] = ['provider', 'provider_id', 'title', 'scraped_at'];
+    const placeholders: string[] = ['?', '?', '?', '?'];
+    const args: relationalStore.ValueType[] = [e.provider, e.providerId, e.title, e.scrapedAt];
+    if (e.originalTitle !== undefined) {
+      columns.push('original_title');
+      placeholders.push('?');
+      args.push(e.originalTitle);
+    }
+    if (e.overview !== undefined) {
+      columns.push('overview');
+      placeholders.push('?');
+      args.push(e.overview);
+    }
+    if (e.firstAirDate !== undefined) {
+      columns.push('first_air_date');
+      placeholders.push('?');
+      args.push(e.firstAirDate);
+    }
+    if (e.rating !== undefined) {
+      columns.push('rating');
+      placeholders.push('?');
+      args.push(e.rating);
+    }
+    if (e.voteCount !== undefined) {
+      columns.push('vote_count');
+      placeholders.push('?');
+      args.push(e.voteCount);
+    }
+    if (e.posterPath !== undefined) {
+      columns.push('poster_path');
+      placeholders.push('?');
+      args.push(e.posterPath);
+    }
+    if (e.backdropPath !== undefined) {
+      columns.push('backdrop_path');
+      placeholders.push('?');
+      args.push(e.backdropPath);
+    }
+    if (e.posterUrl !== undefined) {
+      columns.push('poster_url');
+      placeholders.push('?');
+      args.push(e.posterUrl);
+    }
+    if (e.backdropUrl !== undefined) {
+      columns.push('backdrop_url');
+      placeholders.push('?');
+      args.push(e.backdropUrl);
+    }
+    if (e.posterLocalPath !== undefined) {
+      columns.push('poster_local_path');
+      placeholders.push('?');
+      args.push(e.posterLocalPath);
+    }
+    if (e.backdropLocalPath !== undefined) {
+      columns.push('backdrop_local_path');
+      placeholders.push('?');
+      args.push(e.backdropLocalPath);
+    }
+    if (e.genresJson !== undefined) {
+      columns.push('genres_json');
+      placeholders.push('?');
+      args.push(e.genresJson);
+    }
+    if (e.castJson !== undefined) {
+      columns.push('cast_json');
+      placeholders.push('?');
+      args.push(e.castJson);
+    }
+    if (e.numberOfSeasons !== undefined) {
+      columns.push('number_of_seasons');
+      placeholders.push('?');
+      args.push(e.numberOfSeasons);
+    }
+    if (e.originalLanguage !== undefined) {
+      columns.push('original_language');
+      placeholders.push('?');
+      args.push(e.originalLanguage);
+    }
+    if (e.originCountryJson !== undefined) {
+      columns.push('origin_country_json');
+      placeholders.push('?');
+      args.push(e.originCountryJson);
+    }
+    if (e.rawJson !== undefined) {
+      columns.push('raw_json');
+      placeholders.push('?');
+      args.push(e.rawJson);
+    }
+    const sql = `INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_TV_SERIES} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
     await this.rdbStore.executeSql(sql, args);
-    const inserted = await this.getTvSeriesByProviderId(e.provider, e.providerId);
-    return inserted?.id ?? -1;
+    const fallbackId = await this.querySingleId(
+      `SELECT id FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ? LIMIT 1`,
+      [e.provider, e.providerId]
+    );
+    return fallbackId > 0 ? fallbackId : await this.getLastInsertedRowId();
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertTvSeries 失败: ${err.message}`);
@@ -1432,13 +1549,15 @@ export class FileSourceDatabase {
 
   async getTvSeason(seriesId: number, seasonNumber: number): Promise<TvSeasonEntity | null> {
     if (this.rdbStore === null) { return null; }
+    let rs: relationalStore.ResultSet | null = null;
     try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SEASONS);
-      pred.equalTo('series_id', seriesId).and().equalTo('season_number', seasonNumber);
-      const rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) { const e = this.parseTvSeasonEntity(rs); rs.close(); return e; }
-      rs.close(); return null;
-    } catch { return null; }
+      rs = await this.rdbStore.querySql(
+        `SELECT * FROM ${FileSourceDatabase.TABLE_TV_SEASONS} WHERE series_id = ? AND season_number = ? LIMIT 1`,
+        [seriesId, seasonNumber]
+      );
+      if (rs.goToFirstRow()) { return this.parseTvSeasonEntity(rs); }
+      return null;
+    } catch { return null; } finally { try { rs?.close(); } catch { } }
   }
 
   async upsertTvSeason(e: TvSeasonEntity): Promise<number> {
@@ -1474,7 +1593,11 @@ export class FileSourceDatabase {
     ];
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvSeason(e.seriesId, e.seasonNumber);
-    return inserted?.id ?? -1;
+    const fallbackId = await this.querySingleId(
+      `SELECT id FROM ${FileSourceDatabase.TABLE_TV_SEASONS} WHERE series_id = ? AND season_number = ? LIMIT 1`,
+      [e.seriesId, e.seasonNumber]
+    );
+    return inserted?.id ?? (fallbackId > 0 ? fallbackId : await this.getLastInsertedRowId());
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertTvSeason 失败: ${err.message}`);
@@ -1510,13 +1633,16 @@ export class FileSourceDatabase {
 
   async getTvEpisode(seriesId: number, seasonNumber: number, episodeNumber: number): Promise<TvEpisodeEntity | null> {
     if (this.rdbStore === null) { return null; }
+    let rs: relationalStore.ResultSet | null = null;
     try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_EPISODES);
-      pred.equalTo('series_id', seriesId).and().equalTo('season_number', seasonNumber).and().equalTo('episode_number', episodeNumber);
-      const rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) { const e = this.parseTvEpisodeEntity(rs); rs.close(); return e; }
-      rs.close(); return null;
-    } catch { return null; }
+      rs = await this.rdbStore.querySql(
+        `SELECT * FROM ${FileSourceDatabase.TABLE_TV_EPISODES} ` +
+        `WHERE series_id = ? AND season_number = ? AND episode_number = ? LIMIT 1`,
+        [seriesId, seasonNumber, episodeNumber]
+      );
+      if (rs.goToFirstRow()) { return this.parseTvEpisodeEntity(rs); }
+      return null;
+    } catch { return null; } finally { try { rs?.close(); } catch { } }
   }
 
   /** 获取某部剧某季的全部集（按 episode_number 升序），用于季详情页集列表展示 */
@@ -1591,7 +1717,12 @@ export class FileSourceDatabase {
     ];
     await this.rdbStore.executeSql(sql, args);
     const inserted = await this.getTvEpisode(e.seriesId, e.seasonNumber, e.episodeNumber);
-    return inserted?.id ?? -1;
+    const fallbackId = await this.querySingleId(
+      `SELECT id FROM ${FileSourceDatabase.TABLE_TV_EPISODES} ` +
+      `WHERE series_id = ? AND season_number = ? AND episode_number = ? LIMIT 1`,
+      [e.seriesId, e.seasonNumber, e.episodeNumber]
+    );
+    return inserted?.id ?? (fallbackId > 0 ? fallbackId : await this.getLastInsertedRowId());
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertTvEpisode 失败: ${err.message}`);
@@ -1643,6 +1774,35 @@ export class FileSourceDatabase {
       );
     } catch {
       // 列已存在时忽略
+    }
+  }
+
+  private async ensureTvSeriesSchema(rdbStore: relationalStore.RdbStore): Promise<void> {
+    const alterCols: string[] = [
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN original_title TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN overview TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN first_air_date TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN rating REAL`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN vote_count INTEGER`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN poster_path TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN backdrop_path TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN poster_url TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN backdrop_url TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN poster_local_path TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN backdrop_local_path TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN genres_json TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN cast_json TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN number_of_seasons INTEGER`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN original_language TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN origin_country_json TEXT`,
+      `ALTER TABLE ${FileSourceDatabase.TABLE_TV_SERIES} ADD COLUMN raw_json TEXT`
+    ];
+    for (const sql of alterCols) {
+      try {
+        await rdbStore.executeSql(sql);
+      } catch {
+        // 列已存在时忽略
+      }
     }
   }
 
@@ -1787,9 +1947,10 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) { return null; }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
-      pred.equalTo('video_id', videoId);
-      rs = await this.rdbStore.query(pred);
+      rs = await this.rdbStore.querySql(
+        `SELECT * FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} WHERE video_id = ? LIMIT 1`,
+        [videoId]
+      );
       if (rs.goToFirstRow()) { return this.parseScrapeInfoEntity(rs); }
       return null;
     } catch { return null; } finally { try { rs?.close(); } catch { } }
@@ -1853,7 +2014,6 @@ export class FileSourceDatabase {
   async upsertScrapeInfo(e: ScrapeInfoEntity): Promise<void> {
     if (this.rdbStore === null) { throw new Error('Database not initialized'); }
     try {
-    console.info(`[DB][upsertScrapeInfo] videoId=${e.videoId} type=${e.mediaType} movieId=${e.movieId ?? 'null'} tvSeriesId=${e.tvSeriesId ?? 'null'} episodeId=${e.episodeId ?? 'null'} title="${e.title}"`);
     // 先查 video_id 是否已有 scrape_info，有则 UPDATE（不依赖 provider+provider_id 唯一索引）
     const existing = await this.getScrapeInfoByVideoId(e.videoId);
     if (existing && existing.id !== undefined) {
@@ -1873,7 +2033,6 @@ export class FileSourceDatabase {
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
       pred.equalTo('id', existing.id);
       await this.rdbStore.update(bucket, pred);
-      console.info(`[DB][upsertScrapeInfo] ✅ 写入成功 videoId=${e.videoId}`);
       return;
     }
     const sql = `
@@ -1897,12 +2056,61 @@ export class FileSourceDatabase {
       e.scrapedAt
     ];
     await this.rdbStore.executeSql(sql, args);
-    console.info(`[DB][upsertScrapeInfo] ✅ 写入成功 videoId=${e.videoId}`);
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertScrapeInfo 失败: ${err.message}`);
       throw new Error(err.message);
     }
+  }
+
+  async clearScrapeInfoForVideo(videoId: number): Promise<void> {
+    if (this.rdbStore === null) { throw new Error('Database not initialized'); }
+    try {
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_SCRAPE_INFO);
+      pred.equalTo('video_id', videoId);
+      await this.rdbStore.delete(pred);
+      await this.cleanupOrphanScrapeMedia();
+      console.info(`[DB][clearScrapeInfoForVideo] videoId=${videoId} 已清理旧关联`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `clearScrapeInfoForVideo 失败: ${err.message}`);
+      throw new Error(err.message);
+    }
+  }
+
+  private async cleanupOrphanScrapeMedia(): Promise<void> {
+    if (this.rdbStore === null) { return; }
+    await this.rdbStore.executeSql(
+      `DELETE FROM ${FileSourceDatabase.TABLE_TV_EPISODES} AS te ` +
+      `WHERE NOT EXISTS (` +
+      `  SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} AS si ` +
+      `  WHERE si.episode_id = te.id` +
+      `)`
+    );
+    await this.rdbStore.executeSql(
+      `DELETE FROM ${FileSourceDatabase.TABLE_TV_SEASONS} AS tsn ` +
+      `WHERE NOT EXISTS (` +
+      `  SELECT 1 FROM ${FileSourceDatabase.TABLE_TV_EPISODES} AS te ` +
+      `  WHERE te.season_id = tsn.id` +
+      `) AND NOT EXISTS (` +
+      `  SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} AS si ` +
+      `  WHERE si.tv_series_id = tsn.series_id AND si.season_number = tsn.season_number` +
+      `)`
+    );
+    await this.rdbStore.executeSql(
+      `DELETE FROM ${FileSourceDatabase.TABLE_TV_SERIES} AS ts ` +
+      `WHERE NOT EXISTS (` +
+      `  SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} AS si ` +
+      `  WHERE si.tv_series_id = ts.id` +
+      `)`
+    );
+    await this.rdbStore.executeSql(
+      `DELETE FROM ${FileSourceDatabase.TABLE_MOVIES} AS m ` +
+      `WHERE NOT EXISTS (` +
+      `  SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} AS si ` +
+      `  WHERE si.movie_id = m.id` +
+      `)`
+    );
   }
 
   private parseScrapeInfoEntity(rs: relationalStore.ResultSet): ScrapeInfoEntity {
@@ -2568,8 +2776,17 @@ export class FileSourceDatabase {
         LEFT JOIN ${FileSourceDatabase.TABLE_TV_SEASONS} tss
                ON tss.series_id = si.tv_series_id
               AND tss.season_number = si.season_number
-        WHERE si.tv_series_id IS NOT NULL
-        GROUP BY si.tv_series_id, COALESCE(si.season_number, 0)
+         WHERE si.tv_series_id IS NOT NULL
+           AND (
+             si.media_type = 'episode'
+             OR NOT EXISTS (
+               SELECT 1
+               FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} sibling
+               WHERE sibling.tv_series_id = si.tv_series_id
+                 AND sibling.media_type = 'episode'
+             )
+           )
+         GROUP BY si.tv_series_id, COALESCE(si.season_number, 0)
         ORDER BY latest_scraped_at DESC
         LIMIT ?
       `;
@@ -3827,7 +4044,3 @@ export class FileSourceDatabase {
     }
   }
 }
-
-
-
-

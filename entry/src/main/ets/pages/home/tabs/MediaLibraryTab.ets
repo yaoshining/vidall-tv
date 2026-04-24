@@ -81,6 +81,16 @@ function classifyVideoMediaType(fileName: string, filePath: string): MediaTypeCl
   return classifyMediaType(buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo));
 }
 
+async function clearVideoScrapeAssociations(
+  db: FileSourceDatabase,
+  videoId: number,
+  fileName: string,
+  reason: string
+): Promise<void> {
+  await db.clearScrapeInfoForVideo(videoId);
+  console.info(`[MediaLibraryTab] 已清理旧刮削关联 fileName=${fileName} reason=${reason}`);
+}
+
 interface SourceRuntimeConfig {
   type: FileSourceType;
   configJson: string;
@@ -623,6 +633,12 @@ export struct MediaLibraryTab {
           const classification = classifyVideoMediaType(video.fileName, video.filePath);
           const seriesHint = extractSeriesHintFromFilePath(video.filePath);
           if (classification.mediaType === 'unknown') {
+            await clearVideoScrapeAssociations(
+              db,
+              video.id!,
+              video.fileName,
+              `unknown:${classification.reason ?? 'unknown'}`
+            );
             skippedCount++;
             console.info(
               `[MediaLibraryTab] 跳过弱语义文件 fileName=${video.fileName} reason=${classification.reason ?? 'unknown'} ` +
@@ -633,7 +649,11 @@ export struct MediaLibraryTab {
 
           if (classification.mediaType === 'movie') {
             const movie = await scrapeClient.autoScrapeMovie(video.fileName);
-            if (!movie) { failedCount++; continue; }
+            if (!movie) {
+              await clearVideoScrapeAssociations(db, video.id!, video.fileName, 'movie-scrape-empty');
+              failedCount++;
+              continue;
+            }
 
             let movieId: number;
             const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
@@ -676,7 +696,11 @@ export struct MediaLibraryTab {
             successCount++;
           } else {
             const result = await scrapeClient.autoScrapeTvEpisode(video.fileName, seriesHint, classification.mediaType);
-            if (!result.series) { failedCount++; continue; }
+            if (!result.series) {
+              await clearVideoScrapeAssociations(db, video.id!, video.fileName, 'tv-scrape-empty');
+              failedCount++;
+              continue;
+            }
             const series: TvSeriesScrapeResult = result.series!;
             const season = result.season;
             const episode = result.episode;
@@ -747,6 +771,11 @@ export struct MediaLibraryTab {
           console.info(`[MediaLibraryTab] 刮削成功: ${video.fileName}`);
         } catch (e) {
           failedCount++;
+          if (video.id !== undefined) {
+            try {
+              await clearVideoScrapeAssociations(db, video.id, video.fileName, 'scrape-exception');
+            } catch (_cleanupError) {}
+          }
           const err = e as Error;
           console.error(`[MediaLibraryTab] 刮削异常: ${video.fileName}, ${err.message}`);
         }
