@@ -1,6 +1,7 @@
 import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
+import { isWeakSemanticTitleText } from './MediaTypeClassifier';
 
 // ─────────────────────────────────────────────
 // 公共数据结构
@@ -634,19 +635,25 @@ export class ScrapeClient {
   /**
    * 自动刮削电视剧集
    * @param fileName 视频文件名，用于解析剧集标题/季集号
-   * @param seriesHint 可选，父目录名作为剧名搜索提示。仅当 fileName 无法解析出剧名（parsed.title 为空）时生效，
-   *                   优先级低于 parsed.title。适用于文件名格式如 `S01E01 4K.mkv` 的场景。
+   * @param seriesHint 可选，路径中提取出的剧名搜索提示。当文件名标题为空或属于弱语义标题（如纯数字）时优先生效。
+   * @param preclassifiedMediaType 可选，入口层已经完成弱语义分类时传入，避免在此处再次被 parseFileName 默认 movie。
    * 返回 TvEpisodeScrapeBundle，每项均可能为 null（查不到时）
    */
-  async autoScrapeTvEpisode(fileName: string, seriesHint?: string): Promise<TvEpisodeScrapeBundle> {
+  async autoScrapeTvEpisode(
+    fileName: string,
+    seriesHint?: string,
+    preclassifiedMediaType?: 'movie' | 'tv' | 'unknown'
+  ): Promise<TvEpisodeScrapeBundle> {
     const parsed = parseFileName(fileName);
     const empty: TvEpisodeScrapeBundle = { series: null, season: null, episode: null };
-    if (parsed.mediaType !== 'tv') {
-      console.warn(`[ScrapeClient] autoScrapeTvEpisode 跳过: mediaType=${parsed.mediaType} title="${parsed.title}" file=${fileName}`);
+    const effectiveMediaType = preclassifiedMediaType ?? parsed.mediaType;
+    if (effectiveMediaType !== 'tv') {
+      console.warn(`[ScrapeClient] autoScrapeTvEpisode 跳过: mediaType=${effectiveMediaType} title="${parsed.title}" file=${fileName}`);
       return empty;
     }
-    // 当文件名无法解析出剧集名时，使用父目录名作为搜索提示
-    const effectiveTitle = (parsed.title.length === 0 && seriesHint && seriesHint.length > 0)
+    const shouldUseSeriesHint = seriesHint !== undefined && seriesHint.length > 0 &&
+      (parsed.title.length === 0 || isWeakSemanticTitleText(parsed.title));
+    const effectiveTitle = shouldUseSeriesHint
       ? seriesHint
       : parsed.title;
     if (effectiveTitle.length === 0) {
@@ -784,5 +791,3 @@ export class ScrapeClient {
     }
   }
 }
-
-

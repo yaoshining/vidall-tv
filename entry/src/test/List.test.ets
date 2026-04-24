@@ -3,6 +3,7 @@ import playbackContextTest from './ets/PlaybackContextTest';
 import settingsControllerTest from './SettingsController.test';
 import validationUtilTest from './ValidationUtil.test';
 import scrapeClientTest from './ScrapeClient.test';
+import mediaTypeClassifierContractTest from './MediaTypeClassifierContract.test';
 import debounceUtilTest from './DebounceUtil.test';
 import videoDataTest from './VideoData.test';
 import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
@@ -23,6 +24,7 @@ export default function testsuite() {
   settingsControllerTest();
   validationUtilTest();
   scrapeClientTest();
+  mediaTypeClassifierContractTest();
   debounceUtilTest();
   videoDataTest();
   ijkSubtitleBridgeTest();

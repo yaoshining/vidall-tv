@@ -2,6 +2,8 @@ import { describe, it, expect } from '@ohos/hypium';
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
+import { FileSource, FileSourceType } from '../main/ets/db/models/FileSourceEntity';
+import { ScrapeInfoEntity, TvEpisodeEntity, TvSeasonEntity, TvSeriesEntity, VideoEntity } from '../main/ets/db/models/MediaEntity';
 
 /**
  * FileSourceDatabase 集成测试（运行在 UnitTestBuild，context 通过 abilityDelegatorRegistry 获取）
@@ -57,5 +59,101 @@ export default function fileSourceDatabaseTest() {
       console.info(`[FileSourceDatabase.test] 环境中共有 ${sources.length} 个文件源`);
     });
 
+  });
+
+  describe('FileSourceDatabase_distinct_tv_series_groups', () => {
+    it('should_count_episode_rows_without_duplicate_tv_rows', 0, async () => {
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      const db = FileSourceDatabase.getInstance(ctx);
+      await db.init();
+
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      const now = Date.now();
+      const fileSource: FileSource = {
+        name: `测试文件源-${suffix}`,
+        type: FileSourceType.WEBDAV,
+        configJson: JSON.stringify({
+          url: '127.0.0.1',
+          username: 'tester',
+          password: 'secret',
+          protocol: 'http',
+          port: 80,
+          rootPath: '/dav'
+        }),
+        createdAt: now
+      };
+      const sourceId = await db.insertFileSource(fileSource);
+
+      const seriesId = await db.upsertTvSeries({
+        provider: 'tmdb',
+        providerId: `series-${suffix}`,
+        title: `测试剧集-${suffix}`,
+        numberOfSeasons: 1,
+        scrapedAt: now
+      } as TvSeriesEntity);
+
+      const seasonId = await db.upsertTvSeason({
+        seriesId,
+        provider: 'tmdb',
+        providerId: `series-${suffix}-s1`,
+        seasonNumber: 1,
+        title: '第 1 季',
+        episodeCount: 1,
+        scrapedAt: now
+      } as TvSeasonEntity);
+
+      const episodeId = await db.upsertTvEpisode({
+        seriesId,
+        seasonId,
+        provider: 'tmdb',
+        providerId: `series-${suffix}-s1e1`,
+        seasonNumber: 1,
+        episodeNumber: 1,
+        title: '第 1 集',
+        scrapedAt: now
+      } as TvEpisodeEntity);
+
+      const episodeVideoId = await db.upsertVideo({
+        sourceId,
+        directoryPath: `/电视剧/测试剧集-${suffix}`,
+        filePath: `/电视剧/测试剧集-${suffix}/S01E01.mkv`,
+        fileName: 'S01E01.mkv',
+        scannedAt: now
+      } as VideoEntity);
+      await db.upsertScrapeInfo({
+        videoId: episodeVideoId,
+        provider: 'tmdb',
+        providerId: `scrape-episode-${suffix}`,
+        mediaType: 'episode',
+        title: `测试剧集-${suffix}`,
+        tvSeriesId: seriesId,
+        episodeId,
+        seasonNumber: 1,
+        episodeNumber: 1,
+        scrapedAt: now
+      } as ScrapeInfoEntity);
+
+      const tvVideoId = await db.upsertVideo({
+        sourceId,
+        directoryPath: `/电视剧/测试剧集-${suffix}`,
+        filePath: `/电视剧/测试剧集-${suffix}/21 4K.mp4`,
+        fileName: '21 4K.mp4',
+        scannedAt: now + 1
+      } as VideoEntity);
+      await db.upsertScrapeInfo({
+        videoId: tvVideoId,
+        provider: 'tmdb',
+        providerId: `scrape-tv-${suffix}`,
+        mediaType: 'tv',
+        title: `测试剧集-${suffix}`,
+        tvSeriesId: seriesId,
+        scrapedAt: now + 1
+      } as ScrapeInfoEntity);
+
+      const groups = await db.getDistinctTvSeriesGroups(200);
+      const targetGroup = groups.find(group => group.tvSeriesId === seriesId);
+      expect(targetGroup !== undefined).assertTrue();
+      expect(targetGroup!.episodeCount).assertEqual(1);
+    });
   });
 }
