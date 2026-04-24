@@ -3,6 +3,14 @@ import { FileSource, FileSourceDirectory, FileSourceType, SMBSourceConfig } from
 import { SMBClient } from '../lib/SMBClient';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
+import {
+  MediaTypeClassificationResult,
+  buildMediaTypeClassificationInput,
+  classifyMediaType,
+  createFileNameSemanticInfo,
+  extractSeriesHintFromFilePath,
+  formatMediaTypeClassificationSignals
+} from '../lib/MediaTypeClassifier';
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
 import { VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../db/models/MediaEntity';
@@ -77,6 +85,21 @@ function isVideoFile(fileName: string, contentType?: string): boolean {
     }
   }
   return false;
+}
+
+function classifyVideoScrapeTarget(fileName: string, filePath: string): MediaTypeClassificationResult {
+  const parsed = parseFileName(fileName);
+  const fileNameInfo = createFileNameSemanticInfo(
+    parsed.title,
+    parsed.language,
+    parsed.mediaType,
+    parsed.seasonNumber,
+    parsed.episodeNumber,
+    parsed.year
+  );
+  return classifyMediaType(
+    buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo)
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -383,12 +406,18 @@ export class WebDAVAdapter implements ISourceAdapter {
     }
 
     console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
-    const parsed = parseFileName(fileName);
-    const filePathParts = info.filePath.split('/').filter((s: string) => s.length > 0);
-    const parentDirParts = filePathParts.slice(0, -1);
-    const seriesHint: string | undefined = parentDirParts.length > 0 ? parentDirParts[parentDirParts.length - 1] : undefined;
+    const classification = classifyVideoScrapeTarget(fileName, info.filePath);
+    const seriesHint = extractSeriesHintFromFilePath(info.filePath);
+    if (classification.mediaType === 'unknown') {
+      info.scrapeSkipped = true;
+      console.info(
+        `[VideoScanner][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
+        `signals=${formatMediaTypeClassificationSignals(classification)}`
+      );
+      return;
+    }
 
-    if (parsed.mediaType === 'movie') {
+    if (classification.mediaType === 'movie') {
       try {
         const movie = await scrapeClient.autoScrapeMovie(fileName);
         if (!movie) {
@@ -451,7 +480,7 @@ export class WebDAVAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint);
+        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
         if (!result.series) {
           console.warn(`[VideoScanner][SCRAPE] 剧集刮削无结果 ${fileName}`);
           return;
@@ -521,17 +550,22 @@ export class WebDAVAdapter implements ISourceAdapter {
         }
 
         const mediaType = episodeId !== undefined ? 'episode' : 'tv';
+        const scrapeSeasonNumber = episode?.seasonNumber ?? season?.seasonNumber;
+        const scrapeEpisodeNumber = episode?.episodeNumber;
         const tvScrapeInfo: ScrapeInfoEntity = {
           videoId, provider: series.provider,
           providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
           mediaType, title: episode?.title ?? series.title,
           originalTitle: series.originalTitle,
           tvSeriesId: seriesId, episodeId,
-          seasonNumber: parsed.seasonNumber, episodeNumber: parsed.episodeNumber,
+          seasonNumber: scrapeSeasonNumber, episodeNumber: scrapeEpisodeNumber,
           scrapedAt: Date.now()
         };
         await db.upsertScrapeInfo(tvScrapeInfo);
-        console.info(`[VideoScanner][SCRAPE] tv scrape_info 落库 videoId=${videoId} S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'}`);
+        console.info(
+          `[VideoScanner][SCRAPE] tv scrape_info 落库 videoId=${videoId} ` +
+          `S${scrapeSeasonNumber ?? '?'}E${scrapeEpisodeNumber ?? '?'}`
+        );
       } catch (e) {
         const err = e as Error;
         console.warn(`[VideoScanner][SCRAPE] 剧集刮削异常 ${fileName}: ${err.message}`);
@@ -838,13 +872,19 @@ export class SMBAdapter implements ISourceAdapter {
     }
 
     console.info(`[VideoScanner][SMB][SCRAPE] 开始刮削 fileName=${fileName}`);
-    const parsed = parseFileName(fileName);
     const db = FileSourceDatabase.getInstance();
-    const filePathParts = info.filePath.split('/').filter((s: string) => s.length > 0);
-    const parentDirParts = filePathParts.slice(0, -1);
-    const seriesHint: string | undefined = parentDirParts.length > 0 ? parentDirParts[parentDirParts.length - 1] : undefined;
+    const classification = classifyVideoScrapeTarget(fileName, info.filePath);
+    const seriesHint = extractSeriesHintFromFilePath(info.filePath);
+    if (classification.mediaType === 'unknown') {
+      info.scrapeSkipped = true;
+      console.info(
+        `[VideoScanner][SMB][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
+        `signals=${formatMediaTypeClassificationSignals(classification)}`
+      );
+      return;
+    }
 
-    if (parsed.mediaType === 'movie') {
+    if (classification.mediaType === 'movie') {
       try {
         const movie = await scrapeClient.autoScrapeMovie(fileName);
         if (!movie) {
@@ -905,7 +945,7 @@ export class SMBAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint);
+        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
         if (!result.series) {
           console.warn(`[VideoScanner][SMB][SCRAPE] 剧集刮削无结果 ${fileName}`);
           return;
@@ -972,18 +1012,21 @@ export class SMBAdapter implements ISourceAdapter {
         }
 
         const mediaType = episodeId !== undefined ? 'episode' : 'tv';
+        const scrapeSeasonNumber = episode?.seasonNumber ?? season?.seasonNumber;
+        const scrapeEpisodeNumber = episode?.episodeNumber;
         const tvScrapeInfo: ScrapeInfoEntity = {
           videoId, provider: series.provider,
           providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
           mediaType, title: episode?.title ?? series.title,
           originalTitle: series.originalTitle,
           tvSeriesId: seriesId, episodeId,
-          seasonNumber: parsed.seasonNumber, episodeNumber: parsed.episodeNumber,
+          seasonNumber: scrapeSeasonNumber, episodeNumber: scrapeEpisodeNumber,
           scrapedAt: Date.now()
         };
         await db.upsertScrapeInfo(tvScrapeInfo);
         console.info(
-          `[VideoScanner][SMB][SCRAPE] tv scrape_info 落库 videoId=${videoId} S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'}`
+          `[VideoScanner][SMB][SCRAPE] tv scrape_info 落库 videoId=${videoId} ` +
+          `S${scrapeSeasonNumber ?? '?'}E${scrapeEpisodeNumber ?? '?'}`
         );
       } catch (e) {
         const err = e as Error;

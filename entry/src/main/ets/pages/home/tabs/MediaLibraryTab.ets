@@ -2,6 +2,14 @@ import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { VideoScannerUtil, ScanMode } from "../../../utils/VideoScannerUtil"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
+import {
+  MediaTypeClassificationResult,
+  buildMediaTypeClassificationInput,
+  classifyMediaType,
+  createFileNameSemanticInfo,
+  extractSeriesHintFromFilePath,
+  formatMediaTypeClassificationSignals
+} from "../../../lib/MediaTypeClassifier"
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel } from "../../../stores/media/MediaLibraryModel"
@@ -58,6 +66,19 @@ function formatScanTime(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number): string => n < 10 ? '0' + n : String(n);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function classifyVideoMediaType(fileName: string, filePath: string): MediaTypeClassificationResult {
+  const parsed = parseFileName(fileName);
+  const fileNameInfo = createFileNameSemanticInfo(
+    parsed.title,
+    parsed.language,
+    parsed.mediaType,
+    parsed.seasonNumber,
+    parsed.episodeNumber,
+    parsed.year
+  );
+  return classifyMediaType(buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo));
 }
 
 interface SourceRuntimeConfig {
@@ -594,12 +615,23 @@ export struct MediaLibraryTab {
 
       let successCount = 0;
       let failedCount = 0;
+      let skippedCount = 0;
 
       for (const video of allVideos) {
         try {
           // 刷新元数据：无论是否已有 scrape_info，都重新刮削并更新
-          const parsed = parseFileName(video.fileName);
-          if (parsed.mediaType === 'movie') {
+          const classification = classifyVideoMediaType(video.fileName, video.filePath);
+          const seriesHint = extractSeriesHintFromFilePath(video.filePath);
+          if (classification.mediaType === 'unknown') {
+            skippedCount++;
+            console.info(
+              `[MediaLibraryTab] 跳过弱语义文件 fileName=${video.fileName} reason=${classification.reason ?? 'unknown'} ` +
+              `signals=${formatMediaTypeClassificationSignals(classification)}`
+            );
+            continue;
+          }
+
+          if (classification.mediaType === 'movie') {
             const movie = await scrapeClient.autoScrapeMovie(video.fileName);
             if (!movie) { failedCount++; continue; }
 
@@ -643,7 +675,7 @@ export struct MediaLibraryTab {
             await db.upsertScrapeInfo(scrapeInfo);
             successCount++;
           } else {
-            const result = await scrapeClient.autoScrapeTvEpisode(video.fileName);
+            const result = await scrapeClient.autoScrapeTvEpisode(video.fileName, seriesHint, classification.mediaType);
             if (!result.series) { failedCount++; continue; }
             const series: TvSeriesScrapeResult = result.series!;
             const season = result.season;
@@ -699,12 +731,14 @@ export struct MediaLibraryTab {
             }
 
             const mediaType = episodeId !== undefined ? 'episode' : 'tv';
+            const scrapeSeasonNumber = episode?.seasonNumber ?? season?.seasonNumber;
+            const scrapeEpisodeNumber = episode?.episodeNumber;
             const scrapeInfo: ScrapeInfoEntity = {
               videoId: video.id!, provider: series.provider,
               providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
               mediaType, title: episode?.title ?? series.title, originalTitle: series.originalTitle,
               tvSeriesId: seriesId, episodeId,
-              seasonNumber: parsed.seasonNumber, episodeNumber: parsed.episodeNumber,
+              seasonNumber: scrapeSeasonNumber, episodeNumber: scrapeEpisodeNumber,
               scrapedAt: Date.now()
             };
             await db.upsertScrapeInfo(scrapeInfo);
@@ -719,7 +753,9 @@ export struct MediaLibraryTab {
       }
 
       await this.model.reload();
-      this.getUIContext().getPromptAction().showToast({ message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个` });
+      this.getUIContext().getPromptAction().showToast({
+        message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个，跳过 ${skippedCount} 个`
+      });
     } catch (e) {
       const err = e as Error;
       console.error(`[MediaLibraryTab] 刷新元数据异常: ${err.message}`);
