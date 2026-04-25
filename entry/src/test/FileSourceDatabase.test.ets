@@ -83,17 +83,22 @@ export default function fileSourceDatabaseTest() {
         createdAt: now
       };
       const sourceId = await db.insertFileSource(fileSource);
+      const seriesProviderId = `series-${suffix}`;
 
       const seriesId = await db.upsertTvSeries({
         provider: 'tmdb',
-        providerId: `series-${suffix}`,
+        providerId: seriesProviderId,
         title: `测试剧集-${suffix}`,
         numberOfSeasons: 1,
         scrapedAt: now
       } as TvSeriesEntity);
+      expect(seriesId > 0).assertTrue();
+      const persistedSeries = await db.getTvSeriesByProviderId('tmdb', seriesProviderId);
+      expect(persistedSeries !== null && persistedSeries.id !== undefined).assertTrue();
+      const persistedSeriesId = persistedSeries!.id!;
 
       const seasonId = await db.upsertTvSeason({
-        seriesId,
+        seriesId: persistedSeriesId,
         provider: 'tmdb',
         providerId: `series-${suffix}-s1`,
         seasonNumber: 1,
@@ -103,7 +108,7 @@ export default function fileSourceDatabaseTest() {
       } as TvSeasonEntity);
 
       const episodeId = await db.upsertTvEpisode({
-        seriesId,
+        seriesId: persistedSeriesId,
         seasonId,
         provider: 'tmdb',
         providerId: `series-${suffix}-s1e1`,
@@ -126,7 +131,7 @@ export default function fileSourceDatabaseTest() {
         providerId: `scrape-episode-${suffix}`,
         mediaType: 'episode',
         title: `测试剧集-${suffix}`,
-        tvSeriesId: seriesId,
+        tvSeriesId: persistedSeriesId,
         episodeId,
         seasonNumber: 1,
         episodeNumber: 1,
@@ -146,12 +151,12 @@ export default function fileSourceDatabaseTest() {
         providerId: `scrape-tv-${suffix}`,
         mediaType: 'tv',
         title: `测试剧集-${suffix}`,
-        tvSeriesId: seriesId,
+        tvSeriesId: persistedSeriesId,
         scrapedAt: now + 1
       } as ScrapeInfoEntity);
 
-      const groups = await db.getDistinctTvSeriesGroups(200);
-      const targetGroup = groups.find(group => group.tvSeriesId === seriesId);
+      const groups = await db.getDistinctTvSeriesGroups(5000);
+      const targetGroup = groups.find(group => group.tvSeriesId === persistedSeriesId);
       expect(targetGroup !== undefined).assertTrue();
       expect(targetGroup!.episodeCount).assertEqual(1);
     });
