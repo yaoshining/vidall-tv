@@ -1497,9 +1497,25 @@ export class FileSourceDatabase {
 
   private parseTvSeriesEntity(rs: relationalStore.ResultSet): TvSeriesEntity {
     try {
-    const str = (col: string): string | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); };
-    const num = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); };
-    const dbl = (col: string): number | undefined => { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getDouble(i); };
+    const optionalIndex = (col: string): number => {
+      try {
+        return rs.getColumnIndex(col);
+      } catch {
+        return -1;
+      }
+    };
+    const str = (col: string): string | undefined => {
+      const i = optionalIndex(col);
+      return i < 0 || rs.isColumnNull(i) ? undefined : rs.getString(i);
+    };
+    const num = (col: string): number | undefined => {
+      const i = optionalIndex(col);
+      return i < 0 || rs.isColumnNull(i) ? undefined : rs.getLong(i);
+    };
+    const dbl = (col: string): number | undefined => {
+      const i = optionalIndex(col);
+      return i < 0 || rs.isColumnNull(i) ? undefined : rs.getDouble(i);
+    };
     return {
       id: rs.getLong(rs.getColumnIndex('id')),
       provider: rs.getString(rs.getColumnIndex('provider')),

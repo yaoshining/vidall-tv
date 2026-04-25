@@ -105,7 +105,7 @@ export default function fileSourceDatabaseTest() {
       } as TvSeriesEntity);
       const persistedSeriesId = await waitForTvSeriesId(db, 'tmdb', seriesProviderId);
       console.info(`[FileSourceDatabase.test] upsertTvSeries returned ${seriesId}, persistedSeriesId=${persistedSeriesId}`);
-      expect(persistedSeriesId > 0).assertTrue();
+      expect(persistedSeriesId).assertLarger(0);
 
       const seasonId = await db.upsertTvSeason({
         seriesId: persistedSeriesId,
