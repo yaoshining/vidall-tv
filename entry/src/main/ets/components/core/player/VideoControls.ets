@@ -6,6 +6,11 @@ import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 import { EpisodeListPanel } from './EpisodeListPanel'
 import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
+import {
+  loadEpisodeAutoplaySettings,
+  saveEpisodeAutoplayCountdownSeconds,
+  saveEpisodeAutoplayEnabled
+} from './EpisodeAutoplayPreferences'
 
 @ComponentV2
 struct VideoControls {
@@ -652,6 +657,14 @@ export function getPlayerSettingsChipStyleState(
   return styleState
 }
 
+export function shouldApplyEpisodeAutoplaySettingsLoad(
+  requestToken: number,
+  currentToken: number,
+  isDirty: boolean
+): boolean {
+  return requestToken === currentToken && !isDirty
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
@@ -679,6 +692,16 @@ export struct PlayerSettingsDialog {
   ]
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
+  @State private autoplayEnabled: boolean = true
+  @State private autoplayCountdownSeconds: number = 8
+  @State private autoplayToggleFocusedIndex: number = -1
+  @State private autoplayCountdownFocusedIndex: number = -1
+  @State private autoplayToggleHoveredIndex: number = -1
+  @State private autoplayCountdownHoveredIndex: number = -1
+  private readonly autoplayToggleOptions: Array<boolean> = [true, false]
+  private readonly autoplayCountdownOptions: Array<number> = [3, 5, 8, 10]
+  private autoplaySettingsLoadToken: number = 0
+  private autoplaySettingsDirty: boolean = false
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
@@ -688,6 +711,10 @@ export struct PlayerSettingsDialog {
     this.speedFocusedIndex = -1;
     this.arHoveredIndex = -1;
     this.speedHoveredIndex = -1;
+    this.autoplayToggleFocusedIndex = -1;
+    this.autoplayCountdownFocusedIndex = -1;
+    this.autoplayToggleHoveredIndex = -1;
+    this.autoplayCountdownHoveredIndex = -1;
     // 从控制器同步当前播放速率，找到匹配的 index（默认回退到 1.0x = index 2）
     const currentSpeed = this.videoController.playbackSpeed;
     let matchIdx = 2;
@@ -698,6 +725,24 @@ export struct PlayerSettingsDialog {
       }
     }
     this.selectedPlaybackRateIndex = matchIdx;
+    this.autoplayEnabled = this.videoController.episodeAutoplayEnabled;
+    this.autoplayCountdownSeconds = this.videoController.episodeAutoplayCountdownSeconds;
+    this.autoplaySettingsDirty = false
+    this.autoplaySettingsLoadToken += 1
+    const currentLoadToken = this.autoplaySettingsLoadToken
+    loadEpisodeAutoplaySettings().then((settings) => {
+      if (!shouldApplyEpisodeAutoplaySettingsLoad(
+        currentLoadToken,
+        this.autoplaySettingsLoadToken,
+        this.autoplaySettingsDirty
+      )) {
+        return
+      }
+      this.autoplayEnabled = settings.enabled;
+      this.autoplayCountdownSeconds = settings.countdownSeconds;
+      this.videoController.episodeAutoplayEnabled = settings.enabled;
+      this.videoController.episodeAutoplayCountdownSeconds = settings.countdownSeconds;
+    }).catch(() => {})
   }
 
   aboutToDisappear(): void {
@@ -705,6 +750,10 @@ export struct PlayerSettingsDialog {
     this.speedFocusedIndex = -1;
     this.arHoveredIndex = -1;
     this.speedHoveredIndex = -1;
+    this.autoplayToggleFocusedIndex = -1;
+    this.autoplayCountdownFocusedIndex = -1;
+    this.autoplayToggleHoveredIndex = -1;
+    this.autoplayCountdownHoveredIndex = -1;
   }
 
   /** 当 playbackContext 是媒体库上下文时返回，否则返回 undefined */
@@ -761,6 +810,36 @@ export struct PlayerSettingsDialog {
       this.currentAspectRatioMode === this.aspectRatioOptions[idx].mode,
       this.arHoveredIndex === idx
     )
+  }
+
+  private getAutoplayToggleChipStyleState(idx: number): PlayerSettingsChipStyleState {
+    return getPlayerSettingsChipStyleState(
+      this.autoplayToggleFocusedIndex === idx,
+      this.autoplayEnabled === this.autoplayToggleOptions[idx],
+      this.autoplayToggleHoveredIndex === idx
+    )
+  }
+
+  private getAutoplayCountdownChipStyleState(idx: number): PlayerSettingsChipStyleState {
+    return getPlayerSettingsChipStyleState(
+      this.autoplayCountdownFocusedIndex === idx,
+      this.autoplayCountdownSeconds === this.autoplayCountdownOptions[idx],
+      this.autoplayCountdownHoveredIndex === idx
+    )
+  }
+
+  private updateEpisodeAutoplayEnabled(enabled: boolean): void {
+    this.autoplaySettingsDirty = true
+    this.autoplayEnabled = enabled
+    this.videoController.episodeAutoplayEnabled = enabled
+    saveEpisodeAutoplayEnabled(enabled).catch(() => {})
+  }
+
+  private updateEpisodeAutoplayCountdownSeconds(seconds: number): void {
+    this.autoplaySettingsDirty = true
+    this.autoplayCountdownSeconds = seconds
+    this.videoController.episodeAutoplayCountdownSeconds = seconds
+    saveEpisodeAutoplayCountdownSeconds(seconds).catch(() => {})
   }
 
   build() {
@@ -858,6 +937,62 @@ export struct PlayerSettingsDialog {
               .onClick(() => {
                 this.onOpenSubtitleSelector()
               })
+            }
+
+            if (this.getMediaLibraryContext() !== undefined) {
+              Column({ space: 12 }) {
+                Text('自动下一集')
+                  .fontSize(32)
+                  .fontColor('#EFF2FB')
+                  .fontWeight(FontWeight.Medium)
+                  .alignSelf(ItemAlign.Start)
+
+                Row({ space: PLAYER_SETTINGS_CHIP_GAP }) {
+                  ForEach(this.autoplayToggleOptions, (enabled: boolean, idx: number) => {
+                    Row() {
+                      this.SelectionOptionChip(enabled ? '开启' : '关闭', this.getAutoplayToggleChipStyleState(idx))
+                    }
+                    .focusable(true)
+                    .onFocus(() => { this.autoplayToggleFocusedIndex = idx })
+                    .onBlur(() => { this.autoplayToggleFocusedIndex = -1 })
+                    .onHover((isHover: boolean) => {
+                      this.autoplayToggleHoveredIndex = isHover ? idx : -1
+                    })
+                    .onClick(() => {
+                      this.updateEpisodeAutoplayEnabled(enabled)
+                    })
+                  }, (enabled: boolean) => enabled ? 'enabled' : 'disabled')
+                }
+                .justifyContent(FlexAlign.Start)
+                .width('100%')
+              }
+
+              Column({ space: 12 }) {
+                Text('倒计时秒数')
+                  .fontSize(32)
+                  .fontColor('#EFF2FB')
+                  .fontWeight(FontWeight.Medium)
+                  .alignSelf(ItemAlign.Start)
+
+                Row({ space: PLAYER_SETTINGS_CHIP_GAP }) {
+                  ForEach(this.autoplayCountdownOptions, (seconds: number, idx: number) => {
+                    Row() {
+                      this.SelectionOptionChip(`${seconds}s`, this.getAutoplayCountdownChipStyleState(idx))
+                    }
+                    .focusable(true)
+                    .onFocus(() => { this.autoplayCountdownFocusedIndex = idx })
+                    .onBlur(() => { this.autoplayCountdownFocusedIndex = -1 })
+                    .onHover((isHover: boolean) => {
+                      this.autoplayCountdownHoveredIndex = isHover ? idx : -1
+                    })
+                    .onClick(() => {
+                      this.updateEpisodeAutoplayCountdownSeconds(seconds)
+                    })
+                  }, (seconds: number) => seconds.toString())
+                }
+                .justifyContent(FlexAlign.Start)
+                .width('100%')
+              }
             }
 
             if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.videoController.backend === 'avplayer') {

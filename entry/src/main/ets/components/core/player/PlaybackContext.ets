@@ -1,5 +1,6 @@
 import { FileSourceDatabase } from '../../../db/files/FileSourceDatabase';
 import { MediaItem, TvEpisodeEntity } from '../../../db/models/MediaEntity';
+import { EpisodeGroupMatcher, EpisodeGroupMatchResult, EpisodeGroupMatchItem } from './EpisodeGroupMatcher';
 
 function tmdbImageUrl(path: string | undefined, width: string): string {
   if (path === undefined || path.length === 0) {
@@ -48,6 +49,10 @@ export interface BuildItemsResult {
   currentIndex: number;
 }
 
+export function createMediaLibraryEpisodeGroupMatcher(): EpisodeGroupMatcher {
+  return new EpisodeGroupMatcher();
+}
+
 // 媒体库播放上下文：基于剧集数据库加载当季集列表
 @ObservedV2
 export class MediaLibraryContext extends PlaybackContext {
@@ -68,6 +73,14 @@ export class MediaLibraryContext extends PlaybackContext {
     episodeEntities: TvEpisodeEntity[] = []
   ): BuildItemsResult {
     const seasonItems = allItems.filter(item => item.seasonNumber === seasonNumber);
+    seasonItems.sort((a: MediaItem, b: MediaItem): number => {
+      const aEpisode = a.episodeNumber ?? Number.MAX_SAFE_INTEGER;
+      const bEpisode = b.episodeNumber ?? Number.MAX_SAFE_INTEGER;
+      if (aEpisode !== bEpisode) {
+        return aEpisode - bEpisode;
+      }
+      return a.filePath.localeCompare(b.filePath);
+    });
     const episodeEntityByNumber = MediaLibraryContext.buildEpisodeEntityByNumber(episodeEntities);
 
     const mapped: PlaybackContextItem[] = [];
@@ -112,17 +125,55 @@ export class MediaLibraryContext extends PlaybackContext {
     seasonNumber: number,
     currentVideoPath: string
   ): Promise<MediaLibraryContext> {
-    const allItems = await db.getMediaItemsByTvSeriesId(seriesId);
-    const episodeEntities = await db.getEpisodesBySeriesAndSeason(seriesId, seasonNumber);
-    const buildResult = MediaLibraryContext.buildItems(allItems, seasonNumber, currentVideoPath, episodeEntities);
+    const episodeGroupMatcher = createMediaLibraryEpisodeGroupMatcher();
+    const matchResult = await episodeGroupMatcher.matchSeasonEpisodes(
+      seriesId,
+      seasonNumber,
+      (): Promise<MediaItem[]> => db.getMediaItemsByTvSeriesId(seriesId),
+      (): Promise<TvEpisodeEntity[]> => db.getEpisodesBySeriesAndSeason(seriesId, seasonNumber)
+    );
+    const buildResult = MediaLibraryContext.buildItemsFromMatchResult(matchResult, currentVideoPath);
 
     const ctx = new MediaLibraryContext();
     ctx.seriesId = seriesId;
     ctx.seasonNumber = seasonNumber;
-    ctx.episodes = allItems.filter(item => item.seasonNumber === seasonNumber);
+    ctx.episodes = matchResult.mediaItems;
     ctx.items = buildResult.items;
     ctx.currentIndex = buildResult.currentIndex;
     return ctx;
+  }
+
+  private static buildItemsFromMatchResult(
+    matchResult: EpisodeGroupMatchResult,
+    currentVideoPath: string
+  ): BuildItemsResult {
+    const mapped: PlaybackContextItem[] = [];
+    for (let i = 0; i < matchResult.items.length; i++) {
+      const matchItem: EpisodeGroupMatchItem = matchResult.items[i];
+      const item: PlaybackContextItem = {
+        videoPath: matchItem.videoPath,
+        title: matchItem.title,
+        index: matchItem.index,
+        thumbnailUrl: matchItem.thumbnailUrl,
+        episodeNumber: matchItem.episodeNumber,
+        seasonNumber: matchItem.seasonNumber,
+        sourceId: matchItem.sourceId,
+        videoId: matchItem.videoId,
+        durationMs: matchItem.durationMs,
+      };
+      mapped.push(item);
+    }
+
+    let foundIndex = 0;
+    for (let i = 0; i < mapped.length; i++) {
+      if (mapped[i].videoPath === currentVideoPath) {
+        foundIndex = i;
+        break;
+      }
+    }
+
+    const result: BuildItemsResult = { items: mapped, currentIndex: foundIndex };
+    return result;
   }
 
   private static buildEpisodeEntityByNumber(episodeEntities: TvEpisodeEntity[]): Map<number, TvEpisodeEntity> {
@@ -145,6 +196,7 @@ export class MediaLibraryContext extends PlaybackContext {
       if (matchedEntity !== undefined) {
         return matchedEntity;
       }
+      return undefined;
     }
     if (index >= 0 && index < episodeEntities.length) {
       return episodeEntities[index];

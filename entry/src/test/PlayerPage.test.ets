@@ -2,9 +2,11 @@ import { describe, it, expect } from '@ohos/hypium'
 import {
   buildMediaLibraryEpisodeSwitchParam,
   commitMediaLibraryEpisodeSwitch,
+  MediaProgressResumeAction,
   PlayerPage,
   PlayerPageParam,
-  ResolvedEpisodePlaybackSource
+  ResolvedEpisodePlaybackSource,
+  resolveMediaProgressResumeAction
 } from '../main/ets/pages/player/index'
 import {
   MediaLibraryContext,
@@ -12,7 +14,7 @@ import {
   PlaybackContext,
   PlaybackContextItem
 } from '../main/ets/components/core/player/PlaybackContext'
-import { MediaItem, TvEpisodeEntity } from '../main/ets/db/models/MediaEntity'
+import { MediaItem, TvEpisodeEntity, MediaProgressEntry } from '../main/ets/db/models/MediaEntity'
 import { PlayerEvents } from '../main/ets/components/core/player/Constants'
 import { emitter } from '@kit.BasicServicesKit'
 
@@ -21,12 +23,16 @@ interface PlayerPageAccessor {
   persistCurrentPlaybackState(): void
   resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null>
   handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean>
+  hideEpisodeAutoplayOverlay(): void
   resumePlaybackForParam(pageParam: PlayerPageParam): void
   currentMediaKey: string
   currentMediaSeason: number
   currentMediaEpisode: number
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean
+  showEpisodeAutoplayOverlay?: boolean
+  episodeAutoplayRemainingSeconds?: number
+  episodeAutoplayNextTitle?: string
   showResumeDialog: boolean
   pendingSeekMs: number
   videoData?: PlayerPageVideoDataAccessor
@@ -163,7 +169,10 @@ class CountingEpisodeSwitchController extends TestPlayerPageController implement
 }
 
 class PreparedResumeIsolationController extends TestPlayerPageController implements PlayerPageControllerPlaybackAccessor {
+  playCalls: number = 0
+
   play(): Promise<void> {
+    this.playCalls += 1
     return Promise.resolve()
   }
 }
@@ -203,6 +212,9 @@ class PreparedResumeListenerPage {
 class EpisodeSwitchTokenPage {
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean = false
+  showEpisodeAutoplayOverlay: boolean = false
+  episodeAutoplayRemainingSeconds: number = 0
+  episodeAutoplayNextTitle: string = ''
   showResumeDialog: boolean = false
   pendingSeekMs: number = -1
   currentMediaKey: string = ''
@@ -225,6 +237,12 @@ class EpisodeSwitchTokenPage {
 
   handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
     return this.handleEpisodeSelectImpl(item)
+  }
+
+  hideEpisodeAutoplayOverlay(): void {
+    this.showEpisodeAutoplayOverlay = false
+    this.episodeAutoplayRemainingSeconds = 0
+    this.episodeAutoplayNextTitle = ''
   }
 
   persistCurrentPlaybackState(): void {
@@ -268,11 +286,15 @@ class EpisodeSwitchTokenPage {
 class TestEpisodeSwitchPage {
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean = false
+  showEpisodeAutoplayOverlay: boolean = false
+  episodeAutoplayRemainingSeconds: number = 0
+  episodeAutoplayNextTitle: string = ''
   showResumeDialog: boolean = false
   pendingSeekMs: number = -1
   currentMediaKey: string = ''
   currentMediaSeason: number = 0
   currentMediaEpisode: number = 0
+  pageParamToken: number = 0
   videoData?: PlayerPageVideoDataAccessor
   videoPlayerController: PlayerPageControllerPlaybackAccessor
   private readonly handleEpisodeSelectImpl: (item: PlaybackContextItem) => Promise<boolean>
@@ -288,6 +310,12 @@ class TestEpisodeSwitchPage {
 
   handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
     return this.handleEpisodeSelectImpl(item)
+  }
+
+  hideEpisodeAutoplayOverlay(): void {
+    this.showEpisodeAutoplayOverlay = false
+    this.episodeAutoplayRemainingSeconds = 0
+    this.episodeAutoplayNextTitle = ''
   }
 
   persistCurrentPlaybackState(): void {
@@ -750,6 +778,27 @@ export default function playerPageTest() {
       emitter.emit(PlayerEvents.PREPARED)
       expect(page.resumeCalls.length).assertEqual(0)
       emitter.off(PlayerEvents.PREPARED.eventId)
+    })
+
+    it('媒体级进度接近完播时会改为清理进度后继续播放', 0, () => {
+      const mediaKey = 'media_progress_episode_tmdb_tmdb-9527_s1_e7'
+      const nearEndEntry: MediaProgressEntry = {
+        mediaKey,
+        positionMs: 1720000,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        nearEndEntry,
+        1800000,
+        1,
+        7
+      )
+
+      expect(action.action).assertEqual('clear_and_play')
+      expect(action.positionMs ?? 0).assertEqual(0)
     })
 
     it('handleEpisodeSelect 会在解析新播放源前推进 pageParamToken', 0, async () => {

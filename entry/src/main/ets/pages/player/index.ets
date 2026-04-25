@@ -8,7 +8,7 @@ import {
 } from "../../components/core/player/VideoPlayerController";
 import { PlaybackContext, PlaybackContextItem, MediaLibraryContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
-import { PlayProgressEntity } from "../../db/models/MediaEntity";
+import { PlayProgressEntity, MediaProgressEntry } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
@@ -17,6 +17,8 @@ import { SubtitleSegment } from "../../components/core/player/SubtitleRenderer";
 import { WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
 import { FileSourceType, SMBSourceConfig, WebDAVSourceConfig } from "../../db/models/FileSourceEntity";
 import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
+import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../components/core/player/EpisodePlaybackManager";
+import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -67,6 +69,35 @@ export interface ResolvedEpisodePlaybackSource {
   presetAudioTracks?: PresetAudioTrack[];
   presetSubtitleTracks?: PresetSubtitleTrack[];
   startPositionMs?: number;
+}
+
+export type MediaProgressResumeActionType = 'seek' | 'play' | 'clear_and_play';
+
+export interface MediaProgressResumeAction {
+  action: MediaProgressResumeActionType;
+  positionMs?: number;
+}
+
+export function resolveMediaProgressResumeAction(
+  saved: MediaProgressEntry | null,
+  currentDurationMs: number,
+  currentSeason: number,
+  currentEpisode: number
+): MediaProgressResumeAction {
+  if (saved === null || saved.positionMs <= 0) {
+    return { action: 'play' };
+  }
+  if (saved.seasonNumber !== currentSeason || saved.episodeNumber !== currentEpisode) {
+    return { action: 'play' };
+  }
+  const effectiveDurationMs = currentDurationMs > 0 ? currentDurationMs : saved.durationMs;
+  if (MediaProgressStore.isNearEnd(saved.positionMs, effectiveDurationMs)) {
+    return { action: 'clear_and_play' };
+  }
+  return {
+    action: 'seek',
+    positionMs: saved.positionMs
+  };
 }
 
 function buildPlayerEpisodeCode(seasonNumber: number, episodeNumber: number): string {
@@ -160,6 +191,7 @@ export struct PlayerPage {
   private currentPageParam?: PlayerPageParam
   private pageParamToken: number = 0
   private episodeSwitching: boolean = false
+  private readonly episodePlaybackManager = new EpisodePlaybackManager()
   @Local isBackPressedOnce: boolean = false
   /** 续播提示弹窗 */
   @Local showResumeDialog: boolean = false
@@ -174,8 +206,13 @@ export struct PlayerPage {
   private currentMediaEpisode: number = 0;
   /** media_progress 周期写入定时器 ID，-1 表示未启动 */
   private mediaProgressTimerId: number = -1;
+  /** 自动下一集轮询定时器 ID，-1 表示未启动 */
+  private episodeAutoplayTimerId: number = -1;
   /** 文件不存在时待 pop 的 videoId（-1 表示无） */
   private fileNotFoundVideoId: number = -1;
+  @Local showEpisodeAutoplayOverlay: boolean = false
+  @Local episodeAutoplayRemainingSeconds: number = 0
+  @Local episodeAutoplayNextTitle: string = ''
 
   /** 合并字幕行中各 Segment 的文本 */
   private mergeSubtitleLineText(line: SubtitleSegment[]): string {
@@ -261,19 +298,20 @@ export struct PlayerPage {
         return;
       }
       MediaProgressStore.get(mediaKey).then((saved) => {
-        if (saved !== null && saved.positionMs > 0
-            && saved.seasonNumber === this.currentMediaSeason
-            && saved.episodeNumber === this.currentMediaEpisode) {
-          const dur = this.videoPlayerController.duration;
-          const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
-          if (!isNearEnd) {
-            this.videoPlayerController.seek(saved.positionMs).catch(() => {});
-          } else {
-            MediaProgressStore.clear(mediaKey).catch(() => {});
-          }
-        } else {
-          this.videoPlayerController.play().catch(() => {});
+        const resumeAction = resolveMediaProgressResumeAction(
+          saved,
+          this.videoPlayerController.duration,
+          this.currentMediaSeason,
+          this.currentMediaEpisode
+        );
+        if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
+          this.videoPlayerController.seek(resumeAction.positionMs).catch(() => {});
+          return;
         }
+        if (resumeAction.action === 'clear_and_play') {
+          MediaProgressStore.clear(mediaKey).catch(() => {});
+        }
+        this.videoPlayerController.play().catch(() => {});
       }).catch(() => {
         this.videoPlayerController.play().catch(() => {});
       });
@@ -335,6 +373,8 @@ export struct PlayerPage {
     this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
     this.showResumeDialog = false;
     this.pendingSeekMs = -1;
+    this.hideEpisodeAutoplayOverlay();
+    this.episodePlaybackManager.clear();
     if (pageParam.videoId !== undefined && pageParam.videoId > 0) {
       this.videoPlayerController.progressContext = this.buildProgressContext(pageParam);
       this.registerPreparedResume(pageParam, token);
@@ -471,6 +511,10 @@ export struct PlayerPage {
     if (currentParam === undefined || this.episodeSwitching) {
       return false;
     }
+    if (this.episodePlaybackManager !== undefined) {
+      this.episodePlaybackManager.cancelCurrentEpisode();
+    }
+    this.hideEpisodeAutoplayOverlay();
     const playbackContext = this.videoPlayerController.playbackContext;
     if (playbackContext !== undefined && playbackContext.contextType === 'media_library') {
       const mediaLibraryContext = playbackContext as MediaLibraryContext;
@@ -528,6 +572,116 @@ export struct PlayerPage {
         this.pageParamToken = previousPageParamToken;
       }
       this.episodeSwitching = false;
+    }
+  }
+
+  private hideEpisodeAutoplayOverlay(): void {
+    this.showEpisodeAutoplayOverlay = false
+    this.episodeAutoplayRemainingSeconds = 0
+    this.episodeAutoplayNextTitle = ''
+  }
+
+  private applyEpisodeAutoplayOverlayState(state: EpisodePlaybackManagerState): void {
+    if (!state.visible || state.nextItem === null) {
+      this.hideEpisodeAutoplayOverlay()
+      return
+    }
+    this.showEpisodeAutoplayOverlay = true
+    this.episodeAutoplayRemainingSeconds = state.remainingSeconds
+    this.episodeAutoplayNextTitle = state.nextItem.title
+  }
+
+  private cancelEpisodeAutoplayCountdown(): boolean {
+    if (!this.showEpisodeAutoplayOverlay) {
+      return false
+    }
+    this.episodePlaybackManager.cancelCurrentEpisode()
+    this.hideEpisodeAutoplayOverlay()
+    return true
+  }
+
+  private loadEpisodeAutoplayPreferences(): void {
+    loadEpisodeAutoplaySettings().then((settings) => {
+      this.videoPlayerController.episodeAutoplayEnabled = settings.enabled
+      this.videoPlayerController.episodeAutoplayCountdownSeconds = settings.countdownSeconds
+    }).catch(() => {})
+  }
+
+  private showEpisodeAutoplayFailureToast(): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: '自动播放下一集失败' })
+    } catch (_) {}
+  }
+
+  private triggerEpisodeAutoplay(nextItem: PlaybackContextItem): void {
+    if (this.episodeSwitching) {
+      return
+    }
+    this.handleEpisodeSelect(nextItem).then((didSwitch: boolean) => {
+      if (!didSwitch) {
+        this.episodePlaybackManager.markAutoplayFailed()
+        this.hideEpisodeAutoplayOverlay()
+        this.showEpisodeAutoplayFailureToast()
+      }
+    }).catch(() => {
+      this.episodePlaybackManager.markAutoplayFailed()
+      this.hideEpisodeAutoplayOverlay()
+      this.showEpisodeAutoplayFailureToast()
+    })
+  }
+
+  private syncEpisodeAutoplayState(): void {
+    this.episodePlaybackManager.updateSettings(
+      this.videoPlayerController.episodeAutoplayEnabled,
+      this.videoPlayerController.episodeAutoplayCountdownSeconds
+    )
+    const state = this.episodePlaybackManager.sync(
+      this.videoPlayerController.playbackContext,
+      this.videoPlayerController.currentTime,
+      this.videoPlayerController.duration
+    )
+    this.applyEpisodeAutoplayOverlayState(state)
+    if (state.shouldPlayNext && state.nextItem !== null) {
+      this.triggerEpisodeAutoplay(state.nextItem)
+    }
+  }
+
+  @Builder
+  private EpisodeAutoplayOverlay() {
+    if (this.showEpisodeAutoplayOverlay) {
+      Row({ space: 18 }) {
+        Column({ space: 4 }) {
+          Text(`即将播放下一集 · ${this.episodeAutoplayRemainingSeconds}s`)
+            .fontSize(24)
+            .fontColor(Color.White)
+            .fontWeight(FontWeight.Medium)
+          Text(this.episodeAutoplayNextTitle.length > 0 ? this.episodeAutoplayNextTitle : '下一集')
+            .fontSize(18)
+            .fontColor('#D7DCE7')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .alignItems(HorizontalAlign.Start)
+
+        Button('取消')
+          .fontSize(16)
+          .fontColor(Color.White)
+          .backgroundColor('rgba(255, 255, 255, 0.18)')
+          .borderRadius(20)
+          .padding({ left: 18, right: 18, top: 10, bottom: 10 })
+          .onClick(() => {
+            this.cancelEpisodeAutoplayCountdown()
+          })
+      }
+      .padding({ left: 22, right: 22, top: 18, bottom: 18 })
+      .backgroundColor('rgba(0, 0, 0, 0.78)')
+      .borderRadius(20)
+      .shadow({ radius: 12, color: '#55000000', offsetX: 0, offsetY: 4 })
+      .alignRules({
+        bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+        middle: { anchor: '__container__', align: HorizontalAlign.Center }
+      })
+      .margin({ bottom: 160 })
     }
   }
 
@@ -662,6 +816,7 @@ export struct PlayerPage {
         }
 
         this.ResumeDialog()
+        this.EpisodeAutoplayOverlay()
 
         Text(this.getBackendDebugText())
           .fontSize(12)
@@ -718,13 +873,20 @@ export struct PlayerPage {
           }
         }
       }, 10000);
+      this.episodeAutoplayTimerId = setInterval(() => {
+        this.syncEpisodeAutoplayState()
+      }, 500);
 
       let pageParam = context.pathInfo.param as PlayerPageParam
       if (pageParam) {
         this.applyPlayerPageParam(pageParam);
       }
+      this.loadEpisodeAutoplayPreferences();
     })
     .onBackPressed(() => {
+      if (this.cancelEpisodeAutoplayCountdown()) {
+        return true
+      }
       if (this.isBackPressedOnce) {
         return false
       } else {
@@ -744,6 +906,10 @@ export struct PlayerPage {
     if (this.mediaProgressTimerId >= 0) {
       clearInterval(this.mediaProgressTimerId);
       this.mediaProgressTimerId = -1;
+    }
+    if (this.episodeAutoplayTimerId >= 0) {
+      clearInterval(this.episodeAutoplayTimerId);
+      this.episodeAutoplayTimerId = -1;
     }
     // 媒体级进度：完播则清除，否则保存当前位置；结束后通知继续播放栏刷新
     if (this.currentMediaKey.length > 0) {
