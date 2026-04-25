@@ -45,11 +45,15 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           cd "$WORK_DIR"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git pull "$REPO_URL" HEAD
+          git fetch --no-tags "$REPO_URL" "$TARGET_SHA"
+          git checkout --force --detach FETCH_HEAD
+          git clean -fdx
+          echo "checked out sha: $(git rev-parse HEAD)"
 
       - name: 执行单元测试
         shell: bash
