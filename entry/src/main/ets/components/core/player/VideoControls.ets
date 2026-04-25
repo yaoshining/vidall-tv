@@ -704,7 +704,7 @@ export struct PlayerSettingsDialog {
   private autoplaySettingsDirty: boolean = false
 
   aboutToAppear(): void {
-    this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
+    this.aiEnhanceOn = this.videoController.getResolvedAiEnhanceEnabled();
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
     this.currentAspectRatioMode = this.videoController.aspectRatioMode;
     this.arFocusedIndex = -1;
@@ -995,7 +995,7 @@ export struct PlayerSettingsDialog {
               }
             }
 
-            if (canIUse('SystemCapability.Multimedia.VideoProcessingEngine') && this.videoController.backend === 'avplayer') {
+            if (this.videoController.shouldShowAiEnhanceSettings()) {
               Column({ space: 12 }) {
                 Text('画质增强')
                   .fontSize(32)

@@ -34,6 +34,21 @@ export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 /** 播放内核类型 */
 export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
 
+export function resolveAiEnhanceEnabledByRuntime(runtimeSupported: boolean, requestedEnabled: boolean): boolean {
+  return runtimeSupported && requestedEnabled;
+}
+
+export function shouldShowAiEnhanceSettingsByRuntime(runtimeSupported: boolean, backend: PlayerBackend): boolean {
+  return runtimeSupported && backend === 'avplayer';
+}
+
+export function resolveEffectivePlaybackSurfaceId(displaySurfaceId: string, vpeSurfaceId: string): string {
+  if (vpeSurfaceId.length > 0) {
+    return vpeSurfaceId;
+  }
+  return displaySurfaceId;
+}
+
 /** 画面比例模式 */
 export enum AspectRatioMode {
   /** 适应：等比缩放保留黑边（RenderFit.RESIZE_CONTAIN 语义，默认） */
@@ -164,6 +179,8 @@ export class VideoPlayerController {
 
   /** AI 画质增强开关（仅 avplayer 路径有效；ijkplayer 路径因渲染方式不同暂不支持） */
   @Trace aiEnhanceEnabled: boolean = true;
+  /** 当前运行环境的 VPE 运行时探测结果 */
+  @Trace aiEnhanceRuntimeSupported: boolean = false;
   /** AI 画质增强质量档位 */
   @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
 
@@ -769,6 +786,12 @@ export class VideoPlayerController {
    * - VPE 未运行（首次启用）：下次 initPlayer 时才会创建（当前播放不影响）
    */
   setAiEnhance(quality: VpeQualityLevel = 'low'): void {
+    const runtimeSupported = this.syncAiEnhanceAvailability();
+    if (!runtimeSupported) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[VPE] 运行时不可用，忽略启用请求: quality=${quality}`);
+      return;
+    }
     this.aiEnhanceEnabled = true;
     this.aiEnhanceQuality = quality;
     if (VpeEnhancerUtil.isRunning) {
@@ -783,7 +806,34 @@ export class VideoPlayerController {
    */
   disableAiEnhance(): void {
     this.aiEnhanceEnabled = false;
-    VpeEnhancerUtil.setPassthrough();
+    if (VpeEnhancerUtil.isRunning) {
+      VpeEnhancerUtil.setPassthrough();
+    }
+  }
+
+  getResolvedAiEnhanceEnabled(): boolean {
+    this.syncAiEnhanceAvailability();
+    return this.aiEnhanceEnabled;
+  }
+
+  shouldShowAiEnhanceSettings(): boolean {
+    return shouldShowAiEnhanceSettingsByRuntime(this.aiEnhanceRuntimeSupported, this.backend);
+  }
+
+  private syncAiEnhanceAvailability(): boolean {
+    const runtimeSupported = this.isAiEnhanceRuntimeSupported();
+    this.aiEnhanceRuntimeSupported = runtimeSupported;
+    const resolvedEnabled = resolveAiEnhanceEnabledByRuntime(runtimeSupported, this.aiEnhanceEnabled);
+    if (this.aiEnhanceEnabled && !resolvedEnabled) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        '[VPE] 运行时探测不可用，自动回退为关闭状态');
+    }
+    this.aiEnhanceEnabled = resolvedEnabled;
+    return runtimeSupported;
+  }
+
+  private isAiEnhanceRuntimeSupported(): boolean {
+    return VpeEnhancerUtil.isSupported();
   }
 
   /**
@@ -825,17 +875,19 @@ export class VideoPlayerController {
    * - 增强失败或不支持：返回原始 displaySurfaceId（透明降级）
    */
   private tryCreateVpeEnhancer(displaySurfaceId: string): string {
+    const runtimeSupported = this.syncAiEnhanceAvailability();
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[VPE] tryCreate: enabled=${this.aiEnhanceEnabled} backend=${this.backend} quality=${this.aiEnhanceQuality}`);
-    if (!this.aiEnhanceEnabled || this.backend !== 'avplayer') {
+      `[VPE] tryCreate: supported=${runtimeSupported} enabled=${this.aiEnhanceEnabled} backend=${this.backend} quality=${this.aiEnhanceQuality}`);
+    if (!runtimeSupported || !this.aiEnhanceEnabled || this.backend !== 'avplayer') {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[VPE] 跳过创建: enabled=${this.aiEnhanceEnabled} backend=${this.backend}`);
+        `[VPE] 跳过创建: supported=${runtimeSupported} enabled=${this.aiEnhanceEnabled} backend=${this.backend}`);
       return displaySurfaceId;
     }
     const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, this.aiEnhanceQuality);
-    if (vpeSurfaceId.length > 0) {
+    const effectiveSurfaceId = resolveEffectivePlaybackSurfaceId(displaySurfaceId, vpeSurfaceId);
+    if (effectiveSurfaceId !== displaySurfaceId) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[VPE] 管线建立: vpeSurfaceId=${vpeSurfaceId}`);
-      return vpeSurfaceId;
+      return effectiveSurfaceId;
     }
     hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[VPE] 创建失败，回退到原始 surfaceId');
     return displaySurfaceId;
