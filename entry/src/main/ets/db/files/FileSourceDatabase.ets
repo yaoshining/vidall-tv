@@ -9,6 +9,7 @@ import {
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { countSeriesEpisodeRows } from './SeriesGroupCountUtil';
 
 // ─────────────────────────────────────────────
 // 用于从 raw_json 回填 origin_country_json 的最小解析接口
@@ -170,6 +171,8 @@ export class FileSourceDatabase {
 
       // 防御性 schema 兼容：补齐 videos 扫描更新标记列
       await this.ensureVideosSchema(this.rdbStore);
+      // 防御性 schema 兼容：补建媒体核心表，覆盖 user_version 已对齐但历史库缺表的场景
+      await this.createMediaTablesV3(this.rdbStore);
 
       // 防御性 schema 兼容：补齐 movies/tv_series origin_country_json 列（v7 新增，幂等）
       await this.ensureOriginCountrySchema(this.rdbStore);
@@ -190,32 +193,144 @@ export class FileSourceDatabase {
   }
 
   private async getLastInsertedRowId(): Promise<number> {
+    return this.queryFirstLong('SELECT last_insert_rowid()', []);
+  }
+
+  private async querySingleId(sql: string, args: relationalStore.ValueType[]): Promise<number> {
+    return this.queryFirstLong(sql, args);
+  }
+
+  private async queryFirstLong(sql: string, args: relationalStore.ValueType[]): Promise<number> {
     if (this.rdbStore === null) { return -1; }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      rs = await this.rdbStore.querySql('SELECT last_insert_rowid() AS id');
+      rs = await this.rdbStore.querySql(sql, args);
       if (rs.goToFirstRow()) {
-        return rs.getLong(rs.getColumnIndex('id'));
+        return rs.getLong(0);
       }
       return -1;
-    } catch {
+    } catch (e) {
+      console.error(`[DB][queryFirstLong] sql=${sql} args=${JSON.stringify(args)} error=${JSON.stringify(e)}`);
       return -1;
     } finally {
       try { rs?.close(); } catch { }
     }
   }
 
-  private async querySingleId(sql: string, args: relationalStore.ValueType[]): Promise<number> {
-    if (this.rdbStore === null) { return -1; }
+  private getNullableString(rs: relationalStore.ResultSet, index: number): string | undefined {
+    return rs.isColumnNull(index) ? undefined : rs.getString(index);
+  }
+
+  private getNullableLong(rs: relationalStore.ResultSet, index: number): number | undefined {
+    return rs.isColumnNull(index) ? undefined : rs.getLong(index);
+  }
+
+  private getNullableDouble(rs: relationalStore.ResultSet, index: number): number | undefined {
+    return rs.isColumnNull(index) ? undefined : rs.getDouble(index);
+  }
+
+  private buildMovieSelectSql(suffix: string = ''): string {
+    return `SELECT id, provider, provider_id, title, original_title, overview, release_date, rating, vote_count, poster_path, backdrop_path, poster_url, backdrop_url, poster_local_path, backdrop_local_path, genres_json, cast_json, directors_json, runtime, original_language, origin_country_json, raw_json, scraped_at FROM ${FileSourceDatabase.TABLE_MOVIES}${suffix}`;
+  }
+
+  private buildTvSeriesSelectSql(suffix: string = ''): string {
+    return `SELECT id, provider, provider_id, title, original_title, overview, first_air_date, rating, vote_count, poster_path, backdrop_path, poster_url, backdrop_url, poster_local_path, backdrop_local_path, genres_json, cast_json, number_of_seasons, original_language, origin_country_json, raw_json, scraped_at FROM ${FileSourceDatabase.TABLE_TV_SERIES}${suffix}`;
+  }
+
+  private mapMovieEntityFromProjectedRow(rs: relationalStore.ResultSet): MovieEntity {
+    const entity: MovieEntity = {
+      id: rs.getLong(0),
+      provider: rs.getString(1),
+      providerId: rs.getString(2),
+      title: rs.getString(3),
+      originalTitle: this.getNullableString(rs, 4),
+      overview: this.getNullableString(rs, 5),
+      releaseDate: this.getNullableString(rs, 6),
+      rating: this.getNullableDouble(rs, 7),
+      voteCount: this.getNullableLong(rs, 8),
+      posterPath: this.getNullableString(rs, 9),
+      backdropPath: this.getNullableString(rs, 10),
+      posterUrl: this.getNullableString(rs, 11),
+      backdropUrl: this.getNullableString(rs, 12),
+      posterLocalPath: this.getNullableString(rs, 13),
+      backdropLocalPath: this.getNullableString(rs, 14),
+      genresJson: this.getNullableString(rs, 15),
+      castJson: this.getNullableString(rs, 16),
+      directorsJson: this.getNullableString(rs, 17),
+      runtime: this.getNullableLong(rs, 18),
+      originalLanguage: this.getNullableString(rs, 19),
+      originCountryJson: this.getNullableString(rs, 20),
+      rawJson: this.getNullableString(rs, 21),
+      scrapedAt: rs.getLong(22)
+    };
+    return entity;
+  }
+
+  private mapTvSeriesEntityFromProjectedRow(rs: relationalStore.ResultSet): TvSeriesEntity {
+    const entity: TvSeriesEntity = {
+      id: rs.getLong(0),
+      provider: rs.getString(1),
+      providerId: rs.getString(2),
+      title: rs.getString(3),
+      originalTitle: this.getNullableString(rs, 4),
+      overview: this.getNullableString(rs, 5),
+      firstAirDate: this.getNullableString(rs, 6),
+      rating: this.getNullableDouble(rs, 7),
+      voteCount: this.getNullableLong(rs, 8),
+      posterPath: this.getNullableString(rs, 9),
+      backdropPath: this.getNullableString(rs, 10),
+      posterUrl: this.getNullableString(rs, 11),
+      backdropUrl: this.getNullableString(rs, 12),
+      posterLocalPath: this.getNullableString(rs, 13),
+      backdropLocalPath: this.getNullableString(rs, 14),
+      genresJson: this.getNullableString(rs, 15),
+      castJson: this.getNullableString(rs, 16),
+      numberOfSeasons: this.getNullableLong(rs, 17),
+      originalLanguage: this.getNullableString(rs, 18),
+      originCountryJson: this.getNullableString(rs, 19),
+      rawJson: this.getNullableString(rs, 20),
+      scrapedAt: rs.getLong(21)
+    };
+    return entity;
+  }
+
+  private async queryMovies(sql: string, args: relationalStore.ValueType[]): Promise<MovieEntity[]> {
+    if (this.rdbStore === null) { return []; }
     let rs: relationalStore.ResultSet | null = null;
     try {
       rs = await this.rdbStore.querySql(sql, args);
-      if (rs.goToFirstRow()) {
-        return rs.getLong(rs.getColumnIndex('id'));
+      const items: MovieEntity[] = [];
+      if (!rs.goToFirstRow()) {
+        return items;
       }
-      return -1;
-    } catch {
-      return -1;
+      do {
+        items.push(this.mapMovieEntityFromProjectedRow(rs));
+      } while (rs.goToNextRow());
+      return items;
+    } catch (e) {
+      console.error(`[DB][queryMovies] sql=${sql} args=${JSON.stringify(args)} error=${JSON.stringify(e)}`);
+      return [];
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
+  private async queryTvSeries(sql: string, args: relationalStore.ValueType[]): Promise<TvSeriesEntity[]> {
+    if (this.rdbStore === null) { return []; }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.rdbStore.querySql(sql, args);
+      const items: TvSeriesEntity[] = [];
+      if (!rs.goToFirstRow()) {
+        return items;
+      }
+      do {
+        items.push(this.mapTvSeriesEntityFromProjectedRow(rs));
+      } while (rs.goToNextRow());
+      return items;
+    } catch (e) {
+      console.error(`[DB][queryTvSeries] sql=${sql} args=${JSON.stringify(args)} error=${JSON.stringify(e)}`);
+      return [];
     } finally {
       try { rs?.close(); } catch { }
     }
@@ -1235,50 +1350,24 @@ export class FileSourceDatabase {
 
   /** 按 provider+providerId 查询电影，存在则返回，不存在返回 null */
   async getMovieByProviderId(provider: string, providerId: string): Promise<MovieEntity | null> {
-    if (this.rdbStore === null) { return null; }
-    try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
-      pred.equalTo('provider', provider).and().equalTo('provider_id', providerId);
-      const rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) {
-        const e = this.parseMovieEntity(rs); rs.close(); return e;
-      }
-      rs.close(); return null;
-    } catch { return null; }
+    const items = await this.queryMovies(
+      this.buildMovieSelectSql(' WHERE provider = ? AND provider_id = ? LIMIT 1'),
+      [provider, providerId]
+    );
+    return items.length > 0 ? items[0] : null;
   }
 
   async getMovieById(id: number): Promise<MovieEntity | null> {
-    if (this.rdbStore === null) { return null; }
-    let rs: relationalStore.ResultSet | null = null;
-    try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
-      pred.equalTo('id', id);
-      rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) { return this.parseMovieEntity(rs); }
-      return null;
-    } catch {
-      return null;
-    } finally {
-      try { rs?.close(); } catch { }
-    }
+    const items = await this.queryMovies(
+      this.buildMovieSelectSql(' WHERE id = ? LIMIT 1'),
+      [id]
+    );
+    return items.length > 0 ? items[0] : null;
   }
 
   /** 批量获取所有电影，供播放历史等场景一次性加载 */
   async getAllMovies(): Promise<MovieEntity[]> {
-    if (this.rdbStore === null) { return []; }
-    let rs: relationalStore.ResultSet | null = null;
-    try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
-      rs = await this.rdbStore.query(pred);
-      const items: MovieEntity[] = [];
-      while (rs.goToNextRow()) { items.push(this.parseMovieEntity(rs)); }
-      return items;
-    } catch (e) {
-      console.error('[FileSourceDatabase] getAllMovies', JSON.stringify(e));
-      return [];
-    } finally {
-      try { rs?.close(); } catch { }
-    }
+    return this.queryMovies(this.buildMovieSelectSql(), []);
   }
 
   /** 插入或更新电影（以 provider+provider_id 唯一），返回 id */
@@ -1307,26 +1396,98 @@ export class FileSourceDatabase {
       console.info(`[DB][upsertMovie] UPDATE id=${existing.id} title="${e.title}" posterUrl=${e.posterUrl ? e.posterUrl.substring(0, 40) : 'null'}`);
       return existing.id;
     }
-    const sql = `
-      INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_MOVIES}
-        (provider, provider_id, title, original_title, overview, release_date, rating,
-         vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
-         poster_local_path, backdrop_local_path, genres_json, cast_json, directors_json,
-         runtime, original_language, origin_country_json, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `;
-    const args: relationalStore.ValueType[] = [
-      e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
-      e.releaseDate ?? null, e.rating ?? null, e.voteCount ?? null,
-      e.posterPath ?? null, e.backdropPath ?? null, e.posterUrl ?? null,
-      e.backdropUrl ?? null, e.posterLocalPath ?? null, e.backdropLocalPath ?? null,
-      e.genresJson ?? null, e.castJson ?? null, e.directorsJson ?? null,
-      e.runtime ?? null, e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
-    ];
+    const columns: string[] = ['provider', 'provider_id', 'title', 'scraped_at'];
+    const args: relationalStore.ValueType[] = [e.provider, e.providerId, e.title, e.scrapedAt];
+    if (e.originalTitle !== undefined) {
+      columns.push('original_title');
+      args.push(e.originalTitle);
+    }
+    if (e.overview !== undefined) {
+      columns.push('overview');
+      args.push(e.overview);
+    }
+    if (e.releaseDate !== undefined) {
+      columns.push('release_date');
+      args.push(e.releaseDate);
+    }
+    if (e.rating !== undefined) {
+      columns.push('rating');
+      args.push(e.rating);
+    }
+    if (e.voteCount !== undefined) {
+      columns.push('vote_count');
+      args.push(e.voteCount);
+    }
+    if (e.posterPath !== undefined) {
+      columns.push('poster_path');
+      args.push(e.posterPath);
+    }
+    if (e.backdropPath !== undefined) {
+      columns.push('backdrop_path');
+      args.push(e.backdropPath);
+    }
+    if (e.posterUrl !== undefined) {
+      columns.push('poster_url');
+      args.push(e.posterUrl);
+    }
+    if (e.backdropUrl !== undefined) {
+      columns.push('backdrop_url');
+      args.push(e.backdropUrl);
+    }
+    if (e.posterLocalPath !== undefined) {
+      columns.push('poster_local_path');
+      args.push(e.posterLocalPath);
+    }
+    if (e.backdropLocalPath !== undefined) {
+      columns.push('backdrop_local_path');
+      args.push(e.backdropLocalPath);
+    }
+    if (e.genresJson !== undefined) {
+      columns.push('genres_json');
+      args.push(e.genresJson);
+    }
+    if (e.castJson !== undefined) {
+      columns.push('cast_json');
+      args.push(e.castJson);
+    }
+    if (e.directorsJson !== undefined) {
+      columns.push('directors_json');
+      args.push(e.directorsJson);
+    }
+    if (e.runtime !== undefined) {
+      columns.push('runtime');
+      args.push(e.runtime);
+    }
+    if (e.originalLanguage !== undefined) {
+      columns.push('original_language');
+      args.push(e.originalLanguage);
+    }
+    if (e.originCountryJson !== undefined) {
+      columns.push('origin_country_json');
+      args.push(e.originCountryJson);
+    }
+    if (e.rawJson !== undefined) {
+      columns.push('raw_json');
+      args.push(e.rawJson);
+    }
+    const placeholders = columns.map(() => '?').join(', ');
+    const sql = `INSERT INTO ${FileSourceDatabase.TABLE_MOVIES} (${columns.join(', ')}) VALUES (${placeholders})`;
     await this.rdbStore.executeSql(sql, args);
     // 查回刚插入的 id
     const inserted = await this.getMovieByProviderId(e.provider, e.providerId);
     const newId = inserted?.id ?? -1;
+    if (newId <= 0) {
+      const visibleMovies = await this.getAllMovies();
+      const totalMovieCount = await this.querySingleId(
+        `SELECT COUNT(*) AS id FROM ${FileSourceDatabase.TABLE_MOVIES}`,
+        []
+      );
+      const movieTableExists = await this.querySingleId(
+        `SELECT COUNT(*) AS id FROM sqlite_master WHERE type = 'table' AND name = '${FileSourceDatabase.TABLE_MOVIES}'`,
+        []
+      );
+      throw new Error(`upsertMovie unresolved id dbName=${FileSourceDatabase.getDatabaseName()} provider=${e.provider} providerId=${e.providerId} visibleMoviesCount=${visibleMovies.length} totalMovieCount=${totalMovieCount} movieTableExists=${movieTableExists}`);
+    }
     console.info(`[DB][upsertMovie] INSERT id=${newId} title="${e.title}" posterUrl=${e.posterUrl ? e.posterUrl.substring(0, 40) : 'null'}`);
     return newId;
     } catch (e) {
@@ -1368,36 +1529,16 @@ export class FileSourceDatabase {
   // ─────────────────────────────────────────────
 
   async getTvSeriesByProviderId(provider: string, providerId: string): Promise<TvSeriesEntity | null> {
-    if (this.rdbStore === null) { return null; }
-    let rs: relationalStore.ResultSet | null = null;
-    try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
-      pred.equalTo('provider', provider).and().equalTo('provider_id', providerId);
-      rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) { return this.parseTvSeriesEntity(rs); }
-      return null;
-    } catch (e) {
-      console.error(`[DB][getTvSeriesByProviderId] provider=${provider} providerId=${providerId} 查询失败: ${JSON.stringify(e)}`);
-      return null;
-    } finally { try { rs?.close(); } catch { } }
+    const items = await this.queryTvSeries(
+      this.buildTvSeriesSelectSql(' WHERE provider = ? AND provider_id = ? LIMIT 1'),
+      [provider, providerId]
+    );
+    return items.length > 0 ? items[0] : null;
   }
 
   /** 批量获取所有剧集，供播放历史等场景一次性加载 */
   async getAllTvSeries(): Promise<TvSeriesEntity[]> {
-    if (this.rdbStore === null) { return []; }
-    let rs: relationalStore.ResultSet | null = null;
-    try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
-      rs = await this.rdbStore.query(pred);
-      const items: TvSeriesEntity[] = [];
-      while (rs.goToNextRow()) { items.push(this.parseTvSeriesEntity(rs)); }
-      return items;
-    } catch (e) {
-      console.error('[FileSourceDatabase] getAllTvSeries', JSON.stringify(e));
-      return [];
-    } finally {
-      try { rs?.close(); } catch { }
-    }
+    return this.queryTvSeries(this.buildTvSeriesSelectSql(), []);
   }
 
   async upsertTvSeries(e: TvSeriesEntity): Promise<number> {
@@ -1423,23 +1564,32 @@ export class FileSourceDatabase {
       await this.rdbStore.update(bucket, pred);
       return existing.id;
     }
-    const sql = `
-      INSERT INTO ${FileSourceDatabase.TABLE_TV_SERIES}
-        (provider, provider_id, title, original_title, overview, first_air_date, rating,
-         vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
-         poster_local_path, backdrop_local_path, genres_json, cast_json,
-         number_of_seasons, original_language, origin_country_json, raw_json, scraped_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `;
-    const args: relationalStore.ValueType[] = [
-      e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
-      e.firstAirDate ?? null, e.rating ?? null, e.voteCount ?? null,
-      e.posterPath ?? null, e.backdropPath ?? null, e.posterUrl ?? null, e.backdropUrl ?? null,
-      e.posterLocalPath ?? null, e.backdropLocalPath ?? null, e.genresJson ?? null, e.castJson ?? null,
-      e.numberOfSeasons ?? null, e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
-    ];
+    const insertBucket: relationalStore.ValuesBucket = {
+      provider: e.provider,
+      provider_id: e.providerId,
+      title: e.title,
+      original_title: e.originalTitle ?? null,
+      overview: e.overview ?? null,
+      first_air_date: e.firstAirDate ?? null,
+      rating: e.rating ?? null,
+      vote_count: e.voteCount ?? null,
+      poster_path: e.posterPath ?? null,
+      backdrop_path: e.backdropPath ?? null,
+      poster_url: e.posterUrl ?? null,
+      backdrop_url: e.backdropUrl ?? null,
+      poster_local_path: e.posterLocalPath ?? null,
+      backdrop_local_path: e.backdropLocalPath ?? null,
+      genres_json: e.genresJson ?? null,
+      cast_json: e.castJson ?? null,
+      number_of_seasons: e.numberOfSeasons ?? null,
+      original_language: e.originalLanguage ?? null,
+      origin_country_json: e.originCountryJson ?? null,
+      raw_json: e.rawJson ?? null,
+      scraped_at: e.scrapedAt
+    };
+    let insertedRowId = -1;
     try {
-      await this.rdbStore.executeSql(sql, args);
+      insertedRowId = await this.rdbStore.insert(FileSourceDatabase.TABLE_TV_SERIES, insertBucket);
     } catch (insertError) {
       const recovered = await this.getTvSeriesByProviderId(e.provider, e.providerId);
       if (recovered && recovered.id !== undefined) {
@@ -1454,10 +1604,19 @@ export class FileSourceDatabase {
       [e.provider, e.providerId]
     );
     const lastInsertedId = await this.getLastInsertedRowId();
-    const resolvedId = inserted?.id ?? (fallbackId > 0 ? fallbackId : lastInsertedId);
+    const resolvedId = inserted?.id ?? (insertedRowId > 0 ? insertedRowId : (fallbackId > 0 ? fallbackId : lastInsertedId));
     if (resolvedId <= 0) {
+      const totalSeriesCount = await this.querySingleId(
+        `SELECT COUNT(*) AS id FROM ${FileSourceDatabase.TABLE_TV_SERIES}`,
+        []
+      );
+      const matchedSeriesCount = await this.querySingleId(
+        `SELECT COUNT(*) AS id FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ?`,
+        [e.provider, e.providerId]
+      );
+      const visibleSeries = await this.getAllTvSeries();
       throw new Error(
-        `upsertTvSeries unresolved id provider=${e.provider} providerId=${e.providerId} fallbackId=${fallbackId} lastInsertedId=${lastInsertedId}`
+        `upsertTvSeries unresolved id dbName=${FileSourceDatabase.getDatabaseName()} provider=${e.provider} providerId=${e.providerId} fallbackId=${fallbackId} lastInsertedId=${lastInsertedId} totalSeriesCount=${totalSeriesCount} matchedSeriesCount=${matchedSeriesCount} visibleSeriesCount=${visibleSeries.length}`
       );
     }
     return resolvedId;
@@ -2400,19 +2559,11 @@ export class FileSourceDatabase {
    * 按主键查询 tv_series 行（用于剧集详情页显示简介/类别/演员等）
    */
   async getTvSeriesById(id: number): Promise<TvSeriesEntity | null> {
-    if (this.rdbStore === null) { return null; }
-    let rs: relationalStore.ResultSet | null = null;
-    try {
-      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
-      pred.equalTo('id', id);
-      rs = await this.rdbStore.query(pred);
-      if (rs.goToFirstRow()) { return this.parseTvSeriesEntity(rs); }
-      return null;
-    } catch {
-      return null;
-    } finally {
-      try { rs?.close(); } catch { }
-    }
+    const items = await this.queryTvSeries(
+      this.buildTvSeriesSelectSql(' WHERE id = ? LIMIT 1'),
+      [id]
+    );
+    return items.length > 0 ? items[0] : null;
   }
 
   /**
@@ -2642,7 +2793,7 @@ export class FileSourceDatabase {
           seasonNumber: repSeasonNum,
           seasonPosterUrl,
           rating: representative.rating,
-          episodeCount: items.length,
+          episodeCount: countSeriesEpisodeRows(items),
           episodes: items,
           latestScannedAt
         };
@@ -2677,7 +2828,11 @@ export class FileSourceDatabase {
         SELECT ts.id AS series_id, ts.title, ts.rating,
                ts.poster_url, ts.backdrop_url,
                ts.poster_local_path, ts.backdrop_local_path,
-               COUNT(*) AS episode_count,
+               CASE
+                 WHEN COUNT(DISTINCT CASE WHEN si.episode_id IS NOT NULL THEN si.episode_id END) > 0
+                 THEN COUNT(DISTINCT CASE WHEN si.episode_id IS NOT NULL THEN si.episode_id END)
+                 ELSE COUNT(*)
+               END AS episode_count,
                MAX(si.scraped_at) AS latest_scraped_at
         FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} si
         JOIN ${FileSourceDatabase.TABLE_TV_SERIES} ts ON si.tv_series_id = ts.id

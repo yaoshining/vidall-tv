@@ -34,7 +34,6 @@ export default function testsuite() {
   videoControlsTest();
   playerPageTest();
   videoPlayerControllerTest();
-  // 集成测试：需要设备上的真实 Context（由 TestAbility.onCreate 设置到 globalThis）
   fileSourceDatabaseTest();
   videoScannerTest();
 }
