@@ -148,6 +148,17 @@ function isFileExplorerPathInRoot(currentPath: string, rootPath: string): boolea
   return currentPath === rootPath || currentPath.startsWith(rootPath + '/');
 }
 
+function getFileExplorerPathLeafName(path: string): string {
+  const normalizedPath = path.endsWith('/') && path.length > 1
+    ? path.substring(0, path.length - 1)
+    : path;
+  const lastSlashIndex = normalizedPath.lastIndexOf('/');
+  if (lastSlashIndex < 0) {
+    return normalizedPath;
+  }
+  return normalizedPath.substring(lastSlashIndex + 1);
+}
+
 function normalizeWebDavLastModified(lastModified?: string): number | undefined {
   if (lastModified === undefined || lastModified.length === 0) {
     return undefined;
@@ -245,6 +256,7 @@ export class FileExplorerController {
   @Computed
   get pathItems(): FileExplorerPathItem[] {
     const items: FileExplorerPathItem[] = [];
+    const pathInRoot = isFileExplorerPathInRoot(this.currentPath, this.rootPath);
 
     items.push({
       name: '根目录',
@@ -255,9 +267,15 @@ export class FileExplorerController {
       return items;
     }
 
-    const relativePath = isFileExplorerPathInRoot(this.currentPath, this.rootPath)
-      ? this.currentPath.substring(this.rootPath.length)
-      : this.currentPath;
+    if (!pathInRoot) {
+      items.push({
+        name: decodeURIComponent(getFileExplorerPathLeafName(this.currentPath)),
+        path: this.currentPath
+      });
+      return items;
+    }
+
+    const relativePath = this.currentPath.substring(this.rootPath.length);
     const parts = relativePath.split('/').filter(p => p.length > 0);
     let accumulatedPath = this.rootPath === '/' ? '' : this.rootPath;
 
