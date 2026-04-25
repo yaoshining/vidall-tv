@@ -1361,10 +1361,9 @@ export class FileSourceDatabase {
     if (this.rdbStore === null) { return null; }
     let rs: relationalStore.ResultSet | null = null;
     try {
-      rs = await this.rdbStore.querySql(
-        `SELECT * FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ? LIMIT 1`,
-        [provider, providerId]
-      );
+      const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
+      pred.equalTo('provider', provider).and().equalTo('provider_id', providerId);
+      rs = await this.rdbStore.query(pred);
       if (rs.goToFirstRow()) { return this.parseTvSeriesEntity(rs); }
       return null;
     } catch (e) {
