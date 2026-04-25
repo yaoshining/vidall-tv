@@ -141,6 +141,13 @@ function joinFileExplorerPath(parentPath: string, childName: string): string {
   return parentPath.endsWith('/') ? parentPath + childName : parentPath + '/' + childName;
 }
 
+function isFileExplorerPathInRoot(currentPath: string, rootPath: string): boolean {
+  if (rootPath === '/') {
+    return currentPath.startsWith('/');
+  }
+  return currentPath === rootPath || currentPath.startsWith(rootPath + '/');
+}
+
 function normalizeWebDavLastModified(lastModified?: string): number | undefined {
   if (lastModified === undefined || lastModified.length === 0) {
     return undefined;
@@ -248,7 +255,7 @@ export class FileExplorerController {
       return items;
     }
 
-    const relativePath = this.currentPath.startsWith(this.rootPath)
+    const relativePath = isFileExplorerPathInRoot(this.currentPath, this.rootPath)
       ? this.currentPath.substring(this.rootPath.length)
       : this.currentPath;
     const parts = relativePath.split('/').filter(p => p.length > 0);
@@ -314,7 +321,7 @@ export class FileExplorerController {
     if (parentPath.length < this.rootPath.length) {
       return this.rootPath
     }
-    return parentPath.startsWith(this.rootPath) ? parentPath : this.rootPath
+    return isFileExplorerPathInRoot(parentPath, this.rootPath) ? parentPath : this.rootPath
   }
 
   handleBack(): void {

@@ -3,6 +3,7 @@ import { WebDAVResource } from '../main/ets/lib/WebDAVClient'
 import { SmbFileInfo, SmbListDirectoryResult } from '../main/ets/lib/SMBClient'
 import { FileExplorerLoadResult } from '../main/ets/components/core/file/FileExplorerController'
 import {
+  getFileExplorerErrorMessage,
   SmbFileExplorerAdapter,
   WebDavFileExplorerAdapter
 } from '../main/ets/components/core/file/FileExplorerAdapter'
@@ -29,6 +30,10 @@ class FakeSmbClient {
   async listDirectory(_path: string): Promise<SmbListDirectoryResult> {
     return this.result
   }
+}
+
+interface MessageOnlyError {
+  message: string
 }
 
 function makeWebDavResource(name: string, href: string, isCollection: boolean): WebDAVResource {
@@ -81,6 +86,13 @@ export default function fileExplorerAdapterTest() {
 
       expect(result.resources.length).assertEqual(0)
       expect(result.errorMessage).assertEqual('连接失败')
+    })
+
+    it('getFileExplorerErrorMessage 会兼容 message 对象与字符串输入', 0, () => {
+      const messageOnlyError: MessageOnlyError = { message: '服务端拒绝访问' }
+
+      expect(getFileExplorerErrorMessage(messageOnlyError)).assertEqual('服务端拒绝访问')
+      expect(getFileExplorerErrorMessage('连接中断')).assertEqual('连接中断')
     })
   })
 }

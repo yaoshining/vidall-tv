@@ -3,6 +3,7 @@ import { FileExplorer } from '../../components/core/file/FileExplorer'
 import { SmbFileExplorerAdapter } from '../../components/core/file/FileExplorerAdapter'
 import { FileExplorerController } from '../../components/core/file/FileExplorerController'
 import { ImagePreviewDialog } from '../../components/core/file/ImagePreview'
+import { DialogHandle, ImagePreviewSessionController } from '../../components/core/file/ImagePreviewSessionController'
 import { SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { SMBClient, SmbFileInfo, SmbListDirectoryResult } from '../../lib/SMBClient'
 import { PlayerPage, PlayerPageParam } from '../player'
@@ -70,6 +71,7 @@ export struct SmbFileExplorerPage {
 
   private config: SMBSourceConfig = DEFAULT_SMB_CONFIG
   private client: SMBClient = SMBClient.fromSourceConfig(DEFAULT_SMB_CONFIG)
+  private imagePreviewSessionController: ImagePreviewSessionController = new ImagePreviewSessionController()
   private fileExplorerAdapter: SmbFileExplorerAdapter = new SmbFileExplorerAdapter(
     (path: string): Promise<SmbListDirectoryResult> => this.client.listDirectory(path)
   )
@@ -216,6 +218,7 @@ export struct SmbFileExplorerPage {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext
     const tempPath = context.tempDir + '/' + displayName
     this.client.downloadFileToLocal(filePath, tempPath).then((savedPath: string) => {
+      this.closeImagePreview()
       this.imagePath = 'file://' + savedPath
       const dialogController: CustomDialogController = new CustomDialogController({
         builder: ImagePreviewDialog({
@@ -227,10 +230,18 @@ export struct SmbFileExplorerPage {
         cornerRadius: 0,
         customStyle: true,
       })
-      dialogController.open()
+      this.imagePreviewSessionController.openDialog(dialogController as DialogHandle)
     }).catch(() => {
       console.error('[SmbExplorer] 图片预览失败')
     })
+  }
+
+  private closeImagePreview(): boolean {
+    const handled = this.imagePreviewSessionController.closeActiveDialog()
+    if (handled) {
+      this.imagePath = ''
+    }
+    return handled
   }
 
   private async playVideo(file: SmbFileInfo): Promise<void> {
@@ -399,7 +410,7 @@ export struct SmbFileExplorerPage {
       this.loadDirectory(startPath)
     })
     .onBackPressed(() => {
-      if (this.imagePath.length > 0) {
+      if (this.imagePreviewSessionController.handleBack()) {
         this.imagePath = ''
         return true
       }
@@ -408,5 +419,9 @@ export struct SmbFileExplorerPage {
     })
     .mode(NavDestinationMode.DIALOG)
     .hideTitleBar(true)
+  }
+
+  aboutToDisappear(): void {
+    this.closeImagePreview()
   }
 }

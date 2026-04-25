@@ -12,6 +12,12 @@ export type WebDavListDirectory = (path: string) => Promise<WebDAVResource[]>;
 
 export type SmbListDirectory = (path: string) => Promise<SmbListDirectoryResult>;
 
+export interface FileExplorerErrorMessageCarrier {
+  message: string;
+}
+
+export type FileExplorerErrorValue = Error | string | FileExplorerErrorMessageCarrier | Object | undefined | null;
+
 function buildLoadResult(resources: FileExplorerResource[], errorMessage?: string): FileExplorerLoadResult {
   const result: FileExplorerLoadResult = {
     resources: resources,
@@ -20,9 +26,30 @@ function buildLoadResult(resources: FileExplorerResource[], errorMessage?: strin
   return result;
 }
 
-function getErrorMessage(error: Error): string {
-  if (error.message.length > 0) {
+function isFileExplorerErrorMessageCarrier(error: FileExplorerErrorValue): boolean {
+  if (error === undefined || error === null || typeof error === 'string' || error instanceof Error) {
+    return false;
+  }
+  const carrier = error as FileExplorerErrorMessageCarrier;
+  return carrier.message !== undefined && carrier.message.length > 0;
+}
+
+export function getFileExplorerErrorMessage(error: FileExplorerErrorValue): string {
+  if (typeof error === 'string' && error.length > 0) {
+    return error;
+  }
+  if (error instanceof Error && error.message.length > 0) {
     return error.message;
+  }
+  if (isFileExplorerErrorMessageCarrier(error)) {
+    const carrier = error as FileExplorerErrorMessageCarrier;
+    return carrier.message;
+  }
+  if (error !== undefined && error !== null) {
+    const fallbackMessage = String(error);
+    if (fallbackMessage.length > 0 && fallbackMessage !== '[object Object]') {
+      return fallbackMessage;
+    }
   }
   return '加载目录失败';
 }
@@ -42,8 +69,8 @@ export class WebDavFileExplorerAdapter implements FileExplorerAdapter {
         .map((resource: WebDAVResource) => createFileExplorerResourceFromWebDav(path, resource));
       return buildLoadResult(mappedResources);
     } catch (error) {
-      const typedError = error as Error;
-      return buildLoadResult([], getErrorMessage(typedError));
+      const typedError = error as FileExplorerErrorValue;
+      return buildLoadResult([], getFileExplorerErrorMessage(typedError));
     }
   }
 }
@@ -64,8 +91,8 @@ export class SmbFileExplorerAdapter implements FileExplorerAdapter {
       const mappedResources = result.files.map(createFileExplorerResourceFromSmb);
       return buildLoadResult(mappedResources);
     } catch (error) {
-      const typedError = error as Error;
-      return buildLoadResult([], getErrorMessage(typedError));
+      const typedError = error as FileExplorerErrorValue;
+      return buildLoadResult([], getFileExplorerErrorMessage(typedError));
     }
   }
 }

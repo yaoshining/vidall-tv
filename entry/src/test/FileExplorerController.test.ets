@@ -179,5 +179,20 @@ export default function fileExplorerControllerTest() {
       expect(controller.pathItems[0].path).assertEqual('/share/library')
       expect(controller.pathItems[1].path).assertEqual('/share/library/season1')
     })
+
+    it('rootPath 仅在完整路径段匹配时才视为当前根目录前缀', 0, () => {
+      const resources: FileExplorerResource[] = []
+      const params: FileExplorerControllerParam = {
+        resources: resources,
+        currentPath: '/share/library2',
+        rootPath: '/share/library'
+      }
+      const controller = new FileExplorerController(params)
+
+      expect(controller.pathItems.length).assertEqual(2)
+      expect(controller.pathItems[0].path).assertEqual('/share/library')
+      expect(controller.pathItems[1].name).assertEqual('library2')
+      expect(controller.pathItems[1].path).assertEqual('/share/library2')
+    })
   })
 }
