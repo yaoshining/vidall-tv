@@ -519,7 +519,7 @@ def persist_design_system(design_system: dict, page: str = None, output_dir: str
     master_file = design_system_dir / "MASTER.md"
     
     # Generate and write MASTER.md
-    master_content = format_master_md(design_system)
+    master_content = format_master_md(design_system, project_slug)
     with open(master_file, 'w', encoding='utf-8') as f:
         f.write(master_content)
     created_files.append(str(master_file))
@@ -527,7 +527,7 @@ def persist_design_system(design_system: dict, page: str = None, output_dir: str
     # If page is specified, create page override file with intelligent content
     if page:
         page_file = pages_dir / f"{page.lower().replace(' ', '-')}.md"
-        page_content = format_page_override_md(design_system, page, page_query)
+        page_content = format_page_override_md(design_system, page, project_slug, page_query)
         with open(page_file, 'w', encoding='utf-8') as f:
             f.write(page_content)
         created_files.append(str(page_file))
@@ -539,7 +539,7 @@ def persist_design_system(design_system: dict, page: str = None, output_dir: str
     }
 
 
-def format_master_md(design_system: dict) -> str:
+def format_master_md(design_system: dict, project_slug: str) -> str:
     """Format design system as MASTER.md with hierarchical override logic."""
     project = design_system.get("project_name", "PROJECT")
     pattern = design_system.get("pattern", {})
@@ -556,7 +556,7 @@ def format_master_md(design_system: dict) -> str:
     # Logic header
     lines.append("# Design System Master File")
     lines.append("")
-    lines.append("> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.")
+    lines.append(f"> **LOGIC:** When building a specific page, first check `design-system/{project_slug}/pages/[page-name].md`.")
     lines.append("> If that file exists, its rules **override** this Master file.")
     lines.append("> If not, strictly follow the rules below.")
     lines.append("")
@@ -802,7 +802,7 @@ def format_master_md(design_system: dict) -> str:
     return "\n".join(lines)
 
 
-def format_page_override_md(design_system: dict, page_name: str, page_query: str = None) -> str:
+def format_page_override_md(design_system: dict, page_name: str, project_slug: str, page_query: str = None) -> str:
     """Format a page-specific override file with intelligent AI-generated content."""
     project = design_system.get("project_name", "PROJECT")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -819,7 +819,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
     lines.append(f"> **Generated:** {timestamp}")
     lines.append(f"> **Page Type:** {page_overrides.get('page_type', 'General')}")
     lines.append("")
-    lines.append("> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).")
+    lines.append(f"> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/{project_slug}/MASTER.md`).")
     lines.append("> Only deviations from the Master are documented here. For all other rules, refer to the Master.")
     lines.append("")
     lines.append("---")

@@ -38,6 +38,7 @@ jobs:
       HARMONY_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
       NODE_BIN: /Applications/DevEco-Studio.app/Contents/tools/node/bin/node
       HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
+      OHPM_BIN: /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm
       WORK_DIR: /Users/shiningyao/DevecostudioProjects/vidall-tv
 
     steps:
@@ -45,11 +46,23 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           cd "$WORK_DIR"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git pull "$REPO_URL" HEAD
+          git fetch --no-tags "$REPO_URL" "$TARGET_SHA"
+          git checkout --force --detach FETCH_HEAD
+          git clean -fdx
+          echo "checked out sha: $(git rev-parse HEAD)"
+
+      - name: 恢复 Harmony 依赖
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$WORK_DIR"
+          "$OHPM_BIN" install
+          test -d "$WORK_DIR/oh_modules/@ibestservices/ibest-ui"
 
       - name: 执行单元测试
         shell: bash
