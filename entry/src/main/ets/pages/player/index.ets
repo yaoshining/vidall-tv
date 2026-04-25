@@ -8,7 +8,7 @@ import {
 } from "../../components/core/player/VideoPlayerController";
 import { PlaybackContext, PlaybackContextItem, MediaLibraryContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
-import { PlayProgressEntity } from "../../db/models/MediaEntity";
+import { PlayProgressEntity, MediaProgressEntry } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
@@ -69,6 +69,35 @@ export interface ResolvedEpisodePlaybackSource {
   presetAudioTracks?: PresetAudioTrack[];
   presetSubtitleTracks?: PresetSubtitleTrack[];
   startPositionMs?: number;
+}
+
+export type MediaProgressResumeActionType = 'seek' | 'play' | 'clear_and_play';
+
+export interface MediaProgressResumeAction {
+  action: MediaProgressResumeActionType;
+  positionMs?: number;
+}
+
+export function resolveMediaProgressResumeAction(
+  saved: MediaProgressEntry | null,
+  currentDurationMs: number,
+  currentSeason: number,
+  currentEpisode: number
+): MediaProgressResumeAction {
+  if (saved === null || saved.positionMs <= 0) {
+    return { action: 'play' };
+  }
+  if (saved.seasonNumber !== currentSeason || saved.episodeNumber !== currentEpisode) {
+    return { action: 'play' };
+  }
+  const effectiveDurationMs = currentDurationMs > 0 ? currentDurationMs : saved.durationMs;
+  if (MediaProgressStore.isNearEnd(saved.positionMs, effectiveDurationMs)) {
+    return { action: 'clear_and_play' };
+  }
+  return {
+    action: 'seek',
+    positionMs: saved.positionMs
+  };
 }
 
 function buildPlayerEpisodeCode(seasonNumber: number, episodeNumber: number): string {
@@ -269,19 +298,20 @@ export struct PlayerPage {
         return;
       }
       MediaProgressStore.get(mediaKey).then((saved) => {
-        if (saved !== null && saved.positionMs > 0
-            && saved.seasonNumber === this.currentMediaSeason
-            && saved.episodeNumber === this.currentMediaEpisode) {
-          const dur = this.videoPlayerController.duration;
-          const isNearEnd = MediaProgressStore.isNearEnd(saved.positionMs, dur > 0 ? dur : saved.durationMs);
-          if (!isNearEnd) {
-            this.videoPlayerController.seek(saved.positionMs).catch(() => {});
-          } else {
-            MediaProgressStore.clear(mediaKey).catch(() => {});
-          }
-        } else {
-          this.videoPlayerController.play().catch(() => {});
+        const resumeAction = resolveMediaProgressResumeAction(
+          saved,
+          this.videoPlayerController.duration,
+          this.currentMediaSeason,
+          this.currentMediaEpisode
+        );
+        if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
+          this.videoPlayerController.seek(resumeAction.positionMs).catch(() => {});
+          return;
         }
+        if (resumeAction.action === 'clear_and_play') {
+          MediaProgressStore.clear(mediaKey).catch(() => {});
+        }
+        this.videoPlayerController.play().catch(() => {});
       }).catch(() => {
         this.videoPlayerController.play().catch(() => {});
       });
