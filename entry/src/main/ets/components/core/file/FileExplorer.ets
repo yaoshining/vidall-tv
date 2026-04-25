@@ -1,20 +1,11 @@
-import { WebDAVResource } from "../../../lib/WebDAVClient";
-import { FileExplorerController } from "./FileExplorerController";
+import { FileExplorerController, FileExplorerPathItem, FileExplorerResource } from "./FileExplorerController";
 
 /**
  * 文件点击事件数据
  */
 export interface FileClickEvent {
-  resource: WebDAVResource;
+  resource: FileExplorerResource;
   fullPath: string;
-}
-
-/**
- * 路径导航项
- */
-interface PathItem {
-  name: string;
-  path: string;
 }
 
 interface ColorsInterface {
@@ -33,7 +24,19 @@ interface ColorsInterface {
 @ComponentV2
 export struct FileExplorer {
   @Param @Require controller: FileExplorerController
+  @Param isLoading: boolean = false
+  @Param errorMessage: string = ''
+  @Param emptyText: string = '此文件夹为空'
+  @Param showDetailColumns: boolean = true
+  @Param disableResourceClick: (resource: FileExplorerResource) => boolean = () => false
+  @Param resourceSecondaryText: (resource: FileExplorerResource) => string = () => ''
+  @Param showResourceSelection: (resource: FileExplorerResource) => boolean = () => false
+  @Param isResourceSelected: (resource: FileExplorerResource) => boolean = () => false
+  @Param onResourceSelectionToggle: (resource: FileExplorerResource) => void = () => {}
   @Event onFileClick: (event: FileClickEvent) => void = () => {};
+  @BuilderParam extraTopBuilder?: () => void
+  @BuilderParam extraBottomBuilder?: () => void
+  @BuilderParam overlayBuilder?: () => void
 
   // 深色主题颜色定义
   private readonly COLORS: ColorsInterface = {
@@ -48,36 +51,6 @@ export struct FileExplorer {
     hover: '#3A3A3C',               // 悬停色
     button: '#48484A'               // 按钮色
   };
-
-  /**
-   * 获取路径导航项
-   */
-  @Computed
-  get pathItems(): PathItem[] {
-    const items: PathItem[] = [];
-
-    items.push({
-      name: '根目录',
-      path: '/'
-    });
-
-    if (this.controller.currentPath === '/') {
-      return items;
-    }
-
-    const parts = this.controller.currentPath.split('/').filter(p => p.length > 0);
-    let accumulatedPath = '';
-
-    for (let i = 0; i < parts.length; i++) {
-      accumulatedPath += '/' + parts[i];
-      items.push({
-        name: decodeURIComponent(parts[i]),
-        path: accumulatedPath
-      });
-    }
-
-    return items;
-  }
 
   private changeSortField(field: 'name' | 'size' | 'date'): void {
     if (this.controller.sortField === field) {
@@ -95,23 +68,17 @@ export struct FileExplorer {
     return this.controller.sortAscending ? '↑' : '↓';
   }
 
-  private handleResourceClick(resource: WebDAVResource): void {
-    if (resource.isCollection) {
-      let newPath = this.controller.currentPath;
-      if (!newPath.endsWith('/')) {
-        newPath += '/';
-      }
-      newPath += resource.displayName;
+  private handleResourceClick(resource: FileExplorerResource): void {
+    if (this.disableResourceClick(resource)) {
+      return;
+    }
 
-      this.controller.onFolderChange(newPath);
+    if (resource.isDirectory) {
+      this.controller.onFolderChange(resource.path);
     } else {
-      const fullPath = this.controller.currentPath.endsWith('/')
-        ? this.controller.currentPath + resource.displayName
-        : this.controller.currentPath + '/' + resource.displayName;
-
       this.onFileClick({
         resource: resource,
-        fullPath: fullPath
+        fullPath: resource.path
       });
     }
   }
@@ -131,29 +98,24 @@ export struct FileExplorer {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   }
 
-  private formatDate(dateStr?: string): string {
-    if (!dateStr) return '-';
+  private formatDate(dateMs?: number): string {
+    if (dateMs === undefined) return '-';
+    const date = new Date(dateMs);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
 
-    try {
-      const date = new Date(dateStr);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-
-      return `${year}-${month}-${day} ${hours}:${minutes}`;
-    } catch (error) {
-      return dateStr;
-    }
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
   }
 
-  private getFileIcon(resource: WebDAVResource): string {
-    if (resource.isCollection) {
+  private getFileIcon(resource: FileExplorerResource): string {
+    if (resource.isDirectory) {
       return '📁';
     }
 
-    const fileName = resource.displayName.toLowerCase();
+    const fileName = resource.name.toLowerCase();
 
     if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') ||
     fileName.endsWith('.png') || fileName.endsWith('.gif') ||
@@ -193,210 +155,275 @@ export struct FileExplorer {
     return '📄';
   }
 
+  private getResourceSecondaryText(resource: FileExplorerResource): string {
+    return this.resourceSecondaryText(resource);
+  }
+
   build() {
-    Column() {
-      // 顶部工具栏
-      Row() {
-        Button('返回')
-          .fontSize(16)
-          .height(40)
-          .backgroundColor(this.COLORS.button)
-          .fontColor(this.COLORS.accent)
-          .onClick(() => {
-            this.controller.handleBack();
-          })
-          .margin({ right: 10 })
-
-        Button(this.controller.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
-          .fontSize(16)
-          .height(40)
-          .backgroundColor(this.COLORS.button)
-          .fontColor(this.controller.showHiddenFiles ? this.COLORS.accent : this.COLORS.secondaryText)
-          .onClick(() => {
-            this.controller.showHiddenFiles = !this.controller.showHiddenFiles;
-          })
-          .margin({ right: 10 })
-
-        Text(`文件：${this.controller.sortedResources.length}`)
-          .fontSize(14)
-          .fontColor(this.COLORS.tertiaryText)
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .backgroundColor(this.COLORS.surface)
-
-      // 路径导航
-      Scroll() {
+    Stack() {
+      Column() {
+        // 顶部工具栏
         Row() {
-          ForEach(this.pathItems, (item: PathItem, index: number) => {
+          Button('返回')
+            .fontSize(16)
+            .height(40)
+            .backgroundColor(this.COLORS.button)
+            .fontColor(this.COLORS.accent)
+            .onClick(() => {
+              this.controller.handleBack();
+            })
+            .margin({ right: 10 })
+
+          Button(this.controller.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
+            .fontSize(16)
+            .height(40)
+            .backgroundColor(this.COLORS.button)
+            .fontColor(this.controller.showHiddenFiles ? this.COLORS.accent : this.COLORS.secondaryText)
+            .onClick(() => {
+              this.controller.showHiddenFiles = !this.controller.showHiddenFiles;
+            })
+            .margin({ right: 10 })
+
+          Text(`文件：${this.controller.sortedResources.length}`)
+            .fontSize(14)
+            .fontColor(this.COLORS.tertiaryText)
+            .layoutWeight(1)
+
+          if (this.isLoading) {
+            LoadingProgress()
+              .width(24)
+              .height(24)
+              .color(this.COLORS.accent)
+          }
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .backgroundColor(this.COLORS.surface)
+
+        // 路径导航
+        Scroll() {
+          Row() {
+            ForEach(this.controller.pathItems, (item: FileExplorerPathItem, index: number) => {
+              Row() {
+                Text(item.name)
+                  .fontSize(14)
+                  .fontColor(index === this.controller.pathItems.length - 1
+                    ? this.COLORS.primaryText
+                    : this.COLORS.accent)
+                  .fontWeight(index === this.controller.pathItems.length - 1
+                    ? FontWeight.Bold
+                    : FontWeight.Normal)
+                  .onClick(() => {
+                    if (index !== this.controller.pathItems.length - 1) {
+                      this.handlePathClick(item.path);
+                    }
+                  })
+
+                if (index < this.controller.pathItems.length - 1) {
+                  Text(' / ')
+                    .fontSize(14)
+                    .fontColor(this.COLORS.tertiaryText)
+                    .margin({ left: 4, right: 4 })
+                }
+              }
+            }, (item: FileExplorerPathItem) => item.path)
+          }
+          .padding({ left: 16, right: 16 })
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .width('100%')
+        .height(40)
+        .backgroundColor(this.COLORS.surfaceVariant)
+
+        Divider()
+          .color(this.COLORS.divider)
+
+        if (this.extraTopBuilder) {
+          this.extraTopBuilder()
+        }
+
+        // 排序栏
+        if (this.showDetailColumns) {
+          Row() {
             Row() {
-              Text(item.name)
-                .fontSize(14)
-                .fontColor(index === this.pathItems.length - 1
-                  ? this.COLORS.primaryText
-                  : this.COLORS.accent)
-                .fontWeight(index === this.pathItems.length - 1
-                  ? FontWeight.Bold
+              Text('名称 ' + this.getSortIcon('name'))
+                .fontSize(13)
+                .fontColor(this.controller.sortField === 'name'
+                  ? this.COLORS.accent
+                  : this.COLORS.tertiaryText)
+                .fontWeight(this.controller.sortField === 'name'
+                  ? FontWeight.Medium
                   : FontWeight.Normal)
                 .onClick(() => {
-                  if (index !== this.pathItems.length - 1) {
-                    this.handlePathClick(item.path);
-                  }
+                  this.changeSortField('name');
                 })
-
-              if (index < this.pathItems.length - 1) {
-                Text(' / ')
-                  .fontSize(14)
-                  .fontColor(this.COLORS.tertiaryText)
-                  .margin({ left: 4, right: 4 })
-              }
             }
-          }, (item: PathItem) => item.path)
+            .layoutWeight(3)
+
+            Row() {
+              Text('大小 ' + this.getSortIcon('size'))
+                .fontSize(13)
+                .fontColor(this.controller.sortField === 'size'
+                  ? this.COLORS.accent
+                  : this.COLORS.tertiaryText)
+                .fontWeight(this.controller.sortField === 'size'
+                  ? FontWeight.Medium
+                  : FontWeight.Normal)
+                .onClick(() => {
+                  this.changeSortField('size');
+                })
+            }
+            .layoutWeight(2)
+            .justifyContent(FlexAlign.End)
+
+            Row() {
+              Text('修改日期 ' + this.getSortIcon('date'))
+                .fontSize(13)
+                .fontColor(this.controller.sortField === 'date'
+                  ? this.COLORS.accent
+                  : this.COLORS.tertiaryText)
+                .fontWeight(this.controller.sortField === 'date'
+                  ? FontWeight.Medium
+                  : FontWeight.Normal)
+                .onClick(() => {
+                  this.changeSortField('date');
+                })
+            }
+            .layoutWeight(2)
+            .justifyContent(FlexAlign.End)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+          .backgroundColor(this.COLORS.surface)
+
+          Divider()
+            .color(this.COLORS.divider)
         }
-        .padding({ left: 16, right: 16 })
-      }
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-      .width('100%')
-      .height(40)
-      .backgroundColor(this.COLORS.surfaceVariant)
 
-      Divider()
-        .color(this.COLORS.divider)
-
-      // 排序栏
-      Row() {
-        Row() {
-          Text('名称 ' + this.getSortIcon('name'))
-            .fontSize(13)
-            .fontColor(this.controller.sortField === 'name'
-              ? this.COLORS.accent
-              : this.COLORS.tertiaryText)
-            .fontWeight(this.controller.sortField === 'name'
-              ? FontWeight.Medium
-              : FontWeight.Normal)
-            .onClick(() => {
-              this.changeSortField('name');
-            })
+        if (this.errorMessage.length > 0) {
+          Row() {
+            Text('⚠️  ' + this.errorMessage)
+              .fontSize(14)
+              .fontColor('#FF6B6B')
+              .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+          }
+          .width('100%')
+          .backgroundColor(this.COLORS.surface)
         }
-        .layoutWeight(3)
 
-        Row() {
-          Text('大小 ' + this.getSortIcon('size'))
-            .fontSize(13)
-            .fontColor(this.controller.sortField === 'size'
-              ? this.COLORS.accent
-              : this.COLORS.tertiaryText)
-            .fontWeight(this.controller.sortField === 'size'
-              ? FontWeight.Medium
-              : FontWeight.Normal)
-            .onClick(() => {
-              this.changeSortField('size');
-            })
-        }
-        .layoutWeight(2)
-        .justifyContent(FlexAlign.End)
+        // 文件列表
+        if (this.controller.sortedResources.length === 0 && !this.isLoading) {
+          Column() {
+            Text('📂')
+              .fontSize(48)
+              .margin({ bottom: 12 })
 
-        Row() {
-          Text('修改日期 ' + this.getSortIcon('date'))
-            .fontSize(13)
-            .fontColor(this.controller.sortField === 'date'
-              ? this.COLORS.accent
-              : this.COLORS.tertiaryText)
-            .fontWeight(this.controller.sortField === 'date'
-              ? FontWeight.Medium
-              : FontWeight.Normal)
-            .onClick(() => {
-              this.changeSortField('date');
-            })
-        }
-        .layoutWeight(2)
-        .justifyContent(FlexAlign.End)
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-      .backgroundColor(this.COLORS.surface)
+            Text(this.emptyText)
+              .fontSize(16)
+              .fontColor(this.COLORS.tertiaryText)
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor(this.COLORS.background)
+        } else {
+          List({ space: 0 }) {
+            ForEach(this.controller.sortedResources, (resource: FileExplorerResource, index: number) => {
+              ListItem() {
+                Row() {
+                  // 图标和名称
+                  Row({ space: 12 }) {
+                    Text(this.getFileIcon(resource))
+                      .fontSize($r('app.float.font_h6_title_large'))
 
-      Divider()
-        .color(this.COLORS.divider)
+                    Column() {
+                      Text(resource.name)
+                        .fontSize($r('app.float.font_h7_title_small'))
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.MARQUEE })
+                        .fontColor(resource.isDirectory
+                          ? this.COLORS.accent
+                          : this.COLORS.primaryText)
+                        .width('100%')
 
-      // 文件列表
-      if (this.controller.sortedResources.length === 0) {
-        Column() {
-          Text('📂')
-            .fontSize(48)
-            .margin({ bottom: 12 })
-
-          Text('此文件夹为空')
-            .fontSize(16)
-            .fontColor(this.COLORS.tertiaryText)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-        .backgroundColor(this.COLORS.background)
-      } else {
-        List({ space: 0 }) {
-          ForEach(this.controller.sortedResources, (resource: WebDAVResource, index: number) => {
-            ListItem() {
-              Row() {
-                // 图标和名称
-                Row({ space: 12 }) {
-                  Text(this.getFileIcon(resource))
-                    .fontSize($r('app.float.font_h6_title_large'))
-
-                  Column() {
-                    Text(resource.displayName)
-                      .fontSize($r('app.float.font_h7_title_small'))
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.MARQUEE })
-                      .fontColor(resource.isCollection
-                        ? this.COLORS.accent
-                        : this.COLORS.primaryText)
-                      .width('100%')
+                      if (this.getResourceSecondaryText(resource).length > 0) {
+                        Text(this.getResourceSecondaryText(resource))
+                          .fontSize(12)
+                          .fontColor(this.COLORS.tertiaryText)
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .width('100%')
+                          .margin({ top: 4 })
+                      }
+                    }
+                    .alignItems(HorizontalAlign.Start)
+                    .layoutWeight(1)
                   }
-                  .alignItems(HorizontalAlign.Start)
-                  .layoutWeight(1)
+                  .layoutWeight(this.showDetailColumns ? 3 : 1)
+                  .alignItems(VerticalAlign.Center)
+
+                  if (this.showDetailColumns) {
+                    // 文件大小
+                    Text(resource.isDirectory ? '-' : this.formatFileSize(resource.size))
+                      .fontSize($r('app.float.font_subtitle_1'))
+                      .fontColor(this.COLORS.tertiaryText)
+                      .layoutWeight(2)
+                      .textAlign(TextAlign.End)
+                      .maxLines(1)
+
+                    // 修改日期
+                    Text(this.formatDate(resource.lastModifiedMs))
+                      .fontSize(13)
+                      .fontColor(this.COLORS.tertiaryText)
+                      .layoutWeight(2)
+                      .textAlign(TextAlign.End)
+                      .maxLines(1)
+                  }
+
+                  if (this.showResourceSelection(resource)) {
+                    Checkbox()
+                      .select(this.isResourceSelected(resource))
+                      .selectedColor(this.COLORS.accent)
+                      .margin({ left: 12 })
+                      .onChange(() => {
+                        this.onResourceSelectionToggle(resource)
+                      })
+                  }
                 }
-                .layoutWeight(3)
-                .alignItems(VerticalAlign.Center)
-
-                // 文件大小
-                Text(resource.isCollection ? '-' : this.formatFileSize(resource.size))
-                  .fontSize($r('app.float.font_subtitle_1'))
-                  .fontColor(this.COLORS.tertiaryText)
-                  .layoutWeight(2)
-                  .textAlign(TextAlign.End)
-                  .maxLines(1)
-
-                // 修改日期
-                Text(this.formatDate(resource.lastModified))
-                  .fontSize(13)
-                  .fontColor(this.COLORS.tertiaryText)
-                  .layoutWeight(2)
-                  .textAlign(TextAlign.End)
-                  .maxLines(1)
+                .width('100%')
+                .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+                .backgroundColor(index % 2 === 0
+                  ? this.COLORS.background
+                  : this.COLORS.surface)
+                .opacity(this.disableResourceClick(resource) ? 0.5 : 1)
               }
-              .width('100%')
-              .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-              .backgroundColor(index % 2 === 0
-                ? this.COLORS.background
-                : this.COLORS.surface)
-            }
-            .onClick(() => {
-              this.handleResourceClick(resource);
-            })
-          }, (resource: WebDAVResource) => resource.href)
+              .onClick(() => {
+                this.handleResourceClick(resource);
+              })
+            }, (resource: FileExplorerResource) => resource.key)
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .backgroundColor(this.COLORS.background)
+          .divider({
+            strokeWidth: 0.5,
+            color: this.COLORS.divider,
+            startMargin: 16,
+            endMargin: 16
+          })
         }
-        .width('100%')
-        .layoutWeight(1)
-        .backgroundColor(this.COLORS.background)
-        .divider({
-          strokeWidth: 0.5,
-          color: this.COLORS.divider,
-          startMargin: 16,
-          endMargin: 16
-        })
+
+        if (this.extraBottomBuilder) {
+          this.extraBottomBuilder()
+        }
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(this.COLORS.background)
+
+      if (this.overlayBuilder) {
+        this.overlayBuilder()
       }
     }
     .width('100%')

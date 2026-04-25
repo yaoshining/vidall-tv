@@ -4449,6 +4449,120 @@ static void CompleteSmbReadTextFile(napi_env env, napi_status /*status*/, void *
     delete ctx;
 }
 
+struct SmbDownloadFileContext {
+    napi_async_work work = nullptr;
+    napi_deferred deferred = nullptr;
+    std::string url;
+    std::string outputPath;
+    int32_t timeoutSeconds = 15;
+    std::string errorMessage;
+};
+
+static void ExecuteSmbDownloadFile(napi_env /*env*/, void *data) {
+    auto *ctx = static_cast<SmbDownloadFileContext *>(data);
+    SmbUrlComponents comps = ParseSmbUrl(ctx->url);
+    if (!comps.valid) {
+        ctx->errorMessage = "smbDownloadFile: invalid SMB URL";
+        return;
+    }
+
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "SMBClient",
+                 "smbDownloadFile: host=%{public}s share=%{public}s path=%{public}s output=%{public}s",
+                 comps.host.c_str(), comps.share.c_str(), comps.subPath.c_str(), ctx->outputPath.c_str());
+
+    struct smb2_context *smb2 = smb2_init_context();
+    if (!smb2) {
+        ctx->errorMessage = "smb2_init_context failed (out of memory)";
+        return;
+    }
+    if (!comps.user.empty())     smb2_set_user(smb2, comps.user.c_str());
+    if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
+    smb2_set_timeout(smb2, ctx->timeoutSeconds);
+
+    int ret = smb2_connect_share(smb2, comps.host.c_str(), comps.share.c_str(),
+                                 comps.user.empty() ? nullptr : comps.user.c_str());
+    if (ret < 0) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "SMB connection failed";
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    struct smb2fh *fh = smb2_open(smb2, comps.subPath.c_str(), O_RDONLY);
+    if (!fh) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_open failed";
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    FILE *outputFile = std::fopen(ctx->outputPath.c_str(), "wb");
+    if (!outputFile) {
+        ctx->errorMessage = "smbDownloadFile: failed to open output file";
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        return;
+    }
+
+    const size_t kBufSize = 65536;
+    std::vector<uint8_t> buf(kBufSize);
+    int32_t bytesRead = 0;
+    while ((bytesRead = smb2_read(smb2, fh, buf.data(), kBufSize)) > 0) {
+        size_t bytesWritten = std::fwrite(buf.data(), 1, static_cast<size_t>(bytesRead), outputFile);
+        if (bytesWritten != static_cast<size_t>(bytesRead)) {
+            ctx->errorMessage = "smbDownloadFile: failed to write output file";
+            break;
+        }
+    }
+    if (bytesRead < 0 && ctx->errorMessage.empty()) {
+        const char *errStr = smb2_get_error(smb2);
+        ctx->errorMessage = (errStr && errStr[0]) ? errStr : "smb2_read failed";
+    }
+
+    std::fclose(outputFile);
+    smb2_close(smb2, fh);
+    smb2_disconnect_share(smb2);
+    smb2_destroy_context(smb2);
+
+    if (!ctx->errorMessage.empty()) {
+        std::remove(ctx->outputPath.c_str());
+        return;
+    }
+}
+
+static void CompleteSmbDownloadFile(napi_env env, napi_status /*status*/, void *data) {
+    auto *ctx = static_cast<SmbDownloadFileContext *>(data);
+    if (!ctx->errorMessage.empty()) {
+        napi_value errMsg = nullptr;
+        napi_create_string_utf8(env, ctx->errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+        napi_value errObj = nullptr;
+        if (napi_create_error(env, nullptr, errMsg, &errObj) == napi_ok) {
+            napi_reject_deferred(env, ctx->deferred, errObj);
+        } else {
+            napi_reject_deferred(env, ctx->deferred, errMsg);
+        }
+    } else {
+        napi_value outputPathVal = nullptr;
+        if (napi_create_string_utf8(env, ctx->outputPath.c_str(), NAPI_AUTO_LENGTH, &outputPathVal) == napi_ok) {
+            napi_resolve_deferred(env, ctx->deferred, outputPathVal);
+        } else {
+            napi_value errMsg = nullptr;
+            napi_create_string_utf8(env, "NAPI internal error: failed to create output path string",
+                                    NAPI_AUTO_LENGTH, &errMsg);
+            napi_value errObj = nullptr;
+            if (napi_create_error(env, nullptr, errMsg, &errObj) == napi_ok) {
+                napi_reject_deferred(env, ctx->deferred, errObj);
+            } else {
+                napi_reject_deferred(env, ctx->deferred, errMsg);
+            }
+        }
+    }
+    if (ctx->work) napi_delete_async_work(env, ctx->work);
+    delete ctx;
+}
+
 #endif // VIDALL_HAS_LIBSMB2
 
 /**
@@ -5125,6 +5239,85 @@ static napi_value SmbReadTextFile(napi_env env, napi_callback_info info) {
     return promise;
 }
 
+static napi_value SmbDownloadFile(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3] = { nullptr, nullptr, nullptr };
+    if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok) {
+        ThrowTypeError(env, "smbDownloadFile failed to read args");
+        return nullptr;
+    }
+    if (argc < 2) {
+        ThrowTypeError(env, "smbDownloadFile requires (url, outputPath)");
+        return nullptr;
+    }
+
+    std::string url;
+    std::string outputPath;
+    if (!ReadUtf8String(env, args[0], url)) {
+        ThrowTypeError(env, "smbDownloadFile url must be string");
+        return nullptr;
+    }
+    if (!ReadUtf8String(env, args[1], outputPath)) {
+        ThrowTypeError(env, "smbDownloadFile outputPath must be string");
+        return nullptr;
+    }
+
+    int32_t timeoutSeconds = 15;
+    if (argc >= 3 && args[2] != nullptr) {
+        int64_t ts = 0;
+        if (napi_get_value_int64(env, args[2], &ts) == napi_ok && ts > 0 && ts <= 300) {
+            timeoutSeconds = static_cast<int32_t>(ts);
+        }
+    }
+
+    napi_deferred deferred = nullptr;
+    napi_value promise = nullptr;
+    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
+        ThrowTypeError(env, "smbDownloadFile failed to create promise");
+        return nullptr;
+    }
+
+#if VIDALL_HAS_LIBSMB2
+    {
+        auto *ctx = new SmbDownloadFileContext();
+        ctx->deferred = deferred;
+        ctx->url = url;
+        ctx->outputPath = outputPath;
+        ctx->timeoutSeconds = timeoutSeconds;
+
+        napi_value resourceName = nullptr;
+        if (napi_create_string_utf8(env, "smbDownloadFileAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbDownloadFile failed to create resource name");
+            return nullptr;
+        }
+        if (napi_create_async_work(env, nullptr, resourceName,
+                                   ExecuteSmbDownloadFile, CompleteSmbDownloadFile,
+                                   ctx, &ctx->work) != napi_ok) {
+            delete ctx;
+            ThrowTypeError(env, "smbDownloadFile failed to create async work");
+            return nullptr;
+        }
+        if (napi_queue_async_work(env, ctx->work) != napi_ok) {
+            napi_delete_async_work(env, ctx->work);
+            delete ctx;
+            ThrowTypeError(env, "smbDownloadFile failed to queue async work");
+            return nullptr;
+        }
+    }
+#else
+    {
+        napi_value errorMsg = nullptr;
+        napi_create_string_utf8(env,
+            "SMB protocol not available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
+            NAPI_AUTO_LENGTH, &errorMsg);
+        napi_reject_deferred(env, deferred, errorMsg);
+    }
+#endif
+
+    return promise;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     { "createPlayer", nullptr, CreatePlayer, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -5159,7 +5352,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "smbListDirectory",  nullptr, SmbListDirectory,  nullptr, nullptr, nullptr, napi_default, nullptr },
     { "smbListShares",     nullptr, SmbListShares,     nullptr, nullptr, nullptr, napi_default, nullptr },
     { "smbDiscoverHosts",  nullptr, SmbDiscoverHosts,  nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "smbReadTextFile",   nullptr, SmbReadTextFile,   nullptr, nullptr, nullptr, napi_default, nullptr }
+    { "smbReadTextFile",   nullptr, SmbReadTextFile,   nullptr, nullptr, nullptr, napi_default, nullptr },
+    { "smbDownloadFile",   nullptr, SmbDownloadFile,   nullptr, nullptr, nullptr, napi_default, nullptr }
   };
   if (napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors) != napi_ok) {
     ThrowTypeError(env, "failed to define native module properties");
