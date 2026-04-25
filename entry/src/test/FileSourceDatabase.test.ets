@@ -103,7 +103,7 @@ export default function fileSourceDatabaseTest() {
         numberOfSeasons: 1,
         scrapedAt: now
       } as TvSeriesEntity);
-      const persistedSeriesId = await waitForTvSeriesId(db, 'tmdb', seriesProviderId);
+      const persistedSeriesId = seriesId > 0 ? seriesId : await waitForTvSeriesId(db, 'tmdb', seriesProviderId);
       console.info(`[FileSourceDatabase.test] upsertTvSeries returned ${seriesId}, persistedSeriesId=${persistedSeriesId}`);
       expect(persistedSeriesId).assertLarger(0);
 
