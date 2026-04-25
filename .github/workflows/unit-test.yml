@@ -56,14 +56,35 @@ jobs:
         env:
           RUNNER_TEMP: ${{ runner.temp }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           cd "$WORK_DIR"
           mkdir -p "$RUNNER_TEMP"
+          RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
           "$NODE_BIN" "$HVIGOR_WRAPPER" \
             --mode module -p module=entry@default \
             test --no-daemon -p coverage=true \
             2>&1 | tee "$RUNNER_TEMP/unit-test.log"
-          exit ${PIPESTATUS[0]}
+          HVIGOR_EXIT=${PIPESTATUS[0]}
+          if [ "$HVIGOR_EXIT" -ne 0 ]; then
+            exit "$HVIGOR_EXIT"
+          fi
+
+          if [ ! -f "$RESULT_TXT" ]; then
+            echo "错误：未找到 test_result.txt，无法确认单测结果"
+            exit 1
+          fi
+
+          TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1 || true)
+          TOTAL=$(echo "$TESTS_LINE" | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
+          if [ "$TOTAL" = "0" ]; then
+            echo "错误：未解析到有效单测结果"
+            exit 1
+          fi
+          if [ "$FAILED" != "0" ]; then
+            echo "检测到单测失败：$TESTS_LINE"
+            exit 1
+          fi
 
       - name: 发布报告到 gh-pages
         if: always()
