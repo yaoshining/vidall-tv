@@ -1,4 +1,5 @@
 import { IBestToast } from "@ibestservices/ibest-ui";
+import { WebDavFileExplorerAdapter } from "../../components/core/file/FileExplorerAdapter";
 import { FileExplorer } from "../../components/core/file/FileExplorer";
 import { FileExplorerController } from "../../components/core/file/FileExplorerController";
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from "../../lib/WebDAVClient";
@@ -40,7 +41,12 @@ const config: WebDAVConfig = {
 export struct FileExplorerPage {
   static PAGE_NAME = "fileExplorerPage"
   client: WebDAVClient = new WebDAVClient(config)
+  private fileExplorerAdapter: WebDavFileExplorerAdapter = new WebDavFileExplorerAdapter(
+    (path: string): Promise<WebDAVResource[]> => this.client.listDirectory(path)
+  )
   @Local imagePath: string = ''
+  @Local isLoading: boolean = false
+  @Local errorMessage: string = ''
   @Local showMissingDirDialog: boolean = false
   @Local isCleaningUp: boolean = false
   private cachedDirId: number = 0
@@ -64,10 +70,12 @@ export struct FileExplorerPage {
       Stack() {
         FileExplorer({
           controller: this.fileExplorerController,
+          isLoading: this.isLoading,
+          errorMessage: this.errorMessage,
           onFileClick: event => {
-            const displayName = event.resource.displayName
+            const displayName = event.resource.name
             if (this.isVideoFile(displayName)) {
-              this.playVideo(event.fullPath, event.resource.displayName)
+              this.playVideo(event.fullPath, displayName)
             }
             if (this.isImageFile(displayName)) {
               this.previewImage(event.fullPath, displayName)
@@ -140,6 +148,9 @@ export struct FileExplorerPage {
         return
       }
       this.client = new WebDAVClient(param.config)
+      this.fileExplorerAdapter = new WebDavFileExplorerAdapter(
+        (path: string): Promise<WebDAVResource[]> => this.client.listDirectory(path)
+      )
       this.cachedDirId = param.dirId ?? 0
       this.cachedSourceId = param.sourceId ?? 0
       this.cachedDirectoryPath = param.directoryPath ?? ''
@@ -372,10 +383,17 @@ export struct FileExplorerPage {
   }
 
   private changePath(newPath: string = '/') {
-    this.client.listDirectory(encodeURIComponent(newPath)).then(files => {
-      files.shift()
+    this.isLoading = true
+    this.errorMessage = ''
+    this.fileExplorerAdapter.list(newPath).then((result) => {
       this.fileExplorerController.currentPath = newPath
-      this.fileExplorerController.resources = files
+      this.fileExplorerController.resources = result.resources
+      this.errorMessage = result.errorMessage ?? ''
+      this.isLoading = false
+    }).catch(() => {
+      this.fileExplorerController.resources = []
+      this.isLoading = false
+      this.errorMessage = '加载目录失败'
     })
   }
 

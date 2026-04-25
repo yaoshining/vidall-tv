@@ -62,6 +62,7 @@ interface SmbNapiBridge {
   smbListShares: (host: string, port: number, username: string, password: string, domain: string, timeoutMs: number) => Promise<Record<string, Object>>;
   smbDiscoverHosts: (subnetPrefix: string, startOctet: number, endOctet: number, port: number, timeoutMs: number) => Promise<Record<string, Object>>;
   smbReadTextFile: (url: string, maxSizeBytes: number, timeoutSeconds?: number) => Promise<string>;
+  smbDownloadFile: (url: string, outputPath: string, timeoutSeconds?: number) => Promise<string>;
 }
 
 interface SmbNapiBridgeModule {
@@ -413,6 +414,18 @@ export class SMBClient {
     } catch (e) {
       const err = e as import('@kit.BasicServicesKit').BusinessError;
       throw new Error(err.message ?? '读取文件失败');
+    }
+  }
+
+  async downloadFileToLocal(filePath: string, outputPath: string): Promise<string> {
+    console.info(`[SMBClient] downloadFileToLocal: ${this.host}/${this.shareName}${filePath}`);
+    const url: string = this.buildSmbUrl(filePath);
+    try {
+      const savedPath: string = await getModule().smbDownloadFile(url, outputPath, 15);
+      return savedPath;
+    } catch (e) {
+      const err = e as import('@kit.BasicServicesKit').BusinessError;
+      throw new Error(err.message ?? '下载文件失败');
     }
   }
 
