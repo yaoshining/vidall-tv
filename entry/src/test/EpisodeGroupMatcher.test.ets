@@ -186,5 +186,47 @@ export default function episodeGroupMatcherTest() {
       expect(db.mediaItemsCalls).assertEqual(1)
       expect(db.episodeEntitiesCalls).assertEqual(1)
     })
+
+    it('matchSeasonEpisodes 在已知 episodeNumber 未命中元数据时不会按索引错配到其他集', 0, async () => {
+      const matcher = new EpisodeGroupMatcher()
+      const db = new FakeEpisodeGroupMatcherDatabase(
+        [
+          {
+            id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+            filePath: '/s1e1.mkv', fileName: 's1e1.mkv', seasonNumber: 1, episodeNumber: 1
+          },
+          {
+            id: 3, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+            filePath: '/s1e3.mkv', fileName: 's1e3.mkv', seasonNumber: 1, episodeNumber: 3
+          }
+        ],
+        [
+          {
+            seriesId: 7, provider: 'tmdb', providerId: 'ep-1', seasonNumber: 1, episodeNumber: 1,
+            title: '第一集', scrapedAt: 0
+          },
+          {
+            seriesId: 7, provider: 'tmdb', providerId: 'ep-2', seasonNumber: 1, episodeNumber: 2,
+            title: '第二集', scrapedAt: 0, stillUrl: 'https://image.tmdb.org/t/p/w342/ep2.jpg'
+          },
+          {
+            seriesId: 7, provider: 'tmdb', providerId: 'ep-4', seasonNumber: 1, episodeNumber: 4,
+            title: '第四集', scrapedAt: 0
+          }
+        ]
+      )
+
+      const result: EpisodeGroupMatchResult = await matcher.matchSeasonEpisodes(
+        7,
+        1,
+        (): Promise<MediaItem[]> => db.getMediaItemsByTvSeriesId(7),
+        (): Promise<TvEpisodeEntity[]> => db.getEpisodesBySeriesAndSeason(7, 1)
+      )
+
+      expect(result.items.length).assertEqual(2)
+      expect(result.items[0].title).assertEqual('第一集')
+      expect(result.items[1].title).assertEqual('第3集')
+      expect(result.items[1].thumbnailUrl === undefined).assertTrue()
+    })
   })
 }

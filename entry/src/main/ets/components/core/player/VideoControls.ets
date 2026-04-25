@@ -657,6 +657,14 @@ export function getPlayerSettingsChipStyleState(
   return styleState
 }
 
+export function shouldApplyEpisodeAutoplaySettingsLoad(
+  requestToken: number,
+  currentToken: number,
+  isDirty: boolean
+): boolean {
+  return requestToken === currentToken && !isDirty
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
@@ -692,6 +700,8 @@ export struct PlayerSettingsDialog {
   @State private autoplayCountdownHoveredIndex: number = -1
   private readonly autoplayToggleOptions: Array<boolean> = [true, false]
   private readonly autoplayCountdownOptions: Array<number> = [3, 5, 8, 10]
+  private autoplaySettingsLoadToken: number = 0
+  private autoplaySettingsDirty: boolean = false
 
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.aiEnhanceEnabled;
@@ -717,7 +727,17 @@ export struct PlayerSettingsDialog {
     this.selectedPlaybackRateIndex = matchIdx;
     this.autoplayEnabled = this.videoController.episodeAutoplayEnabled;
     this.autoplayCountdownSeconds = this.videoController.episodeAutoplayCountdownSeconds;
+    this.autoplaySettingsDirty = false
+    this.autoplaySettingsLoadToken += 1
+    const currentLoadToken = this.autoplaySettingsLoadToken
     loadEpisodeAutoplaySettings().then((settings) => {
+      if (!shouldApplyEpisodeAutoplaySettingsLoad(
+        currentLoadToken,
+        this.autoplaySettingsLoadToken,
+        this.autoplaySettingsDirty
+      )) {
+        return
+      }
       this.autoplayEnabled = settings.enabled;
       this.autoplayCountdownSeconds = settings.countdownSeconds;
       this.videoController.episodeAutoplayEnabled = settings.enabled;
@@ -809,12 +829,14 @@ export struct PlayerSettingsDialog {
   }
 
   private updateEpisodeAutoplayEnabled(enabled: boolean): void {
+    this.autoplaySettingsDirty = true
     this.autoplayEnabled = enabled
     this.videoController.episodeAutoplayEnabled = enabled
     saveEpisodeAutoplayEnabled(enabled).catch(() => {})
   }
 
   private updateEpisodeAutoplayCountdownSeconds(seconds: number): void {
+    this.autoplaySettingsDirty = true
     this.autoplayCountdownSeconds = seconds
     this.videoController.episodeAutoplayCountdownSeconds = seconds
     saveEpisodeAutoplayCountdownSeconds(seconds).catch(() => {})

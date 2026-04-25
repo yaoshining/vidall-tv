@@ -49,11 +49,14 @@ export interface BuildItemsResult {
   currentIndex: number;
 }
 
+export function createMediaLibraryEpisodeGroupMatcher(): EpisodeGroupMatcher {
+  return new EpisodeGroupMatcher();
+}
+
 // 媒体库播放上下文：基于剧集数据库加载当季集列表
 @ObservedV2
 export class MediaLibraryContext extends PlaybackContext {
   readonly contextType: string = 'media_library';
-  private static readonly episodeGroupMatcher: EpisodeGroupMatcher = new EpisodeGroupMatcher();
 
   @Trace seriesId: number = 0;
   @Trace seasonNumber: number = 0;
@@ -122,7 +125,8 @@ export class MediaLibraryContext extends PlaybackContext {
     seasonNumber: number,
     currentVideoPath: string
   ): Promise<MediaLibraryContext> {
-    const matchResult = await MediaLibraryContext.episodeGroupMatcher.matchSeasonEpisodes(
+    const episodeGroupMatcher = createMediaLibraryEpisodeGroupMatcher();
+    const matchResult = await episodeGroupMatcher.matchSeasonEpisodes(
       seriesId,
       seasonNumber,
       (): Promise<MediaItem[]> => db.getMediaItemsByTvSeriesId(seriesId),
@@ -192,6 +196,7 @@ export class MediaLibraryContext extends PlaybackContext {
       if (matchedEntity !== undefined) {
         return matchedEntity;
       }
+      return undefined;
     }
     if (index >= 0 && index < episodeEntities.length) {
       return episodeEntities[index];

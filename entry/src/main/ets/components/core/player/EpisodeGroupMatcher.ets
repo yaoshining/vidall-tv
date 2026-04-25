@@ -117,6 +117,7 @@ export class EpisodeGroupMatcher {
       if (matchedEntity !== undefined) {
         return matchedEntity
       }
+      return undefined
     }
     if (index >= 0 && index < episodeEntities.length) {
       return episodeEntities[index]

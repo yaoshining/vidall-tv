@@ -1,5 +1,9 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { PlayerSettingsChipStyleState, getPlayerSettingsChipStyleState } from '../main/ets/components/core/player/VideoControls'
+import {
+  PlayerSettingsChipStyleState,
+  getPlayerSettingsChipStyleState,
+  shouldApplyEpisodeAutoplaySettingsLoad
+} from '../main/ets/components/core/player/VideoControls'
 
 export default function videoControlsTest() {
   describe('VideoControls player settings chip styles', () => {
@@ -42,6 +46,17 @@ export default function videoControlsTest() {
       expect(focusedState.scale).assertEqual(1.04)
       expect(focusedSelectedState.backgroundColor).assertEqual(selectedState.backgroundColor)
       expect(focusedSelectedState.scale).assertEqual(focusedState.scale)
+    })
+  })
+
+  describe('VideoControls autoplay settings load guard', () => {
+    it('用户已修改设置后不再应用旧的异步加载结果', 0, () => {
+      expect(shouldApplyEpisodeAutoplaySettingsLoad(1, 1, true)).assertFalse()
+    })
+
+    it('弹窗重新打开后只接受最新一次加载结果', 0, () => {
+      expect(shouldApplyEpisodeAutoplaySettingsLoad(1, 2, false)).assertFalse()
+      expect(shouldApplyEpisodeAutoplaySettingsLoad(2, 2, false)).assertTrue()
     })
   })
 }

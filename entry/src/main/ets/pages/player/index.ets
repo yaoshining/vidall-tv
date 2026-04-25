@@ -514,9 +514,7 @@ export struct PlayerPage {
     if (this.episodePlaybackManager !== undefined) {
       this.episodePlaybackManager.cancelCurrentEpisode();
     }
-    this.showEpisodeAutoplayOverlay = false;
-    this.episodeAutoplayRemainingSeconds = 0;
-    this.episodeAutoplayNextTitle = '';
+    this.hideEpisodeAutoplayOverlay();
     const playbackContext = this.videoPlayerController.playbackContext;
     if (playbackContext !== undefined && playbackContext.contextType === 'media_library') {
       const mediaLibraryContext = playbackContext as MediaLibraryContext;

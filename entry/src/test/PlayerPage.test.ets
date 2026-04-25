@@ -23,12 +23,16 @@ interface PlayerPageAccessor {
   persistCurrentPlaybackState(): void
   resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null>
   handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean>
+  hideEpisodeAutoplayOverlay(): void
   resumePlaybackForParam(pageParam: PlayerPageParam): void
   currentMediaKey: string
   currentMediaSeason: number
   currentMediaEpisode: number
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean
+  showEpisodeAutoplayOverlay?: boolean
+  episodeAutoplayRemainingSeconds?: number
+  episodeAutoplayNextTitle?: string
   showResumeDialog: boolean
   pendingSeekMs: number
   videoData?: PlayerPageVideoDataAccessor
@@ -208,6 +212,9 @@ class PreparedResumeListenerPage {
 class EpisodeSwitchTokenPage {
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean = false
+  showEpisodeAutoplayOverlay: boolean = false
+  episodeAutoplayRemainingSeconds: number = 0
+  episodeAutoplayNextTitle: string = ''
   showResumeDialog: boolean = false
   pendingSeekMs: number = -1
   currentMediaKey: string = ''
@@ -230,6 +237,12 @@ class EpisodeSwitchTokenPage {
 
   handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
     return this.handleEpisodeSelectImpl(item)
+  }
+
+  hideEpisodeAutoplayOverlay(): void {
+    this.showEpisodeAutoplayOverlay = false
+    this.episodeAutoplayRemainingSeconds = 0
+    this.episodeAutoplayNextTitle = ''
   }
 
   persistCurrentPlaybackState(): void {
@@ -273,11 +286,15 @@ class EpisodeSwitchTokenPage {
 class TestEpisodeSwitchPage {
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean = false
+  showEpisodeAutoplayOverlay: boolean = false
+  episodeAutoplayRemainingSeconds: number = 0
+  episodeAutoplayNextTitle: string = ''
   showResumeDialog: boolean = false
   pendingSeekMs: number = -1
   currentMediaKey: string = ''
   currentMediaSeason: number = 0
   currentMediaEpisode: number = 0
+  pageParamToken: number = 0
   videoData?: PlayerPageVideoDataAccessor
   videoPlayerController: PlayerPageControllerPlaybackAccessor
   private readonly handleEpisodeSelectImpl: (item: PlaybackContextItem) => Promise<boolean>
@@ -293,6 +310,12 @@ class TestEpisodeSwitchPage {
 
   handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
     return this.handleEpisodeSelectImpl(item)
+  }
+
+  hideEpisodeAutoplayOverlay(): void {
+    this.showEpisodeAutoplayOverlay = false
+    this.episodeAutoplayRemainingSeconds = 0
+    this.episodeAutoplayNextTitle = ''
   }
 
   persistCurrentPlaybackState(): void {

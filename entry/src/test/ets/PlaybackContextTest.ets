@@ -1,7 +1,8 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   PlaybackContext, PlaybackContextItem,
-  MediaLibraryContext, FileExplorerContext, BuildItemsResult
+  MediaLibraryContext, FileExplorerContext, BuildItemsResult,
+  createMediaLibraryEpisodeGroupMatcher
 } from '../../main/ets/components/core/player/PlaybackContext';
 import { MediaItem, TvEpisodeEntity } from '../../main/ets/db/models/MediaEntity';
 
@@ -355,6 +356,48 @@ export default function PlaybackContextTest() {
       const result = MediaLibraryContext.buildItems(fakeItems, 1, '/s1e7.mkv');
       expect(result.items.length).assertEqual(1);
       expect(result.items[0].title).assertEqual('第7集');
+    });
+
+    it('buildItems 在已知 episodeNumber 未命中元数据时不会按索引错配到其他集', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s1e1.mkv', fileName: 's1e1.mkv', seasonNumber: 1, episodeNumber: 1
+        },
+        {
+          id: 3, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/s1e3.mkv', fileName: 's1e3.mkv', seasonNumber: 1, episodeNumber: 3
+        }
+      ];
+      const episodeEntities: TvEpisodeEntity[] = [
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-1',
+          seasonNumber: 1, episodeNumber: 1, scrapedAt: 0, title: '第一集'
+        },
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-2',
+          seasonNumber: 1, episodeNumber: 2, scrapedAt: 0, title: '第二集',
+          stillUrl: 'https://image.tmdb.org/t/p/w342/ep2.jpg'
+        },
+        {
+          seriesId: 7, provider: 'tmdb', providerId: 'ep-4',
+          seasonNumber: 1, episodeNumber: 4, scrapedAt: 0, title: '第四集'
+        }
+      ];
+
+      const result = MediaLibraryContext.buildItems(fakeItems, 1, '/s1e3.mkv', episodeEntities);
+      const thirdItem = result.items[1] as PlaybackContextItemWithThumbnail;
+
+      expect(result.items.length).assertEqual(2);
+      expect(thirdItem.title).assertEqual('第3集');
+      expect(thirdItem.thumbnailUrl === undefined).assertTrue();
+    });
+
+    it('createMediaLibraryEpisodeGroupMatcher 每次都返回新实例以避免跨 build 复用旧缓存', 0, () => {
+      const first = createMediaLibraryEpisodeGroupMatcher();
+      const second = createMediaLibraryEpisodeGroupMatcher();
+
+      expect(first === second).assertFalse();
     });
 
   });
