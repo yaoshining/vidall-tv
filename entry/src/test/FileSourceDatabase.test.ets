@@ -5,6 +5,17 @@ import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
 import { FileSource, FileSourceType } from '../main/ets/db/models/FileSourceEntity';
 import { ScrapeInfoEntity, TvEpisodeEntity, TvSeasonEntity, TvSeriesEntity, VideoEntity } from '../main/ets/db/models/MediaEntity';
 
+async function waitForTvSeriesId(db: FileSourceDatabase, provider: string, providerId: string): Promise<number> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const persistedSeries = await db.getTvSeriesByProviderId(provider, providerId);
+    if (persistedSeries && persistedSeries.id !== undefined) {
+      return persistedSeries.id;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+  return -1;
+}
+
 /**
  * FileSourceDatabase 集成测试（运行在 UnitTestBuild，context 通过 abilityDelegatorRegistry 获取）
  *
@@ -92,10 +103,9 @@ export default function fileSourceDatabaseTest() {
         numberOfSeasons: 1,
         scrapedAt: now
       } as TvSeriesEntity);
-      expect(seriesId > 0).assertTrue();
-      const persistedSeries = await db.getTvSeriesByProviderId('tmdb', seriesProviderId);
-      expect(persistedSeries !== null && persistedSeries.id !== undefined).assertTrue();
-      const persistedSeriesId = persistedSeries!.id!;
+      const persistedSeriesId = await waitForTvSeriesId(db, 'tmdb', seriesProviderId);
+      console.info(`[FileSourceDatabase.test] upsertTvSeries returned ${seriesId}, persistedSeriesId=${persistedSeriesId}`);
+      expect(persistedSeriesId > 0).assertTrue();
 
       const seasonId = await db.upsertTvSeason({
         seriesId: persistedSeriesId,
