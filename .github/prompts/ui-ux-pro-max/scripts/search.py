@@ -7,7 +7,7 @@ Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-r
        python search.py "<query>" --design-system --persist [-p "Project Name"] [--page "dashboard"]
 
 Domains: style, prompt, color, chart, landing, product, ux, typography
-Stacks: html-tailwind, react, nextjs, astro, vue, nuxtjs, nuxt-ui, svelte, swiftui, react-native, flutter, shadcn, jetpack-compose, arkui
+Stacks: html-tailwind, react, nextjs, astro, vue, nuxtjs, nuxt-ui, svelte, swiftui, react-native, flutter, shadcn, jetpack-compose, arkts (arkui as legacy alias)
 
 Persistence (Master + Overrides pattern):
   --persist    Save design system to design-system/MASTER.md
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UI Pro Max Search")
     parser.add_argument("query", help="Search query")
     parser.add_argument("--domain", "-d", choices=list(CSV_CONFIG.keys()), help="Search domain")
-    parser.add_argument("--stack", "-s", choices=AVAILABLE_STACKS, help="Stack-specific search (html-tailwind, react, nextjs, astro, vue, nuxtjs, nuxt-ui, svelte, swiftui, react-native, flutter, shadcn, jetpack-compose, arkui)")
+    parser.add_argument("--stack", "-s", choices=AVAILABLE_STACKS, help="Stack-specific search (arkts recommended; arkui is legacy alias; also: html-tailwind, react, nextjs, astro, vue, nuxtjs, nuxt-ui, svelte, swiftui, react-native, flutter, shadcn, jetpack-compose)")
     parser.add_argument("--max-results", "-n", type=int, default=MAX_RESULTS, help="Max results (default: 3)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     # Design system generation

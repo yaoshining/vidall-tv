@@ -81,7 +81,12 @@ STACK_CONFIG = {
     "flutter": {"file": "stacks/flutter.csv"},
     "shadcn": {"file": "stacks/shadcn.csv"},
     "jetpack-compose": {"file": "stacks/jetpack-compose.csv"},
-    "arkui": {"file": "stacks/arkui.csv"}
+    "arkts": {"file": "stacks/arkts.csv"}
+}
+
+# Stack aliases: map legacy names to canonical names
+STACK_ALIASES = {
+    "arkui": "arkts"
 }
 
 # Common columns for all stacks
@@ -90,7 +95,7 @@ _STACK_COLS = {
     "output_cols": ["Category", "Guideline", "Description", "Do", "Don't", "Code Good", "Code Bad", "Severity", "Docs URL"]
 }
 
-AVAILABLE_STACKS = list(STACK_CONFIG.keys())
+AVAILABLE_STACKS = list(STACK_CONFIG.keys()) + list(STACK_ALIASES.keys())
 
 
 # ============ BM25 IMPLEMENTATION ============
@@ -234,21 +239,24 @@ def search(query, domain=None, max_results=MAX_RESULTS):
 
 def search_stack(query, stack, max_results=MAX_RESULTS):
     """Search stack-specific guidelines"""
-    if stack not in STACK_CONFIG:
+    # Normalize alias to canonical name
+    canonical_stack = STACK_ALIASES.get(stack, stack)
+    
+    if canonical_stack not in STACK_CONFIG:
         return {"error": f"Unknown stack: {stack}. Available: {', '.join(AVAILABLE_STACKS)}"}
 
-    filepath = DATA_DIR / STACK_CONFIG[stack]["file"]
+    filepath = DATA_DIR / STACK_CONFIG[canonical_stack]["file"]
 
     if not filepath.exists():
-        return {"error": f"Stack file not found: {filepath}", "stack": stack}
+        return {"error": f"Stack file not found: {filepath}", "stack": canonical_stack}
 
     results = _search_csv(filepath, _STACK_COLS["search_cols"], _STACK_COLS["output_cols"], query, max_results)
 
     return {
         "domain": "stack",
-        "stack": stack,
+        "stack": canonical_stack,
         "query": query,
-        "file": STACK_CONFIG[stack]["file"],
+        "file": STACK_CONFIG[canonical_stack]["file"],
         "count": len(results),
         "results": results
     }
