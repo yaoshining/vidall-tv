@@ -3850,7 +3850,7 @@ static bool LoadVpeRuntimeLocked() {
   return true;
 }
 
-static bool InitializeVpeEnvironmentLocked(const char* context) {
+static bool InitializeVpeEnvironmentLocked(const char* context, bool cacheUnsupported) {
   if (!LoadVpeRuntimeLocked()) {
     return false;
   }
@@ -3859,8 +3859,14 @@ static bool InitializeVpeEnvironmentLocked(const char* context) {
   }
   VideoProcessing_ErrorCode ret = g_vpeRuntimeSymbols.initializeEnvironment();
   if (ret != VIDEO_PROCESSING_SUCCESS) {
-    MarkVpeRuntimeUnsupportedLocked(
-      std::string(context) + ": InitializeEnvironment failed ret=" + std::to_string(static_cast<int>(ret)));
+    const std::string detail =
+      std::string(context) + ": InitializeEnvironment failed ret=" + std::to_string(static_cast<int>(ret));
+    if (cacheUnsupported) {
+      MarkVpeRuntimeUnsupportedLocked(detail);
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+        "VPE: %{public}s", detail.c_str());
+    }
     return false;
   }
   g_vpeEnvironmentInitialized = true;
@@ -3884,7 +3890,7 @@ static bool ProbeVpeRuntimeSupportLocked() {
   if (g_vpeRuntimeSupportProbed) {
     return g_vpeRuntimeSupported;
   }
-  if (!InitializeVpeEnvironmentLocked("probe")) {
+  if (!InitializeVpeEnvironmentLocked("probe", true)) {
     return false;
   }
   OH_VideoProcessing* probe = nullptr;
@@ -3985,14 +3991,14 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
   if (!ProbeVpeRuntimeSupportLocked()) {
     return returnEmpty();
   }
-  if (!InitializeVpeEnvironmentLocked("create")) {
+  if (!InitializeVpeEnvironmentLocked("create", false)) {
     return returnEmpty();
   }
 
   const int32_t detailEnhancerType = *g_vpeRuntimeSymbols.detailEnhancerType;
   if (g_vpeRuntimeSymbols.create(&g_vpeProcessor, detailEnhancerType) != VIDEO_PROCESSING_SUCCESS) {
-    MarkVpeRuntimeUnsupportedLocked("create: detail enhancer creation failed");
-    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: Create failed (runtime downgraded)");
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+      "VPE: Create failed after runtime probe passed");
     DeinitializeVpeEnvironmentLocked();
     return returnEmpty();
   }
@@ -4005,7 +4011,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
 
   // 注册回调（必须在 Start 前）
   if (g_vpeRuntimeSymbols.createCallback(&g_vpeCallback) != VIDEO_PROCESSING_SUCCESS || g_vpeCallback == nullptr) {
-    MarkVpeRuntimeUnsupportedLocked("create: callback creation failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: callback creation failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -4013,7 +4018,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
   if (g_vpeRuntimeSymbols.bindOnError(g_vpeCallback, VpeOnError) != VIDEO_PROCESSING_SUCCESS ||
       g_vpeRuntimeSymbols.bindOnState(g_vpeCallback, VpeOnState) != VIDEO_PROCESSING_SUCCESS ||
       g_vpeRuntimeSymbols.registerCallback(g_vpeProcessor, g_vpeCallback, nullptr) != VIDEO_PROCESSING_SUCCESS) {
-    MarkVpeRuntimeUnsupportedLocked("create: callback registration failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: callback registration failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -4022,7 +4026,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
   // 从 surfaceId 字符串恢复 uint64_t
   uint64_t displaySurfaceId = strtoull(surfaceIdBuf, nullptr, 10);
   if (OH_NativeWindow_CreateNativeWindowFromSurfaceId(displaySurfaceId, &g_vpeDisplayWindow) != 0) {
-    MarkVpeRuntimeUnsupportedLocked("create: display surface binding failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: CreateNativeWindowFromSurfaceId failed for id=%{public}s", surfaceIdBuf);
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -4030,7 +4033,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
 
   // 绑定输出（VPE → 显示）
   if (g_vpeRuntimeSymbols.setSurface(g_vpeProcessor, g_vpeDisplayWindow) != VIDEO_PROCESSING_SUCCESS) {
-    MarkVpeRuntimeUnsupportedLocked("create: output surface setup failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: SetSurface (output) failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -4038,7 +4040,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
 
   // 获取输入 Surface（解码器 → VPE）
   if (g_vpeRuntimeSymbols.getSurface(g_vpeProcessor, &g_vpeInputWindow) != VIDEO_PROCESSING_SUCCESS) {
-    MarkVpeRuntimeUnsupportedLocked("create: input surface acquisition failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: GetSurface (input) failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -4046,7 +4047,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
 
   // 启动 VPE
   if (g_vpeRuntimeSymbols.start(g_vpeProcessor) != VIDEO_PROCESSING_SUCCESS) {
-    MarkVpeRuntimeUnsupportedLocked("create: start failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: Start failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -4055,7 +4055,6 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
   // 获取输入 Surface 的 surfaceId，回传给 ArkTS
   uint64_t inputSurfaceId = 0;
   if (OH_NativeWindow_GetSurfaceId(g_vpeInputWindow, &inputSurfaceId) != 0) {
-    MarkVpeRuntimeUnsupportedLocked("create: input surface id query failed");
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: GetSurfaceId (input) failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
