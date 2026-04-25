@@ -57,7 +57,7 @@ export interface SearchMediaOptions {
  */
 export class FileSourceDatabase {
   private static readonly DB_VERSION = 10;
-  private static readonly DB_NAME = 'FILE_SOURCES_DB';
+  private static readonly DEFAULT_DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
   private static readonly TABLE_VIDEOS = 'videos';
@@ -73,6 +73,7 @@ export class FileSourceDatabase {
 
   // 单例实例
   private static instance: FileSourceDatabase | null = null;
+  private static databaseNameOverride: string | null = null;
 
   // 数据库存储
   private rdbStore: relationalStore.RdbStore | null = null;
@@ -94,6 +95,15 @@ export class FileSourceDatabase {
       FileSourceDatabase.instance.context = context;
     }
     return FileSourceDatabase.instance;
+  }
+
+  static setDatabaseNameForTesting(databaseName: string | null): void {
+    FileSourceDatabase.databaseNameOverride = databaseName;
+    FileSourceDatabase.instance = null;
+  }
+
+  private static getDatabaseName(): string {
+    return FileSourceDatabase.databaseNameOverride ?? FileSourceDatabase.DEFAULT_DB_NAME;
   }
 
   /**
@@ -124,7 +134,7 @@ export class FileSourceDatabase {
   private async doInit(ctx: Context): Promise<void> {
     try {
       const config: relationalStore.StoreConfig = {
-        name: FileSourceDatabase.DB_NAME,
+        name: FileSourceDatabase.getDatabaseName(),
         securityLevel: relationalStore.SecurityLevel.S1
       };
 
@@ -1413,66 +1423,23 @@ export class FileSourceDatabase {
       await this.rdbStore.update(bucket, pred);
       return existing.id;
     }
-    const valueBucket: relationalStore.ValuesBucket = {
-      provider: e.provider,
-      provider_id: e.providerId,
-      title: e.title,
-      scraped_at: e.scrapedAt
-    };
-    if (e.originalTitle !== undefined) {
-      valueBucket.original_title = e.originalTitle;
-    }
-    if (e.overview !== undefined) {
-      valueBucket.overview = e.overview;
-    }
-    if (e.firstAirDate !== undefined) {
-      valueBucket.first_air_date = e.firstAirDate;
-    }
-    if (e.rating !== undefined) {
-      valueBucket.rating = e.rating;
-    }
-    if (e.voteCount !== undefined) {
-      valueBucket.vote_count = e.voteCount;
-    }
-    if (e.posterPath !== undefined) {
-      valueBucket.poster_path = e.posterPath;
-    }
-    if (e.backdropPath !== undefined) {
-      valueBucket.backdrop_path = e.backdropPath;
-    }
-    if (e.posterUrl !== undefined) {
-      valueBucket.poster_url = e.posterUrl;
-    }
-    if (e.backdropUrl !== undefined) {
-      valueBucket.backdrop_url = e.backdropUrl;
-    }
-    if (e.posterLocalPath !== undefined) {
-      valueBucket.poster_local_path = e.posterLocalPath;
-    }
-    if (e.backdropLocalPath !== undefined) {
-      valueBucket.backdrop_local_path = e.backdropLocalPath;
-    }
-    if (e.genresJson !== undefined) {
-      valueBucket.genres_json = e.genresJson;
-    }
-    if (e.castJson !== undefined) {
-      valueBucket.cast_json = e.castJson;
-    }
-    if (e.numberOfSeasons !== undefined) {
-      valueBucket.number_of_seasons = e.numberOfSeasons;
-    }
-    if (e.originalLanguage !== undefined) {
-      valueBucket.original_language = e.originalLanguage;
-    }
-    if (e.originCountryJson !== undefined) {
-      valueBucket.origin_country_json = e.originCountryJson;
-    }
-    if (e.rawJson !== undefined) {
-      valueBucket.raw_json = e.rawJson;
-    }
-    let insertedRowId = -1;
+    const sql = `
+      INSERT INTO ${FileSourceDatabase.TABLE_TV_SERIES}
+        (provider, provider_id, title, original_title, overview, first_air_date, rating,
+         vote_count, poster_path, backdrop_path, poster_url, backdrop_url,
+         poster_local_path, backdrop_local_path, genres_json, cast_json,
+         number_of_seasons, original_language, origin_country_json, raw_json, scraped_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `;
+    const args: relationalStore.ValueType[] = [
+      e.provider, e.providerId, e.title, e.originalTitle ?? null, e.overview ?? null,
+      e.firstAirDate ?? null, e.rating ?? null, e.voteCount ?? null,
+      e.posterPath ?? null, e.backdropPath ?? null, e.posterUrl ?? null, e.backdropUrl ?? null,
+      e.posterLocalPath ?? null, e.backdropLocalPath ?? null, e.genresJson ?? null, e.castJson ?? null,
+      e.numberOfSeasons ?? null, e.originalLanguage ?? null, e.originCountryJson ?? null, e.rawJson ?? null, e.scrapedAt
+    ];
     try {
-      insertedRowId = await this.rdbStore.insert(FileSourceDatabase.TABLE_TV_SERIES, valueBucket);
+      await this.rdbStore.executeSql(sql, args);
     } catch (insertError) {
       const recovered = await this.getTvSeriesByProviderId(e.provider, e.providerId);
       if (recovered && recovered.id !== undefined) {
@@ -1486,7 +1453,14 @@ export class FileSourceDatabase {
       `SELECT id FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ? LIMIT 1`,
       [e.provider, e.providerId]
     );
-    return inserted?.id ?? (fallbackId > 0 ? fallbackId : (insertedRowId > 0 ? insertedRowId : await this.getLastInsertedRowId()));
+    const lastInsertedId = await this.getLastInsertedRowId();
+    const resolvedId = inserted?.id ?? (fallbackId > 0 ? fallbackId : lastInsertedId);
+    if (resolvedId <= 0) {
+      throw new Error(
+        `upsertTvSeries unresolved id provider=${e.provider} providerId=${e.providerId} fallbackId=${fallbackId} lastInsertedId=${lastInsertedId}`
+      );
+    }
+    return resolvedId;
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertTvSeries 失败: ${err.message}`);

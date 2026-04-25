@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@ohos/hypium';
+import { describe, beforeAll, afterAll, it, expect } from '@ohos/hypium';
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
@@ -24,6 +24,15 @@ async function waitForTvSeriesId(db: FileSourceDatabase, provider: string, provi
  *   2. 基础 DB 可用性 — 初始化后可正常读取文件源列表
  */
 export default function fileSourceDatabaseTest() {
+  const isolatedDatabaseName = `FILE_SOURCES_DB_TEST_${Date.now()}`;
+
+  beforeAll(() => {
+    FileSourceDatabase.setDatabaseNameForTesting(isolatedDatabaseName);
+  });
+
+  afterAll(() => {
+    FileSourceDatabase.setDatabaseNameForTesting(null);
+  });
 
   describe('FileSourceDatabase_concurrent_init', () => {
 
@@ -104,7 +113,6 @@ export default function fileSourceDatabaseTest() {
         scrapedAt: now
       } as TvSeriesEntity);
       const persistedSeriesId = seriesId > 0 ? seriesId : await waitForTvSeriesId(db, 'tmdb', seriesProviderId);
-      console.info(`[FileSourceDatabase.test] upsertTvSeries returned ${seriesId}, persistedSeriesId=${persistedSeriesId}`);
       expect(persistedSeriesId).assertLarger(0);
 
       const seasonId = await db.upsertTvSeason({
