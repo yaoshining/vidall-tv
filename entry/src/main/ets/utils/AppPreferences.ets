@@ -18,6 +18,10 @@ export class PrefKey {
   static readonly SCRAPE_PROVIDER_ORDER = 'scrape_provider_order';
   /** 播放器诊断面包屑（用于无 faultlog 场景定位最后阶段） */
   static readonly PLAYER_LAST_BREADCRUMB = 'player_last_breadcrumb';
+  /** 剧集播放结束前是否自动切到下一集（1=开启，0=关闭） */
+  static readonly PLAYER_EPISODE_AUTOPLAY_ENABLED = 'player_episode_autoplay_enabled';
+  /** 自动切到下一集前的倒计时秒数 */
+  static readonly PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS = 'player_episode_autoplay_countdown_seconds';
 }
 
 // ─────────────────────────────────────────────
@@ -99,4 +103,3 @@ export class AppPreferences {
     }
   }
 }
-

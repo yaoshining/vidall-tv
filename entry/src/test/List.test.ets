@@ -10,6 +10,8 @@ import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
 import subtitleBridgeAdapterTest from './SubtitleBridgeAdapter.test';
 import webDAVClientUtilsTest from './WebDAVClientUtils.test';
 import episodeListPanelTest from './EpisodeListPanel.test';
+import episodeGroupMatcherTest from './EpisodeGroupMatcher.test';
+import episodePlaybackManagerTest from './EpisodePlaybackManager.test';
 import videoControlsTest from './VideoControls.test';
 import playerPageTest from './PlayerPage.test';
 import videoPlayerControllerTest from './VideoPlayerController.test';
@@ -31,6 +33,8 @@ export default function testsuite() {
   subtitleBridgeAdapterTest();
   webDAVClientUtilsTest();
   episodeListPanelTest();
+  episodeGroupMatcherTest();
+  episodePlaybackManagerTest();
   videoControlsTest();
   playerPageTest();
   videoPlayerControllerTest();

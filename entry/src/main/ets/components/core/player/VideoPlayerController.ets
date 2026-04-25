@@ -24,6 +24,10 @@ import { SmbAvSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
 import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 import { ParsedSubtitle } from "./SubtitleRenderer";
 import { PlaybackContext } from "./PlaybackContext";
+import {
+  DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
+  DEFAULT_EPISODE_AUTOPLAY_ENABLED
+} from "./EpisodeAutoplayPreferences";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -235,6 +239,10 @@ export class VideoPlayerController {
   progressContext: PlayProgressEntity | null = null;
   /** 播放上下文（当季集列表 + 当前集索引），供连播/上下集跳转使用；文件浏览器入口不传时为 undefined */
   playbackContext: PlaybackContext | undefined = undefined;
+  /** 是否自动播放下一集 */
+  @Trace episodeAutoplayEnabled: boolean = DEFAULT_EPISODE_AUTOPLAY_ENABLED;
+  /** 自动播放下一集前的倒计时秒数 */
+  @Trace episodeAutoplayCountdownSeconds: number = DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS;
   /** 10s 防抖进度写入定时器 */
   private progressTimer?: number;
   /** 播放会话编号：每次 initPlayer 自增，用于忽略旧实例回调 */

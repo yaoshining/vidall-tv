@@ -193,6 +193,31 @@ export default function PlaybackContextTest() {
       expect(result.items[1].videoPath).assertEqual('/ep2.mkv');
     });
 
+    it('buildItems 会将当前季的可播放条目按集号升序排列', 0, () => {
+      const fakeItems: MediaItem[] = [
+        {
+          id: 2, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep2.mkv', fileName: 'ep2.mkv', seasonNumber: 1, episodeNumber: 2, title: 'EP2'
+        },
+        {
+          id: 1, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/ep1.mkv', fileName: 'ep1.mkv', seasonNumber: 1, episodeNumber: 1, title: 'EP1'
+        },
+        {
+          id: 3, sourceId: 1, directoryPath: '/tv', scannedAt: 0,
+          filePath: '/special.mkv', fileName: 'special.mkv', seasonNumber: 1, title: 'SPECIAL'
+        }
+      ];
+
+      const result: BuildItemsResult = MediaLibraryContext.buildItems(fakeItems, 1, '/ep2.mkv');
+
+      expect(result.items.length).assertEqual(3);
+      expect(result.items[0].videoPath).assertEqual('/ep1.mkv');
+      expect(result.items[1].videoPath).assertEqual('/ep2.mkv');
+      expect(result.items[2].videoPath).assertEqual('/special.mkv');
+      expect(result.currentIndex).assertEqual(1);
+    });
+
     it('buildItems currentVideoPath 不存在时 currentIndex 默认为 0', 0, () => {
       const fakeItems: MediaItem[] = [
         {
