@@ -171,15 +171,12 @@ else()
 endif()
 
 # VPE (Video Processing Engine) — AI 画质增强（Detail Enhancer）
-# libvideo_processing.so 在 HarmonyOS API 12+ 上存在（我们 minSdk=API19 ≥ API12，始终可用）
-# 定义 VIDALL_HAS_VPE 宏让 IDE 知道这段代码是有意为之的条件编译，消除"API not supported"警告
+# 保留头文件编译能力，但不再对 libvideo_processing.so 建立运行时硬链接。
+# 运行时由 NAPI 内部自行探测 / dlopen，缺库时降级为“不支持”。
 option(VIDALL_ENABLE_VPE "Enable VPE (Video Processing Engine) AI enhancement" ON)
 if(VIDALL_ENABLE_VPE)
   target_compile_definitions(vidall_core_player_napi PRIVATE VIDALL_HAS_VPE=1)
-  target_link_libraries(vidall_core_player_napi PUBLIC
-      libvideo_processing.so
-  )
-  message(STATUS "VIDALL_ENABLE_VPE=ON — VPE Detail Enhancer enabled")
+  message(STATUS "VIDALL_ENABLE_VPE=ON — VPE Detail Enhancer enabled with runtime probing")
 else()
   message(STATUS "VIDALL_ENABLE_VPE=OFF — VPE Detail Enhancer disabled (stub stubs will be used)")
 endif()
@@ -187,6 +184,7 @@ endif()
 target_link_libraries(vidall_core_player_napi PUBLIC
     libace_napi.z.so
     libhilog_ndk.z.so
+    libdl.so
     libnative_media_codecbase.so
     ffmpeg
 )
