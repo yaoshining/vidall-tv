@@ -1414,101 +1414,80 @@ export class FileSourceDatabase {
       await this.rdbStore.update(bucket, pred);
       return existing.id;
     }
-    const columns: string[] = ['provider', 'provider_id', 'title', 'scraped_at'];
-    const placeholders: string[] = ['?', '?', '?', '?'];
-    const args: relationalStore.ValueType[] = [e.provider, e.providerId, e.title, e.scrapedAt];
+    const valueBucket: relationalStore.ValuesBucket = {
+      provider: e.provider,
+      provider_id: e.providerId,
+      title: e.title,
+      scraped_at: e.scrapedAt
+    };
     if (e.originalTitle !== undefined) {
-      columns.push('original_title');
-      placeholders.push('?');
-      args.push(e.originalTitle);
+      valueBucket.original_title = e.originalTitle;
     }
     if (e.overview !== undefined) {
-      columns.push('overview');
-      placeholders.push('?');
-      args.push(e.overview);
+      valueBucket.overview = e.overview;
     }
     if (e.firstAirDate !== undefined) {
-      columns.push('first_air_date');
-      placeholders.push('?');
-      args.push(e.firstAirDate);
+      valueBucket.first_air_date = e.firstAirDate;
     }
     if (e.rating !== undefined) {
-      columns.push('rating');
-      placeholders.push('?');
-      args.push(e.rating);
+      valueBucket.rating = e.rating;
     }
     if (e.voteCount !== undefined) {
-      columns.push('vote_count');
-      placeholders.push('?');
-      args.push(e.voteCount);
+      valueBucket.vote_count = e.voteCount;
     }
     if (e.posterPath !== undefined) {
-      columns.push('poster_path');
-      placeholders.push('?');
-      args.push(e.posterPath);
+      valueBucket.poster_path = e.posterPath;
     }
     if (e.backdropPath !== undefined) {
-      columns.push('backdrop_path');
-      placeholders.push('?');
-      args.push(e.backdropPath);
+      valueBucket.backdrop_path = e.backdropPath;
     }
     if (e.posterUrl !== undefined) {
-      columns.push('poster_url');
-      placeholders.push('?');
-      args.push(e.posterUrl);
+      valueBucket.poster_url = e.posterUrl;
     }
     if (e.backdropUrl !== undefined) {
-      columns.push('backdrop_url');
-      placeholders.push('?');
-      args.push(e.backdropUrl);
+      valueBucket.backdrop_url = e.backdropUrl;
     }
     if (e.posterLocalPath !== undefined) {
-      columns.push('poster_local_path');
-      placeholders.push('?');
-      args.push(e.posterLocalPath);
+      valueBucket.poster_local_path = e.posterLocalPath;
     }
     if (e.backdropLocalPath !== undefined) {
-      columns.push('backdrop_local_path');
-      placeholders.push('?');
-      args.push(e.backdropLocalPath);
+      valueBucket.backdrop_local_path = e.backdropLocalPath;
     }
     if (e.genresJson !== undefined) {
-      columns.push('genres_json');
-      placeholders.push('?');
-      args.push(e.genresJson);
+      valueBucket.genres_json = e.genresJson;
     }
     if (e.castJson !== undefined) {
-      columns.push('cast_json');
-      placeholders.push('?');
-      args.push(e.castJson);
+      valueBucket.cast_json = e.castJson;
     }
     if (e.numberOfSeasons !== undefined) {
-      columns.push('number_of_seasons');
-      placeholders.push('?');
-      args.push(e.numberOfSeasons);
+      valueBucket.number_of_seasons = e.numberOfSeasons;
     }
     if (e.originalLanguage !== undefined) {
-      columns.push('original_language');
-      placeholders.push('?');
-      args.push(e.originalLanguage);
+      valueBucket.original_language = e.originalLanguage;
     }
     if (e.originCountryJson !== undefined) {
-      columns.push('origin_country_json');
-      placeholders.push('?');
-      args.push(e.originCountryJson);
+      valueBucket.origin_country_json = e.originCountryJson;
     }
     if (e.rawJson !== undefined) {
-      columns.push('raw_json');
-      placeholders.push('?');
-      args.push(e.rawJson);
+      valueBucket.raw_json = e.rawJson;
     }
-    const sql = `INSERT OR IGNORE INTO ${FileSourceDatabase.TABLE_TV_SERIES} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
-    await this.rdbStore.executeSql(sql, args);
+    let insertedRowId = -1;
+    try {
+      insertedRowId = await this.rdbStore.insert(FileSourceDatabase.TABLE_TV_SERIES, valueBucket);
+    } catch (insertError) {
+      const recovered = await this.getTvSeriesByProviderId(e.provider, e.providerId);
+      if (recovered && recovered.id !== undefined) {
+        return recovered.id;
+      }
+      const insertErr = insertError as BusinessError;
+      throw new Error(insertErr.message);
+    }
+    const inserted = await this.getTvSeriesByProviderId(e.provider, e.providerId);
     const fallbackId = await this.querySingleId(
       `SELECT id FROM ${FileSourceDatabase.TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ? LIMIT 1`,
       [e.provider, e.providerId]
     );
-    return fallbackId > 0 ? fallbackId : await this.getLastInsertedRowId();
+    return inserted?.id ?? (fallbackId > 0 ? fallbackId : (insertedRowId > 0 ? insertedRowId : await this.getLastInsertedRowId()));
     } catch (e) {
       const err = e as BusinessError;
       hilog.error(0x0000, 'FileSourceDatabase', `upsertTvSeries 失败: ${err.message}`);
