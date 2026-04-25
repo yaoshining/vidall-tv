@@ -57,6 +57,7 @@ extern "C" {
 #include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <dlfcn.h>
 
 #if VIDALL_HAS_LIBSMB2
 #include <smb2/smb2.h>       // 必须先于 libsmb2.h：定义 SMB2_GUID_SIZE / smb2_lease_key
@@ -3719,6 +3720,196 @@ static OHNativeWindow*        g_vpeInputWindow  = nullptr;
 static OHNativeWindow*        g_vpeDisplayWindow = nullptr;
 static VideoProcessing_Callback* g_vpeCallback  = nullptr;
 static std::mutex g_vpeMutex;
+static void* g_vpeLibraryHandle = nullptr;
+static bool g_vpeLibraryLoadAttempted = false;
+static bool g_vpeRuntimeSupportProbed = false;
+static bool g_vpeRuntimeSupported = false;
+static bool g_vpeEnvironmentInitialized = false;
+static std::string g_vpeRuntimeStatusDetail;
+
+struct VpeRuntimeSymbols {
+  decltype(&OH_VideoProcessing_InitializeEnvironment) initializeEnvironment = nullptr;
+  decltype(&OH_VideoProcessing_DeinitializeEnvironment) deinitializeEnvironment = nullptr;
+  decltype(&OH_VideoProcessing_Create) create = nullptr;
+  decltype(&OH_VideoProcessing_Destroy) destroy = nullptr;
+  decltype(&OH_VideoProcessing_RegisterCallback) registerCallback = nullptr;
+  decltype(&OH_VideoProcessing_SetSurface) setSurface = nullptr;
+  decltype(&OH_VideoProcessing_GetSurface) getSurface = nullptr;
+  decltype(&OH_VideoProcessing_SetParameter) setParameter = nullptr;
+  decltype(&OH_VideoProcessing_Start) start = nullptr;
+  decltype(&OH_VideoProcessing_Stop) stop = nullptr;
+  decltype(&OH_VideoProcessingCallback_Create) createCallback = nullptr;
+  decltype(&OH_VideoProcessingCallback_Destroy) destroyCallback = nullptr;
+  decltype(&OH_VideoProcessingCallback_BindOnError) bindOnError = nullptr;
+  decltype(&OH_VideoProcessingCallback_BindOnState) bindOnState = nullptr;
+  decltype(&VIDEO_PROCESSING_TYPE_DETAIL_ENHANCER) detailEnhancerType = nullptr;
+  decltype(&VIDEO_DETAIL_ENHANCER_PARAMETER_KEY_QUALITY_LEVEL) qualityLevelKey = nullptr;
+};
+
+static VpeRuntimeSymbols g_vpeRuntimeSymbols;
+
+template <typename T>
+static bool ResolveVpeSymbolLocked(const char* symbolName, T& target, std::string& errorDetail) {
+  dlerror();
+  void* symbol = dlsym(g_vpeLibraryHandle, symbolName);
+  const char* error = dlerror();
+  if (error != nullptr || symbol == nullptr) {
+    errorDetail = std::string("missing symbol ") + symbolName;
+    if (error != nullptr) {
+      errorDetail += ": ";
+      errorDetail += error;
+    }
+    return false;
+  }
+  target = reinterpret_cast<T>(symbol);
+  return true;
+}
+
+static void LogVpeRuntimeStatusLocked(bool supported, const std::string& detail) {
+  if (detail == g_vpeRuntimeStatusDetail) {
+    return;
+  }
+  g_vpeRuntimeStatusDetail = detail;
+  if (supported) {
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
+      "VPE runtime available: %{public}s", detail.c_str());
+    return;
+  }
+  OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+    "VPE runtime degraded: %{public}s", detail.c_str());
+}
+
+static void MarkVpeRuntimeSupportedLocked(const std::string& detail) {
+  g_vpeRuntimeSupportProbed = true;
+  g_vpeRuntimeSupported = true;
+  LogVpeRuntimeStatusLocked(true, detail);
+}
+
+static void MarkVpeRuntimeUnsupportedLocked(const std::string& detail) {
+  g_vpeRuntimeSupportProbed = true;
+  g_vpeRuntimeSupported = false;
+  LogVpeRuntimeStatusLocked(false, detail);
+}
+
+static bool LoadVpeRuntimeLocked() {
+  if (g_vpeLibraryHandle != nullptr) {
+    return true;
+  }
+  if (g_vpeLibraryLoadAttempted) {
+    return false;
+  }
+  g_vpeLibraryLoadAttempted = true;
+  g_vpeLibraryHandle = dlopen("libvideo_processing.so", RTLD_NOW | RTLD_LOCAL);
+  if (g_vpeLibraryHandle == nullptr) {
+    const char* error = dlerror();
+    MarkVpeRuntimeUnsupportedLocked(
+      error != nullptr
+        ? std::string("libvideo_processing.so unavailable: ") + error
+        : std::string("libvideo_processing.so unavailable"));
+    return false;
+  }
+
+  std::string errorDetail;
+  if (!ResolveVpeSymbolLocked("OH_VideoProcessing_InitializeEnvironment",
+        g_vpeRuntimeSymbols.initializeEnvironment, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_DeinitializeEnvironment",
+        g_vpeRuntimeSymbols.deinitializeEnvironment, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_Create",
+        g_vpeRuntimeSymbols.create, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_Destroy",
+        g_vpeRuntimeSymbols.destroy, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_RegisterCallback",
+        g_vpeRuntimeSymbols.registerCallback, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_SetSurface",
+        g_vpeRuntimeSymbols.setSurface, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_GetSurface",
+        g_vpeRuntimeSymbols.getSurface, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_SetParameter",
+        g_vpeRuntimeSymbols.setParameter, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_Start",
+        g_vpeRuntimeSymbols.start, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessing_Stop",
+        g_vpeRuntimeSymbols.stop, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessingCallback_Create",
+        g_vpeRuntimeSymbols.createCallback, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessingCallback_Destroy",
+        g_vpeRuntimeSymbols.destroyCallback, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessingCallback_BindOnError",
+        g_vpeRuntimeSymbols.bindOnError, errorDetail) ||
+      !ResolveVpeSymbolLocked("OH_VideoProcessingCallback_BindOnState",
+        g_vpeRuntimeSymbols.bindOnState, errorDetail) ||
+      !ResolveVpeSymbolLocked("VIDEO_PROCESSING_TYPE_DETAIL_ENHANCER",
+        g_vpeRuntimeSymbols.detailEnhancerType, errorDetail) ||
+      !ResolveVpeSymbolLocked("VIDEO_DETAIL_ENHANCER_PARAMETER_KEY_QUALITY_LEVEL",
+        g_vpeRuntimeSymbols.qualityLevelKey, errorDetail)) {
+    dlclose(g_vpeLibraryHandle);
+    g_vpeLibraryHandle = nullptr;
+    MarkVpeRuntimeUnsupportedLocked(errorDetail);
+    return false;
+  }
+  return true;
+}
+
+static bool InitializeVpeEnvironmentLocked(const char* context, bool cacheUnsupported) {
+  if (!LoadVpeRuntimeLocked()) {
+    return false;
+  }
+  if (g_vpeEnvironmentInitialized) {
+    return true;
+  }
+  VideoProcessing_ErrorCode ret = g_vpeRuntimeSymbols.initializeEnvironment();
+  if (ret != VIDEO_PROCESSING_SUCCESS) {
+    const std::string detail =
+      std::string(context) + ": InitializeEnvironment failed ret=" + std::to_string(static_cast<int>(ret));
+    if (cacheUnsupported) {
+      MarkVpeRuntimeUnsupportedLocked(detail);
+    } else {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+        "VPE: %{public}s", detail.c_str());
+    }
+    return false;
+  }
+  g_vpeEnvironmentInitialized = true;
+  return true;
+}
+
+static void DeinitializeVpeEnvironmentLocked() {
+  if (!g_vpeEnvironmentInitialized || g_vpeRuntimeSymbols.deinitializeEnvironment == nullptr) {
+    return;
+  }
+  VideoProcessing_ErrorCode ret = g_vpeRuntimeSymbols.deinitializeEnvironment();
+  if (ret != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+      "VPE runtime degraded: DeinitializeEnvironment returned %{public}d",
+      static_cast<int>(ret));
+  }
+  g_vpeEnvironmentInitialized = false;
+}
+
+static bool ProbeVpeRuntimeSupportLocked() {
+  if (g_vpeRuntimeSupportProbed) {
+    return g_vpeRuntimeSupported;
+  }
+  if (!InitializeVpeEnvironmentLocked("probe", true)) {
+    return false;
+  }
+  OH_VideoProcessing* probe = nullptr;
+  const int32_t detailEnhancerType = *g_vpeRuntimeSymbols.detailEnhancerType;
+  VideoProcessing_ErrorCode ret = g_vpeRuntimeSymbols.create(&probe, detailEnhancerType);
+  if (ret != VIDEO_PROCESSING_SUCCESS || probe == nullptr) {
+    MarkVpeRuntimeUnsupportedLocked(
+      std::string("probe: detail enhancer unavailable ret=") + std::to_string(static_cast<int>(ret)));
+    if (probe != nullptr) {
+      g_vpeRuntimeSymbols.destroy(probe);
+    }
+    DeinitializeVpeEnvironmentLocked();
+    return false;
+  }
+  g_vpeRuntimeSymbols.destroy(probe);
+  DeinitializeVpeEnvironmentLocked();
+  MarkVpeRuntimeSupportedLocked("probe: detail enhancer ready");
+  return true;
+}
 
 static void VpeOnError(OH_VideoProcessing* /*vp*/, VideoProcessing_ErrorCode error, void* /*userData*/) {
   OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE onError: %{public}d", static_cast<int>(error));
@@ -3732,8 +3923,12 @@ static void VpeOnState(OH_VideoProcessing* /*vp*/, VideoProcessing_State state, 
 // 销毁现有 VPE 实例（调用方持锁）
 static void DestroyVpeInstanceLocked() {
   if (g_vpeProcessor) {
-    OH_VideoProcessing_Stop(g_vpeProcessor);
-    OH_VideoProcessing_Destroy(g_vpeProcessor);
+    if (g_vpeRuntimeSymbols.stop != nullptr) {
+      g_vpeRuntimeSymbols.stop(g_vpeProcessor);
+    }
+    if (g_vpeRuntimeSymbols.destroy != nullptr) {
+      g_vpeRuntimeSymbols.destroy(g_vpeProcessor);
+    }
     g_vpeProcessor = nullptr;
   }
   if (g_vpeInputWindow) {
@@ -3745,23 +3940,18 @@ static void DestroyVpeInstanceLocked() {
     g_vpeDisplayWindow = nullptr;
   }
   if (g_vpeCallback) {
-    OH_VideoProcessingCallback_Destroy(g_vpeCallback);
+    if (g_vpeRuntimeSymbols.destroyCallback != nullptr) {
+      g_vpeRuntimeSymbols.destroyCallback(g_vpeCallback);
+    }
     g_vpeCallback = nullptr;
   }
-  OH_VideoProcessing_DeinitializeEnvironment();
+  DeinitializeVpeEnvironmentLocked();
 }
 
 // isVpeDetailEnhancerSupported() → boolean
 static napi_value IsVpeDetailEnhancerSupported(napi_env env, napi_callback_info /*info*/) {
-  bool supported = false;
-  if (OH_VideoProcessing_InitializeEnvironment() == VIDEO_PROCESSING_SUCCESS) {
-    OH_VideoProcessing* probe = nullptr;
-    if (OH_VideoProcessing_Create(&probe, VIDEO_PROCESSING_TYPE_DETAIL_ENHANCER) == VIDEO_PROCESSING_SUCCESS) {
-      supported = true;
-      OH_VideoProcessing_Destroy(probe);
-    }
-    OH_VideoProcessing_DeinitializeEnvironment();
-  }
+  std::lock_guard<std::mutex> lock(g_vpeMutex);
+  const bool supported = ProbeVpeRuntimeSupportLocked();
   napi_value result;
   napi_get_boolean(env, supported, &result);
   return result;
@@ -3798,28 +3988,40 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
   std::lock_guard<std::mutex> lock(g_vpeMutex);
   DestroyVpeInstanceLocked(); // 清理旧实例
 
-  if (OH_VideoProcessing_InitializeEnvironment() != VIDEO_PROCESSING_SUCCESS) {
-    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: InitializeEnvironment failed");
+  if (!ProbeVpeRuntimeSupportLocked()) {
+    return returnEmpty();
+  }
+  if (!InitializeVpeEnvironmentLocked("create", false)) {
     return returnEmpty();
   }
 
-  if (OH_VideoProcessing_Create(&g_vpeProcessor, VIDEO_PROCESSING_TYPE_DETAIL_ENHANCER) != VIDEO_PROCESSING_SUCCESS) {
-    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: Create failed (not supported on this device)");
-    OH_VideoProcessing_DeinitializeEnvironment();
+  const int32_t detailEnhancerType = *g_vpeRuntimeSymbols.detailEnhancerType;
+  if (g_vpeRuntimeSymbols.create(&g_vpeProcessor, detailEnhancerType) != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll",
+      "VPE: Create failed after runtime probe passed");
+    DeinitializeVpeEnvironmentLocked();
     return returnEmpty();
   }
 
   // 设置质量等级
   OH_AVFormat* param = OH_AVFormat_Create();
-  OH_AVFormat_SetIntValue(param, VIDEO_DETAIL_ENHANCER_PARAMETER_KEY_QUALITY_LEVEL, qualityLevel);
-  OH_VideoProcessing_SetParameter(g_vpeProcessor, param); // 失败不致命，使用默认
+  OH_AVFormat_SetIntValue(param, *g_vpeRuntimeSymbols.qualityLevelKey, qualityLevel);
+  g_vpeRuntimeSymbols.setParameter(g_vpeProcessor, param); // 失败不致命，使用默认
   OH_AVFormat_Destroy(param);
 
   // 注册回调（必须在 Start 前）
-  OH_VideoProcessingCallback_Create(&g_vpeCallback);
-  OH_VideoProcessingCallback_BindOnError(g_vpeCallback, VpeOnError);
-  OH_VideoProcessingCallback_BindOnState(g_vpeCallback, VpeOnState);
-  OH_VideoProcessing_RegisterCallback(g_vpeProcessor, g_vpeCallback, nullptr);
+  if (g_vpeRuntimeSymbols.createCallback(&g_vpeCallback) != VIDEO_PROCESSING_SUCCESS || g_vpeCallback == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: callback creation failed");
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
+  if (g_vpeRuntimeSymbols.bindOnError(g_vpeCallback, VpeOnError) != VIDEO_PROCESSING_SUCCESS ||
+      g_vpeRuntimeSymbols.bindOnState(g_vpeCallback, VpeOnState) != VIDEO_PROCESSING_SUCCESS ||
+      g_vpeRuntimeSymbols.registerCallback(g_vpeProcessor, g_vpeCallback, nullptr) != VIDEO_PROCESSING_SUCCESS) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: callback registration failed");
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
 
   // 从 surfaceId 字符串恢复 uint64_t
   uint64_t displaySurfaceId = strtoull(surfaceIdBuf, nullptr, 10);
@@ -3830,21 +4032,21 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
   }
 
   // 绑定输出（VPE → 显示）
-  if (OH_VideoProcessing_SetSurface(g_vpeProcessor, g_vpeDisplayWindow) != VIDEO_PROCESSING_SUCCESS) {
+  if (g_vpeRuntimeSymbols.setSurface(g_vpeProcessor, g_vpeDisplayWindow) != VIDEO_PROCESSING_SUCCESS) {
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: SetSurface (output) failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
   }
 
   // 获取输入 Surface（解码器 → VPE）
-  if (OH_VideoProcessing_GetSurface(g_vpeProcessor, &g_vpeInputWindow) != VIDEO_PROCESSING_SUCCESS) {
+  if (g_vpeRuntimeSymbols.getSurface(g_vpeProcessor, &g_vpeInputWindow) != VIDEO_PROCESSING_SUCCESS) {
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: GetSurface (input) failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
   }
 
   // 启动 VPE
-  if (OH_VideoProcessing_Start(g_vpeProcessor) != VIDEO_PROCESSING_SUCCESS) {
+  if (g_vpeRuntimeSymbols.start(g_vpeProcessor) != VIDEO_PROCESSING_SUCCESS) {
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: Start failed");
     DestroyVpeInstanceLocked();
     return returnEmpty();
@@ -3860,6 +4062,7 @@ static napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info)
 
   char inputIdBuf[32];
   snprintf(inputIdBuf, sizeof(inputIdBuf), "%llu", static_cast<unsigned long long>(inputSurfaceId));
+  MarkVpeRuntimeSupportedLocked("create: detail enhancer running");
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VPE: Created OK — inputSurfaceId=%{public}s quality=%{public}d",
     inputIdBuf, qualityLevel);
 
@@ -3905,8 +4108,8 @@ static napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
   }
 
   OH_AVFormat* param = OH_AVFormat_Create();
-  OH_AVFormat_SetIntValue(param, VIDEO_DETAIL_ENHANCER_PARAMETER_KEY_QUALITY_LEVEL, qualityLevel);
-  VideoProcessing_ErrorCode ret = OH_VideoProcessing_SetParameter(g_vpeProcessor, param);
+  OH_AVFormat_SetIntValue(param, *g_vpeRuntimeSymbols.qualityLevelKey, qualityLevel);
+  VideoProcessing_ErrorCode ret = g_vpeRuntimeSymbols.setParameter(g_vpeProcessor, param);
   OH_AVFormat_Destroy(param);
 
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",

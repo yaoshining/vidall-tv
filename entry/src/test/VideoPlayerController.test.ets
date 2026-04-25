@@ -1,5 +1,11 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { VideoPlayerController, PlayerBackend } from '../main/ets/components/core/player/VideoPlayerController';
+import {
+  VideoPlayerController,
+  PlayerBackend,
+  resolveAiEnhanceEnabledByRuntime,
+  shouldShowAiEnhanceSettingsByRuntime,
+  resolveEffectivePlaybackSurfaceId
+} from '../main/ets/components/core/player/VideoPlayerController';
 import { VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
 
@@ -81,6 +87,23 @@ export default function videoPlayerControllerTest() {
       expect(accessor.cachedIjkComponentId).assertEqual('')
       expect(accessor.cachedNativeContext === undefined).assertTrue()
       expect(accessor.cachedNativeComponentId).assertEqual('')
+    })
+
+    it('运行时探测失败时会强制关闭画质增强请求', 0, () => {
+      expect(resolveAiEnhanceEnabledByRuntime(false, true)).assertFalse()
+      expect(resolveAiEnhanceEnabledByRuntime(false, false)).assertFalse()
+      expect(resolveAiEnhanceEnabledByRuntime(true, true)).assertTrue()
+    })
+
+    it('仅在 avplayer 且运行时支持时显示画质增强设置', 0, () => {
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer')).assertTrue()
+      expect(shouldShowAiEnhanceSettingsByRuntime(false, 'avplayer')).assertFalse()
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'ijkplayer')).assertFalse()
+    })
+
+    it('VPE 未提供输入 surface 时回退到基础播放 surface', 0, () => {
+      expect(resolveEffectivePlaybackSurfaceId('display-surface', '')).assertEqual('display-surface')
+      expect(resolveEffectivePlaybackSurfaceId('display-surface', 'vpe-input-surface')).assertEqual('vpe-input-surface')
     })
   })
 }
