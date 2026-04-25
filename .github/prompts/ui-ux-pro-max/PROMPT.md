@@ -111,12 +111,14 @@ Get implementation-specific best practices. If user doesn't specify a stack, **d
 python3 prompts/ui-ux-pro-max/scripts/search.py "<keyword>" --stack html-tailwind
 ```
 
-**Example for ArkUI:**
+**Example for ArkTS (ArkUI):**
 ```bash
-python3 prompts/ui-ux-pro-max/scripts/search.py "build lifecycle focus state" --stack arkui
+python3 prompts/ui-ux-pro-max/scripts/search.py "build lifecycle focus state" --stack arkts
 ```
 
-Available stacks: `html-tailwind`, `react`, `nextjs`, `vue`, `svelte`, `swiftui`, `react-native`, `flutter`, `shadcn`, `jetpack-compose`, `arkui`
+Available stacks: `html-tailwind`, `react`, `nextjs`, `vue`, `svelte`, `swiftui`, `react-native`, `flutter`, `shadcn`, `jetpack-compose`, `arkts`
+
+Legacy compatibility: `--stack arkui` is still supported as an alias of `arkts`.
 
 ---
 
@@ -151,7 +153,7 @@ Available stacks: `html-tailwind`, `react`, `nextjs`, `vue`, `svelte`, `swiftui`
 | `flutter` | Widgets, State, Layout, Theming |
 | `shadcn` | shadcn/ui components, theming, forms, patterns |
 | `jetpack-compose` | Composables, Modifiers, State Hoisting, Recomposition |
-| `arkui` | ArkUI components, ArkTS guardrails, lifecycle, TV focus |
+| `arkts` | ArkTS language + ArkUI declarative UI + lifecycle + TV focus |
 
 ---
 
