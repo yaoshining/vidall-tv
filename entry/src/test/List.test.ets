@@ -17,6 +17,8 @@ import playerPageTest from './PlayerPage.test';
 import videoPlayerControllerTest from './VideoPlayerController.test';
 import fileExplorerControllerTest from './FileExplorerController.test';
 import fileExplorerAdapterTest from './FileExplorerAdapter.test';
+import directorySelectorAdapterTest from './DirectorySelectorAdapter.test';
+import directorySelectorStateTest from './DirectorySelectorState.test';
 import imagePreviewSessionControllerTest from './ImagePreviewSessionController.test';
 // 需要真实 Context 和 .so 的集成测试放在 UnitTestBuild 侧（entry 模块本身，包含 native .so）
 // ohosTest(entry_test HAP) 不包含 .so，不能 import VideoScannerUtil / WebDAVClient
@@ -43,6 +45,8 @@ export default function testsuite() {
   videoPlayerControllerTest();
   fileExplorerControllerTest();
   fileExplorerAdapterTest();
+  directorySelectorAdapterTest();
+  directorySelectorStateTest();
   imagePreviewSessionControllerTest();
   fileSourceDatabaseTest();
   videoScannerTest();
