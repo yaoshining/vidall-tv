@@ -1,6 +1,7 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingListItemGroup } from "../SettingListItemGroup"
 import {
+  buildSubtitleLanguageActions,
   buildSubtitleLanguagePreferenceSummary,
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
   getSubtitleLanguageDisplayName,
@@ -8,11 +9,12 @@ import {
   moveSubtitleLanguagePreference,
   saveSubtitleLanguagePreference,
   shouldApplySubtitleLanguagePreferenceLoad,
+  SubtitleLanguageAction,
+  SubtitleLanguageActionType,
   SubtitleLanguageOption,
   SubtitleLanguagePreference,
   SUBTITLE_LANGUAGE_OPTIONS
 } from "../../../subtitle/SubtitleLanguagePreference"
-import { KeyCode } from '@kit.InputKit'
 
 @ComponentV2
 struct SubtitleLanguagePreferenceBuilderComponent {
@@ -172,17 +174,28 @@ struct SubtitleLanguagePreferenceBuilderComponent {
     await this.persistPreference(isEnabled ? '已隐藏非偏好语言' : '已显示全部语言')
   }
 
-  private handleLanguageKeyEvent(languageCode: string, event: KeyEvent): void {
-    if (event.type !== KeyType.Down) {
+  private getLanguageActions(languageCode: string): SubtitleLanguageAction[] {
+    return buildSubtitleLanguageActions(this.buildPreference(), languageCode)
+  }
+
+  private async handleLanguageAction(languageCode: string, actionType: SubtitleLanguageActionType): Promise<void> {
+    if (actionType === 'enable' || actionType === 'disable') {
+      await this.toggleLanguage(languageCode)
       return
     }
-    if (event.keyCode === KeyCode.KEYCODE_DPAD_UP && this.canMoveLanguageUp(languageCode)) {
-      this.moveLanguage(languageCode, 'up')
+    if (actionType === 'move-up') {
+      await this.moveLanguage(languageCode, 'up')
       return
     }
-    if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN && this.canMoveLanguageDown(languageCode)) {
-      this.moveLanguage(languageCode, 'down')
-    }
+    await this.moveLanguage(languageCode, 'down')
+  }
+
+  private getActionButtonFontColor(action: SubtitleLanguageAction): string {
+    return action.enabled ? '#F5F5F5' : '#6F6F6F'
+  }
+
+  private getActionButtonBackgroundColor(action: SubtitleLanguageAction): string {
+    return action.enabled ? '#3F3F3F' : '#2B2B2B'
   }
 
   build() {
@@ -248,19 +261,19 @@ struct SubtitleLanguagePreferenceBuilderComponent {
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
 
-                if (this.isLanguageSelected(option.code)) {
-                  Row({ space: 8 }) {
-                    Text(this.canMoveLanguageUp(option.code) ? '↑ 上移' : '↑ 顶部')
+                Row({ space: 8 }) {
+                  ForEach(this.getLanguageActions(option.code), (action: SubtitleLanguageAction) => {
+                    Button(action.label)
+                      .enabled(action.enabled)
                       .fontSize(12)
-                      .fontColor(this.canMoveLanguageUp(option.code) ? '#F5F5F5' : '#6F6F6F')
-                    Text(this.canMoveLanguageDown(option.code) ? '↓ 下移' : '↓ 底部')
-                      .fontSize(12)
-                      .fontColor(this.canMoveLanguageDown(option.code) ? '#F5F5F5' : '#6F6F6F')
-                  }
-                } else {
-                  Text('按确认键添加')
-                    .fontSize(12)
-                    .fontColor('#6F6F6F')
+                      .fontColor(this.getActionButtonFontColor(action))
+                      .backgroundColor(this.getActionButtonBackgroundColor(action))
+                      .borderRadius(8)
+                      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+                      .onClick(() => {
+                        this.handleLanguageAction(option.code, action.type)
+                      })
+                  }, (action: SubtitleLanguageAction): string => action.type)
                 }
               }
               .width('100%')
@@ -268,13 +281,6 @@ struct SubtitleLanguagePreferenceBuilderComponent {
               .alignItems(VerticalAlign.Center)
               .backgroundColor('#333333')
               .borderRadius(8)
-              .focusable(true)
-              .onClick(() => {
-                this.toggleLanguage(option.code)
-              })
-              .onKeyEvent((event: KeyEvent) => {
-                this.handleLanguageKeyEvent(option.code, event)
-              })
             }
           }, (option: SubtitleLanguageOption) => option.code)
         }

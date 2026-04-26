@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium'
 import {
+  buildSubtitleLanguageActions,
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
   applySubtitleLanguagePreferenceToSearchResults,
   buildSubtitleSearchPreferenceSnapshot,
@@ -60,6 +61,32 @@ export default function subtitleLanguagePreferenceTest() {
       expect(movedDown.languages[0]).assertEqual('en')
       expect(movedDown.languages[1]).assertEqual('ja')
       expect(movedDown.languages[2]).assertEqual('zh-CN')
+    })
+
+    it('should expose explicit actions for enabled and disabled subtitle languages', 0, () => {
+      const preference: SubtitleLanguagePreference = {
+        languages: ['zh-CN', 'en', 'ja'],
+        hideOtherLanguages: false
+      }
+      const availablePreference: SubtitleLanguagePreference = {
+        languages: ['zh-CN', 'en'],
+        hideOtherLanguages: false
+      }
+
+      const enabledActions = buildSubtitleLanguageActions(preference, 'en')
+      const disabledActions = buildSubtitleLanguageActions(availablePreference, 'fr')
+
+      expect(enabledActions.length).assertEqual(3)
+      expect(enabledActions[0].type).assertEqual('move-up')
+      expect(enabledActions[0].enabled).assertTrue()
+      expect(enabledActions[1].type).assertEqual('move-down')
+      expect(enabledActions[1].enabled).assertTrue()
+      expect(enabledActions[2].type).assertEqual('disable')
+      expect(enabledActions[2].enabled).assertTrue()
+
+      expect(disabledActions.length).assertEqual(1)
+      expect(disabledActions[0].type).assertEqual('enable')
+      expect(disabledActions[0].enabled).assertTrue()
     })
 
     it('should expose search snapshot and sort subtitle results by preferred language aliases', 0, () => {

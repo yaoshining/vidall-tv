@@ -12,6 +12,14 @@ export interface SubtitleLanguagePreference {
   hideOtherLanguages: boolean
 }
 
+export type SubtitleLanguageActionType = 'enable' | 'disable' | 'move-up' | 'move-down'
+
+export interface SubtitleLanguageAction {
+  type: SubtitleLanguageActionType
+  label: string
+  enabled: boolean
+}
+
 export interface SubtitleSearchResultLike {
   id: string
   language: string
@@ -152,6 +160,41 @@ export function moveSubtitleLanguagePreference(
     hideOtherLanguages: normalizedPreference.hideOtherLanguages
   }
   return movedPreference
+}
+
+export function buildSubtitleLanguageActions(
+  preference: SubtitleLanguagePreference,
+  languageCode: string
+): SubtitleLanguageAction[] {
+  const normalizedPreference = normalizeSubtitleLanguagePreference(preference)
+  const index = normalizedPreference.languages.indexOf(languageCode)
+  if (index < 0) {
+    const enableAction: SubtitleLanguageAction = {
+      type: 'enable',
+      label: '启用',
+      enabled: normalizedPreference.languages.length < MAX_SUBTITLE_LANGUAGE_COUNT
+    }
+    return [enableAction]
+  }
+
+  const actions: SubtitleLanguageAction[] = [
+    {
+      type: 'move-up',
+      label: '上移',
+      enabled: index > 0
+    },
+    {
+      type: 'move-down',
+      label: '下移',
+      enabled: index < normalizedPreference.languages.length - 1
+    },
+    {
+      type: 'disable',
+      label: '取消启用',
+      enabled: normalizedPreference.languages.length > 1
+    }
+  ]
+  return actions
 }
 
 export function buildSubtitleSearchPreferenceSnapshot(
