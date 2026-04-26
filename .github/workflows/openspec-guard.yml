@@ -17,10 +17,17 @@ jobs:
       - name: Guard openspec tracking
         shell: bash
         run: |
-          tracked="$(git ls-files -- openspec)"
-          if [ -n "$tracked" ]; then
-            echo "$tracked"
+          set -euo pipefail
+
+          tracked_files="$(git --no-pager ls-files -- openspec)"
+          if [ -n "$tracked_files" ]; then
+            echo "::error title=OpenSpec Guard Failed::检测到 openspec 目录下存在被 Git 跟踪的文件。请执行 git rm --cached -r -- openspec，并保留 .gitignore 中的 /openspec 规则。"
+            echo "OpenSpec Guard Failed"
+            echo "Tracked openspec files:"
+            printf "%s\n" "$tracked_files"
+            echo "Fix: git rm --cached -r -- openspec"
+            echo "Reminder: 保留 .gitignore 中的 /openspec 规则"
             exit 1
-          else
-            echo "No tracked openspec files detected."
           fi
+
+          echo "OpenSpec Guard passed: openspec 目录仍为未跟踪状态。"
