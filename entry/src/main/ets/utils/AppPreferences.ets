@@ -2,6 +2,16 @@ import dataPreferences from '@ohos.data.preferences';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { BusinessError } from '@kit.BasicServicesKit';
 
+export type AppPreferenceValue = string | number;
+
+export interface AppPreferencesStore {
+  get(key: string, defaultValue: AppPreferenceValue): Promise<AppPreferenceValue>;
+  put(key: string, value: AppPreferenceValue): Promise<void>;
+  flush(): Promise<void>;
+}
+
+export type AppPreferencesLoader = (context: Context, storeName: string) => Promise<AppPreferencesStore>;
+
 // ─────────────────────────────────────────────
 // Key 常量
 // ─────────────────────────────────────────────
@@ -32,6 +42,14 @@ export class PrefKey {
 
 const STORE_NAME = 'app_preferences';
 
+const DEFAULT_APP_PREFERENCES_LOADER: AppPreferencesLoader = async (
+  context: Context,
+  storeName: string
+): Promise<AppPreferencesStore> => {
+  const store = await dataPreferences.getPreferences(context, storeName);
+  return store as AppPreferencesStore;
+};
+
 /**
  * 应用偏好设置工具（EL1）
  *
@@ -44,31 +62,68 @@ const STORE_NAME = 'app_preferences';
  * ```
  */
 export class AppPreferences {
-  private static store: dataPreferences.Preferences | null = null;
+  private static store: AppPreferencesStore | null = null;
+  private static initPromise: Promise<void> | null = null;
+  private static storeLoader: AppPreferencesLoader = DEFAULT_APP_PREFERENCES_LOADER;
+
+  static setStoreLoaderForTesting(loader: AppPreferencesLoader | null): void {
+    AppPreferences.storeLoader = loader ?? DEFAULT_APP_PREFERENCES_LOADER;
+    AppPreferences.store = null;
+    AppPreferences.initPromise = null;
+  }
+
+  static resetForTesting(): void {
+    AppPreferences.store = null;
+    AppPreferences.initPromise = null;
+  }
 
   /** 在 EntryAbility.onCreate 里调用一次 */
   static async init(context: Context): Promise<void> {
     if (AppPreferences.store !== null) {
       return;
     }
-    try {
-      AppPreferences.store = await dataPreferences.getPreferences(context, STORE_NAME);
-      console.info('[AppPreferences] 初始化成功');
-    } catch (e) {
-      const err = e as BusinessError;
-      console.error(`[AppPreferences] 初始化失败: ${err.message ?? JSON.stringify(e)}`);
-      throw new Error(`AppPreferences init failed: ${err.message}`);
+    if (AppPreferences.initPromise !== null) {
+      return AppPreferences.initPromise;
     }
+    AppPreferences.initPromise = (async () => {
+      try {
+        AppPreferences.store = await AppPreferences.storeLoader(context, STORE_NAME);
+        console.info('[AppPreferences] 初始化成功');
+      } catch (e) {
+        const err = e as BusinessError;
+        console.error(`[AppPreferences] 初始化失败: ${err.message ?? JSON.stringify(e)}`);
+        throw new Error(`AppPreferences init failed: ${err.message}`);
+      } finally {
+        AppPreferences.initPromise = null;
+      }
+    })();
+    return AppPreferences.initPromise;
+  }
+
+  private static async waitForStore(): Promise<AppPreferencesStore | null> {
+    if (AppPreferences.store !== null) {
+      return AppPreferences.store;
+    }
+    if (AppPreferences.initPromise !== null) {
+      try {
+        await AppPreferences.initPromise;
+      } catch {
+        return null;
+      }
+      return AppPreferences.store;
+    }
+    return null;
   }
 
   /** 读取字符串值 */
   static async get(key: string, defaultValue: string): Promise<string> {
-    if (!AppPreferences.store) {
+    const store = await AppPreferences.waitForStore();
+    if (!store) {
       console.warn(`[AppPreferences] 未初始化，key=${key} 返回默认值`);
       return defaultValue;
     }
     try {
-      const val = await AppPreferences.store.get(key, defaultValue);
+      const val = await store.get(key, defaultValue);
       return val as string;
     } catch {
       return defaultValue;
@@ -77,12 +132,13 @@ export class AppPreferences {
 
   /** 读取数字值 */
   static async getNumber(key: string, defaultValue: number): Promise<number> {
-    if (!AppPreferences.store) {
+    const store = await AppPreferences.waitForStore();
+    if (!store) {
       console.warn(`[AppPreferences] 未初始化，key=${key} 返回默认值`);
       return defaultValue;
     }
     try {
-      const val = await AppPreferences.store.get(key, defaultValue);
+      const val = await store.get(key, defaultValue);
       return val as number;
     } catch {
       return defaultValue;
@@ -91,13 +147,14 @@ export class AppPreferences {
 
   /** 写入值（string 或 number） */
   static async set(key: string, value: string | number): Promise<void> {
-    if (!AppPreferences.store) {
+    const store = await AppPreferences.waitForStore();
+    if (!store) {
       console.warn(`[AppPreferences] 未初始化，key=${key} 写入失败`);
       return;
     }
     try {
-      await AppPreferences.store.put(key, value);
-      await AppPreferences.store.flush();
+      await store.put(key, value);
+      await store.flush();
       console.info(`[AppPreferences] 写入 key=${key}`);
     } catch (e) {
       const err = e as BusinessError;
