@@ -22,6 +22,8 @@ export class PrefKey {
   static readonly PLAYER_EPISODE_AUTOPLAY_ENABLED = 'player_episode_autoplay_enabled';
   /** 自动切到下一集前的倒计时秒数 */
   static readonly PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS = 'player_episode_autoplay_countdown_seconds';
+  /** 字幕语言偏好（JSON 序列化字符串） */
+  static readonly SUBTITLE_LANGUAGE_PREFERENCE = 'subtitle_language_preference';
 }
 
 // ─────────────────────────────────────────────

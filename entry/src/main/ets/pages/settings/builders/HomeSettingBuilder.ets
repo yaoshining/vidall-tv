@@ -3,6 +3,11 @@ import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
+import {
+  buildSubtitleLanguagePreferenceSummary,
+  DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
+  loadSubtitleLanguagePreference
+} from "../../../subtitle/SubtitleLanguagePreference";
 
 @Builder
 function vipTitleBuilder() {
@@ -23,6 +28,20 @@ function vipTitleBuilder() {
 @ComponentV2
 struct HomeSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
+  @Local subtitleLanguageSummary: string = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
+
+  aboutToAppear(): void {
+    this.loadSubtitlePreference()
+  }
+
+  private async loadSubtitlePreference(): Promise<void> {
+    try {
+      const preference = await loadSubtitleLanguagePreference()
+      this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(preference)
+    } catch {
+      this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
+    }
+  }
 
   build() {
     SettingContainer({
@@ -64,6 +83,19 @@ struct HomeSettingBuilderComponent {
           onItemClick: () => {
             this.controller.pushType(SettingType.RESOURCE_LIBRARY)
           },
+        })
+      }
+
+      SettingListItemGroup({
+        title: "字幕"
+      }) {
+        SettingListItem({
+          title: "字幕语言偏好",
+          value: this.subtitleLanguageSummary,
+          isLink: true,
+          onItemClick: () => {
+            this.controller.pushType(SettingType.SUBTITLE_LANGUAGE_PREFERENCE)
+          }
         })
       }
 

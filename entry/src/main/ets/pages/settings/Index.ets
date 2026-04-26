@@ -7,6 +7,7 @@ import { WebDAVConfigBuilder } from "./builders/WebDAVConfigBuilder"
 import { SMBConfigBuilder } from "./builders/SMBConfigBuilder"
 import { DirectorySelectorBuilder } from "./builders/DirectorySelectorBuilder"
 import { SmbDirectorySelectorBuilder } from "./builders/SmbDirectorySelectorBuilder"
+import { SubtitleLanguagePreferenceBuilder } from "./builders/SubtitleLanguagePreferenceBuilder"
 import { SettingsController } from "./SettingsController"
 import SettingType from "./SettingType"
 
@@ -65,6 +66,9 @@ export struct SettingsPage {
             }
             if (this.controller.type === SettingType.RESOURCE_LIBRARY) {
               ResourceLibrarySettingBuilder()
+            }
+            if (this.controller.type === SettingType.SUBTITLE_LANGUAGE_PREFERENCE) {
+              SubtitleLanguagePreferenceBuilder()
             }
           }
         }
