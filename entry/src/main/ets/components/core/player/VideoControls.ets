@@ -603,6 +603,7 @@ const PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING: number = 18
 const PLAYER_SETTINGS_CHIP_VERTICAL_PADDING: number = 10
 const PLAYER_SETTINGS_CHIP_GAP: number = 10
 const PLAYER_SETTINGS_CHIP_SCALE_FOCUSED: number = 1.04
+const DEFAULT_PLAYBACK_RATE_INDEX: number = 2
 
 export interface PlayerSettingsChipStyleState {
   isFocused: boolean
@@ -624,6 +625,8 @@ export interface PlayerSettingsChipStyleState {
   horizontalPadding: number
   verticalPadding: number
   groupGap: number
+  borderWidth: number
+  borderColor: string
 }
 
 export function getPlayerSettingsChipStyleState(
@@ -652,9 +655,71 @@ export function getPlayerSettingsChipStyleState(
     labelFontSize: PLAYER_SETTINGS_CHIP_FONT_SIZE,
     horizontalPadding: PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING,
     verticalPadding: PLAYER_SETTINGS_CHIP_VERTICAL_PADDING,
-    groupGap: PLAYER_SETTINGS_CHIP_GAP
+    groupGap: PLAYER_SETTINGS_CHIP_GAP,
+    borderWidth: 0,
+    borderColor: '#00000000'
   }
   return styleState
+}
+
+export function getPlayerSettingsValueChipStyleState(
+  isFocused: boolean,
+  isSelected: boolean,
+  isHovered: boolean = false
+): PlayerSettingsChipStyleState {
+  const isEmphasized = isFocused || isHovered
+  const borderWidth = isSelected || isEmphasized ? 2 : 1
+  const styleState: PlayerSettingsChipStyleState = {
+    isFocused,
+    isHovered,
+    isSelected,
+    showFocusOutline: false,
+    showSelectedOutline: false,
+    showWaveIcon: false,
+    scale: isEmphasized ? PLAYER_SETTINGS_CHIP_SCALE_FOCUSED : 1,
+    shadowRadius: isEmphasized ? 12 : isSelected ? 8 : 0,
+    shadowColor: isEmphasized ? '#386EA8E0' : isSelected ? '#33597FB8' : '#00000000',
+    backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.45)' :
+      isEmphasized ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.1)',
+    labelColor: isSelected ? '#F3F7FF' : isEmphasized ? '#EFF2FB' : '#D7DCE7',
+    focusBorderWidth: isSelected ? 0 : isEmphasized ? 2 : 0,
+    selectedBorderWidth: isSelected ? 2 : 0,
+    height: PLAYER_SETTINGS_CHIP_HEIGHT,
+    borderRadius: PLAYER_SETTINGS_CHIP_RADIUS,
+    labelFontSize: PLAYER_SETTINGS_CHIP_FONT_SIZE,
+    horizontalPadding: PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING,
+    verticalPadding: PLAYER_SETTINGS_CHIP_VERTICAL_PADDING,
+    groupGap: PLAYER_SETTINGS_CHIP_GAP,
+    borderWidth,
+    borderColor: isSelected ? '#fffefe' : isEmphasized ? '#66A9D8FF' : '#45ffffff'
+  }
+  return styleState
+}
+
+export function resolveSelectedPlaybackRateIndex(playbackSpeed: number): number {
+  switch (playbackSpeed) {
+    case 0.5:
+      return 0
+    case 0.75:
+      return 1
+    case 1.0:
+      return 2
+    case 1.25:
+      return 3
+    case 1.5:
+      return 4
+    case 2.0:
+      return 5
+    default:
+      return DEFAULT_PLAYBACK_RATE_INDEX
+  }
+}
+
+export function isAspectRatioOptionSelected(
+  currentMode: AspectRatioMode,
+  optionMode: AspectRatioMode
+): boolean {
+  return currentMode === optionMode
 }
 
 export function shouldApplyEpisodeAutoplaySettingsLoad(
@@ -671,8 +736,6 @@ export struct PlayerSettingsDialog {
   @Require videoController: VideoPlayerController
   @Require onOpenSubtitleSelector: () => void
   @Require onEpisodeSelect: (item: PlaybackContextItem) => Promise<boolean>
-  @State selectedPlaybackRateIndex: number = 2
-  @State private currentAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
   @State private arFocusedIndex: number = -1
   @State private speedFocusedIndex: number = -1
   @State private arHoveredIndex: number = -1
@@ -706,7 +769,6 @@ export struct PlayerSettingsDialog {
   aboutToAppear(): void {
     this.aiEnhanceOn = this.videoController.getResolvedAiEnhanceEnabled();
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
-    this.currentAspectRatioMode = this.videoController.aspectRatioMode;
     this.arFocusedIndex = -1;
     this.speedFocusedIndex = -1;
     this.arHoveredIndex = -1;
@@ -715,16 +777,6 @@ export struct PlayerSettingsDialog {
     this.autoplayCountdownFocusedIndex = -1;
     this.autoplayToggleHoveredIndex = -1;
     this.autoplayCountdownHoveredIndex = -1;
-    // 从控制器同步当前播放速率，找到匹配的 index（默认回退到 1.0x = index 2）
-    const currentSpeed = this.videoController.playbackSpeed;
-    let matchIdx = 2;
-    for (let i = 0; i < this.speedOptions.length; i++) {
-      if (this.speedOptions[i].speed === currentSpeed) {
-        matchIdx = i;
-        break;
-      }
-    }
-    this.selectedPlaybackRateIndex = matchIdx;
     this.autoplayEnabled = this.videoController.episodeAutoplayEnabled;
     this.autoplayCountdownSeconds = this.videoController.episodeAutoplayCountdownSeconds;
     this.autoplaySettingsDirty = false
@@ -790,6 +842,7 @@ export struct PlayerSettingsDialog {
     .padding({ left: styleState.horizontalPadding, right: styleState.horizontalPadding })
     .justifyContent(FlexAlign.Center)
     .backgroundColor(styleState.backgroundColor)
+    .border({ width: styleState.borderWidth, color: styleState.borderColor })
     .borderRadius(styleState.borderRadius)
     .shadow({ radius: styleState.shadowRadius, color: styleState.shadowColor })
     .scale({ x: styleState.scale, y: styleState.scale })
@@ -797,17 +850,17 @@ export struct PlayerSettingsDialog {
   }
 
   private getSpeedChipStyleState(idx: number): PlayerSettingsChipStyleState {
-    return getPlayerSettingsChipStyleState(
+    return getPlayerSettingsValueChipStyleState(
       this.speedFocusedIndex === idx,
-      this.selectedPlaybackRateIndex === idx,
+      resolveSelectedPlaybackRateIndex(this.videoController.playbackSpeed) === idx,
       this.speedHoveredIndex === idx
     )
   }
 
   private getAspectRatioChipStyleState(idx: number): PlayerSettingsChipStyleState {
-    return getPlayerSettingsChipStyleState(
+    return getPlayerSettingsValueChipStyleState(
       this.arFocusedIndex === idx,
-      this.currentAspectRatioMode === this.aspectRatioOptions[idx].mode,
+      isAspectRatioOptionSelected(this.videoController.aspectRatioMode, this.aspectRatioOptions[idx].mode),
       this.arHoveredIndex === idx
     )
   }
@@ -886,7 +939,6 @@ export struct PlayerSettingsDialog {
                     this.speedHoveredIndex = isHover ? idx : -1
                   })
                   .onClick(() => {
-                    this.selectedPlaybackRateIndex = idx
                     this.videoController.setPlaybackSpeed(opt.speed)
                   })
                 }, (opt: SpeedOption) => opt.speed.toString())
@@ -915,7 +967,6 @@ export struct PlayerSettingsDialog {
                     this.arHoveredIndex = isHover ? idx : -1
                   })
                   .onClick(() => {
-                    this.currentAspectRatioMode = opt.mode
                     this.videoController.setAspectRatioMode(opt.mode)
                   })
                 }, (opt: AspectRatioOption) => opt.mode.toString())
