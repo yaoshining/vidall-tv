@@ -56,8 +56,9 @@ export default function subtitleLanguagePreferenceTest() {
 
       expect(movedUp.languages[0]).assertEqual('en')
       expect(movedUp.languages[1]).assertEqual('zh-CN')
-      expect(movedDown.languages[0]).assertEqual('zh-CN')
-      expect(movedDown.languages[1]).assertEqual('en')
+      expect(movedDown.languages[0]).assertEqual('en')
+      expect(movedDown.languages[1]).assertEqual('ja')
+      expect(movedDown.languages[2]).assertEqual('zh-CN')
     })
 
     it('should expose search snapshot and sort subtitle results by preferred language aliases', 0, () => {
