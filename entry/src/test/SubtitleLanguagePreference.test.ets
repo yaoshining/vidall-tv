@@ -5,6 +5,7 @@ import {
   buildSubtitleSearchPreferenceSnapshot,
   moveSubtitleLanguagePreference,
   normalizeSubtitleLanguagePreference,
+  shouldApplySubtitleLanguagePreferenceLoad,
   SubtitleLanguagePreference,
   SubtitleSearchResultLike
 } from '../main/ets/subtitle/SubtitleLanguagePreference'
@@ -98,6 +99,17 @@ export default function subtitleLanguagePreferenceTest() {
 
       expect(filtered.length).assertEqual(1)
       expect(filtered[0].id).assertEqual('2')
+    })
+  })
+
+  describe('SubtitleLanguagePreference async load guard', () => {
+    it('用户已修改字幕语言偏好后不再应用旧的异步加载结果', 0, () => {
+      expect(shouldApplySubtitleLanguagePreferenceLoad(1, 1, true)).assertFalse()
+    })
+
+    it('字幕偏好页重新打开后只接受最新一次加载结果', 0, () => {
+      expect(shouldApplySubtitleLanguagePreferenceLoad(1, 2, false)).assertFalse()
+      expect(shouldApplySubtitleLanguagePreferenceLoad(2, 2, false)).assertTrue()
     })
   })
 }

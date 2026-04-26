@@ -37,7 +37,7 @@ export struct SettingsPage {
 
   build() {
     NavDestination() {
-      RelativeContainer() {
+      Row() {
         Scroll() {
           Column() {
             if (this.controller.type === SettingType.HOME) {
@@ -76,10 +76,6 @@ export struct SettingsPage {
         .scrollBar(BarState.Off)
         .width("35%")
         .height("100%")
-        .alignRules({
-          top: { anchor: '__container__', align: VerticalAlign.Top },
-          left: { anchor: '__container__', align: HorizontalAlign.Start }
-        })
         .translate({
           x: this.menuVisible ? 0 : -400
         })
@@ -87,13 +83,18 @@ export struct SettingsPage {
           duration: 300,
           curve: Curve.EaseOut
         })
+
+        Column() {
+        }
+        .layoutWeight(1)
+        .height("100%")
+        .onClick(() => {
+          this.pageStack.pop(true)
+        })
       }
       .width("100%")
       .height("100%")
       .padding(20)
-      .onClick(() => {
-        this.pageStack.pop(true)
-      })
       .backgroundColor('#88000000')
     }
     .onReady((context) => {

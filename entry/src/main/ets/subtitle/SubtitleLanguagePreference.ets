@@ -166,6 +166,14 @@ export function buildSubtitleSearchPreferenceSnapshot(
   return snapshot
 }
 
+export function shouldApplySubtitleLanguagePreferenceLoad(
+  loadVersion: number,
+  currentLoadVersion: number,
+  hasLocalChanges: boolean
+): boolean {
+  return loadVersion === currentLoadVersion && !hasLocalChanges
+}
+
 function getSubtitleLanguageRank(language: string, preference: SubtitleLanguagePreference): number {
   const normalizedLanguage = language.trim().toLowerCase()
   for (let index = 0; index < preference.languages.length; index++) {

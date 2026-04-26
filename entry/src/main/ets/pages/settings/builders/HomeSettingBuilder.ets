@@ -29,6 +29,7 @@ function vipTitleBuilder() {
 struct HomeSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
   @Local subtitleLanguageSummary: string = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
+  @Local isSubtitleLanguageSummaryLoaded: boolean = false
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
@@ -38,8 +39,10 @@ struct HomeSettingBuilderComponent {
     try {
       const preference = await loadSubtitleLanguagePreference()
       this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(preference)
+      this.isSubtitleLanguageSummaryLoaded = true
     } catch {
       this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
+      this.isSubtitleLanguageSummaryLoaded = true
     }
   }
 
@@ -91,7 +94,7 @@ struct HomeSettingBuilderComponent {
       }) {
         SettingListItem({
           title: "字幕语言偏好",
-          value: this.subtitleLanguageSummary,
+          value: this.isSubtitleLanguageSummaryLoaded ? this.subtitleLanguageSummary : '正在加载…',
           isLink: true,
           onItemClick: () => {
             this.controller.pushType(SettingType.SUBTITLE_LANGUAGE_PREFERENCE)
