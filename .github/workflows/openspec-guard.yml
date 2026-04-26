@@ -11,9 +11,11 @@ permissions:
 
 jobs:
   openspec-guard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Guard openspec tracking
         shell: bash
         run: |
