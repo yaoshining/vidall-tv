@@ -106,8 +106,10 @@ export class WebDavDirectorySelectorAdapter implements DirectorySelectorSourceAd
   async load(path: string): Promise<DirectorySelectorLoadResult> {
     try {
       const resources = await this.listDirectory(path)
-      const entries = resources
-        .filter((resource: WebDAVResource, index: number) => resource.isCollection && index > 0)
+      const collectionResources = resources
+        .filter((resource: WebDAVResource) => resource.isCollection)
+      const entries = collectionResources
+        .slice(1)
         .map((resource: WebDAVResource) => createDirectorySelectorEntryFromWebDav(path, resource))
       return buildDirectorySelectorLoadResult(entries)
     } catch (error) {
@@ -204,20 +206,28 @@ export function createDirectorySelectorRouteParams(
   }
   const protocolKey = readStringParam(params, 'protocolKey')
   if (protocolKey === 'webdav' || (protocolKey.length === 0 && readStringParam(params, 'baseUrl').length > 0)) {
+    const baseUrl = readStringParam(params, 'baseUrl')
+    if (baseUrl.length === 0) {
+      return undefined
+    }
     const routeParams: DirectorySelectorRouteParams = {
       sourceId: sourceId,
       protocolKey: 'webdav',
-      baseUrl: readStringParam(params, 'baseUrl'),
+      baseUrl: baseUrl,
       username: readStringParam(params, 'username'),
       password: readStringParam(params, 'password')
     }
     return routeParams
   }
   if (protocolKey === 'smb' || (protocolKey.length === 0 && readStringParam(params, 'host').length > 0)) {
+    const host = readStringParam(params, 'host')
+    if (host.length === 0) {
+      return undefined
+    }
     const routeParams: DirectorySelectorRouteParams = {
       sourceId: sourceId,
       protocolKey: 'smb',
-      host: readStringParam(params, 'host'),
+      host: host,
       username: readStringParam(params, 'username'),
       password: readStringParam(params, 'password'),
       port: readNumberParam(params, 'port') ?? 445,

@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium'
 import { WebDAVResource } from '../main/ets/lib/WebDAVClient'
 import { SmbFileInfo, SmbListDirectoryResult } from '../main/ets/lib/SMBClient'
 import {
+  createDirectorySelectorRouteParams,
   createDirectorySelectorSourceDescriptor,
   DirectorySelectorLoadResult,
   DirectorySelectorRouteParams,
@@ -53,6 +54,32 @@ function makeSmbFile(name: string, path: string, isDirectory: boolean): SmbFileI
   return file
 }
 
+function createRawDirectorySelectorRouteParams(
+  sourceId: number,
+  protocolKey: string,
+  username: string,
+  password: string,
+  baseUrl?: string,
+  host?: string,
+  port?: number
+): Record<string, Object> {
+  const rawParams: Record<string, Object> = {}
+  rawParams['sourceId'] = sourceId
+  rawParams['protocolKey'] = protocolKey
+  rawParams['username'] = username
+  rawParams['password'] = password
+  if (baseUrl !== undefined) {
+    rawParams['baseUrl'] = baseUrl
+  }
+  if (host !== undefined) {
+    rawParams['host'] = host
+  }
+  if (port !== undefined) {
+    rawParams['port'] = port
+  }
+  return rawParams
+}
+
 export default function directorySelectorAdapterTest() {
   describe('DirectorySelectorAdapter', () => {
     it('WebDavDirectorySelectorAdapter 会过滤当前目录并映射文件夹路径', 0, async () => {
@@ -71,6 +98,24 @@ export default function directorySelectorAdapterTest() {
       expect(result.entries.length).assertEqual(1)
       expect(result.entries[0].path).assertEqual('/root/Movies')
       expect(result.errorMessage === undefined).assertTrue()
+    })
+
+    it('WebDavDirectorySelectorAdapter 不会因原始列表首项是文件而保留当前目录', 0, async () => {
+      const client = new FakeWebDavClient([
+        makeWebDavResource('cover.jpg', '/dav/root/cover.jpg', false),
+        makeWebDavResource('当前目录', '/dav/root', true),
+        makeWebDavResource('Movies', '/dav/root/Movies', true)
+      ])
+      const adapter = new WebDavDirectorySelectorAdapter(
+        (path: string): Promise<WebDAVResource[]> => client.listDirectory(path),
+        'https://demo.local:8443/media'
+      )
+
+      const result: DirectorySelectorLoadResult = await adapter.load('/root')
+
+      expect(result.entries.length).assertEqual(1)
+      expect(result.entries[0].name).assertEqual('Movies')
+      expect(result.entries[0].path).assertEqual('/root/Movies')
     })
 
     it('SmbDirectorySelectorAdapter 遇到部分错误时仍保留可浏览目录', 0, async () => {
@@ -143,6 +188,22 @@ export default function directorySelectorAdapterTest() {
       }
 
       expect(thrownMessage.includes('baseUrl')).assertTrue()
+    })
+
+    it('createDirectorySelectorRouteParams 会拒绝缺失 baseUrl 的 WebDAV 路由参数', 0, () => {
+      const rawParams = createRawDirectorySelectorRouteParams(11, 'webdav', 'tester', 'secret')
+
+      const routeParams = createDirectorySelectorRouteParams(rawParams)
+
+      expect(routeParams === undefined).assertTrue()
+    })
+
+    it('createDirectorySelectorRouteParams 会拒绝缺失 host 的 SMB 路由参数', 0, () => {
+      const rawParams = createRawDirectorySelectorRouteParams(12, 'smb', 'tester', 'secret', undefined, undefined, 445)
+
+      const routeParams = createDirectorySelectorRouteParams(rawParams)
+
+      expect(routeParams === undefined).assertTrue()
     })
   })
 }
