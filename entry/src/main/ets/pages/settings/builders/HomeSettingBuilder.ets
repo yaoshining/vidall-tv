@@ -8,7 +8,10 @@ import {
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
   loadSubtitleLanguagePreference
 } from "../../../subtitle/SubtitleLanguagePreference";
-import { buildSubtitleLanguagePreferenceEntryModel } from "./HomeSettingBuilderModel";
+import {
+  buildSubtitleLanguagePreferenceEntryValue,
+  navigateToSubtitleLanguagePreference
+} from "./HomeSettingBuilderModel";
 
 @Builder
 function vipTitleBuilder() {
@@ -93,11 +96,20 @@ struct HomeSettingBuilderComponent {
       SettingListItemGroup({
         title: "字幕"
       }) {
-        SettingListItem(buildSubtitleLanguagePreferenceEntryModel(
-          this.controller,
-          this.subtitleLanguageSummary,
-          this.isSubtitleLanguageSummaryLoaded
-        ))
+        SettingListItem({
+          title: "字幕语言偏好",
+          value: buildSubtitleLanguagePreferenceEntryValue(
+            this.subtitleLanguageSummary,
+            this.isSubtitleLanguageSummaryLoaded
+          ),
+          isLink: true,
+          onItemClick: () => {
+            navigateToSubtitleLanguagePreference(this.controller)
+          },
+          onRightIconClick: () => {
+            navigateToSubtitleLanguagePreference(this.controller)
+          }
+        })
       }
 
       SettingListItemGroup({
