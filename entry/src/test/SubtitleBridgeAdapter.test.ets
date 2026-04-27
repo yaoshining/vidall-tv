@@ -79,6 +79,27 @@ export default function subtitleBridgeAdapterTest() {
       done();
     });
 
+    it('AvSubtitleBridgeAdapter: 无偏好匹配时不自动切换到非偏好字幕', 0, async (done: () => void) => {
+      const player = new MockPlayer();
+      player.trackInfos = [
+        { trackIndex: 0, trackType: 'video' },
+        { trackIndex: 4, trackType: 'subtitle', language: 'eng' }
+      ];
+
+      const adapter = new AvSubtitleBridgeAdapter();
+      const videoData: VideoData = {
+        type: VideoDataType.FILE_URI,
+        videoSrc: 'file:///english-only.mp4'
+      };
+
+      await adapter.init(player, videoData);
+      const state = adapter.getState();
+      expect(state.allSubtitleTracks.length).assertEqual(1);
+      expect(state.activeSubtitleIndex).assertEqual(-1);
+      expect(player.selectedTrack).assertEqual(-99);
+      done();
+    });
+
     it('IjkSubtitleBridgeAdapter: 当前策略下隐藏内嵌字幕轨', 0, async (done: () => void) => {
       const player = new MockPlayer();
       const adapter = new IjkSubtitleBridgeAdapter();

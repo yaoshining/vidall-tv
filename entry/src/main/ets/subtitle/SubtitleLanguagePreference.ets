@@ -31,6 +31,11 @@ export interface SubtitleLanguageSearchPreferenceSnapshot {
   hideOtherLanguages: boolean
 }
 
+export interface SubtitleTrackLanguageCandidate {
+  displayName: string
+  language?: string
+}
+
 interface RawSubtitleLanguagePreference {
   languages?: string[]
   hideOtherLanguages?: boolean
@@ -229,6 +234,98 @@ function getSubtitleLanguageRank(language: string, preference: SubtitleLanguageP
     }
   }
   return -1
+}
+
+function buildSubtitleDisplayMatchKeywords(languageCode: string): string[] {
+  const option = findSubtitleLanguageOption(languageCode)
+  if (option === null) {
+    return []
+  }
+
+  const baseKeywords: string[] = [
+    option.code,
+    option.label
+  ]
+  for (let index = 0; index < option.searchCodes.length; index++) {
+    baseKeywords.push(option.searchCodes[index])
+  }
+  for (let index = 0; index < option.resultAliases.length; index++) {
+    baseKeywords.push(option.resultAliases[index])
+  }
+
+  if (option.code === 'zh-CN') {
+    baseKeywords.push('简体', '简中', 'hans', 'simplified')
+  } else if (option.code === 'zh-TW') {
+    baseKeywords.push('繁体', '繁中', '香港', '臺灣', '台湾', 'hant', 'traditional')
+  } else if (option.code === 'en') {
+    baseKeywords.push('english')
+  } else if (option.code === 'ja') {
+    baseKeywords.push('japanese')
+  } else if (option.code === 'ko') {
+    baseKeywords.push('korean')
+  } else if (option.code === 'fr') {
+    baseKeywords.push('french')
+  } else if (option.code === 'de') {
+    baseKeywords.push('german')
+  } else if (option.code === 'es') {
+    baseKeywords.push('spanish')
+  }
+
+  const keywords: string[] = []
+  for (let index = 0; index < baseKeywords.length; index++) {
+    const keyword = baseKeywords[index].trim().toLowerCase()
+    if (keyword.length === 0 || keywords.includes(keyword)) {
+      continue
+    }
+    keywords.push(keyword)
+  }
+  return keywords
+}
+
+function getSubtitleTrackLanguageRank(
+  track: SubtitleTrackLanguageCandidate,
+  preference: SubtitleLanguagePreference
+): number {
+  const normalizedPreference = normalizeSubtitleLanguagePreference(preference)
+  const languageRank = track.language !== undefined
+    ? getSubtitleLanguageRank(track.language, normalizedPreference)
+    : -1
+  if (languageRank >= 0) {
+    return languageRank
+  }
+
+  const normalizedDisplayName = track.displayName.trim().toLowerCase()
+  for (let index = 0; index < normalizedPreference.languages.length; index++) {
+    const keywords = buildSubtitleDisplayMatchKeywords(normalizedPreference.languages[index])
+    for (let keywordIndex = 0; keywordIndex < keywords.length; keywordIndex++) {
+      if (normalizedDisplayName.includes(keywords[keywordIndex])) {
+        return index
+      }
+    }
+  }
+  return -1
+}
+
+export function findPreferredSubtitleTrackIndex(
+  tracks: SubtitleTrackLanguageCandidate[],
+  preference: SubtitleLanguagePreference
+): number {
+  const normalizedPreference = normalizeSubtitleLanguagePreference(preference)
+  let matchedTrackIndex = -1
+  let matchedTrackRank = normalizedPreference.languages.length
+
+  for (let index = 0; index < tracks.length; index++) {
+    const rank = getSubtitleTrackLanguageRank(tracks[index], normalizedPreference)
+    if (rank < 0) {
+      continue
+    }
+    if (rank < matchedTrackRank) {
+      matchedTrackRank = rank
+      matchedTrackIndex = index
+    }
+  }
+
+  return matchedTrackIndex
 }
 
 export function applySubtitleLanguagePreferenceToSearchResults<T extends SubtitleSearchResultLike>(

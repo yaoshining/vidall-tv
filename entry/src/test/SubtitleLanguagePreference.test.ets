@@ -4,15 +4,20 @@ import {
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
   applySubtitleLanguagePreferenceToSearchResults,
   buildSubtitleSearchPreferenceSnapshot,
+  findPreferredSubtitleTrackIndex,
   moveSubtitleLanguagePreference,
   normalizeSubtitleLanguagePreference,
   shouldApplySubtitleLanguagePreferenceLoad,
   SubtitleLanguagePreference,
-  SubtitleSearchResultLike
+  SubtitleSearchResultLike,
+  SubtitleTrackLanguageCandidate
 } from '../main/ets/subtitle/SubtitleLanguagePreference'
 
 interface MockSubtitleSearchResult extends SubtitleSearchResultLike {
   releaseName: string
+}
+
+interface MockSubtitleTrackCandidate extends SubtitleTrackLanguageCandidate {
 }
 
 function createSearchResult(id: string, language: string, releaseName: string): MockSubtitleSearchResult {
@@ -21,6 +26,16 @@ function createSearchResult(id: string, language: string, releaseName: string): 
     language,
     releaseName
   }
+}
+
+function createTrackCandidate(displayName: string, language?: string): MockSubtitleTrackCandidate {
+  const candidate: MockSubtitleTrackCandidate = {
+    displayName
+  }
+  if (language !== undefined) {
+    candidate.language = language
+  }
+  return candidate
 }
 
 export default function subtitleLanguagePreferenceTest() {
@@ -126,6 +141,52 @@ export default function subtitleLanguagePreferenceTest() {
 
       expect(filtered.length).assertEqual(1)
       expect(filtered[0].id).assertEqual('2')
+    })
+
+    it('should pick the highest priority subtitle track that matches preferred languages', 0, () => {
+      const preference: SubtitleLanguagePreference = {
+        languages: ['ja', 'en', 'zh-CN'],
+        hideOtherLanguages: false
+      }
+      const tracks: MockSubtitleTrackCandidate[] = [
+        createTrackCandidate('简体中文 (ASS)'),
+        createTrackCandidate('English (SRT)', 'eng'),
+        createTrackCandidate('日语 (ASS)', 'jpn')
+      ]
+
+      const preferredIndex = findPreferredSubtitleTrackIndex(tracks, preference)
+
+      expect(preferredIndex).assertEqual(2)
+    })
+
+    it('should match preferred subtitle language from display name when track language is missing', 0, () => {
+      const preference: SubtitleLanguagePreference = {
+        languages: ['zh-TW', 'en'],
+        hideOtherLanguages: false
+      }
+      const tracks: MockSubtitleTrackCandidate[] = [
+        createTrackCandidate('繁体中文 [外部·ASS]'),
+        createTrackCandidate('English [外部·SRT]')
+      ]
+
+      const preferredIndex = findPreferredSubtitleTrackIndex(tracks, preference)
+
+      expect(preferredIndex).assertEqual(0)
+    })
+
+    it('should keep subtitle disabled when no track matches preferred languages', 0, () => {
+      const preference: SubtitleLanguagePreference = {
+        languages: ['zh-CN', 'zh-TW'],
+        hideOtherLanguages: false
+      }
+      const tracks: MockSubtitleTrackCandidate[] = [
+        createTrackCandidate('English (ASS)', 'eng'),
+        createTrackCandidate('French (SRT)', 'fra')
+      ]
+
+      const preferredIndex = findPreferredSubtitleTrackIndex(tracks, preference)
+
+      expect(preferredIndex).assertEqual(-1)
     })
   })
 
