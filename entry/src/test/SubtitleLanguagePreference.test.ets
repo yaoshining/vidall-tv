@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium'
 import {
   buildSubtitleLanguageActions,
+  beginSubtitleLanguagePreferenceLoad,
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
   applySubtitleLanguagePreferenceToSearchResults,
   buildSubtitleSearchPreferenceSnapshot,
@@ -193,6 +194,13 @@ export default function subtitleLanguagePreferenceTest() {
   describe('SubtitleLanguagePreference async load guard', () => {
     it('用户已修改字幕语言偏好后不再应用旧的异步加载结果', 0, () => {
       expect(shouldApplySubtitleLanguagePreferenceLoad(1, 1, true)).assertFalse()
+    })
+
+    it('字幕偏好页开始新一轮加载时会清除旧的本地修改标记', 0, () => {
+      const nextLoad = beginSubtitleLanguagePreferenceLoad(3)
+
+      expect(nextLoad.loadVersion).assertEqual(4)
+      expect(nextLoad.hasLocalChanges).assertFalse()
     })
 
     it('字幕偏好页重新打开后只接受最新一次加载结果', 0, () => {

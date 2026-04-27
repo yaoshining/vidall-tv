@@ -31,6 +31,11 @@ export interface SubtitleLanguageSearchPreferenceSnapshot {
   hideOtherLanguages: boolean
 }
 
+export interface SubtitleLanguagePreferenceLoadContext {
+  loadVersion: number
+  hasLocalChanges: boolean
+}
+
 export interface SubtitleTrackLanguageCandidate {
   displayName: string
   language?: string
@@ -220,6 +225,16 @@ export function shouldApplySubtitleLanguagePreferenceLoad(
   hasLocalChanges: boolean
 ): boolean {
   return loadVersion === currentLoadVersion && !hasLocalChanges
+}
+
+export function beginSubtitleLanguagePreferenceLoad(
+  currentLoadVersion: number
+): SubtitleLanguagePreferenceLoadContext {
+  const nextLoadContext: SubtitleLanguagePreferenceLoadContext = {
+    loadVersion: currentLoadVersion + 1,
+    hasLocalChanges: false
+  }
+  return nextLoadContext
 }
 
 function getSubtitleLanguageRank(language: string, preference: SubtitleLanguagePreference): number {

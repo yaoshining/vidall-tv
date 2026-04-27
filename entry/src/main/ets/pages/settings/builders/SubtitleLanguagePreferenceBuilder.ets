@@ -1,10 +1,10 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingListItemGroup } from "../SettingListItemGroup"
 import {
+  beginSubtitleLanguagePreferenceLoad,
   buildSubtitleLanguageActions,
   buildSubtitleLanguagePreferenceSummary,
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
-  getSubtitleLanguageDisplayName,
   loadSubtitleLanguagePreference,
   moveSubtitleLanguagePreference,
   saveSubtitleLanguagePreference,
@@ -30,8 +30,10 @@ struct SubtitleLanguagePreferenceBuilderComponent {
 
   private async loadPreference(): Promise<void> {
     this.isPreferenceLoaded = false
-    this.preferenceLoadVersion += 1
-    const currentLoadVersion = this.preferenceLoadVersion
+    const nextLoadContext = beginSubtitleLanguagePreferenceLoad(this.preferenceLoadVersion)
+    this.preferenceLoadVersion = nextLoadContext.loadVersion
+    this.hasLocalPreferenceChange = nextLoadContext.hasLocalChanges
+    const currentLoadVersion = nextLoadContext.loadVersion
     try {
       const preference = await loadSubtitleLanguagePreference()
       if (!shouldApplySubtitleLanguagePreferenceLoad(
@@ -72,15 +74,6 @@ struct SubtitleLanguagePreferenceBuilderComponent {
 
   private isLanguageSelected(languageCode: string): boolean {
     return this.getLanguageRank(languageCode) >= 0
-  }
-
-  private canMoveLanguageUp(languageCode: string): boolean {
-    return this.getLanguageRank(languageCode) > 0
-  }
-
-  private canMoveLanguageDown(languageCode: string): boolean {
-    const rank = this.getLanguageRank(languageCode)
-    return rank >= 0 && rank < this.selectedLanguages.length - 1
   }
 
   private getDisplayOptions(): SubtitleLanguageOption[] {
