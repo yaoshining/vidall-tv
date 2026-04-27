@@ -9,6 +9,11 @@ import { VideoData } from './VideoData';
 import { VideoDataType } from './Constants';
 import { IPlayer, SubtitleInfo, TrackInfo } from './IPlayer';
 import { AssFileParser, SrtEntry, SrtParser } from './SubtitleRenderer';
+import {
+  findPreferredSubtitleTrackIndex,
+  loadSubtitleLanguagePreference,
+  SubtitleTrackLanguageCandidate
+} from '../../../subtitle/SubtitleLanguagePreference';
 
 const TAG = '[SubtitleBridgeAdapter]';
 const MAX_SUBTITLE_PROBE_CANDIDATES = 12;
@@ -443,21 +448,21 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     this.allSubtitleTracks = mergedItems;
 
     if (this.allSubtitleTracks.length > 0) {
-      const preferredIndex = this.findPreferredTrackIndex();
-      // 不 await：auto-select 的轨道切换可能包含长时间异步操作（如 SMB 内嵌字幕 30s 提取）
-      // fire-and-forget，初始化立即完成，字幕在提取完成后自动开始渲染
-      this.switchTrack(preferredIndex).catch(() => {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `[字幕指标] 自动选轨异常，降级无字幕`);
-      });
-      const selected = this.allSubtitleTracks[preferredIndex];
-      if (selected) {
+      const preferredIndex = await this.findPreferredTrackIndex();
+      if (preferredIndex >= 0) {
+        // 不 await：auto-select 的轨道切换可能包含长时间异步操作（如 SMB 内嵌字幕 30s 提取）
+        // fire-and-forget，初始化立即完成，字幕在提取完成后自动开始渲染
+        this.switchTrack(preferredIndex).catch(() => {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `[字幕指标] 自动选轨异常，降级无字幕`);
+        });
+        const selected = this.allSubtitleTracks[preferredIndex];
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length}` +
           ` 自动选中[${preferredIndex}]=${selected.displayName}(${selected.kind})`);
       } else {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length} 轨道索引越界`);
+          `[字幕指标] 初始化完成: 内嵌=${internalItems.length} 外置=${externalItems.length} 无偏好匹配，保持关闭字幕`);
       }
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -465,21 +470,37 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
   }
 
-  /** 默认优先选择第一条内嵌字幕，没有内嵌字幕再选第一条外置字幕 */
-  protected findPreferredTrackIndex(): number {
-    // 先找内嵌字幕
-    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
-      if (this.allSubtitleTracks[i].kind === 'internal') {
-        return i;
+  protected async findPreferredTrackIndex(): Promise<number> {
+    const preference = await loadSubtitleLanguagePreference()
+    const trackCandidates: SubtitleTrackLanguageCandidate[] = []
+    for (let index = 0; index < this.allSubtitleTracks.length; index++) {
+      const item = this.allSubtitleTracks[index]
+      const candidate: SubtitleTrackLanguageCandidate = {
+        displayName: item.displayName
+      }
+      if (item.kind === 'internal') {
+        const language = this.findInternalTrackLanguage(item.internalIndex)
+        if (language !== undefined && language.length > 0) {
+          candidate.language = language
+        }
+      }
+      trackCandidates.push(candidate)
+    }
+
+    return findPreferredSubtitleTrackIndex(trackCandidates, preference)
+  }
+
+  private findInternalTrackLanguage(trackIndex: number | undefined): string | undefined {
+    if (trackIndex === undefined) {
+      return undefined
+    }
+    for (let index = 0; index < this.subtitleTracks.length; index++) {
+      const track = this.subtitleTracks[index]
+      if (track.trackIndex === trackIndex) {
+        return track.language
       }
     }
-    // 没有内嵌字幕则找外置字幕
-    for (let i = 0; i < this.allSubtitleTracks.length; i++) {
-      if (this.allSubtitleTracks[i].kind === 'external') {
-        return i;
-      }
-    }
-    return 0;
+    return undefined
   }
 
   onTimeUpdate(currentTimeMs: number): void {

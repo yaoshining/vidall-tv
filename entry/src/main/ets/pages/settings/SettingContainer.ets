@@ -26,13 +26,6 @@ export struct SettingContainer {
       .backgroundColor("#222222")
     }
     .id("menuContainer")
-    .onClick((event) => {
-      try {
-        event.preventDefault()
-      } catch (error) {
-        // TODO: Implement error handling.
-      }
-    })
     .backgroundColor("#222222")
     .width("100%")
     .height("100%")

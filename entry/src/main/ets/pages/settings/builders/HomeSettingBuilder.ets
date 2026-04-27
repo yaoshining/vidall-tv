@@ -3,6 +3,15 @@ import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
+import {
+  buildSubtitleLanguagePreferenceSummary,
+  DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
+  loadSubtitleLanguagePreference
+} from "../../../subtitle/SubtitleLanguagePreference";
+import {
+  buildSubtitleLanguagePreferenceEntryValue,
+  navigateToSubtitleLanguagePreference
+} from "./HomeSettingBuilderModel";
 
 @Builder
 function vipTitleBuilder() {
@@ -23,6 +32,23 @@ function vipTitleBuilder() {
 @ComponentV2
 struct HomeSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
+  @Local subtitleLanguageSummary: string = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
+  @Local isSubtitleLanguageSummaryLoaded: boolean = false
+
+  aboutToAppear(): void {
+    this.loadSubtitlePreference()
+  }
+
+  private async loadSubtitlePreference(): Promise<void> {
+    try {
+      const preference = await loadSubtitleLanguagePreference()
+      this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(preference)
+      this.isSubtitleLanguageSummaryLoaded = true
+    } catch {
+      this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
+      this.isSubtitleLanguageSummaryLoaded = true
+    }
+  }
 
   build() {
     SettingContainer({
@@ -64,6 +90,25 @@ struct HomeSettingBuilderComponent {
           onItemClick: () => {
             this.controller.pushType(SettingType.RESOURCE_LIBRARY)
           },
+        })
+      }
+
+      SettingListItemGroup({
+        title: "字幕"
+      }) {
+        SettingListItem({
+          title: "字幕语言偏好",
+          value: buildSubtitleLanguagePreferenceEntryValue(
+            this.subtitleLanguageSummary,
+            this.isSubtitleLanguageSummaryLoaded
+          ),
+          isLink: true,
+          onItemClick: () => {
+            navigateToSubtitleLanguagePreference(this.controller)
+          },
+          onRightIconClick: () => {
+            navigateToSubtitleLanguagePreference(this.controller)
+          }
         })
       }
 
