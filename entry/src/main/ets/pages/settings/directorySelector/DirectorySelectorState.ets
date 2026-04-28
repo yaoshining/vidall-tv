@@ -89,6 +89,10 @@ export class DirectorySelectorState {
     }
   }
 
+  async retryCurrentDirectory(): Promise<void> {
+    await this.loadCurrentDirectory()
+  }
+
   enterDirectory(directory: DirectorySelectorEntry): void {
     this.pathHistory.push(this.currentPath)
     this.currentPath = directory.path

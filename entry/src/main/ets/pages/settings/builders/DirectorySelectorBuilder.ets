@@ -171,6 +171,16 @@ struct DirectorySelectorBuilderComponent {
                 Text(this.selectorState.errorMessage)
                   .fontSize(14)
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                Button('重试')
+                  .fontSize(14)
+                  .height(32)
+                  .margin({ left: 12 })
+                  .backgroundColor($r('sys.color.ohos_id_color_emphasize'))
+                  .fontColor($r('sys.color.ohos_id_color_text_primary_contrary'))
+                  .onClick(() => {
+                    void this.selectorState.retryCurrentDirectory()
+                  })
+                  .enabled(!this.selectorState.isLoading && !this.isSaving)
               }
               .width('100%')
               .padding({ top: 40 })

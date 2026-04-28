@@ -12,12 +12,28 @@ class FakeDirectorySelectorAdapter implements DirectorySelectorSourceAdapter {
   readonly rootLabel: string = '根目录'
   readonly endpointSummary: string = 'mock://root'
   private readonly entriesByPath: Map<string, DirectorySelectorLoadResult>
+  private readonly sequenceResultsByPath: Map<string, DirectorySelectorLoadResult[]>
+  private readonly loadCountByPath: Map<string, number> = new Map()
 
-  constructor(entriesByPath: Map<string, DirectorySelectorLoadResult>) {
+  constructor(
+    entriesByPath: Map<string, DirectorySelectorLoadResult>,
+    sequenceResultsByPath: Map<string, DirectorySelectorLoadResult[]> = new Map()
+  ) {
     this.entriesByPath = entriesByPath
+    this.sequenceResultsByPath = sequenceResultsByPath
   }
 
   async load(path: string): Promise<DirectorySelectorLoadResult> {
+    const loadCount = (this.loadCountByPath.get(path) ?? 0) + 1
+    this.loadCountByPath.set(path, loadCount)
+    const sequenceResults = this.sequenceResultsByPath.get(path)
+    if (sequenceResults !== undefined && sequenceResults.length > 0) {
+      const sequenceIndex = loadCount - 1
+      if (sequenceIndex < sequenceResults.length) {
+        return sequenceResults[sequenceIndex]
+      }
+      return sequenceResults[sequenceResults.length - 1]
+    }
     const result = this.entriesByPath.get(path)
     if (result !== undefined) {
       return result
@@ -26,6 +42,10 @@ class FakeDirectorySelectorAdapter implements DirectorySelectorSourceAdapter {
       entries: []
     }
     return emptyResult
+  }
+
+  getLoadCount(path: string): number {
+    return this.loadCountByPath.get(path) ?? 0
   }
 }
 
@@ -111,6 +131,36 @@ export default function directorySelectorStateTest() {
       expect(state.handleBack()).assertTrue()
       expect(state.currentPath).assertEqual('/')
       expect(state.handleBack()).assertFalse()
+    })
+
+    it('错误态和空态都可以重试当前目录并重新触发加载', 0, async () => {
+      const sequenceResultsByPath: Map<string, DirectorySelectorLoadResult[]> = new Map<string, DirectorySelectorLoadResult[]>([
+        ['/Retry', [
+          { entries: [], errorMessage: '目录加载失败' },
+          { entries: [] },
+          { entries: [makeEntry('Recovered', '/Retry/Recovered')] }
+        ]]
+      ])
+      const adapter = new FakeDirectorySelectorAdapter(new Map<string, DirectorySelectorLoadResult>(), sequenceResultsByPath)
+      const state = new DirectorySelectorState(1, adapter)
+      state.currentPath = '/Retry'
+
+      await state.loadCurrentDirectory()
+      expect(adapter.getLoadCount('/Retry')).assertEqual(1)
+      expect(state.errorMessage).assertEqual('目录加载失败')
+      expect(state.currentPath).assertEqual('/Retry')
+
+      await state.retryCurrentDirectory()
+      expect(adapter.getLoadCount('/Retry')).assertEqual(2)
+      expect(state.errorMessage).assertEqual('此目录下没有文件夹')
+      expect(state.currentPath).assertEqual('/Retry')
+
+      await state.retryCurrentDirectory()
+      expect(adapter.getLoadCount('/Retry')).assertEqual(3)
+      expect(state.errorMessage).assertEqual('')
+      expect(state.directories.length).assertEqual(1)
+      expect(state.directories[0].path).assertEqual('/Retry/Recovered')
+      expect(state.currentPath).assertEqual('/Retry')
     })
   })
 }
