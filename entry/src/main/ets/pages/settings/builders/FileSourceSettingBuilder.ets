@@ -17,6 +17,12 @@ import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
 import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceModel, DirectoryItem } from "../../../stores/files/FileSourceModel";
+import {
+  buildSmbDirectorySelectorRouteParams,
+  buildWebDavDirectorySelectorRouteParams,
+  createDirectorySelectorRecordParams,
+  DirectorySelectorRouteParams
+} from "../directorySelector/DirectorySelectorAdapter";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {
@@ -238,44 +244,9 @@ struct FileSourceSettingBuilderComponent {
 
     if (fileSource.type === FileSourceType.WEBDAV) {
       try {
-        // 解析配置
         const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig
-
-        // 构造完整的 baseUrl
-        let serverAddress = config.url
-        let port = config.port
-
-        // 如果服务器地址中已经包含端口，提取它们
-        if (serverAddress.includes(':')) {
-          const parts = serverAddress.split(':')
-          serverAddress = parts[0]
-          const portInUrl = parseInt(parts[1])
-          if (!isNaN(portInUrl)) {
-            port = portInUrl
-          }
-        }
-
-        // 构造基础 URL
-        let baseUrl = `${config.protocol}://${serverAddress}:${port}`
-
-        // 添加路径
-        const path = config.rootPath || '/'
-        if (path !== '/') {
-          const formattedPath = path.startsWith('/') ? path : '/' + path
-          baseUrl = baseUrl + formattedPath
-        }
-
-        // 跳转到文件夹选择器
-        const params: Record<string, Object> = {}
-        params['sourceId'] = fileSource.id as Object
-        params['baseUrl'] = baseUrl as Object
-        params['username'] = config.username as Object
-        params['password'] = config.password as Object
-        params['protocol'] = config.protocol as Object
-        params['port'] = port as Object
-        params['rootPath'] = path as Object
-
-        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, params as Record<string, Object>)
+        const routeParams: DirectorySelectorRouteParams = buildWebDavDirectorySelectorRouteParams(fileSource.id, config)
+        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, createDirectorySelectorRecordParams(routeParams))
       } catch (error) {
         console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
         this.getUIContext().getPromptAction().showToast({
@@ -285,14 +256,8 @@ struct FileSourceSettingBuilderComponent {
     } else if (fileSource.type === FileSourceType.SMB) {
       try {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
-        const params: Record<string, Object> = {}
-        params['sourceId'] = fileSource.id as Object
-        params['host'] = config.host as Object
-        params['username'] = config.username as Object
-        params['password'] = (config.password ?? '') as Object
-        params['port'] = (config.port ?? 445) as Object
-        params['domain'] = (config.domain ?? '') as Object
-        this.controller.pushType(SettingType.SMB_DIRECTORY_SELECTOR, params as Record<string, Object>)
+        const routeParams: DirectorySelectorRouteParams = buildSmbDirectorySelectorRouteParams(fileSource.id, config)
+        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, createDirectorySelectorRecordParams(routeParams))
       } catch (e) {
         console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
         this.getUIContext().getPromptAction().showToast({

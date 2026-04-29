@@ -8,4 +8,5 @@ export default class SettingType {
   static SMB_CONFIG = "smbConfig" // SMB 配置
   static DIRECTORY_SELECTOR = "directorySelector" // WebDAV 文件夹选择器
   static SMB_DIRECTORY_SELECTOR = "smbDirectorySelector" // SMB 文件夹选择器
+  static SUBTITLE_LANGUAGE_PREFERENCE = "subtitleLanguagePreference" // 字幕语言偏好
 }

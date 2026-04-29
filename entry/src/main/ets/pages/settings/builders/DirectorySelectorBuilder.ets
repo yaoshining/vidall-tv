@@ -1,304 +1,95 @@
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
-import { WebDAVClient, WebDAVConfig, WebDAVResource } from "../../../lib/WebDAVClient"
 import promptAction from '@ohos.promptAction'
-import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
-import { FileSourceDirectory } from "../../../db/models/FileSourceEntity";
-import { FileSourceModel } from "../../../stores/files/FileSourceModel";
-import { FileSourceStore } from "../../../stores/files/FileSourceStore";
-
-/**
- * 面包屑项接口
- */
-interface BreadcrumbItem {
-  name: string;
-  path: string;
-}
+import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { FileSourceStore } from "../../../stores/files/FileSourceStore"
+import { FileSourceModel } from "../../../stores/files/FileSourceModel"
+import { getFileExplorerErrorMessage } from "../../../components/core/file/FileExplorerAdapter"
+import {
+  createDirectorySelectorRouteParams,
+  createDirectorySelectorSourceDescriptor,
+  DirectorySelectorEntry,
+  DirectorySelectorRouteParams
+} from "../directorySelector/DirectorySelectorAdapter"
+import { DirectorySelectorBreadcrumbItem, DirectorySelectorState } from "../directorySelector/DirectorySelectorState"
 
 @ComponentV2
 struct DirectorySelectorBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
-
-  // 状态变量
-  @Local directories: WebDAVResource[] = []
-  @Local isLoading: boolean = false
   @Local isSaving: boolean = false
-  @Local errorMessage: string = ''
-  @Local currentPath: string = '/'
-  // path -> customName（空字符串表示使用默认名）
-  @Local selectedMap: Map<string, string> = new Map()
-  @Local isAllSelected: boolean = false
   fileSourceModel: FileSourceModel = FileSourceStore.getState()
-
-  // 命名弹窗状态
-  @Local showNameDialog: boolean = false
-  @Local pendingPath: string = ''          // 待命名的路径
-  @Local pendingDefaultName: string = ''   // 默认名（文件夹名）
-  @Local inputCustomName: string = ''      // 弹窗输入框内容
+  private selectorState: DirectorySelectorState = new DirectorySelectorState()
   private nameInputController: TextInputController = new TextInputController()
 
-  // 私有变量
-  private pathHistory: string[] = ['/']
-  private sourceId: number = 0
-  private webdavClient: WebDAVClient | null = null
-  private previousSelectedMap: Map<string, string> = new Map()
-  // 暂存取消勾选的路径→名字，下次再勾选时带回
-  private uncheckedMap: Map<string, string> = new Map()
-
   aboutToAppear(): void {
-    this.controller.setBackHandler(() => this.handleBackPressed())
-    this.initializeSelector()
+    this.controller.setBackHandler(() => this.selectorState.handleBack())
+    void this.initializeSelector()
   }
 
   aboutToDisappear(): void {
     this.controller.setBackHandler(null)
   }
 
-  /**
-   * 初始化选择器
-   */
   private async initializeSelector(): Promise<void> {
-    try {
-      // 从参数获取配置
-      const params = this.controller.params
-      if (!params) {
-        this.errorMessage = '缺少必要参数'
-        return
-      }
-
-      this.sourceId = params['sourceId'] as number
-      const baseUrl = params['baseUrl'] as string
-      const username = params['username'] as string
-      const password = params['password'] as string
-
-      if (!this.sourceId || !baseUrl || !username || !password) {
-        this.errorMessage = '配置参数不完整'
-        return
-      }
-
-      // 创建 WebDAV 客户端
-      const config: WebDAVConfig = {
-        baseUrl: baseUrl,
-        username: username,
-        password: password,
-        timeout: 10000
-      }
-      this.webdavClient = new WebDAVClient(config)
-
-      // 加载已保存的目录
-      await this.loadSelectedDirectories()
-
-      // 加载根目录
-      await this.loadCurrentDirectory()
-    } catch (error) {
-      const errMsg = (error as Error).message ?? String(error);
-      console.error('DirectorySelector: Failed to initialize', errMsg)
-      this.errorMessage = '初始化失败：' + errMsg
+    const routeParams = createDirectorySelectorRouteParams(this.controller.params)
+    if (routeParams === undefined) {
+      this.selectorState.errorMessage = '配置参数不完整'
+      return
     }
+    this.applyRouteParams(routeParams)
+    await this.loadSelectedDirectories()
+    await this.selectorState.loadCurrentDirectory()
   }
 
-  /**
-   * 加载已保存的目录路径
-   */
+  private applyRouteParams(routeParams: DirectorySelectorRouteParams): void {
+    const descriptor = createDirectorySelectorSourceDescriptor(routeParams)
+    this.selectorState.configure(descriptor.sourceId, descriptor.adapter)
+    console.info(`[DirectorySelector] 初始化协议=${descriptor.protocolKey} endpoint=${descriptor.endpointSummary}`)
+  }
+
   private async loadSelectedDirectories(): Promise<void> {
     try {
       const database = FileSourceDatabase.getInstance()
-      const directories = await database.getDirectoriesBySourceId(this.sourceId)
-
-      directories.forEach((dir: FileSourceDirectory) => {
-        this.selectedMap.set(dir.directoryPath, dir.customName ?? '')
-      })
-
-      // 检查是否选择了"全部文件夹"（根路径标记）
-      if (this.selectedMap.has('/') && this.selectedMap.size === 1) {
-        // 只有一个路径且是根路径，说明用户之前选择了"全部文件夹"
-        this.isAllSelected = true
-        console.info('DirectorySelector: Detected "all folders" selection')
-      }
-
-      console.info(`DirectorySelector: Loaded ${this.selectedMap.size} selected paths`)
+      const directories = await database.getDirectoriesBySourceId(this.selectorState.sourceId)
+      this.selectorState.hydrateSelectedDirectories(directories)
     } catch (error) {
-      console.error('DirectorySelector: Failed to load selected directories', (error as Error).message ?? String(error))
-      // 不阻断流程，继续执行
+      console.error('[DirectorySelector] 加载已选目录失败', getFileExplorerErrorMessage(error))
     }
   }
 
-  /**
-   * 加载当前目录的文件夹列表
-   */
-  private async loadCurrentDirectory(): Promise<void> {
-    if (!this.webdavClient) {
-      this.errorMessage = 'WebDAV 客户端未初始化'
-      return
-    }
-
-    this.isLoading = true
-    this.errorMessage = ''
-
-    try {
-      console.info('DirectorySelector: Loading directory:', this.currentPath)
-
-      const resources = await this.webdavClient.listDirectory(this.currentPath)
-
-      // 过滤出文件夹，并排除第一条（当前目录本身）
-      // WebDAV PROPFIND depth=1 会返回当前目录作为第一条结果
-      this.directories = resources
-        .filter((item: WebDAVResource) => item.isCollection)
-        .filter((item: WebDAVResource, index: number) => index > 0)
-
-      console.info(`DirectorySelector: Found ${this.directories.length} directories`)
-
-      if (this.directories.length === 0) {
-        this.errorMessage = '此目录下没有文件夹'
-      }
-    } catch (error) {
-      const errMsg = (error as Error).message ?? String(error);
-      console.error('DirectorySelector: Failed to load directory', errMsg)
-      // 截断 raw CURL 部分，只显示可读的前缀（如 "TLS 证书验证失败：..."）
-      const displayIdx = errMsg.indexOf(' [CURL:');
-      this.errorMessage = displayIdx > 0 ? errMsg.substring(0, displayIdx) : errMsg;
-    } finally {
-      this.isLoading = false
+  private handleCancel(): void {
+    if (!this.selectorState.handleBack()) {
+      this.controller.popType()
     }
   }
 
-  /**
-   * 进入子目录
-   */
-  private handleEnterDirectory(directory: WebDAVResource): void {
-    // 将当前路径加入历史
-    this.pathHistory.push(this.currentPath)
-
-    // 构造新路径
-    const separator = this.currentPath.endsWith('/') ? '' : '/'
-    this.currentPath = this.currentPath + separator + directory.displayName
-
-    console.info('DirectorySelector: Enter directory:', this.currentPath)
-
-    // 加载新目录
-    this.loadCurrentDirectory()
-  }
-
-  /**
-   * 返回上一级目录
-   */
-  private handleGoBack(): void {
-    if (this.pathHistory.length <= 1) {
-      return
-    }
-
-    // 从历史中弹出最后一个路径，这就是上一级目录
-    const previousPath = this.pathHistory.pop()
-
-    // 设置当前路径为弹出的路径
-    if (previousPath) {
-      this.currentPath = previousPath
-      console.info('DirectorySelector: Go back to:', this.currentPath)
-
-      // 加载目录
-      this.loadCurrentDirectory()
+  private handleDirectoryClick(directory: DirectorySelectorEntry): void {
+    if (!this.selectorState.isAllSelected && !this.selectorState.isLoading && !this.isSaving) {
+      this.selectorState.enterDirectory(directory)
     }
   }
 
-  /**
-   * 获取文件夹完整路径
-   */
-  private getFullPath(directory: WebDAVResource): string {
-    const separator = this.currentPath.endsWith('/') ? '' : '/'
-    return this.currentPath + separator + directory.displayName
-  }
-
-  /**
-   * 勾选 checkbox —— 弹出命名弹窗
-   */
-  private handleCheckboxChange(directory: WebDAVResource): void {
-    const fullPath = this.getFullPath(directory)
-    if (this.selectedMap.has(fullPath)) {
-      // 已选中 → 取消选中：把当前名字存入 uncheckedMap，从 selectedMap 移除
-      const savedName = this.selectedMap.get(fullPath) ?? ''
-      this.uncheckedMap.set(fullPath, savedName)
-      this.selectedMap.delete(fullPath)
-      this.selectedMap = new Map(this.selectedMap)
-    } else {
-      // 未选中 → 弹出命名弹窗
-      this.pendingPath = fullPath
-      this.pendingDefaultName = directory.displayName
-      // 优先用上次保存的名字，否则默认为文件夹名
-      this.inputCustomName = this.uncheckedMap.get(fullPath) ?? directory.displayName
-      this.showNameDialog = true
+  private handleBreadcrumbClick(targetPath: string): void {
+    if (!this.selectorState.isLoading && !this.isSaving) {
+      this.selectorState.jumpToBreadcrumb(targetPath)
     }
   }
 
-  /**
-   * 确认命名弹窗
-   */
-  private confirmNameDialog(): void {
-    // 名字为空时回退到文件夹名
-    const finalName = this.inputCustomName.trim().length > 0
-      ? this.inputCustomName.trim()
-      : this.pendingDefaultName
-    this.selectedMap.set(this.pendingPath, finalName)
-    this.selectedMap = new Map(this.selectedMap)
-    // 确认后清除暂存
-    this.uncheckedMap.delete(this.pendingPath)
-    this.showNameDialog = false
-  }
-
-  /**
-   * 取消命名弹窗 —— 不保存，不清除 uncheckedMap 暂存
-   */
-  private cancelNameDialog(): void {
-    this.showNameDialog = false
-    this.pendingPath = ''
-    this.inputCustomName = ''
-  }
-
-  private isSelected(directory: WebDAVResource): boolean {
-    return this.selectedMap.has(this.getFullPath(directory))
-  }
-
-  /**
-   * 完成选择并保存
-   */
   private async handleComplete(): Promise<void> {
     this.isSaving = true
-
     try {
       const database = FileSourceDatabase.getInstance()
-      // 删除旧记录
-      await database.deleteDirectoriesBySourceId(this.sourceId)
-
-      const dirEntries: FileSourceDirectory[] = []
-      this.selectedMap.forEach((customName: string, path: string) => {
-        const entry: FileSourceDirectory = {
-          sourceId: this.sourceId,
-          directoryPath: path,
-          customName: customName.length > 0 ? customName : undefined
-        }
-        dirEntries.push(entry)
-      })
-
-      // 插入新选择
-      await database.insertDirectories(this.sourceId, dirEntries)
+      const entries = this.selectorState.buildSaveEntries()
+      await database.saveDirectoriesForSource(this.selectorState.sourceId, entries)
       await this.fileSourceModel.loadFileSources(true)
-      // 保存成功后清除所有暂存
-      this.uncheckedMap.clear()
-
-      console.info(`DirectorySelector: Saved ${dirEntries.length} directories`)
-
       this.getUIContext().getPromptAction().showToast({
         message: '保存成功'
       } as promptAction.ShowToastOptions)
-
-      // 返回文件源列表
       this.controller.popType()
     } catch (error) {
-      const errMsg = (error as Error).message ?? String(error);
-      console.error('DirectorySelector: Failed to save', errMsg)
-
       this.getUIContext().showAlertDialog({
         title: '保存失败',
-        message: '保存目录选择失败：' + errMsg,
+        message: '保存目录选择失败：' + getFileExplorerErrorMessage(error),
         primaryButton: {
           value: '确定',
           action: () => {}
@@ -309,181 +100,50 @@ struct DirectorySelectorBuilderComponent {
     }
   }
 
-  /**
-   * 取消选择
-   */
-  private handleCancel(): void {
-    // 如果在非根目录，返回上一级
-    if (this.pathHistory.length > 1) {
-      this.handleGoBack()
-    } else {
-      // 在根目录才返回文件源列表
-      this.controller.popType()
-    }
-  }
-
-  /**
-   * 处理返回键按下事件
-   * @returns true 表示消费事件，false 表示不消费
-   */
-  private handleBackPressed(): boolean {
-    // 如果在非根目录，返回上一级
-    if (this.pathHistory.length > 1) {
-      this.handleGoBack()
-      return true // 消费事件，不继续传递
-    }
-    // 在根目录时返回 false，让上层处理（返回文件源列表）
-    return false
-  }
-
-  /**
-   * 获取面包屑路径数组
-   * 将当前路径解析为面包屑路径段
-   */
-  private getBreadcrumbs(): BreadcrumbItem[] {
-    const breadcrumbs: BreadcrumbItem[] = []
-
-    // 添加根目录
-    const rootItem: BreadcrumbItem = { name: '根目录', path: '/' }
-    breadcrumbs.push(rootItem)
-
-    // 如果当前路径不是根目录，解析路径
-    if (this.currentPath !== '/') {
-      const segments = this.currentPath.split('/').filter(seg => seg.length > 0)
-      let accumulatedPath = ''
-
-      segments.forEach((segment) => {
-        accumulatedPath += '/' + segment
-        const item: BreadcrumbItem = {
-          name: segment,
-          path: accumulatedPath
-        }
-        breadcrumbs.push(item)
-      })
-    }
-
-    return breadcrumbs
-  }
-
-  /**
-   * 处理面包屑点击，跳转到指定路径
-   */
-  private handleBreadcrumbClick(targetPath: string): void {
-    if (targetPath === this.currentPath) {
-      // 点击的是当前路径，不做处理
-      return
-    }
-
-    // 重建路径历史栈
-    // 找到目标路径在当前历史中的位置
-    const targetIndex = this.pathHistory.indexOf(targetPath)
-
-    if (targetIndex !== -1) {
-      // 目标路径在历史栈中，移除之后的所有路径
-      this.pathHistory = this.pathHistory.slice(0, targetIndex + 1)
-    } else {
-      // 目标路径不在历史栈中（可能是通过面包屑跳转的）
-      // 重新构建历史栈：根据目标路径构建从根到目标的路径序列
-      const segments = targetPath.split('/').filter(seg => seg.length > 0)
-      this.pathHistory = ['/']
-
-      let accumulatedPath = ''
-      segments.forEach((segment) => {
-        accumulatedPath += '/' + segment
-        this.pathHistory.push(accumulatedPath)
-      })
-    }
-
-    // 更新当前路径
-    this.currentPath = targetPath
-
-    console.info('DirectorySelector: Jump to breadcrumb:', targetPath)
-
-    // 加载目标目录
-    this.loadCurrentDirectory()
-  }
-
-  /**
-   * 全部选择或取消选择
-   */
-  private handleSelectAll(): void {
-    if (this.isAllSelected) {
-      // 取消全选 - 恢复之前的选择状态
-      this.selectedMap = new Map(this.previousSelectedMap)
-      this.isAllSelected = false
-      console.info('DirectorySelector: Deselected all folders, restored previous selection')
-    } else {
-      // 全选 - 备份当前选择，然后只保存根路径标记
-      this.previousSelectedMap = new Map(this.selectedMap)
-
-      // 清空当前选择，只保留根路径标记表示"全部文件夹"
-      this.selectedMap = new Map([[' /', '']])
-      this.isAllSelected = true
-      console.info('DirectorySelector: Selected all folders (saved as root path)')
-    }
-  }
-
-  private getCustomName(directory: WebDAVResource): string {
-    return this.selectedMap.get(this.getFullPath(directory)) ?? ''
-  }
-
-  private hasCustomName(directory: WebDAVResource): boolean {
-    return this.getCustomName(directory).length > 0
-  }
-
   build() {
     Stack() {
       SettingContainer({ title: "选择文件夹" }) {
         Column() {
-          // 顶部面包屑
           Column() {
-            // 返回按钮行
-            if (this.pathHistory.length > 1) {
+            if (this.selectorState.currentPath !== '/') {
               Row() {
                 Button("← 返回")
                   .fontSize(14)
                   .height(32)
                   .backgroundColor($r('sys.color.ohos_id_color_button_normal'))
                   .fontColor($r('sys.color.ohos_id_color_text_primary_contrary'))
-                  .onClick(() => this.handleGoBack())
-                  .enabled(!this.isLoading && !this.isSaving)
+                  .onClick(() => this.selectorState.goBack())
+                  .enabled(!this.selectorState.isLoading && !this.isSaving)
               }
               .width('100%')
               .margin({ bottom: 8 })
             }
 
-            // 面包屑导航
             Scroll() {
               Row({ space: 4 }) {
-                ForEach(this.getBreadcrumbs(), (breadcrumb: BreadcrumbItem, index: number) => {
+                ForEach(this.selectorState.getBreadcrumbs(), (breadcrumb: DirectorySelectorBreadcrumbItem, index: number) => {
                   Row({ space: 4 }) {
-                    // 面包屑项
                     Text(breadcrumb.name)
                       .fontSize(14)
-                      .fontColor(breadcrumb.path === this.currentPath ?
+                      .fontColor(breadcrumb.path === this.selectorState.currentPath ?
                         $r('sys.color.ohos_id_color_emphasize') :
                         $r('sys.color.ohos_id_color_text_secondary'))
-                      .fontWeight(breadcrumb.path === this.currentPath ? FontWeight.Medium : FontWeight.Normal)
+                      .fontWeight(breadcrumb.path === this.selectorState.currentPath ? FontWeight.Medium : FontWeight.Normal)
                       .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                       .borderRadius(4)
-                      .backgroundColor(breadcrumb.path === this.currentPath ?
+                      .backgroundColor(breadcrumb.path === this.selectorState.currentPath ?
                         $r('sys.color.ohos_id_color_click_effect') :
                         Color.Transparent)
-                      .onClick(() => {
-                        if (!this.isLoading && !this.isSaving) {
-                          this.handleBreadcrumbClick(breadcrumb.path)
-                        }
-                      })
-                      .enabled(!this.isLoading && !this.isSaving)
+                      .onClick(() => this.handleBreadcrumbClick(breadcrumb.path))
+                      .enabled(!this.selectorState.isLoading && !this.isSaving)
 
-                    // 分隔符（最后一项不显示）
-                    if (index < this.getBreadcrumbs().length - 1) {
+                    if (index < this.selectorState.getBreadcrumbs().length - 1) {
                       Text('/')
                         .fontSize(14)
                         .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                     }
                   }
-                }, (breadcrumb: BreadcrumbItem) => breadcrumb.path)
+                }, (breadcrumb: DirectorySelectorBreadcrumbItem) => breadcrumb.path)
               }
               .padding({ left: 4, right: 4 })
             }
@@ -495,59 +155,71 @@ struct DirectorySelectorBuilderComponent {
           .padding(12)
           .backgroundColor($r('sys.color.ohos_id_color_background'))
 
-          // 内容区
           Column() {
-            if (this.isLoading) {
-              // 加载状态
+            if (this.selectorState.isLoading) {
               Row() {
                 LoadingProgress()
-                  .width(30).height(30)
+                  .width(30)
+                  .height(30)
                   .color($r('sys.color.ohos_id_color_emphasize'))
               }
-              .width('100%').padding({ top: 40 })
+              .width('100%')
+              .padding({ top: 40 })
               .justifyContent(FlexAlign.Center)
-            } else if (this.errorMessage) {
-              // 错误提示
+            } else if (this.selectorState.errorMessage.length > 0) {
               Row() {
-                Text(this.errorMessage)
+                Text(this.selectorState.errorMessage)
                   .fontSize(14)
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                Button('重试')
+                  .fontSize(14)
+                  .height(32)
+                  .margin({ left: 12 })
+                  .backgroundColor($r('sys.color.ohos_id_color_emphasize'))
+                  .fontColor($r('sys.color.ohos_id_color_text_primary_contrary'))
+                  .onClick(() => {
+                    void this.selectorState.retryCurrentDirectory()
+                  })
+                  .enabled(!this.selectorState.isLoading && !this.isSaving)
               }
-              .width('100%').padding({ top: 40 })
+              .width('100%')
+              .padding({ top: 40 })
               .justifyContent(FlexAlign.Center)
             } else {
               Scroll() {
                 Column({ space: 0 }) {
-                  // 全部文件夹选项
                   Row() {
-                    Text('📂').fontSize(24).margin({ right: 12 })
+                    Text('📂')
+                      .fontSize(24)
+                      .margin({ right: 12 })
                     Text('全部文件夹')
                       .fontSize(16)
                       .fontColor($r('sys.color.ohos_id_color_emphasize'))
                       .fontWeight(FontWeight.Medium)
                       .layoutWeight(1)
                     Checkbox()
-                      .select(this.isAllSelected)
+                      .select(this.selectorState.isAllSelected)
                       .selectedColor($r('sys.color.ohos_id_color_emphasize'))
-                      .onChange(() => { this.handleSelectAll() })
+                      .onChange(() => this.selectorState.toggleSelectAll())
                   }
-                  .width('100%').height(56)
+                  .width('100%')
+                  .height(56)
                   .padding({ left: 16, right: 16 })
                   .border({ width: { bottom: 2 }, color: $r('sys.color.ohos_id_color_emphasize') })
 
-                  // 文件夹列表
-                  ForEach(this.directories, (directory: WebDAVResource) => {
+                  ForEach(this.selectorState.directories, (directory: DirectorySelectorEntry) => {
                     Row() {
-                      Text('📁').fontSize(24).margin({ right: 12 })
+                      Text('📁')
+                        .fontSize(24)
+                        .margin({ right: 12 })
                       Column() {
-                        Text(directory.displayName)
+                        Text(directory.name)
                           .fontSize(16)
                           .fontColor($r('sys.color.ohos_id_color_text_primary'))
                           .maxLines(1)
                           .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        // 显示自定义名（如果有）
-                        if (this.isSelected(directory) && this.hasCustomName(directory)) {
-                          Text('别名：' + this.getCustomName(directory))
+                        if (this.selectorState.isSelected(directory) && this.selectorState.hasCustomName(directory)) {
+                          Text('别名：' + this.selectorState.getCustomName(directory))
                             .fontSize(12)
                             .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                             .maxLines(1)
@@ -557,23 +229,20 @@ struct DirectorySelectorBuilderComponent {
                       .layoutWeight(1)
                       .alignItems(HorizontalAlign.Start)
 
-                      if (!this.isAllSelected) {
+                      if (!this.selectorState.isAllSelected) {
                         Checkbox()
-                          .select(this.isSelected(directory))
+                          .select(this.selectorState.isSelected(directory))
                           .selectedColor($r('sys.color.ohos_id_color_emphasize'))
-                          .onChange(() => { this.handleCheckboxChange(directory) })
+                          .onChange(() => this.selectorState.toggleDirectorySelection(directory))
                       }
                     }
-                    .width('100%').height(56)
+                    .width('100%')
+                    .height(56)
                     .padding({ left: 16, right: 16 })
-                    .onClick(() => {
-                      if (!this.isAllSelected) {
-                        this.handleEnterDirectory(directory)
-                      }
-                    })
+                    .onClick(() => this.handleDirectoryClick(directory))
                     .border({ width: { bottom: 1 }, color: $r('sys.color.ohos_id_color_list_separator') })
-                    .opacity(this.isAllSelected ? 0.5 : 1)
-                  }, (directory: WebDAVResource) => directory.href)
+                    .opacity(this.selectorState.isAllSelected ? 0.5 : 1)
+                  }, (directory: DirectorySelectorEntry) => directory.path)
                 }
               }
               .width('100%')
@@ -585,7 +254,6 @@ struct DirectorySelectorBuilderComponent {
           .layoutWeight(1)
           .alignItems(HorizontalAlign.Start)
 
-          // 底部操作栏
           Row({ space: 12 }) {
             Button('取消')
               .fontSize(16)
@@ -600,17 +268,19 @@ struct DirectorySelectorBuilderComponent {
               .backgroundColor($r('sys.color.ohos_id_color_emphasize'))
               .fontColor($r('sys.color.ohos_id_color_text_primary_contrary'))
               .layoutWeight(1)
-              .onClick(() => this.handleComplete())
+              .onClick(() => {
+                void this.handleComplete()
+              })
               .enabled(!this.isSaving)
           }
           .width('100%')
           .padding(16)
         }
-        .width('100%').height('100%')
+        .width('100%')
+        .height('100%')
       }
 
-      // 自定义命名弹窗（蒙层 + 弹窗卡片）
-      if (this.showNameDialog) {
+      if (this.selectorState.showNameDialog) {
         Column() {
           Column({ space: 16 }) {
             Text('自定义文件夹名称')
@@ -618,24 +288,25 @@ struct DirectorySelectorBuilderComponent {
               .fontWeight(FontWeight.Bold)
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
 
-            Text('文件夹：' + this.pendingDefaultName)
+            Text('文件夹：' + this.selectorState.pendingDefaultName)
               .fontSize(13)
               .fontColor($r('sys.color.ohos_id_color_text_secondary'))
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
 
             TextInput({
-              placeholder: this.pendingDefaultName,
-              text: this.inputCustomName,
+              placeholder: this.selectorState.pendingDefaultName,
+              text: this.selectorState.inputCustomName,
               controller: this.nameInputController
             })
-              .onChange((val: string) => { this.inputCustomName = val })
-              .onAppear(() => {
-                // 弹窗出现后自动请求焦点
-                this.nameInputController.caretPosition(this.inputCustomName.length)
-                focusControl.requestFocus('nameInput')
+              .onChange((value: string) => {
+                this.selectorState.inputCustomName = value
               })
-              .id('nameInput')
+              .onAppear(() => {
+                this.nameInputController.caretPosition(this.selectorState.inputCustomName.length)
+                focusControl.requestFocus('directorySelectorNameInput')
+              })
+              .id('directorySelectorNameInput')
               .defaultFocus(true)
               .fontSize(16)
               .borderRadius(8)
@@ -645,33 +316,27 @@ struct DirectorySelectorBuilderComponent {
                 .layoutWeight(1)
                 .backgroundColor($r('sys.color.ohos_id_color_button_normal'))
                 .fontColor($r('sys.color.ohos_id_color_text_primary_contrary'))
-                .onClick(() => { this.cancelNameDialog() })
+                .onClick(() => this.selectorState.cancelPendingSelection())
+
               Button('确定')
                 .layoutWeight(1)
                 .backgroundColor($r('sys.color.ohos_id_color_emphasize'))
                 .fontColor($r('sys.color.ohos_id_color_text_primary_contrary'))
-                .onClick(() => { this.confirmNameDialog() })
+                .onClick(() => this.selectorState.confirmPendingSelection())
             }
             .width('100%')
           }
-          .width('80%')
+          .width('72%')
           .padding(24)
-          .borderRadius(16)
           .backgroundColor($r('sys.color.ohos_id_color_background'))
-          .shadow({ radius: 20, color: '#33000000', offsetX: 0, offsetY: 4 })
+          .borderRadius(12)
         }
         .width('100%')
         .height('100%')
         .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-        .backgroundColor('#80000000')
-        .onClick(() => {
-          // 点击蒙层不关闭，避免误触
-        })
+        .backgroundColor('#66000000')
       }
     }
-    .width('100%')
-    .height('100%')
   }
 }
 
