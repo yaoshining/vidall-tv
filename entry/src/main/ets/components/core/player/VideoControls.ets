@@ -661,6 +661,13 @@ export interface PlayerSettingsAspectRatioChipRenderModel {
   styleState: PlayerSettingsChipStyleState
 }
 
+export interface PlayerSettingsDiagnosticVisualSnapshot {
+  idx: number
+  label: string
+  roles: string
+  styleState: PlayerSettingsChipStyleState
+}
+
 export function getPlayerSettingsChipStyleState(
   isFocused: boolean,
   isSelected: boolean,
@@ -853,6 +860,42 @@ export function formatPlayerSettingsDiagnosticLog(scope: string, detail: string)
   return `${PLAYER_SETTINGS_DIAGNOSTIC_PREFIX} ${scope}: ${detail}`
 }
 
+export function formatPlayerSettingsVisualSnapshotDetail(
+  group: string,
+  snapshot: PlayerSettingsDiagnosticVisualSnapshot
+): string {
+  return `group=${group} idx=${snapshot.idx} label=${snapshot.label} roles=${snapshot.roles} ` +
+    `isSelected=${snapshot.styleState.isSelected} isHovered=${snapshot.styleState.isHovered} ` +
+    `isFocused=${snapshot.styleState.isFocused} backgroundColor=${snapshot.styleState.backgroundColor} ` +
+    `borderWidth=${snapshot.styleState.borderWidth} borderColor=${snapshot.styleState.borderColor} ` +
+    `shadowRadius=${snapshot.styleState.shadowRadius} shadowColor=${snapshot.styleState.shadowColor} ` +
+    `scale=${snapshot.styleState.scale} labelColor=${snapshot.styleState.labelColor}`
+}
+
+export function buildPlayerSettingsVisualSnapshotSummary(
+  group: string,
+  snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot>
+): string {
+  const details: Array<string> = []
+  for (let idx = 0; idx < snapshots.length; idx++) {
+    details.push(formatPlayerSettingsVisualSnapshotDetail(group, snapshots[idx]))
+  }
+  return details.join(' || ')
+}
+
+export function formatPlayerSettingsEventSequenceDetail(
+  eventType: string,
+  idx: number,
+  label: string,
+  nextState: string,
+  focusedIndex: number,
+  hoveredIndex: number,
+  selectedIndex: number
+): string {
+  return `eventType=${eventType} idx=${idx} label=${label} next=${nextState} ` +
+    `focusedIndex=${focusedIndex} hoveredIndex=${hoveredIndex} selectedIndex=${selectedIndex}`
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
@@ -895,19 +938,145 @@ export struct PlayerSettingsDialog {
     return -1
   }
 
-  private logRenderSummaryIfChanged(scope: string, summary: string): void {
+  private appendVisualSnapshot(
+    snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot>,
+    idx: number,
+    role: string,
+    label: string,
+    styleState: PlayerSettingsChipStyleState
+  ): void {
+    for (let snapshotIdx = 0; snapshotIdx < snapshots.length; snapshotIdx++) {
+      if (snapshots[snapshotIdx].idx === idx) {
+        if (snapshots[snapshotIdx].roles.indexOf(role) < 0) {
+          snapshots[snapshotIdx].roles = `${snapshots[snapshotIdx].roles}|${role}`
+        }
+        return
+      }
+    }
+    const snapshot: PlayerSettingsDiagnosticVisualSnapshot = {
+      idx,
+      label,
+      roles: role,
+      styleState
+    }
+    snapshots.push(snapshot)
+  }
+
+  private buildSpeedVisualSnapshotSummary(renderModels: Array<PlayerSettingsSpeedChipRenderModel>): string {
+    const snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot> = []
+    const selectedIndex = resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed)
+    if (selectedIndex >= 0 && selectedIndex < renderModels.length) {
+      this.appendVisualSnapshot(
+        snapshots,
+        selectedIndex,
+        'selected',
+        renderModels[selectedIndex].label,
+        renderModels[selectedIndex].styleState
+      )
+    }
+    if (this.speedHoveredIndex >= 0 && this.speedHoveredIndex < renderModels.length) {
+      this.appendVisualSnapshot(
+        snapshots,
+        this.speedHoveredIndex,
+        'hovered',
+        renderModels[this.speedHoveredIndex].label,
+        renderModels[this.speedHoveredIndex].styleState
+      )
+    }
+    if (this.speedFocusedIndex >= 0 && this.speedFocusedIndex < renderModels.length) {
+      this.appendVisualSnapshot(
+        snapshots,
+        this.speedFocusedIndex,
+        'focused',
+        renderModels[this.speedFocusedIndex].label,
+        renderModels[this.speedFocusedIndex].styleState
+      )
+    }
+    return buildPlayerSettingsVisualSnapshotSummary('speed', snapshots)
+  }
+
+  private buildAspectRatioVisualSnapshotSummary(
+    renderModels: Array<PlayerSettingsAspectRatioChipRenderModel>
+  ): string {
+    const snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot> = []
+    const selectedIndex = this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode)
+    if (selectedIndex >= 0 && selectedIndex < renderModels.length) {
+      this.appendVisualSnapshot(
+        snapshots,
+        selectedIndex,
+        'selected',
+        renderModels[selectedIndex].label,
+        renderModels[selectedIndex].styleState
+      )
+    }
+    if (this.arHoveredIndex >= 0 && this.arHoveredIndex < renderModels.length) {
+      this.appendVisualSnapshot(
+        snapshots,
+        this.arHoveredIndex,
+        'hovered',
+        renderModels[this.arHoveredIndex].label,
+        renderModels[this.arHoveredIndex].styleState
+      )
+    }
+    if (this.arFocusedIndex >= 0 && this.arFocusedIndex < renderModels.length) {
+      this.appendVisualSnapshot(
+        snapshots,
+        this.arFocusedIndex,
+        'focused',
+        renderModels[this.arFocusedIndex].label,
+        renderModels[this.arFocusedIndex].styleState
+      )
+    }
+    return buildPlayerSettingsVisualSnapshotSummary('aspect-ratio', snapshots)
+  }
+
+  private logRenderSummaryIfChanged(scope: string, summary: string, visualSnapshotSummary: string = ''): void {
+    const summaryKey = visualSnapshotSummary.length > 0 ? `${summary} || ${visualSnapshotSummary}` : summary
     if (scope === 'render/speed') {
-      if (this.lastSpeedRenderSummary === summary) {
+      if (this.lastSpeedRenderSummary === summaryKey) {
         return
       }
-      this.lastSpeedRenderSummary = summary
+      this.lastSpeedRenderSummary = summaryKey
     } else if (scope === 'render/aspect-ratio') {
-      if (this.lastAspectRatioRenderSummary === summary) {
+      if (this.lastAspectRatioRenderSummary === summaryKey) {
         return
       }
-      this.lastAspectRatioRenderSummary = summary
+      this.lastAspectRatioRenderSummary = summaryKey
     }
     this.logPlayerSettingsDiagnostic(scope, summary)
+    if (visualSnapshotSummary.length > 0) {
+      this.logPlayerSettingsDiagnostic(`${scope}/styleState`, visualSnapshotSummary)
+    }
+  }
+
+  private logSpeedInteractionEvent(eventType: string, idx: number, label: string, nextState: string): void {
+    this.logPlayerSettingsDiagnostic(
+      'interaction/speed',
+      formatPlayerSettingsEventSequenceDetail(
+        eventType,
+        idx,
+        label,
+        nextState,
+        this.speedFocusedIndex,
+        this.speedHoveredIndex,
+        resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed)
+      )
+    )
+  }
+
+  private logAspectRatioInteractionEvent(eventType: string, idx: number, label: string, nextState: string): void {
+    this.logPlayerSettingsDiagnostic(
+      'interaction/aspect-ratio',
+      formatPlayerSettingsEventSequenceDetail(
+        eventType,
+        idx,
+        label,
+        nextState,
+        this.arFocusedIndex,
+        this.arHoveredIndex,
+        this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode)
+      )
+    )
   }
 
   private applySelectionMirrorState(state: PlayerSettingsSelectionMirrorState): void {
@@ -1089,9 +1258,11 @@ export struct PlayerSettingsDialog {
       this.speedHoveredIndex
     )
     const selectedIndex = resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed)
+    const visualSnapshotSummary = this.buildSpeedVisualSnapshotSummary(renderModels)
     this.logRenderSummaryIfChanged(
       'render/speed',
-      `activePlaybackSpeed=${this.mirroredPlaybackSpeed} focusedIndex=${this.speedFocusedIndex} hoveredIndex=${this.speedHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${renderModels[selectedIndex].label}`
+      `activePlaybackSpeed=${this.mirroredPlaybackSpeed} focusedIndex=${this.speedFocusedIndex} hoveredIndex=${this.speedHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${renderModels[selectedIndex].label}`,
+      visualSnapshotSummary
     )
     return renderModels
   }
@@ -1104,9 +1275,11 @@ export struct PlayerSettingsDialog {
     )
     const selectedIndex = this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode)
     const selectedLabel = selectedIndex >= 0 ? renderModels[selectedIndex].label : 'none'
+    const visualSnapshotSummary = this.buildAspectRatioVisualSnapshotSummary(renderModels)
     this.logRenderSummaryIfChanged(
       'render/aspect-ratio',
-      `activeAspectRatioMode=${this.mirroredAspectRatioMode} focusedIndex=${this.arFocusedIndex} hoveredIndex=${this.arHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${selectedLabel}`
+      `activeAspectRatioMode=${this.mirroredAspectRatioMode} focusedIndex=${this.arFocusedIndex} hoveredIndex=${this.arHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${selectedLabel}`,
+      visualSnapshotSummary
     )
     return renderModels
   }
@@ -1195,16 +1368,25 @@ export struct PlayerSettingsDialog {
                     .scale({ x: model.styleState.scale, y: model.styleState.scale })
                     .animation({ duration: 180, curve: Curve.EaseInOut })
                     .focusable(true)
-                    .onFocus(() => { this.speedFocusedIndex = idx })
-                    .onBlur(() => { this.speedFocusedIndex = -1 })
+                    .onFocus(() => {
+                      this.speedFocusedIndex = idx
+                      this.logSpeedInteractionEvent('focus', idx, model.label, `focusedIndex=${idx}`)
+                    })
+                    .onBlur(() => {
+                      this.speedFocusedIndex = -1
+                      this.logSpeedInteractionEvent('blur', idx, model.label, 'focusedIndex=-1')
+                    })
                     .onHover((isHover: boolean) => {
                       this.speedHoveredIndex = isHover ? idx : -1
+                      this.logSpeedInteractionEvent(
+                        'hover',
+                        idx,
+                        model.label,
+                        `hoveredIndex=${this.speedHoveredIndex}`
+                      )
                     })
                     .onClick(() => {
-                      this.logPlayerSettingsDiagnostic(
-                        'interaction/speed',
-                        `focusedIndex=${this.speedFocusedIndex} targetIndex=${idx} label=${model.label} speed=${model.speed}`
-                      )
+                      this.logSpeedInteractionEvent('click', idx, model.label, `requestedSpeed=${model.speed}`)
                       this.updatePlaybackSpeedSelection(model.speed)
                     })
                 }, (model: PlayerSettingsSpeedChipRenderModel) => model.speed.toString())
@@ -1243,15 +1425,29 @@ export struct PlayerSettingsDialog {
                     .scale({ x: model.styleState.scale, y: model.styleState.scale })
                     .animation({ duration: 180, curve: Curve.EaseInOut })
                     .focusable(true)
-                    .onFocus(() => { this.arFocusedIndex = idx })
-                    .onBlur(() => { this.arFocusedIndex = -1 })
+                    .onFocus(() => {
+                      this.arFocusedIndex = idx
+                      this.logAspectRatioInteractionEvent('focus', idx, model.label, `focusedIndex=${idx}`)
+                    })
+                    .onBlur(() => {
+                      this.arFocusedIndex = -1
+                      this.logAspectRatioInteractionEvent('blur', idx, model.label, 'focusedIndex=-1')
+                    })
                     .onHover((isHover: boolean) => {
                       this.arHoveredIndex = isHover ? idx : -1
+                      this.logAspectRatioInteractionEvent(
+                        'hover',
+                        idx,
+                        model.label,
+                        `hoveredIndex=${this.arHoveredIndex}`
+                      )
                     })
                     .onClick(() => {
-                      this.logPlayerSettingsDiagnostic(
-                        'interaction/aspect-ratio',
-                        `focusedIndex=${this.arFocusedIndex} targetIndex=${idx} label=${model.label} mode=${model.mode}`
+                      this.logAspectRatioInteractionEvent(
+                        'click',
+                        idx,
+                        model.label,
+                        `requestedAspectRatioMode=${model.mode}`
                       )
                       this.updateAspectRatioSelection(model.mode)
                     })

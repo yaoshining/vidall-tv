@@ -1,13 +1,16 @@
 import { describe, it, expect } from '@ohos/hypium'
 import {
   PlayerSettingsAspectRatioChipRenderModel,
+  PlayerSettingsDiagnosticVisualSnapshot,
   PlayerSettingsSelectionMirrorState,
   createPlayerSettingsSelectionMirrorState,
   PlayerSettingsChipStyleState,
   PlayerSettingsSpeedChipRenderModel,
   buildAspectRatioChipRenderModels,
   buildPlaybackSpeedChipRenderModels,
+  buildPlayerSettingsVisualSnapshotSummary,
   formatPlayerSettingsDiagnosticLog,
+  formatPlayerSettingsEventSequenceDetail,
   getPlayerSettingsValueChipStyleState,
   isAspectRatioOptionSelected,
   resolveSelectedPlaybackRateIndex,
@@ -24,6 +27,33 @@ export default function videoControlsTest() {
           'interaction/speed',
           'focusedIndex=2 label=1.5x'
         )).assertEqual('[#180-settings] interaction/speed: focusedIndex=2 label=1.5x')
+      })
+
+      it('视觉快照摘要会合并同一 chip 的多重角色并输出真实样式字段', 0, () => {
+        const visualSnapshot: PlayerSettingsDiagnosticVisualSnapshot = {
+          idx: 4,
+          label: '1.5x',
+          roles: 'selected|hovered',
+          styleState: getPlayerSettingsValueChipStyleState(false, true, true)
+        }
+
+        expect(buildPlayerSettingsVisualSnapshotSummary('speed', [visualSnapshot])).assertEqual(
+          'group=speed idx=4 label=1.5x roles=selected|hovered isSelected=true isHovered=true isFocused=false backgroundColor=rgba(255, 255, 255, 0.45) borderWidth=2 borderColor=#fffefe shadowRadius=14 shadowColor=#33597FB8 scale=1.05 labelColor=#F3F7FF'
+        )
+      })
+
+      it('事件序列日志会记录事件类型与触发时索引摘要', 0, () => {
+        expect(formatPlayerSettingsEventSequenceDetail(
+          'hover',
+          3,
+          '1.25x',
+          'hoveredIndex=3',
+          -1,
+          2,
+          4
+        )).assertEqual(
+          'eventType=hover idx=3 label=1.25x next=hoveredIndex=3 focusedIndex=-1 hoveredIndex=2 selectedIndex=4'
+        )
       })
 
       it('播放速度镜像会在控制器倍速变化后刷新', 0, () => {
