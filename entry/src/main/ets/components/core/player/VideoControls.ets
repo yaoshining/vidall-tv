@@ -596,6 +596,21 @@ interface SpeedOption {
   speed: number;
 }
 
+const PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
+  { label: '适应', mode: AspectRatioMode.FIT },
+  { label: '填充', mode: AspectRatioMode.FILL },
+  { label: '拉伸', mode: AspectRatioMode.STRETCH },
+]
+
+const PLAYER_SETTINGS_SPEED_OPTIONS: SpeedOption[] = [
+  { label: '0.5x', speed: 0.5 },
+  { label: '0.75x', speed: 0.75 },
+  { label: '1.0x', speed: 1.0 },
+  { label: '1.25x', speed: 1.25 },
+  { label: '1.5x', speed: 1.5 },
+  { label: '2.0x', speed: 2.0 },
+]
+
 const PLAYER_SETTINGS_CHIP_HEIGHT: number = 68
 const PLAYER_SETTINGS_CHIP_RADIUS: number = 22
 const PLAYER_SETTINGS_CHIP_FONT_SIZE: number = 18
@@ -630,6 +645,18 @@ export interface PlayerSettingsChipStyleState {
   // 当前实际渲染来源：SelectionOptionChip 通过这组真实边框字段输出 UI。
   borderWidth: number
   borderColor: string
+}
+
+export interface PlayerSettingsSpeedChipRenderModel {
+  label: string
+  speed: number
+  styleState: PlayerSettingsChipStyleState
+}
+
+export interface PlayerSettingsAspectRatioChipRenderModel {
+  label: string
+  mode: AspectRatioMode
+  styleState: PlayerSettingsChipStyleState
 }
 
 export function getPlayerSettingsChipStyleState(
@@ -699,6 +726,53 @@ export function getPlayerSettingsValueChipStyleState(
     borderColor: isSelected ? '#fffefe' : isEmphasized ? '#66A9D8FF' : '#45ffffff'
   }
   return styleState
+}
+
+export function buildPlaybackSpeedChipRenderModels(
+  playbackSpeed: number,
+  focusedIndex: number = -1,
+  hoveredIndex: number = -1
+): PlayerSettingsSpeedChipRenderModel[] {
+  const renderModels: PlayerSettingsSpeedChipRenderModel[] = []
+  const selectedIndex = resolveSelectedPlaybackRateIndex(playbackSpeed)
+  for (let idx = 0; idx < PLAYER_SETTINGS_SPEED_OPTIONS.length; idx++) {
+    const option = PLAYER_SETTINGS_SPEED_OPTIONS[idx]
+    const styleState = getPlayerSettingsValueChipStyleState(
+      focusedIndex === idx,
+      selectedIndex === idx,
+      hoveredIndex === idx
+    )
+    const renderModel: PlayerSettingsSpeedChipRenderModel = {
+      label: option.label,
+      speed: option.speed,
+      styleState
+    }
+    renderModels.push(renderModel)
+  }
+  return renderModels
+}
+
+export function buildAspectRatioChipRenderModels(
+  currentMode: AspectRatioMode,
+  focusedIndex: number = -1,
+  hoveredIndex: number = -1
+): PlayerSettingsAspectRatioChipRenderModel[] {
+  const renderModels: PlayerSettingsAspectRatioChipRenderModel[] = []
+  for (let idx = 0; idx < PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS.length; idx++) {
+    const option = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS[idx]
+    const styleState = getPlayerSettingsValueChipStyleState(
+      focusedIndex === idx,
+      isAspectRatioOptionSelected(currentMode, option.mode),
+      hoveredIndex === idx
+    )
+    const renderModel: PlayerSettingsAspectRatioChipRenderModel = {
+      label: option.label,
+      mode: option.mode,
+      styleState
+    }
+    renderModels.push(renderModel)
+  }
+  return renderModels
 }
 
 export function resolveSelectedPlaybackRateIndex(playbackSpeed: number): number {
@@ -778,19 +852,8 @@ export struct PlayerSettingsDialog {
   @State private speedFocusedIndex: number = -1
   @State private arHoveredIndex: number = -1
   @State private speedHoveredIndex: number = -1
-  private readonly aspectRatioOptions: AspectRatioOption[] = [
-    { label: '适应', mode: AspectRatioMode.FIT },
-    { label: '填充', mode: AspectRatioMode.FILL },
-    { label: '拉伸', mode: AspectRatioMode.STRETCH },
-  ]
-  private readonly speedOptions: SpeedOption[] = [
-    { label: '0.5x', speed: 0.5 },
-    { label: '0.75x', speed: 0.75 },
-    { label: '1.0x', speed: 1.0 },
-    { label: '1.25x', speed: 1.25 },
-    { label: '1.5x', speed: 1.5 },
-    { label: '2.0x', speed: 2.0 },
-  ]
+  private readonly aspectRatioOptions: AspectRatioOption[] = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS
+  private readonly speedOptions: SpeedOption[] = PLAYER_SETTINGS_SPEED_OPTIONS
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
   @State private autoplayEnabled: boolean = true
@@ -950,6 +1013,22 @@ export struct PlayerSettingsDialog {
     )
   }
 
+  private getSpeedChipRenderModels(): PlayerSettingsSpeedChipRenderModel[] {
+    return buildPlaybackSpeedChipRenderModels(
+      this.mirroredPlaybackSpeed,
+      this.speedFocusedIndex,
+      this.speedHoveredIndex
+    )
+  }
+
+  private getAspectRatioChipRenderModels(): PlayerSettingsAspectRatioChipRenderModel[] {
+    return buildAspectRatioChipRenderModels(
+      this.mirroredAspectRatioMode,
+      this.arFocusedIndex,
+      this.arHoveredIndex
+    )
+  }
+
   private getAutoplayToggleChipStyleState(idx: number): PlayerSettingsChipStyleState {
     return getPlayerSettingsChipStyleState(
       this.autoplayToggleFocusedIndex === idx,
@@ -1013,24 +1092,40 @@ export struct PlayerSettingsDialog {
                 .alignSelf(ItemAlign.Start)
 
               Row({ space: PLAYER_SETTINGS_CHIP_GAP }) {
-                ForEach(this.speedOptions, (opt: SpeedOption, idx: number) => {
+                ForEach(this.getSpeedChipRenderModels(), (model: PlayerSettingsSpeedChipRenderModel, idx: number) => {
                   Row() {
-                    this.SelectionOptionChip(opt.label, this.getSpeedChipStyleState(idx))
+                    Text(model.label)
+                      .fontSize(model.styleState.labelFontSize)
+                      .fontColor(model.styleState.labelColor)
+                      .fontWeight(model.styleState.isSelected ? FontWeight.Medium : FontWeight.Regular)
+                      .maxLines(1)
                   }
-                  .focusable(true)
-                  .onFocus(() => { this.speedFocusedIndex = idx })
-                  .onBlur(() => { this.speedFocusedIndex = -1 })
-                   .onHover((isHover: boolean) => {
-                     this.speedHoveredIndex = isHover ? idx : -1
-                   })
-                   .onClick(() => {
-                     this.updatePlaybackSpeedSelection(opt.speed)
-                   })
-                 }, (opt: SpeedOption) => opt.speed.toString())
-               }
-              .justifyContent(FlexAlign.Start)
-              .width('100%')
-            }
+                    .height(model.styleState.height)
+                    .padding({
+                      left: model.styleState.horizontalPadding,
+                      right: model.styleState.horizontalPadding
+                    })
+                    .justifyContent(FlexAlign.Center)
+                    .backgroundColor(model.styleState.backgroundColor)
+                    .border({ width: model.styleState.borderWidth, color: model.styleState.borderColor })
+                    .borderRadius(model.styleState.borderRadius)
+                    .shadow({ radius: model.styleState.shadowRadius, color: model.styleState.shadowColor })
+                    .scale({ x: model.styleState.scale, y: model.styleState.scale })
+                    .animation({ duration: 180, curve: Curve.EaseInOut })
+                    .focusable(true)
+                    .onFocus(() => { this.speedFocusedIndex = idx })
+                    .onBlur(() => { this.speedFocusedIndex = -1 })
+                    .onHover((isHover: boolean) => {
+                      this.speedHoveredIndex = isHover ? idx : -1
+                    })
+                    .onClick(() => {
+                      this.updatePlaybackSpeedSelection(model.speed)
+                    })
+                }, (model: PlayerSettingsSpeedChipRenderModel) => model.speed.toString())
+              }
+               .justifyContent(FlexAlign.Start)
+               .width('100%')
+             }
 
 
             Column({ space: 12 }) {
@@ -1041,24 +1136,40 @@ export struct PlayerSettingsDialog {
                 .alignSelf(ItemAlign.Start)
 
               Row({ space: PLAYER_SETTINGS_CHIP_GAP }) {
-                ForEach(this.aspectRatioOptions, (opt: AspectRatioOption, idx: number) => {
+                ForEach(this.getAspectRatioChipRenderModels(), (model: PlayerSettingsAspectRatioChipRenderModel, idx: number) => {
                   Row() {
-                    this.SelectionOptionChip(opt.label, this.getAspectRatioChipStyleState(idx))
+                    Text(model.label)
+                      .fontSize(model.styleState.labelFontSize)
+                      .fontColor(model.styleState.labelColor)
+                      .fontWeight(model.styleState.isSelected ? FontWeight.Medium : FontWeight.Regular)
+                      .maxLines(1)
                   }
-                  .focusable(true)
-                  .onFocus(() => { this.arFocusedIndex = idx })
-                  .onBlur(() => { this.arFocusedIndex = -1 })
-                   .onHover((isHover: boolean) => {
-                     this.arHoveredIndex = isHover ? idx : -1
-                   })
-                   .onClick(() => {
-                     this.updateAspectRatioSelection(opt.mode)
-                   })
-                 }, (opt: AspectRatioOption) => opt.mode.toString())
-               }
-              .justifyContent(FlexAlign.Start)
-              .width('100%')
-            }
+                    .height(model.styleState.height)
+                    .padding({
+                      left: model.styleState.horizontalPadding,
+                      right: model.styleState.horizontalPadding
+                    })
+                    .justifyContent(FlexAlign.Center)
+                    .backgroundColor(model.styleState.backgroundColor)
+                    .border({ width: model.styleState.borderWidth, color: model.styleState.borderColor })
+                    .borderRadius(model.styleState.borderRadius)
+                    .shadow({ radius: model.styleState.shadowRadius, color: model.styleState.shadowColor })
+                    .scale({ x: model.styleState.scale, y: model.styleState.scale })
+                    .animation({ duration: 180, curve: Curve.EaseInOut })
+                    .focusable(true)
+                    .onFocus(() => { this.arFocusedIndex = idx })
+                    .onBlur(() => { this.arFocusedIndex = -1 })
+                    .onHover((isHover: boolean) => {
+                      this.arHoveredIndex = isHover ? idx : -1
+                    })
+                    .onClick(() => {
+                      this.updateAspectRatioSelection(model.mode)
+                    })
+                }, (model: PlayerSettingsAspectRatioChipRenderModel) => model.mode.toString())
+              }
+               .justifyContent(FlexAlign.Start)
+               .width('100%')
+             }
 
             Column({ space: 12 }) {
               Text('字幕管理')

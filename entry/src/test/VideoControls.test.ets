@@ -1,8 +1,12 @@
 import { describe, it, expect } from '@ohos/hypium'
 import {
+  PlayerSettingsAspectRatioChipRenderModel,
   PlayerSettingsSelectionMirrorState,
   createPlayerSettingsSelectionMirrorState,
   PlayerSettingsChipStyleState,
+  PlayerSettingsSpeedChipRenderModel,
+  buildAspectRatioChipRenderModels,
+  buildPlaybackSpeedChipRenderModels,
   getPlayerSettingsValueChipStyleState,
   isAspectRatioOptionSelected,
   resolveSelectedPlaybackRateIndex,
@@ -45,9 +49,36 @@ export default function videoControlsTest() {
         expect(resolveSelectedPlaybackRateIndex(1.33)).assertEqual(2)
       })
 
+      it('倍速 chip 渲染模型直接由当前倍速驱动，便于切到非参数化渲染路径', 0, () => {
+        const models: PlayerSettingsSpeedChipRenderModel[] =
+          buildPlaybackSpeedChipRenderModels(1.5, 1, 3)
+
+        expect(models.length).assertEqual(6)
+        expect(models[1].styleState.isFocused).assertTrue()
+        expect(models[1].styleState.scale).assertEqual(1.04)
+        expect(models[3].styleState.isHovered).assertTrue()
+        expect(models[4].label).assertEqual('1.5x')
+        expect(models[4].styleState.isSelected).assertTrue()
+        expect(models[4].styleState.borderColor).assertEqual('#fffefe')
+      })
+
       it('画面比例选中态直接比较控制器当前模式', 0, () => {
         expect(isAspectRatioOptionSelected(AspectRatioMode.FILL, AspectRatioMode.FILL)).assertTrue()
         expect(isAspectRatioOptionSelected(AspectRatioMode.FILL, AspectRatioMode.FIT)).assertFalse()
+      })
+
+      it('画面比例 chip 渲染模型直接由当前比例驱动，避免参数化 Builder 选中态丢失', 0, () => {
+        const models: PlayerSettingsAspectRatioChipRenderModel[] =
+          buildAspectRatioChipRenderModels(AspectRatioMode.STRETCH, 0, 1)
+
+        expect(models.length).assertEqual(3)
+        expect(models[0].label).assertEqual('适应')
+        expect(models[0].styleState.isFocused).assertTrue()
+        expect(models[1].label).assertEqual('填充')
+        expect(models[1].styleState.isHovered).assertTrue()
+        expect(models[2].label).assertEqual('拉伸')
+        expect(models[2].styleState.isSelected).assertTrue()
+        expect(models[2].styleState.borderColor).assertEqual('#fffefe')
       })
     })
 
