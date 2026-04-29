@@ -7,6 +7,7 @@ import {
   PlayerSettingsSpeedChipRenderModel,
   buildAspectRatioChipRenderModels,
   buildPlaybackSpeedChipRenderModels,
+  formatPlayerSettingsDiagnosticLog,
   getPlayerSettingsValueChipStyleState,
   isAspectRatioOptionSelected,
   resolveSelectedPlaybackRateIndex,
@@ -18,6 +19,13 @@ import { AspectRatioMode } from '../main/ets/components/core/player/VideoPlayerC
 export default function videoControlsTest() {
   describe('VideoControls', () => {
     describe('player settings selection bridge', () => {
+      it('诊断日志统一带 #180 前缀并保留作用域与摘要', 0, () => {
+        expect(formatPlayerSettingsDiagnosticLog(
+          'interaction/speed',
+          'focusedIndex=2 label=1.5x'
+        )).assertEqual('[#180-settings] interaction/speed: focusedIndex=2 label=1.5x')
+      })
+
       it('播放速度镜像会在控制器倍速变化后刷新', 0, () => {
         const initialState: PlayerSettingsSelectionMirrorState =
           createPlayerSettingsSelectionMirrorState(1.0, AspectRatioMode.FIT)

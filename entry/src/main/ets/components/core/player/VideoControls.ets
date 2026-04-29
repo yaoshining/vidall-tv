@@ -619,6 +619,8 @@ const PLAYER_SETTINGS_CHIP_VERTICAL_PADDING: number = 10
 const PLAYER_SETTINGS_CHIP_GAP: number = 10
 const PLAYER_SETTINGS_CHIP_SCALE_FOCUSED: number = 1.04
 const DEFAULT_PLAYBACK_RATE_INDEX: number = 2
+const PLAYER_SETTINGS_DIAGNOSTIC_PREFIX: string = '[#180-settings]'
+const PLAYER_SETTINGS_DIAGNOSTIC_TAG: string = 'PlayerSettingsDialog'
 
 export interface PlayerSettingsChipStyleState {
   isFocused: boolean
@@ -840,6 +842,10 @@ export function shouldApplyEpisodeAutoplaySettingsLoad(
   return requestToken === currentToken && !isDirty
 }
 
+export function formatPlayerSettingsDiagnosticLog(scope: string, detail: string): string {
+  return `${PLAYER_SETTINGS_DIAGNOSTIC_PREFIX} ${scope}: ${detail}`
+}
+
 @CustomDialog
 export struct PlayerSettingsDialog {
   controller: CustomDialogController
@@ -866,10 +872,50 @@ export struct PlayerSettingsDialog {
   private readonly autoplayCountdownOptions: Array<number> = [3, 5, 8, 10]
   private autoplaySettingsLoadToken: number = 0
   private autoplaySettingsDirty: boolean = false
+  private lastSpeedRenderSummary: string = ''
+  private lastAspectRatioRenderSummary: string = ''
+
+  private logPlayerSettingsDiagnostic(scope: string, detail: string): void {
+    hilog.info(0x0000, PLAYER_SETTINGS_DIAGNOSTIC_TAG, formatPlayerSettingsDiagnosticLog(scope, detail))
+  }
+
+  private resolveAspectRatioSelectedIndex(mode: AspectRatioMode): number {
+    for (let idx = 0; idx < this.aspectRatioOptions.length; idx++) {
+      if (isAspectRatioOptionSelected(mode, this.aspectRatioOptions[idx].mode)) {
+        return idx
+      }
+    }
+    return -1
+  }
+
+  private logRenderSummaryIfChanged(scope: string, summary: string): void {
+    if (scope === 'render/speed') {
+      if (this.lastSpeedRenderSummary === summary) {
+        return
+      }
+      this.lastSpeedRenderSummary = summary
+    } else if (scope === 'render/aspect-ratio') {
+      if (this.lastAspectRatioRenderSummary === summary) {
+        return
+      }
+      this.lastAspectRatioRenderSummary = summary
+    }
+    this.logPlayerSettingsDiagnostic(scope, summary)
+  }
 
   private applySelectionMirrorState(state: PlayerSettingsSelectionMirrorState): void {
+    const beforePlaybackSpeed = this.mirroredPlaybackSpeed
+    const beforeAspectRatioMode = this.mirroredAspectRatioMode
+    this.logPlayerSettingsDiagnostic(
+      'state/applySelectionMirrorState-before',
+      `playbackSpeed=${beforePlaybackSpeed} aspectRatioMode=${beforeAspectRatioMode} nextPlaybackSpeed=${state.playbackSpeed} nextAspectRatioMode=${state.aspectRatioMode}`
+    )
     this.mirroredPlaybackSpeed = state.playbackSpeed
     this.mirroredAspectRatioMode = state.aspectRatioMode
+    this.logPlayerSettingsDiagnostic(
+      'state/applySelectionMirrorState-after',
+      `playbackSpeed=${this.mirroredPlaybackSpeed} aspectRatioMode=${this.mirroredAspectRatioMode}`
+    )
   }
 
   private syncSelectionMirrorState(): void {
@@ -886,6 +932,10 @@ export struct PlayerSettingsDialog {
   }
 
   private updatePlaybackSpeedSelection(speed: number): void {
+    this.logPlayerSettingsDiagnostic(
+      'state/updatePlaybackSpeedSelection-enter',
+      `targetSpeed=${speed} beforePlaybackSpeed=${this.mirroredPlaybackSpeed} beforeAspectRatioMode=${this.mirroredAspectRatioMode}`
+    )
     const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState(
       this.mirroredPlaybackSpeed,
       this.mirroredAspectRatioMode
@@ -896,10 +946,18 @@ export struct PlayerSettingsDialog {
       this.mirroredAspectRatioMode
     )
     this.applySelectionMirrorState(nextState)
+    this.logPlayerSettingsDiagnostic(
+      'state/updatePlaybackSpeedSelection-after',
+      `afterPlaybackSpeed=${this.mirroredPlaybackSpeed} afterAspectRatioMode=${this.mirroredAspectRatioMode}`
+    )
     this.videoController.setPlaybackSpeed(speed)
   }
 
   private updateAspectRatioSelection(mode: AspectRatioMode): void {
+    this.logPlayerSettingsDiagnostic(
+      'state/updateAspectRatioSelection-enter',
+      `targetAspectRatioMode=${mode} beforePlaybackSpeed=${this.mirroredPlaybackSpeed} beforeAspectRatioMode=${this.mirroredAspectRatioMode}`
+    )
     const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState(
       this.mirroredPlaybackSpeed,
       this.mirroredAspectRatioMode
@@ -910,6 +968,10 @@ export struct PlayerSettingsDialog {
       mode
     )
     this.applySelectionMirrorState(nextState)
+    this.logPlayerSettingsDiagnostic(
+      'state/updateAspectRatioSelection-after',
+      `afterPlaybackSpeed=${this.mirroredPlaybackSpeed} afterAspectRatioMode=${this.mirroredAspectRatioMode}`
+    )
     this.videoController.setAspectRatioMode(mode)
   }
 
@@ -1014,19 +1076,32 @@ export struct PlayerSettingsDialog {
   }
 
   private getSpeedChipRenderModels(): PlayerSettingsSpeedChipRenderModel[] {
-    return buildPlaybackSpeedChipRenderModels(
+    const renderModels = buildPlaybackSpeedChipRenderModels(
       this.mirroredPlaybackSpeed,
       this.speedFocusedIndex,
       this.speedHoveredIndex
     )
+    const selectedIndex = resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed)
+    this.logRenderSummaryIfChanged(
+      'render/speed',
+      `activePlaybackSpeed=${this.mirroredPlaybackSpeed} focusedIndex=${this.speedFocusedIndex} hoveredIndex=${this.speedHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${renderModels[selectedIndex].label}`
+    )
+    return renderModels
   }
 
   private getAspectRatioChipRenderModels(): PlayerSettingsAspectRatioChipRenderModel[] {
-    return buildAspectRatioChipRenderModels(
+    const renderModels = buildAspectRatioChipRenderModels(
       this.mirroredAspectRatioMode,
       this.arFocusedIndex,
       this.arHoveredIndex
     )
+    const selectedIndex = this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode)
+    const selectedLabel = selectedIndex >= 0 ? renderModels[selectedIndex].label : 'none'
+    this.logRenderSummaryIfChanged(
+      'render/aspect-ratio',
+      `activeAspectRatioMode=${this.mirroredAspectRatioMode} focusedIndex=${this.arFocusedIndex} hoveredIndex=${this.arHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${selectedLabel}`
+    )
+    return renderModels
   }
 
   private getAutoplayToggleChipStyleState(idx: number): PlayerSettingsChipStyleState {
@@ -1119,6 +1194,10 @@ export struct PlayerSettingsDialog {
                       this.speedHoveredIndex = isHover ? idx : -1
                     })
                     .onClick(() => {
+                      this.logPlayerSettingsDiagnostic(
+                        'interaction/speed',
+                        `focusedIndex=${this.speedFocusedIndex} targetIndex=${idx} label=${model.label} speed=${model.speed}`
+                      )
                       this.updatePlaybackSpeedSelection(model.speed)
                     })
                 }, (model: PlayerSettingsSpeedChipRenderModel) => model.speed.toString())
@@ -1163,6 +1242,10 @@ export struct PlayerSettingsDialog {
                       this.arHoveredIndex = isHover ? idx : -1
                     })
                     .onClick(() => {
+                      this.logPlayerSettingsDiagnostic(
+                        'interaction/aspect-ratio',
+                        `focusedIndex=${this.arFocusedIndex} targetIndex=${idx} label=${model.label} mode=${model.mode}`
+                      )
                       this.updateAspectRatioSelection(model.mode)
                     })
                 }, (model: PlayerSettingsAspectRatioChipRenderModel) => model.mode.toString())
