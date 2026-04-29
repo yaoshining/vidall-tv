@@ -609,6 +609,8 @@ export interface PlayerSettingsChipStyleState {
   isFocused: boolean
   isHovered: boolean
   isSelected: boolean
+  // 兼容保留：沿用旧的 outline 语义字段，供已有测试/样式语义判断继续读取。
+  // 当前值芯片真实渲染已改为 borderWidth / borderColor，这组字段不再直接驱动 SelectionOptionChip 的边框。
   showFocusOutline: boolean
   showSelectedOutline: boolean
   showWaveIcon: boolean
@@ -625,6 +627,7 @@ export interface PlayerSettingsChipStyleState {
   horizontalPadding: number
   verticalPadding: number
   groupGap: number
+  // 当前实际渲染来源：SelectionOptionChip 通过这组真实边框字段输出 UI。
   borderWidth: number
   borderColor: string
 }
@@ -682,6 +685,8 @@ export function getPlayerSettingsValueChipStyleState(
     backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.45)' :
       isEmphasized ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.1)',
     labelColor: isSelected ? '#F3F7FF' : isEmphasized ? '#EFF2FB' : '#D7DCE7',
+    // 兼容保留：旧测试和语义判断仍读取 focusBorderWidth / selectedBorderWidth。
+    // 当前值芯片的真实边框渲染以下方 borderWidth / borderColor 为准。
     focusBorderWidth: isSelected ? 0 : isEmphasized ? 2 : 0,
     selectedBorderWidth: isSelected ? 2 : 0,
     height: PLAYER_SETTINGS_CHIP_HEIGHT,
@@ -722,6 +727,37 @@ export function isAspectRatioOptionSelected(
   return currentMode === optionMode
 }
 
+export interface PlayerSettingsSelectionMirrorState {
+  playbackSpeed: number
+  aspectRatioMode: AspectRatioMode
+}
+
+export function createPlayerSettingsSelectionMirrorState(
+  playbackSpeed: number,
+  aspectRatioMode: AspectRatioMode
+): PlayerSettingsSelectionMirrorState {
+  const mirrorState: PlayerSettingsSelectionMirrorState = {
+    playbackSpeed,
+    aspectRatioMode
+  }
+  return mirrorState
+}
+
+export function syncPlayerSettingsSelectionMirrorState(
+  currentState: PlayerSettingsSelectionMirrorState,
+  playbackSpeed: number,
+  aspectRatioMode: AspectRatioMode
+): PlayerSettingsSelectionMirrorState {
+  if (currentState.playbackSpeed === playbackSpeed && currentState.aspectRatioMode === aspectRatioMode) {
+    return currentState
+  }
+  const nextState: PlayerSettingsSelectionMirrorState = {
+    playbackSpeed,
+    aspectRatioMode
+  }
+  return nextState
+}
+
 export function shouldApplyEpisodeAutoplaySettingsLoad(
   requestToken: number,
   currentToken: number,
@@ -736,6 +772,8 @@ export struct PlayerSettingsDialog {
   @Require videoController: VideoPlayerController
   @Require onOpenSubtitleSelector: () => void
   @Require onEpisodeSelect: (item: PlaybackContextItem) => Promise<boolean>
+  @State private mirroredPlaybackSpeed: number = 1.0
+  @State private mirroredAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
   @State private arFocusedIndex: number = -1
   @State private speedFocusedIndex: number = -1
   @State private arHoveredIndex: number = -1
@@ -766,7 +804,54 @@ export struct PlayerSettingsDialog {
   private autoplaySettingsLoadToken: number = 0
   private autoplaySettingsDirty: boolean = false
 
+  private applySelectionMirrorState(state: PlayerSettingsSelectionMirrorState): void {
+    this.mirroredPlaybackSpeed = state.playbackSpeed
+    this.mirroredAspectRatioMode = state.aspectRatioMode
+  }
+
+  private syncSelectionMirrorState(): void {
+    const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState(
+      this.mirroredPlaybackSpeed,
+      this.mirroredAspectRatioMode
+    )
+    const nextState: PlayerSettingsSelectionMirrorState = syncPlayerSettingsSelectionMirrorState(
+      currentState,
+      this.videoController.playbackSpeed,
+      this.videoController.aspectRatioMode
+    )
+    this.applySelectionMirrorState(nextState)
+  }
+
+  private updatePlaybackSpeedSelection(speed: number): void {
+    const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState(
+      this.mirroredPlaybackSpeed,
+      this.mirroredAspectRatioMode
+    )
+    const nextState: PlayerSettingsSelectionMirrorState = syncPlayerSettingsSelectionMirrorState(
+      currentState,
+      speed,
+      this.mirroredAspectRatioMode
+    )
+    this.applySelectionMirrorState(nextState)
+    this.videoController.setPlaybackSpeed(speed)
+  }
+
+  private updateAspectRatioSelection(mode: AspectRatioMode): void {
+    const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState(
+      this.mirroredPlaybackSpeed,
+      this.mirroredAspectRatioMode
+    )
+    const nextState: PlayerSettingsSelectionMirrorState = syncPlayerSettingsSelectionMirrorState(
+      currentState,
+      this.mirroredPlaybackSpeed,
+      mode
+    )
+    this.applySelectionMirrorState(nextState)
+    this.videoController.setAspectRatioMode(mode)
+  }
+
   aboutToAppear(): void {
+    this.syncSelectionMirrorState()
     this.aiEnhanceOn = this.videoController.getResolvedAiEnhanceEnabled();
     this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
     this.arFocusedIndex = -1;
@@ -852,7 +937,7 @@ export struct PlayerSettingsDialog {
   private getSpeedChipStyleState(idx: number): PlayerSettingsChipStyleState {
     return getPlayerSettingsValueChipStyleState(
       this.speedFocusedIndex === idx,
-      resolveSelectedPlaybackRateIndex(this.videoController.playbackSpeed) === idx,
+      resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed) === idx,
       this.speedHoveredIndex === idx
     )
   }
@@ -860,7 +945,7 @@ export struct PlayerSettingsDialog {
   private getAspectRatioChipStyleState(idx: number): PlayerSettingsChipStyleState {
     return getPlayerSettingsValueChipStyleState(
       this.arFocusedIndex === idx,
-      isAspectRatioOptionSelected(this.videoController.aspectRatioMode, this.aspectRatioOptions[idx].mode),
+      isAspectRatioOptionSelected(this.mirroredAspectRatioMode, this.aspectRatioOptions[idx].mode),
       this.arHoveredIndex === idx
     )
   }
@@ -935,14 +1020,14 @@ export struct PlayerSettingsDialog {
                   .focusable(true)
                   .onFocus(() => { this.speedFocusedIndex = idx })
                   .onBlur(() => { this.speedFocusedIndex = -1 })
-                  .onHover((isHover: boolean) => {
-                    this.speedHoveredIndex = isHover ? idx : -1
-                  })
-                  .onClick(() => {
-                    this.videoController.setPlaybackSpeed(opt.speed)
-                  })
-                }, (opt: SpeedOption) => opt.speed.toString())
-              }
+                   .onHover((isHover: boolean) => {
+                     this.speedHoveredIndex = isHover ? idx : -1
+                   })
+                   .onClick(() => {
+                     this.updatePlaybackSpeedSelection(opt.speed)
+                   })
+                 }, (opt: SpeedOption) => opt.speed.toString())
+               }
               .justifyContent(FlexAlign.Start)
               .width('100%')
             }
@@ -963,14 +1048,14 @@ export struct PlayerSettingsDialog {
                   .focusable(true)
                   .onFocus(() => { this.arFocusedIndex = idx })
                   .onBlur(() => { this.arFocusedIndex = -1 })
-                  .onHover((isHover: boolean) => {
-                    this.arHoveredIndex = isHover ? idx : -1
-                  })
-                  .onClick(() => {
-                    this.videoController.setAspectRatioMode(opt.mode)
-                  })
-                }, (opt: AspectRatioOption) => opt.mode.toString())
-              }
+                   .onHover((isHover: boolean) => {
+                     this.arHoveredIndex = isHover ? idx : -1
+                   })
+                   .onClick(() => {
+                     this.updateAspectRatioSelection(opt.mode)
+                   })
+                 }, (opt: AspectRatioOption) => opt.mode.toString())
+               }
               .justifyContent(FlexAlign.Start)
               .width('100%')
             }
