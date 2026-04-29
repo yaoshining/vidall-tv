@@ -700,7 +700,14 @@ export function getPlayerSettingsValueChipStyleState(
   isHovered: boolean = false
 ): PlayerSettingsChipStyleState {
   const isEmphasized = isFocused || isHovered
+  const scale = isSelected ? 1.05 :
+    isFocused ? PLAYER_SETTINGS_CHIP_SCALE_FOCUSED :
+    isHovered ? 1.02 : 1
   const borderWidth = isSelected || isEmphasized ? 2 : 1
+  const shadowRadius = isSelected ? 14 : isFocused ? 12 : isHovered ? 8 : 0
+  const shadowColor = isSelected ? '#33597FB8' :
+    isFocused ? '#386EA8E0' :
+    isHovered ? '#2A6EA8E0' : '#00000000'
   const styleState: PlayerSettingsChipStyleState = {
     isFocused,
     isHovered,
@@ -708,9 +715,9 @@ export function getPlayerSettingsValueChipStyleState(
     showFocusOutline: false,
     showSelectedOutline: false,
     showWaveIcon: false,
-    scale: isEmphasized ? PLAYER_SETTINGS_CHIP_SCALE_FOCUSED : 1,
-    shadowRadius: isEmphasized ? 12 : isSelected ? 8 : 0,
-    shadowColor: isEmphasized ? '#386EA8E0' : isSelected ? '#33597FB8' : '#00000000',
+    scale,
+    shadowRadius,
+    shadowColor,
     backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.45)' :
       isEmphasized ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.1)',
     labelColor: isSelected ? '#F3F7FF' : isEmphasized ? '#EFF2FB' : '#D7DCE7',

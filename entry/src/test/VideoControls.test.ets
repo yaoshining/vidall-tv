@@ -133,16 +133,61 @@ export default function videoControlsTest() {
         const focusedSelectedState: PlayerSettingsChipStyleState = getPlayerSettingsValueChipStyleState(true, true)
 
         expect(selectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
-        expect(selectedState.scale).assertEqual(1)
+        expect(selectedState.scale).assertEqual(1.05)
         expect(selectedState.selectedBorderWidth).assertEqual(2)
         expect(focusedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.18)')
         expect(focusedState.scale).assertEqual(1.04)
         expect(focusedState.focusBorderWidth).assertEqual(2)
         expect(focusedSelectedState.backgroundColor).assertEqual(selectedState.backgroundColor)
-        expect(focusedSelectedState.scale).assertEqual(focusedState.scale)
+        expect(focusedSelectedState.scale).assertEqual(selectedState.scale)
         expect(focusedSelectedState.selectedBorderWidth).assertEqual(2)
         expect(focusedSelectedState.borderWidth).assertEqual(2)
         expect(focusedSelectedState.borderColor).assertEqual('#fffefe')
+      })
+
+      it('当未选中项处于 hovered 时，selected 项仍保持最强的视觉语义', 0, () => {
+        const speedModels: PlayerSettingsSpeedChipRenderModel[] =
+          buildPlaybackSpeedChipRenderModels(1.5, -1, 3)
+        const hoveredSpeedState: PlayerSettingsChipStyleState = speedModels[3].styleState
+        const selectedSpeedState: PlayerSettingsChipStyleState = speedModels[4].styleState
+
+        expect(selectedSpeedState.isSelected).assertTrue()
+        expect(hoveredSpeedState.isHovered).assertTrue()
+        expect(selectedSpeedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(selectedSpeedState.scale >= hoveredSpeedState.scale).assertTrue()
+        expect(selectedSpeedState.shadowRadius >= hoveredSpeedState.shadowRadius).assertTrue()
+
+        const aspectModels: PlayerSettingsAspectRatioChipRenderModel[] =
+          buildAspectRatioChipRenderModels(AspectRatioMode.STRETCH, -1, 1)
+        const hoveredAspectState: PlayerSettingsChipStyleState = aspectModels[1].styleState
+        const selectedAspectState: PlayerSettingsChipStyleState = aspectModels[2].styleState
+
+        expect(selectedAspectState.isSelected).assertTrue()
+        expect(hoveredAspectState.isHovered).assertTrue()
+        expect(selectedAspectState.scale >= hoveredAspectState.scale).assertTrue()
+        expect(selectedAspectState.shadowRadius >= hoveredAspectState.shadowRadius).assertTrue()
+      })
+
+      it('当未选中项处于 focused 时，selected 项仍保持最强的视觉语义', 0, () => {
+        const speedModels: PlayerSettingsSpeedChipRenderModel[] =
+          buildPlaybackSpeedChipRenderModels(1.5, 3, -1)
+        const focusedSpeedState: PlayerSettingsChipStyleState = speedModels[3].styleState
+        const selectedSpeedState: PlayerSettingsChipStyleState = speedModels[4].styleState
+
+        expect(focusedSpeedState.isFocused).assertTrue()
+        expect(selectedSpeedState.isSelected).assertTrue()
+        expect(selectedSpeedState.scale >= focusedSpeedState.scale).assertTrue()
+        expect(selectedSpeedState.shadowRadius >= focusedSpeedState.shadowRadius).assertTrue()
+
+        const aspectModels: PlayerSettingsAspectRatioChipRenderModel[] =
+          buildAspectRatioChipRenderModels(AspectRatioMode.STRETCH, 1, -1)
+        const focusedAspectState: PlayerSettingsChipStyleState = aspectModels[1].styleState
+        const selectedAspectState: PlayerSettingsChipStyleState = aspectModels[2].styleState
+
+        expect(focusedAspectState.isFocused).assertTrue()
+        expect(selectedAspectState.isSelected).assertTrue()
+        expect(selectedAspectState.scale >= focusedAspectState.scale).assertTrue()
+        expect(selectedAspectState.shadowRadius >= focusedAspectState.shadowRadius).assertTrue()
       })
     })
 
