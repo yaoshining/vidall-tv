@@ -791,10 +791,13 @@ function getPlayerSettingsAutoplayChipStyleState(
   isSelected: boolean,
   isHovered: boolean = false
 ): PlayerSettingsChipStyleState {
-  if (isFocused || isHovered) {
-    return getPlayerSettingsChipStyleState(isFocused, isSelected, isHovered)
+  if (isSelected) {
+    return getPlayerSettingsValueChipStyleState(isFocused, true, isHovered)
   }
-  return getPlayerSettingsValueChipStyleState(false, isSelected, false)
+  if (isFocused || isHovered) {
+    return getPlayerSettingsChipStyleState(isFocused, false, isHovered)
+  }
+  return getPlayerSettingsValueChipStyleState(false, false, false)
 }
 
 export function buildPlaybackSpeedChipRenderModels(

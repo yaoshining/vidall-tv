@@ -415,6 +415,58 @@ export default function videoControlsTest() {
         expect(hoveredState.scale).assertEqual(1.04)
       })
 
+      it('自动下一集开启项 selected 与 focused 叠加时仍保持当前值白色选中边框', 0, () => {
+        const models: PlayerSettingsAutoplayToggleChipRenderModel[] =
+          buildAutoplayToggleChipRenderModels(true, 0, -1)
+        const focusedSelectedState: PlayerSettingsChipStyleState = models[0].styleState
+
+        expect(focusedSelectedState.isSelected).assertTrue()
+        expect(focusedSelectedState.isFocused).assertTrue()
+        expect(focusedSelectedState.borderWidth).assertEqual(2)
+        expect(focusedSelectedState.borderColor).assertEqual('#fffefe')
+        expect(focusedSelectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(focusedSelectedState.scale).assertEqual(1.05)
+      })
+
+      it('自动下一集开启项 selected 与 hovered 叠加时仍保持当前值白色选中边框', 0, () => {
+        const models: PlayerSettingsAutoplayToggleChipRenderModel[] =
+          buildAutoplayToggleChipRenderModels(true, -1, 0)
+        const hoveredSelectedState: PlayerSettingsChipStyleState = models[0].styleState
+
+        expect(hoveredSelectedState.isSelected).assertTrue()
+        expect(hoveredSelectedState.isHovered).assertTrue()
+        expect(hoveredSelectedState.borderWidth).assertEqual(2)
+        expect(hoveredSelectedState.borderColor).assertEqual('#fffefe')
+        expect(hoveredSelectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(hoveredSelectedState.scale).assertEqual(1.05)
+      })
+
+      it('自动下一集倒计时 selected 与 focused 叠加时仍保持当前值白色选中边框', 0, () => {
+        const models: PlayerSettingsAutoplayCountdownChipRenderModel[] =
+          buildAutoplayCountdownChipRenderModels(8, 2, -1)
+        const focusedSelectedState: PlayerSettingsChipStyleState = models[2].styleState
+
+        expect(focusedSelectedState.isSelected).assertTrue()
+        expect(focusedSelectedState.isFocused).assertTrue()
+        expect(focusedSelectedState.borderWidth).assertEqual(2)
+        expect(focusedSelectedState.borderColor).assertEqual('#fffefe')
+        expect(focusedSelectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(focusedSelectedState.scale).assertEqual(1.05)
+      })
+
+      it('自动下一集倒计时 selected 与 hovered 叠加时仍保持当前值白色选中边框', 0, () => {
+        const models: PlayerSettingsAutoplayCountdownChipRenderModel[] =
+          buildAutoplayCountdownChipRenderModels(8, -1, 2)
+        const hoveredSelectedState: PlayerSettingsChipStyleState = models[2].styleState
+
+        expect(hoveredSelectedState.isSelected).assertTrue()
+        expect(hoveredSelectedState.isHovered).assertTrue()
+        expect(hoveredSelectedState.borderWidth).assertEqual(2)
+        expect(hoveredSelectedState.borderColor).assertEqual('#fffefe')
+        expect(hoveredSelectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(hoveredSelectedState.scale).assertEqual(1.05)
+      })
+
       it('当未选中项处于 hovered 时，selected 项仍保持最强的视觉语义', 0, () => {
         const speedModels: PlayerSettingsSpeedChipRenderModel[] =
           buildPlaybackSpeedChipRenderModels(1.5, -1, 3)
