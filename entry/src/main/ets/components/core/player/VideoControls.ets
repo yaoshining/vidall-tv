@@ -641,8 +641,9 @@ const PLAYER_SETTINGS_CHIP_VERTICAL_PADDING: number = 10
 const PLAYER_SETTINGS_CHIP_GAP: number = 10
 const PLAYER_SETTINGS_CHIP_SCALE_FOCUSED: number = 1.04
 const DEFAULT_PLAYBACK_RATE_INDEX: number = 2
-const PLAYER_SETTINGS_DIAGNOSTIC_PREFIX: string = '[#180-settings]'
+const PLAYER_SETTINGS_DIAGNOSTIC_PREFIX: string = '[#player-settings]'
 const PLAYER_SETTINGS_DIAGNOSTIC_TAG: string = 'PlayerSettingsDialog'
+const PLAYER_SETTINGS_DIAGNOSTIC_LOG_ENABLED: boolean = false
 
 export interface PlayerSettingsChipStyleState {
   isFocused: boolean
@@ -1013,7 +1014,6 @@ export struct PlayerSettingsDialog {
   @State private arHoveredIndex: number = -1
   @State private speedHoveredIndex: number = -1
   private readonly aspectRatioOptions: AspectRatioOption[] = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS
-  private readonly speedOptions: SpeedOption[] = PLAYER_SETTINGS_SPEED_OPTIONS
   @State private aiEnhanceOn: boolean = true
   @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
   @State private autoplayEnabled: boolean = true
@@ -1026,11 +1026,12 @@ export struct PlayerSettingsDialog {
   private readonly autoplayCountdownOptions: Array<number> = [3, 5, 8, 10]
   private autoplaySettingsLoadToken: number = 0
   private autoplaySettingsDirty: boolean = false
-  private lastSpeedRenderSummary: string = ''
-  private lastAspectRatioRenderSummary: string = ''
 
   private logPlayerSettingsDiagnostic(scope: string, detail: string): void {
-    hilog.info(0x0000, PLAYER_SETTINGS_DIAGNOSTIC_TAG, formatPlayerSettingsDiagnosticLog(scope, detail))
+    if (!PLAYER_SETTINGS_DIAGNOSTIC_LOG_ENABLED) {
+      return
+    }
+    hilog.debug(0x0000, PLAYER_SETTINGS_DIAGNOSTIC_TAG, formatPlayerSettingsDiagnosticLog(scope, detail))
   }
 
   private resolveAspectRatioSelectedIndex(mode: AspectRatioMode): number {
@@ -1040,117 +1041,6 @@ export struct PlayerSettingsDialog {
       }
     }
     return -1
-  }
-
-  private appendVisualSnapshot(
-    snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot>,
-    idx: number,
-    role: string,
-    label: string,
-    styleState: PlayerSettingsChipStyleState
-  ): void {
-    for (let snapshotIdx = 0; snapshotIdx < snapshots.length; snapshotIdx++) {
-      if (snapshots[snapshotIdx].idx === idx) {
-        if (snapshots[snapshotIdx].roles.indexOf(role) < 0) {
-          snapshots[snapshotIdx].roles = `${snapshots[snapshotIdx].roles}|${role}`
-        }
-        return
-      }
-    }
-    const snapshot: PlayerSettingsDiagnosticVisualSnapshot = {
-      idx,
-      label,
-      roles: role,
-      styleState
-    }
-    snapshots.push(snapshot)
-  }
-
-  private buildSpeedVisualSnapshotSummary(renderModels: Array<PlayerSettingsSpeedChipRenderModel>): string {
-    const snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot> = []
-    const selectedIndex = resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed)
-    if (selectedIndex >= 0 && selectedIndex < renderModels.length) {
-      this.appendVisualSnapshot(
-        snapshots,
-        selectedIndex,
-        'selected',
-        renderModels[selectedIndex].label,
-        renderModels[selectedIndex].styleState
-      )
-    }
-    if (this.speedHoveredIndex >= 0 && this.speedHoveredIndex < renderModels.length) {
-      this.appendVisualSnapshot(
-        snapshots,
-        this.speedHoveredIndex,
-        'hovered',
-        renderModels[this.speedHoveredIndex].label,
-        renderModels[this.speedHoveredIndex].styleState
-      )
-    }
-    if (this.speedFocusedIndex >= 0 && this.speedFocusedIndex < renderModels.length) {
-      this.appendVisualSnapshot(
-        snapshots,
-        this.speedFocusedIndex,
-        'focused',
-        renderModels[this.speedFocusedIndex].label,
-        renderModels[this.speedFocusedIndex].styleState
-      )
-    }
-    return buildPlayerSettingsVisualSnapshotSummary('speed', snapshots)
-  }
-
-  private buildAspectRatioVisualSnapshotSummary(
-    renderModels: Array<PlayerSettingsAspectRatioChipRenderModel>
-  ): string {
-    const snapshots: Array<PlayerSettingsDiagnosticVisualSnapshot> = []
-    const selectedIndex = this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode)
-    if (selectedIndex >= 0 && selectedIndex < renderModels.length) {
-      this.appendVisualSnapshot(
-        snapshots,
-        selectedIndex,
-        'selected',
-        renderModels[selectedIndex].label,
-        renderModels[selectedIndex].styleState
-      )
-    }
-    if (this.arHoveredIndex >= 0 && this.arHoveredIndex < renderModels.length) {
-      this.appendVisualSnapshot(
-        snapshots,
-        this.arHoveredIndex,
-        'hovered',
-        renderModels[this.arHoveredIndex].label,
-        renderModels[this.arHoveredIndex].styleState
-      )
-    }
-    if (this.arFocusedIndex >= 0 && this.arFocusedIndex < renderModels.length) {
-      this.appendVisualSnapshot(
-        snapshots,
-        this.arFocusedIndex,
-        'focused',
-        renderModels[this.arFocusedIndex].label,
-        renderModels[this.arFocusedIndex].styleState
-      )
-    }
-    return buildPlayerSettingsVisualSnapshotSummary('aspect-ratio', snapshots)
-  }
-
-  private logRenderSummaryIfChanged(scope: string, summary: string, visualSnapshotSummary: string = ''): void {
-    const summaryKey = visualSnapshotSummary.length > 0 ? `${summary} || ${visualSnapshotSummary}` : summary
-    if (scope === 'render/speed') {
-      if (this.lastSpeedRenderSummary === summaryKey) {
-        return
-      }
-      this.lastSpeedRenderSummary = summaryKey
-    } else if (scope === 'render/aspect-ratio') {
-      if (this.lastAspectRatioRenderSummary === summaryKey) {
-        return
-      }
-      this.lastAspectRatioRenderSummary = summaryKey
-    }
-    this.logPlayerSettingsDiagnostic(scope, summary)
-    if (visualSnapshotSummary.length > 0) {
-      this.logPlayerSettingsDiagnostic(`${scope}/styleState`, visualSnapshotSummary)
-    }
   }
 
   private logSpeedInteractionEvent(eventType: string, idx: number, label: string, nextState: string): void {
@@ -1339,53 +1229,20 @@ export struct PlayerSettingsDialog {
     .animation({ duration: 180, curve: Curve.EaseInOut })
   }
 
-  private getSpeedChipStyleState(idx: number): PlayerSettingsChipStyleState {
-    return getPlayerSettingsValueChipStyleState(
-      this.speedFocusedIndex === idx,
-      resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed) === idx,
-      this.speedHoveredIndex === idx
-    )
-  }
-
-  private getAspectRatioChipStyleState(idx: number): PlayerSettingsChipStyleState {
-    return getPlayerSettingsValueChipStyleState(
-      this.arFocusedIndex === idx,
-      isAspectRatioOptionSelected(this.mirroredAspectRatioMode, this.aspectRatioOptions[idx].mode),
-      this.arHoveredIndex === idx
-    )
-  }
-
   private getSpeedChipRenderModels(): PlayerSettingsSpeedChipRenderModel[] {
-    const renderModels = buildPlaybackSpeedChipRenderModels(
+    return buildPlaybackSpeedChipRenderModels(
       this.mirroredPlaybackSpeed,
       this.speedFocusedIndex,
       this.speedHoveredIndex
     )
-    const selectedIndex = resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed)
-    const visualSnapshotSummary = this.buildSpeedVisualSnapshotSummary(renderModels)
-    this.logRenderSummaryIfChanged(
-      'render/speed',
-      `activePlaybackSpeed=${this.mirroredPlaybackSpeed} focusedIndex=${this.speedFocusedIndex} hoveredIndex=${this.speedHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${renderModels[selectedIndex].label}`,
-      visualSnapshotSummary
-    )
-    return renderModels
   }
 
   private getAspectRatioChipRenderModels(): PlayerSettingsAspectRatioChipRenderModel[] {
-    const renderModels = buildAspectRatioChipRenderModels(
+    return buildAspectRatioChipRenderModels(
       this.mirroredAspectRatioMode,
       this.arFocusedIndex,
       this.arHoveredIndex
     )
-    const selectedIndex = this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode)
-    const selectedLabel = selectedIndex >= 0 ? renderModels[selectedIndex].label : 'none'
-    const visualSnapshotSummary = this.buildAspectRatioVisualSnapshotSummary(renderModels)
-    this.logRenderSummaryIfChanged(
-      'render/aspect-ratio',
-      `activeAspectRatioMode=${this.mirroredAspectRatioMode} focusedIndex=${this.arFocusedIndex} hoveredIndex=${this.arHoveredIndex} selectedIndex=${selectedIndex} selectedLabel=${selectedLabel}`,
-      visualSnapshotSummary
-    )
-    return renderModels
   }
 
   private getAutoplayToggleChipStyleState(idx: number): PlayerSettingsChipStyleState {

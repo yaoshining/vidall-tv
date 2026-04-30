@@ -28,11 +28,11 @@ import { AspectRatioMode } from '../main/ets/components/core/player/VideoPlayerC
 export default function videoControlsTest() {
   describe('VideoControls', () => {
     describe('player settings selection bridge', () => {
-      it('诊断日志统一带 #180 前缀并保留作用域与摘要', 0, () => {
+      it('诊断日志统一带稳定播放器设置前缀并保留作用域与摘要', 0, () => {
         expect(formatPlayerSettingsDiagnosticLog(
           'interaction/speed',
           'focusedIndex=2 label=1.5x'
-        )).assertEqual('[#180-settings] interaction/speed: focusedIndex=2 label=1.5x')
+        )).assertEqual('[#player-settings] interaction/speed: focusedIndex=2 label=1.5x')
       })
 
       it('视觉快照摘要会合并同一 chip 的多重角色并输出真实样式字段', 0, () => {
