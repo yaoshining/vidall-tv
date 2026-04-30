@@ -672,6 +672,10 @@ export function buildPlayerSettingsSelectionChipKey(optionKey: string, label: st
   return `${optionKey}:${label}`
 }
 
+export function buildPlayerSettingsSelectionStateKey(optionKey: string, isSelected: boolean): string {
+  return `${optionKey}:${isSelected ? 'selected' : 'not-selected'}`
+}
+
 export function getPlayerSettingsChipStyleState(
   isFocused: boolean,
   isSelected: boolean,
@@ -764,7 +768,7 @@ export function buildPlaybackSpeedChipRenderModels(
       hoveredIndex === idx
     )
     const renderModel: PlayerSettingsSpeedChipRenderModel = {
-      label: isSelected ? `${option.label} 选中` : option.label,
+      label: option.label,
       speed: option.speed,
       styleState
     }
@@ -788,7 +792,7 @@ export function buildAspectRatioChipRenderModels(
       hoveredIndex === idx
     )
     const renderModel: PlayerSettingsAspectRatioChipRenderModel = {
-      label: isSelected ? `${option.label} 选中` : option.label,
+      label: option.label,
       mode: option.mode,
       styleState
     }
@@ -1396,7 +1400,7 @@ export struct PlayerSettingsDialog {
                        this.updatePlaybackSpeedSelection(model.speed)
                      })
                 }, (model: PlayerSettingsSpeedChipRenderModel) =>
-                  buildPlayerSettingsSelectionChipKey(model.speed.toString(), model.label))
+                  buildPlayerSettingsSelectionStateKey(model.speed.toString(), model.styleState.isSelected))
               }
                .justifyContent(FlexAlign.Start)
                .width('100%')
@@ -1459,7 +1463,7 @@ export struct PlayerSettingsDialog {
                        this.updateAspectRatioSelection(model.mode)
                      })
                 }, (model: PlayerSettingsAspectRatioChipRenderModel) =>
-                  buildPlayerSettingsSelectionChipKey(model.mode.toString(), model.label))
+                  buildPlayerSettingsSelectionStateKey(model.mode.toString(), model.styleState.isSelected))
               }
                .justifyContent(FlexAlign.Start)
                .width('100%')
@@ -1502,7 +1506,10 @@ export struct PlayerSettingsDialog {
                     .onClick(() => {
                       this.updateEpisodeAutoplayEnabled(enabled)
                     })
-                  }, (enabled: boolean) => enabled ? 'enabled' : 'disabled')
+                  }, (enabled: boolean) => buildPlayerSettingsSelectionStateKey(
+                    enabled ? 'enabled' : 'disabled',
+                    this.autoplayEnabled === enabled
+                  ))
                 }
                 .justifyContent(FlexAlign.Start)
                 .width('100%')
@@ -1529,7 +1536,10 @@ export struct PlayerSettingsDialog {
                     .onClick(() => {
                       this.updateEpisodeAutoplayCountdownSeconds(seconds)
                     })
-                  }, (seconds: number) => seconds.toString())
+                  }, (seconds: number) => buildPlayerSettingsSelectionStateKey(
+                    seconds.toString(),
+                    this.autoplayCountdownSeconds === seconds
+                  ))
                 }
                 .justifyContent(FlexAlign.Start)
                 .width('100%')

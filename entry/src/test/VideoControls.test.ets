@@ -4,6 +4,7 @@ import {
   PlayerSettingsDiagnosticVisualSnapshot,
   PlayerSettingsSelectionMirrorState,
   buildPlayerSettingsSelectionChipKey,
+  buildPlayerSettingsSelectionStateKey,
   createPlayerSettingsSelectionMirrorState,
   PlayerSettingsChipStyleState,
   PlayerSettingsSpeedChipRenderModel,
@@ -96,42 +97,54 @@ export default function videoControlsTest() {
         expect(models[1].styleState.isFocused).assertTrue()
         expect(models[1].styleState.scale).assertEqual(1.04)
         expect(models[3].styleState.isHovered).assertTrue()
-        expect(models[4].label).assertEqual('1.5x 选中')
+        expect(models[4].label).assertEqual('1.5x')
         expect(models[4].styleState.isSelected).assertTrue()
         expect(models[4].styleState.borderColor).assertEqual('#fffefe')
       })
 
-      it('选中的倍速 chip 文案追加选中后缀，未选中项保持原文案', 0, () => {
+      it('倍速 chip 文案恢复原始文案，选中态不再依赖文案后缀', 0, () => {
         const models: PlayerSettingsSpeedChipRenderModel[] =
           buildPlaybackSpeedChipRenderModels(1.25, -1, -1)
 
         expect(models[2].label).assertEqual('1.0x')
-        expect(models[3].label).assertEqual('1.25x 选中')
+        expect(models[3].label).assertEqual('1.25x')
         expect(models[4].label).assertEqual('1.5x')
       })
 
-      it('倍速最终渲染 key 会随选中文案切换，避免复用旧 Text 文案', 0, () => {
+      it('倍速最终渲染 key 会随选中态切换，同时保持原始文案', 0, () => {
         const initialModels: PlayerSettingsSpeedChipRenderModel[] =
           buildPlaybackSpeedChipRenderModels(1.0, -1, -1)
         const updatedModels: PlayerSettingsSpeedChipRenderModel[] =
           buildPlaybackSpeedChipRenderModels(1.25, -1, -1)
 
-        const initialSelectedKey = buildPlayerSettingsSelectionChipKey(
+        const initialLabelKey = buildPlayerSettingsSelectionChipKey(
           initialModels[2].speed.toString(),
           initialModels[2].label
         )
-        const updatedOldKey = buildPlayerSettingsSelectionChipKey(
-          updatedModels[2].speed.toString(),
-          updatedModels[2].label
-        )
-        const updatedSelectedKey = buildPlayerSettingsSelectionChipKey(
+        const updatedLabelKey = buildPlayerSettingsSelectionChipKey(
           updatedModels[3].speed.toString(),
           updatedModels[3].label
         )
+        const initialSelectedKey = buildPlayerSettingsSelectionStateKey(
+          initialModels[2].speed.toString(),
+          initialModels[2].styleState.isSelected
+        )
+        const updatedOldKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[2].speed.toString(),
+          updatedModels[2].styleState.isSelected
+        )
+        const updatedSelectedKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[3].speed.toString(),
+          updatedModels[3].styleState.isSelected
+        )
 
-        expect(initialSelectedKey).assertEqual('1:1.0x 选中')
-        expect(updatedOldKey).assertEqual('1:1.0x')
-        expect(updatedSelectedKey).assertEqual('1.25:1.25x 选中')
+        expect(initialModels[2].label).assertEqual('1.0x')
+        expect(updatedModels[3].label).assertEqual('1.25x')
+        expect(initialLabelKey).assertEqual('1:1.0x')
+        expect(updatedLabelKey).assertEqual('1.25:1.25x')
+        expect(initialSelectedKey).assertEqual('1:selected')
+        expect(updatedOldKey).assertEqual('1:not-selected')
+        expect(updatedSelectedKey).assertEqual('1.25:selected')
         expect(initialSelectedKey === updatedOldKey).assertFalse()
       })
 
@@ -149,43 +162,77 @@ export default function videoControlsTest() {
         expect(models[0].styleState.isFocused).assertTrue()
         expect(models[1].label).assertEqual('填充')
         expect(models[1].styleState.isHovered).assertTrue()
-        expect(models[2].label).assertEqual('拉伸 选中')
+        expect(models[2].label).assertEqual('拉伸')
         expect(models[2].styleState.isSelected).assertTrue()
         expect(models[2].styleState.borderColor).assertEqual('#fffefe')
       })
 
-      it('选中的画面比例 chip 文案追加选中后缀，未选中项保持原文案', 0, () => {
+      it('画面比例 chip 文案恢复原始文案，选中态不再依赖文案后缀', 0, () => {
         const models: PlayerSettingsAspectRatioChipRenderModel[] =
           buildAspectRatioChipRenderModels(AspectRatioMode.FILL, -1, -1)
 
         expect(models[0].label).assertEqual('适应')
-        expect(models[1].label).assertEqual('填充 选中')
+        expect(models[1].label).assertEqual('填充')
         expect(models[2].label).assertEqual('拉伸')
       })
 
-      it('画面比例最终渲染 key 会随选中文案切换，避免复用旧 Text 文案', 0, () => {
+      it('画面比例最终渲染 key 会随选中态切换，同时保持原始文案', 0, () => {
         const initialModels: PlayerSettingsAspectRatioChipRenderModel[] =
           buildAspectRatioChipRenderModels(AspectRatioMode.FIT, -1, -1)
         const updatedModels: PlayerSettingsAspectRatioChipRenderModel[] =
           buildAspectRatioChipRenderModels(AspectRatioMode.FILL, -1, -1)
 
-        const initialSelectedKey = buildPlayerSettingsSelectionChipKey(
+        const initialLabelKey = buildPlayerSettingsSelectionChipKey(
           initialModels[0].mode.toString(),
           initialModels[0].label
         )
-        const updatedOldKey = buildPlayerSettingsSelectionChipKey(
-          updatedModels[0].mode.toString(),
-          updatedModels[0].label
-        )
-        const updatedSelectedKey = buildPlayerSettingsSelectionChipKey(
+        const updatedLabelKey = buildPlayerSettingsSelectionChipKey(
           updatedModels[1].mode.toString(),
           updatedModels[1].label
         )
+        const initialSelectedKey = buildPlayerSettingsSelectionStateKey(
+          initialModels[0].mode.toString(),
+          initialModels[0].styleState.isSelected
+        )
+        const updatedOldKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[0].mode.toString(),
+          updatedModels[0].styleState.isSelected
+        )
+        const updatedSelectedKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[1].mode.toString(),
+          updatedModels[1].styleState.isSelected
+        )
 
-        expect(initialSelectedKey).assertEqual('0:适应 选中')
-        expect(updatedOldKey).assertEqual('0:适应')
-        expect(updatedSelectedKey).assertEqual('1:填充 选中')
+        expect(initialModels[0].label).assertEqual('适应')
+        expect(updatedModels[1].label).assertEqual('填充')
+        expect(initialLabelKey).assertEqual('0:适应')
+        expect(updatedLabelKey).assertEqual('1:填充')
+        expect(initialSelectedKey).assertEqual('0:selected')
+        expect(updatedOldKey).assertEqual('0:not-selected')
+        expect(updatedSelectedKey).assertEqual('1:selected')
         expect(initialSelectedKey === updatedOldKey).assertFalse()
+      })
+
+      it('自动下一集选项 key 会随选中态切换', 0, () => {
+        const enabledSelectedKey = buildPlayerSettingsSelectionStateKey('enabled', true)
+        const enabledUnselectedKey = buildPlayerSettingsSelectionStateKey('enabled', false)
+        const disabledSelectedKey = buildPlayerSettingsSelectionStateKey('disabled', true)
+
+        expect(enabledSelectedKey).assertEqual('enabled:selected')
+        expect(enabledUnselectedKey).assertEqual('enabled:not-selected')
+        expect(disabledSelectedKey).assertEqual('disabled:selected')
+        expect(enabledSelectedKey === enabledUnselectedKey).assertFalse()
+      })
+
+      it('自动下一集倒计时选项 key 会随选中态切换', 0, () => {
+        const seconds8SelectedKey = buildPlayerSettingsSelectionStateKey('8', true)
+        const seconds8UnselectedKey = buildPlayerSettingsSelectionStateKey('8', false)
+        const seconds10SelectedKey = buildPlayerSettingsSelectionStateKey('10', true)
+
+        expect(seconds8SelectedKey).assertEqual('8:selected')
+        expect(seconds8UnselectedKey).assertEqual('8:not-selected')
+        expect(seconds10SelectedKey).assertEqual('10:selected')
+        expect(seconds8SelectedKey === seconds8UnselectedKey).assertFalse()
       })
     })
 
