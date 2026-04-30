@@ -113,10 +113,10 @@ const WEAK_FILENAME_TOKENS: string[] = [
 ];
 
 const SEASON_DIRECTORY_PATTERNS: RegExp[] = [
-  /^season(\s*\d+)?$/i,
-  /^s\d{1,2}$/i,
-  /^第\s*\d+\s*季$/,
-  /^season\s+\d+$/i
+  /^season(\s*\d+)?/i,
+  /^s\d{1,2}(?:\s|$)/i,
+  /^第\s*\d+\s*季/,
+  /^season\s+\d+/i
 ];
 
 function normalizePathSegments(filePath: string): string[] {
@@ -220,7 +220,7 @@ function hasStrongMovieSignal(fileNameInfo?: FileNameSemanticInfo): boolean {
 export function isSeasonDirectorySegment(segment: string): boolean {
   const normalizedSegment = normalizeSemanticToken(segment);
   return SEASON_DIRECTORY_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedSegment)) ||
-    /^第\s*[\d一二三四五六七八九十百]+\s*季$/.test(segment);
+    /^第\s*[\d一二三四五六七八九十百]+\s*季/.test(segment);
 }
 
 function isGenericTvSemanticSegment(segment: string): boolean {

@@ -7,7 +7,8 @@ import {
 } from '../../main/ets/utils/VideoScannerUtil';
 import {
   MediaTypeClassification,
-  isWeakSemanticTitleText
+  isWeakSemanticTitleText,
+  isSeasonDirectorySegment
 } from '../../main/ets/lib/MediaTypeClassifier';
 
 /**
@@ -23,6 +24,32 @@ export default function incrementalScanContextChangeTest() {
       expect(isWeakSemanticTitleText('22')).assertTrue();
     });
 
+    it('isSeasonDirectorySegment应识别基础季目录名', () => {
+      // 纯季目录名（旧测试已覆盖的场景）
+      expect(isSeasonDirectorySegment('第一季')).assertTrue();
+      expect(isSeasonDirectorySegment('Season 1')).assertTrue();
+      expect(isSeasonDirectorySegment('S01')).assertTrue();
+      expect(isSeasonDirectorySegment('S02')).assertTrue();
+      expect(isSeasonDirectorySegment('第 2 季')).assertTrue();
+    });
+
+    it('isSeasonDirectorySegment应识别带质量后缀的真实季目录名 (#191 QA证据)', () => {
+      // 真实场景：季目录名后面跟随质量信息
+      expect(isSeasonDirectorySegment('第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1')).assertTrue();
+      expect(isSeasonDirectorySegment('Season 01 - 1080p BluRay')).assertTrue();
+      expect(isSeasonDirectorySegment('S02 - AMZN WEB-DL')).assertTrue();
+      expect(isSeasonDirectorySegment('第二季 - 4K HDR')).assertTrue();
+    });
+
+    it('isSeasonDirectorySegment应拒绝非季目录名', () => {
+      // 避免误判：标题中恰好包含 S02 等模式但不是季目录
+      expect(isSeasonDirectorySegment('特典')).assertFalse();
+      expect(isSeasonDirectorySegment('其他目录')).assertFalse();
+      expect(isSeasonDirectorySegment('extras')).assertFalse();
+      // 注意：像 "Breaking Bad S01E01" 这样的文件名也应被拒绝，
+      // 但由于 normalizeSemanticToken 会移除空格，实际测试需考虑归一化后的形态
+    });
+
     it('检测到季目录兄弟时应返回true', () => {
       const childDirs1 = ['第一季', '其他目录'];
       expect(hasSeasonSiblingDirectory(childDirs1)).assertTrue();
@@ -31,6 +58,18 @@ export default function incrementalScanContextChangeTest() {
       expect(hasSeasonSiblingDirectory(childDirs2)).assertTrue();
 
       const childDirs3 = ['S01', 'S02'];
+      expect(hasSeasonSiblingDirectory(childDirs3)).assertTrue();
+    });
+
+    it('检测到带质量后缀的季目录兄弟时应返回true (#191 QA证据)', () => {
+      // 真实场景：目录列表包含带质量信息的季目录
+      const childDirs1 = ['第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1', '其他目录'];
+      expect(hasSeasonSiblingDirectory(childDirs1)).assertTrue();
+
+      const childDirs2 = ['Season 01 - 1080p BluRay', 'extras', 'Season 02 - 1080p BluRay'];
+      expect(hasSeasonSiblingDirectory(childDirs2)).assertTrue();
+
+      const childDirs3 = ['S02 - AMZN WEB-DL', '特典'];
       expect(hasSeasonSiblingDirectory(childDirs3)).assertTrue();
     });
 
