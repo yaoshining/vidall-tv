@@ -753,13 +753,14 @@ export function buildPlaybackSpeedChipRenderModels(
   const selectedIndex = resolveSelectedPlaybackRateIndex(playbackSpeed)
   for (let idx = 0; idx < PLAYER_SETTINGS_SPEED_OPTIONS.length; idx++) {
     const option = PLAYER_SETTINGS_SPEED_OPTIONS[idx]
+    const isSelected = selectedIndex === idx
     const styleState = getPlayerSettingsValueChipStyleState(
       focusedIndex === idx,
-      selectedIndex === idx,
+      isSelected,
       hoveredIndex === idx
     )
     const renderModel: PlayerSettingsSpeedChipRenderModel = {
-      label: option.label,
+      label: isSelected ? `${option.label} 选中` : option.label,
       speed: option.speed,
       styleState
     }
@@ -776,13 +777,14 @@ export function buildAspectRatioChipRenderModels(
   const renderModels: PlayerSettingsAspectRatioChipRenderModel[] = []
   for (let idx = 0; idx < PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS.length; idx++) {
     const option = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS[idx]
+    const isSelected = isAspectRatioOptionSelected(currentMode, option.mode)
     const styleState = getPlayerSettingsValueChipStyleState(
       focusedIndex === idx,
-      isAspectRatioOptionSelected(currentMode, option.mode),
+      isSelected,
       hoveredIndex === idx
     )
     const renderModel: PlayerSettingsAspectRatioChipRenderModel = {
-      label: option.label,
+      label: isSelected ? `${option.label} 选中` : option.label,
       mode: option.mode,
       styleState
     }

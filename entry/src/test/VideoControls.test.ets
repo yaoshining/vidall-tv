@@ -95,9 +95,18 @@ export default function videoControlsTest() {
         expect(models[1].styleState.isFocused).assertTrue()
         expect(models[1].styleState.scale).assertEqual(1.04)
         expect(models[3].styleState.isHovered).assertTrue()
-        expect(models[4].label).assertEqual('1.5x')
+        expect(models[4].label).assertEqual('1.5x 选中')
         expect(models[4].styleState.isSelected).assertTrue()
         expect(models[4].styleState.borderColor).assertEqual('#fffefe')
+      })
+
+      it('选中的倍速 chip 文案追加选中后缀，未选中项保持原文案', 0, () => {
+        const models: PlayerSettingsSpeedChipRenderModel[] =
+          buildPlaybackSpeedChipRenderModels(1.25, -1, -1)
+
+        expect(models[2].label).assertEqual('1.0x')
+        expect(models[3].label).assertEqual('1.25x 选中')
+        expect(models[4].label).assertEqual('1.5x')
       })
 
       it('画面比例选中态直接比较控制器当前模式', 0, () => {
@@ -114,9 +123,18 @@ export default function videoControlsTest() {
         expect(models[0].styleState.isFocused).assertTrue()
         expect(models[1].label).assertEqual('填充')
         expect(models[1].styleState.isHovered).assertTrue()
-        expect(models[2].label).assertEqual('拉伸')
+        expect(models[2].label).assertEqual('拉伸 选中')
         expect(models[2].styleState.isSelected).assertTrue()
         expect(models[2].styleState.borderColor).assertEqual('#fffefe')
+      })
+
+      it('选中的画面比例 chip 文案追加选中后缀，未选中项保持原文案', 0, () => {
+        const models: PlayerSettingsAspectRatioChipRenderModel[] =
+          buildAspectRatioChipRenderModels(AspectRatioMode.FILL, -1, -1)
+
+        expect(models[0].label).assertEqual('适应')
+        expect(models[1].label).assertEqual('填充 选中')
+        expect(models[2].label).assertEqual('拉伸')
       })
     })
 
