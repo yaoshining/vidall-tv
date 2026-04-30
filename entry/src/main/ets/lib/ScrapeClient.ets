@@ -637,12 +637,16 @@ export class ScrapeClient {
    * @param fileName 视频文件名，用于解析剧集标题/季集号
    * @param seriesHint 可选，路径中提取出的剧名搜索提示。当文件名标题为空或属于弱语义标题（如纯数字）时优先生效。
    * @param preclassifiedMediaType 可选，入口层已经完成弱语义分类时传入，避免在此处再次被 parseFileName 默认 movie。
+   * @param explicitEpisodeNumber 可选，显式传入的集数。优先于 parseFileName 提取的集数。用于修复弱语义文件名（如 "19 4K.mp4"）。
+   * @param explicitSeasonNumber 可选，显式传入的季数。优先于 parseFileName 提取的季数。未传入时默认为 1（如果有显式集数）。
    * 返回 TvEpisodeScrapeBundle，每项均可能为 null（查不到时）
    */
   async autoScrapeTvEpisode(
     fileName: string,
     seriesHint?: string,
-    preclassifiedMediaType?: 'movie' | 'tv' | 'unknown'
+    preclassifiedMediaType?: 'movie' | 'tv' | 'unknown',
+    explicitEpisodeNumber?: number,
+    explicitSeasonNumber?: number
   ): Promise<TvEpisodeScrapeBundle> {
     const parsed = parseFileName(fileName);
     const empty: TvEpisodeScrapeBundle = { series: null, season: null, episode: null };
@@ -663,7 +667,13 @@ export class ScrapeClient {
     if (effectiveTitle !== parsed.title) {
       console.info(`[ScrapeClient] autoScrapeTvEpisode 使用 seriesHint="${seriesHint}" 作为搜索标题（文件名无剧名）: file="${fileName}"`);
     }
-    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" → title="${effectiveTitle}" S${parsed.seasonNumber ?? '?'}E${parsed.episodeNumber ?? '?'} year=${parsed.year ?? '?'}`);
+
+    // #191 支持显式季集号：优先使用显式参数，回退到 parseFileName 结果
+    // 如果有显式集数但没有显式季数，默认季数为 1
+    const effectiveEpisodeNumber = explicitEpisodeNumber ?? parsed.episodeNumber;
+    const effectiveSeasonNumber = explicitSeasonNumber ?? (explicitEpisodeNumber !== undefined ? 1 : parsed.seasonNumber);
+
+    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" → title="${effectiveTitle}" S${effectiveSeasonNumber ?? '?'}E${effectiveEpisodeNumber ?? '?'} year=${parsed.year ?? '?'}`);
     const searchTitlesLog = buildSearchTitles(effectiveTitle);
     console.info(`[ScrapeClient] autoScrapeTvEpisode 候选标题: ${JSON.stringify(searchTitlesLog)}`);
 
@@ -702,18 +712,18 @@ export class ScrapeClient {
           let season: TvSeasonScrapeResult | null = null;
           let episode: TvEpisodeScrapeResult | null = null;
 
-          if (parsed.seasonNumber !== undefined) {
-            season = await provider.fetchSeason(series.providerId, parsed.seasonNumber, 'zh-CN').catch((e: BusinessError) => {
-              console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${parsed.seasonNumber}) 失败: ${JSON.stringify(e)}`);
+          if (effectiveSeasonNumber !== undefined) {
+            season = await provider.fetchSeason(series.providerId, effectiveSeasonNumber, 'zh-CN').catch((e: BusinessError) => {
+              console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${effectiveSeasonNumber}) 失败: ${JSON.stringify(e)}`);
               return null;
             });
-            console.info(`[ScrapeClient] fetchSeason S${parsed.seasonNumber} → ${season ? 'OK posterUrl=' + (season.posterUrl ? 'Y' : 'N') : 'null'}`);
-            if (parsed.episodeNumber !== undefined) {
-              episode = await provider.fetchEpisode(series.providerId, parsed.seasonNumber, parsed.episodeNumber, 'zh-CN').catch((e: BusinessError) => {
-                console.warn(`[ScrapeClient] fetchEpisode(${series.providerId}, S${parsed.seasonNumber}E${parsed.episodeNumber}) 失败: ${JSON.stringify(e)}`);
+            console.info(`[ScrapeClient] fetchSeason S${effectiveSeasonNumber} → ${season ? 'OK posterUrl=' + (season.posterUrl ? 'Y' : 'N') : 'null'}`);
+            if (effectiveEpisodeNumber !== undefined) {
+              episode = await provider.fetchEpisode(series.providerId, effectiveSeasonNumber, effectiveEpisodeNumber, 'zh-CN').catch((e: BusinessError) => {
+                console.warn(`[ScrapeClient] fetchEpisode(${series.providerId}, S${effectiveSeasonNumber}E${effectiveEpisodeNumber}) 失败: ${JSON.stringify(e)}`);
                 return null;
               });
-              console.info(`[ScrapeClient] fetchEpisode E${parsed.episodeNumber} → ${episode ? 'OK title="' + (episode.title ?? '') + '"' : 'null'}`);
+              console.info(`[ScrapeClient] fetchEpisode E${effectiveEpisodeNumber} → ${episode ? 'OK title="' + (episode.title ?? '') + '"' : 'null'}`);
             }
           }
 

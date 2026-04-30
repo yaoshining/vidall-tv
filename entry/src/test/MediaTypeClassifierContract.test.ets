@@ -10,6 +10,7 @@ import {
   extractSeriesHintFromFilePath
 } from '../main/ets/lib/MediaTypeClassifier';
 import { parseFileName } from '../main/ets/lib/ScrapeClient';
+import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerUtil';
 
 interface WeakSemanticRegressionSample {
   name: string;
@@ -145,6 +146,33 @@ export default function mediaTypeClassifierContractTest() {
           expect(classification.reason).assertEqual(sample.expectedReason);
         }
       });
+    });
+
+    it('should classify root weak semantic episode as tv when season sibling is detected', 0, () => {
+      const classification = classifyVideoScrapeTarget(
+        '19.mp4',
+        '/蜜语纪/19.mp4',
+        { seasonSiblingDetected: true }
+      );
+
+      expect(classification.mediaType).assertEqual('tv');
+      expect(classification.reason).assertEqual('season-sibling-detected');
+      expect(classification.signals.length > 0).assertTrue();
+      expect(classification.signals[classification.signals.length - 1].detail).assertEqual('path:season-sibling-detected');
+    });
+
+    it('should keep weak semantic episode unknown when no season sibling is detected', 0, () => {
+      const explicitFalseClassification = classifyVideoScrapeTarget(
+        '19.mp4',
+        '/电影合集/19.mp4',
+        { seasonSiblingDetected: false }
+      );
+      const omittedClassification = classifyVideoScrapeTarget('19.mp4', '/电影合集/19.mp4');
+
+      expect(explicitFalseClassification.mediaType).assertEqual('unknown');
+      expect(explicitFalseClassification.reason).assertEqual('insufficient-evidence');
+      expect(omittedClassification.mediaType).assertEqual('unknown');
+      expect(omittedClassification.reason).assertEqual('insufficient-evidence');
     });
   });
 }

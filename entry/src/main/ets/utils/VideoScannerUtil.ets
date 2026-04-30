@@ -5,11 +5,13 @@ import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
 import {
   MediaTypeClassificationResult,
+  MediaTypeClassificationOptions,
   buildMediaTypeClassificationInput,
   classifyMediaType,
   createFileNameSemanticInfo,
   extractSeriesHintFromFilePath,
-  formatMediaTypeClassificationSignals
+  formatMediaTypeClassificationSignals,
+  isSeasonDirectorySegment
 } from '../lib/MediaTypeClassifier';
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
@@ -32,6 +34,15 @@ export interface VideoFileInfo {
   contentType?: string;
   wasProcessed?: boolean;
   scrapeSkipped?: boolean;
+  seasonSiblingDetected?: boolean;
+  seriesHint?: string;
+}
+
+export interface VideoScrapeContext {
+  seasonSiblingDetected?: boolean;
+  seriesHint?: string;
+  explicitEpisodeNumber?: number;
+  explicitSeasonNumber?: number;
 }
 
 export interface SourceScanStat {
@@ -87,7 +98,34 @@ function isVideoFile(fileName: string, contentType?: string): boolean {
   return false;
 }
 
-function classifyVideoScrapeTarget(fileName: string, filePath: string): MediaTypeClassificationResult {
+export function hasSeasonSiblingDirectory(directoryNames: string[]): boolean {
+  return directoryNames.some((directoryName: string) => isSeasonDirectorySegment(directoryName));
+}
+
+function extractLastPathSegment(path: string): string | undefined {
+  const normalizedPath = path.replace(/\\/g, '/').replace(/\/+$/g, '');
+  const segments = normalizedPath.split('/').filter((segment: string) => segment.length > 0);
+  if (segments.length === 0) {
+    return undefined;
+  }
+  return segments[segments.length - 1];
+}
+
+export function createVideoScrapeContext(rootPath: string, depth: number, seasonSiblingDetected: boolean): VideoScrapeContext {
+  const context: VideoScrapeContext = {
+    seasonSiblingDetected
+  };
+  if (depth === 0) {
+    context.seriesHint = extractLastPathSegment(rootPath);
+  }
+  return context;
+}
+
+export function classifyVideoScrapeTarget(
+  fileName: string,
+  filePath: string,
+  context?: VideoScrapeContext
+): MediaTypeClassificationResult {
   const parsed = parseFileName(fileName);
   const fileNameInfo = createFileNameSemanticInfo(
     parsed.title,
@@ -97,9 +135,105 @@ function classifyVideoScrapeTarget(fileName: string, filePath: string): MediaTyp
     parsed.episodeNumber,
     parsed.year
   );
+  const classificationOptions: MediaTypeClassificationOptions = {
+    seasonSiblingDetected: context?.seasonSiblingDetected
+  };
   return classifyMediaType(
-    buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo)
+    buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo, classificationOptions)
   );
+}
+
+/**
+ * 判断是否需要修复不完整的 TV 剧集关联
+ *
+ * 场景：scrape_info 已标记为 tv + title 非空，但 episodeId 为空
+ * 策略：如果能从文件名提取 episode number，返回 true
+ *
+ * @param scrapeInfo 已有的刮削信息
+ * @param fileName 文件名
+ * @returns true 表示需要修复，false 表示不需要
+ */
+export function shouldRepairIncompleteTvEpisode(
+  scrapeInfo: ScrapeInfoEntity | null,
+  fileName: string
+): boolean {
+  // 1. scrapeInfo 不存在，不需要修复
+  if (scrapeInfo === null) {
+    return false;
+  }
+
+  // 2. mediaType 不是 tv，不需要修复
+  if (scrapeInfo.mediaType !== 'tv') {
+    return false;
+  }
+
+  // 3. title 为空，不需要修复
+  if (scrapeInfo.title === undefined || scrapeInfo.title.trim() === '') {
+    return false;
+  }
+
+  // 4. episodeId 已存在，不需要修复
+  if (scrapeInfo.episodeId !== undefined) {
+    return false;
+  }
+
+  // 5. 尝试从文件名提取 episode number
+  const extractedEpisode = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+  if (extractedEpisode === undefined) {
+    return false;
+  }
+
+  // 满足所有条件：tv + title 非空 + episodeId 空 + 文件名可提取 episode
+  return true;
+}
+
+/**
+ * 从弱语义文件名提取 episode number
+ *
+ * 支持格式：
+ * - 19.mp4 -> 19
+ * - 19 4K.mp4 -> 19
+ * - 20 4K.mp4 -> 20
+ * - E19.mp4 -> 19
+ *
+ * 不支持格式：
+ * - trailer.mp4 -> undefined
+ * - 2024.mp4 -> undefined (年份，过滤掉)
+ *
+ * @param fileName 文件名
+ * @returns episode number，如果无法提取则返回 undefined
+ */
+function extractEpisodeNumberFromWeakSemanticFileName(fileName: string): number | undefined {
+  const withoutExt = fileName.replace(/\.[^.]+$/, '');
+
+  // 1. 先尝试 SxxEyy 格式（优先级最高）
+  const standardMatch = withoutExt.match(/[Ss](\d{1,2})[Ee](\d{1,3})/);
+  if (standardMatch) {
+    return parseInt(standardMatch[2]);
+  }
+
+  // 2. 尝试单独的 Eyy 格式
+  const episodeOnlyMatch = withoutExt.match(/^[Ee](\d{1,3})/);
+  if (episodeOnlyMatch) {
+    return parseInt(episodeOnlyMatch[1]);
+  }
+
+  // 3. 尝试纯数字开头（如 "19 4K" 或 "19"）
+  const pureNumberMatch = withoutExt.match(/^(\d{1,3})(?:\s|$)/);
+  if (pureNumberMatch) {
+    const num = parseInt(pureNumberMatch[1]);
+    // 过滤掉年份（1900-2099）
+    if (num >= 1900 && num <= 2099) {
+      return undefined;
+    }
+    // 过滤掉过大的数字（episode 通常 < 999）
+    if (num > 999) {
+      return undefined;
+    }
+    return num;
+  }
+
+  return undefined;
 }
 
 async function clearStaleScrapeAssociationsForOverwrite(
@@ -205,6 +339,23 @@ export class WebDAVAdapter implements ISourceAdapter {
       return;
     }
 
+    const childDirectoryNames: string[] = [];
+    resources.forEach((resource: WebDAVResource) => {
+      if (resource.isCollection) {
+        const decodedHref = this.decodePath(resource.href);
+        const relativePath = this.toRelativePath(decodedHref);
+        if (this.isSamePath(relativePath, currentPath)) {
+          return;
+        }
+        childDirectoryNames.push(resource.displayName || this.extractFileName(decodedHref));
+      }
+    });
+    const videoScrapeContext = createVideoScrapeContext(
+      rootPath,
+      depth,
+      hasSeasonSiblingDirectory(childDirectoryNames)
+    );
+
     for (const resource of resources) {
       const decodedHref = this.decodePath(resource.href);
       const relativePath = this.toRelativePath(decodedHref);
@@ -232,7 +383,9 @@ export class WebDAVAdapter implements ISourceAdapter {
             fileSize: resource.size,
             lastModified: resource.lastModified,
             contentType: resource.contentType,
-            wasProcessed: true
+            wasProcessed: true,
+            seasonSiblingDetected: videoScrapeContext.seasonSiblingDetected,
+            seriesHint: videoScrapeContext.seriesHint
           };
 
           console.info(
@@ -256,23 +409,62 @@ export class WebDAVAdapter implements ISourceAdapter {
                 const existingScrape =
                   await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existingVideo.id);
                 if (!existingScrape) {
+                  // #191 第三轮修复：如果无 scrape_info 但检测到季目录兄弟，应重新完整处理（分类+刮削）
+                  if (videoScrapeContext.seasonSiblingDetected) {
+                    console.info(
+                      `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录且检测到季目录兄弟，` +
+                      `重新处理: ${fileName}`
+                    );
+                    // 不 continue，继续执行后续的完整处理流程
+                  } else {
+                    console.info(
+                      `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}`
+                    );
+                    const capturedVideoId = existingVideo.id;
+                    const capturedFileName = fileName;
+                    const capturedDirPath = info.directoryPath;
+                    const capturedScrapeClient = this.scrapeClient;
+                    const capturedMode = mode;
+                    const retryTask: Promise<void> =
+                      this.doScrapeOnly(capturedVideoId, capturedFileName,
+                        capturedScrapeClient, capturedMode, info).catch(() => {});
+                    processingTasks.push(retryTask);
+                    continue;
+                  }
+                } else if (existingScrape.mediaType === 'unknown' && videoScrapeContext.seasonSiblingDetected) {
+                  // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理
                   console.info(
-                    `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}`
+                    `[VideoScanner][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` +
+                    `重新处理之前的 unknown 文件: ${fileName}`
                   );
-                  const capturedVideoId = existingVideo.id;
-                  const capturedFileName = fileName;
-                  const capturedDirPath = info.directoryPath;
-                  const capturedScrapeClient = this.scrapeClient;
-                  const capturedMode = mode;
-                  const retryTask: Promise<void> =
-                    this.doScrapeOnly(capturedVideoId, capturedFileName,
-                      capturedScrapeClient, capturedMode, info).catch(() => {});
-                  processingTasks.push(retryTask);
+                  // 清理旧的 unknown scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existingVideo.id);
+                    console.info(`[VideoScanner][INCREMENTAL] 已清理旧 unknown 标记: ${fileName}`);
+                  } catch {
+                    console.warn(`[VideoScanner][INCREMENTAL] 清理旧 unknown 标记失败: ${fileName}`);
+                  }
+                  // 不 continue，继续执行后续的完整处理流程
+                } else if (shouldRepairIncompleteTvEpisode(existingScrape, fileName)) {
+                  // #191 第四轮修复：检测到 tv + title 非空但 episodeId 为空，且文件名可提取 episode number
+                  console.info(
+                    `[VideoScanner][INCREMENTAL] 检测到不完整的 TV 剧集关联（tv + title 但无 episodeId），` +
+                    `重新处理: ${fileName} | title=${existingScrape.title}`
+                  );
+                  // 清理旧的不完整 scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existingVideo.id);
+                    console.info(`[VideoScanner][INCREMENTAL] 已清理不完整 TV 关联: ${fileName}`);
+                  } catch {
+                    console.warn(`[VideoScanner][INCREMENTAL] 清理不完整 TV 关联失败: ${fileName}`);
+                  }
+                  // 不 continue，继续执行后续的完整处理流程
                 } else {
                   console.info(
                     `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                     `lastModified=${info.lastModified ?? '未知'}`
                   );
+                  continue;
                 }
               } catch {
                 // 查询失败，按已有刮削记录处理，正常跳过
@@ -280,14 +472,15 @@ export class WebDAVAdapter implements ISourceAdapter {
                   `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                   `lastModified=${info.lastModified ?? '未知'}`
                 );
+                continue;
               }
             } else {
               console.info(
                 `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                 `lastModified=${info.lastModified ?? '未知'}`
               );
+              continue;
             }
-            continue;
           }
 
           // ── 落库 + 刮削：加入跟踪列表，确保 scan() 返回前所有视频已入库 ──
@@ -420,8 +613,12 @@ export class WebDAVAdapter implements ISourceAdapter {
     }
 
     console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
-    const classification = classifyVideoScrapeTarget(fileName, info.filePath);
-    const seriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const classificationContext: VideoScrapeContext = {
+      seasonSiblingDetected: info.seasonSiblingDetected
+    };
+    const classification = classifyVideoScrapeTarget(fileName, info.filePath, classificationContext);
+    const extractedSeriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const seriesHint = extractedSeriesHint ?? info.seriesHint;
     if (classification.mediaType === 'unknown') {
       await clearStaleScrapeAssociationsForOverwrite(
         videoId,
@@ -430,11 +627,26 @@ export class WebDAVAdapter implements ISourceAdapter {
         '[VideoScanner][SCRAPE]',
         `unknown:${classification.reason ?? 'unknown'}`
       );
+      // #191 修复：为 unknown 文件创建 scrape_info 记录，以便增量扫描时能检测上下文变化
+      const db = FileSourceDatabase.getInstance();
+      const unknownScrapeInfo: ScrapeInfoEntity = {
+        videoId,
+        provider: 'local',
+        providerId: `unknown_${videoId}`,
+        mediaType: 'unknown',
+        title: fileName,
+        scrapedAt: Date.now()
+      };
+      try {
+        await db.upsertScrapeInfo(unknownScrapeInfo);
+        console.info(
+          `[VideoScanner][SCRAPE] 已标记弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
+          `signals=${formatMediaTypeClassificationSignals(classification)}`
+        );
+      } catch {
+        console.warn(`[VideoScanner][SCRAPE] 无法保存 unknown 标记 fileName=${fileName}`);
+      }
       info.scrapeSkipped = true;
-      console.info(
-        `[VideoScanner][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
-        `signals=${formatMediaTypeClassificationSignals(classification)}`
-      );
       return;
     }
 
@@ -515,7 +727,10 @@ export class WebDAVAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
+        // #191 尝试从文件名提取显式集数（用于修复弱语义文件名关联）
+        const explicitEpisodeNum = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+        const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
+        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
         if (!result.series) {
           await clearStaleScrapeAssociationsForOverwrite(
             videoId,
@@ -746,6 +961,18 @@ export class SMBAdapter implements ISourceAdapter {
       return;
     }
 
+    const childDirectoryNames: string[] = [];
+    listResult.files.forEach((file) => {
+      if (file.isDirectory) {
+        childDirectoryNames.push(file.name);
+      }
+    });
+    const videoScrapeContext = createVideoScrapeContext(
+      rootPath,
+      currentDepth,
+      hasSeasonSiblingDirectory(childDirectoryNames)
+    );
+
     for (const file of listResult.files) {
       if (file.isDirectory) {
         await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks);
@@ -759,7 +986,9 @@ export class SMBAdapter implements ISourceAdapter {
           fileName: file.name,
           fileSize: file.size,
           lastModified: file.lastModifiedMs > 0 ? new Date(file.lastModifiedMs).toISOString() : undefined,
-          wasProcessed: true
+          wasProcessed: true,
+          seasonSiblingDetected: videoScrapeContext.seasonSiblingDetected,
+          seriesHint: videoScrapeContext.seriesHint
         };
         console.info(
           `[VideoScanner][SMB] 文件源=${this.fileSource.name} | 路径=${file.path} | 文件名=${file.name} | 大小=${file.size} bytes`
@@ -787,24 +1016,67 @@ export class SMBAdapter implements ISourceAdapter {
                 const existingScrape =
                   await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existing.id);
                 if (!existingScrape) {
+                  // #191 第三轮修复：如果无 scrape_info 但检测到季目录兄弟，应重新完整处理（分类+刮削）
+                  if (videoScrapeContext.seasonSiblingDetected) {
+                    console.info(
+                      `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录且检测到季目录兄弟，` +
+                      `重新处理: ${file.name}`
+                    );
+                    // 不 continue，继续执行后续的完整处理流程
+                  } else {
+                    console.info(
+                      `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${file.name}`
+                    );
+                    const capturedVideoId = existing.id;
+                    const capturedScrapeClientR = this.scrapeClient;
+                    const capturedModeR = mode;
+                    const retryTask: Promise<void> =
+                      this.doScrapeOnly(capturedVideoId, file.name,
+                        capturedScrapeClientR, capturedModeR, info).catch(() => {});
+                    processingTasks.push(retryTask);
+                    continue;
+                  }
+                } else if (existingScrape.mediaType === 'unknown' && videoScrapeContext.seasonSiblingDetected) {
+                  // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理
                   console.info(
-                    `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${file.name}`
+                    `[VideoScanner][SMB][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` +
+                    `重新处理之前的 unknown 文件: ${file.name}`
                   );
-                  const capturedVideoId = existing.id;
-                  const capturedScrapeClientR = this.scrapeClient;
-                  const capturedModeR = mode;
-                  const retryTask: Promise<void> =
-                    this.doScrapeOnly(capturedVideoId, file.name,
-                      capturedScrapeClientR, capturedModeR, info).catch(() => {});
-                  processingTasks.push(retryTask);
+                  // 清理旧的 unknown scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existing.id);
+                    console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理旧 unknown 标记: ${file.name}`);
+                  } catch {
+                    console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理旧 unknown 标记失败: ${file.name}`);
+                  }
+                  // 不 continue，继续执行后续的完整处理流程
+                } else if (shouldRepairIncompleteTvEpisode(existingScrape, file.name)) {
+                  // #191 第四轮修复：检测到 tv + title 非空但 episodeId 为空，且文件名可提取 episode number
+                  console.info(
+                    `[VideoScanner][SMB][INCREMENTAL] 检测到不完整的 TV 剧集关联（tv + title 但无 episodeId），` +
+                    `重新处理: ${file.name} | title=${existingScrape.title}`
+                  );
+                  // 清理旧的不完整 scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existing.id);
+                    console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理不完整 TV 关联: ${file.name}`);
+                  } catch {
+                    console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理不完整 TV 关联失败: ${file.name}`);
+                  }
+                  // 不 continue，继续执行后续的完整处理流程
+                } else {
+                  console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
                   continue;
                 }
               } catch {
                 // 查询失败，正常跳过
+                console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
+                continue;
               }
+            } else {
+              console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
+              continue;
             }
-            console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
-            continue;
           }
         }
 
@@ -922,8 +1194,12 @@ export class SMBAdapter implements ISourceAdapter {
 
     console.info(`[VideoScanner][SMB][SCRAPE] 开始刮削 fileName=${fileName}`);
     const db = FileSourceDatabase.getInstance();
-    const classification = classifyVideoScrapeTarget(fileName, info.filePath);
-    const seriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const classificationContext: VideoScrapeContext = {
+      seasonSiblingDetected: info.seasonSiblingDetected
+    };
+    const classification = classifyVideoScrapeTarget(fileName, info.filePath, classificationContext);
+    const extractedSeriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const seriesHint = extractedSeriesHint ?? info.seriesHint;
     if (classification.mediaType === 'unknown') {
       await clearStaleScrapeAssociationsForOverwrite(
         videoId,
@@ -932,11 +1208,25 @@ export class SMBAdapter implements ISourceAdapter {
         '[VideoScanner][SMB][SCRAPE]',
         `unknown:${classification.reason ?? 'unknown'}`
       );
+      // #191 修复：为 unknown 文件创建 scrape_info 记录，以便增量扫描时能检测上下文变化
+      const unknownScrapeInfo: ScrapeInfoEntity = {
+        videoId,
+        provider: 'local',
+        providerId: `unknown_${videoId}`,
+        mediaType: 'unknown',
+        title: fileName,
+        scrapedAt: Date.now()
+      };
+      try {
+        await db.upsertScrapeInfo(unknownScrapeInfo);
+        console.info(
+          `[VideoScanner][SMB][SCRAPE] 已标记弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
+          `signals=${formatMediaTypeClassificationSignals(classification)}`
+        );
+      } catch {
+        console.warn(`[VideoScanner][SMB][SCRAPE] 无法保存 unknown 标记 fileName=${fileName}`);
+      }
       info.scrapeSkipped = true;
-      console.info(
-        `[VideoScanner][SMB][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
-        `signals=${formatMediaTypeClassificationSignals(classification)}`
-      );
       return;
     }
 
@@ -1015,7 +1305,10 @@ export class SMBAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
+        // #191 尝试从文件名提取显式集数（用于修复弱语义文件名关联）
+        const explicitEpisodeNum = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+        const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
+        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
         if (!result.series) {
           await clearStaleScrapeAssociationsForOverwrite(
             videoId,
