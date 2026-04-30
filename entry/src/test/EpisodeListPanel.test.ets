@@ -126,20 +126,26 @@ export default function EpisodeListPanelTest() {
       expect(styleState.labelFontSize < 22).assertTrue()
     })
 
-    it('锚点 tab 使用无边框 chip 风格，当前组与聚焦态仍可区分', 0, () => {
-      const styleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(true, true)
+    it('锚点 tab 使用无边框 chip 风格，只有聚焦态才显示视觉反馈', 0, () => {
+      const focusedStyleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(true, true)
+      const unfocusedStyleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(false, true)
 
-      expect(styleState.showFocusPill).assertFalse()
-      expect(styleState.showFocusBackground).assertTrue()
-      expect(styleState.showCurrentUnderline).assertTrue()
-      expect(styleState.isCurrentAnchor).assertTrue()
-      expect(styleState.isFocused).assertTrue()
-      expect(styleState.focusBorderWidth).assertEqual(0)
-      expect(styleState.scale).assertEqual(1.04)
-      expect(styleState.borderRadius).assertEqual(20)
-      expect(styleState.fontSize).assertEqual(18)
-      expect(styleState.horizontalPadding).assertEqual(16)
-      expect(styleState.verticalPadding).assertEqual(8)
+      // 聚焦时有视觉反馈
+      expect(focusedStyleState.showFocusPill).assertFalse()
+      expect(focusedStyleState.showFocusBackground).assertTrue()
+      expect(focusedStyleState.isFocused).assertTrue()
+      expect(focusedStyleState.focusBorderWidth).assertEqual(0)
+      expect(focusedStyleState.scale).assertEqual(1.04)
+      expect(focusedStyleState.borderRadius).assertEqual(20)
+      expect(focusedStyleState.fontSize).assertEqual(18)
+      expect(focusedStyleState.horizontalPadding).assertEqual(16)
+      expect(focusedStyleState.verticalPadding).assertEqual(8)
+
+      // 非聚焦时无默认 selected 状态
+      expect(unfocusedStyleState.showFocusBackground).assertFalse()
+      expect(unfocusedStyleState.showCurrentUnderline).assertFalse()
+      expect(unfocusedStyleState.scale).assertEqual(1)
+      expect(unfocusedStyleState.backgroundColor).assertEqual('#00000000')
     })
 
     it('分页 tab 在 hover 时同样使用 scale 而不是边框', 0, () => {
