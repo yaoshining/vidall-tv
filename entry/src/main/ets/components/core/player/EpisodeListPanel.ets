@@ -1,7 +1,7 @@
 import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
 import { KeyCode } from '@kit.InputKit'
 
-const FIRST_PAGE_SIZE: number = 6
+const EPISODE_GROUP_SIZE: number = 6
 const EPISODE_SECTION_TITLE_FONT_SIZE: number = 32
 const EPISODE_SECTION_TITLE_LEFT_MARGIN: number = 0
 const EPISODE_SECTION_TITLE_BOTTOM_MARGIN: number = 12
@@ -30,11 +30,17 @@ const EPISODE_WAVE_FRAMES: number[][] = [
   [14, 10, 12]
 ]
 
-export interface EpisodePageRange {
-  pageIndex: number
+export interface EpisodeAnchorRange {
+  groupIndex: number
   startIndex: number
   endIndexExclusive: number
   label: string
+}
+
+export interface EpisodeScrollRequest {
+  index: number
+  smooth: boolean
+  align: ScrollAlign
 }
 
 export interface EpisodeCardStyleState {
@@ -80,7 +86,7 @@ export interface EpisodeSectionTitleStyleState {
 export interface EpisodePageTabStyleState {
   isFocused: boolean
   isHovered: boolean
-  isCurrentPage: boolean
+  isCurrentAnchor: boolean
   showFocusPill: boolean
   showFocusBackground: boolean
   showCurrentUnderline: boolean
@@ -99,41 +105,30 @@ export interface EpisodePageTabStyleState {
   shadowColor: string
 }
 
-export function buildEpisodePageRanges(totalCount: number): EpisodePageRange[] {
-  const result: EpisodePageRange[] = []
+export function buildEpisodeAnchorRanges(totalCount: number): EpisodeAnchorRange[] {
+  const result: EpisodeAnchorRange[] = []
   if (totalCount <= 0) {
     return result
   }
 
-  const firstPageEnd = Math.min(FIRST_PAGE_SIZE, totalCount)
-  const firstRange: EpisodePageRange = {
-    pageIndex: 0,
-    startIndex: 0,
-    endIndexExclusive: firstPageEnd,
-    label: `1-${firstPageEnd}`
-  }
-  result.push(firstRange)
-
-  if (totalCount > FIRST_PAGE_SIZE) {
-    const secondRange: EpisodePageRange = {
-      pageIndex: 1,
-      startIndex: FIRST_PAGE_SIZE,
-      endIndexExclusive: totalCount,
-      label: `${FIRST_PAGE_SIZE + 1}-${totalCount}`
+  const groupCount = Math.ceil(totalCount / EPISODE_GROUP_SIZE)
+  for (let groupIndex = 0; groupIndex < groupCount; groupIndex++) {
+    const startIndex = groupIndex * EPISODE_GROUP_SIZE
+    const endIndexExclusive = Math.min(startIndex + EPISODE_GROUP_SIZE, totalCount)
+    const range: EpisodeAnchorRange = {
+      groupIndex,
+      startIndex,
+      endIndexExclusive,
+      label: `${startIndex + 1}-${endIndexExclusive}`
     }
-    result.push(secondRange)
+    result.push(range)
   }
 
   return result
 }
 
-export function getEpisodePageItems(items: PlaybackContextItem[], page: number): PlaybackContextItem[] {
-  const ranges = buildEpisodePageRanges(items.length)
-  if (page < 0 || page >= ranges.length) {
-    return []
-  }
-  const range = ranges[page]
-  return items.slice(range.startIndex, range.endIndexExclusive)
+export function buildEpisodeContinuousListItems(items: PlaybackContextItem[]): PlaybackContextItem[] {
+  return items
 }
 
 export function getEpisodeItemRenderKey(item: PlaybackContextItem): string {
@@ -143,25 +138,37 @@ export function getEpisodeItemRenderKey(item: PlaybackContextItem): string {
   return item.index.toString()
 }
 
-function getEpisodePageIndex(currentIndex: number, totalCount: number): number {
-  const ranges = buildEpisodePageRanges(totalCount)
+export function getEpisodeAnchorIndexForItem(currentIndex: number, totalCount: number): number {
+  const ranges = buildEpisodeAnchorRanges(totalCount)
   for (let i = 0; i < ranges.length; i++) {
     const range = ranges[i]
     if (currentIndex >= range.startIndex && currentIndex < range.endIndexExclusive) {
-      return range.pageIndex
+      return range.groupIndex
     }
   }
   return 0
 }
 
-function getEpisodeFocusIndex(currentIndex: number, totalCount: number): number {
-  const ranges = buildEpisodePageRanges(totalCount)
-  const pageIndex = getEpisodePageIndex(currentIndex, totalCount)
-  if (pageIndex < 0 || pageIndex >= ranges.length) {
-    return 0
+export function buildEpisodeAnchorScrollRequest(groupIndex: number, totalCount: number): EpisodeScrollRequest {
+  const ranges = buildEpisodeAnchorRanges(totalCount)
+  const targetGroupIndex = Math.max(0, Math.min(groupIndex, ranges.length - 1))
+  const targetIndex = ranges.length > 0 ? ranges[targetGroupIndex].startIndex : 0
+  const request: EpisodeScrollRequest = {
+    index: targetIndex,
+    smooth: true,
+    align: ScrollAlign.START
   }
-  const range = ranges[pageIndex]
-  return currentIndex - range.startIndex
+  return request
+}
+
+export function buildEpisodeInitialScrollRequest(currentIndex: number, totalCount: number): EpisodeScrollRequest {
+  const maxIndex = Math.max(0, totalCount - 1)
+  const request: EpisodeScrollRequest = {
+    index: Math.max(0, Math.min(currentIndex, maxIndex)),
+    smooth: false,
+    align: ScrollAlign.START
+  }
+  return request
 }
 
 export function getEpisodeCardStyleState(isFocused: boolean, isCurrent: boolean, isHovered: boolean = false): EpisodeCardStyleState {
@@ -211,18 +218,17 @@ export function getEpisodeSectionTitleStyleState(): EpisodeSectionTitleStyleStat
   return styleState
 }
 
-export function getEpisodePageTabStyleState(isFocused: boolean, isCurrentPage: boolean, isHovered: boolean = false): EpisodePageTabStyleState {
+export function getEpisodePageTabStyleState(isFocused: boolean, isCurrentAnchor: boolean, isHovered: boolean = false): EpisodePageTabStyleState {
   const isEmphasized = isFocused || isHovered
   const styleState: EpisodePageTabStyleState = {
     isFocused,
     isHovered,
-    isCurrentPage,
+    isCurrentAnchor,
     showFocusPill: false,
-    showFocusBackground: isEmphasized || isCurrentPage,
-    showCurrentUnderline: isCurrentPage,
-    labelColor: isCurrentPage ? '#F3F7FB' : '#D5DDE8',
-    backgroundColor: isEmphasized ? 'rgba(255, 255, 255, 0.22)' :
-      isCurrentPage ? 'rgba(255, 255, 255, 0.12)' : '#00000000',
+    showFocusBackground: isEmphasized,
+    showCurrentUnderline: false,
+    labelColor: '#D5DDE8',
+    backgroundColor: isEmphasized ? 'rgba(255, 255, 255, 0.22)' : '#00000000',
     focusPillBackgroundColor: '#00000000',
     focusPillBorderColor: '#00000000',
     focusPillBorderWidth: 0,
@@ -245,20 +251,19 @@ export struct EpisodeListPanel {
   @Require context: MediaLibraryContext
   onSelect: (item: PlaybackContextItem) => void = () => {}
 
-  @State private currentPage: number = 0
   @State private focusedCardIndex: number = 0
   @State private hoveredCardIndex: number = -1
   @State private isPageBarFocused: boolean = false
   @State private pageBarFocusedIndex: number = 0
   @State private hoveredPageBarIndex: number = -1
   @State private waveFrameIndex: number = 0
+  private scroller: ListScroller = new ListScroller()
   private waveTimerId: number | undefined = undefined
 
   aboutToAppear(): void {
     const currentIdx = this.context.currentIndex
-    this.currentPage = getEpisodePageIndex(currentIdx, this.context.items.length)
-    this.focusedCardIndex = getEpisodeFocusIndex(currentIdx, this.context.items.length)
-    this.pageBarFocusedIndex = this.currentPage
+    this.focusedCardIndex = Math.max(0, Math.min(currentIdx, this.context.items.length - 1))
+    this.pageBarFocusedIndex = getEpisodeAnchorIndexForItem(currentIdx, this.context.items.length)
     this.startWaveAnimation()
   }
 
@@ -268,42 +273,54 @@ export struct EpisodeListPanel {
 
   // ── 数据辅助方法 ───────────────────────────────────────────────────────────
 
-  private getPageRanges(): EpisodePageRange[] {
-    return buildEpisodePageRanges(this.context.items.length)
+  private getAnchorRanges(): EpisodeAnchorRange[] {
+    return buildEpisodeAnchorRanges(this.context.items.length)
   }
 
-  private getTotalPages(): number {
-    return Math.max(1, this.getPageRanges().length)
+  private getTotalAnchors(): number {
+    return this.getAnchorRanges().length
   }
 
-  private getPageItems(): PlaybackContextItem[] {
-    return getEpisodePageItems(this.context.items, this.currentPage)
+  private getListItems(): PlaybackContextItem[] {
+    return buildEpisodeContinuousListItems(this.context.items)
   }
 
-  private goToPage(page: number): void {
-    const total = this.getTotalPages()
-    if (page < 0 || page >= total) {
+  private scrollToAnchor(groupIndex: number): void {
+    if (this.context.items.length === 0) {
       return
     }
-    this.currentPage = page
-    this.focusedCardIndex = 0
-    this.pageBarFocusedIndex = page
+    const total = this.getTotalAnchors()
+    if (groupIndex < 0 || groupIndex >= total) {
+      return
+    }
+    const request = buildEpisodeAnchorScrollRequest(groupIndex, this.context.items.length)
+    this.scroller.scrollToIndex(request.index, request.smooth, request.align)
+    this.focusedCardIndex = request.index
+    this.pageBarFocusedIndex = groupIndex
   }
 
-  private getPageLabel(page: number): string {
-    const ranges = this.getPageRanges()
-    if (page < 0 || page >= ranges.length) {
+  private scrollToCurrentItem(): void {
+    if (this.context.items.length === 0) {
+      return
+    }
+    const request = buildEpisodeInitialScrollRequest(this.context.currentIndex, this.context.items.length)
+    this.scroller.scrollToIndex(request.index, request.smooth, request.align)
+  }
+
+  private getAnchorLabel(groupIndex: number): string {
+    const ranges = this.getAnchorRanges()
+    if (groupIndex < 0 || groupIndex >= ranges.length) {
       return ''
     }
-    return ranges[page].label
+    return ranges[groupIndex].label
   }
 
   private isCurrentItem(item: PlaybackContextItem): boolean {
     return item.index === this.context.currentIndex
   }
 
-  private buildPageRange(): number[] {
-    const total = this.getPageRanges().length
+  private buildAnchorIndexRange(): number[] {
+    const total = this.getAnchorRanges().length
     const result: number[] = []
     for (let i = 0; i < total; i++) {
       result.push(i)
@@ -322,7 +339,7 @@ export struct EpisodeListPanel {
   private getPageTabStyleState(pageIdx: number): EpisodePageTabStyleState {
     return getEpisodePageTabStyleState(
       this.isPageBarFocused && this.pageBarFocusedIndex === pageIdx,
-      this.currentPage === pageIdx,
+      getEpisodeAnchorIndexForItem(this.context.currentIndex, this.context.items.length) === pageIdx,
       this.hoveredPageBarIndex === pageIdx
     )
   }
@@ -451,10 +468,10 @@ export struct EpisodeListPanel {
         })
         .alignSelf(ItemAlign.Start)
 
-      // 集数卡片横向列表
-      List({ space: 18 }) {
+      // 集数卡片连续横向列表
+      List({ space: 18, scroller: this.scroller }) {
         ForEach(
-          this.getPageItems(),
+          this.getListItems(),
           (item: PlaybackContextItem, index: number) => {
             ListItem() {
               this.EpisodeCard(item, index)
@@ -467,32 +484,24 @@ export struct EpisodeListPanel {
       .scrollBar(BarState.Off)
       .width('100%')
       .height(154)
+      .onAppear(() => {
+        this.scrollToCurrentItem()
+      })
       .onKeyEvent((event: KeyEvent) => {
         if (event.type !== KeyType.Down) {
           return
         }
-        const pageItems = this.getPageItems()
-        if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT) {
-          // 到达当前页最后一张时翻页
-          if (this.focusedCardIndex >= pageItems.length - 1) {
-            this.goToPage(this.currentPage + 1)
-          }
-        } else if (event.keyCode === KeyCode.KEYCODE_DPAD_LEFT) {
-          // 到达当前页第一张时翻页
-          if (this.focusedCardIndex <= 0) {
-            this.goToPage(this.currentPage - 1)
-          }
-        } else if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN) {
-          // 向下进入分页范围条
+        if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN) {
+          // 向下进入分组锚点条
           this.isPageBarFocused = true
         }
       })
 
-      // 分页范围条（多页时才显示）
-      if (this.getTotalPages() > 1) {
+      // 分组锚点条（多组时才显示）
+      if (this.getTotalAnchors() > 1) {
         Row({ space: 12 }) {
           ForEach(
-            this.buildPageRange(),
+            this.buildAnchorIndexRange(),
             (pageIdx: number) => {
               Stack() {
                 if (this.getPageTabStyleState(pageIdx).showFocusBackground) {
@@ -507,9 +516,9 @@ export struct EpisodeListPanel {
                     .backgroundColor(this.getPageTabStyleState(pageIdx).backgroundColor)
                 }
 
-                // 分页标签 + 激活下划线
+                // 分组锚点标签 + 当前组下划线
                 Column({ space: 6 }) {
-                  Text(this.getPageLabel(pageIdx))
+                  Text(this.getAnchorLabel(pageIdx))
                     .fontSize(this.getPageTabStyleState(pageIdx).fontSize)
                     .fontColor(this.getPageTabStyleState(pageIdx).labelColor)
                     .fontWeight(FontWeight.Bold)
@@ -550,20 +559,20 @@ export struct EpisodeListPanel {
                 this.isPageBarFocused = false
               })
               .onClick(() => {
-                this.goToPage(pageIdx)
+                this.scrollToAnchor(pageIdx)
               })
               .onKeyEvent((event: KeyEvent) => {
                 if (event.type !== KeyType.Down) {
                   return
                 }
                 if (event.keyCode === KeyCode.KEYCODE_ENTER || event.keyCode === KeyCode.KEYCODE_DPAD_CENTER) {
-                  this.goToPage(pageIdx)
+                  this.scrollToAnchor(pageIdx)
                 } else if (event.keyCode === KeyCode.KEYCODE_DPAD_UP) {
                   this.isPageBarFocused = false
                 } else if (event.keyCode === KeyCode.KEYCODE_DPAD_LEFT && this.pageBarFocusedIndex > 0) {
-                  this.goToPage(pageIdx - 1)
-                } else if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT && this.pageBarFocusedIndex < this.getTotalPages() - 1) {
-                  this.goToPage(pageIdx + 1)
+                  this.scrollToAnchor(pageIdx - 1)
+                } else if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT && this.pageBarFocusedIndex < this.getTotalAnchors() - 1) {
+                  this.scrollToAnchor(pageIdx + 1)
                 }
               })
             },
