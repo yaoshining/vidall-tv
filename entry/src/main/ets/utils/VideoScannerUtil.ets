@@ -41,6 +41,8 @@ export interface VideoFileInfo {
 export interface VideoScrapeContext {
   seasonSiblingDetected?: boolean;
   seriesHint?: string;
+  explicitEpisodeNumber?: number;
+  explicitSeasonNumber?: number;
 }
 
 export interface SourceScanStat {
@@ -725,7 +727,10 @@ export class WebDAVAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
+        // #191 尝试从文件名提取显式集数（用于修复弱语义文件名关联）
+        const explicitEpisodeNum = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+        const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
+        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
         if (!result.series) {
           await clearStaleScrapeAssociationsForOverwrite(
             videoId,
@@ -1300,7 +1305,10 @@ export class SMBAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType);
+        // #191 尝试从文件名提取显式集数（用于修复弱语义文件名关联）
+        const explicitEpisodeNum = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+        const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
+        const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
         if (!result.series) {
           await clearStaleScrapeAssociationsForOverwrite(
             videoId,

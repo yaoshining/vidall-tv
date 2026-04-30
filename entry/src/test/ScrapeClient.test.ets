@@ -4,7 +4,9 @@ import {
   ScriptedFakeScrapeProvider,
   createDeferred,
   createMovieScrapeResult,
-  createTvSeriesScrapeResult
+  createTvSeriesScrapeResult,
+  createTvSeasonScrapeResult,
+  createTvEpisodeScrapeResult
 } from './helpers/ScrapeClientFakeProvider';
 
 async function flushMicrotasksUntil(predicate: () => boolean, rounds: number = 12): Promise<void> {
@@ -463,6 +465,62 @@ export default function scrapeClientTest() {
       const result = await pending;
       expect(settled).assertTrue();
       expect(result).assertEqual(null);
+    });
+
+    /**
+     * 测试用例 24：#191 显式传入季集号修复弱语义文件名刮削
+     * 
+     * 场景：不完整 TV 关联修复链路中，文件名 "19 4K.mp4" 无法被 parseFileName 识别 S/E，
+     * 但扫描器已通过 extractEpisodeNumberFromWeakSemanticFileName 得到 episode=19。
+     * 此时应支持显式传入 episodeNumber=19, seasonNumber=1，刮削时能正确调用 fetchEpisode(S01E19)。
+     */
+    it('should use explicit episode and season numbers when provided for weak semantic filenames', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-explicit-episode');
+      fake.enqueueSearchTvResults([createTvSeriesScrapeResult('fake-explicit-episode', '蜜语纪', 'tv-100')]);
+      fake.enqueueFetchTvSeriesDetailResult(createTvSeriesScrapeResult('fake-explicit-episode', '蜜语纪', 'tv-100'));
+      fake.enqueueFetchSeasonResult(createTvSeasonScrapeResult('fake-explicit-episode', 1, 'tv-100_s1', 'Season 1'));
+      fake.enqueueFetchEpisodeResult(createTvEpisodeScrapeResult('fake-explicit-episode', 1, 19, 'ep-100-1-19', 'Episode 19'));
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      // 显式传入 episodeNumber=19, seasonNumber=1（模拟修复链路）
+      const result = await client.autoScrapeTvEpisode('19 4K.mp4', '蜜语纪', 'tv', 19, 1);
+
+      // 验证：series 成功刮削
+      expect(result.series !== null).assertTrue();
+      if (result.series !== null) {
+        expect(result.series.title).assertEqual('蜜语纪');
+      }
+
+      // 验证：season 成功刮削
+      expect(result.season !== null).assertTrue();
+      if (result.season !== null) {
+        expect(result.season.seasonNumber).assertEqual(1);
+      }
+
+      // 验证：episode 成功刮削
+      expect(result.episode !== null).assertTrue();
+      if (result.episode !== null) {
+        expect(result.episode.episodeNumber).assertEqual(19);
+        expect(result.episode.seasonNumber).assertEqual(1);
+        expect(result.episode.title).assertEqual('Episode 19');
+      }
+
+      // 验证：provider 按预期被调用
+      expect(fake.getCallCount('searchTv')).assertEqual(1);
+      expect(fake.getCallCount('fetchTvSeriesDetail')).assertEqual(1);
+      expect(fake.getCallCount('fetchSeason')).assertEqual(1);
+      expect(fake.getCallCount('fetchEpisode')).assertEqual(1);
+
+      // 验证：fetchEpisode 调用参数正确
+      const episodeCall = fake.getLastCall('fetchEpisode');
+      expect(episodeCall !== null).assertTrue();
+      if (episodeCall !== null) {
+        expect(episodeCall.providerId).assertEqual('tv-100');
+        expect(episodeCall.seasonNumber).assertEqual(1);
+        expect(episodeCall.episodeNumber).assertEqual(19);
+      }
     });
   });
 
