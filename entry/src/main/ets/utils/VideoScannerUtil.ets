@@ -141,6 +141,99 @@ export function classifyVideoScrapeTarget(
   );
 }
 
+/**
+ * 判断是否需要修复不完整的 TV 剧集关联
+ *
+ * 场景：scrape_info 已标记为 tv + title 非空，但 episodeId 为空
+ * 策略：如果能从文件名提取 episode number，返回 true
+ *
+ * @param scrapeInfo 已有的刮削信息
+ * @param fileName 文件名
+ * @returns true 表示需要修复，false 表示不需要
+ */
+export function shouldRepairIncompleteTvEpisode(
+  scrapeInfo: ScrapeInfoEntity | null,
+  fileName: string
+): boolean {
+  // 1. scrapeInfo 不存在，不需要修复
+  if (scrapeInfo === null) {
+    return false;
+  }
+
+  // 2. mediaType 不是 tv，不需要修复
+  if (scrapeInfo.mediaType !== 'tv') {
+    return false;
+  }
+
+  // 3. title 为空，不需要修复
+  if (scrapeInfo.title === undefined || scrapeInfo.title.trim() === '') {
+    return false;
+  }
+
+  // 4. episodeId 已存在，不需要修复
+  if (scrapeInfo.episodeId !== undefined) {
+    return false;
+  }
+
+  // 5. 尝试从文件名提取 episode number
+  const extractedEpisode = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+  if (extractedEpisode === undefined) {
+    return false;
+  }
+
+  // 满足所有条件：tv + title 非空 + episodeId 空 + 文件名可提取 episode
+  return true;
+}
+
+/**
+ * 从弱语义文件名提取 episode number
+ *
+ * 支持格式：
+ * - 19.mp4 -> 19
+ * - 19 4K.mp4 -> 19
+ * - 20 4K.mp4 -> 20
+ * - E19.mp4 -> 19
+ *
+ * 不支持格式：
+ * - trailer.mp4 -> undefined
+ * - 2024.mp4 -> undefined (年份，过滤掉)
+ *
+ * @param fileName 文件名
+ * @returns episode number，如果无法提取则返回 undefined
+ */
+function extractEpisodeNumberFromWeakSemanticFileName(fileName: string): number | undefined {
+  const withoutExt = fileName.replace(/\.[^.]+$/, '');
+
+  // 1. 先尝试 SxxEyy 格式（优先级最高）
+  const standardMatch = withoutExt.match(/[Ss](\d{1,2})[Ee](\d{1,3})/);
+  if (standardMatch) {
+    return parseInt(standardMatch[2]);
+  }
+
+  // 2. 尝试单独的 Eyy 格式
+  const episodeOnlyMatch = withoutExt.match(/^[Ee](\d{1,3})/);
+  if (episodeOnlyMatch) {
+    return parseInt(episodeOnlyMatch[1]);
+  }
+
+  // 3. 尝试纯数字开头（如 "19 4K" 或 "19"）
+  const pureNumberMatch = withoutExt.match(/^(\d{1,3})(?:\s|$)/);
+  if (pureNumberMatch) {
+    const num = parseInt(pureNumberMatch[1]);
+    // 过滤掉年份（1900-2099）
+    if (num >= 1900 && num <= 2099) {
+      return undefined;
+    }
+    // 过滤掉过大的数字（episode 通常 < 999）
+    if (num > 999) {
+      return undefined;
+    }
+    return num;
+  }
+
+  return undefined;
+}
+
 async function clearStaleScrapeAssociationsForOverwrite(
   videoId: number,
   mode: ScanMode,
@@ -348,6 +441,20 @@ export class WebDAVAdapter implements ISourceAdapter {
                     console.info(`[VideoScanner][INCREMENTAL] 已清理旧 unknown 标记: ${fileName}`);
                   } catch {
                     console.warn(`[VideoScanner][INCREMENTAL] 清理旧 unknown 标记失败: ${fileName}`);
+                  }
+                  // 不 continue，继续执行后续的完整处理流程
+                } else if (shouldRepairIncompleteTvEpisode(existingScrape, fileName)) {
+                  // #191 第四轮修复：检测到 tv + title 非空但 episodeId 为空，且文件名可提取 episode number
+                  console.info(
+                    `[VideoScanner][INCREMENTAL] 检测到不完整的 TV 剧集关联（tv + title 但无 episodeId），` +
+                    `重新处理: ${fileName} | title=${existingScrape.title}`
+                  );
+                  // 清理旧的不完整 scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existingVideo.id);
+                    console.info(`[VideoScanner][INCREMENTAL] 已清理不完整 TV 关联: ${fileName}`);
+                  } catch {
+                    console.warn(`[VideoScanner][INCREMENTAL] 清理不完整 TV 关联失败: ${fileName}`);
                   }
                   // 不 continue，继续执行后续的完整处理流程
                 } else {
@@ -936,6 +1043,20 @@ export class SMBAdapter implements ISourceAdapter {
                     console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理旧 unknown 标记: ${file.name}`);
                   } catch {
                     console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理旧 unknown 标记失败: ${file.name}`);
+                  }
+                  // 不 continue，继续执行后续的完整处理流程
+                } else if (shouldRepairIncompleteTvEpisode(existingScrape, file.name)) {
+                  // #191 第四轮修复：检测到 tv + title 非空但 episodeId 为空，且文件名可提取 episode number
+                  console.info(
+                    `[VideoScanner][SMB][INCREMENTAL] 检测到不完整的 TV 剧集关联（tv + title 但无 episodeId），` +
+                    `重新处理: ${file.name} | title=${existingScrape.title}`
+                  );
+                  // 清理旧的不完整 scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existing.id);
+                    console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理不完整 TV 关联: ${file.name}`);
+                  } catch {
+                    console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理不完整 TV 关联失败: ${file.name}`);
                   }
                   // 不 continue，继续执行后续的完整处理流程
                 } else {
