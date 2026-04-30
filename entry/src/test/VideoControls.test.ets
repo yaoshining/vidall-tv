@@ -1,8 +1,12 @@
 import { describe, it, expect } from '@ohos/hypium'
 import {
+  PlayerSettingsAutoplayCountdownChipRenderModel,
+  PlayerSettingsAutoplayToggleChipRenderModel,
   PlayerSettingsAspectRatioChipRenderModel,
   PlayerSettingsDiagnosticVisualSnapshot,
   PlayerSettingsSelectionMirrorState,
+  buildAutoplayCountdownChipRenderModels,
+  buildAutoplayToggleChipRenderModels,
   buildPlayerSettingsSelectionChipKey,
   buildPlayerSettingsSelectionStateKey,
   createPlayerSettingsSelectionMirrorState,
@@ -234,7 +238,57 @@ export default function videoControlsTest() {
         expect(seconds10SelectedKey).assertEqual('10:selected')
         expect(seconds8SelectedKey === seconds8UnselectedKey).assertFalse()
       })
-    })
+
+      it('自动下一集最终渲染 key 会随选中态切换，同时保持显式选中态刷新', 0, () => {
+        const initialModels: PlayerSettingsAutoplayToggleChipRenderModel[] =
+          buildAutoplayToggleChipRenderModels(true, -1, -1)
+        const updatedModels: PlayerSettingsAutoplayToggleChipRenderModel[] =
+          buildAutoplayToggleChipRenderModels(false, -1, -1)
+
+        const initialSelectedKey = buildPlayerSettingsSelectionStateKey(
+          initialModels[0].enabled ? 'enabled' : 'disabled',
+          initialModels[0].styleState.isSelected
+        )
+        const updatedOldKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[0].enabled ? 'enabled' : 'disabled',
+          updatedModels[0].styleState.isSelected
+        )
+        const updatedSelectedKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[1].enabled ? 'enabled' : 'disabled',
+          updatedModels[1].styleState.isSelected
+        )
+
+        expect(initialSelectedKey).assertEqual('enabled:selected')
+        expect(updatedOldKey).assertEqual('enabled:not-selected')
+        expect(updatedSelectedKey).assertEqual('disabled:selected')
+        expect(initialSelectedKey === updatedOldKey).assertFalse()
+      })
+
+      it('自动下一集倒计时最终渲染 key 会随选中态切换，同时保持显式选中态刷新', 0, () => {
+        const initialModels: PlayerSettingsAutoplayCountdownChipRenderModel[] =
+          buildAutoplayCountdownChipRenderModels(8, -1, -1)
+        const updatedModels: PlayerSettingsAutoplayCountdownChipRenderModel[] =
+          buildAutoplayCountdownChipRenderModels(10, -1, -1)
+
+        const initialSelectedKey = buildPlayerSettingsSelectionStateKey(
+          initialModels[2].seconds.toString(),
+          initialModels[2].styleState.isSelected
+        )
+        const updatedOldKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[2].seconds.toString(),
+          updatedModels[2].styleState.isSelected
+        )
+        const updatedSelectedKey = buildPlayerSettingsSelectionStateKey(
+          updatedModels[3].seconds.toString(),
+          updatedModels[3].styleState.isSelected
+        )
+
+        expect(initialSelectedKey).assertEqual('8:selected')
+        expect(updatedOldKey).assertEqual('8:not-selected')
+        expect(updatedSelectedKey).assertEqual('10:selected')
+        expect(initialSelectedKey === updatedOldKey).assertFalse()
+      })
+      })
 
     describe('player settings value chip styles', () => {
       it('倍速与画面比例项保留当前 chip 结构，但选中态对齐画质增强语义', 0, () => {
@@ -289,6 +343,76 @@ export default function videoControlsTest() {
         expect(focusedSelectedState.selectedBorderWidth).assertEqual(2)
         expect(focusedSelectedState.borderWidth).assertEqual(2)
         expect(focusedSelectedState.borderColor).assertEqual('#fffefe')
+      })
+
+      it('自动下一集选项 selected 与 unselected 样式对齐当前倍速 chip', 0, () => {
+        const models: PlayerSettingsAutoplayToggleChipRenderModel[] =
+          buildAutoplayToggleChipRenderModels(true, -1, -1)
+        const selectedState: PlayerSettingsChipStyleState = models[0].styleState
+        const unselectedState: PlayerSettingsChipStyleState = models[1].styleState
+
+        expect(selectedState.isSelected).assertTrue()
+        expect(selectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(selectedState.borderWidth).assertEqual(2)
+        expect(selectedState.borderColor).assertEqual('#fffefe')
+        expect(selectedState.shadowRadius).assertEqual(14)
+        expect(selectedState.scale).assertEqual(1.05)
+        expect(unselectedState.isSelected).assertFalse()
+        expect(unselectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.1)')
+        expect(unselectedState.borderWidth).assertEqual(1)
+        expect(unselectedState.borderColor).assertEqual('#45ffffff')
+        expect(unselectedState.shadowRadius).assertEqual(0)
+        expect(unselectedState.scale).assertEqual(1)
+      })
+
+      it('自动下一集倒计时 selected 与 unselected 样式对齐当前画面比例 chip', 0, () => {
+        const models: PlayerSettingsAutoplayCountdownChipRenderModel[] =
+          buildAutoplayCountdownChipRenderModels(8, -1, -1)
+        const selectedState: PlayerSettingsChipStyleState = models[2].styleState
+        const unselectedState: PlayerSettingsChipStyleState = models[0].styleState
+
+        expect(selectedState.isSelected).assertTrue()
+        expect(selectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.45)')
+        expect(selectedState.labelColor).assertEqual('#F3F7FF')
+        expect(selectedState.borderWidth).assertEqual(2)
+        expect(selectedState.borderColor).assertEqual('#fffefe')
+        expect(selectedState.shadowColor).assertEqual('#33597FB8')
+        expect(selectedState.scale).assertEqual(1.05)
+        expect(unselectedState.isSelected).assertFalse()
+        expect(unselectedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.1)')
+        expect(unselectedState.labelColor).assertEqual('#D7DCE7')
+        expect(unselectedState.borderWidth).assertEqual(1)
+        expect(unselectedState.borderColor).assertEqual('#45ffffff')
+        expect(unselectedState.shadowColor).assertEqual('#00000000')
+        expect(unselectedState.scale).assertEqual(1)
+      })
+
+      it('自动下一集聚焦态仍保留原有 focus 视觉，不跟随倍速 hover 边框', 0, () => {
+        const models: PlayerSettingsAutoplayToggleChipRenderModel[] =
+          buildAutoplayToggleChipRenderModels(false, 0, -1)
+        const focusedState: PlayerSettingsChipStyleState = models[0].styleState
+
+        expect(focusedState.isFocused).assertTrue()
+        expect(focusedState.isSelected).assertFalse()
+        expect(focusedState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.22)')
+        expect(focusedState.borderWidth).assertEqual(0)
+        expect(focusedState.borderColor).assertEqual('#00000000')
+        expect(focusedState.shadowRadius).assertEqual(12)
+        expect(focusedState.scale).assertEqual(1.04)
+      })
+
+      it('自动下一集倒计时 hover 态仍保留原有 hover 视觉，不跟随倍速 hover 边框', 0, () => {
+        const models: PlayerSettingsAutoplayCountdownChipRenderModel[] =
+          buildAutoplayCountdownChipRenderModels(8, -1, 0)
+        const hoveredState: PlayerSettingsChipStyleState = models[0].styleState
+
+        expect(hoveredState.isHovered).assertTrue()
+        expect(hoveredState.isSelected).assertFalse()
+        expect(hoveredState.backgroundColor).assertEqual('rgba(255, 255, 255, 0.22)')
+        expect(hoveredState.borderWidth).assertEqual(0)
+        expect(hoveredState.borderColor).assertEqual('#00000000')
+        expect(hoveredState.shadowRadius).assertEqual(12)
+        expect(hoveredState.scale).assertEqual(1.04)
       })
 
       it('当未选中项处于 hovered 时，selected 项仍保持最强的视觉语义', 0, () => {

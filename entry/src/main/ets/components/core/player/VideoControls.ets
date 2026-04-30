@@ -596,6 +596,16 @@ interface SpeedOption {
   speed: number;
 }
 
+interface AutoplayToggleOption {
+  label: string;
+  enabled: boolean;
+}
+
+interface AutoplayCountdownOption {
+  label: string;
+  seconds: number;
+}
+
 const PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
   { label: '适应', mode: AspectRatioMode.FIT },
   { label: '填充', mode: AspectRatioMode.FILL },
@@ -609,6 +619,18 @@ const PLAYER_SETTINGS_SPEED_OPTIONS: SpeedOption[] = [
   { label: '1.25x', speed: 1.25 },
   { label: '1.5x', speed: 1.5 },
   { label: '2.0x', speed: 2.0 },
+]
+
+const PLAYER_SETTINGS_AUTOPLAY_TOGGLE_OPTIONS: AutoplayToggleOption[] = [
+  { label: '开启', enabled: true },
+  { label: '关闭', enabled: false },
+]
+
+const PLAYER_SETTINGS_AUTOPLAY_COUNTDOWN_OPTIONS: AutoplayCountdownOption[] = [
+  { label: '3s', seconds: 3 },
+  { label: '5s', seconds: 5 },
+  { label: '8s', seconds: 8 },
+  { label: '10s', seconds: 10 },
 ]
 
 const PLAYER_SETTINGS_CHIP_HEIGHT: number = 68
@@ -658,6 +680,18 @@ export interface PlayerSettingsSpeedChipRenderModel {
 export interface PlayerSettingsAspectRatioChipRenderModel {
   label: string
   mode: AspectRatioMode
+  styleState: PlayerSettingsChipStyleState
+}
+
+export interface PlayerSettingsAutoplayToggleChipRenderModel {
+  label: string
+  enabled: boolean
+  styleState: PlayerSettingsChipStyleState
+}
+
+export interface PlayerSettingsAutoplayCountdownChipRenderModel {
+  label: string
+  seconds: number
   styleState: PlayerSettingsChipStyleState
 }
 
@@ -752,6 +786,17 @@ export function getPlayerSettingsValueChipStyleState(
   return styleState
 }
 
+function getPlayerSettingsAutoplayChipStyleState(
+  isFocused: boolean,
+  isSelected: boolean,
+  isHovered: boolean = false
+): PlayerSettingsChipStyleState {
+  if (isFocused || isHovered) {
+    return getPlayerSettingsChipStyleState(isFocused, isSelected, isHovered)
+  }
+  return getPlayerSettingsValueChipStyleState(false, isSelected, false)
+}
+
 export function buildPlaybackSpeedChipRenderModels(
   playbackSpeed: number,
   focusedIndex: number = -1,
@@ -794,6 +839,52 @@ export function buildAspectRatioChipRenderModels(
     const renderModel: PlayerSettingsAspectRatioChipRenderModel = {
       label: option.label,
       mode: option.mode,
+      styleState
+    }
+    renderModels.push(renderModel)
+  }
+  return renderModels
+}
+
+export function buildAutoplayToggleChipRenderModels(
+  autoplayEnabled: boolean,
+  focusedIndex: number = -1,
+  hoveredIndex: number = -1
+): PlayerSettingsAutoplayToggleChipRenderModel[] {
+  const renderModels: PlayerSettingsAutoplayToggleChipRenderModel[] = []
+  for (let idx = 0; idx < PLAYER_SETTINGS_AUTOPLAY_TOGGLE_OPTIONS.length; idx++) {
+    const option = PLAYER_SETTINGS_AUTOPLAY_TOGGLE_OPTIONS[idx]
+    const styleState = getPlayerSettingsAutoplayChipStyleState(
+      focusedIndex === idx,
+      autoplayEnabled === option.enabled,
+      hoveredIndex === idx
+    )
+    const renderModel: PlayerSettingsAutoplayToggleChipRenderModel = {
+      label: option.label,
+      enabled: option.enabled,
+      styleState
+    }
+    renderModels.push(renderModel)
+  }
+  return renderModels
+}
+
+export function buildAutoplayCountdownChipRenderModels(
+  autoplayCountdownSeconds: number,
+  focusedIndex: number = -1,
+  hoveredIndex: number = -1
+): PlayerSettingsAutoplayCountdownChipRenderModel[] {
+  const renderModels: PlayerSettingsAutoplayCountdownChipRenderModel[] = []
+  for (let idx = 0; idx < PLAYER_SETTINGS_AUTOPLAY_COUNTDOWN_OPTIONS.length; idx++) {
+    const option = PLAYER_SETTINGS_AUTOPLAY_COUNTDOWN_OPTIONS[idx]
+    const styleState = getPlayerSettingsAutoplayChipStyleState(
+      focusedIndex === idx,
+      autoplayCountdownSeconds === option.seconds,
+      hoveredIndex === idx
+    )
+    const renderModel: PlayerSettingsAutoplayCountdownChipRenderModel = {
+      label: option.label,
+      seconds: option.seconds,
       styleState
     }
     renderModels.push(renderModel)
@@ -1295,7 +1386,7 @@ export struct PlayerSettingsDialog {
   }
 
   private getAutoplayToggleChipStyleState(idx: number): PlayerSettingsChipStyleState {
-    return getPlayerSettingsChipStyleState(
+    return getPlayerSettingsAutoplayChipStyleState(
       this.autoplayToggleFocusedIndex === idx,
       this.autoplayEnabled === this.autoplayToggleOptions[idx],
       this.autoplayToggleHoveredIndex === idx
@@ -1303,7 +1394,7 @@ export struct PlayerSettingsDialog {
   }
 
   private getAutoplayCountdownChipStyleState(idx: number): PlayerSettingsChipStyleState {
-    return getPlayerSettingsChipStyleState(
+    return getPlayerSettingsAutoplayChipStyleState(
       this.autoplayCountdownFocusedIndex === idx,
       this.autoplayCountdownSeconds === this.autoplayCountdownOptions[idx],
       this.autoplayCountdownHoveredIndex === idx
