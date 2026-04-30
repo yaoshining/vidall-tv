@@ -154,5 +154,76 @@ export default function incrementalScanContextChangeTest() {
       // 关键断言：即使文件本身未变化，分类结果应该不同
       expect(resultBefore.mediaType).assertNotEqual(resultAfter.mediaType);
     });
+
+    it('真实文件名带质量后缀时纯数字前缀应被识别为弱语义 (#191 第三轮真机失败)', () => {
+      // 真实场景：文件名为 "19 4K.mp4"，前缀 "19" 是弱语义
+      expect(isWeakSemanticTitleText('19 4K')).assertTrue();
+      expect(isWeakSemanticTitleText('20 4K')).assertTrue();
+      expect(isWeakSemanticTitleText('22 HDR')).assertTrue();
+      expect(isWeakSemanticTitleText('19 2160p')).assertTrue();
+    });
+
+    it('真实文件名带质量后缀时有季目录兄弟应分类为tv (#191 第三轮真机失败)', () => {
+      // 真实场景：文件名为 "19 4K.mp4"，目录下有 "第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1"
+      const context: VideoScrapeContext = {
+        seasonSiblingDetected: true
+      };
+      const result = classifyVideoScrapeTarget(
+        '19 4K.mp4',
+        '/蜜语纪/19 4K.mp4',
+        context
+      );
+      expect(result.mediaType).assertEqual('tv');
+      expect(result.reason).assertEqual('season-sibling-detected');
+    });
+
+    it('真实文件名带质量后缀时无季目录兄弟应分类为unknown (#191 第三轮真机失败)', () => {
+      // 真实场景：文件名为 "19 4K.mp4"，但目录下无季目录兄弟
+      const context: VideoScrapeContext = {
+        seasonSiblingDetected: false
+      };
+      const result = classifyVideoScrapeTarget(
+        '19 4K.mp4',
+        '/蜜语纪/19 4K.mp4',
+        context
+      );
+      expect(result.mediaType).assertEqual('unknown');
+      expect(result.reason).assertEqual('insufficient-evidence');
+    });
+
+    it('增量扫描时已存在video file但无scrape_info的弱语义文件在季目录兄弟出现后应重新处理 (#191 第三轮真机失败根因)', () => {
+      // 这个测试覆盖真实数据流：
+      // 1. 首次扫描：19 4K.mp4 被识别为 video file，但因为弱语义+无季目录兄弟，分类为 unknown
+      //    可能没有创建 scrape_info，或创建了 mediaType=unknown 的 scrape_info
+      // 2. 用户添加季目录兄弟：第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1/
+      // 3. 增量扫描：19 4K.mp4 文件未变化，但季目录兄弟已出现
+      //    期望：应重新处理该文件，分类为 tv
+      //    实际：被 canSkipIncrementalProcessing 跳过，或虽补刮削但没有检测季目录兄弟上下文变化
+
+      // 场景1：首次扫描，无季目录兄弟
+      const contextFirst: VideoScrapeContext = {
+        seasonSiblingDetected: false
+      };
+      const resultFirst = classifyVideoScrapeTarget(
+        '19 4K.mp4',
+        '/蜜语纪/19 4K.mp4',
+        contextFirst
+      );
+      expect(resultFirst.mediaType).assertEqual('unknown');
+
+      // 场景2：增量扫描，季目录兄弟已出现
+      const contextIncremental: VideoScrapeContext = {
+        seasonSiblingDetected: true
+      };
+      const resultIncremental = classifyVideoScrapeTarget(
+        '19 4K.mp4',
+        '/蜜语纪/19 4K.mp4',
+        contextIncremental
+      );
+      expect(resultIncremental.mediaType).assertEqual('tv');
+
+      // 关键断言：即使 video file 未变化，增量扫描时检测到季目录兄弟，应重新分类
+      expect(resultFirst.mediaType).assertNotEqual(resultIncremental.mediaType);
+    });
   });
 }

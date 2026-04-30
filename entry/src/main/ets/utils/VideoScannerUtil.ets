@@ -314,18 +314,28 @@ export class WebDAVAdapter implements ISourceAdapter {
                 const existingScrape =
                   await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existingVideo.id);
                 if (!existingScrape) {
-                  console.info(
-                    `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}`
-                  );
-                  const capturedVideoId = existingVideo.id;
-                  const capturedFileName = fileName;
-                  const capturedDirPath = info.directoryPath;
-                  const capturedScrapeClient = this.scrapeClient;
-                  const capturedMode = mode;
-                  const retryTask: Promise<void> =
-                    this.doScrapeOnly(capturedVideoId, capturedFileName,
-                      capturedScrapeClient, capturedMode, info).catch(() => {});
-                  processingTasks.push(retryTask);
+                  // #191 第三轮修复：如果无 scrape_info 但检测到季目录兄弟，应重新完整处理（分类+刮削）
+                  if (videoScrapeContext.seasonSiblingDetected) {
+                    console.info(
+                      `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录且检测到季目录兄弟，` +
+                      `重新处理: ${fileName}`
+                    );
+                    // 不 continue，继续执行后续的完整处理流程
+                  } else {
+                    console.info(
+                      `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}`
+                    );
+                    const capturedVideoId = existingVideo.id;
+                    const capturedFileName = fileName;
+                    const capturedDirPath = info.directoryPath;
+                    const capturedScrapeClient = this.scrapeClient;
+                    const capturedMode = mode;
+                    const retryTask: Promise<void> =
+                      this.doScrapeOnly(capturedVideoId, capturedFileName,
+                        capturedScrapeClient, capturedMode, info).catch(() => {});
+                    processingTasks.push(retryTask);
+                    continue;
+                  }
                 } else if (existingScrape.mediaType === 'unknown' && videoScrapeContext.seasonSiblingDetected) {
                   // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理
                   console.info(
@@ -894,17 +904,26 @@ export class SMBAdapter implements ISourceAdapter {
                 const existingScrape =
                   await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existing.id);
                 if (!existingScrape) {
-                  console.info(
-                    `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${file.name}`
-                  );
-                  const capturedVideoId = existing.id;
-                  const capturedScrapeClientR = this.scrapeClient;
-                  const capturedModeR = mode;
-                  const retryTask: Promise<void> =
-                    this.doScrapeOnly(capturedVideoId, file.name,
-                      capturedScrapeClientR, capturedModeR, info).catch(() => {});
-                  processingTasks.push(retryTask);
-                  continue;
+                  // #191 第三轮修复：如果无 scrape_info 但检测到季目录兄弟，应重新完整处理（分类+刮削）
+                  if (videoScrapeContext.seasonSiblingDetected) {
+                    console.info(
+                      `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录且检测到季目录兄弟，` +
+                      `重新处理: ${file.name}`
+                    );
+                    // 不 continue，继续执行后续的完整处理流程
+                  } else {
+                    console.info(
+                      `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${file.name}`
+                    );
+                    const capturedVideoId = existing.id;
+                    const capturedScrapeClientR = this.scrapeClient;
+                    const capturedModeR = mode;
+                    const retryTask: Promise<void> =
+                      this.doScrapeOnly(capturedVideoId, file.name,
+                        capturedScrapeClientR, capturedModeR, info).catch(() => {});
+                    processingTasks.push(retryTask);
+                    continue;
+                  }
                 } else if (existingScrape.mediaType === 'unknown' && videoScrapeContext.seasonSiblingDetected) {
                   // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理
                   console.info(
