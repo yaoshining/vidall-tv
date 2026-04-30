@@ -5,11 +5,13 @@ import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
 import {
   MediaTypeClassificationResult,
+  MediaTypeClassificationOptions,
   buildMediaTypeClassificationInput,
   classifyMediaType,
   createFileNameSemanticInfo,
   extractSeriesHintFromFilePath,
-  formatMediaTypeClassificationSignals
+  formatMediaTypeClassificationSignals,
+  isSeasonDirectorySegment
 } from '../lib/MediaTypeClassifier';
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
@@ -32,6 +34,13 @@ export interface VideoFileInfo {
   contentType?: string;
   wasProcessed?: boolean;
   scrapeSkipped?: boolean;
+  seasonSiblingDetected?: boolean;
+  seriesHint?: string;
+}
+
+export interface VideoScrapeContext {
+  seasonSiblingDetected?: boolean;
+  seriesHint?: string;
 }
 
 export interface SourceScanStat {
@@ -87,7 +96,34 @@ function isVideoFile(fileName: string, contentType?: string): boolean {
   return false;
 }
 
-function classifyVideoScrapeTarget(fileName: string, filePath: string): MediaTypeClassificationResult {
+export function hasSeasonSiblingDirectory(directoryNames: string[]): boolean {
+  return directoryNames.some((directoryName: string) => isSeasonDirectorySegment(directoryName));
+}
+
+function extractLastPathSegment(path: string): string | undefined {
+  const normalizedPath = path.replace(/\\/g, '/').replace(/\/+$/g, '');
+  const segments = normalizedPath.split('/').filter((segment: string) => segment.length > 0);
+  if (segments.length === 0) {
+    return undefined;
+  }
+  return segments[segments.length - 1];
+}
+
+export function createVideoScrapeContext(rootPath: string, depth: number, seasonSiblingDetected: boolean): VideoScrapeContext {
+  const context: VideoScrapeContext = {
+    seasonSiblingDetected
+  };
+  if (depth === 0) {
+    context.seriesHint = extractLastPathSegment(rootPath);
+  }
+  return context;
+}
+
+export function classifyVideoScrapeTarget(
+  fileName: string,
+  filePath: string,
+  context?: VideoScrapeContext
+): MediaTypeClassificationResult {
   const parsed = parseFileName(fileName);
   const fileNameInfo = createFileNameSemanticInfo(
     parsed.title,
@@ -97,8 +133,11 @@ function classifyVideoScrapeTarget(fileName: string, filePath: string): MediaTyp
     parsed.episodeNumber,
     parsed.year
   );
+  const classificationOptions: MediaTypeClassificationOptions = {
+    seasonSiblingDetected: context?.seasonSiblingDetected
+  };
   return classifyMediaType(
-    buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo)
+    buildMediaTypeClassificationInput(fileName, filePath, fileNameInfo, classificationOptions)
   );
 }
 
@@ -205,6 +244,23 @@ export class WebDAVAdapter implements ISourceAdapter {
       return;
     }
 
+    const childDirectoryNames: string[] = [];
+    resources.forEach((resource: WebDAVResource) => {
+      if (resource.isCollection) {
+        const decodedHref = this.decodePath(resource.href);
+        const relativePath = this.toRelativePath(decodedHref);
+        if (this.isSamePath(relativePath, currentPath)) {
+          return;
+        }
+        childDirectoryNames.push(resource.displayName || this.extractFileName(decodedHref));
+      }
+    });
+    const videoScrapeContext = createVideoScrapeContext(
+      rootPath,
+      depth,
+      hasSeasonSiblingDirectory(childDirectoryNames)
+    );
+
     for (const resource of resources) {
       const decodedHref = this.decodePath(resource.href);
       const relativePath = this.toRelativePath(decodedHref);
@@ -232,7 +288,9 @@ export class WebDAVAdapter implements ISourceAdapter {
             fileSize: resource.size,
             lastModified: resource.lastModified,
             contentType: resource.contentType,
-            wasProcessed: true
+            wasProcessed: true,
+            seasonSiblingDetected: videoScrapeContext.seasonSiblingDetected,
+            seriesHint: videoScrapeContext.seriesHint
           };
 
           console.info(
@@ -420,8 +478,12 @@ export class WebDAVAdapter implements ISourceAdapter {
     }
 
     console.info(`[VideoScanner][SCRAPE] 开始刮削 fileName=${fileName}`);
-    const classification = classifyVideoScrapeTarget(fileName, info.filePath);
-    const seriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const classificationContext: VideoScrapeContext = {
+      seasonSiblingDetected: info.seasonSiblingDetected
+    };
+    const classification = classifyVideoScrapeTarget(fileName, info.filePath, classificationContext);
+    const extractedSeriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const seriesHint = extractedSeriesHint ?? info.seriesHint;
     if (classification.mediaType === 'unknown') {
       await clearStaleScrapeAssociationsForOverwrite(
         videoId,
@@ -746,6 +808,18 @@ export class SMBAdapter implements ISourceAdapter {
       return;
     }
 
+    const childDirectoryNames: string[] = [];
+    listResult.files.forEach((file) => {
+      if (file.isDirectory) {
+        childDirectoryNames.push(file.name);
+      }
+    });
+    const videoScrapeContext = createVideoScrapeContext(
+      rootPath,
+      currentDepth,
+      hasSeasonSiblingDirectory(childDirectoryNames)
+    );
+
     for (const file of listResult.files) {
       if (file.isDirectory) {
         await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks);
@@ -759,7 +833,9 @@ export class SMBAdapter implements ISourceAdapter {
           fileName: file.name,
           fileSize: file.size,
           lastModified: file.lastModifiedMs > 0 ? new Date(file.lastModifiedMs).toISOString() : undefined,
-          wasProcessed: true
+          wasProcessed: true,
+          seasonSiblingDetected: videoScrapeContext.seasonSiblingDetected,
+          seriesHint: videoScrapeContext.seriesHint
         };
         console.info(
           `[VideoScanner][SMB] 文件源=${this.fileSource.name} | 路径=${file.path} | 文件名=${file.name} | 大小=${file.size} bytes`
@@ -922,8 +998,12 @@ export class SMBAdapter implements ISourceAdapter {
 
     console.info(`[VideoScanner][SMB][SCRAPE] 开始刮削 fileName=${fileName}`);
     const db = FileSourceDatabase.getInstance();
-    const classification = classifyVideoScrapeTarget(fileName, info.filePath);
-    const seriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const classificationContext: VideoScrapeContext = {
+      seasonSiblingDetected: info.seasonSiblingDetected
+    };
+    const classification = classifyVideoScrapeTarget(fileName, info.filePath, classificationContext);
+    const extractedSeriesHint = extractSeriesHintFromFilePath(info.filePath);
+    const seriesHint = extractedSeriesHint ?? info.seriesHint;
     if (classification.mediaType === 'unknown') {
       await clearStaleScrapeAssociationsForOverwrite(
         videoId,

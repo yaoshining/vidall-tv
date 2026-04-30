@@ -30,6 +30,11 @@ export interface MediaTypeClassificationInput {
   ancestorDirectoryNames: string[];
   pathSegments: string[];
   fileNameInfo?: FileNameSemanticInfo;
+  seasonSiblingDetected?: boolean;
+}
+
+export interface MediaTypeClassificationOptions {
+  seasonSiblingDetected?: boolean;
 }
 
 export interface MediaTypeClassificationResult {
@@ -212,10 +217,10 @@ function hasStrongMovieSignal(fileNameInfo?: FileNameSemanticInfo): boolean {
   return fileNameInfo.year !== undefined || fileNameInfo.title.length >= 2;
 }
 
-function isSeasonDirectorySegment(segment: string): boolean {
+export function isSeasonDirectorySegment(segment: string): boolean {
   const normalizedSegment = normalizeSemanticToken(segment);
   return SEASON_DIRECTORY_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedSegment)) ||
-    /^第\s*\d+\s*季$/.test(segment);
+    /^第\s*[\d一二三四五六七八九十百]+\s*季$/.test(segment);
 }
 
 function isGenericTvSemanticSegment(segment: string): boolean {
@@ -237,7 +242,8 @@ function appendSignal(
 export function buildMediaTypeClassificationInput(
   fileName: string,
   filePath: string,
-  fileNameInfo?: FileNameSemanticInfo
+  fileNameInfo?: FileNameSemanticInfo,
+  options?: MediaTypeClassificationOptions
 ): MediaTypeClassificationInput {
   const rawSegments: string[] = normalizePathSegments(filePath);
   const filePathEndsWithFileName = rawSegments.length > 0 && rawSegments[rawSegments.length - 1] === fileName;
@@ -252,7 +258,8 @@ export function buildMediaTypeClassificationInput(
     parentDirectoryName,
     ancestorDirectoryNames,
     pathSegments,
-    fileNameInfo
+    fileNameInfo,
+    seasonSiblingDetected: options?.seasonSiblingDetected
   };
 }
 
@@ -370,6 +377,17 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
 
   if (movieScore > 0 && tvScore === 0 && !isWeakSemanticTitleText(fileNameInfo?.title ?? '')) {
     return createMediaTypeClassificationResult('movie', signals, 'movie-title-or-path');
+  }
+
+  if (input.seasonSiblingDetected === true && isWeakSemanticTitleText(fileNameInfo?.title ?? input.fileName)) {
+    appendSignal(
+      signals,
+      'path-semantics',
+      input.parentDirectoryName ?? input.filePath,
+      'path:season-sibling-detected',
+      60
+    );
+    return createMediaTypeClassificationResult('tv', signals, 'season-sibling-detected');
   }
 
   return createMediaTypeClassificationResult('unknown', signals, 'insufficient-evidence');

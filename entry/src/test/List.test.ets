@@ -23,6 +23,7 @@ import imagePreviewSessionControllerTest from './ImagePreviewSessionController.t
 import subtitleLanguagePreferenceTest from './SubtitleLanguagePreference.test';
 import appPreferencesTest from './AppPreferences.test';
 import homeSettingBuilderModelTest from './HomeSettingBuilderModel.test';
+import videoScannerUtilTest from './VideoScannerUtil.test';
 // 需要真实 Context 和 .so 的集成测试放在 UnitTestBuild 侧（entry 模块本身，包含 native .so）
 // ohosTest(entry_test HAP) 不包含 .so，不能 import VideoScannerUtil / WebDAVClient
 import fileSourceDatabaseTest from './FileSourceDatabase.test';
@@ -54,6 +55,7 @@ export default function testsuite() {
   subtitleLanguagePreferenceTest();
   appPreferencesTest();
   homeSettingBuilderModelTest();
+  videoScannerUtilTest();
   fileSourceDatabaseTest();
   videoScannerTest();
 }
