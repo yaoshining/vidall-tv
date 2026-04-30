@@ -324,6 +324,7 @@ export function formatMediaTypeClassificationSignals(classification: MediaTypeCl
 export function classifyMediaType(input: MediaTypeClassificationInput): MediaTypeClassificationResult {
   const signals: MediaTypeClassificationSignal[] = [];
   const fileNameInfo = input.fileNameInfo;
+  const hasWeakSemanticTitle = isWeakSemanticTitleText(fileNameInfo?.title ?? '');
 
   if (hasStrongTvSignal(fileNameInfo)) {
     appendSignal(
@@ -340,7 +341,7 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
   let tvScore = 0;
 
   if (fileNameInfo !== undefined) {
-    if (isWeakSemanticTitleText(fileNameInfo.title)) {
+    if (hasWeakSemanticTitle) {
       appendSignal(signals, 'file-name', fileNameInfo.title.length > 0 ? fileNameInfo.title : input.fileName, 'weak-semantic-title', 0);
     } else if (hasStrongMovieSignal(fileNameInfo)) {
       const movieSignalWeight = fileNameInfo.year !== undefined ? 80 : 60;
@@ -367,7 +368,7 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
     return createMediaTypeClassificationResult('tv', signals, 'path-tv-semantics');
   }
 
-  if (movieScore >= 70 && movieScore > tvScore) {
+  if (movieScore >= 70 && movieScore > tvScore && !hasWeakSemanticTitle) {
     return createMediaTypeClassificationResult('movie', signals, 'movie-title-or-path');
   }
 
@@ -375,7 +376,7 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
     return createMediaTypeClassificationResult('tv', signals, 'path-tv-semantics');
   }
 
-  if (movieScore > 0 && tvScore === 0 && !isWeakSemanticTitleText(fileNameInfo?.title ?? '')) {
+  if (movieScore > 0 && tvScore === 0 && !hasWeakSemanticTitle) {
     return createMediaTypeClassificationResult('movie', signals, 'movie-title-or-path');
   }
 
