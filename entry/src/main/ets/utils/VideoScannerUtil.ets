@@ -332,6 +332,13 @@ export class WebDAVAdapter implements ISourceAdapter {
                     `[VideoScanner][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` +
                     `重新处理之前的 unknown 文件: ${fileName}`
                   );
+                  // 清理旧的 unknown scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existingVideo.id);
+                    console.info(`[VideoScanner][INCREMENTAL] 已清理旧 unknown 标记: ${fileName}`);
+                  } catch {
+                    console.warn(`[VideoScanner][INCREMENTAL] 清理旧 unknown 标记失败: ${fileName}`);
+                  }
                   // 不 continue，继续执行后续的完整处理流程
                 } else {
                   console.info(
@@ -501,11 +508,26 @@ export class WebDAVAdapter implements ISourceAdapter {
         '[VideoScanner][SCRAPE]',
         `unknown:${classification.reason ?? 'unknown'}`
       );
+      // #191 修复：为 unknown 文件创建 scrape_info 记录，以便增量扫描时能检测上下文变化
+      const db = FileSourceDatabase.getInstance();
+      const unknownScrapeInfo: ScrapeInfoEntity = {
+        videoId,
+        provider: 'local',
+        providerId: `unknown_${videoId}`,
+        mediaType: 'unknown',
+        title: fileName,
+        scrapedAt: Date.now()
+      };
+      try {
+        await db.upsertScrapeInfo(unknownScrapeInfo);
+        console.info(
+          `[VideoScanner][SCRAPE] 已标记弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
+          `signals=${formatMediaTypeClassificationSignals(classification)}`
+        );
+      } catch {
+        console.warn(`[VideoScanner][SCRAPE] 无法保存 unknown 标记 fileName=${fileName}`);
+      }
       info.scrapeSkipped = true;
-      console.info(
-        `[VideoScanner][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
-        `signals=${formatMediaTypeClassificationSignals(classification)}`
-      );
       return;
     }
 
@@ -889,6 +911,13 @@ export class SMBAdapter implements ISourceAdapter {
                     `[VideoScanner][SMB][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` +
                     `重新处理之前的 unknown 文件: ${file.name}`
                   );
+                  // 清理旧的 unknown scrape_info 记录，以便后续重新刮削
+                  try {
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existing.id);
+                    console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理旧 unknown 标记: ${file.name}`);
+                  } catch {
+                    console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理旧 unknown 标记失败: ${file.name}`);
+                  }
                   // 不 continue，继续执行后续的完整处理流程
                 } else {
                   console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
@@ -1034,11 +1063,25 @@ export class SMBAdapter implements ISourceAdapter {
         '[VideoScanner][SMB][SCRAPE]',
         `unknown:${classification.reason ?? 'unknown'}`
       );
+      // #191 修复：为 unknown 文件创建 scrape_info 记录，以便增量扫描时能检测上下文变化
+      const unknownScrapeInfo: ScrapeInfoEntity = {
+        videoId,
+        provider: 'local',
+        providerId: `unknown_${videoId}`,
+        mediaType: 'unknown',
+        title: fileName,
+        scrapedAt: Date.now()
+      };
+      try {
+        await db.upsertScrapeInfo(unknownScrapeInfo);
+        console.info(
+          `[VideoScanner][SMB][SCRAPE] 已标记弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
+          `signals=${formatMediaTypeClassificationSignals(classification)}`
+        );
+      } catch {
+        console.warn(`[VideoScanner][SMB][SCRAPE] 无法保存 unknown 标记 fileName=${fileName}`);
+      }
       info.scrapeSkipped = true;
-      console.info(
-        `[VideoScanner][SMB][SCRAPE] 跳过弱语义文件 fileName=${fileName} reason=${classification.reason ?? 'unknown'} ` +
-        `signals=${formatMediaTypeClassificationSignals(classification)}`
-      );
       return;
     }
 
