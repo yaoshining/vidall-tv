@@ -2,11 +2,14 @@ import { describe, it, expect } from '@ohos/hypium'
 import {
   buildEpisodeAnchorRanges,
   buildEpisodeContinuousListItems,
+  buildEpisodeAnchorScrollRequest,
+  buildEpisodeInitialScrollRequest,
   getEpisodeItemRenderKey,
   getEpisodeSectionTitleStyleState,
   getEpisodeCardStyleState,
   getEpisodePageTabStyleState,
   EpisodeAnchorRange,
+  EpisodeScrollRequest,
   EpisodeSectionTitleStyleState,
   EpisodeCardStyleState,
   EpisodePageTabStyleState
@@ -154,6 +157,28 @@ export default function EpisodeListPanelTest() {
       expect(styleState.showFocusBackground).assertTrue()
       expect(styleState.focusBorderWidth).assertEqual(0)
       expect(styleState.scale).assertEqual(1.04)
+    })
+  })
+
+  describe('EpisodeListPanel empty list boundary', () => {
+    it('空列表时不生成任何锚点范围', 0, () => {
+      const ranges: EpisodeAnchorRange[] = buildEpisodeAnchorRanges(0)
+
+      expect(ranges.length).assertEqual(0)
+    })
+
+    it('空列表时 buildEpisodeInitialScrollRequest 返回 index 0 但不应被调用', 0, () => {
+      const request: EpisodeScrollRequest = buildEpisodeInitialScrollRequest(0, 0)
+
+      expect(request.index).assertEqual(0)
+      expect(request.smooth).assertFalse()
+    })
+
+    it('空列表时 buildEpisodeAnchorScrollRequest 返回 index 0 但不应被调用', 0, () => {
+      const request: EpisodeScrollRequest = buildEpisodeAnchorScrollRequest(0, 0)
+
+      expect(request.index).assertEqual(0)
+      expect(request.smooth).assertTrue()
     })
   })
 }

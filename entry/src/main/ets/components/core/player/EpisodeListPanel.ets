@@ -278,7 +278,7 @@ export struct EpisodeListPanel {
   }
 
   private getTotalAnchors(): number {
-    return Math.max(1, this.getAnchorRanges().length)
+    return this.getAnchorRanges().length
   }
 
   private getListItems(): PlaybackContextItem[] {
@@ -286,6 +286,9 @@ export struct EpisodeListPanel {
   }
 
   private scrollToAnchor(groupIndex: number): void {
+    if (this.context.items.length === 0) {
+      return
+    }
     const total = this.getTotalAnchors()
     if (groupIndex < 0 || groupIndex >= total) {
       return
@@ -297,6 +300,9 @@ export struct EpisodeListPanel {
   }
 
   private scrollToCurrentItem(): void {
+    if (this.context.items.length === 0) {
+      return
+    }
     const request = buildEpisodeInitialScrollRequest(this.context.currentIndex, this.context.items.length)
     this.scroller.scrollToIndex(request.index, request.smooth, request.align)
   }
