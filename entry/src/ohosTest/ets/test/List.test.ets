@@ -4,6 +4,7 @@ import fileSourceUiTest from './FileSourceUI.test';
 import mediaNavigationTest from './MediaNavigation.test';
 import playerSettingsTest from './PlayerSettings.test';
 import scanFlowTest from './ScanFlow.test';
+import incrementalScanContextChangeTest from './IncrementalScanContextChange.test';
 
 export default function testsuite() {
   abilityTest();
@@ -12,4 +13,5 @@ export default function testsuite() {
   mediaNavigationTest();
   playerSettingsTest();
   scanFlowTest();
+  incrementalScanContextChangeTest();
 }

@@ -326,11 +326,19 @@ export class WebDAVAdapter implements ISourceAdapter {
                     this.doScrapeOnly(capturedVideoId, capturedFileName,
                       capturedScrapeClient, capturedMode, info).catch(() => {});
                   processingTasks.push(retryTask);
+                } else if (existingScrape.mediaType === 'unknown' && videoScrapeContext.seasonSiblingDetected) {
+                  // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理
+                  console.info(
+                    `[VideoScanner][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` +
+                    `重新处理之前的 unknown 文件: ${fileName}`
+                  );
+                  // 不 continue，继续执行后续的完整处理流程
                 } else {
                   console.info(
                     `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                     `lastModified=${info.lastModified ?? '未知'}`
                   );
+                  continue;
                 }
               } catch {
                 // 查询失败，按已有刮削记录处理，正常跳过
@@ -338,14 +346,15 @@ export class WebDAVAdapter implements ISourceAdapter {
                   `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                   `lastModified=${info.lastModified ?? '未知'}`
                 );
+                continue;
               }
             } else {
               console.info(
                 `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` +
                 `lastModified=${info.lastModified ?? '未知'}`
               );
+              continue;
             }
-            continue;
           }
 
           // ── 落库 + 刮削：加入跟踪列表，确保 scan() 返回前所有视频已入库 ──
@@ -874,13 +883,26 @@ export class SMBAdapter implements ISourceAdapter {
                       capturedScrapeClientR, capturedModeR, info).catch(() => {});
                   processingTasks.push(retryTask);
                   continue;
+                } else if (existingScrape.mediaType === 'unknown' && videoScrapeContext.seasonSiblingDetected) {
+                  // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理
+                  console.info(
+                    `[VideoScanner][SMB][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` +
+                    `重新处理之前的 unknown 文件: ${file.name}`
+                  );
+                  // 不 continue，继续执行后续的完整处理流程
+                } else {
+                  console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
+                  continue;
                 }
               } catch {
                 // 查询失败，正常跳过
+                console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
+                continue;
               }
+            } else {
+              console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
+              continue;
             }
-            console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`);
-            continue;
           }
         }
 
