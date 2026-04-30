@@ -1,20 +1,17 @@
 import { describe, it, expect } from '@ohos/hypium'
 import {
-  buildEpisodePageRanges,
-  getEpisodePageItems,
+  buildEpisodeAnchorRanges,
+  buildEpisodeContinuousListItems,
   getEpisodeItemRenderKey,
   getEpisodeSectionTitleStyleState,
   getEpisodeCardStyleState,
   getEpisodePageTabStyleState,
+  EpisodeAnchorRange,
   EpisodeSectionTitleStyleState,
   EpisodeCardStyleState,
   EpisodePageTabStyleState
 } from '../main/ets/components/core/player/EpisodeListPanel'
 import { PlaybackContextItem } from '../main/ets/components/core/player/PlaybackContext'
-
-interface EpisodePageRangeExpectation {
-  label: string
-}
 
 function makeItems(count: number): PlaybackContextItem[] {
   const result: PlaybackContextItem[] = []
@@ -31,34 +28,35 @@ function makeItems(count: number): PlaybackContextItem[] {
 }
 
 export default function EpisodeListPanelTest() {
-  describe('EpisodeListPanel pagination', () => {
-    it('切换到第二组选集后返回 7 到最后一集', 0, () => {
+  describe('EpisodeListPanel anchors', () => {
+    it('按每 6 集生成连续列表锚点，最后一组保留不足 6 集的范围', 0, () => {
       const items: PlaybackContextItem[] = makeItems(15)
 
-      const ranges: EpisodePageRangeExpectation[] = buildEpisodePageRanges(items.length)
-      const secondPageItems: PlaybackContextItem[] = getEpisodePageItems(items, 1)
+      const ranges: EpisodeAnchorRange[] = buildEpisodeAnchorRanges(items.length)
+      const listItems: PlaybackContextItem[] = buildEpisodeContinuousListItems(items)
 
-      expect(ranges.length).assertEqual(2)
-      expect(ranges[1].label).assertEqual('7-15')
-      expect(secondPageItems.length).assertEqual(9)
-      expect(secondPageItems[0].episodeNumber).assertEqual(7)
-      expect(secondPageItems[8].episodeNumber).assertEqual(15)
+      expect(ranges.length).assertEqual(3)
+      expect(ranges[0].label).assertEqual('1-6')
+      expect(ranges[1].label).assertEqual('7-12')
+      expect(ranges[2].label).assertEqual('13-15')
+      expect(listItems.length).assertEqual(15)
+      expect(listItems[6].episodeNumber).assertEqual(7)
+      expect(listItems[14].episodeNumber).assertEqual(15)
     })
 
-    it('分页切换后渲染 key 使用全局唯一值，不复用第一页索引', 0, () => {
+    it('连续列表渲染 key 使用全局唯一值，滚动后不复用局部索引', 0, () => {
       const items: PlaybackContextItem[] = makeItems(15)
 
-      const firstPageItems: PlaybackContextItem[] = getEpisodePageItems(items, 0)
-      const secondPageItems: PlaybackContextItem[] = getEpisodePageItems(items, 1)
-      const firstPageKeys: string[] = firstPageItems.map((item: PlaybackContextItem): string => getEpisodeItemRenderKey(item))
-      const secondPageFirstKey: string = getEpisodeItemRenderKey(secondPageItems[0])
+      const listItems: PlaybackContextItem[] = buildEpisodeContinuousListItems(items)
+      const firstGroupKeys: string[] = listItems.slice(0, 6).map((item: PlaybackContextItem): string => getEpisodeItemRenderKey(item))
+      const secondGroupFirstKey: string = getEpisodeItemRenderKey(listItems[6])
 
-      expect(firstPageKeys.indexOf(secondPageFirstKey)).assertEqual(-1)
-      expect(secondPageFirstKey).assertEqual('/episode-7.mp4')
+      expect(firstGroupKeys.indexOf(secondGroupFirstKey)).assertEqual(-1)
+      expect(secondGroupFirstKey).assertEqual('/episode-7.mp4')
     })
 
-    it('总集数不超过 6 时不生成第二组', 0, () => {
-      const ranges: EpisodePageRangeExpectation[] = buildEpisodePageRanges(6)
+    it('总集数不超过 6 时仅生成一个锚点', 0, () => {
+      const ranges: EpisodeAnchorRange[] = buildEpisodeAnchorRanges(6)
 
       expect(ranges.length).assertEqual(1)
       expect(ranges[0].label).assertEqual('1-6')
@@ -128,13 +126,13 @@ export default function EpisodeListPanelTest() {
       expect(styleState.labelFontSize < 22).assertTrue()
     })
 
-    it('分页 tab 改为无边框 chip 风格，当前页与聚焦态仍可区分', 0, () => {
+    it('锚点 tab 使用无边框 chip 风格，当前组与聚焦态仍可区分', 0, () => {
       const styleState: EpisodePageTabStyleState = getEpisodePageTabStyleState(true, true)
 
       expect(styleState.showFocusPill).assertFalse()
       expect(styleState.showFocusBackground).assertTrue()
       expect(styleState.showCurrentUnderline).assertTrue()
-      expect(styleState.isCurrentPage).assertTrue()
+      expect(styleState.isCurrentAnchor).assertTrue()
       expect(styleState.isFocused).assertTrue()
       expect(styleState.focusBorderWidth).assertEqual(0)
       expect(styleState.scale).assertEqual(1.04)

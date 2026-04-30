@@ -23,10 +23,86 @@ import {
   syncPlayerSettingsSelectionMirrorState,
   shouldApplyEpisodeAutoplaySettingsLoad
 } from '../main/ets/components/core/player/VideoControls'
+import {
+  buildEpisodeAnchorRanges,
+  buildEpisodeAnchorScrollRequest,
+  buildEpisodeContinuousListItems,
+  buildEpisodeInitialScrollRequest,
+  EpisodeAnchorRange,
+  EpisodeScrollRequest
+} from '../main/ets/components/core/player/EpisodeListPanel'
+import { PlaybackContextItem } from '../main/ets/components/core/player/PlaybackContext'
 import { AspectRatioMode } from '../main/ets/components/core/player/VideoPlayerController'
+
+function makeVideoControlsEpisodeItems(count: number): PlaybackContextItem[] {
+  const result: PlaybackContextItem[] = []
+  for (let i = 0; i < count; i++) {
+    const item: PlaybackContextItem = {
+      videoPath: `/video-controls-episode-${i + 1}.mp4`,
+      title: `Episode ${i + 1}`,
+      index: i,
+      episodeNumber: i + 1
+    }
+    result.push(item)
+  }
+  return result
+}
 
 export default function videoControlsTest() {
   describe('VideoControls', () => {
+    describe('episode list continuous scroll anchors', () => {
+      it('全部集数在同一列表可访问且不分页过滤', 0, () => {
+        const items: PlaybackContextItem[] = makeVideoControlsEpisodeItems(15)
+
+        const listItems: PlaybackContextItem[] = buildEpisodeContinuousListItems(items)
+        const anchorRanges: EpisodeAnchorRange[] = buildEpisodeAnchorRanges(items.length)
+
+        expect(listItems.length).assertEqual(15)
+        expect(listItems[0].episodeNumber).assertEqual(1)
+        expect(listItems[14].episodeNumber).assertEqual(15)
+        expect(anchorRanges.length).assertEqual(3)
+        expect(anchorRanges[0].label).assertEqual('1-6')
+        expect(anchorRanges[1].label).assertEqual('7-12')
+        expect(anchorRanges[2].label).assertEqual('13-15')
+      })
+
+      it('点击 1-6 锚点触发 scrollToIndex(0, true, ScrollAlign.START)', 0, () => {
+        const request: EpisodeScrollRequest = buildEpisodeAnchorScrollRequest(0, 15)
+
+        expect(request.index).assertEqual(0)
+        expect(request.smooth).assertTrue()
+        expect(request.align).assertEqual(ScrollAlign.START)
+      })
+
+      it('点击 7-12 锚点触发 scrollToIndex(6, true, ScrollAlign.START)', 0, () => {
+        const request: EpisodeScrollRequest = buildEpisodeAnchorScrollRequest(1, 15)
+
+        expect(request.index).assertEqual(6)
+        expect(request.smooth).assertTrue()
+        expect(request.align).assertEqual(ScrollAlign.START)
+      })
+
+      it('最后一组不足 6 集时锚点仍指向正确 groupStartIndex', 0, () => {
+        const anchorRanges: EpisodeAnchorRange[] = buildEpisodeAnchorRanges(10)
+        const request: EpisodeScrollRequest = buildEpisodeAnchorScrollRequest(1, 10)
+
+        expect(anchorRanges.length).assertEqual(2)
+        expect(anchorRanges[1].label).assertEqual('7-10')
+        expect(anchorRanges[1].startIndex).assertEqual(6)
+        expect(request.index).assertEqual(6)
+        expect(request.smooth).assertTrue()
+        expect(request.align).assertEqual(ScrollAlign.START)
+      })
+
+      it('onAppear 时调用 scrollToIndex(currentIndex, false, ScrollAlign.START)', 0, () => {
+        const request: EpisodeScrollRequest = buildEpisodeInitialScrollRequest(14, 30)
+
+        expect(request.index).assertEqual(14)
+        expect(request.smooth).assertFalse()
+        expect(request.align).assertEqual(ScrollAlign.START)
+      })
+    })
+
     describe('player settings selection bridge', () => {
       it('诊断日志统一带稳定播放器设置前缀并保留作用域与摘要', 0, () => {
         expect(formatPlayerSettingsDiagnosticLog(
