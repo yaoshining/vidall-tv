@@ -668,6 +668,10 @@ export interface PlayerSettingsDiagnosticVisualSnapshot {
   styleState: PlayerSettingsChipStyleState
 }
 
+export function buildPlayerSettingsSelectionChipKey(optionKey: string, label: string): string {
+  return `${optionKey}:${label}`
+}
+
 export function getPlayerSettingsChipStyleState(
   isFocused: boolean,
   isSelected: boolean,
@@ -1387,15 +1391,16 @@ export struct PlayerSettingsDialog {
                         `hoveredIndex=${this.speedHoveredIndex}`
                       )
                     })
-                    .onClick(() => {
-                      this.logSpeedInteractionEvent('click', idx, model.label, `requestedSpeed=${model.speed}`)
-                      this.updatePlaybackSpeedSelection(model.speed)
-                    })
-                }, (model: PlayerSettingsSpeedChipRenderModel) => model.speed.toString())
+                     .onClick(() => {
+                       this.logSpeedInteractionEvent('click', idx, model.label, `requestedSpeed=${model.speed}`)
+                       this.updatePlaybackSpeedSelection(model.speed)
+                     })
+                }, (model: PlayerSettingsSpeedChipRenderModel) =>
+                  buildPlayerSettingsSelectionChipKey(model.speed.toString(), model.label))
               }
                .justifyContent(FlexAlign.Start)
                .width('100%')
-             }
+              }
 
 
             Column({ space: 12 }) {
@@ -1444,20 +1449,21 @@ export struct PlayerSettingsDialog {
                         `hoveredIndex=${this.arHoveredIndex}`
                       )
                     })
-                    .onClick(() => {
-                      this.logAspectRatioInteractionEvent(
-                        'click',
-                        idx,
-                        model.label,
+                     .onClick(() => {
+                       this.logAspectRatioInteractionEvent(
+                         'click',
+                         idx,
+                         model.label,
                         `requestedAspectRatioMode=${model.mode}`
-                      )
-                      this.updateAspectRatioSelection(model.mode)
-                    })
-                }, (model: PlayerSettingsAspectRatioChipRenderModel) => model.mode.toString())
+                       )
+                       this.updateAspectRatioSelection(model.mode)
+                     })
+                }, (model: PlayerSettingsAspectRatioChipRenderModel) =>
+                  buildPlayerSettingsSelectionChipKey(model.mode.toString(), model.label))
               }
                .justifyContent(FlexAlign.Start)
                .width('100%')
-             }
+              }
 
             Column({ space: 12 }) {
               Text('字幕管理')

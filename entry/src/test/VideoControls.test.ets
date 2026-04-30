@@ -3,6 +3,7 @@ import {
   PlayerSettingsAspectRatioChipRenderModel,
   PlayerSettingsDiagnosticVisualSnapshot,
   PlayerSettingsSelectionMirrorState,
+  buildPlayerSettingsSelectionChipKey,
   createPlayerSettingsSelectionMirrorState,
   PlayerSettingsChipStyleState,
   PlayerSettingsSpeedChipRenderModel,
@@ -109,6 +110,31 @@ export default function videoControlsTest() {
         expect(models[4].label).assertEqual('1.5x')
       })
 
+      it('倍速最终渲染 key 会随选中文案切换，避免复用旧 Text 文案', 0, () => {
+        const initialModels: PlayerSettingsSpeedChipRenderModel[] =
+          buildPlaybackSpeedChipRenderModels(1.0, -1, -1)
+        const updatedModels: PlayerSettingsSpeedChipRenderModel[] =
+          buildPlaybackSpeedChipRenderModels(1.25, -1, -1)
+
+        const initialSelectedKey = buildPlayerSettingsSelectionChipKey(
+          initialModels[2].speed.toString(),
+          initialModels[2].label
+        )
+        const updatedOldKey = buildPlayerSettingsSelectionChipKey(
+          updatedModels[2].speed.toString(),
+          updatedModels[2].label
+        )
+        const updatedSelectedKey = buildPlayerSettingsSelectionChipKey(
+          updatedModels[3].speed.toString(),
+          updatedModels[3].label
+        )
+
+        expect(initialSelectedKey).assertEqual('1:1.0x 选中')
+        expect(updatedOldKey).assertEqual('1:1.0x')
+        expect(updatedSelectedKey).assertEqual('1.25:1.25x 选中')
+        expect(initialSelectedKey === updatedOldKey).assertFalse()
+      })
+
       it('画面比例选中态直接比较控制器当前模式', 0, () => {
         expect(isAspectRatioOptionSelected(AspectRatioMode.FILL, AspectRatioMode.FILL)).assertTrue()
         expect(isAspectRatioOptionSelected(AspectRatioMode.FILL, AspectRatioMode.FIT)).assertFalse()
@@ -135,6 +161,31 @@ export default function videoControlsTest() {
         expect(models[0].label).assertEqual('适应')
         expect(models[1].label).assertEqual('填充 选中')
         expect(models[2].label).assertEqual('拉伸')
+      })
+
+      it('画面比例最终渲染 key 会随选中文案切换，避免复用旧 Text 文案', 0, () => {
+        const initialModels: PlayerSettingsAspectRatioChipRenderModel[] =
+          buildAspectRatioChipRenderModels(AspectRatioMode.FIT, -1, -1)
+        const updatedModels: PlayerSettingsAspectRatioChipRenderModel[] =
+          buildAspectRatioChipRenderModels(AspectRatioMode.FILL, -1, -1)
+
+        const initialSelectedKey = buildPlayerSettingsSelectionChipKey(
+          initialModels[0].mode.toString(),
+          initialModels[0].label
+        )
+        const updatedOldKey = buildPlayerSettingsSelectionChipKey(
+          updatedModels[0].mode.toString(),
+          updatedModels[0].label
+        )
+        const updatedSelectedKey = buildPlayerSettingsSelectionChipKey(
+          updatedModels[1].mode.toString(),
+          updatedModels[1].label
+        )
+
+        expect(initialSelectedKey).assertEqual('0:适应 选中')
+        expect(updatedOldKey).assertEqual('0:适应')
+        expect(updatedSelectedKey).assertEqual('1:填充 选中')
+        expect(initialSelectedKey === updatedOldKey).assertFalse()
       })
     })
 
