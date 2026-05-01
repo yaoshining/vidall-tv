@@ -6,6 +6,7 @@ import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
 import { emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
+import { MetricsService } from '../services/metrics/MetricsService';
 
 const DOMAIN = 0x0000;
 
@@ -17,6 +18,14 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+
+    // 初始化 Metrics Service（播放指标埋点）
+    try {
+      MetricsService.initialize(this.context);
+      hilog.info(DOMAIN, 'testTag', 'MetricsService initialized');
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'Failed to init MetricsService: %{public}s', JSON.stringify(err));
+    }
 
     // 并行初始化 AppPreferences 和数据库
     AppPreferences.init(this.context)
@@ -53,6 +62,16 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
+    // Flush metrics before app terminates
+    if (MetricsService.isInitialized()) {
+      MetricsService.getInstance().flush()
+        .then(() => {
+          hilog.info(DOMAIN, 'testTag', 'Metrics flushed on destroy');
+        })
+        .catch((err: Error) => {
+          hilog.error(DOMAIN, 'testTag', 'Failed to flush metrics on destroy: %{public}s', JSON.stringify(err));
+        });
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -99,6 +118,18 @@ export default class EntryAbility extends UIAbility {
   onBackground(): void {
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
+    
+    // Flush metrics before app goes to background
+    if (MetricsService.isInitialized()) {
+      MetricsService.getInstance().flush()
+        .then(() => {
+          hilog.info(DOMAIN, 'testTag', 'Metrics flushed on background');
+        })
+        .catch((err: Error) => {
+          hilog.error(DOMAIN, 'testTag', 'Failed to flush metrics on background: %{public}s', JSON.stringify(err));
+        });
+    }
+    
     // 通知正在播放的播放器页面立即落盘进度
     emitter.emit(PlayerEvents.APP_BACKGROUND);
   }
