@@ -49,6 +49,33 @@ export class MockDirectoryProvider implements DirectoryProvider {
     this.mockConfig = mockConfig
   }
   
+  /**
+   * 更新 mock 配置（用于测试中动态修改行为）
+   */
+  updateMockConfig(config: Partial<MockDirectoryProviderConfig>): void {
+    if (config.mockEntries !== undefined) {
+      this.mockConfig.mockEntries = config.mockEntries
+    }
+    if (config.shouldFailInit !== undefined) {
+      this.mockConfig.shouldFailInit = config.shouldFailInit
+    }
+    if (config.shouldFailList !== undefined) {
+      this.mockConfig.shouldFailList = config.shouldFailList
+    }
+    if (config.errorMessage !== undefined) {
+      this.mockConfig.errorMessage = config.errorMessage
+    }
+    if (config.protocolKey !== undefined) {
+      this.mockConfig.protocolKey = config.protocolKey
+    }
+    if (config.rootLabel !== undefined) {
+      this.mockConfig.rootLabel = config.rootLabel
+    }
+    if (config.endpointSummary !== undefined) {
+      this.mockConfig.endpointSummary = config.endpointSummary
+    }
+  }
+  
   async initWithConfig(config: DirectoryProviderConfig): Promise<void> {
     if (this.mockConfig.shouldFailInit) {
       throw new Error(this.mockConfig.errorMessage ?? 'Mock init failed')

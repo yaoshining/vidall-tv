@@ -9,7 +9,7 @@ import { describe, it, expect } from '@ohos/hypium'
 
 export default function DirectoryProviderInterfaceTest() {
   describe('DirectoryProvider Interface', () => {
-    it('should compile with correct interface definition', () => {
+    it('should compile with correct interface definition', 0, () => {
       // 该测试仅验证接口编译通过
       // 具体实现测试在各 Provider 实现类中
       expect(true).assertEqual(true)

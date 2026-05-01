@@ -133,17 +133,21 @@ export default function directorySelectorStateTest() {
       expect(state.currentPath).assertEqual('/Retry')
 
       // Switch to success mode with empty entries
-      mockProvider['mockConfig'].shouldFailList = false
-      mockProvider['mockConfig'].mockEntries = []
+      mockProvider.updateMockConfig({
+        shouldFailList: false,
+        mockEntries: []
+      })
       
       await state.retryCurrentDirectory()
       expect(state.errorMessage).assertEqual('此目录下没有文件夹')
       expect(state.currentPath).assertEqual('/Retry')
 
       // Switch to success mode with entries
-      mockProvider['mockConfig'].mockEntries = [
-        makeDirectoryEntry('Recovered', '/Retry/Recovered', true)
-      ]
+      mockProvider.updateMockConfig({
+        mockEntries: [
+          makeDirectoryEntry('Recovered', '/Retry/Recovered', true)
+        ]
+      })
       
       await state.retryCurrentDirectory()
       expect(state.errorMessage).assertEqual('')
