@@ -21,32 +21,32 @@ export default function localFreeEntitlementServiceTest() {
 
   describe('LocalFreeEntitlementService - hasFeature()', () => {
     
-    it('已知功能 FEATURE_ADVANCED_PLAYBACK 应返回 true', async () => {
+    it('已知功能 FEATURE_ADVANCED_PLAYBACK 应返回 true', 0, async () => {
       const result = await service.hasFeature(FEATURE_ADVANCED_PLAYBACK);
       expect(result).assertTrue();
     });
 
-    it('已知功能 FEATURE_CLOUD_SYNC 应返回 true', async () => {
+    it('已知功能 FEATURE_CLOUD_SYNC 应返回 true', 0, async () => {
       const result = await service.hasFeature(FEATURE_CLOUD_SYNC);
       expect(result).assertTrue();
     });
 
-    it('已知功能 FEATURE_PREMIUM_CONTENT 应返回 true', async () => {
+    it('已知功能 FEATURE_PREMIUM_CONTENT 应返回 true', 0, async () => {
       const result = await service.hasFeature(FEATURE_PREMIUM_CONTENT);
       expect(result).assertTrue();
     });
 
-    it('未知功能 ID 也应返回 true (fail-open 策略)', async () => {
+    it('未知功能 ID 也应返回 true (fail-open 策略)', 0, async () => {
       const result = await service.hasFeature('feature:unknown-feature');
       expect(result).assertTrue();
     });
 
-    it('空字符串功能 ID 应返回 true', async () => {
+    it('空字符串功能 ID 应返回 true', 0, async () => {
       const result = await service.hasFeature('');
       expect(result).assertTrue();
     });
 
-    it('不符合命名规范的 ID 也应返回 true', async () => {
+    it('不符合命名规范的 ID 也应返回 true', 0, async () => {
       const result = await service.hasFeature('InvalidFeatureId');
       expect(result).assertTrue();
     });
@@ -54,22 +54,22 @@ export default function localFreeEntitlementServiceTest() {
 
   describe('LocalFreeEntitlementService - canAccessContent()', () => {
     
-    it('任意内容 ID 和类型应返回 true', async () => {
+    it('任意内容 ID 和类型应返回 true', 0, async () => {
       const result = await service.canAccessContent('video-123', 'video');
       expect(result).assertTrue();
     });
 
-    it('空内容 ID 应返回 true', async () => {
+    it('空内容 ID 应返回 true', 0, async () => {
       const result = await service.canAccessContent('', 'video');
       expect(result).assertTrue();
     });
 
-    it('空内容类型应返回 true', async () => {
+    it('空内容类型应返回 true', 0, async () => {
       const result = await service.canAccessContent('video-123', '');
       expect(result).assertTrue();
     });
 
-    it('多种内容类型都应返回 true', async () => {
+    it('多种内容类型都应返回 true', 0, async () => {
       const contentTypes = ['video', 'series', 'live', 'movie', 'unknown'];
       for (const type of contentTypes) {
         const result = await service.canAccessContent('content-id', type);
@@ -80,12 +80,12 @@ export default function localFreeEntitlementServiceTest() {
 
   describe('LocalFreeEntitlementService - getUserTier()', () => {
     
-    it('应固定返回 "free"', async () => {
+    it('应固定返回 "free"', 0, async () => {
       const tier = await service.getUserTier();
       expect(tier).assertEqual('free');
     });
 
-    it('多次调用应保持一致返回 "free"', async () => {
+    it('多次调用应保持一致返回 "free"', 0, async () => {
       const tier1 = await service.getUserTier();
       const tier2 = await service.getUserTier();
       const tier3 = await service.getUserTier();
@@ -98,7 +98,7 @@ export default function localFreeEntitlementServiceTest() {
 
   describe('LocalFreeEntitlementService - Performance', () => {
     
-    it('hasFeature 应在 10ms 内完成（快速响应）', async () => {
+    it('hasFeature 应在 10ms 内完成（快速响应）', 0, async () => {
       const startTime = Date.now();
       await service.hasFeature(FEATURE_ADVANCED_PLAYBACK);
       const duration = Date.now() - startTime;
@@ -107,7 +107,7 @@ export default function localFreeEntitlementServiceTest() {
       expect(duration < 10).assertTrue();
     });
 
-    it('canAccessContent 应在 10ms 内完成（快速响应）', async () => {
+    it('canAccessContent 应在 10ms 内完成（快速响应）', 0, async () => {
       const startTime = Date.now();
       await service.canAccessContent('video-123', 'video');
       const duration = Date.now() - startTime;
@@ -116,7 +116,7 @@ export default function localFreeEntitlementServiceTest() {
       expect(duration < 10).assertTrue();
     });
 
-    it('getUserTier 应在 10ms 内完成（快速响应）', async () => {
+    it('getUserTier 应在 10ms 内完成（快速响应）', 0, async () => {
       const startTime = Date.now();
       await service.getUserTier();
       const duration = Date.now() - startTime;
@@ -125,7 +125,7 @@ export default function localFreeEntitlementServiceTest() {
       expect(duration < 10).assertTrue();
     });
 
-    it('连续100次调用应保持高性能', async () => {
+    it('连续100次调用应保持高性能', 0, async () => {
       const startTime = Date.now();
       
       for (let i = 0; i < 100; i++) {
