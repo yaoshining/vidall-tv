@@ -20,7 +20,7 @@ export default function fileSourceRoutingTest(): void {
      * Test 6.2: 路由参数解析测试
      */
     describe('createDirectorySelectorRouteParams', (): void => {
-      it('should parse WebDAV route params correctly', (): void => {
+      it('should parse WebDAV route params correctly', 0, (): void => {
         const params: Record<string, Object> = {}
         params['sourceId'] = 123 as Object
         params['protocol'] = 'webdav' as Object
@@ -31,7 +31,7 @@ export default function fileSourceRoutingTest(): void {
         
         const result = createDirectorySelectorRouteParams(params)
         
-        expect(result).assertNotNull()
+        expect(result !== undefined).assertTrue()
         if (result !== undefined) {
           expect(result.sourceId).assertEqual(123)
           expect(result.protocol).assertEqual('webdav')
@@ -42,7 +42,7 @@ export default function fileSourceRoutingTest(): void {
         }
       })
       
-      it('should parse SMB route params correctly', (): void => {
+      it('should parse SMB route params correctly', 0, (): void => {
         const params: Record<string, Object> = {}
         params['sourceId'] = 456 as Object
         params['protocol'] = 'smb' as Object
@@ -55,7 +55,7 @@ export default function fileSourceRoutingTest(): void {
         
         const result = createDirectorySelectorRouteParams(params)
         
-        expect(result).assertNotNull()
+        expect(result !== undefined).assertTrue()
         if (result !== undefined) {
           expect(result.sourceId).assertEqual(456)
           expect(result.protocol).assertEqual('smb')
@@ -68,26 +68,26 @@ export default function fileSourceRoutingTest(): void {
         }
       })
       
-      it('should return undefined for missing sourceId', (): void => {
+      it('should return undefined for missing sourceId', 0, (): void => {
         const params: Record<string, Object> = {}
         params['protocol'] = 'webdav' as Object
         
         const result = createDirectorySelectorRouteParams(params)
         
-        expect(result).assertUndefined()
+        expect(result === undefined).assertTrue()
       })
       
-      it('should return undefined for invalid sourceId', (): void => {
+      it('should return undefined for invalid sourceId', 0, (): void => {
         const params: Record<string, Object> = {}
         params['sourceId'] = 0 as Object
         params['protocol'] = 'webdav' as Object
         
         const result = createDirectorySelectorRouteParams(params)
         
-        expect(result).assertUndefined()
+        expect(result === undefined).assertTrue()
       })
       
-      it('should handle legacy WebDAV format with baseUrl', (): void => {
+      it('should handle legacy WebDAV format with baseUrl', 0, (): void => {
         const params: Record<string, Object> = {}
         params['sourceId'] = 789 as Object
         params['username'] = 'legacyuser' as Object
@@ -96,7 +96,7 @@ export default function fileSourceRoutingTest(): void {
         
         const result = createDirectorySelectorRouteParams(params)
         
-        expect(result).assertNotNull()
+        expect(result !== undefined).assertTrue()
         if (result !== undefined) {
           expect(result.protocol).assertEqual('webdav')
           expect(result.sourceId).assertEqual(789)
@@ -105,7 +105,7 @@ export default function fileSourceRoutingTest(): void {
         }
       })
       
-      it('should handle legacy SMB format with host', (): void => {
+      it('should handle legacy SMB format with host', 0, (): void => {
         const params: Record<string, Object> = {}
         params['sourceId'] = 999 as Object
         params['username'] = 'legacysmb' as Object
@@ -115,7 +115,7 @@ export default function fileSourceRoutingTest(): void {
         
         const result = createDirectorySelectorRouteParams(params)
         
-        expect(result).assertNotNull()
+        expect(result !== undefined).assertTrue()
         if (result !== undefined) {
           expect(result.protocol).assertEqual('smb')
           expect(result.sourceId).assertEqual(999)
@@ -129,7 +129,7 @@ export default function fileSourceRoutingTest(): void {
      * Test 6.4 & 6.5: 路由参数构建测试
      */
     describe('buildWebDavDirectorySelectorRouteParams', (): void => {
-      it('should build WebDAV route params with port in URL', (): void => {
+      it('should build WebDAV route params with port in URL', 0, (): void => {
         const config: WebDAVSourceConfig = {
           url: 'example.com:8080',
           port: 80,
@@ -150,7 +150,7 @@ export default function fileSourceRoutingTest(): void {
         expect(result['tlsCertPolicy']).assertEqual('strict')
       })
       
-      it('should build WebDAV route params with root path', (): void => {
+      it('should build WebDAV route params with root path', 0, (): void => {
         const config: WebDAVSourceConfig = {
           url: 'nas.local',
           port: 443,
@@ -169,7 +169,7 @@ export default function fileSourceRoutingTest(): void {
     })
     
     describe('buildSmbDirectorySelectorRouteParams', (): void => {
-      it('should build SMB route params correctly', (): void => {
+      it('should build SMB route params correctly', 0, (): void => {
         const config: SMBSourceConfig = {
           host: '192.168.1.50',
           port: 445,
@@ -190,7 +190,7 @@ export default function fileSourceRoutingTest(): void {
         expect(result['shareName']).assertEqual('')
       })
       
-      it('should default port to 445 if not specified', (): void => {
+      it('should default port to 445 if not specified', 0, (): void => {
         const config: SMBSourceConfig = {
           host: '10.0.0.100',
           username: 'user',
@@ -208,15 +208,15 @@ export default function fileSourceRoutingTest(): void {
      * Test 6.5: Provider 实例化测试（集成测试）
      */
     describe('createDirectorySelectorSourceDescriptor', (): void => {
-      it('should instantiate WebDAV provider from route params', async (): Promise<void> => {
+      it('should instantiate WebDAV provider from route params', 0, async (): Promise<void> => {
         const routeParams: DirectorySelectorRouteParams = {
           sourceId: 500,
           protocol: 'webdav',
           username: 'webdavtest',
           password: 'webdavpass',
           protocolSpecific: {
-            baseUrl: 'https://test.example.com/dav',
-            tlsCertPolicy: 'allow_self_signed'
+            'baseUrl': 'https://test.example.com/dav',
+            'tlsCertPolicy': 'allow_self_signed'
           }
         }
         
@@ -227,23 +227,23 @@ export default function fileSourceRoutingTest(): void {
           
           expect(descriptor.sourceId).assertEqual(500)
           expect(descriptor.protocol).assertEqual('webdav')
-          expect(descriptor.provider).assertNotNull()
+          expect(descriptor.provider !== undefined).assertTrue()
         } catch {
           // 预期可能因网络连接失败，测试通过（仅验证实例化逻辑）
         }
       })
       
-      it('should instantiate SMB provider from route params', async (): Promise<void> => {
+      it('should instantiate SMB provider from route params', 0, async (): Promise<void> => {
         const routeParams: DirectorySelectorRouteParams = {
           sourceId: 600,
           protocol: 'smb',
           username: 'smbtest',
           password: 'smbpass',
           protocolSpecific: {
-            host: '192.168.1.200',
-            port: 445,
-            domain: 'TEST',
-            shareName: 'share'
+            'host': '192.168.1.200',
+            'port': 445,
+            'domain': 'TEST',
+            'shareName': 'share'
           }
         }
         
@@ -252,13 +252,13 @@ export default function fileSourceRoutingTest(): void {
           
           expect(descriptor.sourceId).assertEqual(600)
           expect(descriptor.protocol).assertEqual('smb')
-          expect(descriptor.provider).assertNotNull()
+          expect(descriptor.provider !== undefined).assertTrue()
         } catch {
           // 预期可能因网络连接失败，测试通过
         }
       })
       
-      it('should reject unsupported protocol', async (): Promise<void> => {
+      it('should reject unsupported protocol', 0, async (): Promise<void> => {
         const routeParams: DirectorySelectorRouteParams = {
           sourceId: 700,
           protocol: 'ftp' as 'webdav',
@@ -267,12 +267,15 @@ export default function fileSourceRoutingTest(): void {
           protocolSpecific: {}
         }
         
+        let thrownMessage = ''
         try {
           await createDirectorySelectorSourceDescriptor(routeParams)
           expect(false).assertTrue() // Should not reach here
         } catch (error) {
-          expect(error).assertInstanceOf(Error)
+          thrownMessage = String(error)
         }
+        
+        expect(thrownMessage.includes('不支持的协议')).assertTrue()
       })
     })
   })
