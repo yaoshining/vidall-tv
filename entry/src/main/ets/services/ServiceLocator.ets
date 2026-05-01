@@ -35,9 +35,9 @@ export class ServiceLocator {
   /**
    * 服务注册表
    * key: 服务名称（字符串）
-   * value: 服务实例（any 类型，通过泛型在使用时保证类型安全）
+   * value: 服务实例（object 类型，通过泛型在使用时保证类型安全）
    */
-  private static services: Map<string, any> = new Map();
+  private static services: Map<string, object> = new Map();
 
   /**
    * 注册服务
@@ -49,12 +49,12 @@ export class ServiceLocator {
    * - 重复注册同名服务会覆盖原服务（用于测试 mock）
    * - 服务名称建议使用 kebab-case（如 'entitlement', 'user-profile'）
    */
-  static register<T>(name: string, service: T): void {
-    if (this.services.has(name)) {
+  static register<T extends object>(name: string, service: T): void {
+    if (ServiceLocator.services.has(name)) {
       hilog.warn(DOMAIN, TAG, `Service '${name}' already registered, will be replaced`);
     }
     
-    this.services.set(name, service);
+    ServiceLocator.services.set(name, service);
     hilog.info(DOMAIN, TAG, `Service '${name}' registered successfully`);
   }
 
@@ -73,7 +73,7 @@ export class ServiceLocator {
    * ```
    */
   static get<T>(name: string): T {
-    const service = this.services.get(name);
+    const service = ServiceLocator.services.get(name);
     
     if (service === undefined) {
       const errorMsg = `Service '${name}' not found. Did you forget to register it in EntryAbility.onCreate()?`;
@@ -92,7 +92,7 @@ export class ServiceLocator {
    * @returns true 如果服务已注册，否则 false
    */
   static has(name: string): boolean {
-    return this.services.has(name);
+    return ServiceLocator.services.has(name);
   }
 
   /**
@@ -103,8 +103,8 @@ export class ServiceLocator {
    * ⚠️ 警告：生产代码不应调用此方法
    */
   static reset(): void {
-    const count = this.services.size;
-    this.services.clear();
+    const count = ServiceLocator.services.size;
+    ServiceLocator.services.clear();
     hilog.info(DOMAIN, TAG, `ServiceLocator reset, ${count} services cleared`);
   }
 
@@ -114,6 +114,6 @@ export class ServiceLocator {
    * @returns 服务名称列表
    */
   static getRegisteredServiceNames(): string[] {
-    return Array.from(this.services.keys());
+    return Array.from(ServiceLocator.services.keys());
   }
 }

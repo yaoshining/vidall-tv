@@ -63,7 +63,8 @@ export class LocalFreeEntitlementService implements EntitlementService {
       return Promise.resolve(true);
     } catch (error) {
       // Fail-open 策略：异常情况下仍然返回 true，避免阻塞用户
-      hilog.error(DOMAIN, TAG, `hasFeature(${featureId}) error: ${JSON.stringify(error)}, returning true (fail-open)`);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      hilog.error(DOMAIN, TAG, `hasFeature(${featureId}) error: ${errorMsg}, returning true (fail-open)`);
       return Promise.resolve(true);
     }
   }
@@ -84,7 +85,8 @@ export class LocalFreeEntitlementService implements EntitlementService {
       return Promise.resolve(true);
     } catch (error) {
       // Fail-open 策略
-      hilog.error(DOMAIN, TAG, `canAccessContent(${contentId}, ${contentType}) error: ${JSON.stringify(error)}, returning true (fail-open)`);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      hilog.error(DOMAIN, TAG, `canAccessContent(${contentId}, ${contentType}) error: ${errorMsg}, returning true (fail-open)`);
       return Promise.resolve(true);
     }
   }
@@ -103,7 +105,8 @@ export class LocalFreeEntitlementService implements EntitlementService {
       return Promise.resolve('free');
     } catch (error) {
       // 即使异常也返回 free，保持一致性
-      hilog.error(DOMAIN, TAG, `getUserTier() error: ${JSON.stringify(error)}, returning 'free' (fail-open)`);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      hilog.error(DOMAIN, TAG, `getUserTier() error: ${errorMsg}, returning 'free' (fail-open)`);
       return Promise.resolve('free');
     }
   }
