@@ -359,7 +359,8 @@ export class SmbSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName: t.displayName,
-        internalIndex: t.trackIndex
+        internalIndex: t.trackIndex,
+        language: t.language
       };
       items.push(item);
     }

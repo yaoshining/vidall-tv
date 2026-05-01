@@ -8,6 +8,7 @@ import debounceUtilTest from './DebounceUtil.test';
 import videoDataTest from './VideoData.test';
 import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
 import subtitleBridgeAdapterTest from './SubtitleBridgeAdapter.test';
+import smbSubtitleBridgeTest from './SmbSubtitleBridge.test';
 import webDAVClientUtilsTest from './WebDAVClientUtils.test';
 import episodeListPanelTest from './EpisodeListPanel.test';
 import episodeGroupMatcherTest from './EpisodeGroupMatcher.test';
@@ -41,6 +42,7 @@ export default function testsuite() {
   videoDataTest();
   ijkSubtitleBridgeTest();
   subtitleBridgeAdapterTest();
+  smbSubtitleBridgeTest();
   webDAVClientUtilsTest();
   episodeListPanelTest();
   episodeGroupMatcherTest();
