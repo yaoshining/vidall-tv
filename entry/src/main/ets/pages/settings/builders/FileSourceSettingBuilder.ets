@@ -19,10 +19,8 @@ import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from 
 import { FileSourceModel, DirectoryItem } from "../../../stores/files/FileSourceModel";
 import {
   buildSmbDirectorySelectorRouteParams,
-  buildWebDavDirectorySelectorRouteParams,
-  createDirectorySelectorRecordParams,
-  DirectorySelectorRouteParams
-} from "../directorySelector/DirectorySelectorAdapter";
+  buildWebDavDirectorySelectorRouteParams
+} from "../directorySelector/DirectorySelectorContainer";
 
 @ComponentV2
 struct FileSourceSettingBuilderComponent {
@@ -245,8 +243,8 @@ struct FileSourceSettingBuilderComponent {
     if (fileSource.type === FileSourceType.WEBDAV) {
       try {
         const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig
-        const routeParams: DirectorySelectorRouteParams = buildWebDavDirectorySelectorRouteParams(fileSource.id, config)
-        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, createDirectorySelectorRecordParams(routeParams))
+        const routeParams = buildWebDavDirectorySelectorRouteParams(fileSource.id, config)
+        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, routeParams)
       } catch (error) {
         console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
         this.getUIContext().getPromptAction().showToast({
@@ -256,8 +254,8 @@ struct FileSourceSettingBuilderComponent {
     } else if (fileSource.type === FileSourceType.SMB) {
       try {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
-        const routeParams: DirectorySelectorRouteParams = buildSmbDirectorySelectorRouteParams(fileSource.id, config)
-        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, createDirectorySelectorRecordParams(routeParams))
+        const routeParams = buildSmbDirectorySelectorRouteParams(fileSource.id, config)
+        this.controller.pushType(SettingType.DIRECTORY_SELECTOR, routeParams)
       } catch (e) {
         console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
         this.getUIContext().getPromptAction().showToast({

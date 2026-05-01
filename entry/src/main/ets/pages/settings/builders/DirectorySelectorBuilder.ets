@@ -10,7 +10,7 @@ import {
   createDirectorySelectorSourceDescriptor,
   DirectorySelectorEntry,
   DirectorySelectorRouteParams
-} from "../directorySelector/DirectorySelectorAdapter"
+} from "../directorySelector/DirectorySelectorContainer"
 import { DirectorySelectorBreadcrumbItem, DirectorySelectorState } from "../directorySelector/DirectorySelectorState"
 
 @ComponentV2
@@ -36,15 +36,19 @@ struct DirectorySelectorBuilderComponent {
       this.selectorState.errorMessage = '配置参数不完整'
       return
     }
-    this.applyRouteParams(routeParams)
+    await this.applyRouteParams(routeParams)
     await this.loadSelectedDirectories()
     await this.selectorState.loadCurrentDirectory()
   }
 
-  private applyRouteParams(routeParams: DirectorySelectorRouteParams): void {
-    const descriptor = createDirectorySelectorSourceDescriptor(routeParams)
-    this.selectorState.configure(descriptor.sourceId, descriptor.adapter)
-    console.info(`[DirectorySelector] 初始化协议=${descriptor.protocolKey} endpoint=${descriptor.endpointSummary}`)
+  private async applyRouteParams(routeParams: DirectorySelectorRouteParams): Promise<void> {
+    try {
+      const descriptor = await createDirectorySelectorSourceDescriptor(routeParams)
+      this.selectorState.configure(descriptor.sourceId, descriptor.provider)
+      console.info(`[DirectorySelector] 初始化协议=${descriptor.protocol} endpoint=${descriptor.endpointSummary}`)
+    } catch (error) {
+      this.selectorState.errorMessage = '初始化失败：' + getFileExplorerErrorMessage(error)
+    }
   }
 
   private async loadSelectedDirectories(): Promise<void> {
