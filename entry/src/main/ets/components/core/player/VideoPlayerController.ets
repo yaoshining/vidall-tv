@@ -28,6 +28,7 @@ import {
   DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
   DEFAULT_EPISODE_AUTOPLAY_ENABLED
 } from "./EpisodeAutoplayPreferences";
+import { MetricsService } from "../../../services/metrics/MetricsService";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -648,6 +649,12 @@ export class VideoPlayerController {
       const metricsElapsedOnError = Date.now() - this.metricsLoadStartMs;
       hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
         `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"error","error_code":"${error.message.substring(0, 80)}","elapsed_ms":${metricsElapsedOnError}}`);
+      
+      // Task 4.5: Record failed playback attempt
+      if (MetricsService.isInitialized()) {
+        MetricsService.getInstance().recordPlaybackAttempt(false, 0);
+      }
+      
       if (this.backend === 'native') {
         this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
         return;
@@ -1802,6 +1809,12 @@ export class VideoPlayerController {
       `{"event":"first_frame","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"elapsed_ms":${firstFrameElapsed}}`);
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"success","elapsed_ms":${firstFrameElapsed}}`);
+    
+    // Task 4.4: Record successful playback attempt with first frame time
+    if (MetricsService.isInitialized()) {
+      MetricsService.getInstance().recordPlaybackAttempt(true, firstFrameElapsed);
+    }
+    
     const resumeTimeMs = this.pendingBackendResumeTimeMs;
     const shouldResumePlay = this.pendingBackendResumePlay;
     if (resumeTimeMs >= 0) {
@@ -1817,6 +1830,12 @@ export class VideoPlayerController {
     }
     await this.loadSubtitleTracks();
     await this.loadAudioTracks();
+    
+    // Task 5.5: Record subtitle usage when playback starts without subtitles
+    if (MetricsService.isInitialized() && this.activeSubtitleIndex < 0) {
+      MetricsService.getInstance().recordSubtitleUsage(null);
+    }
+    
     if (resumeTimeMs > 0 && this.player) {
       const safeResumeTimeMs = this.duration > 0 && resumeTimeMs > this.duration
         ? this.duration
@@ -2513,6 +2532,17 @@ export class VideoPlayerController {
     this.subtitleRemainingTime = 0;
     await this.subtitleAdapter.switchTrack(allIndex);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    
+    // Task 5.4: Record subtitle usage when user selects subtitle language
+    if (MetricsService.isInitialized()) {
+      let subtitleLanguage: string | null = null;
+      if (allIndex >= 0 && allIndex < this.allSubtitleTracks.length) {
+        const selectedTrack = this.allSubtitleTracks[allIndex];
+        // Extract language code from track (language property or displayName)
+        subtitleLanguage = selectedTrack.language || null;
+      }
+      MetricsService.getInstance().recordSubtitleUsage(subtitleLanguage);
+    }
   }
 
   // ─────────────────────────────────────────────
