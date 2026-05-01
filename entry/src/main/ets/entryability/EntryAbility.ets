@@ -6,6 +6,8 @@ import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
 import { emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
+import { ServiceLocator } from '../services/ServiceLocator';
+import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
 
 const DOMAIN = 0x0000;
 
@@ -17,6 +19,11 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+
+    // 初始化 EntitlementService (v1.x: LocalFree 实现，所有功能免费)
+    const entitlementService = new LocalFreeEntitlementService();
+    ServiceLocator.register('entitlement', entitlementService);
+    hilog.info(DOMAIN, 'testTag', 'EntitlementService registered (LocalFree mode)');
 
     // 并行初始化 AppPreferences 和数据库
     AppPreferences.init(this.context)
