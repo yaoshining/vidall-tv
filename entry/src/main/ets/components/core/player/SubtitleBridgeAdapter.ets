@@ -381,6 +381,7 @@ export interface SubtitleTrackItem {
   internalIndex?: number;
   srtEntries?: SrtEntry[];
   url?: string;
+  language?: string;
 }
 
 export interface SubtitleBridgeState {
@@ -1103,7 +1104,8 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
-        internalIndex: track.trackIndex
+        internalIndex: track.trackIndex,
+        language: track.language
       };
       items.push(item);
     }
