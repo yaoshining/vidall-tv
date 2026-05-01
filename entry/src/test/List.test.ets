@@ -29,6 +29,10 @@ import tvEpisodeIncompleteRepairTest from './TvEpisodeIncompleteRepair.test';
 // ohosTest(entry_test HAP) 不包含 .so，不能 import VideoScannerUtil / WebDAVClient
 import fileSourceDatabaseTest from './FileSourceDatabase.test';
 import videoScannerTest from './VideoScanner.test';
+import directoryProviderInterfaceTest from './DirectoryProvider.test';
+import smbDirectoryProviderTest from './SmbDirectoryProvider.test';
+import webDAVDirectoryProviderTest from './WebDAVDirectoryProvider.test';
+import directorySelectorContainerTest from './DirectorySelectorContainer.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -60,4 +64,8 @@ export default function testsuite() {
   tvEpisodeIncompleteRepairTest();
   fileSourceDatabaseTest();
   videoScannerTest();
+  directoryProviderInterfaceTest();
+  smbDirectoryProviderTest();
+  webDAVDirectoryProviderTest();
+  directorySelectorContainerTest();
 }
