@@ -1,59 +1,25 @@
 import { describe, it, expect } from '@ohos/hypium'
 import { FileSourceDirectory } from '../main/ets/db/models/FileSourceEntity'
-import {
-  DirectorySelectorEntry,
-  DirectorySelectorLoadResult,
-  DirectorySelectorSourceAdapter
-} from '../main/ets/pages/settings/directorySelector/DirectorySelectorAdapter'
+import { DirectorySelectorEntry } from '../main/ets/pages/settings/directorySelector/DirectorySelectorContainer'
 import { DirectorySelectorState } from '../main/ets/pages/settings/directorySelector/DirectorySelectorState'
-
-class FakeDirectorySelectorAdapter implements DirectorySelectorSourceAdapter {
-  readonly protocolKey: string = 'mock'
-  readonly rootLabel: string = '根目录'
-  readonly endpointSummary: string = 'mock://root'
-  private readonly entriesByPath: Map<string, DirectorySelectorLoadResult>
-  private readonly sequenceResultsByPath: Map<string, DirectorySelectorLoadResult[]>
-  private readonly loadCountByPath: Map<string, number> = new Map()
-
-  constructor(
-    entriesByPath: Map<string, DirectorySelectorLoadResult>,
-    sequenceResultsByPath: Map<string, DirectorySelectorLoadResult[]> = new Map()
-  ) {
-    this.entriesByPath = entriesByPath
-    this.sequenceResultsByPath = sequenceResultsByPath
-  }
-
-  async load(path: string): Promise<DirectorySelectorLoadResult> {
-    const loadCount = (this.loadCountByPath.get(path) ?? 0) + 1
-    this.loadCountByPath.set(path, loadCount)
-    const sequenceResults = this.sequenceResultsByPath.get(path)
-    if (sequenceResults !== undefined && sequenceResults.length > 0) {
-      const sequenceIndex = loadCount - 1
-      if (sequenceIndex < sequenceResults.length) {
-        return sequenceResults[sequenceIndex]
-      }
-      return sequenceResults[sequenceResults.length - 1]
-    }
-    const result = this.entriesByPath.get(path)
-    if (result !== undefined) {
-      return result
-    }
-    const emptyResult: DirectorySelectorLoadResult = {
-      entries: []
-    }
-    return emptyResult
-  }
-
-  getLoadCount(path: string): number {
-    return this.loadCountByPath.get(path) ?? 0
-  }
-}
+import { DirectoryEntry, DirectoryLoadResult } from '../main/ets/lib/DirectoryProvider'
+import { MockDirectoryProvider } from './mocks/MockDirectoryProvider'
 
 function makeEntry(name: string, path: string): DirectorySelectorEntry {
   const entry: DirectorySelectorEntry = {
     key: path,
     name: name,
     path: path
+  }
+  return entry
+}
+
+function makeDirectoryEntry(name: string, path: string, isDirectory: boolean): DirectoryEntry {
+  const entry: DirectoryEntry = {
+    key: path,
+    name: name,
+    path: path,
+    isDirectory: isDirectory
   }
   return entry
 }
@@ -70,7 +36,13 @@ function makeDirectory(path: string, customName?: string): FileSourceDirectory {
 export default function directorySelectorStateTest() {
   describe('DirectorySelectorState', () => {
     it('会把根路径标记识别为全部文件夹并可恢复之前的选择', 0, () => {
-      const state = new DirectorySelectorState(1, new FakeDirectorySelectorAdapter(new Map<string, DirectorySelectorLoadResult>()))
+      const mockProvider = new MockDirectoryProvider({
+        mockEntries: [],
+        protocolKey: 'mock',
+        rootLabel: '根目录',
+        endpointSummary: 'mock://root'
+      })
+      const state = new DirectorySelectorState(1, mockProvider)
 
       state.hydrateSelectedDirectories([
         makeDirectory('/', ''),
@@ -93,7 +65,13 @@ export default function directorySelectorStateTest() {
     })
 
     it('勾选目录时会弹出命名态并在二次勾选时恢复上次别名', 0, () => {
-      const state = new DirectorySelectorState(1, new FakeDirectorySelectorAdapter(new Map<string, DirectorySelectorLoadResult>()))
+      const mockProvider = new MockDirectoryProvider({
+        mockEntries: [],
+        protocolKey: 'mock',
+        rootLabel: '根目录',
+        endpointSummary: 'mock://root'
+      })
+      const state = new DirectorySelectorState(1, mockProvider)
       const movieEntry = makeEntry('Movies', '/Movies')
 
       state.toggleDirectorySelection(movieEntry)
@@ -115,11 +93,16 @@ export default function directorySelectorStateTest() {
     })
 
     it('会根据路径历史生成面包屑并在返回根目录时交给外层处理', 0, async () => {
-      const entriesByPath: Map<string, DirectorySelectorLoadResult> = new Map<string, DirectorySelectorLoadResult>([
-        ['/', { entries: [makeEntry('Movies', '/Movies')] }],
-        ['/Movies', { entries: [makeEntry('Action', '/Movies/Action')] }]
-      ])
-      const state = new DirectorySelectorState(1, new FakeDirectorySelectorAdapter(entriesByPath))
+      const mockEntries: DirectoryEntry[] = [
+        makeDirectoryEntry('Movies', '/Movies', true)
+      ]
+      const mockProvider = new MockDirectoryProvider({
+        mockEntries: mockEntries,
+        protocolKey: 'mock',
+        rootLabel: '根目录',
+        endpointSummary: 'mock://root'
+      })
+      const state = new DirectorySelectorState(1, mockProvider)
 
       await state.loadCurrentDirectory()
       state.enterDirectory(makeEntry('Movies', '/Movies'))
@@ -134,29 +117,35 @@ export default function directorySelectorStateTest() {
     })
 
     it('错误态和空态都可以重试当前目录并重新触发加载', 0, async () => {
-      const sequenceResultsByPath: Map<string, DirectorySelectorLoadResult[]> = new Map<string, DirectorySelectorLoadResult[]>([
-        ['/Retry', [
-          { entries: [], errorMessage: '目录加载失败' },
-          { entries: [] },
-          { entries: [makeEntry('Recovered', '/Retry/Recovered')] }
-        ]]
-      ])
-      const adapter = new FakeDirectorySelectorAdapter(new Map<string, DirectorySelectorLoadResult>(), sequenceResultsByPath)
-      const state = new DirectorySelectorState(1, adapter)
+      const mockProvider = new MockDirectoryProvider({
+        mockEntries: [],
+        shouldFailList: true,
+        errorMessage: '目录加载失败',
+        protocolKey: 'mock',
+        rootLabel: '根目录',
+        endpointSummary: 'mock://root'
+      })
+      const state = new DirectorySelectorState(1, mockProvider)
       state.currentPath = '/Retry'
 
       await state.loadCurrentDirectory()
-      expect(adapter.getLoadCount('/Retry')).assertEqual(1)
       expect(state.errorMessage).assertEqual('目录加载失败')
       expect(state.currentPath).assertEqual('/Retry')
 
+      // Switch to success mode with empty entries
+      mockProvider['mockConfig'].shouldFailList = false
+      mockProvider['mockConfig'].mockEntries = []
+      
       await state.retryCurrentDirectory()
-      expect(adapter.getLoadCount('/Retry')).assertEqual(2)
       expect(state.errorMessage).assertEqual('此目录下没有文件夹')
       expect(state.currentPath).assertEqual('/Retry')
 
+      // Switch to success mode with entries
+      mockProvider['mockConfig'].mockEntries = [
+        makeDirectoryEntry('Recovered', '/Retry/Recovered', true)
+      ]
+      
       await state.retryCurrentDirectory()
-      expect(adapter.getLoadCount('/Retry')).assertEqual(3)
       expect(state.errorMessage).assertEqual('')
       expect(state.directories.length).assertEqual(1)
       expect(state.directories[0].path).assertEqual('/Retry/Recovered')

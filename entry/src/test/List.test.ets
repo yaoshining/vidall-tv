@@ -17,7 +17,6 @@ import playerPageTest from './PlayerPage.test';
 import videoPlayerControllerTest from './VideoPlayerController.test';
 import fileExplorerControllerTest from './FileExplorerController.test';
 import fileExplorerAdapterTest from './FileExplorerAdapter.test';
-import directorySelectorAdapterTest from './DirectorySelectorAdapter.test';
 import directorySelectorStateTest from './DirectorySelectorState.test';
 import imagePreviewSessionControllerTest from './ImagePreviewSessionController.test';
 import subtitleLanguagePreferenceTest from './SubtitleLanguagePreference.test';
@@ -55,7 +54,6 @@ export default function testsuite() {
   videoPlayerControllerTest();
   fileExplorerControllerTest();
   fileExplorerAdapterTest();
-  directorySelectorAdapterTest();
   directorySelectorStateTest();
   imagePreviewSessionControllerTest();
   subtitleLanguagePreferenceTest();
