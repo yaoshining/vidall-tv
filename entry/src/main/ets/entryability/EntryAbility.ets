@@ -7,6 +7,8 @@ import { AppPreferences, PrefKey } from '../utils/AppPreferences';
 import { emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
 import { MetricsService } from '../services/metrics/MetricsService';
+import { ServiceLocator } from '../services/ServiceLocator';
+import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
 
 const DOMAIN = 0x0000;
 
@@ -18,6 +20,11 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+
+    // 初始化 EntitlementService (v1.x: LocalFree 实现，所有功能免费)
+    const entitlementService = new LocalFreeEntitlementService();
+    ServiceLocator.register('entitlement', entitlementService);
+    hilog.info(DOMAIN, 'testTag', 'EntitlementService registered (LocalFree mode)');
 
     // 初始化 Metrics Service（播放指标埋点）
     try {
