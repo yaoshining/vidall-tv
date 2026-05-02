@@ -18,7 +18,6 @@ import playerPageTest from './PlayerPage.test';
 import videoPlayerControllerTest from './VideoPlayerController.test';
 import fileExplorerControllerTest from './FileExplorerController.test';
 import fileExplorerAdapterTest from './FileExplorerAdapter.test';
-import directorySelectorAdapterTest from './DirectorySelectorAdapter.test';
 import directorySelectorStateTest from './DirectorySelectorState.test';
 import imagePreviewSessionControllerTest from './ImagePreviewSessionController.test';
 import subtitleLanguagePreferenceTest from './SubtitleLanguagePreference.test';
@@ -33,6 +32,11 @@ import entryAbilityLifecycleTest from './ets/entryability/EntryAbilityLifecycle.
 // ohosTest(entry_test HAP) 不包含 .so，不能 import VideoScannerUtil / WebDAVClient
 import fileSourceDatabaseTest from './FileSourceDatabase.test';
 import videoScannerTest from './VideoScanner.test';
+import directoryProviderInterfaceTest from './DirectoryProvider.test';
+import smbDirectoryProviderTest from './SmbDirectoryProvider.test';
+import webDAVDirectoryProviderTest from './WebDAVDirectoryProvider.test';
+import directorySelectorContainerTest from './DirectorySelectorContainer.test';
+import fileSourceRoutingTest from './FileSourceRouting.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -55,7 +59,6 @@ export default function testsuite() {
   videoPlayerControllerTest();
   fileExplorerControllerTest();
   fileExplorerAdapterTest();
-  directorySelectorAdapterTest();
   directorySelectorStateTest();
   imagePreviewSessionControllerTest();
   subtitleLanguagePreferenceTest();
@@ -68,4 +71,9 @@ export default function testsuite() {
   entryAbilityLifecycleTest();
   fileSourceDatabaseTest();
   videoScannerTest();
+  directoryProviderInterfaceTest();
+  smbDirectoryProviderTest();
+  webDAVDirectoryProviderTest();
+  directorySelectorContainerTest();
+  fileSourceRoutingTest();
 }

@@ -1,5 +1,6 @@
 import { FileSourceDirectory } from "../../../db/models/FileSourceEntity"
-import { DirectorySelectorEntry, DirectorySelectorSourceAdapter, EmptyDirectorySelectorSourceAdapter } from "./DirectorySelectorAdapter"
+import { DirectoryProvider, DirectoryEntry } from "../../../lib/DirectoryProvider"
+import { DirectorySelectorEntry } from "./DirectorySelectorContainer"
 
 export interface DirectorySelectorBreadcrumbItem {
   name: string
@@ -23,22 +24,22 @@ export class DirectorySelectorState {
   @Trace protocolKey: string = 'empty'
 
   sourceId: number = 0
-  private adapter: DirectorySelectorSourceAdapter = new EmptyDirectorySelectorSourceAdapter()
+  private provider?: DirectoryProvider
   private pathHistory: string[] = ['/']
   private previousSelectedMap: Map<string, string> = new Map()
   private uncheckedMap: Map<string, string> = new Map()
   private directoryLoadSeq: number = 0
 
-  constructor(sourceId: number = 0, adapter: DirectorySelectorSourceAdapter = new EmptyDirectorySelectorSourceAdapter()) {
-    this.configure(sourceId, adapter)
+  constructor(sourceId: number = 0, provider?: DirectoryProvider) {
+    this.configure(sourceId, provider)
   }
 
-  configure(sourceId: number, adapter: DirectorySelectorSourceAdapter): void {
+  configure(sourceId: number, provider?: DirectoryProvider): void {
     this.sourceId = sourceId
-    this.adapter = adapter
-    this.rootLabel = adapter.rootLabel
-    this.endpointSummary = adapter.endpointSummary
-    this.protocolKey = adapter.protocolKey
+    this.provider = provider
+    this.rootLabel = provider !== undefined ? provider.getRootLabel() : '根目录'
+    this.endpointSummary = provider !== undefined ? provider.getEndpointSummary() : ''
+    this.protocolKey = provider !== undefined ? provider.getProtocolKey() : 'empty'
     this.directories = []
     this.isLoading = false
     this.errorMessage = ''
@@ -72,14 +73,27 @@ export class DirectorySelectorState {
     this.isLoading = true
     this.errorMessage = ''
     try {
-      const result = await this.adapter.load(this.currentPath)
+      if (this.provider === undefined) {
+        this.errorMessage = '提供者未初始化'
+        return
+      }
+      const result = await this.provider.listDirectory(this.currentPath)
       if (loadSeq !== this.directoryLoadSeq) {
         return
       }
-      this.directories = result.entries
-      if (result.errorMessage !== undefined && result.errorMessage.length > 0 && result.entries.length === 0) {
+      // 转换 DirectoryEntry 到 DirectorySelectorEntry
+      const entries: DirectorySelectorEntry[] = result.entries.map((entry: DirectoryEntry) => {
+        const selectorEntry: DirectorySelectorEntry = {
+          key: entry.key,
+          name: entry.name,
+          path: entry.path
+        }
+        return selectorEntry
+      })
+      this.directories = entries
+      if (result.errorMessage !== undefined && result.errorMessage.length > 0 && entries.length === 0) {
         this.errorMessage = result.errorMessage
-      } else if (result.entries.length === 0) {
+      } else if (entries.length === 0) {
         this.errorMessage = '此目录下没有文件夹'
       }
     } finally {
