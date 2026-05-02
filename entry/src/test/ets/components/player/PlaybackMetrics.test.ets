@@ -12,8 +12,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@ohos/hypium';
-import { MetricsService } from '../../../../../main/ets/services/metrics/MetricsService';
-import { MetricsReporter } from '../../../../../main/ets/services/metrics/MetricsReporter';
+import { MetricsService } from '../../../../main/ets/services/metrics/MetricsService';
+import { MetricsReporter } from '../../../../main/ets/services/metrics/MetricsReporter';
 
 export default function PlaybackMetricsTest() {
   describe('PlaybackMetrics', () => {
@@ -53,7 +53,7 @@ export default function PlaybackMetricsTest() {
     beforeEach(() => {
       mockReporter = new MockMetricsReporter();
       MetricsService.resetForTesting();
-      MetricsService.initialize(null as any, mockReporter);
+      MetricsService.initialize({} as Context, mockReporter);
     });
 
     afterEach(() => {

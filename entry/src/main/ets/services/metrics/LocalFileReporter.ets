@@ -25,6 +25,7 @@ import fs from '@ohos.file.fs';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import util from '@ohos.util';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const TAG = 'LocalFileReporter';
 const DOMAIN = 0x0001;
@@ -201,7 +202,8 @@ export class LocalFileReporter implements MetricsReporter {
         this.metricsData.playback.sourceTypes.set(sourceType, current + 1);
       }
     } catch (e) {
-      hilog.error(DOMAIN, TAG, `Failed to record playback attempt: ${e}`);
+      const err = e as BusinessError;
+      hilog.error(DOMAIN, TAG, `Failed to record playback attempt: ${err.message ?? String(e)}`);
     }
   }
 
@@ -219,7 +221,8 @@ export class LocalFileReporter implements MetricsReporter {
         this.metricsData.subtitles.languages.set(language, currentCount + 1);
       }
     } catch (e) {
-      hilog.error(DOMAIN, TAG, `Failed to record subtitle usage: ${e}`);
+      const err = e as BusinessError;
+      hilog.error(DOMAIN, TAG, `Failed to record subtitle usage: ${err.message ?? String(e)}`);
     }
   }
 
@@ -233,7 +236,8 @@ export class LocalFileReporter implements MetricsReporter {
       this.metricsData.scanning.items_scanned += scanned;
       this.metricsData.scanning.items_available += total;
     } catch (e) {
-      hilog.error(DOMAIN, TAG, `Failed to record scan coverage: ${e}`);
+      const err = e as BusinessError;
+      hilog.error(DOMAIN, TAG, `Failed to record scan coverage: ${err.message ?? String(e)}`);
     }
   }
 
@@ -253,8 +257,10 @@ export class LocalFileReporter implements MetricsReporter {
         let existingData: MetricsJSON | null = null;
         try {
           if (fs.accessSync(filePath)) {
+            const stat = fs.statSync(filePath);
+            const fileSize = stat.size;
             const file = fs.openSync(filePath, fs.OpenMode.READ_ONLY);
-            const buffer = new ArrayBuffer(10240); // 10KB buffer
+            const buffer = new ArrayBuffer(fileSize);
             const readLen = fs.readSync(file.fd, buffer);
             fs.closeSync(file);
             
@@ -263,7 +269,8 @@ export class LocalFileReporter implements MetricsReporter {
             existingData = JSON.parse(content) as MetricsJSON;
           }
         } catch (e) {
-          hilog.warn(DOMAIN, TAG, `Could not read existing metrics file: ${e}`);
+          const err = e as BusinessError;
+          hilog.warn(DOMAIN, TAG, `Could not read existing metrics file: ${err.message ?? String(e)}`);
         }
 
         // Merge with existing data if present
@@ -283,7 +290,8 @@ export class LocalFileReporter implements MetricsReporter {
         // Reset in-memory data after successful flush
         this.metricsData = this.initializeMetricsData();
       } catch (e) {
-        hilog.error(DOMAIN, TAG, `Failed to flush metrics: ${e}`);
+        const err = e as BusinessError;
+        hilog.error(DOMAIN, TAG, `Failed to flush metrics: ${err.message ?? String(e)}`);
         // Don't throw - graceful degradation
       }
     });
@@ -407,13 +415,15 @@ export class LocalFileReporter implements MetricsReporter {
               fs.unlinkSync(filePath);
               hilog.info(DOMAIN, TAG, `Deleted old metrics file: ${fileName}`);
             } catch (e) {
-              hilog.warn(DOMAIN, TAG, `Could not delete old file ${fileName}: ${e}`);
+              const err = e as BusinessError;
+              hilog.warn(DOMAIN, TAG, `Could not delete old file ${fileName}: ${err.message ?? String(e)}`);
             }
           }
         }
       });
     } catch (e) {
-      hilog.error(DOMAIN, TAG, `Failed to cleanup old files: ${e}`);
+      const err = e as BusinessError;
+      hilog.error(DOMAIN, TAG, `Failed to cleanup old files: ${err.message ?? String(e)}`);
       // Don't throw - initialization should continue
     }
   }

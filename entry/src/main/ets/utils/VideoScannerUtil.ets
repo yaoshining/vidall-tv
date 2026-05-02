@@ -1627,6 +1627,8 @@ export class VideoScannerUtil {
     }
 
     // Task 6.4: Record scan coverage at end of scan operation
+    // Note: processedVideos represents files processed in this scan run (not total files with metadata).
+    // In incremental scans this will be a subset of allVideos.length.
     if (MetricsService.isInitialized()) {
       MetricsService.getInstance().recordScanCoverage(processedVideos, allVideos.length);
     }

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from '@ohos/hypium';
-import { MetricsReporter } from '../../main/ets/services/metrics/MetricsReporter';
+import { MetricsReporter } from '../../../../main/ets/services/metrics/MetricsReporter';
 
 export default function metricsReporterInterfaceTest() {
   describe('MetricsReporter Interface Contract', () => {
