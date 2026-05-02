@@ -28,6 +28,7 @@ import videoScannerUtilTest from './VideoScannerUtil.test';
 import tvEpisodeIncompleteRepairTest from './TvEpisodeIncompleteRepair.test';
 import entitlementServiceTest from './EntitlementService.test';
 import localFreeEntitlementServiceTest from './LocalFreeEntitlementService.test';
+import entryAbilityLifecycleTest from './ets/entryability/EntryAbilityLifecycle.test';
 // 需要真实 Context 和 .so 的集成测试放在 UnitTestBuild 侧（entry 模块本身,包含 native .so）
 // ohosTest(entry_test HAP) 不包含 .so，不能 import VideoScannerUtil / WebDAVClient
 import fileSourceDatabaseTest from './FileSourceDatabase.test';
@@ -64,6 +65,7 @@ export default function testsuite() {
   tvEpisodeIncompleteRepairTest();
   entitlementServiceTest();
   localFreeEntitlementServiceTest();
+  entryAbilityLifecycleTest();
   fileSourceDatabaseTest();
   videoScannerTest();
 }
