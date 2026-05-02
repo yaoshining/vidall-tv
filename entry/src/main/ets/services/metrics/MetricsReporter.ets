@@ -14,27 +14,50 @@
  */
 
 /**
+ * Media identity for playback metrics.
+ * Enables server-side video identification via external platform IDs.
+ *
+ * Degradation rules (when TMDB scrape info is unavailable):
+ *   provider / provider_id / title / year → null
+ *   file_name → always populated from VideoEntity.fileName
+ */
+export interface MediaIdentity {
+  /** Local database ID (videos.id) */
+  local_id: number;
+  /** External provider name, e.g. 'tmdb'; null when not scraped */
+  provider: string | null;
+  /** External provider video ID, e.g. TMDB movie/series ID; null when not scraped */
+  provider_id: string | null;
+  /** Video title from scrape info; null when not scraped */
+  title: string | null;
+  /** Release year; null (ScrapeInfoEntity has no year field) */
+  year: number | null;
+  /** File name without path, always set from VideoEntity.fileName */
+  file_name: string;
+}
+
+/**
  * Core metrics reporting interface
  */
 export interface MetricsReporter {
   /**
    * Record a playback attempt and its outcome
-   * 
+   *
    * @param success - Whether the playback attempt succeeded (first frame rendered)
    * @param firstFrameMs - Time from play intent to first frame (milliseconds), 0 if failed
-   * @param mediaId - Database ID of the media being played (-1 if unavailable)
+   * @param media - Media identity object for server-side identification (undefined if unavailable)
    * @param sourceType - Source type string, e.g. 'local' (FILE_URI) or 'network' (URL)
-   * 
+   *
    * Requirements:
    * - Must complete in < 1ms (non-blocking)
    * - Called on player thread, must be thread-safe
    * - Failures should be logged but not throw exceptions
-   * 
+   *
    * Example:
-   *   reporter.recordPlaybackAttempt(true, 450, 42, 'local');   // Successful local file playback
-   *   reporter.recordPlaybackAttempt(false, 0, -1, 'network');  // Failed network playback
+   *   reporter.recordPlaybackAttempt(true, 450, media, 'local');   // Successful local file playback
+   *   reporter.recordPlaybackAttempt(false, 0, undefined, 'network');  // Failed network playback
    */
-  recordPlaybackAttempt(success: boolean, firstFrameMs: number, mediaId?: number, sourceType?: string): void;
+  recordPlaybackAttempt(success: boolean, firstFrameMs: number, media?: MediaIdentity, sourceType?: string): void;
 
   /**
    * Record subtitle language selection or absence

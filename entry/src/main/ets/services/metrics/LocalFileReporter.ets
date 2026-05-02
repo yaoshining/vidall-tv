@@ -20,7 +20,7 @@
  * Spec: metrics-instrumentation-api/spec.md, playback-metrics-collection/spec.md
  */
 
-import { MetricsReporter } from './MetricsReporter';
+import { MetricsReporter, MediaIdentity } from './MetricsReporter';
 import fs from '@ohos.file.fs';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -39,8 +39,8 @@ interface PlaybackMetricsData {
   success: number;
   failures: number;
   firstFrameTimes: number[];
-  /** 最近一次播放的媒体 ID（用于调试定位），-1 表示不可用 */
-  lastMediaId: number;
+  /** 最近一次播放的媒体标识（含 TMDB 信息），null 表示不可用 */
+  lastMedia: MediaIdentity | null;
   /** 按来源类型统计的播放次数，key 为 'local'/'network' 等 */
   sourceTypes: Map<string, number>;
 }
@@ -89,8 +89,8 @@ interface PlaybackMetricsJSON {
   success: number;
   failures: number;
   firstFrameTimeMs: FirstFrameTimePercentiles;
-  /** 最近一次播放的媒体 ID，-1 表示不可用 */
-  last_media_id: number;
+  /** 最近一次播放的媒体标识对象，null 表示不可用 */
+  last_media: MediaIdentity | null;
   /** 按来源类型统计的播放次数 */
   source_types: Record<string, number>;
 }
@@ -150,7 +150,7 @@ export class LocalFileReporter implements MetricsReporter {
       success: 0,
       failures: 0,
       firstFrameTimes: [],
-      lastMediaId: -1,
+      lastMedia: null,
       sourceTypes: new Map<string, number>()
     };
     
@@ -179,7 +179,7 @@ export class LocalFileReporter implements MetricsReporter {
    * Record a playback attempt
    * Requirement: Playback Success Rate Tracking, First Frame Time Measurement
    */
-  recordPlaybackAttempt(success: boolean, firstFrameMs: number, mediaId?: number, sourceType?: string): void {
+  recordPlaybackAttempt(success: boolean, firstFrameMs: number, media?: MediaIdentity, sourceType?: string): void {
     try {
       this.metricsData.playback.attempts++;
       
@@ -192,9 +192,9 @@ export class LocalFileReporter implements MetricsReporter {
         this.metricsData.playback.failures++;
       }
 
-      // 缺陷 1 修复：记录媒体 ID 和来源类型
-      if (mediaId !== undefined && mediaId > 0) {
-        this.metricsData.playback.lastMediaId = mediaId;
+      // 记录媒体标识和来源类型
+      if (media !== undefined) {
+        this.metricsData.playback.lastMedia = media;
       }
       if (sourceType !== undefined && sourceType.length > 0) {
         const current = this.metricsData.playback.sourceTypes.get(sourceType) || 0;
@@ -309,21 +309,21 @@ export class LocalFileReporter implements MetricsReporter {
       languages[lang] = (languages[lang] || 0) + count;
     });
 
-    // 缺陷 1 修复：合并来源类型计数，取最新有效的 lastMediaId
+    // 合并来源类型计数，取最新有效的 lastMedia（优先本次会话，fallback 到文件中已存数据）
     const sourceTypes: Record<string, number> = existingData?.playback.source_types || {};
     this.metricsData.playback.sourceTypes.forEach((count: number, src: string) => {
       sourceTypes[src] = (sourceTypes[src] || 0) + count;
     });
-    const lastMediaId: number = this.metricsData.playback.lastMediaId > 0
-      ? this.metricsData.playback.lastMediaId
-      : (existingData?.playback.last_media_id ?? -1);
+    const lastMedia: MediaIdentity | null = this.metricsData.playback.lastMedia !== null
+      ? this.metricsData.playback.lastMedia
+      : (existingData?.playback.last_media ?? null);
 
     const playback: PlaybackMetricsJSON = {
       attempts: (existingData?.playback.attempts || 0) + this.metricsData.playback.attempts,
       success: (existingData?.playback.success || 0) + this.metricsData.playback.success,
       failures: (existingData?.playback.failures || 0) + this.metricsData.playback.failures,
       firstFrameTimeMs: percentiles,
-      last_media_id: lastMediaId,
+      last_media: lastMedia,
       source_types: sourceTypes
     };
     

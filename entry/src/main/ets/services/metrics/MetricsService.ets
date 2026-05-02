@@ -18,7 +18,7 @@
  */
 
 import { Context } from '@ohos.abilityAccessCtrl';
-import { MetricsReporter } from './MetricsReporter';
+import { MetricsReporter, MediaIdentity } from './MetricsReporter';
 import { LocalFileReporter } from './LocalFileReporter';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -89,9 +89,9 @@ export class MetricsService {
   /**
    * Record a playback attempt (delegates to reporter)
    */
-  recordPlaybackAttempt(success: boolean, firstFrameMs: number, mediaId?: number, sourceType?: string): void {
+  recordPlaybackAttempt(success: boolean, firstFrameMs: number, media?: MediaIdentity, sourceType?: string): void {
     try {
-      this.reporter.recordPlaybackAttempt(success, firstFrameMs, mediaId, sourceType);
+      this.reporter.recordPlaybackAttempt(success, firstFrameMs, media, sourceType);
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to record playback attempt: ${e}`);
     }
