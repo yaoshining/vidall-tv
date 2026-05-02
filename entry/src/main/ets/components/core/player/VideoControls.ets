@@ -5,7 +5,7 @@ import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
 import { media } from "@kit.MediaKit"
 import { EpisodeListPanel } from './EpisodeListPanel'
-import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
+import { PlaybackContextItem, MediaLibraryContext, PlaybackContext } from './PlaybackContext'
 import {
   loadEpisodeAutoplaySettings,
   saveEpisodeAutoplayCountdownSeconds,
@@ -1284,10 +1284,10 @@ export struct PlayerSettingsDialog {
 
       Scroll() {
         Column({ space: 0 }) {
-          // ── 选集区域（仅 MediaLibraryContext 时显示）────────────────────────
-          if (this.getMediaLibraryContext() !== undefined) {
+          // ── 选集/文件列表区域（有播放上下文时显示）────────────────────────
+          if (this.videoController.playbackContext !== undefined) {
             EpisodeListPanel({
-              context: this.getMediaLibraryContext() as MediaLibraryContext,
+              context: this.videoController.playbackContext as PlaybackContext,
               onSelect: (item: PlaybackContextItem) => {
                 this.onEpisodeSelect(item).then((didSwitch: boolean) => {
                   if (didSwitch) {
@@ -1435,7 +1435,7 @@ export struct PlayerSettingsDialog {
               })
             }
 
-            if (this.getMediaLibraryContext() !== undefined) {
+            if (this.videoController.playbackContext !== undefined) {
               Column({ space: 12 }) {
                 Text('自动下一集')
                   .fontSize(32)

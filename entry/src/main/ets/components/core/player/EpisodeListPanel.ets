@@ -1,4 +1,4 @@
-import { PlaybackContextItem, MediaLibraryContext } from './PlaybackContext'
+import { PlaybackContextItem, PlaybackContext } from './PlaybackContext'
 import { KeyCode } from '@kit.InputKit'
 
 const EPISODE_GROUP_SIZE: number = 6
@@ -248,7 +248,7 @@ export function getEpisodePageTabStyleState(isFocused: boolean, isCurrentAnchor:
 
 @Component
 export struct EpisodeListPanel {
-  @Require context: MediaLibraryContext
+  @Require context: PlaybackContext
   onSelect: (item: PlaybackContextItem) => void = () => {}
 
   @State private focusedCardIndex: number = 0
@@ -365,6 +365,35 @@ export struct EpisodeListPanel {
     return EPISODE_WAVE_FRAMES[this.waveFrameIndex % EPISODE_WAVE_FRAMES.length]
   }
 
+  private getPanelTitle(): string {
+    return this.context.contextType === 'file_explorer' ? '文件列表' : '选集'
+  }
+
+  private getFileItemBgColor(item: PlaybackContextItem, index: number): string {
+    const isFocused = this.focusedCardIndex === index && !this.isPageBarFocused
+    const isCurrent = this.isCurrentItem(item)
+    const isHovered = this.hoveredCardIndex === index
+    if (isCurrent) {
+      return 'rgba(169, 244, 255, 0.18)'
+    }
+    if (isFocused || isHovered) {
+      return 'rgba(255, 255, 255, 0.16)'
+    }
+    return 'rgba(255, 255, 255, 0.06)'
+  }
+
+  private getFileItemFontColor(item: PlaybackContextItem): string {
+    return this.isCurrentItem(item) ? '#A9F4FF' : '#EFF2FB'
+  }
+
+  private getFileItemBorderWidth(item: PlaybackContextItem): number {
+    return this.isCurrentItem(item) ? 2 : 0
+  }
+
+  private getFileItemScale(index: number): number {
+    return this.focusedCardIndex === index && !this.isPageBarFocused ? EPISODE_CARD_SCALE_FOCUSED : 1.0
+  }
+
   // ── 卡片 Builder ──────────────────────────────────────────────────────────
 
   @Builder
@@ -381,6 +410,50 @@ export struct EpisodeListPanel {
     .height(16)
     .alignItems(VerticalAlign.Bottom)
     .justifyContent(FlexAlign.Center)
+  }
+
+  @Builder
+  FileItem(item: PlaybackContextItem, index: number) {
+    Column({ space: 8 }) {
+      if (this.isCurrentItem(item)) {
+        this.PlayingWaveIcon()
+      }
+      Text(item.title)
+        .fontSize(18)
+        .fontColor(this.getFileItemFontColor(item))
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .textAlign(TextAlign.Center)
+        .width(180)
+        .wordBreak(WordBreak.BREAK_ALL)
+    }
+    .width(200)
+    .height(114)
+    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .borderRadius(EPISODE_CARD_RADIUS)
+    .backgroundColor(this.getFileItemBgColor(item, index))
+    .border({ width: this.getFileItemBorderWidth(item), color: '#A9F4FF' })
+    .scale({ x: this.getFileItemScale(index), y: this.getFileItemScale(index) })
+    .shadow({
+      radius: this.getFileItemScale(index) > 1.0 ? 12 : 0,
+      color: '#334C77A8',
+      offsetX: 0,
+      offsetY: 6
+    })
+    .animation({ duration: 180, curve: Curve.EaseInOut })
+    .focusable(true)
+    .onFocus(() => {
+      this.focusedCardIndex = index
+      this.isPageBarFocused = false
+    })
+    .onHover((isHover: boolean) => {
+      this.hoveredCardIndex = isHover ? index : -1
+    })
+    .onClick(() => {
+      this.onSelect(item)
+    })
   }
 
   @Builder
@@ -458,7 +531,7 @@ export struct EpisodeListPanel {
   build() {
     Column({ space: 0 }) {
       // 标题行
-      Text('选集')
+      Text(this.getPanelTitle())
         .fontSize(getEpisodeSectionTitleStyleState().fontSize)
         .fontWeight(FontWeight.Medium)
         .fontColor('#EFF2FB')
@@ -474,7 +547,11 @@ export struct EpisodeListPanel {
           this.getListItems(),
           (item: PlaybackContextItem, index: number) => {
             ListItem() {
-              this.EpisodeCard(item, index)
+              if (this.context.contextType === 'file_explorer') {
+                this.FileItem(item, index)
+              } else {
+                this.EpisodeCard(item, index)
+              }
             }
           },
           (item: PlaybackContextItem): string => getEpisodeItemRenderKey(item)

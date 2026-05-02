@@ -37,6 +37,7 @@ import smbDirectoryProviderTest from './SmbDirectoryProvider.test';
 import webDAVDirectoryProviderTest from './WebDAVDirectoryProvider.test';
 import directorySelectorContainerTest from './DirectorySelectorContainer.test';
 import fileSourceRoutingTest from './FileSourceRouting.test';
+import fileExplorerContextTest from './FileExplorerContext.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -76,4 +77,5 @@ export default function testsuite() {
   webDAVDirectoryProviderTest();
   directorySelectorContainerTest();
   fileSourceRoutingTest();
+  fileExplorerContextTest();
 }

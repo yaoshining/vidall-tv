@@ -6,7 +6,7 @@ import {
   type PlayerBackend,
   type UnsupportedFormatFallback
 } from "../../components/core/player/VideoPlayerController";
-import { PlaybackContext, PlaybackContextItem, MediaLibraryContext } from "../../components/core/player/PlaybackContext";
+import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity, MediaProgressEntry } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
@@ -181,6 +181,29 @@ export function commitMediaLibraryEpisodeSwitch(
   }
   const mediaLibraryContext = playbackContext as MediaLibraryContext;
   return mediaLibraryContext.jumpTo(selectedItem.index);
+}
+
+/**
+ * 构建文件浏览器集切换参数，复用当前播放参数中的 httpHeader/preferredBackend 等字段。
+ * videoPath 已是完整播放 URL（由 FileExplorerContext.build() 的 urlMapper 处理）。
+ */
+export function buildFileExplorerEpisodeSwitchParam(
+  currentParam: PlayerPageParam,
+  context: FileExplorerContext,
+  selectedItem: PlaybackContextItem
+): PlayerPageParam | null {
+  if (selectedItem.index < 0 || selectedItem.index >= context.items.length) {
+    return null;
+  }
+  const nextParam: PlayerPageParam = {
+    url: selectedItem.videoPath,
+    httpHeader: currentParam.httpHeader,
+    title: selectedItem.title,
+    preferredBackend: currentParam.preferredBackend,
+    unsupportedFormatFallback: currentParam.unsupportedFormatFallback,
+    playbackContext: context
+  };
+  return nextParam;
 }
 
 @ComponentV2
@@ -522,22 +545,33 @@ export struct PlayerPage {
         return true;
       }
     }
+    if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
+      if (item.index === playbackContext.currentIndex) {
+        return true;
+      }
+    }
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;
     const previousPageParamToken = this.pageParamToken;
     this.pageParamToken += 1;
     let keepNextPageParamToken = false;
     try {
-      const resolvedSource = await this.resolveEpisodePlaybackSource(item);
-      if (resolvedSource === null) {
-        return false;
+      let nextParam: PlayerPageParam | null = null;
+      if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
+        const fileExplorerContext = playbackContext as FileExplorerContext;
+        nextParam = buildFileExplorerEpisodeSwitchParam(currentParam, fileExplorerContext, item);
+      } else {
+        const resolvedSource = await this.resolveEpisodePlaybackSource(item);
+        if (resolvedSource === null) {
+          return false;
+        }
+        nextParam = buildMediaLibraryEpisodeSwitchParam(
+          currentParam,
+          playbackContext,
+          item,
+          resolvedSource
+        );
       }
-      const nextParam = buildMediaLibraryEpisodeSwitchParam(
-        currentParam,
-        playbackContext,
-        item,
-        resolvedSource
-      );
       if (nextParam === null) {
         return false;
       }
@@ -550,9 +584,14 @@ export struct PlayerPage {
         ? this.buildProgressContext(nextParam)
         : null;
       await this.videoPlayerController.reloadSource(nextVideoData, false);
-      if (commitMediaLibraryEpisodeSwitch(playbackContext, item) === null) {
-        this.videoPlayerController.progressContext = previousProgressContext;
-        return false;
+      if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
+        const fileExplorerContext = playbackContext as FileExplorerContext;
+        fileExplorerContext.jumpTo(item.index);
+      } else {
+        if (commitMediaLibraryEpisodeSwitch(playbackContext, item) === null) {
+          this.videoPlayerController.progressContext = previousProgressContext;
+          return false;
+        }
       }
       this.currentPageParam = nextParam;
       this.videoData = nextVideoData;

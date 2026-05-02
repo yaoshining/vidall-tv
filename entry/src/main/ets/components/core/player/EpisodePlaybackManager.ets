@@ -1,4 +1,4 @@
-import { MediaLibraryContext, PlaybackContext, PlaybackContextItem } from './PlaybackContext'
+import { PlaybackContext, PlaybackContextItem } from './PlaybackContext'
 import {
   DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
   DEFAULT_EPISODE_AUTOPLAY_ENABLED,
@@ -49,16 +49,16 @@ export class EpisodePlaybackManager {
   }
 
   sync(playbackContext: PlaybackContext | undefined, currentTimeMs: number, durationMs: number): EpisodePlaybackManagerState {
-    const mediaLibraryContext = this.getMediaLibraryContext(playbackContext)
-    const currentEpisodeKey = this.getCurrentEpisodeKey(mediaLibraryContext)
+    const context = this.getContextForAutoplay(playbackContext)
+    const currentEpisodeKey = this.getCurrentEpisodeKeyFromContext(context)
     if (currentEpisodeKey !== this.activeEpisodeKey) {
       this.activeEpisodeKey = currentEpisodeKey
       this.suppressedEpisodeKey = ''
     }
-    if (!this.autoplayEnabled || mediaLibraryContext === undefined || durationMs <= 0 || currentEpisodeKey.length === 0) {
+    if (!this.autoplayEnabled || context === undefined || durationMs <= 0 || currentEpisodeKey.length === 0) {
       return buildIdleEpisodePlaybackManagerState()
     }
-    const nextItem = this.getNextItem(mediaLibraryContext)
+    const nextItem = this.getNextItemFromContext(context)
     if (nextItem === null || this.suppressedEpisodeKey === currentEpisodeKey) {
       return buildIdleEpisodePlaybackManagerState()
     }
@@ -84,32 +84,35 @@ export class EpisodePlaybackManager {
     return state
   }
 
-  private getMediaLibraryContext(playbackContext: PlaybackContext | undefined): MediaLibraryContext | undefined {
-    if (playbackContext === undefined || playbackContext.contextType !== 'media_library') {
+  private getContextForAutoplay(playbackContext: PlaybackContext | undefined): PlaybackContext | undefined {
+    if (playbackContext === undefined) {
       return undefined
     }
-    return playbackContext as MediaLibraryContext
+    if (playbackContext.contextType === 'media_library' || playbackContext.contextType === 'file_explorer') {
+      return playbackContext
+    }
+    return undefined
   }
 
-  private getCurrentEpisodeKey(playbackContext: MediaLibraryContext | undefined): string {
-    if (playbackContext === undefined) {
+  private getCurrentEpisodeKeyFromContext(context: PlaybackContext | undefined): string {
+    if (context === undefined) {
       return ''
     }
-    if (playbackContext.currentIndex < 0 || playbackContext.currentIndex >= playbackContext.items.length) {
+    if (context.currentIndex < 0 || context.currentIndex >= context.items.length) {
       return ''
     }
-    const currentItem = playbackContext.items[playbackContext.currentIndex]
+    const currentItem = context.items[context.currentIndex]
     return currentItem.videoPath
   }
 
-  private getNextItem(playbackContext: MediaLibraryContext): PlaybackContextItem | null {
-    if (!playbackContext.hasNext) {
+  private getNextItemFromContext(context: PlaybackContext): PlaybackContextItem | null {
+    if (!context.hasNext) {
       return null
     }
-    const nextIndex = playbackContext.currentIndex + 1
-    if (nextIndex < 0 || nextIndex >= playbackContext.items.length) {
+    const nextIndex = context.currentIndex + 1
+    if (nextIndex < 0 || nextIndex >= context.items.length) {
       return null
     }
-    return playbackContext.items[nextIndex]
+    return context.items[nextIndex]
   }
 }

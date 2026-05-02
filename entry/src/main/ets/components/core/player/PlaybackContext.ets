@@ -1,6 +1,8 @@
 import { FileSourceDatabase } from '../../../db/files/FileSourceDatabase';
 import { MediaItem, TvEpisodeEntity } from '../../../db/models/MediaEntity';
 import { EpisodeGroupMatcher, EpisodeGroupMatchResult, EpisodeGroupMatchItem } from './EpisodeGroupMatcher';
+import { FileExplorerResource } from '../file/FileExplorerController';
+import { isVideoFile } from '../../../utils/VideoFileUtil';
 
 function tmdbImageUrl(path: string | undefined, width: string): string {
   if (path === undefined || path.length === 0) {
@@ -260,20 +262,73 @@ export class MediaLibraryContext extends PlaybackContext {
   }
 }
 
-// 文件浏览器播放上下文：骨架实现，jumpTo 系列均返回 null（待后续 Phase 实现）
+// 文件浏览器播放上下文：从 FileExplorerResource 列表过滤视频文件，支持同目录连播
 @ObservedV2
 export class FileExplorerContext extends PlaybackContext {
   readonly contextType: string = 'file_explorer';
 
-  jumpTo(_index: number): PlaybackContextItem | null {
-    return null;
+  /**
+   * 工厂方法：从当前目录的资源列表构建文件浏览器上下文。
+   * @param resources 当前目录的所有资源（已排序）
+   * @param currentVideoPath 当前视频的 raw 路径（resource.path），用于定位 currentIndex
+   * @param urlMapper 可选路径映射器，将 raw path 转为实际播放 URL；默认 identity
+   */
+  static build(
+    resources: FileExplorerResource[],
+    currentVideoPath: string,
+    urlMapper: (path: string) => string = (p: string): string => p
+  ): FileExplorerContext {
+    const videoResources = resources.filter((r: FileExplorerResource) => {
+      if (r.isDirectory) {
+        return false;
+      }
+      return isVideoFile(r.name);
+    });
+
+    const items: PlaybackContextItem[] = [];
+    for (let i = 0; i < videoResources.length; i++) {
+      const r = videoResources[i];
+      const item: PlaybackContextItem = {
+        videoPath: urlMapper(r.path),
+        title: r.name,
+        index: i
+      };
+      items.push(item);
+    }
+
+    let foundIndex = 0;
+    for (let i = 0; i < videoResources.length; i++) {
+      if (videoResources[i].path === currentVideoPath) {
+        foundIndex = i;
+        break;
+      }
+    }
+
+    const ctx = new FileExplorerContext();
+    ctx.items = items;
+    ctx.currentIndex = foundIndex;
+    return ctx;
+  }
+
+  jumpTo(index: number): PlaybackContextItem | null {
+    if (index < 0 || index >= this.items.length) {
+      return null;
+    }
+    this.currentIndex = index;
+    return this.items[index];
   }
 
   jumpToNext(): PlaybackContextItem | null {
-    return null;
+    if (!this.hasNext) {
+      return null;
+    }
+    return this.jumpTo(this.currentIndex + 1);
   }
 
   jumpToPrev(): PlaybackContextItem | null {
-    return null;
+    if (!this.hasPrev) {
+      return null;
+    }
+    return this.jumpTo(this.currentIndex - 1);
   }
 }
