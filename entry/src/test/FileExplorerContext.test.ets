@@ -87,7 +87,7 @@ export default function FileExplorerContextTest() {
         ]
         const ctx = FileExplorerContext.build(resources, '/a.mp4')
         const item = ctx.jumpTo(2)
-        expect(item).assertNotNull()
+        expect(item !== null).assertTrue()
         expect(item!.title).assertEqual('c.mp4')
         expect(ctx.currentIndex).assertEqual(2)
       })
@@ -121,7 +121,7 @@ export default function FileExplorerContextTest() {
         ]
         const ctx = FileExplorerContext.build(resources, '/a.mp4')
         const next = ctx.jumpToNext()
-        expect(next).assertNotNull()
+        expect(next !== null).assertTrue()
         expect(next!.title).assertEqual('b.mp4')
         expect(ctx.currentIndex).assertEqual(1)
       })
@@ -146,7 +146,7 @@ export default function FileExplorerContextTest() {
         ]
         const ctx = FileExplorerContext.build(resources, '/b.mp4')
         const prev = ctx.jumpToPrev()
-        expect(prev).assertNotNull()
+        expect(prev !== null).assertTrue()
         expect(prev!.title).assertEqual('a.mp4')
         expect(ctx.currentIndex).assertEqual(0)
       })
