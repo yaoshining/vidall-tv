@@ -1228,6 +1228,29 @@ export class FileSourceDatabase {
     }
   }
 
+  /** 按主键 id 查询单条视频记录 */
+  async getVideoById(videoId: number): Promise<VideoEntity | null> {
+    if (this.rdbStore === null) {
+      throw new Error('Database not initialized');
+    }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.rdbStore.querySql(
+        `SELECT * FROM ${FileSourceDatabase.TABLE_VIDEOS} WHERE id = ? LIMIT 1`,
+        [videoId]
+      );
+      if (rs.goToFirstRow()) {
+        return this.parseVideoEntity(rs);
+      }
+      return null;
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getVideoById 失败: ${JSON.stringify(error)}`);
+      return null;
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
   /** 按 sourceId 查询该文件源下所有视频 */
   async getVideosBySourceId(sourceId: number): Promise<VideoEntity[]> {
     if (this.rdbStore === null) {

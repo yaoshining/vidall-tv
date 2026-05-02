@@ -28,6 +28,8 @@ import {
   DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
   DEFAULT_EPISODE_AUTOPLAY_ENABLED
 } from "./EpisodeAutoplayPreferences";
+import { MetricsService } from "../../../services/metrics/MetricsService";
+import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -268,6 +270,8 @@ export class VideoPlayerController {
   private metricsLoadStartMs: number = 0;
   /** 指标埋点：seek 开始时间（用于计算 seek 完成耗时） */
   private metricsSeekStartMs: number = 0;
+  /** 指标埋点：当前播放会话的媒体标识（在 initPlayer 中异步构造，供回调同步使用） */
+  private metricsMedia: MediaIdentity | null = null;
   /** 时间回退诊断：记录最近一次 timeUpdate 值 */
   private lastTimeUpdateMs: number = -1;
   /** duration 未就绪时 seek 的诊断日志节流 */
@@ -337,6 +341,12 @@ export class VideoPlayerController {
     this.playbackSessionId += 1;
     const currentSessionId = this.playbackSessionId;
     this.metricsLoadStartMs = Date.now();
+    this.metricsMedia = null;
+    // 在适配器注册回调前提前查询媒体标识，回调内同步使用，避免异步改造回调签名
+    const metricsVideoId = this.progressContext?.videoId;
+    if (metricsVideoId !== undefined && metricsVideoId > 0) {
+      this.metricsMedia = await this.buildMediaIdentity(metricsVideoId);
+    }
     this.hasPrepared = false;
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
@@ -648,6 +658,14 @@ export class VideoPlayerController {
       const metricsElapsedOnError = Date.now() - this.metricsLoadStartMs;
       hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
         `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"error","error_code":"${error.message.substring(0, 80)}","elapsed_ms":${metricsElapsedOnError}}`);
+      
+      // Task 4.5: Record failed playback attempt
+      if (MetricsService.isInitialized()) {
+        // 升级为 MediaIdentity 对象，服务端可通过 provider/provider_id 唯一识别视频
+        const sourceType = videoData.type === VideoDataType.FILE_URI ? 'local' : 'network';
+        MetricsService.getInstance().recordPlaybackAttempt(false, 0, this.metricsMedia ?? undefined, sourceType);
+      }
+      
       if (this.backend === 'native') {
         this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
         return;
@@ -1802,6 +1820,14 @@ export class VideoPlayerController {
       `{"event":"first_frame","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"elapsed_ms":${firstFrameElapsed}}`);
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"success","elapsed_ms":${firstFrameElapsed}}`);
+    
+    // Task 4.4: Record successful playback attempt with first frame time
+    if (MetricsService.isInitialized()) {
+      // 升级为 MediaIdentity 对象，服务端可通过 provider/provider_id 唯一识别视频
+      const sourceType = this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network';
+      MetricsService.getInstance().recordPlaybackAttempt(true, firstFrameElapsed, this.metricsMedia ?? undefined, sourceType);
+    }
+    
     const resumeTimeMs = this.pendingBackendResumeTimeMs;
     const shouldResumePlay = this.pendingBackendResumePlay;
     if (resumeTimeMs >= 0) {
@@ -1817,6 +1843,19 @@ export class VideoPlayerController {
     }
     await this.loadSubtitleTracks();
     await this.loadAudioTracks();
+    
+    // Task 5.5: Record subtitle usage at playback start (once per session, avoid double-counting)
+    // 缺陷 2 修复：移除 activeSubtitleIndex < 0 的条件判断，始终记录一次，
+    //   并取当前激活轨道的语言（auto-select 已在 loadSubtitleTracks 内完成）。
+    // switchSubtitleTrack 中不再调用 recordSubtitleUsage，防止同一播放会话重复计数。
+    if (MetricsService.isInitialized()) {
+      let startSubtitleLang: string | null = null;
+      if (this.activeSubtitleIndex >= 0 && this.activeSubtitleIndex < this.allSubtitleTracks.length) {
+        startSubtitleLang = this.allSubtitleTracks[this.activeSubtitleIndex].language ?? null;
+      }
+      MetricsService.getInstance().recordSubtitleUsage(startSubtitleLang);
+    }
+    
     if (resumeTimeMs > 0 && this.player) {
       const safeResumeTimeMs = this.duration > 0 && resumeTimeMs > this.duration
         ? this.duration
@@ -1919,6 +1958,39 @@ export class VideoPlayerController {
     const clean = filePath.replace(/\?.*$/, '');
     const lastSlash = clean.lastIndexOf('/');
     return lastSlash >= 0 ? clean.substring(lastSlash + 1) : clean;
+  }
+
+  /**
+   * 构造播放会话的媒体标识对象，供 metrics 上报使用。
+   * 在 initPlayer 开始时（适配器回调注册前）异步调用，结果缓存到 metricsMedia 字段。
+   * 异常时降级返回仅含 local_id 的最小标识，不影响播放主流程。
+   */
+  private async buildMediaIdentity(videoId: number): Promise<MediaIdentity> {
+    try {
+      const db = FileSourceDatabase.getInstance();
+      const scrapeInfo = await db.getScrapeInfoByVideoId(videoId);
+      const videoEntity = await db.getVideoById(videoId);
+      const media: MediaIdentity = {
+        local_id: videoId,
+        provider: scrapeInfo?.provider ?? null,
+        provider_id: scrapeInfo?.providerId ?? null,
+        title: scrapeInfo?.title ?? null,
+        year: null,
+        file_name: videoEntity?.fileName ?? ''
+      };
+      return media;
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `buildMediaIdentity 失败 videoId=${videoId}: ${e}`);
+      const fallback: MediaIdentity = {
+        local_id: videoId,
+        provider: null,
+        provider_id: null,
+        title: null,
+        year: null,
+        file_name: ''
+      };
+      return fallback;
+    }
   }
 
   private sanitizeLogFilePath(filePath: string): string {
@@ -2513,6 +2585,9 @@ export class VideoPlayerController {
     this.subtitleRemainingTime = 0;
     await this.subtitleAdapter.switchTrack(allIndex);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    
+    // Task 5.4: 缺陷 2 修复：此处不再调用 recordSubtitleUsage，
+    // subtitle 使用计数已在 onPlayerReady 内一次性记录，此处重复调用会导致 total_playbacks 双重计数。
   }
 
   // ─────────────────────────────────────────────

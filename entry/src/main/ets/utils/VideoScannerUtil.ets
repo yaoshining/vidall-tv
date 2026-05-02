@@ -16,6 +16,7 @@ import {
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
 import { VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../db/models/MediaEntity';
+import { MetricsService } from '../services/metrics/MetricsService';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -1623,6 +1624,13 @@ export class VideoScannerUtil {
       } else {
         console.warn(`[VideoScanner] 鬼记录清理跳过：所有文件源均未成功扫到文件`);
       }
+    }
+
+    // Task 6.4: Record scan coverage at end of scan operation
+    // Note: processedVideos represents files processed in this scan run (not total files with metadata).
+    // In incremental scans this will be a subset of allVideos.length.
+    if (MetricsService.isInitialized()) {
+      MetricsService.getInstance().recordScanCoverage(processedVideos, allVideos.length);
     }
 
     return {

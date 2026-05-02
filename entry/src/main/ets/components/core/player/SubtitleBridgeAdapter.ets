@@ -381,6 +381,7 @@ export interface SubtitleTrackItem {
   internalIndex?: number;
   srtEntries?: SrtEntry[];
   url?: string;
+  language?: string;
 }
 
 export interface SubtitleBridgeState {
@@ -735,6 +736,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
             entries = await this.fetchSrt(url, headers);
           }
           const langLabel = this.extractLangLabel(candidate, baseName);
+          // 缺陷 3 修复：提取原始语言代码（如 'zh'/'en'），用于埋点语言统计
+          const langCode = this.extractLangCode(candidate, baseName);
           const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
           const item: SubtitleTrackItem = {
             kind: 'external',
@@ -742,7 +745,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
               ? `${langLabel} [外部·${formatLabel}]`
               : `字幕 [外部·${formatLabel}]`,
             url,
-            srtEntries: entries
+            srtEntries: entries,
+            language: langCode
           };
           found.push(item);
         } catch (e) {
@@ -776,6 +780,25 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
         resolve(code === 200 || code === 206);
       });
     });
+  }
+
+  /**
+   * 从字幕文件名中提取原始语言代码（如 'zh'、'en'、'chi'）。
+   * 适配命名规范：<baseName>.<langCode>.<ext>（如 movie.zh.srt → 'zh'）。
+   * 若文件名与视频同名或无法识别语言后缀，返回 undefined。
+   */
+  protected extractLangCode(candidate: string, baseName: string): string | undefined {
+    const dotIdx = candidate.lastIndexOf('.');
+    const withoutExt = dotIdx >= 0 ? candidate.substring(0, dotIdx) : candidate;
+    if (withoutExt === baseName) {
+      return undefined;
+    }
+    const prefix = baseName + '.';
+    if (withoutExt.startsWith(prefix)) {
+      const code = withoutExt.substring(prefix.length);
+      return code.length > 0 ? code : undefined;
+    }
+    return undefined;
   }
 
   protected extractLangLabel(candidate: string, baseName: string): string {
@@ -889,7 +912,9 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
-        internalIndex: ft.index
+        internalIndex: ft.index,
+        // 缺陷 3 修复：透传 ffprobe 探测到的语言代码，供埋点统计使用
+        language: ft.language
       };
       items.push(item);
     }
@@ -1103,7 +1128,8 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
-        internalIndex: track.trackIndex
+        internalIndex: track.trackIndex,
+        language: track.language
       };
       items.push(item);
     }

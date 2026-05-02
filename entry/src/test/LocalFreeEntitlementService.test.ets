@@ -13,14 +13,14 @@ import { FEATURE_ADVANCED_PLAYBACK, FEATURE_CLOUD_SYNC, FEATURE_PREMIUM_CONTENT 
  * 4. 异常安全（fail-open 策略）
  */
 export default function localFreeEntitlementServiceTest() {
-  let service: EntitlementService;
+  describe('LocalFreeEntitlementService', () => {
+    let service: EntitlementService;
 
-  beforeEach(() => {
-    service = new LocalFreeEntitlementService();
-  });
+    beforeEach(() => {
+      service = new LocalFreeEntitlementService();
+    });
 
-  describe('LocalFreeEntitlementService - hasFeature()', () => {
-    
+    // ── hasFeature() ─────────────────────────────────────────────────────────
     it('已知功能 FEATURE_ADVANCED_PLAYBACK 应返回 true', 0, async () => {
       const result = await service.hasFeature(FEATURE_ADVANCED_PLAYBACK);
       expect(result).assertTrue();
@@ -50,10 +50,8 @@ export default function localFreeEntitlementServiceTest() {
       const result = await service.hasFeature('InvalidFeatureId');
       expect(result).assertTrue();
     });
-  });
 
-  describe('LocalFreeEntitlementService - canAccessContent()', () => {
-    
+    // ── canAccessContent() ───────────────────────────────────────────────────
     it('任意内容 ID 和类型应返回 true', 0, async () => {
       const result = await service.canAccessContent('video-123', 'video');
       expect(result).assertTrue();
@@ -76,10 +74,8 @@ export default function localFreeEntitlementServiceTest() {
         expect(result).assertTrue();
       }
     });
-  });
 
-  describe('LocalFreeEntitlementService - getUserTier()', () => {
-    
+    // ── getUserTier() ────────────────────────────────────────────────────────
     it('应固定返回 "free"', 0, async () => {
       const tier = await service.getUserTier();
       expect(tier).assertEqual('free');
@@ -89,20 +85,16 @@ export default function localFreeEntitlementServiceTest() {
       const tier1 = await service.getUserTier();
       const tier2 = await service.getUserTier();
       const tier3 = await service.getUserTier();
-      
       expect(tier1).assertEqual('free');
       expect(tier2).assertEqual('free');
       expect(tier3).assertEqual('free');
     });
-  });
 
-  describe('LocalFreeEntitlementService - Performance', () => {
-    
+    // ── Performance ──────────────────────────────────────────────────────────
     it('hasFeature 应在 10ms 内完成（快速响应）', 0, async () => {
       const startTime = Date.now();
       await service.hasFeature(FEATURE_ADVANCED_PLAYBACK);
       const duration = Date.now() - startTime;
-      
       // 放宽到 10ms 避免 CI 环境抖动
       expect(duration < 10).assertTrue();
     });
@@ -111,7 +103,6 @@ export default function localFreeEntitlementServiceTest() {
       const startTime = Date.now();
       await service.canAccessContent('video-123', 'video');
       const duration = Date.now() - startTime;
-      
       // 放宽到 10ms 避免 CI 环境抖动
       expect(duration < 10).assertTrue();
     });
@@ -120,28 +111,22 @@ export default function localFreeEntitlementServiceTest() {
       const startTime = Date.now();
       await service.getUserTier();
       const duration = Date.now() - startTime;
-      
       // 放宽到 10ms 避免 CI 环境抖动
       expect(duration < 10).assertTrue();
     });
 
     it('连续100次调用应保持高性能', 0, async () => {
       const startTime = Date.now();
-      
       for (let i = 0; i < 100; i++) {
         await service.hasFeature(FEATURE_ADVANCED_PLAYBACK);
       }
-      
       const duration = Date.now() - startTime;
       const avgDuration = duration / 100;
-      
       // 平均每次调用应 < 10ms（批量调用）
       expect(avgDuration < 10).assertTrue();
     });
-  });
 
-  describe('LocalFreeEntitlementService - Service Contract', () => {
-    
+    // ── Service Contract ──────────────────────────────────────────────────────
     it('应实现 EntitlementService 接口', 0, () => {
       // TypeScript 类型检查确保接口实现正确
       const _service: EntitlementService = new LocalFreeEntitlementService();

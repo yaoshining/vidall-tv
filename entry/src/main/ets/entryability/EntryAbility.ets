@@ -8,6 +8,7 @@ import { emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
 import { ServiceLocator } from '../services/ServiceLocator';
 import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
+import { MetricsService } from '../services/metrics/MetricsService';
 
 const DOMAIN = 0x0000;
 
@@ -19,6 +20,10 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+
+    // 初始化 MetricsService
+    MetricsService.initialize(this.context);
+    hilog.info(DOMAIN, 'testTag', 'MetricsService initialized');
 
     // 初始化 EntitlementService (v1.x: LocalFree 实现，所有功能免费)
     const entitlementService = new LocalFreeEntitlementService();
@@ -60,6 +65,17 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
+    
+    // Flush metrics before destroy
+    if (MetricsService.isInitialized()) {
+      MetricsService.getInstance().flush()
+        .then(() => {
+          hilog.info(DOMAIN, 'testTag', 'Metrics flushed on destroy');
+        })
+        .catch(() => {
+          hilog.error(DOMAIN, 'testTag', 'Failed to flush metrics on destroy');
+        });
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -106,6 +122,18 @@ export default class EntryAbility extends UIAbility {
   onBackground(): void {
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
+    
+    // Flush metrics before going to background
+    if (MetricsService.isInitialized()) {
+      MetricsService.getInstance().flush()
+        .then(() => {
+          hilog.info(DOMAIN, 'testTag', 'Metrics flushed on background');
+        })
+        .catch(() => {
+          hilog.error(DOMAIN, 'testTag', 'Failed to flush metrics on background');
+        });
+    }
+    
     // 通知正在播放的播放器页面立即落盘进度
     emitter.emit(PlayerEvents.APP_BACKGROUND);
   }
