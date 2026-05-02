@@ -220,17 +220,12 @@ export default function fileSourceRoutingTest(): void {
           }
         }
         
-        // 注意：此测试需要 mock 网络请求，否则会真实连接
-        // 实际项目中应使用 dependency injection 或 mock 库
-        try {
-          const descriptor = await createDirectorySelectorSourceDescriptor(routeParams)
-          
-          expect(descriptor.sourceId).assertEqual(500)
-          expect(descriptor.protocol).assertEqual('webdav')
-          expect(descriptor.provider !== undefined).assertTrue()
-        } catch {
-          // 预期可能因网络连接失败，测试通过（仅验证实例化逻辑）
-        }
+        // createDirectorySelectorSourceDescriptor 仅在内存中初始化 provider，不发起网络请求
+        const descriptor = await createDirectorySelectorSourceDescriptor(routeParams)
+        
+        expect(descriptor.sourceId).assertEqual(500)
+        expect(descriptor.protocol).assertEqual('webdav')
+        expect(descriptor.provider !== undefined).assertTrue()
       })
       
       it('should instantiate SMB provider from route params', 0, async (): Promise<void> => {
@@ -247,15 +242,12 @@ export default function fileSourceRoutingTest(): void {
           }
         }
         
-        try {
-          const descriptor = await createDirectorySelectorSourceDescriptor(routeParams)
-          
-          expect(descriptor.sourceId).assertEqual(600)
-          expect(descriptor.protocol).assertEqual('smb')
-          expect(descriptor.provider !== undefined).assertTrue()
-        } catch {
-          // 预期可能因网络连接失败，测试通过
-        }
+        // createDirectorySelectorSourceDescriptor 仅在内存中初始化 provider，不发起网络请求
+        const descriptor = await createDirectorySelectorSourceDescriptor(routeParams)
+        
+        expect(descriptor.sourceId).assertEqual(600)
+        expect(descriptor.protocol).assertEqual('smb')
+        expect(descriptor.provider !== undefined).assertTrue()
       })
       
       it('should reject unsupported protocol', 0, async (): Promise<void> => {

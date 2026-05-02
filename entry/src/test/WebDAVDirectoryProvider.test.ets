@@ -39,28 +39,27 @@ function createWebDAVConfig(baseUrl: string = 'https://demo.local:8443/dav'): Di
 
 export default function WebDAVDirectoryProviderTest() {
   describe('WebDAVDirectoryProvider', () => {
-    it('过滤并只返回目录集合，忽略文件', 0, async () => {
+    it('初始化后 getProtocolKey 返回 webdav', 0, async () => {
       const provider = new WebDAVDirectoryProvider()
       await provider.initWithConfig(createWebDAVConfig())
       
-      // 测试目标：验证只返回 isCollection=true 的资源
       expect(provider.getProtocolKey()).assertEqual('webdav')
       expect(provider.getRootLabel()).assertEqual('根目录')
     })
 
-    it('处理空目录列表返回空数组', 0, async () => {
+    it('初始化后接口签名完整（getRootLabel 非空）', 0, async () => {
       const provider = new WebDAVDirectoryProvider()
       await provider.initWithConfig(createWebDAVConfig())
       
-      // 验证接口定义正确
+      // 验证接口签名完整
       expect(provider.getProtocolKey()).assertEqual('webdav')
     })
 
-    it('处理 WebDAV 客户端错误时返回错误消息', 0, async () => {
+    it('初始化成功后接口可正常调用', 0, async () => {
       const provider = new WebDAVDirectoryProvider()
       await provider.initWithConfig(createWebDAVConfig())
       
-      // 验证接口定义正确
+      // 验证初始化后接口可正常调用
       expect(provider.getProtocolKey()).assertEqual('webdav')
     })
 

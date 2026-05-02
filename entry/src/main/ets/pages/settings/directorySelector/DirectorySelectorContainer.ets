@@ -83,10 +83,18 @@ export function createDirectorySelectorRouteParams(
   const protocolSpecific: Record<string, Object> = {}
   
   if (protocol === 'webdav') {
-    protocolSpecific['baseUrl'] = readStringParam(params, 'baseUrl')
+    const baseUrl = readStringParam(params, 'baseUrl')
+    if (baseUrl.length === 0) {
+      return undefined  // webdav 必须提供 baseUrl
+    }
+    protocolSpecific['baseUrl'] = baseUrl
     protocolSpecific['tlsCertPolicy'] = readStringParam(params, 'tlsCertPolicy')
   } else if (protocol === 'smb') {
-    protocolSpecific['host'] = readStringParam(params, 'host')
+    const host = readStringParam(params, 'host')
+    if (host.length === 0) {
+      return undefined  // smb 必须提供 host
+    }
+    protocolSpecific['host'] = host
     protocolSpecific['port'] = readNumberParam(params, 'port') ?? 445
     protocolSpecific['domain'] = readStringParam(params, 'domain')
     protocolSpecific['shareName'] = readStringParam(params, 'shareName')

@@ -155,6 +155,7 @@ export default function DirectorySelectorContainerTest() {
     })
 
     it('拒绝缺失协议关键参数（WebDAV无baseUrl）', 0, () => {
+      // 不传 baseUrl，createRawRouteParams 的 baseUrl 参数留空
       const rawParams = createRawRouteParams(
         50,
         'webdav',
@@ -164,11 +165,12 @@ export default function DirectorySelectorContainerTest() {
       
       const parsed = createDirectorySelectorRouteParams(rawParams)
       
-      // 解析会成功但 protocolSpecific 不完整
-      expect(parsed !== undefined).assertTrue()
+      // webdav 缺少 baseUrl 必须返回 undefined
+      expect(parsed === undefined).assertTrue()
     })
 
     it('拒绝缺失协议关键参数（SMB无host）', 0, () => {
+      // 不传 host，createRawRouteParams 的 host 参数留空
       const rawParams = createRawRouteParams(
         60,
         'smb',
@@ -178,8 +180,8 @@ export default function DirectorySelectorContainerTest() {
       
       const parsed = createDirectorySelectorRouteParams(rawParams)
       
-      // 解析会成功但 protocolSpecific 不完整
-      expect(parsed !== undefined).assertTrue()
+      // smb 缺少 host 必须返回 undefined
+      expect(parsed === undefined).assertTrue()
     })
 
     it('创建 WebDAV Provider 并初始化', 0, async () => {

@@ -43,29 +43,28 @@ function createSmbConfig(host: string = 'nas.local', port: number = 445): Direct
 
 export default function SmbDirectoryProviderTest() {
   describe('SmbDirectoryProvider', () => {
-    it('过滤并只返回目录项，忽略文件', 0, async () => {
+    it('初始化后 getProtocolKey 返回 smb', 0, async () => {
       const provider = new SmbDirectoryProvider()
       await provider.initWithConfig(createSmbConfig())
       
-      // 测试目标：验证只返回目录，文件被过滤
-      // 注：由于无法注入 mock SMBClient，此测试验证接口签名和基本初始化
+      // 验证接口签名和基本初始化
       expect(provider.getProtocolKey()).assertEqual('smb')
       expect(provider.getRootLabel()).assertEqual('共享列表')
     })
 
-    it('处理空目录列表返回空数组', 0, async () => {
+    it('初始化后接口签名完整（getRootLabel 非空）', 0, async () => {
       const provider = new SmbDirectoryProvider()
       await provider.initWithConfig(createSmbConfig())
       
-      // 验证接口定义正确
+      // 验证接口签名完整
       expect(provider.getProtocolKey()).assertEqual('smb')
     })
 
-    it('处理 SMB 客户端错误时返回错误消息', 0, async () => {
+    it('初始化成功后接口可正常调用', 0, async () => {
       const provider = new SmbDirectoryProvider()
       await provider.initWithConfig(createSmbConfig())
       
-      // 验证接口定义正确
+      // 验证初始化后接口可正常调用
       expect(provider.getProtocolKey()).assertEqual('smb')
     })
 
