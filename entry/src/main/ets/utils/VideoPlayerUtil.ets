@@ -1,6 +1,7 @@
 // VideoPlayerUtil.ets — ArkTS 兼容版
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { isVideoFile } from './VideoFileUtil';
 
 // ─────────────────────────────────────────────
 // 类型定义
@@ -167,9 +168,7 @@ export class VideoPlayerUtil {
     if (ext === '.ac3' || ext === '.eac3' || ext === '.dts' || ext === '.truehd') {
       return false;
     }
-    if (ext === '.mp4' || ext === '.m4v' || ext === '.mov' ||
-      ext === '.mkv' ||
-      ext === '.ts' || ext === '.m2ts' || ext === '.mts' ||
+    if (isVideoFile(url) ||
       ext === '.m4a' || ext === '.aac' || ext === '.mp3' ||
       ext === '.ogg' || ext === '.oga' ||
       ext === '.wav' || ext === '.flac' || ext === '.amr') {
@@ -283,4 +282,3 @@ export class VideoPlayerUtil {
     });
   }
 }
-

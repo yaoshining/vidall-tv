@@ -1,4 +1,4 @@
-import { MediaLibraryContext, PlaybackContext, PlaybackContextItem } from './PlaybackContext'
+import { PlaybackContext, PlaybackContextItem } from './PlaybackContext'
 import {
   DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
   DEFAULT_EPISODE_AUTOPLAY_ENABLED,
@@ -114,34 +114,5 @@ export class EpisodePlaybackManager {
       return null
     }
     return context.items[nextIndex]
-  }
-
-  private getMediaLibraryContext(playbackContext: PlaybackContext | undefined): MediaLibraryContext | undefined {
-    if (playbackContext === undefined || playbackContext.contextType !== 'media_library') {
-      return undefined
-    }
-    return playbackContext as MediaLibraryContext
-  }
-
-  private getCurrentEpisodeKey(playbackContext: MediaLibraryContext | undefined): string {
-    if (playbackContext === undefined) {
-      return ''
-    }
-    if (playbackContext.currentIndex < 0 || playbackContext.currentIndex >= playbackContext.items.length) {
-      return ''
-    }
-    const currentItem = playbackContext.items[playbackContext.currentIndex]
-    return currentItem.videoPath
-  }
-
-  private getNextItem(playbackContext: MediaLibraryContext): PlaybackContextItem | null {
-    if (!playbackContext.hasNext) {
-      return null
-    }
-    const nextIndex = playbackContext.currentIndex + 1
-    if (nextIndex < 0 || nextIndex >= playbackContext.items.length) {
-      return null
-    }
-    return playbackContext.items[nextIndex]
   }
 }

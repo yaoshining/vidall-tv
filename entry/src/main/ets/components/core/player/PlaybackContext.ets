@@ -2,6 +2,7 @@ import { FileSourceDatabase } from '../../../db/files/FileSourceDatabase';
 import { MediaItem, TvEpisodeEntity } from '../../../db/models/MediaEntity';
 import { EpisodeGroupMatcher, EpisodeGroupMatchResult, EpisodeGroupMatchItem } from './EpisodeGroupMatcher';
 import { FileExplorerResource } from '../file/FileExplorerController';
+import { isVideoFile } from '../../../utils/VideoFileUtil';
 
 function tmdbImageUrl(path: string | undefined, width: string): string {
   if (path === undefined || path.length === 0) {
@@ -261,10 +262,6 @@ export class MediaLibraryContext extends PlaybackContext {
   }
 }
 
-const SUPPORTED_VIDEO_EXTENSIONS: string[] = [
-  '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.m2ts'
-];
-
 // 文件浏览器播放上下文：从 FileExplorerResource 列表过滤视频文件，支持同目录连播
 @ObservedV2
 export class FileExplorerContext extends PlaybackContext {
@@ -285,15 +282,7 @@ export class FileExplorerContext extends PlaybackContext {
       if (r.isDirectory) {
         return false;
       }
-      const lower = r.name.toLowerCase();
-      let isVideo = false;
-      for (let i = 0; i < SUPPORTED_VIDEO_EXTENSIONS.length; i++) {
-        if (lower.endsWith(SUPPORTED_VIDEO_EXTENSIONS[i])) {
-          isVideo = true;
-          break;
-        }
-      }
-      return isVideo;
+      return isVideoFile(r.name);
     });
 
     const items: PlaybackContextItem[] = [];

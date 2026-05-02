@@ -8,6 +8,7 @@ import { SMBSourceConfig } from '../../db/models/FileSourceEntity'
 import { SMBClient, SmbFileInfo, SmbListDirectoryResult } from '../../lib/SMBClient'
 import { PlayerPage, PlayerPageParam } from '../player'
 import { FfprobeUtil } from '../../utils/FfprobeUtil'
+import { isVideoFile } from '../../utils/VideoFileUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { FileExplorerContext } from '../../components/core/player/PlaybackContext'
 
@@ -208,7 +209,7 @@ export struct SmbFileExplorerPage {
   private handleFileClick(file: SmbFileInfo): void {
     if (file.isDirectory) {
       this.loadDirectory(file.path)
-    } else if (this.isVideoFile(file.name)) {
+    } else if (isVideoFile(file.name)) {
       this.playVideo(file)
     } else if (this.isImageFile(file.name)) {
       this.previewImage(file.path, file.name)
@@ -349,7 +350,7 @@ export struct SmbFileExplorerPage {
       return '📁'
     }
     const name = file.name.toLowerCase()
-    if (this.isVideoFile(name)) {
+    if (isVideoFile(name)) {
       return '🎬'
     }
     if (this.isAudioFile(name)) {
@@ -359,12 +360,6 @@ export struct SmbFileExplorerPage {
       return '🖼️'
     }
     return '📄'
-  }
-
-  private isVideoFile(name: string): boolean {
-    const exts = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.m2ts']
-    const lower = name.toLowerCase()
-    return exts.some(ext => lower.endsWith(ext))
   }
 
   private isAudioFile(name: string): boolean {
@@ -388,7 +383,7 @@ export struct SmbFileExplorerPage {
         isLoading: this.isLoading,
         errorMessage: this.errorMessage,
         onFileClick: (event) => {
-          if (this.isVideoFile(event.resource.name)) {
+          if (isVideoFile(event.resource.name)) {
             const fileInfo: SmbFileInfo = {
               name: event.resource.name,
               path: event.resource.path,
