@@ -9,6 +9,7 @@ import { SMBClient, SmbFileInfo, SmbListDirectoryResult } from '../../lib/SMBCli
 import { PlayerPage, PlayerPageParam } from '../player'
 import { FfprobeUtil } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
+import { FileExplorerContext } from '../../components/core/player/PlaybackContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 对外导出的路由参数接口
@@ -272,7 +273,12 @@ export struct SmbFileExplorerPage {
       url: url,
       title: file.name,
       presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
-      presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
+      presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
+      playbackContext: FileExplorerContext.build(
+        this.fileExplorerController.sortedResources,
+        file.path,
+        (p: string): string => this.buildPlaybackUrl(p)
+      )
     }
     this.pageStack.pushPath({
       name: PlayerPage.PAGE_NAME,

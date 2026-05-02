@@ -14,6 +14,7 @@ import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/pla
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { DirStatus } from "../../db/models/FileSourceEntity";
 import { FileSourceStore } from "../../stores/files/FileSourceStore";
+import { FileExplorerContext } from "../../components/core/player/PlaybackContext";
 
 /**
  * 文件浏览页路由参数
@@ -368,7 +369,12 @@ export struct FileExplorerPage {
       title: displayName,
       durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
       presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
-      presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined
+      presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
+      playbackContext: FileExplorerContext.build(
+        this.fileExplorerController.sortedResources,
+        path,
+        (p: string): string => this.client.getFullUrl(p)
+      )
     };
 
     this.pageStack.pushPath({
