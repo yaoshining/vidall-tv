@@ -407,11 +407,12 @@ export default function PlaybackContextTest() {
   // ─────────────────────────────────────────────
   describe('FileExplorerContextTest', () => {
 
-    it('jumpTo 始终返回 null', 0, () => {
+    it('jumpTo 有效索引返回对应项并更新 currentIndex', 0, () => {
       const ctx = new FileExplorerContext();
       ctx.items = makeItems(3);
-      const result = ctx.jumpTo(0);
-      expect(result === null).assertTrue();
+      const result = ctx.jumpTo(1);
+      expect(result !== null).assertTrue();
+      expect(ctx.currentIndex).assertEqual(1);
     });
 
     it('contextType 为 file_explorer', 0, () => {

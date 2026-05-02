@@ -72,7 +72,7 @@ export default function episodePlaybackManagerTest() {
       expect(resumedState.nextItem?.videoPath ?? '').assertEqual('/series/s01e03.mkv')
     })
 
-    it('非媒体库上下文或无下一集时安全降级', 0, () => {
+    it('file_explorer 上下文有下一集时显示自动播放倒计时', 0, () => {
       const manager: EpisodePlaybackManager = new EpisodePlaybackManager()
       const fileExplorerContext = new FileExplorerContext()
       fileExplorerContext.items = [buildEpisodeItem(0), buildEpisodeItem(1)]
@@ -80,7 +80,7 @@ export default function episodePlaybackManagerTest() {
 
       manager.updateSettings(true, 8)
       const fileExplorerState: EpisodePlaybackManagerState = manager.sync(fileExplorerContext, 1795000, 1800000)
-      expect(fileExplorerState.visible).assertFalse()
+      expect(fileExplorerState.visible).assertTrue()
       expect(fileExplorerState.shouldPlayNext).assertFalse()
 
       const mediaContext = buildMediaLibraryContext(2)
