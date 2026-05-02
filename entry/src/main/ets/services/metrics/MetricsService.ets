@@ -89,9 +89,9 @@ export class MetricsService {
   /**
    * Record a playback attempt (delegates to reporter)
    */
-  recordPlaybackAttempt(success: boolean, firstFrameMs: number): void {
+  recordPlaybackAttempt(success: boolean, firstFrameMs: number, mediaId?: number, sourceType?: string): void {
     try {
-      this.reporter.recordPlaybackAttempt(success, firstFrameMs);
+      this.reporter.recordPlaybackAttempt(success, firstFrameMs, mediaId, sourceType);
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to record playback attempt: ${e}`);
     }

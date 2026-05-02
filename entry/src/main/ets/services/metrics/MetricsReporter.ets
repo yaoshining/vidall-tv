@@ -22,6 +22,8 @@ export interface MetricsReporter {
    * 
    * @param success - Whether the playback attempt succeeded (first frame rendered)
    * @param firstFrameMs - Time from play intent to first frame (milliseconds), 0 if failed
+   * @param mediaId - Database ID of the media being played (-1 if unavailable)
+   * @param sourceType - Source type string, e.g. 'local' (FILE_URI) or 'network' (URL)
    * 
    * Requirements:
    * - Must complete in < 1ms (non-blocking)
@@ -29,10 +31,10 @@ export interface MetricsReporter {
    * - Failures should be logged but not throw exceptions
    * 
    * Example:
-   *   reporter.recordPlaybackAttempt(true, 450);  // Successful playback, 450ms to first frame
-   *   reporter.recordPlaybackAttempt(false, 0);   // Failed playback
+   *   reporter.recordPlaybackAttempt(true, 450, 42, 'local');   // Successful local file playback
+   *   reporter.recordPlaybackAttempt(false, 0, -1, 'network');  // Failed network playback
    */
-  recordPlaybackAttempt(success: boolean, firstFrameMs: number): void;
+  recordPlaybackAttempt(success: boolean, firstFrameMs: number, mediaId?: number, sourceType?: string): void;
 
   /**
    * Record subtitle language selection or absence

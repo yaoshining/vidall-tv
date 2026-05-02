@@ -652,7 +652,10 @@ export class VideoPlayerController {
       
       // Task 4.5: Record failed playback attempt
       if (MetricsService.isInitialized()) {
-        MetricsService.getInstance().recordPlaybackAttempt(false, 0);
+        // 缺陷 1 修复：传入 mediaId 和 sourceType
+        const mediaId = this.progressContext?.videoId ?? -1;
+        const sourceType = videoData.type === VideoDataType.FILE_URI ? 'local' : 'network';
+        MetricsService.getInstance().recordPlaybackAttempt(false, 0, mediaId, sourceType);
       }
       
       if (this.backend === 'native') {
@@ -1812,7 +1815,10 @@ export class VideoPlayerController {
     
     // Task 4.4: Record successful playback attempt with first frame time
     if (MetricsService.isInitialized()) {
-      MetricsService.getInstance().recordPlaybackAttempt(true, firstFrameElapsed);
+      // 缺陷 1 修复：传入 mediaId 和 sourceType
+      const mediaId = this.progressContext?.videoId ?? -1;
+      const sourceType = this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network';
+      MetricsService.getInstance().recordPlaybackAttempt(true, firstFrameElapsed, mediaId, sourceType);
     }
     
     const resumeTimeMs = this.pendingBackendResumeTimeMs;
@@ -1831,9 +1837,16 @@ export class VideoPlayerController {
     await this.loadSubtitleTracks();
     await this.loadAudioTracks();
     
-    // Task 5.5: Record subtitle usage when playback starts without subtitles
-    if (MetricsService.isInitialized() && this.activeSubtitleIndex < 0) {
-      MetricsService.getInstance().recordSubtitleUsage(null);
+    // Task 5.5: Record subtitle usage at playback start (once per session, avoid double-counting)
+    // 缺陷 2 修复：移除 activeSubtitleIndex < 0 的条件判断，始终记录一次，
+    //   并取当前激活轨道的语言（auto-select 已在 loadSubtitleTracks 内完成）。
+    // switchSubtitleTrack 中不再调用 recordSubtitleUsage，防止同一播放会话重复计数。
+    if (MetricsService.isInitialized()) {
+      let startSubtitleLang: string | null = null;
+      if (this.activeSubtitleIndex >= 0 && this.activeSubtitleIndex < this.allSubtitleTracks.length) {
+        startSubtitleLang = this.allSubtitleTracks[this.activeSubtitleIndex].language ?? null;
+      }
+      MetricsService.getInstance().recordSubtitleUsage(startSubtitleLang);
     }
     
     if (resumeTimeMs > 0 && this.player) {
@@ -2533,16 +2546,8 @@ export class VideoPlayerController {
     await this.subtitleAdapter.switchTrack(allIndex);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
     
-    // Task 5.4: Record subtitle usage when user selects subtitle language
-    if (MetricsService.isInitialized()) {
-      let subtitleLanguage: string | null = null;
-      if (allIndex >= 0 && allIndex < this.allSubtitleTracks.length) {
-        const selectedTrack = this.allSubtitleTracks[allIndex];
-        // Extract language code from track (language property or displayName)
-        subtitleLanguage = selectedTrack.language || null;
-      }
-      MetricsService.getInstance().recordSubtitleUsage(subtitleLanguage);
-    }
+    // Task 5.4: 缺陷 2 修复：此处不再调用 recordSubtitleUsage，
+    // subtitle 使用计数已在 onPlayerReady 内一次性记录，此处重复调用会导致 total_playbacks 双重计数。
   }
 
   // ─────────────────────────────────────────────

@@ -299,7 +299,13 @@ async function loadSmbExternalSubtitles(smbVideoUrl: string): Promise<SubtitleTr
             `[外置字幕] 解析结果为空，跳过: ${candidates[i].name}`);
           continue;
         }
-        const item: SubtitleTrackItem = { kind: 'external', displayName, srtEntries: entries };
+        const item: SubtitleTrackItem = {
+          kind: 'external',
+          displayName,
+          srtEntries: entries,
+          // 缺陷 3 修复：langLabel 在 SMB 路径下即为原始语言代码（如 'zh'/'en'），透传给埋点
+          language: langLabel.length > 0 ? langLabel : undefined
+        };
         found.push(item);
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[外置字幕] 加载成功: ${candidates[i].name} entries=${entries.length}`);

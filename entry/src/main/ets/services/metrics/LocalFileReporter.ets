@@ -39,6 +39,10 @@ interface PlaybackMetricsData {
   success: number;
   failures: number;
   firstFrameTimes: number[];
+  /** 最近一次播放的媒体 ID（用于调试定位），-1 表示不可用 */
+  lastMediaId: number;
+  /** 按来源类型统计的播放次数，key 为 'local'/'network' 等 */
+  sourceTypes: Map<string, number>;
 }
 
 /**
@@ -85,6 +89,10 @@ interface PlaybackMetricsJSON {
   success: number;
   failures: number;
   firstFrameTimeMs: FirstFrameTimePercentiles;
+  /** 最近一次播放的媒体 ID，-1 表示不可用 */
+  last_media_id: number;
+  /** 按来源类型统计的播放次数 */
+  source_types: Record<string, number>;
 }
 
 /**
@@ -141,7 +149,9 @@ export class LocalFileReporter implements MetricsReporter {
       attempts: 0,
       success: 0,
       failures: 0,
-      firstFrameTimes: []
+      firstFrameTimes: [],
+      lastMediaId: -1,
+      sourceTypes: new Map<string, number>()
     };
     
     const subtitles: SubtitleMetricsData = {
@@ -169,7 +179,7 @@ export class LocalFileReporter implements MetricsReporter {
    * Record a playback attempt
    * Requirement: Playback Success Rate Tracking, First Frame Time Measurement
    */
-  recordPlaybackAttempt(success: boolean, firstFrameMs: number): void {
+  recordPlaybackAttempt(success: boolean, firstFrameMs: number, mediaId?: number, sourceType?: string): void {
     try {
       this.metricsData.playback.attempts++;
       
@@ -180,6 +190,15 @@ export class LocalFileReporter implements MetricsReporter {
         }
       } else {
         this.metricsData.playback.failures++;
+      }
+
+      // 缺陷 1 修复：记录媒体 ID 和来源类型
+      if (mediaId !== undefined && mediaId > 0) {
+        this.metricsData.playback.lastMediaId = mediaId;
+      }
+      if (sourceType !== undefined && sourceType.length > 0) {
+        const current = this.metricsData.playback.sourceTypes.get(sourceType) || 0;
+        this.metricsData.playback.sourceTypes.set(sourceType, current + 1);
       }
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to record playback attempt: ${e}`);
@@ -290,11 +309,22 @@ export class LocalFileReporter implements MetricsReporter {
       languages[lang] = (languages[lang] || 0) + count;
     });
 
+    // 缺陷 1 修复：合并来源类型计数，取最新有效的 lastMediaId
+    const sourceTypes: Record<string, number> = existingData?.playback.source_types || {};
+    this.metricsData.playback.sourceTypes.forEach((count: number, src: string) => {
+      sourceTypes[src] = (sourceTypes[src] || 0) + count;
+    });
+    const lastMediaId: number = this.metricsData.playback.lastMediaId > 0
+      ? this.metricsData.playback.lastMediaId
+      : (existingData?.playback.last_media_id ?? -1);
+
     const playback: PlaybackMetricsJSON = {
       attempts: (existingData?.playback.attempts || 0) + this.metricsData.playback.attempts,
       success: (existingData?.playback.success || 0) + this.metricsData.playback.success,
       failures: (existingData?.playback.failures || 0) + this.metricsData.playback.failures,
-      firstFrameTimeMs: percentiles
+      firstFrameTimeMs: percentiles,
+      last_media_id: lastMediaId,
+      source_types: sourceTypes
     };
     
     const subtitles: SubtitleMetricsJSON = {
