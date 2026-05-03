@@ -17,7 +17,7 @@ export interface UmamiConfig {
 export const DEFAULT_UMAMI_CONFIG: UmamiConfig = {
   baseUrl: 'https://analytics.yaoshining.space',
   websiteId: 'a212474c-ad81-4e9e-80a0-39d735941f44',
-  hostname: 'vidall-tv'
+  hostname: 'vidall-tv.yaoshining.com'
 };
 
 export interface UmamiEventData {
