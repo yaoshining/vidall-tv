@@ -34,6 +34,8 @@ export class PrefKey {
   static readonly PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS = 'player_episode_autoplay_countdown_seconds';
   /** 字幕语言偏好（JSON 序列化字符串） */
   static readonly SUBTITLE_LANGUAGE_PREFERENCE = 'subtitle_language_preference';
+  /** 指标上报使用的持久化设备 UUID */
+  static readonly METRICS_DEVICE_UUID = 'metrics_device_uuid';
 }
 
 // ─────────────────────────────────────────────
@@ -65,6 +67,13 @@ export class AppPreferences {
   private static store: AppPreferencesStore | null = null;
   private static initPromise: Promise<void> | null = null;
   private static storeLoader: AppPreferencesLoader = DEFAULT_APP_PREFERENCES_LOADER;
+
+  private static generateDeviceUuid(): string {
+    const segment = (): string => {
+      return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+    };
+    return `${segment()}${segment()}-${segment()}-${segment()}-${segment()}-${segment()}${segment()}${segment()}`;
+  }
 
   static setStoreLoaderForTesting(loader: AppPreferencesLoader | null): void {
     AppPreferences.storeLoader = loader ?? DEFAULT_APP_PREFERENCES_LOADER;
@@ -160,5 +169,15 @@ export class AppPreferences {
       const err = e as BusinessError;
       console.error(`[AppPreferences] 写入失败 key=${key}: ${err.message ?? JSON.stringify(e)}`);
     }
+  }
+
+  static async getOrCreateDeviceUuid(): Promise<string> {
+    const existingUuid = await AppPreferences.get(PrefKey.METRICS_DEVICE_UUID, '');
+    if (existingUuid.length > 0) {
+      return existingUuid;
+    }
+    const nextUuid = AppPreferences.generateDeviceUuid();
+    await AppPreferences.set(PrefKey.METRICS_DEVICE_UUID, nextUuid);
+    return nextUuid;
   }
 }

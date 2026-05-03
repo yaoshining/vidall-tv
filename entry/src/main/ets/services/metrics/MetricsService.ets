@@ -20,6 +20,8 @@
 import { Context } from '@ohos.abilityAccessCtrl';
 import { MetricsReporter, MediaIdentity } from './MetricsReporter';
 import { LocalFileReporter } from './LocalFileReporter';
+import { CompositeMetricsReporter } from './CompositeMetricsReporter';
+import { UmamiReporter } from '../analytics/UmamiReporter';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const TAG = 'MetricsService';
@@ -49,7 +51,10 @@ export class MetricsService {
       return;
     }
 
-    const reporter = customReporter || new LocalFileReporter(context);
+    const reporter = customReporter || new CompositeMetricsReporter([
+      new LocalFileReporter(context),
+      new UmamiReporter()
+    ]);
     MetricsService.instance = new MetricsService(reporter);
     hilog.info(DOMAIN, TAG, 'MetricsService initialized');
   }

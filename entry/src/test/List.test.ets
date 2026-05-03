@@ -38,6 +38,8 @@ import webDAVDirectoryProviderTest from './WebDAVDirectoryProvider.test';
 import directorySelectorContainerTest from './DirectorySelectorContainer.test';
 import fileSourceRoutingTest from './FileSourceRouting.test';
 import fileExplorerContextTest from './FileExplorerContext.test';
+import umamiReporterTest from './ets/services/analytics/UmamiReporter.test';
+import compositeMetricsReporterTest from './ets/services/metrics/CompositeMetricsReporter.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -78,4 +80,6 @@ export default function testsuite() {
   directorySelectorContainerTest();
   fileSourceRoutingTest();
   fileExplorerContextTest();
+  umamiReporterTest();
+  compositeMetricsReporterTest();
 }
