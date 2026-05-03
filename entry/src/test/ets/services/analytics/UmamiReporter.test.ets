@@ -4,6 +4,7 @@ import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry
 import { Context } from '@ohos.abilityAccessCtrl';
 import { AppPreferences, AppPreferencesLoader, AppPreferencesStore, PrefKey } from '../../../../main/ets/utils/AppPreferences';
 import { MediaIdentity } from '../../../../main/ets/services/metrics/MetricsReporter';
+import { MetricsTraceLogger, setMetricsTraceLoggerForTesting } from '../../../../main/ets/services/metrics/MetricsTraceLogger';
 import {
   DEFAULT_UMAMI_CONFIG,
   buildUmamiEventPayload,
@@ -163,6 +164,31 @@ class MockUmamiHttpRequest implements UmamiHttpRequest {
   }
 }
 
+class CapturingMetricsTraceLogger implements MetricsTraceLogger {
+  readonly entries: string[] = [];
+
+  info(tag: string, message: string): void {
+    this.entries.push(`${tag}:${message}`);
+  }
+
+  warn(tag: string, message: string): void {
+    this.entries.push(`${tag}:${message}`);
+  }
+
+  error(tag: string, message: string): void {
+    this.entries.push(`${tag}:${message}`);
+  }
+
+  contains(keyword: string): boolean {
+    for (let i = 0; i < this.entries.length; i++) {
+      if (this.entries[i].indexOf(keyword) >= 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
 function buildMediaIdentity(): MediaIdentity {
   return {
     local_id: 123,
@@ -206,11 +232,13 @@ export default function umamiReporterTest() {
   describe('UmamiReporter_http_behavior', () => {
     beforeEach(() => {
       AppPreferences.resetForTesting();
+      setMetricsTraceLoggerForTesting(null);
     });
 
     afterEach(() => {
       AppPreferences.setStoreLoaderForTesting(null);
       AppPreferences.resetForTesting();
+      setMetricsTraceLoggerForTesting(null);
     });
 
     it('should send identify once and reuse persisted device uuid', 0, async () => {
@@ -364,6 +392,27 @@ export default function umamiReporterTest() {
       expect(countBodiesContaining(state.bodies, '"type":"identify"')).assertEqual(1);
       expect(countBodiesContaining(state.bodies, '"name":"playback_attempt"')).assertEqual(1);
       expect(state.bodies.length).assertEqual(2);
+    });
+
+    it('should emit observable traces from record through send success', 0, async () => {
+      await initPreferences('observable-device-uuid');
+      const logger = new CapturingMetricsTraceLogger();
+      setMetricsTraceLoggerForTesting(logger);
+      const state = new MockRequestState([]);
+      const reporter = new UmamiReporter(
+        DEFAULT_UMAMI_CONFIG,
+        () => new MockUmamiHttpRequest(state)
+      );
+
+      reporter.recordPlaybackAttempt(true, 450, buildMediaIdentity(), 'network');
+      reporter.recordSubtitleUsage('zh');
+      await reporter.flush();
+
+      expect(logger.contains('Umami record playback_attempt')).assertTrue();
+      expect(logger.contains('Umami record subtitle_usage')).assertTrue();
+      expect(logger.contains('Umami flush entered')).assertTrue();
+      expect(logger.contains('Umami send start')).assertTrue();
+      expect(logger.contains('Umami send success')).assertTrue();
     });
   });
 

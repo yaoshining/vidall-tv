@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPreferences } from '../../utils/AppPreferences';
 import { MediaIdentity, MetricsReporter } from '../metrics/MetricsReporter';
+import { getMetricsTraceLogger } from '../metrics/MetricsTraceLogger';
 
 const TAG = 'UmamiReporter';
 const DOMAIN = 0x0001;
@@ -176,7 +177,13 @@ export class UmamiReporter implements MetricsReporter {
     this.requestFactory = requestFactory;
   }
 
+  getReporterName(): string {
+    return 'UmamiReporter';
+  }
+
   recordPlaybackAttempt(success: boolean, firstFrameMs: number, media?: MediaIdentity, sourceType?: string): void {
+    getMetricsTraceLogger().info(TAG,
+      `Umami record playback_attempt success=${success ? 1 : 0} queue=${this.pendingQueue.length}`);
     const payload = buildUmamiEventPayload(
       this.config,
       'player',
@@ -187,6 +194,8 @@ export class UmamiReporter implements MetricsReporter {
   }
 
   recordSubtitleUsage(language: string | null): void {
+    getMetricsTraceLogger().info(TAG,
+      `Umami record subtitle_usage subtitle=${language === null ? 'off' : 'on'} queue=${this.pendingQueue.length}`);
     const payload = buildUmamiEventPayload(
       this.config,
       'player',
@@ -197,6 +206,8 @@ export class UmamiReporter implements MetricsReporter {
   }
 
   recordScanCoverage(scanned: number, total: number): void {
+    getMetricsTraceLogger().info(TAG,
+      `Umami record scan_coverage scanned=${scanned} total=${total} queue=${this.pendingQueue.length}`);
     const payload = buildUmamiEventPayload(
       this.config,
       'scanner',
@@ -207,17 +218,18 @@ export class UmamiReporter implements MetricsReporter {
   }
 
   async flush(): Promise<void> {
-    hilog.info(DOMAIN, TAG, `Umami flush entered: queue=${this.pendingQueue.length} sending=${this.isSending}`);
+    getMetricsTraceLogger().info(TAG, `Umami flush entered: queue=${this.pendingQueue.length} sending=${this.isSending}`);
     await this.ensureIdentifyQueued();
     if (this.activeDrainPromise !== null) {
-      hilog.info(DOMAIN, TAG, 'Umami flush waiting for in-flight send');
+      getMetricsTraceLogger().info(TAG, 'Umami flush waiting for in-flight send');
     }
     await this.processQueue();
   }
 
   private enqueue(payload: UmamiSendRequest): void {
     this.pendingQueue.push(payload);
-    hilog.info(DOMAIN, TAG, `Umami enqueue: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
+    getMetricsTraceLogger().info(TAG,
+      `Umami enqueue: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
     void this.kickoffProcessing();
   }
 
@@ -249,7 +261,7 @@ export class UmamiReporter implements MetricsReporter {
       }
       this.pendingQueue.unshift(buildUmamiIdentifyPayload(this.config, deviceUuid));
       this.identifyQueued = true;
-      hilog.info(DOMAIN, TAG, `Umami identify queued: queue=${this.pendingQueue.length}`);
+      getMetricsTraceLogger().info(TAG, `Umami identify queued: queue=${this.pendingQueue.length}`);
     } finally {
       this.identifyQueuePromise = null;
     }
@@ -291,6 +303,8 @@ export class UmamiReporter implements MetricsReporter {
   private async sendPayload(payload: UmamiSendRequest): Promise<boolean> {
     const request = this.requestFactory();
     try {
+      getMetricsTraceLogger().info(TAG,
+        `Umami send start: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
       const response = await request.request(`${this.config.baseUrl}/api/send`, {
         method: http.RequestMethod.POST,
         header: {
@@ -302,15 +316,15 @@ export class UmamiReporter implements MetricsReporter {
       });
       const ok = response.responseCode >= 200 && response.responseCode < 300;
       if (ok) {
-        hilog.info(DOMAIN, TAG, `Umami send success: type=${payload.type} name=${payload.payload.name}`);
+        getMetricsTraceLogger().info(TAG, `Umami send success: type=${payload.type} name=${payload.payload.name}`);
       }
       if (!ok) {
-        hilog.warn(DOMAIN, TAG, `Umami send failed: type=${payload.type} code=${response.responseCode}`);
+        getMetricsTraceLogger().warn(TAG, `Umami send failed: type=${payload.type} code=${response.responseCode}`);
       }
       return ok;
     } catch (e) {
       const err = e as BusinessError;
-      hilog.warn(DOMAIN, TAG, `Umami send error: type=${payload.type} message=${err.message ?? String(e)}`);
+      getMetricsTraceLogger().warn(TAG, `Umami send failed: type=${payload.type} message=${err.message ?? String(e)}`);
       return false;
     } finally {
       request.destroy();

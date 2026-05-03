@@ -23,6 +23,7 @@ import { LocalFileReporter } from './LocalFileReporter';
 import { CompositeMetricsReporter } from './CompositeMetricsReporter';
 import { UmamiReporter } from '../analytics/UmamiReporter';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { getMetricsTraceLogger } from './MetricsTraceLogger';
 
 const TAG = 'MetricsService';
 const DOMAIN = 0x0001;
@@ -36,6 +37,13 @@ export class MetricsService {
 
   private constructor(reporter: MetricsReporter) {
     this.reporter = reporter;
+  }
+
+  private static describeReporter(reporter: MetricsReporter): string {
+    if (reporter.getReporterName !== undefined) {
+      return reporter.getReporterName();
+    }
+    return 'CustomMetricsReporter';
   }
 
   /**
@@ -56,6 +64,7 @@ export class MetricsService {
       new UmamiReporter()
     ]);
     MetricsService.instance = new MetricsService(reporter);
+    getMetricsTraceLogger().info(TAG, `MetricsService initialized reporter=${MetricsService.describeReporter(reporter)}`);
     hilog.info(DOMAIN, TAG, 'MetricsService initialized');
   }
 
@@ -96,6 +105,8 @@ export class MetricsService {
    */
   recordPlaybackAttempt(success: boolean, firstFrameMs: number, media?: MediaIdentity, sourceType?: string): void {
     try {
+      getMetricsTraceLogger().info(TAG,
+        `MetricsService forward event=playback_attempt reporter=${MetricsService.describeReporter(this.reporter)} success=${success ? 1 : 0}`);
       this.reporter.recordPlaybackAttempt(success, firstFrameMs, media, sourceType);
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to record playback attempt: ${e}`);
@@ -107,6 +118,8 @@ export class MetricsService {
    */
   recordSubtitleUsage(language: string | null): void {
     try {
+      getMetricsTraceLogger().info(TAG,
+        `MetricsService forward event=subtitle_usage reporter=${MetricsService.describeReporter(this.reporter)} subtitle=${language === null ? 'off' : 'on'}`);
       this.reporter.recordSubtitleUsage(language);
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to record subtitle usage: ${e}`);
@@ -118,6 +131,8 @@ export class MetricsService {
    */
   recordScanCoverage(scanned: number, total: number): void {
     try {
+      getMetricsTraceLogger().info(TAG,
+        `MetricsService forward event=scan_coverage reporter=${MetricsService.describeReporter(this.reporter)} scanned=${scanned} total=${total}`);
       this.reporter.recordScanCoverage(scanned, total);
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to record scan coverage: ${e}`);
@@ -129,6 +144,7 @@ export class MetricsService {
    */
   async flush(): Promise<void> {
     try {
+      getMetricsTraceLogger().info(TAG, `MetricsService flush reporter=${MetricsService.describeReporter(this.reporter)}`);
       await this.reporter.flush();
     } catch (e) {
       hilog.error(DOMAIN, TAG, `Failed to flush metrics: ${e}`);
