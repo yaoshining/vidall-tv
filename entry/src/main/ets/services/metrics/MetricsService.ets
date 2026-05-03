@@ -51,7 +51,7 @@ export class MetricsService {
    * Should be called once in Application/Ability onCreate
    * 
    * @param context - Application context for accessing storage
-   * @param customReporter - Optional custom reporter (default: LocalFileReporter)
+   * @param customReporter - Optional custom reporter (default: CompositeMetricsReporter with LocalFileReporter and UmamiReporter)
    */
   static initialize(context: Context, customReporter?: MetricsReporter): void {
     if (MetricsService.instance) {

@@ -178,6 +178,7 @@ export class AppPreferences {
     }
     const nextUuid = AppPreferences.generateDeviceUuid();
     await AppPreferences.set(PrefKey.METRICS_DEVICE_UUID, nextUuid);
-    return nextUuid;
+    const verified = await AppPreferences.get(PrefKey.METRICS_DEVICE_UUID, '');
+    return verified.length > 0 ? verified : '';
   }
 }

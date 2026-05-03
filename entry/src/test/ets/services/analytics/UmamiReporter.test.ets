@@ -420,7 +420,7 @@ export default function umamiReporterTest() {
     it('should expose default Umami config', 0, () => {
       expect(DEFAULT_UMAMI_CONFIG.baseUrl).assertEqual('https://analytics.yaoshining.space');
       expect(DEFAULT_UMAMI_CONFIG.websiteId).assertEqual('a212474c-ad81-4e9e-80a0-39d735941f44');
-      expect(DEFAULT_UMAMI_CONFIG.hostname).assertEqual('vidall-tv');
+      expect(DEFAULT_UMAMI_CONFIG.hostname).assertEqual('vidall-tv.yaoshining.com');
     });
   });
 
@@ -445,8 +445,8 @@ export default function umamiReporterTest() {
 
       expect(payload.type).assertEqual('event');
       expect(payload.payload.website).assertEqual('a212474c-ad81-4e9e-80a0-39d735941f44');
-      expect(payload.payload.hostname).assertEqual('vidall-tv');
-      expect(payload.payload.url).assertEqual('app://vidall-tv/player/playback_attempt');
+      expect(payload.payload.hostname).assertEqual('vidall-tv.yaoshining.com');
+      expect(payload.payload.url).assertEqual('app://vidall-tv.yaoshining.com/player/playback_attempt');
       expect(payload.payload.name).assertEqual('playback_attempt');
       expect(payload.payload.data.success as boolean).assertTrue();
       expect(payload.payload.data.first_frame_ms as number).assertEqual(450);

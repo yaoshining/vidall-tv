@@ -219,7 +219,9 @@ export class UmamiReporter implements MetricsReporter {
 
   async flush(): Promise<void> {
     getMetricsTraceLogger().info(TAG, `Umami flush entered: queue=${this.pendingQueue.length} sending=${this.isSending}`);
-    await this.ensureIdentifyQueued();
+    if (this.pendingQueue.length > 0) {
+      await this.ensureIdentifyQueued();
+    }
     if (this.activeDrainPromise !== null) {
       getMetricsTraceLogger().info(TAG, 'Umami flush waiting for in-flight send');
     }
@@ -278,11 +280,13 @@ export class UmamiReporter implements MetricsReporter {
 
   private async drainQueue(): Promise<void> {
     this.isSending = true;
+    let sendFailed = false;
     try {
       while (this.pendingQueue.length > 0) {
         const payload = this.pendingQueue[0];
         const sent = await this.sendPayload(payload);
         if (!sent) {
+          sendFailed = true;
           break;
         }
         this.pendingQueue.shift();
@@ -294,7 +298,7 @@ export class UmamiReporter implements MetricsReporter {
     } finally {
       this.isSending = false;
       this.activeDrainPromise = null;
-      if (this.pendingQueue.length > 0) {
+      if (this.pendingQueue.length > 0 && !sendFailed) {
         void this.processQueue();
       }
     }
