@@ -308,7 +308,8 @@ export class UmamiReporter implements MetricsReporter {
       const response = await request.request(`${this.config.baseUrl}/api/send`, {
         method: http.RequestMethod.POST,
         header: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (HarmonyOS; TV) VidAll/1.0'
         },
         extraData: JSON.stringify(payload),
         connectTimeout: 15000,
