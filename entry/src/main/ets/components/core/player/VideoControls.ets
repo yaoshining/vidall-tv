@@ -11,6 +11,18 @@ import {
   saveEpisodeAutoplayCountdownSeconds,
   saveEpisodeAutoplayEnabled
 } from './EpisodeAutoplayPreferences'
+import { common } from '@kit.AbilityKit'
+import {
+  OpenSubtitlesClient,
+  SubtitleSearchResult,
+  ProxyQuotaExceededError,
+  ProxyUnavailableError,
+  InvalidApiKeyError,
+  SubtitleDownloadError
+} from '../../../lib/OpenSubtitlesClient'
+import { SubtitleDownloader, SubtitleStorageContext } from '../../../subtitle/SubtitleDownloader'
+import { parseFileName, buildSearchTitles } from '../../../lib/ScrapeClient'
+import { loadSubtitleSearchPreferenceSnapshot } from '../../../subtitle/SubtitleLanguagePreference'
 
 @ComponentV2
 struct VideoControls {
@@ -1590,8 +1602,27 @@ export struct PlayerSettingsDialog {
 export struct SubtitleSelectorDrawerDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
+  /** 当前播放视频的完整路径（用于提取搜索词和字幕目录 hash） */
+  videoPath: string = ''
+  /** 文件源类型，如 'webdav'、'local'、'network'（用于字幕本地存储目录） */
+  sourceType: string = 'network'
+  /** 文件源 ID 字符串（用于字幕本地存储目录） */
+  sourceId: string = '0'
+
   @State panelOffsetX: number = 72
   @State panelOpacity: number = 0
+  /** 是否显示搜索结果面板（替换字幕轨道列表） */
+  @State showSearchResults: boolean = false
+  /** 正在搜索中 */
+  @State isSearching: boolean = false
+  /** 搜索结果列表 */
+  @State searchResults: SubtitleSearchResult[] = []
+  /** 搜索完成但无结果 */
+  @State searchNoResults: boolean = false
+  /** 正在下载字幕 */
+  @State isDownloading: boolean = false
+  /** 正在下载的条目 fileId（用于 UI 高亮） */
+  @State downloadingFileId: number = -1
 
   aboutToAppear(): void {
     this.panelOffsetX = 72
@@ -1669,6 +1700,166 @@ export struct SubtitleSelectorDrawerDialog {
     return base + 1
   }
 
+  // ─────────────────────────────────────────────
+  // 在线字幕搜索辅助方法
+  // ─────────────────────────────────────────────
+
+  /** 从 videoPath 中提取文件名（含扩展名） */
+  private extractFileName(): string {
+    const path = this.videoPath
+    const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    return lastSlash >= 0 ? path.substring(lastSlash + 1) : path
+  }
+
+  /** 格式化下载次数：≥1000 时显示 k */
+  private formatDownloadCount(count: number): string {
+    if (count >= 1000) {
+      const k = Math.round(count / 100) / 10
+      return `${k}k`
+    }
+    return `${count}`
+  }
+
+  /** 将 BCP-47 语言代码映射为显示标签 */
+  private getResultLanguageTag(languageCode: string): string {
+    const lower = languageCode.toLowerCase()
+    if (lower === 'zh-cn' || lower === 'zh' || lower === 'chi' || lower === 'chs') {
+      return '简中'
+    }
+    if (lower === 'zh-tw' || lower === 'cht' || lower === 'zht') {
+      return '繁中'
+    }
+    if (lower === 'en' || lower === 'eng') {
+      return 'EN'
+    }
+    if (lower === 'ja' || lower === 'jpn') {
+      return '日文'
+    }
+    if (lower === 'ko' || lower === 'kor') {
+      return '韩文'
+    }
+    return languageCode.toUpperCase().substring(0, 4)
+  }
+
+  /** 语言标签文字颜色 */
+  private getResultBadgeTextColor(tag: string): string {
+    if (tag === '简中' || tag === '繁中') {
+      return '#93C5FD'
+    }
+    if (tag === '日文') {
+      return '#FCD34D'
+    }
+    return '#93C5FD'
+  }
+
+  /** 语言标签背景颜色 */
+  private getResultBadgeFillColor(tag: string): string {
+    if (tag === '简中' || tag === '繁中') {
+      return 'rgba(29, 78, 216, 0.25)'
+    }
+    if (tag === '日文') {
+      return 'rgba(120, 53, 15, 0.25)'
+    }
+    return 'rgba(29, 78, 216, 0.31)'
+  }
+
+  /** 显示 Toast 提示 */
+  private showSearchToast(message: string, duration: number): void {
+    this.getUIContext().getPromptAction().showToast({ message: message, duration: duration })
+  }
+
+  /**
+   * 触发在线字幕搜索。
+   * 流程：提取文件名 → 解析搜索词 → 读取语言偏好 → 调用 OpenSubtitlesClient.search()
+   */
+  private async startSearch(): Promise<void> {
+    this.isSearching = true
+    this.showSearchResults = true
+    this.searchResults = []
+    this.searchNoResults = false
+
+    try {
+      const fileName = this.extractFileName()
+      const parsed = parseFileName(fileName)
+      const titles = buildSearchTitles(parsed.title)
+      const query = titles.length > 0 ? titles[0] : parsed.title
+
+      const snapshot = await loadSubtitleSearchPreferenceSnapshot()
+      const languages = snapshot.languagesParam
+
+      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}"`)
+
+      const client = new OpenSubtitlesClient()
+      const results = await client.search(query, languages)
+
+      this.searchResults = results
+      this.searchNoResults = results.length === 0
+    } catch (e) {
+      if (e instanceof ProxyQuotaExceededError) {
+        this.showSearchToast('今日字幕搜索配额已用完，请在设置页填写您自己的 API Key', 4000)
+        this.showSearchResults = false
+      } else if (e instanceof ProxyUnavailableError) {
+        this.showSearchToast('字幕服务暂时不可用，请在设置页填写您自己的 API Key', 4000)
+        this.showSearchResults = false
+      } else if (e instanceof InvalidApiKeyError) {
+        this.showSearchToast('API Key 无效，请在设置页重新填写', 4000)
+        this.showSearchResults = false
+      } else {
+        this.showSearchToast('字幕搜索失败，请稍后重试', 4000)
+        this.showSearchResults = false
+      }
+    } finally {
+      this.isSearching = false
+    }
+  }
+
+  /**
+   * 下载并尝试加载用户选择的字幕条目。
+   */
+  private async downloadSubtitle(result: SubtitleSearchResult): Promise<void> {
+    if (this.isDownloading) {
+      return
+    }
+    this.isDownloading = true
+    this.downloadingFileId = result.fileId
+
+    try {
+      const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const storageCtx: SubtitleStorageContext = { filesDir: hostCtx.filesDir }
+      const downloader = new SubtitleDownloader(storageCtx)
+      const downloadResult = await downloader.download(
+        result.fileId,
+        this.videoPath,
+        this.sourceType,
+        this.sourceId
+      )
+
+      this.showSearchToast('字幕下载成功', 2000)
+      console.info(`[SubtitleSearch] 字幕已写入: ${downloadResult.localPath}`)
+
+      // TODO: 调用播放器字幕动态加载接口（当前 VideoPlayerController 尚无
+      //       addExternalSubtitle(localPath) API，待后续扩展后在此处调用）
+      // this.videoController.addExternalSubtitle(downloadResult.localPath)
+
+      this.showSearchResults = false
+    } catch (e) {
+      if (e instanceof SubtitleDownloadError) {
+        this.showSearchToast('字幕下载失败，请稍后重试', 4000)
+      } else if (e instanceof InvalidApiKeyError) {
+        this.showSearchToast('API Key 无效，请在设置页重新填写', 4000)
+      } else if (e instanceof ProxyQuotaExceededError) {
+        this.showSearchToast('今日字幕搜索配额已用完，请在设置页填写您自己的 API Key', 4000)
+      } else if (e instanceof ProxyUnavailableError) {
+        this.showSearchToast('字幕服务暂时不可用，请在设置页填写您自己的 API Key', 4000)
+      } else {
+        this.showSearchToast('字幕下载失败，请稍后重试', 4000)
+      }
+    } finally {
+      this.isDownloading = false
+      this.downloadingFileId = -1
+    }
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
       Column()
@@ -1680,8 +1871,19 @@ export struct SubtitleSelectorDrawerDialog {
         })
 
       Column({ space: 16 }) {
+        // ── 面板标题（始终可见） ──
         Row() {
-          Text('字幕')
+          if (this.showSearchResults) {
+            Text('←')
+              .fontSize(24)
+              .fontColor('#97A9CD')
+              .margin({ right: 12 })
+              .focusable(true)
+              .onClick(() => {
+                this.showSearchResults = false
+              })
+          }
+          Text(this.showSearchResults ? '在线搜索字幕' : '字幕')
             .fontSize(34)
             .fontColor('#F3F6FB')
             .fontWeight(FontWeight.Bold)
@@ -1690,177 +1892,290 @@ export struct SubtitleSelectorDrawerDialog {
         .width('100%')
         .alignItems(VerticalAlign.Center)
 
-        Text('当前字幕')
-          .fontSize(17)
-          .fontColor('#97A9CD')
-
-        Row({ space: 12 }) {
-          if (this.videoController.activeSubtitleIndex >= 0) {
-            Row() {
-              Text(this.getLanguageTag(this.getCurrentSubtitleName()))
-                .fontSize(13)
-                .fontWeight(600)
-                .fontColor(this.getLanguageBadgeTextColor(this.getLanguageTag(this.getCurrentSubtitleName())))
-            }
-            .height(26)
-            .padding({ left: 10, right: 10, top: 3, bottom: 3 })
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .borderRadius(13)
-            .backgroundColor(this.getLanguageBadgeFillColor(this.getLanguageTag(this.getCurrentSubtitleName())))
-          }
-
-          Text(this.getCurrentSubtitleName())
-            .fontSize(18)
-            .fontColor('#FBFDFF')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
-
-          if (this.videoController.activeSubtitleIndex >= 0) {
-            Text('✓')
-              .fontSize(20)
-              .fontColor('#4ADE80')
-          }
-        }
-        .width('100%')
-        .height(68)
-        .padding({ left: 16, right: 16 })
-        .justifyContent(FlexAlign.SpaceBetween)
-        .alignItems(VerticalAlign.Center)
-        .backgroundColor('rgba(255, 255, 255, 0.12)')
-        .borderRadius(16)
-        .border({
-          width: this.videoController.activeSubtitleIndex >= 0 ? 2 : 1,
-          color: this.videoController.activeSubtitleIndex >= 0 ? '#FFFEFE' : 'rgba(255, 255, 255, 0.19)'
-        })
-
-        Row({ space: 12 }) {
-          Row() {
-            Text('关闭字幕')
-              .fontSize(18)
-              .fontColor('#DDE4EE')
-          }
-          .height(48)
-          .padding({ left: 18, right: 18 })
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .backgroundColor('rgba(255, 255, 255, 0.07)')
-          .borderRadius(24)
-          .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
-          .onClick(() => {
-            this.videoController.switchSubtitleTrack(-1)
-          })
-
-          Row() {
-            Text('⏱ 时间调整')
-              .fontSize(18)
-              .fontColor('#DDE4EE')
-          }
-          .height(48)
-          .padding({ left: 18, right: 18 })
-          .justifyContent(FlexAlign.Center)
-          .alignItems(VerticalAlign.Center)
-          .backgroundColor('rgba(255, 255, 255, 0.07)')
-          .borderRadius(24)
-          .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
-        }
-        .width('100%')
-
-        Divider()
-          .strokeWidth(1)
-          .color('rgba(255, 255, 255, 0.15)')
-
-        Column({ space: 8 }) {
-          Text(`其他可用字幕 (${this.getAvailableSubtitleCount()})`)
+        if (!this.showSearchResults) {
+          // ── 正常视图：当前字幕 + 轨道列表 + 搜索按钮 ──
+          Text('当前字幕')
             .fontSize(17)
             .fontColor('#97A9CD')
 
-          Scroll() {
-            Column({ space: 8 }) {
-              ForEach(this.videoController.allSubtitleTracks, (item: SubtitleTrackItem, index: number) => {
-                if (index !== this.videoController.activeSubtitleIndex) {
-                  Row({ space: 10 }) {
-                    Row() {
-                      Text(this.getLanguageTag(item.displayName))
-                        .fontSize(13)
-                        .fontWeight(600)
-                        .fontColor(this.getLanguageBadgeTextColor(this.getLanguageTag(item.displayName)))
+          Row({ space: 12 }) {
+            if (this.videoController.activeSubtitleIndex >= 0) {
+              Row() {
+                Text(this.getLanguageTag(this.getCurrentSubtitleName()))
+                  .fontSize(13)
+                  .fontWeight(600)
+                  .fontColor(this.getLanguageBadgeTextColor(this.getLanguageTag(this.getCurrentSubtitleName())))
+              }
+              .height(26)
+              .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Center)
+              .borderRadius(13)
+              .backgroundColor(this.getLanguageBadgeFillColor(this.getLanguageTag(this.getCurrentSubtitleName())))
+            }
+
+            Text(this.getCurrentSubtitleName())
+              .fontSize(18)
+              .fontColor('#FBFDFF')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+
+            if (this.videoController.activeSubtitleIndex >= 0) {
+              Text('✓')
+                .fontSize(20)
+                .fontColor('#4ADE80')
+            }
+          }
+          .width('100%')
+          .height(68)
+          .padding({ left: 16, right: 16 })
+          .justifyContent(FlexAlign.SpaceBetween)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('rgba(255, 255, 255, 0.12)')
+          .borderRadius(16)
+          .border({
+            width: this.videoController.activeSubtitleIndex >= 0 ? 2 : 1,
+            color: this.videoController.activeSubtitleIndex >= 0 ? '#FFFEFE' : 'rgba(255, 255, 255, 0.19)'
+          })
+
+          Row({ space: 12 }) {
+            Row() {
+              Text('关闭字幕')
+                .fontSize(18)
+                .fontColor('#DDE4EE')
+            }
+            .height(48)
+            .padding({ left: 18, right: 18 })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .backgroundColor('rgba(255, 255, 255, 0.07)')
+            .borderRadius(24)
+            .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
+            .focusable(true)
+            .onClick(() => {
+              this.videoController.switchSubtitleTrack(-1)
+            })
+
+            Row() {
+              Text('⏱ 时间调整')
+                .fontSize(18)
+                .fontColor('#DDE4EE')
+            }
+            .height(48)
+            .padding({ left: 18, right: 18 })
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Center)
+            .backgroundColor('rgba(255, 255, 255, 0.07)')
+            .borderRadius(24)
+            .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
+          }
+          .width('100%')
+
+          Divider()
+            .strokeWidth(1)
+            .color('rgba(255, 255, 255, 0.15)')
+
+          Column({ space: 8 }) {
+            Text(`其他可用字幕 (${this.getAvailableSubtitleCount()})`)
+              .fontSize(17)
+              .fontColor('#97A9CD')
+
+            Scroll() {
+              Column({ space: 8 }) {
+                ForEach(this.videoController.allSubtitleTracks, (item: SubtitleTrackItem, index: number) => {
+                  if (index !== this.videoController.activeSubtitleIndex) {
+                    Row({ space: 10 }) {
+                      Row() {
+                        Text(this.getLanguageTag(item.displayName))
+                          .fontSize(13)
+                          .fontWeight(600)
+                          .fontColor(this.getLanguageBadgeTextColor(this.getLanguageTag(item.displayName)))
+                      }
+                      .height(24)
+                      .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(12)
+                      .backgroundColor(this.getLanguageBadgeFillColor(this.getLanguageTag(item.displayName)))
+
+                      Text(item.displayName)
+                        .fontSize(17)
+                        .fontColor('#EAF0F7')
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .layoutWeight(1)
+
+                      if (item.kind === 'external') {
+                        Text(`↓ ${this.getExternalSubtitleDownloadCount(index)}`)
+                          .fontSize(13)
+                          .fontColor('#97A9CD')
+                      }
                     }
-                    .height(24)
-                    .padding({ left: 9, right: 9, top: 3, bottom: 3 })
-                    .justifyContent(FlexAlign.Center)
+                    .width('100%')
+                    .height(62)
+                    .padding({ top: 12, bottom: 12, left: 14, right: 14 })
                     .alignItems(VerticalAlign.Center)
-                    .borderRadius(12)
-                    .backgroundColor(this.getLanguageBadgeFillColor(this.getLanguageTag(item.displayName)))
-
-                    Text(item.displayName)
-                      .fontSize(17)
-                      .fontColor('#EAF0F7')
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                      .layoutWeight(1)
-
-                    if (item.kind === 'external') {
-                      Text(`↓ ${this.getExternalSubtitleDownloadCount(index)}`)
-                        .fontSize(13)
-                        .fontColor('#97A9CD')
-                    }
+                    .backgroundColor('rgba(255, 255, 255, 0.05)')
+                    .borderRadius(14)
+                    .focusable(true)
+                    .onClick(() => {
+                      this.videoController.switchSubtitleTrack(index)
+                    })
                   }
-                  .width('100%')
-                  .height(62)
-                  .padding({ top: 12, bottom: 12, left: 14, right: 14 })
-                  .alignItems(VerticalAlign.Center)
-                  .backgroundColor('rgba(255, 255, 255, 0.05)')
-                  .borderRadius(14)
-                  .onClick(() => {
-                    this.videoController.switchSubtitleTrack(index)
-                  })
-                }
-              })
+                })
 
-              Row({ space: 10 }) {
-                Text('无字幕')
-                  .fontSize(17)
-                  .fontColor('#97A9CD')
+                Row({ space: 10 }) {
+                  Text('无字幕')
+                    .fontSize(17)
+                    .fontColor('#97A9CD')
+                }
+                .width('100%')
+                .height(50)
+                .padding({ top: 12, bottom: 12, left: 14, right: 14 })
+                .alignItems(VerticalAlign.Center)
+                .backgroundColor('rgba(255, 255, 255, 0.03)')
+                .borderRadius(14)
+                .focusable(true)
+                .onClick(() => {
+                  this.videoController.switchSubtitleTrack(-1)
+                })
               }
               .width('100%')
-              .height(50)
-              .padding({ top: 12, bottom: 12, left: 14, right: 14 })
-              .alignItems(VerticalAlign.Center)
-              .backgroundColor('rgba(255, 255, 255, 0.03)')
-              .borderRadius(14)
-              .onClick(() => {
-                this.videoController.switchSubtitleTrack(-1)
-              })
             }
+            .align(Alignment.Top)
+            .scrollBar(BarState.Off)
+            .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
             .width('100%')
+            .layoutWeight(1)
           }
-          .align(Alignment.Top)
-          .scrollBar(BarState.Off)
-          .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
           .width('100%')
           .layoutWeight(1)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
+          .alignItems(HorizontalAlign.Start)
 
-        Row({ space: 8 }) {
-          Text('搜索更多字幕')
-            .fontSize(18)
-            .fontColor('#B0C4DE')
-          Text('→')
-            .fontSize(18)
-            .fontColor('#B0C4DE')
+          // ── 在线搜索字幕入口按钮（Task 6.1）──
+          Row({ space: 10 }) {
+            Text('🔍')
+              .fontSize(18)
+              .fontColor('#B0C4DE')
+            Text('在线搜索字幕')
+              .fontSize(18)
+              .fontColor('#B0C4DE')
+          }
+          .width('100%')
+          .height(52)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('rgba(255, 255, 255, 0.03)')
+          .borderRadius(26)
+          .border({ width: 1, color: 'rgba(255, 255, 255, 0.15)' })
+          .focusable(true)
+          .onClick(() => {
+            this.startSearch().catch(() => {})
+          })
+        } else {
+          // ── 搜索结果视图（Task 6.2）──
+          if (this.isSearching) {
+            // 加载中状态
+            Column({ space: 16 }) {
+              LoadingProgress()
+                .width(48)
+                .height(48)
+                .color('#6B9EE0')
+              Text('正在搜索字幕...')
+                .fontSize(16)
+                .fontColor('#97A9CD')
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+          } else if (this.searchNoResults) {
+            // 无结果状态
+            Column({ space: 12 }) {
+              Text('未找到字幕')
+                .fontSize(18)
+                .fontColor('#97A9CD')
+              Text('请尝试在设置页调整字幕语言偏好')
+                .fontSize(14)
+                .fontColor('rgba(151, 169, 205, 0.6)')
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+          } else {
+            // 结果列表（Task 6.2）
+            Column({ space: 8 }) {
+              Text(`搜索结果 (${this.searchResults.length})`)
+                .fontSize(17)
+                .fontColor('#97A9CD')
+
+              Scroll() {
+                Column({ space: 8 }) {
+                  ForEach(this.searchResults, (result: SubtitleSearchResult) => {
+                    Row({ space: 10 }) {
+                      Row() {
+                        Text(this.getResultLanguageTag(result.languageCode))
+                          .fontSize(13)
+                          .fontWeight(600)
+                          .fontColor(this.getResultBadgeTextColor(this.getResultLanguageTag(result.languageCode)))
+                      }
+                      .height(24)
+                      .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(12)
+                      .backgroundColor(this.getResultBadgeFillColor(this.getResultLanguageTag(result.languageCode)))
+
+                      Column({ space: 4 }) {
+                        Text(result.fileName)
+                          .fontSize(16)
+                          .fontColor('#EAF0F7')
+                          .maxLines(2)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .width('100%')
+                        Text(`${result.languageCode}  ↓ ${this.formatDownloadCount(result.downloadCount)}`)
+                          .fontSize(13)
+                          .fontColor('#97A9CD')
+                          .maxLines(1)
+                          .width('100%')
+                      }
+                      .layoutWeight(1)
+                      .alignItems(HorizontalAlign.Start)
+
+                      if (this.isDownloading && this.downloadingFileId === result.fileId) {
+                        LoadingProgress()
+                          .width(24)
+                          .height(24)
+                          .color('#6B9EE0')
+                      }
+                    }
+                    .width('100%')
+                    .padding({ top: 12, bottom: 12, left: 14, right: 14 })
+                    .alignItems(VerticalAlign.Center)
+                    .backgroundColor('rgba(255, 255, 255, 0.05)')
+                    .borderRadius(14)
+                    .focusable(true)
+                    .enabled(!this.isDownloading)
+                    .onClick(() => {
+                      this.downloadSubtitle(result).catch(() => {})
+                    })
+                  }, (result: SubtitleSearchResult) => result.subtitleId)
+                }
+                .width('100%')
+              }
+              .align(Alignment.Top)
+              .scrollBar(BarState.Off)
+              .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY })
+              .width('100%')
+              .layoutWeight(1)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+          }
         }
-        .width('100%')
-        .height(52)
-        .justifyContent(FlexAlign.Center)
-        .alignItems(VerticalAlign.Center)
-        .backgroundColor('rgba(255, 255, 255, 0.03)')
-        .borderRadius(26)
-        .border({ width: 1, color: 'rgba(255, 255, 255, 0.15)' })
       }
       .width('33.33%')
       .height('100%')
