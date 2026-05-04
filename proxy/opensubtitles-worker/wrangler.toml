@@ -1,0 +1,11 @@
+name = "opensubtitles-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "placeholder_replace_before_deploy"
+preview_id = "placeholder_replace_before_deploy"
+
+[vars]
+# OPENSUBTITLES_API_KEY is set via wrangler secret, not here
