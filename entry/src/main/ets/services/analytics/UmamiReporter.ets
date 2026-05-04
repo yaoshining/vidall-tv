@@ -64,6 +64,21 @@ export interface UmamiIdentifyRequestPayload {
   value: string;
 }
 
+export interface UmamiPageViewRequestPayload {
+  website: string;
+  hostname: string;
+  url: string;
+  referrer: string;
+  title: string;
+  language: string;
+  screen: string;
+}
+
+export interface UmamiPageViewRequest {
+  type: 'pageview';
+  payload: UmamiPageViewRequestPayload;
+}
+
 export interface UmamiEventRequest {
   type: 'event';
   payload: UmamiEventRequestPayload;
@@ -74,7 +89,7 @@ export interface UmamiIdentifyRequest {
   payload: UmamiIdentifyRequestPayload;
 }
 
-export type UmamiSendRequest = UmamiEventRequest | UmamiIdentifyRequest;
+export type UmamiSendRequest = UmamiPageViewRequest | UmamiEventRequest | UmamiIdentifyRequest;
 
 export interface UmamiHttpResponse {
   responseCode: number;
@@ -252,15 +267,22 @@ export class UmamiReporter implements MetricsReporter {
 
   trackPageView(path: string): void {
     getMetricsTraceLogger().info(TAG, `Umami trackPageView path=${path} queue=${this.pendingQueue.length}`);
-    const data = buildBaseFields();
-    const payload: UmamiEventRequest = {
-      type: 'event',
+    let lang = 'zh-CN';
+    try {
+      lang = i18n.System.getSystemLanguage();
+    } catch (e) {
+      // fallback to zh-CN
+    }
+    const payload: UmamiPageViewRequest = {
+      type: 'pageview',
       payload: {
         website: this.config.websiteId,
         hostname: this.config.hostname,
         url: path,
-        name: 'page_view',
-        data
+        referrer: '',
+        title: '',
+        language: lang,
+        screen: SCREEN_RESOLUTION
       }
     };
     this.enqueue(payload);
@@ -287,7 +309,7 @@ export class UmamiReporter implements MetricsReporter {
   private enqueue(payload: UmamiSendRequest): void {
     this.pendingQueue.push(payload);
     getMetricsTraceLogger().info(TAG,
-      `Umami enqueue: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
+      `Umami enqueue: type=${payload.type} queue=${this.pendingQueue.length}`);
     void this.kickoffProcessing();
   }
 
@@ -342,6 +364,15 @@ export class UmamiReporter implements MetricsReporter {
         const payload = this.pendingQueue[0];
         const sent = await this.sendPayload(payload);
         if (!sent) {
+          if (payload.type === 'identify') {
+            // identify 不被服务器支持时直接丢弃，避免阻塞后续 pageview/event
+            this.pendingQueue.shift();
+            this.identifyQueued = false;
+            // 标记为已处理，防止被重新入队
+            this.identifySent = true;
+            getMetricsTraceLogger().warn(TAG, 'Umami identify failed, dropping to unblock event queue');
+            continue;
+          }
           sendFailed = true;
           break;
         }
@@ -364,7 +395,7 @@ export class UmamiReporter implements MetricsReporter {
     const request = this.requestFactory();
     try {
       getMetricsTraceLogger().info(TAG,
-        `Umami send start: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
+        `Umami send start: type=${payload.type} queue=${this.pendingQueue.length}`);
       const response = await request.request(`${this.config.baseUrl}/api/send`, {
         method: http.RequestMethod.POST,
         header: {
@@ -377,7 +408,7 @@ export class UmamiReporter implements MetricsReporter {
       });
       const ok = response.responseCode >= 200 && response.responseCode < 300;
       if (ok) {
-        getMetricsTraceLogger().info(TAG, `Umami send success: type=${payload.type} name=${payload.payload.name}`);
+        getMetricsTraceLogger().info(TAG, `Umami send success: type=${payload.type}`);
       }
       if (!ok) {
         getMetricsTraceLogger().warn(TAG, `Umami send failed: type=${payload.type} code=${response.responseCode}`);
