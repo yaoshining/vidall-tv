@@ -74,8 +74,9 @@ export interface UmamiPageViewRequestPayload {
   screen: string;
 }
 
+// Umami v2 新版已移除 type:"pageview"，pageview 通过 type:"event" + 无 name 字段实现
 export interface UmamiPageViewRequest {
-  type: 'pageview';
+  type: 'event';
   payload: UmamiPageViewRequestPayload;
 }
 
@@ -274,7 +275,7 @@ export class UmamiReporter implements MetricsReporter {
       // fallback to zh-CN
     }
     const payload: UmamiPageViewRequest = {
-      type: 'pageview',
+      type: 'event',
       payload: {
         website: this.config.websiteId,
         hostname: this.config.hostname,
