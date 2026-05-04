@@ -4,7 +4,8 @@ import { Context } from '@ohos.abilityAccessCtrl';
 import {
   AppPreferences,
   AppPreferencesLoader,
-  AppPreferencesStore
+  AppPreferencesStore,
+  PrefKey
 } from '../main/ets/utils/AppPreferences';
 import {
   loadSubtitleLanguagePreference,
@@ -105,6 +106,50 @@ export default function appPreferencesTest() {
       expect(loadedPreference.languages[0]).assertEqual('en');
       expect(loadedPreference.languages[1]).assertEqual('zh-CN');
       expect(loadedPreference.hideOtherLanguages).assertFalse();
+    });
+  });
+
+  describe('AppPreferences_device_uuid', () => {
+    beforeEach(() => {
+      AppPreferences.resetForTesting();
+    });
+
+    afterEach(() => {
+      AppPreferences.setStoreLoaderForTesting(null);
+      AppPreferences.resetForTesting();
+    });
+
+    it('should expose device uuid preference key', 0, () => {
+      expect(PrefKey.METRICS_DEVICE_UUID).assertEqual('metrics_device_uuid');
+    });
+
+    it('should create and persist device uuid when missing', 0, async () => {
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      const store = new InMemoryAppPreferencesStore();
+      const loader: AppPreferencesLoader = async () => store;
+
+      AppPreferences.setStoreLoaderForTesting(loader);
+      await AppPreferences.init(ctx);
+
+      const deviceUuid = await AppPreferences.getOrCreateDeviceUuid();
+      const persistedValue = await AppPreferences.get(PrefKey.METRICS_DEVICE_UUID, '');
+
+      expect(deviceUuid.length > 0).assertTrue();
+      expect(persistedValue).assertEqual(deviceUuid);
+    });
+
+    it('should reuse persisted device uuid when present', 0, async () => {
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      const store = new InMemoryAppPreferencesStore();
+      const loader: AppPreferencesLoader = async () => store;
+
+      store.seed(PrefKey.METRICS_DEVICE_UUID, 'existing-device-uuid');
+      AppPreferences.setStoreLoaderForTesting(loader);
+      await AppPreferences.init(ctx);
+
+      const deviceUuid = await AppPreferences.getOrCreateDeviceUuid();
+
+      expect(deviceUuid).assertEqual('existing-device-uuid');
     });
   });
 }

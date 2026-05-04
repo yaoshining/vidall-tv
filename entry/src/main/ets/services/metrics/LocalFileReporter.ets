@@ -134,6 +134,10 @@ export class LocalFileReporter implements MetricsReporter {
   private metricsData: MetricsData;
   private lock: Promise<void> = Promise.resolve();
 
+  getReporterName(): string {
+    return 'LocalFileReporter';
+  }
+
   constructor(context: Context) {
     this.context = context;
     this.metricsData = this.initializeMetricsData();

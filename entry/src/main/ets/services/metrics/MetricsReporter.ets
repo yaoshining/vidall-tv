@@ -41,6 +41,11 @@ export interface MediaIdentity {
  */
 export interface MetricsReporter {
   /**
+   * Optional reporter label for diagnostics and observability.
+   */
+  getReporterName?(): string;
+
+  /**
    * Record a playback attempt and its outcome
    *
    * @param success - Whether the playback attempt succeeded (first frame rendered)
