@@ -540,6 +540,10 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   }
 
   onSubtitleUpdate(info: SubtitleInfo): void {
+    // 字幕已关闭时（activeSubtitleIndex < 0），忽略 AVPlayer 仍在推送的 onTimedText 回调
+    if (this.activeSubtitleIndex < 0) {
+      return;
+    }
     if (this.srtEntries.length > 0) {
       return;
     }

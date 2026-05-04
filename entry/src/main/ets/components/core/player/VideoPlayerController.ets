@@ -741,6 +741,10 @@ export class VideoPlayerController {
       }
       this.subtitleAdapter.onSubtitleUpdate(info);
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+      // 字幕已关闭（activeSubtitleIndex < 0），忽略后续定时器与文本更新
+      if (this.activeSubtitleIndex < 0) {
+        return;
+      }
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `内嵌字幕回调: text="${info.text?.substring(0, 80)}" startTime=${info.startTime}ms duration=${info.duration}ms`);
       if (info.text) {
