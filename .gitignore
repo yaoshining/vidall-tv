@@ -19,6 +19,3 @@
 .worktrees/
 /certs
 /openspec
-
-# Cloudflare Worker local dev secrets
-proxy/opensubtitles-worker/.dev.vars
