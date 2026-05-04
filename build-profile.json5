@@ -41,6 +41,19 @@
             "useNormalizedOHMUrl": true
           }
         }
+      },
+      {
+        "name": "production",
+        "signingConfig": "release",
+        "targetSdkVersion": "6.0.2(22)",
+        "compatibleSdkVersion": "5.1.1(19)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
       }
     ],
     "buildModeSet": [
@@ -60,7 +73,8 @@
         {
           "name": "default",
           "applyToProducts": [
-            "default"
+            "default",
+            "production"
           ]
         }
       ]

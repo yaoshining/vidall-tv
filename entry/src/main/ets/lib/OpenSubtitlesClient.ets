@@ -1,13 +1,7 @@
 import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
-
-// ─────────────────────────────────────────────
-// 通道基础 URL 常量
-// ─────────────────────────────────────────────
-
-const DIRECT_BASE_URL = 'https://api.opensubtitles.com/api/v1';
-const PROXY_BASE_URL = 'https://os-proxy.vidall.app/v1';
+import { AppEnv } from '../config/AppEnv';
 
 // ─────────────────────────────────────────────
 // 错误类型
@@ -139,9 +133,9 @@ export class OpenSubtitlesClient {
   async resolveBaseUrl(): Promise<string> {
     const apiKey = await AppPreferences.get(PrefKey.OPENSUBTITLES_API_KEY, '');
     if (apiKey.length > 0) {
-      return DIRECT_BASE_URL;
+      return AppEnv.OS_DIRECT_BASE_URL;
     }
-    return PROXY_BASE_URL;
+    return AppEnv.OS_PROXY_BASE_URL;
   }
 
   private async isDirectMode(): Promise<boolean> {

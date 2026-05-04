@@ -4,7 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
+    "dev:remote": "wrangler dev --remote",
     "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "secret:put": "wrangler secret put OPENSUBTITLES_API_KEY",
+    "secret:put:production": "wrangler secret put OPENSUBTITLES_API_KEY --env production",
+    "kv:create": "wrangler kv:namespace create RATE_LIMIT_KV",
+    "kv:create:production": "wrangler kv:namespace create RATE_LIMIT_KV --env production",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
