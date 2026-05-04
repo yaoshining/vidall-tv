@@ -1,4 +1,6 @@
 import { AppPreferences, PrefKey } from '../utils/AppPreferences'
+import { UmamiAnalyticsService } from '../services/analytics/UmamiAnalyticsService'
+import { UmamiEventData } from '../services/analytics/UmamiReporter'
 
 export interface SubtitleLanguageOption {
   code: string
@@ -418,6 +420,10 @@ export async function saveSubtitleLanguagePreference(preference: SubtitleLanguag
     PrefKey.SUBTITLE_LANGUAGE_PREFERENCE,
     JSON.stringify(normalizedPreference)
   )
+  if (UmamiAnalyticsService.isInitialized()) {
+    const evtData: UmamiEventData = { setting_key: 'SUBTITLE_LANGUAGE_PREFERENCE', new_value: JSON.stringify(normalizedPreference) };
+    UmamiAnalyticsService.getInstance().trackEvent('settings', 'settings_changed', evtData);
+  }
 }
 
 export async function loadSubtitleSearchPreferenceSnapshot(): Promise<SubtitleLanguageSearchPreferenceSnapshot> {

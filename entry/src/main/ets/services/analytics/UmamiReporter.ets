@@ -1,12 +1,14 @@
 import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { i18n } from '@kit.LocalizationKit';
 import { AppPreferences } from '../../utils/AppPreferences';
 import { MediaIdentity, MetricsReporter } from '../metrics/MetricsReporter';
 import { getMetricsTraceLogger } from '../metrics/MetricsTraceLogger';
 
 const TAG = 'UmamiReporter';
 const DOMAIN = 0x0001;
+const SCREEN_RESOLUTION = '3840x2160';
 
 export interface UmamiConfig {
   baseUrl: string;
@@ -35,6 +37,15 @@ export interface UmamiEventData {
   scanned?: number;
   total?: number;
   coverage_pct?: number;
+  screen?: string;
+  total_files?: number;
+  duration_ms?: number;
+  error_code?: number;
+  backend?: string;
+  os_version?: string;
+  app_version?: string;
+  setting_key?: string;
+  new_value?: string | number | boolean;
 }
 
 export interface UmamiEventRequestPayload {
@@ -85,6 +96,20 @@ function buildUmamiUrl(config: UmamiConfig, feature: string, eventName: string):
   return `app://${config.hostname}/${feature}/${eventName}`;
 }
 
+function buildBaseFields(): UmamiEventData {
+  let lang = 'zh-CN';
+  try {
+    lang = i18n.System.getSystemLanguage();
+  } catch (e) {
+    // fallback to zh-CN
+  }
+  const base: UmamiEventData = {
+    screen: SCREEN_RESOLUTION,
+    language: lang
+  };
+  return base;
+}
+
 export function buildUmamiEventPayload(
   config: UmamiConfig,
   feature: string,
@@ -127,6 +152,7 @@ function buildPlaybackAttemptData(
   media?: MediaIdentity,
   sourceType?: string
 ): UmamiEventData {
+  const base = buildBaseFields();
   const data: UmamiEventData = {
     success,
     first_frame_ms: firstFrameMs,
@@ -136,25 +162,32 @@ function buildPlaybackAttemptData(
     provider_id: media?.provider_id ?? null,
     title: media?.title ?? null,
     year: media?.year ?? null,
-    file_name: media?.file_name ?? null
+    file_name: media?.file_name ?? null,
+    screen: base.screen,
+    language: base.language
   };
   return data;
 }
 
 function buildSubtitleUsageData(language: string | null): UmamiEventData {
+  const base = buildBaseFields();
   const data: UmamiEventData = {
     language,
-    has_subtitle: language !== null
+    has_subtitle: language !== null,
+    screen: base.screen
   };
   return data;
 }
 
 function buildScanCoverageData(scanned: number, total: number): UmamiEventData {
   const coverage = total > 0 ? Math.round((scanned / total) * 10000) / 100 : 0;
+  const base = buildBaseFields();
   const data: UmamiEventData = {
     scanned,
     total,
-    coverage_pct: coverage
+    coverage_pct: coverage,
+    screen: base.screen,
+    language: base.language
   };
   return data;
 }
@@ -214,6 +247,29 @@ export class UmamiReporter implements MetricsReporter {
       'scan_coverage',
       buildScanCoverageData(scanned, total)
     );
+    this.enqueue(payload);
+  }
+
+  trackPageView(path: string): void {
+    getMetricsTraceLogger().info(TAG, `Umami trackPageView path=${path} queue=${this.pendingQueue.length}`);
+    const data = buildBaseFields();
+    const payload: UmamiEventRequest = {
+      type: 'event',
+      payload: {
+        website: this.config.websiteId,
+        hostname: this.config.hostname,
+        url: path,
+        name: 'page_view',
+        data
+      }
+    };
+    this.enqueue(payload);
+  }
+
+  trackCustomEvent(feature: string, name: string, data: UmamiEventData): void {
+    getMetricsTraceLogger().info(TAG,
+      `Umami trackCustomEvent feature=${feature} name=${name} queue=${this.pendingQueue.length}`);
+    const payload = buildUmamiEventPayload(this.config, feature, name, data);
     this.enqueue(payload);
   }
 

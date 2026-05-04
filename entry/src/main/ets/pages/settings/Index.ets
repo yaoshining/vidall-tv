@@ -9,6 +9,7 @@ import { DirectorySelectorBuilder } from "./builders/DirectorySelectorBuilder"
 import { SubtitleLanguagePreferenceBuilder } from "./builders/SubtitleLanguagePreferenceBuilder"
 import { SettingsController } from "./SettingsController"
 import SettingType from "./SettingType"
+import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService"
 
 export interface SettingsPageParam {
   type: SettingType
@@ -20,6 +21,24 @@ export struct SettingsPage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Local menuVisible: boolean = false
   @Provider('settingsController') controller: SettingsController = new SettingsController()
+
+  private settingsPagePath(): string {
+    if (this.controller.type === SettingType.FILE_SOURCE ||
+      this.controller.type === SettingType.ADD_FILE_SOURCE ||
+      this.controller.type === SettingType.WEBDAV_CONFIG ||
+      this.controller.type === SettingType.SMB_CONFIG ||
+      this.controller.type === SettingType.DIRECTORY_SELECTOR ||
+      this.controller.type === SettingType.SMB_DIRECTORY_SELECTOR) {
+      return '/settings/sources';
+    }
+    return '/settings/player';
+  }
+
+  aboutToAppear(): void {
+    if (UmamiAnalyticsService.isInitialized()) {
+      UmamiAnalyticsService.getInstance().trackPageView(this.settingsPagePath());
+    }
+  }
 
   /**
    * 处理返回操作

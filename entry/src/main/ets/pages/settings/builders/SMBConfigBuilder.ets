@@ -6,6 +6,8 @@ import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 import promptAction from '@ohos.promptAction'
 import { SMBClient } from '../../../lib/SMBClient'
+import { UmamiAnalyticsService } from "../../../services/analytics/UmamiAnalyticsService"
+import { UmamiEventData } from "../../../services/analytics/UmamiReporter"
 
 @ComponentV2
 struct SMBConfigBuilderComponent {
@@ -113,7 +115,15 @@ struct SMBConfigBuilderComponent {
       const result = await client.testConnection()
       if (result.success) {
         this.getUIContext().getPromptAction().showToast({ message: '连接成功', duration: 2000 })
+        if (UmamiAnalyticsService.isInitialized()) {
+          const evtData: UmamiEventData = { source_type: FileSourceType.SMB };
+          UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connected', evtData);
+        }
       } else {
+        if (UmamiAnalyticsService.isInitialized()) {
+          const evtData: UmamiEventData = { source_type: FileSourceType.SMB };
+          UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connect_failed', evtData);
+        }
         this.getUIContext().getPromptAction().showToast({
           message: result.error ?? '连接失败',
           duration: 3000

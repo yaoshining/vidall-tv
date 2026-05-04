@@ -17,6 +17,8 @@ import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
 import { VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../db/models/MediaEntity';
 import { MetricsService } from '../services/metrics/MetricsService';
+import { UmamiAnalyticsService } from '../services/analytics/UmamiAnalyticsService';
+import { UmamiEventData } from '../services/analytics/UmamiReporter';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -1631,6 +1633,11 @@ export class VideoScannerUtil {
     // In incremental scans this will be a subset of allVideos.length.
     if (MetricsService.isInitialized()) {
       MetricsService.getInstance().recordScanCoverage(processedVideos, allVideos.length);
+    }
+
+    if (UmamiAnalyticsService.isInitialized()) {
+      const scanData: UmamiEventData = { total_files: allVideos.length, duration_ms: elapsedMs };
+      UmamiAnalyticsService.getInstance().trackEvent('scanner', 'scan_completed', scanData);
     }
 
     return {
