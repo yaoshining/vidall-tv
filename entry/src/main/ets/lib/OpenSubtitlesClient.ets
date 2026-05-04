@@ -217,7 +217,7 @@ export class OpenSubtitlesClient {
       return osResp;
     } catch (e) {
       req.destroy();
-      throw e;
+      throw e as Error;
     }
   }
 
@@ -282,7 +282,7 @@ export class OpenSubtitlesClient {
       } catch (e) {
         // 已分类的业务错误直接上抛，不重试
         if (e instanceof InvalidApiKeyError || e instanceof ProxyQuotaExceededError) {
-          throw e;
+          throw e as Error;
         }
         // 代理通道网络连接异常 → ProxyUnavailableError
         if (!isDirect) {
@@ -343,7 +343,7 @@ export class OpenSubtitlesClient {
         e instanceof InvalidApiKeyError ||
         e instanceof ProxyQuotaExceededError
       ) {
-        throw e;
+        throw e as Error;
       }
       if (!isDirect) {
         const msg = (e as BusinessError).message ?? JSON.stringify(e);
