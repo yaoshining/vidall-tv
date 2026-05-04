@@ -36,6 +36,10 @@ export class PrefKey {
   static readonly SUBTITLE_LANGUAGE_PREFERENCE = 'subtitle_language_preference';
   /** 指标上报使用的持久化设备 UUID */
   static readonly METRICS_DEVICE_UUID = 'metrics_device_uuid';
+  /** OpenSubtitles API Key（直连通道，留空则走代理） */
+  static readonly OPENSUBTITLES_API_KEY = 'opensubtitles_api_key';
+  /** OpenSubtitles 设备 ID（代理通道身份标识，首次启动自动生成） */
+  static readonly OPENSUBTITLES_DEVICE_ID = 'opensubtitles_device_id';
 }
 
 // ─────────────────────────────────────────────
@@ -169,6 +173,21 @@ export class AppPreferences {
       const err = e as BusinessError;
       console.error(`[AppPreferences] 写入失败 key=${key}: ${err.message ?? JSON.stringify(e)}`);
     }
+  }
+
+  /**
+   * 获取或创建 OpenSubtitles 代理通道设备 ID。
+   * 首次调用时自动生成 UUID 并持久化；后续调用直接返回已存值。
+   */
+  static async getOrCreateDeviceId(): Promise<string> {
+    const existing = await AppPreferences.get(PrefKey.OPENSUBTITLES_DEVICE_ID, '');
+    if (existing.length > 0) {
+      return existing;
+    }
+    const newId = AppPreferences.generateDeviceUuid();
+    await AppPreferences.set(PrefKey.OPENSUBTITLES_DEVICE_ID, newId);
+    const verified = await AppPreferences.get(PrefKey.OPENSUBTITLES_DEVICE_ID, '');
+    return verified.length > 0 ? verified : newId;
   }
 
   static async getOrCreateDeviceUuid(): Promise<string> {

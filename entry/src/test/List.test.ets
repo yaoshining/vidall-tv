@@ -40,6 +40,8 @@ import fileSourceRoutingTest from './FileSourceRouting.test';
 import fileExplorerContextTest from './FileExplorerContext.test';
 import umamiReporterTest from './ets/services/analytics/UmamiReporter.test';
 import compositeMetricsReporterTest from './ets/services/metrics/CompositeMetricsReporter.test';
+import openSubtitlesPrefsTest from './OpenSubtitlesPrefs.test';
+import openSubtitlesClientTest from './OpenSubtitlesClient.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -82,4 +84,6 @@ export default function testsuite() {
   fileExplorerContextTest();
   umamiReporterTest();
   compositeMetricsReporterTest();
+  openSubtitlesPrefsTest();
+  openSubtitlesClientTest();
 }
