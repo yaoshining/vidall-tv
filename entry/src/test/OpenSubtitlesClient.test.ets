@@ -16,6 +16,7 @@ import {
   InvalidApiKeyError,
   SubtitleSearchResult
 } from '../main/ets/lib/OpenSubtitlesClient';
+import { AppEnv } from '../main/ets/config/AppEnv';
 
 // ─────────────────────────────────────────────
 // 内存 Store 辅助
@@ -110,7 +111,7 @@ export default function openSubtitlesClientTest() {
       const client = new OpenSubtitlesClient();
       const baseUrl = await client.resolveBaseUrl();
 
-      expect(baseUrl).assertEqual('https://os-proxy.vidall.app/v1');
+      expect(baseUrl).assertEqual(AppEnv.OS_PROXY_BASE_URL);
     });
 
     it('should use direct base url when api key is configured', 0, async () => {
