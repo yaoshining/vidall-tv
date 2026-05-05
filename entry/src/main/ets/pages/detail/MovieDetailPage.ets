@@ -419,7 +419,11 @@ export struct MovieDetailPage {
         seriesProviderId: '',
         seasonNumber: 0,
         episodeNumber: 0,
-        mediaKey: mKey
+        mediaKey: mKey,
+        scrapeOriginalTitle: this.movieEntity?.originalTitle ?? item.originalTitle,
+        tmdbId: this.movieEntity?.providerId ?? item.providerId,
+        fileSourceType: fileSource.type === FileSourceType.SMB ? 'smb' : 'webdav',
+        fileSourceId: fileSource.id !== undefined ? String(fileSource.id) : undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {

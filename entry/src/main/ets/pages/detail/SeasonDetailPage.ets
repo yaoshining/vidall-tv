@@ -1014,7 +1014,11 @@ export struct SeasonDetailPage {
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mKey,
         startPositionMs: startPositionMs > 0 ? startPositionMs : undefined,
-        playbackContext
+        playbackContext,
+        scrapeOriginalTitle: this.seriesEntity?.originalTitle,
+        tmdbId: this.seriesEntity?.providerId,
+        fileSourceType: fileSource.type === FileSourceType.SMB ? 'smb' : 'webdav',
+        fileSourceId: fileSource.id !== undefined ? String(fileSource.id) : undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
         if (popInfo.result !== null && popInfo.result !== undefined) {

@@ -211,7 +211,8 @@ export class OpenSubtitlesClient {
       return osResp;
     } catch (e) {
       req.destroy();
-      throw e as Error;
+      const be = e as BusinessError;
+      throw new Error(`HTTP 请求失败: code=${be.code ?? ''} ${be.message ?? JSON.stringify(e)}`);
     }
   }
 
@@ -231,14 +232,21 @@ export class OpenSubtitlesClient {
     year?: number,
     seasonNumber?: number,
     episodeNumber?: number,
-    mediaType?: 'movie' | 'tv'
+    mediaType?: 'movie' | 'tv',
+    tmdbId?: string
   ): Promise<SubtitleSearchResult[]> {
     const baseUrl = await this.resolveBaseUrl();
     const isDirect = await this.isDirectMode();
     const headers = await this.buildHeaders();
-    const encodedQuery = encodeURIComponent(query);
     const encodedLangs = encodeURIComponent(languages);
-    let url = `${baseUrl}/subtitles?query=${encodedQuery}&languages=${encodedLangs}`;
+    // 有 tmdb_id 时直接用 ID 查询，精准度远高于文本搜索
+    let url: string;
+    if (tmdbId !== undefined && tmdbId.length > 0) {
+      url = `${baseUrl}/subtitles?tmdb_id=${tmdbId}&languages=${encodedLangs}`;
+    } else {
+      const encodedQuery = encodeURIComponent(query);
+      url = `${baseUrl}/subtitles?query=${encodedQuery}&languages=${encodedLangs}`;
+    }
     // 附加精准匹配参数，减少无关结果
     if (year !== undefined) {
       url += `&year=${year}`;
@@ -289,14 +297,16 @@ export class OpenSubtitlesClient {
           return [];
         }
 
-        return parsed.data.map((item: OsDataItem): SubtitleSearchResult => {
+        return parsed.data
+          .filter((item: OsDataItem): boolean => item.attributes.files.length > 0)
+          .map((item: OsDataItem): SubtitleSearchResult => {
           const attr = item.attributes;
           const result: SubtitleSearchResult = {
             subtitleId: attr.subtitle_id,
-            fileName: attr.release,
+            fileName: attr.files[0].file_name || attr.release,
             languageCode: attr.language,
             downloadCount: attr.download_count,
-            fileId: attr.files.length > 0 ? attr.files[0].file_id : 0
+            fileId: attr.files[0].file_id
           };
           return result;
         });

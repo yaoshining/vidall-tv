@@ -136,7 +136,7 @@ export class SubtitleDownloader {
     } catch (e) {
       // 目录已存在时 mkdirSync 可能抛出，忽略该错误
       const be = e as BusinessError;
-      // EEXIST（17）属于正常情况，其他错误仍记录但不中断
+      // 13900015（EEXIST）属于正常情况，其他错误仍记录但不中断
       if (be.code !== 13900015) {
         console.warn(`[SubtitleDownloader] mkdirSync warning code=${be.code}: ${be.message}`);
       }
@@ -167,14 +167,15 @@ export class SubtitleDownloader {
     }
 
     // Task 4.3 - 写入文件
+    const fileHandle = fs.openSync(localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
     try {
-      const fileHandle = fs.openSync(localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
       fs.writeSync(fileHandle.fd, arrayBuffer);
-      fs.closeSync(fileHandle);
     } catch (e) {
+      fs.closeSync(fileHandle);
       const be = e as BusinessError;
       throw new SubtitleDownloadError(`字幕文件写入失败: ${be.message ?? JSON.stringify(e)}`);
     }
+    fs.closeSync(fileHandle);
 
     const result: DownloadResult = {
       localPath: localPath,

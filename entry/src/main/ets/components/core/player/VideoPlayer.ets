@@ -84,15 +84,11 @@ export struct VideoPlayer {
 
   /** 从 VideoData 推断字幕存储用的 sourceType 字符串 */
   private resolveSubtitleSourceType(): string {
+    if (this.data.fileSourceType) {
+      return this.data.fileSourceType
+    }
     if (this.data.type === VideoDataType.FILE_URI) {
       return 'local'
-    }
-    const src = this.data.videoSrc
-    if (src.startsWith('smb://')) {
-      return 'smb'
-    }
-    if (src.startsWith('webdav://') || src.startsWith('webdavs://')) {
-      return 'webdav'
     }
     return 'network'
   }
@@ -165,7 +161,9 @@ export struct VideoPlayer {
       videoController: this.controller,
       videoPath: this.data.videoSrc,
       sourceType: this.resolveSubtitleSourceType(),
-      sourceId: '0'
+      sourceId: this.data.fileSourceId ?? '0',
+      scrapeOriginalTitle: this.data.scrapeOriginalTitle,
+      tmdbId: this.data.tmdbId
     }),
     customStyle: true,
     backgroundColor: Color.Transparent,

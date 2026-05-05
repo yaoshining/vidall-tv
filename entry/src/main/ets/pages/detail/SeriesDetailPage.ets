@@ -818,7 +818,11 @@ export struct SeriesDetailPage {
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mediaKey,
-        playbackContext
+        playbackContext,
+        scrapeOriginalTitle: this.seriesEntity?.originalTitle,
+        tmdbId: this.seriesEntity?.providerId,
+        fileSourceType: fileSource.type === FileSourceType.SMB ? 'smb' : 'webdav',
+        fileSourceId: fileSource.id !== undefined ? String(fileSource.id) : undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
         if (popInfo.result !== null && popInfo.result !== undefined) {

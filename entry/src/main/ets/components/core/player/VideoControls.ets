@@ -1608,6 +1608,10 @@ export struct SubtitleSelectorDrawerDialog {
   sourceType: string = 'network'
   /** 文件源 ID 字符串（用于字幕本地存储目录） */
   sourceId: string = '0'
+  /** 刮削得到的原始标题（英文，可选），优先用于 OpenSubtitles 搜索 */
+  scrapeOriginalTitle: string = ''
+  /** TMDB ID（可选），用于 OpenSubtitles tmdb_id 精准匹配 */
+  tmdbId: string = ''
 
   @State panelOffsetX: number = 72
   @State panelOpacity: number = 0
@@ -1781,16 +1785,35 @@ export struct SubtitleSelectorDrawerDialog {
     try {
       const fileName = this.extractFileName()
       const parsed = parseFileName(fileName)
-      const titles = buildSearchTitles(parsed.title)
-      const query = titles.length > 0 ? titles[0] : parsed.title
+
+      // 优先使用刮削数据：originalTitle 质量远高于文件名解析
+      let query: string
+      let searchYear: number | undefined = parsed.year
+      let searchSeason: number | undefined = parsed.seasonNumber
+      let searchEpisode: number | undefined = parsed.episodeNumber
+      let searchMediaType: 'movie' | 'tv' | undefined = parsed.mediaType
+      let searchTmdbId: string | undefined = undefined
+
+      if (this.scrapeOriginalTitle.length > 0) {
+        // 有刮削原始标题，直接使用
+        query = this.scrapeOriginalTitle
+      } else {
+        // 无刮削数据，回退到文件名解析
+        const titles = buildSearchTitles(parsed.title)
+        query = titles.length > 0 ? titles[0] : parsed.title
+      }
+
+      if (this.tmdbId.length > 0) {
+        searchTmdbId = this.tmdbId
+      }
 
       const snapshot = await loadSubtitleSearchPreferenceSnapshot()
       const languages = snapshot.languagesParam
 
-      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${parsed.year}, 季: ${parsed.seasonNumber}, 集: ${parsed.episodeNumber}`)
+      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${searchYear}, 季: ${searchSeason}, 集: ${searchEpisode}, tmdbId: ${searchTmdbId ?? 'none'}`)
 
       const client = new OpenSubtitlesClient()
-      const results = await client.search(query, languages, parsed.year, parsed.seasonNumber, parsed.episodeNumber, parsed.mediaType)
+      const results = await client.search(query, languages, searchYear, searchSeason, searchEpisode, searchMediaType, searchTmdbId)
 
       this.searchResults = results
       this.searchNoResults = results.length === 0
@@ -1837,12 +1860,12 @@ export struct SubtitleSelectorDrawerDialog {
       this.showSearchToast('字幕下载成功', 2000)
       console.info(`[SubtitleSearch] 字幕已写入: ${downloadResult.localPath}`)
 
-      // TODO: 调用播放器字幕动态加载接口（当前 VideoPlayerController 尚无
-      //       addExternalSubtitle(localPath) API，待后续扩展后在此处调用）
-      // this.videoController.addExternalSubtitle(downloadResult.localPath)
+      await this.videoController.addExternalSubtitle(downloadResult.localPath)
 
       this.showSearchResults = false
     } catch (e) {
+      const errMsg = (e as object as Record<string, string>)['message'] ?? JSON.stringify(e)
+      console.error(`[SubtitleDownload] 下载异常 type=${(e as object)?.constructor?.name} msg=${errMsg}`)
       if (e instanceof SubtitleDownloadError) {
         this.showSearchToast('字幕下载失败，请稍后重试', 4000)
       } else if (e instanceof InvalidApiKeyError) {

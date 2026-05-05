@@ -275,6 +275,7 @@ export struct SmbFileExplorerPage {
       title: file.name,
       presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
       presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
+      fileSourceType: 'smb',
       playbackContext: FileExplorerContext.build(
         this.fileExplorerController.sortedResources,
         file.path,

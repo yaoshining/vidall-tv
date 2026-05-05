@@ -5,7 +5,6 @@
  * 基于 WebDAVClient 提供目录浏览能力
  */
 
-import url from '@ohos.url'
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient'
 import { WebDAVSourceConfig } from '../db/models/FileSourceEntity'
 import { getFileExplorerErrorMessage } from '../components/core/file/FileExplorerAdapter'
@@ -37,9 +36,12 @@ export class WebDAVDirectoryProvider implements DirectoryProvider {
     // 创建 WebDAV 客户端
     this.webdavClient = new WebDAVClient(webdavConfig)
     
-    // 构建端点摘要
-    const parsedUrl = new url.URL(webdavConfig.baseUrl)
-    this.endpointSummary = `${parsedUrl.hostname}:${parsedUrl.port || (parsedUrl.protocol === 'https:' ? '443' : '80')}`
+    // 构建端点摘要（用正则解析避免 automock 环境中 URLSearchParams 缺失）
+    const urlMatch = webdavConfig.baseUrl.match(/^(https?):\/\/([^/:]+)(?::(\d+))?/)
+    const protocol = urlMatch?.[1] ?? 'http'
+    const hostname = urlMatch?.[2] ?? webdavConfig.baseUrl
+    const port = urlMatch?.[3] ?? (protocol === 'https' ? '443' : '80')
+    this.endpointSummary = `${hostname}:${port}`
   }
 
   /**

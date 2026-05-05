@@ -60,6 +60,26 @@ export interface PlayerPageParam {
    * 由 SeasonDetailPage / SeriesDetailPage 在 playEpisode() 中构建并传入。
    */
   playbackContext?: PlaybackContext;
+  /**
+   * 刮削得到的原始标题（英文，可选）。用于 OpenSubtitles 字幕搜索，
+   * 优先于文件名解析，避免中文/混合标题问题。
+   */
+  scrapeOriginalTitle?: string;
+  /**
+   * TMDB ID（数字字符串，可选）。电影或剧集系列级别。
+   * 用于 OpenSubtitles `tmdb_id` 精准匹配字幕。
+   */
+  tmdbId?: string;
+  /**
+   * 文件源类型（可选），如 'webdav'、'smb'。透传到 VideoData.fileSourceType，
+   * 用于字幕本地缓存分桶策略中的 sourceType 字段。
+   */
+  fileSourceType?: string;
+  /**
+   * 文件源 ID（可选），对应数据库 FileSource.id 的字符串形式。
+   * 透传到 VideoData.fileSourceId，用于字幕缓存分桶的 sourceId 字段。
+   */
+  fileSourceId?: string;
 }
 
 export interface ResolvedEpisodePlaybackSource {
@@ -295,6 +315,21 @@ export struct PlayerPage {
     }
     if (pageParam.presetSubtitleTracks && pageParam.presetSubtitleTracks.length > 0) {
       nextVideoData.presetSubtitleTracks = pageParam.presetSubtitleTracks;
+    }
+    if (pageParam.scrapeOriginalTitle) {
+      nextVideoData.scrapeOriginalTitle = pageParam.scrapeOriginalTitle;
+    }
+    if (pageParam.tmdbId) {
+      nextVideoData.tmdbId = pageParam.tmdbId;
+    } else if (pageParam.seriesProviderId && pageParam.seriesProviderId.length > 0) {
+      // TV series: seriesProviderId IS the TMDB series ID, reuse for subtitle search
+      nextVideoData.tmdbId = pageParam.seriesProviderId;
+    }
+    if (pageParam.fileSourceType) {
+      nextVideoData.fileSourceType = pageParam.fileSourceType;
+    }
+    if (pageParam.fileSourceId) {
+      nextVideoData.fileSourceId = pageParam.fileSourceId;
     }
     return nextVideoData;
   }
