@@ -4,12 +4,11 @@ import {
   hasSeasonSiblingDirectory,
   createVideoScrapeContext,
   VideoScrapeContext
-} from '../../main/ets/utils/VideoScannerUtil';
+} from '../../../main/ets/utils/VideoScannerUtil';
 import {
-  MediaTypeClassification,
   isWeakSemanticTitleText,
   isSeasonDirectorySegment
-} from '../../main/ets/lib/MediaTypeClassifier';
+} from '../../../main/ets/lib/MediaTypeClassifier';
 
 /**
  * 测试场景：增量扫描时扫描上下文变化的处理
@@ -18,13 +17,13 @@ import {
  */
 export default function incrementalScanContextChangeTest() {
   describe('IncrementalScanContextChange', () => {
-    it('纯数字文件名为弱语义', () => {
+    it('纯数字文件名为弱语义', 0, () => {
       expect(isWeakSemanticTitleText('19')).assertTrue();
       expect(isWeakSemanticTitleText('20')).assertTrue();
       expect(isWeakSemanticTitleText('22')).assertTrue();
     });
 
-    it('isSeasonDirectorySegment应识别基础季目录名', () => {
+    it('isSeasonDirectorySegment应识别基础季目录名', 0, () => {
       // 纯季目录名（旧测试已覆盖的场景）
       expect(isSeasonDirectorySegment('第一季')).assertTrue();
       expect(isSeasonDirectorySegment('Season 1')).assertTrue();
@@ -33,7 +32,7 @@ export default function incrementalScanContextChangeTest() {
       expect(isSeasonDirectorySegment('第 2 季')).assertTrue();
     });
 
-    it('isSeasonDirectorySegment应识别带质量后缀的真实季目录名 (#191 QA证据)', () => {
+    it('isSeasonDirectorySegment应识别带质量后缀的真实季目录名 (#191 QA证据)', 0, () => {
       // 真实场景：季目录名后面跟随质量信息
       expect(isSeasonDirectorySegment('第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1')).assertTrue();
       expect(isSeasonDirectorySegment('Season 01 - 1080p BluRay')).assertTrue();
@@ -41,7 +40,7 @@ export default function incrementalScanContextChangeTest() {
       expect(isSeasonDirectorySegment('第二季 - 4K HDR')).assertTrue();
     });
 
-    it('isSeasonDirectorySegment应拒绝非季目录名', () => {
+    it('isSeasonDirectorySegment应拒绝非季目录名', 0, () => {
       // 避免误判：标题中恰好包含 S02 等模式但不是季目录
       expect(isSeasonDirectorySegment('特典')).assertFalse();
       expect(isSeasonDirectorySegment('其他目录')).assertFalse();
@@ -50,7 +49,7 @@ export default function incrementalScanContextChangeTest() {
       // 但由于 normalizeSemanticToken 会移除空格，实际测试需考虑归一化后的形态
     });
 
-    it('检测到季目录兄弟时应返回true', () => {
+    it('检测到季目录兄弟时应返回true', 0, () => {
       const childDirs1 = ['第一季', '其他目录'];
       expect(hasSeasonSiblingDirectory(childDirs1)).assertTrue();
 
@@ -61,7 +60,7 @@ export default function incrementalScanContextChangeTest() {
       expect(hasSeasonSiblingDirectory(childDirs3)).assertTrue();
     });
 
-    it('检测到带质量后缀的季目录兄弟时应返回true (#191 QA证据)', () => {
+    it('检测到带质量后缀的季目录兄弟时应返回true (#191 QA证据)', 0, () => {
       // 真实场景：目录列表包含带质量信息的季目录
       const childDirs1 = ['第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1', '其他目录'];
       expect(hasSeasonSiblingDirectory(childDirs1)).assertTrue();
@@ -73,12 +72,12 @@ export default function incrementalScanContextChangeTest() {
       expect(hasSeasonSiblingDirectory(childDirs3)).assertTrue();
     });
 
-    it('无季目录兄弟时应返回false', () => {
+    it('无季目录兄弟时应返回false', 0, () => {
       const childDirs = ['其他目录', '特典'];
       expect(hasSeasonSiblingDirectory(childDirs)).assertFalse();
     });
 
-    it('无季目录兄弟时纯数字文件应分类为unknown', () => {
+    it('无季目录兄弟时纯数字文件应分类为unknown', 0, () => {
       const context: VideoScrapeContext = {
         seasonSiblingDetected: false
       };
@@ -91,7 +90,7 @@ export default function incrementalScanContextChangeTest() {
       expect(result.reason).assertEqual('insufficient-evidence');
     });
 
-    it('有季目录兄弟时纯数字文件应分类为tv', () => {
+    it('有季目录兄弟时纯数字文件应分类为tv', 0, () => {
       const context: VideoScrapeContext = {
         seasonSiblingDetected: true
       };
@@ -104,7 +103,7 @@ export default function incrementalScanContextChangeTest() {
       expect(result.reason).assertEqual('season-sibling-detected');
     });
 
-    it('扫描上下文应正确传递seasonSiblingDetected', () => {
+    it('扫描上下文应正确传递seasonSiblingDetected', 0, () => {
       const rootPath = '/storage/蜜语纪';
       const depth = 0;
 
@@ -119,7 +118,7 @@ export default function incrementalScanContextChangeTest() {
       expect(contextWith.seriesHint).assertEqual('蜜语纪');
     });
 
-    it('深度>0时不应设置seriesHint', () => {
+    it('深度>0时不应设置seriesHint', 0, () => {
       const rootPath = '/storage/蜜语纪';
       const depth = 1;
 
@@ -128,7 +127,7 @@ export default function incrementalScanContextChangeTest() {
       expect(context.seriesHint).assertUndefined();
     });
 
-    it('真实场景模拟：扫描上下文变化前后的分类结果应不同', () => {
+    it('真实场景模拟：扫描上下文变化前后的分类结果应不同', 0, () => {
       // 模拟首次扫描：蜜语纪/ 只有 19.mp4-22.mp4（无季目录）
       const contextBefore: VideoScrapeContext = {
         seasonSiblingDetected: false
@@ -152,10 +151,10 @@ export default function incrementalScanContextChangeTest() {
       expect(resultAfter.mediaType).assertEqual('tv');
 
       // 关键断言：即使文件本身未变化，分类结果应该不同
-      expect(resultBefore.mediaType).assertNotEqual(resultAfter.mediaType);
+      expect(resultBefore.mediaType !== resultAfter.mediaType).assertTrue();
     });
 
-    it('真实文件名带质量后缀时纯数字前缀应被识别为弱语义 (#191 第三轮真机失败)', () => {
+    it('真实文件名带质量后缀时纯数字前缀应被识别为弱语义 (#191 第三轮真机失败)', 0, () => {
       // 真实场景：文件名为 "19 4K.mp4"，前缀 "19" 是弱语义
       expect(isWeakSemanticTitleText('19 4K')).assertTrue();
       expect(isWeakSemanticTitleText('20 4K')).assertTrue();
@@ -163,7 +162,7 @@ export default function incrementalScanContextChangeTest() {
       expect(isWeakSemanticTitleText('19 2160p')).assertTrue();
     });
 
-    it('真实文件名带质量后缀时有季目录兄弟应分类为tv (#191 第三轮真机失败)', () => {
+    it('真实文件名带质量后缀时有季目录兄弟应分类为tv (#191 第三轮真机失败)', 0, () => {
       // 真实场景：文件名为 "19 4K.mp4"，目录下有 "第 1 季 - 2160p WEB-DL HDR H265 DDP 5.1"
       const context: VideoScrapeContext = {
         seasonSiblingDetected: true
@@ -177,7 +176,7 @@ export default function incrementalScanContextChangeTest() {
       expect(result.reason).assertEqual('season-sibling-detected');
     });
 
-    it('真实文件名带质量后缀时无季目录兄弟应分类为unknown (#191 第三轮真机失败)', () => {
+    it('真实文件名带质量后缀时无季目录兄弟应分类为unknown (#191 第三轮真机失败)', 0, () => {
       // 真实场景：文件名为 "19 4K.mp4"，但目录下无季目录兄弟
       const context: VideoScrapeContext = {
         seasonSiblingDetected: false
@@ -191,7 +190,7 @@ export default function incrementalScanContextChangeTest() {
       expect(result.reason).assertEqual('insufficient-evidence');
     });
 
-    it('增量扫描时已存在video file但无scrape_info的弱语义文件在季目录兄弟出现后应重新处理 (#191 第三轮真机失败根因)', () => {
+    it('增量扫描时已存在video file但无scrape_info的弱语义文件在季目录兄弟出现后应重新处理 (#191 第三轮真机失败根因)', 0, () => {
       // 这个测试覆盖真实数据流：
       // 1. 首次扫描：19 4K.mp4 被识别为 video file，但因为弱语义+无季目录兄弟，分类为 unknown
       //    可能没有创建 scrape_info，或创建了 mediaType=unknown 的 scrape_info
@@ -223,7 +222,7 @@ export default function incrementalScanContextChangeTest() {
       expect(resultIncremental.mediaType).assertEqual('tv');
 
       // 关键断言：即使 video file 未变化，增量扫描时检测到季目录兄弟，应重新分类
-      expect(resultFirst.mediaType).assertNotEqual(resultIncremental.mediaType);
+      expect(resultFirst.mediaType !== resultIncremental.mediaType).assertTrue();
     });
   });
 }
