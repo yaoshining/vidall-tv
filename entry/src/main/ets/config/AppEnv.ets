@@ -36,10 +36,16 @@ export class AppEnv {
 
   /**
    * OpenSubtitles 代理 Worker 地址。
-   * - 开发环境：本地 wrangler dev（http://localhost:8787/v1）
    * - 生产环境：Cloudflare Worker（https://os-proxy.vidall.app/v1）
+   * - 开发环境：Mac 局域网 IP + wrangler dev 端口
+   *
+   * ⚠️ 开发注意事项：
+   *   1. 在 proxy/opensubtitles-worker/ 执行 `npm run dev`（监听 0.0.0.0:8787）
+   *   2. 若 Mac 的 LAN IP 变化，更新下方 DEV_PROXY_HOST 后重新编译 App
+   *   3. Mac LAN IP 查询：`ipconfig getifaddr en0`
    */
+  private static readonly DEV_PROXY_HOST: string = '192.168.3.199';
   static readonly OS_PROXY_BASE_URL: string = AppEnv.IS_PRODUCTION
     ? 'https://os-proxy.vidall.app/v1'
-    : 'http://localhost:8787/v1';
+    : `http://${AppEnv.DEV_PROXY_HOST}:8787/v1`;
 }
