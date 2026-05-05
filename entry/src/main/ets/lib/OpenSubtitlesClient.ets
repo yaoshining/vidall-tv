@@ -217,17 +217,44 @@ export class OpenSubtitlesClient {
 
   /**
    * 搜索字幕。
-   * @param query   视频标题关键词
-   * @param languages BCP-47 语言代码，如 "zh-CN"
+   * @param query        视频标题关键词
+   * @param languages    BCP-47 语言代码，如 "zh-CN"
+   * @param year         发行年份（可选，提升精准度）
+   * @param seasonNumber 剧集季号（可选）
+   * @param episodeNumber 剧集集号（可选）
+   * @param mediaType    媒体类型 "movie" | "episode"（可选）
    * @returns 搜索结果列表；0 条时返回空数组（不抛错）
    */
-  async search(query: string, languages: string): Promise<SubtitleSearchResult[]> {
+  async search(
+    query: string,
+    languages: string,
+    year?: number,
+    seasonNumber?: number,
+    episodeNumber?: number,
+    mediaType?: 'movie' | 'tv'
+  ): Promise<SubtitleSearchResult[]> {
     const baseUrl = await this.resolveBaseUrl();
     const isDirect = await this.isDirectMode();
     const headers = await this.buildHeaders();
     const encodedQuery = encodeURIComponent(query);
     const encodedLangs = encodeURIComponent(languages);
-    const url = `${baseUrl}/subtitles?query=${encodedQuery}&languages=${encodedLangs}`;
+    let url = `${baseUrl}/subtitles?query=${encodedQuery}&languages=${encodedLangs}`;
+    // 附加精准匹配参数，减少无关结果
+    if (year !== undefined) {
+      url += `&year=${year}`;
+    }
+    if (seasonNumber !== undefined) {
+      url += `&season_number=${seasonNumber}`;
+    }
+    if (episodeNumber !== undefined) {
+      url += `&episode_number=${episodeNumber}`;
+    }
+    // OpenSubtitles API type 参数：movie / episode（tv → episode）
+    if (mediaType === 'tv') {
+      url += `&type=episode`;
+    } else if (mediaType === 'movie') {
+      url += `&type=movie`;
+    }
 
     const maxRetries = 3;
     let lastError: Error = new Error('未知错误');

@@ -1787,10 +1787,10 @@ export struct SubtitleSelectorDrawerDialog {
       const snapshot = await loadSubtitleSearchPreferenceSnapshot()
       const languages = snapshot.languagesParam
 
-      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}"`)
+      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${parsed.year}, 季: ${parsed.seasonNumber}, 集: ${parsed.episodeNumber}`)
 
       const client = new OpenSubtitlesClient()
-      const results = await client.search(query, languages)
+      const results = await client.search(query, languages, parsed.year, parsed.seasonNumber, parsed.episodeNumber, parsed.mediaType)
 
       this.searchResults = results
       this.searchNoResults = results.length === 0
