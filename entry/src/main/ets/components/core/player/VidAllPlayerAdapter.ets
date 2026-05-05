@@ -5,6 +5,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 import buffer from '@ohos.buffer';
+import { UmamiAnalyticsService } from '../../../services/analytics/UmamiAnalyticsService';
+import { UmamiEventData } from '../../../services/analytics/UmamiReporter';
 
 const TAG = '[VidAllPlayerAdapter]';
 const METRICS_TAG = 'VidAll_Metrics';
@@ -217,6 +219,10 @@ export class VidAllPlayerAdapter implements IPlayer {
           hilog.error(CommonConstants.LOG_DOMAIN, TAG,
             `onError: handle=${currentHandle} code=${code} hint=${hint}`);
           this._onErrorCb?.(new Error(errorMessage));
+          if (UmamiAnalyticsService.isInitialized()) {
+            const errData: UmamiEventData = { error_code: code.toString(), backend: 'avplayer' };
+            UmamiAnalyticsService.getInstance().trackEvent('player', 'playback_error', errData);
+          }
         },
         (posMs: number) => {
           // 状态门禁：同 onError。

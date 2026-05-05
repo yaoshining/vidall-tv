@@ -8,6 +8,8 @@ import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { CancellableFunction, DebounceUtil } from "../../../utils/DebounceUtil"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
+import { UmamiAnalyticsService } from "../../../services/analytics/UmamiAnalyticsService"
+import { UmamiEventData } from "../../../services/analytics/UmamiReporter"
 
 @ComponentV2
 struct WebDAVConfigBuilderComponent {
@@ -197,7 +199,20 @@ struct WebDAVConfigBuilderComponent {
 
       if (result.success) {
         this.getUIContext().getPromptAction().showToast({ message: '连接成功' })
+        if (UmamiAnalyticsService.isInitialized()) {
+          const evtData: UmamiEventData = { source_type: FileSourceType.WEBDAV };
+          UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connected', evtData);
+        }
       } else {
+        if (UmamiAnalyticsService.isInitialized()) {
+          // 从 result.message 提取可聚合的错误码
+          const errorCode = result.message.includes('401') ? 'AUTH_FAILED'
+            : result.message.includes('timeout') ? 'TIMEOUT'
+            : result.message.includes('403') ? 'FORBIDDEN'
+            : 'UNKNOWN';
+          const evtData: UmamiEventData = { source_type: FileSourceType.WEBDAV, error_code: errorCode };
+          UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connect_failed', evtData);
+        }
         this.getUIContext().showAlertDialog({
           title: '连接失败',
           message: result.message,

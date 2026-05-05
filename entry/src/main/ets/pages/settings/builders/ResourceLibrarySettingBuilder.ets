@@ -3,6 +3,8 @@ import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences";
 import promptAction from '@ohos.promptAction';
+import { UmamiAnalyticsService } from "../../../services/analytics/UmamiAnalyticsService";
+import { UmamiEventData } from "../../../services/analytics/UmamiReporter";
 
 @ComponentV2
 struct ResourceLibrarySettingBuilderComponent {
@@ -44,6 +46,10 @@ struct ResourceLibrarySettingBuilderComponent {
     try {
       await AppPreferences.set(PrefKey.TMDB_API_KEY, value);
       this.tmdbApiKey = value;
+      if (UmamiAnalyticsService.isInitialized()) {
+        const evtData: UmamiEventData = { setting_key: 'TMDB_API_KEY', new_value: value ? 'set' : 'cleared' };
+        UmamiAnalyticsService.getInstance().trackEvent('settings', 'settings_changed', evtData);
+      }
       this.getUIContext().getPromptAction().showToast({
         message: value ? 'API Key 已保存' : 'API Key 已清除'
       });

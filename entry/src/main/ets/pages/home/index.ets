@@ -5,6 +5,7 @@ import { HomeTopBar } from "./topbar"
 import { TabContentBuilder } from "./tabs"
 import { TabItem, TabItemCode } from "../../stores/tabbar/TabBarModel"
 import { FileSourceStore } from "../../stores/files/FileSourceStore"
+import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService"
 
 @ComponentV2
 @Preview({
@@ -20,6 +21,28 @@ export struct HomePage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
 
   swiperController = new SwiperController()
+
+  private tabIndexToPath(index: number): string {
+    const tab = this.tabBarModel.tabs[index];
+    if (tab === undefined) {
+      return '/home';
+    }
+    if (tab.code === TabItemCode.MEDIA_LIBRARY) {
+      return '/media-library';
+    }
+    if (tab.code === TabItemCode.FILE_SOURCE) {
+      return '/file-browser';
+    }
+    return '/home';
+  }
+
+  aboutToAppear(): void {
+    if (UmamiAnalyticsService.isInitialized()) {
+      // 按实际当前 tab 上报，而非固定 /home（Swiper.onChange 首次不触发）
+      const path = this.tabIndexToPath(this.tabBarModel.currentTabIndex);
+      UmamiAnalyticsService.getInstance().trackPageView(path);
+    }
+  }
 
   build() {
     Scroll() {
@@ -72,6 +95,9 @@ export struct HomePage {
         }
         .onChange((index) => {
           this.tabBarModel.currentTabIndex = index
+          if (UmamiAnalyticsService.isInitialized()) {
+            UmamiAnalyticsService.getInstance().trackPageView(this.tabIndexToPath(index));
+          }
         })
         .index(this.tabBarModel.currentTabIndex)
         .indicator(false)

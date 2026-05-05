@@ -11,6 +11,7 @@ import { FfprobeUtil } from '../../utils/FfprobeUtil'
 import { isVideoFile } from '../../utils/VideoFileUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { FileExplorerContext } from '../../components/core/player/PlaybackContext'
+import { UmamiAnalyticsService } from '../../services/analytics/UmamiAnalyticsService'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 对外导出的路由参数接口
@@ -375,6 +376,12 @@ export struct SmbFileExplorerPage {
   }
 
   // ── UI ──────────────────────────────────────────────────────────────────────
+
+  aboutToAppear(): void {
+    if (UmamiAnalyticsService.isInitialized()) {
+      UmamiAnalyticsService.getInstance().trackPageView('/file-browser');
+    }
+  }
 
   build() {
     NavDestination() {

@@ -6,6 +6,8 @@ import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 import promptAction from '@ohos.promptAction'
 import { SMBClient } from '../../../lib/SMBClient'
+import { UmamiAnalyticsService } from "../../../services/analytics/UmamiAnalyticsService"
+import { UmamiEventData } from "../../../services/analytics/UmamiReporter"
 
 @ComponentV2
 struct SMBConfigBuilderComponent {
@@ -113,7 +115,21 @@ struct SMBConfigBuilderComponent {
       const result = await client.testConnection()
       if (result.success) {
         this.getUIContext().getPromptAction().showToast({ message: '连接成功', duration: 2000 })
+        if (UmamiAnalyticsService.isInitialized()) {
+          const evtData: UmamiEventData = { source_type: FileSourceType.SMB };
+          UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connected', evtData);
+        }
       } else {
+        if (UmamiAnalyticsService.isInitialized()) {
+          // 从 result.error 提取可聚合的错误码
+          const errMsg = result.error ?? '';
+          const errorCode = errMsg.includes('AUTH') || errMsg.includes('401') || errMsg.includes('认证') ? 'AUTH_FAILED'
+            : errMsg.includes('timeout') || errMsg.includes('超时') ? 'TIMEOUT'
+            : errMsg.includes('refused') || errMsg.includes('拒绝') ? 'CONNECTION_REFUSED'
+            : 'UNKNOWN';
+          const evtData: UmamiEventData = { source_type: FileSourceType.SMB, error_code: errorCode };
+          UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connect_failed', evtData);
+        }
         this.getUIContext().getPromptAction().showToast({
           message: result.error ?? '连接失败',
           duration: 3000

@@ -19,6 +19,7 @@ import { FileSourceType, SMBSourceConfig, WebDAVSourceConfig } from "../../db/mo
 import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../components/core/player/EpisodePlaybackManager";
 import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
+import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -236,6 +237,12 @@ export struct PlayerPage {
   @Local showEpisodeAutoplayOverlay: boolean = false
   @Local episodeAutoplayRemainingSeconds: number = 0
   @Local episodeAutoplayNextTitle: string = ''
+
+  aboutToAppear(): void {
+    if (UmamiAnalyticsService.isInitialized()) {
+      UmamiAnalyticsService.getInstance().trackPageView('/player');
+    }
+  }
 
   /** 合并字幕行中各 Segment 的文本 */
   private mergeSubtitleLineText(line: SubtitleSegment[]): string {

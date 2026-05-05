@@ -9,6 +9,12 @@ import { PlayerEvents } from '../components/core/player/Constants';
 import { ServiceLocator } from '../services/ServiceLocator';
 import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
 import { MetricsService } from '../services/metrics/MetricsService';
+import { CompositeMetricsReporter } from '../services/metrics/CompositeMetricsReporter';
+import { LocalFileReporter } from '../services/metrics/LocalFileReporter';
+import { UmamiReporter, UmamiEventData } from '../services/analytics/UmamiReporter';
+import { UmamiAnalyticsService } from '../services/analytics/UmamiAnalyticsService';
+import bundleManager from '@ohos.bundle.bundleManager';
+import deviceInfo from '@ohos.deviceInfo';
 
 const DOMAIN = 0x0000;
 
@@ -21,9 +27,33 @@ export default class EntryAbility extends UIAbility {
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
 
-    // 初始化 MetricsService
-    MetricsService.initialize(this.context);
+    // 初始化 MetricsService（共享 UmamiReporter 实例给 UmamiAnalyticsService）
+    const umamiReporter = new UmamiReporter();
+    MetricsService.initialize(this.context, new CompositeMetricsReporter([
+      new LocalFileReporter(this.context),
+      umamiReporter
+    ]));
     hilog.info(DOMAIN, 'testTag', 'MetricsService initialized');
+
+    // 初始化 UmamiAnalyticsService（复用同一 UmamiReporter 实例）
+    UmamiAnalyticsService.initialize(umamiReporter);
+    hilog.info(DOMAIN, 'testTag', 'UmamiAnalyticsService initialized');
+
+    // 发送 app_launch 事件
+    bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT)
+      .then((info) => {
+        const svc = UmamiAnalyticsService.getInstance();
+        const appVersion = info.versionName;
+        const osVersion = deviceInfo.osFullName;
+        // 使用 version 字段（Issue 规范命名），同时保留 os_version 上报系统版本
+        const eventData: UmamiEventData = { version: appVersion, os_version: osVersion };
+        svc.trackEvent('system', 'app_launch', eventData);
+        hilog.info(DOMAIN, 'testTag', `app_launch sent version=${appVersion}`);
+      })
+      .catch(() => {
+        const eventData: UmamiEventData = { os_version: deviceInfo.osFullName };
+        UmamiAnalyticsService.getInstance().trackEvent('system', 'app_launch', eventData);
+      });
 
     // 初始化 EntitlementService (v1.x: LocalFree 实现，所有功能免费)
     const entitlementService = new LocalFreeEntitlementService();

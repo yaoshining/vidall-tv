@@ -1,12 +1,14 @@
 import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { i18n } from '@kit.LocalizationKit';
 import { AppPreferences } from '../../utils/AppPreferences';
 import { MediaIdentity, MetricsReporter } from '../metrics/MetricsReporter';
 import { getMetricsTraceLogger } from '../metrics/MetricsTraceLogger';
 
 const TAG = 'UmamiReporter';
 const DOMAIN = 0x0001;
+const SCREEN_RESOLUTION = '3840x2160';
 
 export interface UmamiConfig {
   baseUrl: string;
@@ -30,11 +32,26 @@ export interface UmamiEventData {
   title?: string | null;
   year?: number | null;
   file_name?: string | null;
+  // 设备系统语言（由 buildBaseFields 填充）
   language?: string | null;
+  // 字幕语言（与设备语言分开，避免语义冲突）
+  subtitle_language?: string | null;
   has_subtitle?: boolean;
   scanned?: number;
   total?: number;
   coverage_pct?: number;
+  screen?: string;
+  total_files?: number;
+  duration_ms?: number;
+  // 可聚合的错误码字符串，如 'AUTH_FAILED' / 'TIMEOUT' / 'UNKNOWN'
+  error_code?: string;
+  backend?: string;
+  os_version?: string;
+  app_version?: string;
+  // app_launch 事件使用的版本字段
+  version?: string;
+  setting_key?: string;
+  new_value?: string | number | boolean;
 }
 
 export interface UmamiEventRequestPayload {
@@ -53,6 +70,22 @@ export interface UmamiIdentifyRequestPayload {
   value: string;
 }
 
+export interface UmamiPageViewRequestPayload {
+  website: string;
+  hostname: string;
+  url: string;
+  referrer: string;
+  title: string;
+  language: string;
+  screen: string;
+}
+
+// Umami v2 新版已移除 type:"pageview"，pageview 通过 type:"event" + 无 name 字段实现
+export interface UmamiPageViewRequest {
+  type: 'event';
+  payload: UmamiPageViewRequestPayload;
+}
+
 export interface UmamiEventRequest {
   type: 'event';
   payload: UmamiEventRequestPayload;
@@ -63,7 +96,7 @@ export interface UmamiIdentifyRequest {
   payload: UmamiIdentifyRequestPayload;
 }
 
-export type UmamiSendRequest = UmamiEventRequest | UmamiIdentifyRequest;
+export type UmamiSendRequest = UmamiPageViewRequest | UmamiEventRequest | UmamiIdentifyRequest;
 
 export interface UmamiHttpResponse {
   responseCode: number;
@@ -83,6 +116,20 @@ function createDefaultUmamiHttpRequest(): UmamiHttpRequest {
 
 function buildUmamiUrl(config: UmamiConfig, feature: string, eventName: string): string {
   return `app://${config.hostname}/${feature}/${eventName}`;
+}
+
+function buildBaseFields(): UmamiEventData {
+  let lang = 'zh-CN';
+  try {
+    lang = i18n.System.getSystemLanguage();
+  } catch (e) {
+    // fallback to zh-CN
+  }
+  const base: UmamiEventData = {
+    screen: SCREEN_RESOLUTION,
+    language: lang
+  };
+  return base;
 }
 
 export function buildUmamiEventPayload(
@@ -127,6 +174,7 @@ function buildPlaybackAttemptData(
   media?: MediaIdentity,
   sourceType?: string
 ): UmamiEventData {
+  const base = buildBaseFields();
   const data: UmamiEventData = {
     success,
     first_frame_ms: firstFrameMs,
@@ -136,25 +184,35 @@ function buildPlaybackAttemptData(
     provider_id: media?.provider_id ?? null,
     title: media?.title ?? null,
     year: media?.year ?? null,
-    file_name: media?.file_name ?? null
+    file_name: media?.file_name ?? null,
+    screen: base.screen,
+    language: base.language
   };
   return data;
 }
 
-function buildSubtitleUsageData(language: string | null): UmamiEventData {
+function buildSubtitleUsageData(subtitleLang: string | null): UmamiEventData {
+  const base = buildBaseFields();
   const data: UmamiEventData = {
-    language,
-    has_subtitle: language !== null
+    // 设备系统语言（与字幕语言保持语义独立）
+    language: base.language,
+    // 字幕语言，null 表示未开启字幕
+    subtitle_language: subtitleLang,
+    has_subtitle: subtitleLang !== null,
+    screen: base.screen
   };
   return data;
 }
 
 function buildScanCoverageData(scanned: number, total: number): UmamiEventData {
   const coverage = total > 0 ? Math.round((scanned / total) * 10000) / 100 : 0;
+  const base = buildBaseFields();
   const data: UmamiEventData = {
     scanned,
     total,
-    coverage_pct: coverage
+    coverage_pct: coverage,
+    screen: base.screen,
+    language: base.language
   };
   return data;
 }
@@ -217,6 +275,66 @@ export class UmamiReporter implements MetricsReporter {
     this.enqueue(payload);
   }
 
+  trackPageView(path: string): void {
+    getMetricsTraceLogger().info(TAG, `Umami trackPageView path=${path} queue=${this.pendingQueue.length}`);
+    let lang = 'zh-CN';
+    try {
+      lang = i18n.System.getSystemLanguage();
+    } catch (e) {
+      // fallback to zh-CN
+    }
+    const payload: UmamiPageViewRequest = {
+      type: 'event',
+      payload: {
+        website: this.config.websiteId,
+        hostname: this.config.hostname,
+        url: path,
+        referrer: '',
+        title: '',
+        language: lang,
+        screen: SCREEN_RESOLUTION
+      }
+    };
+    this.enqueue(payload);
+  }
+
+  trackCustomEvent(feature: string, name: string, data: UmamiEventData): void {
+    getMetricsTraceLogger().info(TAG,
+      `Umami trackCustomEvent feature=${feature} name=${name} queue=${this.pendingQueue.length}`);
+    // 补齐基础字段（language / screen / app_version / os_version），调用方显式传入的字段优先
+    const base = buildBaseFields();
+    const merged: UmamiEventData = {
+      language: data.language ?? base.language,
+      screen: data.screen ?? base.screen,
+      app_version: data.app_version ?? base.app_version,
+      os_version: data.os_version ?? base.os_version,
+      // 以下为纯业务字段，直接取调用方传入值
+      success: data.success,
+      first_frame_ms: data.first_frame_ms,
+      source_type: data.source_type,
+      local_id: data.local_id,
+      provider: data.provider,
+      provider_id: data.provider_id,
+      title: data.title,
+      year: data.year,
+      file_name: data.file_name,
+      subtitle_language: data.subtitle_language,
+      has_subtitle: data.has_subtitle,
+      scanned: data.scanned,
+      total: data.total,
+      coverage_pct: data.coverage_pct,
+      total_files: data.total_files,
+      duration_ms: data.duration_ms,
+      error_code: data.error_code,
+      backend: data.backend,
+      version: data.version,
+      setting_key: data.setting_key,
+      new_value: data.new_value
+    };
+    const payload = buildUmamiEventPayload(this.config, feature, name, merged);
+    this.enqueue(payload);
+  }
+
   async flush(): Promise<void> {
     getMetricsTraceLogger().info(TAG, `Umami flush entered: queue=${this.pendingQueue.length} sending=${this.isSending}`);
     if (this.pendingQueue.length > 0) {
@@ -231,7 +349,7 @@ export class UmamiReporter implements MetricsReporter {
   private enqueue(payload: UmamiSendRequest): void {
     this.pendingQueue.push(payload);
     getMetricsTraceLogger().info(TAG,
-      `Umami enqueue: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
+      `Umami enqueue: type=${payload.type} queue=${this.pendingQueue.length}`);
     void this.kickoffProcessing();
   }
 
@@ -286,6 +404,15 @@ export class UmamiReporter implements MetricsReporter {
         const payload = this.pendingQueue[0];
         const sent = await this.sendPayload(payload);
         if (!sent) {
+          if (payload.type === 'identify') {
+            // identify 不被服务器支持时直接丢弃，避免阻塞后续 pageview/event
+            this.pendingQueue.shift();
+            this.identifyQueued = false;
+            // 标记为已处理，防止被重新入队
+            this.identifySent = true;
+            getMetricsTraceLogger().warn(TAG, 'Umami identify failed, dropping to unblock event queue');
+            continue;
+          }
           sendFailed = true;
           break;
         }
@@ -308,7 +435,7 @@ export class UmamiReporter implements MetricsReporter {
     const request = this.requestFactory();
     try {
       getMetricsTraceLogger().info(TAG,
-        `Umami send start: type=${payload.type} name=${payload.payload.name} queue=${this.pendingQueue.length}`);
+        `Umami send start: type=${payload.type} queue=${this.pendingQueue.length}`);
       const response = await request.request(`${this.config.baseUrl}/api/send`, {
         method: http.RequestMethod.POST,
         header: {
@@ -321,7 +448,7 @@ export class UmamiReporter implements MetricsReporter {
       });
       const ok = response.responseCode >= 200 && response.responseCode < 300;
       if (ok) {
-        getMetricsTraceLogger().info(TAG, `Umami send success: type=${payload.type} name=${payload.payload.name}`);
+        getMetricsTraceLogger().info(TAG, `Umami send success: type=${payload.type}`);
       }
       if (!ok) {
         getMetricsTraceLogger().warn(TAG, `Umami send failed: type=${payload.type} code=${response.responseCode}`);

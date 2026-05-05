@@ -1,4 +1,6 @@
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences'
+import { UmamiAnalyticsService } from '../../../services/analytics/UmamiAnalyticsService'
+import { UmamiEventData } from '../../../services/analytics/UmamiReporter'
 
 export interface EpisodeAutoplaySettings {
   enabled: boolean;
@@ -45,11 +47,20 @@ export async function saveEpisodeAutoplayEnabled(enabled: boolean): Promise<void
     PrefKey.PLAYER_EPISODE_AUTOPLAY_ENABLED,
     enabled ? 1 : 0
   )
+  if (UmamiAnalyticsService.isInitialized()) {
+    const evtData: UmamiEventData = { setting_key: 'PLAYER_EPISODE_AUTOPLAY_ENABLED', new_value: String(enabled) };
+    UmamiAnalyticsService.getInstance().trackEvent('settings', 'settings_changed', evtData);
+  }
 }
 
 export async function saveEpisodeAutoplayCountdownSeconds(countdownSeconds: number): Promise<void> {
+  const normalized = normalizeEpisodeAutoplayCountdownSeconds(countdownSeconds)
   await AppPreferences.set(
     PrefKey.PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
-    normalizeEpisodeAutoplayCountdownSeconds(countdownSeconds)
+    normalized
   )
+  if (UmamiAnalyticsService.isInitialized()) {
+    const evtData: UmamiEventData = { setting_key: 'PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS', new_value: String(normalized) };
+    UmamiAnalyticsService.getInstance().trackEvent('settings', 'settings_changed', evtData);
+  }
 }

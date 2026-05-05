@@ -16,6 +16,7 @@ import { DirStatus } from "../../db/models/FileSourceEntity";
 import { FileSourceStore } from "../../stores/files/FileSourceStore";
 import { FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { isVideoFile } from "../../utils/VideoFileUtil";
+import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
 
 /**
  * 文件浏览页路由参数
@@ -66,6 +67,12 @@ export struct FileExplorerPage {
       return true
     }
   })
+
+  aboutToAppear(): void {
+    if (UmamiAnalyticsService.isInitialized()) {
+      UmamiAnalyticsService.getInstance().trackPageView('/file-browser');
+    }
+  }
 
   build() {
     NavDestination() {
