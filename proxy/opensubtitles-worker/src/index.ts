@@ -97,6 +97,8 @@ async function forwardToUpstream(
   const forwardHeaders = new Headers();
   forwardHeaders.set("Api-Key", apiKey);
   forwardHeaders.set("Content-Type", "application/json");
+  // OpenSubtitles API 要求 User-Agent，否则返回 403
+  forwardHeaders.set("User-Agent", "VidAllTV v1.0");
 
   // 透传客户端传入的 Accept-Language（有助于 OpenSubtitles 返回更精准结果）
   const acceptLanguage = originalRequest.headers.get("Accept-Language");
