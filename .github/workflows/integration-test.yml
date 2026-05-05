@@ -974,14 +974,38 @@ jobs:
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "Portal push skipped"
           rm -rf "$SITE_DIR/.git"
 
+      - name: Package integration artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR="$GITHUB_WORKSPACE/.ci/artifacts"
+          ARCHIVE_PATH="$ARTIFACT_DIR/integration-test-artifacts.tar.gz"
+          INCLUDE_PATHS=()
+
+          mkdir -p "$ARTIFACT_DIR"
+          if [[ -d "$GITHUB_WORKSPACE/.ci/integration" ]]; then
+            INCLUDE_PATHS+=(".ci/integration")
+          fi
+          if [[ -d "$GITHUB_WORKSPACE/.ci/allure-results" ]]; then
+            INCLUDE_PATHS+=(".ci/allure-results")
+          fi
+
+          if [[ "${#INCLUDE_PATHS[@]}" -eq 0 ]]; then
+            echo "No integration artifact directories found, skip packaging"
+            exit 0
+          fi
+
+          tar -C "$GITHUB_WORKSPACE" -czf "$ARCHIVE_PATH" "${INCLUDE_PATHS[@]}"
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
+
       - name: Upload integration artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: integration-test-artifacts
-          path: |
-            ${{ github.workspace }}/.ci/integration
-            ${{ github.workspace }}/.ci/allure-results
+          path: ${{ env.ARCHIVE_PATH }}
           if-no-files-found: warn
 
       - name: Cleanup peaceiris/actions-gh-pages temp dirs
