@@ -120,7 +120,7 @@ export default function subtitleDownloaderTest() {
       const hash1 = await sha256Hex('/path/to/movie1.mkv');
       const hash2 = await sha256Hex('/path/to/movie2.mkv');
 
-      expect(hash1).assertNotEqual('');  // 非空
+      expect(hash1.length > 0).assertTrue();  // 非空
       expect(hash1 === hash2).assertFalse();
     });
 
