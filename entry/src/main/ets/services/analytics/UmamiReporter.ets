@@ -226,6 +226,7 @@ export class UmamiReporter implements MetricsReporter {
   private identifyQueuePromise: Promise<void> | null = null;
   private identifyQueued: boolean = false;
   private identifySent: boolean = false;
+  private identifyRetryCount: number = 0;
 
   constructor(
     config: UmamiConfig = DEFAULT_UMAMI_CONFIG,
@@ -399,19 +400,41 @@ export class UmamiReporter implements MetricsReporter {
   private async drainQueue(): Promise<void> {
     this.isSending = true;
     let sendFailed = false;
+    const MAX_IDENTIFY_RETRIES = 3;
     try {
       while (this.pendingQueue.length > 0) {
         const payload = this.pendingQueue[0];
-        const sent = await this.sendPayload(payload);
-        if (!sent) {
+        const responseCode = await this.sendPayload(payload);
+        const ok = responseCode >= 200 && responseCode < 300;
+        if (!ok) {
           if (payload.type === 'identify') {
-            // identify 不被服务器支持时直接丢弃，避免阻塞后续 pageview/event
-            this.pendingQueue.shift();
-            this.identifyQueued = false;
-            // 标记为已处理，防止被重新入队
-            this.identifySent = true;
-            getMetricsTraceLogger().warn(TAG, 'Umami identify failed, dropping to unblock event queue');
-            continue;
+            if (responseCode === 400 || responseCode === 422) {
+              // 服务端明确拒绝（语义错误）→ 立即丢弃，不重试
+              this.pendingQueue.shift();
+              this.identifyQueued = false;
+              this.identifySent = true;
+              this.identifyRetryCount = 0;
+              getMetricsTraceLogger().warn(TAG,
+                `Umami identify rejected by server (code=${responseCode}), dropping immediately`);
+              continue;
+            }
+            // 其他失败（5xx / -1 / 401 / 403 / 404 / 429 等）→ 重试策略
+            this.identifyRetryCount++;
+            if (this.identifyRetryCount >= MAX_IDENTIFY_RETRIES) {
+              // 超过最大重试次数 → 丢弃，避免永久阻塞事件队列
+              this.pendingQueue.shift();
+              this.identifyQueued = false;
+              this.identifySent = true;
+              this.identifyRetryCount = 0;
+              getMetricsTraceLogger().warn(TAG,
+                `Umami identify dropped after ${MAX_IDENTIFY_RETRIES} retries (code=${responseCode})`);
+              continue;
+            }
+            // 可重试，保留在队列中，等待下次 drainQueue
+            getMetricsTraceLogger().warn(TAG,
+              `Umami identify retryable failure (code=${responseCode}), retry=${this.identifyRetryCount}, will retry`);
+            sendFailed = true;
+            break;
           }
           sendFailed = true;
           break;
@@ -420,6 +443,7 @@ export class UmamiReporter implements MetricsReporter {
         if (payload.type === 'identify') {
           this.identifySent = true;
           this.identifyQueued = false;
+          this.identifyRetryCount = 0;
         }
       }
     } finally {
@@ -431,7 +455,7 @@ export class UmamiReporter implements MetricsReporter {
     }
   }
 
-  private async sendPayload(payload: UmamiSendRequest): Promise<boolean> {
+  private async sendPayload(payload: UmamiSendRequest): Promise<number> {
     const request = this.requestFactory();
     try {
       getMetricsTraceLogger().info(TAG,
@@ -453,11 +477,11 @@ export class UmamiReporter implements MetricsReporter {
       if (!ok) {
         getMetricsTraceLogger().warn(TAG, `Umami send failed: type=${payload.type} code=${response.responseCode}`);
       }
-      return ok;
+      return response.responseCode;
     } catch (e) {
       const err = e as BusinessError;
       getMetricsTraceLogger().warn(TAG, `Umami send failed: type=${payload.type} message=${err.message ?? String(e)}`);
-      return false;
+      return -1;
     } finally {
       request.destroy();
     }
