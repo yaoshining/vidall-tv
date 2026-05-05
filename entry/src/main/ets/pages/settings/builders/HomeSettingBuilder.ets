@@ -3,6 +3,7 @@ import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
 import SettingType from "../SettingType";
+import { OpenSubtitlesConfigBuilder } from "./OpenSubtitlesConfigBuilder";
 import {
   buildSubtitleLanguagePreferenceSummary,
   DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE,
@@ -111,6 +112,8 @@ struct HomeSettingBuilderComponent {
           }
         })
       }
+
+      OpenSubtitlesConfigBuilder()
 
       SettingListItemGroup({
         title: "通用"

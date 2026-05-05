@@ -1,0 +1,30 @@
+name = "opensubtitles-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# ── 本地开发（默认） ──────────────────────────────────
+# 运行：npm run dev
+# KV 使用本地模拟，不访问真实 Cloudflare KV
+# OPENSUBTITLES_API_KEY 从 .dev.vars 读取（gitignore）
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "placeholder_replace_before_deploy"
+preview_id = "placeholder_replace_before_deploy"
+
+[vars]
+# OPENSUBTITLES_API_KEY 通过 wrangler secret 注入，不在此配置明文
+
+# ── 生产环境 ─────────────────────────────────────────
+# 部署：npm run deploy:production
+# 需预先执行：
+#   1. wrangler kv:namespace create RATE_LIMIT_KV --env production
+#   2. 将返回的 id 填入下方 [[env.production.kv_namespaces]] id 字段
+#   3. wrangler secret put OPENSUBTITLES_API_KEY --env production
+
+[env.production]
+name = "opensubtitles-proxy"
+
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_PRODUCTION_KV_ID"

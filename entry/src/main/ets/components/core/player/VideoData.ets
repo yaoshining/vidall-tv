@@ -93,4 +93,28 @@ export interface VideoData {
    * 用于 IjkPlayerAdapter 决策是否开启硬解（HEVC 硬解在 HDR/DV 内容下会花屏）。
    */
   videoCodec?: string;
+
+  /**
+   * 刮削得到的原始标题（英文），如 "The Bad Kids"。
+   * 优先用于 OpenSubtitles 搜索，避免文件名中文/混合标题解析失败。
+   */
+  scrapeOriginalTitle?: string;
+
+  /**
+   * TMDB ID（数字字符串），电影或剧集系列级别。
+   * 传给 OpenSubtitles `tmdb_id` 参数可精准匹配字幕。
+   */
+  tmdbId?: string;
+
+  /**
+   * 文件源类型（可选），如 'webdav'、'smb'、'local'、'network'。
+   * 由调用方从 FileSource.type 转换后传入，用于字幕本地缓存分桶。
+   */
+  fileSourceType?: string;
+
+  /**
+   * 文件源 ID（可选），对应数据库中 FileSource.id 转字符串。
+   * 与 fileSourceType 配合作为字幕缓存路径的 sourceId 分段。
+   */
+  fileSourceId?: string;
 }

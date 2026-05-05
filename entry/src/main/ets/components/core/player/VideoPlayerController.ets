@@ -2693,4 +2693,10 @@ export class VideoPlayerController {
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
   }
 
+  /** 将已下载到本地的字幕文件追加到轨道列表并刷新 UI。 */
+  async addExternalSubtitle(localPath: string): Promise<void> {
+    await this.subtitleAdapter.addLocalSubtitle(localPath);
+    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+  }
+
 }

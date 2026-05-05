@@ -378,6 +378,8 @@ export struct FileExplorerPage {
       durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
       presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
       presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
+      fileSourceType: 'webdav',
+      fileSourceId: this.cachedSourceId > 0 ? String(this.cachedSourceId) : undefined,
       playbackContext: FileExplorerContext.build(
         this.fileExplorerController.sortedResources,
         path,

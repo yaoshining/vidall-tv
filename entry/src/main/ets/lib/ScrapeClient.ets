@@ -163,14 +163,31 @@ export function parseFileName(fileName: string): ParsedFileName {
 }
 
 /**
+ * 判断一个提取到的英文词是否足够有意义，可用作搜索词。
+ * 排除：长度过短、仅由冠词/介词/连词组成的情况。
+ */
+const ENGLISH_STOP_WORDS = new Set([
+  'the', 'a', 'an', 'in', 'of', 'at', 'by', 'for', 'on', 'to', 'up',
+  'is', 'it', 'as', 'or', 'and', 'but', 'not', 'so', 'do'
+]);
+
+function isUsefulEnglishTerm(term: string): boolean {
+  if (term.length < 4) { return false; }
+  const words = term.toLowerCase().split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 1 && ENGLISH_STOP_WORDS.has(words[0])) { return false; }
+  return true;
+}
+
+/**
  * 从混合标题中生成候选搜索词列表（按优先级排序）
  *
  * 策略：
  * - 纯中文标题（无英文）：中文 → 完整标题
  * - 纯英文标题（无中文）：英文 → 完整标题
- * - 中英混合：只用英文部分，不加中文（中文搜索易命中歧义剧）
+ * - 中英混合：优先英文（精度高），但若英文部分不足（冠词/太短），回退到中文
  *
  * 例："权力的游戏 Game of Thrones" → ["Game of Thrones"]
+ * 例："The 庆余年"                 → ["庆余年"]（英文仅为冠词，无意义）
  * 例："权力的游戏" → ["权力的游戏"]
  * 例："Game of Thrones" → ["Game of Thrones"]
  */
@@ -184,11 +201,16 @@ export function buildSearchTitles(title: string): string[] {
   const chinesePart = chineseMatch ? chineseMatch[0].trim() : '';
 
   if (hasChinese && hasEnglish) {
-    // 混合：只用英文（精度高、不歧义）
-    if (englishPart.length >= 2) {
+    if (isUsefulEnglishTerm(englishPart)) {
+      // 英文部分有意义，优先用英文（精度高、不歧义）
       candidates.push(englishPart);
     } else {
-      candidates.push(title.trim());
+      // 英文部分无意义（如冠词 "The"、单字母等），回退到中文
+      if (chinesePart.length >= 1) {
+        candidates.push(chinesePart);
+      } else {
+        candidates.push(title.trim());
+      }
     }
   } else if (hasEnglish) {
     if (englishPart.length >= 2) { candidates.push(englishPart); }

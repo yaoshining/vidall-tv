@@ -156,6 +156,10 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 
 ### 编译 HAP
 
+#### 开发包（product=default）
+
+开发调试使用，代理 Worker 指向 `localhost:8787`（需本地运行 `wrangler dev`）。
+
 ```bash
 zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
@@ -165,6 +169,48 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
 --mode module -p module=entry@default -p product=default assembleHap --analyze=normal --parallel --incremental --daemon'
 ```
+
+#### 发布包（product=production）
+
+正式发布使用，代理 Worker 指向 `https://os-proxy.vidall.app/v1`，需配置 release 签名。
+
+```bash
+zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
+export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
+/Applications/DevEco-Studio.app/Contents/tools/node/bin/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js \
+--mode module -p module=entry@default -p product=production assembleHap --analyze=normal --parallel --incremental --daemon'
+```
+
+> **注意**：`product=production` 使用 `release` signingConfig，需确保证书路径 `certs/release/` 下文件完整。
+
+#### DevEco Studio 切换环境
+
+Product > default（开发调试）或 production（正式发布）
+
+#### 多环境配置说明
+
+| 配置项 | default（开发） | production（发布） |
+|--------|-----------------|-------------------|
+| 签名 | debug key | release key |
+| OpenSubtitles 代理 | `localhost:8787/v1` | `os-proxy.vidall.app/v1` |
+| `AppEnv.IS_PRODUCTION` | `false` | `true` |
+
+环境判断逻辑见 `entry/src/main/ets/config/AppEnv.ets`。
+
+### OpenSubtitles Worker（Cloudflare）
+
+Worker 代码位于 `proxy/opensubtitles-worker/`，对应两套环境：
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 本地开发，KV 模拟，监听 localhost:8787 |
+| `npm run dev:remote` | 本地开发，连接真实 Cloudflare KV |
+| `npm run deploy:production` | 部署到生产环境 |
+
+首次部署步骤见 [proxy/opensubtitles-worker/README.md](proxy/opensubtitles-worker/README.md)。
 
 ## 相关文档
 

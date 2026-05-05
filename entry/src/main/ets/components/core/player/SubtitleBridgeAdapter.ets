@@ -1,6 +1,7 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 import buffer from '@ohos.buffer';
 import { CommonConstants } from '../../../common/constants/CommonConstants';
@@ -404,6 +405,8 @@ export interface ISubtitleBridgeAdapter {
   onSeekSync(): void;
   getState(): SubtitleBridgeState;
   release(): void;
+  /** 将已下载到本地的字幕文件追加到轨道列表（不切换到该轨道）。 */
+  addLocalSubtitle(localPath: string): Promise<void>;
 }
 
 export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
@@ -613,6 +616,41 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       hasExternalActive: this.srtEntries.length > 0
     };
     return state;
+  }
+
+  async addLocalSubtitle(localPath: string): Promise<void> {
+    const fileName = localPath.split('/').pop() ?? localPath;
+    const lower = fileName.toLowerCase();
+    const isAss = lower.endsWith('.ass') || lower.endsWith('.ssa');
+    const isVtt = lower.endsWith('.vtt');
+    const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
+
+    const stat = fs.statSync(localPath);
+    const buf = new ArrayBuffer(stat.size);
+    const file = fs.openSync(localPath, fs.OpenMode.READ_ONLY);
+    fs.readSync(file.fd, buf);
+    fs.closeSync(file);
+
+    const text = decodeSubtitlePayload(buf);
+    const entries = isAss ? AssFileParser.parse(text) : SrtParser.parse(text);
+
+    const baseName: string = ((this.videoData?.videoSrc ?? '').split('/').pop() ?? '').replace(/\.[^.]+$/, '');
+    const langLabel = this.extractLangLabel(fileName, baseName);
+    const langCode = this.extractLangCode(fileName, baseName);
+
+    const item: SubtitleTrackItem = {
+      kind: 'external',
+      displayName: langLabel.length > 0
+        ? `${langLabel} [本地·${formatLabel}]`
+        : `字幕 [本地·${formatLabel}]`,
+      url: `file://${localPath}`,
+      srtEntries: entries,
+      language: langCode
+    };
+
+    this.allSubtitleTracks = [...this.allSubtitleTracks, item];
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[addLocalSubtitle] 已追加本地字幕: ${item.displayName} path=${localPath}`);
   }
 
   release(): void {
@@ -1180,6 +1218,8 @@ export class NoSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   getState(): SubtitleBridgeState {
     return this.state;
   }
+
+  async addLocalSubtitle(_localPath: string): Promise<void> {}
 
   release(): void {}
 }

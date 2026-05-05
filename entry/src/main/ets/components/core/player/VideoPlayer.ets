@@ -2,7 +2,7 @@ import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog
 import { VideoData } from "./VideoData"
 import { VideoPlayerController, type PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
-import { PlayerEvents } from "./Constants"
+import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
@@ -82,6 +82,17 @@ export struct VideoPlayer {
     return current >= duration
   }
 
+  /** 从 VideoData 推断字幕存储用的 sourceType 字符串 */
+  private resolveSubtitleSourceType(): string {
+    if (this.data.fileSourceType) {
+      return this.data.fileSourceType
+    }
+    if (this.data.type === VideoDataType.FILE_URI) {
+      return 'local'
+    }
+    return 'network'
+  }
+
   controlsDialogController = new CustomDialogController({
     builder: VideoControlsDialog({
       videoController: this.controller,
@@ -147,7 +158,12 @@ export struct VideoPlayer {
 
   subtitleSelectorDialogController = new CustomDialogController({
     builder: SubtitleSelectorDrawerDialog({
-      videoController: this.controller
+      videoController: this.controller,
+      videoPath: this.data.videoSrc,
+      sourceType: this.resolveSubtitleSourceType(),
+      sourceId: this.data.fileSourceId ?? '0',
+      scrapeOriginalTitle: this.data.scrapeOriginalTitle,
+      tmdbId: this.data.tmdbId
     }),
     customStyle: true,
     backgroundColor: Color.Transparent,
