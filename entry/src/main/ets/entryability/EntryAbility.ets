@@ -45,7 +45,8 @@ export default class EntryAbility extends UIAbility {
         const svc = UmamiAnalyticsService.getInstance();
         const appVersion = info.versionName;
         const osVersion = deviceInfo.osFullName;
-        const eventData: UmamiEventData = { app_version: appVersion, os_version: osVersion };
+        // 使用 version 字段（Issue 规范命名），同时保留 os_version 上报系统版本
+        const eventData: UmamiEventData = { version: appVersion, os_version: osVersion };
         svc.trackEvent('system', 'app_launch', eventData);
         hilog.info(DOMAIN, 'testTag', `app_launch sent version=${appVersion}`);
       })

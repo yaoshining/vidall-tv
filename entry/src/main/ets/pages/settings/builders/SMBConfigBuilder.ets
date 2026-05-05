@@ -121,7 +121,13 @@ struct SMBConfigBuilderComponent {
         }
       } else {
         if (UmamiAnalyticsService.isInitialized()) {
-          const evtData: UmamiEventData = { source_type: FileSourceType.SMB };
+          // 从 result.error 提取可聚合的错误码
+          const errMsg = result.error ?? '';
+          const errorCode = errMsg.includes('AUTH') || errMsg.includes('401') || errMsg.includes('认证') ? 'AUTH_FAILED'
+            : errMsg.includes('timeout') || errMsg.includes('超时') ? 'TIMEOUT'
+            : errMsg.includes('refused') || errMsg.includes('拒绝') ? 'CONNECTION_REFUSED'
+            : 'UNKNOWN';
+          const evtData: UmamiEventData = { source_type: FileSourceType.SMB, error_code: errorCode };
           UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connect_failed', evtData);
         }
         this.getUIContext().getPromptAction().showToast({

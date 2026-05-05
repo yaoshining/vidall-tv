@@ -38,7 +38,9 @@ export struct HomePage {
 
   aboutToAppear(): void {
     if (UmamiAnalyticsService.isInitialized()) {
-      UmamiAnalyticsService.getInstance().trackPageView('/home');
+      // 按实际当前 tab 上报，而非固定 /home（Swiper.onChange 首次不触发）
+      const path = this.tabIndexToPath(this.tabBarModel.currentTabIndex);
+      UmamiAnalyticsService.getInstance().trackPageView(path);
     }
   }
 

@@ -205,7 +205,12 @@ struct WebDAVConfigBuilderComponent {
         }
       } else {
         if (UmamiAnalyticsService.isInitialized()) {
-          const evtData: UmamiEventData = { source_type: FileSourceType.WEBDAV };
+          // 从 result.message 提取可聚合的错误码
+          const errorCode = result.message.includes('401') ? 'AUTH_FAILED'
+            : result.message.includes('timeout') ? 'TIMEOUT'
+            : result.message.includes('403') ? 'FORBIDDEN'
+            : 'UNKNOWN';
+          const evtData: UmamiEventData = { source_type: FileSourceType.WEBDAV, error_code: errorCode };
           UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connect_failed', evtData);
         }
         this.getUIContext().showAlertDialog({

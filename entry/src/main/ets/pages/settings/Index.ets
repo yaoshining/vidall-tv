@@ -35,9 +35,7 @@ export struct SettingsPage {
   }
 
   aboutToAppear(): void {
-    if (UmamiAnalyticsService.isInitialized()) {
-      UmamiAnalyticsService.getInstance().trackPageView(this.settingsPagePath());
-    }
+    // trackPageView 在 onReady 中 controller.reset() 之后调用，确保 type 已正确设置
   }
 
   /**
@@ -119,6 +117,10 @@ export struct SettingsPage {
       const param = context.pathInfo.param as SettingsPageParam
       if (param) {
         this.controller.reset(param.type)
+      }
+      // reset 之后上报，此时 controller.type 已是正确值
+      if (UmamiAnalyticsService.isInitialized()) {
+        UmamiAnalyticsService.getInstance().trackPageView(this.settingsPagePath());
       }
       // 触发首次滑入动画
       setTimeout(() => {

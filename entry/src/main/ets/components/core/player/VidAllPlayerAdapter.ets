@@ -220,7 +220,7 @@ export class VidAllPlayerAdapter implements IPlayer {
             `onError: handle=${currentHandle} code=${code} hint=${hint}`);
           this._onErrorCb?.(new Error(errorMessage));
           if (UmamiAnalyticsService.isInitialized()) {
-            const errData: UmamiEventData = { error_code: code, backend: 'avplayer' };
+            const errData: UmamiEventData = { error_code: code.toString(), backend: 'avplayer' };
             UmamiAnalyticsService.getInstance().trackEvent('player', 'playback_error', errData);
           }
         },

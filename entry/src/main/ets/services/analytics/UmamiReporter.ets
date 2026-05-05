@@ -32,7 +32,10 @@ export interface UmamiEventData {
   title?: string | null;
   year?: number | null;
   file_name?: string | null;
+  // 设备系统语言（由 buildBaseFields 填充）
   language?: string | null;
+  // 字幕语言（与设备语言分开，避免语义冲突）
+  subtitle_language?: string | null;
   has_subtitle?: boolean;
   scanned?: number;
   total?: number;
@@ -40,10 +43,13 @@ export interface UmamiEventData {
   screen?: string;
   total_files?: number;
   duration_ms?: number;
-  error_code?: number;
+  // 可聚合的错误码字符串，如 'AUTH_FAILED' / 'TIMEOUT' / 'UNKNOWN'
+  error_code?: string;
   backend?: string;
   os_version?: string;
   app_version?: string;
+  // app_launch 事件使用的版本字段
+  version?: string;
   setting_key?: string;
   new_value?: string | number | boolean;
 }
@@ -185,11 +191,14 @@ function buildPlaybackAttemptData(
   return data;
 }
 
-function buildSubtitleUsageData(language: string | null): UmamiEventData {
+function buildSubtitleUsageData(subtitleLang: string | null): UmamiEventData {
   const base = buildBaseFields();
   const data: UmamiEventData = {
-    language,
-    has_subtitle: language !== null,
+    // 设备系统语言（与字幕语言保持语义独立）
+    language: base.language,
+    // 字幕语言，null 表示未开启字幕
+    subtitle_language: subtitleLang,
+    has_subtitle: subtitleLang !== null,
     screen: base.screen
   };
   return data;
@@ -292,7 +301,37 @@ export class UmamiReporter implements MetricsReporter {
   trackCustomEvent(feature: string, name: string, data: UmamiEventData): void {
     getMetricsTraceLogger().info(TAG,
       `Umami trackCustomEvent feature=${feature} name=${name} queue=${this.pendingQueue.length}`);
-    const payload = buildUmamiEventPayload(this.config, feature, name, data);
+    // 补齐基础字段（language / screen / app_version / os_version），调用方显式传入的字段优先
+    const base = buildBaseFields();
+    const merged: UmamiEventData = {
+      language: data.language ?? base.language,
+      screen: data.screen ?? base.screen,
+      app_version: data.app_version ?? base.app_version,
+      os_version: data.os_version ?? base.os_version,
+      // 以下为纯业务字段，直接取调用方传入值
+      success: data.success,
+      first_frame_ms: data.first_frame_ms,
+      source_type: data.source_type,
+      local_id: data.local_id,
+      provider: data.provider,
+      provider_id: data.provider_id,
+      title: data.title,
+      year: data.year,
+      file_name: data.file_name,
+      subtitle_language: data.subtitle_language,
+      has_subtitle: data.has_subtitle,
+      scanned: data.scanned,
+      total: data.total,
+      coverage_pct: data.coverage_pct,
+      total_files: data.total_files,
+      duration_ms: data.duration_ms,
+      error_code: data.error_code,
+      backend: data.backend,
+      version: data.version,
+      setting_key: data.setting_key,
+      new_value: data.new_value
+    };
+    const payload = buildUmamiEventPayload(this.config, feature, name, merged);
     this.enqueue(payload);
   }
 
