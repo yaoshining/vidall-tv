@@ -408,33 +408,33 @@ export class UmamiReporter implements MetricsReporter {
         const ok = responseCode >= 200 && responseCode < 300;
         if (!ok) {
           if (payload.type === 'identify') {
-            const isRetryable = responseCode === -1 || responseCode >= 500;
-            if (isRetryable) {
-              this.identifyRetryCount++;
-              if (this.identifyRetryCount >= MAX_IDENTIFY_RETRIES) {
-                // 超过最大重试次数 → 丢弃，避免永久阻塞事件队列
-                this.pendingQueue.shift();
-                this.identifyQueued = false;
-                this.identifySent = true;
-                this.identifyRetryCount = 0;
-                getMetricsTraceLogger().warn(TAG,
-                  `Umami identify dropped after ${MAX_IDENTIFY_RETRIES} retries (code=${responseCode})`);
-                continue;
-              }
-              // 可重试，保留在队列中，等待下次 drainQueue
+            if (responseCode === 400 || responseCode === 422) {
+              // 服务端明确拒绝（语义错误）→ 立即丢弃，不重试
+              this.pendingQueue.shift();
+              this.identifyQueued = false;
+              this.identifySent = true;
+              this.identifyRetryCount = 0;
               getMetricsTraceLogger().warn(TAG,
-                `Umami identify retryable failure (code=${responseCode}), retry=${this.identifyRetryCount}`);
-              sendFailed = true;
-              break;
+                `Umami identify rejected by server (code=${responseCode}), dropping immediately`);
+              continue;
             }
-            // 400/422 等服务端拒绝 → 立即丢弃
-            this.pendingQueue.shift();
-            this.identifyQueued = false;
-            this.identifySent = true;
-            this.identifyRetryCount = 0;
+            // 其他失败（5xx / -1 / 401 / 403 / 404 / 429 等）→ 重试策略
+            this.identifyRetryCount++;
+            if (this.identifyRetryCount >= MAX_IDENTIFY_RETRIES) {
+              // 超过最大重试次数 → 丢弃，避免永久阻塞事件队列
+              this.pendingQueue.shift();
+              this.identifyQueued = false;
+              this.identifySent = true;
+              this.identifyRetryCount = 0;
+              getMetricsTraceLogger().warn(TAG,
+                `Umami identify dropped after ${MAX_IDENTIFY_RETRIES} retries (code=${responseCode})`);
+              continue;
+            }
+            // 可重试，保留在队列中，等待下次 drainQueue
             getMetricsTraceLogger().warn(TAG,
-              `Umami identify rejected by server (code=${responseCode}), dropping`);
-            continue;
+              `Umami identify retryable failure (code=${responseCode}), retry=${this.identifyRetryCount}, will retry`);
+            sendFailed = true;
+            break;
           }
           sendFailed = true;
           break;
