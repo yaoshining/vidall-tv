@@ -13,6 +13,20 @@ const TAG = '[AVPlayerAdapter]';
 const ENABLE_AVPLAYER_TRACK_DIAG_LOG = true;
 const ENABLE_AVPLAYER_SUBTITLE_DIAG_LOG = false;
 
+// AVPlayer 在 API 23+ 的 demux 层可识别这些 codec 并进入 PREPARED，
+// 但 decoder 层静默放弃解码导致无声（Issue #212）。
+// 需在 PREPARED 时主动检测，若全部音频轨道均属此列则触发 fallback。
+// 与 VideoPlayerController.SYSTEM_SOFT_FALLBACK_CODECS 保持内容同步（MIME 格式）。
+const UNSUPPORTED_AUDIO_CODECS: string[] = [
+  'audio/ac3',        // Dolby Digital (AC-3)
+  'audio/eac3',       // Dolby Digital Plus / Atmos (E-AC-3)
+  'audio/truehd',     // Dolby TrueHD / Atmos
+  'audio/vnd.dts',    // DTS Core
+  'audio/vnd.dts.hd', // DTS-HD
+  'audio/mlp',        // MLP (Meridian Lossless Packing)
+  'audio/vivid',      // Audio Vivid
+];
+
 /**
  * AVPlayer 播放内核适配器
  *
@@ -347,21 +361,44 @@ export class AVPlayerAdapter implements IPlayer {
           });
           break;
         case AVPlayerState.PREPARED:
-          // 诊断日志：打印所有轨道信息（用于 Issue #212 eac3 静默失败排查）
+          // API 23 eac3 静默失败修复（Issue #212）：
+          // demux 可识别 eac3 进入 PREPARED，但 decoder 静默放弃导致无声、不报 error。
+          // 在此主动检测所有音频轨道 codec，全为不支持格式时触发 fallback，而非直接调 _onReadyCb。
           player.getTrackDescription().then((tracks: Array<media.MediaDescription>) => {
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `[DIAG] PREPARED trackCount=${tracks.length}`);
+              `PREPARED trackCount=${tracks.length}`);
+            // 统计音频轨道中属于不支持格式的数量
+            let audioCount = 0;
+            let unsupportedCount = 0;
             for (let i = 0; i < tracks.length; i++) {
               const t = tracks[i];
-              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-                `[DIAG] track[${i}] codec=${t[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] ?? 'N/A'} type=${t[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] ?? 'N/A'} channels=${t[media.MediaDescriptionKey.MD_KEY_AUD_CHANNEL_COUNT] ?? 'N/A'}`);
+              const trackType = t[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] as number;
+              if (trackType !== media.MediaType.MEDIA_TYPE_AUD) {
+                continue;
+              }
+              audioCount++;
+              const mimeType = t[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] as string | undefined;
+              if (mimeType !== undefined) {
+                const codecLower = mimeType.toLowerCase();
+                if (UNSUPPORTED_AUDIO_CODECS.indexOf(codecLower) >= 0) {
+                  unsupportedCount++;
+                }
+              }
             }
+            if (audioCount > 0 && audioCount === unsupportedCount) {
+              hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+                `所有音频轨道均为不支持格式，主动触发 fallback（音频轨道数=${audioCount}）`);
+              if (this._onUnsupportedFormatCb) { this._onUnsupportedFormatCb(); }
+              return;
+            }
+            // 正常 ready 路径
+            if (this._onReadyCb) { this._onReadyCb(); }
           }).catch((e: BusinessError) => {
             hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-              `[DIAG] getTrackDescription 失败: ${e.message}`);
+              `getTrackDescription 失败: ${e.message}`);
+            // 无法读取轨道时降级为正常 ready，避免永久阻塞
+            if (this._onReadyCb) { this._onReadyCb(); }
           });
-          // 准备完成，通知 Controller
-          if (this._onReadyCb) { this._onReadyCb(); }
           break;
         case AVPlayerState.PLAYING:
           if (this._onPlayCb) { this._onPlayCb(); }
