@@ -347,6 +347,19 @@ export class AVPlayerAdapter implements IPlayer {
           });
           break;
         case AVPlayerState.PREPARED:
+          // 诊断日志：打印所有轨道信息（用于 Issue #212 eac3 静默失败排查）
+          player.getTrackDescription().then((tracks: Array<media.MediaDescription>) => {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `[DIAG] PREPARED trackCount=${tracks.length}`);
+            for (let i = 0; i < tracks.length; i++) {
+              const t = tracks[i];
+              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+                `[DIAG] track[${i}] codec=${t[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] ?? 'N/A'} type=${t[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] ?? 'N/A'} channels=${t[media.MediaDescriptionKey.MD_KEY_AUD_CHANNEL_COUNT] ?? 'N/A'}`);
+            }
+          }).catch((e: BusinessError) => {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `[DIAG] getTrackDescription 失败: ${e.message}`);
+          });
           // 准备完成，通知 Controller
           if (this._onReadyCb) { this._onReadyCb(); }
           break;
