@@ -365,14 +365,8 @@ export class AVPlayerAdapter implements IPlayer {
           // demux 可识别 eac3 进入 PREPARED，但 decoder 静默放弃导致无声、不报 error。
           // 在此主动检测所有音频轨道 codec，全为不支持格式时触发 fallback，而非直接调 _onReadyCb。
           player.getTrackDescription().then((tracks: Array<media.MediaDescription>) => {
-            // [DIAG] 保留轨道诊断日志
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `[DIAG] PREPARED trackCount=${tracks.length}`);
-            for (let i = 0; i < tracks.length; i++) {
-              const t = tracks[i];
-              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-                `[DIAG] track[${i}] codec=${t[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] ?? 'N/A'} type=${t[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] ?? 'N/A'} channels=${t[media.MediaDescriptionKey.MD_KEY_AUD_CHANNEL_COUNT] ?? 'N/A'}`);
-            }
+              `PREPARED trackCount=${tracks.length}`);
             // 统计音频轨道中属于不支持格式的数量
             let audioCount = 0;
             let unsupportedCount = 0;
@@ -401,7 +395,7 @@ export class AVPlayerAdapter implements IPlayer {
             if (this._onReadyCb) { this._onReadyCb(); }
           }).catch((e: BusinessError) => {
             hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-              `[DIAG] getTrackDescription 失败: ${e.message}`);
+              `getTrackDescription 失败: ${e.message}`);
             // 无法读取轨道时降级为正常 ready，避免永久阻塞
             if (this._onReadyCb) { this._onReadyCb(); }
           });
