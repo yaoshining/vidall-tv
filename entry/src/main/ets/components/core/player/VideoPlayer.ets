@@ -6,6 +6,7 @@ import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
+import { resolveIjkPlayerLayoutConfig } from "./VideoPlayerLayoutUtil"
 
 function resolveRenderFitForAspectRatioMode(mode: AspectRatioMode): RenderFit {
   if (mode === AspectRatioMode.FILL) {
@@ -17,7 +18,7 @@ function resolveRenderFitForAspectRatioMode(mode: AspectRatioMode): RenderFit {
   return RenderFit.RESIZE_CONTAIN
 }
 
-export class IjkXComponentLayoutModifier implements AttributeModifier<XComponentAttribute> {
+class IjkXComponentLayoutModifier implements AttributeModifier<XComponentAttribute> {
   private readonly mode: AspectRatioMode
   private readonly ratio: number
 
@@ -27,14 +28,15 @@ export class IjkXComponentLayoutModifier implements AttributeModifier<XComponent
   }
 
   applyNormalAttribute(instance: XComponentAttribute): void {
-    instance.width('100%')
-    if (this.mode === AspectRatioMode.FIT && this.ratio > 0) {
-      instance.aspectRatio(this.ratio)
-    } else {
-      instance.height('100%')
-      instance.renderFit(resolveRenderFitForAspectRatioMode(this.mode))
+    const config = resolveIjkPlayerLayoutConfig(this.mode, this.ratio)
+    instance.width(config.width)
+    if (config.aspectRatio !== undefined) {
+      instance.aspectRatio(config.aspectRatio)
+    } else if (config.height !== undefined && config.renderFit !== undefined) {
+      instance.height(config.height)
+      instance.renderFit(config.renderFit)
     }
-    instance.backgroundColor(Color.Black)
+    instance.backgroundColor(config.xComponentBackgroundColor)
   }
 }
 
@@ -529,6 +531,7 @@ export struct VideoPlayer {
         }
         .width("100%")
         .height("100%")
+        .backgroundColor(resolveIjkPlayerLayoutConfig(this.aspectRatioMode, this.ijkVideoRatio).outerStackBackgroundColor)
       } else if (this.backendMode === 'native') {
         Stack() {
           XComponent({
