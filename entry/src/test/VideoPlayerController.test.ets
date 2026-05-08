@@ -38,21 +38,15 @@ class TestVideoPlayerController extends VideoPlayerController {
 }
 
 /**
- * Task 2.2 TDD 专用 stub：
- * 模拟真实 initPlayer 在"重置旧播放器状态"处执行的重置动作。
- * 该 stub 在编译期验证 ijkVideoRatio 属性存在（2.1），并在运行期验证重置合约（2.2）。
- *
- * 说明：真实 initPlayer 内部依赖 FfprobeUtil（ffprobe 9000ms 超时）和 AVPlayer/IjkPlayer
- * 设备 API，在单元测试环境中直接调用会导致测试长时间等待或设备 API 不可用崩溃。
- * 此 stub 仅还原 initPlayer 里 ijkVideoRatio 的重置语句，用于 TDD 红绿验证。
+ * Task 2.2 TDD spy：验证真实 initPlayer 调用了 resetDisplayState。
+ * override resetDisplayState() 而非 initPlayer，确保生产代码路径被真实执行。
  */
-class IjkRatioResetHarnessController extends VideoPlayerController {
-  async initPlayer(_videoData: VideoData, surfaceId: string): Promise<void> {
-    // 镜像真实 initPlayer "重置可展示状态" 块中即将新增的语句：
-    // this.ijkVideoRatio = 0;
-    // 本行在 2.1 属性未添加时编译失败（RED），添加后编译通过（GREEN）。
-    this.ijkVideoRatio = 0;
-    this.surfaceId = surfaceId;
+class ResetDisplayStateSpyController extends VideoPlayerController {
+  resetDisplayStateCalled: boolean = false;
+
+  protected override resetDisplayState(): void {
+    this.resetDisplayStateCalled = true;
+    super.resetDisplayState();
   }
 
   saveProgressNow(): void {}
@@ -139,24 +133,25 @@ export default function videoPlayerControllerTest() {
       expect(accessor.ijkVideoRatio).assertEqual(0)
     })
 
-    // ── Task 2.2：initPlayer 重置 ijkVideoRatio ──────────────────────────────
-    // 验证策略说明：
-    //   真实 initPlayer 依赖 FfprobeUtil（ffprobe 9000ms 超时）和设备 API，
-    //   不适合直接在单元测试中调用（会导致长时间等待或崩溃）。
-    //   本测试使用镜像 stub（IjkRatioResetHarnessController），在编译期验证
-    //   ijkVideoRatio 属性可访问，在运行期验证 initPlayer 调用后的重置结果为 0。
-    //   stub 的 initPlayer 中 `this.ijkVideoRatio = 0` 语句与真实实现完全一致，
-    //   若该属性未添加则编译失败（RED），添加后测试通过（GREEN）。
-    it('initPlayer 调用后 ijkVideoRatio 被重置为 0（Task 2.2）', 0, async () => {
-      const controller = new IjkRatioResetHarnessController()
-      const accessor = controller as Object as IjkVideoRatioAccessor
-      // 模拟上一个视频残留的非零比例值
-      accessor.ijkVideoRatio = 1.7778
-      expect(accessor.ijkVideoRatio).assertEqual(1.7778)
+    // ── Task 2.2：initPlayer 调用 resetDisplayState，ijkVideoRatio 被清零 ───
+    // 验证策略：spy override resetDisplayState()，调用真实 initPlayer（不 await 全程）。
+    // initPlayer 为 async 函数，同步部分在第一个 await（resolveAudioRoutingDecision）前
+    // 执行，resetDisplayState() 在此之前被调用，可在同步阶段立即断言。
+    // 若删除 initPlayer 中 this.resetDisplayState() 调用，第一个 expect 失败（RED）。
+    it('initPlayer 调用真实 resetDisplayState 并将 ijkVideoRatio 重置为 0（Task 2.2）', 0, async () => {
+      const controller = new ResetDisplayStateSpyController()
+      const ratioAccessor = controller as Object as IjkVideoRatioAccessor
+      ratioAccessor.ijkVideoRatio = 1.7778
 
-      await controller.initPlayer(buildVideoData('task-2-2-reset-test'), 'surface-ratio-reset')
+      // 启动真实 initPlayer，不 await：同步阶段在第一个 await 前立即执行
+      const p = controller.initPlayer(buildVideoData('task-2-2-spy'), 'surface-spy')
 
-      expect(accessor.ijkVideoRatio).assertEqual(0)
+      // 同步阶段已完成：resetDisplayState 已被真实 initPlayer 调用
+      expect(controller.resetDisplayStateCalled).assertTrue()
+      expect(ratioAccessor.ijkVideoRatio).assertEqual(0)
+
+      // 静默消费 Promise，忽略设备 API 不可用的异步错误
+      await p.catch(() => {})
     })
   })
 }

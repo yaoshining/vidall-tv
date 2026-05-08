@@ -394,11 +394,7 @@ export class VideoPlayerController {
     }
 
     // 先重置可展示状态，避免复用上次播放残留。
-    this.audioCapabilityText = '';
-    this.ffmpegPreviewUri = '';
-    this.sourceProtocol = '';
-    // 切换视频时清零 ijkplayer 宽高比，防止旧 ratio 残留影响下一个视频的渲染（Task 2.2）
-    this.ijkVideoRatio = 0;
+    this.resetDisplayState();
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
@@ -806,6 +802,19 @@ export class VideoPlayerController {
         this.rejectPendingReload(new Error(err.message));
       }
     }
+  }
+
+  /**
+   * 重置上一次播放残留的可展示状态。
+   * 在 initPlayer 同步阶段（第一个 await 之前）调用，确保切源时 UI 状态干净。
+   * 声明为 protected 以允许测试通过 spy override 验证调用合约（Task 2.2）。
+   */
+  protected resetDisplayState(): void {
+    this.audioCapabilityText = '';
+    this.ffmpegPreviewUri = '';
+    this.sourceProtocol = '';
+    // 切换视频时清零 ijkplayer 宽高比，防止旧 ratio 残留影响下一个视频的渲染（Task 2.2）
+    this.ijkVideoRatio = 0;
   }
 
   // ─── VPE AI 画质增强 ──────────────────────────────────────────
