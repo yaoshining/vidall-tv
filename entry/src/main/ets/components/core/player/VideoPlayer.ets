@@ -1,11 +1,42 @@
 import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
-import { VideoPlayerController, type PlayerBackend, AspectRatioMode, resolveIjkUseAspectRatio } from "./VideoPlayerController"
+import { VideoPlayerController, type PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
+
+function resolveRenderFitForAspectRatioMode(mode: AspectRatioMode): RenderFit {
+  if (mode === AspectRatioMode.FILL) {
+    return RenderFit.RESIZE_COVER
+  }
+  if (mode === AspectRatioMode.STRETCH) {
+    return RenderFit.RESIZE_FILL
+  }
+  return RenderFit.RESIZE_CONTAIN
+}
+
+export class IjkXComponentLayoutModifier implements AttributeModifier<XComponentAttribute> {
+  private readonly mode: AspectRatioMode
+  private readonly ratio: number
+
+  constructor(mode: AspectRatioMode, ratio: number) {
+    this.mode = mode
+    this.ratio = ratio
+  }
+
+  applyNormalAttribute(instance: XComponentAttribute): void {
+    instance.width('100%')
+    if (this.mode === AspectRatioMode.FIT && this.ratio > 0) {
+      instance.aspectRatio(this.ratio)
+    } else {
+      instance.height('100%')
+      instance.renderFit(resolveRenderFitForAspectRatioMode(this.mode))
+    }
+    instance.backgroundColor(Color.Black)
+  }
+}
 
 @ComponentV2
 export struct VideoPlayer {
@@ -22,11 +53,7 @@ export struct VideoPlayer {
   @Local backendMode: PlayerBackend = 'avplayer'
   /** 镜像 controller.aspectRatioMode，用于驱动 renderFit 响应式更新 */
   @Local aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
-  /**
-   * 镜像 controller.ijkVideoRatio，用于驱动 ijkplayer 外层 Stack 的 aspectRatio 约束。
-   * FIT 模式且 ratio > 0 时，外层 Stack 使用 aspectRatio(ijkVideoRatio) 代替 height="100%"，
-   * 确保 ijkplayer 渲染面与视频 DAR 一致，上下/左右黑边由外层 Stack 黑背景自然填充。
-   */
+  /** 镜像 controller.ijkVideoRatio，用于驱动 ijkplayer 内层 XComponent 的显式布局切换。 */
   @Local ijkVideoRatio: number = 0
 
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
@@ -57,13 +84,7 @@ export struct VideoPlayer {
 
   /** 将画面比例模式映射到 XComponent.renderFit */
   private toRenderFit(mode: AspectRatioMode): RenderFit {
-    if (mode === AspectRatioMode.FILL) {
-      return RenderFit.RESIZE_COVER
-    }
-    if (mode === AspectRatioMode.STRETCH) {
-      return RenderFit.RESIZE_FILL
-    }
-    return RenderFit.RESIZE_CONTAIN
+    return resolveRenderFitForAspectRatioMode(mode)
   }
 
   private tryMarkInit(mode: string): boolean {
@@ -484,10 +505,7 @@ export struct VideoPlayer {
                 })
               }, 100)
             })
-            .width("100%")
-            .height("100%")
-            .renderFit(this.toRenderFit(this.aspectRatioMode))
-            .backgroundColor(Color.Black)
+            .attributeModifier(new IjkXComponentLayoutModifier(this.aspectRatioMode, this.ijkVideoRatio))
 
           // 透明触摸拦截层：专门处理点击和手势，解决 libraryname 模式事件不透传问题
           Stack()
@@ -511,11 +529,6 @@ export struct VideoPlayer {
         }
         .width("100%")
         .height("100%")
-        // 3.4 FIT 模式且 DAR 已知（ratio > 0）时，外层 Stack 使用 aspectRatio 控制高度，
-        //     避免在 XComponent 层产生双重黑边（ijkplayer 不支持 renderFit GPU 合成层）。
-        //     ratio ≤ 0 或非 FIT 时，ArkUI 文档保证 aspectRatio(0) 被忽略，
-        //     退回显式 height="100%" 语义，FILL/STRETCH 不退化。
-        .aspectRatio(resolveIjkUseAspectRatio(this.aspectRatioMode, this.ijkVideoRatio) ? this.ijkVideoRatio : 0)
       } else if (this.backendMode === 'native') {
         Stack() {
           XComponent({

@@ -2,11 +2,9 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   VideoPlayerController,
   PlayerBackend,
-  AspectRatioMode,
   resolveAiEnhanceEnabledByRuntime,
   shouldShowAiEnhanceSettingsByRuntime,
-  resolveEffectivePlaybackSurfaceId,
-  resolveIjkUseAspectRatio
+  resolveEffectivePlaybackSurfaceId
 } from '../main/ets/components/core/player/VideoPlayerController';
 import { VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
@@ -172,31 +170,5 @@ export default function videoPlayerControllerTest() {
       expect(Math.abs(accessor.ijkVideoRatio - 1.7778) < 1e-9).assertTrue()
     })
 
-    // ── Task 3.4：resolveIjkUseAspectRatio 纯函数覆盖 ────────────────────────
-    // 该函数决定 ijkplayer XComponent 外层 Stack 是否使用 aspectRatio 约束。
-    // 测试策略：穷举 AspectRatioMode × ratio 边界组合，验证行为契约。
-    it('FIT 模式且 ratio > 0 → 使用 aspectRatio 约束（resolveIjkUseAspectRatio）', 0, () => {
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FIT, 1.7778)).assertTrue()
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FIT, 2.4)).assertTrue()
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FIT, 4 / 3)).assertTrue()
-    })
-
-    it('FIT 模式且 ratio = 0 → 不使用 aspectRatio（ratio 未知时退到 renderFit）', 0, () => {
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FIT, 0)).assertFalse()
-    })
-
-    it('FIT 模式且 ratio < 0 → 不使用 aspectRatio（无效比率）', 0, () => {
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FIT, -1)).assertFalse()
-    })
-
-    it('FILL 模式不使用 aspectRatio（保持 FILL 等比裁剪语义，不退化）', 0, () => {
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FILL, 1.7778)).assertFalse()
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.FILL, 0)).assertFalse()
-    })
-
-    it('STRETCH 模式不使用 aspectRatio（保持 STRETCH 铺满语义，不退化）', 0, () => {
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.STRETCH, 1.7778)).assertFalse()
-      expect(resolveIjkUseAspectRatio(AspectRatioMode.STRETCH, 0)).assertFalse()
-    })
   })
 }

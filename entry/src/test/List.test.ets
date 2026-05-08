@@ -17,6 +17,7 @@ import episodePlaybackManagerTest from './EpisodePlaybackManager.test';
 import videoControlsTest from './VideoControls.test';
 import playerPageTest from './PlayerPage.test';
 import videoPlayerControllerTest from './VideoPlayerController.test';
+import videoPlayerLayoutTest from './VideoPlayerLayout.test';
 import fileExplorerControllerTest from './FileExplorerController.test';
 import fileExplorerAdapterTest from './FileExplorerAdapter.test';
 import directorySelectorStateTest from './DirectorySelectorState.test';
@@ -65,6 +66,7 @@ export default function testsuite() {
   videoControlsTest();
   playerPageTest();
   videoPlayerControllerTest();
+  videoPlayerLayoutTest();
   fileExplorerControllerTest();
   fileExplorerAdapterTest();
   directorySelectorStateTest();
