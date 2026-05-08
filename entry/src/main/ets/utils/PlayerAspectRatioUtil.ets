@@ -1,13 +1,19 @@
 /**
  * PlayerAspectRatioUtil — 视频显示宽高比计算工具
  *
- * 从 IjkPlayerAdapter 中提取，独立为可复用的纯函数模块：
+ * 从 IjkPlayerAdapter 中提取，独立为可测试的纯函数模块：
  * - 无任何 native 依赖，可直接在 UnitTestBuild 侧测试
- * - 其他 Adapter（如 AVPlayerAdapter）或 UI 层如需 DAR 计算可直接引用
+ * - 对外仅暴露 dispatchDarCallback；DAR 计算逻辑封装在模块内部
+ * - 其他 Adapter（如 AVPlayerAdapter）如需 DAR 计算，
+ *   应通过 dispatchDarCallback 注入回调，而非直接引用内部的 computeDar
  */
 
 /**
  * 计算视频 Display Aspect Ratio（DAR）。
+ *
+ * 模块内部辅助函数，由 dispatchDarCallback 调用。
+ * 不导出：调用方应使用 dispatchDarCallback；若其他模块需要 DAR 值，
+ * 也应通过 dispatchDarCallback 传入回调来获取，而不是直接调用本函数。
  *
  * 公式：
  *   - sarNum > 0 && sarDen > 0：DAR = (w * sarNum) / (h * sarDen)
@@ -21,7 +27,7 @@
  * @param sarDen Sample Aspect Ratio 分母（native 上报）
  * @returns DAR 值，或 0（不可用 / 分母为零）
  */
-export function computeDar(w: number, h: number, sarNum: number, sarDen: number): number {
+function computeDar(w: number, h: number, sarNum: number, sarDen: number): number {
   if (sarNum > 0 && sarDen > 0) {
     const denom = h * sarDen;
     if (denom === 0) {
