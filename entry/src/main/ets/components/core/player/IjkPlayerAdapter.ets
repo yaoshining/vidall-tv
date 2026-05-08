@@ -20,6 +20,35 @@ const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
 
 /**
+ * 计算视频 Display Aspect Ratio（DAR）。
+ *
+ * 公式：
+ *   - sarNum > 0 && sarDen > 0：DAR = (w * sarNum) / (h * sarDen)
+ *   - 否则回退到像素比：DAR = w / h
+ *
+ * 安全策略：分母为 0（h=0 或 h*sarDen=0）时返回 0，调用方须在 DAR > 0 时才触发回调。
+ *
+ * @param w      视频宽度（像素）
+ * @param h      视频高度（像素）
+ * @param sarNum Sample Aspect Ratio 分子（native 上报）
+ * @param sarDen Sample Aspect Ratio 分母（native 上报）
+ * @returns DAR 值，或 0（不可用 / 分母为零）
+ */
+export function computeDar(w: number, h: number, sarNum: number, sarDen: number): number {
+  if (sarNum > 0 && sarDen > 0) {
+    const denom = h * sarDen;
+    if (denom === 0) {
+      return 0;
+    }
+    return (w * sarNum) / denom;
+  }
+  if (h === 0) {
+    return 0;
+  }
+  return w / h;
+}
+
+/**
  * IjkPlayer 播放内核适配器
  *
  * 实现 IPlayer 接口，封装 @ohos/ijkplayer 的所有操作。
@@ -77,6 +106,9 @@ export class IjkPlayerAdapter implements IPlayer {
 
   // onTimedText 内嵌字幕回调（由 VideoPlayerController 注入）
   private _onEmbeddedSubtitleCb: ((text: string) => void) | null = null;
+
+  // DAR 回调（由 VideoPlayerController 注入，生命周期由外层管理，init() 不重置）
+  private _onVideoRatioCb: ((ratio: number) => void) | null = null;
 
   constructor() {
     // 使用多实例模式，避免单例跨页面状态残留导致的偶发异常。
@@ -498,6 +530,18 @@ export class IjkPlayerAdapter implements IPlayer {
     this._onEmbeddedSubtitleCb = cb;
   }
 
+  /**
+   * 注入视频 DAR（Display Aspect Ratio）变化回调。
+   *
+   * 当 native 上报 onVideoSizeChanged 并计算出有效 DAR（> 0）时触发。
+   * 回调引用由外层（VideoPlayerController）管理，init() 不重置此字段。
+   *
+   * @param cb 接收 DAR 值（如 1.778 表示 16:9）的回调
+   */
+  setOnVideoRatioCallback(cb: (ratio: number) => void): void {
+    this._onVideoRatioCb = cb;
+  }
+
   // ─── 内部实现 ───
 
   /**
@@ -682,11 +726,15 @@ export class IjkPlayerAdapter implements IPlayer {
     };
     this.ijk.setOnBufferingUpdateListener(onBufferingUpdateListener);
 
-    // onVideoSizeChanged
+    // onVideoSizeChanged：计算 DAR 并通知上层（如 VideoPlayerController）以便 UI 层按正确宽高比渲染
     const onVideoSizeChangedListener: OnVideoSizeChangedListener = {
       onVideoSizeChanged: (width: number, height: number, sarNum: number, sarDen: number) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `onVideoSizeChanged — ${width}x${height} sar=${sarNum}/${sarDen}`);
+        const dar = computeDar(width, height, sarNum, sarDen);
+        if (dar > 0 && this._onVideoRatioCb) {
+          this._onVideoRatioCb(dar);
+        }
       }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
