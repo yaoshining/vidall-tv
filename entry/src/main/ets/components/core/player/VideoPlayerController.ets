@@ -229,6 +229,12 @@ export class VideoPlayerController {
   @Trace sourceProtocol: string = '';
   /** 画面比例模式，默认为适应（等比保留黑边） */
   @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
+  /**
+   * ijkplayer 上报的视频原始宽高比（width / height）。
+   * 0 表示尚未收到比例信息（初始态或切换视频时重置）。
+   * 由 adapter 回调写入（Task 2.3/2.4），供 UI 层计算实际渲染尺寸使用。
+   */
+  @Trace ijkVideoRatio: number = 0;
   /** 当前播放速率，默认 1.0（正常速度）。支持档位：0.5/0.75/1.0/1.25/1.5/2.0 */
   @Trace playbackSpeed: number = 1.0;
   /** 复用同一 XComponent 切源时缓存的 IJK context */
@@ -391,6 +397,8 @@ export class VideoPlayerController {
     this.audioCapabilityText = '';
     this.ffmpegPreviewUri = '';
     this.sourceProtocol = '';
+    // 切换视频时清零 ijkplayer 宽高比，防止旧 ratio 残留影响下一个视频的渲染（Task 2.2）
+    this.ijkVideoRatio = 0;
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
