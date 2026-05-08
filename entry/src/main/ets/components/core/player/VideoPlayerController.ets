@@ -51,6 +51,20 @@ export function resolveEffectivePlaybackSurfaceId(displaySurfaceId: string, vpeS
   return displaySurfaceId;
 }
 
+/**
+ * ijkplayer FIT 模式下是否应通过 aspectRatio 约束外层 Stack 尺寸。
+ *
+ * ratio > 0 时（已从 onVideoSizeChanged 回调中获取 DAR），使用 aspectRatio 替代
+ * height="100%"，让 ijkplayer 渲染面与视频内容比例完全一致，避免 ijkplayer 自身
+ * 产生上下/左右黑边（ijkplayer 不支持 renderFit GPU 合成层，无法通过 RESIZE_CONTAIN 去除）。
+ *
+ * ratio ≤ 0 或非 FIT 模式时返回 false，外层 Stack 保持原有 width/height 约束，
+ * FILL/STRETCH 语义不退化。
+ */
+export function resolveIjkUseAspectRatio(mode: AspectRatioMode, ratio: number): boolean {
+  return mode === AspectRatioMode.FIT && ratio > 0;
+}
+
 /** 画面比例模式 */
 export enum AspectRatioMode {
   /** 适应：等比缩放保留黑边（RenderFit.RESIZE_CONTAIN 语义，默认） */
@@ -530,6 +544,15 @@ export class VideoPlayerController {
         }
         ijkSubAdapter.onEmbeddedTimedText(text);
         this.applySubtitleBridgeState(ijkSubAdapter.getState());
+      });
+      // 2.3 注入 DAR 比率回调：prepared 后 onVideoSizeChanged 触发，更新 ijkVideoRatio
+      // 2.4 在 bindListeners（adapter.onReady/onPlay/... 注册）之前注入，确保 prepared 后
+      //     回调立即可用（DAR 触发时机在 prepared 之后）
+      ijkAdapter.setOnVideoRatioCallback((ratio: number) => {
+        if (currentSessionId !== this.playbackSessionId) {
+          return;
+        }
+        this.ijkVideoRatio = ratio;
       });
       adapter = ijkAdapter;
     } else {

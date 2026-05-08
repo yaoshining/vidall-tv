@@ -1,6 +1,6 @@
 import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
-import { VideoPlayerController, type PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
+import { VideoPlayerController, type PlayerBackend, AspectRatioMode, resolveIjkUseAspectRatio } from "./VideoPlayerController"
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
@@ -22,6 +22,12 @@ export struct VideoPlayer {
   @Local backendMode: PlayerBackend = 'avplayer'
   /** 镜像 controller.aspectRatioMode，用于驱动 renderFit 响应式更新 */
   @Local aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
+  /**
+   * 镜像 controller.ijkVideoRatio，用于驱动 ijkplayer 外层 Stack 的 aspectRatio 约束。
+   * FIT 模式且 ratio > 0 时，外层 Stack 使用 aspectRatio(ijkVideoRatio) 代替 height="100%"，
+   * 确保 ijkplayer 渲染面与视频 DAR 一致，上下/左右黑边由外层 Stack 黑背景自然填充。
+   */
+  @Local ijkVideoRatio: number = 0
 
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
   private _lastRawText: string = ''
@@ -40,6 +46,13 @@ export struct VideoPlayer {
   onAspectRatioModeChange(): void {
     this.aspectRatioMode = this.controller.aspectRatioMode
     console.info(`[VideoPlayer] 画面比例变更 → mode=${this.aspectRatioMode}, renderFit=${this.toRenderFit(this.aspectRatioMode)}`)
+  }
+
+  /** 3.2 镜像 controller.ijkVideoRatio：DAR 回调更新后同步到本地状态，驱动 Stack 响应式重排 */
+  @Monitor('controller.ijkVideoRatio')
+  onIjkVideoRatioChange(): void {
+    this.ijkVideoRatio = this.controller.ijkVideoRatio
+    console.info(`[VideoPlayer] ijkVideoRatio 变更 → ${this.ijkVideoRatio}`)
   }
 
   /** 将画面比例模式映射到 XComponent.renderFit */
@@ -498,6 +511,11 @@ export struct VideoPlayer {
         }
         .width("100%")
         .height("100%")
+        // 3.4 FIT 模式且 DAR 已知（ratio > 0）时，外层 Stack 使用 aspectRatio 控制高度，
+        //     避免在 XComponent 层产生双重黑边（ijkplayer 不支持 renderFit GPU 合成层）。
+        //     ratio ≤ 0 或非 FIT 时，ArkUI 文档保证 aspectRatio(0) 被忽略，
+        //     退回显式 height="100%" 语义，FILL/STRETCH 不退化。
+        .aspectRatio(resolveIjkUseAspectRatio(this.aspectRatioMode, this.ijkVideoRatio) ? this.ijkVideoRatio : 0)
       } else if (this.backendMode === 'native') {
         Stack() {
           XComponent({
@@ -595,6 +613,8 @@ export struct VideoPlayer {
   aboutToAppear(): void {
     this.backendMode = this.controller.backend
     this.aspectRatioMode = this.controller.aspectRatioMode
+    // 3.3 初始化镜像：若 controller 在 aboutToAppear 前已有 ijkVideoRatio（理论上不发生，防御性读取）
+    this.ijkVideoRatio = this.controller.ijkVideoRatio
     this.initMode = ''
     emitter.on(PlayerEvents.COMPLETED, () => {
       this.clearIjkInitTimer()
