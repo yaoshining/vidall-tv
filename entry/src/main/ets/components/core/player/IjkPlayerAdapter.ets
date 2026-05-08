@@ -15,38 +15,10 @@ import type { OnTimedTextListener } from '@yaoshining/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { dispatchDarCallback } from '../../../utils/PlayerAspectRatioUtil';
 
 const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
-
-/**
- * 计算视频 Display Aspect Ratio（DAR）。
- *
- * 公式：
- *   - sarNum > 0 && sarDen > 0：DAR = (w * sarNum) / (h * sarDen)
- *   - 否则回退到像素比：DAR = w / h
- *
- * 安全策略：分母为 0（h=0 或 h*sarDen=0）时返回 0，调用方须在 DAR > 0 时才触发回调。
- *
- * @param w      视频宽度（像素）
- * @param h      视频高度（像素）
- * @param sarNum Sample Aspect Ratio 分子（native 上报）
- * @param sarDen Sample Aspect Ratio 分母（native 上报）
- * @returns DAR 值，或 0（不可用 / 分母为零）
- */
-export function computeDar(w: number, h: number, sarNum: number, sarDen: number): number {
-  if (sarNum > 0 && sarDen > 0) {
-    const denom = h * sarDen;
-    if (denom === 0) {
-      return 0;
-    }
-    return (w * sarNum) / denom;
-  }
-  if (h === 0) {
-    return 0;
-  }
-  return w / h;
-}
 
 /**
  * IjkPlayer 播放内核适配器
@@ -731,11 +703,7 @@ export class IjkPlayerAdapter implements IPlayer {
       onVideoSizeChanged: (width: number, height: number, sarNum: number, sarDen: number) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `onVideoSizeChanged — ${width}x${height} sar=${sarNum}/${sarDen}`);
-        const dar = computeDar(width, height, sarNum, sarDen);
-        if (dar > 0 && this._onVideoRatioCb) {
-          this._onVideoRatioCb(dar);
-        }
-      }
+        dispatchDarCallback(width, height, sarNum, sarDen, this._onVideoRatioCb);      }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
 
