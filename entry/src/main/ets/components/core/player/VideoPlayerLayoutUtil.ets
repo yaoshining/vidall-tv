@@ -10,7 +10,7 @@ export class IjkPlayerLayoutConfig {
   outerStackBackgroundColor: ResourceColor = Color.Black
 }
 
-function resolveRenderFitForAspectRatioMode(mode: AspectRatioMode): RenderFit {
+export function resolveRenderFitForAspectRatioMode(mode: AspectRatioMode): RenderFit {
   if (mode === AspectRatioMode.FILL) {
     return RenderFit.RESIZE_COVER
   }

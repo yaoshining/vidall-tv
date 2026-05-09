@@ -6,17 +6,11 @@ import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
-import { resolveIjkPlayerLayoutConfig, IjkPlayerLayoutConfig } from "./VideoPlayerLayoutUtil"
-
-function resolveRenderFitForAspectRatioMode(mode: AspectRatioMode): RenderFit {
-  if (mode === AspectRatioMode.FILL) {
-    return RenderFit.RESIZE_COVER
-  }
-  if (mode === AspectRatioMode.STRETCH) {
-    return RenderFit.RESIZE_FILL
-  }
-  return RenderFit.RESIZE_CONTAIN
-}
+import {
+  resolveIjkPlayerLayoutConfig,
+  IjkPlayerLayoutConfig,
+  resolveRenderFitForAspectRatioMode
+} from "./VideoPlayerLayoutUtil"
 
 class IjkXComponentLayoutModifier implements AttributeModifier<XComponentAttribute> {
   private readonly mode: AspectRatioMode

@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium'
 import { AspectRatioMode } from '../main/ets/components/core/player/VideoPlayerController'
-import { resolveIjkPlayerLayoutConfig } from '../main/ets/components/core/player/VideoPlayerLayoutUtil'
+import { resolveIjkPlayerLayoutConfig, resolveRenderFitForAspectRatioMode } from '../main/ets/components/core/player/VideoPlayerLayoutUtil'
 
 class XComponentAttributeSpy {
   calls: string[] = []
@@ -61,6 +61,12 @@ function applyLayout(mode: AspectRatioMode, videoRatio: number, viewportWidth: n
 
 export default function videoPlayerLayoutTest() {
   describe('VideoPlayer 3.4 layout contract', () => {
+    it('AspectRatioMode 到 RenderFit 的映射由单一导出函数提供', 0, () => {
+      expect(resolveRenderFitForAspectRatioMode(AspectRatioMode.FIT)).assertEqual(RenderFit.RESIZE_CONTAIN)
+      expect(resolveRenderFitForAspectRatioMode(AspectRatioMode.FILL)).assertEqual(RenderFit.RESIZE_COVER)
+      expect(resolveRenderFitForAspectRatioMode(AspectRatioMode.STRETCH)).assertEqual(RenderFit.RESIZE_FILL)
+    })
+
     it('FIT 且 ratio > 0 时在内层 XComponent 上使用 width + aspectRatio，且不设置 height / renderFit', 0, () => {
       const spy = applyLayout(AspectRatioMode.FIT, 1.7778, 1920, 1080)
       const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FIT, 1.7778, 1920, 1080)

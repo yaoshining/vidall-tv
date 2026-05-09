@@ -703,7 +703,8 @@ export class IjkPlayerAdapter implements IPlayer {
       onVideoSizeChanged: (width: number, height: number, sarNum: number, sarDen: number) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `onVideoSizeChanged — ${width}x${height} sar=${sarNum}/${sarDen}`);
-        dispatchDarCallback(width, height, sarNum, sarDen, this._onVideoRatioCb);      }
+        dispatchDarCallback(width, height, sarNum, sarDen, this._onVideoRatioCb);
+      }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
 
@@ -782,7 +783,6 @@ export class IjkPlayerAdapter implements IPlayer {
     }
   }
 }
-
 
 
 
