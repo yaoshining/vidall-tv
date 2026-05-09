@@ -6,18 +6,29 @@ import {
   shouldShowAiEnhanceSettingsByRuntime,
   resolveEffectivePlaybackSurfaceId
 } from '../main/ets/components/core/player/VideoPlayerController';
+import { IPlayer, SubtitleInfo, TrackInfo } from '../main/ets/components/core/player/IPlayer';
 import { VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
 
 interface VideoPlayerControllerAccessor {
   backend: PlayerBackend
   surfaceId: string
+  player?: IPlayer
   cachedIjkContext?: object
   cachedIjkComponentId: string
   cachedNativeContext?: object
   cachedNativeComponentId: string
+  currentTime: number
+  duration: number
+  progress: number
+  isPlaying: boolean
+  isSeeking: boolean
+  pendingBackendResumeTimeMs: number
+  pendingBackendResumePlay: boolean
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
+  capturePendingResumeForFallback(): void
+  onPlayerReady(): Promise<void>
   resolvePendingReload(): void
 }
 
@@ -27,6 +38,42 @@ interface IjkVideoRatioAccessor {
 }
 
 interface TestXComponentContext {
+}
+
+class MockFallbackPlayer implements IPlayer {
+  duration: number = 2_684_598
+  currentTime: number = 500_762
+  seekCalls: number[] = []
+  playCallCount: number = 0
+
+  init(_videoData: VideoData, _surfaceId: string): Promise<void> { return Promise.resolve() }
+  play(): Promise<void> {
+    this.playCallCount += 1
+    return Promise.resolve()
+  }
+  pause(): Promise<void> { return Promise.resolve() }
+  toggle(): Promise<void> { return Promise.resolve() }
+  release(): Promise<void> { return Promise.resolve() }
+  seek(timeMs: number): void {
+    this.seekCalls.push(timeMs)
+  }
+  forward(_milliseconds: number): Promise<void> { return Promise.resolve() }
+  backward(_milliseconds: number): Promise<void> { return Promise.resolve() }
+  getTrackInfos(): Promise<TrackInfo[]> { return Promise.resolve([]) }
+  selectTrack(_trackIndex: number): Promise<void> { return Promise.resolve() }
+  setSubtitleDelay(_delayMs: number): void {}
+  setPlaybackSpeed(_speed: number): void {}
+  onReady(_callback: () => void): void {}
+  onPlay(_callback: () => void): void {}
+  onPaused(_callback: () => void): void {}
+  onCompleted(_callback: () => void): void {}
+  onStopped(_callback: () => void): void {}
+  onTimeUpdate(_callback: (currentTime: number) => void): void {}
+  onBuffering(_callback: (isBuffering: boolean) => void): void {}
+  onError(_callback: (error: Error) => void): void {}
+  onUnsupportedFormat(_callback: () => void): void {}
+  onSeekDone(_callback: () => void): void {}
+  onSubtitleUpdate(_callback: (info: SubtitleInfo) => void): void {}
 }
 
 class TestVideoPlayerController extends VideoPlayerController {
@@ -168,6 +215,49 @@ export default function videoPlayerControllerTest() {
       }
       simulatedCallback(1.7778)
       expect(Math.abs(accessor.ijkVideoRatio - 1.7778) < 1e-9).assertTrue()
+    })
+
+    it('fallback 到 ijkplayer 前会保留 seek flush 的续播位置与自动续播意图', 0, () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.player = new MockFallbackPlayer()
+      accessor.currentTime = 501626
+      accessor.duration = 2684598
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = true
+      accessor.pendingBackendResumeTimeMs = -1
+      accessor.pendingBackendResumePlay = false
+
+      accessor.capturePendingResumeForFallback()
+
+      expect(accessor.pendingBackendResumeTimeMs).assertEqual(501626)
+      expect(accessor.pendingBackendResumePlay).assertTrue()
+      expect(accessor.currentTime).assertEqual(501626)
+    })
+
+    it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      accessor.backend = 'ijkplayer'
+      accessor.player = player
+      accessor.currentTime = 0
+      accessor.duration = player.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+
+      expect(player.seekCalls.length).assertEqual(1)
+      expect(player.seekCalls[0]).assertEqual(501626)
+      expect(accessor.pendingBackendResumeTimeMs).assertEqual(-1)
+      expect(accessor.pendingBackendResumePlay).assertFalse()
+      expect(accessor.currentTime).assertEqual(501626)
+      expect(player.playCallCount).assertEqual(0)
     })
 
   })

@@ -288,9 +288,9 @@ export class VideoPlayerController {
   private nativeSeekDiagLogEnabled: boolean = DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED;
   /** native 初始化就绪保护定时器：超时后自动回退到 ijkplayer */
   private nativeReadyGuardTimer?: number;
-  /** native 自动回退到 ijkplayer 时，待恢复的播放进度 */
+  /** 后端自动 fallback（如 avplayer/native → ijkplayer）时，待恢复的播放进度 */
   private pendingBackendResumeTimeMs: number = -1;
-  /** native 自动回退后，是否在 seek 完成后自动续播 */
+  /** 后端自动 fallback 后，是否在 seek 完成后自动续播 */
   private pendingBackendResumePlay: boolean = false;
   /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
   private smbProxyActive: boolean = false;
@@ -712,6 +712,7 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
+      this.capturePendingResumeForFallback();
       // 先把 player 引用清空，防止后续调用
       const oldPlayer = this.player;
       this.player = undefined;
@@ -1958,6 +1959,19 @@ export class VideoPlayerController {
     this.player = undefined;
     this.backend = 'ijkplayer';
     oldPlayer?.release().catch(() => {});
+  }
+
+  private capturePendingResumeForFallback(): void {
+    const playerPosition = this.player?.currentTime ?? 0;
+    const controllerPosition = this.currentTime > 0 ? this.currentTime : 0;
+    const latestPosition = playerPosition > controllerPosition ? playerPosition : controllerPosition;
+    const safePosition = this.duration > 0 && latestPosition > this.duration
+      ? this.duration
+      : latestPosition;
+    this.pendingBackendResumeTimeMs = safePosition;
+    this.pendingBackendResumePlay = this.isPlaying || this.isSeeking;
+    this.currentTime = safePosition;
+    this.progress = this.duration > 0 ? safePosition / this.duration : 0;
   }
 
   private logFallbackEvent(
