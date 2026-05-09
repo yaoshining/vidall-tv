@@ -5,13 +5,17 @@ import { resolveIjkPlayerLayoutConfig } from '../main/ets/components/core/player
 class XComponentAttributeSpy {
   calls: string[] = []
 
-  width(value: string): XComponentAttributeSpy {
-    this.calls.push(`width:${value}`)
+  width(value: Length | undefined): XComponentAttributeSpy {
+    if (value !== undefined) {
+      this.calls.push(`width:${value}`)
+    }
     return this
   }
 
-  height(value: string): XComponentAttributeSpy {
-    this.calls.push(`height:${value}`)
+  height(value: Length | undefined): XComponentAttributeSpy {
+    if (value !== undefined) {
+      this.calls.push(`height:${value}`)
+    }
     return this
   }
 
@@ -40,13 +44,11 @@ class XComponentAttributeSpy {
   }
 }
 
-function applyLayout(mode: AspectRatioMode, ratio: number): XComponentAttributeSpy {
-  const config = resolveIjkPlayerLayoutConfig(mode, ratio)
+function applyLayout(mode: AspectRatioMode, videoRatio: number, viewportWidth: number, viewportHeight: number): XComponentAttributeSpy {
+  const config = resolveIjkPlayerLayoutConfig(mode, videoRatio, viewportWidth, viewportHeight)
   const spy = new XComponentAttributeSpy()
   spy.width(config.width)
-  if (config.height !== undefined) {
-    spy.height(config.height)
-  }
+  spy.height(config.height)
   if (config.aspectRatio !== undefined) {
     spy.aspectRatio(config.aspectRatio)
   }
@@ -60,39 +62,64 @@ function applyLayout(mode: AspectRatioMode, ratio: number): XComponentAttributeS
 export default function videoPlayerLayoutTest() {
   describe('VideoPlayer 3.4 layout contract', () => {
     it('FIT 且 ratio > 0 时在内层 XComponent 上使用 width + aspectRatio，且不设置 height / renderFit', 0, () => {
-      const spy = applyLayout(AspectRatioMode.FIT, 1.7778)
+      const spy = applyLayout(AspectRatioMode.FIT, 1.7778, 1920, 1080)
+      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FIT, 1.7778, 1920, 1080)
 
       expect(spy.hasCall('width:100%')).assertTrue()
       expect(spy.hasCall('aspectRatio:1.7778')).assertTrue()
       expect(spy.hasCall('height:')).assertFalse()
       expect(spy.hasCall('renderFit:')).assertFalse()
+      expect(config.clipViewport).assertFalse()
       expect(spy.hasCall('backgroundColor')).assertTrue()
     })
 
     it('FIT 且 ratio 未知时显式回退为 width + height + renderFit', 0, () => {
-      const spy = applyLayout(AspectRatioMode.FIT, 0)
+      const spy = applyLayout(AspectRatioMode.FIT, 0, 1920, 1080)
+      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FIT, 0, 1920, 1080)
 
       expect(spy.hasCall('width:100%')).assertTrue()
       expect(spy.hasCall('height:100%')).assertTrue()
       expect(spy.hasCall(`renderFit:${RenderFit.RESIZE_CONTAIN}`)).assertTrue()
       expect(spy.hasCall('aspectRatio:')).assertFalse()
+      expect(config.clipViewport).assertFalse()
     })
 
-    it('FILL / STRETCH 时保持原有 renderFit 分支，不使用 aspectRatio', 0, () => {
-      const fillSpy = applyLayout(AspectRatioMode.FILL, 1.7778)
-      const stretchSpy = applyLayout(AspectRatioMode.STRETCH, 1.7778)
+    it('FILL 在窄视频场景走显式 cover 尺寸 + clip 路径，不再依赖 renderFit', 0, () => {
+      const expectedHeight = 1920 / 1.3333
+      const fillSpy = applyLayout(AspectRatioMode.FILL, 1.3333, 1920, 1080)
+      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FILL, 1.3333, 1920, 1080)
 
-      expect(fillSpy.hasCall('height:100%')).assertTrue()
-      expect(fillSpy.hasCall(`renderFit:${RenderFit.RESIZE_COVER}`)).assertTrue()
+      expect(fillSpy.hasCall('width:1920')).assertTrue()
+      expect(fillSpy.hasCall(`height:${expectedHeight}`)).assertTrue()
       expect(fillSpy.hasCall('aspectRatio:')).assertFalse()
+      expect(fillSpy.hasCall('renderFit:')).assertFalse()
+      expect(config.clipViewport).assertTrue()
+    })
+
+    it('FILL 在宽视频场景走显式 cover 尺寸 + clip 路径，不再依赖 renderFit', 0, () => {
+      const fillSpy = applyLayout(AspectRatioMode.FILL, 2.39, 1920, 1080)
+      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FILL, 2.39, 1920, 1080)
+
+      expect(fillSpy.hasCall('width:2581.2')).assertTrue()
+      expect(fillSpy.hasCall('height:1080')).assertTrue()
+      expect(fillSpy.hasCall('aspectRatio:')).assertFalse()
+      expect(fillSpy.hasCall('renderFit:')).assertFalse()
+      expect(config.clipViewport).assertTrue()
+    })
+
+    it('STRETCH 保持明确的 width + height + renderFit 拉伸路径，且不启用 clip', 0, () => {
+      const stretchSpy = applyLayout(AspectRatioMode.STRETCH, 1.7778, 1920, 1080)
+      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.STRETCH, 1.7778, 1920, 1080)
 
       expect(stretchSpy.hasCall('height:100%')).assertTrue()
+      expect(stretchSpy.hasCall('width:100%')).assertTrue()
       expect(stretchSpy.hasCall(`renderFit:${RenderFit.RESIZE_FILL}`)).assertTrue()
       expect(stretchSpy.hasCall('aspectRatio:')).assertFalse()
+      expect(config.clipViewport).assertFalse()
     })
 
     it('ijkplayer 外层 Stack 显式使用 Color.Black', 0, () => {
-      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FIT, 1.7778)
+      const config = resolveIjkPlayerLayoutConfig(AspectRatioMode.FIT, 1.7778, 1920, 1080)
 
       expect(config.outerStackBackgroundColor).assertEqual(Color.Black)
     })
