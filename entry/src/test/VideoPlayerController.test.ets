@@ -36,6 +36,7 @@ interface VideoPlayerControllerAccessor {
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
   capturePendingResumeForFallback(source: string): void
+  handlePlayerPaused(): void
   continuePendingReadyAfterSeek(): Promise<void>
   onPlayerReady(): Promise<void>
   resolvePendingReload(): void
@@ -397,6 +398,24 @@ export default function videoPlayerControllerTest() {
       expect(player.seekCalls[0]).assertEqual(3200)
       expect(accessor.pendingBackendResumePlay).assertTrue()
       expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
+    })
+
+    it('seek 显式来源在 onPaused 早于 fallback capture 时仍会被保留', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      accessor.player = player
+      accessor.currentTime = 3200
+      accessor.duration = 9000
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      await controller.seek(3200, 'prepared_resume_seek')
+      accessor.handlePlayerPaused()
+      accessor.capturePendingResumeForFallback('test_fallback')
+
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
+      expect(accessor.pendingBackendResumePlay).assertTrue()
     })
 
     it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {

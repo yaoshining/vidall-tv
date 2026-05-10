@@ -332,6 +332,8 @@ export class VideoPlayerController {
   private hasPendingResumeAutoplayDecisionExplicit: boolean = false;
   /** 当前播放会话显式自动播放决策来源 */
   private pendingResumeAutoplayDecisionSource: string = '';
+  /** seek 临时 pause 窗口内，onPaused 不应清理显式自动播放决策 */
+  private preservePendingResumeAutoplayDecisionOnPaused: boolean = false;
   /** 待恢复续播 seek 是否进行中 */
   private pendingResumeSeekInFlight: boolean = false;
   /** 当前待恢复续播 seek 的来源 */
@@ -508,6 +510,20 @@ export class VideoPlayerController {
     this.pendingResumeAutoplayDecisionExplicit = false;
     this.hasPendingResumeAutoplayDecisionExplicit = false;
     this.pendingResumeAutoplayDecisionSource = '';
+    this.preservePendingResumeAutoplayDecisionOnPaused = false;
+  }
+
+  private handlePlayerPaused(): void {
+    if (!this.preservePendingResumeAutoplayDecisionOnPaused) {
+      this.clearPendingResumeAutoplayDecision();
+    }
+    this.isPlaying = false;
+    this.pauseSubtitleTimer();
+    this.stopProgressTimer();
+    this.saveProgressNow();
+    if (this.backend === 'ffmpeg') {
+      this.stopFfmpegRenderTimer();
+    }
   }
 
   private resolvePendingResumeAutoplayDecision(
@@ -791,14 +807,7 @@ export class VideoPlayerController {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
-      this.clearPendingResumeAutoplayDecision();
-      this.isPlaying = false;
-      this.pauseSubtitleTimer();
-      this.stopProgressTimer();
-      this.saveProgressNow();
-      if (this.backend === 'ffmpeg') {
-        this.stopFfmpegRenderTimer();
-      }
+      this.handlePlayerPaused();
     });
     adapter.onCompleted(() => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -2590,6 +2599,9 @@ export class VideoPlayerController {
     }
     if (autoplayDecisionSource.length > 0) {
       this.rememberPendingResumeAutoplayDecision(true, autoplayDecisionSource);
+      this.preservePendingResumeAutoplayDecisionOnPaused = true;
+    } else {
+      this.preservePendingResumeAutoplayDecisionOnPaused = false;
     }
     await this.pause();
     this.currentTime = safeTime;
