@@ -329,6 +329,10 @@ export class VideoPlayerController {
   private pendingResumeSeekTargetMs: number = -1;
   /** 当前待恢复续播 seek 完成后是否自动恢复播放 */
   private pendingResumeSeekAutoPlay: boolean = false;
+  /** fallback resume seek 完成后，是否需要补做 ready 阶段的轨道初始化 */
+  private pendingReadyTrackInitAfterSeek: boolean = false;
+  /** fallback resume seek 完成后，轨道初始化结束是否需要恢复播放 */
+  private pendingReadyTrackInitResumePlay: boolean = false;
   /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
   private smbProxyActive: boolean = false;
   /** 保存原始 smb:// URL，供 avplayer→ijkplayer fallback 时重新启动代理 */
@@ -533,6 +537,8 @@ export class VideoPlayerController {
     this.pendingResumeSeekCaptureBackend = 'avplayer';
     this.pendingResumeSeekTargetMs = -1;
     this.pendingResumeSeekAutoPlay = false;
+    this.pendingReadyTrackInitAfterSeek = false;
+    this.pendingReadyTrackInitResumePlay = false;
     this.suppressPlayAfterSeekOnce = false;
     if (ENABLE_SESSION_DIAG_LOG) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -889,24 +895,18 @@ export class VideoPlayerController {
         if (resumeSeekInFlight) {
           this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
             resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'queued_seek', this.timeToSeek);
+          this.pendingResumeSeekInFlight = false;
+          this.pendingResumeSeekSource = '';
+          this.pendingResumeSeekCaptureBackend = 'avplayer';
+          this.pendingResumeSeekTargetMs = -1;
+          this.pendingResumeSeekAutoPlay = false;
         }
         adapter.seek(this.timeToSeek);
         this.timeToSeek = -1;
-      } else {
-        if (this.suppressPlayAfterSeekOnce) {
-          if (resumeSeekInFlight) {
-            this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
-              resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'suppress', -1);
-          }
-          this.suppressPlayAfterSeekOnce = false;
-        } else {
-          if (resumeSeekInFlight) {
-            this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
-              resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'play', -1);
-          }
-          this.player?.play().catch(() => {});
-        }
+        this.isSeeking = false;
+        return;
       }
+      const shouldContinuePendingReadyAfterSeek = this.pendingReadyTrackInitAfterSeek;
       if (resumeSeekInFlight) {
         this.pendingResumeSeekInFlight = false;
         this.pendingResumeSeekSource = '';
@@ -915,6 +915,24 @@ export class VideoPlayerController {
         this.pendingResumeSeekAutoPlay = false;
       }
       this.isSeeking = false;
+      if (shouldContinuePendingReadyAfterSeek) {
+        this.suppressPlayAfterSeekOnce = false;
+        this.continuePendingReadyAfterSeek(currentSessionId).catch(() => {});
+        return;
+      }
+      if (this.suppressPlayAfterSeekOnce) {
+        if (resumeSeekInFlight) {
+          this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
+            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'suppress', -1);
+        }
+        this.suppressPlayAfterSeekOnce = false;
+      } else {
+        if (resumeSeekInFlight) {
+          this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
+            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'play', -1);
+        }
+        this.player?.play().catch(() => {});
+      }
     });
     adapter.onSubtitleUpdate((info) => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -2008,6 +2026,7 @@ export class VideoPlayerController {
 
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
+    const readySessionId = this.playbackSessionId;
     this.clearNativeReadyGuardTimer();
     this.hasPrepared = true;
     const playerDuration = this.player?.duration ?? 0;
@@ -2017,42 +2036,24 @@ export class VideoPlayerController {
     this.currentTime = this.player?.currentTime ?? 0;
     this.isReady = true;
     this.isLoading = false;
-    // 指标埋点：首帧到达 + play_result=success
     const firstFrameElapsed = Date.now() - this.metricsLoadStartMs;
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"first_frame","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"elapsed_ms":${firstFrameElapsed}}`);
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"play_result","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"result":"success","elapsed_ms":${firstFrameElapsed}}`);
-    
-    // Task 4.4: Record successful playback attempt with first frame time
     if (MetricsService.isInitialized()) {
-      // 升级为 MediaIdentity 对象，服务端可通过 provider/provider_id 唯一识别视频
       const sourceType = this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network';
       MetricsService.getInstance().recordPlaybackAttempt(true, firstFrameElapsed, this.metricsMedia ?? undefined, sourceType);
     }
-    
+
     const pendingResumeState = this.consumePendingResumeState();
     emitter.emit(PlayerEvents.PREPARED);
-    // 重新应用播放速率（后端切换或重新 init 后，保持用户设置的倍速）
     if (this.playbackSpeed !== 1.0 && this.player) {
       this.player.setPlaybackSpeed(this.playbackSpeed);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `onPlayerReady: 重新应用播放速率 speed=${this.playbackSpeed}`);
     }
-    await this.loadSubtitleTracks();
-    await this.loadAudioTracks();
-    
-    // Task 5.5: Record subtitle usage at playback start (once per session, avoid double-counting)
-    // 缺陷 2 修复：移除 activeSubtitleIndex < 0 的条件判断，始终记录一次，
-    //   并取当前激活轨道的语言（auto-select 已在 loadSubtitleTracks 内完成）。
-    // switchSubtitleTrack 中不再调用 recordSubtitleUsage，防止同一播放会话重复计数。
-    if (MetricsService.isInitialized()) {
-      let startSubtitleLang: string | null = null;
-      if (this.activeSubtitleIndex >= 0 && this.activeSubtitleIndex < this.allSubtitleTracks.length) {
-        startSubtitleLang = this.allSubtitleTracks[this.activeSubtitleIndex].language ?? null;
-      }
-      MetricsService.getInstance().recordSubtitleUsage(startSubtitleLang);
-    }
+
     const resumeTimeMs = pendingResumeState?.positionMs ?? -1;
     const shouldResumePlay = pendingResumeState?.shouldResumePlay ?? false;
     const resumeSource = pendingResumeState?.reason ?? '';
@@ -2064,7 +2065,7 @@ export class VideoPlayerController {
       this.logResumeDiagnostic('resume_pending_consume', resumeSource, resumeCaptureBackend, resumeTimeMs,
         effectiveResumeTimeMs, shouldResumePlay, 'pending', -1);
     }
-    
+
     if (pendingResumeState !== null && pendingResumeState.positionMs > 0 && this.player) {
       const safeResumeTimeMs = effectiveResumeTimeMs;
       this.currentTime = safeResumeTimeMs;
@@ -2072,7 +2073,9 @@ export class VideoPlayerController {
       this.subtitleAdapter.onSeekSync();
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
       this.isSeeking = true;
-      this.suppressPlayAfterSeekOnce = !shouldResumePlay;
+      this.suppressPlayAfterSeekOnce = true;
+      this.pendingReadyTrackInitAfterSeek = true;
+      this.pendingReadyTrackInitResumePlay = shouldResumePlay;
       this.pendingResumeSeekInFlight = true;
       this.pendingResumeSeekSource = resumeSource;
       this.pendingResumeSeekCaptureBackend = resumeCaptureBackend;
@@ -2085,9 +2088,56 @@ export class VideoPlayerController {
         `后端切换续播定位: backend=${this.backend} time=${safeResumeTimeMs}`);
       return;
     }
+
+    await this.finalizePlayerReadyTrackInitialization(readySessionId);
     if (pendingResumeState !== null && pendingResumeState.shouldResumePlay && !this.isPlaying) {
       this.logResumeDiagnostic('resume_autoplay_decision', resumeSource, resumeCaptureBackend, resumeTimeMs,
         effectiveResumeTimeMs, shouldResumePlay, 'play_no_seek', -1);
+      await this.play();
+    }
+  }
+
+  private async finalizePlayerReadyTrackInitialization(sessionId: number = this.playbackSessionId): Promise<void> {
+    if (sessionId !== this.playbackSessionId) {
+      return;
+    }
+    await this.loadSubtitleTracks();
+    if (sessionId !== this.playbackSessionId) {
+      return;
+    }
+    await this.loadAudioTracks();
+    if (sessionId !== this.playbackSessionId) {
+      return;
+    }
+    this.recordSubtitleUsageAtPlaybackStart();
+  }
+
+  private recordSubtitleUsageAtPlaybackStart(): void {
+    // Task 5.5: Record subtitle usage at playback start (once per session, avoid double-counting)
+    // 缺陷 2 修复：移除 activeSubtitleIndex < 0 的条件判断，始终记录一次，
+    //   并取当前激活轨道的语言（auto-select 已在 loadSubtitleTracks 内完成）。
+    // switchSubtitleTrack 中不再调用 recordSubtitleUsage，防止同一播放会话重复计数。
+    if (MetricsService.isInitialized()) {
+      let startSubtitleLang: string | null = null;
+      if (this.activeSubtitleIndex >= 0 && this.activeSubtitleIndex < this.allSubtitleTracks.length) {
+        startSubtitleLang = this.allSubtitleTracks[this.activeSubtitleIndex].language ?? null;
+      }
+      MetricsService.getInstance().recordSubtitleUsage(startSubtitleLang);
+    }
+  }
+
+  private async continuePendingReadyAfterSeek(sessionId: number = this.playbackSessionId): Promise<void> {
+    if (sessionId !== this.playbackSessionId || !this.pendingReadyTrackInitAfterSeek) {
+      return;
+    }
+    const shouldResumePlay = this.pendingReadyTrackInitResumePlay;
+    this.pendingReadyTrackInitAfterSeek = false;
+    this.pendingReadyTrackInitResumePlay = false;
+    await this.finalizePlayerReadyTrackInitialization(sessionId);
+    if (sessionId !== this.playbackSessionId) {
+      return;
+    }
+    if (shouldResumePlay && !this.isPlaying) {
       await this.play();
     }
   }
