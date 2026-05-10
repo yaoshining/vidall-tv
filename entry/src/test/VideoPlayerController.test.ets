@@ -20,6 +20,9 @@ interface VideoPlayerControllerAccessor {
   surfaceId: string
   player?: IPlayer
   pendingResumeState: PendingResumeStateSnapshot | null
+  pendingResumeAutoplayDecisionExplicit: boolean
+  hasPendingResumeAutoplayDecisionExplicit: boolean
+  pendingResumeAutoplayDecisionSource: string
   cachedIjkContext?: object
   cachedIjkComponentId: string
   cachedNativeContext?: object
@@ -374,20 +377,6 @@ export default function videoPlayerControllerTest() {
       expect(accessor.currentTime).assertEqual(501626)
     })
 
-    it('fallback pending-resume 会记录自动续播决策来源', 0, () => {
-      const controller = new TestVideoPlayerController()
-      const accessor = accessController(controller)
-      accessor.player = new MockFallbackPlayer()
-      accessor.currentTime = 3200
-      accessor.duration = 9000
-      accessor.isPlaying = false
-      accessor.isSeeking = true
-
-      accessor.capturePendingResumeForFallback('test_fallback')
-
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('transient_player_state')
-    })
-
     it('reloadSource 自动播放路径会在初始化前预设新媒体自动续播决策', 0, async () => {
       const controller = new ReloadAutoplayDecisionSpyController()
       const accessor = accessController(controller)
@@ -402,7 +391,7 @@ export default function videoPlayerControllerTest() {
       expect(controller.prepareResumeAutoplayDecisionCalls[0]).assertEqual('true:reload_source_autoplay')
     })
 
-    it('公共 seek 入口会为 fallback pending-resume 建立显式自动续播决策来源', 0, async () => {
+    it('公共 seek 入口会为新会话初始化链路记录显式自动续播决策来源', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
       const player = new MockFallbackPlayer()
@@ -413,16 +402,15 @@ export default function videoPlayerControllerTest() {
       accessor.isSeeking = false
 
       await controller.seek(3200, 'prepared_resume_seek')
-
-      accessor.capturePendingResumeForFallback('test_fallback')
 
       expect(player.seekCalls.length).assertEqual(1)
       expect(player.seekCalls[0]).assertEqual(3200)
-      expect(accessor.pendingBackendResumePlay).assertTrue()
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
+      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
+      expect(accessor.pendingResumeAutoplayDecisionExplicit).assertTrue()
+      expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('prepared_resume_seek')
     })
 
-    it('seek 显式来源在 onPaused 早于 fallback capture 时仍会被保留', 0, async () => {
+    it('fallback capture 在 task 2.1 前仍只依赖瞬时播放态', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
       const player = new MockFallbackPlayer()
@@ -433,11 +421,10 @@ export default function videoPlayerControllerTest() {
       accessor.isSeeking = false
 
       await controller.seek(3200, 'prepared_resume_seek')
-      accessor.handlePlayerPaused()
       accessor.capturePendingResumeForFallback('test_fallback')
 
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
-      expect(accessor.pendingBackendResumePlay).assertTrue()
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('transient_player_state')
+      expect(accessor.pendingBackendResumePlay).assertFalse()
     })
 
     it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {
