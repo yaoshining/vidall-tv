@@ -236,6 +236,10 @@ class ReloadPreparedLifecycleController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class ReloadPreparedEarlyFailureController extends VideoPlayerController {
+  saveProgressNow(): void {}
+}
+
 /**
  * Task 2.2 TDD spy：验证真实 initPlayer 调用了 resetDisplayState。
  * override resetDisplayState() 而非 initPlayer，确保生产代码路径被真实执行。
@@ -414,6 +418,24 @@ export default function videoPlayerControllerTest() {
       expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
       expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('reload_source_autoplay')
       expect(controller.playCallCount).assertEqual(1)
+    })
+
+    it('reloadSource 自动播放路径前置校验失败时会清理旧 prepared decision', 0, async () => {
+      const controller = new ReloadPreparedEarlyFailureController()
+      const accessor = accessController(controller)
+      accessor.surfaceId = ''
+      controller.prepareResumeAutoplayDecision(false, 'stale_prepared')
+
+      let rejectedMessage = ''
+      try {
+        await controller.reloadSource(buildVideoData('reload-autoplay-early-failure'), true)
+      } catch (error) {
+        rejectedMessage = (error as Error).message
+      }
+
+      expect(rejectedMessage).assertEqual('reloadSource requires surfaceId')
+      expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
+      expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
     })
 
     it('公共 seek 入口会为新会话初始化链路记录显式自动续播决策来源', 0, async () => {

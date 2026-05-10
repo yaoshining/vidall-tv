@@ -1782,6 +1782,9 @@ export class VideoPlayerController {
   }
 
   async reloadSource(videoData: VideoData, autoPlay: boolean = true): Promise<void> {
+    if (autoPlay) {
+      this.clearPreparedResumeAutoplayDecision();
+    }
     if (this.surfaceId.length === 0) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'reloadSource: surfaceId 为空，忽略切源请求');
       throw new Error('reloadSource requires surfaceId');
@@ -1789,7 +1792,6 @@ export class VideoPlayerController {
     this.clearPendingResumeState();
     this.rejectPendingReload(new Error('reload superseded'));
     if (autoPlay) {
-      this.clearPreparedResumeAutoplayDecision();
       this.prepareResumeAutoplayDecision(true, 'reload_source_autoplay');
     }
     const reloadToken = this.pendingReloadToken + 1;

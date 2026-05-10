@@ -786,6 +786,7 @@ export struct PlayerPage {
       this.resumePlaybackForParam(nextParam);
       return true;
     } catch {
+      this.videoPlayerController.discardPreparedResumeAutoplayDecision();
       this.videoPlayerController.progressContext = previousProgressContext;
       return false;
     } finally {
