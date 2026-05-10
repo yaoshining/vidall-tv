@@ -99,6 +99,28 @@ export interface MediaProgressResumeAction {
   positionMs?: number;
 }
 
+export type ResumeDiagnosticEventName = 'page_param_received' | 'saved_progress_resolved' | 'prepared_resume_decision';
+
+export type ResumeDiagnosticAction = MediaProgressResumeActionType | 'dialog' | 'none';
+
+export interface ResumeDiagnosticLogOptions {
+  savedPositionMs?: number;
+  resumeAction?: ResumeDiagnosticAction;
+  resumePositionMs?: number;
+}
+
+export interface ResumeDiagnosticLogPayload {
+  event: ResumeDiagnosticEventName;
+  videoId: number;
+  mediaKey: string;
+  season: number;
+  episode: number;
+  startPositionMs: number;
+  savedPositionMs: number;
+  resumeAction: ResumeDiagnosticAction;
+  resumePositionMs: number;
+}
+
 export function resolveMediaProgressResumeAction(
   saved: MediaProgressEntry | null,
   currentDurationMs: number,
@@ -354,11 +376,40 @@ export struct PlayerPage {
     return ctx;
   }
 
+  private emitResumeDiagnosticLog(
+    event: ResumeDiagnosticEventName,
+    pageParam: PlayerPageParam,
+    options?: ResumeDiagnosticLogOptions
+  ): void {
+    const payload: ResumeDiagnosticLogPayload = {
+      event,
+      videoId: pageParam.videoId ?? 0,
+      mediaKey: pageParam.mediaKey ?? '',
+      season: pageParam.seasonNumber ?? 0,
+      episode: pageParam.episodeNumber ?? 0,
+      startPositionMs: pageParam.startPositionMs ?? 0,
+      savedPositionMs: options?.savedPositionMs ?? 0,
+      resumeAction: options?.resumeAction ?? 'none',
+      resumePositionMs: options?.resumePositionMs ?? 0
+    };
+    console.info(`[PlayerPage][RESUME] ${JSON.stringify(payload)}`);
+  }
+
   private resumePlaybackForParam(pageParam: PlayerPageParam): void {
     const mediaKey = pageParam.mediaKey ?? '';
     if (mediaKey.length > 0) {
       const directStart = pageParam.startPositionMs ?? 0;
       if (directStart > 0) {
+        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+          savedPositionMs: directStart,
+          resumeAction: 'seek',
+          resumePositionMs: directStart
+        });
+        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+          savedPositionMs: directStart,
+          resumeAction: 'seek',
+          resumePositionMs: directStart
+        });
         this.videoPlayerController.seek(directStart).catch(() => {});
         return;
       }
@@ -369,6 +420,18 @@ export struct PlayerPage {
           this.currentMediaSeason,
           this.currentMediaEpisode
         );
+        const savedPositionMs = saved?.positionMs ?? 0;
+        const resumePositionMs = resumeAction.positionMs ?? 0;
+        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+          savedPositionMs,
+          resumeAction: resumeAction.action,
+          resumePositionMs
+        });
+        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+          savedPositionMs,
+          resumeAction: resumeAction.action,
+          resumePositionMs
+        });
         if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
           this.videoPlayerController.seek(resumeAction.positionMs).catch(() => {});
           return;
@@ -378,10 +441,19 @@ export struct PlayerPage {
         }
         this.videoPlayerController.play().catch(() => {});
       }).catch(() => {
+        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+          resumeAction: 'play'
+        });
+        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+          resumeAction: 'play'
+        });
         this.videoPlayerController.play().catch(() => {});
       });
       return;
     }
+    this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+      resumeAction: 'play'
+    });
     this.videoPlayerController.play().catch(() => {});
   }
 
@@ -400,6 +472,7 @@ export struct PlayerPage {
         if (token !== this.pageParamToken) {
           return;
         }
+        const savedPositionMs = saved?.positionMs ?? 0;
         if (saved !== null && saved.positionMs > 0) {
           const dur = this.videoPlayerController.duration;
           const isWatched = dur > 0 && saved.positionMs >= dur * 0.95;
@@ -410,14 +483,41 @@ export struct PlayerPage {
           } else {
             this.pendingSeekMs = saved.positionMs;
           }
+          this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+            savedPositionMs,
+            resumeAction: 'dialog',
+            resumePositionMs: this.pendingSeekMs > 0 ? this.pendingSeekMs : 0
+          });
+          this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+            savedPositionMs,
+            resumeAction: 'dialog',
+            resumePositionMs: this.pendingSeekMs > 0 ? this.pendingSeekMs : 0
+          });
           this.showResumeDialog = true;
+          return;
         }
-      }).catch(() => {});
+        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+          savedPositionMs,
+          resumeAction: 'play'
+        });
+        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+          savedPositionMs,
+          resumeAction: 'play'
+        });
+      }).catch(() => {
+        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+          resumeAction: 'play'
+        });
+        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+          resumeAction: 'play'
+        });
+      });
     });
   }
 
   private applyPlayerPageParam(pageParam: PlayerPageParam): void {
     this.currentPageParam = pageParam;
+    this.emitResumeDiagnosticLog('page_param_received', pageParam);
     this.pageParamToken += 1;
     const token = this.pageParamToken;
     if (pageParam.preferredBackend) {
