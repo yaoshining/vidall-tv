@@ -124,6 +124,27 @@ interface FallbackLogRecord {
   detailMessage: string;
 }
 
+interface ResumeDiagnosticLogRecord {
+  event: string;
+  sessionId: number;
+  backend: PlayerBackend;
+  videoId: number;
+  seriesProviderId: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  resumeSource: string;
+  captureBackend: PlayerBackend;
+  pendingResumeMs: number;
+  effectiveResumeMs: number;
+  autoResumePlay: boolean;
+  autoplayDecision: string;
+  queuedSeekMs: number;
+  isSeeking: boolean;
+  currentTimeMs: number;
+  durationMs: number;
+  filePath: string;
+}
+
 interface NativeXComponentFallbackContext {
 }
 
@@ -292,6 +313,20 @@ export class VideoPlayerController {
   private pendingBackendResumeTimeMs: number = -1;
   /** 后端自动 fallback 后，是否在 seek 完成后自动续播 */
   private pendingBackendResumePlay: boolean = false;
+  /** 待恢复续播点来源（用于真机结构化日志串联） */
+  private pendingBackendResumeSource: string = '';
+  /** 捕获待恢复续播点时的原后端 */
+  private pendingBackendResumeCaptureBackend: PlayerBackend = 'avplayer';
+  /** 待恢复续播 seek 是否进行中 */
+  private pendingResumeSeekInFlight: boolean = false;
+  /** 当前待恢复续播 seek 的来源 */
+  private pendingResumeSeekSource: string = '';
+  /** 当前待恢复续播 seek 的捕获后端 */
+  private pendingResumeSeekCaptureBackend: PlayerBackend = 'avplayer';
+  /** 当前待恢复续播 seek 的目标时间 */
+  private pendingResumeSeekTargetMs: number = -1;
+  /** 当前待恢复续播 seek 完成后是否自动恢复播放 */
+  private pendingResumeSeekAutoPlay: boolean = false;
   /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
   private smbProxyActive: boolean = false;
   /** 保存原始 smb:// URL，供 avplayer→ijkplayer fallback 时重新启动代理 */
@@ -388,7 +423,14 @@ export class VideoPlayerController {
     if (!shouldPreserveBackendResume) {
       this.pendingBackendResumeTimeMs = -1;
       this.pendingBackendResumePlay = false;
+      this.pendingBackendResumeSource = '';
+      this.pendingBackendResumeCaptureBackend = 'avplayer';
     }
+    this.pendingResumeSeekInFlight = false;
+    this.pendingResumeSeekSource = '';
+    this.pendingResumeSeekCaptureBackend = 'avplayer';
+    this.pendingResumeSeekTargetMs = -1;
+    this.pendingResumeSeekAutoPlay = false;
     this.suppressPlayAfterSeekOnce = false;
     if (ENABLE_SESSION_DIAG_LOG) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -711,7 +753,7 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
-      this.capturePendingResumeForFallback();
+      this.capturePendingResumeForFallback('avplayer_unsupported_format');
       // 先把 player 引用清空，防止后续调用
       const oldPlayer = this.player;
       this.player = undefined;
@@ -732,15 +774,43 @@ export class VideoPlayerController {
         hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
           `{"event":"seek_result","backend":"${this.backend}","result":"done","elapsed_ms":${seekElapsed}}`);
       }
+      const resumeSeekInFlight = this.pendingResumeSeekInFlight;
+      const resumeSeekSource = this.pendingResumeSeekSource;
+      const resumeSeekCaptureBackend = this.pendingResumeSeekCaptureBackend;
+      const resumeSeekTargetMs = this.pendingResumeSeekTargetMs;
+      const resumeSeekAutoPlay = this.pendingResumeSeekAutoPlay;
+      if (resumeSeekInFlight) {
+        this.logResumeDiagnostic('resume_seek_done', resumeSeekSource, resumeSeekCaptureBackend, resumeSeekTargetMs,
+          resumeSeekTargetMs, resumeSeekAutoPlay, 'pending', this.timeToSeek);
+      }
       if (this.timeToSeek >= 0) {
+        if (resumeSeekInFlight) {
+          this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
+            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'queued_seek', this.timeToSeek);
+        }
         adapter.seek(this.timeToSeek);
         this.timeToSeek = -1;
       } else {
         if (this.suppressPlayAfterSeekOnce) {
+          if (resumeSeekInFlight) {
+            this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
+              resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'suppress', -1);
+          }
           this.suppressPlayAfterSeekOnce = false;
         } else {
+          if (resumeSeekInFlight) {
+            this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
+              resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'play', -1);
+          }
           this.player?.play().catch(() => {});
         }
+      }
+      if (resumeSeekInFlight) {
+        this.pendingResumeSeekInFlight = false;
+        this.pendingResumeSeekSource = '';
+        this.pendingResumeSeekCaptureBackend = 'avplayer';
+        this.pendingResumeSeekTargetMs = -1;
+        this.pendingResumeSeekAutoPlay = false;
       }
       this.isSeeking = false;
     });
@@ -1860,9 +1930,13 @@ export class VideoPlayerController {
     
     const resumeTimeMs = this.pendingBackendResumeTimeMs;
     const shouldResumePlay = this.pendingBackendResumePlay;
+    const resumeSource = this.pendingBackendResumeSource;
+    const resumeCaptureBackend = this.pendingBackendResumeCaptureBackend;
     if (resumeTimeMs >= 0) {
       this.pendingBackendResumeTimeMs = -1;
       this.pendingBackendResumePlay = false;
+      this.pendingBackendResumeSource = '';
+      this.pendingBackendResumeCaptureBackend = 'avplayer';
     }
     emitter.emit(PlayerEvents.PREPARED);
     // 重新应用播放速率（后端切换或重新 init 后，保持用户设置的倍速）
@@ -1885,23 +1959,39 @@ export class VideoPlayerController {
       }
       MetricsService.getInstance().recordSubtitleUsage(startSubtitleLang);
     }
+    const effectiveResumeTimeMs = resumeTimeMs > 0 && this.duration > 0 && resumeTimeMs > this.duration
+      ? this.duration
+      : (resumeTimeMs > 0 ? resumeTimeMs : 0);
+    if (resumeTimeMs >= 0) {
+      this.logResumeDiagnostic('resume_pending_consume', resumeSource, resumeCaptureBackend, resumeTimeMs,
+        effectiveResumeTimeMs, shouldResumePlay, 'pending', -1);
+    }
     
     if (resumeTimeMs > 0 && this.player) {
-      const safeResumeTimeMs = this.duration > 0 && resumeTimeMs > this.duration
-        ? this.duration
-        : resumeTimeMs;
+      const safeResumeTimeMs = effectiveResumeTimeMs;
       this.currentTime = safeResumeTimeMs;
       this.progress = this.duration > 0 ? safeResumeTimeMs / this.duration : 0;
       this.subtitleAdapter.onSeekSync();
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
       this.isSeeking = true;
       this.suppressPlayAfterSeekOnce = !shouldResumePlay;
+      this.pendingResumeSeekInFlight = true;
+      this.pendingResumeSeekSource = resumeSource;
+      this.pendingResumeSeekCaptureBackend = resumeCaptureBackend;
+      this.pendingResumeSeekTargetMs = safeResumeTimeMs;
+      this.pendingResumeSeekAutoPlay = shouldResumePlay;
+      this.logResumeDiagnostic('resume_seek_dispatch', resumeSource, resumeCaptureBackend, resumeTimeMs,
+        safeResumeTimeMs, shouldResumePlay, shouldResumePlay ? 'play_after_seek' : 'suppress_after_seek', -1);
       this.player.seek(safeResumeTimeMs);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `后端切换续播定位: backend=${this.backend} time=${safeResumeTimeMs}`);
       return;
     }
     if (shouldResumePlay && !this.isPlaying) {
+      if (resumeTimeMs >= 0) {
+        this.logResumeDiagnostic('resume_autoplay_decision', resumeSource, resumeCaptureBackend, resumeTimeMs,
+          effectiveResumeTimeMs, shouldResumePlay, 'play_no_seek', -1);
+      }
       await this.play();
     }
   }
@@ -1952,6 +2042,10 @@ export class VideoPlayerController {
     this.clearNativeReadyGuardTimer();
     this.pendingBackendResumeTimeMs = safeFallbackPosition;
     this.pendingBackendResumePlay = shouldResumePlay;
+    this.pendingBackendResumeSource = fallbackReason;
+    this.pendingBackendResumeCaptureBackend = 'native';
+    this.logResumeDiagnostic('resume_pending_capture', fallbackReason, 'native', safeFallbackPosition,
+      safeFallbackPosition, shouldResumePlay, 'pending', -1);
     this.currentTime = safeFallbackPosition;
     this.progress = this.duration > 0 ? safeFallbackPosition / this.duration : 0;
     const oldPlayer = this.player;
@@ -1960,7 +2054,7 @@ export class VideoPlayerController {
     oldPlayer?.release().catch(() => {});
   }
 
-  private capturePendingResumeForFallback(): void {
+  private capturePendingResumeForFallback(source: string): void {
     const playerPosition = this.player?.currentTime ?? 0;
     const controllerPosition = this.currentTime > 0 ? this.currentTime : 0;
     const latestPosition = playerPosition > controllerPosition ? playerPosition : controllerPosition;
@@ -1969,6 +2063,10 @@ export class VideoPlayerController {
       : latestPosition;
     this.pendingBackendResumeTimeMs = safePosition;
     this.pendingBackendResumePlay = this.isPlaying || this.isSeeking;
+    this.pendingBackendResumeSource = source;
+    this.pendingBackendResumeCaptureBackend = this.backend;
+    this.logResumeDiagnostic('resume_pending_capture', source, this.backend, safePosition, safePosition,
+      this.pendingBackendResumePlay, 'pending', -1);
     this.currentTime = safePosition;
     this.progress = this.duration > 0 ? safePosition / this.duration : 0;
   }
@@ -1992,6 +2090,39 @@ export class VideoPlayerController {
     // 指标埋点：play_result=fallback（便于 VidAll_Metrics 过滤统计兜底触发率）
     hilog.warn(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"play_result","backend":"${fallbackFrom}","video_id":${structured.videoId},"result":"fallback","fallback_from":"${fallbackFrom}","fallback_to":"${fallbackTo}","reason":"${fallbackReason}"}`);
+  }
+
+  private logResumeDiagnostic(
+    event: string,
+    resumeSource: string,
+    captureBackend: PlayerBackend,
+    pendingResumeMs: number,
+    effectiveResumeMs: number,
+    autoResumePlay: boolean,
+    autoplayDecision: string,
+    queuedSeekMs: number
+  ): void {
+    const record: ResumeDiagnosticLogRecord = {
+      event,
+      sessionId: this.playbackSessionId,
+      backend: this.backend,
+      videoId: this.progressContext?.videoId ?? -1,
+      seriesProviderId: this.progressContext?.seriesProviderId ?? '',
+      seasonNumber: this.progressContext?.seasonNumber ?? 0,
+      episodeNumber: this.progressContext?.episodeNumber ?? 0,
+      resumeSource,
+      captureBackend,
+      pendingResumeMs,
+      effectiveResumeMs,
+      autoResumePlay,
+      autoplayDecision,
+      queuedSeekMs,
+      isSeeking: this.isSeeking,
+      currentTimeMs: this.currentTime,
+      durationMs: this.duration,
+      filePath: this.sanitizeLogFilePath(this.currentVideoData?.videoSrc ?? '')
+    };
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[resume] ${JSON.stringify(record)}`);
   }
 
   private extractFileName(filePath: string): string {
