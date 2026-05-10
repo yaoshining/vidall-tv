@@ -60,6 +60,8 @@ interface PlayerPageControllerAccessor {
   progressContext: PlayerPageProgressContextAccessor | null
   saveProgressNow(): void
   reloadSource(videoData: PlayerPageVideoDataAccessor, autoPlay: boolean): Promise<void>
+  prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void
+  rememberResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void
 }
 
 interface PlayerPageControllerPlaybackAccessor extends PlayerPageControllerAccessor {
@@ -91,6 +93,10 @@ class TestPlayerPageController implements PlayerPageControllerAccessor {
   saveProgressNow(): void {}
 
   async reloadSource(_videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {}
+
+  prepareResumeAutoplayDecision(_shouldResumePlay: boolean, _source: string): void {}
+
+  rememberResumeAutoplayDecision(_shouldResumePlay: boolean, _source: string): void {}
 }
 
 interface EpisodeSelectNoOpSideEffectCalls {
@@ -149,6 +155,7 @@ class SpyEpisodeSwitchController extends TestPlayerPageController {
 class CountingEpisodeSwitchController extends TestPlayerPageController implements PlayerPageControllerPlaybackAccessor {
   private calls: EpisodeSelectNoOpSideEffectCalls
   lastVideoSrc: string = ''
+  prepareResumeAutoplayDecisionCalls: string[] = []
 
   constructor(context: MediaLibraryContext, calls: EpisodeSelectNoOpSideEffectCalls) {
     super(context)
@@ -163,6 +170,10 @@ class CountingEpisodeSwitchController extends TestPlayerPageController implement
   async reloadSource(videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {
     this.calls.reloadSource += 1
     this.lastVideoSrc = videoData.videoSrc
+  }
+
+  prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.prepareResumeAutoplayDecisionCalls.push(`${shouldResumePlay ? 'true' : 'false'}:${source}`)
   }
 
   play(): Promise<void> {
@@ -188,13 +199,19 @@ interface ResumeDecisionControllerAccessor extends PlayerPageControllerPlaybackA
 class ResumeDecisionController extends TestPlayerPageController implements ResumeDecisionControllerAccessor {
   seekCalls: number[] = []
   playCalls: number = 0
+  resumeAutoplayDecisionEvents: string[] = []
 
   seek(timeMs: number): Promise<void> {
     this.seekCalls.push(timeMs)
     return Promise.resolve()
   }
 
+  rememberResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.resumeAutoplayDecisionEvents.push(`remember:${shouldResumePlay ? 'true' : 'false'}:${source}`)
+  }
+
   play(): Promise<void> {
+    this.resumeAutoplayDecisionEvents.push('play')
     this.playCalls += 1
     return Promise.resolve()
   }
@@ -329,6 +346,12 @@ class ResumeDecisionPage {
   resumePlaybackForParam(pageParam: PlayerPageParam): void {
     this.resumePlaybackForParamImpl(pageParam)
   }
+
+  emitResumeDiagnosticLog(
+    _event: string,
+    _pageParam: PlayerPageParam,
+    _options?: Object
+  ): void {}
 }
 
 class TestEpisodeSwitchPage {
@@ -978,6 +1001,23 @@ export default function playerPageTest() {
       expect(controller.playCalls).assertEqual(0)
     })
 
+    it('resumePlaybackForParam 直接播放路径会显式记录当前会话的自动续播决策', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      const page = new ResumeDecisionPage(context)
+      const controller = page.videoPlayerController as ResumeDecisionController
+      const pageParam: PlayerPageParam = {
+        url: 'https://example.com/movie.mkv',
+        title: '独行月球',
+        videoId: 9527
+      }
+
+      page.resumePlaybackForParam(pageParam)
+
+      expect(controller.resumeAutoplayDecisionEvents.length).assertEqual(2)
+      expect(controller.resumeAutoplayDecisionEvents[0]).assertEqual('remember:true:prepared_resume_play')
+      expect(controller.resumeAutoplayDecisionEvents[1]).assertEqual('play')
+    })
+
     it('handleEpisodeSelect 会把新媒体续播参数与新季集标识一起传给 reload 后的续播决策', 0, async () => {
       const context = buildEpisodeSwitchContext(0)
       const calls: EpisodeSelectNoOpSideEffectCalls = {
@@ -999,6 +1039,9 @@ export default function playerPageTest() {
 
       expect(didSwitch).assertTrue()
       expect(calls.reloadSource).assertEqual(1)
+      const controller = page.videoPlayerController as CountingEpisodeSwitchController
+      expect(controller.prepareResumeAutoplayDecisionCalls.length).assertEqual(1)
+      expect(controller.prepareResumeAutoplayDecisionCalls[0]).assertEqual('true:episode_switch_prepared_resume')
       expect(page.resumeCalls.length).assertEqual(1)
       expect(page.resumeCalls[0].mediaKey).assertEqual('media_progress_episode_tmdb_tmdb-9527_s1_e2')
       expect(page.resumeCalls[0].startPositionMs).assertEqual(245000)

@@ -463,6 +463,7 @@ export struct PlayerPage {
         if (resumeAction.action === 'clear_and_play') {
           MediaProgressStore.clear(mediaKey).catch(() => {});
         }
+        this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
         this.videoPlayerController.play().catch(() => {});
       }).catch(() => {
         this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
@@ -471,6 +472,7 @@ export struct PlayerPage {
         this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
           resumeAction: 'play'
         });
+        this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
         this.videoPlayerController.play().catch(() => {});
       });
       return;
@@ -478,6 +480,7 @@ export struct PlayerPage {
     this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
       resumeAction: 'play'
     });
+    this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
     this.videoPlayerController.play().catch(() => {});
   }
 
@@ -567,6 +570,9 @@ export struct PlayerPage {
     this.currentMediaKey = pageParam.mediaKey ?? '';
     this.currentMediaSeason = pageParam.seasonNumber ?? 0;
     this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
+    if (this.currentMediaKey.length > 0) {
+      this.videoPlayerController.prepareResumeAutoplayDecision(true, 'page_param_prepared_resume');
+    }
     this.showResumeDialog = false;
     this.pendingSeekMs = -1;
     this.hideEpisodeAutoplayOverlay();
@@ -752,6 +758,7 @@ export struct PlayerPage {
       if (nextVideoData === undefined) {
         return false;
       }
+      this.videoPlayerController.prepareResumeAutoplayDecision(true, 'episode_switch_prepared_resume');
       this.persistCurrentPlaybackState();
       this.videoPlayerController.progressContext = nextParam.videoId !== undefined && nextParam.videoId > 0
         ? this.buildProgressContext(nextParam)

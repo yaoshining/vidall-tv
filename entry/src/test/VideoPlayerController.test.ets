@@ -204,6 +204,14 @@ class TestVideoPlayerController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class ReloadAutoplayDecisionSpyController extends TestVideoPlayerController {
+  prepareResumeAutoplayDecisionCalls: string[] = []
+
+  prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.prepareResumeAutoplayDecisionCalls.push(`${shouldResumePlay ? 'true' : 'false'}:${source}`)
+  }
+}
+
 /**
  * Task 2.2 TDD spy：验证真实 initPlayer 调用了 resetDisplayState。
  * override resetDisplayState() 而非 initPlayer，确保生产代码路径被真实执行。
@@ -378,6 +386,20 @@ export default function videoPlayerControllerTest() {
       accessor.capturePendingResumeForFallback('test_fallback')
 
       expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('transient_player_state')
+    })
+
+    it('reloadSource 自动播放路径会在初始化前预设新媒体自动续播决策', 0, async () => {
+      const controller = new ReloadAutoplayDecisionSpyController()
+      const accessor = accessController(controller)
+      accessor.surfaceId = 'surface-review'
+
+      const reloadPromise = controller.reloadSource(buildVideoData('reload-autoplay'), true)
+      await flushMicrotasks()
+      accessor.resolvePendingReload()
+      await reloadPromise
+
+      expect(controller.prepareResumeAutoplayDecisionCalls.length).assertEqual(1)
+      expect(controller.prepareResumeAutoplayDecisionCalls[0]).assertEqual('true:reload_source_autoplay')
     })
 
     it('公共 seek 入口会为 fallback pending-resume 建立显式自动续播决策来源', 0, async () => {

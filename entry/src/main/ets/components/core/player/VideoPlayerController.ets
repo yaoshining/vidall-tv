@@ -332,6 +332,12 @@ export class VideoPlayerController {
   private hasPendingResumeAutoplayDecisionExplicit: boolean = false;
   /** 当前播放会话显式自动播放决策来源 */
   private pendingResumeAutoplayDecisionSource: string = '';
+  /** 新媒体初始化链路预置的自动播放决策；在 initPlayer 启动新会话时转正为当前会话决策 */
+  private preparedResumeAutoplayDecisionExplicit: boolean = false;
+  /** 新媒体初始化链路是否已预置自动播放决策 */
+  private hasPreparedResumeAutoplayDecisionExplicit: boolean = false;
+  /** 新媒体初始化链路预置自动播放决策来源 */
+  private preparedResumeAutoplayDecisionSource: string = '';
   /** seek 临时 pause 窗口内，onPaused 不应清理显式自动播放决策 */
   private preservePendingResumeAutoplayDecisionOnPaused: boolean = false;
   /** 待恢复续播 seek 是否进行中 */
@@ -506,6 +512,33 @@ export class VideoPlayerController {
     this.pendingResumeAutoplayDecisionSource = source.length > 0 ? source : 'explicit';
   }
 
+  prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.preparedResumeAutoplayDecisionExplicit = shouldResumePlay;
+    this.hasPreparedResumeAutoplayDecisionExplicit = true;
+    this.preparedResumeAutoplayDecisionSource = source.length > 0 ? source : 'prepared';
+  }
+
+  rememberResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.rememberPendingResumeAutoplayDecision(shouldResumePlay, source);
+  }
+
+  private clearPreparedResumeAutoplayDecision(): void {
+    this.preparedResumeAutoplayDecisionExplicit = false;
+    this.hasPreparedResumeAutoplayDecisionExplicit = false;
+    this.preparedResumeAutoplayDecisionSource = '';
+  }
+
+  private applyPreparedResumeAutoplayDecision(): void {
+    if (!this.hasPreparedResumeAutoplayDecisionExplicit) {
+      return;
+    }
+    this.rememberPendingResumeAutoplayDecision(
+      this.preparedResumeAutoplayDecisionExplicit,
+      this.preparedResumeAutoplayDecisionSource
+    );
+    this.clearPreparedResumeAutoplayDecision();
+  }
+
   private clearPendingResumeAutoplayDecision(): void {
     this.pendingResumeAutoplayDecisionExplicit = false;
     this.hasPendingResumeAutoplayDecisionExplicit = false;
@@ -598,6 +631,7 @@ export class VideoPlayerController {
       this.clearPendingResumeState();
     }
     this.clearPendingResumeAutoplayDecision();
+    this.applyPreparedResumeAutoplayDecision();
     this.pendingResumeSeekInFlight = false;
     this.pendingResumeSeekSource = '';
     this.pendingResumeSeekCaptureBackend = 'avplayer';
@@ -1760,6 +1794,9 @@ export class VideoPlayerController {
     }
     this.clearPendingResumeState();
     this.rejectPendingReload(new Error('reload superseded'));
+    if (autoPlay) {
+      this.prepareResumeAutoplayDecision(true, 'reload_source_autoplay');
+    }
     const reloadToken = this.pendingReloadToken + 1;
     this.pendingReloadToken = reloadToken;
     this.activeReloadToken = reloadToken;

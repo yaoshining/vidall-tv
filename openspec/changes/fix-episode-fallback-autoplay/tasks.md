@@ -1,7 +1,7 @@
 ## 1. 恢复决策建模
 
 - [x] 1.1 梳理 `VideoPlayerController` 当前 pending resume state 的字段与消费路径，补齐“恢复后是否自动播放”的显式决策来源
-- [ ] 1.2 调整切集/`reloadSource`/续播初始化链路，使新媒体在建立恢复决策时不再只依赖瞬时 `isPlaying` 或 `isSeeking`
+- [x] 1.2 调整切集/`reloadSource`/续播初始化链路，使新媒体在建立恢复决策时不再只依赖瞬时 `isPlaying` 或 `isSeeking`
 
 ## 2. Fallback 透传与消费
 
