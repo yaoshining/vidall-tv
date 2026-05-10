@@ -240,6 +240,21 @@ class ReloadPreparedEarlyFailureController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class ReloadPreparedPendingFailureController extends VideoPlayerController {
+  pendingStateSeenBeforeFailure: boolean = false
+  pendingSourceSeenBeforeFailure: string = ''
+
+  async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
+    super.initPlayer(videoData, surfaceId).catch(() => {})
+    const accessor = accessController(this)
+    this.pendingStateSeenBeforeFailure = accessor.hasPendingResumeAutoplayDecisionExplicit
+    this.pendingSourceSeenBeforeFailure = accessor.pendingResumeAutoplayDecisionSource
+    throw new Error('init failed after pending decision')
+  }
+
+  saveProgressNow(): void {}
+}
+
 /**
  * Task 2.2 TDD spy：验证真实 initPlayer 调用了 resetDisplayState。
  * override resetDisplayState() 而非 initPlayer，确保生产代码路径被真实执行。
@@ -436,6 +451,28 @@ export default function videoPlayerControllerTest() {
       expect(rejectedMessage).assertEqual('reloadSource requires surfaceId')
       expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
       expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
+    })
+
+    it('reloadSource 在 prepared 已转成 pending 后失败时会同时清理 prepared 与 pending decision', 0, async () => {
+      const controller = new ReloadPreparedPendingFailureController()
+      const accessor = accessController(controller)
+      accessor.surfaceId = 'surface-review'
+      controller.prepareResumeAutoplayDecision(true, 'episode_switch_prepared_resume')
+
+      let rejectedMessage = ''
+      try {
+        await controller.reloadSource(buildVideoData('reload-pending-failure'), false)
+      } catch (error) {
+        rejectedMessage = (error as Error).message
+      }
+
+      expect(controller.pendingStateSeenBeforeFailure).assertTrue()
+      expect(controller.pendingSourceSeenBeforeFailure).assertEqual('episode_switch_prepared_resume')
+      expect(rejectedMessage).assertEqual('init failed after pending decision')
+      expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
+      expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
+      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertFalse()
+      expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('')
     })
 
     it('公共 seek 入口会为新会话初始化链路记录显式自动续播决策来源', 0, async () => {

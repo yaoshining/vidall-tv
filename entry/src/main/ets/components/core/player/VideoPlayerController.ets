@@ -547,6 +547,11 @@ export class VideoPlayerController {
     this.preservePendingResumeAutoplayDecisionOnPaused = false;
   }
 
+  private clearResumeAutoplayDecisionLifecycle(): void {
+    this.clearPreparedResumeAutoplayDecision();
+    this.clearPendingResumeAutoplayDecision();
+  }
+
   private handlePlayerPaused(): void {
     if (!this.preservePendingResumeAutoplayDecisionOnPaused) {
       this.clearPendingResumeAutoplayDecision();
@@ -1786,6 +1791,7 @@ export class VideoPlayerController {
       this.clearPreparedResumeAutoplayDecision();
     }
     if (this.surfaceId.length === 0) {
+      this.clearResumeAutoplayDecisionLifecycle();
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'reloadSource: surfaceId 为空，忽略切源请求');
       throw new Error('reloadSource requires surfaceId');
     }
@@ -1826,6 +1832,7 @@ export class VideoPlayerController {
       }
     } catch (error) {
       const reloadError = error instanceof Error ? error : new Error(String(error));
+      this.clearResumeAutoplayDecisionLifecycle();
       this.rejectPendingReload(reloadError);
       throw reloadError;
     }
