@@ -229,6 +229,12 @@ export class VideoPlayerController {
   @Trace sourceProtocol: string = '';
   /** 画面比例模式，默认为适应（等比保留黑边） */
   @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
+  /**
+   * ijkplayer 上报的视频原始宽高比（width / height）。
+   * 0 表示尚未收到比例信息（初始态或切换视频时重置）。
+   * 由 adapter 回调写入（Task 2.3/2.4），供 UI 层计算实际渲染尺寸使用。
+   */
+  @Trace ijkVideoRatio: number = 0;
   /** 当前播放速率，默认 1.0（正常速度）。支持档位：0.5/0.75/1.0/1.25/1.5/2.0 */
   @Trace playbackSpeed: number = 1.0;
   /** 复用同一 XComponent 切源时缓存的 IJK context */
@@ -282,9 +288,9 @@ export class VideoPlayerController {
   private nativeSeekDiagLogEnabled: boolean = DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED;
   /** native 初始化就绪保护定时器：超时后自动回退到 ijkplayer */
   private nativeReadyGuardTimer?: number;
-  /** native 自动回退到 ijkplayer 时，待恢复的播放进度 */
+  /** 后端自动 fallback（如 avplayer/native → ijkplayer）时，待恢复的播放进度 */
   private pendingBackendResumeTimeMs: number = -1;
-  /** native 自动回退后，是否在 seek 完成后自动续播 */
+  /** 后端自动 fallback 后，是否在 seek 完成后自动续播 */
   private pendingBackendResumePlay: boolean = false;
   /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
   private smbProxyActive: boolean = false;
@@ -342,6 +348,8 @@ export class VideoPlayerController {
     const currentSessionId = this.playbackSessionId;
     this.metricsLoadStartMs = Date.now();
     this.metricsMedia = null;
+    // 先重置可展示状态，避免在异步预处理期间继续暴露上次播放残留。
+    this.resetDisplayState();
     // 在适配器注册回调前提前查询媒体标识，回调内同步使用，避免异步改造回调签名
     const metricsVideoId = this.progressContext?.videoId;
     if (metricsVideoId !== undefined && metricsVideoId > 0) {
@@ -386,11 +394,6 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[session=${currentSessionId}] initPlayer start backend=${this.backend}`);
     }
-
-    // 先重置可展示状态，避免复用上次播放残留。
-    this.audioCapabilityText = '';
-    this.ffmpegPreviewUri = '';
-    this.sourceProtocol = '';
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
@@ -526,6 +529,15 @@ export class VideoPlayerController {
         }
         ijkSubAdapter.onEmbeddedTimedText(text);
         this.applySubtitleBridgeState(ijkSubAdapter.getState());
+      });
+      // 2.3 注入 DAR 比率回调：prepared 后 onVideoSizeChanged 触发，更新 ijkVideoRatio
+      // 2.4 在 bindListeners（adapter.onReady/onPlay/... 注册）之前注入，确保 prepared 后
+      //     回调立即可用（DAR 触发时机在 prepared 之后）
+      ijkAdapter.setOnVideoRatioCallback((ratio: number) => {
+        if (currentSessionId !== this.playbackSessionId) {
+          return;
+        }
+        this.ijkVideoRatio = ratio;
       });
       adapter = ijkAdapter;
     } else {
@@ -699,6 +711,7 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
+      this.capturePendingResumeForFallback();
       // 先把 player 引用清空，防止后续调用
       const oldPlayer = this.player;
       this.player = undefined;
@@ -798,6 +811,19 @@ export class VideoPlayerController {
         this.rejectPendingReload(new Error(err.message));
       }
     }
+  }
+
+  /**
+   * 重置上一次播放残留的可展示状态。
+   * 在 initPlayer 的异步预处理前调用，确保切源时 UI 状态尽快清空。
+   * 声明为 protected 以允许测试通过 spy override 验证调用合约（Task 2.2）。
+   */
+  protected resetDisplayState(): void {
+    this.audioCapabilityText = '';
+    this.ffmpegPreviewUri = '';
+    this.sourceProtocol = '';
+    // 切换视频时清零 ijkplayer 宽高比，防止旧 ratio 残留影响下一个视频的渲染（Task 2.2）
+    this.ijkVideoRatio = 0;
   }
 
   // ─── VPE AI 画质增强 ──────────────────────────────────────────
@@ -1932,6 +1958,19 @@ export class VideoPlayerController {
     this.player = undefined;
     this.backend = 'ijkplayer';
     oldPlayer?.release().catch(() => {});
+  }
+
+  private capturePendingResumeForFallback(): void {
+    const playerPosition = this.player?.currentTime ?? 0;
+    const controllerPosition = this.currentTime > 0 ? this.currentTime : 0;
+    const latestPosition = playerPosition > controllerPosition ? playerPosition : controllerPosition;
+    const safePosition = this.duration > 0 && latestPosition > this.duration
+      ? this.duration
+      : latestPosition;
+    this.pendingBackendResumeTimeMs = safePosition;
+    this.pendingBackendResumePlay = this.isPlaying || this.isSeeking;
+    this.currentTime = safePosition;
+    this.progress = this.duration > 0 ? safePosition / this.duration : 0;
   }
 
   private logFallbackEvent(

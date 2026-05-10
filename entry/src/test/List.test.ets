@@ -7,6 +7,7 @@ import mediaTypeClassifierContractTest from './MediaTypeClassifierContract.test'
 import debounceUtilTest from './DebounceUtil.test';
 import videoDataTest from './VideoData.test';
 import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
+import ijkPlayerAdapterDarTest from './IjkPlayerAdapterDar.test';
 import subtitleBridgeAdapterTest from './SubtitleBridgeAdapter.test';
 import smbSubtitleBridgeTest from './SmbSubtitleBridge.test';
 import webDAVClientUtilsTest from './WebDAVClientUtils.test';
@@ -16,6 +17,7 @@ import episodePlaybackManagerTest from './EpisodePlaybackManager.test';
 import videoControlsTest from './VideoControls.test';
 import playerPageTest from './PlayerPage.test';
 import videoPlayerControllerTest from './VideoPlayerController.test';
+import videoPlayerLayoutTest from './VideoPlayerLayout.test';
 import fileExplorerControllerTest from './FileExplorerController.test';
 import fileExplorerAdapterTest from './FileExplorerAdapter.test';
 import directorySelectorStateTest from './DirectorySelectorState.test';
@@ -54,6 +56,7 @@ export default function testsuite() {
   debounceUtilTest();
   videoDataTest();
   ijkSubtitleBridgeTest();
+  ijkPlayerAdapterDarTest();
   subtitleBridgeAdapterTest();
   smbSubtitleBridgeTest();
   webDAVClientUtilsTest();
@@ -63,6 +66,7 @@ export default function testsuite() {
   videoControlsTest();
   playerPageTest();
   videoPlayerControllerTest();
+  videoPlayerLayoutTest();
   fileExplorerControllerTest();
   fileExplorerAdapterTest();
   directorySelectorStateTest();

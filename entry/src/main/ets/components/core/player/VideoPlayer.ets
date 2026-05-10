@@ -6,6 +6,40 @@ import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
+import {
+  resolveIjkPlayerLayoutConfig,
+  IjkPlayerLayoutConfig,
+  resolveRenderFitForAspectRatioMode
+} from "./VideoPlayerLayoutUtil"
+
+class IjkXComponentLayoutModifier implements AttributeModifier<XComponentAttribute> {
+  private readonly mode: AspectRatioMode
+  private readonly videoRatio: number
+  private readonly viewportWidth: number
+  private readonly viewportHeight: number
+
+  constructor(mode: AspectRatioMode, videoRatio: number, viewportWidth: number, viewportHeight: number) {
+    this.mode = mode
+    this.videoRatio = videoRatio
+    this.viewportWidth = viewportWidth
+    this.viewportHeight = viewportHeight
+  }
+
+  applyNormalAttribute(instance: XComponentAttribute): void {
+    const config = resolveIjkPlayerLayoutConfig(this.mode, this.videoRatio, this.viewportWidth, this.viewportHeight)
+    instance.width(config.width)
+    if (config.height !== undefined) {
+      instance.height(config.height)
+    }
+    if (config.aspectRatio !== undefined) {
+      instance.aspectRatio(config.aspectRatio)
+    }
+    if (config.renderFit !== undefined) {
+      instance.renderFit(config.renderFit)
+    }
+    instance.backgroundColor(config.xComponentBackgroundColor)
+  }
+}
 
 @ComponentV2
 export struct VideoPlayer {
@@ -22,6 +56,10 @@ export struct VideoPlayer {
   @Local backendMode: PlayerBackend = 'avplayer'
   /** 镜像 controller.aspectRatioMode，用于驱动 renderFit 响应式更新 */
   @Local aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
+  /** 镜像 controller.ijkVideoRatio，用于驱动 ijkplayer 内层 XComponent 的显式布局切换。 */
+  @Local ijkVideoRatio: number = 0
+  @Local ijkViewportWidth: number = 0
+  @Local ijkViewportHeight: number = 0
 
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
   private _lastRawText: string = ''
@@ -42,15 +80,16 @@ export struct VideoPlayer {
     console.info(`[VideoPlayer] 画面比例变更 → mode=${this.aspectRatioMode}, renderFit=${this.toRenderFit(this.aspectRatioMode)}`)
   }
 
+  /** 3.2 镜像 controller.ijkVideoRatio：DAR 回调更新后同步到本地状态，驱动 Stack 响应式重排 */
+  @Monitor('controller.ijkVideoRatio')
+  onIjkVideoRatioChange(): void {
+    this.ijkVideoRatio = this.controller.ijkVideoRatio
+    console.info(`[VideoPlayer] ijkVideoRatio 变更 → ${this.ijkVideoRatio}`)
+  }
+
   /** 将画面比例模式映射到 XComponent.renderFit */
   private toRenderFit(mode: AspectRatioMode): RenderFit {
-    if (mode === AspectRatioMode.FILL) {
-      return RenderFit.RESIZE_COVER
-    }
-    if (mode === AspectRatioMode.STRETCH) {
-      return RenderFit.RESIZE_FILL
-    }
-    return RenderFit.RESIZE_CONTAIN
+    return resolveRenderFitForAspectRatioMode(mode)
   }
 
   private tryMarkInit(mode: string): boolean {
@@ -80,6 +119,15 @@ export struct VideoPlayer {
       return false
     }
     return current >= duration
+  }
+
+  private resolveIjkLayoutConfig(): IjkPlayerLayoutConfig {
+    return resolveIjkPlayerLayoutConfig(
+      this.aspectRatioMode,
+      this.ijkVideoRatio,
+      this.ijkViewportWidth,
+      this.ijkViewportHeight
+    )
   }
 
   /** 从 VideoData 推断字幕存储用的 sourceType 字符串 */
@@ -435,7 +483,7 @@ export struct VideoPlayer {
         // IjkPlayer 内核：必须用 libraryname 模式，不能用 XComponentController
         // ⚠️ libraryname 模式的 XComponent 原生层会抢占触摸事件，onClick/gesture 无效，
         //    需要在上方叠加透明触摸层来拦截交互。
-        Stack() {
+        Stack({ alignContent: Alignment.Center }) {
           XComponent({
             id: 'ijkPlayerXComponent',
             type: XComponentType.SURFACE,
@@ -471,10 +519,12 @@ export struct VideoPlayer {
                 })
               }, 100)
             })
-            .width("100%")
-            .height("100%")
-            .renderFit(this.toRenderFit(this.aspectRatioMode))
-            .backgroundColor(Color.Black)
+            .attributeModifier(new IjkXComponentLayoutModifier(
+              this.aspectRatioMode,
+              this.ijkVideoRatio,
+              this.ijkViewportWidth,
+              this.ijkViewportHeight
+            ))
 
           // 透明触摸拦截层：专门处理点击和手势，解决 libraryname 模式事件不透传问题
           Stack()
@@ -498,6 +548,12 @@ export struct VideoPlayer {
         }
         .width("100%")
         .height("100%")
+        .clip(this.resolveIjkLayoutConfig().clipViewport)
+        .backgroundColor(this.resolveIjkLayoutConfig().outerStackBackgroundColor)
+        .onAreaChange((_oldValue, newValue) => {
+          this.ijkViewportWidth = typeof newValue.width === 'number' ? newValue.width : 0
+          this.ijkViewportHeight = typeof newValue.height === 'number' ? newValue.height : 0
+        })
       } else if (this.backendMode === 'native') {
         Stack() {
           XComponent({
@@ -595,6 +651,8 @@ export struct VideoPlayer {
   aboutToAppear(): void {
     this.backendMode = this.controller.backend
     this.aspectRatioMode = this.controller.aspectRatioMode
+    // 3.3 初始化镜像：若 controller 在 aboutToAppear 前已有 ijkVideoRatio（理论上不发生，防御性读取）
+    this.ijkVideoRatio = this.controller.ijkVideoRatio
     this.initMode = ''
     emitter.on(PlayerEvents.COMPLETED, () => {
       this.clearIjkInitTimer()

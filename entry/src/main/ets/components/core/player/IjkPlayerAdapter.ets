@@ -15,6 +15,7 @@ import type { OnTimedTextListener } from '@yaoshining/ijkplayer';
 import { DeviceCapabilityUtil, type IjkHwDecodeSupport } from '../../../utils/DeviceCapabilityUtil';
 import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { dispatchDarCallback } from '../../../utils/PlayerAspectRatioUtil';
 
 const TAG = '[IjkPlayerAdapter]';
 const ENABLE_IJK_INFO_CALLBACK = false;
@@ -77,6 +78,9 @@ export class IjkPlayerAdapter implements IPlayer {
 
   // onTimedText 内嵌字幕回调（由 VideoPlayerController 注入）
   private _onEmbeddedSubtitleCb: ((text: string) => void) | null = null;
+
+  // DAR 回调（由 VideoPlayerController 注入，生命周期由外层管理，init() 不重置）
+  private _onVideoRatioCb: ((ratio: number) => void) | null = null;
 
   constructor() {
     // 使用多实例模式，避免单例跨页面状态残留导致的偶发异常。
@@ -498,6 +502,18 @@ export class IjkPlayerAdapter implements IPlayer {
     this._onEmbeddedSubtitleCb = cb;
   }
 
+  /**
+   * 注入视频 DAR（Display Aspect Ratio）变化回调。
+   *
+   * 当 native 上报 onVideoSizeChanged 并计算出有效 DAR（> 0）时触发。
+   * 回调引用由外层（VideoPlayerController）管理，init() 不重置此字段。
+   *
+   * @param cb 接收 DAR 值（如 1.778 表示 16:9）的回调
+   */
+  setOnVideoRatioCallback(cb: (ratio: number) => void): void {
+    this._onVideoRatioCb = cb;
+  }
+
   // ─── 内部实现 ───
 
   /**
@@ -682,11 +698,12 @@ export class IjkPlayerAdapter implements IPlayer {
     };
     this.ijk.setOnBufferingUpdateListener(onBufferingUpdateListener);
 
-    // onVideoSizeChanged
+    // onVideoSizeChanged：计算 DAR 并通知上层（如 VideoPlayerController）以便 UI 层按正确宽高比渲染
     const onVideoSizeChangedListener: OnVideoSizeChangedListener = {
       onVideoSizeChanged: (width: number, height: number, sarNum: number, sarDen: number) => {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `onVideoSizeChanged — ${width}x${height} sar=${sarNum}/${sarDen}`);
+        dispatchDarCallback(width, height, sarNum, sarDen, this._onVideoRatioCb);
       }
     };
     this.ijk.setOnVideoSizeChangedListener(onVideoSizeChangedListener);
@@ -766,7 +783,6 @@ export class IjkPlayerAdapter implements IPlayer {
     }
   }
 }
-
 
 
 
