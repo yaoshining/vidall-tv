@@ -801,6 +801,74 @@ export default function playerPageTest() {
       expect(action.positionMs ?? 0).assertEqual(0)
     })
 
+    it('重新进入同季同集且存在有效进度时会生成 seek 决策', 0, () => {
+      const savedEntry: MediaProgressEntry = {
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
+        positionMs: 420000,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        savedEntry,
+        1800000,
+        1,
+        7
+      )
+
+      expect(action.action).assertEqual('seek')
+      expect(action.positionMs ?? 0).assertEqual(420000)
+    })
+
+    it('重新进入同一视频但没有有效进度时会直接播放', 0, () => {
+      const noProgressEntry: MediaProgressEntry = {
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
+        positionMs: 0,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        noProgressEntry,
+        1800000,
+        1,
+        7
+      )
+
+      expect(action.action).assertEqual('play')
+      expect(action.positionMs ?? 0).assertEqual(0)
+    })
+
+    it('重新进入不同季或不同集时不会错误复用旧进度', 0, () => {
+      const savedEntry: MediaProgressEntry = {
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
+        positionMs: 420000,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const actionForDifferentSeason: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        savedEntry,
+        1800000,
+        2,
+        7
+      )
+      const actionForDifferentEpisode: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        savedEntry,
+        1800000,
+        1,
+        8
+      )
+
+      expect(actionForDifferentSeason.action).assertEqual('play')
+      expect(actionForDifferentSeason.positionMs ?? 0).assertEqual(0)
+      expect(actionForDifferentEpisode.action).assertEqual('play')
+      expect(actionForDifferentEpisode.positionMs ?? 0).assertEqual(0)
+    })
+
     it('handleEpisodeSelect 会在解析新播放源前推进 pageParamToken', 0, async () => {
       const context = buildEpisodeSwitchContext(0)
       const page = new EpisodeSwitchTokenPage(context, 'https://example.com/s01e02.mkv')
