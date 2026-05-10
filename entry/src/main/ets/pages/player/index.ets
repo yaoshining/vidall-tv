@@ -121,26 +121,47 @@ export interface ResumeDiagnosticLogPayload {
   resumePositionMs: number;
 }
 
+export function resolveSavedProgressResumeAction(
+  positionMs: number,
+  savedDurationMs: number,
+  currentDurationMs: number
+): MediaProgressResumeAction {
+  if (positionMs <= 0) {
+    return { action: 'play' };
+  }
+  const effectiveDurationMs = currentDurationMs > 0 ? currentDurationMs : savedDurationMs;
+  if (MediaProgressStore.isNearEnd(positionMs, effectiveDurationMs)) {
+    return { action: 'clear_and_play' };
+  }
+  return {
+    action: 'seek',
+    positionMs
+  };
+}
+
 export function resolveMediaProgressResumeAction(
   saved: MediaProgressEntry | null,
   currentDurationMs: number,
   currentSeason: number,
   currentEpisode: number
 ): MediaProgressResumeAction {
-  if (saved === null || saved.positionMs <= 0) {
+  if (saved === null) {
     return { action: 'play' };
   }
   if (saved.seasonNumber !== currentSeason || saved.episodeNumber !== currentEpisode) {
     return { action: 'play' };
   }
-  const effectiveDurationMs = currentDurationMs > 0 ? currentDurationMs : saved.durationMs;
-  if (MediaProgressStore.isNearEnd(saved.positionMs, effectiveDurationMs)) {
-    return { action: 'clear_and_play' };
+  return resolveSavedProgressResumeAction(saved.positionMs, saved.durationMs, currentDurationMs);
+}
+
+export function resolvePlayProgressResumeAction(
+  saved: PlayProgressEntity | null,
+  currentDurationMs: number
+): MediaProgressResumeAction {
+  if (saved === null) {
+    return { action: 'play' };
   }
-  return {
-    action: 'seek',
-    positionMs: saved.positionMs
-  };
+  return resolveSavedProgressResumeAction(saved.positionMs, saved.durationMs, currentDurationMs);
 }
 
 function buildPlayerEpisodeCode(seasonNumber: number, episodeNumber: number): string {
@@ -399,18 +420,21 @@ export struct PlayerPage {
     const mediaKey = pageParam.mediaKey ?? '';
     if (mediaKey.length > 0) {
       const directStart = pageParam.startPositionMs ?? 0;
-      if (directStart > 0) {
-        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
-          savedPositionMs: directStart,
-          resumeAction: 'seek',
-          resumePositionMs: directStart
-        });
-        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
-          savedPositionMs: directStart,
-          resumeAction: 'seek',
-          resumePositionMs: directStart
-        });
-        this.videoPlayerController.seek(directStart).catch(() => {});
+      const directResumeAction: MediaProgressResumeAction = directStart > 0
+        ? { action: 'seek', positionMs: directStart }
+        : { action: 'play' };
+      this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+        savedPositionMs: directStart,
+        resumeAction: directResumeAction.action,
+        resumePositionMs: directResumeAction.positionMs ?? 0
+      });
+      this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+        savedPositionMs: directStart,
+        resumeAction: directResumeAction.action,
+        resumePositionMs: directResumeAction.positionMs ?? 0
+      });
+      if (directResumeAction.action === 'seek' && directResumeAction.positionMs !== undefined && directResumeAction.positionMs > 0) {
+        this.videoPlayerController.seek(directResumeAction.positionMs).catch(() => {});
         return;
       }
       MediaProgressStore.get(mediaKey).then((saved) => {
@@ -473,37 +497,43 @@ export struct PlayerPage {
           return;
         }
         const savedPositionMs = saved?.positionMs ?? 0;
-        if (saved !== null && saved.positionMs > 0) {
-          const dur = this.videoPlayerController.duration;
-          const isWatched = dur > 0 && saved.positionMs >= dur * 0.95;
-          this.savedPositionMs = saved.positionMs;
-          this.totalDurationMs = dur > 0 ? dur : saved.durationMs;
-          if (isWatched) {
-            this.pendingSeekMs = 0;
-          } else {
-            this.pendingSeekMs = saved.positionMs;
-          }
+        const resumeAction = resolvePlayProgressResumeAction(saved, this.videoPlayerController.duration);
+        if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
+          this.savedPositionMs = resumeAction.positionMs;
+          this.totalDurationMs = this.videoPlayerController.duration > 0
+            ? this.videoPlayerController.duration
+            : (saved?.durationMs ?? 0);
+          this.pendingSeekMs = resumeAction.positionMs;
           this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
             savedPositionMs,
             resumeAction: 'dialog',
-            resumePositionMs: this.pendingSeekMs > 0 ? this.pendingSeekMs : 0
+            resumePositionMs: resumeAction.positionMs
           });
           this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
             savedPositionMs,
             resumeAction: 'dialog',
-            resumePositionMs: this.pendingSeekMs > 0 ? this.pendingSeekMs : 0
+            resumePositionMs: resumeAction.positionMs
           });
           this.showResumeDialog = true;
           return;
         }
+        if (resumeAction.action === 'clear_and_play') {
+          const progressContext = this.buildProgressContext(pageParam);
+          progressContext.durationMs = saved?.durationMs ?? 0;
+          progressContext.updatedAt = Date.now();
+          FileSourceDatabase.getInstance().upsertPlayProgress(progressContext).catch(() => {});
+        }
         this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
           savedPositionMs,
-          resumeAction: 'play'
+          resumeAction: resumeAction.action,
+          resumePositionMs: resumeAction.positionMs ?? 0
         });
         this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
           savedPositionMs,
-          resumeAction: 'play'
+          resumeAction: resumeAction.action,
+          resumePositionMs: resumeAction.positionMs ?? 0
         });
+        this.videoPlayerController.play().catch(() => {});
       }).catch(() => {
         this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
           resumeAction: 'play'
@@ -511,6 +541,7 @@ export struct PlayerPage {
         this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
           resumeAction: 'play'
         });
+        this.videoPlayerController.play().catch(() => {});
       });
     });
   }
