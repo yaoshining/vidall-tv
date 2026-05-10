@@ -74,6 +74,10 @@ interface BoundRegisterPreparedResumeMethod {
   bind(target: Object): (pageParam: PlayerPageParam, token: number) => void
 }
 
+interface BoundResumePlaybackForParamMethod {
+  bind(target: Object): (pageParam: PlayerPageParam) => void
+}
+
 class TestPlayerPageController implements PlayerPageControllerAccessor {
   currentTime: number = 120000
   duration: number = 1800000
@@ -175,6 +179,32 @@ class PreparedResumeIsolationController extends TestPlayerPageController impleme
     this.playCalls += 1
     return Promise.resolve()
   }
+}
+
+interface ResumeDecisionControllerAccessor extends PlayerPageControllerPlaybackAccessor {
+  seek(timeMs: number): Promise<void>
+}
+
+class ResumeDecisionController extends TestPlayerPageController implements ResumeDecisionControllerAccessor {
+  seekCalls: number[] = []
+  playCalls: number = 0
+
+  seek(timeMs: number): Promise<void> {
+    this.seekCalls.push(timeMs)
+    return Promise.resolve()
+  }
+
+  play(): Promise<void> {
+    this.playCalls += 1
+    return Promise.resolve()
+  }
+}
+
+interface EpisodeSwitchResumeCall {
+  mediaKey: string
+  startPositionMs: number
+  seasonAtCall: number
+  episodeAtCall: number
 }
 
 class PreparedResumeListenerPage {
@@ -283,6 +313,24 @@ class EpisodeSwitchTokenPage {
   }
 }
 
+class ResumeDecisionPage {
+  currentMediaSeason: number = 0
+  currentMediaEpisode: number = 0
+  videoPlayerController: ResumeDecisionControllerAccessor
+  private readonly resumePlaybackForParamImpl: (pageParam: PlayerPageParam) => void
+
+  constructor(context: MediaLibraryContext) {
+    const page = buildPlayerPageAccessor()
+    const resumePlaybackForParam = page.resumePlaybackForParam as Object as BoundResumePlaybackForParamMethod
+    this.resumePlaybackForParamImpl = resumePlaybackForParam.bind(this as Object)
+    this.videoPlayerController = new ResumeDecisionController(context)
+  }
+
+  resumePlaybackForParam(pageParam: PlayerPageParam): void {
+    this.resumePlaybackForParamImpl(pageParam)
+  }
+}
+
 class TestEpisodeSwitchPage {
   currentPageParam?: PlayerPageParam
   episodeSwitching: boolean = false
@@ -352,6 +400,47 @@ class TestEpisodeSwitchPage {
 
   resumePlaybackForParam(_pageParam: PlayerPageParam): void {
     this.videoPlayerController.play().catch(() => {})
+  }
+}
+
+class ResumeDecisionEpisodeSwitchPage extends TestEpisodeSwitchPage {
+  resumeCalls: EpisodeSwitchResumeCall[] = []
+  private readonly resolvedStartPositionMs: number
+
+  constructor(
+    context: MediaLibraryContext,
+    calls: EpisodeSelectNoOpSideEffectCalls,
+    resolvedSourceUrl: string,
+    resolvedStartPositionMs: number
+  ) {
+    super(context, calls, resolvedSourceUrl)
+    this.resolvedStartPositionMs = resolvedStartPositionMs
+  }
+
+  async resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
+    const resolvedSource = await super.resolveEpisodePlaybackSource(item)
+    if (resolvedSource === null) {
+      return null
+    }
+    const nextResolvedSource: ResolvedEpisodePlaybackSource = {
+      url: resolvedSource.url,
+      httpHeader: resolvedSource.httpHeader,
+      durationHintMs: resolvedSource.durationHintMs,
+      presetAudioTracks: resolvedSource.presetAudioTracks,
+      presetSubtitleTracks: resolvedSource.presetSubtitleTracks,
+      startPositionMs: this.resolvedStartPositionMs
+    }
+    return nextResolvedSource
+  }
+
+  resumePlaybackForParam(pageParam: PlayerPageParam): void {
+    const call: EpisodeSwitchResumeCall = {
+      mediaKey: pageParam.mediaKey ?? '',
+      startPositionMs: pageParam.startPositionMs ?? 0,
+      seasonAtCall: this.currentMediaSeason,
+      episodeAtCall: this.currentMediaEpisode
+    }
+    this.resumeCalls.push(call)
   }
 }
 
@@ -799,6 +888,123 @@ export default function playerPageTest() {
 
       expect(action.action).assertEqual('clear_and_play')
       expect(action.positionMs ?? 0).assertEqual(0)
+    })
+
+    it('重新进入同季同集且存在有效进度时会生成 seek 决策', 0, () => {
+      const savedEntry: MediaProgressEntry = {
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
+        positionMs: 420000,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        savedEntry,
+        1800000,
+        1,
+        7
+      )
+
+      expect(action.action).assertEqual('seek')
+      expect(action.positionMs ?? 0).assertEqual(420000)
+    })
+
+    it('重新进入同一视频但没有有效进度时会直接播放', 0, () => {
+      const noProgressEntry: MediaProgressEntry = {
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
+        positionMs: 0,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        noProgressEntry,
+        1800000,
+        1,
+        7
+      )
+
+      expect(action.action).assertEqual('play')
+      expect(action.positionMs ?? 0).assertEqual(0)
+    })
+
+    it('重新进入不同季或不同集时不会错误复用旧进度', 0, () => {
+      const savedEntry: MediaProgressEntry = {
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
+        positionMs: 420000,
+        durationMs: 1800000,
+        lastPlayedAt: 1,
+        seasonNumber: 1,
+        episodeNumber: 7
+      }
+      const actionForDifferentSeason: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        savedEntry,
+        1800000,
+        2,
+        7
+      )
+      const actionForDifferentEpisode: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+        savedEntry,
+        1800000,
+        1,
+        8
+      )
+
+      expect(actionForDifferentSeason.action).assertEqual('play')
+      expect(actionForDifferentSeason.positionMs ?? 0).assertEqual(0)
+      expect(actionForDifferentEpisode.action).assertEqual('play')
+      expect(actionForDifferentEpisode.positionMs ?? 0).assertEqual(0)
+    })
+
+    it('resumePlaybackForParam 会优先 seek 选集切换传入的新媒体 startPositionMs', 0, async () => {
+      const context = buildEpisodeSwitchContext(1)
+      const page = new ResumeDecisionPage(context)
+      const controller = page.videoPlayerController as ResumeDecisionController
+      const pageParam: PlayerPageParam = {
+        url: 'https://example.com/s01e02.mkv',
+        title: '长夜余火 第一季-S1:E2-突围',
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e2',
+        seasonNumber: 1,
+        episodeNumber: 2,
+        startPositionMs: 245000
+      }
+
+      page.resumePlaybackForParam(pageParam)
+
+      expect(controller.seekCalls.length).assertEqual(1)
+      expect(controller.seekCalls[0]).assertEqual(245000)
+      expect(controller.playCalls).assertEqual(0)
+    })
+
+    it('handleEpisodeSelect 会把新媒体续播参数与新季集标识一起传给 reload 后的续播决策', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      const calls: EpisodeSelectNoOpSideEffectCalls = {
+        persistCurrentPlaybackState: 0,
+        reloadSource: 0,
+        resumePlaybackForParam: 0,
+        saveProgressNow: 0,
+        play: 0
+      }
+      const page = new ResumeDecisionEpisodeSwitchPage(
+        context,
+        calls,
+        'https://example.com/s01e02.mkv',
+        245000
+      )
+      page.currentPageParam = buildEpisodeSwitchParam(context)
+
+      const didSwitch = await page.handleEpisodeSelect(context.items[1])
+
+      expect(didSwitch).assertTrue()
+      expect(calls.reloadSource).assertEqual(1)
+      expect(page.resumeCalls.length).assertEqual(1)
+      expect(page.resumeCalls[0].mediaKey).assertEqual('media_progress_episode_tmdb_tmdb-9527_s1_e2')
+      expect(page.resumeCalls[0].startPositionMs).assertEqual(245000)
+      expect(page.resumeCalls[0].seasonAtCall).assertEqual(1)
+      expect(page.resumeCalls[0].episodeAtCall).assertEqual(2)
+      expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(2)
     })
 
     it('handleEpisodeSelect 会在解析新播放源前推进 pageParamToken', 0, async () => {

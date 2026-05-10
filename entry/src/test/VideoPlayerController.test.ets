@@ -7,6 +7,11 @@ import {
   resolveEffectivePlaybackSurfaceId
 } from '../main/ets/components/core/player/VideoPlayerController';
 import { IPlayer, SubtitleInfo, TrackInfo } from '../main/ets/components/core/player/IPlayer';
+import {
+  ISubtitleBridgeAdapter,
+  SubtitleBridgeState,
+  SubtitleTrackItem
+} from '../main/ets/components/core/player/SubtitleBridgeAdapter';
 import { VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
 
@@ -23,11 +28,14 @@ interface VideoPlayerControllerAccessor {
   progress: number
   isPlaying: boolean
   isSeeking: boolean
+  activeSubtitleIndex: number
   pendingBackendResumeTimeMs: number
   pendingBackendResumePlay: boolean
+  subtitleAdapter: ISubtitleBridgeAdapter
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
   capturePendingResumeForFallback(): void
+  continuePendingReadyAfterSeek(): Promise<void>
   onPlayerReady(): Promise<void>
   resolvePendingReload(): void
 }
@@ -74,6 +82,110 @@ class MockFallbackPlayer implements IPlayer {
   onUnsupportedFormat(_callback: () => void): void {}
   onSeekDone(_callback: () => void): void {}
   onSubtitleUpdate(_callback: (info: SubtitleInfo) => void): void {}
+}
+
+class RecordingFallbackPlayer extends MockFallbackPlayer {
+  readonly events: string[]
+  private readonly audioTrackInfo: TrackInfo
+
+  constructor(events: string[]) {
+    super()
+    this.events = events
+    const audioTrackInfo: TrackInfo = {
+      trackIndex: 0,
+      trackType: 'audio',
+      language: 'chi',
+      mimeType: 'audio/mp4a-latm'
+    }
+    this.audioTrackInfo = audioTrackInfo
+  }
+
+  play(): Promise<void> {
+    this.events.push('player:play')
+    return super.play()
+  }
+
+  seek(timeMs: number): void {
+    this.events.push(`player:seek:${timeMs}`)
+    super.seek(timeMs)
+  }
+
+  getTrackInfos(): Promise<TrackInfo[]> {
+    this.events.push('player:getTrackInfos')
+    return Promise.resolve([this.audioTrackInfo])
+  }
+
+  selectTrack(trackIndex: number): Promise<void> {
+    this.events.push(`player:selectTrack:${trackIndex}`)
+    return Promise.resolve()
+  }
+}
+
+class RecordingSubtitleAdapter implements ISubtitleBridgeAdapter {
+  private readonly events: string[]
+  private state: SubtitleBridgeState
+
+  constructor(events: string[]) {
+    this.events = events
+    const subtitleTracks: TrackInfo[] = []
+    const allSubtitleTracks: SubtitleTrackItem[] = []
+    const state: SubtitleBridgeState = {
+      subtitleTracks,
+      allSubtitleTracks,
+      activeSubtitleIndex: -1,
+      currentSubtitleTrack: -1,
+      currentSubtitleText: '',
+      subtitleDelayMs: 0,
+      hasExternalActive: false
+    }
+    this.state = state
+  }
+
+  async init(_player: IPlayer, _videoData?: VideoData): Promise<void> {
+    this.events.push('subtitle:init')
+    const internalSubtitleTracks: SubtitleTrackItem[] = [{
+      kind: 'internal',
+      displayName: '中文',
+      internalIndex: 0,
+      language: 'chi'
+    }]
+    const nextState: SubtitleBridgeState = {
+      subtitleTracks: [],
+      allSubtitleTracks: internalSubtitleTracks,
+      activeSubtitleIndex: 0,
+      currentSubtitleTrack: 0,
+      currentSubtitleText: '',
+      subtitleDelayMs: 0,
+      hasExternalActive: false
+    }
+    this.state = nextState
+  }
+
+  onTimeUpdate(_currentTimeMs: number): void {}
+
+  onSubtitleUpdate(_info: SubtitleInfo): void {}
+
+  onEmbeddedTimedText(_text: string): void {}
+
+  async switchTrack(_allIndex: number): Promise<void> {
+    return Promise.resolve()
+  }
+
+  adjustDelay(_deltaMs: number): void {}
+
+  onSeekSync(): void {
+    this.events.push('subtitle:onSeekSync')
+  }
+
+  getState(): SubtitleBridgeState {
+    return this.state
+  }
+
+  release(): void {}
+
+  async addLocalSubtitle(_localPath: string): Promise<void> {
+    return Promise.resolve()
+  }
 }
 
 class TestVideoPlayerController extends VideoPlayerController {
@@ -268,6 +380,61 @@ export default function videoPlayerControllerTest() {
       expect(accessor.pendingBackendResumePlay).assertFalse()
       expect(accessor.currentTime).assertEqual(501626)
       expect(player.playCallCount).assertEqual(0)
+    })
+
+    it('fallback pending-resume 场景 onPlayerReady 会先进入 seek 再延后轨道初始化', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const events: string[] = []
+      const player = new RecordingFallbackPlayer(events)
+      const subtitleAdapter = new RecordingSubtitleAdapter(events)
+      accessor.backend = 'ijkplayer'
+      accessor.player = player
+      accessor.subtitleAdapter = subtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = player.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+
+      expect(events.length).assertEqual(2)
+      expect(events[0]).assertEqual('subtitle:onSeekSync')
+      expect(events[1]).assertEqual('player:seek:501626')
+    })
+
+    it('fallback pending-resume 场景 seek 完成后才补偿轨道初始化并只恢复一次播放', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const events: string[] = []
+      const player = new RecordingFallbackPlayer(events)
+      const subtitleAdapter = new RecordingSubtitleAdapter(events)
+      accessor.backend = 'ijkplayer'
+      accessor.player = player
+      accessor.subtitleAdapter = subtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = player.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      expect(events.length).assertEqual(6)
+      expect(events[0]).assertEqual('subtitle:onSeekSync')
+      expect(events[1]).assertEqual('player:seek:501626')
+      expect(events[2]).assertEqual('subtitle:init')
+      expect(events[3]).assertEqual('player:getTrackInfos')
+      expect(events[4]).assertEqual('player:selectTrack:0')
+      expect(events[5]).assertEqual('player:play')
+      expect(accessor.activeSubtitleIndex).assertEqual(0)
+      expect(player.playCallCount).assertEqual(1)
     })
 
   })
