@@ -90,10 +90,20 @@ class TestVideoPlayerController extends VideoPlayerController {
  */
 class ResetDisplayStateSpyController extends VideoPlayerController {
   resetDisplayStateCalled: boolean = false;
+  private resolveResetDisplayStateWaiter?: () => void
+  private readonly resetDisplayStateWaiter: Promise<void> = new Promise<void>((resolve: () => void): void => {
+    this.resolveResetDisplayStateWaiter = resolve
+  })
 
   protected override resetDisplayState(): void {
     this.resetDisplayStateCalled = true;
+    this.resolveResetDisplayStateWaiter?.()
+    this.resolveResetDisplayStateWaiter = undefined
     super.resetDisplayState();
+  }
+
+  waitForResetDisplayStateCall(): Promise<void> {
+    return this.resetDisplayStateWaiter
   }
 
   saveProgressNow(): void {}
@@ -181,24 +191,24 @@ export default function videoPlayerControllerTest() {
     })
 
     // ── Task 2.2：initPlayer 调用 resetDisplayState，ijkVideoRatio 被清零 ───
-    // 验证策略：spy override resetDisplayState()，调用真实 initPlayer（不 await 全程）。
-    // initPlayer 为 async 函数，同步部分在第一个 await（resolveAudioRoutingDecision）前
-    // 执行，resetDisplayState() 在此之前被调用，可在同步阶段立即断言。
-    // 若删除 initPlayer 中 this.resetDisplayState() 调用，第一个 expect 失败（RED）。
+    // 验证策略：spy override resetDisplayState()，通过 promise 等待真实调用发生，
+    // 不再依赖 initPlayer 内部 await 排布或“同步阶段立即断言”的时序假设。
     it('initPlayer 调用真实 resetDisplayState 并将 ijkVideoRatio 重置为 0（Task 2.2）', 0, async () => {
       const controller = new ResetDisplayStateSpyController()
       const ratioAccessor = controller as Object as IjkVideoRatioAccessor
       ratioAccessor.ijkVideoRatio = 1.7778
 
-      // 启动真实 initPlayer，不 await：同步阶段在第一个 await 前立即执行
-      const p = controller.initPlayer(buildVideoData('task-2-2-spy'), 'surface-spy')
+      const initPromise = controller.initPlayer(buildVideoData('task-2-2-spy'), 'surface-spy')
+      const resetOrInitSettled = Promise.race<void>([
+        controller.waitForResetDisplayStateCall(),
+        initPromise.then((): void => {}, (): void => {})
+      ])
 
-      // 同步阶段已完成：resetDisplayState 已被真实 initPlayer 调用
+      await resetOrInitSettled
       expect(controller.resetDisplayStateCalled).assertTrue()
       expect(ratioAccessor.ijkVideoRatio).assertEqual(0)
 
-      // 静默消费 Promise，忽略设备 API 不可用的异步错误
-      await p.catch(() => {})
+      await initPromise.catch(() => {})
     })
 
     // ── Task 2.3/2.4：ijkVideoRatio 回调注入语义验证 ─────────────────────────

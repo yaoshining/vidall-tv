@@ -348,6 +348,8 @@ export class VideoPlayerController {
     const currentSessionId = this.playbackSessionId;
     this.metricsLoadStartMs = Date.now();
     this.metricsMedia = null;
+    // 先重置可展示状态，避免在异步预处理期间继续暴露上次播放残留。
+    this.resetDisplayState();
     // 在适配器注册回调前提前查询媒体标识，回调内同步使用，避免异步改造回调签名
     const metricsVideoId = this.progressContext?.videoId;
     if (metricsVideoId !== undefined && metricsVideoId > 0) {
@@ -392,9 +394,6 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[session=${currentSessionId}] initPlayer start backend=${this.backend}`);
     }
-
-    // 先重置可展示状态，避免复用上次播放残留。
-    this.resetDisplayState();
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
     if (!this.unsupportedFallbackLockedByUser) {
@@ -816,7 +815,7 @@ export class VideoPlayerController {
 
   /**
    * 重置上一次播放残留的可展示状态。
-   * 在 initPlayer 同步阶段（第一个 await 之前）调用，确保切源时 UI 状态干净。
+   * 在 initPlayer 的异步预处理前调用，确保切源时 UI 状态尽快清空。
    * 声明为 protected 以允许测试通过 spy override 验证调用合约（Task 2.2）。
    */
   protected resetDisplayState(): void {
