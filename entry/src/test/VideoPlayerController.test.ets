@@ -35,8 +35,6 @@ interface VideoPlayerControllerAccessor {
   subtitleAdapter: ISubtitleBridgeAdapter
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
-  rememberPendingResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void
-  clearPendingResumeAutoplayDecision(): void
   capturePendingResumeForFallback(source: string): void
   continuePendingReadyAfterSeek(): Promise<void>
   onPlayerReady(): Promise<void>
@@ -381,21 +379,24 @@ export default function videoPlayerControllerTest() {
       expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('transient_player_state')
     })
 
-    it('fallback pending-resume 会优先保留显式自动续播决策', 0, () => {
+    it('公共 seek 入口会为 fallback pending-resume 建立显式自动续播决策来源', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
-      accessor.player = new MockFallbackPlayer()
+      const player = new MockFallbackPlayer()
+      accessor.player = player
       accessor.currentTime = 3200
       accessor.duration = 9000
       accessor.isPlaying = false
       accessor.isSeeking = false
-      accessor.rememberPendingResumeAutoplayDecision(true, 'episode_resume_seek')
+
+      await controller.seek(3200, 'prepared_resume_seek')
 
       accessor.capturePendingResumeForFallback('test_fallback')
 
+      expect(player.seekCalls.length).assertEqual(1)
+      expect(player.seekCalls[0]).assertEqual(3200)
       expect(accessor.pendingBackendResumePlay).assertTrue()
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('episode_resume_seek')
-      accessor.clearPendingResumeAutoplayDecision()
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
     })
 
     it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {

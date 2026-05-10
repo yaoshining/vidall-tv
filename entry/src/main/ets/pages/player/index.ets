@@ -434,7 +434,7 @@ export struct PlayerPage {
         resumePositionMs: directResumeAction.positionMs ?? 0
       });
       if (directResumeAction.action === 'seek' && directResumeAction.positionMs !== undefined && directResumeAction.positionMs > 0) {
-        this.videoPlayerController.seek(directResumeAction.positionMs).catch(() => {});
+        this.videoPlayerController.seek(directResumeAction.positionMs, 'prepared_resume_seek').catch(() => {});
         return;
       }
       MediaProgressStore.get(mediaKey).then((saved) => {
@@ -457,7 +457,7 @@ export struct PlayerPage {
           resumePositionMs
         });
         if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
-          this.videoPlayerController.seek(resumeAction.positionMs).catch(() => {});
+          this.videoPlayerController.seek(resumeAction.positionMs, 'prepared_resume_seek').catch(() => {});
           return;
         }
         if (resumeAction.action === 'clear_and_play') {
@@ -930,7 +930,7 @@ export struct PlayerPage {
               .padding({ left: 24, right: 24, top: 10, bottom: 10 })
               .onClick(() => {
                 this.showResumeDialog = false;
-                this.videoPlayerController.seek(this.pendingSeekMs);
+                this.videoPlayerController.seek(this.pendingSeekMs, 'resume_dialog_seek');
               })
           }
           .justifyContent(FlexAlign.Center)

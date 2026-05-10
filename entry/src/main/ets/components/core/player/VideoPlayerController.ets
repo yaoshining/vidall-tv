@@ -770,6 +770,7 @@ export class VideoPlayerController {
           `[session=${currentSessionId}] 忽略过期 onPlay`);
         return;
       }
+      this.clearPendingResumeAutoplayDecision();
       this.isPlaying = true;
       this.isLoading = false;
       // 成功播放后清理历史错误，避免底部长期显示旧报错。
@@ -790,6 +791,7 @@ export class VideoPlayerController {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
+      this.clearPendingResumeAutoplayDecision();
       this.isPlaying = false;
       this.pauseSubtitleTimer();
       this.stopProgressTimer();
@@ -802,6 +804,7 @@ export class VideoPlayerController {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
+      this.clearPendingResumeAutoplayDecision();
       this.isPlaying = false;
       this.isLoading = false;
       if (this.duration > 0) {
@@ -819,6 +822,7 @@ export class VideoPlayerController {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
+      this.clearPendingResumeAutoplayDecision();
       this.isPlaying = false;
       this.stopProgressTimer();
       if (this.backend === 'ffmpeg') {
@@ -2552,7 +2556,7 @@ export class VideoPlayerController {
     VpeEnhancerUtil.destroyEnhancer();
   }
 
-  async seek(time: number): Promise<void> {
+  async seek(time: number, autoplayDecisionSource: string = ''): Promise<void> {
     if (!this.player) { return; }
     this.metricsSeekStartMs = Date.now();
     let safeTime = time < 0 ? 0 : time;
@@ -2584,6 +2588,9 @@ export class VideoPlayerController {
         }
       }
     }
+    if (autoplayDecisionSource.length > 0) {
+      this.rememberPendingResumeAutoplayDecision(true, autoplayDecisionSource);
+    }
     await this.pause();
     this.currentTime = safeTime;
     this.subtitleAdapter.onSeekSync();
@@ -2596,6 +2603,7 @@ export class VideoPlayerController {
         // seek 调用失败（如 native 地底抛异常）：重置 isSeeking 防止永久卡住。
         // onError 回调已在 callNativeVoid 里触发，此处仅做状态修复。
         this.isSeeking = false;
+        this.clearPendingResumeAutoplayDecision();
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `seek 调用异常: ${(seekErr as BusinessError).message ?? 'unknown'}`);
       }
