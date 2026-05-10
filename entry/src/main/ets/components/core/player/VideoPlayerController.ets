@@ -137,6 +137,7 @@ interface ResumeDiagnosticLogRecord {
   pendingResumeMs: number;
   effectiveResumeMs: number;
   autoResumePlay: boolean;
+  autoplayDecisionSource: string;
   autoplayDecision: string;
   queuedSeekMs: number;
   isSeeking: boolean;
@@ -145,9 +146,15 @@ interface ResumeDiagnosticLogRecord {
   filePath: string;
 }
 
+interface ResumeAutoplayDecision {
+  shouldResumePlay: boolean;
+  source: string;
+}
+
 interface PendingResumeState {
   positionMs: number;
   shouldResumePlay: boolean;
+  autoplayDecisionSource: string;
   sourceKey: string;
   reason: string;
   captureBackend: PlayerBackend;
@@ -319,6 +326,12 @@ export class VideoPlayerController {
   private nativeReadyGuardTimer?: number;
   /** 后端自动 fallback / 实例重建时待恢复的续播状态（一次性消费） */
   private pendingResumeState: PendingResumeState | null = null;
+  /** 当前播放会话显式记录的“恢复后是否自动播放”决策 */
+  private pendingResumeAutoplayDecisionExplicit: boolean = false;
+  /** 当前播放会话是否已写入显式自动播放决策 */
+  private hasPendingResumeAutoplayDecisionExplicit: boolean = false;
+  /** 当前播放会话显式自动播放决策来源 */
+  private pendingResumeAutoplayDecisionSource: string = '';
   /** 待恢复续播 seek 是否进行中 */
   private pendingResumeSeekInFlight: boolean = false;
   /** 当前待恢复续播 seek 的来源 */
@@ -329,6 +342,8 @@ export class VideoPlayerController {
   private pendingResumeSeekTargetMs: number = -1;
   /** 当前待恢复续播 seek 完成后是否自动恢复播放 */
   private pendingResumeSeekAutoPlay: boolean = false;
+  /** 当前待恢复续播 seek 对应的自动播放决策来源 */
+  private pendingResumeSeekAutoplayDecisionSource: string = '';
   /** fallback resume seek 完成后，是否需要补做 ready 阶段的轨道初始化 */
   private pendingReadyTrackInitAfterSeek: boolean = false;
   /** fallback resume seek 完成后，轨道初始化结束是否需要恢复播放 */
@@ -393,6 +408,7 @@ export class VideoPlayerController {
   private set pendingBackendResumePlay(value: boolean) {
     const pendingState = this.ensurePendingResumeState();
     pendingState.shouldResumePlay = value;
+    pendingState.autoplayDecisionSource = this.resolvePendingResumeAutoplayDecision(value, 'compat_override').source;
     this.prunePendingResumeState();
   }
 
@@ -401,6 +417,7 @@ export class VideoPlayerController {
       const pendingState: PendingResumeState = {
         positionMs: -1,
         shouldResumePlay: false,
+        autoplayDecisionSource: 'compat_override',
         sourceKey: this.buildPendingResumeSourceKey(this.currentVideoData),
         reason: 'compat_override',
         captureBackend: this.backend
@@ -461,6 +478,7 @@ export class VideoPlayerController {
   private savePendingResumeState(
     positionMs: number,
     shouldResumePlay: boolean,
+    autoplayDecisionSource: string,
     reason: string,
     captureBackend: PlayerBackend
   ): void {
@@ -468,6 +486,7 @@ export class VideoPlayerController {
     const pendingState: PendingResumeState = {
       positionMs: safePosition,
       shouldResumePlay,
+      autoplayDecisionSource,
       sourceKey: this.buildPendingResumeSourceKey(this.currentVideoData),
       reason,
       captureBackend
@@ -476,7 +495,37 @@ export class VideoPlayerController {
     this.currentTime = safePosition;
     this.progress = this.duration > 0 ? safePosition / this.duration : 0;
     this.logResumeDiagnostic('resume_pending_capture', reason, captureBackend, safePosition,
-      safePosition, shouldResumePlay, 'pending', -1);
+      safePosition, shouldResumePlay, autoplayDecisionSource, 'pending', -1);
+  }
+
+  private rememberPendingResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.pendingResumeAutoplayDecisionExplicit = shouldResumePlay;
+    this.hasPendingResumeAutoplayDecisionExplicit = true;
+    this.pendingResumeAutoplayDecisionSource = source.length > 0 ? source : 'explicit';
+  }
+
+  private clearPendingResumeAutoplayDecision(): void {
+    this.pendingResumeAutoplayDecisionExplicit = false;
+    this.hasPendingResumeAutoplayDecisionExplicit = false;
+    this.pendingResumeAutoplayDecisionSource = '';
+  }
+
+  private resolvePendingResumeAutoplayDecision(
+    inferredShouldResumePlay: boolean,
+    inferredSource: string
+  ): ResumeAutoplayDecision {
+    if (this.hasPendingResumeAutoplayDecisionExplicit) {
+      return {
+        shouldResumePlay: this.pendingResumeAutoplayDecisionExplicit,
+        source: this.pendingResumeAutoplayDecisionSource.length > 0
+          ? this.pendingResumeAutoplayDecisionSource
+          : 'explicit'
+      };
+    }
+    return {
+      shouldResumePlay: inferredShouldResumePlay,
+      source: inferredSource
+    };
   }
 
   /**
@@ -532,11 +581,13 @@ export class VideoPlayerController {
     if (!shouldPreservePendingResume) {
       this.clearPendingResumeState();
     }
+    this.clearPendingResumeAutoplayDecision();
     this.pendingResumeSeekInFlight = false;
     this.pendingResumeSeekSource = '';
     this.pendingResumeSeekCaptureBackend = 'avplayer';
     this.pendingResumeSeekTargetMs = -1;
     this.pendingResumeSeekAutoPlay = false;
+    this.pendingResumeSeekAutoplayDecisionSource = '';
     this.pendingReadyTrackInitAfterSeek = false;
     this.pendingReadyTrackInitResumePlay = false;
     this.suppressPlayAfterSeekOnce = false;
@@ -887,19 +938,22 @@ export class VideoPlayerController {
       const resumeSeekCaptureBackend = this.pendingResumeSeekCaptureBackend;
       const resumeSeekTargetMs = this.pendingResumeSeekTargetMs;
       const resumeSeekAutoPlay = this.pendingResumeSeekAutoPlay;
+      const resumeSeekAutoplayDecisionSource = this.pendingResumeSeekAutoplayDecisionSource;
       if (resumeSeekInFlight) {
         this.logResumeDiagnostic('resume_seek_done', resumeSeekSource, resumeSeekCaptureBackend, resumeSeekTargetMs,
-          resumeSeekTargetMs, resumeSeekAutoPlay, 'pending', this.timeToSeek);
+          resumeSeekTargetMs, resumeSeekAutoPlay, resumeSeekAutoplayDecisionSource, 'pending', this.timeToSeek);
       }
       if (this.timeToSeek >= 0) {
         if (resumeSeekInFlight) {
           this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
-            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'queued_seek', this.timeToSeek);
+            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, resumeSeekAutoplayDecisionSource,
+            'queued_seek', this.timeToSeek);
           this.pendingResumeSeekInFlight = false;
           this.pendingResumeSeekSource = '';
           this.pendingResumeSeekCaptureBackend = 'avplayer';
           this.pendingResumeSeekTargetMs = -1;
           this.pendingResumeSeekAutoPlay = false;
+          this.pendingResumeSeekAutoplayDecisionSource = '';
         }
         adapter.seek(this.timeToSeek);
         this.timeToSeek = -1;
@@ -913,6 +967,7 @@ export class VideoPlayerController {
         this.pendingResumeSeekCaptureBackend = 'avplayer';
         this.pendingResumeSeekTargetMs = -1;
         this.pendingResumeSeekAutoPlay = false;
+        this.pendingResumeSeekAutoplayDecisionSource = '';
       }
       this.isSeeking = false;
       if (shouldContinuePendingReadyAfterSeek) {
@@ -923,13 +978,15 @@ export class VideoPlayerController {
       if (this.suppressPlayAfterSeekOnce) {
         if (resumeSeekInFlight) {
           this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
-            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'suppress', -1);
+            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, resumeSeekAutoplayDecisionSource,
+            'suppress', -1);
         }
         this.suppressPlayAfterSeekOnce = false;
       } else {
         if (resumeSeekInFlight) {
           this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
-            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'play', -1);
+            resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, resumeSeekAutoplayDecisionSource,
+            'play', -1);
         }
         this.player?.play().catch(() => {});
       }
@@ -2056,6 +2113,7 @@ export class VideoPlayerController {
 
     const resumeTimeMs = pendingResumeState?.positionMs ?? -1;
     const shouldResumePlay = pendingResumeState?.shouldResumePlay ?? false;
+    const autoplayDecisionSource = pendingResumeState?.autoplayDecisionSource ?? '';
     const resumeSource = pendingResumeState?.reason ?? '';
     const resumeCaptureBackend = pendingResumeState?.captureBackend ?? this.backend;
     const effectiveResumeTimeMs = resumeTimeMs > 0 && this.duration > 0 && resumeTimeMs > this.duration
@@ -2063,7 +2121,7 @@ export class VideoPlayerController {
       : (resumeTimeMs > 0 ? resumeTimeMs : 0);
     if (pendingResumeState !== null) {
       this.logResumeDiagnostic('resume_pending_consume', resumeSource, resumeCaptureBackend, resumeTimeMs,
-        effectiveResumeTimeMs, shouldResumePlay, 'pending', -1);
+        effectiveResumeTimeMs, shouldResumePlay, autoplayDecisionSource, 'pending', -1);
     }
 
     if (pendingResumeState !== null && pendingResumeState.positionMs > 0 && this.player) {
@@ -2081,8 +2139,10 @@ export class VideoPlayerController {
       this.pendingResumeSeekCaptureBackend = resumeCaptureBackend;
       this.pendingResumeSeekTargetMs = safeResumeTimeMs;
       this.pendingResumeSeekAutoPlay = shouldResumePlay;
+      this.pendingResumeSeekAutoplayDecisionSource = autoplayDecisionSource;
       this.logResumeDiagnostic('resume_seek_dispatch', resumeSource, resumeCaptureBackend, resumeTimeMs,
-        safeResumeTimeMs, shouldResumePlay, shouldResumePlay ? 'play_after_seek' : 'suppress_after_seek', -1);
+        safeResumeTimeMs, shouldResumePlay, autoplayDecisionSource,
+        shouldResumePlay ? 'play_after_seek' : 'suppress_after_seek', -1);
       this.player.seek(safeResumeTimeMs);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `后端切换续播定位: backend=${this.backend} time=${safeResumeTimeMs}`);
@@ -2092,7 +2152,7 @@ export class VideoPlayerController {
     await this.finalizePlayerReadyTrackInitialization(readySessionId);
     if (pendingResumeState !== null && pendingResumeState.shouldResumePlay && !this.isPlaying) {
       this.logResumeDiagnostic('resume_autoplay_decision', resumeSource, resumeCaptureBackend, resumeTimeMs,
-        effectiveResumeTimeMs, shouldResumePlay, 'play_no_seek', -1);
+        effectiveResumeTimeMs, shouldResumePlay, autoplayDecisionSource, 'play_no_seek', -1);
       await this.play();
     }
   }
@@ -2180,13 +2240,14 @@ export class VideoPlayerController {
     }
     const fallbackPosition = this.player?.currentTime ?? this.currentTime;
     const safeFallbackPosition = fallbackPosition > 0 ? fallbackPosition : 0;
-    const shouldResumePlay = this.isPlaying;
+    const autoplayDecision = this.resolvePendingResumeAutoplayDecision(this.isPlaying, 'transient_player_state');
     this.logFallbackEvent(fallbackReason, 'native', 'ijkplayer', detailMessage);
     hilog.warn(CommonConstants.LOG_DOMAIN, TAG, userMessage);
     this.lastErrorMessage = userMessage;
     this.isLoading = true;
     this.clearNativeReadyGuardTimer();
-    this.savePendingResumeState(safeFallbackPosition, shouldResumePlay, fallbackReason, 'native');
+    this.savePendingResumeState(safeFallbackPosition, autoplayDecision.shouldResumePlay,
+      autoplayDecision.source, fallbackReason, 'native');
     const oldPlayer = this.player;
     this.player = undefined;
     this.backend = 'ijkplayer';
@@ -2197,7 +2258,12 @@ export class VideoPlayerController {
     const playerPosition = this.player?.currentTime ?? 0;
     const controllerPosition = this.currentTime > 0 ? this.currentTime : 0;
     const latestPosition = playerPosition > controllerPosition ? playerPosition : controllerPosition;
-    this.savePendingResumeState(latestPosition, this.isPlaying || this.isSeeking, source, this.backend);
+    const autoplayDecision = this.resolvePendingResumeAutoplayDecision(
+      this.isPlaying || this.isSeeking,
+      'transient_player_state'
+    );
+    this.savePendingResumeState(latestPosition, autoplayDecision.shouldResumePlay,
+      autoplayDecision.source, source, this.backend);
   }
 
   private logFallbackEvent(
@@ -2228,6 +2294,7 @@ export class VideoPlayerController {
     pendingResumeMs: number,
     effectiveResumeMs: number,
     autoResumePlay: boolean,
+    autoplayDecisionSource: string,
     autoplayDecision: string,
     queuedSeekMs: number
   ): void {
@@ -2244,6 +2311,7 @@ export class VideoPlayerController {
       pendingResumeMs,
       effectiveResumeMs,
       autoResumePlay,
+      autoplayDecisionSource,
       autoplayDecision,
       queuedSeekMs,
       isSeeking: this.isSeeking,

@@ -19,6 +19,7 @@ interface VideoPlayerControllerAccessor {
   backend: PlayerBackend
   surfaceId: string
   player?: IPlayer
+  pendingResumeState: PendingResumeStateSnapshot | null
   cachedIjkContext?: object
   cachedIjkComponentId: string
   cachedNativeContext?: object
@@ -34,10 +35,18 @@ interface VideoPlayerControllerAccessor {
   subtitleAdapter: ISubtitleBridgeAdapter
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
-  capturePendingResumeForFallback(): void
+  rememberPendingResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void
+  clearPendingResumeAutoplayDecision(): void
+  capturePendingResumeForFallback(source: string): void
   continuePendingReadyAfterSeek(): Promise<void>
   onPlayerReady(): Promise<void>
   resolvePendingReload(): void
+}
+
+interface PendingResumeStateSnapshot {
+  positionMs: number
+  shouldResumePlay: boolean
+  autoplayDecisionSource: string
 }
 
 /** 用于访问 ijkVideoRatio 字段的 accessor 接口（Task 2.1/2.2 TDD 用） */
@@ -351,11 +360,42 @@ export default function videoPlayerControllerTest() {
       accessor.pendingBackendResumeTimeMs = -1
       accessor.pendingBackendResumePlay = false
 
-      accessor.capturePendingResumeForFallback()
+      accessor.capturePendingResumeForFallback('test_fallback')
 
       expect(accessor.pendingBackendResumeTimeMs).assertEqual(501626)
       expect(accessor.pendingBackendResumePlay).assertTrue()
       expect(accessor.currentTime).assertEqual(501626)
+    })
+
+    it('fallback pending-resume 会记录自动续播决策来源', 0, () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.player = new MockFallbackPlayer()
+      accessor.currentTime = 3200
+      accessor.duration = 9000
+      accessor.isPlaying = false
+      accessor.isSeeking = true
+
+      accessor.capturePendingResumeForFallback('test_fallback')
+
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('transient_player_state')
+    })
+
+    it('fallback pending-resume 会优先保留显式自动续播决策', 0, () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.player = new MockFallbackPlayer()
+      accessor.currentTime = 3200
+      accessor.duration = 9000
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.rememberPendingResumeAutoplayDecision(true, 'episode_resume_seek')
+
+      accessor.capturePendingResumeForFallback('test_fallback')
+
+      expect(accessor.pendingBackendResumePlay).assertTrue()
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('episode_resume_seek')
+      accessor.clearPendingResumeAutoplayDecision()
     })
 
     it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {
