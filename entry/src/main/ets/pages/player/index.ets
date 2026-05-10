@@ -554,6 +554,7 @@ export struct PlayerPage {
     this.emitResumeDiagnosticLog('page_param_received', pageParam);
     this.pageParamToken += 1;
     const token = this.pageParamToken;
+    this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     if (pageParam.preferredBackend) {
       this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
         ? 'ijkplayer'
@@ -733,6 +734,7 @@ export struct PlayerPage {
     const previousProgressContext = this.videoPlayerController.progressContext;
     const previousPageParamToken = this.pageParamToken;
     this.pageParamToken += 1;
+    this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     let keepNextPageParamToken = false;
     try {
       let nextParam: PlayerPageParam | null = null;

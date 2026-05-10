@@ -515,6 +515,10 @@ export class VideoPlayerController {
     this.preparedResumeAutoplayDecisionSource = source.length > 0 ? source : 'prepared';
   }
 
+  discardPreparedResumeAutoplayDecision(): void {
+    this.clearPreparedResumeAutoplayDecision();
+  }
+
   rememberResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
     this.rememberPendingResumeAutoplayDecision(shouldResumePlay, source);
   }
@@ -1785,6 +1789,7 @@ export class VideoPlayerController {
     this.clearPendingResumeState();
     this.rejectPendingReload(new Error('reload superseded'));
     if (autoPlay) {
+      this.clearPreparedResumeAutoplayDecision();
       this.prepareResumeAutoplayDecision(true, 'reload_source_autoplay');
     }
     const reloadToken = this.pendingReloadToken + 1;

@@ -60,6 +60,7 @@ interface PlayerPageControllerAccessor {
   progressContext: PlayerPageProgressContextAccessor | null
   saveProgressNow(): void
   reloadSource(videoData: PlayerPageVideoDataAccessor, autoPlay: boolean): Promise<void>
+  discardPreparedResumeAutoplayDecision(): void
   prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void
   rememberResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void
 }
@@ -93,6 +94,8 @@ class TestPlayerPageController implements PlayerPageControllerAccessor {
   saveProgressNow(): void {}
 
   async reloadSource(_videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {}
+
+  discardPreparedResumeAutoplayDecision(): void {}
 
   prepareResumeAutoplayDecision(_shouldResumePlay: boolean, _source: string): void {}
 
@@ -188,6 +191,22 @@ class PreparedResumeIsolationController extends TestPlayerPageController impleme
 
   play(): Promise<void> {
     this.playCalls += 1
+    return Promise.resolve()
+  }
+}
+
+class PreparedDecisionTrackingController extends TestPlayerPageController implements PlayerPageControllerPlaybackAccessor {
+  decisionEvents: string[] = []
+
+  discardPreparedResumeAutoplayDecision(): void {
+    this.decisionEvents.push('discard')
+  }
+
+  prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
+    this.decisionEvents.push(`prepare:${shouldResumePlay ? 'true' : 'false'}:${source}`)
+  }
+
+  play(): Promise<void> {
     return Promise.resolve()
   }
 }
@@ -328,6 +347,74 @@ class EpisodeSwitchTokenPage {
   resumePlaybackForParam(_pageParam: PlayerPageParam): void {
     this.videoPlayerController.play().catch(() => {})
   }
+}
+
+class EpisodeSwitchPreparedDecisionInvalidationPage {
+  currentPageParam?: PlayerPageParam
+  episodeSwitching: boolean = false
+  showEpisodeAutoplayOverlay: boolean = false
+  episodeAutoplayRemainingSeconds: number = 0
+  episodeAutoplayNextTitle: string = ''
+  showResumeDialog: boolean = false
+  pendingSeekMs: number = -1
+  currentMediaKey: string = ''
+  currentMediaSeason: number = 0
+  currentMediaEpisode: number = 0
+  pageParamToken: number = 0
+  videoData?: PlayerPageVideoDataAccessor
+  videoPlayerController: PlayerPageControllerPlaybackAccessor
+  private readonly handleEpisodeSelectImpl: (item: PlaybackContextItem) => Promise<boolean>
+
+  constructor(context: MediaLibraryContext) {
+    const page = buildPlayerPageAccessor()
+    const handleEpisodeSelect = page.handleEpisodeSelect as Object as BoundHandleEpisodeSelectMethod
+    this.handleEpisodeSelectImpl = handleEpisodeSelect.bind(this as Object)
+    this.videoPlayerController = new PreparedDecisionTrackingController(context)
+  }
+
+  handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
+    return this.handleEpisodeSelectImpl(item)
+  }
+
+  hideEpisodeAutoplayOverlay(): void {
+    this.showEpisodeAutoplayOverlay = false
+    this.episodeAutoplayRemainingSeconds = 0
+    this.episodeAutoplayNextTitle = ''
+  }
+
+  persistCurrentPlaybackState(): void {
+    this.videoPlayerController.saveProgressNow()
+  }
+
+  async resolveEpisodePlaybackSource(_item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
+    return null
+  }
+
+  buildVideoDataFromParam(pageParam: PlayerPageParam): PlayerPageVideoDataAccessor | undefined {
+    const url = pageParam.url ?? ''
+    if (url.length === 0) {
+      return undefined
+    }
+    const videoData: PlayerPageVideoDataAccessor = {
+      videoSrc: url
+    }
+    return videoData
+  }
+
+  buildProgressContext(pageParam: PlayerPageParam): PlayerPageProgressContextAccessor {
+    const progressContext: PlayerPageProgressContextAccessor = {
+      videoId: pageParam.videoId ?? 0,
+      seriesProviderId: pageParam.seriesProviderId ?? '',
+      seasonNumber: pageParam.seasonNumber ?? 0,
+      episodeNumber: pageParam.episodeNumber ?? 0,
+      positionMs: 0,
+      durationMs: 0,
+      updatedAt: 0
+    }
+    return progressContext
+  }
+
+  resumePlaybackForParam(_pageParam: PlayerPageParam): void {}
 }
 
 class ResumeDecisionPage {
@@ -550,6 +637,47 @@ export default function playerPageTest() {
 
       expect(page.currentMediaKey.length > 0).assertTrue()
       expect(page.currentMediaKey).assertEqual(mediaKey)
+    })
+
+    it('page_param_prepared_resume 会先清理旧 prepared decision，再为当前媒体建立新 decision', 0, () => {
+      const page = buildPlayerPageAccessor()
+      const controller = new PreparedDecisionTrackingController(new MediaLibraryContext())
+      page.videoPlayerController = controller
+
+      page.applyPlayerPageParam({
+        url: 'https://example.com/s01e03.mkv',
+        title: '第3集',
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e3',
+        seasonNumber: 1,
+        episodeNumber: 3
+      })
+
+      expect(controller.decisionEvents.length).assertEqual(2)
+      expect(controller.decisionEvents[0]).assertEqual('discard')
+      expect(controller.decisionEvents[1]).assertEqual('prepare:true:page_param_prepared_resume')
+    })
+
+    it('新 pageParam 覆盖旧 prepared resume 场景时不会保留旧 decision', 0, () => {
+      const page = buildPlayerPageAccessor()
+      const controller = new PreparedDecisionTrackingController(new MediaLibraryContext())
+      page.videoPlayerController = controller
+
+      page.applyPlayerPageParam({
+        url: 'https://example.com/s01e03.mkv',
+        title: '第3集',
+        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e3',
+        seasonNumber: 1,
+        episodeNumber: 3
+      })
+      page.applyPlayerPageParam({
+        url: 'https://example.com/movie.mkv',
+        title: '电影'
+      })
+
+      expect(controller.decisionEvents.length).assertEqual(3)
+      expect(controller.decisionEvents[0]).assertEqual('discard')
+      expect(controller.decisionEvents[1]).assertEqual('prepare:true:page_param_prepared_resume')
+      expect(controller.decisionEvents[2]).assertEqual('discard')
     })
 
     it('媒体库选集会生成新的播放参数，并在提交后让 currentIndex 与所选播放源对齐', 0, () => {
@@ -890,6 +1018,20 @@ export default function playerPageTest() {
       emitter.emit(PlayerEvents.PREPARED)
       expect(page.resumeCalls.length).assertEqual(0)
       emitter.off(PlayerEvents.PREPARED.eventId)
+    })
+
+    it('pageParamToken 失效且切集解析失败时会先丢弃旧 prepared decision，避免泄漏到后续媒体', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      const page = new EpisodeSwitchPreparedDecisionInvalidationPage(context)
+      const controller = page.videoPlayerController as PreparedDecisionTrackingController
+      page.currentPageParam = buildEpisodeSwitchParam(context)
+      page.pageParamToken = 5
+
+      const didSwitch = await page.handleEpisodeSelect(context.items[1])
+
+      expect(didSwitch).assertFalse()
+      expect(controller.decisionEvents.length).assertEqual(1)
+      expect(controller.decisionEvents[0]).assertEqual('discard')
     })
 
     it('媒体级进度接近完播时会改为清理进度后继续播放', 0, () => {

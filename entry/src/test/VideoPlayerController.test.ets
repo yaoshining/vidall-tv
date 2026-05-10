@@ -23,6 +23,9 @@ interface VideoPlayerControllerAccessor {
   pendingResumeAutoplayDecisionExplicit: boolean
   hasPendingResumeAutoplayDecisionExplicit: boolean
   pendingResumeAutoplayDecisionSource: string
+  preparedResumeAutoplayDecisionExplicit: boolean
+  hasPreparedResumeAutoplayDecisionExplicit: boolean
+  preparedResumeAutoplayDecisionSource: string
   cachedIjkContext?: object
   cachedIjkComponentId: string
   cachedNativeContext?: object
@@ -207,12 +210,30 @@ class TestVideoPlayerController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
-class ReloadAutoplayDecisionSpyController extends TestVideoPlayerController {
-  prepareResumeAutoplayDecisionCalls: string[] = []
+class ReloadPreparedLifecycleController extends VideoPlayerController {
+  preparedStateSeenInReload: boolean = false
+  preparedSourceSeenInReload: string = ''
+  pendingStateSeenAfterInit: boolean = false
+  pendingSourceSeenAfterInit: string = ''
+  playCallCount: number = 0
 
-  prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
-    this.prepareResumeAutoplayDecisionCalls.push(`${shouldResumePlay ? 'true' : 'false'}:${source}`)
+  async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
+    const beforeAccessor = accessController(this)
+    this.preparedStateSeenInReload = beforeAccessor.hasPreparedResumeAutoplayDecisionExplicit
+    this.preparedSourceSeenInReload = beforeAccessor.preparedResumeAutoplayDecisionSource
+    super.initPlayer(videoData, surfaceId).catch(() => {})
+    const afterAccessor = accessController(this)
+    this.pendingStateSeenAfterInit = afterAccessor.hasPendingResumeAutoplayDecisionExplicit
+    this.pendingSourceSeenAfterInit = afterAccessor.pendingResumeAutoplayDecisionSource
+    afterAccessor.resolvePendingReload()
   }
+
+  play(): Promise<void> {
+    this.playCallCount += 1
+    return Promise.resolve()
+  }
+
+  saveProgressNow(): void {}
 }
 
 /**
@@ -377,18 +398,22 @@ export default function videoPlayerControllerTest() {
       expect(accessor.currentTime).assertEqual(501626)
     })
 
-    it('reloadSource 自动播放路径会在初始化前预设新媒体自动续播决策', 0, async () => {
-      const controller = new ReloadAutoplayDecisionSpyController()
+    it('reloadSource 自动播放路径会写入 prepared decision，并在 initPlayer 启动时转正消费', 0, async () => {
+      const controller = new ReloadPreparedLifecycleController()
       const accessor = accessController(controller)
       accessor.surfaceId = 'surface-review'
 
-      const reloadPromise = controller.reloadSource(buildVideoData('reload-autoplay'), true)
-      await flushMicrotasks()
-      accessor.resolvePendingReload()
-      await reloadPromise
+      await controller.reloadSource(buildVideoData('reload-autoplay'), true)
 
-      expect(controller.prepareResumeAutoplayDecisionCalls.length).assertEqual(1)
-      expect(controller.prepareResumeAutoplayDecisionCalls[0]).assertEqual('true:reload_source_autoplay')
+      expect(controller.preparedStateSeenInReload).assertTrue()
+      expect(controller.preparedSourceSeenInReload).assertEqual('reload_source_autoplay')
+      expect(controller.pendingStateSeenAfterInit).assertTrue()
+      expect(controller.pendingSourceSeenAfterInit).assertEqual('reload_source_autoplay')
+      expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
+      expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
+      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
+      expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('reload_source_autoplay')
+      expect(controller.playCallCount).assertEqual(1)
     })
 
     it('公共 seek 入口会为新会话初始化链路记录显式自动续播决策来源', 0, async () => {
