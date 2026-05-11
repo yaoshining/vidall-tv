@@ -860,28 +860,7 @@ export class VideoPlayerController {
       this.resolvePendingReload();
     });
     adapter.onPlay(() => {
-      if (currentSessionId !== this.playbackSessionId) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `[session=${currentSessionId}] 忽略过期 onPlay`);
-        return;
-      }
-      this.recordPendingResumeAutoplayResult('play_started', true);
-      this.clearPendingResumeAutoplayDecision();
-      this.isPlaying = true;
-      this.isLoading = false;
-      // 成功播放后清理历史错误，避免底部长期显示旧报错。
-      this.lastErrorMessage = '';
-      if (ENABLE_SESSION_DIAG_LOG) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[session=${currentSessionId}] onPlay`);
-      }
-      this.resumeSubtitleTimer();
-      this.startProgressTimer();
-      if (this.backend === 'ffmpeg') {
-        this.startFfmpegRenderTimer();
-        this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
-      }
-      emitter.emit(PlayerEvents.PLAYING);
+      this.handlePlayerPlayEvent(currentSessionId);
     });
     adapter.onPaused(() => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -2497,6 +2476,31 @@ export class VideoPlayerController {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, recordText);
   }
 
+  private handlePlayerPlayEvent(currentSessionId: number): void {
+    if (currentSessionId !== this.playbackSessionId) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[session=${currentSessionId}] 忽略过期 onPlay`);
+      return;
+    }
+    this.recordPendingResumeAutoplayResult('play_started', true);
+    this.clearPendingResumeAutoplayDecision();
+    this.isPlaying = true;
+    this.isLoading = false;
+    // 成功播放后清理历史错误，避免底部长期显示旧报错。
+    this.lastErrorMessage = '';
+    if (ENABLE_SESSION_DIAG_LOG) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[session=${currentSessionId}] onPlay`);
+    }
+    this.resumeSubtitleTimer();
+    this.startProgressTimer();
+    if (this.backend === 'ffmpeg') {
+      this.startFfmpegRenderTimer();
+      this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
+    }
+    emitter.emit(PlayerEvents.PLAYING);
+  }
+
   private extractFileName(filePath: string): string {
     if (filePath.length === 0) {
       return '';
@@ -2543,12 +2547,11 @@ export class VideoPlayerController {
     if (filePath.length === 0) {
       return '';
     }
-    let sanitized = filePath;
-    sanitized = sanitized.replace(/\?.*$/, '');
-    sanitized = sanitized.replace(/\/\/([^\/@]+)@/, '//***@');
-    sanitized = sanitized.replace(/(authorization=)[^&]*/ig, '$1***');
-    sanitized = sanitized.replace(/(token=)[^&]*/ig, '$1***');
-    return sanitized;
+    const schemeMatch = filePath.match(/^([a-zA-Z][a-zA-Z0-9+\-.]*):/);
+    if (schemeMatch !== null && schemeMatch[1].length > 0) {
+      return `${schemeMatch[1].toLowerCase()}://***`;
+    }
+    return '***';
   }
 
   private safeErrorMessage(e: Object): string {

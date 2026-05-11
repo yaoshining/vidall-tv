@@ -20,6 +20,7 @@ interface VideoPlayerControllerAccessor {
   backend: PlayerBackend
   surfaceId: string
   player?: IPlayer
+  currentVideoData?: VideoData
   playbackSessionId: number
   consumedReadyResumeToken: string
   pendingResumeState: PendingResumeStateSnapshot | null
@@ -51,6 +52,7 @@ interface VideoPlayerControllerAccessor {
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
   pendingResumeAutoplayResultState: PendingResumeAutoplayResultStateSnapshot | null
+  handlePlayerPlayEvent(sessionId: number): void
   capturePendingResumeForFallback(source: string): void
   handlePlayerPaused(): void
   continuePendingReadyAfterSeek(): Promise<void>
@@ -77,6 +79,7 @@ interface ResumeDiagnosticRecordSnapshot {
   autoplayDecisionSource: string
   autoplayDecisionOrigin: string
   autoplayExecutionResult: string
+  filePath: string
 }
 
 interface PendingResumeAutoplayResultStateSnapshot {
@@ -168,6 +171,13 @@ class RecordingFallbackPlayer extends MockFallbackPlayer {
   selectTrack(trackIndex: number): Promise<void> {
     this.events.push(`player:selectTrack:${trackIndex}`)
     return Promise.resolve()
+  }
+}
+
+class RejectingFallbackPlayer extends MockFallbackPlayer {
+  play(): Promise<void> {
+    this.playCallCount += 1
+    return Promise.reject(new Error('mock play failed'))
   }
 }
 
@@ -809,6 +819,94 @@ export default function videoPlayerControllerTest() {
       }
     })
 
+    it('resume 日志仅保留本地文件协议，不暴露敏感路径信息', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      const videoData: VideoData = {
+        type: VideoDataType.FILE_URI,
+        videoSrc: 'file:///Users/demo/Movies/Secret/episode01.mp4?token=abc',
+        name: 'episode01'
+      }
+      accessor.player = player
+      accessor.currentVideoData = videoData
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      await controller.play()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.filePath).assertEqual('file://***')
+      }
+    })
+
+    it('resume 日志仅保留 SMB 协议，不暴露主机与共享路径信息', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      const videoData: VideoData = {
+        type: VideoDataType.URL,
+        videoSrc: 'smb://user:pass@192.168.1.9/media-share/Shows/episode01.mkv?token=abc',
+        name: 'episode01'
+      }
+      accessor.player = player
+      accessor.currentVideoData = videoData
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      await controller.play()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.filePath).assertEqual('smb://***')
+      }
+    })
+
+    it('onPlay 在已有恢复上下文时会记录 play_started 结果日志', 0, () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      accessor.handlePlayerPlayEvent(accessor.playbackSessionId)
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('play_started')
+      }
+    })
+
     it('play 在无播放器实例时会记录 play_no_player 结果日志', 0, async () => {
       const controller = new DiagnosticVideoPlayerController()
       const accessor = accessController(controller)
@@ -830,6 +928,32 @@ export default function videoPlayerControllerTest() {
       expect(resultLog !== null).assertTrue()
       if (resultLog !== null) {
         expect(resultLog.autoplayExecutionResult).assertEqual('play_no_player')
+      }
+    })
+
+    it('play 在底层播放器拒绝时会记录 play_failed 结果日志', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new RejectingFallbackPlayer()
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      accessor.player = player
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      await controller.play()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('play_failed')
       }
     })
 
