@@ -494,7 +494,7 @@ export default function videoPlayerControllerTest() {
       expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('prepared_resume_seek')
     })
 
-    it('fallback capture 在 task 2.1 前仍沿用 seek in-flight 的瞬时状态', 0, async () => {
+    it('fallback capture 会在 seekDone 到 onPlay 窗口内保留显式自动播放决策', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
       const player = new MockFallbackPlayer()
@@ -505,10 +505,11 @@ export default function videoPlayerControllerTest() {
       accessor.isSeeking = false
 
       await controller.seek(3200, 'prepared_resume_seek')
-      expect(accessor.isSeeking).assertTrue()
+      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
+      accessor.isSeeking = false
       accessor.capturePendingResumeForFallback('test_fallback')
 
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('transient_player_state')
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
       expect(accessor.pendingBackendResumePlay).assertTrue()
     })
 

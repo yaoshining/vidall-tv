@@ -2309,8 +2309,12 @@ export class VideoPlayerController {
     const playerPosition = this.player?.currentTime ?? 0;
     const controllerPosition = this.currentTime > 0 ? this.currentTime : 0;
     const latestPosition = playerPosition > controllerPosition ? playerPosition : controllerPosition;
-    this.savePendingResumeState(latestPosition, this.isPlaying || this.isSeeking,
-      'transient_player_state', source, this.backend);
+    const autoplayDecision = this.resolvePendingResumeAutoplayDecision(
+      this.isPlaying || this.isSeeking,
+      'transient_player_state'
+    );
+    this.savePendingResumeState(latestPosition, autoplayDecision.shouldResumePlay,
+      autoplayDecision.source, source, this.backend);
   }
 
   private logFallbackEvent(
