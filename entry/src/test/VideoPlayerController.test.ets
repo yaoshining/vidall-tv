@@ -181,6 +181,18 @@ class RejectingFallbackPlayer extends MockFallbackPlayer {
   }
 }
 
+class PlayEventFallbackPlayer extends MockFallbackPlayer {
+  private playCallback?: () => void
+
+  onPlay(callback: () => void): void {
+    this.playCallback = callback
+  }
+
+  triggerPlayEvent(): void {
+    this.playCallback?.()
+  }
+}
+
 class RecordingSubtitleAdapter implements ISubtitleBridgeAdapter {
   private readonly events: string[]
   private state: SubtitleBridgeState
@@ -883,9 +895,10 @@ export default function videoPlayerControllerTest() {
       }
     })
 
-    it('onPlay 在已有恢复上下文时会记录 play_started 结果日志', 0, () => {
+    it('play -> onPlay 在已有恢复上下文时会记录 play_started 结果日志', 0, async () => {
       const controller = new DiagnosticVideoPlayerController()
       const accessor = accessController(controller)
+      const player = new PlayEventFallbackPlayer()
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
         captureBackend: 'ijkplayer',
@@ -896,9 +909,20 @@ export default function videoPlayerControllerTest() {
         autoplayDecisionSource: 'prepared_resume_seek',
         autoplayDecisionOrigin: 'explicit'
       }
+      accessor.player = player
       accessor.pendingResumeAutoplayResultState = pendingResultState
+      player.onPlay(() => {
+        accessor.handlePlayerPlayEvent(accessor.playbackSessionId)
+      })
 
-      accessor.handlePlayerPlayEvent(accessor.playbackSessionId)
+      await controller.play()
+      expect(player.playCallCount).assertEqual(1)
+      const requestedLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(requestedLog !== null).assertTrue()
+      if (requestedLog !== null) {
+        expect(requestedLog.autoplayExecutionResult).assertEqual('play_requested')
+      }
+      player.triggerPlayEvent()
 
       const resultLog = findResumeLog(controller, 'resume_autoplay_result')
       expect(resultLog !== null).assertTrue()
