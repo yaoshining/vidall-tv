@@ -79,6 +79,7 @@ interface ResumeDiagnosticRecordSnapshot {
   autoplayDecisionSource: string
   autoplayDecisionOrigin: string
   autoplayExecutionResult: string
+  durationMs: number
   filePath: string
 }
 
@@ -1068,6 +1069,35 @@ export default function videoPlayerControllerTest() {
       if (resultLog !== null) {
         expect(resultLog.autoplayExecutionResult).assertEqual('play_requested')
         expect(resultLog.autoplayDecision).assertEqual('play')
+      }
+    })
+
+    it('play 在记录 play_requested 前会先刷新 duration 日志字段', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      player.duration = 654321
+      accessor.player = player
+      accessor.duration = 0
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      await controller.play()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('play_requested')
+        expect(resultLog.durationMs).assertEqual(654321)
       }
     })
 

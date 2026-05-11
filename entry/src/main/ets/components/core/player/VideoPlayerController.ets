@@ -2630,8 +2630,8 @@ export class VideoPlayerController {
     }
     try {
       await this.player.play();
-      this.recordPendingResumeAutoplayResult('play_requested', false);
       this.duration = this.player.duration;
+      this.recordPendingResumeAutoplayResult('play_requested', false);
     } catch (err) {
       const playError = err as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
