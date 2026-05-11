@@ -333,6 +333,29 @@ class InitPlayerDelayedSeekFallbackController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class ControlledResumeSeekFallbackController extends InitPlayerDelayedSeekFallbackController {
+  private pendingResumeSeekFallbackTimerId: number = 0
+  private pendingResumeSeekFallbackCallback?: () => void
+
+  protected override scheduleResumeSeekAutoplayFallbackTimeout(callback: () => void): number {
+    this.pendingResumeSeekFallbackTimerId += 1
+    this.pendingResumeSeekFallbackCallback = callback
+    return this.pendingResumeSeekFallbackTimerId
+  }
+
+  protected override clearResumeSeekAutoplayFallbackTimeout(timerId: number): void {
+    if (timerId === this.pendingResumeSeekFallbackTimerId) {
+      this.pendingResumeSeekFallbackCallback = undefined
+    }
+  }
+
+  triggerResumeSeekAutoplayFallback(): void {
+    const callback = this.pendingResumeSeekFallbackCallback
+    this.pendingResumeSeekFallbackCallback = undefined
+    callback?.()
+  }
+}
+
 class ReloadPreparedLifecycleController extends VideoPlayerController {
   preparedStateSeenInReload: boolean = false
   preparedSourceSeenInReload: string = ''
@@ -435,14 +458,6 @@ function accessController(controller: VideoPlayerController): VideoPlayerControl
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
-}
-
-async function waitFor(delayMs: number): Promise<void> {
-  await new Promise<void>((resolve: () => void): void => {
-    setTimeout(() => {
-      resolve()
-    }, delayMs)
-  })
 }
 
 function resetTrackStateForSimulatedNewSession(accessor: VideoPlayerControllerAccessor): void {
@@ -667,58 +682,62 @@ export default function videoPlayerControllerTest() {
 
     it('prepared resume seek 超时兜底会恢复一次播放且晚到 seekDone 不会重复 play', 0, async () => {
       const player = new DelayedSeekCompleteFallbackPlayer()
-      const controller = new InitPlayerDelayedSeekFallbackController(player)
+      const controller = new ControlledResumeSeekFallbackController(player)
 
       await controller.initPlayer(buildVideoDataWithPresetAudio('resume-seek-timeout-fallback'), 'surface-timeout-fallback')
       await controller.seek(245000, 'prepared_resume_seek')
 
       expect(player.seekCalls.length).assertEqual(1)
       expect(player.playCallCount).assertEqual(0)
-      await waitFor(1700)
+      controller.triggerResumeSeekAutoplayFallback()
+      await flushMicrotasks()
 
       expect(player.playCallCount).assertEqual(1)
 
       player.triggerSeekDone()
+      await flushMicrotasks()
 
       expect(player.playCallCount).assertEqual(1)
     })
 
     it('prepared resume seek 超时兜底前若发生显式 pause 不会误恢复播放', 0, async () => {
       const player = new DelayedSeekCompleteFallbackPlayer()
-      const controller = new InitPlayerDelayedSeekFallbackController(player)
+      const controller = new ControlledResumeSeekFallbackController(player)
 
       await controller.initPlayer(buildVideoDataWithPresetAudio('resume-seek-timeout-pause'), 'surface-timeout-pause')
       await controller.seek(245000, 'prepared_resume_seek')
 
-      await waitFor(200)
       await controller.pause()
-      await waitFor(1700)
+      controller.triggerResumeSeekAutoplayFallback()
+      await flushMicrotasks()
 
       expect(player.playCallCount).assertEqual(0)
     })
 
     it('prepared resume seek 显式 pause 后晚到 seekDone 主路径不会误恢复播放', 0, async () => {
       const player = new DelayedSeekCompleteFallbackPlayer()
-      const controller = new InitPlayerDelayedSeekFallbackController(player)
+      const controller = new ControlledResumeSeekFallbackController(player)
 
       await controller.initPlayer(buildVideoDataWithPresetAudio('resume-seek-late-seekdone-pause'), 'surface-late-seekdone-pause')
       await controller.seek(245000, 'prepared_resume_seek')
 
-      await waitFor(200)
       await controller.pause()
-      await waitFor(1700)
+      controller.triggerResumeSeekAutoplayFallback()
+      await flushMicrotasks()
       player.triggerSeekDone()
+      await flushMicrotasks()
 
       expect(player.playCallCount).assertEqual(0)
     })
 
     it('普通 seek 未带 autoplayDecisionSource 时超时后不会触发 fallback play', 0, async () => {
       const player = new DelayedSeekCompleteFallbackPlayer()
-      const controller = new InitPlayerDelayedSeekFallbackController(player)
+      const controller = new ControlledResumeSeekFallbackController(player)
 
       await controller.initPlayer(buildVideoDataWithPresetAudio('plain-seek-no-fallback-play'), 'surface-no-fallback-play')
       await controller.seek(245000)
-      await waitFor(1700)
+      controller.triggerResumeSeekAutoplayFallback()
+      await flushMicrotasks()
 
       expect(player.playCallCount).assertEqual(0)
     })

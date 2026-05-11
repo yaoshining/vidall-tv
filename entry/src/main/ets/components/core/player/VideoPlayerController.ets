@@ -596,9 +596,17 @@ export class VideoPlayerController {
     this.clearPendingResumeAutoplayDecision();
   }
 
+  protected scheduleResumeSeekAutoplayFallbackTimeout(callback: () => void): number {
+    return setTimeout(callback, RESUME_SEEK_AUTOPLAY_FALLBACK_MS);
+  }
+
+  protected clearResumeSeekAutoplayFallbackTimeout(timerId: number): void {
+    clearTimeout(timerId);
+  }
+
   private clearResumeSeekAutoplayFallbackState(): void {
     if (this.resumeSeekAutoplayFallbackTimer !== undefined) {
-      clearTimeout(this.resumeSeekAutoplayFallbackTimer);
+      this.clearResumeSeekAutoplayFallbackTimeout(this.resumeSeekAutoplayFallbackTimer);
       this.resumeSeekAutoplayFallbackTimer = undefined;
     }
     this.resumeSeekAutoplayFallbackSessionId = 0;
@@ -608,10 +616,10 @@ export class VideoPlayerController {
   private armResumeSeekAutoplayFallback(sessionId: number): void {
     this.clearResumeSeekAutoplayFallbackState();
     this.resumeSeekAutoplayFallbackSessionId = sessionId;
-    this.resumeSeekAutoplayFallbackTimer = setTimeout(() => {
+    this.resumeSeekAutoplayFallbackTimer = this.scheduleResumeSeekAutoplayFallbackTimeout(() => {
       this.resumeSeekAutoplayFallbackTimer = undefined;
       this.handleResumeSeekAutoplayTimeout(sessionId);
-    }, RESUME_SEEK_AUTOPLAY_FALLBACK_MS);
+    });
   }
 
   private handleResumeSeekAutoplayTimeout(sessionId: number): void {
