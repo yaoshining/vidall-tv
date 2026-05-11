@@ -50,6 +50,7 @@ interface VideoPlayerControllerAccessor {
   subtitleAdapter: ISubtitleBridgeAdapter
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
+  pendingResumeAutoplayResultState: PendingResumeAutoplayResultStateSnapshot | null
   capturePendingResumeForFallback(source: string): void
   handlePlayerPaused(): void
   continuePendingReadyAfterSeek(): Promise<void>
@@ -61,6 +62,32 @@ interface PendingResumeStateSnapshot {
   positionMs: number
   shouldResumePlay: boolean
   autoplayDecisionSource: string
+  autoplayDecisionOrigin: string
+}
+
+interface ResumeDiagnosticRecordSnapshot {
+  event: string
+  resumeSource: string
+  captureBackend: PlayerBackend
+  pendingResumeMs: number
+  effectiveResumeMs: number
+  autoResumePlay: boolean
+  autoplayDecision: string
+  queuedSeekMs: number
+  autoplayDecisionSource: string
+  autoplayDecisionOrigin: string
+  autoplayExecutionResult: string
+}
+
+interface PendingResumeAutoplayResultStateSnapshot {
+  resumeSource: string
+  captureBackend: PlayerBackend
+  pendingResumeMs: number
+  effectiveResumeMs: number
+  shouldResumePlay: boolean
+  autoplayDecision: string
+  autoplayDecisionSource: string
+  autoplayDecisionOrigin: string
 }
 
 /** 用于访问 ijkVideoRatio 字段的 accessor 接口（Task 2.1/2.2 TDD 用） */
@@ -219,6 +246,19 @@ class TestVideoPlayerController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class DiagnosticVideoPlayerController extends TestVideoPlayerController {
+  readonly resumeLogs: ResumeDiagnosticRecordSnapshot[] = []
+
+  protected override emitResumeDiagnosticRecord(recordText: string): void {
+    const logPrefix = '[resume] '
+    const payloadText = recordText.startsWith(logPrefix)
+      ? recordText.substring(logPrefix.length)
+      : recordText
+    const parsed = JSON.parse(payloadText) as ResumeDiagnosticRecordSnapshot
+    this.resumeLogs.push(parsed)
+  }
+}
+
 class ReloadPreparedLifecycleController extends VideoPlayerController {
   preparedStateSeenInReload: boolean = false
   preparedSourceSeenInReload: string = ''
@@ -314,6 +354,19 @@ function resetTrackStateForSimulatedNewSession(accessor: VideoPlayerControllerAc
   accessor.subtitleDelayMs = 0
   accessor.audioTracks = []
   accessor.activeAudioIndex = -1
+}
+
+function findResumeLog(
+  controller: DiagnosticVideoPlayerController,
+  event: string
+): ResumeDiagnosticRecordSnapshot | null {
+  for (let index = controller.resumeLogs.length - 1; index >= 0; index -= 1) {
+    const record = controller.resumeLogs[index]
+    if (record.event === event) {
+      return record
+    }
+  }
+  return null
 }
 
 export default function videoPlayerControllerTest() {
@@ -513,6 +566,25 @@ export default function videoPlayerControllerTest() {
       expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('prepared_resume_seek')
     })
 
+    it('reloadSource 自动播放会记录显式恢复决策建立日志', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.backend = 'avplayer'
+      accessor.surfaceId = 'surface-review'
+
+      const reloadTask = controller.reloadSource(buildVideoData('reload-diagnostic'), true)
+      await flushMicrotasks()
+      accessor.resolvePendingReload()
+      await reloadTask
+
+      const decisionLog = findResumeLog(controller, 'resume_decision_established')
+      expect(decisionLog !== null).assertTrue()
+      if (decisionLog !== null) {
+        expect(decisionLog.autoplayDecisionSource).assertEqual('reload_source_autoplay')
+        expect(decisionLog.autoplayDecisionOrigin).assertEqual('explicit')
+      }
+    })
+
     it('fallback capture 会在 seekDone 到 onPlay 窗口内保留显式自动播放决策', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
@@ -530,6 +602,46 @@ export default function videoPlayerControllerTest() {
 
       expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
       expect(accessor.pendingBackendResumePlay).assertTrue()
+    })
+
+    it('fallback capture 日志会区分显式恢复决策来源', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      accessor.player = player
+      accessor.currentTime = 3200
+      accessor.duration = 9000
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      await controller.seek(3200, 'prepared_resume_seek')
+      accessor.isSeeking = false
+      accessor.capturePendingResumeForFallback('test_fallback')
+
+      const captureLog = findResumeLog(controller, 'resume_pending_capture')
+      expect(captureLog !== null).assertTrue()
+      if (captureLog !== null) {
+        expect(captureLog.autoplayDecisionSource).assertEqual('prepared_resume_seek')
+        expect(captureLog.autoplayDecisionOrigin).assertEqual('explicit')
+      }
+    })
+
+    it('fallback capture 日志会标记瞬时状态兜底来源', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.currentTime = 1800
+      accessor.duration = 9000
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      accessor.capturePendingResumeForFallback('test_fallback')
+
+      const captureLog = findResumeLog(controller, 'resume_pending_capture')
+      expect(captureLog !== null).assertTrue()
+      if (captureLog !== null) {
+        expect(captureLog.autoplayDecisionSource).assertEqual('transient_player_state')
+        expect(captureLog.autoplayDecisionOrigin).assertEqual('transient')
+      }
     })
 
     it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {
@@ -609,6 +721,116 @@ export default function videoPlayerControllerTest() {
       expect(events[5]).assertEqual('player:play')
       expect(accessor.activeSubtitleIndex).assertEqual(0)
       expect(player.playCallCount).assertEqual(1)
+    })
+
+    it('fallback pending-resume 场景会记录消费与自动播放结果日志', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const events: string[] = []
+      const player = new RecordingFallbackPlayer(events)
+      const subtitleAdapter = new RecordingSubtitleAdapter(events)
+      accessor.backend = 'ijkplayer'
+      accessor.player = player
+      accessor.subtitleAdapter = subtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = player.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      const consumeLog = findResumeLog(controller, 'resume_pending_consume')
+      expect(consumeLog !== null).assertTrue()
+      if (consumeLog !== null) {
+        expect(consumeLog.autoplayDecisionSource).assertEqual('compat_override')
+      }
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('play_requested')
+      }
+    })
+
+    it('fallback pending-resume 保持暂停时会记录 paused 结果日志', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const events: string[] = []
+      const player = new RecordingFallbackPlayer(events)
+      const subtitleAdapter = new RecordingSubtitleAdapter(events)
+      accessor.backend = 'ijkplayer'
+      accessor.player = player
+      accessor.subtitleAdapter = subtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = player.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = false
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('paused')
+      }
+    })
+
+    it('play 在已有恢复上下文时会记录 play_requested 结果日志', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const player = new MockFallbackPlayer()
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      accessor.player = player
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      await controller.play()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('play_requested')
+        expect(resultLog.autoplayDecision).assertEqual('play')
+      }
+    })
+
+    it('play 在无播放器实例时会记录 play_no_player 结果日志', 0, async () => {
+      const controller = new DiagnosticVideoPlayerController()
+      const accessor = accessController(controller)
+      const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
+        resumeSource: 'seek_done_resume',
+        captureBackend: 'ijkplayer',
+        pendingResumeMs: 3200,
+        effectiveResumeMs: 3200,
+        shouldResumePlay: true,
+        autoplayDecision: 'play',
+        autoplayDecisionSource: 'prepared_resume_seek',
+        autoplayDecisionOrigin: 'explicit'
+      }
+      accessor.pendingResumeAutoplayResultState = pendingResultState
+
+      await controller.play()
+
+      const resultLog = findResumeLog(controller, 'resume_autoplay_result')
+      expect(resultLog !== null).assertTrue()
+      if (resultLog !== null) {
+        expect(resultLog.autoplayExecutionResult).assertEqual('play_no_player')
+      }
     })
 
     it('fallback pending-resume 场景重复 onPlayerReady 不会重复消费恢复逻辑', 0, async () => {
