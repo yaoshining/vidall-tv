@@ -841,6 +841,92 @@ export default function videoPlayerControllerTest() {
       }
     })
 
+    it('选集切换续播在 unsupported fallback 后会恢复位置并自动播放', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const currentPlayer = new MockFallbackPlayer()
+      currentPlayer.currentTime = 245000
+      accessor.backend = 'avplayer'
+      accessor.player = currentPlayer
+      accessor.currentTime = 245000
+      accessor.duration = 900000
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      controller.prepareResumeAutoplayDecision(true, 'episode_switch_prepared_resume')
+      await controller.seek(245000, 'prepared_resume_seek')
+      accessor.isSeeking = false
+      accessor.capturePendingResumeForFallback('avplayer_unsupported_format')
+
+      expect(accessor.pendingResumeState?.positionMs ?? 0).assertEqual(245000)
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
+      expect(accessor.pendingResumeState?.shouldResumePlay ?? false).assertTrue()
+
+      const fallbackEvents: string[] = []
+      const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
+      const fallbackSubtitleAdapter = new RecordingSubtitleAdapter(fallbackEvents)
+      accessor.backend = 'ijkplayer'
+      accessor.player = fallbackPlayer
+      accessor.subtitleAdapter = fallbackSubtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = fallbackPlayer.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      expect(fallbackPlayer.seekCalls.length).assertEqual(1)
+      expect(fallbackPlayer.seekCalls[0]).assertEqual(245000)
+      expect(fallbackPlayer.playCallCount).assertEqual(1)
+      expect(fallbackEvents.length).assertEqual(6)
+      expect(fallbackEvents[5]).assertEqual('player:play')
+    })
+
+    it('选集切换后的显式暂停决策在 unsupported fallback 后仍保持暂停', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const currentPlayer = new MockFallbackPlayer()
+      currentPlayer.currentTime = 245000
+      accessor.backend = 'avplayer'
+      accessor.player = currentPlayer
+      accessor.currentTime = 245000
+      accessor.duration = 900000
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      controller.rememberResumeAutoplayDecision(false, 'episode_switch_pause_resume')
+      accessor.capturePendingResumeForFallback('avplayer_unsupported_format')
+
+      expect(accessor.pendingResumeState?.positionMs ?? 0).assertEqual(245000)
+      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('episode_switch_pause_resume')
+      expect(accessor.pendingResumeState?.shouldResumePlay ?? true).assertFalse()
+
+      const fallbackEvents: string[] = []
+      const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
+      const fallbackSubtitleAdapter = new RecordingSubtitleAdapter(fallbackEvents)
+      accessor.backend = 'ijkplayer'
+      accessor.player = fallbackPlayer
+      accessor.subtitleAdapter = fallbackSubtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = fallbackPlayer.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      expect(fallbackPlayer.seekCalls.length).assertEqual(1)
+      expect(fallbackPlayer.seekCalls[0]).assertEqual(245000)
+      expect(fallbackPlayer.playCallCount).assertEqual(0)
+      expect(fallbackEvents.length).assertEqual(5)
+      expect(fallbackEvents[4]).assertEqual('player:selectTrack:0')
+    })
+
     it('play 在已有恢复上下文时会记录 play_requested 结果日志', 0, async () => {
       const controller = new DiagnosticVideoPlayerController()
       const accessor = accessController(controller)
