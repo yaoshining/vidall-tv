@@ -697,6 +697,21 @@ export default function videoPlayerControllerTest() {
       expect(player.playCallCount).assertEqual(0)
     })
 
+    it('prepared resume seek 显式 pause 后晚到 seekDone 主路径不会误恢复播放', 0, async () => {
+      const player = new DelayedSeekCompleteFallbackPlayer()
+      const controller = new InitPlayerDelayedSeekFallbackController(player)
+
+      await controller.initPlayer(buildVideoDataWithPresetAudio('resume-seek-late-seekdone-pause'), 'surface-late-seekdone-pause')
+      await controller.seek(245000, 'prepared_resume_seek')
+
+      await waitFor(200)
+      await controller.pause()
+      await waitFor(1700)
+      player.triggerSeekDone()
+
+      expect(player.playCallCount).assertEqual(0)
+    })
+
     it('普通 seek 未带 autoplayDecisionSource 时超时后不会触发 fallback play', 0, async () => {
       const player = new DelayedSeekCompleteFallbackPlayer()
       const controller = new InitPlayerDelayedSeekFallbackController(player)

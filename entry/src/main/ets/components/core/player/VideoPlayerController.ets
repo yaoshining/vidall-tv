@@ -2752,6 +2752,7 @@ export class VideoPlayerController {
     if (this.resumeSeekAutoplayFallbackTimer !== undefined) {
       this.clearResumeSeekAutoplayFallbackState();
       this.clearPendingResumeAutoplayDecision();
+      this.suppressPlayAfterSeekOnce = true;
     }
     await this.player?.pause().catch((err: BusinessError) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
