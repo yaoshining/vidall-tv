@@ -839,7 +839,7 @@ export class VideoPlayerController {
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
-      adapter = new AVPlayerAdapter();
+      adapter = this.createAvPlayerAdapter();
       if (smbOriginalUrl.length > 0) {
         // SMB 源：AVPlayer 通过代理 URL 播放，内嵌字幕走 AVPlayer 原生 selectTrack，
         // 外置字幕走 SmbAvSubtitleBridgeAdapter.loadExternalTracks（SMB client 读取）
@@ -1134,6 +1134,10 @@ export class VideoPlayerController {
         this.rejectPendingReload(new Error(err.message));
       }
     }
+  }
+
+  protected createAvPlayerAdapter(): IPlayer {
+    return new AVPlayerAdapter();
   }
 
   /**

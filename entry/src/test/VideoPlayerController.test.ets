@@ -13,7 +13,7 @@ import {
   SubtitleBridgeState,
   SubtitleTrackItem
 } from '../main/ets/components/core/player/SubtitleBridgeAdapter';
-import { VideoData } from '../main/ets/components/core/player/VideoData';
+import { PresetAudioTrack, VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
 
 interface VideoPlayerControllerAccessor {
@@ -281,6 +281,31 @@ class DiagnosticVideoPlayerController extends TestVideoPlayerController {
   }
 }
 
+class InitPlayerDiagnosticVideoPlayerController extends VideoPlayerController {
+  readonly resumeLogs: ResumeDiagnosticRecordSnapshot[] = []
+  private readonly injectedPlayer: PlayEventFallbackPlayer
+
+  constructor(player: PlayEventFallbackPlayer) {
+    super()
+    this.injectedPlayer = player
+  }
+
+  protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
+
+  protected override emitResumeDiagnosticRecord(recordText: string): void {
+    const logPrefix = '[resume] '
+    const payloadText = recordText.startsWith(logPrefix)
+      ? recordText.substring(logPrefix.length)
+      : recordText
+    const parsed = JSON.parse(payloadText) as ResumeDiagnosticRecordSnapshot
+    this.resumeLogs.push(parsed)
+  }
+
+  saveProgressNow(): void {}
+}
+
 class ReloadPreparedLifecycleController extends VideoPlayerController {
   preparedStateSeenInReload: boolean = false
   preparedSourceSeenInReload: string = ''
@@ -359,6 +384,18 @@ function buildVideoData(name: string): VideoData {
   }
 }
 
+function buildVideoDataWithPresetAudio(name: string): VideoData {
+  const videoData = buildVideoData(name)
+  const presetAudioTracks: PresetAudioTrack[] = [{
+    trackIndex: 0,
+    displayName: '中文 (AAC)',
+    language: 'chi',
+    mimeType: 'audio/mp4a-latm'
+  }]
+  videoData.presetAudioTracks = presetAudioTracks
+  return videoData
+}
+
 function accessController(controller: VideoPlayerController): VideoPlayerControllerAccessor {
   return controller as Object as VideoPlayerControllerAccessor
 }
@@ -379,7 +416,7 @@ function resetTrackStateForSimulatedNewSession(accessor: VideoPlayerControllerAc
 }
 
 function findResumeLog(
-  controller: DiagnosticVideoPlayerController,
+  controller: DiagnosticVideoPlayerController | InitPlayerDiagnosticVideoPlayerController,
   event: string
 ): ResumeDiagnosticRecordSnapshot | null {
   for (let index = controller.resumeLogs.length - 1; index >= 0; index -= 1) {
@@ -896,9 +933,9 @@ export default function videoPlayerControllerTest() {
     })
 
     it('play -> onPlay 在已有恢复上下文时会记录 play_started 结果日志', 0, async () => {
-      const controller = new DiagnosticVideoPlayerController()
-      const accessor = accessController(controller)
       const player = new PlayEventFallbackPlayer()
+      const controller = new InitPlayerDiagnosticVideoPlayerController(player)
+      const accessor = accessController(controller)
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
         captureBackend: 'ijkplayer',
@@ -909,11 +946,9 @@ export default function videoPlayerControllerTest() {
         autoplayDecisionSource: 'prepared_resume_seek',
         autoplayDecisionOrigin: 'explicit'
       }
-      accessor.player = player
+      await controller.initPlayer(buildVideoDataWithPresetAudio('task-3-1-play-started'), 'surface-play-started')
+      expect(accessor.player === player).assertTrue()
       accessor.pendingResumeAutoplayResultState = pendingResultState
-      player.onPlay(() => {
-        accessor.handlePlayerPlayEvent(accessor.playbackSessionId)
-      })
 
       await controller.play()
       expect(player.playCallCount).assertEqual(1)
