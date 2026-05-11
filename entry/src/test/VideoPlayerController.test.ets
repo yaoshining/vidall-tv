@@ -193,6 +193,18 @@ class PlayEventFallbackPlayer extends MockFallbackPlayer {
   }
 }
 
+class DelayedSeekCompleteFallbackPlayer extends PlayEventFallbackPlayer {
+  private seekDoneCallback?: () => void
+
+  onSeekDone(callback: () => void): void {
+    this.seekDoneCallback = callback
+  }
+
+  triggerSeekDone(): void {
+    this.seekDoneCallback?.()
+  }
+}
+
 class RecordingSubtitleAdapter implements ISubtitleBridgeAdapter {
   private readonly events: string[]
   private state: SubtitleBridgeState
@@ -306,12 +318,32 @@ class InitPlayerDiagnosticVideoPlayerController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class InitPlayerDelayedSeekFallbackController extends VideoPlayerController {
+  private readonly injectedPlayer: DelayedSeekCompleteFallbackPlayer
+
+  constructor(player: DelayedSeekCompleteFallbackPlayer) {
+    super()
+    this.injectedPlayer = player
+  }
+
+  protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
+
+  saveProgressNow(): void {}
+}
+
 class ReloadPreparedLifecycleController extends VideoPlayerController {
   preparedStateSeenInReload: boolean = false
   preparedSourceSeenInReload: string = ''
   pendingStateSeenAfterInit: boolean = false
   pendingSourceSeenAfterInit: string = ''
   playCallCount: number = 0
+  private readonly injectedPlayer: MockFallbackPlayer = new MockFallbackPlayer()
+
+  protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
 
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     const beforeAccessor = accessController(this)
@@ -403,6 +435,14 @@ function accessController(controller: VideoPlayerController): VideoPlayerControl
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+}
+
+async function waitFor(delayMs: number): Promise<void> {
+  await new Promise<void>((resolve: () => void): void => {
+    setTimeout(() => {
+      resolve()
+    }, delayMs)
+  })
 }
 
 function resetTrackStateForSimulatedNewSession(accessor: VideoPlayerControllerAccessor): void {
@@ -623,6 +663,24 @@ export default function videoPlayerControllerTest() {
       expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
       expect(accessor.pendingResumeAutoplayDecisionExplicit).assertTrue()
       expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('prepared_resume_seek')
+    })
+
+    it('prepared resume seek 超时兜底会恢复一次播放且晚到 seekDone 不会重复 play', 0, async () => {
+      const player = new DelayedSeekCompleteFallbackPlayer()
+      const controller = new InitPlayerDelayedSeekFallbackController(player)
+
+      await controller.initPlayer(buildVideoDataWithPresetAudio('resume-seek-timeout-fallback'), 'surface-timeout-fallback')
+      await controller.seek(245000, 'prepared_resume_seek')
+
+      expect(player.seekCalls.length).assertEqual(1)
+      expect(player.playCallCount).assertEqual(0)
+      await waitFor(1700)
+
+      expect(player.playCallCount).assertEqual(1)
+
+      player.triggerSeekDone()
+
+      expect(player.playCallCount).assertEqual(1)
     })
 
     it('reloadSource 自动播放会记录显式恢复决策建立日志', 0, async () => {
