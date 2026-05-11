@@ -2749,6 +2749,10 @@ export class VideoPlayerController {
   }
 
   async pause(): Promise<void> {
+    if (this.resumeSeekAutoplayFallbackTimer !== undefined) {
+      this.clearResumeSeekAutoplayFallbackState();
+      this.clearPendingResumeAutoplayDecision();
+    }
     await this.player?.pause().catch((err: BusinessError) => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `pause 失败: code=${err.code} msg=${err.message}`);

@@ -683,6 +683,31 @@ export default function videoPlayerControllerTest() {
       expect(player.playCallCount).assertEqual(1)
     })
 
+    it('prepared resume seek 超时兜底前若发生显式 pause 不会误恢复播放', 0, async () => {
+      const player = new DelayedSeekCompleteFallbackPlayer()
+      const controller = new InitPlayerDelayedSeekFallbackController(player)
+
+      await controller.initPlayer(buildVideoDataWithPresetAudio('resume-seek-timeout-pause'), 'surface-timeout-pause')
+      await controller.seek(245000, 'prepared_resume_seek')
+
+      await waitFor(200)
+      await controller.pause()
+      await waitFor(1700)
+
+      expect(player.playCallCount).assertEqual(0)
+    })
+
+    it('普通 seek 未带 autoplayDecisionSource 时超时后不会触发 fallback play', 0, async () => {
+      const player = new DelayedSeekCompleteFallbackPlayer()
+      const controller = new InitPlayerDelayedSeekFallbackController(player)
+
+      await controller.initPlayer(buildVideoDataWithPresetAudio('plain-seek-no-fallback-play'), 'surface-no-fallback-play')
+      await controller.seek(245000)
+      await waitFor(1700)
+
+      expect(player.playCallCount).assertEqual(0)
+    })
+
     it('reloadSource 自动播放会记录显式恢复决策建立日志', 0, async () => {
       const controller = new DiagnosticVideoPlayerController()
       const accessor = accessController(controller)
