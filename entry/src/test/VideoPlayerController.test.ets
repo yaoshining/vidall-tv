@@ -1,6 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
   VideoPlayerController,
+  AudioTrackItem,
   PlayerBackend,
   resolveAiEnhanceEnabledByRuntime,
   shouldShowAiEnhanceSettingsByRuntime,
@@ -37,7 +38,13 @@ interface VideoPlayerControllerAccessor {
   progress: number
   isPlaying: boolean
   isSeeking: boolean
+  subtitleTracks: TrackInfo[]
+  currentSubtitleTrack: number
+  allSubtitleTracks: SubtitleTrackItem[]
   activeSubtitleIndex: number
+  subtitleDelayMs: number
+  audioTracks: AudioTrackItem[]
+  activeAudioIndex: number
   pendingBackendResumeTimeMs: number
   pendingBackendResumePlay: boolean
   subtitleAdapter: ISubtitleBridgeAdapter
@@ -297,6 +304,16 @@ function accessController(controller: VideoPlayerController): VideoPlayerControl
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
+}
+
+function resetTrackStateForSimulatedNewSession(accessor: VideoPlayerControllerAccessor): void {
+  accessor.subtitleTracks = []
+  accessor.currentSubtitleTrack = -1
+  accessor.allSubtitleTracks = []
+  accessor.activeSubtitleIndex = -1
+  accessor.subtitleDelayMs = 0
+  accessor.audioTracks = []
+  accessor.activeAudioIndex = -1
 }
 
 export default function videoPlayerControllerTest() {
@@ -691,6 +708,9 @@ export default function videoPlayerControllerTest() {
       const secondSessionSubtitleAdapter = new RecordingSubtitleAdapter(secondSessionEvents)
       accessor.player = secondSessionPlayer
       accessor.subtitleAdapter = secondSessionSubtitleAdapter
+      // 该用例手工切换“新会话”以验证 ready token 作用域，需同步清理 initPlayer()
+      // 会重置的轨道相关状态，避免前一会话残留污染第二次 ready 验证。
+      resetTrackStateForSimulatedNewSession(accessor)
       accessor.playbackSessionId = 2
       accessor.currentTime = 0
       accessor.duration = secondSessionPlayer.duration
