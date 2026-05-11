@@ -19,6 +19,8 @@ interface VideoPlayerControllerAccessor {
   backend: PlayerBackend
   surfaceId: string
   player?: IPlayer
+  playbackSessionId: number
+  consumedReadyResumeToken: string
   pendingResumeState: PendingResumeStateSnapshot | null
   pendingResumeAutoplayDecisionExplicit: boolean
   hasPendingResumeAutoplayDecisionExplicit: boolean
@@ -657,6 +659,60 @@ export default function videoPlayerControllerTest() {
       expect(fallbackEvents[1]).assertEqual('player:seek:501626')
       expect(fallbackPlayer.seekCalls.length).assertEqual(1)
       expect(accessor.pendingBackendResumeTimeMs).assertEqual(-1)
+    })
+
+    it('同 backend 的后续新媒体会话不会被旧 ready token 阻断 pending resume', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const firstSessionEvents: string[] = []
+      const firstSessionPlayer = new RecordingFallbackPlayer(firstSessionEvents)
+      const firstSessionSubtitleAdapter = new RecordingSubtitleAdapter(firstSessionEvents)
+      accessor.backend = 'ijkplayer'
+      accessor.player = firstSessionPlayer
+      accessor.subtitleAdapter = firstSessionSubtitleAdapter
+      accessor.playbackSessionId = 1
+      accessor.currentTime = 0
+      accessor.duration = firstSessionPlayer.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      expect(accessor.consumedReadyResumeToken).assertEqual('1:ijkplayer')
+      expect(firstSessionPlayer.seekCalls.length).assertEqual(1)
+      expect(firstSessionPlayer.playCallCount).assertEqual(1)
+
+      const secondSessionEvents: string[] = []
+      const secondSessionPlayer = new RecordingFallbackPlayer(secondSessionEvents)
+      const secondSessionSubtitleAdapter = new RecordingSubtitleAdapter(secondSessionEvents)
+      accessor.player = secondSessionPlayer
+      accessor.subtitleAdapter = secondSessionSubtitleAdapter
+      accessor.playbackSessionId = 2
+      accessor.currentTime = 0
+      accessor.duration = secondSessionPlayer.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 28123
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+      await accessor.continuePendingReadyAfterSeek()
+
+      expect(accessor.consumedReadyResumeToken).assertEqual('2:ijkplayer')
+      expect(secondSessionEvents.length).assertEqual(6)
+      expect(secondSessionEvents[0]).assertEqual('subtitle:onSeekSync')
+      expect(secondSessionEvents[1]).assertEqual('player:seek:28123')
+      expect(secondSessionEvents[2]).assertEqual('subtitle:init')
+      expect(secondSessionEvents[3]).assertEqual('player:getTrackInfos')
+      expect(secondSessionEvents[4]).assertEqual('player:selectTrack:0')
+      expect(secondSessionEvents[5]).assertEqual('player:play')
+      expect(secondSessionPlayer.seekCalls.length).assertEqual(1)
+      expect(secondSessionPlayer.playCallCount).assertEqual(1)
     })
 
   })
