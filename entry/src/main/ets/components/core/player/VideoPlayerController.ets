@@ -319,6 +319,8 @@ export class VideoPlayerController {
   private lastSeekDurationUnknownLogMs: number = 0;
   /** prepare 成功标志：首次 onPlayerReady 后置 true，每次 initPlayer 重置 */
   private hasPrepared: boolean = false;
+  /** 已完成 ready 恢复消费的会话+后端标识，避免同一后端重复 ready 再次消费 pending resume */
+  private consumedReadyResumeToken: string = '';
   /** native seek 诊断开关（默认关闭） */
   private nativeSeekDiagLogEnabled: boolean = DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED;
   /** native 初始化就绪保护定时器：超时后自动回退到 ijkplayer */
@@ -2138,6 +2140,13 @@ export class VideoPlayerController {
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
     const readySessionId = this.playbackSessionId;
+    const readyResumeToken = `${readySessionId}:${this.backend}`;
+    if (this.consumedReadyResumeToken === readyResumeToken) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `忽略重复 onPlayerReady: session=${readySessionId} backend=${this.backend}`);
+      return;
+    }
+    this.consumedReadyResumeToken = readyResumeToken;
     this.clearNativeReadyGuardTimer();
     this.hasPrepared = true;
     const playerDuration = this.player?.duration ?? 0;

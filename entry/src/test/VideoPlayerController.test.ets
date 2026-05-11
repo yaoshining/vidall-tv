@@ -592,5 +592,72 @@ export default function videoPlayerControllerTest() {
       expect(player.playCallCount).assertEqual(1)
     })
 
+    it('fallback pending-resume 场景重复 onPlayerReady 不会重复消费恢复逻辑', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const events: string[] = []
+      const player = new RecordingFallbackPlayer(events)
+      const subtitleAdapter = new RecordingSubtitleAdapter(events)
+      accessor.backend = 'ijkplayer'
+      accessor.player = player
+      accessor.subtitleAdapter = subtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = player.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+      await accessor.onPlayerReady()
+
+      expect(events.length).assertEqual(2)
+      expect(events[0]).assertEqual('subtitle:onSeekSync')
+      expect(events[1]).assertEqual('player:seek:501626')
+      expect(player.seekCalls.length).assertEqual(1)
+      expect(player.playCallCount).assertEqual(0)
+    })
+
+    it('fallback 切换后新后端首次 onPlayerReady 仍会消费 pending resume', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      const initialEvents: string[] = []
+      const initialPlayer = new RecordingFallbackPlayer(initialEvents)
+      const initialSubtitleAdapter = new RecordingSubtitleAdapter(initialEvents)
+      accessor.backend = 'avplayer'
+      accessor.player = initialPlayer
+      accessor.subtitleAdapter = initialSubtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = initialPlayer.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+
+      await accessor.onPlayerReady()
+
+      const fallbackEvents: string[] = []
+      const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
+      const fallbackSubtitleAdapter = new RecordingSubtitleAdapter(fallbackEvents)
+      accessor.backend = 'ijkplayer'
+      accessor.player = fallbackPlayer
+      accessor.subtitleAdapter = fallbackSubtitleAdapter
+      accessor.currentTime = 0
+      accessor.duration = fallbackPlayer.duration
+      accessor.progress = 0
+      accessor.isPlaying = false
+      accessor.isSeeking = false
+      accessor.pendingBackendResumeTimeMs = 501626
+      accessor.pendingBackendResumePlay = true
+
+      await accessor.onPlayerReady()
+
+      expect(fallbackEvents.length).assertEqual(2)
+      expect(fallbackEvents[0]).assertEqual('subtitle:onSeekSync')
+      expect(fallbackEvents[1]).assertEqual('player:seek:501626')
+      expect(fallbackPlayer.seekCalls.length).assertEqual(1)
+      expect(accessor.pendingBackendResumeTimeMs).assertEqual(-1)
+    })
+
   })
 }

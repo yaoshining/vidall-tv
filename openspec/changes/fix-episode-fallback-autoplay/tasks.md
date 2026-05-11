@@ -6,7 +6,7 @@
 ## 2. Fallback 透传与消费
 
 - [x] 2.1 修改 AVPlayer unsupported fallback 捕获逻辑，确保在 `seekDone -> play()` 窗口内仍能保留自动播放意图
-- [ ] 2.2 调整 fallback 后新后端 ready 的恢复逻辑，保证位置与自动播放语义只消费一次且不会污染后续媒体会话
+- [x] 2.2 调整 fallback 后新后端 ready 的恢复逻辑，保证位置与自动播放语义只消费一次且不会污染后续媒体会话
 
 ## 3. 诊断与验证
 
