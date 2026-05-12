@@ -21,6 +21,12 @@ export interface PresetAudioTrack {
    * 用于同声道数下的高质量轨道优先选择（高码率优先）。
    */
   bitrate?: number;
+  /**
+   * 编解码器名称，由调用方按 ffprobe 结果注入，如 "aac"、"eac3"、"ac3"。
+   * 用于 codec-aware 音轨候选选择器，避免偏好恢复时命中 AVPlayer 不支持的 codec。
+   * 缺失时按未知 codec 处理，不视为可播放证明。
+   */
+  codecName?: string;
 }
 
 /**
