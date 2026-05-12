@@ -185,6 +185,8 @@ export class FileSourceDatabase {
 
       // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用）
       await this.backfillOriginCountryFromRawJson();
+      // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件）
+      this.backfillPinyinFields(this.rdbStore!).catch(() => {});
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
     } catch (error) {
@@ -669,10 +671,8 @@ export class FileSourceDatabase {
             console.warn(`[DB] v11 ALTER ${tbl} title_initials: 列已存在，已忽略`);
           }
         }
-        // 回填：读取全表 title，计算并批量写入
-        await this.backfillPinyinFields(rdbStore);
         currentVersion = 11;
-        console.info('[DB] 已迁移到 v11：新增拼音字段并回填存量数据');
+        console.info('[DB] 已迁移到 v11：新增拼音字段（回填将在后台异步执行）');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -3714,14 +3714,16 @@ export class FileSourceDatabase {
       if (kw.length > 0) {
         const kwLike: string = `%${kw}%`;
         const kwLower: string = kw.toLowerCase();
-        const kwLikeLower: string = `%${kwLower}%`;
+        // 拼音前缀匹配：转义 LIKE 通配符，避免 %/_ 被误当通配符；使用 ESCAPE '\'
+        const kwLowerEscape: string = kwLower.replace(/%/g, '\\%').replace(/_/g, '\\_');
+        const kwLowerEscapePrefix: string = `${kwLowerEscape}%`;
         conditions.push(
           '(m.title LIKE ? OR m.original_title LIKE ? OR ts.title LIKE ? OR ts.original_title LIKE ?' +
-          ' OR m.title_pinyin LIKE ? OR m.title_initials LIKE ?' +
-          ' OR ts.title_pinyin LIKE ? OR ts.title_initials LIKE ?)'
+          " OR m.title_pinyin LIKE ? ESCAPE '\\' OR m.title_initials LIKE ? ESCAPE '\\'" +
+          " OR ts.title_pinyin LIKE ? ESCAPE '\\' OR ts.title_initials LIKE ? ESCAPE '\\')"
         );
         params.push(kwLike, kwLike, kwLike, kwLike);
-        params.push(kwLikeLower, kwLikeLower, kwLikeLower, kwLikeLower);
+        params.push(kwLowerEscapePrefix, kwLowerEscapePrefix, kwLowerEscapePrefix, kwLowerEscapePrefix);
       }
 
       // ── mediaType 过滤（'all' 时不加条件） ──
@@ -3821,7 +3823,8 @@ export class FileSourceDatabase {
         orderClause = ' ORDER BY COALESCE(m.title, ts.title) ASC';
       } else if (kw.length > 0) {
         // keyword 搜索时：相关度分层排序，次级按评分降序
-        // 单引号转义防止 SQL 注入；LIKE 通配符转义防止 %/_ 被误当通配符
+        // SQLite ORDER BY CASE WHEN 不支持 ? 参数化绑定（relationalStore API 限制）；
+        // 已通过三重转义保证安全：单引号转义（''）+ LIKE 通配符转义（\%/\_）+ ESCAPE '\\'
         const kwEscape: string = kw.replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
         const kwLowerEscape: string = kw.toLowerCase().replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
         orderClause =
@@ -4178,25 +4181,41 @@ export class FileSourceDatabase {
   private async backfillPinyinFields(rdbStore: relationalStore.RdbStore): Promise<void> {
     const tables: string[] = ['movies', 'tv_series'];
     for (const tbl of tables) {
+      // ── 第一步：先将全量行读入内存，关闭 ResultSet ──
+      // 避免在游标未关闭时对同一表执行 UPDATE，防止游标失效/锁冲突
+      interface PinyinRow { id: number; title: string }
+      const rows: PinyinRow[] = [];
       let rs: relationalStore.ResultSet | null = null;
       try {
         rs = await rdbStore.querySql(`SELECT id, title FROM ${tbl} WHERE title IS NOT NULL`);
         while (rs.goToNextRow()) {
-          const id = rs.getLong(rs.getColumnIndex('id'));
-          const title = rs.getString(rs.getColumnIndex('title'));
-          const full = toPinyinFull(title);
-          const initials = toPinyinInitials(title);
+          const row: PinyinRow = {
+            id: rs.getLong(rs.getColumnIndex('id')),
+            title: rs.getString(rs.getColumnIndex('title'))
+          };
+          rows.push(row);
+        }
+      } catch (e) {
+        const msg: string = (e instanceof Error) ? e.message : String(e);
+        console.warn(`[DB] v11 读取 ${tbl} 拼音回填数据失败: ${msg}`);
+      } finally {
+        try { rs?.close(); } catch { }
+      }
+
+      // ── 第二步：ResultSet 已关闭，再批量 UPDATE ──
+      try {
+        for (const row of rows) {
+          const full = toPinyinFull(row.title);
+          const initials = toPinyinInitials(row.title);
           await rdbStore.executeSql(
             `UPDATE ${tbl} SET title_pinyin = ?, title_initials = ? WHERE id = ?`,
-            [full, initials, id]
+            [full, initials, row.id]
           );
         }
-        console.info(`[DB] v11 回填 ${tbl} 拼音字段完成`);
+        console.info(`[DB] v11 回填 ${tbl} 拼音字段完成，共 ${rows.length} 条`);
       } catch (e) {
         const msg: string = (e instanceof Error) ? e.message : String(e);
         console.warn(`[DB] v11 回填 ${tbl} 失败: ${msg}`);
-      } finally {
-        try { rs?.close(); } catch { }
       }
     }
   }
