@@ -434,7 +434,7 @@ export struct PlayerPage {
         resumePositionMs: directResumeAction.positionMs ?? 0
       });
       if (directResumeAction.action === 'seek' && directResumeAction.positionMs !== undefined && directResumeAction.positionMs > 0) {
-        this.videoPlayerController.seek(directResumeAction.positionMs).catch(() => {});
+        this.videoPlayerController.seek(directResumeAction.positionMs, 'prepared_resume_seek').catch(() => {});
         return;
       }
       MediaProgressStore.get(mediaKey).then((saved) => {
@@ -457,12 +457,13 @@ export struct PlayerPage {
           resumePositionMs
         });
         if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
-          this.videoPlayerController.seek(resumeAction.positionMs).catch(() => {});
+          this.videoPlayerController.seek(resumeAction.positionMs, 'prepared_resume_seek').catch(() => {});
           return;
         }
         if (resumeAction.action === 'clear_and_play') {
           MediaProgressStore.clear(mediaKey).catch(() => {});
         }
+        this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
         this.videoPlayerController.play().catch(() => {});
       }).catch(() => {
         this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
@@ -471,6 +472,7 @@ export struct PlayerPage {
         this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
           resumeAction: 'play'
         });
+        this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
         this.videoPlayerController.play().catch(() => {});
       });
       return;
@@ -478,6 +480,7 @@ export struct PlayerPage {
     this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
       resumeAction: 'play'
     });
+    this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
     this.videoPlayerController.play().catch(() => {});
   }
 
@@ -551,6 +554,7 @@ export struct PlayerPage {
     this.emitResumeDiagnosticLog('page_param_received', pageParam);
     this.pageParamToken += 1;
     const token = this.pageParamToken;
+    this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     if (pageParam.preferredBackend) {
       this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
         ? 'ijkplayer'
@@ -567,6 +571,9 @@ export struct PlayerPage {
     this.currentMediaKey = pageParam.mediaKey ?? '';
     this.currentMediaSeason = pageParam.seasonNumber ?? 0;
     this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
+    if (this.currentMediaKey.length > 0) {
+      this.videoPlayerController.prepareResumeAutoplayDecision(true, 'page_param_prepared_resume');
+    }
     this.showResumeDialog = false;
     this.pendingSeekMs = -1;
     this.hideEpisodeAutoplayOverlay();
@@ -727,6 +734,7 @@ export struct PlayerPage {
     const previousProgressContext = this.videoPlayerController.progressContext;
     const previousPageParamToken = this.pageParamToken;
     this.pageParamToken += 1;
+    this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     let keepNextPageParamToken = false;
     try {
       let nextParam: PlayerPageParam | null = null;
@@ -752,6 +760,7 @@ export struct PlayerPage {
       if (nextVideoData === undefined) {
         return false;
       }
+      this.videoPlayerController.prepareResumeAutoplayDecision(true, 'episode_switch_prepared_resume');
       this.persistCurrentPlaybackState();
       this.videoPlayerController.progressContext = nextParam.videoId !== undefined && nextParam.videoId > 0
         ? this.buildProgressContext(nextParam)
@@ -777,6 +786,7 @@ export struct PlayerPage {
       this.resumePlaybackForParam(nextParam);
       return true;
     } catch {
+      this.videoPlayerController.discardPreparedResumeAutoplayDecision();
       this.videoPlayerController.progressContext = previousProgressContext;
       return false;
     } finally {
@@ -930,7 +940,7 @@ export struct PlayerPage {
               .padding({ left: 24, right: 24, top: 10, bottom: 10 })
               .onClick(() => {
                 this.showResumeDialog = false;
-                this.videoPlayerController.seek(this.pendingSeekMs);
+                this.videoPlayerController.seek(this.pendingSeekMs, 'resume_dialog_seek');
               })
           }
           .justifyContent(FlexAlign.Center)
