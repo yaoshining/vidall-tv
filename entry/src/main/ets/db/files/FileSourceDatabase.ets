@@ -3821,15 +3821,16 @@ export class FileSourceDatabase {
         orderClause = ' ORDER BY COALESCE(m.title, ts.title) ASC';
       } else if (kw.length > 0) {
         // keyword 搜索时：相关度分层排序，次级按评分降序
-        const kwEscape: string = kw.replace(/'/g, "''");
-        const kwLowerEscape: string = kw.toLowerCase().replace(/'/g, "''");
+        // 单引号转义防止 SQL 注入；LIKE 通配符转义防止 %/_ 被误当通配符
+        const kwEscape: string = kw.replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
+        const kwLowerEscape: string = kw.toLowerCase().replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
         orderClause =
           ` ORDER BY CASE` +
           ` WHEN COALESCE(m.title, ts.title) = '${kwEscape}' THEN 0` +
-          ` WHEN COALESCE(m.title, ts.title) LIKE '${kwEscape}%' THEN 1` +
-          ` WHEN COALESCE(m.title, ts.title) LIKE '%${kwEscape}%' THEN 2` +
-          ` WHEN COALESCE(m.title_pinyin, ts.title_pinyin) LIKE '${kwLowerEscape}%' THEN 3` +
-          ` WHEN COALESCE(m.title_initials, ts.title_initials) LIKE '${kwLowerEscape}%' THEN 4` +
+          ` WHEN COALESCE(m.title, ts.title) LIKE '${kwEscape}%' ESCAPE '\\' THEN 1` +
+          ` WHEN COALESCE(m.title, ts.title) LIKE '%${kwEscape}%' ESCAPE '\\' THEN 2` +
+          ` WHEN COALESCE(m.title_pinyin, ts.title_pinyin) LIKE '${kwLowerEscape}%' ESCAPE '\\' THEN 3` +
+          ` WHEN COALESCE(m.title_initials, ts.title_initials) LIKE '${kwLowerEscape}%' ESCAPE '\\' THEN 4` +
           ` ELSE 5 END ASC,` +
           ` COALESCE(m.rating, ts.rating) DESC`;
       } else {
@@ -4192,8 +4193,8 @@ export class FileSourceDatabase {
         }
         console.info(`[DB] v11 回填 ${tbl} 拼音字段完成`);
       } catch (e) {
-        const err = e as BusinessError;
-        console.warn(`[DB] v11 回填 ${tbl} 失败: ${err.message}`);
+        const msg: string = (e instanceof Error) ? e.message : String(e);
+        console.warn(`[DB] v11 回填 ${tbl} 失败: ${msg}`);
       } finally {
         try { rs?.close(); } catch { }
       }
