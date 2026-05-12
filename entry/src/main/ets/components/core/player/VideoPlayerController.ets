@@ -2233,9 +2233,14 @@ export class VideoPlayerController {
    * 判断指定音轨是否可播放（AVPlayer 可解码）。
    * 优先使用 codecName 字段；缺失时降级到 mimeType；两者均缺失时视为可播放（保持既有行为）。
    * codecName 或 mimeType 缺失 / 未知时，不视为可播放的额外证明，但也不阻止选择。
+   *
+   * mimeType 归一化：去掉 "audio/" 前缀并移除短横线，使 "audio/ac-3" → "ac3"、
+   * "audio/e-ac-3" → "eac3"，与 isLikelySystemHardDecodeSupported 的关键字列表对齐。
    */
   private isAudioTrackPlayable(track: AudioTrackItem): boolean {
-    const codec = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
+    const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
+    // 归一化：去掉 "audio/" 前缀，移除短横线，使 "audio/ac-3" 匹配黑名单关键字 "ac3"
+    const codec = raw.replace('audio/', '').split('-').join('');
     return this.isLikelySystemHardDecodeSupported(codec);
   }
 

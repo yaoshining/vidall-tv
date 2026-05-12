@@ -1444,5 +1444,22 @@ export default function videoPlayerControllerTest() {
       expect(result).assertEqual(0)
     })
 
+    it('4.5 mimeType=audio/ac-3 路径：无 codecName 时通过归一化 mimeType 判定为不可播放并降级', 0, () => {
+      // 验证 getTrackInfos() 路径下 mimeType="audio/ac-3"（含短横线）能被正确识别为不可播放
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const ac3Track: AudioTrackItem = {
+        trackIndex: 0, displayName: 'AC-3', language: 'chi', mimeType: 'audio/ac-3'
+        // codecName 故意不设置，模拟 getTrackInfos() 只有 mimeType 的情况
+      }
+      const aacTrack: AudioTrackItem = {
+        trackIndex: 1, displayName: 'AAC', language: 'chi', codecName: 'aac'
+      }
+      accessor.audioTracks = [ac3Track, aacTrack]
+      const result = accessor.findInitialAudioTrackIndex()
+      // audio/ac-3 归一化后为 "ac3"，命中黑名单，应降级到 index=1 的 AAC 轨
+      expect(result).assertEqual(1)
+    })
+
   })
 }
