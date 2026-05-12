@@ -58,6 +58,8 @@ interface VideoPlayerControllerAccessor {
   continuePendingReadyAfterSeek(): Promise<void>
   onPlayerReady(): Promise<void>
   resolvePendingReload(): void
+  findInitialAudioTrackIndex(): number
+  isAudioTrackPlayable(track: AudioTrackItem): boolean
 }
 
 interface PendingResumeStateSnapshot {
@@ -1371,6 +1373,75 @@ export default function videoPlayerControllerTest() {
       expect(secondSessionEvents[5]).assertEqual('player:play')
       expect(secondSessionPlayer.seekCalls.length).assertEqual(1)
       expect(secondSessionPlayer.playCallCount).assertEqual(1)
+    })
+
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // codec-aware 音轨候选选择器（#214 修复）
+  // ─────────────────────────────────────────────────────────────────────────
+  describe('findInitialAudioTrackIndex - codec-aware 音轨选择', () => {
+
+    it('4.1 可播偏好命中：偏好轨 codec 可播放时直接返回 0', 0, () => {
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const aacTrack: AudioTrackItem = {
+        trackIndex: 0, displayName: '中文 (AAC)', language: 'chi', codecName: 'aac'
+      }
+      const eac3Track: AudioTrackItem = {
+        trackIndex: 1, displayName: '日语 (E-AC-3)', language: 'jpn', codecName: 'eac3'
+      }
+      accessor.audioTracks = [aacTrack, eac3Track]
+      const result = accessor.findInitialAudioTrackIndex()
+      expect(result).assertEqual(0)
+    })
+
+    it('4.2 同语言可播放降级：偏好轨 eac3 不可播，同语言 aac 轨优先', 0, () => {
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const eac3Chi: AudioTrackItem = {
+        trackIndex: 0, displayName: '中文 (E-AC-3)', language: 'chi', codecName: 'eac3'
+      }
+      const aacChi: AudioTrackItem = {
+        trackIndex: 1, displayName: '中文 (AAC)', language: 'chi', codecName: 'aac'
+      }
+      const aacEng: AudioTrackItem = {
+        trackIndex: 2, displayName: '英语 (AAC)', language: 'eng', codecName: 'aac'
+      }
+      accessor.audioTracks = [eac3Chi, aacChi, aacEng]
+      const result = accessor.findInitialAudioTrackIndex()
+      expect(result).assertEqual(1)
+    })
+
+    it('4.3 任意可播放降级：偏好轨 eac3 不可播、无同语言候选时选择第一个可播放轨', 0, () => {
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const eac3Chi: AudioTrackItem = {
+        trackIndex: 0, displayName: '中文 (E-AC-3)', language: 'chi', codecName: 'eac3'
+      }
+      const eac3Jpn: AudioTrackItem = {
+        trackIndex: 1, displayName: '日语 (E-AC-3)', language: 'jpn', codecName: 'eac3'
+      }
+      const aacEng: AudioTrackItem = {
+        trackIndex: 2, displayName: '英语 (AAC)', language: 'eng', codecName: 'aac'
+      }
+      accessor.audioTracks = [eac3Chi, eac3Jpn, aacEng]
+      const result = accessor.findInitialAudioTrackIndex()
+      expect(result).assertEqual(2)
+    })
+
+    it('4.4 全部不可播放：所有轨道 codec 不支持时返回 0，沿用现有降级策略', 0, () => {
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const eac3Chi: AudioTrackItem = {
+        trackIndex: 0, displayName: '中文 (E-AC-3)', language: 'chi', codecName: 'eac3'
+      }
+      const ac3Eng: AudioTrackItem = {
+        trackIndex: 1, displayName: '英语 (AC-3)', language: 'eng', codecName: 'ac3'
+      }
+      accessor.audioTracks = [eac3Chi, ac3Eng]
+      const result = accessor.findInitialAudioTrackIndex()
+      expect(result).assertEqual(0)
     })
 
   })

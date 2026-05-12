@@ -854,8 +854,10 @@ export class FfprobeUtil {
         trackIndex: t.index,
         displayName: FfprobeUtil.buildAudioTrackDisplayName(t, i),
         language: t.language,
-        // codecName 是解码器名，不是 MIME type，下游用 codecName 匹配即可
-        mimeType: undefined
+        mimeType: undefined,
+        codecName: t.codecName,
+        channels: t.channels,
+        bitrate: t.bitrate
       };
       result.push(item);
     }

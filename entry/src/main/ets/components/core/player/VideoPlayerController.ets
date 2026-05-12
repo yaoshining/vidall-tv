@@ -217,6 +217,8 @@ export interface AudioTrackItem {
   language?: string;
   /** MIME 类型 */
   mimeType?: string;
+  /** 编解码器名称，如 "aac"、"eac3"、"ac3"，供 codec-aware 选轨使用 */
+  codecName?: string;
 }
 
 export type UnsupportedFormatFallback = 'ijkplayer' | 'native';
@@ -852,7 +854,8 @@ export class VideoPlayerController {
           trackIndex: p.trackIndex,
           displayName: p.displayName,
           language: p.language,
-          mimeType: p.mimeType
+          mimeType: p.mimeType,
+          codecName: p.codecName
         };
         tracks.push(item);
       }
@@ -2226,6 +2229,76 @@ export class VideoPlayerController {
     return true;
   }
 
+  /**
+   * 判断指定音轨是否可播放（AVPlayer 可解码）。
+   * 优先使用 codecName 字段；缺失时降级到 mimeType；两者均缺失时视为可播放（保持既有行为）。
+   * codecName 或 mimeType 缺失 / 未知时，不视为可播放的额外证明，但也不阻止选择。
+   */
+  private isAudioTrackPlayable(track: AudioTrackItem): boolean {
+    const codec = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
+    return this.isLikelySystemHardDecodeSupported(codec);
+  }
+
+  /**
+   * codec-aware 初始音轨候选选择器。
+   *
+   * 选择策略（优先级从高到低）：
+   * 1. 偏好轨（audioTracks[0]）可播放 → 直接使用
+   * 2. 偏好轨不可播放，存在同语言可播放轨 → 同语言降级
+   * 3. 无同语言候选，存在任意可播放轨 → 任意可播放降级
+   * 4. 全部不可播放 → 返回 0，沿用现有失败/fallback 策略
+   *
+   * @returns 应传给 switchAudioTrack 的轨道在 audioTracks 数组中的索引
+   */
+  private findInitialAudioTrackIndex(): number {
+    if (this.audioTracks.length === 0) {
+      return 0;
+    }
+
+    const preferred = this.audioTracks[0];
+    const preferredCodec = ((preferred.codecName ?? preferred.mimeType) ?? '');
+
+    // 1. 偏好轨可播放：直接选
+    if (this.isAudioTrackPlayable(preferred)) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[findInitialAudioTrackIndex] 偏好轨可播放，直接选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
+      return 0;
+    }
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[findInitialAudioTrackIndex] 偏好轨不可播放: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}，尝试降级`);
+
+    // 2. 同语言可播放降级
+    const preferredLang = preferred.language ?? '';
+    if (preferredLang.length > 0) {
+      for (let i = 1; i < this.audioTracks.length; i++) {
+        const t = this.audioTracks[i];
+        if (t.language === preferredLang && this.isAudioTrackPlayable(t)) {
+          const tCodec = ((t.codecName ?? t.mimeType) ?? '');
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[findInitialAudioTrackIndex] 同语言降级: index=${i} lang=${preferredLang} codec=${tCodec || 'unknown'}`);
+          return i;
+        }
+      }
+    }
+
+    // 3. 任意可播放轨降级
+    for (let i = 1; i < this.audioTracks.length; i++) {
+      const t = this.audioTracks[i];
+      if (this.isAudioTrackPlayable(t)) {
+        const tCodec = ((t.codecName ?? t.mimeType) ?? '');
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[findInitialAudioTrackIndex] 任意可播放降级: index=${i} lang=${t.language ?? 'unknown'} codec=${tCodec || 'unknown'}`);
+        return i;
+      }
+    }
+
+    // 4. 全部不可播放：返回 0，沿用现有失败/fallback 策略
+    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+      `[findInitialAudioTrackIndex] 全部音轨不可播放（共 ${this.audioTracks.length} 条），返回 0 沿用现有降级策略`);
+    return 0;
+  }
+
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
   private async onPlayerReady(): Promise<void> {
     const readySessionId = this.playbackSessionId;
@@ -3065,7 +3138,7 @@ export class VideoPlayerController {
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
         } else {
-          await this.switchAudioTrack(0);
+          await this.switchAudioTrack(this.findInitialAudioTrackIndex());
         }
         return;
       }
@@ -3097,7 +3170,7 @@ export class VideoPlayerController {
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
         } else {
-          await this.switchAudioTrack(0);
+          await this.switchAudioTrack(this.findInitialAudioTrackIndex());
         }
       }
     } catch (e) {
