@@ -5,7 +5,8 @@
     "@ibestservices/ibest-ui": "2.1.4",
     "lucide": "^1.1.0",
     "@hadss/state_store": "^1.0.0",
-    "@yaoshining/ijkplayer": "file:./package/ijkplayer.har"
+    "@yaoshining/ijkplayer": "file:./package/ijkplayer.har",
+    "pinyin-pro": "3.18.3"
   },
   "devDependencies": {
     "@ohos/hypium": "1.0.25",
