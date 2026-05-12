@@ -7,6 +7,7 @@ import {
   SearchHistoryEntry
 } from '../models/MediaEntity';
 import { CryptoUtil } from '../../utils/CryptoUtil';
+import { toPinyinFull, toPinyinInitials } from '../../utils/PinyinUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { countSeriesEpisodeRows } from './SeriesGroupCountUtil';
@@ -52,12 +53,12 @@ export interface SearchMediaOptions {
 }
 
 /**
- * 文件源数据库管理类 — DB v10
+ * 文件源数据库管理类 — DB v11
  * 表结构：file_sources, file_source_directories, videos, scrape_info,
  *         movies, tv_series, tv_seasons, tv_episodes, play_progress, media_progress
  */
 export class FileSourceDatabase {
-  private static readonly DB_VERSION = 10;
+  private static readonly DB_VERSION = 11;
   private static readonly DEFAULT_DB_NAME = 'FILE_SOURCES_DB';
   private static readonly TABLE_FILE_SOURCES = 'file_sources';
   private static readonly TABLE_DIRECTORIES = 'file_source_directories';
@@ -184,6 +185,8 @@ export class FileSourceDatabase {
 
       // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用）
       await this.backfillOriginCountryFromRawJson();
+      // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件）
+      this.backfillPinyinFields(this.rdbStore!).catch(() => {});
       emitter.emit(FileSourceDatabase.DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
     } catch (error) {
@@ -429,6 +432,8 @@ export class FileSourceDatabase {
         origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
+        title_pinyin TEXT,
+        title_initials TEXT,
         UNIQUE(provider, provider_id)
       )
     `);
@@ -457,6 +462,8 @@ export class FileSourceDatabase {
         origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
+        title_pinyin TEXT,
+        title_initials TEXT,
         UNIQUE(provider, provider_id)
       )
     `);
@@ -648,6 +655,24 @@ export class FileSourceDatabase {
         );
         currentVersion = 10;
         console.info('[DB] 已迁移到 v10：media_progress 新增 is_watched 完播标记列，并回填历史完播数据');
+      }
+      if (currentVersion < 11) {
+        // v11：movies / tv_series 新增 title_pinyin / title_initials 拼音字段
+        const tables: string[] = ['movies', 'tv_series'];
+        for (const tbl of tables) {
+          try {
+            await rdbStore.executeSql(`ALTER TABLE ${tbl} ADD COLUMN title_pinyin TEXT`);
+          } catch (e) {
+            console.warn(`[DB] v11 ALTER ${tbl} title_pinyin: 列已存在，已忽略`);
+          }
+          try {
+            await rdbStore.executeSql(`ALTER TABLE ${tbl} ADD COLUMN title_initials TEXT`);
+          } catch (e) {
+            console.warn(`[DB] v11 ALTER ${tbl} title_initials: 列已存在，已忽略`);
+          }
+        }
+        currentVersion = 11;
+        console.info('[DB] 已迁移到 v11：新增拼音字段（回填将在后台异步执行）');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -1411,7 +1436,9 @@ export class FileSourceDatabase {
         cast_json: e.castJson ?? null, directors_json: e.directorsJson ?? null,
         runtime: e.runtime ?? null, original_language: e.originalLanguage ?? null,
         origin_country_json: e.originCountryJson ?? null,
-        raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt
+        raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt,
+        title_pinyin: toPinyinFull(e.title),
+        title_initials: toPinyinInitials(e.title)
       };
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_MOVIES);
       pred.equalTo('id', existing.id);
@@ -1493,6 +1520,10 @@ export class FileSourceDatabase {
       columns.push('raw_json');
       args.push(e.rawJson);
     }
+    columns.push('title_pinyin');
+    args.push(toPinyinFull(e.title));
+    columns.push('title_initials');
+    args.push(toPinyinInitials(e.title));
     const placeholders = columns.map(() => '?').join(', ');
     const sql = `INSERT INTO ${FileSourceDatabase.TABLE_MOVIES} (${columns.join(', ')}) VALUES (${placeholders})`;
     await this.rdbStore.executeSql(sql, args);
@@ -1580,7 +1611,9 @@ export class FileSourceDatabase {
         cast_json: e.castJson ?? null, number_of_seasons: e.numberOfSeasons ?? null,
         original_language: e.originalLanguage ?? null, origin_country_json: e.originCountryJson ?? null,
         raw_json: e.rawJson ?? null,
-        scraped_at: e.scrapedAt
+        scraped_at: e.scrapedAt,
+        title_pinyin: toPinyinFull(e.title),
+        title_initials: toPinyinInitials(e.title)
       };
       const pred = new relationalStore.RdbPredicates(FileSourceDatabase.TABLE_TV_SERIES);
       pred.equalTo('id', existing.id);
@@ -1608,7 +1641,9 @@ export class FileSourceDatabase {
       original_language: e.originalLanguage ?? null,
       origin_country_json: e.originCountryJson ?? null,
       raw_json: e.rawJson ?? null,
-      scraped_at: e.scrapedAt
+      scraped_at: e.scrapedAt,
+      title_pinyin: toPinyinFull(e.title),
+      title_initials: toPinyinInitials(e.title)
     };
     let insertedRowId = -1;
     try {
@@ -3675,14 +3710,20 @@ export class FileSourceDatabase {
       // ── 统一 trim keyword，避免含前后空格时无法正确匹配 ──
       const kw: string = keyword.trim();
 
-      // ── keyword 非空时：title / original_title 四字段模糊匹配 ──
+      // ── keyword 非空时：title / original_title + 拼音字段模糊匹配 ──
       if (kw.length > 0) {
         const kwLike: string = `%${kw}%`;
-        conditions.push('(m.title LIKE ? OR m.original_title LIKE ? OR ts.title LIKE ? OR ts.original_title LIKE ?)');
-        params.push(kwLike);
-        params.push(kwLike);
-        params.push(kwLike);
-        params.push(kwLike);
+        const kwLower: string = kw.toLowerCase();
+        // 拼音前缀匹配：转义 LIKE 通配符，避免 %/_ 被误当通配符；使用 ESCAPE '\'
+        const kwLowerEscape: string = kwLower.replace(/%/g, '\\%').replace(/_/g, '\\_');
+        const kwLowerEscapePrefix: string = `${kwLowerEscape}%`;
+        conditions.push(
+          '(m.title LIKE ? OR m.original_title LIKE ? OR ts.title LIKE ? OR ts.original_title LIKE ?' +
+          " OR m.title_pinyin LIKE ? ESCAPE '\\' OR m.title_initials LIKE ? ESCAPE '\\'" +
+          " OR ts.title_pinyin LIKE ? ESCAPE '\\' OR ts.title_initials LIKE ? ESCAPE '\\')"
+        );
+        params.push(kwLike, kwLike, kwLike, kwLike);
+        params.push(kwLowerEscapePrefix, kwLowerEscapePrefix, kwLowerEscapePrefix, kwLowerEscapePrefix);
       }
 
       // ── mediaType 过滤（'all' 时不加条件） ──
@@ -3780,8 +3821,23 @@ export class FileSourceDatabase {
         orderClause = ' ORDER BY release_date DESC';
       } else if (sortBy === 'title') {
         orderClause = ' ORDER BY COALESCE(m.title, ts.title) ASC';
+      } else if (kw.length > 0) {
+        // keyword 搜索时：相关度分层排序，次级按评分降序
+        // SQLite ORDER BY CASE WHEN 不支持 ? 参数化绑定（relationalStore API 限制）；
+        // 已通过三重转义保证安全：单引号转义（''）+ LIKE 通配符转义（\%/\_）+ ESCAPE '\\'
+        const kwEscape: string = kw.replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
+        const kwLowerEscape: string = kw.toLowerCase().replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
+        orderClause =
+          ` ORDER BY CASE` +
+          ` WHEN COALESCE(m.title, ts.title) = '${kwEscape}' THEN 0` +
+          ` WHEN COALESCE(m.title, ts.title) LIKE '${kwEscape}%' ESCAPE '\\' THEN 1` +
+          ` WHEN COALESCE(m.title, ts.title) LIKE '%${kwEscape}%' ESCAPE '\\' THEN 2` +
+          ` WHEN COALESCE(m.title_pinyin, ts.title_pinyin) LIKE '${kwLowerEscape}%' ESCAPE '\\' THEN 3` +
+          ` WHEN COALESCE(m.title_initials, ts.title_initials) LIKE '${kwLowerEscape}%' ESCAPE '\\' THEN 4` +
+          ` ELSE 5 END ASC,` +
+          ` COALESCE(m.rating, ts.rating) DESC`;
       } else {
-        // 默认：评分降序
+        // 无 keyword：默认按评分
         orderClause = ' ORDER BY COALESCE(m.rating, ts.rating) DESC';
       }
 
@@ -4119,6 +4175,48 @@ export class FileSourceDatabase {
     } catch (e) {
       const err = e as BusinessError;
       console.warn(`[DB][backfillOriginCountry] 异常 code=${err.code} msg=${err.message}`);
+    }
+  }
+
+  private async backfillPinyinFields(rdbStore: relationalStore.RdbStore): Promise<void> {
+    const tables: string[] = ['movies', 'tv_series'];
+    for (const tbl of tables) {
+      // ── 第一步：先将全量行读入内存，关闭 ResultSet ──
+      // 避免在游标未关闭时对同一表执行 UPDATE，防止游标失效/锁冲突
+      interface PinyinRow { id: number; title: string }
+      const rows: PinyinRow[] = [];
+      let rs: relationalStore.ResultSet | null = null;
+      try {
+        rs = await rdbStore.querySql(`SELECT id, title FROM ${tbl} WHERE title IS NOT NULL`);
+        while (rs.goToNextRow()) {
+          const row: PinyinRow = {
+            id: rs.getLong(rs.getColumnIndex('id')),
+            title: rs.getString(rs.getColumnIndex('title'))
+          };
+          rows.push(row);
+        }
+      } catch (e) {
+        const msg: string = (e instanceof Error) ? e.message : String(e);
+        console.warn(`[DB] v11 读取 ${tbl} 拼音回填数据失败: ${msg}`);
+      } finally {
+        try { rs?.close(); } catch { }
+      }
+
+      // ── 第二步：ResultSet 已关闭，再批量 UPDATE ──
+      try {
+        for (const row of rows) {
+          const full = toPinyinFull(row.title);
+          const initials = toPinyinInitials(row.title);
+          await rdbStore.executeSql(
+            `UPDATE ${tbl} SET title_pinyin = ?, title_initials = ? WHERE id = ?`,
+            [full, initials, row.id]
+          );
+        }
+        console.info(`[DB] v11 回填 ${tbl} 拼音字段完成，共 ${rows.length} 条`);
+      } catch (e) {
+        const msg: string = (e instanceof Error) ? e.message : String(e);
+        console.warn(`[DB] v11 回填 ${tbl} 失败: ${msg}`);
+      }
     }
   }
 
