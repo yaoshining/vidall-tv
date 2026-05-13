@@ -30,6 +30,7 @@ import {
 } from "./EpisodeAutoplayPreferences";
 import { MetricsService } from "../../../services/metrics/MetricsService";
 import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
+import { SubtitleDispatcher } from "../../../subtitle/SubtitleDispatcher";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -303,6 +304,7 @@ export class VideoPlayerController {
   private pendingReloadResolve?: () => void;
   private pendingReloadReject?: (error: Error) => void;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
+  private readonly subtitleDispatcher: SubtitleDispatcher = new SubtitleDispatcher();
   private currentVideoData?: VideoData;
   private timeToSeek = -1
   private subtitleClearTimer?: number
@@ -3119,6 +3121,18 @@ export class VideoPlayerController {
     try {
       await this.subtitleAdapter.init(this.player, this.currentVideoData);
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+
+      // 字幕优先级调度：步骤 1（用户指定）
+      const videoPath = this.currentVideoData?.videoSrc ?? '';
+      if (videoPath.length > 0 && this.allSubtitleTracks.length > 0) {
+        const resolution = await this.subtitleDispatcher.resolveSubtitle(videoPath, this.allSubtitleTracks);
+        if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[loadSubtitleTracks] 调度器覆盖选轨: trackIndex=${resolution.trackIndex}`);
+          await this.subtitleAdapter.switchTrack(resolution.trackIndex);
+          this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+        }
+      }
     } catch (e) {
       const err = e as BusinessError;
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
@@ -3301,7 +3315,25 @@ export class VideoPlayerController {
     this.subtitleRemainingTime = 0;
     await this.subtitleAdapter.switchTrack(allIndex);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
-    
+
+    // 用户绑定持久化
+    const videoPath = this.currentVideoData?.videoSrc ?? '';
+    if (videoPath.length > 0) {
+      if (allIndex === -1) {
+        // 关闭字幕 → 清除绑定
+        this.subtitleDispatcher.clearUserBinding(videoPath).catch(() => {});
+      } else if (allIndex >= 0 && allIndex < this.allSubtitleTracks.length) {
+        const track = this.allSubtitleTracks[allIndex];
+        if (track.kind === 'external' && track.url !== undefined && track.url.length > 0) {
+          // 用户手动选择外置字幕 → 保存绑定
+          this.subtitleDispatcher.saveUserBinding(videoPath, track.url, 'local-file').catch(() => {});
+        } else if (track.kind === 'internal') {
+          // 用户手动选择内置字幕 → 用 displayName 作为绑定 key
+          this.subtitleDispatcher.saveUserBinding(videoPath, track.displayName, 'internal').catch(() => {});
+        }
+      }
+    }
+
     // Task 5.4: 缺陷 2 修复：此处不再调用 recordSubtitleUsage，
     // subtitle 使用计数已在 onPlayerReady 内一次性记录，此处重复调用会导致 total_playbacks 双重计数。
   }

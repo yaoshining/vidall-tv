@@ -40,6 +40,8 @@ export class PrefKey {
   static readonly OPENSUBTITLES_API_KEY = 'opensubtitles_api_key';
   /** OpenSubtitles 设备 ID（代理通道身份标识，首次启动自动生成） */
   static readonly OPENSUBTITLES_DEVICE_ID = 'opensubtitles_device_id';
+  /** 用户字幕绑定前缀，完整 key = subtitle_binding_<sha256前12位> */
+  static readonly SUBTITLE_BINDING_PREFIX = 'subtitle_binding';
 }
 
 // ─────────────────────────────────────────────
