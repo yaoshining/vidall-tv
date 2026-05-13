@@ -45,6 +45,7 @@ import compositeMetricsReporterTest from './ets/services/metrics/CompositeMetric
 import openSubtitlesPrefsTest from './OpenSubtitlesPrefs.test';
 import openSubtitlesClientTest from './OpenSubtitlesClient.test';
 import subtitleDownloaderTest from './SubtitleDownloader.test';
+import subtitleDispatcherTest from './SubtitleDispatcher.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -92,4 +93,5 @@ export default function testsuite() {
   openSubtitlesPrefsTest();
   openSubtitlesClientTest();
   subtitleDownloaderTest();
+  subtitleDispatcherTest();
 }
