@@ -134,6 +134,36 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
     });
 
+    it('resolveSubtitle_internalBindingMatches_returnsUserSpecified', 0, async () => {
+      const setup = await makeSetup();
+      await setup.dispatcher.saveUserBinding(VIDEO_PATH, '简体中文', 'internal');
+
+      const track: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName: '简体中文'
+      };
+      const tracks: SubtitleTrackItem[] = [track];
+      const resolution: SubtitleResolution = await setup.dispatcher.resolveSubtitle(VIDEO_PATH, tracks);
+      expect(resolution.type).assertEqual('user-specified');
+      expect(resolution.trackIndex).assertEqual(0);
+    });
+
+    it('resolveSubtitle_internalBindingNotInTracks_clearsBindingAndReturnsNone', 0, async () => {
+      const setup = await makeSetup();
+      await setup.dispatcher.saveUserBinding(VIDEO_PATH, '简体中文', 'internal');
+
+      const track: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName: 'English'
+      };
+      const tracks: SubtitleTrackItem[] = [track];
+      const resolution: SubtitleResolution = await setup.dispatcher.resolveSubtitle(VIDEO_PATH, tracks);
+      expect(resolution.type).assertEqual('none');
+
+      const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
+      expect(binding).assertNull();
+    });
+
     it('clearUserBinding_removesExistingBinding', 0, async () => {
       const setup = await makeSetup();
       await setup.dispatcher.saveUserBinding(VIDEO_PATH, SUBTITLE_URL, 'local-file');

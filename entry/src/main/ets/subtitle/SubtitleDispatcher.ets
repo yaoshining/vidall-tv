@@ -13,7 +13,12 @@ export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded' | 'inte
 export interface SubtitleBinding {
   /** 视频完整 URL */
   videoPath: string;
-  /** 字幕完整 URL（local-file）或本地路径（downloaded/cached） */
+  /**
+   * 字幕标识符，语义因 subtitleType 而异：
+   * - `local-file`：外置字幕的完整 URL
+   * - `downloaded` / `cached`：本地缓存文件路径
+   * - `internal`：内置轨道的 displayName（用于按名称重定位轨道索引）
+   */
   subtitlePath: string;
   /** 绑定类型 */
   subtitleType: SubtitleBindingType;
@@ -107,7 +112,7 @@ export class SubtitleDispatcher {
       };
       await AppPreferences.set(key, JSON.stringify(binding));
     } catch (e) {
-      console.error(`[SubtitleDispatcher] saveUserBinding 失败: ${JSON.stringify(e)}`);
+      console.error(`[SubtitleDispatcher] saveUserBinding 失败: ${String(e)}`);
     }
   }
 
@@ -120,7 +125,7 @@ export class SubtitleDispatcher {
       const key = await this.buildKey(videoPath);
       await AppPreferences.set(key, '');
     } catch (e) {
-      console.error(`[SubtitleDispatcher] clearUserBinding 失败: ${JSON.stringify(e)}`);
+      console.error(`[SubtitleDispatcher] clearUserBinding 失败: ${String(e)}`);
     }
   }
 
