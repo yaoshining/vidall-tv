@@ -7,7 +7,7 @@ import { SubtitleTrackItem } from '../components/core/player/SubtitleBridgeAdapt
 // ─────────────────────────────────────────────
 
 /** 用户字幕绑定类型 */
-export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded';
+export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded' | 'internal';
 
 /** 用户字幕绑定记录（存储在 AppPreferences 中） */
 export interface SubtitleBinding {
@@ -127,7 +127,9 @@ export class SubtitleDispatcher {
   /**
    * 按 5 步优先级链裁决字幕来源。
    *
-   * - 步骤 1：查用户绑定 → 在 allSubtitleTracks 中按 URL 精确匹配
+   * - 步骤 1：查用户绑定
+   *   - local-file：在 allSubtitleTracks 中按 URL 精确匹配（外置字幕）
+   *   - internal：在 allSubtitleTracks 中按 displayName 精确匹配（内置字幕）
    * - 步骤 2-3：adapter 已处理，此处不介入（返回 none，让 adapter 的自动选轨生效）
    * - 步骤 4：stub，始终跳过
    * - 步骤 5：返回 { type: 'none' }
@@ -144,7 +146,7 @@ export class SubtitleDispatcher {
       const binding = await this.getUserBinding(videoPath);
       if (binding !== null) {
         if (binding.subtitleType === 'local-file') {
-          // 在轨道列表中按 URL 精确匹配
+          // 外置字幕：按 URL 精确匹配
           let foundIndex = -1;
           for (let i = 0; i < allSubtitleTracks.length; i++) {
             if (allSubtitleTracks[i].url === binding.subtitlePath) {
@@ -153,12 +155,28 @@ export class SubtitleDispatcher {
             }
           }
           if (foundIndex >= 0) {
-            console.info(`[SubtitleDispatcher] 步骤1命中用户绑定: index=${foundIndex} url=${binding.subtitlePath}`);
+            console.info(`[SubtitleDispatcher] 步骤1命中用户绑定(external): index=${foundIndex} url=${binding.subtitlePath}`);
             const resolution: SubtitleResolution = { type: 'user-specified', trackIndex: foundIndex };
             return resolution;
           } else {
-            // URL 已失效，自动清除绑定
             console.warn(`[SubtitleDispatcher] 绑定 URL 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
+            await this.clearUserBinding(videoPath);
+          }
+        } else if (binding.subtitleType === 'internal') {
+          // 内置字幕：按 displayName 精确匹配
+          let foundIndex = -1;
+          for (let i = 0; i < allSubtitleTracks.length; i++) {
+            if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === binding.subtitlePath) {
+              foundIndex = i;
+              break;
+            }
+          }
+          if (foundIndex >= 0) {
+            console.info(`[SubtitleDispatcher] 步骤1命中用户绑定(internal): index=${foundIndex} displayName=${binding.subtitlePath}`);
+            const resolution: SubtitleResolution = { type: 'user-specified', trackIndex: foundIndex };
+            return resolution;
+          } else {
+            console.warn(`[SubtitleDispatcher] 绑定 displayName 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
             await this.clearUserBinding(videoPath);
           }
         }

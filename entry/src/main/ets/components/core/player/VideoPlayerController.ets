@@ -3327,6 +3327,9 @@ export class VideoPlayerController {
         if (track.kind === 'external' && track.url !== undefined && track.url.length > 0) {
           // 用户手动选择外置字幕 → 保存绑定
           this.subtitleDispatcher.saveUserBinding(videoPath, track.url, 'local-file').catch(() => {});
+        } else if (track.kind === 'internal') {
+          // 用户手动选择内置字幕 → 用 displayName 作为绑定 key
+          this.subtitleDispatcher.saveUserBinding(videoPath, track.displayName, 'internal').catch(() => {});
         }
       }
     }
