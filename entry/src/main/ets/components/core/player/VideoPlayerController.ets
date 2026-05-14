@@ -31,6 +31,7 @@ import {
 import { MetricsService } from "../../../services/metrics/MetricsService";
 import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
 import { SubtitleDispatcher } from "../../../subtitle/SubtitleDispatcher";
+import { AudioDispatcher } from "../../../audio/AudioDispatcher";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -3157,6 +3158,16 @@ export class VideoPlayerController {
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
         } else {
+          // 尝试恢复用户上次选择的音轨
+          const videoPath = this.currentVideoData?.videoSrc ?? '';
+          if (videoPath.length > 0) {
+            const audioDispatcher = new AudioDispatcher();
+            const resolution = await audioDispatcher.resolveAudioTrack(videoPath, this.audioTracks);
+            if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
+              await this.switchAudioTrack(resolution.trackIndex);
+              return;
+            }
+          }
           await this.switchAudioTrack(this.findInitialAudioTrackIndex());
         }
         return;
@@ -3189,6 +3200,16 @@ export class VideoPlayerController {
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
         } else {
+          // 尝试恢复用户上次选择的音轨
+          const videoPath = this.currentVideoData?.videoSrc ?? '';
+          if (videoPath.length > 0) {
+            const audioDispatcher = new AudioDispatcher();
+            const resolution = await audioDispatcher.resolveAudioTrack(videoPath, this.audioTracks);
+            if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
+              await this.switchAudioTrack(resolution.trackIndex);
+              return;
+            }
+          }
           await this.switchAudioTrack(this.findInitialAudioTrackIndex());
         }
       }
@@ -3345,7 +3366,7 @@ export class VideoPlayerController {
   /**
    * 通过 audioTracks 索引切换音轨
    */
-  async switchAudioTrack(trackIndex: number): Promise<void> {
+  async switchAudioTrack(trackIndex: number, userInitiated: boolean = false): Promise<void> {
     if (trackIndex < 0 || trackIndex >= this.audioTracks.length) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `切换音轨失败: 索引越界 ${trackIndex}`);
@@ -3389,6 +3410,15 @@ export class VideoPlayerController {
       this.activeAudioIndex = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[switchAudioTrack] 音轨已切换: ${audioTrack.displayName} (trackIndex=${audioTrack.trackIndex})`);
+
+      // 用户主动切换时持久化绑定
+      if (userInitiated) {
+        const videoPath = this.currentVideoData?.videoSrc ?? '';
+        if (videoPath.length > 0) {
+          const dispatcher = new AudioDispatcher();
+          dispatcher.saveAudioBinding(videoPath, audioTrack.displayName).catch(() => {});
+        }
+      }
 
       // 3. seek 到当前位置，强制音频解码器 flush 并从正确位置开始解码
       //    这样恢复播放时新音轨与视频帧完全对齐
