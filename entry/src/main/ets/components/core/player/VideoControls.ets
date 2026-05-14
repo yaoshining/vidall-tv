@@ -548,7 +548,7 @@ struct VideoControls {
 
   private dispatchAudioTrackSwitch(index: number): void {
     setTimeout(() => {
-      this.videoController.switchAudioTrack(index)
+      this.videoController.switchAudioTrack(index, true)
     }, 0)
   }
 
