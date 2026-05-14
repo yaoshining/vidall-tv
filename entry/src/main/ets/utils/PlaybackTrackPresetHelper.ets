@@ -18,31 +18,39 @@ export async function resolvePlaybackTrackPresetFromDb(
   let durationHintMs: number | undefined = fallbackDurationMs > 0 ? fallbackDurationMs : undefined
   let presetAudioTracks: PresetAudioTrack[] | undefined = undefined
   let presetSubtitleTracks: PresetSubtitleTrack[] | undefined = undefined
+  let videoEntity: VideoEntity | null = null
 
   try {
-    const videoEntity = await loadVideoByPath(filePath)
-    if (videoEntity !== null) {
-      if (videoEntity.durationMs !== undefined && videoEntity.durationMs !== null && videoEntity.durationMs > 0) {
-        durationHintMs = videoEntity.durationMs
-      }
-      if (videoEntity.audioTracksJson !== undefined && videoEntity.audioTracksJson !== null &&
-        videoEntity.audioTracksJson.length > 0) {
+    videoEntity = await loadVideoByPath(filePath)
+  } catch (_e) {
+  }
+
+  if (videoEntity !== null) {
+    if (videoEntity.durationMs !== undefined && videoEntity.durationMs !== null && videoEntity.durationMs > 0) {
+      durationHintMs = videoEntity.durationMs
+    }
+    if (videoEntity.audioTracksJson !== undefined && videoEntity.audioTracksJson !== null &&
+      videoEntity.audioTracksJson.length > 0) {
+      try {
         const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[]
         const resolvedTracks = FfprobeUtil.toPresetAudioTracks(tracks)
         if (resolvedTracks.length > 0) {
           presetAudioTracks = resolvedTracks
         }
+      } catch (_e) {
       }
-      if (videoEntity.subtitleTracksJson !== undefined && videoEntity.subtitleTracksJson !== null &&
-        videoEntity.subtitleTracksJson.length > 0) {
+    }
+    if (videoEntity.subtitleTracksJson !== undefined && videoEntity.subtitleTracksJson !== null &&
+      videoEntity.subtitleTracksJson.length > 0) {
+      try {
         const tracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[]
         const resolvedTracks = FfprobeUtil.toPresetSubtitleTracks(tracks)
         if (resolvedTracks.length > 0) {
           presetSubtitleTracks = resolvedTracks
         }
+      } catch (_e) {
       }
     }
-  } catch (_e) {
   }
 
   const result: PlaybackTrackPresetResult = {}

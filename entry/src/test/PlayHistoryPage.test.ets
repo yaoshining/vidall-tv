@@ -42,6 +42,16 @@ function buildVideoEntity(): VideoEntity {
   }
 }
 
+function buildVideoEntityWithTrackJson(
+  audioTracksJson: string | undefined,
+  subtitleTracksJson: string | undefined
+): VideoEntity {
+  const videoEntity: VideoEntity = buildVideoEntity()
+  videoEntity.audioTracksJson = audioTracksJson
+  videoEntity.subtitleTracksJson = subtitleTracksJson
+  return videoEntity
+}
+
 export default function playHistoryPageTest(): void {
   describe('PlayHistoryPage_track_preset_resolution', () => {
     it('fills player presets from database cached tracks', 0, async () => {
@@ -70,6 +80,38 @@ export default function playHistoryPageTest(): void {
       expect(result.durationHintMs ?? 0).assertEqual(246800)
       expect(result.presetAudioTracks === undefined).assertTrue()
       expect(result.presetSubtitleTracks === undefined).assertTrue()
+    })
+
+    it('keeps duration and subtitle presets when audio track json is malformed', 0, async () => {
+      const result = await resolvePlaybackTrackPresetFromDb(
+        '/video/demo.mkv',
+        120000,
+        async (_filePath: string): Promise<VideoEntity | null> => buildVideoEntityWithTrackJson(
+          '{broken-audio-json',
+          JSON.stringify(buildSubtitleTrackFixture())
+        )
+      )
+
+      expect(result.durationHintMs ?? 0).assertEqual(543210)
+      expect(result.presetAudioTracks === undefined).assertTrue()
+      expect(result.presetSubtitleTracks?.length ?? 0).assertEqual(1)
+      expect(result.presetSubtitleTracks?.[0].trackIndex ?? -1).assertEqual(5)
+    })
+
+    it('keeps duration and audio presets when subtitle track json is malformed', 0, async () => {
+      const result = await resolvePlaybackTrackPresetFromDb(
+        '/video/demo.mkv',
+        120000,
+        async (_filePath: string): Promise<VideoEntity | null> => buildVideoEntityWithTrackJson(
+          JSON.stringify(buildAudioTrackFixture()),
+          '{broken-subtitle-json'
+        )
+      )
+
+      expect(result.durationHintMs ?? 0).assertEqual(543210)
+      expect(result.presetSubtitleTracks === undefined).assertTrue()
+      expect(result.presetAudioTracks?.length ?? 0).assertEqual(1)
+      expect(result.presetAudioTracks?.[0].trackIndex ?? -1).assertEqual(2)
     })
   })
 }
