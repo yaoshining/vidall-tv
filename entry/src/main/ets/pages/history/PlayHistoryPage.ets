@@ -1,15 +1,13 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaProgressEntry, MediaItem, MovieEntity, TvSeriesEntity } from '../../db/models/MediaEntity';
-import { VideoEntity } from '../../db/models/MediaEntity';
 import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity';
 import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { PlayerPage, PlayerPageParam } from '../player/index';
-import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
 import { BusinessError, emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../../components/core/player/Constants';
-import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil';
+import { resolvePlaybackTrackPresetFromDb } from '../../utils/PlaybackTrackPresetHelper';
 
 
 // ─────────────────────────────────────────────
@@ -47,14 +45,6 @@ interface PlayUrlResult {
   url: string;
   httpHeader: Record<string, string>;
 }
-
-export interface PlayHistoryTrackPresetResult {
-  durationHintMs?: number;
-  presetAudioTracks?: PresetAudioTrack[];
-  presetSubtitleTracks?: PresetSubtitleTrack[];
-}
-
-type PlayHistoryVideoLoader = (filePath: string) => Promise<VideoEntity | null>;
 
 /** showActionMenu 回调数据结构（仅需 index 字段） */
 interface ActionMenuSuccessResult {
@@ -106,54 +96,6 @@ function parseMediaKey(mediaKey: string): ParsedMediaKey {
     }
   }
   return { kind: 'unknown', providerId: '' };
-}
-
-export async function resolvePlayHistoryTrackPreset(
-  filePath: string,
-  fallbackDurationMs: number,
-  loadVideoByPath: PlayHistoryVideoLoader
-): Promise<PlayHistoryTrackPresetResult> {
-  let durationHintMs: number | undefined = fallbackDurationMs > 0 ? fallbackDurationMs : undefined;
-  let presetAudioTracks: PresetAudioTrack[] | undefined = undefined;
-  let presetSubtitleTracks: PresetSubtitleTrack[] | undefined = undefined;
-
-  try {
-    const videoEntity = await loadVideoByPath(filePath);
-    if (videoEntity !== null) {
-      if (videoEntity.durationMs !== undefined && videoEntity.durationMs !== null && videoEntity.durationMs > 0) {
-        durationHintMs = videoEntity.durationMs;
-      }
-      if (videoEntity.audioTracksJson !== undefined && videoEntity.audioTracksJson !== null && videoEntity.audioTracksJson.length > 0) {
-        const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
-        const resolvedTracks = FfprobeUtil.toPresetAudioTracks(tracks);
-        if (resolvedTracks.length > 0) {
-          presetAudioTracks = resolvedTracks;
-        }
-      }
-      if (videoEntity.subtitleTracksJson !== undefined &&
-        videoEntity.subtitleTracksJson !== null &&
-        videoEntity.subtitleTracksJson.length > 0) {
-        const tracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
-        const resolvedTracks = FfprobeUtil.toPresetSubtitleTracks(tracks);
-        if (resolvedTracks.length > 0) {
-          presetSubtitleTracks = resolvedTracks;
-        }
-      }
-    }
-  } catch (_e) {
-  }
-
-  const result: PlayHistoryTrackPresetResult = {};
-  if (durationHintMs !== undefined && durationHintMs > 0) {
-    result.durationHintMs = durationHintMs;
-  }
-  if (presetAudioTracks !== undefined && presetAudioTracks.length > 0) {
-    result.presetAudioTracks = presetAudioTracks;
-  }
-  if (presetSubtitleTracks !== undefined && presetSubtitleTracks.length > 0) {
-    result.presetSubtitleTracks = presetSubtitleTracks;
-  }
-  return result;
 }
 
 // ─────────────────────────────────────────────
@@ -421,10 +363,10 @@ export struct PlayHistoryPage {
       try { this.getUIContext().getPromptAction().showToast({ message: '无法构建播放地址' }); } catch (_e) {}
       return;
     }
-    const presetResult = await resolvePlayHistoryTrackPreset(
+    const presetResult = await resolvePlaybackTrackPresetFromDb(
       item.filePath,
       item.durationMs,
-      async (filePath: string): Promise<VideoEntity | null> => db.getVideoByPath(filePath)
+      async (filePath: string) => db.getVideoByPath(filePath)
     );
     const param: PlayerPageParam = {
       url: urlResult.url.length > 0 ? urlResult.url : undefined,

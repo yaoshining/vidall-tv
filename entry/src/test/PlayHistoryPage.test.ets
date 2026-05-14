@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { resolvePlayHistoryTrackPreset } from '../main/ets/pages/history/PlayHistoryPage'
 import { FfprobeTrack } from '../main/ets/utils/FfprobeUtil'
 import { VideoEntity } from '../main/ets/db/models/MediaEntity'
+import { resolvePlaybackTrackPresetFromDb } from '../main/ets/utils/PlaybackTrackPresetHelper'
 
 function buildAudioTrackFixture(): FfprobeTrack[] {
   const track: FfprobeTrack = {
@@ -45,7 +45,7 @@ function buildVideoEntity(): VideoEntity {
 export default function playHistoryPageTest(): void {
   describe('PlayHistoryPage_track_preset_resolution', () => {
     it('fills player presets from database cached tracks', 0, async () => {
-      const result = await resolvePlayHistoryTrackPreset(
+      const result = await resolvePlaybackTrackPresetFromDb(
         '/video/demo.mkv',
         120000,
         async (_filePath: string): Promise<VideoEntity | null> => buildVideoEntity()
@@ -59,7 +59,7 @@ export default function playHistoryPageTest(): void {
     })
 
     it('keeps playback fallback when database lookup fails', 0, async () => {
-      const result = await resolvePlayHistoryTrackPreset(
+      const result = await resolvePlaybackTrackPresetFromDb(
         '/video/demo.mkv',
         246800,
         async (_filePath: string): Promise<VideoEntity | null> => {

@@ -47,6 +47,7 @@ import openSubtitlesClientTest from './OpenSubtitlesClient.test';
 import subtitleDownloaderTest from './SubtitleDownloader.test';
 import subtitleDispatcherTest from './SubtitleDispatcher.test';
 import playHistoryPageTest from './PlayHistoryPage.test';
+import continueWatchCardTest from './ContinueWatchCard.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -96,4 +97,5 @@ export default function testsuite() {
   subtitleDownloaderTest();
   subtitleDispatcherTest();
   playHistoryPageTest();
+  continueWatchCardTest();
 }
