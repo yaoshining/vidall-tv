@@ -46,6 +46,7 @@ import openSubtitlesPrefsTest from './OpenSubtitlesPrefs.test';
 import openSubtitlesClientTest from './OpenSubtitlesClient.test';
 import subtitleDownloaderTest from './SubtitleDownloader.test';
 import subtitleDispatcherTest from './SubtitleDispatcher.test';
+import playHistoryPageTest from './PlayHistoryPage.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -94,4 +95,5 @@ export default function testsuite() {
   openSubtitlesClientTest();
   subtitleDownloaderTest();
   subtitleDispatcherTest();
+  playHistoryPageTest();
 }
