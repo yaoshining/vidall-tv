@@ -7,6 +7,7 @@ import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
 import { BusinessError, emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../../components/core/player/Constants';
+import { resolvePlaybackTrackPresetFromDb } from '../../utils/PlaybackTrackPresetHelper';
 
 
 // ─────────────────────────────────────────────
@@ -356,20 +357,29 @@ export struct PlayHistoryPage {
       try { this.getUIContext().getPromptAction().showToast({ message: '无法找到对应视频文件' }); } catch (_e) {}
       return;
     }
+    const db = FileSourceDatabase.getInstance();
     const urlResult = await this.buildPlayUrl(item.sourceId, item.filePath);
     if (urlResult === null) {
       try { this.getUIContext().getPromptAction().showToast({ message: '无法构建播放地址' }); } catch (_e) {}
       return;
     }
+    const presetResult = await resolvePlaybackTrackPresetFromDb(
+      item.filePath,
+      item.durationMs,
+      async (filePath: string) => db.getVideoByPath(filePath)
+    );
     const param: PlayerPageParam = {
       url: urlResult.url.length > 0 ? urlResult.url : undefined,
       fileUrl: urlResult.fileUrl.length > 0 ? urlResult.fileUrl : undefined,
       httpHeader: urlResult.httpHeader,
       title: item.title,
+      durationHintMs: presetResult.durationHintMs,
       videoId: item.videoId,
       seriesProviderId: item.seriesProviderId,
       seasonNumber: item.episodeNumber > 0 ? item.seasonNumber : 0,
       episodeNumber: item.episodeNumber > 0 ? item.episodeNumber : 0,
+      presetAudioTracks: presetResult.presetAudioTracks,
+      presetSubtitleTracks: presetResult.presetSubtitleTracks,
       mediaKey: fromStart ? undefined : item.mediaKey,
       startPositionMs: fromStart ? 0 : (item.positionMs > 0 ? item.positionMs : undefined),
     };

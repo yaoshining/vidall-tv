@@ -17,9 +17,39 @@ import { ContinueWatchingItem } from '../../db/models/MediaEntity';
 import { PlayerPageParam, PlayerPage } from '../../pages/player/index';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaLibraryContext } from '../core/player/PlaybackContext';
+import { PresetAudioTrack, PresetSubtitleTrack } from '../core/player/VideoData';
 import { FileSourceType, FileSourceTypeLabels, SMBSourceConfig } from '../../db/models/FileSourceEntity';
 import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
 import promptAction from '@ohos.promptAction';
+import { resolvePlaybackTrackPresetFromDb } from '../../utils/PlaybackTrackPresetHelper';
+
+export interface ContinueWatchPlayerParamInput {
+  item: ContinueWatchingItem
+  fullUrl: string
+  httpHeader: Record<string, string>
+  title: string
+  durationHintMs?: number
+  presetAudioTracks?: PresetAudioTrack[]
+  presetSubtitleTracks?: PresetSubtitleTrack[]
+}
+
+export function buildContinueWatchPlayerParam(input: ContinueWatchPlayerParamInput): PlayerPageParam {
+  const param: PlayerPageParam = {
+    videoId: input.item.videoId,
+    url: input.fullUrl,
+    httpHeader: input.httpHeader,
+    title: input.title,
+    durationHintMs: input.durationHintMs,
+    mediaKey: input.item.mediaKey,
+    startPositionMs: input.item.startPositionMs,
+    seriesProviderId: input.item.seriesProviderId,
+    seasonNumber: input.item.seasonNumber,
+    episodeNumber: input.item.episodeNumber,
+    presetAudioTracks: input.presetAudioTracks,
+    presetSubtitleTracks: input.presetSubtitleTracks
+  };
+  return param;
+}
 
 // ─── 卡片尺寸常量 ────────────────────────────────
 const CARD_W = 320;
@@ -176,18 +206,20 @@ export struct ContinueWatchCard {
         return;
       }
 
-      const param: PlayerPageParam = {
-        videoId: this.item.videoId,
-        url: fullUrl,
+      const presetResult = await resolvePlaybackTrackPresetFromDb(
+        this.item.filePath,
+        this.item.durationMs,
+        async (filePath: string) => db.getVideoByPath(filePath)
+      );
+      const param = buildContinueWatchPlayerParam({
+        item: this.item,
+        fullUrl,
         httpHeader,
         title: this.buildPlayerTitle(),
-        durationHintMs: this.item.durationMs > 0 ? this.item.durationMs : undefined,
-        mediaKey: this.item.mediaKey,
-        startPositionMs: this.item.startPositionMs,
-        seriesProviderId: this.item.seriesProviderId,
-        seasonNumber: this.item.seasonNumber,
-        episodeNumber: this.item.episodeNumber
-      };
+        durationHintMs: presetResult.durationHintMs,
+        presetAudioTracks: presetResult.presetAudioTracks,
+        presetSubtitleTracks: presetResult.presetSubtitleTracks
+      });
       if (this.item.kind === 'series' && this.item.tvSeriesId > 0 && this.item.seasonNumber > 0) {
         try {
           const playbackCtx = await MediaLibraryContext.build(
