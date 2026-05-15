@@ -62,7 +62,11 @@ export class SubtitleCacheManager {
       const buf = new ArrayBuffer(stat.size);
       fs.readSync(file.fd, buf);
       fs.closeSync(file);
-      const text = String.fromCharCode(...new Uint8Array(buf));
+      const bytes = new Uint8Array(buf);
+      let text = '';
+      for (let i = 0; i < bytes.length; i++) {
+        text += String.fromCharCode(bytes[i]);
+      }
       const parsed = JSON.parse(text) as Record<string, string | CachedSubtitleEntry[]>;
       if (!parsed['videoPath'] || !parsed['subtitles']) {
         return null;
@@ -93,13 +97,9 @@ export class SubtitleCacheManager {
       }
     }
     const text = JSON.stringify(metadata, null, 2);
-    const buf = new Uint8Array(text.length);
-    for (let i = 0; i < text.length; i++) {
-      buf[i] = text.charCodeAt(i);
-    }
     const file = fs.openSync(metaPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
     try {
-      fs.writeSync(file.fd, buf.buffer);
+      fs.writeSync(file.fd, text);
     } catch (e) {
       fs.closeSync(file);
       const be = e as BusinessError;
