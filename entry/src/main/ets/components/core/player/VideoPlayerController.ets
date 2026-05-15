@@ -3134,7 +3134,9 @@ export class VideoPlayerController {
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
 
       // 字幕优先级调度：步骤 1（用户指定） + 步骤 4（本地缓存）
-      const videoPath = this.currentVideoData?.videoSrc ?? '';
+      // SMB 源代理 URL 的端口每次随机，必须用原始 smb:// URL 作为绑定 key 保持稳定
+      const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
+      const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
       if (videoPath.length > 0 && this.allSubtitleTracks.length > 0) {
         // 构建缓存上下文：filesDir 由外部注入，sourceType/sourceId 来自 VideoData
         let cacheCtx: SubtitleCacheContext | undefined = undefined;
@@ -3361,7 +3363,9 @@ export class VideoPlayerController {
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
 
     // 用户绑定持久化
-    const videoPath = this.currentVideoData?.videoSrc ?? '';
+    // SMB 源代理 URL 的端口每次随机，必须用原始 smb:// URL 作为绑定 key 保持稳定
+    const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
+    const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
     if (videoPath.length > 0) {
       if (allIndex === -1) {
         // 关闭字幕 → 清除绑定
