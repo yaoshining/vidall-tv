@@ -13,7 +13,10 @@ import { sha256Hex, buildSubtitleDir } from '../../../main/ets/subtitle/Subtitle
 // ─────────────────────────────────────────────
 
 const SOURCE_TYPE = 'webdav';
-const SOURCE_ID = 'test-42';
+/** 每个测试用独立 sourceId，彻底隔离跨运行和运行内的数据污染 */
+const _RUN_EPOCH = Date.now().toString(36);
+let _testCounter = 0;
+let SOURCE_ID = 'test-42'; // 会在每个 beforeEach 里更新
 const VIDEO_PATH = 'http://192.168.1.1/dav/films/movie.mkv';
 const VIDEO_PATH_2 = 'http://192.168.1.1/dav/films/other.mkv';
 
@@ -74,10 +77,10 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
+      SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
-      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     afterEach(() => {
@@ -137,6 +140,7 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
+      SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
@@ -157,10 +161,10 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
+      SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
-      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     afterEach(() => {
@@ -212,10 +216,10 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
+      SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
-      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     afterEach(() => {
