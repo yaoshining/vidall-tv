@@ -381,4 +381,69 @@ export class SubtitleCacheManager {
       console.error(`[SubtitleCacheManager] clearSubtitleCache 失败: ${String(e)}`);
     }
   }
+
+  /**
+   * 清理所有字幕缓存（删除 {filesDir}/subtitles/ 下的全部内容）。
+   *
+   * - subtitles/ 根目录不存在时静默返回，不抛异常
+   * - 单个子目录或文件失败时记录日志并继续处理其余项
+   */
+  async clearAllSubtitleCaches(filesDir: string): Promise<void> {
+    const subtitlesRoot = `${filesDir}/subtitles`;
+    try {
+      // 检查根目录是否存在
+      try {
+        fs.statSync(subtitlesRoot);
+      } catch {
+        // 根目录不存在，静默返回
+        return;
+      }
+
+      // 遍历一级子目录
+      let subDirNames: string[] = [];
+      try {
+        subDirNames = fs.listFileSync(subtitlesRoot);
+      } catch {
+        // 无法列目录，静默返回
+        return;
+      }
+
+      for (let i = 0; i < subDirNames.length; i++) {
+        const subDir = `${subtitlesRoot}/${subDirNames[i]}`;
+        try {
+          // 删除子目录内所有文件
+          try {
+            const files = fs.listFileSync(subDir);
+            for (let j = 0; j < files.length; j++) {
+              try {
+                fs.unlinkSync(`${subDir}/${files[j]}`);
+              } catch {
+                // 单文件删除失败时忽略，继续下一个
+              }
+            }
+          } catch {
+            // listFileSync 失败时忽略（可能是文件而非目录）
+          }
+          // 删除子目录本身
+          try {
+            fs.rmdirSync(subDir);
+          } catch (e) {
+            console.error(`[SubtitleCacheManager] clearAllSubtitleCaches 删除子目录失败: ${subDir} ${String(e)}`);
+          }
+        } catch (e) {
+          // 单个子目录整体处理失败，记录日志，不中断其他子目录
+          console.error(`[SubtitleCacheManager] clearAllSubtitleCaches 处理子目录失败: ${subDir} ${String(e)}`);
+        }
+      }
+
+      // 尝试删除根目录（非空时失败可忽略）
+      try {
+        fs.rmdirSync(subtitlesRoot);
+      } catch {
+        // 根目录非空时忽略
+      }
+    } catch (e) {
+      console.error(`[SubtitleCacheManager] clearAllSubtitleCaches 失败: ${String(e)}`);
+    }
+  }
 }
