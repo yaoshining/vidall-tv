@@ -1852,9 +1852,11 @@ export struct SubtitleSelectorDrawerDialog {
       const downloader = new SubtitleDownloader(storageCtx)
       const downloadResult = await downloader.download(
         result.fileId,
-        this.videoPath,
+        this.videoController.stableVideoSrcForCache,
         this.sourceType,
-        this.sourceId
+        this.sourceId,
+        result.languageCode,
+        result.downloadCount
       )
 
       this.showSearchToast('字幕下载成功', 2000)

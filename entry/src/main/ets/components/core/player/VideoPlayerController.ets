@@ -492,6 +492,15 @@ export class VideoPlayerController {
     return videoData.videoSrc;
   }
 
+  /**
+   * 缓存 key 用的稳定视频路径：SMB 源用原始 smb:// URL（端口稳定），其他源用 videoSrc。
+   * 下载字幕写缓存与读缓存必须使用同一路径，否则 SHA-256 hash 不同导致缓存永远无法命中。
+   */
+  get stableVideoSrcForCache(): string {
+    const raw = this.currentVideoData?.videoSrc ?? '';
+    return this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : raw;
+  }
+
   private shouldPreservePendingResume(videoData: VideoData): boolean {
     if (this.pendingResumeState === null) {
       return false;
@@ -1787,11 +1796,8 @@ export class VideoPlayerController {
   }
 
   /**
-   * 供 VideoPlayer UI 层在 ijkplayer XComponent.onLoad 回调中调用。
-   * 必须在 initPlayer() 之后调用，绑定 XComponent context 后触发真正的 init。
-   *
    * 注入字幕缓存上下文，用于步骤 4 本地缓存自动加载。
-   * 由 player page 在持有 UIAbilityContext 后调用。
+   * 由 player page 在持有 UIAbilityContext 后调用，注入 filesDir 等信息。
    */
   setSubtitleCacheContext(ctx: SubtitleCacheContext): void {
     this.subtitleCacheContext = ctx;
@@ -3137,7 +3143,7 @@ export class VideoPlayerController {
       // SMB 源代理 URL 的端口每次随机，必须用原始 smb:// URL 作为绑定 key 保持稳定
       const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
       const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
-      if (videoPath.length > 0 && this.allSubtitleTracks.length > 0) {
+      if (videoPath.length > 0) {
         // 构建缓存上下文：filesDir 由外部注入，sourceType/sourceId 来自 VideoData
         let cacheCtx: SubtitleCacheContext | undefined = undefined;
         const cachedFilesDir = this.subtitleCacheContext?.filesDir;
@@ -3157,6 +3163,17 @@ export class VideoPlayerController {
             `[loadSubtitleTracks] 调度器覆盖选轨: trackIndex=${resolution.trackIndex}`);
           await this.subtitleAdapter.switchTrack(resolution.trackIndex);
           this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+        } else if (resolution.type === 'local-cache' && resolution.localPath !== undefined) {
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[loadSubtitleTracks] 步骤4命中缓存字幕，追加到轨道列表并切换: ${resolution.localPath}`);
+          await this.addExternalSubtitle(resolution.localPath);
+          // addExternalSubtitle 内部调用 applySubtitleBridgeState，轨道列表已更新
+          // 切换到刚追加的轨道（最后一个）
+          const newIndex = this.allSubtitleTracks.length - 1;
+          if (newIndex >= 0) {
+            await this.subtitleAdapter.switchTrack(newIndex);
+            this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+          }
         }
       }
     } catch (e) {

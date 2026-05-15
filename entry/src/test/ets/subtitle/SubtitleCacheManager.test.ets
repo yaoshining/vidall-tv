@@ -133,7 +133,15 @@ export default function subtitleCacheManagerTest() {
       }
       expect(foundSub0).assertFalse();
     });
-  });
+
+    it('saveSubtitle_中文路径_正确存储', 0, async () => {
+      const unicodePath = 'http://192.168.1.1/dav/电影 2024/movie.mkv';
+      const entry = makeEntry('zh-subtitle.srt');
+      await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, unicodePath, entry);
+      const list = await manager.listCachedSubtitles(filesDir, SOURCE_TYPE, SOURCE_ID, unicodePath);
+      expect(list.length).assertEqual(1);
+      expect(list[0].fileName).assertEqual('zh-subtitle.srt');
+    });
 
   describe('SubtitleCacheManager_listCachedSubtitles', () => {
     let filesDir: string = '';

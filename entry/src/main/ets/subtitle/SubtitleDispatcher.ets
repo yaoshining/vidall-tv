@@ -30,9 +30,11 @@ export interface SubtitleBinding {
 /** 字幕调度结果 */
 export interface SubtitleResolution {
   /** 调度来源类型 */
-  type: 'user-specified' | 'none';
+  type: 'user-specified' | 'local-cache' | 'none';
   /** 匹配到的轨道在 allSubtitleTracks 中的索引（type=user-specified 时有效） */
   trackIndex?: number;
+  /** 本地缓存文件完整路径（type=local-cache 时有效） */
+  localPath?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -235,7 +237,11 @@ export class SubtitleDispatcher {
             const resolution: SubtitleResolution = { type: 'user-specified', trackIndex: foundIndex };
             return resolution;
           } else {
-            console.info(`[SubtitleDispatcher] 步骤4缓存路径未在轨道列表中找到对应 track: ${cachedPath}`);
+            // 缓存文件不在当前轨道列表（如下载缓存存于 filesDir/subtitles/），需追加加载
+            // TODO: 补充单元测试覆盖此分支（需 mock SubtitleCacheManager），见 Issue #230
+            console.info(`[SubtitleDispatcher] 步骤4缓存路径需追加到轨道列表: ${cachedPath}`);
+            const localCache: SubtitleResolution = { type: 'local-cache', localPath: cachedPath };
+            return localCache;
           }
         }
       } catch {

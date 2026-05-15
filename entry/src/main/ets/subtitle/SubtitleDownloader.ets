@@ -237,8 +237,8 @@ export class SubtitleDownloader {
     };
     this.cacheManager.saveSubtitle(
       this.context.filesDir, sourceType, sourceId, videoPath, cacheEntry
-    ).catch((e: Error) => {
-      console.warn(`[SubtitleDownloader] saveSubtitle 失败（非致命）: ${e.message}`);
+    ).catch(() => {
+      console.warn('[SubtitleDownloader] saveSubtitle 失败（非致命）');
     });
 
     console.info(`[SubtitleDownloader] 字幕已写入: ${localPath}`);

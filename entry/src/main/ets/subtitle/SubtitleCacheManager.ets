@@ -13,6 +13,8 @@ export interface CachedSubtitleEntry {
   downloadedAt: string;
   source: string;
   subDownloadCount: number;
+  /** 最后访问时间（用于 LRU 淘汰）；旧版 metadata 无此字段时降级为 downloadedAt */
+  lastAccessedAt?: string;
 }
 
 /** metadata.json 整体结构 */
@@ -183,26 +185,37 @@ export class SubtitleCacheManager {
 
       // 追加或覆盖（同名文件替换）
       let replaced = false;
+      const now = new Date().toISOString();
+      const entryWithAccess: CachedSubtitleEntry = {
+        fileName: entry.fileName,
+        language: entry.language,
+        downloadedAt: entry.downloadedAt,
+        source: entry.source,
+        subDownloadCount: entry.subDownloadCount,
+        lastAccessedAt: now
+      };
       const updatedSubtitles: CachedSubtitleEntry[] = [];
       for (let i = 0; i < metadata.subtitles.length; i++) {
         if (metadata.subtitles[i].fileName === entry.fileName) {
-          updatedSubtitles.push(entry);
+          updatedSubtitles.push(entryWithAccess);
           replaced = true;
         } else {
           updatedSubtitles.push(metadata.subtitles[i]);
         }
       }
       if (!replaced) {
-        updatedSubtitles.push(entry);
+        updatedSubtitles.push(entryWithAccess);
       }
       metadata.subtitles = updatedSubtitles;
       metadata.lastUsed = entry.fileName;
 
-      // LRU 清理：超过上限时删除 downloadedAt 最早的条目
+      // LRU 清理：超过上限时删除最近最少使用（lastAccessedAt，无则降级为 downloadedAt）的条目
       while (metadata.subtitles.length > MAX_CACHED_SUBTITLES) {
         let oldestIdx = 0;
         for (let i = 1; i < metadata.subtitles.length; i++) {
-          if (metadata.subtitles[i].downloadedAt < metadata.subtitles[oldestIdx].downloadedAt) {
+          const timeI = metadata.subtitles[i].lastAccessedAt ?? metadata.subtitles[i].downloadedAt;
+          const timeOldest = metadata.subtitles[oldestIdx].lastAccessedAt ?? metadata.subtitles[oldestIdx].downloadedAt;
+          if (timeI < timeOldest) {
             oldestIdx = i;
           }
         }
@@ -307,6 +320,14 @@ export class SubtitleCacheManager {
         return;
       }
       metadata.lastUsed = fileName;
+      // 同步更新对应条目的访问时间，确保 LRU 淘汰不会删掉刚使用的字幕
+      const accessTime = new Date().toISOString();
+      for (let i = 0; i < metadata.subtitles.length; i++) {
+        if (metadata.subtitles[i].fileName === fileName) {
+          metadata.subtitles[i].lastAccessedAt = accessTime;
+          break;
+        }
+      }
       await this.writeMetadata(dir, metadata);
     } catch (e) {
       console.error(`[SubtitleCacheManager] setLastUsedSubtitle 失败: ${String(e)}`);
