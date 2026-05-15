@@ -80,7 +80,7 @@ export class SubtitleCacheManager {
       } catch (e) {
         const be = e as BusinessError;
         if (be.code !== 13900015) {
-          throw e;
+          throw new Error(`mkdirSync(${toCreate[i]}) failed: ${be.message} (code: ${be.code})`);
         }
       }
     }
