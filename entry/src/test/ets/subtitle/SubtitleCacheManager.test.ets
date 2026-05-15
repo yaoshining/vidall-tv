@@ -46,6 +46,23 @@ function cleanDir(dir: string): void {
   }
 }
 
+/**
+ * 同步清理 sourceType_sourceId 下的所有哈希目录。
+ * 不依赖 async sha256Hex，可安全用于 beforeEach/afterEach。
+ */
+function cleanSourceDir(filesDir: string, sourceType: string, sourceId: string): void {
+  const sourceDir = `${filesDir}/subtitles/${sourceType}_${sourceId}`;
+  try {
+    const hashDirs = fs.listFileSync(sourceDir);
+    for (let i = 0; i < hashDirs.length; i++) {
+      cleanDir(`${sourceDir}/${hashDirs[i]}`);
+    }
+    fs.rmdirSync(sourceDir);
+  } catch {
+    // 目录不存在时静默
+  }
+}
+
 // ─────────────────────────────────────────────
 // 测试套件
 // ─────────────────────────────────────────────
@@ -56,18 +73,15 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(async () => {
+    beforeEach(() => {
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
-      // 清理可能存在的测试目录
-      const hash = await sha256Hex(VIDEO_PATH);
-      cleanDir(buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash));
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
-    afterEach(async () => {
-      const hash = await sha256Hex(VIDEO_PATH);
-      cleanDir(buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash));
+    afterEach(() => {
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     it('saveSubtitle_首次写入_创建metadata', 0, async () => {
@@ -122,15 +136,14 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(async () => {
+    beforeEach(() => {
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
     });
 
-    afterEach(async () => {
-      const hash = await sha256Hex(VIDEO_PATH_2);
-      cleanDir(buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash));
+    afterEach(() => {
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     it('listCachedSubtitles_无缓存_返回空数组', 0, async () => {
@@ -142,19 +155,16 @@ export default function subtitleCacheManagerTest() {
   describe('SubtitleCacheManager_getLastUsedSubtitle', () => {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
-    let testDir: string = '';
 
-    beforeEach(async () => {
+    beforeEach(() => {
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
-      const hash = await sha256Hex(VIDEO_PATH);
-      testDir = buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash);
-      cleanDir(testDir);
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     afterEach(() => {
-      cleanDir(testDir);
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     it('getLastUsedSubtitle_未设置lastUsed_返回null', 0, async () => {
@@ -200,15 +210,16 @@ export default function subtitleCacheManagerTest() {
   describe('SubtitleCacheManager_clearSubtitleCache', () => {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
-    let testDir: string = '';
 
-    beforeEach(async () => {
+    beforeEach(() => {
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
       filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
-      const hash = await sha256Hex(VIDEO_PATH);
-      testDir = buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash);
-      cleanDir(testDir);
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
+    });
+
+    afterEach(() => {
+      cleanSourceDir(filesDir, SOURCE_TYPE, SOURCE_ID);
     });
 
     it('clearSubtitleCache_有缓存_清除目录', 0, async () => {
