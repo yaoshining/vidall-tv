@@ -143,6 +143,8 @@ export default function subtitleCacheManagerTest() {
       expect(list[0].fileName).assertEqual('zh-subtitle.srt');
     });
 
+  });
+
   describe('SubtitleCacheManager_listCachedSubtitles', () => {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
