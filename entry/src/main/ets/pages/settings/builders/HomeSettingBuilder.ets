@@ -13,6 +13,7 @@ import {
   buildSubtitleLanguagePreferenceEntryValue,
   navigateToSubtitleLanguagePreference
 } from "./HomeSettingBuilderModel";
+import { SubtitleCacheManager } from '../../../subtitle/SubtitleCacheManager';
 
 @Builder
 function vipTitleBuilder() {
@@ -35,6 +36,7 @@ struct HomeSettingBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
   @Local subtitleLanguageSummary: string = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
   @Local isSubtitleLanguageSummaryLoaded: boolean = false
+  @Local private isClearingCache: boolean = false
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
@@ -48,6 +50,43 @@ struct HomeSettingBuilderComponent {
     } catch {
       this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
       this.isSubtitleLanguageSummaryLoaded = true
+    }
+  }
+
+  private showCacheClearConfirm(): void {
+    AlertDialog.show({
+      title: '清理字幕缓存',
+      message: '将清空所有已下载的字幕缓存，此操作不可恢复。',
+      primaryButton: {
+        value: '确认清理',
+        action: () => { this.doClearCache() }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    })
+  }
+
+  private doClearCache(): void {
+    if (this.isClearingCache) { return }
+    this.isClearingCache = true
+    const filesDir = getContext(this).filesDir
+    const mgr = new SubtitleCacheManager()
+    mgr.clearAllSubtitleCaches(filesDir).then(() => {
+      this.isClearingCache = false
+      this.showToast('字幕缓存已清理')
+    }).catch(() => {
+      this.isClearingCache = false
+      this.showToast('清理失败，请重试')
+    })
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 })
+    } catch {
+      console.warn(`[HomeSettingBuilder] toast failed: ${message}`)
     }
   }
 
@@ -110,6 +149,10 @@ struct HomeSettingBuilderComponent {
           onRightIconClick: () => {
             navigateToSubtitleLanguagePreference(this.controller)
           }
+        })
+        SettingListItem({
+          title: '清理字幕缓存',
+          onItemClick: () => { this.showCacheClearConfirm() }
         })
       }
 
