@@ -13,7 +13,7 @@ import {
   buildSubtitleLanguagePreferenceEntryValue,
   navigateToSubtitleLanguagePreference
 } from "./HomeSettingBuilderModel";
-import { SubtitleCacheManager } from '../../../subtitle/SubtitleCacheManager';
+import { SubtitleCacheManager, formatCacheSize } from '../../../subtitle/SubtitleCacheManager';
 
 @Builder
 function vipTitleBuilder() {
@@ -37,9 +37,11 @@ struct HomeSettingBuilderComponent {
   @Local subtitleLanguageSummary: string = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
   @Local isSubtitleLanguageSummaryLoaded: boolean = false
   @Local private isClearingCache: boolean = false
+  @Local private cacheSizeText: string = ''
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
+    this.loadCacheSize()
   }
 
   private async loadSubtitlePreference(): Promise<void> {
@@ -50,6 +52,16 @@ struct HomeSettingBuilderComponent {
     } catch {
       this.subtitleLanguageSummary = buildSubtitleLanguagePreferenceSummary(DEFAULT_SUBTITLE_LANGUAGE_PREFERENCE)
       this.isSubtitleLanguageSummaryLoaded = true
+    }
+  }
+
+  private async loadCacheSize(): Promise<void> {
+    try {
+      const filesDir = getContext(this).filesDir
+      const bytes = await new SubtitleCacheManager().getTotalCacheSizeBytes(filesDir)
+      this.cacheSizeText = formatCacheSize(bytes)
+    } catch {
+      this.cacheSizeText = ''
     }
   }
 
@@ -75,6 +87,7 @@ struct HomeSettingBuilderComponent {
     const mgr = new SubtitleCacheManager()
     mgr.clearAllSubtitleCaches(filesDir).then(() => {
       this.isClearingCache = false
+      this.cacheSizeText = formatCacheSize(0)
       this.showToast('字幕缓存已清理')
     }).catch(() => {
       this.isClearingCache = false
@@ -152,6 +165,7 @@ struct HomeSettingBuilderComponent {
         })
         SettingListItem({
           title: '清理字幕缓存',
+          value: this.cacheSizeText,
           onItemClick: () => { this.showCacheClearConfirm() }
         })
       }
