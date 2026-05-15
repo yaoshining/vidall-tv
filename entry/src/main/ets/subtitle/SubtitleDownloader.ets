@@ -4,6 +4,7 @@ import fs from '@ohos.file.fs';
 import http from '@ohos.net.http';
 import { emitter, BusinessError } from '@kit.BasicServicesKit';
 import { OpenSubtitlesClient, SubtitleDownloadError } from '../lib/OpenSubtitlesClient';
+import { SubtitleCacheManager, CachedSubtitleEntry } from './SubtitleCacheManager';
 
 // ─────────────────────────────────────────────
 // 事件 ID 常量
@@ -117,23 +118,35 @@ export function buildSubtitlePath(
 export class SubtitleDownloader {
   private readonly context: SubtitleStorageContext;
   private readonly client: OpenSubtitlesClient;
+  private readonly cacheManager: SubtitleCacheManager;
 
-  constructor(context: SubtitleStorageContext, client?: OpenSubtitlesClient) {
+  constructor(
+    context: SubtitleStorageContext,
+    client?: OpenSubtitlesClient,
+    cacheManager?: SubtitleCacheManager
+  ) {
     this.context = context;
     if (client !== undefined) {
       this.client = client;
     } else {
       this.client = new OpenSubtitlesClient();
     }
+    if (cacheManager !== undefined) {
+      this.cacheManager = cacheManager;
+    } else {
+      this.cacheManager = new SubtitleCacheManager();
+    }
   }
 
   /**
    * 下载字幕文件并持久化到本地。
    *
-   * @param fileId      OpenSubtitles file_id
-   * @param videoPath   视频完整路径（用于计算存储目录 hash）
-   * @param sourceType  文件源类型字符串（如 "webdav"）
-   * @param sourceId    文件源 ID 字符串
+   * @param fileId            OpenSubtitles file_id
+   * @param videoPath         视频完整路径（用于计算存储目录 hash）
+   * @param sourceType        文件源类型字符串（如 "webdav"）
+   * @param sourceId          文件源 ID 字符串
+   * @param language          字幕语言（可选，用于 metadata 记录）
+   * @param subDownloadCount  字幕下载量（可选，用于 metadata 记录）
    * @returns 写入完成后的本地路径与文件名
    * @throws SubtitleDownloadError 下载或写入失败时抛出
    */
@@ -141,7 +154,9 @@ export class SubtitleDownloader {
     fileId: number,
     videoPath: string,
     sourceType: string,
-    sourceId: string
+    sourceId: string,
+    language?: string,
+    subDownloadCount?: number
   ): Promise<DownloadResult> {
     // Task 4.2 - 获取下载链接
     const linkInfo = await this.client.getDownloadLink(fileId);
@@ -210,6 +225,20 @@ export class SubtitleDownloader {
     // Task 4.4 - 发布下载完成事件
     emitter.emit({ eventId: SUBTITLE_DOWNLOADED_EVENT_ID }, {
       data: { localPath: result.localPath, fileName: result.fileName }
+    });
+
+    // 写入字幕缓存 metadata（fire-and-forget，失败不影响下载结果）
+    const cacheEntry: CachedSubtitleEntry = {
+      fileName: fileName,
+      language: language ?? '',
+      downloadedAt: new Date().toISOString(),
+      source: 'opensubtitles',
+      subDownloadCount: subDownloadCount ?? 0
+    };
+    this.cacheManager.saveSubtitle(
+      this.context.filesDir, sourceType, sourceId, videoPath, cacheEntry
+    ).catch((e: Error) => {
+      console.warn(`[SubtitleDownloader] saveSubtitle 失败（非致命）: ${e.message}`);
     });
 
     console.info(`[SubtitleDownloader] 字幕已写入: ${localPath}`);

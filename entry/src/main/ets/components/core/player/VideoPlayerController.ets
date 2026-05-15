@@ -30,7 +30,7 @@ import {
 } from "./EpisodeAutoplayPreferences";
 import { MetricsService } from "../../../services/metrics/MetricsService";
 import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
-import { SubtitleDispatcher } from "../../../subtitle/SubtitleDispatcher";
+import { SubtitleDispatcher, SubtitleCacheContext } from "../../../subtitle/SubtitleDispatcher";
 import { AudioDispatcher } from "../../../audio/AudioDispatcher";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
@@ -306,6 +306,8 @@ export class VideoPlayerController {
   private pendingReloadReject?: (error: Error) => void;
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private readonly subtitleDispatcher: SubtitleDispatcher = new SubtitleDispatcher();
+  /** 字幕缓存上下文，由外部（player page）注入后用于步骤 4 缓存查询 */
+  private subtitleCacheContext?: SubtitleCacheContext;
   private currentVideoData?: VideoData;
   private timeToSeek = -1
   private subtitleClearTimer?: number
@@ -1788,6 +1790,14 @@ export class VideoPlayerController {
    * 供 VideoPlayer UI 层在 ijkplayer XComponent.onLoad 回调中调用。
    * 必须在 initPlayer() 之后调用，绑定 XComponent context 后触发真正的 init。
    *
+   * 注入字幕缓存上下文，用于步骤 4 本地缓存自动加载。
+   * 由 player page 在持有 UIAbilityContext 后调用。
+   */
+  setSubtitleCacheContext(ctx: SubtitleCacheContext): void {
+    this.subtitleCacheContext = ctx;
+  }
+
+  /**
    * 时序说明：
    * 1. UI 层先注册 emitter.once(PREPARED)
    * 2. UI 层调 initPlayer()（创建 IjkPlayerAdapter 但不调 native_setup）
@@ -3123,10 +3133,23 @@ export class VideoPlayerController {
       await this.subtitleAdapter.init(this.player, this.currentVideoData);
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
 
-      // 字幕优先级调度：步骤 1（用户指定）
+      // 字幕优先级调度：步骤 1（用户指定） + 步骤 4（本地缓存）
       const videoPath = this.currentVideoData?.videoSrc ?? '';
       if (videoPath.length > 0 && this.allSubtitleTracks.length > 0) {
-        const resolution = await this.subtitleDispatcher.resolveSubtitle(videoPath, this.allSubtitleTracks);
+        // 构建缓存上下文：filesDir 由外部注入，sourceType/sourceId 来自 VideoData
+        let cacheCtx: SubtitleCacheContext | undefined = undefined;
+        const cachedFilesDir = this.subtitleCacheContext?.filesDir;
+        const cachedSourceType = this.currentVideoData?.fileSourceType;
+        const cachedSourceId = this.currentVideoData?.fileSourceId;
+        if (cachedFilesDir !== undefined && cachedSourceType !== undefined && cachedSourceId !== undefined) {
+          const ctx: SubtitleCacheContext = {
+            filesDir: cachedFilesDir,
+            sourceType: cachedSourceType,
+            sourceId: cachedSourceId
+          };
+          cacheCtx = ctx;
+        }
+        const resolution = await this.subtitleDispatcher.resolveSubtitle(videoPath, this.allSubtitleTracks, cacheCtx);
         if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `[loadSubtitleTracks] 调度器覆盖选轨: trackIndex=${resolution.trackIndex}`);

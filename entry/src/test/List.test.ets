@@ -46,6 +46,7 @@ import openSubtitlesPrefsTest from './OpenSubtitlesPrefs.test';
 import openSubtitlesClientTest from './OpenSubtitlesClient.test';
 import subtitleDownloaderTest from './SubtitleDownloader.test';
 import subtitleDispatcherTest from './SubtitleDispatcher.test';
+import subtitleCacheManagerTest from './ets/subtitle/SubtitleCacheManager.test';
 import playHistoryPageTest from './PlayHistoryPage.test';
 import continueWatchCardTest from './ContinueWatchCard.test';
 
@@ -96,6 +97,7 @@ export default function testsuite() {
   openSubtitlesClientTest();
   subtitleDownloaderTest();
   subtitleDispatcherTest();
+  subtitleCacheManagerTest();
   playHistoryPageTest();
   continueWatchCardTest();
 }

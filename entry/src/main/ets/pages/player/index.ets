@@ -6,6 +6,8 @@ import {
   type PlayerBackend,
   type UnsupportedFormatFallback
 } from "../../components/core/player/VideoPlayerController";
+import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
+import { common } from "@kit.AbilityKit";
 import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity, MediaProgressEntry } from "../../db/models/MediaEntity";
@@ -304,6 +306,18 @@ export struct PlayerPage {
   aboutToAppear(): void {
     if (UmamiAnalyticsService.isInitialized()) {
       UmamiAnalyticsService.getInstance().trackPageView('/player');
+    }
+    // 注入字幕缓存上下文（filesDir 由 UIAbilityContext 获取）
+    try {
+      const abilityCtx = getContext(this) as common.UIAbilityContext;
+      const subtitleCacheCtx: SubtitleCacheContext = {
+        filesDir: abilityCtx.filesDir,
+        sourceType: '',
+        sourceId: ''
+      };
+      this.videoPlayerController.setSubtitleCacheContext(subtitleCacheCtx);
+    } catch {
+      // 获取 context 失败时，步骤 4 缓存查询将跳过
     }
   }
 
