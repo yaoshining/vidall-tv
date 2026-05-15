@@ -381,4 +381,132 @@ export class SubtitleCacheManager {
       console.error(`[SubtitleCacheManager] clearSubtitleCache 失败: ${String(e)}`);
     }
   }
+
+  /**
+   * 计算字幕缓存占用的总磁盘空间（字节数）。
+   *
+   * 目录结构为三层：subtitles/{sourceType}_{sourceId}/{sha256Hash}/files
+   * subtitles/ 不存在时返回 0。
+   */
+  async getTotalCacheSizeBytes(filesDir: string): Promise<number> {
+    const subtitlesRoot = `${filesDir}/subtitles`;
+    try {
+      await fs.stat(subtitlesRoot);
+    } catch {
+      return 0;
+    }
+    let totalBytes = 0;
+    let level1Names: string[] = [];
+    try {
+      level1Names = await fs.listFile(subtitlesRoot);
+    } catch {
+      return 0;
+    }
+    for (let i = 0; i < level1Names.length; i++) {
+      const level1Dir = `${subtitlesRoot}/${level1Names[i]}`;
+      let level2Names: string[] = [];
+      try {
+        level2Names = await fs.listFile(level1Dir);
+      } catch {
+        continue;
+      }
+      for (let j = 0; j < level2Names.length; j++) {
+        const level2Dir = `${level1Dir}/${level2Names[j]}`;
+        let fileNames: string[] = [];
+        try {
+          fileNames = await fs.listFile(level2Dir);
+        } catch {
+          // level2 entry 可能是文件，直接 stat
+          try {
+            const stat = await fs.stat(level2Dir);
+            totalBytes += stat.size;
+          } catch {
+            // ignore
+          }
+          continue;
+        }
+        for (let k = 0; k < fileNames.length; k++) {
+          try {
+            const stat = await fs.stat(`${level2Dir}/${fileNames[k]}`);
+            totalBytes += stat.size;
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+    return totalBytes;
+  }
+
+  /**
+   * 清理所有字幕缓存（删除 {filesDir}/subtitles/ 下的全部内容）。
+   *
+   * - subtitles/ 根目录不存在时静默返回，不抛异常
+   * - 单个文件失败时记录日志并继续，全部处理完后若有失败则抛出 Error
+   */
+  async clearAllSubtitleCaches(filesDir: string): Promise<void> {
+    const subtitlesRoot = `${filesDir}/subtitles`;
+    // 根目录不存在时静默返回
+    try {
+      await fs.stat(subtitlesRoot);
+    } catch {
+      return;
+    }
+
+    // 遍历一级子目录
+    let subDirNames: string[] = [];
+    try {
+      subDirNames = await fs.listFile(subtitlesRoot);
+    } catch (e) {
+      throw new Error(`[SubtitleCacheManager] 无法列出缓存目录: ${String(e)}`);
+    }
+
+    let hasError = false;
+    for (let i = 0; i < subDirNames.length; i++) {
+      const subDir = `${subtitlesRoot}/${subDirNames[i]}`;
+      try {
+        let files: string[] = [];
+        try {
+          files = await fs.listFile(subDir);
+        } catch {
+          // listFile 失败时忽略（可能是文件而非目录）
+        }
+        for (let j = 0; j < files.length; j++) {
+          try {
+            await fs.unlink(`${subDir}/${files[j]}`);
+          } catch {
+            // 单文件删除失败时忽略，继续下一个
+          }
+        }
+        await fs.rmdir(subDir);
+      } catch (e) {
+        hasError = true;
+        console.error(`[SubtitleCacheManager] clearAllSubtitleCaches 处理子目录失败: ${subDir} ${String(e)}`);
+      }
+    }
+
+    // 尝试删除根目录（非空时失败可忽略）
+    try {
+      await fs.rmdir(subtitlesRoot);
+    } catch {
+      // 根目录非空时忽略
+    }
+
+    if (hasError) {
+      throw new Error('[SubtitleCacheManager] 部分字幕缓存清理失败，请重试');
+    }
+  }
+}
+
+/**
+ * 将字节数格式化为人类可读的缓存大小字符串。
+ */
+export function formatCacheSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  } else if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  } else {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 }
