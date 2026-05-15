@@ -70,7 +70,7 @@ export default function subtitleCacheManagerTest() {
       cleanDir(buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash));
     });
 
-    it('saveSubtitle_首次写入_创建metadata', async () => {
+    it('saveSubtitle_首次写入_创建metadata', 0, async () => {
       const entry = makeEntry('movie.zh.srt');
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, entry);
 
@@ -80,7 +80,7 @@ export default function subtitleCacheManagerTest() {
       expect(list[0].language).assertEqual('zh');
     });
 
-    it('saveSubtitle_二次写入_追加记录', async () => {
+    it('saveSubtitle_二次写入_追加记录', 0, async () => {
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, makeEntry('movie.zh.srt', 'zh'));
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, makeEntry('movie.en.srt', 'en'));
 
@@ -88,7 +88,7 @@ export default function subtitleCacheManagerTest() {
       expect(list.length).assertEqual(2);
     });
 
-    it('saveSubtitle_同名文件_覆盖而非追加', async () => {
+    it('saveSubtitle_同名文件_覆盖而非追加', 0, async () => {
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, makeEntry('movie.zh.srt', 'zh'));
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, makeEntry('movie.zh.srt', 'zh-updated'));
 
@@ -97,7 +97,7 @@ export default function subtitleCacheManagerTest() {
       expect(list[0].language).assertEqual('zh-updated');
     });
 
-    it('saveSubtitle_超过10条_LRU清理最旧', async () => {
+    it('saveSubtitle_超过10条_LRU清理最旧', 0, async () => {
       // 写入 11 条，最旧的是 daysAgo=10
       for (let i = 0; i < 11; i++) {
         const e = makeEntry(`sub${i}.srt`, 'zh', 10 - i);
@@ -133,7 +133,7 @@ export default function subtitleCacheManagerTest() {
       cleanDir(buildSubtitleDir(filesDir, SOURCE_TYPE, SOURCE_ID, hash));
     });
 
-    it('listCachedSubtitles_无缓存_返回空数组', async () => {
+    it('listCachedSubtitles_无缓存_返回空数组', 0, async () => {
       const list = await manager.listCachedSubtitles(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH_2);
       expect(list.length).assertEqual(0);
     });
@@ -157,14 +157,14 @@ export default function subtitleCacheManagerTest() {
       cleanDir(testDir);
     });
 
-    it('getLastUsedSubtitle_未设置lastUsed_返回null', async () => {
+    it('getLastUsedSubtitle_未设置lastUsed_返回null', 0, async () => {
       const entry = makeEntry('movie.zh.srt');
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, entry);
       const result = await manager.getLastUsedSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH);
       expect(result === null).assertTrue();
     });
 
-    it('getLastUsedSubtitle_setLastUsed后_返回路径', async () => {
+    it('getLastUsedSubtitle_setLastUsed后_返回路径', 0, async () => {
       const entry = makeEntry('movie.zh.srt');
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, entry);
       // 创建实际文件（模拟已下载）
@@ -182,7 +182,7 @@ export default function subtitleCacheManagerTest() {
       }
     });
 
-    it('getLastUsedSubtitle_文件不存在_返回null并清除lastUsed', async () => {
+    it('getLastUsedSubtitle_文件不存在_返回null并清除lastUsed', 0, async () => {
       const entry = makeEntry('missing.srt');
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, entry);
       await manager.setLastUsedSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, 'missing.srt');
@@ -211,7 +211,7 @@ export default function subtitleCacheManagerTest() {
       cleanDir(testDir);
     });
 
-    it('clearSubtitleCache_有缓存_清除目录', async () => {
+    it('clearSubtitleCache_有缓存_清除目录', 0, async () => {
       await manager.saveSubtitle(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH, makeEntry('movie.zh.srt'));
       await manager.clearSubtitleCache(filesDir, SOURCE_TYPE, SOURCE_ID, VIDEO_PATH);
 
@@ -219,7 +219,7 @@ export default function subtitleCacheManagerTest() {
       expect(list.length).assertEqual(0);
     });
 
-    it('clearSubtitleCache_无缓存_静默返回', async () => {
+    it('clearSubtitleCache_无缓存_静默返回', 0, async () => {
       // 目录不存在时不抛出异常
       let threw = false;
       try {
