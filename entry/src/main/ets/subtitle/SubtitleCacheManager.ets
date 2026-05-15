@@ -331,20 +331,30 @@ export class SubtitleCacheManager {
         // 目录不存在，静默返回
         return;
       }
-      // 删除目录内所有文件
-      const entries = fs.listFileSync(dir);
-      for (let i = 0; i < entries.length; i++) {
-        try {
-          fs.unlinkSync(`${dir}/${entries[i]}`);
-        } catch {
-          // 单个文件删除失败不中断
+      // 先按已知路径删除 metadata.json（不依赖 listFileSync 行为）
+      try {
+        fs.unlinkSync(`${dir}/${METADATA_FILE_NAME}`);
+      } catch {
+        // 不存在时忽略
+      }
+      // 再用 listFileSync 删除目录内其余文件（字幕文件等）
+      try {
+        const entries = fs.listFileSync(dir);
+        for (let i = 0; i < entries.length; i++) {
+          try {
+            fs.unlinkSync(`${dir}/${entries[i]}`);
+          } catch {
+            // 单个文件删除失败不中断
+          }
         }
+      } catch {
+        // listFileSync 失败时忽略
       }
       // 删除目录本身
       try {
         fs.rmdirSync(dir);
       } catch {
-        // 目录非空时忽略（理论上不会发生）
+        // 目录非空时忽略
       }
     } catch (e) {
       console.error(`[SubtitleCacheManager] clearSubtitleCache 失败: ${String(e)}`);
