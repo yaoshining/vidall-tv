@@ -60,6 +60,12 @@ export struct VideoPlayer {
   @Local ijkVideoRatio: number = 0
   @Local ijkViewportWidth: number = 0
   @Local ijkViewportHeight: number = 0
+  /**
+   * 字幕选择器抽屉「退出搜索结果」回调。
+   * 由 SubtitleSelectorDrawerDialog.aboutToAppear 注册；
+   * onWillDismiss 拦截返回键时调用：若处于搜索结果视图则退回轨道列表（返回 true），否则返回 false。
+   */
+  private subtitleTryHideSearch: (() => boolean) | undefined = undefined
 
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
   private _lastRawText: string = ''
@@ -215,7 +221,11 @@ export struct VideoPlayer {
       sourceType: this.resolveSubtitleSourceType(),
       sourceId: this.data.fileSourceId ?? '0',
       scrapeOriginalTitle: this.data.scrapeOriginalTitle,
-      tmdbId: this.data.tmdbId
+      tmdbId: this.data.tmdbId,
+      // 注册回调：onWillDismiss 拦截返回键时，先调用此函数尝试退出搜索结果视图
+      onRegisterResetSearch: (fn: () => boolean) => {
+        this.subtitleTryHideSearch = fn
+      }
     }),
     customStyle: true,
     backgroundColor: Color.Transparent,
@@ -223,8 +233,13 @@ export struct VideoPlayer {
     width: '100%',
     height: '100%',
     cornerRadius: 0,
-    onWillDismiss: () => {
-      this.subtitleSelectorDialogController.close()
+    onWillDismiss: (action: DismissDialogAction) => {
+      // 若处于搜索结果视图，退回轨道列表而不关闭 Dialog
+      if (this.subtitleTryHideSearch?.()) {
+        // subtitleTryHideSearch 已将 showSearchResults 置 false，不调用 action.dismiss()
+      } else {
+        action.dismiss()
+      }
     },
     openAnimation: {
       duration: 0

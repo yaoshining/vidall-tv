@@ -1634,6 +1634,13 @@ export struct SubtitleSelectorDrawerDialog {
   scrapeOriginalTitle: string = ''
   /** TMDB ID（可选），用于 OpenSubtitles tmdb_id 精准匹配 */
   tmdbId: string = ''
+  /**
+   * 由 VideoPlayer 注入：注册一个「尝试退出搜索结果」的回调。
+   * 当 VideoPlayer 的 onWillDismiss 拦截到返回键时，调用此处注册的函数：
+   *   - 若当前处于搜索结果视图：将 showSearchResults 置 false 并返回 true（dialog 保持打开）
+   *   - 若当前处于轨道列表视图：返回 false（交由 VideoPlayer 调用 action.dismiss()）
+   */
+  onRegisterResetSearch?: (fn: () => boolean) => void
 
   @State panelOffsetX: number = 72
   @State panelOpacity: number = 0
@@ -1656,6 +1663,14 @@ export struct SubtitleSelectorDrawerDialog {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
       this.panelOffsetX = 0
       this.panelOpacity = 1
+    })
+    // 向 VideoPlayer 注册「退出搜索结果」回调，供 onWillDismiss 拦截返回键时调用
+    this.onRegisterResetSearch?.(() => {
+      if (this.showSearchResults) {
+        this.showSearchResults = false
+        return true
+      }
+      return false
     })
   }
 
@@ -2243,13 +2258,5 @@ export struct SubtitleSelectorDrawerDialog {
     }
     .width('100%')
     .height('100%')
-    .onKeyEvent((event: KeyEvent) => {
-      if (event.type === KeyType.Down &&
-          event.keyCode === KeyCode.KEYCODE_BACK &&
-          this.showSearchResults) {
-        this.showSearchResults = false
-        event.stopPropagation()
-      }
-    })
   }
 }
