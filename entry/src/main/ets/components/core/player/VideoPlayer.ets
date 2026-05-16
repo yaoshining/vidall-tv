@@ -147,6 +147,10 @@ export struct VideoPlayer {
       onOpenSettings: () => {
         this.controlsDialogController.close()
         this.settingsDialogController.open()
+      },
+      onOpenSubtitleSelector: () => {
+        this.controlsDialogController.close()
+        this.subtitleSelectorDialogController.open()
       }
     }),
     customStyle: true,

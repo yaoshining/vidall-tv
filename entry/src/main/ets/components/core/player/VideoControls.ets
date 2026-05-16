@@ -21,6 +21,7 @@ import {
   SubtitleDownloadError
 } from '../../../lib/OpenSubtitlesClient'
 import { SubtitleDownloader, SubtitleStorageContext } from '../../../subtitle/SubtitleDownloader'
+import { SubtitleCacheManager } from '../../../subtitle/SubtitleCacheManager'
 import { parseFileName, buildSearchTitles } from '../../../lib/ScrapeClient'
 import { loadSubtitleSearchPreferenceSnapshot } from '../../../subtitle/SubtitleLanguagePreference'
 
@@ -29,6 +30,7 @@ struct VideoControls {
   @Require @Param videoController: VideoPlayerController
   @Require @Param dialogController: CustomDialogController
   @Require @Param openSettings: () => void
+  @Param onOpenSubtitleSelector: () => void = () => {}
   closeTimer?: number
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
@@ -213,6 +215,25 @@ struct VideoControls {
             .padding({ top: 8, bottom: 8 })
           }
         }
+
+        ListItem() {
+          Row({ space: 10 }) {
+            Text('🔍')
+              .fontSize(16)
+              .fontColor(Color.White)
+            Text('更多字幕配置')
+              .fontSize(16)
+              .fontColor(Color.White)
+          }
+          .width('100%')
+          .height(50)
+          .justifyContent(FlexAlign.Start)
+          .padding({ left: 20, right: 20 })
+        }
+        .onClick(() => {
+          this.showSubtitleMenu = false
+          this.onOpenSubtitleSelector()
+        })
       }
       .width('100%')
       .backgroundColor('rgba(0, 0, 0, 0.8)')
@@ -299,27 +320,25 @@ struct VideoControls {
           }
 
           // 字幕按钮
-          if (this.videoController.allSubtitleTracks.length > 0) {
-            Row({ space: 8 }) {
-              SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
-                .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
-                .fontSize(24)
-              Text(this.getActiveSubtitleName())
-                .fontSize(14)
-                .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
-            }
-            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .backgroundColor(this.subtitleButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
-            .borderRadius(20)
-            .border({ width: this.subtitleButtonFocused ? 2 : 1, color: this.subtitleButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
-            .focusable(true)
-            .onFocus(() => { this.subtitleButtonFocused = true })
-            .onBlur(() => { this.subtitleButtonFocused = false })
-            .onClick(() => {
-              this.showSubtitleMenu = !this.showSubtitleMenu
-              clearTimeout(this.closeTimer)
-            })
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
+              .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
+              .fontSize(24)
+            Text(this.getActiveSubtitleName())
+              .fontSize(14)
+              .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
           }
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor(this.subtitleButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
+          .borderRadius(20)
+          .border({ width: this.subtitleButtonFocused ? 2 : 1, color: this.subtitleButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
+          .focusable(true)
+          .onFocus(() => { this.subtitleButtonFocused = true })
+          .onBlur(() => { this.subtitleButtonFocused = false })
+          .onClick(() => {
+            this.showSubtitleMenu = !this.showSubtitleMenu
+            clearTimeout(this.closeTimer)
+          })
 
           Row({ space: 8 }) {
             SymbolGlyph($r('sys.symbol.gearshape'))
@@ -576,6 +595,7 @@ export struct VideoControlsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
   @Require onOpenSettings: () => void
+  onOpenSubtitleSelector: () => void = () => {}
   @State opacityValue: number = 0;
 
   aboutToAppear(): void {
@@ -592,7 +612,8 @@ export struct VideoControlsDialog {
     VideoControls({
       videoController: this.videoController,
       dialogController: this.controller,
-      openSettings: this.onOpenSettings
+      openSettings: this.onOpenSettings,
+      onOpenSubtitleSelector: this.onOpenSubtitleSelector
     })
       .opacity(this.opacityValue)
   }
@@ -1864,6 +1885,15 @@ export struct SubtitleSelectorDrawerDialog {
 
       await this.videoController.addExternalSubtitle(downloadResult.localPath)
 
+      const cacheManager = new SubtitleCacheManager()
+      await cacheManager.setLastUsedSubtitle(
+        hostCtx.filesDir,
+        this.sourceType,
+        this.sourceId,
+        this.videoController.stableVideoSrcForCache,
+        downloadResult.fileName
+      )
+
       this.showSearchResults = false
     } catch (e) {
       const errMsg = (e as object as Record<string, string>)['message'] ?? JSON.stringify(e)
@@ -2138,7 +2168,7 @@ export struct SubtitleSelectorDrawerDialog {
 
               Scroll() {
                 Column({ space: 8 }) {
-                  ForEach(this.searchResults, (result: SubtitleSearchResult) => {
+                  ForEach(this.searchResults, (result: SubtitleSearchResult, index: number) => {
                     Row({ space: 10 }) {
                       Row() {
                         Text(this.getResultLanguageTag(result.languageCode))
@@ -2181,6 +2211,7 @@ export struct SubtitleSelectorDrawerDialog {
                     .alignItems(VerticalAlign.Center)
                     .backgroundColor('rgba(255, 255, 255, 0.05)')
                     .borderRadius(14)
+                    .defaultFocus(index === 0)
                     .focusable(true)
                     .enabled(!this.isDownloading)
                     .onClick(() => {
@@ -2211,5 +2242,13 @@ export struct SubtitleSelectorDrawerDialog {
     }
     .width('100%')
     .height('100%')
+    .onKeyEvent((event: KeyEvent) => {
+      if (event.type === KeyType.Down &&
+          event.keyCode === KeyCode.KEYCODE_BACK &&
+          this.showSearchResults) {
+        this.showSearchResults = false
+        event.stopPropagation()
+      }
+    })
   }
 }
