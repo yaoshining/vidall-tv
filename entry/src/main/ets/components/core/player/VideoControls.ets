@@ -1904,6 +1904,12 @@ export struct SubtitleSelectorDrawerDialog {
 
       await this.videoController.addExternalSubtitle(downloadResult.localPath)
 
+      // 下载成功后自动切换到该字幕轨道（新增轨道总是追加到列表末尾）
+      const newSubtitleIndex = this.videoController.allSubtitleTracks.length - 1
+      if (newSubtitleIndex >= 0) {
+        await this.videoController.switchSubtitleTrack(newSubtitleIndex)
+      }
+
       const cacheManager = new SubtitleCacheManager()
       await cacheManager.setLastUsedSubtitle(
         hostCtx.filesDir,

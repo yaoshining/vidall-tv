@@ -3145,15 +3145,20 @@ export class VideoPlayerController {
       const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
       if (videoPath.length > 0) {
         // 构建缓存上下文：filesDir 由外部注入，sourceType/sourceId 来自 VideoData
+        // Bug 修复：fileSourceType/fileSourceId 仅在 SMB/WebDAV 源时才存在，
+        // 本地文件（FILE_URI）不设置这两个字段，需要用与 VideoPlayer.resolveSubtitleSourceType()
+        // 相同的降级逻辑补全，否则缓存上下文无法构建，重开视频后已下载字幕消失。
         let cacheCtx: SubtitleCacheContext | undefined = undefined;
         const cachedFilesDir = this.subtitleCacheContext?.filesDir;
-        const cachedSourceType = this.currentVideoData?.fileSourceType;
-        const cachedSourceId = this.currentVideoData?.fileSourceId;
-        if (cachedFilesDir !== undefined && cachedSourceType !== undefined && cachedSourceId !== undefined) {
+        if (cachedFilesDir !== undefined) {
+          const rawSourceType = this.currentVideoData?.fileSourceType;
+          const resolvedSourceType = rawSourceType !== undefined ? rawSourceType :
+            (this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network');
+          const resolvedSourceId = this.currentVideoData?.fileSourceId ?? '0';
           const ctx: SubtitleCacheContext = {
             filesDir: cachedFilesDir,
-            sourceType: cachedSourceType,
-            sourceId: cachedSourceId
+            sourceType: resolvedSourceType,
+            sourceId: resolvedSourceId
           };
           cacheCtx = ctx;
         }
