@@ -130,6 +130,8 @@ struct VideoControls {
                 Text(item.displayName)
                   .fontSize(16)
                   .fontColor(Color.White)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
                 if (item.kind === 'external') {
                   Text('外部文件')
                     .fontSize(11)
@@ -137,6 +139,7 @@ struct VideoControls {
                 }
               }
               .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
 
               if (this.videoController.activeSubtitleIndex === index) {
                 SymbolGlyph($r('sys.symbol.checkmark'))
@@ -2203,7 +2206,7 @@ export struct SubtitleSelectorDrawerDialog {
                         Text(result.fileName)
                           .fontSize(16)
                           .fontColor('#EAF0F7')
-                          .maxLines(2)
+                          .maxLines(1)
                           .textOverflow({ overflow: TextOverflow.Ellipsis })
                           .width('100%')
                         Text(`${result.languageCode}  ↓ ${this.formatDownloadCount(result.downloadCount)}`)
