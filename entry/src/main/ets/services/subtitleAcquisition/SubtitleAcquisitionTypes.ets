@@ -23,6 +23,7 @@ import {
   SubtitleDownloadError,
   SubtitleSearchResult
 } from "../../lib/OpenSubtitlesClient";
+import { CachedSubtitleEntry } from "../../subtitle/SubtitleCacheManager";
 
 /** 字幕搜索结果（直接复用 OpenSubtitlesClient 类型）。 */
 export type { SubtitleSearchResult };
@@ -95,6 +96,32 @@ export interface SubtitleClearLastUsedInput {
   sourceId: string;
   filesDir: string;
 }
+
+/** 列出已下载字幕条目输入。 */
+export interface SubtitleListCachedInput {
+  stableVideoSrc: string;
+  sourceType: string;
+  sourceId: string;
+  filesDir: string;
+}
+
+/** 启用已下载字幕输入（计算 localPath 供 UI 调 `videoController.addExternalSubtitle`）。 */
+export interface SubtitleEnableCachedInput {
+  stableVideoSrc: string;
+  sourceType: string;
+  sourceId: string;
+  filesDir: string;
+  fileName: string;
+}
+
+/** 启用已下载字幕结果。 */
+export interface SubtitleEnableCachedOutcome {
+  localPath: string;
+  fileName: string;
+}
+
+/** 已下载字幕条目（re-export，UI 端无需直接 import SubtitleCacheManager）。 */
+export type { CachedSubtitleEntry };
 
 /**
  * 把已知的 4 个具体 Error 类归一映射为业务错误分类。

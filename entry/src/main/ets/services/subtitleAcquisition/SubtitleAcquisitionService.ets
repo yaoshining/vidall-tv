@@ -19,13 +19,20 @@
 
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { OpenSubtitlesClient } from "../../lib/OpenSubtitlesClient";
-import { SubtitleDownloader } from "../../subtitle/SubtitleDownloader";
-import { SubtitleCacheManager } from "../../subtitle/SubtitleCacheManager";
+import {
+  SubtitleDownloader,
+  buildSubtitlePath,
+  sha256Hex
+} from "../../subtitle/SubtitleDownloader";
+import { SubtitleCacheManager, CachedSubtitleEntry } from "../../subtitle/SubtitleCacheManager";
 import {
   SubtitleAcquisitionError,
   SubtitleClearLastUsedInput,
   SubtitleDownloadInput,
   SubtitleDownloadOutcome,
+  SubtitleEnableCachedInput,
+  SubtitleEnableCachedOutcome,
+  SubtitleListCachedInput,
   SubtitleMarkLastUsedInput,
   SubtitleSearchInput,
   SubtitleSearchResult,
@@ -139,6 +146,53 @@ export class SubtitleAcquisitionService {
       const errMsg = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
       hilog.warn(DOMAIN, TAG, `clearLastUsed failed (non-fatal): ${errMsg}`);
     }
+  }
+
+  /**
+   * 列出某视频已下载的所有字幕缓存条目。
+   *
+   * 用于 UI 端在"关闭字幕"后仍能展示"已下载字幕"分组，供用户主动重新启用。
+   * 失败返回空数组（与 `listCachedSubtitles` 实现一致），不抛。
+   */
+  async listCached(input: SubtitleListCachedInput): Promise<CachedSubtitleEntry[]> {
+    try {
+      const cacheManager = new SubtitleCacheManager();
+      return await cacheManager.listCachedSubtitles(
+        input.filesDir,
+        input.sourceType,
+        input.sourceId,
+        input.stableVideoSrc
+      );
+    } catch (e) {
+      const errMsg = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
+      hilog.warn(DOMAIN, TAG, `listCached failed: ${errMsg}`);
+      return [];
+    }
+  }
+
+  /**
+   * 计算缓存字幕的本地绝对路径，供 UI 调 `videoController.addExternalSubtitle`。
+   *
+   * 之所以 service 暴露此路径而不是 UI 端自行调用 `buildSubtitlePath`：
+   * 1. `buildSubtitlePath` 是 `SubtitleDownloader` 的内部实现细节，UI 不应直接 import
+   * 2. 路径计算涉及 SHA-256（异步），service 统一封装避免 UI 端遗漏 await
+   *
+   * 调用时机：用户在字幕菜单"已下载"分组中点击某条缓存字幕。
+   */
+  async enableCached(input: SubtitleEnableCachedInput): Promise<SubtitleEnableCachedOutcome> {
+    const hash = await sha256Hex(input.stableVideoSrc);
+    const localPath = buildSubtitlePath(
+      input.filesDir,
+      input.sourceType,
+      input.sourceId,
+      hash,
+      input.fileName
+    );
+    const outcome: SubtitleEnableCachedOutcome = {
+      localPath,
+      fileName: input.fileName
+    };
+    return outcome;
   }
 }
 

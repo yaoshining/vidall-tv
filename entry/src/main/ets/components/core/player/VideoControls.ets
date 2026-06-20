@@ -21,7 +21,10 @@ import { loadSubtitleSearchPreferenceSnapshot } from '../../../subtitle/Subtitle
 import {
   defaultSubtitleAcquisitionService as subtitleService
 } from '../../../services/subtitleAcquisition/SubtitleAcquisitionService'
-import { SubtitleAcquisitionError } from '../../../services/subtitleAcquisition/SubtitleAcquisitionTypes'
+import {
+  SubtitleAcquisitionError,
+  CachedSubtitleEntry
+} from '../../../services/subtitleAcquisition/SubtitleAcquisitionTypes'
 
 @ComponentV2
 struct VideoControls {
@@ -42,6 +45,18 @@ struct VideoControls {
   // ── 进度条 hover tooltip ──
   @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
   @Local sliderWidth: number = 0      // Slider 组件实际宽度（vp）
+  /**
+   * 已下载字幕缓存列表（来自 SubtitleCacheManager.metadata.json）。
+   * 用户主动关闭字幕后仍可在"字幕"菜单看到，供重新启用。
+   * 加载时通过 `videoController.stableVideoSrcForCache` 拿稳定 key，
+   * 避免 SMB 代理 URL 端口漂移导致缓存目录 hash 不一致。
+   */
+  @Local cachedSubtitles: CachedSubtitleEntry[] = []
+  /**
+   * 过滤后的缓存字幕列表（剔除 `allSubtitleTracks` 中已展示的）。
+   * 避免菜单同一字幕在两个分组中重复出现。
+   */
+  @Local visibleCachedSubtitles: CachedSubtitleEntry[] = []
 
   /** 将毫秒格式化为 HH:MM:SS 或 MM:SS */
   private formatTime(ms: number): string {
@@ -155,6 +170,46 @@ struct VideoControls {
             this.enableAutoHide()
           })
         })
+
+        // 已下载字幕（来自 SubtitleCacheManager.metadata.json）
+        // 用户主动关闭字幕后仍可在此分组重新启用；
+        // 同时按 fileName 后缀对 allSubtitleTracks 做去重，避免双列。
+        if (this.visibleCachedSubtitles.length > 0) {
+          ListItem() {
+            Text('已下载字幕')
+              .fontSize(13)
+              .fontColor('rgba(255,255,255,0.6)')
+              .alignSelf(ItemAlign.Start)
+              .padding({ left: 20, top: 8 })
+          }
+          ForEach(this.visibleCachedSubtitles, (entry: CachedSubtitleEntry) => {
+            ListItem() {
+              Row() {
+                Column({ space: 2 }) {
+                  Text(entry.fileName)
+                    .fontSize(16)
+                    .fontColor(Color.White)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text('已下载 · ' + (entry.language.length > 0 ? entry.language : '未知语言'))
+                    .fontSize(11)
+                    .fontColor('#FFA500')
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+              }
+              .width('100%')
+              .height(60)
+              .justifyContent(FlexAlign.SpaceBetween)
+              .padding({ left: 20, right: 20 })
+            }
+            .onClick(() => {
+              this.enableCachedSubtitle(entry).catch(() => {})
+              this.showSubtitleMenu = false
+              this.enableAutoHide()
+            })
+          }, (entry: CachedSubtitleEntry): string => entry.fileName)
+        }
 
         // 字幕延迟调整（仅在外部 SRT 字幕激活时显示；内嵌轨由播放器原生渲染，延迟不适用）
         if (this.videoController.activeSubtitleIndex >= 0 && this.videoController.hasSrtSubtitle) {
@@ -338,6 +393,10 @@ struct VideoControls {
           .onBlur(() => { this.subtitleButtonFocused = false })
           .onClick(() => {
             this.showSubtitleMenu = !this.showSubtitleMenu
+            // 打开字幕菜单时刷新"已下载"列表（dialog 打开后异步加载完成时也会触发重渲染）
+            if (this.showSubtitleMenu) {
+              this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+            }
             clearTimeout(this.closeTimer)
           })
 
@@ -583,11 +642,103 @@ struct VideoControls {
 
   aboutToAppear(): void {
     this.enableAutoHide()
+    // 加载已下载字幕缓存列表（fire-and-forget，菜单分组仅在 visibleCachedSubtitles.length > 0 时显示）
+    this.loadCachedSubtitles()
   }
 
   aboutToDisappear(): void {
     clearTimeout(this.closeTimer)
     clearTimeout(this.seekTimer)
+  }
+
+  private async loadCachedSubtitles(): Promise<void> {
+    try {
+      const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const filesDir: string = hostCtx.filesDir;
+      // SMB 源必须用 stableVideoSrcForCache 避免代理 URL 端口漂移导致 hash 不一致
+      const stableVideoSrc = this.videoController.stableVideoSrcForCache;
+      this.cachedSubtitles = await subtitleService.listCached({
+        filesDir,
+        stableVideoSrc,
+        sourceType: this.videoController.subtitleSourceType,
+        sourceId: this.videoController.subtitleSourceId
+      });
+      this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+    } catch {
+      this.cachedSubtitles = [];
+      this.visibleCachedSubtitles = [];
+    }
+  }
+
+  /**
+   * 剔除 `allSubtitleTracks` 中已展示的缓存条目，避免菜单重复。
+   * 匹配规则：缓存条目的 fileName 是否为任一轨道 URL 的后缀（与 SubtitleDispatcher 步骤 4 一致）。
+   */
+  private filterVisibleCached(cached: CachedSubtitleEntry[]): CachedSubtitleEntry[] {
+    const tracks = this.videoController.allSubtitleTracks;
+    const filtered: CachedSubtitleEntry[] = [];
+    for (let i = 0; i < cached.length; i++) {
+      const entry = cached[i];
+      const fileName = entry.fileName;
+      let existsInTracks = false;
+      for (let j = 0; j < tracks.length; j++) {
+        const trackUrl = tracks[j].url ?? '';
+        if (trackUrl.length > 0 && trackUrl.endsWith(fileName)) {
+          existsInTracks = true;
+          break;
+        }
+      }
+      if (!existsInTracks) {
+        filtered.push(entry);
+      }
+    }
+    return filtered;
+  }
+
+  /**
+   * 用户点击"已下载字幕"分组中的某条缓存条目。
+   *
+   * 编排：
+   * 1. `subtitleService.enableCached()` 计算本地路径（保持 Module 3 收口）
+   * 2. `videoController.addExternalSubtitle()` 挂载
+   * 3. `videoController.switchSubtitleTrack()` 自动切换到新轨道
+   * 4. `subtitleService.markLastUsed()` 异步写入 lastUsed + 覆盖 disabled binding
+   */
+  private async enableCachedSubtitle(entry: CachedSubtitleEntry): Promise<void> {
+    try {
+      const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const filesDir: string = hostCtx.filesDir;
+      const stableVideoSrc = this.videoController.stableVideoSrcForCache;
+      const sourceType = this.videoController.subtitleSourceType;
+      const sourceId = this.videoController.subtitleSourceId;
+      const outcome = await subtitleService.enableCached({
+        filesDir,
+        stableVideoSrc,
+        sourceType,
+        sourceId,
+        fileName: entry.fileName
+      });
+      await this.videoController.addExternalSubtitle(outcome.localPath);
+      const newIndex = this.videoController.allSubtitleTracks.length - 1;
+      if (newIndex >= 0) {
+        await this.videoController.switchSubtitleTrack(newIndex);
+      }
+      // markLastUsed 写 metadata.lastUsed，fire-and-forget。
+      // 关键：覆盖 disabled 标记 → 下次进入同视频，resolveSubtitle 步骤 1 命中 enabled binding 而非 disabled。
+      subtitleService.markLastUsed({
+        fileName: entry.fileName,
+        stableVideoSrc,
+        sourceType,
+        sourceId,
+        filesDir
+      }).catch(() => {});
+      // addExternalSubtitle 把这条字幕加到了 allSubtitleTracks 末尾，
+      // 重算过滤列表让"已下载"分组不再重复展示
+      this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+    } catch (e) {
+      const errMsg = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
+      console.error(`[SubtitleCache] 启用已下载字幕失败: ${errMsg}`);
+    }
   }
 }
 

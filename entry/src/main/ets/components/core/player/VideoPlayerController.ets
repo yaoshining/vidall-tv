@@ -501,6 +501,35 @@ export class VideoPlayerController {
     return this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : raw;
   }
 
+  /**
+   * 字幕缓存用的文件源类型（公开 getter）。
+   *
+   * 与 `loadSubtitleTracks` 步骤 4 构建 cacheCtx 的推算逻辑保持一致：
+   * - 优先用 `VideoData.fileSourceType`（WebDAV/SMB 等远程源）
+   * - 否则 FILE_URI 退化为 'local'（本地文件）
+   * - 其它情况退化为 'network'（直链）
+   *
+   * 暴露给 UI（如 SubtitleSelectorDrawerDialog）以正确访问缓存目录。
+   */
+  get subtitleSourceType(): string {
+    const raw = this.currentVideoData?.fileSourceType;
+    if (raw !== undefined && raw.length > 0) {
+      return raw;
+    }
+    if (this.currentVideoData?.type === VideoDataType.FILE_URI) {
+      return 'local';
+    }
+    return 'network';
+  }
+
+  /**
+   * 字幕缓存用的文件源 ID（公开 getter）。
+   * 与 `subtitleSourceType` 配对使用。
+   */
+  get subtitleSourceId(): string {
+    return this.currentVideoData?.fileSourceId ?? '0';
+  }
+
   private shouldPreservePendingResume(videoData: VideoData): boolean {
     if (this.pendingResumeState === null) {
       return false;
