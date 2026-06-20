@@ -1,9 +1,15 @@
 ## 1. SourceAdapterService 落地
 
-- [ ] 1.1 盘点所有播放器入口与剧集切源路径中的 WebDAV / SMB / local 参数装配逻辑。
-- [ ] 1.2 定义统一的播放源描述模型，覆盖 URL、headers、sourceType、sourceId 与稳定缓存 key。
-- [ ] 1.3 实现 `SourceAdapterService` 并接入详情页、历史页、文件页与 `PlayerPage.resolveEpisodePlaybackSource()`。
-- [ ] 1.4 保持 `PlayerPageParam` 与现有播放入口行为不变，删除页面层重复协议拼装逻辑。
+- [x] 1.1 盘点所有播放器入口与剧集切源路径中的 WebDAV / SMB / local 参数装配逻辑。
+  - 盘点产出：`.plans/reference/plan-playerFoundationSourceAdapterInventory.md`
+- [x] 1.2 定义统一的播放源描述模型，覆盖 URL、headers、sourceType、sourceId 与稳定缓存 key。
+  - 类型定义：`entry/src/main/ets/services/sourceAdapter/PlaybackSource.ets`
+- [x] 1.3 实现 `SourceAdapterService` 并接入详情页、历史页、文件页与 `PlayerPage.resolveEpisodePlaybackSource()`。
+  - service 实现：`entry/src/main/ets/services/sourceAdapter/SourceAdapterService.ets`
+  - 已接入：`PlayerPage.resolveEpisodePlaybackSource`、`MovieDetailPage.play`、`PlayHistoryPage.buildPlayUrl`、`SeasonDetailPage.playEpisode`、`SeriesDetailPage.playEpisode`、`ContinueWatchCard.buildAndPlay`
+  - 暂未接入：`FileExplorerPage.playVideo`（保持双轨，详见 inventory 6 节）。
+- [x] 1.4 保持 `PlayerPageParam` 与现有播放入口行为不变，删除页面层重复协议拼装。
+  - 验证：仅 `pages/settings/builders/*` 仍保留 `JSON.parse(configJson)` 调用，但其用途是设置页表单回填而非播放 URL 拼装，符合预期。
 
 ## 2. PlaybackProgressService 落地
 

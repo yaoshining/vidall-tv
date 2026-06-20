@@ -18,8 +18,8 @@ import { PlayerPageParam, PlayerPage } from '../../pages/player/index';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaLibraryContext } from '../core/player/PlaybackContext';
 import { PresetAudioTrack, PresetSubtitleTrack } from '../core/player/VideoData';
-import { FileSourceType, FileSourceTypeLabels, SMBSourceConfig } from '../../db/models/FileSourceEntity';
-import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
+import { FileSourceTypeLabels } from '../../db/models/FileSourceEntity';
+import { defaultSourceAdapterService as sourceAdapter, identityToPlayerPageParams } from '../../services/sourceAdapter/SourceAdapterService';
 import promptAction from '@ohos.promptAction';
 import { resolvePlaybackTrackPresetFromDb } from '../../utils/PlaybackTrackPresetHelper';
 
@@ -31,6 +31,12 @@ export interface ContinueWatchPlayerParamInput {
   durationHintMs?: number
   presetAudioTracks?: PresetAudioTrack[]
   presetSubtitleTracks?: PresetSubtitleTrack[]
+  /**
+   * 稳定 source identity（来自 SourceAdapterService），用于字幕缓存分桶。
+   * 视频/剧集不传时保持 undefined，行为与历史实现一致。
+   */
+  fileSourceType?: string
+  fileSourceId?: string
 }
 
 export function buildContinueWatchPlayerParam(input: ContinueWatchPlayerParamInput): PlayerPageParam {
@@ -48,6 +54,12 @@ export function buildContinueWatchPlayerParam(input: ContinueWatchPlayerParamInp
     presetAudioTracks: input.presetAudioTracks,
     presetSubtitleTracks: input.presetSubtitleTracks
   };
+  if (input.fileSourceType !== undefined) {
+    param.fileSourceType = input.fileSourceType;
+  }
+  if (input.fileSourceId !== undefined) {
+    param.fileSourceId = input.fileSourceId;
+  }
   return param;
 }
 
@@ -160,51 +172,19 @@ export struct ContinueWatchCard {
         console.warn('[ContinueWatchCard] 找不到文件源 sourceId=' + this.item.sourceId.toString());
         return;
       }
-      const config = JSON.parse(fileSource.configJson) as Record<string, string>;
-      let fullUrl: string = '';
-      let httpHeader: Record<string, string> = {};
-
-      if (fileSource.type === FileSourceType.SMB) {
-        const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
-        const port = smbConfig.port ?? 445;
-        const user = encodeURIComponent(smbConfig.username);
-        const pass = encodeURIComponent(smbConfig.password);
-        const encodedPath = this.item.filePath.split('/').map((seg: string): string => {
-          if (seg.length === 0) {
-            return '';
-          }
-          let decoded: string = seg;
-          try {
-            decoded = decodeURIComponent(seg);
-          } catch {
-            decoded = seg;
-          }
-          return encodeURIComponent(decoded);
-        }).join('/');
-        fullUrl = 'smb://' + user + ':' + pass + '@' + smbConfig.host + ':' + port.toString() + encodedPath;
-        httpHeader = {};
-      } else if (fileSource.type === FileSourceType.WEBDAV) {
-        const protocol = config['protocol'] ?? 'http';
-        const host = config['url'] ?? '';
-        const portStr = config['port'] ?? (protocol === 'https' ? '443' : '80');
-        const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
-        const baseUrl = protocol + '://' + host + ':' + portStr + rootPath;
-        const webdavConfig: WebDAVConfig = {
-          baseUrl,
-          username: config['username'] ?? '',
-          password: config['password'] ?? '',
-          timeout: 30000
-        };
-        const client = new WebDAVClient(webdavConfig);
-        fullUrl = client.getFullUrl(this.item.filePath);
-        const authHeader = client.getAuthHeaderPublic();
-        httpHeader = authHeader.length > 0 ? { 'Authorization': authHeader } : {};
-      } else {
+      // 协议拼装与 DB 落库元数据已统一收口到 SourceAdapterService。
+      const resolved = await sourceAdapter.resolveFromFileSource(fileSource, this.item.filePath, this.item.videoId ?? 0);
+      if (resolved === null) {
         const typeName = FileSourceTypeLabels.getLabel(fileSource.type);
         console.warn('[ContinueWatchCard] 不支持的文件源类型: ' + fileSource.type.toString());
         this.getUIContext().getPromptAction().showToast({ message: typeName + ' 暂不支持继续播放' });
         return;
       }
+      const identityParams = identityToPlayerPageParams(resolved.sourceIdentity);
+      const fileSourceType = identityParams.fileSourceType;
+      const fileSourceId = identityParams.fileSourceId;
+      const fullUrl: string = resolved.url;
+      const httpHeader: Record<string, string> = resolved.httpHeader;
 
       const presetResult = await resolvePlaybackTrackPresetFromDb(
         this.item.filePath,
@@ -218,7 +198,9 @@ export struct ContinueWatchCard {
         title: this.buildPlayerTitle(),
         durationHintMs: presetResult.durationHintMs,
         presetAudioTracks: presetResult.presetAudioTracks,
-        presetSubtitleTracks: presetResult.presetSubtitleTracks
+        presetSubtitleTracks: presetResult.presetSubtitleTracks,
+        fileSourceType,
+        fileSourceId
       });
       if (this.item.kind === 'series' && this.item.tvSeriesId > 0 && this.item.seasonNumber > 0) {
         try {

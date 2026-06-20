@@ -16,12 +16,10 @@ import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
 import { emitter } from "@kit.BasicServicesKit";
 import { SubtitleSegment } from "../../components/core/player/SubtitleRenderer";
-import { WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
-import { FileSourceType, SMBSourceConfig, WebDAVSourceConfig } from "../../db/models/FileSourceEntity";
-import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../components/core/player/EpisodePlaybackManager";
 import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
+import { defaultSourceAdapterService as sourceAdapter } from "../../services/sourceAdapter/SourceAdapterService";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -625,101 +623,34 @@ export struct PlayerPage {
   }
 
   private async resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
-    if (item.sourceId === undefined || item.sourceId <= 0) {
+    // 第一阶段：协议拼装与已落库元数据已收口到 SourceAdapterService。
+    // 后续字段映射仍由 PlayerPage 维护，确保 ResolvedEpisodePlaybackSource 现有契约不变。
+    const resolved = await sourceAdapter.resolveEpisode({
+      sourceId: item.sourceId,
+      filePath: item.videoPath,
+      videoId: item.videoId
+    });
+    if (resolved === null) {
       return null;
-    }
-    const db = FileSourceDatabase.getInstance();
-    const fileSource = await db.getFileSourceById(item.sourceId);
-    if (fileSource === null) {
-      return null;
-    }
-    let url = '';
-    let httpHeader: Record<string, string> | undefined = undefined;
-    if (fileSource.type === FileSourceType.SMB) {
-      const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
-      const port = smbConfig.port ?? 445;
-      const user = encodeURIComponent(smbConfig.username);
-      const pass = encodeURIComponent(smbConfig.password);
-      const encodedPath = item.videoPath.split('/').map((seg: string): string => {
-        if (seg.length === 0) {
-          return '';
-        }
-        let decoded = seg;
-        try {
-          decoded = decodeURIComponent(seg);
-        } catch {
-          decoded = seg;
-        }
-        return encodeURIComponent(decoded);
-      }).join('/');
-      url = `smb://${user}:${pass}@${smbConfig.host}:${port}${encodedPath}`;
-    } else if (fileSource.type === FileSourceType.WEBDAV) {
-      const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig;
-      const protocol = config.protocol ?? 'http';
-      const host = config.url ?? '';
-      const port = config.port ?? (protocol === 'https' ? 443 : 80);
-      const rootPath = (config.rootPath ?? '').replace(/\/$/, '');
-      const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
-      const webdavConfig: WebDAVConfig = {
-        baseUrl,
-        username: config.username ?? '',
-        password: config.password ?? '',
-        timeout: 30000
-      };
-      const client = new WebDAVClient(webdavConfig);
-      url = client.getFullUrl(item.videoPath);
-      const authHeader = client.getAuthHeaderPublic();
-      if (authHeader.length > 0) {
-        httpHeader = { 'Authorization': authHeader };
-      }
-    } else {
-      return null;
-    }
-
-    const videoEntity = await db.getVideoByPath(item.videoPath);
-    let durationHintMs = item.durationMs ?? 0;
-    let presetAudioTracks: PresetAudioTrack[] | undefined = undefined;
-    let presetSubtitleTracks: PresetSubtitleTrack[] | undefined = undefined;
-    if (videoEntity !== null) {
-      durationHintMs = videoEntity.durationMs ?? durationHintMs;
-      if (videoEntity.audioTracksJson !== undefined && videoEntity.audioTracksJson !== null &&
-          videoEntity.audioTracksJson.length > 0) {
-        const audioTracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
-        const mappedAudioTracks = FfprobeUtil.toPresetAudioTracks(audioTracks);
-        if (mappedAudioTracks.length > 0) {
-          presetAudioTracks = mappedAudioTracks;
-        }
-      }
-      if (videoEntity.subtitleTracksJson !== undefined && videoEntity.subtitleTracksJson !== null &&
-          videoEntity.subtitleTracksJson.length > 0) {
-        const subtitleTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
-        const mappedSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(subtitleTracks);
-        if (mappedSubtitleTracks.length > 0) {
-          presetSubtitleTracks = mappedSubtitleTracks;
-        }
-      }
-    }
-
-    let startPositionMs = 0;
-    const progressVideoId = item.videoId ?? videoEntity?.id ?? 0;
-    if (progressVideoId > 0) {
-      const savedProgress = await db.getPlayProgress(progressVideoId);
-      if (savedProgress !== null && savedProgress.positionMs > 0) {
-        const isWatched = savedProgress.durationMs > 0
-          && savedProgress.positionMs >= savedProgress.durationMs * 0.95;
-        if (!isWatched) {
-          startPositionMs = savedProgress.positionMs;
-        }
-      }
     }
     const resolvedSource: ResolvedEpisodePlaybackSource = {
-      url,
-      httpHeader,
-      durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
-      presetAudioTracks,
-      presetSubtitleTracks,
-      startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
+      url: resolved.url
     };
+    if (Object.keys(resolved.httpHeader).length > 0) {
+      resolvedSource.httpHeader = resolved.httpHeader;
+    }
+    if (resolved.durationHintMs !== undefined) {
+      resolvedSource.durationHintMs = resolved.durationHintMs;
+    }
+    if (resolved.presetAudioTracks !== undefined) {
+      resolvedSource.presetAudioTracks = resolved.presetAudioTracks;
+    }
+    if (resolved.presetSubtitleTracks !== undefined) {
+      resolvedSource.presetSubtitleTracks = resolved.presetSubtitleTracks;
+    }
+    if (resolved.startPositionMs !== undefined) {
+      resolvedSource.startPositionMs = resolved.startPositionMs;
+    }
     return resolvedSource;
   }
 

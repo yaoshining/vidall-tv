@@ -8,10 +8,9 @@ import { PlayerPageParam, PlayerPage } from '../player/index'
 import http from '@ohos.net.http'
 import image from '@ohos.multimedia.image'
 import effectKit from '@ohos.effectKit'
-import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient'
-import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity'
+import { defaultSourceAdapterService as sourceAdapter, identityToPlayerPageParams } from '../../services/sourceAdapter/SourceAdapterService'
 import { millisecondsToTime } from '../../utils/TimeUtil'
-import { FfprobeUtil, FfprobeTrack } from '../../utils/FfprobeUtil'
+import { FfprobeUtil } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 import { emitter } from "@kit.BasicServicesKit"
@@ -701,79 +700,29 @@ export struct SeriesDetailPage {
         console.warn('[SeriesDetailPage] 找不到文件源 sourceId=' + episode.sourceId);
         return;
       }
-
-      const config = JSON.parse(fileSource.configJson) as Record<string, string>;
-
-      let fullUrl: string;
-      let httpHeader: Record<string, string>;
-
-      if (fileSource.type === FileSourceType.SMB) {
-        const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
-        const port = smbConfig.port ?? 445;
-        const user = encodeURIComponent(smbConfig.username);
-        const pass = encodeURIComponent(smbConfig.password);
-        const encodedPath = episode.filePath.split('/').map((seg: string): string => {
-          if (seg.length === 0) { return ''; }
-          let decoded: string = seg;
-          try { decoded = decodeURIComponent(seg); } catch { decoded = seg; }
-          return encodeURIComponent(decoded);
-        }).join('/');
-        fullUrl = `smb://${user}:${pass}@${smbConfig.host}:${port}${encodedPath}`;
-        httpHeader = {};
-      } else {
-        const protocol = config['protocol'] ?? 'http';
-        const host = config['url'] ?? '';
-        const port = config['port'] ?? (protocol === 'https' ? '443' : '80');
-        const rootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
-        const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
-        const webdavConfig: WebDAVConfig = {
-          baseUrl,
-          username: config['username'] ?? '',
-          password: config['password'] ?? '',
-          timeout: 30000
-        };
-        const client = new WebDAVClient(webdavConfig);
-        fullUrl = client.getFullUrl(episode.filePath);
-        const authHeader = client.getAuthHeaderPublic();
-        httpHeader = authHeader ? { 'Authorization': authHeader } : {};
+      // 协议拼装与 DB 落库元数据已统一收口到 SourceAdapterService。
+      const resolved = await sourceAdapter.resolveFromFileSource(fileSource, episode.filePath, episode.id ?? 0);
+      if (resolved === null) {
+        console.warn('[SeriesDetailPage] 暂不支持的文件源类型: ' + fileSource.type);
+        return;
       }
+      const identityParams = identityToPlayerPageParams(resolved.sourceIdentity);
+      const fileSourceType = identityParams.fileSourceType;
+      const fileSourceId = identityParams.fileSourceId;
 
-      // ── 音轨 / 字幕轨 ──────────────────────────
-      let presetAudioTracks: PresetAudioTrack[] = [];
-      let presetSubtitleTracks: PresetSubtitleTrack[] = [];
-      let durationHintMs: number = episode.durationMs ?? 0;
-      let dbHasAudioData = false;
-      let dbHasSubtitleData = false;
-
-      try {
-        const videoEntity = await db.getVideoByPath(episode.filePath);
-        if (videoEntity) {
-          if (videoEntity.durationMs !== undefined && videoEntity.durationMs !== null && videoEntity.durationMs > 0) {
-            durationHintMs = videoEntity.durationMs;
-          }
-          if (videoEntity.audioTracksJson !== null && videoEntity.audioTracksJson !== undefined) {
-            dbHasAudioData = true;
-            if (videoEntity.audioTracksJson.length > 0) {
-              const tracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
-              presetAudioTracks = FfprobeUtil.toPresetAudioTracks(tracks);
-            }
-          }
-          if (videoEntity.subtitleTracksJson !== null && videoEntity.subtitleTracksJson !== undefined) {
-            dbHasSubtitleData = true;
-            if (videoEntity.subtitleTracksJson.length > 0) {
-              const subTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
-              presetSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(subTracks);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[SeriesDetailPage] 数据库读取轨道失败，将 fallback 到 ffprobe: ' + JSON.stringify(e));
-      }
+      // ── ffprobe 回填：DB 缺数据时再补探测（页面级关注点，留在 page 层） ──
+      let presetAudioTracks: PresetAudioTrack[] = resolved.presetAudioTracks ?? [];
+      let presetSubtitleTracks: PresetSubtitleTrack[] = resolved.presetSubtitleTracks ?? [];
+      let durationHintMs: number = resolved.durationHintMs ?? episode.durationMs ?? 0;
+      let dbHasAudioData: boolean = resolved.presetAudioTracks !== undefined
+        && resolved.presetAudioTracks.length > 0;
+      let dbHasSubtitleData: boolean = resolved.presetSubtitleTracks !== undefined
+        && resolved.presetSubtitleTracks.length > 0;
 
       if (!dbHasAudioData || !dbHasSubtitleData || durationHintMs <= 0) {
         try {
           // getFullUrl() 已完成编码，这里禁止再次 encodeURI，避免 % -> %25。
-          const probeResult = await FfprobeUtil.probe(fullUrl, httpHeader, 15000);
+          const probeResult = await FfprobeUtil.probe(resolved.url, resolved.httpHeader, 15000);
           if (probeResult.success) {
             if (durationHintMs <= 0 && probeResult.durationMs > 0) {
               durationHintMs = probeResult.durationMs;
@@ -789,6 +738,8 @@ export struct SeriesDetailPage {
           console.warn('[SeriesDetailPage] ffprobe 异常，忽略: ' + JSON.stringify(e));
         }
       }
+
+      const startPositionMs: number = resolved.startPositionMs ?? 0;
 
       const episodeName = await this.resolveEpisodeName(db, episode);
 
@@ -807,8 +758,8 @@ export struct SeriesDetailPage {
 
       const param: PlayerPageParam = {
         // getFullUrl() 已编码，传给播放页时保持原值，避免二次编码。
-        url: fullUrl,
-        httpHeader,
+        url: resolved.url,
+        httpHeader: resolved.httpHeader,
         title: this.buildPlayerTitle(episode, episodeName),
         durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
         videoId: episode.id,
@@ -818,11 +769,12 @@ export struct SeriesDetailPage {
         presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
         presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
         mediaKey: mediaKey,
+        startPositionMs: startPositionMs > 0 ? startPositionMs : undefined,
         playbackContext,
         scrapeOriginalTitle: this.seriesEntity?.originalTitle,
         tmdbId: this.seriesEntity?.providerId,
-        fileSourceType: fileSource.type === FileSourceType.SMB ? 'smb' : 'webdav',
-        fileSourceId: fileSource.id !== undefined ? String(fileSource.id) : undefined
+        fileSourceType,
+        fileSourceId
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
         if (popInfo.result !== null && popInfo.result !== undefined) {
