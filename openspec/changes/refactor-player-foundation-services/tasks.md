@@ -13,10 +13,20 @@
 
 ## 2. PlaybackProgressService 落地
 
-- [ ] 2.1 提炼 prepared resume、弹窗续播、clear-and-play、媒体级进度回写的统一决策接口。
-- [ ] 2.2 实现 `PlaybackProgressService` 并替换 `PlayerPage` 中分散的续播决策与定时保存逻辑。
-- [ ] 2.3 保持 `MediaProgressStore` / `FileSourceDatabase` 的持久化行为与 near-end 语义不变。
-- [ ] 2.4 验证页面切换、切后台、退出播放与剧集切换时的进度保存路径未回归。
+- [x] 2.1 提炼 prepared resume、弹窗续播、clear-and-play、媒体级进度回写的统一决策接口。
+  - 类型契约 + 决策 pure functions：`entry/src/main/ets/services/playbackProgress/PlaybackResumeDecision.ets`
+  - 设计文档：`.plans/reference/plan-playerProgressServiceDesign.md`
+- [x] 2.2 实现 `PlaybackProgressService` 并替换 `PlayerPage` 中分散的续播决策与定时保存逻辑。
+  - service 实现：`entry/src/main/ets/services/playbackProgress/PlaybackProgressService.ets`
+  - PlayerPage 三个方法改用：`resumePlaybackForParam`（decideMediaResume）、`registerPreparedResume`（decidePlayResume）、`persistCurrentPlaybackState`（persistNow）
+  - 三个调用点改用：切后台（emitter APP_BACKGROUND）、10s 定时、aboutToDisappear
+- [x] 2.3 保持 `MediaProgressStore` / `FileSourceDatabase` 的持久化行为与 near-end 语义不变。
+  - 持久化语义（near-end 判定 → clear，否则 save）通过 `MediaProgressStore.isNearEnd` 内部完成，service 仅编排。
+  - `PlayerPage` 内 `MediaProgressStore` 直接调用从 11 处收敛为 1 处（applyMediaResumeDecision 中 clear_and_play 副作用的 `MediaProgressStore.clear(decision.mediaKey)`）+ 1 处（`MediaProgressStore.episodeKey` 构造 mediaKey 默认值）。
+- [x] 2.4 验证页面切换、切后台、退出播放与剧集切换时的进度保存路径未回归。
+  - 编译验证：`BUILD SUCCESSFUL in 7 s 60 ms`，0 ArkTS 错误
+  - 静态路径梳理：4 个 persist 入口 + 2 个 resume 决策全部走 service
+  - 真机回归：需在电视上验证 4 个场景（详见后续 issue）
 
 ## 3. SubtitleAcquisitionService 落地
 
