@@ -12,7 +12,6 @@ import {
   saveEpisodeAutoplayEnabled
 } from './EpisodeAutoplayPreferences'
 import { common } from '@kit.AbilityKit'
-import { KeyCode } from '@kit.InputKit'
 import {
   OpenSubtitlesClient,
   SubtitleSearchResult,

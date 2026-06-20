@@ -237,9 +237,10 @@ export struct VideoPlayer {
       // 若处于搜索结果视图，退回轨道列表而不关闭 Dialog
       if (this.subtitleTryHideSearch?.()) {
         // subtitleTryHideSearch 已将 showSearchResults 置 false，不调用 action.dismiss()
-      } else {
-        action.dismiss()
+        return
       }
+      action.dismiss()
+      this.subtitleSelectorDialogController.close()
     },
     openAnimation: {
       duration: 0
