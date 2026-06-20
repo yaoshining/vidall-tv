@@ -169,6 +169,27 @@ export class SubtitleDispatcher {
   }
 
   /**
+   * 强制清空用户字幕绑定（不写 disabled 标记）。
+   *
+   * 调用场景：avplayer → ijkplayer 格式回退时。fallback 不是用户主动行为，
+   * 应当不继承 disabled 状态，让 `resolveSubtitle` 步骤 4 仍能命中 lastUsed 自动恢复缓存字幕。
+   *
+   * 与 `clearUserBinding` 的区别：
+   * - `clearUserBinding` 写 `{ subtitleType: 'disabled' }` 标记（v2 fix 引入，保留"用户主动关闭"语义）
+   * - `clearUserBindingForce` 直接清空 key，让 resolveSubtitle 走原始步骤 4 命中逻辑
+   *
+   * 失败仅 warn，不抛。
+   */
+  async clearUserBindingForce(videoPath: string): Promise<void> {
+    try {
+      const key = await this.buildKey(videoPath);
+      await AppPreferences.set(key, '');
+    } catch (e) {
+      console.error(`[SubtitleDispatcher] clearUserBindingForce 失败: ${String(e)}`);
+    }
+  }
+
+  /**
    * 按 5 步优先级链裁决字幕来源。
    *
    * - 步骤 1：查用户绑定
