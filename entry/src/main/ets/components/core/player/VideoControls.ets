@@ -174,14 +174,10 @@ struct VideoControls {
         // 已下载字幕（来自 SubtitleCacheManager.metadata.json）
         // 用户主动关闭字幕后仍可在此分组重新启用；
         // 同时按 fileName 后缀对 allSubtitleTracks 做去重，避免双列。
+        //
+        // 不加"已下载字幕"标题：标题出现的时机（lastUsed 自动应用时无，禁用时有时无）会让用户感知到分组语义变化；
+        // 不带标题的列表与上方"关闭字幕 + allSubtitleTracks"组视觉一致，列表项内的副标题（"已下载 · 语言"）已能传达来源。
         if (this.visibleCachedSubtitles.length > 0) {
-          ListItem() {
-            Text('已下载字幕')
-              .fontSize(13)
-              .fontColor('rgba(255,255,255,0.6)')
-              .alignSelf(ItemAlign.Start)
-              .padding({ left: 20, top: 8 })
-          }
           ForEach(this.visibleCachedSubtitles, (entry: CachedSubtitleEntry) => {
             ListItem() {
               Row() {
