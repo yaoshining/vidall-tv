@@ -30,10 +30,20 @@
 
 ## 3. SubtitleAcquisitionService 落地
 
-- [ ] 3.1 提炼字幕搜索、下载、缓存写回、last used 更新与错误映射的 service 接口。
-- [ ] 3.2 实现 `SubtitleAcquisitionService`，封装 `OpenSubtitlesClient`、`SubtitleDownloader`、`SubtitleCacheManager` 调用链。
-- [ ] 3.3 改造 `SubtitleSelectorDrawerDialog` 仅负责 UI 展示与用户操作，不直接依赖字幕基础设施。
-- [ ] 3.4 保持下载后自动追加字幕、自动切换到新字幕与最近使用字幕恢复行为不变。
+- [x] 3.1 提炼字幕搜索、下载、缓存写回、last used 更新与错误映射的 service 接口。
+  - 类型契约：`entry/src/main/ets/services/subtitleAcquisition/SubtitleAcquisitionTypes.ets`
+  - 设计文档：`.plans/reference/plan-subtitleAcquisitionServiceDesign.md`
+- [x] 3.2 实现 `SubtitleAcquisitionService`，封装 `OpenSubtitlesClient`、`SubtitleDownloader`、`SubtitleCacheManager` 调用链。
+  - service 实现：`entry/src/main/ets/services/subtitleAcquisition/SubtitleAcquisitionService.ets`
+  - 3 个公共方法：`search` / `download` / `markLastUsed`
+- [x] 3.3 改造 `SubtitleSelectorDrawerDialog` 仅负责 UI 展示与用户操作，不直接依赖字幕基础设施。
+  - VideoControls.ets 删除了 `OpenSubtitlesClient` / `SubtitleDownloader` / `SubtitleCacheManager` 3 个类与 4 个 Error 类的 import
+  - `startSearch` / `downloadSubtitle` 改用 `subtitleService.search` / `subtitleService.download` / `subtitleService.markLastUsed`
+  - 错误 Toast 文案统一抽到 `toastMessageForAcquisitionError`，按 `error.kind` 决定
+- [x] 3.4 保持下载后自动追加字幕、自动切换到新字幕与最近使用字幕恢复行为不变。
+  - 下载后顺序：service.download → videoController.addExternalSubtitle → videoController.switchSubtitleTrack → service.markLastUsed（fire-and-forget）
+  - markLastUsed 失败仅 warn 不抛（与 OpenSpec 3.4 scenario 2 一致）
+  - 编译验证：`BUILD SUCCESSFUL in 6 s 441 ms`，0 ArkTS 错误
 
 ## 4. 收口与回归
 
