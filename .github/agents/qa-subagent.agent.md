@@ -92,13 +92,19 @@ tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'todo']
 - 将测试与私有方法名或内部状态结构等实现细节强绑定。
 - 提交“它不工作”这类无复现步骤的模糊缺陷报告。
 
+## 真机安装与工作树规则
+
+- 若任务涉及“安装到电视、真机验证、看当前分支效果、查看设备日志”，先读取 `.github/instructions/localTvDeploy.instructions.md`
+- 当前 worktree 的识别、构建、安装、启动、日志查看，以该 instructions 文件为准
+- 本 Agent 保留 QA 测试方法与验证标准，不再单独维护一套与共享 instructions 分叉的电视部署流程
+
 ## 本仓库测试环境与命令（持久记忆）
 
 以下内容用于 `VidAll_TV` 仓库（HarmonyOS 6.0.2）本地复现，后续执行测试默认先按此基线。
 
 ### 一、已验证环境基线
 
-- 工程根目录：`/Users/yaoshining/DevEcoStudioProjects/VidAll_TV`
+- 工程根目录：优先使用当前 worktree 根目录，即 `git rev-parse --show-toplevel`
 - SDK 基线：DevEco Studio 内置 SDK（优先使用 IDE 同源路径）
 - 建议执行 shell：`zsh -f`（避免 `.zshrc` 中 `neofetch` 等噪音干扰）
 - 关键环境变量：
@@ -114,7 +120,8 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 1) 同步工程
 
 ```bash
-zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+zsh -f -c 'cd "'"$ROOT_DIR"'" && \
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
 export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
 export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
@@ -126,7 +133,8 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 2) 本地单测**真实执行**（推荐，无需设备，输出测试结果和 HTML 报告）
 
 ```bash
-zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+zsh -f -c 'cd "'"$ROOT_DIR"'" && \
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
 export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
 export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
@@ -145,7 +153,8 @@ HTML 报告位于：`entry/.test/default/outputs/test/reports/index.html`
 2b) 本地单测**仅编译**（不执行，只验证编译链路）
 
 ```bash
-zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+zsh -f -c 'cd "'"$ROOT_DIR"'" && \
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
 export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
 export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
@@ -160,7 +169,8 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 3) 查看模块可用任务
 
 ```bash
-zsh -f -c 'cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+zsh -f -c 'cd "'"$ROOT_DIR"'" && \
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk && \
 export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
 export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony && \
@@ -240,6 +250,7 @@ zsh -f -c 'set -o pipefail; your_hvigor_command 2>&1 | tail -n 40; echo HVIGOR_E
 **前置条件**：
 - 设备已连接（真机或模拟器）
 - `hdc` 可用：`/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc`
+- 若需要先把当前功能分支版本安装到电视，先读取 `.github/instructions/localTvDeploy.instructions.md`
 
 **执行步骤**：
 
@@ -254,7 +265,8 @@ $HDC list targets
 #### 2) 编译集成测试 HAP
 
 ```bash
-cd /Users/yaoshining/DevEcoStudioProjects/VidAll_TV && \
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR" && \
 zsh -f -c '
 export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk
 export OHOS_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
@@ -277,7 +289,8 @@ export HARMONY_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/ope
 
 ```bash
 HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc
-HAP=/Users/yaoshining/DevEcoStudioProjects/VidAll_TV/entry/build/default/outputs/ohosTest/entry-ohosTest-signed.hap
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+HAP="$ROOT_DIR/entry/build/default/outputs/ohosTest/entry-ohosTest-signed.hap"
 
 $HDC install "$HAP"
 # 输出示例：[Info]...msg:install bundle successfully.
