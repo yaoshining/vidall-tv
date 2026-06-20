@@ -27,7 +27,14 @@
 - `.github/instructions/githubWorkflow.instructions.md`：放 Git 提交、推分支、创建 PR、命令行执行方式等工作流规则
 - `.github/instructions/arktsGuardrails.instructions.md`：放 ArkTS 编译约束、生命周期限制、Promise/catch 书写规范等代码护栏
 - `.github/instructions/agentOrganization.instructions.md`：放 `.github/agents/*.agent.md` 的维护规则、命名稳定性和低风险改动原则
+- `.github/instructions/localTvDeploy.instructions.md`：放“当前 worktree 构建并安装到局域网电视”的共享流程、设备检查、启动与日志查看规则
 - 新增经验时优先追加到最贴近主题的 instructions 文件，避免继续把所有规则堆进一个总文件
+
+## 局域网电视部署入口规则
+
+- 只要任务涉及 **构建 HAP、安装到电视、真机看效果、设备日志、局域网 TV 验证**，必须先读取 `.github/instructions/localTvDeploy.instructions.md`
+- 默认操作对象是**当前 worktree**，不是默认主工作区
+- 部署结果必须说明：当前 worktree 路径、分支、是否有本地改动、目标电视地址、安装包路径
 
 ## Git 提交规范（重要）
 

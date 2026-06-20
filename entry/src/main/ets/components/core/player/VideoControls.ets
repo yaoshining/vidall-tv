@@ -21,6 +21,7 @@ import {
   SubtitleDownloadError
 } from '../../../lib/OpenSubtitlesClient'
 import { SubtitleDownloader, SubtitleStorageContext } from '../../../subtitle/SubtitleDownloader'
+import { SubtitleCacheManager } from '../../../subtitle/SubtitleCacheManager'
 import { parseFileName, buildSearchTitles } from '../../../lib/ScrapeClient'
 import { loadSubtitleSearchPreferenceSnapshot } from '../../../subtitle/SubtitleLanguagePreference'
 
@@ -29,6 +30,7 @@ struct VideoControls {
   @Require @Param videoController: VideoPlayerController
   @Require @Param dialogController: CustomDialogController
   @Require @Param openSettings: () => void
+  @Param onOpenSubtitleSelector: () => void = () => {}
   closeTimer?: number
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
@@ -127,6 +129,8 @@ struct VideoControls {
                 Text(item.displayName)
                   .fontSize(16)
                   .fontColor(Color.White)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
                 if (item.kind === 'external') {
                   Text('外部文件')
                     .fontSize(11)
@@ -134,6 +138,7 @@ struct VideoControls {
                 }
               }
               .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
 
               if (this.videoController.activeSubtitleIndex === index) {
                 SymbolGlyph($r('sys.symbol.checkmark'))
@@ -213,6 +218,25 @@ struct VideoControls {
             .padding({ top: 8, bottom: 8 })
           }
         }
+
+        ListItem() {
+          Row({ space: 10 }) {
+            Text('🔍')
+              .fontSize(16)
+              .fontColor(Color.White)
+            Text('更多字幕配置')
+              .fontSize(16)
+              .fontColor(Color.White)
+          }
+          .width('100%')
+          .height(50)
+          .justifyContent(FlexAlign.Start)
+          .padding({ left: 20, right: 20 })
+        }
+        .onClick(() => {
+          this.showSubtitleMenu = false
+          this.onOpenSubtitleSelector()
+        })
       }
       .width('100%')
       .backgroundColor('rgba(0, 0, 0, 0.8)')
@@ -299,27 +323,25 @@ struct VideoControls {
           }
 
           // 字幕按钮
-          if (this.videoController.allSubtitleTracks.length > 0) {
-            Row({ space: 8 }) {
-              SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
-                .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
-                .fontSize(24)
-              Text(this.getActiveSubtitleName())
-                .fontSize(14)
-                .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
-            }
-            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .backgroundColor(this.subtitleButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
-            .borderRadius(20)
-            .border({ width: this.subtitleButtonFocused ? 2 : 1, color: this.subtitleButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
-            .focusable(true)
-            .onFocus(() => { this.subtitleButtonFocused = true })
-            .onBlur(() => { this.subtitleButtonFocused = false })
-            .onClick(() => {
-              this.showSubtitleMenu = !this.showSubtitleMenu
-              clearTimeout(this.closeTimer)
-            })
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.text_bubble_left_2'))
+              .fontColor([this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray])
+              .fontSize(24)
+            Text(this.getActiveSubtitleName())
+              .fontSize(14)
+              .fontColor(this.videoController.activeSubtitleIndex >= 0 ? Color.White : Color.Gray)
           }
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor(this.subtitleButtonFocused ? 'rgba(27, 120, 242, 0.35)' : 'rgba(0, 0, 0, 0.5)')
+          .borderRadius(20)
+          .border({ width: this.subtitleButtonFocused ? 2 : 1, color: this.subtitleButtonFocused ? '#66A9D8FF' : 'rgba(255, 255, 255, 0.18)' })
+          .focusable(true)
+          .onFocus(() => { this.subtitleButtonFocused = true })
+          .onBlur(() => { this.subtitleButtonFocused = false })
+          .onClick(() => {
+            this.showSubtitleMenu = !this.showSubtitleMenu
+            clearTimeout(this.closeTimer)
+          })
 
           Row({ space: 8 }) {
             SymbolGlyph($r('sys.symbol.gearshape'))
@@ -576,6 +598,7 @@ export struct VideoControlsDialog {
   controller: CustomDialogController
   @Require videoController: VideoPlayerController
   @Require onOpenSettings: () => void
+  onOpenSubtitleSelector: () => void = () => {}
   @State opacityValue: number = 0;
 
   aboutToAppear(): void {
@@ -592,7 +615,8 @@ export struct VideoControlsDialog {
     VideoControls({
       videoController: this.videoController,
       dialogController: this.controller,
-      openSettings: this.onOpenSettings
+      openSettings: this.onOpenSettings,
+      onOpenSubtitleSelector: this.onOpenSubtitleSelector
     })
       .opacity(this.opacityValue)
   }
@@ -1612,6 +1636,13 @@ export struct SubtitleSelectorDrawerDialog {
   scrapeOriginalTitle: string = ''
   /** TMDB ID（可选），用于 OpenSubtitles tmdb_id 精准匹配 */
   tmdbId: string = ''
+  /**
+   * 由 VideoPlayer 注入：注册一个「尝试退出搜索结果」的回调。
+   * 当 VideoPlayer 的 onWillDismiss 拦截到返回键时，调用此处注册的函数：
+   *   - 若当前处于搜索结果视图：将 showSearchResults 置 false 并返回 true（dialog 保持打开）
+   *   - 若当前处于轨道列表视图：返回 false（交由 VideoPlayer 调用 action.dismiss()）
+   */
+  onRegisterResetSearch?: (fn: () => boolean) => void
 
   @State panelOffsetX: number = 72
   @State panelOpacity: number = 0
@@ -1634,6 +1665,14 @@ export struct SubtitleSelectorDrawerDialog {
     this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
       this.panelOffsetX = 0
       this.panelOpacity = 1
+    })
+    // 向 VideoPlayer 注册「退出搜索结果」回调，供 onWillDismiss 拦截返回键时调用
+    this.onRegisterResetSearch?.(() => {
+      if (this.showSearchResults) {
+        this.showSearchResults = false
+        return true
+      }
+      return false
     })
   }
 
@@ -1863,6 +1902,21 @@ export struct SubtitleSelectorDrawerDialog {
       console.info(`[SubtitleSearch] 字幕已写入: ${downloadResult.localPath}`)
 
       await this.videoController.addExternalSubtitle(downloadResult.localPath)
+
+      // 下载成功后自动切换到该字幕轨道（新增轨道总是追加到列表末尾）
+      const newSubtitleIndex = this.videoController.allSubtitleTracks.length - 1
+      if (newSubtitleIndex >= 0) {
+        await this.videoController.switchSubtitleTrack(newSubtitleIndex)
+      }
+
+      const cacheManager = new SubtitleCacheManager()
+      await cacheManager.setLastUsedSubtitle(
+        hostCtx.filesDir,
+        this.sourceType,
+        this.sourceId,
+        this.videoController.stableVideoSrcForCache,
+        downloadResult.fileName
+      )
 
       this.showSearchResults = false
     } catch (e) {
@@ -2138,7 +2192,7 @@ export struct SubtitleSelectorDrawerDialog {
 
               Scroll() {
                 Column({ space: 8 }) {
-                  ForEach(this.searchResults, (result: SubtitleSearchResult) => {
+                  ForEach(this.searchResults, (result: SubtitleSearchResult, index: number) => {
                     Row({ space: 10 }) {
                       Row() {
                         Text(this.getResultLanguageTag(result.languageCode))
@@ -2157,7 +2211,7 @@ export struct SubtitleSelectorDrawerDialog {
                         Text(result.fileName)
                           .fontSize(16)
                           .fontColor('#EAF0F7')
-                          .maxLines(2)
+                          .maxLines(1)
                           .textOverflow({ overflow: TextOverflow.Ellipsis })
                           .width('100%')
                         Text(`${result.languageCode}  ↓ ${this.formatDownloadCount(result.downloadCount)}`)
@@ -2181,6 +2235,7 @@ export struct SubtitleSelectorDrawerDialog {
                     .alignItems(VerticalAlign.Center)
                     .backgroundColor('rgba(255, 255, 255, 0.05)')
                     .borderRadius(14)
+                    .defaultFocus(index === 0)
                     .focusable(true)
                     .enabled(!this.isDownloading)
                     .onClick(() => {
