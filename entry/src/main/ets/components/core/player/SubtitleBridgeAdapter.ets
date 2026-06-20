@@ -949,8 +949,10 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     const items: SubtitleTrackItem[] = [];
     for (let i = 0; i < textTracks.length; i++) {
       const ft: FfprobeTrack = textTracks[i];
-      // 直接用描述作为显示名，外部字幕已有标识，内嵌字幕不再加前缀
-      const displayName = FfprobeUtil.buildSubtitleTrackDisplayName(ft, i);
+      // displayName 与 AvSubtitleBridgeAdapter 保持一致：仅用语言名（不带 codec / title 后缀）。
+      // 跨 avplayer/ijkplayer 切换时，internal binding 的 subtitlePath 匹配才能稳定。
+      const langName = ft.language ? FfprobeUtil.getLanguageDisplayName(ft.language) : '';
+      const displayName = langName.length > 0 ? langName : `字幕 ${i + 1}`;
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,

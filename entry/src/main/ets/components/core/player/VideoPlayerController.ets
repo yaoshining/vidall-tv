@@ -1083,12 +1083,21 @@ export class VideoPlayerController {
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
       this.capturePendingResumeForFallback('avplayer_unsupported_format');
-      // 强制清空用户字幕绑定（不写 disabled 标记）：fallback 不是用户主动行为，
-      // 不应继承 disabled 状态；让回退后 resolveSubtitle 步骤 4 仍能命中 lastUsed 自动恢复缓存字幕。
+      // 条件化清空 disabled binding：fallback 不是用户主动行为，disabled 状态不应跨回退继承。
+      // 但若用户**主动选了某条字幕**（enabled binding），不应被清掉——用户的明确选择优先。
       const rawFbVideoSrc = this.currentVideoData?.videoSrc ?? '';
       const fbVideoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawFbVideoSrc;
       if (fbVideoPath.length > 0) {
-        this.subtitleDispatcher.clearUserBindingForce(fbVideoPath).catch(() => {});
+        this.subtitleDispatcher.getUserBinding(fbVideoPath).then((binding) => {
+          if (binding !== null && binding.subtitleType === 'disabled') {
+            this.subtitleDispatcher.clearUserBindingForce(fbVideoPath).catch(() => {});
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              'fallback: 清空 disabled binding，让 lastUsed 接管');
+          } else {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `fallback: 保留 enabled binding (${binding?.subtitleType ?? 'none'})，不自动应用 lastUsed`);
+          }
+        }).catch(() => {});
       }
       // 先把 player 引用清空，防止后续调用
       const oldPlayer = this.player;

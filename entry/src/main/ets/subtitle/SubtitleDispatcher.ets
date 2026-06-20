@@ -237,12 +237,25 @@ export class SubtitleDispatcher {
             await this.clearUserBinding(videoPath);
           }
         } else if (binding.subtitleType === 'internal') {
-          // 内置字幕：按 displayName 精确匹配
+          // 内置字幕：先按 displayName 精确匹配，失败则按语言名模糊匹配（兼容历史 binding "英语 (SRT)" vs 新 displayName "英语"）
           let foundIndex = -1;
           for (let i = 0; i < allSubtitleTracks.length; i++) {
             if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === binding.subtitlePath) {
               foundIndex = i;
               break;
+            }
+          }
+          if (foundIndex < 0) {
+            // 模糊匹配：binding.subtitlePath 形如 "英语 (SRT)" 时，剥去 " (xxx)" 后缀再与轨道 displayName 比对
+            const boundBase = binding.subtitlePath.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            if (boundBase.length > 0 && boundBase !== binding.subtitlePath) {
+              for (let i = 0; i < allSubtitleTracks.length; i++) {
+                if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === boundBase) {
+                  foundIndex = i;
+                  console.info(`[SubtitleDispatcher] 步骤1 internal 模糊匹配: binding="${binding.subtitlePath}" → displayName="${allSubtitleTracks[i].displayName}" index=${i}`);
+                  break;
+                }
+              }
             }
           }
           if (foundIndex >= 0) {
