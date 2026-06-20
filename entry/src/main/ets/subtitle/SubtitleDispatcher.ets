@@ -8,7 +8,7 @@ import { SubtitleCacheManager } from './SubtitleCacheManager';
 // ─────────────────────────────────────────────
 
 /** 用户字幕绑定类型 */
-export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded' | 'internal';
+export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded' | 'internal' | 'disabled';
 
 /** 用户字幕绑定记录（存储在 AppPreferences 中） */
 export interface SubtitleBinding {
@@ -97,7 +97,12 @@ export class SubtitleDispatcher {
         return null;
       }
       const parsed = JSON.parse(raw) as Record<string, string | number>;
-      if (!parsed['videoPath'] || !parsed['subtitlePath'] || !parsed['subtitleType'] || !parsed['savedAt']) {
+      // disabled 标记可能 subtitlePath 为空；其它类型必须有 4 字段。
+      if (parsed['subtitleType'] === 'disabled') {
+        if (!parsed['videoPath'] || !parsed['savedAt']) {
+          return null;
+        }
+      } else if (!parsed['videoPath'] || !parsed['subtitlePath'] || !parsed['subtitleType'] || !parsed['savedAt']) {
         return null;
       }
       const binding: SubtitleBinding = {
@@ -136,13 +141,28 @@ export class SubtitleDispatcher {
   }
 
   /**
-   * 清除用户字幕绑定。
-   * 在用户关闭字幕或绑定 URL 匹配失败时调用。
+   * 清除用户字幕绑定（标记 disabled 状态）。
+   *
+   * 历史行为：把 AppPreferences 里的 binding key 清空。
+   * 改造后：写入 `{ subtitleType: 'disabled' }` 标记用户主动关闭过字幕。
+   *
+   * 之所以改成"标记"而不是"清空"：
+   * - 步骤 1 看到 disabled 直接 return none（与原 clearUserBinding 行为等价）
+   * - 步骤 4（lastUsed 自动恢复）**仍然能命中** metadata.json.lastUsed 指向的缓存字幕
+   * - 这样：
+   *   1. 关闭字幕后重开视频不会自动应用 lastUsed（用户主动意图生效）
+   *   2. 缓存字幕文件**不会被清除**，仍可通过后续扩展在菜单中列出供用户重新启用
    */
   async clearUserBinding(videoPath: string): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
-      await AppPreferences.set(key, '');
+      const binding: SubtitleBinding = {
+        videoPath,
+        subtitlePath: '',
+        subtitleType: 'disabled',
+        savedAt: Date.now()
+      };
+      await AppPreferences.set(key, JSON.stringify(binding));
     } catch (e) {
       console.error(`[SubtitleDispatcher] clearUserBinding 失败: ${String(e)}`);
     }
@@ -171,6 +191,13 @@ export class SubtitleDispatcher {
     try {
       const binding = await this.getUserBinding(videoPath);
       if (binding !== null) {
+        // 用户主动关闭过字幕 → 短路返回 none，跳过步骤 4 的 lastUsed 自动恢复
+        // 注意：metadata.json.lastUsed 不会被本方法清空，缓存文件仍保留供未来 UI 重新加载。
+        if (binding.subtitleType === 'disabled') {
+          console.info(`[SubtitleDispatcher] 步骤1命中 disabled 用户标记，跳过 lastUsed 自动恢复`);
+          const none: SubtitleResolution = { type: 'none' };
+          return none;
+        }
         if (binding.subtitleType === 'local-file') {
           // 外置字幕：按 URL 精确匹配
           let foundIndex = -1;

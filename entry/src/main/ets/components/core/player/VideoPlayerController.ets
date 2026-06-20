@@ -31,7 +31,6 @@ import {
 import { MetricsService } from "../../../services/metrics/MetricsService";
 import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
 import { SubtitleDispatcher, SubtitleCacheContext } from "../../../subtitle/SubtitleDispatcher";
-import { SubtitleCacheManager } from "../../../subtitle/SubtitleCacheManager";
 import { AudioDispatcher } from "../../../audio/AudioDispatcher";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
@@ -3391,34 +3390,16 @@ export class VideoPlayerController {
     const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
     if (videoPath.length > 0) {
       if (allIndex === -1) {
-        // 关闭字幕 → 清除绑定
+        // 关闭字幕 → 写 disabled 标记（让 resolveSubtitle 步骤 1 短路，跳过步骤 4 自动恢复）
+        // 注意：metadata.json.lastUsed 与缓存文件不删除，用户后续若在菜单中启用，可继续命中。
         this.subtitleDispatcher.clearUserBinding(videoPath).catch(() => {});
-        // 同时清除 metadata.json.lastUsed，否则下次进入同一视频时
-        // SubtitleDispatcher.resolveSubtitle 步骤 4 仍会命中 lastUsed 自动恢复字幕。
-        // 与 loadSubtitleTracks 中构建 cacheCtx 的逻辑保持一致：用 VideoData 推导 sourceType/sourceId，
-        // 不依赖外部 setSubtitleCacheContext 调用方传值。
-        const cachedFilesDir = this.subtitleCacheContext?.filesDir;
-        if (cachedFilesDir !== undefined && cachedFilesDir.length > 0) {
-          const rawSourceType = this.currentVideoData?.fileSourceType;
-          const resolvedSourceType = rawSourceType !== undefined
-            ? rawSourceType
-            : (this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network');
-          const resolvedSourceId = this.currentVideoData?.fileSourceId ?? '0';
-          const cacheManager = new SubtitleCacheManager();
-          cacheManager.clearLastUsedSubtitle(
-            cachedFilesDir,
-            resolvedSourceType,
-            resolvedSourceId,
-            videoPath
-          ).catch(() => {});
-        }
       } else if (allIndex >= 0 && allIndex < this.allSubtitleTracks.length) {
         const track = this.allSubtitleTracks[allIndex];
         if (track.kind === 'external' && track.url !== undefined && track.url.length > 0) {
-          // 用户手动选择外置字幕 → 保存绑定
+          // 用户手动选择外置字幕 → 保存绑定（覆盖 disabled 标记）
           this.subtitleDispatcher.saveUserBinding(videoPath, track.url, 'local-file').catch(() => {});
         } else if (track.kind === 'internal') {
-          // 用户手动选择内置字幕 → 用 displayName 作为绑定 key
+          // 用户手动选择内置字幕 → 用 displayName 作为绑定 key（覆盖 disabled 标记）
           this.subtitleDispatcher.saveUserBinding(videoPath, track.displayName, 'internal').catch(() => {});
         }
       }
