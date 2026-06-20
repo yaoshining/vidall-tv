@@ -31,6 +31,7 @@ import {
 import { MetricsService } from "../../../services/metrics/MetricsService";
 import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
 import { SubtitleDispatcher, SubtitleCacheContext } from "../../../subtitle/SubtitleDispatcher";
+import { SubtitleCacheManager } from "../../../subtitle/SubtitleCacheManager";
 import { AudioDispatcher } from "../../../audio/AudioDispatcher";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
@@ -3392,6 +3393,25 @@ export class VideoPlayerController {
       if (allIndex === -1) {
         // 关闭字幕 → 清除绑定
         this.subtitleDispatcher.clearUserBinding(videoPath).catch(() => {});
+        // 同时清除 metadata.json.lastUsed，否则下次进入同一视频时
+        // SubtitleDispatcher.resolveSubtitle 步骤 4 仍会命中 lastUsed 自动恢复字幕。
+        // 与 loadSubtitleTracks 中构建 cacheCtx 的逻辑保持一致：用 VideoData 推导 sourceType/sourceId，
+        // 不依赖外部 setSubtitleCacheContext 调用方传值。
+        const cachedFilesDir = this.subtitleCacheContext?.filesDir;
+        if (cachedFilesDir !== undefined && cachedFilesDir.length > 0) {
+          const rawSourceType = this.currentVideoData?.fileSourceType;
+          const resolvedSourceType = rawSourceType !== undefined
+            ? rawSourceType
+            : (this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network');
+          const resolvedSourceId = this.currentVideoData?.fileSourceId ?? '0';
+          const cacheManager = new SubtitleCacheManager();
+          cacheManager.clearLastUsedSubtitle(
+            cachedFilesDir,
+            resolvedSourceType,
+            resolvedSourceId,
+            videoPath
+          ).catch(() => {});
+        }
       } else if (allIndex >= 0 && allIndex < this.allSubtitleTracks.length) {
         const track = this.allSubtitleTracks[allIndex];
         if (track.kind === 'external' && track.url !== undefined && track.url.length > 0) {

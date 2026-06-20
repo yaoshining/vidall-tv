@@ -88,6 +88,14 @@ export interface SubtitleMarkLastUsedInput {
   filesDir: string;
 }
 
+/** 清除最近使用输入（与 `SubtitleMarkLastUsedInput` 同形，但无需 fileName）。 */
+export interface SubtitleClearLastUsedInput {
+  stableVideoSrc: string;
+  sourceType: string;
+  sourceId: string;
+  filesDir: string;
+}
+
 /**
  * 把已知的 4 个具体 Error 类归一映射为业务错误分类。
  *

@@ -23,6 +23,7 @@ import { SubtitleDownloader } from "../../subtitle/SubtitleDownloader";
 import { SubtitleCacheManager } from "../../subtitle/SubtitleCacheManager";
 import {
   SubtitleAcquisitionError,
+  SubtitleClearLastUsedInput,
   SubtitleDownloadInput,
   SubtitleDownloadOutcome,
   SubtitleMarkLastUsedInput,
@@ -112,6 +113,31 @@ export class SubtitleAcquisitionService {
     } catch (e) {
       const errMsg = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
       hilog.warn(DOMAIN, TAG, `markLastUsed failed (non-fatal): ${errMsg}`);
+    }
+  }
+
+  /**
+   * 清除最近使用字幕标记。
+   *
+   * 调用场景：用户在播放器内主动"关闭字幕"。
+   * 关闭动作除了清掉 `SubtitleDispatcher` 中的用户绑定（`AppPreferences` 里的 binding key）
+   * 之外，还应同时清掉 `SubtitleCacheManager` 的 `lastUsed`，否则下次进入同一视频时
+   * `SubtitleDispatcher.resolveSubtitle` 步骤 4 仍会命中 lastUsed 自动恢复字幕。
+   *
+   * 失败仅 warn，不抛（与 `markLastUsed` 风格一致）。
+   */
+  async clearLastUsed(input: SubtitleClearLastUsedInput): Promise<void> {
+    try {
+      const cacheManager = new SubtitleCacheManager();
+      await cacheManager.clearLastUsedSubtitle(
+        input.filesDir,
+        input.sourceType,
+        input.sourceId,
+        input.stableVideoSrc
+      );
+    } catch (e) {
+      const errMsg = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
+      hilog.warn(DOMAIN, TAG, `clearLastUsed failed (non-fatal): ${errMsg}`);
     }
   }
 }

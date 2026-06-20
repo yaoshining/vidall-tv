@@ -335,6 +335,43 @@ export class SubtitleCacheManager {
   }
 
   /**
+   * 清除 metadata.json 中的 lastUsed 字段，但保留 subtitles 数组中已下载的字幕文件。
+   *
+   * 调用场景：用户在播放器内主动"关闭字幕"。
+   * 关闭动作除了清掉 `SubtitleDispatcher` 中的用户绑定（`AppPreferences` 里的 binding key）
+   * 之外，还应同时清掉 `SubtitleCacheManager` 的 `lastUsed`，否则下次进入同一视频时
+   * `SubtitleDispatcher.resolveSubtitle` 步骤 4 仍会命中 lastUsed 自动恢复字幕，
+   * 与"主动关闭"语义相悖。
+   *
+   * 行为：
+   * - 已有 metadata.json：清空 `lastUsed`，写回磁盘。subtitles 数组保持原样（已下载文件不被删除）。
+   * - 无 metadata.json：静默返回。
+   *
+   * 不抛异常，失败仅 hilog.warn，不影响调用方主流程。
+   */
+  async clearLastUsedSubtitle(
+    filesDir: string,
+    sourceType: string,
+    sourceId: string,
+    videoPath: string
+  ): Promise<void> {
+    try {
+      const dir = await this.buildDir(filesDir, sourceType, sourceId, videoPath);
+      const metadata = await this.readMetadata(dir);
+      if (metadata === null) {
+        return;
+      }
+      if (metadata.lastUsed.length === 0) {
+        return;
+      }
+      metadata.lastUsed = '';
+      await this.writeMetadata(dir, metadata);
+    } catch (e) {
+      console.error(`[SubtitleCacheManager] clearLastUsedSubtitle 失败: ${String(e)}`);
+    }
+  }
+
+  /**
    * 删除某视频目录下的所有字幕文件及 metadata.json。
    * 目录不存在时静默返回。
    */
