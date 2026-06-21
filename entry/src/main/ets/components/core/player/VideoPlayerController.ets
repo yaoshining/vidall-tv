@@ -820,6 +820,19 @@ export class VideoPlayerController {
           decision.precheckProbeError
         );
       }
+      // 关键：详细打印整组音轨分析（用于 verify 真机回溯）
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
+        `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
+        `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}`);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);
+      for (let i = 0; i < decision.trackAnalyses.length; i++) {
+        const t = decision.trackAnalyses[i];
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[initPlayer.route-decision]   [${i}] codec=${t.codec} channels=${t.channels} ` +
+          `hardSupported=${t.hardSupported} source=${t.source}`);
+      }
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
         `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
@@ -3048,6 +3061,14 @@ export class VideoPlayerController {
       if (this.audioTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，直接选择默认轨道`);
+        // 详细打印（用于 verify 真机回溯）
+        for (let i = 0; i < this.audioTracks.length; i++) {
+          const t = this.audioTracks[i];
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `[loadAudioTracks] 预置音轨[${i}]: trackIndex=${t.trackIndex} ` +
+            `displayName=${t.displayName} mime=${t.mimeType ?? ''} ` +
+            `codecName=${t.codecName ?? ''} lang=${t.language ?? ''}`);
+        }
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
           return;
@@ -3307,7 +3328,10 @@ export class VideoPlayerController {
       await this.player.selectTrack(audioTrack.trackIndex);
       this.activeAudioIndex = trackIndex;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchAudioTrack] 音轨已切换: ${audioTrack.displayName} (trackIndex=${audioTrack.trackIndex})`);
+        `[switchAudioTrack] ✓ 音轨已切换: uiIndex=${trackIndex} ` +
+        `displayName=${audioTrack.displayName} trackIndex=${audioTrack.trackIndex} ` +
+        `mime=${audioTrack.mimeType ?? ''} codecName=${audioTrack.codecName ?? ''} ` +
+        `lang=${audioTrack.language ?? ''} userInitiated=${userInitiated} backend=${this.backend}`);
 
       // 用户主动切换时持久化绑定
       if (userInitiated) {

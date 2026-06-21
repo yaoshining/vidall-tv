@@ -364,7 +364,22 @@ export class AVPlayerAdapter implements IPlayer {
           // API 23 eac3 静默失败修复（Issue #212）：
           // demux 可识别 eac3 进入 PREPARED，但 decoder 静默放弃导致无声、不报 error。
           // 在此主动检测所有音频轨道 codec，全为不支持格式时触发 fallback，而非直接调 _onReadyCb。
+          //
+          // 关键：若整组音轨中存在至少一条"软解常见"（AC-3/EAC-3）或"硬解"轨道，
+          // 不能默认落到 track 0 的 TrueHD 触发 fallback，应让 controller 在
+          // loadAudioTracks 阶段按 codecCompatibilityRank 切到合适轨道。
+          // 这里仍按"全部 unsupported"才触发 fallback 的逻辑。
           player.getTrackDescription().then((tracks: Array<media.MediaDescription>) => {
+            // 详细打印所有轨道（用于 verify 真机回溯）
+            for (let i = 0; i < tracks.length; i++) {
+              const t = tracks[i];
+              const trackType = t[media.MediaDescriptionKey.MD_KEY_TRACK_TYPE] as number;
+              if (trackType === media.MediaType.MEDIA_TYPE_AUD) {
+                const mimeType = t[media.MediaDescriptionKey.MD_KEY_CODEC_MIME] as string | undefined;
+                hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+                  `[AVPlayer.PREPARED] 音频轨[${i}]: mime=${mimeType ?? 'unknown'}`);
+              }
+            }
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
               `PREPARED trackCount=${tracks.length}`);
             // 统计音频轨道中属于不支持格式的数量
@@ -387,10 +402,12 @@ export class AVPlayerAdapter implements IPlayer {
             }
             if (audioCount > 0 && audioCount === unsupportedCount) {
               hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-                `所有音频轨道均为不支持格式，主动触发 fallback（音频轨道数=${audioCount}）`);
+                `所有音频轨道均为不支持格式，主动触发 fallback（音频轨道数=${audioCount}, unsupportedCount=${unsupportedCount}）`);
               if (this._onUnsupportedFormatCb) { this._onUnsupportedFormatCb(); }
               return;
             }
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `[AVPlayer.PREPARED] 部分音频轨道可播放：audioCount=${audioCount}, unsupportedCount=${unsupportedCount}，avplayer 继续运行，等 controller 按 rank 切轨`);
             // 正常 ready 路径
             if (this._onReadyCb) { this._onReadyCb(); }
           }).catch((e: BusinessError) => {

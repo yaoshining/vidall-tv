@@ -48,28 +48,66 @@ const SOFT_ONLY_KEYWORDS: string[] = [
 ];
 
 /**
- * 构造路由决策：基于整组音轨分析，而非单条首轨。
+ * codec 兼容性等级（数字越小越优先，作为初轨选择与 route decision 的排序依据）。
  *
- * 策略：
- * - 整组音轨中存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer
- *   （让 avplayer 自行尝试，并在 onPlay 后由 `loadAudioTracks` 通过 `resolveInitialTrackIndex`
- *   选中最优可硬解轨道）
- * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer，fallback=ijkplayer
- *   （保留现有 fallback 路径，让 avplayer 失败后自动切 ijkplayer 软解）
- * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer（保守）
- * - preferredChannels 取首条可播放轨道的归一化声道
+ * 关键点：AC-3 / EAC-3 虽属软解，但在 HarmonyOS 平台普遍有 ijkplayer / 系统软解支持；
+ * TrueHD / MLP / Audio Vivid 解码链不成熟，默认应排在 AC-3 之后。
+ *
+ * 1 = 系统稳态可硬解（HARD_PREFERRED）
+ * 2 = 软解但常见（AC-3 / EAC-3 / DTS）— 优先选择
+ * 3 = 软解且罕见（TrueHD / MLP / Audio Vivid）— 仅在别无选择时使用
+ * 4 = 未知 codec
+ */
+function codecCompatibilityRank(codec: string): number {
+  if (codec.length === 0) {
+    return 4;
+  }
+  const c = codec.toLowerCase();
+  // 硬解友好
+  if (c.includes('aac') || c.includes('mp3') || c.includes('opus') ||
+    c.includes('flac') || c.includes('pcm') || c.includes('vorbis')) {
+    return 1;
+  }
+  // 软解常见：AC-3 / EAC-3 / DTS（注意 DTS 排后面，会被 AC-3 抢优先）
+  if (c.includes('ac3') && !c.includes('eac3')) {
+    return 2;
+  }
+  if (c.includes('eac3')) {
+    return 2;
+  }
+  if (c.includes('dts')) {
+    return 3;
+  }
+  // 软解罕见：TrueHD / MLP / Audio Vivid
+  if (c.includes('truehd') || c.includes('mlp') || c.includes('vivid') || c.includes('atmos')) {
+    return 3;
+  }
+  return 4;
+}
+
+/**
+ * 构造路由决策：基于整组音轨分析 + codec compatibility rank。
+ *
+ * 关键策略（按用户场景 TrueHD + AC-3 混合片源）：
+ * 1. 整组音轨存在至少一条 rank≤1（硬解）或 rank≤2（AC-3/EAC-3 软解常见）轨道 → preferredBackend=avplayer
+ *    （avplayer 启动后由 `loadAudioTracks` + `findInitialAudioTrackIndex` 切到该轨道，避免无声）
+ * 2. 整组音轨全部 rank≥3（仅 TrueHD / MLP / DTS / Audio Vivid 等软解罕见或 DTS）→ preferredBackend=avplayer
+ *    + fallback=ijkplayer（让 avplayer 失败后自动切 ijkplayer 软解）
+ * 3. 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer（保守）
+ * 4. detectedCodec / detectedChannels 取整组中 rank 最低的轨道（最兼容），不再是 probe[0]
  */
 export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDecision {
   const tracks = input.trackAnalyses;
   const trackCount = tracks.length;
 
-  // 整组分析
+  // 整组分析：累加硬解 / 软解统计 + 收集 rank 最低轨道
   let anyHardSupported = false;
   let anyPlayable = true;
   let allSoftDecodeOnly = true;
   let firstHardSupported: AudioTrackAnalysis | null = null;
-  let firstPlayable: AudioTrackAnalysis | null = null;
   let unplayableCount = 0;
+  let bestRankedTrack: AudioTrackAnalysis | null = null;
+  let bestRankedIndex = -1;
   for (let i = 0; i < trackCount; i++) {
     const t = tracks[i];
     if (t.hardSupported) {
@@ -79,13 +117,14 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
         firstHardSupported = t;
       }
     }
-    if (firstPlayable === null && t.codec.length > 0) {
-      firstPlayable = t;
-    }
-    if (!t.hardSupported && t.codec.length > 0) {
-      // 已知 codec 但应软解
-    } else if (t.codec.length === 0) {
+    if (t.codec.length === 0) {
       unplayableCount++;
+    } else {
+      const rank = codecCompatibilityRank(t.codec);
+      if (bestRankedTrack === null || rank < codecCompatibilityRank(bestRankedTrack.codec)) {
+        bestRankedTrack = t;
+        bestRankedIndex = i;
+      }
     }
   }
   if (unplayableCount === trackCount && trackCount > 0) {
@@ -93,24 +132,26 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
   }
   const anyUnplayable = unplayableCount > 0;
 
-  // 选择用于日志的 "代表 codec/channels"
-  const detectedCodec = firstHardSupported !== null
-    ? firstHardSupported.codec
-    : (firstPlayable !== null ? firstPlayable.codec : 'unknown');
-  const detectedChannels = firstHardSupported !== null
-    ? firstHardSupported.channels
-    : (firstPlayable !== null ? firstPlayable.channels : 2);
+  // 决定 detectedCodec / detectedChannels：取整组中 rank 最低的轨道（最兼容）
+  const representative = bestRankedTrack !== null
+    ? bestRankedTrack
+    : (firstHardSupported !== null ? firstHardSupported : null);
+  const detectedCodec = representative !== null ? representative.codec : 'unknown';
+  const detectedChannels = representative !== null ? representative.channels : 2;
   const preferredChannels = normalizeTargetChannels(detectedChannels);
 
   const summary = `tracks=${trackCount}, ` +
     `firstHardSupported=${firstHardSupported !== null ? firstHardSupported.codec : 'none'}, ` +
     `allSoftDecodeOnly=${allSoftDecodeOnly}, anyHardSupported=${anyHardSupported}, ` +
+    `bestRankedIndex=${bestRankedIndex}, bestRankedCodec=${detectedCodec}, ` +
     `precheckProbeFailed=${input.precheckProbeFailed}`;
 
-  // preferredBackend 决策：
+  // preferredBackend 决策（关键修复：TrueHD+AC-3 混合时不能默认 TrueHD）
   // 1. 探测完全失败且无任何音轨提示 → ijkplayer（保守）
-  // 2. 整组音轨存在至少一条可硬解轨道 → avplayer（让 avplayer 尝试，初始选轨由 resolveInitialTrackIndex 决定）
-  // 3. 整组音轨全部应软解 → avplayer（保持现有 fallback 路径）
+  // 2. 整组音轨存在至少一条 rank≤2 轨道（硬解 / AC-3 / EAC-3）→ avplayer
+  //    （avplayer 启动后由 loadAudioTracks 切到该轨道）
+  // 3. 整组音轨全部 rank≥3（仅 TrueHD / MLP / Audio Vivid / DTS）→ avplayer + fallback=ijkplayer
+  //    （让 avplayer 失败后自动切 ijkplayer 软解；同时避免"全部 rank3"误判为 ijkplayer）
   let preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
   if (input.precheckProbeFailed && trackCount === 0 && !input.presetHasAudio) {
     preferredBackend = 'ijkplayer';
@@ -230,55 +271,109 @@ function normalizeChannelsForSort(ch: number): number {
   return 8;
 }
 
-/** 判断音轨是否可播放（与原 `isAudioTrackPlayable` 等价）。 */
+/** 判断音轨是否"系统级可用"（与原 `isAudioTrackPlayable` 等价）。
+ *  含义：AVPlayer 不进入 onUnsupportedFormat 路径；TrueHD / MLP / Audio Vivid 等"软解罕见"
+ *  仍被视为"可用"，但兼容性更差，由 `codecCompatibilityRank` 进一步排序。
+ */
 function isAudioTrackPlayable(track: AudioTrackItem): boolean {
   const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
   const codec = raw.replace('audio/', '').split('-').join('');
-  return isLikelySystemHardDecodeSupported(codec);
+  // 注意：不能把 TrueHD / AC-3 一律视为不可用，否则"全部不可用"会回退到 track 0。
+  // 这里仅过滤"完全无法识别的未知 codec"，硬解 / 软解兼容性由 rank 决定。
+  if (codec.length === 0) {
+    return false;
+  }
+  // 若 codec 在 SOFT_ONLY_KEYWORDS 中，视为"软解可用"——avplayer/ijkplayer 都能尝试播放
+  if (SOFT_ONLY_KEYWORDS.indexOf(codec) >= 0) {
+    return true;
+  }
+  // 硬解友好
+  if (isLikelySystemHardDecodeSupported(codec)) {
+    return true;
+  }
+  // 未知 codec：保守视为不可用
+  return false;
 }
 
-/** codec-aware 初始音轨选择（与原 `findInitialAudioTrackIndex` 等价）。 */
+/** 提取音轨的归一化 codec 字符串（用于日志与排序）。 */
+function getNormalizedCodec(track: AudioTrackItem): string {
+  const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
+  return raw.replace('audio/', '').split('-').join('');
+}
+
+/** codec-aware 初始音轨选择（与原 `findInitialAudioTrackIndex` 等价，但按 compatibility rank 排序）。
+ *
+ * 关键修复：
+ * - 旧实现把所有"软解罕见"（TrueHD/MLP/Audio Vivid）和"软解常见"（AC-3/EAC-3/DTS）一同视为"软解"，
+ *   然后"按可播放性"返回首条，导致 TrueHD 排在 AC-3 前面被选中。
+ * - 新实现按 `codecCompatibilityRank` 排序：硬解 > AC-3/EAC-3 > DTS > TrueHD/MLP > unknown。
+ *   偏好轨不可用时，按"同语言可播放轨中 rank 最低"选择。
+ */
 export function findInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): number {
   if (audioTracks.length === 0) {
     return 0;
   }
   const preferred = audioTracks[0];
-  const preferredCodec = ((preferred.codecName ?? preferred.mimeType) ?? '');
+  const preferredCodec = getNormalizedCodec(preferred);
+  const preferredRank = codecCompatibilityRank(preferredCodec);
 
-  if (isAudioTrackPlayable(preferred)) {
+  if (preferredRank <= 2) {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[findInitialAudioTrackIndex] 偏好轨可播放，直接选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
+      `[findInitialAudioTrackIndex] 偏好轨可播放(rank=${preferredRank})，直接选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
     return 0;
   }
 
   hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-    `[findInitialAudioTrackIndex] 偏好轨不可播放: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}，尝试降级`);
+    `[findInitialAudioTrackIndex] 偏好轨不优先(rank=${preferredRank}): index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}，按 rank 降级`);
 
   const preferredLang = preferred.language ?? '';
-  if (preferredLang.length > 0) {
-    for (let i = 1; i < audioTracks.length; i++) {
-      const t = audioTracks[i];
-      if (t.language === preferredLang && isAudioTrackPlayable(t)) {
-        const tCodec = ((t.codecName ?? t.mimeType) ?? '');
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[findInitialAudioTrackIndex] 同语言降级: index=${i} lang=${preferredLang} codec=${tCodec || 'unknown'}`);
-        return i;
-      }
-    }
-  }
 
+  // 步骤 1：同语言 + 任意可播放轨中 rank 最低者
+  let bestSameLangIdx = -1;
+  let bestSameLangRank = Number.MAX_SAFE_INTEGER;
   for (let i = 1; i < audioTracks.length; i++) {
     const t = audioTracks[i];
-    if (isAudioTrackPlayable(t)) {
-      const tCodec = ((t.codecName ?? t.mimeType) ?? '');
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[findInitialAudioTrackIndex] 任意可播放降级: index=${i} lang=${t.language ?? 'unknown'} codec=${tCodec || 'unknown'}`);
-      return i;
+    const tRank = codecCompatibilityRank(getNormalizedCodec(t));
+    if (tRank > 4) {
+      continue;
     }
+    if (preferredLang.length > 0 && t.language === preferredLang && tRank < bestSameLangRank) {
+      bestSameLangIdx = i;
+      bestSameLangRank = tRank;
+    }
+  }
+  if (bestSameLangIdx >= 0) {
+    const t = audioTracks[bestSameLangIdx];
+    const tCodec = getNormalizedCodec(t);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[findInitialAudioTrackIndex] 同语言降级: index=${bestSameLangIdx} lang=${preferredLang} rank=${bestSameLangRank} codec=${tCodec || 'unknown'}`);
+    return bestSameLangIdx;
+  }
+
+  // 步骤 2：任意可播放轨中 rank 最低者（跨语言）
+  let bestAnyIdx = -1;
+  let bestAnyRank = Number.MAX_SAFE_INTEGER;
+  for (let i = 1; i < audioTracks.length; i++) {
+    const t = audioTracks[i];
+    const tRank = codecCompatibilityRank(getNormalizedCodec(t));
+    if (tRank > 4) {
+      continue;
+    }
+    if (tRank < bestAnyRank) {
+      bestAnyIdx = i;
+      bestAnyRank = tRank;
+    }
+  }
+  if (bestAnyIdx >= 0) {
+    const t = audioTracks[bestAnyIdx];
+    const tCodec = getNormalizedCodec(t);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[findInitialAudioTrackIndex] 任意可播放降级: index=${bestAnyIdx} rank=${bestAnyRank} lang=${t.language ?? 'unknown'} codec=${tCodec || 'unknown'}`);
+    return bestAnyIdx;
   }
 
   hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-    `[findInitialAudioTrackIndex] 全部音轨不可播放（共 ${audioTracks.length} 条），返回 0 沿用现有降级策略`);
+    `[findInitialAudioTrackIndex] 全部音轨 rank>4（不可解析），返回 0 沿用现有降级策略`);
   return 0;
 }
 
