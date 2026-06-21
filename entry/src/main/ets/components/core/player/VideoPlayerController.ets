@@ -1083,19 +1083,16 @@ export class VideoPlayerController {
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
       this.isLoading = true;
       this.capturePendingResumeForFallback('avplayer_unsupported_format');
-      // 条件化清空 disabled binding：fallback 不是用户主动行为，disabled 状态不应跨回退继承。
-      // 但若用户**主动选了某条字幕**（enabled binding），不应被清掉——用户的明确选择优先。
+      // 不干预用户字幕绑定：fallback 是系统行为，不应覆盖用户的主动选择。
+      // 若用户之前关闭过字幕（disabled），resolveSubtitle 步骤 1 会正确返回 none。
+      // 若用户之前选中了某条字幕，binding 保留，步骤 1 会正确恢复。
       const rawFbVideoSrc = this.currentVideoData?.videoSrc ?? '';
       const fbVideoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawFbVideoSrc;
       if (fbVideoPath.length > 0) {
         this.subtitleDispatcher.getUserBinding(fbVideoPath).then((binding) => {
-          if (binding !== null && binding.subtitleType === 'disabled') {
-            this.subtitleDispatcher.clearUserBindingForce(fbVideoPath).catch(() => {});
+          if (binding !== null) {
             hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              'fallback: 清空 disabled binding，让 lastUsed 接管');
-          } else {
-            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `fallback: 保留 enabled binding (${binding?.subtitleType ?? 'none'})，不自动应用 lastUsed`);
+              `fallback: 保留 binding (${binding.subtitleType})，resolveSubtitle 步骤 1 会按类型处理`);
           }
         }).catch(() => {});
       }
@@ -3444,8 +3441,11 @@ export class VideoPlayerController {
           // 用户手动选择外置字幕 → 保存绑定（覆盖 disabled 标记）
           this.subtitleDispatcher.saveUserBinding(videoPath, track.url, 'local-file').catch(() => {});
         } else if (track.kind === 'internal') {
-          // 用户手动选择内置字幕 → 用 displayName 作为绑定 key（覆盖 disabled 标记）
-          this.subtitleDispatcher.saveUserBinding(videoPath, track.displayName, 'internal').catch(() => {});
+          // 用户手动选择内置字幕 → 优先保存稳定 internalIndex token，避免 displayName 变更导致重开失配
+          const internalBindingKey = track.internalIndex !== undefined
+            ? `@idx:${track.internalIndex}`
+            : track.displayName;
+          this.subtitleDispatcher.saveUserBinding(videoPath, internalBindingKey, 'internal').catch(() => {});
         }
       }
     }

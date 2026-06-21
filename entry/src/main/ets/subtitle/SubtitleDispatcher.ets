@@ -18,7 +18,7 @@ export interface SubtitleBinding {
    * 字幕标识符，语义因 subtitleType 而异：
    * - `local-file`：外置字幕的完整 URL
    * - `downloaded` / `cached`：本地缓存文件路径
-   * - `internal`：内置轨道的 displayName（用于按名称重定位轨道索引）
+    * - `internal`：优先使用 `@idx:<internalIndex>` 稳定 token（兼容历史 displayName）
    */
   subtitlePath: string;
   /** 绑定类型 */
@@ -61,6 +61,7 @@ export interface SubtitleCacheContext {
  *   5. 无字幕 → 返回 { type: 'none' }
  */
 export class SubtitleDispatcher {
+  private static readonly INTERNAL_INDEX_TOKEN_PREFIX: string = '@idx:';
   private readonly cacheManager: SubtitleCacheManager;
 
   constructor(cacheManager?: SubtitleCacheManager) {
@@ -78,6 +79,21 @@ export class SubtitleDispatcher {
   private async buildKey(videoPath: string): Promise<string> {
     const hash = await sha256Hex(videoPath);
     return `${PrefKey.SUBTITLE_BINDING_PREFIX}_${hash.slice(0, 12)}`;
+  }
+
+  private parseInternalBindingIndexToken(subtitlePath: string): number {
+    if (!subtitlePath.startsWith(SubtitleDispatcher.INTERNAL_INDEX_TOKEN_PREFIX)) {
+      return -1;
+    }
+    const rawIndex = subtitlePath.substring(SubtitleDispatcher.INTERNAL_INDEX_TOKEN_PREFIX.length);
+    if (rawIndex.length === 0) {
+      return -1;
+    }
+    const parsedIndex = Number.parseInt(rawIndex, 10);
+    if (Number.isNaN(parsedIndex)) {
+      return -1;
+    }
+    return parsedIndex;
   }
 
   // ──────────────────────────────────────────
@@ -194,7 +210,7 @@ export class SubtitleDispatcher {
    *
    * - 步骤 1：查用户绑定
    *   - local-file：在 allSubtitleTracks 中按 URL 精确匹配（外置字幕）
-   *   - internal：在 allSubtitleTracks 中按 displayName 精确匹配（内置字幕）
+  *   - internal：优先按 @idx token 匹配 internalIndex，再兼容 displayName（内置字幕）
    * - 步骤 2-3：adapter 已处理，此处不介入（返回 none，让 adapter 的自动选轨生效）
    * - 步骤 4：查本地缓存（需要传入 cacheContext）
    * - 步骤 5：返回 { type: 'none' }
@@ -212,12 +228,13 @@ export class SubtitleDispatcher {
     try {
       const binding = await this.getUserBinding(videoPath);
       if (binding !== null) {
-        // 用户主动关闭过字幕 → 短路返回 none，跳过步骤 4 的 lastUsed 自动恢复
-        // 注意：metadata.json.lastUsed 不会被本方法清空，缓存文件仍保留供未来 UI 重新加载。
+        // 用户主动关闭过字幕 → 返回 user-specified trackIndex=-1，让控制器显式关闭字幕
+        // 注意：返回 { type: 'none' } 会让适配器的自动选轨保留，导致字幕仍显示。
+        // metadata.json.lastUsed 不会被清除，缓存文件保留供未来 UI 重新加载。
         if (binding.subtitleType === 'disabled') {
-          console.info(`[SubtitleDispatcher] 步骤1命中 disabled 用户标记，跳过 lastUsed 自动恢复`);
-          const none: SubtitleResolution = { type: 'none' };
-          return none;
+          console.info(`[SubtitleDispatcher] 步骤1命中 disabled 用户标记，返回 trackIndex=-1 关闭字幕`);
+          const disabled: SubtitleResolution = { type: 'user-specified', trackIndex: -1 };
+          return disabled;
         }
         if (binding.subtitleType === 'local-file') {
           // 外置字幕：按 URL 精确匹配
@@ -237,12 +254,28 @@ export class SubtitleDispatcher {
             await this.clearUserBinding(videoPath);
           }
         } else if (binding.subtitleType === 'internal') {
-          // 内置字幕：先按 displayName 精确匹配，失败则按语言名模糊匹配（兼容历史 binding "英语 (SRT)" vs 新 displayName "英语"）
+          // 内置字幕：优先按 @idx token 精确匹配 internalIndex，兼容历史 displayName 匹配。
           let foundIndex = -1;
+          const boundInternalIndex = this.parseInternalBindingIndexToken(binding.subtitlePath);
+          if (boundInternalIndex >= 0) {
+            for (let i = 0; i < allSubtitleTracks.length; i++) {
+              const track = allSubtitleTracks[i];
+              const trackInternalIndex = track.internalIndex ?? -1;
+              if (track.kind === 'internal' && trackInternalIndex === boundInternalIndex) {
+                foundIndex = i;
+                console.info(`[SubtitleDispatcher] 步骤1 internal token 匹配: token=${binding.subtitlePath} index=${i}`);
+                break;
+              }
+            }
+          }
+
+          // 兼容历史 binding（displayName）
           for (let i = 0; i < allSubtitleTracks.length; i++) {
-            if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === binding.subtitlePath) {
-              foundIndex = i;
-              break;
+            if (foundIndex < 0) {
+              if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === binding.subtitlePath) {
+                foundIndex = i;
+                break;
+              }
             }
           }
           if (foundIndex < 0) {

@@ -687,7 +687,7 @@ export struct SeriesDetailPage {
 
   /**
    * 点击集 → 导航到播放器
-   * 构造 WebDAV 完整 URL + Authorization 请求头后传入 PlayerPageParam，
+   * 通过 SourceAdapterService 统一解析 URL 和请求头（收口 SMB / WebDAV 差异），
    * 同时从 DB / ffprobe 读取音轨和字幕轨元数据并注入，与文件浏览器行为一致。
    * @param episode  要播放的集
    * @param mediaKey 媒体级进度 key（仅"继续播放"入口传入，文件浏览器/集列表不传）

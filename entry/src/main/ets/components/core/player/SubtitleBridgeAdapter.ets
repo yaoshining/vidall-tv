@@ -909,6 +909,37 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 }
 
 export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
+  private static toInternalFormatLabel(codecName: string | undefined): string {
+    const codec = (codecName ?? '').toLowerCase();
+    if (codec.length === 0) {
+      return '';
+    }
+    if (codec === 'subrip') {
+      return 'SRT';
+    }
+    if (codec === 'ass' || codec === 'ssa') {
+      return 'ASS';
+    }
+    if (codec === 'webvtt') {
+      return 'VTT';
+    }
+    if (codec === 'mov_text') {
+      return 'TX3G';
+    }
+    return codec.toUpperCase();
+  }
+
+  private static buildInternalDisplayName(
+    language: string | undefined,
+    codecName: string | undefined,
+    fallbackName: string
+  ): string {
+    const langName = language ? FfprobeUtil.getLanguageDisplayName(language) : '';
+    const baseName = langName.length > 0 ? langName : fallbackName;
+    const formatLabel = IjkSubtitleBridgeAdapter.toInternalFormatLabel(codecName);
+    return formatLabel.length > 0 ? `${baseName}(${formatLabel})` : baseName;
+  }
+
   protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
     if (!this.videoData) {
       return [];
@@ -949,10 +980,11 @@ export class IjkSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     const items: SubtitleTrackItem[] = [];
     for (let i = 0; i < textTracks.length; i++) {
       const ft: FfprobeTrack = textTracks[i];
-      // displayName 与 AvSubtitleBridgeAdapter 保持一致：仅用语言名（不带 codec / title 后缀）。
-      // 跨 avplayer/ijkplayer 切换时，internal binding 的 subtitlePath 匹配才能稳定。
-      const langName = ft.language ? FfprobeUtil.getLanguageDisplayName(ft.language) : '';
-      const displayName = langName.length > 0 ? langName : `字幕 ${i + 1}`;
+      const displayName = IjkSubtitleBridgeAdapter.buildInternalDisplayName(
+        ft.language,
+        ft.codecName,
+        `字幕 ${i + 1}`
+      );
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
