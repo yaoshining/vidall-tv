@@ -340,7 +340,9 @@ export class SubtitleCacheManager {
    * 保留为公开 API 以备未来 UI 扩展（例如"已下载字幕列表"菜单）时使用。
    * 当前 `VideoPlayerController.switchSubtitleTrack(-1)` 不再调用本方法——
    * "关闭字幕"通过 `SubtitleDispatcher.clearUserBinding` 写入 `disabled` 标记实现，
-   * 让 `SubtitleDispatcher.resolveSubtitle` 步骤 1 短路 return none，
+   * 让 `SubtitleDispatcher.resolveSubtitle` 步骤 1 返回
+   * `{ type: 'user-specified', trackIndex: -1 }`（显式关闭字幕，避免 adapter 自动选轨
+   * 继续显示字幕），短路步骤 4 的 lastUsed 自动恢复。
    * metadata.json.lastUsed 与已下载字幕文件保持原样。
    *
    * 行为：

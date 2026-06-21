@@ -126,10 +126,13 @@ export class SubtitleAcquisitionService {
   /**
    * 清除最近使用字幕标记。
    *
-   * 调用场景：用户在播放器内主动"关闭字幕"。
-   * 关闭动作除了清掉 `SubtitleDispatcher` 中的用户绑定（`AppPreferences` 里的 binding key）
-   * 之外，还应同时清掉 `SubtitleCacheManager` 的 `lastUsed`，否则下次进入同一视频时
-   * `SubtitleDispatcher.resolveSubtitle` 步骤 4 仍会命中 lastUsed 自动恢复字幕。
+   * 调用场景：仅在**显式重置最近使用记录**时调用（例如菜单中"清除 lastUsed"操作）。
+   *
+   * 注意：`SubtitleDispatcher` 当前已采用 disabled 绑定标记策略——
+   * 用户关闭字幕时通过 `clearUserBinding` 写入 `{ subtitleType: 'disabled' }`，
+   * `resolveSubtitle` 步骤 1 即返回 `{ type: 'user-specified', trackIndex: -1 }`，
+   * 短路步骤 4 的 lastUsed 自动恢复。因此**用户主动关闭字幕**的场景**无需**调用本方法；
+   * 错误的"为防 lastUsed 恢复而调用"会导致 lastUsed 指针丢失，影响后续手动选轨时缓存提示。
    *
    * 失败仅 warn，不抛（与 `markLastUsed` 风格一致）。
    */

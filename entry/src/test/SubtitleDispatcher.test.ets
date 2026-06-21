@@ -125,7 +125,8 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
 
       const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
-      expect(binding?.subtitleType).assertEqual('disabled');
+      // 失效场景使用 clearUserBindingForce（清空 key），binding 应为 null
+      expect(binding).assertNull();
     });
 
     it('resolveSubtitle_noBindingNoTracks_returnsNone', 0, async () => {
@@ -161,7 +162,8 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
 
       const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
-      expect(binding?.subtitleType).assertEqual('disabled');
+      // 失效场景使用 clearUserBindingForce（清空 key），binding 应为 null
+      expect(binding).assertNull();
     });
 
     it('clearUserBinding_removesExistingBinding', 0, async () => {

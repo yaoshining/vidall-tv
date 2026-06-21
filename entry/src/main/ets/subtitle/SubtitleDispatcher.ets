@@ -163,11 +163,17 @@ export class SubtitleDispatcher {
    * 改造后：写入 `{ subtitleType: 'disabled' }` 标记用户主动关闭过字幕。
    *
    * 之所以改成"标记"而不是"清空"：
-   * - 步骤 1 看到 disabled 直接 return none（与原 clearUserBinding 行为等价）
+   * - 步骤 1 看到 disabled 返回 `{ type: 'user-specified', trackIndex: -1 }`
+   *   （**显式关闭字幕**，避免 adapter 自动选轨继续显示字幕，而非 return none 让 adapter 自行处理）
    * - 步骤 4（lastUsed 自动恢复）**仍然能命中** metadata.json.lastUsed 指向的缓存字幕
    * - 这样：
    *   1. 关闭字幕后重开视频不会自动应用 lastUsed（用户主动意图生效）
    *   2. 缓存字幕文件**不会被清除**，仍可通过后续扩展在菜单中列出供用户重新启用
+   *
+   * 注意事项：使用本方法必须确认调用方表达的是"用户主动关闭字幕"语义。
+   * 如果是"绑定失效/轨道列表变化"等**非用户主动**的清理场景，应改用
+   * `clearUserBindingForce`（直接清空 key），避免误写 disabled 标记导致
+   * 下次进入同一视频时字幕被强制关闭。
    */
   async clearUserBinding(videoPath: string): Promise<void> {
     try {
@@ -251,7 +257,12 @@ export class SubtitleDispatcher {
             return resolution;
           } else {
             console.warn(`[SubtitleDispatcher] 绑定 URL 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
-            await this.clearUserBinding(videoPath);
+            // 注：失效清理使用 clearUserBindingForce（清空 key）而不是 clearUserBinding（写 disabled 标记）。
+            // clearUserBinding 会写入 { subtitleType: 'disabled' }，等价于"用户主动关闭字幕"，
+            // 会在后续 resolveSubtitle 步骤 1 短路返回 trackIndex=-1，错误地把"轨道列表变化/绑定失效"
+            // 当作"用户主动关闭"处理，导致下次进入同一视频时字幕被强制关闭。
+            // 失效清理应当让 adapter / 缓存字幕按正常流程接管，而非继承 disabled 状态。
+            await this.clearUserBindingForce(videoPath);
           }
         } else if (binding.subtitleType === 'internal') {
           // 内置字幕：优先按 @idx token 精确匹配 internalIndex，兼容历史 displayName 匹配。
@@ -297,7 +308,8 @@ export class SubtitleDispatcher {
             return resolution;
           } else {
             console.warn(`[SubtitleDispatcher] 绑定 displayName 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
-            await this.clearUserBinding(videoPath);
+            // 同样：失效清理使用 clearUserBindingForce，避免误写 disabled 标记导致下次进入视频时字幕被强制关闭。
+            await this.clearUserBindingForce(videoPath);
           }
         }
         // downloaded / cached → step 4 处理

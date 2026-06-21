@@ -220,7 +220,12 @@ export class SourceAdapterService {
     const host = config.url ?? '';
     const port = config.port ?? (protocol === 'https' ? 443 : 80);
     const rootPath = (config.rootPath ?? '').replace(/\/$/, '');
-    const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
+    // 补齐前导斜杠：用户配置 `rootPath: "dav"` 时，必须变成 `/dav`，
+    // 否则 baseUrl 会拼成 `http://host:portdav`，WebDAVClient.getFullUrl 会生成错误 URL。
+    const normalizedRootPath = rootPath.length > 0 && !rootPath.startsWith('/')
+      ? `/${rootPath}`
+      : rootPath;
+    const baseUrl = `${protocol}://${host}:${port}${normalizedRootPath}`;
     const webdavConfig: WebDAVConfig = {
       baseUrl,
       username: config.username ?? '',
