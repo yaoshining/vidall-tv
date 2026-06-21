@@ -922,72 +922,66 @@ export class VideoPlayerController {
 
     // 根据 backend 创建对应适配器（thin delegation to `PlaybackBackendService.prepareAdapter`）。
     //
-    // service 负责：
-    // - backend 选择后的 adapter factory（IjkPlayerAdapter / AVPlayerAdapter）
-    // - SMB 代理生命周期（prepareAdapter 内部已启动代理；controller 仅记录 smbOriginalSrc）
-    // - 字幕桥接 adapter 创建 + 注入（service 同时返回 bridge 引用供 controller 持有）
-    // - onEmbeddedTimedText / onVideoRatio 回调注入（IJK 路径）
-    //
-    // controller 负责：
-    // - service 暴露的 handle 投影到本地 @Trace 字段
-    // - IPlayer 事件回调注册（onReady/onPlay/... 这些需要 controller 的 @Trace 状态）
-    const adapterHandle = this.backendService.prepareAdapter(
-      videoData,
-      this.backend,
-      {
-        onReady: () => {},
-        onPlay: () => {},
-        onPaused: () => {},
-        onCompleted: () => {},
-        onStopped: () => {},
-        onTimeUpdate: () => {},
-        onError: () => {},
-        onUnsupportedFormat: () => {},
-        onSeekDone: () => {},
-        onSubtitleUpdate: () => {},
-        onBuffering: () => {},
-        // 内嵌字幕回调（IJK 路径）：bridge 内部 + applySubtitleBridgeState
-        onEmbeddedTimedText: (text: string) => {
-          const bridge = this.subtitleAdapter;
-          if (currentSessionId !== this.playbackSessionId || !(bridge instanceof IjkSubtitleBridgeAdapter)) {
-            return;
-          }
-          bridge.onEmbeddedTimedText(text);
-          this.applySubtitleBridgeState(bridge.getState());
-        },
-        // 视频比例回调：controller 的 ijkVideoRatio @Trace 字段
-        onVideoRatio: (ratio: number) => {
-          if (currentSessionId !== this.playbackSessionId) {
-            return;
-          }
-          this.ijkVideoRatio = ratio;
-        }
-      }
-    );
-    // service 启动 SMB 代理后会把 videoData.videoSrc 改写为代理 URL，controller 同步追踪 smbOriginalSrc
-    if (adapterHandle.smbOriginalSrc.length > 0) {
-      this.smbOriginalSrc = adapterHandle.smbOriginalSrc;
-    }
-    this.smbProxyActive = adapterHandle.smbProxyActive;
-    this.sourceProtocol = adapterHandle.smbOriginalSrc.length > 0 ? 'SMB' : this.sourceProtocol;
-    // service 已创建 bridge adapter；controller 持有同一引用以便后续 switch / delay / addExternal 调用
-    const adapter: IPlayer | undefined = adapterHandle.player;
-    if (adapterHandle.subtitleBridge !== undefined) {
-      this.subtitleAdapter = adapterHandle.subtitleBridge;
+    // 测试注入钩子：若子类覆写了 createAdapterForBackend() 并返回非 undefined，则跳过 service
+    // 直接使用测试注入的 player（历史测试类依赖 createAvPlayerAdapter 注入 mock player）。
+    const testAdapter = this.createAdapterForBackend(this.backend);
+    if (testAdapter !== undefined) {
+      this.player = testAdapter;
     } else {
-      // 防御性回退：service 异常时降级到旧工厂
-      this.subtitleAdapter = new NoSubtitleBridgeAdapter();
+      const adapterHandle = this.backendService.prepareAdapter(
+        videoData,
+        this.backend,
+        {
+          onReady: () => {},
+          onPlay: () => {},
+          onPaused: () => {},
+          onCompleted: () => {},
+          onStopped: () => {},
+          onTimeUpdate: () => {},
+          onError: () => {},
+          onUnsupportedFormat: () => {},
+          onSeekDone: () => {},
+          onSubtitleUpdate: () => {},
+          onBuffering: () => {},
+          onEmbeddedTimedText: (text: string) => {
+            const bridge = this.subtitleAdapter;
+            if (currentSessionId !== this.playbackSessionId || !(bridge instanceof IjkSubtitleBridgeAdapter)) {
+              return;
+            }
+            bridge.onEmbeddedTimedText(text);
+            this.applySubtitleBridgeState(bridge.getState());
+          },
+          onVideoRatio: (ratio: number) => {
+            if (currentSessionId !== this.playbackSessionId) {
+              return;
+            }
+            this.ijkVideoRatio = ratio;
+          }
+        }
+      );
+      if (adapterHandle.smbOriginalSrc.length > 0) {
+        this.smbOriginalSrc = adapterHandle.smbOriginalSrc;
+      }
+      this.smbProxyActive = adapterHandle.smbProxyActive;
+      this.sourceProtocol = adapterHandle.smbOriginalSrc.length > 0 ? 'SMB' : this.sourceProtocol;
+      if (adapterHandle.subtitleBridge !== undefined) {
+        this.subtitleAdapter = adapterHandle.subtitleBridge;
+      } else {
+        this.subtitleAdapter = new NoSubtitleBridgeAdapter();
+      }
+      const adapter: IPlayer | undefined = adapterHandle.player;
+      if (adapter === undefined) {
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          'initPlayer: PlaybackBackendService.prepareAdapter 未返回 player，降级到 AVPlayerAdapter');
+        this.player = this.createAvPlayerAdapter();
+        return;
+      }
+      this.player = adapter;
     }
-    if (adapter === undefined) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: PlaybackBackendService.prepareAdapter 未返回 player，降级到 AVPlayerAdapter');
-      this.player = this.createAvPlayerAdapter();
-      return;
-    }
-    this.player = adapter;
 
-    // 注册所有 IPlayer 事件回调
-    adapter.onReady(() => {
+    // Register IPlayer event callbacks (shared path for both service and test adapter).
+    const p = this.player as IPlayer;
+    p.onReady(() => {
       if (currentSessionId !== this.playbackSessionId) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `[session=${currentSessionId}] 忽略过期 onReady`);
@@ -996,16 +990,16 @@ export class VideoPlayerController {
       this.onPlayerReady();
       this.resolvePendingReload();
     });
-    adapter.onPlay(() => {
+    p.onPlay(() => {
       this.handlePlayerPlayEvent(currentSessionId);
     });
-    adapter.onPaused(() => {
+    p.onPaused(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
       this.handlePlayerPaused();
     });
-    adapter.onCompleted(() => {
+    p.onCompleted(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1023,7 +1017,7 @@ export class VideoPlayerController {
       }
       emitter.emit(PlayerEvents.COMPLETED);
     });
-    adapter.onStopped(() => {
+    p.onStopped(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1034,7 +1028,7 @@ export class VideoPlayerController {
         this.stopFfmpegRenderTimer();
       }
     });
-    adapter.onTimeUpdate((currentTime: number) => {
+    p.onTimeUpdate((currentTime: number) => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1071,7 +1065,7 @@ export class VideoPlayerController {
       }
       this.logSubtitleTimeline(currentTime);
     });
-    adapter.onError((error: Error) => {
+    p.onError((error: Error) => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1103,7 +1097,7 @@ export class VideoPlayerController {
       this.lastErrorMessage = this.normalizePlayerError(error.message);
       this.rejectPendingReload(new Error(error.message));
     });
-    adapter.onBuffering((isBuffering: boolean) => {
+    p.onBuffering((isBuffering: boolean) => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1112,7 +1106,7 @@ export class VideoPlayerController {
         this.lastErrorMessage = '';
       }
     });
-    adapter.onUnsupportedFormat(() => {
+    p.onUnsupportedFormat(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1145,7 +1139,7 @@ export class VideoPlayerController {
       // 异步释放旧 player（不等待，不影响切换流程）
       oldPlayer?.release().catch(() => {});
     });
-    adapter.onSeekDone(() => {
+    p.onSeekDone(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1180,7 +1174,7 @@ export class VideoPlayerController {
           this.pendingResumeSeekTargetMs = -1;
           this.pendingResumeSeekAutoPlay = false;
         }
-        adapter.seek(this.timeToSeek);
+        this.player?.seek(this.timeToSeek);
         this.timeToSeek = -1;
         this.isSeeking = false;
         return;
@@ -1222,7 +1216,7 @@ export class VideoPlayerController {
         this.play().catch(() => {});
       }
     });
-    adapter.onSubtitleUpdate((info) => {
+    p.onSubtitleUpdate((info) => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
@@ -1282,7 +1276,7 @@ export class VideoPlayerController {
       // VPE 增强仍由 controller 负责（service 不持有 aiEnhance 状态）。
       const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
       try {
-        await adapter.init(videoData, effectiveSurfaceId);
+        await this.player?.init(videoData, effectiveSurfaceId);
       } catch (e) {
         const err = e as BusinessError;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -1294,6 +1288,14 @@ export class VideoPlayerController {
 
   protected createAvPlayerAdapter(): IPlayer {
     return new AVPlayerAdapter();
+  }
+
+  /**
+   * 测试注入钩子：若返回非 undefined，initPlayer 将跳过 PlaybackBackendService 直接使用该 adapter。
+   * 基类返回 undefined（正常走 service 路径）；测试子类覆写此方法注入 mock player。
+   */
+  protected createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
+    return undefined;
   }
 
   /**

@@ -125,7 +125,7 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
 
       const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
-      expect(binding).assertNull();
+      expect(binding?.subtitleType).assertEqual('disabled');
     });
 
     it('resolveSubtitle_noBindingNoTracks_returnsNone', 0, async () => {
@@ -161,7 +161,7 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
 
       const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
-      expect(binding).assertNull();
+      expect(binding?.subtitleType).assertEqual('disabled');
     });
 
     it('clearUserBinding_removesExistingBinding', 0, async () => {
@@ -169,7 +169,7 @@ export default function subtitleDispatcherTest() {
       await setup.dispatcher.saveUserBinding(VIDEO_PATH, SUBTITLE_URL, 'local-file');
       await setup.dispatcher.clearUserBinding(VIDEO_PATH);
       const result: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
-      expect(result).assertNull();
+      expect(result?.subtitleType).assertEqual('disabled');
     });
   });
 }

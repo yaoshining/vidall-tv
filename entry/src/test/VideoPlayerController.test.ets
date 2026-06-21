@@ -309,6 +309,10 @@ class InitPlayerDiagnosticVideoPlayerController extends VideoPlayerController {
     return this.injectedPlayer
   }
 
+  protected override createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
+    return this.injectedPlayer
+  }
+
   protected override emitResumeDiagnosticRecord(recordText: string): void {
     const logPrefix = '[resume] '
     const payloadText = recordText.startsWith(logPrefix)
@@ -330,6 +334,10 @@ class InitPlayerDelayedSeekFallbackController extends VideoPlayerController {
   }
 
   protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
+
+  protected override createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
     return this.injectedPlayer
   }
 
@@ -368,6 +376,10 @@ class ReloadPreparedLifecycleController extends VideoPlayerController {
   private readonly injectedPlayer: MockFallbackPlayer = new MockFallbackPlayer()
 
   protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
+
+  protected override createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
     return this.injectedPlayer
   }
 

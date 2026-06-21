@@ -323,9 +323,25 @@ export function findInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): numbe
   const preferredCodec = getNormalizedCodec(preferred);
   const preferredRank = codecCompatibilityRank(preferredCodec);
 
-  if (preferredRank <= 2) {
+  if (preferredRank === 1) {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[findInitialAudioTrackIndex] 偏好轨可播放(rank=${preferredRank})，直接选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
+      `[findInitialAudioTrackIndex] 偏好轨硬解可播(rank=1)，直接选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
+    return 0;
+  }
+
+  if (preferredRank <= 2) {
+    // AC-3/EAC-3 在 AVPlayer 上下文中可通过软解播放，但若有硬解轨（rank=1）则优先用硬解轨
+    for (let i = 1; i < audioTracks.length; i++) {
+      const t = audioTracks[i];
+      const tRank = codecCompatibilityRank(getNormalizedCodec(t));
+      if (tRank === 1) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[findInitialAudioTrackIndex] 偏好轨为软解常见(rank=2)，发现硬解轨(index=${i})，优先选中`);
+        return i;
+      }
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[findInitialAudioTrackIndex] 偏好轨软解常见(rank=2)，无硬解替代，选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
     return 0;
   }
 
