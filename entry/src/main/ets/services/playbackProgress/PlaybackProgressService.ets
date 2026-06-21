@@ -97,13 +97,11 @@ export interface PersistOptions {
 export type PersistOutcome =
   /** mediaKey 为空，无可写目标。page 不 emit。 */
   | 'noop_no_media_key'
-  /** durMs <= 0，跳过完播判断避免误清除。page 不 emit。 */
-  | 'skipped_no_duration'
-  /** posMs = 0（duration 有效），原行为是仍 emit 以通知 ContinueWatchCard 刷新。 */
+  /** posMs = 0 或 durMs <= 0（未就绪/无有效进度），原行为是仍 emit 以通知 ContinueWatchCard 刷新。 */
   | 'noop_position_zero'
   /** near-end 触发 MediaProgressStore.clear。page 应 emit。 */
   | 'cleared'
-  /** 正常落库 MediaProgressStore.save。page 应 emit。 */
+  /** 正常保存媒体级进度。page 应 emit。 */
   | 'saved';
 
 export class PlaybackProgressService {
@@ -180,6 +178,14 @@ export class PlaybackProgressService {
       return { action: 'play', source: 'playProgress' };
     }
     if (input.pageStartPositionMs > 0) {
+      // 先检查是否接近完播，避免历史记录等入口透传的位置直接弹续播框
+      if (input.currentDurationMs > 0 &&
+        MediaProgressStore.isNearEnd(input.pageStartPositionMs, input.currentDurationMs)) {
+        return {
+          action: 'clear_and_play',
+          source: 'pageStartPosition'
+        };
+      }
       this.options.onResumeDialog?.(input.pageStartPositionMs);
       return {
         action: 'dialog',
@@ -231,9 +237,8 @@ export class PlaybackProgressService {
    *
    * 返回 `PersistOutcome` 让 page 决定是否要 emit `MEDIA_PROGRESS_SAVED`：
    * - `'cleared'` / `'saved'` → page 应 emit
-   * - `'noop_position_zero'` → page 仍 emit（保持原 `posMs=0` 路径行为兼容）
+   * - `'noop_position_zero'` → page 仍 emit（保持原 `posMs=0` 或 `durMs=0` 路径行为兼容）
    * - `'noop_no_media_key'` → page 不 emit
-   * - `'skipped_no_duration'` → page 不 emit
    *
    * 与原 `PlayerPage.persistCurrentPlaybackState` 行为字节级一致。
    */
@@ -247,7 +252,9 @@ export class PlaybackProgressService {
     const durMs = this.options.controller.duration;
     if (durMs <= 0) {
       if (options?.forceMediaWrite !== true) {
-        return 'skipped_no_duration';
+        // durMs 未就绪时仍返回 noop_position_zero，让 page 侧 emit MEDIA_PROGRESS_SAVED，
+        // 保持与原"打开即失败/未就绪就退出时仍刷新继续播放栏"行为一致。
+        return 'noop_position_zero';
       }
     }
     if (MediaProgressStore.isNearEnd(posMs, durMs)) {
