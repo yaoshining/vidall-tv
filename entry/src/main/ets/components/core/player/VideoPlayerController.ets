@@ -32,6 +32,13 @@ import { MetricsService } from "../../../services/metrics/MetricsService";
 import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
 import { SubtitleDispatcher, SubtitleCacheContext } from "../../../subtitle/SubtitleDispatcher";
 import { AudioDispatcher } from "../../../audio/AudioDispatcher";
+// ─── Runtime session services (Module 4: refactor-player-runtime-session-services) ───
+import { playbackBackendService, PlaybackBackendService, PlaybackAdapterCallbacks } from
+  "../../../services/playback/PlaybackBackendService";
+import { subtitleSessionService, SubtitleSessionService } from
+  "../../../services/subtitleSession/SubtitleSessionService";
+import { audioTrackRoutingService, AudioTrackRoutingService } from
+  "../../../services/audioRouting/AudioTrackRoutingService";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -327,6 +334,13 @@ export class VideoPlayerController {
   @Trace episodeAutoplayEnabled: boolean = DEFAULT_EPISODE_AUTOPLAY_ENABLED;
   /** 自动播放下一集前的倒计时秒数 */
   @Trace episodeAutoplayCountdownSeconds: number = DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS;
+  // ─── Runtime session services (Module 4 wiring) ───
+  /** 后端编排 service（adapter 生命周期 + fallback 编排 + XComponent 时序）。 */
+  private readonly backendService: PlaybackBackendService = playbackBackendService;
+  /** 字幕会话 service（会话内字幕状态 + 优先级裁决）。 */
+  private readonly subtitleSessionSvc: SubtitleSessionService = subtitleSessionService;
+  /** 音轨路由 service（codec 探测 + 初始选轨 + 用户绑定恢复）。 */
+  private readonly audioRoutingService: AudioTrackRoutingService = audioTrackRoutingService;
   /** 10s 防抖进度写入定时器 */
   private progressTimer?: number;
   /** 播放会话编号：每次 initPlayer 自增，用于忽略旧实例回调 */
