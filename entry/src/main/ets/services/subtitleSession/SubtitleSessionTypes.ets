@@ -44,9 +44,15 @@ export interface SubtitleSessionState {
   subtitleDelayMs: number;
   /** 当前是否启用外部字幕。 */
   hasExternalActive: boolean;
-  /** 解析后的字幕数据（供 UI 渲染层直接读取）。 */
-  parsedSubtitle: ParsedSubtitle | null;
-  /** 字幕更新计数器（用于触发 UI 重新订阅）。 */
+  /**
+   * 字幕更新计数器（用于触发 UI 重新订阅）。
+   *
+   * 注意：`parsedSubtitle`（每帧解析结果）**不**作为 session state 持有。
+   * 设计 open question 决议（design.md §Open Questions）：保留 VideoPlayer 的
+   * 解析监听逻辑；controller 的 `@Trace parsedSubtitle` 字段由 `VideoPlayer`
+   * 解析监听器直接写入。如需把 parsedSubtitle 也纳入 service，可在未来 stage
+   * 由 `SubtitleSessionService.setParsedSubtitle` 接管。
+   */
   updateCounter: number;
 }
 

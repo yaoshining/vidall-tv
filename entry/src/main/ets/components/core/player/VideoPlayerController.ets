@@ -802,13 +802,16 @@ export class VideoPlayerController {
     }
 
     // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
+    // 决策通过 `backendService.chooseBackend` 计算（Fix #3：backend route 主路径必须经 backend service）。
+    // 关键（Fix W3）：即使锁定 fallback 策略，也始终让 `backendService.chooseBackend` 跑一遍以刷新
+    // `audioProbeSummary` / `trackAnalyses` 等诊断字段（不影响 `this.backend` / `this.unsupportedFormatFallback`）。
+    const backendBeforeAutoRouting = this.backend;
+    const decision = await this.resolveAudioRoutingDecision(videoData);
+    videoData.ffmpegDecodeChannels = decision.preferredChannels;
+    videoData.audioProbeSummary = decision.summary;
+    videoData.videoCodec = decision.videoCodecName;
     if (!this.unsupportedFallbackLockedByUser) {
-      const backendBeforeAutoRouting = this.backend;
-      const decision = await this.resolveAudioRoutingDecision(videoData);
       this.unsupportedFormatFallback = decision.fallback;
-      videoData.ffmpegDecodeChannels = decision.preferredChannels;
-      videoData.audioProbeSummary = decision.summary;
-      videoData.videoCodec = decision.videoCodecName;
       if (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native') {
         this.backend = decision.preferredBackend;
       }
@@ -820,24 +823,24 @@ export class VideoPlayerController {
           decision.precheckProbeError
         );
       }
-      // 关键：详细打印整组音轨分析（用于 verify 真机回溯）
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
-        `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
-        `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}`);
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);
-      for (let i = 0; i < decision.trackAnalyses.length; i++) {
-        const t = decision.trackAnalyses[i];
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[initPlayer.route-decision]   [${i}] codec=${t.codec} channels=${t.channels} ` +
-          `hardSupported=${t.hardSupported} source=${t.source}`);
-      }
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
-        `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
-      this.logAudioCapabilityReport(decision);
     }
+    // 关键：详细打印整组音轨分析（用于 verify 真机回溯；不论是否锁定 fallback 都打印）
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
+      `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
+      `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}`);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);
+    for (let i = 0; i < decision.trackAnalyses.length; i++) {
+      const t = decision.trackAnalyses[i];
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[initPlayer.route-decision]   [${i}] codec=${t.codec} channels=${t.channels} ` +
+        `hardSupported=${t.hardSupported} source=${t.source}`);
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
+      `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
+    this.logAudioCapabilityReport(decision);
 
     if (this.backend === 'ffmpeg') {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,

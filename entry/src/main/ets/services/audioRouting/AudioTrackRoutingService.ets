@@ -301,13 +301,19 @@ function getNormalizedCodec(track: AudioTrackItem): string {
   return raw.replace('audio/', '').split('-').join('');
 }
 
-/** codec-aware 初始音轨选择（与原 `findInitialAudioTrackIndex` 等价，但按 compatibility rank 排序）。
+/**
+ * codec-aware 初始音轨选择（与原 `findInitialAudioTrackIndex` 等价，但按 compatibility rank 排序）。
  *
  * 关键修复：
  * - 旧实现把所有"软解罕见"（TrueHD/MLP/Audio Vivid）和"软解常见"（AC-3/EAC-3/DTS）一同视为"软解"，
  *   然后"按可播放性"返回首条，导致 TrueHD 排在 AC-3 前面被选中。
  * - 新实现按 `codecCompatibilityRank` 排序：硬解 > AC-3/EAC-3 > DTS > TrueHD/MLP > unknown。
  *   偏好轨不可用时，按"同语言可播放轨中 rank 最低"选择。
+ *
+ * 注意：导出为 free function 仅供 `AudioTrackRoutingService` 内部 `resolveInitialTrackIndex` 调用；
+ * 外部调用方请改用 `audioTrackRoutingService.resolveInitialTrackIndex(...)`，避免直接
+ * 绕过 service 入口。controller 旧 import 路径 `findInitialAudioTrackIndex` 已被替换为
+ * `serviceFindInitialAudioTrackIndex` 包装，仅为兼容历史 import 路径（见 W2 修复说明）。
  */
 export function findInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): number {
   if (audioTracks.length === 0) {
@@ -375,6 +381,16 @@ export function findInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): numbe
   hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
     `[findInitialAudioTrackIndex] 全部音轨 rank>4（不可解析），返回 0 沿用现有降级策略`);
   return 0;
+}
+
+/**
+ * controller façade 调用入口：薄包装 `findInitialAudioTrackIndex` 让 controller 仍可走
+ * service import 路径。完整推荐调用方式：
+ *   `await this.audioRoutingService.resolveInitialTrackIndex(videoPath, audioTracks)`
+ * 该方法会先查用户绑定，再调本函数做默认选轨。
+ */
+export function serviceFindInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): number {
+  return findInitialAudioTrackIndex(audioTracks);
 }
 
 /** AudioTrackRoutingService façade。 */

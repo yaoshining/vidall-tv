@@ -73,7 +73,6 @@ function buildEmptySessionState(): SubtitleSessionState {
     currentSubtitleText: '',
     subtitleDelayMs: 0,
     hasExternalActive: false,
-    parsedSubtitle: null,
     updateCounter: 0
   };
   return state;
@@ -94,15 +93,9 @@ export class SubtitleSessionService {
       currentSubtitleText: this.state.currentSubtitleText,
       subtitleDelayMs: this.state.subtitleDelayMs,
       hasExternalActive: this.state.hasExternalActive,
-      parsedSubtitle: this.state.parsedSubtitle,
       updateCounter: this.state.updateCounter
     };
     return next;
-  }
-
-  /** 写入解析后的字幕数据（由 controller 在解析监听中回调）。 */
-  setParsedSubtitle(parsed: ParsedSubtitle | null): void {
-    this.state.parsedSubtitle = parsed;
   }
 
   /** 重置 session（用于 initPlayer 切换源时清理上一次残留）。 */
