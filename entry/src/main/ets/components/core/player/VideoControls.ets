@@ -14,8 +14,7 @@ import {
 import { common } from '@kit.AbilityKit'
 // Module 3 收口：原 `OpenSubtitlesClient` / `SubtitleDownloader` / `SubtitleCacheManager`
 // + 4 个具体 Error 类的 import 已删除，全部通过 SubtitleAcquisitionService 编排。
-// 仍需保留 SubtitleSearchResult 用于搜索结果 UI 渲染。
-import { SubtitleSearchResult } from '../../../lib/OpenSubtitlesClient'
+import { SubtitleSearchResult } from '../../../services/subtitleAcquisition/SubtitleAcquisitionTypes'
 import { parseFileName, buildSearchTitles } from '../../../lib/ScrapeClient'
 import { loadSubtitleSearchPreferenceSnapshot } from '../../../subtitle/SubtitleLanguagePreference'
 import {
