@@ -34,7 +34,8 @@ import {
   DEFAULT_AUDIO_ROUTING_DECISION,
   InitialTrackIndexInput,
   InitialTrackIndexResult,
-  AudioTrackItem
+  AudioTrackItem,
+  AudioTrackAnalysis
 } from "./AudioRoutingTypes";
 import { AudioDispatcher, AudioBinding } from "../../audio/AudioDispatcher";
 
@@ -47,39 +48,89 @@ const SOFT_ONLY_KEYWORDS: string[] = [
 ];
 
 /**
- * 构造路由决策。
- * 输入来自 controller 持有的 preset/probe 结果；service 不发起 ffprobe。
+ * 构造路由决策：基于整组音轨分析，而非单条首轨。
+ *
+ * 策略：
+ * - 整组音轨中存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer
+ *   （让 avplayer 自行尝试，并在 onPlay 后由 `loadAudioTracks` 通过 `resolveInitialTrackIndex`
+ *   选中最优可硬解轨道）
+ * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer，fallback=ijkplayer
+ *   （保留现有 fallback 路径，让 avplayer 失败后自动切 ijkplayer 软解）
+ * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer（保守）
+ * - preferredChannels 取首条可播放轨道的归一化声道
  */
 export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDecision {
-  const probeCodec = (input.probeCodecName ?? '').toLowerCase();
-  const presetCodec = (input.presetCodecName ?? '').toLowerCase();
-  const effectiveCodec = probeCodec.length > 0 ? probeCodec : presetCodec;
-  const effectiveChannels = input.probeChannels > 0 ? input.probeChannels : input.presetChannels;
-  const safeChannels = normalizeTargetChannels(effectiveChannels);
-  const hardSupported = isLikelySystemHardDecodeSupported(effectiveCodec);
+  const tracks = input.trackAnalyses;
+  const trackCount = tracks.length;
 
-  const summary = `codec=${effectiveCodec.length > 0 ? effectiveCodec : 'unknown'}, ` +
-    `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${input.precheckProbeFailed}`;
+  // 整组分析
+  let anyHardSupported = false;
+  let anyPlayable = true;
+  let allSoftDecodeOnly = true;
+  let firstHardSupported: AudioTrackAnalysis | null = null;
+  let firstPlayable: AudioTrackAnalysis | null = null;
+  let unplayableCount = 0;
+  for (let i = 0; i < trackCount; i++) {
+    const t = tracks[i];
+    if (t.hardSupported) {
+      anyHardSupported = true;
+      allSoftDecodeOnly = false;
+      if (firstHardSupported === null) {
+        firstHardSupported = t;
+      }
+    }
+    if (firstPlayable === null && t.codec.length > 0) {
+      firstPlayable = t;
+    }
+    if (!t.hardSupported && t.codec.length > 0) {
+      // 已知 codec 但应软解
+    } else if (t.codec.length === 0) {
+      unplayableCount++;
+    }
+  }
+  if (unplayableCount === trackCount && trackCount > 0) {
+    anyPlayable = false;
+  }
+  const anyUnplayable = unplayableCount > 0;
 
-  // 策略：始终优先 avplayer，让系统自行尝试播放（含 TrueHD/DTS/AC3 等非标音频）。
-  // avplayer 报 onUnsupportedFormat 时会自动 fallback 到 ijkplayer。
-  // 仅在探测完全失败且没有任何音轨提示时，保守走 ijkplayer 避免 avplayer 进入不可恢复错误态。
+  // 选择用于日志的 "代表 codec/channels"
+  const detectedCodec = firstHardSupported !== null
+    ? firstHardSupported.codec
+    : (firstPlayable !== null ? firstPlayable.codec : 'unknown');
+  const detectedChannels = firstHardSupported !== null
+    ? firstHardSupported.channels
+    : (firstPlayable !== null ? firstPlayable.channels : 2);
+  const preferredChannels = normalizeTargetChannels(detectedChannels);
+
+  const summary = `tracks=${trackCount}, ` +
+    `firstHardSupported=${firstHardSupported !== null ? firstHardSupported.codec : 'none'}, ` +
+    `allSoftDecodeOnly=${allSoftDecodeOnly}, anyHardSupported=${anyHardSupported}, ` +
+    `precheckProbeFailed=${input.precheckProbeFailed}`;
+
+  // preferredBackend 决策：
+  // 1. 探测完全失败且无任何音轨提示 → ijkplayer（保守）
+  // 2. 整组音轨存在至少一条可硬解轨道 → avplayer（让 avplayer 尝试，初始选轨由 resolveInitialTrackIndex 决定）
+  // 3. 整组音轨全部应软解 → avplayer（保持现有 fallback 路径）
   let preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
-  if (input.precheckProbeFailed && effectiveCodec.length === 0 && !input.presetHasAudio) {
+  if (input.precheckProbeFailed && trackCount === 0 && !input.presetHasAudio) {
     preferredBackend = 'ijkplayer';
   }
 
   const decision: AudioRoutingDecision = {
     preferredBackend,
     fallback: 'ijkplayer',
-    preferredChannels: safeChannels,
+    preferredChannels,
     summary,
-    detectedCodec: effectiveCodec.length > 0 ? effectiveCodec : 'unknown',
-    detectedChannels: safeChannels,
-    hardSupported,
+    detectedCodec,
+    detectedChannels,
+    anyHardSupported,
+    allSoftDecodeOnly,
+    anyPlayable,
+    anyUnplayable,
     precheckProbeFailed: input.precheckProbeFailed,
     precheckProbeError: input.precheckProbeError,
-    videoCodecName: (input.probeVideoCodecName ?? '').toLowerCase()
+    videoCodecName: (input.probeVideoCodecName ?? '').toLowerCase(),
+    trackAnalyses: tracks
   };
   return decision;
 }
@@ -238,9 +289,14 @@ export class AudioTrackRoutingService {
   /**
    * 计算 backend route 决策。
    *
-   * 行为与原 `VideoPlayerController.resolveAudioRoutingDecision` 字节级一致：
-   * - 优先用 probe 结果；失败时降级 preset。
-   * - 始终优先 avplayer；仅探测完全失败且无音轨提示时走 ijkplayer。
+   * 关键变化（与历史实现对照）：**遍历整组音轨**（probe + preset 合并去重），
+   * 而非仅看 probe.audioTracks[0] 决定一切。
+   *
+   * 行为：
+   * - 整组音轨存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer
+   * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer + fallback=ijkplayer
+   * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer
+   * - 初始选轨由 controller 调用 `resolveInitialTrackIndex` 决定（与 backend route 决策解耦）
    */
   async resolveRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
     const presetHint = readPresetAudioHint(videoData);
@@ -250,6 +306,15 @@ export class AudioTrackRoutingService {
     let precheckProbeError = '';
     let videoCodecName = '';
     let probeSuccess = false;
+    interface ProbeAudio {
+      codec: string;
+      channels: number;
+    }
+    interface ProbeVideo {
+      codec: string;
+    }
+    const probeAudioTracks: ProbeAudio[] = [];
+    const probeVideoTracks: ProbeVideo[] = [];
 
     try {
       const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
@@ -258,14 +323,58 @@ export class AudioTrackRoutingService {
         const first = probe.audioTracks[0];
         probeCodec = first.codecName;
         probeChannels = first.channels ?? probeChannels;
+        // ── 关键：收集整组 audio tracks ──
+        for (let i = 0; i < probe.audioTracks.length; i++) {
+          const t = probe.audioTracks[i];
+          const entry: ProbeAudio = {
+            codec: t.codecName,
+            channels: t.channels ?? 2
+          };
+          probeAudioTracks.push(entry);
+        }
       }
       if (probe.success && probe.videoTracks.length > 0) {
         videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
+        for (let i = 0; i < probe.videoTracks.length; i++) {
+          const v: ProbeVideo = { codec: (probe.videoTracks[i].codecName ?? '').toLowerCase() };
+          probeVideoTracks.push(v);
+        }
       }
     } catch (e) {
       precheckProbeFailed = true;
       const err = e as Record<string, string>;
       precheckProbeError = err['message'] ?? JSON.stringify(e);
+    }
+
+    // 合并 probe + preset 为整组音轨分析（probe 优先，preset 作为补充）
+    const trackAnalyses: AudioTrackAnalysis[] = [];
+    const seenCodecs = new Set<string>();
+    for (let i = 0; i < probeAudioTracks.length; i++) {
+      const t = probeAudioTracks[i];
+      const codec = t.codec.toLowerCase();
+      if (seenCodecs.has(codec)) {
+        continue;
+      }
+      seenCodecs.add(codec);
+      const analysis: AudioTrackAnalysis = {
+        index: i,
+        codec,
+        channels: t.channels,
+        hardSupported: isLikelySystemHardDecodeSupported(codec),
+        source: 'probe'
+      };
+      trackAnalyses.push(analysis);
+    }
+    // preset hint 补充：仅在 probe 为空时使用
+    if (trackAnalyses.length === 0 && presetHint.codecName.length > 0) {
+      const codec = presetHint.codecName.toLowerCase();
+      trackAnalyses.push({
+        index: 0,
+        codec,
+        channels: presetHint.channels,
+        hardSupported: isLikelySystemHardDecodeSupported(codec),
+        source: 'preset'
+      });
     }
 
     const input: AudioRoutingInput = {
@@ -278,7 +387,8 @@ export class AudioTrackRoutingService {
       probeSuccess,
       probeError: precheckProbeError,
       precheckProbeFailed,
-      precheckProbeError
+      precheckProbeError,
+      trackAnalyses
     };
     return buildRoutingDecision(input);
   }

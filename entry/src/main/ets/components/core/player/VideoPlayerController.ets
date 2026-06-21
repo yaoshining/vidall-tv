@@ -35,7 +35,9 @@ import { AudioDispatcher } from "../../../audio/AudioDispatcher";
 // ─── Runtime session services (Module 4: refactor-player-runtime-session-services) ───
 import { playbackBackendService, PlaybackBackendService, PlaybackAdapterCallbacks } from
   "../../../services/playback/PlaybackBackendService";
-import { subtitleSessionService, SubtitleSessionService } from
+import type { PlaybackBackendDecision } from
+  "../../../services/playback/PlaybackBackendTypes";
+import { SubtitleSessionService } from
   "../../../services/subtitleSession/SubtitleSessionService";
 import {
   audioTrackRoutingService,
@@ -329,8 +331,12 @@ export class VideoPlayerController {
   // ─── Runtime session services (Module 4 wiring) ───
   /** 后端编排 service（adapter 生命周期 + fallback 编排 + XComponent 时序）。 */
   private readonly backendService: PlaybackBackendService = playbackBackendService;
-  /** 字幕会话 service（会话内字幕状态 + 优先级裁决）。 */
-  private readonly subtitleSessionSvc: SubtitleSessionService = subtitleSessionService;
+  /**
+   * 字幕会话 service（会话内字幕状态 + 优先级裁决）。
+   * 每个 controller 各自 `new` 一个实例，service 内部 mutable state 与 controller 生命周期一一对应。
+   * 这样避免多 controller / 多播放会话状态串扰（Module 4 fix #2）。
+   */
+  private readonly subtitleSessionSvc: SubtitleSessionService = new SubtitleSessionService();
   /** 音轨路由 service（codec 探测 + 初始选轨 + 用户绑定恢复）。 */
   private readonly audioRoutingService: AudioTrackRoutingService = audioTrackRoutingService;
   /** 10s 防抖进度写入定时器 */
@@ -2089,18 +2095,26 @@ export class VideoPlayerController {
   }
 
   /**
-   * 计算后端路由决策（thin delegation to `AudioTrackRoutingService`）。
+   * 计算后端路由决策（thin delegation to `PlaybackBackendService.chooseBackend`）。
    *
-   * 历史背景：原方法直接做 ffprobe + 决策；为符合 OpenSpec stage 4 的 service 化要求，
-   * 本方法现在只是 service 的 façade。所有实际计算（ffprobe / preset 降级 / route 决策
-   * / 硬解判断）由 `AudioTrackRoutingService.resolveRoutingDecision` 完成。
+   * controller **不得**直接调用 `audioRoutingService.resolveRoutingDecision`。
+   * backend route 决策的唯一入口是 `backendService.chooseBackend`，它内部委托
+   * `AudioTrackRoutingService` 完成整组音轨分析，并把结果包装为 `PlaybackBackendDecision`。
+   *
+   * 历史背景：原 `VideoPlayerController.resolveAudioRoutingDecision` 直接做 ffprobe + 决策。
+   * 为符合 OpenSpec stage 4 的 service 化要求，本方法现在只是 backend service 的 façade。
+   * 整组音轨分析、preset 降级、route 决策、硬解判断全部由 service 链完成。
    */
   private async resolveAudioRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
-    return await this.audioRoutingService.resolveRoutingDecision(videoData);
+    const decision: PlaybackBackendDecision = await this.backendService.chooseBackend(videoData);
+    // 字段在 PlaybackBackendDecision 与 AudioRoutingDecision 上完全对齐，直接 cast
+    return decision as AudioRoutingDecision;
   }
 
   private logAudioCapabilityReport(decision: AudioRoutingDecision): void {
     // 结构化日志：后续可直接平移到 UI 能力面板，减少二次拼装成本。
+    // 字段语义已升级为整组音轨分析（anyHardSupported / allSoftDecodeOnly），
+    // 反映多音轨片源下"是否至少存在一条可硬解轨 / 是否全部应软解"。
     const channelTag = this.getChannelTag(decision.detectedChannels);
     const currentDecodePlan = decision.preferredBackend === 'avplayer'
       ? `system-harddecode-${channelTag}`
@@ -2108,16 +2122,20 @@ export class VideoPlayerController {
 
     const message =
       '[AudioCapability] ' +
-      `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}(${channelTag}), ` +
-      `hardSupported=${decision.hardSupported}, route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
+      `trackCount=${decision.trackAnalyses.length}, ` +
+      `firstCodec=${decision.detectedCodec}, firstChannels=${decision.detectedChannels}(${channelTag}), ` +
+      `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
+      `anyPlayable=${decision.anyPlayable}, anyUnplayable=${decision.anyUnplayable}, ` +
+      `route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
       `decodePlan=${currentDecodePlan}; ` +
       `systemHardPreferred=[${SYSTEM_HARD_PREFERRED_CODECS.join(', ')}]; ` +
       `systemSoftFallback=[${SYSTEM_SOFT_FALLBACK_CODECS.join(', ')}]; ` +
       `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
 
     this.audioCapabilityText =
-      `音频能力: 检测=${decision.detectedCodec} ${channelTag} | ` +
-      `硬解=${decision.hardSupported ? '是' : '否'} | ` +
+      `音频能力: 共${decision.trackAnalyses.length}条 | ` +
+      `首轨=${decision.detectedCodec} ${channelTag} | ` +
+      `可硬解=${decision.anyHardSupported ? '是' : '否'} | ` +
       `当前路由=${decision.preferredBackend} | ` +
       `软解兜底=${decision.fallback}`;
 

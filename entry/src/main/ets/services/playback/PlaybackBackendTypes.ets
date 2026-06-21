@@ -38,7 +38,20 @@ export interface PlaybackBackendProbeInput {
   probeSuccess: boolean;
 }
 
-/** 后端选择决策输出。 */
+/**
+ * 后端选择决策输出（已与 `AudioRoutingDecision` 字段对齐）。
+ * 字段语义升级为基于整组音轨分析（anyHardSupported / allSoftDecodeOnly）。
+ */
+/** 整组音轨分析条目（用于 backend decision / routing decision 共享类型）。 */
+export interface BackendTrackAnalysis {
+  index: number;
+  codec: string;
+  channels: number;
+  hardSupported: boolean;
+  /** 'probe' | 'preset' */
+  source: string;
+}
+
 export interface PlaybackBackendDecision {
   preferredBackend: ServicePlayerBackend;
   fallback: ServiceUnsupportedFormatFallback;
@@ -46,10 +59,19 @@ export interface PlaybackBackendDecision {
   summary: string;
   detectedCodec: string;
   detectedChannels: number;
-  hardSupported: boolean;
+  /** 整组音轨中是否存在至少一条系统稳态可硬解轨道。 */
+  anyHardSupported: boolean;
+  /** 整组音轨是否全部应软解。 */
+  allSoftDecodeOnly: boolean;
+  /** 整组音轨是否存在至少一条系统可播放轨道。 */
+  anyPlayable: boolean;
+  /** 整组音轨是否存在至少一条不可播放轨道。 */
+  anyUnplayable: boolean;
   precheckProbeFailed: boolean;
   precheckProbeError: string;
   videoCodecName: string;
+  /** 整组音轨分析详情（调试用）。 */
+  trackAnalyses: BackendTrackAnalysis[];
 }
 
 /** 默认后端决策（探测未启动时使用）。 */
@@ -60,10 +82,14 @@ export const DEFAULT_BACKEND_DECISION: PlaybackBackendDecision = {
   summary: 'default: 未探测到音轨细节',
   detectedCodec: 'unknown',
   detectedChannels: 2,
-  hardSupported: true,
+  anyHardSupported: true,
+  allSoftDecodeOnly: false,
+  anyPlayable: true,
+  anyUnplayable: false,
   precheckProbeFailed: false,
   precheckProbeError: '',
-  videoCodecName: ''
+  videoCodecName: '',
+  trackAnalyses: []
 };
 
 /** 字幕桥接 adapter 类型（service 内部命名以避免与 controller 现有类型冲突）。 */
@@ -137,10 +163,14 @@ export function buildDefaultBackendDecision(): PlaybackBackendDecision {
     summary: 'default: 未探测到音轨细节',
     detectedCodec: 'unknown',
     detectedChannels: 2,
-    hardSupported: true,
+    anyHardSupported: true,
+    allSoftDecodeOnly: false,
+    anyPlayable: true,
+    anyUnplayable: false,
     precheckProbeFailed: false,
     precheckProbeError: '',
-    videoCodecName: ''
+    videoCodecName: '',
+    trackAnalyses: []
   };
   return decision;
 }

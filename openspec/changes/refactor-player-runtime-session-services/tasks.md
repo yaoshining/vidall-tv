@@ -33,7 +33,7 @@
 
 - [x] 3.1 提炼 codec 探测、能力判断、初始 route 与用户绑定恢复建议接口。
 - [x] 3.2 实现 `AudioTrackRoutingService`，迁移 `resolveAudioRoutingDecision()` 与初始音轨恢复逻辑。
-  - ✅ `resolveAudioRoutingDecision` → `audioRoutingService.resolveRoutingDecision(...)`（thin delegation）
+  - ✅ `resolveAudioRoutingDecision` → `backendService.chooseBackend(...)`（Fix #3：backend route 主路径必须经 `PlaybackBackendService`；controller 不再直接调用 audio routing service）
   - ✅ `findInitialAudioTrackIndex` → `serviceFindInitialAudioTrackIndex(this.audioTracks)`（thin delegation）
   - ✅ `loadAudioTracks` 内部 → `audioRoutingService.resolveInitialTrackIndex(videoPath, audioTracks)`（含用户绑定恢复）
   - ✅ 旧 helper（`readPresetAudioHint` / `inferTrackChannels` / `normalizeChannelsForSort` / `normalizeTargetChannels` / `isLikelySystemHardDecodeSupported` / `isAudioTrackPlayable`）已从 controller 删除
@@ -43,6 +43,19 @@
 - [x] 3.4 验证 AVPlayer / IJKPlayer 在预置音轨与 `getTrackInfos()` 两条路径上的初始选轨结果一致。
   - ✅ 两条路径（`presetAudioTracks` 提前填充 / `player.getTrackInfos()` 运行时枚举）均调 `selectInitialAudioTrackByService`，统一由 service 给建议
   - ⚠ 真机回归未在本环境执行（无 TV 设备）
+
+### Fix #1 增量（多音轨分析）
+
+- ✅ `AudioTrackRoutingService.resolveRoutingDecision` **遍历整组 probe.audioTracks**（不再仅看首轨）
+- ✅ `buildRoutingDecision` 接收 `trackAnalyses: AudioTrackAnalysis[]`（每条分析包含 codec / channels / hardSupported / source）
+- ✅ 新增字段 `anyHardSupported` / `allSoftDecodeOnly` / `anyPlayable` / `anyUnplayable`
+- ✅ 决策语义升级：
+  - 整组音轨存在至少一条可硬解 → preferredBackend=avplayer（让 avplayer 尝试，初始选轨由 `resolveInitialTrackIndex` 选中最优可硬解轨）
+  - 整组音轨全部应软解 → preferredBackend=avplayer + fallback=ijkplayer
+  - 探测完全失败且无音轨提示 → preferredBackend=ijkplayer
+- ✅ `PlaybackBackendDecision` 字段已同步升级（与 `AudioRoutingDecision` 对齐）
+- ✅ `logAudioCapabilityReport` 日志反映整组分析（`trackCount` / `anyHardSupported` / `allSoftDecodeOnly`）
+- ✅ controller 的 `resolveAudioRoutingDecision` 仍返回 `AudioRoutingDecision`（字段兼容），内部委托 `backendService.chooseBackend`
 
 ## 4. Controller façade 收口
 
@@ -57,7 +70,7 @@
   - ✅ 删除 `resolveAudioRoutingDecision` / `findInitialAudioTrackIndex` 旧实现（thin delegation 替代）
   - ⚠ 保留：`initPlayer` 内 IPlayer 事件回调注册（onReady/onPlay/... 共 10+ 个回调，需要 controller 的 @Trace 状态）、progress timer、subtitle timer、VPE 状态、续播状态机（pending resume / seek / autoplay decision）
 - [x] 4.3 回归播放启动、seek、fallback、轨道切换、切集与释放主路径。
-  - ✅ 播放启动：`initPlayer` → `backendService.prepareAdapter` + service.bind 编排
+  - ✅ 播放启动：`initPlayer` → `backendService.chooseBackend` → `backendService.prepareAdapter` + service.bind 编排
   - ✅ seek：controller 持有 `seek` 方法 + 续播状态机（service 不参与 seek 时序，因 seek 与 controller 状态机强耦合）
   - ✅ AVPlayer unsupported format fallback：controller 的 `onUnsupportedFormat` 回调根据 `this.unsupportedFormatFallback`（由 service 在 `chooseBackend` 阶段写入）切换 backend（service 不直接持有回调，但 decision 由 service 计算）
   - ✅ 字幕轨切换：`switchSubtitleTrack` → `subtitleSessionSvc.switchToTrack` + binding 持久化
@@ -66,3 +79,18 @@
   - ✅ 切集（reloadSource）：`reloadSource` 公开方法签名未变，调用 `initPlayer` 复用 service 编排
   - ✅ release：`backendService.cleanupOrphanedProxies` 接管 SMB 清理
   - ⚠ 真机回归未在本环境执行（无 TV 设备）
+
+### Fix #2 增量（service 实例化策略）
+
+- ✅ `SubtitleSessionService` **不再导出全局单例**
+- ✅ `subtitleSessionService` 导出已删除（service 文件末尾）
+- ✅ controller 改为 `private readonly subtitleSessionSvc: SubtitleSessionService = new SubtitleSessionService()`（每个 controller 各自一份实例）
+- ✅ service 内部 mutable state 与 controller 生命周期一一对应，避免多 controller / 多播放会话状态串扰
+
+### Fix #3 增量（backend 主入口）
+
+- ✅ controller **不再**直接调用 `audioRoutingService.resolveRoutingDecision` 做 backend route 决策
+- ✅ backend route 决策统一入口：`backendService.chooseBackend(videoData)`（返回 `PlaybackBackendDecision`）
+- ✅ `PlaybackBackendService.chooseBackend` 内部委托 `audioRoutingService.resolveRoutingDecision`，并把结果包装为 `PlaybackBackendDecision`
+- ✅ controller 的 `resolveAudioRoutingDecision` thin delegation 改为 `await this.backendService.chooseBackend(...)`
+- ✅ controller 仍然调用 `audioRoutingService.resolveInitialTrackIndex` 做初始选轨（与 backend route 决策解耦，初始选轨不属于 backend service 职责范围）

@@ -22,6 +22,20 @@ import type { AudioTrackItem } from "../../components/core/player/VideoPlayerCon
 
 export type { AudioTrackItem };
 
+/** 单条音轨分析结果（service 内部使用，可被 controller 日志引用）。 */
+export interface AudioTrackAnalysis {
+  /** 在原始轨道列表中的索引（service 不持有列表，仅记录位置）。 */
+  index: number;
+  /** 归一化后的 codec（如 'aac' / 'eac3' / 'ac3' / 'truehd' / ''）。 */
+  codec: string;
+  /** 归一化后的声道计划（1/2/6/8）。 */
+  channels: number;
+  /** 是否系统稳态可硬解。 */
+  hardSupported: boolean;
+  /** 来源：probe（ffprobe） / preset（数据库预置）。 */
+  source: 'probe' | 'preset';
+}
+
 /** 路由决策输入（controller 持有 videoData 与 ffprobe 状态）。 */
 export interface AudioRoutingInput {
   /** 预置音轨（来自数据库已读取，可选）。 */
@@ -38,6 +52,12 @@ export interface AudioRoutingInput {
   precheckProbeFailed: boolean;
   /** 探测失败错误信息。 */
   precheckProbeError: string;
+  /**
+   * 整组音轨分析结果（probe + preset 合并去重后的有序列表）。
+   * 注意：本字段优先级高于 probeCodecName / presetCodecName，
+   * controller 应优先传入整组分析；旧字段仅作单轨快速路径。
+   */
+  trackAnalyses: AudioTrackAnalysis[];
 }
 
 /** 路由决策输出。 */
@@ -50,12 +70,25 @@ export interface AudioRoutingDecision {
   preferredChannels: number;
   /** 诊断摘要。 */
   summary: string;
+  /** 整组音轨中第一条稳态可硬解轨道的 codec（用于日志）。 */
   detectedCodec: string;
+  /** 整组音轨中第一条稳态可硬解轨道的声道。 */
   detectedChannels: number;
-  hardSupported: boolean;
+  /** 整组音轨中是否存在至少一条稳态可硬解轨道。 */
+  anyHardSupported: boolean;
+  /** 整组音轨中是否所有轨道都应软解。 */
+  allSoftDecodeOnly: boolean;
+  /** 整组音轨中是否存在至少一条系统可播放的轨道。 */
+  anyPlayable: boolean;
+  /** 整组音轨中是否存在至少一条不可播放的轨道（用于日志）。 */
+  anyUnplayable: boolean;
+  /** 探测是否失败。 */
   precheckProbeFailed: boolean;
   precheckProbeError: string;
+  /** 视频编码名称（来自 ffprobe 首条 video track）。 */
   videoCodecName: string;
+  /** 整组音轨分析结果。 */
+  trackAnalyses: AudioTrackAnalysis[];
 }
 
 /** 默认路由决策（探测未启动时使用）。 */
@@ -66,10 +99,14 @@ export const DEFAULT_AUDIO_ROUTING_DECISION: AudioRoutingDecision = {
   summary: 'default: 未探测到音轨细节',
   detectedCodec: 'unknown',
   detectedChannels: 2,
-  hardSupported: true,
+  anyHardSupported: true,
+  allSoftDecodeOnly: false,
+  anyPlayable: true,
+  anyUnplayable: false,
   precheckProbeFailed: false,
   precheckProbeError: '',
-  videoCodecName: ''
+  videoCodecName: '',
+  trackAnalyses: []
 };
 
 /** 初始音轨选择输入。 */

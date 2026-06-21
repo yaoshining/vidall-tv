@@ -30,6 +30,13 @@
 //   确保外部 import 兼容。
 // - 持久化（saveUserBinding / clearUserBinding）由 controller 持有 service
 //   返回的 directive 后执行，避免 service 直接依赖 AppPreferences。
+//
+// 实例化策略（Module 4 fix #2）：
+// - 本 service 不再导出全局单例。
+// - 每个 `VideoPlayerController` 在自己生命周期内 `new SubtitleSessionService()`，
+//   让 service 内部持有的 mutable state 与 controller 生命周期一一对应，
+//   避免多 controller / 多播放会话状态串扰。
+// - 旧版的全局单例 `subtitleSessionService` 已删除。
 
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -271,6 +278,3 @@ export class SubtitleSessionService {
     return this.state.hasExternalActive;
   }
 }
-
-/** 默认无依赖实例（pure service，controller 可选持有或新建）。 */
-export const subtitleSessionService: SubtitleSessionService = new SubtitleSessionService();

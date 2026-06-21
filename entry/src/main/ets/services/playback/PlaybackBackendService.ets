@@ -57,6 +57,7 @@ import {
   audioTrackRoutingService,
   AudioTrackRoutingService
 } from '../audioRouting/AudioTrackRoutingService';
+import type { AudioRoutingDecision } from '../audioRouting/AudioRoutingTypes';
 
 const TAG = '[PlaybackBackendService]';
 
@@ -107,13 +108,38 @@ export class PlaybackBackendService {
   /**
    * 选择 backend 决策。
    *
-   * 行为与原 `VideoPlayerController.resolveAudioRoutingDecision` 字节级一致：
-   * - 探测 ffprobe 失败时降级 preset。
-   * - 始终优先 avplayer；仅探测完全失败且无音轨提示时走 ijkplayer。
+   * 这是 backend 选择的统一入口。controller 不得绕过本方法直接调 routing service。
+   * 本方法内部委托 `AudioTrackRoutingService.resolveRoutingDecision` 计算整组音轨分析，
+   * 并把结果包装为 `PlaybackBackendDecision` 暴露给 controller。
+   *
+   * 行为：
+   * - 探测 ffprobe 失败时降级 preset hint
+   * - 整组音轨存在至少一条稳态可硬解轨道 → preferredBackend=avplayer（让 avplayer 尝试，
+   *   由 `loadAudioTracks` 阶段的 `resolveInitialTrackIndex` 选中最优可硬解轨）
+   * - 整组音轨全部应软解 → preferredBackend=avplayer + fallback=ijkplayer
+   * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer
    */
   async chooseBackend(videoData: VideoData): Promise<PlaybackBackendDecision> {
     try {
-      return await this.routingService.resolveRoutingDecision(videoData);
+      const decision: AudioRoutingDecision = await this.routingService.resolveRoutingDecision(videoData);
+      // service 内部完成 audio routing 决策 → 包装为 PlaybackBackendDecision
+      // 字段映射基于已升级的整组音轨分析（anyHardSupported / allSoftDecodeOnly / anyPlayable / anyUnplayable）
+      return {
+        preferredBackend: decision.preferredBackend,
+        fallback: decision.fallback,
+        preferredChannels: decision.preferredChannels,
+        summary: decision.summary,
+        detectedCodec: decision.detectedCodec,
+        detectedChannels: decision.detectedChannels,
+        anyHardSupported: decision.anyHardSupported,
+        allSoftDecodeOnly: decision.allSoftDecodeOnly,
+        anyPlayable: decision.anyPlayable,
+        anyUnplayable: decision.anyUnplayable,
+        precheckProbeFailed: decision.precheckProbeFailed,
+        precheckProbeError: decision.precheckProbeError,
+        videoCodecName: decision.videoCodecName,
+        trackAnalyses: decision.trackAnalyses
+      };
     } catch (e) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `路由决策异常，降级到默认: ${String(e)}`);
