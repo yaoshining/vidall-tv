@@ -1076,7 +1076,7 @@ export default function playerPageTest() {
       const nearEndEntry = new MediaProgressEntry(
         mediaKey, 1720000, 1800000, 1, 1, 7
       )
-      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const action = resolveMediaProgressResumeAction(
         nearEndEntry,
         1800000,
         1,
@@ -1091,7 +1091,7 @@ export default function playerPageTest() {
       const savedEntry = new MediaProgressEntry(
         'media_progress_episode_tmdb_tmdb-9527_s1_e7', 420000, 1800000, 1, 1, 7
       )
-      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const action = resolveMediaProgressResumeAction(
         savedEntry,
         1800000,
         1,
@@ -1106,7 +1106,7 @@ export default function playerPageTest() {
       const noProgressEntry = new MediaProgressEntry(
         'media_progress_episode_tmdb_tmdb-9527_s1_e7', 0, 1800000, 1, 1, 7
       )
-      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const action = resolveMediaProgressResumeAction(
         noProgressEntry,
         1800000,
         1,
@@ -1121,13 +1121,13 @@ export default function playerPageTest() {
       const savedEntry = new MediaProgressEntry(
         'media_progress_episode_tmdb_tmdb-9527_s1_e7', 420000, 1800000, 1, 1, 7
       )
-      const actionForDifferentSeason: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const actionForDifferentSeason = resolveMediaProgressResumeAction(
         savedEntry,
         1800000,
         2,
         7
       )
-      const actionForDifferentEpisode: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const actionForDifferentEpisode = resolveMediaProgressResumeAction(
         savedEntry,
         1800000,
         1,
