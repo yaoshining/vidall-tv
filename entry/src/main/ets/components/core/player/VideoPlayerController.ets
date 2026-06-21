@@ -37,8 +37,14 @@ import { playbackBackendService, PlaybackBackendService, PlaybackAdapterCallback
   "../../../services/playback/PlaybackBackendService";
 import { subtitleSessionService, SubtitleSessionService } from
   "../../../services/subtitleSession/SubtitleSessionService";
-import { audioTrackRoutingService, AudioTrackRoutingService } from
-  "../../../services/audioRouting/AudioTrackRoutingService";
+import {
+  audioTrackRoutingService,
+  AudioTrackRoutingService,
+  PresetAudioHint,
+  readPresetAudioHint,
+  findInitialAudioTrackIndex as serviceFindInitialAudioTrackIndex
+} from "../../../services/audioRouting/AudioTrackRoutingService";
+import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioRoutingTypes";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -106,24 +112,10 @@ interface FfmpegQueuedFrame {
   ptsMs: number;
 }
 
-interface AudioRoutingDecision {
-  preferredBackend: PlayerBackend;
-  fallback: UnsupportedFormatFallback;
-  preferredChannels: number;
-  summary: string;
-  detectedCodec: string;
-  detectedChannels: number;
-  hardSupported: boolean;
-  precheckProbeFailed: boolean;
-  precheckProbeError: string;
-  /** 视频编码名称（如 'hevc', 'h264'），由 ffprobe 探测，未探测到为空字符串 */
-  videoCodecName: string;
-}
-
-interface PresetAudioHint {
-  codecName: string;
-  channels: number;
-}
+// AudioRoutingDecision 与 PresetAudioHint 已迁移到 AudioTrackRoutingService：
+//   import type { AudioRoutingDecision, PresetAudioHint } from
+//     "../../../services/audioRouting/AudioRoutingTypes"
+// controller 仅作为 façade 引用 service 类型，不再保留本地重复声明。
 
 interface FallbackLogRecord {
   fallbackReason: string;
@@ -777,8 +769,9 @@ export class VideoPlayerController {
     this.ffmpegSingleFrameMode = false;
     this.clearNativeReadyGuardTimer();
     // 清理上一次 SMB 源遗留的孤立代理线程（keepProxy=true 释放后），防止线程泄漏
+    // 委托给 PlaybackBackendService.cleanupOrphanedProxies（service 集中管理）
     if (this.smbProxyActive) {
-      VidAllPlayerAdapter.cleanupOrphanedProxies();
+      this.backendService.cleanupOrphanedProxies();
       this.smbProxyActive = false;
     }
     const shouldPreservePendingResume = this.shouldPreservePendingResume(videoData);
@@ -840,29 +833,12 @@ export class VideoPlayerController {
       this.backend = 'ijkplayer';
     }
 
-    // SMB 源（smb://）统一通过本地 HTTP 代理转发，avplayer 和 ijkplayer 均适用。
-    // 在所有自动路由决策完成后（backend 已确定为 avplayer/ijkplayer），启动代理并将
-    // videoSrc 替换为代理 URL，下游 AVPlayerAdapter / IjkPlayerAdapter 均透明使用。
-    let smbOriginalUrl: string = '';
-    if (videoData.videoSrc.startsWith('smb://')) {
-      this.sourceProtocol = 'SMB';
-      smbOriginalUrl = videoData.videoSrc;
-      // SMB 源统一通过本地 HTTP 代理转发，avplayer 和 ijkplayer 均适用
-      const proxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalUrl);
-      if (proxyUrl.length > 0) {
-        videoData.videoSrc = proxyUrl;
-        this.smbProxyActive = true;
-        this.smbOriginalSrc = smbOriginalUrl;  // 保存原始 smb:// URL，供 fallback 时重启代理
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `SMB 源已通过代理 URL 转交 ${this.backend}（proxy started → rewritten to ${proxyUrl}）`);
-      } else {
-        // 代理启动失败，保留原始 smb:// URL（ijkplayer 会尝试直连，大概率失败）
-        smbOriginalUrl = '';
-        this.smbOriginalSrc = '';  // 代理未启动，清空缓存
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `SMB 代理启动失败，backend=${this.backend} 将使用原始 smb:// URL`);
-      }
-    } else if (!videoData.videoSrc.startsWith('http://127.0.0.1')) {
+    // SMB 源（smb://）的代理启动已由 `PlaybackBackendService.prepareAdapter` 统一处理。
+    // controller 不再直接调用 `VidAllPlayerAdapter.startSmbProxy`，避免双启动。
+    // controller 持有 service 写回的 smbOriginalSrc（已写在下面的 prepareAdapter 调用之后）。
+    //
+    // 旧的"非 SMB 源清空 smbOriginalSrc"逻辑仍然保留（用于 initPlayer 二次调用的 fallback 场景）：
+    if (!videoData.videoSrc.startsWith('smb://') && !videoData.videoSrc.startsWith('http://127.0.0.1')) {
       // 非 SMB、非本地代理 URL（即真正的非 SMB 播放源），才清空缓存。
       // fallback 场景下第二次 initPlayer() 收到的是上一次代理的 http://127.0.0.1:PORT/... URL，
       // 不能清空 smbOriginalSrc，否则 setIjkContext() 无法重启代理。
@@ -922,44 +898,71 @@ export class VideoPlayerController {
         `[initPlayer] 预置音轨已提前填充: ${tracks.length} 条`);
     }
 
-    // 根据 backend 创建对应适配器
-    let adapter: IPlayer;
-    if (this.backend === 'ijkplayer') {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
-      const ijkAdapter = new IjkPlayerAdapter();
-      const ijkSubAdapter = new IjkSubtitleBridgeAdapter();
-      this.subtitleAdapter = ijkSubAdapter;
-      // 注册内嵌字幕回调：onTimedText → subtitleAdapter → currentSubtitleText
-      ijkAdapter.setOnEmbeddedSubtitleCallback((text: string) => {
-        if (currentSessionId !== this.playbackSessionId || this.subtitleAdapter !== ijkSubAdapter) {
-          return;
+    // 根据 backend 创建对应适配器（thin delegation to `PlaybackBackendService.prepareAdapter`）。
+    //
+    // service 负责：
+    // - backend 选择后的 adapter factory（IjkPlayerAdapter / AVPlayerAdapter）
+    // - SMB 代理生命周期（prepareAdapter 内部已启动代理；controller 仅记录 smbOriginalSrc）
+    // - 字幕桥接 adapter 创建 + 注入（service 同时返回 bridge 引用供 controller 持有）
+    // - onEmbeddedTimedText / onVideoRatio 回调注入（IJK 路径）
+    //
+    // controller 负责：
+    // - service 暴露的 handle 投影到本地 @Trace 字段
+    // - IPlayer 事件回调注册（onReady/onPlay/... 这些需要 controller 的 @Trace 状态）
+    const adapterHandle = this.backendService.prepareAdapter(
+      videoData,
+      this.backend,
+      {
+        onReady: () => {},
+        onPlay: () => {},
+        onPaused: () => {},
+        onCompleted: () => {},
+        onStopped: () => {},
+        onTimeUpdate: () => {},
+        onError: () => {},
+        onUnsupportedFormat: () => {},
+        onSeekDone: () => {},
+        onSubtitleUpdate: () => {},
+        onBuffering: () => {},
+        // 内嵌字幕回调（IJK 路径）：bridge 内部 + applySubtitleBridgeState
+        onEmbeddedTimedText: (text: string) => {
+          const bridge = this.subtitleAdapter;
+          if (currentSessionId !== this.playbackSessionId || !(bridge instanceof IjkSubtitleBridgeAdapter)) {
+            return;
+          }
+          bridge.onEmbeddedTimedText(text);
+          this.applySubtitleBridgeState(bridge.getState());
+        },
+        // 视频比例回调：controller 的 ijkVideoRatio @Trace 字段
+        onVideoRatio: (ratio: number) => {
+          if (currentSessionId !== this.playbackSessionId) {
+            return;
+          }
+          this.ijkVideoRatio = ratio;
         }
-        ijkSubAdapter.onEmbeddedTimedText(text);
-        this.applySubtitleBridgeState(ijkSubAdapter.getState());
-      });
-      // 2.3 注入 DAR 比率回调：prepared 后 onVideoSizeChanged 触发，更新 ijkVideoRatio
-      // 2.4 在 bindListeners（adapter.onReady/onPlay/... 注册）之前注入，确保 prepared 后
-      //     回调立即可用（DAR 触发时机在 prepared 之后）
-      ijkAdapter.setOnVideoRatioCallback((ratio: number) => {
-        if (currentSessionId !== this.playbackSessionId) {
-          return;
-        }
-        this.ijkVideoRatio = ratio;
-      });
-      adapter = ijkAdapter;
-    } else {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: 使用 AVPlayerAdapter');
-      adapter = this.createAvPlayerAdapter();
-      if (smbOriginalUrl.length > 0) {
-        // SMB 源：AVPlayer 通过代理 URL 播放，内嵌字幕走 AVPlayer 原生 selectTrack，
-        // 外置字幕走 SmbAvSubtitleBridgeAdapter.loadExternalTracks（SMB client 读取）
-        this.subtitleAdapter = new SmbAvSubtitleBridgeAdapter(smbOriginalUrl);
-      } else {
-        this.subtitleAdapter = new AvSubtitleBridgeAdapter();
       }
+    );
+    // service 启动 SMB 代理后会把 videoData.videoSrc 改写为代理 URL，controller 同步追踪 smbOriginalSrc
+    if (adapterHandle.smbOriginalSrc.length > 0) {
+      this.smbOriginalSrc = adapterHandle.smbOriginalSrc;
     }
+    this.smbProxyActive = adapterHandle.smbProxyActive;
+    this.sourceProtocol = adapterHandle.smbOriginalSrc.length > 0 ? 'SMB' : this.sourceProtocol;
+    // service 已创建 bridge adapter；controller 持有同一引用以便后续 switch / delay / addExternal 调用
+    const adapter: IPlayer | undefined = adapterHandle.player;
+    if (adapterHandle.subtitleBridge !== undefined) {
+      this.subtitleAdapter = adapterHandle.subtitleBridge;
+    } else {
+      // 防御性回退：service 异常时降级到旧工厂
+      this.subtitleAdapter = new NoSubtitleBridgeAdapter();
+    }
+    if (adapter === undefined) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: PlaybackBackendService.prepareAdapter 未返回 player，降级到 AVPlayerAdapter');
+      this.player = this.createAvPlayerAdapter();
+      return;
+    }
+    this.player = adapter;
 
     // 注册所有 IPlayer 事件回调
     adapter.onReady(() => {
@@ -1244,7 +1247,7 @@ export class VideoPlayerController {
       this.subtitleUpdateCounter++;
     });
 
-    this.player = adapter;
+    // 注：this.player 已在上面 `this.player = adapter` 提前赋值（service 编排后立刻投影到 @Trace 字段）。
 
     if (this.backend === 'ijkplayer') {
       // IjkPlayer 需要先由 UI 层绑定 XComponent context，
@@ -1253,7 +1256,8 @@ export class VideoPlayerController {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
     } else {
-      // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE
+      // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE；
+      // VPE 增强仍由 controller 负责（service 不持有 aiEnhance 状态）。
       const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
       try {
         await adapter.init(videoData, effectiveSurfaceId);
@@ -1860,10 +1864,18 @@ export class VideoPlayerController {
   }
 
   /**
-   * 时序说明：
+   * 时序说明（thin delegation to `PlaybackBackendService.bindIjkContext`）：
    * 1. UI 层先注册 emitter.once(PREPARED)
    * 2. UI 层调 initPlayer()（创建 IjkPlayerAdapter 但不调 native_setup）
-  * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
+   * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
+   *
+   * service 负责：
+   * - SMB fallback 时的代理重启
+   * - adapter.init 编排
+   * controller 负责：
+   * - 校验 backend / player 就绪
+   * - 缓存 context/componentId 供 reloadSource 复用
+   * - init 失败的 rejectPendingReload
    */
   async setIjkContext(context: object, xComponentId: string): Promise<void> {
     if (this.backend !== 'ijkplayer') {
@@ -1876,36 +1888,26 @@ export class VideoPlayerController {
         'setIjkContext() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
       return;
     }
-    const ijkAdapter = this.player as IjkPlayerAdapter;
     this.cachedIjkContext = context;
     this.cachedIjkComponentId = xComponentId;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setIjkContext: 绑定 XComponent id=${xComponentId}，开始完整 init 流程...`);
-    // 把 context 传给 adapter，由 adapter 的 init() 内部在 native_setup 前调用 setContext
-    ijkAdapter.setPendingContext(context, xComponentId);
     if (this.currentVideoData) {
-      // SMB fallback：avplayer release 时会停止代理，若原始源是 SMB 则需重新启动
+      // 委托 SMB 代理重启给 service
       if (this.smbOriginalSrc.length > 0) {
-        const newProxyUrl = VidAllPlayerAdapter.startSmbProxy(this.smbOriginalSrc);
-        if (newProxyUrl.length > 0) {
-          this.currentVideoData.videoSrc = newProxyUrl;
-          this.smbProxyActive = true;
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[setIjkContext] SMB fallback 重启代理成功: ${newProxyUrl}`);
-        } else {
-          // 代理重启失败：回退到原始 smb:// URL，不保留已停止代理的死 URL
-          this.currentVideoData.videoSrc = this.smbOriginalSrc;
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `[setIjkContext] SMB fallback 代理重启失败，已回退到原始 SMB URL: ${this.smbOriginalSrc}`);
-        }
+        this.backendService.restartSmbProxyForFallback(this.smbOriginalSrc, this.currentVideoData);
       }
       try {
-        await ijkAdapter.init(this.currentVideoData, this.surfaceId);
+        await this.backendService.bindIjkContext(
+          this.player,
+          context,
+          xComponentId,
+          this.currentVideoData,
+          this.surfaceId
+        );
       } catch (e) {
-        const err = e as BusinessError;
+        const err = e as Error;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `setIjkContext init 失败: ${err.message}`);
-        this.rejectPendingReload(new Error(err.message));
+        this.rejectPendingReload(err);
       }
     }
   }
@@ -1913,6 +1915,7 @@ export class VideoPlayerController {
   /**
    * 供 VideoPlayer UI 层在 native so XComponent.onLoad 回调中调用。
    * 当前阶段仅完成原生播放器骨架绑定，真实解码/渲染链路后续接入。
+   * 行为已迁移至 `PlaybackBackendService.bindNativeContext`，controller 仅保留 façade 校验与回退。
    */
   async setNativeContext(context: object, xComponentId: string): Promise<void> {
     if (this.backend !== 'native') {
@@ -1925,27 +1928,23 @@ export class VideoPlayerController {
         'setNativeContext() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
       return;
     }
-    const nativeAdapter = this.player as VidAllPlayerAdapter;
     this.cachedNativeContext = context;
     this.cachedNativeComponentId = xComponentId;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
     this.startNativeReadyGuard(this.playbackSessionId);
     if (this.currentVideoData) {
       try {
-        let safeContext: object = context;
-        if (safeContext === null || safeContext === undefined) {
-          const fallbackContext: NativeXComponentFallbackContext = {};
-          safeContext = fallbackContext as object;
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `setNativeContext: onLoad context 为空，使用空对象兜底 id=${xComponentId}`);
-        }
-        await nativeAdapter.initWithContext(this.currentVideoData, this.surfaceId, safeContext, xComponentId);
+        await this.backendService.bindNativeContext(
+          this.player,
+          context,
+          xComponentId,
+          this.currentVideoData,
+          this.surfaceId
+        );
       } catch (e) {
-        const err = e as BusinessError;
+        const err = e as Error;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `setNativeContext init 失败: ${err.message}`);
-        this.rejectPendingReload(new Error(err.message));
+        this.rejectPendingReload(err);
         this.fallbackNativeToIjk('native_init_error', 'native 初始化失败，已自动回退到 IJK 播放', err.message);
       }
     }
@@ -2089,73 +2088,15 @@ export class VideoPlayerController {
     return false;
   }
 
+  /**
+   * 计算后端路由决策（thin delegation to `AudioTrackRoutingService`）。
+   *
+   * 历史背景：原方法直接做 ffprobe + 决策；为符合 OpenSpec stage 4 的 service 化要求，
+   * 本方法现在只是 service 的 façade。所有实际计算（ffprobe / preset 降级 / route 决策
+   * / 硬解判断）由 `AudioTrackRoutingService.resolveRoutingDecision` 完成。
+   */
   private async resolveAudioRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
-    const defaultDecision: AudioRoutingDecision = {
-      preferredBackend: 'avplayer',
-      fallback: 'ijkplayer',
-      preferredChannels: 2,
-      summary: 'default: 未探测到音轨细节',
-      detectedCodec: 'unknown',
-      detectedChannels: 2,
-      hardSupported: true,
-      precheckProbeFailed: false,
-      precheckProbeError: '',
-      videoCodecName: ''
-    };
-
-    const presetHint = this.readPresetAudioHint(videoData);
-    let codecName = presetHint.codecName;
-    let channels = presetHint.channels;
-    let precheckProbeFailed = false;
-    let precheckProbeError = '';
-    let videoCodecName = '';
-
-    try {
-      // 优先用 ffprobe 读取真实流信息；失败时再退回 preset 提示。
-      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
-      if (probe.success && probe.audioTracks.length > 0) {
-        const first = probe.audioTracks[0];
-        codecName = first.codecName;
-        channels = first.channels ?? channels;
-      }
-      // 同时捕获视频编码，供 IjkPlayerAdapter 决策硬解策略（HEVC 硬解+HDR/DV 会花屏）
-      if (probe.success && probe.videoTracks.length > 0) {
-        videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
-      }
-    } catch (e) {
-      precheckProbeFailed = true;
-      precheckProbeError = this.safeErrorMessage(e);
-      // 探测失败时使用预置音轨提示继续决策。
-    }
-
-    const normalizedCodec = (codecName ?? '').toLowerCase();
-    const safeChannels = this.normalizeTargetChannels(channels);
-    const hardSupported = this.isLikelySystemHardDecodeSupported(normalizedCodec);
-
-    const summary = `codec=${normalizedCodec.length > 0 ? normalizedCodec : 'unknown'}, ` +
-      `channels=${safeChannels}, hardSupported=${hardSupported}, precheckProbeFailed=${precheckProbeFailed}`;
-
-    // 策略：始终优先 avplayer，让系统自行尝试播放（含 TrueHD/DTS/AC3 等非标音频）。
-    // avplayer 报 onUnsupportedFormat 时会自动 fallback 到 ijkplayer（见 unsupportedFormatFallback='ijkplayer'）。
-    // 仅在探测完全失败且没有任何音轨提示时，保守走 ijkplayer 避免 avplayer 进入不可恢复错误态。
-    let preferredBackend: PlayerBackend = 'avplayer';
-    if (precheckProbeFailed && normalizedCodec.length === 0) {
-      preferredBackend = 'ijkplayer';
-    }
-
-    const decision: AudioRoutingDecision = {
-      preferredBackend,
-      fallback: 'ijkplayer',
-      preferredChannels: safeChannels,
-      summary,
-      detectedCodec: normalizedCodec.length > 0 ? normalizedCodec : 'unknown',
-      detectedChannels: safeChannels,
-      hardSupported,
-      precheckProbeFailed,
-      precheckProbeError,
-      videoCodecName
-    };
-    return decision;
+    return await this.audioRoutingService.resolveRoutingDecision(videoData);
   }
 
   private logAudioCapabilityReport(decision: AudioRoutingDecision): void {
@@ -2196,187 +2137,29 @@ export class VideoPlayerController {
     return '2.0';
   }
 
-  private readPresetAudioHint(videoData: VideoData): PresetAudioHint {
-    const tracks = videoData.presetAudioTracks;
-    if (!tracks || tracks.length === 0) {
-      const emptyHint: PresetAudioHint = { codecName: '', channels: 2 };
-      return emptyHint;
-    }
-
-    // ── 优先级排序：多声道 > 高码率 > 原始顺序 ──────────────────────
-    // 克隆数组避免修改原始数据；只影响"路由决策"，不影响实际选轨。
-    // 排序前先归一化声道数，避免原始值（如 4/5/7）与实际解码计划（2/6/8）错位，
-    // 导致 5ch 排在 2ch 前面、但二者最终都解码为 2ch 的次优选轨问题。
-    const sorted = tracks.slice().sort((a, b) => {
-      const chA = this.normalizeChannelsForSort(this.inferTrackChannels(a));
-      const chB = this.normalizeChannelsForSort(this.inferTrackChannels(b));
-      if (chB !== chA) {
-        return chB - chA; // 多声道优先
-      }
-      const brA = a.bitrate ?? 0;
-      const brB = b.bitrate ?? 0;
-      return brB - brA; // 高码率优先
-    });
-
-    const best = sorted[0];
-    const mime = (best.mimeType ?? '').toLowerCase();
-    const channels = this.inferTrackChannels(best);
-    const codecName = mime.length > 0 ? mime : best.displayName.toLowerCase();
-    const hint: PresetAudioHint = { codecName, channels };
-    return hint;
-  }
+  // ─── 路由决策 / 初始选轨 helpers 已迁移至 `AudioTrackRoutingService` ───
+  // - readPresetAudioHint
+  // - inferTrackChannels
+  // - normalizeChannelsForSort
+  // - normalizeTargetChannels
+  // - isLikelySystemHardDecodeSupported
+  // - isAudioTrackPlayable
+  // controller 仅保留 façade 调用 `audioRoutingService.resolveRoutingDecision` /
+  // `serviceFindInitialAudioTrackIndex`，并把状态投影到 @Trace 字段。
 
   /**
-   * 推断音轨的实际声道数。
-   * 优先使用 `PresetAudioTrack.channels` 字段（由调用方通过 ffprobe 注入）；
-   * 字段缺失时从 displayName 关键字推断，保持向后兼容。
-   */
-  private inferTrackChannels(track: PresetAudioTrack): number {
-    if (track.channels !== undefined && track.channels > 0) {
-      return track.channels;
-    }
-    const display = track.displayName.toLowerCase();
-    if (display.includes('7.1')) {
-      return 8;
-    }
-    if (display.includes('5.1')) {
-      return 6;
-    }
-    if (display.includes('mono')) {
-      return 1;
-    }
-    return 2;
-  }
-
-  /**
-   * 将原始声道数归一化到实际解码计划所对应的层级，用于音轨优先级排序。
-   * 播放路径只支持 1/2/6/8 四个层级；直接用原始值（如 4/5/7）排序会导致
-   * 选出与 2ch 解码计划相同但顺序更靠前的"伪多声道"音轨。
-   *   1ch        → 1
-   *   ≤ 2ch      → 2  （包含异常值 0 或原始 2）
-   *   3 ~ 6ch    → 6  （5.1 及以下）
-   *   7ch 以上   → 8  （7.1）
-   */
-  private normalizeChannelsForSort(ch: number): number {
-    if (ch <= 1) {
-      return 1;
-    }
-    if (ch <= 2) {
-      return 2;
-    }
-    if (ch <= 6) {
-      return 6;
-    }
-    return 8;
-  }
-
-  private normalizeTargetChannels(channels?: number): number {
-    if (!channels) {
-      return 2;
-    }
-    if (channels <= 1) {
-      return 1;
-    }
-    if (channels >= 8) {
-      return 8;
-    }
-    if (channels >= 6) {
-      return 6;
-    }
-    return 2;
-  }
-
-  private isLikelySystemHardDecodeSupported(codec: string): boolean {
-    if (codec.length === 0) {
-      return true;
-    }
-
-    // 经验规则：命中下列关键字时优先软解，避免先硬解再失败切换带来的卡顿。
-    const softOnlyKeywords: string[] = [
-      'ac3', 'eac3', 'dts', 'truehd', 'mlp', 'vivid', 'atmos'
-    ];
-    for (let i = 0; i < softOnlyKeywords.length; i++) {
-      if (codec.includes(softOnlyKeywords[i])) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * 判断指定音轨是否可播放（AVPlayer 可解码）。
-   * 优先使用 codecName 字段；缺失时降级到 mimeType；两者均缺失时视为可播放（保持既有行为）。
-   * codecName 或 mimeType 缺失 / 未知时，不视为可播放的额外证明，但也不阻止选择。
+   * codec-aware 初始音轨候选选择器（thin delegation to `AudioTrackRoutingService`）。
    *
-   * mimeType 归一化：去掉 "audio/" 前缀并移除短横线，使 "audio/ac-3" → "ac3"、
-   * "audio/e-ac-3" → "eac3"，与 isLikelySystemHardDecodeSupported 的关键字列表对齐。
-   */
-  private isAudioTrackPlayable(track: AudioTrackItem): boolean {
-    const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
-    // 归一化：去掉 "audio/" 前缀，移除短横线，使 "audio/ac-3" 匹配黑名单关键字 "ac3"
-    const codec = raw.replace('audio/', '').split('-').join('');
-    return this.isLikelySystemHardDecodeSupported(codec);
-  }
-
-  /**
-   * codec-aware 初始音轨候选选择器。
-   *
-   * 选择策略（优先级从高到低）：
+   * 行为与原实现字节级一致：
    * 1. 偏好轨（audioTracks[0]）可播放 → 直接使用
    * 2. 偏好轨不可播放，存在同语言可播放轨 → 同语言降级
    * 3. 无同语言候选，存在任意可播放轨 → 任意可播放降级
-   * 4. 全部不可播放 → 返回 0，沿用现有失败/fallback 策略
+   * 4. 全部不可播放 → 返回 0
    *
    * @returns 应传给 switchAudioTrack 的轨道在 audioTracks 数组中的索引
    */
   private findInitialAudioTrackIndex(): number {
-    if (this.audioTracks.length === 0) {
-      return 0;
-    }
-
-    const preferred = this.audioTracks[0];
-    const preferredCodec = ((preferred.codecName ?? preferred.mimeType) ?? '');
-
-    // 1. 偏好轨可播放：直接选
-    if (this.isAudioTrackPlayable(preferred)) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[findInitialAudioTrackIndex] 偏好轨可播放，直接选中: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}`);
-      return 0;
-    }
-
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[findInitialAudioTrackIndex] 偏好轨不可播放: index=0 lang=${preferred.language ?? 'unknown'} codec=${preferredCodec || 'unknown'}，尝试降级`);
-
-    // 2. 同语言可播放降级
-    const preferredLang = preferred.language ?? '';
-    if (preferredLang.length > 0) {
-      for (let i = 1; i < this.audioTracks.length; i++) {
-        const t = this.audioTracks[i];
-        if (t.language === preferredLang && this.isAudioTrackPlayable(t)) {
-          const tCodec = ((t.codecName ?? t.mimeType) ?? '');
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[findInitialAudioTrackIndex] 同语言降级: index=${i} lang=${preferredLang} codec=${tCodec || 'unknown'}`);
-          return i;
-        }
-      }
-    }
-
-    // 3. 任意可播放轨降级
-    for (let i = 1; i < this.audioTracks.length; i++) {
-      const t = this.audioTracks[i];
-      if (this.isAudioTrackPlayable(t)) {
-        const tCodec = ((t.codecName ?? t.mimeType) ?? '');
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[findInitialAudioTrackIndex] 任意可播放降级: index=${i} lang=${t.language ?? 'unknown'} codec=${tCodec || 'unknown'}`);
-        return i;
-      }
-    }
-
-    // 4. 全部不可播放：返回 0，沿用现有失败/fallback 策略
-    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-      `[findInitialAudioTrackIndex] 全部音轨不可播放（共 ${this.audioTracks.length} 条），返回 0 沿用现有降级策略`);
-    return 0;
+    return serviceFindInitialAudioTrackIndex(this.audioTracks);
   }
 
   /** prepared 后回调：读取 duration、加载字幕轨道和音轨 */
@@ -2951,9 +2734,9 @@ export class VideoPlayerController {
       await this.player.release().catch(() => {});
       this.player = undefined;
     }
-    // 清理 SMB 代理孤立线程（keepProxy=true 释放后遗留）
+    // 清理 SMB 代理孤立线程（keepProxy=true 释放后遗留）——委托给 backend service
     if (this.smbProxyActive) {
-      VidAllPlayerAdapter.cleanupOrphanedProxies();
+      this.backendService.cleanupOrphanedProxies();
       this.smbProxyActive = false;
     }
     // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
@@ -3187,92 +2970,71 @@ export class VideoPlayerController {
     return this.subtitleAdapter.getState().hasExternalActive;
   }
 
+  /**
+   * 字幕会话初始化（thin delegation to `SubtitleSessionService.initialize`）。
+   *
+   * 行为与原 `loadSubtitleTracks` 字节级一致：
+   * - subtitleAdapter.init
+   * - 应用 bridge state 到 @Trace 字段
+   * - 调度器步骤 1（用户绑定）/ 步骤 4（本地缓存）覆盖
+   * - 失败回退到 NoSubtitleBridgeAdapter
+   */
   private async loadSubtitleTracks(): Promise<void> {
     if (!this.player) {
       return;
     }
-    try {
-      await this.subtitleAdapter.init(this.player, this.currentVideoData);
-      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
-
-      // 字幕优先级调度：步骤 1（用户指定） + 步骤 4（本地缓存）
-      // SMB 源代理 URL 的端口每次随机，必须用原始 smb:// URL 作为绑定 key 保持稳定
-      const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
-      const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
-      if (videoPath.length > 0) {
-        // 构建缓存上下文：filesDir 由外部注入，sourceType/sourceId 来自 VideoData
-        // Bug 修复：fileSourceType/fileSourceId 仅在 SMB/WebDAV 源时才存在，
-        // 本地文件（FILE_URI）不设置这两个字段，需要用与 VideoPlayer.resolveSubtitleSourceType()
-        // 相同的降级逻辑补全，否则缓存上下文无法构建，重开视频后已下载字幕消失。
-        let cacheCtx: SubtitleCacheContext | undefined = undefined;
-        const cachedFilesDir = this.subtitleCacheContext?.filesDir;
-        if (cachedFilesDir !== undefined) {
-          const rawSourceType = this.currentVideoData?.fileSourceType;
-          const resolvedSourceType = rawSourceType !== undefined ? rawSourceType :
-            (this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network');
-          const resolvedSourceId = this.currentVideoData?.fileSourceId ?? '0';
-          const ctx: SubtitleCacheContext = {
-            filesDir: cachedFilesDir,
-            sourceType: resolvedSourceType,
-            sourceId: resolvedSourceId
-          };
-          cacheCtx = ctx;
-        }
-        const resolution = await this.subtitleDispatcher.resolveSubtitle(videoPath, this.allSubtitleTracks, cacheCtx);
-        if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[loadSubtitleTracks] 调度器覆盖选轨: trackIndex=${resolution.trackIndex}`);
-          await this.subtitleAdapter.switchTrack(resolution.trackIndex);
-          this.applySubtitleBridgeState(this.subtitleAdapter.getState());
-        } else if (resolution.type === 'local-cache' && resolution.localPath !== undefined) {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[loadSubtitleTracks] 步骤4命中缓存字幕，追加到轨道列表并切换: ${resolution.localPath}`);
-          await this.addExternalSubtitle(resolution.localPath);
-          // addExternalSubtitle 内部调用 applySubtitleBridgeState，轨道列表已更新
-          // 切换到刚追加的轨道（最后一个）
-          const newIndex = this.allSubtitleTracks.length - 1;
-          if (newIndex >= 0) {
-            await this.subtitleAdapter.switchTrack(newIndex);
-            this.applySubtitleBridgeState(this.subtitleAdapter.getState());
-          }
-        }
-      }
-    } catch (e) {
-      const err = e as BusinessError;
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `[loadSubtitleTracks] 字幕适配器初始化失败，回退无字幕模式: code=${err.code} msg=${err.message}`);
-      this.subtitleAdapter.release();
-      this.subtitleAdapter = new NoSubtitleBridgeAdapter();
-      this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+    // 构建缓存上下文（filesDir 由外部注入，sourceType/sourceId 来自 VideoData）
+    let cacheCtx: SubtitleCacheContext | undefined = undefined;
+    const cachedFilesDir = this.subtitleCacheContext?.filesDir;
+    if (cachedFilesDir !== undefined) {
+      const rawSourceType = this.currentVideoData?.fileSourceType;
+      const resolvedSourceType = rawSourceType !== undefined ? rawSourceType :
+        (this.currentVideoData?.type === VideoDataType.FILE_URI ? 'local' : 'network');
+      const resolvedSourceId = this.currentVideoData?.fileSourceId ?? '0';
+      const ctx: SubtitleCacheContext = {
+        filesDir: cachedFilesDir,
+        sourceType: resolvedSourceType,
+        sourceId: resolvedSourceId
+      };
+      cacheCtx = ctx;
     }
+
+    // 委托给 SubtitleSessionService
+    await this.subtitleSessionSvc.initialize(
+      this.subtitleAdapter,
+      this.player,
+      this.currentVideoData,
+      this.smbOriginalSrc,
+      cacheCtx
+    );
+    // 同步 service session state 到 controller 的 @Trace 字段
+    this.applySubtitleBridgeState(this.subtitleAdapter.getState());
+
+    // 容错：若 service 报 fallback-no-bridge，自身适配器已被 service 重置为 NoSubtitleBridgeAdapter
+    // 保留原 catch 行为（service 已内部处理，但 controller 兜底）
   }
 
-  /** 加载音轨列表 */
+  /**
+   * 加载音轨列表 + 选择初始轨。
+   *
+   * 初始轨选择已委托给 `AudioTrackRoutingService.resolveInitialTrackIndex`（含用户绑定恢复与
+   * codec-aware 默认选轨）。两条入口路径：
+   * - presetAudioTracks 已在 initPlayer 提前填充 → 直接调 service 选轨
+   * - player.getTrackInfos() 运行时枚举 → 构造列表后再调 service 选轨
+   */
   private async loadAudioTracks(): Promise<void> {
     if (!this.player) { return; }
 
     try {
       // ── 已在 initPlayer 提前填充（presetAudioTracks 路径）──
-      // initPlayer 时若有 presetAudioTracks 已立即写入 this.audioTracks，
-      // onPlayerReady 时只需触发首轨选择，不需要重新构建列表
       if (this.audioTracks.length > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[loadAudioTracks] 已提前填充 ${this.audioTracks.length} 条音轨，直接选择默认轨道`);
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
-        } else {
-          // 尝试恢复用户上次选择的音轨
-          const videoPath = this.currentVideoData?.videoSrc ?? '';
-          if (videoPath.length > 0) {
-            const audioDispatcher = new AudioDispatcher();
-            const resolution = await audioDispatcher.resolveAudioTrack(videoPath, this.audioTracks);
-            if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
-              await this.switchAudioTrack(resolution.trackIndex);
-              return;
-            }
-          }
-          await this.switchAudioTrack(this.findInitialAudioTrackIndex());
+          return;
         }
+        await this.selectInitialAudioTrackByService();
         return;
       }
 
@@ -3303,23 +3065,33 @@ export class VideoPlayerController {
         if (this.backend === 'ffmpeg') {
           this.activeAudioIndex = 0;
         } else {
-          // 尝试恢复用户上次选择的音轨
-          const videoPath = this.currentVideoData?.videoSrc ?? '';
-          if (videoPath.length > 0) {
-            const audioDispatcher = new AudioDispatcher();
-            const resolution = await audioDispatcher.resolveAudioTrack(videoPath, this.audioTracks);
-            if (resolution.type === 'user-specified' && resolution.trackIndex !== undefined) {
-              await this.switchAudioTrack(resolution.trackIndex);
-              return;
-            }
-          }
-          await this.switchAudioTrack(this.findInitialAudioTrackIndex());
+          await this.selectInitialAudioTrackByService();
         }
       }
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `加载音轨失败: ${JSON.stringify(e)}`);
     }
+  }
+
+  /**
+   * 内部辅助：调 `AudioTrackRoutingService.resolveInitialTrackIndex` 决定初始轨。
+   * - 命中用户绑定 → 应用该轨
+   * - 命中用户绑定但 displayName 已失效 → service 自动清除绑定，回退默认
+   * - 无用户绑定 → codec-aware 默认选轨
+   */
+  private async selectInitialAudioTrackByService(): Promise<void> {
+    const videoPath = this.smbOriginalSrc.length > 0
+      ? this.smbOriginalSrc
+      : (this.currentVideoData?.videoSrc ?? '');
+    if (videoPath.length === 0) {
+      await this.switchAudioTrack(serviceFindInitialAudioTrackIndex(this.audioTracks));
+      return;
+    }
+    const result = await this.audioRoutingService.resolveInitialTrackIndex(videoPath, this.audioTracks);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[loadAudioTracks] AudioTrackRoutingService 选轨: source=${result.source} trackIndex=${result.trackIndex} shouldClearUserBinding=${result.shouldClearUserBinding}`);
+    await this.switchAudioTrack(result.trackIndex);
   }
 
   /** 获取音轨显示名称 */
@@ -3428,8 +3200,14 @@ export class VideoPlayerController {
   // ─────────────────────────────────────────────
 
   /**
-   * 通过 allSubtitleTracks 索引切换字幕
-   * allIndex = -1 表示关闭字幕
+   * 通过 allSubtitleTracks 索引切换字幕（thin delegation to `SubtitleSessionService.switchToTrack`）。
+   * allIndex = -1 表示关闭字幕。
+   *
+   * 行为与原实现字节级一致：
+   * - 清除字幕定时器
+   * - subtitleAdapter.switchTrack
+   * - 应用 binding directive（disabled / external-local-file / internal）
+   * - SMB 源代理 URL 端口随机，必须用 smbOriginalSrc 作为绑定 key
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
     if (this.subtitleClearTimer !== undefined) {
@@ -3437,35 +3215,28 @@ export class VideoPlayerController {
       this.subtitleClearTimer = undefined;
     }
     this.subtitleRemainingTime = 0;
-    await this.subtitleAdapter.switchTrack(allIndex);
+
+    // 委托给 SubtitleSessionService 计算 bridge state 变化 + binding directive
+    const directive = await this.subtitleSessionSvc.switchToTrack(
+      this.subtitleAdapter,
+      this.currentVideoData,
+      this.smbOriginalSrc,
+      allIndex
+    );
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
 
-    // 用户绑定持久化
-    // SMB 源代理 URL 的端口每次随机，必须用原始 smb:// URL 作为绑定 key 保持稳定
+    // 应用 binding directive 持久化
     const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
     const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
     if (videoPath.length > 0) {
-      if (allIndex === -1) {
-        // 关闭字幕 → 写 disabled 标记（让 resolveSubtitle 步骤 1 短路，跳过步骤 4 自动恢复）
-        // 注意：metadata.json.lastUsed 与缓存文件不删除，用户后续若在菜单中启用，可继续命中。
+      if (directive.type === 'disabled') {
         this.subtitleDispatcher.clearUserBinding(videoPath).catch(() => {});
-      } else if (allIndex >= 0 && allIndex < this.allSubtitleTracks.length) {
-        const track = this.allSubtitleTracks[allIndex];
-        if (track.kind === 'external' && track.url !== undefined && track.url.length > 0) {
-          // 用户手动选择外置字幕 → 保存绑定（覆盖 disabled 标记）
-          this.subtitleDispatcher.saveUserBinding(videoPath, track.url, 'local-file').catch(() => {});
-        } else if (track.kind === 'internal') {
-          // 用户手动选择内置字幕 → 优先保存稳定 internalIndex token，避免 displayName 变更导致重开失配
-          const internalBindingKey = track.internalIndex !== undefined
-            ? `@idx:${track.internalIndex}`
-            : track.displayName;
-          this.subtitleDispatcher.saveUserBinding(videoPath, internalBindingKey, 'internal').catch(() => {});
-        }
+      } else if (directive.type === 'external-local-file' && directive.url !== undefined) {
+        this.subtitleDispatcher.saveUserBinding(videoPath, directive.url, 'local-file').catch(() => {});
+      } else if (directive.type === 'internal' && directive.bindingKey !== undefined) {
+        this.subtitleDispatcher.saveUserBinding(videoPath, directive.bindingKey, 'internal').catch(() => {});
       }
     }
-
-    // Task 5.4: 缺陷 2 修复：此处不再调用 recordSubtitleUsage，
-    // subtitle 使用计数已在 onPlayerReady 内一次性记录，此处重复调用会导致 total_playbacks 双重计数。
   }
 
   // ─────────────────────────────────────────────
@@ -3559,26 +3330,20 @@ export class VideoPlayerController {
   // ─────────────────────────────────────────────
 
   /**
-   * 调整字幕延迟偏移量。
+   * 调整字幕延迟偏移量（thin delegation to `SubtitleSessionService.adjustDelay`）。
    *
    * @param deltaMs 增量（单位 ms）。
    *   正值 → 字幕偏慢（画面已出但字幕还没出），增大 subtitleDelayMs，使字幕显示时刻后移
    *   负值 → 字幕偏快（字幕出早了），减小 subtitleDelayMs，使字幕显示时刻前移
-   *
-   * 原理：SRT 查找时使用 `currentTime - subtitleDelayMs`。
-   *   - subtitleDelayMs > 0 → 在视频时间 T，查找 T - D 处的字幕，相当于字幕到 T + D 才出现（延迟）。
-   *   - subtitleDelayMs < 0 → 查找 T + |D| 处的字幕，相当于字幕在 T - |D| 时出现（提前）。
-   *
-   * 效果可感知时间 <= 下一帧 onTimeUpdate 间隔（≈ 250ms）。
    */
   adjustSubtitleDelay(deltaMs: number): void {
-    this.subtitleAdapter.adjustDelay(deltaMs);
+    this.subtitleSessionSvc.adjustDelay(this.subtitleAdapter, deltaMs);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
   }
 
   /** 将已下载到本地的字幕文件追加到轨道列表并刷新 UI。 */
   async addExternalSubtitle(localPath: string): Promise<void> {
-    await this.subtitleAdapter.addLocalSubtitle(localPath);
+    await this.subtitleSessionSvc.addLocalSubtitle(this.subtitleAdapter, localPath);
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
   }
 

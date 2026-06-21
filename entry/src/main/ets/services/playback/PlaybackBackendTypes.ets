@@ -19,6 +19,7 @@
 
 import type { VideoData } from "../../components/core/player/VideoData";
 import type { IPlayer } from "../../components/core/player/IPlayer";
+import type { ISubtitleBridgeAdapter } from "../../components/core/player/SubtitleBridgeAdapter";
 
 /** 播放内核类型（service 内部命名，controller 已有同名类型，alias 复用）。 */
 export type ServicePlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
@@ -74,7 +75,9 @@ export interface PlaybackAdapterHandle {
   backend: ServicePlayerBackend;
   /** 适配器实例（未绑定 XComponent 上下文前可能为 undefined）。 */
   player?: IPlayer;
-  /** 字幕桥接 adapter（与 player 一一对应；no-op 适用于无可用字幕时）。 */
+  /** 字幕桥接 adapter（service 内部创建并注入回调，controller 持有此引用以调用 switch/delay）。 */
+  subtitleBridge?: ISubtitleBridgeAdapter;
+  /** 字幕桥接类型标签（冗余字段，便于 controller 调试与 fallback 决策）。 */
   subtitleBridgeKind: SubtitleBridgeKind;
   /** 启动 SMB 代理后写回 videoData.videoSrc（用于 controller 持有原始 URL 记录）。 */
   effectiveVideoSrc: string;

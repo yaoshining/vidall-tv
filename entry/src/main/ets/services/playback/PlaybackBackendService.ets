@@ -232,6 +232,7 @@ export class PlaybackBackendService {
     const handle: PlaybackAdapterHandle = {
       backend,
       player: adapter,
+      subtitleBridge,
       subtitleBridgeKind,
       effectiveVideoSrc,
       smbOriginalSrc: smbOriginalUrl,
@@ -328,6 +329,13 @@ export class PlaybackBackendService {
     hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
       `[setIjkContext] SMB fallback 代理重启失败，已回退到原始 SMB URL: ${smbOriginalSrc}`);
     return false;
+  }
+
+  /**
+   * 清理 SMB 孤立代理线程。controller 在切换源前调用，避免 keepProxy=true 释放后的线程泄漏。
+   */
+  cleanupOrphanedProxies(): void {
+    VidAllPlayerAdapter.cleanupOrphanedProxies();
   }
 
   /** 释放 adapter 与 SMB 代理。 */
