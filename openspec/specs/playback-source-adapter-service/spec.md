@@ -1,4 +1,9 @@
-## ADDED Requirements
+# playback-source-adapter-service Specification
+
+## Purpose
+统一收口播放器入口的协议源解析，将 WebDAV、SMB、本地文件的 URL 拼装与认证头构造从页面层剥离到独立的 service 中。
+
+## Requirements
 
 ### Requirement: Player source resolution SHALL be centralized
 播放器相关入口在构建播放请求时，系统 MUST 通过统一的 source adapter service 解析播放源，而不能由页面层或剧集切源逻辑各自拼装协议细节。

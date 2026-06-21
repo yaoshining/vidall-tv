@@ -1,4 +1,9 @@
-## ADDED Requirements
+# playback-progress-service Specification
+
+## Purpose
+统一收口播放器 Prepared 后的续播决策（直接播放、直接 seek、弹续播框、清理已完播进度）与播放进度定时/退出/切后台持久化，将分散在页面层与控制层中的状态机逻辑剥离到独立的 service 中。
+
+## Requirements
 
 ### Requirement: Playback resume decisions SHALL be centralized
 播放器 prepared 后的续播决策，系统 MUST 通过统一的 playback progress service 计算，包括直接播放、直接 seek、弹续播框、清理已完播进度等分支。

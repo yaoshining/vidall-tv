@@ -39,22 +39,21 @@
 - **AND** 用户唤起播放控制条
 - **THEN** 字幕按钮标签文本为当前轨道的 `displayName`
 
-### Requirement: 系统 SHALL 在字幕搜索抽屉下载成功后记录最后使用的字幕
+### Requirement: 系统 SHALL 在字幕搜索抽屉下载成功后通过统一获取流程记录最后使用的字幕
 
-用户在 `SubtitleSelectorDrawerDialog` 中选择并下载一条字幕，下载成功且挂载到播放器后，系统 SHALL 调用 `SubtitleCacheManager.setLastUsedSubtitle()` 更新该视频目录下 `metadata.json` 的 `lastUsed` 字段及对应条目的 `lastAccessedAt`。
+用户在 `SubtitleSelectorDrawerDialog` 中选择并下载一条字幕，下载成功且挂载到播放器后，系统 SHALL 调用统一的 subtitle acquisition service 协调下载结果落盘、最近使用字幕记录更新与当前播放会话回灌；该流程对用户仍表现为下载完成后自动追加并切换字幕。
 
-#### Scenario: 下载成功后 setLastUsedSubtitle 被调用
+#### Scenario: 下载成功后通过统一获取流程记录最后使用字幕
 - **WHEN** 用户在字幕搜索结果中选中一条字幕并触发下载
 - **AND** 下载成功且文件已写入本地
 - **AND** `addExternalSubtitle` 挂载成功
-- **THEN** `SubtitleCacheManager.setLastUsedSubtitle(filesDir, sourceType, sourceId, videoPath, fileName)` 被调用
-- **AND** 对应 `metadata.json` 的 `lastUsed` 更新为本次下载的文件名
+- **THEN** 系统通过统一的 subtitle acquisition service 更新对应 `metadata.json` 的 `lastUsed`
+- **AND** 当前播放会话自动追加并切换到该字幕
 
-#### Scenario: setLastUsedSubtitle 调用失败不影响播放和 UI
-- **WHEN** `setLastUsedSubtitle` 内部发生异常（如文件系统错误）
-- **THEN** 异常被静默捕获，不向上抛出
-- **AND** 字幕仍然正常显示
-- **AND** UI 不展示错误提示
+#### Scenario: 最近使用字幕记录失败不影响当前字幕显示
+- **WHEN** 统一字幕获取流程在更新最近使用字幕记录时发生异常
+- **THEN** 异常不会改变当前下载字幕已经成功挂载的结果
+- **AND** 用户仍看到与当前版本一致的字幕显示行为
 
 ### Requirement: 字幕搜索结果面板 SHALL 在打开时将焦点置于第一条结果
 

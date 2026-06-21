@@ -1,4 +1,9 @@
-## ADDED Requirements
+# subtitle-acquisition-service Specification
+
+## Purpose
+统一收口在线字幕搜索、下载与最近使用字幕记录更新流程，将字幕面板对 `OpenSubtitlesClient`、`SubtitleDownloader`、`SubtitleCacheManager` 的直接依赖剥离到独立的 service 中。
+
+## Requirements
 
 ### Requirement: Subtitle acquisition SHALL be coordinated by a dedicated service
 在线字幕搜索、下载、缓存命中与最近使用字幕更新，系统 MUST 通过统一的 subtitle acquisition service 编排，而不能由字幕面板直接调用底层 client 与 cache manager。
