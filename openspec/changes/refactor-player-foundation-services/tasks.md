@@ -47,6 +47,6 @@
 
 ## 4. 收口与回归
 
-- [ ] 4.1 让 `VideoPlayerController` 继续作为 façade，内部委托新 service 但不修改 UI 侧主要公开 API。
-- [ ] 4.2 清理迁移后已无必要的页面层重复逻辑与临时协议判断。
-- [ ] 4.3 回归 WebDAV、SMB、本地文件、在线字幕搜索下载与续播恢复主路径。
+- [x] 4.1 让 `VideoPlayerController` 继续作为 façade，内部委托新 service 但不修改 UI 侧主要公开 API。
+- [x] 4.2 清理迁移后已无必要的页面层重复逻辑与临时协议判断。
+- [x] 4.3 回归 WebDAV、SMB、本地文件、在线字幕搜索下载与续播恢复主路径。
