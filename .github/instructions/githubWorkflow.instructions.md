@@ -22,12 +22,13 @@ description: "GitHub 工作流指令。用于 git add、git commit、git push、
 - 创建 PR 时优先分 3 步执行：先 `git push`，再准备标题/正文，最后 `gh pr create`
 - 若 PR 正文较长，优先使用 `gh pr create --body-file <file>`，不要内联超长正文
 
-## OpenSpec 本地保留规则
+## OpenSpec 跟踪规则
 
-- `openspec/` 目录仅保留在本地工作区，禁止纳入 Git 跟踪，禁止提交或推送到远端
-- `.gitignore` 中必须保留 `/openspec` 规则，禁止删除、放宽或绕过该忽略项
-- 若 `git ls-files -- openspec` 输出非空，说明 `openspec/` 已重新进入跟踪集合；立即执行 `git rm --cached -r -- openspec` 清理 index，并保留本地文件
-- 仓库已配置 `OpenSpec Guard CI` 作为防回归门禁；处理 PR 或 GitHub Actions 时以该检查为准，失败时先清理 tracked `openspec/`，再继续后续操作
+- `openspec/` 目录（除 `archive` 外）已纳入 Git 跟踪并推送远端，用于 CI 间的规格同步
+- `openspec/changes/archive` 目录禁止纳入 Git 跟踪，仅保留在本地工作区
+- `.gitignore` 中必须保留 `/openspec/changes/archive` 规则，禁止删除、放宽或绕过该忽略项
+- 若 `git ls-files -- openspec/changes/archive` 输出非空，说明 `archive` 目录已重新进入跟踪集合；立即执行 `git rm --cached -r -- openspec/changes/archive` 清理 index，并保留本地文件
+- 仓库已配置 `OpenSpec Guard CI` 作为 archive 防回归门禁；处理 PR 或 GitHub Actions 时以该检查为准，失败时先清理 tracked archive，再继续后续操作
 
 ## 命令行稳定性
 
