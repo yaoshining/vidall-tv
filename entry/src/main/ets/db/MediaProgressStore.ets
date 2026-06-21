@@ -58,14 +58,7 @@ export class MediaProgressStore {
     seasonNumber: number,
     episodeNumber: number
   ): Promise<void> {
-    const entry: MediaProgressEntry = {
-      mediaKey: key,
-      positionMs: posMs,
-      durationMs: durMs,
-      lastPlayedAt: Date.now(),
-      episodeNumber: episodeNumber,
-      seasonNumber: seasonNumber
-    };
+    const entry = new MediaProgressEntry(key, posMs, durMs, Date.now(), seasonNumber, episodeNumber);
     await FileSourceDatabase.getInstance().upsertMediaProgress(entry);
   }
 

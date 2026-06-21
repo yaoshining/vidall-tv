@@ -335,6 +335,45 @@ export class SubtitleCacheManager {
   }
 
   /**
+   * 清除 metadata.json 中的 lastUsed 字段，但保留 subtitles 数组中已下载的字幕文件。
+   *
+   * 保留为公开 API 以备未来 UI 扩展（例如"已下载字幕列表"菜单）时使用。
+   * 当前 `VideoPlayerController.switchSubtitleTrack(-1)` 不再调用本方法——
+   * "关闭字幕"通过 `SubtitleDispatcher.clearUserBinding` 写入 `disabled` 标记实现，
+   * 让 `SubtitleDispatcher.resolveSubtitle` 步骤 1 返回
+   * `{ type: 'user-specified', trackIndex: -1 }`（显式关闭字幕，避免 adapter 自动选轨
+   * 继续显示字幕），短路步骤 4 的 lastUsed 自动恢复。
+   * metadata.json.lastUsed 与已下载字幕文件保持原样。
+   *
+   * 行为：
+   * - 已有 metadata.json：清空 `lastUsed`，写回磁盘。subtitles 数组保持原样（已下载文件不被删除）。
+   * - 无 metadata.json：静默返回。
+   *
+   * 不抛异常，失败仅 hilog.warn，不影响调用方主流程。
+   */
+  async clearLastUsedSubtitle(
+    filesDir: string,
+    sourceType: string,
+    sourceId: string,
+    videoPath: string
+  ): Promise<void> {
+    try {
+      const dir = await this.buildDir(filesDir, sourceType, sourceId, videoPath);
+      const metadata = await this.readMetadata(dir);
+      if (metadata === null) {
+        return;
+      }
+      if (metadata.lastUsed.length === 0) {
+        return;
+      }
+      metadata.lastUsed = '';
+      await this.writeMetadata(dir, metadata);
+    } catch (e) {
+      console.error(`[SubtitleCacheManager] clearLastUsedSubtitle 失败: ${String(e)}`);
+    }
+  }
+
+  /**
    * 删除某视频目录下的所有字幕文件及 metadata.json。
    * 目录不存在时静默返回。
    */

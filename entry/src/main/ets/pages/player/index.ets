@@ -10,18 +10,22 @@ import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
 import { common } from "@kit.AbilityKit";
 import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
-import { PlayProgressEntity, MediaProgressEntry } from "../../db/models/MediaEntity";
+import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
 import { emitter } from "@kit.BasicServicesKit";
 import { SubtitleSegment } from "../../components/core/player/SubtitleRenderer";
-import { WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
-import { FileSourceType, SMBSourceConfig, WebDAVSourceConfig } from "../../db/models/FileSourceEntity";
-import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../components/core/player/EpisodePlaybackManager";
 import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
+import { defaultSourceAdapterService as sourceAdapter } from "../../services/sourceAdapter/SourceAdapterService";
+import {
+  PlaybackProgressService,
+  PlaybackProgressContext,
+  PersistOutcome
+} from "../../services/playbackProgress/PlaybackProgressService";
+import { PlaybackResumeDecision } from "../../services/playbackProgress/PlaybackResumeDecision";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -123,48 +127,13 @@ export interface ResumeDiagnosticLogPayload {
   resumePositionMs: number;
 }
 
-export function resolveSavedProgressResumeAction(
-  positionMs: number,
-  savedDurationMs: number,
-  currentDurationMs: number
-): MediaProgressResumeAction {
-  if (positionMs <= 0) {
-    return { action: 'play' };
-  }
-  const effectiveDurationMs = currentDurationMs > 0 ? currentDurationMs : savedDurationMs;
-  if (MediaProgressStore.isNearEnd(positionMs, effectiveDurationMs)) {
-    return { action: 'clear_and_play' };
-  }
-  return {
-    action: 'seek',
-    positionMs
-  };
-}
-
-export function resolveMediaProgressResumeAction(
-  saved: MediaProgressEntry | null,
-  currentDurationMs: number,
-  currentSeason: number,
-  currentEpisode: number
-): MediaProgressResumeAction {
-  if (saved === null) {
-    return { action: 'play' };
-  }
-  if (saved.seasonNumber !== currentSeason || saved.episodeNumber !== currentEpisode) {
-    return { action: 'play' };
-  }
-  return resolveSavedProgressResumeAction(saved.positionMs, saved.durationMs, currentDurationMs);
-}
-
-export function resolvePlayProgressResumeAction(
-  saved: PlayProgressEntity | null,
-  currentDurationMs: number
-): MediaProgressResumeAction {
-  if (saved === null) {
-    return { action: 'play' };
-  }
-  return resolveSavedProgressResumeAction(saved.positionMs, saved.durationMs, currentDurationMs);
-}
+// 续播决策 pure functions 已在 Module 2 收口到 `PlaybackProgressService`。
+// 这里 re-export 仅为了保持外部对 `PlayerPage` 顶层 export 符号的 import 兼容。
+export {
+  resolveSavedProgressResumeAction,
+  resolveMediaProgressResumeAction,
+  resolvePlayProgressResumeAction
+} from "../../services/playbackProgress/PlaybackResumeDecision";
 
 function buildPlayerEpisodeCode(seasonNumber: number, episodeNumber: number): string {
   const sn = seasonNumber > 0 ? seasonNumber : 0;
@@ -299,9 +268,41 @@ export struct PlayerPage {
   private episodeAutoplayTimerId: number = -1;
   /** 文件不存在时待 pop 的 videoId（-1 表示无） */
   private fileNotFoundVideoId: number = -1;
+  /**
+   * Module 2 收口后的续播 + 持久化 façade。
+   * 延迟初始化：第一次访问 `this.progressService` 时创建，确保 `this.videoPlayerController` /
+   * `this.currentMediaKey` 等 page state 已就绪。
+   */
+  private progressService?: PlaybackProgressService = undefined;
   @Local showEpisodeAutoplayOverlay: boolean = false
   @Local episodeAutoplayRemainingSeconds: number = 0
   @Local episodeAutoplayNextTitle: string = ''
+
+  /**
+   * 懒构造 service。
+   *
+   * 因为 page 字段都在 `this` 上且 `currentMediaKey` 在切换时会被修改，
+   * 用 `getContext: () => ({...})` 回调让 service 每次实时读取最新值。
+   */
+  private getProgressService(): PlaybackProgressService {
+    if (this.progressService === undefined) {
+      this.progressService = new PlaybackProgressService({
+        controller: this.videoPlayerController,
+        getContext: (): PlaybackProgressContext => {
+          return {
+            mediaKey: this.currentMediaKey,
+            season: this.currentMediaSeason,
+            episode: this.currentMediaEpisode
+          };
+        },
+        onResumeDialog: (posMs: number): void => {
+          this.pendingSeekMs = posMs;
+          this.showResumeDialog = true;
+        }
+      });
+    }
+    return this.progressService;
+  }
 
   aboutToAppear(): void {
     if (UmamiAnalyticsService.isInitialized()) {
@@ -432,68 +433,81 @@ export struct PlayerPage {
 
   private resumePlaybackForParam(pageParam: PlayerPageParam): void {
     const mediaKey = pageParam.mediaKey ?? '';
-    if (mediaKey.length > 0) {
-      const directStart = pageParam.startPositionMs ?? 0;
-      const directResumeAction: MediaProgressResumeAction = directStart > 0
-        ? { action: 'seek', positionMs: directStart }
-        : { action: 'play' };
+    if (mediaKey.length === 0) {
+      this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+        resumeAction: 'play'
+      });
+      this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
+      this.videoPlayerController.play().catch(() => {});
+      return;
+    }
+    const directStart = pageParam.startPositionMs ?? 0;
+    // 直接走 pageStartPosition 决策，跳过 DB 读。
+    if (directStart > 0) {
       this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
         savedPositionMs: directStart,
-        resumeAction: directResumeAction.action,
-        resumePositionMs: directResumeAction.positionMs ?? 0
+        resumeAction: 'seek',
+        resumePositionMs: directStart
       });
       this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
         savedPositionMs: directStart,
-        resumeAction: directResumeAction.action,
-        resumePositionMs: directResumeAction.positionMs ?? 0
+        resumeAction: 'seek',
+        resumePositionMs: directStart
       });
-      if (directResumeAction.action === 'seek' && directResumeAction.positionMs !== undefined && directResumeAction.positionMs > 0) {
-        this.videoPlayerController.seek(directResumeAction.positionMs, 'prepared_resume_seek').catch(() => {});
-        return;
-      }
-      MediaProgressStore.get(mediaKey).then((saved) => {
-        const resumeAction = resolveMediaProgressResumeAction(
-          saved,
-          this.videoPlayerController.duration,
-          this.currentMediaSeason,
-          this.currentMediaEpisode
-        );
-        const savedPositionMs = saved?.positionMs ?? 0;
-        const resumePositionMs = resumeAction.positionMs ?? 0;
-        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
-          savedPositionMs,
-          resumeAction: resumeAction.action,
-          resumePositionMs
-        });
-        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
-          savedPositionMs,
-          resumeAction: resumeAction.action,
-          resumePositionMs
-        });
-        if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
-          this.videoPlayerController.seek(resumeAction.positionMs, 'prepared_resume_seek').catch(() => {});
-          return;
-        }
-        if (resumeAction.action === 'clear_and_play') {
-          MediaProgressStore.clear(mediaKey).catch(() => {});
-        }
-        this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
-        this.videoPlayerController.play().catch(() => {});
-      }).catch(() => {
-        this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
-          resumeAction: 'play'
-        });
-        this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
-          resumeAction: 'play'
-        });
-        this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
-        this.videoPlayerController.play().catch(() => {});
-      });
+      this.videoPlayerController.seek(directStart, 'prepared_resume_seek').catch(() => {});
       return;
     }
-    this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
-      resumeAction: 'play'
+    // 走 service 决策媒体级续播（含 DB 读 + near-end 判定）。
+    this.getProgressService().decideMediaResume({
+      mediaKey,
+      pageStartPositionMs: directStart,
+      currentDurationMs: this.videoPlayerController.duration,
+      currentSeason: this.currentMediaSeason,
+      currentEpisode: this.currentMediaEpisode
+    }).then((decision) => {
+      const savedPositionMs = decision.positionMs ?? 0;
+      this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+        savedPositionMs,
+        resumeAction: decision.action === 'dialog' ? 'dialog' : decision.action,
+        resumePositionMs: savedPositionMs
+      });
+      this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+        savedPositionMs,
+        resumeAction: decision.action === 'dialog' ? 'dialog' : decision.action,
+        resumePositionMs: savedPositionMs
+      });
+      this.applyMediaResumeDecision(decision);
+    }).catch(() => {
+      this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
+        resumeAction: 'play'
+      });
+      this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
+        resumeAction: 'play'
+      });
+      this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
+      this.videoPlayerController.play().catch(() => {});
     });
+  }
+
+  /**
+   * 把 `decideMediaResume` 返回的决策落到 player 上。
+   *
+   * 与原 `PlayerPage.resumePlaybackForParam` 中内联分支等价。
+   */
+  private applyMediaResumeDecision(decision: PlaybackResumeDecision): void {
+    if (decision.action === 'seek' && decision.positionMs !== undefined && decision.positionMs > 0) {
+      this.videoPlayerController.seek(decision.positionMs, 'prepared_resume_seek').catch(() => {});
+      return;
+    }
+    if (decision.action === 'clear_and_play') {
+      if (decision.mediaKey !== undefined && decision.mediaKey.length > 0) {
+        MediaProgressStore.clear(decision.mediaKey).catch(() => {});
+      }
+      this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
+      this.videoPlayerController.play().catch(() => {});
+      return;
+    }
+    // action === 'play'
     this.videoPlayerController.rememberResumeAutoplayDecision(true, 'prepared_resume_play');
     this.videoPlayerController.play().catch(() => {});
   }
@@ -509,48 +523,47 @@ export struct PlayerPage {
         return;
       }
       const videoId = pageParam.videoId ?? 0;
-      FileSourceDatabase.getInstance().getPlayProgress(videoId).then((saved) => {
+      // 走 service 决策视频级续播。`onResumeDialog` 回调已通过 service 配置注入，
+      // 会负责设置 pendingSeekMs / showResumeDialog / savedPositionMs / totalDurationMs。
+      this.getProgressService().decidePlayResume({
+        videoId,
+        currentDurationMs: this.videoPlayerController.duration,
+        pageStartPositionMs: pageParam.startPositionMs ?? 0
+      }).then((decision) => {
         if (token !== this.pageParamToken) {
           return;
         }
-        const savedPositionMs = saved?.positionMs ?? 0;
-        const resumeAction = resolvePlayProgressResumeAction(saved, this.videoPlayerController.duration);
-        if (resumeAction.action === 'seek' && resumeAction.positionMs !== undefined && resumeAction.positionMs > 0) {
-          this.savedPositionMs = resumeAction.positionMs;
+        const savedPositionMs = decision.positionMs ?? 0;
+        // `dialog` 决策：service 已通过 onResumeDialog 设置了 pendingSeekMs / showResumeDialog。
+        // 这里再补 savedPositionMs / totalDurationMs 两个 page 状态字段（用于 UI 显示）。
+        if (decision.action === 'dialog' && decision.positionMs !== undefined) {
+          this.savedPositionMs = decision.positionMs;
           this.totalDurationMs = this.videoPlayerController.duration > 0
             ? this.videoPlayerController.duration
-            : (saved?.durationMs ?? 0);
-          this.pendingSeekMs = resumeAction.positionMs;
-          this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
-            savedPositionMs,
-            resumeAction: 'dialog',
-            resumePositionMs: resumeAction.positionMs
-          });
-          this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
-            savedPositionMs,
-            resumeAction: 'dialog',
-            resumePositionMs: resumeAction.positionMs
-          });
-          this.showResumeDialog = true;
-          return;
+            : 0;
         }
-        if (resumeAction.action === 'clear_and_play') {
+        if (decision.action === 'clear_and_play') {
+          // 与原行为一致：把 buildProgressContext 用作 play_progress 清理回写。
           const progressContext = this.buildProgressContext(pageParam);
-          progressContext.durationMs = saved?.durationMs ?? 0;
+          progressContext.durationMs = this.videoPlayerController.duration > 0
+            ? this.videoPlayerController.duration
+            : 0;
           progressContext.updatedAt = Date.now();
           FileSourceDatabase.getInstance().upsertPlayProgress(progressContext).catch(() => {});
         }
         this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
           savedPositionMs,
-          resumeAction: resumeAction.action,
-          resumePositionMs: resumeAction.positionMs ?? 0
+          resumeAction: decision.action === 'dialog' ? 'dialog' : decision.action,
+          resumePositionMs: savedPositionMs
         });
         this.emitResumeDiagnosticLog('prepared_resume_decision', pageParam, {
           savedPositionMs,
-          resumeAction: resumeAction.action,
-          resumePositionMs: resumeAction.positionMs ?? 0
+          resumeAction: decision.action === 'dialog' ? 'dialog' : decision.action,
+          resumePositionMs: savedPositionMs
         });
-        this.videoPlayerController.play().catch(() => {});
+        if (decision.action !== 'dialog') {
+          this.videoPlayerController.play().catch(() => {});
+        }
       }).catch(() => {
         this.emitResumeDiagnosticLog('saved_progress_resolved', pageParam, {
           resumeAction: 'play'
@@ -600,126 +613,39 @@ export struct PlayerPage {
   }
 
   private persistCurrentPlaybackState(): void {
-    this.videoPlayerController.saveProgressNow();
-    if (this.currentMediaKey.length === 0) {
-      return;
-    }
-    const posMs = this.videoPlayerController.currentTime;
-    const durMs = this.videoPlayerController.duration;
-    if (durMs <= 0) {
-      return;
-    }
-    if (MediaProgressStore.isNearEnd(posMs, durMs)) {
-      MediaProgressStore.clear(this.currentMediaKey).catch(() => {});
-      return;
-    }
-    if (posMs > 0) {
-      MediaProgressStore.save(
-        this.currentMediaKey,
-        posMs,
-        durMs,
-        this.currentMediaSeason,
-        this.currentMediaEpisode
-      ).catch(() => {});
-    }
+    // 切集前 fire-and-forget 持久化：play_progress 立即写，media_progress 异步落盘。
+    this.getProgressService().persistNow().catch(() => {});
   }
 
   private async resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
-    if (item.sourceId === undefined || item.sourceId <= 0) {
+    // 第一阶段：协议拼装与已落库元数据已收口到 SourceAdapterService。
+    // 后续字段映射仍由 PlayerPage 维护，确保 ResolvedEpisodePlaybackSource 现有契约不变。
+    const resolved = await sourceAdapter.resolveEpisode({
+      sourceId: item.sourceId,
+      filePath: item.videoPath,
+      videoId: item.videoId
+    });
+    if (resolved === null) {
       return null;
-    }
-    const db = FileSourceDatabase.getInstance();
-    const fileSource = await db.getFileSourceById(item.sourceId);
-    if (fileSource === null) {
-      return null;
-    }
-    let url = '';
-    let httpHeader: Record<string, string> | undefined = undefined;
-    if (fileSource.type === FileSourceType.SMB) {
-      const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
-      const port = smbConfig.port ?? 445;
-      const user = encodeURIComponent(smbConfig.username);
-      const pass = encodeURIComponent(smbConfig.password);
-      const encodedPath = item.videoPath.split('/').map((seg: string): string => {
-        if (seg.length === 0) {
-          return '';
-        }
-        let decoded = seg;
-        try {
-          decoded = decodeURIComponent(seg);
-        } catch {
-          decoded = seg;
-        }
-        return encodeURIComponent(decoded);
-      }).join('/');
-      url = `smb://${user}:${pass}@${smbConfig.host}:${port}${encodedPath}`;
-    } else if (fileSource.type === FileSourceType.WEBDAV) {
-      const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig;
-      const protocol = config.protocol ?? 'http';
-      const host = config.url ?? '';
-      const port = config.port ?? (protocol === 'https' ? 443 : 80);
-      const rootPath = (config.rootPath ?? '').replace(/\/$/, '');
-      const baseUrl = `${protocol}://${host}:${port}${rootPath}`;
-      const webdavConfig: WebDAVConfig = {
-        baseUrl,
-        username: config.username ?? '',
-        password: config.password ?? '',
-        timeout: 30000
-      };
-      const client = new WebDAVClient(webdavConfig);
-      url = client.getFullUrl(item.videoPath);
-      const authHeader = client.getAuthHeaderPublic();
-      if (authHeader.length > 0) {
-        httpHeader = { 'Authorization': authHeader };
-      }
-    } else {
-      return null;
-    }
-
-    const videoEntity = await db.getVideoByPath(item.videoPath);
-    let durationHintMs = item.durationMs ?? 0;
-    let presetAudioTracks: PresetAudioTrack[] | undefined = undefined;
-    let presetSubtitleTracks: PresetSubtitleTrack[] | undefined = undefined;
-    if (videoEntity !== null) {
-      durationHintMs = videoEntity.durationMs ?? durationHintMs;
-      if (videoEntity.audioTracksJson !== undefined && videoEntity.audioTracksJson !== null &&
-          videoEntity.audioTracksJson.length > 0) {
-        const audioTracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[];
-        const mappedAudioTracks = FfprobeUtil.toPresetAudioTracks(audioTracks);
-        if (mappedAudioTracks.length > 0) {
-          presetAudioTracks = mappedAudioTracks;
-        }
-      }
-      if (videoEntity.subtitleTracksJson !== undefined && videoEntity.subtitleTracksJson !== null &&
-          videoEntity.subtitleTracksJson.length > 0) {
-        const subtitleTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[];
-        const mappedSubtitleTracks = FfprobeUtil.toPresetSubtitleTracks(subtitleTracks);
-        if (mappedSubtitleTracks.length > 0) {
-          presetSubtitleTracks = mappedSubtitleTracks;
-        }
-      }
-    }
-
-    let startPositionMs = 0;
-    const progressVideoId = item.videoId ?? videoEntity?.id ?? 0;
-    if (progressVideoId > 0) {
-      const savedProgress = await db.getPlayProgress(progressVideoId);
-      if (savedProgress !== null && savedProgress.positionMs > 0) {
-        const isWatched = savedProgress.durationMs > 0
-          && savedProgress.positionMs >= savedProgress.durationMs * 0.95;
-        if (!isWatched) {
-          startPositionMs = savedProgress.positionMs;
-        }
-      }
     }
     const resolvedSource: ResolvedEpisodePlaybackSource = {
-      url,
-      httpHeader,
-      durationHintMs: durationHintMs > 0 ? durationHintMs : undefined,
-      presetAudioTracks,
-      presetSubtitleTracks,
-      startPositionMs: startPositionMs > 0 ? startPositionMs : undefined
+      url: resolved.url
     };
+    if (Object.keys(resolved.httpHeader).length > 0) {
+      resolvedSource.httpHeader = resolved.httpHeader;
+    }
+    if (resolved.durationHintMs !== undefined) {
+      resolvedSource.durationHintMs = resolved.durationHintMs;
+    }
+    if (resolved.presetAudioTracks !== undefined) {
+      resolvedSource.presetAudioTracks = resolved.presetAudioTracks;
+    }
+    if (resolved.presetSubtitleTracks !== undefined) {
+      resolvedSource.presetSubtitleTracks = resolved.presetSubtitleTracks;
+    }
+    if (resolved.startPositionMs !== undefined) {
+      resolvedSource.startPositionMs = resolved.startPositionMs;
+    }
     return resolvedSource;
   }
 
@@ -1072,18 +998,7 @@ export struct PlayerPage {
     .onReady((context) => {
       // 订阅 App 切后台事件，确保进度立即落盘
       emitter.on(PlayerEvents.APP_BACKGROUND, () => {
-        this.videoPlayerController.saveProgressNow();
-        // 媒体级进度：切后台时保存当前位置
-        if (this.currentMediaKey.length > 0) {
-          const posMs = this.videoPlayerController.currentTime;
-          const durMs = this.videoPlayerController.duration;
-          if (posMs > 0 && durMs > 0) {
-            MediaProgressStore.save(
-              this.currentMediaKey, posMs, durMs,
-              this.currentMediaSeason, this.currentMediaEpisode
-            ).catch(() => {});
-          }
-        }
+        this.getProgressService().persistNow().catch(() => {});
       });
       // 订阅文件不存在事件：记录 videoId 并自动退出播放页
       emitter.on(PlayerEvents.FILE_INACCESSIBLE, (event: emitter.EventData) => {
@@ -1098,16 +1013,7 @@ export struct PlayerPage {
 
       // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
       this.mediaProgressTimerId = setInterval(() => {
-        if (this.currentMediaKey.length > 0) {
-          const posMs: number = this.videoPlayerController.currentTime;
-          const durMs: number = this.videoPlayerController.duration;
-          if (posMs > 0 && durMs > 0) {
-            MediaProgressStore.save(
-              this.currentMediaKey, posMs, durMs,
-              this.currentMediaSeason, this.currentMediaEpisode
-            ).catch(() => {});
-          }
-        }
+        this.getProgressService().persistNow().catch(() => {});
       }, 10000);
       this.episodeAutoplayTimerId = setInterval(() => {
         this.syncEpisodeAutoplayState()
@@ -1147,43 +1053,26 @@ export struct PlayerPage {
       clearInterval(this.episodeAutoplayTimerId);
       this.episodeAutoplayTimerId = -1;
     }
-    // 媒体级进度：完播则清除，否则保存当前位置；结束后通知继续播放栏刷新
-    if (this.currentMediaKey.length > 0) {
-      const posMs = this.videoPlayerController.currentTime;
-      const durMs = this.videoPlayerController.duration;
-      console.info(`[PlayerPage][REFRESH] aboutToDisappear: currentMediaKey=${this.currentMediaKey} posMs=${posMs} durMs=${durMs}`);
-      // duration 未就绪时跳过完播判断，避免 duration=0 误清除进度
-      if (durMs > 0) {
-        if (MediaProgressStore.isNearEnd(posMs, durMs)) {
-          MediaProgressStore.clear(this.currentMediaKey).then(() => {
-            console.info('[PlayerPage][REFRESH] clear 完成，emit MEDIA_PROGRESS_SAVED');
-            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-          }).catch(() => {
-            console.warn('[PlayerPage][REFRESH] clear 失败，仍 emit MEDIA_PROGRESS_SAVED');
-            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-          });
-        } else if (posMs > 0) {
-          MediaProgressStore.save(
-            this.currentMediaKey, posMs, durMs,
-            this.currentMediaSeason, this.currentMediaEpisode
-          ).then(() => {
-            console.info('[PlayerPage][REFRESH] save 完成，emit MEDIA_PROGRESS_SAVED');
-            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-          }).catch(() => {
-            console.warn('[PlayerPage][REFRESH] save 失败，仍 emit MEDIA_PROGRESS_SAVED');
-            emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-          });
-        } else {
-          console.info('[PlayerPage][REFRESH] posMs=0，直接 emit MEDIA_PROGRESS_SAVED');
-          emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
-        }
-      } else {
-        console.info('[PlayerPage][REFRESH] durMs=0，直接 emit MEDIA_PROGRESS_SAVED');
+    // 媒体级进度：完播则清除，否则保存当前位置；结束后通知继续播放栏刷新。
+    // 委托给 PlaybackProgressService.persistNow() 编排，
+    // page 端只负责根据 outcome 决定是否 emit MEDIA_PROGRESS_SAVED。
+    const posMs = this.videoPlayerController.currentTime;
+    const durMs = this.videoPlayerController.duration;
+    console.info(`[PlayerPage][REFRESH] aboutToDisappear: currentMediaKey=${this.currentMediaKey} posMs=${posMs} durMs=${durMs}`);
+    this.getProgressService().persistNow().then((outcome: PersistOutcome) => {
+      // 与原行为一致：clear / save / posMs=0 路径都 emit，让首页「继续播放」刷新。
+      // durMs=0 / mediaKey 为空 路径不 emit（无可写目标或 durMs 未就绪）。
+      if (outcome === 'cleared' || outcome === 'saved' || outcome === 'noop_position_zero') {
+        console.info(`[PlayerPage][REFRESH] outcome=${outcome}，emit MEDIA_PROGRESS_SAVED`);
         emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+      } else {
+        console.info(`[PlayerPage][REFRESH] outcome=${outcome}，跳过 emit`);
       }
-    } else {
-      console.info('[PlayerPage][REFRESH] currentMediaKey 为空，跳过 emit');
-    }
+    }).catch(() => {
+      // service 异常时仍 emit，保持与原"save 失败仍 emit"路径兼容。
+      console.warn('[PlayerPage][REFRESH] persistNow 失败，仍 emit MEDIA_PROGRESS_SAVED');
+      emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+    });
     this.videoPlayerController.saveProgressNow()
     this.videoPlayerController.release()
   }

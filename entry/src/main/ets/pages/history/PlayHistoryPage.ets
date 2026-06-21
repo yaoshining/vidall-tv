@@ -1,9 +1,8 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaProgressEntry, MediaItem, MovieEntity, TvSeriesEntity } from '../../db/models/MediaEntity';
-import { FileSourceType, SMBSourceConfig } from '../../db/models/FileSourceEntity';
 import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { PlayerPage, PlayerPageParam } from '../player/index';
-import { WebDAVClient, WebDAVConfig } from '../../lib/WebDAVClient';
+import { defaultSourceAdapterService as sourceAdapter } from '../../services/sourceAdapter/SourceAdapterService';
 import promptAction from '@ohos.promptAction';
 import { BusinessError, emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../../components/core/player/Constants';
@@ -285,60 +284,26 @@ export struct PlayHistoryPage {
 
   /**
    * 构建播放 URL。支持 SMB 和 WebDAV 两种文件源类型。
+   *
+   * 已迁移到 SourceAdapterService，本方法仅负责调用 service 并把结果映射回
+   * 历史页原有的 `PlayUrlResult` 结构，保持下游 `playItemAsync` 逻辑不变。
    */
   private async buildPlayUrl(sourceId: number, filePath: string): Promise<PlayUrlResult | null> {
-    const db = FileSourceDatabase.getInstance();
     try {
-      const fileSource = await db.getFileSourceById(sourceId);
+      const fileSource = await FileSourceDatabase.getInstance().getFileSourceById(sourceId);
       if (fileSource === null) {
         return null;
       }
-      if (fileSource.type === FileSourceType.SMB) {
-        const smbConfig = JSON.parse(fileSource.configJson) as SMBSourceConfig;
-        const port = smbConfig.port ?? 445;
-        const user = encodeURIComponent(smbConfig.username);
-        const pass = encodeURIComponent(smbConfig.password);
-        const encodedPath = filePath.split('/').map((seg: string): string => {
-          if (seg.length === 0) {
-            return '';
-          }
-          let decoded: string = seg;
-          try {
-            decoded = decodeURIComponent(seg);
-          } catch {
-            decoded = seg;
-          }
-          return encodeURIComponent(decoded);
-        }).join('/');
-        const fullUrl = 'smb://' + user + ':' + pass + '@' + smbConfig.host + ':' + port.toString() + encodedPath;
-        const result: PlayUrlResult = { fileUrl: '', url: fullUrl, httpHeader: {} };
-        return result;
-      } else if (fileSource.type === FileSourceType.WEBDAV) {
-        const config = JSON.parse(fileSource.configJson) as Record<string, string>;
-        const protocol = config['protocol'] ?? 'http';
-        const host = config['url'] ?? '';
-        const webdavPort = config['port'] ?? (protocol === 'https' ? '443' : '80');
-        const rawRootPath = (config['rootPath'] ?? '').replace(/\/$/, '');
-        // 确保前导 / 避免拼出错误路径（Thread 7）
-        const rootPath = rawRootPath.length > 0 && !rawRootPath.startsWith('/')
-          ? '/' + rawRootPath
-          : rawRootPath;
-        const baseUrl = protocol + '://' + host + ':' + webdavPort + rootPath;
-        const webdavConfig: WebDAVConfig = {
-          baseUrl,
-          username: config['username'] ?? '',
-          password: config['password'] ?? '',
-          timeout: 30000,
-        };
-        const client = new WebDAVClient(webdavConfig);
-        const fullUrl = client.getFullUrl(filePath);
-        const authHeader = client.getAuthHeaderPublic();
-        const httpHeader: Record<string, string> =
-          authHeader.length > 0 ? { 'Authorization': authHeader } : {};
-        const result: PlayUrlResult = { fileUrl: '', url: fullUrl, httpHeader };
-        return result;
+      const resolved = await sourceAdapter.resolveFromFileSource(fileSource, filePath, 0);
+      if (resolved === null) {
+        return null;
       }
-      return null;
+      const result: PlayUrlResult = {
+        fileUrl: '',
+        url: resolved.url,
+        httpHeader: resolved.httpHeader
+      };
+      return result;
     } catch (e) {
       return null;
     }

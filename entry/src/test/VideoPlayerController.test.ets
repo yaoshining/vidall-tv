@@ -309,6 +309,10 @@ class InitPlayerDiagnosticVideoPlayerController extends VideoPlayerController {
     return this.injectedPlayer
   }
 
+  protected override createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
+    return this.injectedPlayer
+  }
+
   protected override emitResumeDiagnosticRecord(recordText: string): void {
     const logPrefix = '[resume] '
     const payloadText = recordText.startsWith(logPrefix)
@@ -330,6 +334,10 @@ class InitPlayerDelayedSeekFallbackController extends VideoPlayerController {
   }
 
   protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
+
+  protected override createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
     return this.injectedPlayer
   }
 
@@ -368,6 +376,10 @@ class ReloadPreparedLifecycleController extends VideoPlayerController {
   private readonly injectedPlayer: MockFallbackPlayer = new MockFallbackPlayer()
 
   protected override createAvPlayerAdapter(): IPlayer {
+    return this.injectedPlayer
+  }
+
+  protected override createAdapterForBackend(_backend: PlayerBackend): IPlayer | undefined {
     return this.injectedPlayer
   }
 
@@ -880,6 +892,7 @@ export default function videoPlayerControllerTest() {
       accessor.backend = 'ijkplayer'
       accessor.player = player
       accessor.subtitleAdapter = subtitleAdapter
+      accessor.currentVideoData = buildVideoData('fallback-pending-resume')
       accessor.currentTime = 0
       accessor.duration = player.duration
       accessor.progress = 0
@@ -989,6 +1002,7 @@ export default function videoPlayerControllerTest() {
       accessor.backend = 'ijkplayer'
       accessor.player = fallbackPlayer
       accessor.subtitleAdapter = fallbackSubtitleAdapter
+      accessor.currentVideoData = buildVideoData('episode-fallback')
       accessor.currentTime = 0
       accessor.duration = fallbackPlayer.duration
       accessor.progress = 0
@@ -1031,6 +1045,7 @@ export default function videoPlayerControllerTest() {
       accessor.backend = 'ijkplayer'
       accessor.player = fallbackPlayer
       accessor.subtitleAdapter = fallbackSubtitleAdapter
+      accessor.currentVideoData = buildVideoData('episode-pause-fallback')
       accessor.currentTime = 0
       accessor.duration = fallbackPlayer.duration
       accessor.progress = 0
@@ -1328,6 +1343,7 @@ export default function videoPlayerControllerTest() {
       accessor.player = firstSessionPlayer
       accessor.subtitleAdapter = firstSessionSubtitleAdapter
       accessor.playbackSessionId = 1
+      accessor.currentVideoData = buildVideoData('same-backend-resume')
       accessor.currentTime = 0
       accessor.duration = firstSessionPlayer.duration
       accessor.progress = 0

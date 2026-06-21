@@ -1073,15 +1073,10 @@ export default function playerPageTest() {
 
     it('媒体级进度接近完播时会改为清理进度后继续播放', 0, () => {
       const mediaKey = 'media_progress_episode_tmdb_tmdb-9527_s1_e7'
-      const nearEndEntry: MediaProgressEntry = {
-        mediaKey,
-        positionMs: 1720000,
-        durationMs: 1800000,
-        lastPlayedAt: 1,
-        seasonNumber: 1,
-        episodeNumber: 7
-      }
-      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const nearEndEntry = new MediaProgressEntry(
+        mediaKey, 1720000, 1800000, 1, 1, 7
+      )
+      const action = resolveMediaProgressResumeAction(
         nearEndEntry,
         1800000,
         1,
@@ -1093,15 +1088,10 @@ export default function playerPageTest() {
     })
 
     it('重新进入同季同集且存在有效进度时会生成 seek 决策', 0, () => {
-      const savedEntry: MediaProgressEntry = {
-        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
-        positionMs: 420000,
-        durationMs: 1800000,
-        lastPlayedAt: 1,
-        seasonNumber: 1,
-        episodeNumber: 7
-      }
-      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const savedEntry = new MediaProgressEntry(
+        'media_progress_episode_tmdb_tmdb-9527_s1_e7', 420000, 1800000, 1, 1, 7
+      )
+      const action = resolveMediaProgressResumeAction(
         savedEntry,
         1800000,
         1,
@@ -1113,15 +1103,10 @@ export default function playerPageTest() {
     })
 
     it('重新进入同一视频但没有有效进度时会直接播放', 0, () => {
-      const noProgressEntry: MediaProgressEntry = {
-        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
-        positionMs: 0,
-        durationMs: 1800000,
-        lastPlayedAt: 1,
-        seasonNumber: 1,
-        episodeNumber: 7
-      }
-      const action: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const noProgressEntry = new MediaProgressEntry(
+        'media_progress_episode_tmdb_tmdb-9527_s1_e7', 0, 1800000, 1, 1, 7
+      )
+      const action = resolveMediaProgressResumeAction(
         noProgressEntry,
         1800000,
         1,
@@ -1133,21 +1118,16 @@ export default function playerPageTest() {
     })
 
     it('重新进入不同季或不同集时不会错误复用旧进度', 0, () => {
-      const savedEntry: MediaProgressEntry = {
-        mediaKey: 'media_progress_episode_tmdb_tmdb-9527_s1_e7',
-        positionMs: 420000,
-        durationMs: 1800000,
-        lastPlayedAt: 1,
-        seasonNumber: 1,
-        episodeNumber: 7
-      }
-      const actionForDifferentSeason: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const savedEntry = new MediaProgressEntry(
+        'media_progress_episode_tmdb_tmdb-9527_s1_e7', 420000, 1800000, 1, 1, 7
+      )
+      const actionForDifferentSeason = resolveMediaProgressResumeAction(
         savedEntry,
         1800000,
         2,
         7
       )
-      const actionForDifferentEpisode: MediaProgressResumeAction = resolveMediaProgressResumeAction(
+      const actionForDifferentEpisode = resolveMediaProgressResumeAction(
         savedEntry,
         1800000,
         1,

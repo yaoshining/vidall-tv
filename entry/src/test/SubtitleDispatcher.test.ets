@@ -125,6 +125,7 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
 
       const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
+      // 失效场景使用 clearUserBindingForce（清空 key），binding 应为 null
       expect(binding).assertNull();
     });
 
@@ -161,6 +162,7 @@ export default function subtitleDispatcherTest() {
       expect(resolution.type).assertEqual('none');
 
       const binding: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
+      // 失效场景使用 clearUserBindingForce（清空 key），binding 应为 null
       expect(binding).assertNull();
     });
 
@@ -169,7 +171,7 @@ export default function subtitleDispatcherTest() {
       await setup.dispatcher.saveUserBinding(VIDEO_PATH, SUBTITLE_URL, 'local-file');
       await setup.dispatcher.clearUserBinding(VIDEO_PATH);
       const result: SubtitleBinding | null = await setup.dispatcher.getUserBinding(VIDEO_PATH);
-      expect(result).assertNull();
+      expect(result?.subtitleType).assertEqual('disabled');
     });
   });
 }

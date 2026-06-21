@@ -8,7 +8,7 @@ import { SubtitleCacheManager } from './SubtitleCacheManager';
 // ─────────────────────────────────────────────
 
 /** 用户字幕绑定类型 */
-export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded' | 'internal';
+export type SubtitleBindingType = 'local-file' | 'cached' | 'downloaded' | 'internal' | 'disabled';
 
 /** 用户字幕绑定记录（存储在 AppPreferences 中） */
 export interface SubtitleBinding {
@@ -18,7 +18,7 @@ export interface SubtitleBinding {
    * 字幕标识符，语义因 subtitleType 而异：
    * - `local-file`：外置字幕的完整 URL
    * - `downloaded` / `cached`：本地缓存文件路径
-   * - `internal`：内置轨道的 displayName（用于按名称重定位轨道索引）
+    * - `internal`：优先使用 `@idx:<internalIndex>` 稳定 token（兼容历史 displayName）
    */
   subtitlePath: string;
   /** 绑定类型 */
@@ -61,6 +61,7 @@ export interface SubtitleCacheContext {
  *   5. 无字幕 → 返回 { type: 'none' }
  */
 export class SubtitleDispatcher {
+  private static readonly INTERNAL_INDEX_TOKEN_PREFIX: string = '@idx:';
   private readonly cacheManager: SubtitleCacheManager;
 
   constructor(cacheManager?: SubtitleCacheManager) {
@@ -80,6 +81,21 @@ export class SubtitleDispatcher {
     return `${PrefKey.SUBTITLE_BINDING_PREFIX}_${hash.slice(0, 12)}`;
   }
 
+  private parseInternalBindingIndexToken(subtitlePath: string): number {
+    if (!subtitlePath.startsWith(SubtitleDispatcher.INTERNAL_INDEX_TOKEN_PREFIX)) {
+      return -1;
+    }
+    const rawIndex = subtitlePath.substring(SubtitleDispatcher.INTERNAL_INDEX_TOKEN_PREFIX.length);
+    if (rawIndex.length === 0) {
+      return -1;
+    }
+    const parsedIndex = Number.parseInt(rawIndex, 10);
+    if (Number.isNaN(parsedIndex)) {
+      return -1;
+    }
+    return parsedIndex;
+  }
+
   // ──────────────────────────────────────────
   // 公开 API
   // ──────────────────────────────────────────
@@ -97,7 +113,12 @@ export class SubtitleDispatcher {
         return null;
       }
       const parsed = JSON.parse(raw) as Record<string, string | number>;
-      if (!parsed['videoPath'] || !parsed['subtitlePath'] || !parsed['subtitleType'] || !parsed['savedAt']) {
+      // disabled 标记可能 subtitlePath 为空；其它类型必须有 4 字段。
+      if (parsed['subtitleType'] === 'disabled') {
+        if (!parsed['videoPath'] || !parsed['savedAt']) {
+          return null;
+        }
+      } else if (!parsed['videoPath'] || !parsed['subtitlePath'] || !parsed['subtitleType'] || !parsed['savedAt']) {
         return null;
       }
       const binding: SubtitleBinding = {
@@ -136,15 +157,57 @@ export class SubtitleDispatcher {
   }
 
   /**
-   * 清除用户字幕绑定。
-   * 在用户关闭字幕或绑定 URL 匹配失败时调用。
+   * 清除用户字幕绑定（标记 disabled 状态）。
+   *
+   * 历史行为：把 AppPreferences 里的 binding key 清空。
+   * 改造后：写入 `{ subtitleType: 'disabled' }` 标记用户主动关闭过字幕。
+   *
+   * 之所以改成"标记"而不是"清空"：
+   * - 步骤 1 看到 disabled 返回 `{ type: 'user-specified', trackIndex: -1 }`
+   *   （**显式关闭字幕**，避免 adapter 自动选轨继续显示字幕，而非 return none 让 adapter 自行处理）
+   * - 步骤 4（lastUsed 自动恢复）**仍然能命中** metadata.json.lastUsed 指向的缓存字幕
+   * - 这样：
+   *   1. 关闭字幕后重开视频不会自动应用 lastUsed（用户主动意图生效）
+   *   2. 缓存字幕文件**不会被清除**，仍可通过后续扩展在菜单中列出供用户重新启用
+   *
+   * 注意事项：使用本方法必须确认调用方表达的是"用户主动关闭字幕"语义。
+   * 如果是"绑定失效/轨道列表变化"等**非用户主动**的清理场景，应改用
+   * `clearUserBindingForce`（直接清空 key），避免误写 disabled 标记导致
+   * 下次进入同一视频时字幕被强制关闭。
    */
   async clearUserBinding(videoPath: string): Promise<void> {
     try {
       const key = await this.buildKey(videoPath);
-      await AppPreferences.set(key, '');
+      const binding: SubtitleBinding = {
+        videoPath,
+        subtitlePath: '',
+        subtitleType: 'disabled',
+        savedAt: Date.now()
+      };
+      await AppPreferences.set(key, JSON.stringify(binding));
     } catch (e) {
       console.error(`[SubtitleDispatcher] clearUserBinding 失败: ${String(e)}`);
+    }
+  }
+
+  /**
+   * 强制清空用户字幕绑定（不写 disabled 标记）。
+   *
+   * 调用场景：avplayer → ijkplayer 格式回退时。fallback 不是用户主动行为，
+   * 应当不继承 disabled 状态，让 `resolveSubtitle` 步骤 4 仍能命中 lastUsed 自动恢复缓存字幕。
+   *
+   * 与 `clearUserBinding` 的区别：
+   * - `clearUserBinding` 写 `{ subtitleType: 'disabled' }` 标记（v2 fix 引入，保留"用户主动关闭"语义）
+   * - `clearUserBindingForce` 直接清空 key，让 resolveSubtitle 走原始步骤 4 命中逻辑
+   *
+   * 失败仅 warn，不抛。
+   */
+  async clearUserBindingForce(videoPath: string): Promise<void> {
+    try {
+      const key = await this.buildKey(videoPath);
+      await AppPreferences.set(key, '');
+    } catch (e) {
+      console.error(`[SubtitleDispatcher] clearUserBindingForce 失败: ${String(e)}`);
     }
   }
 
@@ -153,7 +216,7 @@ export class SubtitleDispatcher {
    *
    * - 步骤 1：查用户绑定
    *   - local-file：在 allSubtitleTracks 中按 URL 精确匹配（外置字幕）
-   *   - internal：在 allSubtitleTracks 中按 displayName 精确匹配（内置字幕）
+  *   - internal：优先按 @idx token 匹配 internalIndex，再兼容 displayName（内置字幕）
    * - 步骤 2-3：adapter 已处理，此处不介入（返回 none，让 adapter 的自动选轨生效）
    * - 步骤 4：查本地缓存（需要传入 cacheContext）
    * - 步骤 5：返回 { type: 'none' }
@@ -171,6 +234,14 @@ export class SubtitleDispatcher {
     try {
       const binding = await this.getUserBinding(videoPath);
       if (binding !== null) {
+        // 用户主动关闭过字幕 → 返回 user-specified trackIndex=-1，让控制器显式关闭字幕
+        // 注意：返回 { type: 'none' } 会让适配器的自动选轨保留，导致字幕仍显示。
+        // metadata.json.lastUsed 不会被清除，缓存文件保留供未来 UI 重新加载。
+        if (binding.subtitleType === 'disabled') {
+          console.info(`[SubtitleDispatcher] 步骤1命中 disabled 用户标记，返回 trackIndex=-1 关闭字幕`);
+          const disabled: SubtitleResolution = { type: 'user-specified', trackIndex: -1 };
+          return disabled;
+        }
         if (binding.subtitleType === 'local-file') {
           // 外置字幕：按 URL 精确匹配
           let foundIndex = -1;
@@ -186,15 +257,49 @@ export class SubtitleDispatcher {
             return resolution;
           } else {
             console.warn(`[SubtitleDispatcher] 绑定 URL 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
-            await this.clearUserBinding(videoPath);
+            // 注：失效清理使用 clearUserBindingForce（清空 key）而不是 clearUserBinding（写 disabled 标记）。
+            // clearUserBinding 会写入 { subtitleType: 'disabled' }，等价于"用户主动关闭字幕"，
+            // 会在后续 resolveSubtitle 步骤 1 短路返回 trackIndex=-1，错误地把"轨道列表变化/绑定失效"
+            // 当作"用户主动关闭"处理，导致下次进入同一视频时字幕被强制关闭。
+            // 失效清理应当让 adapter / 缓存字幕按正常流程接管，而非继承 disabled 状态。
+            await this.clearUserBindingForce(videoPath);
           }
         } else if (binding.subtitleType === 'internal') {
-          // 内置字幕：按 displayName 精确匹配
+          // 内置字幕：优先按 @idx token 精确匹配 internalIndex，兼容历史 displayName 匹配。
           let foundIndex = -1;
+          const boundInternalIndex = this.parseInternalBindingIndexToken(binding.subtitlePath);
+          if (boundInternalIndex >= 0) {
+            for (let i = 0; i < allSubtitleTracks.length; i++) {
+              const track = allSubtitleTracks[i];
+              const trackInternalIndex = track.internalIndex ?? -1;
+              if (track.kind === 'internal' && trackInternalIndex === boundInternalIndex) {
+                foundIndex = i;
+                console.info(`[SubtitleDispatcher] 步骤1 internal token 匹配: token=${binding.subtitlePath} index=${i}`);
+                break;
+              }
+            }
+          }
+
+          // 兼容历史 binding（displayName）
           for (let i = 0; i < allSubtitleTracks.length; i++) {
-            if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === binding.subtitlePath) {
-              foundIndex = i;
-              break;
+            if (foundIndex < 0) {
+              if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === binding.subtitlePath) {
+                foundIndex = i;
+                break;
+              }
+            }
+          }
+          if (foundIndex < 0) {
+            // 模糊匹配：binding.subtitlePath 形如 "英语 (SRT)" 时，剥去 " (xxx)" 后缀再与轨道 displayName 比对
+            const boundBase = binding.subtitlePath.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            if (boundBase.length > 0 && boundBase !== binding.subtitlePath) {
+              for (let i = 0; i < allSubtitleTracks.length; i++) {
+                if (allSubtitleTracks[i].kind === 'internal' && allSubtitleTracks[i].displayName === boundBase) {
+                  foundIndex = i;
+                  console.info(`[SubtitleDispatcher] 步骤1 internal 模糊匹配: binding="${binding.subtitlePath}" → displayName="${allSubtitleTracks[i].displayName}" index=${i}`);
+                  break;
+                }
+              }
             }
           }
           if (foundIndex >= 0) {
@@ -203,7 +308,8 @@ export class SubtitleDispatcher {
             return resolution;
           } else {
             console.warn(`[SubtitleDispatcher] 绑定 displayName 不在轨道列表中，自动清除: ${binding.subtitlePath}`);
-            await this.clearUserBinding(videoPath);
+            // 同样：失效清理使用 clearUserBindingForce，避免误写 disabled 标记导致下次进入视频时字幕被强制关闭。
+            await this.clearUserBindingForce(videoPath);
           }
         }
         // downloaded / cached → step 4 处理

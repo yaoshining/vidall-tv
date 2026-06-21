@@ -12,18 +12,18 @@ import {
   saveEpisodeAutoplayEnabled
 } from './EpisodeAutoplayPreferences'
 import { common } from '@kit.AbilityKit'
-import {
-  OpenSubtitlesClient,
-  SubtitleSearchResult,
-  ProxyQuotaExceededError,
-  ProxyUnavailableError,
-  InvalidApiKeyError,
-  SubtitleDownloadError
-} from '../../../lib/OpenSubtitlesClient'
-import { SubtitleDownloader, SubtitleStorageContext } from '../../../subtitle/SubtitleDownloader'
-import { SubtitleCacheManager } from '../../../subtitle/SubtitleCacheManager'
+// Module 3 收口：原 `OpenSubtitlesClient` / `SubtitleDownloader` / `SubtitleCacheManager`
+// + 4 个具体 Error 类的 import 已删除，全部通过 SubtitleAcquisitionService 编排。
+import { SubtitleSearchResult } from '../../../services/subtitleAcquisition/SubtitleAcquisitionTypes'
 import { parseFileName, buildSearchTitles } from '../../../lib/ScrapeClient'
 import { loadSubtitleSearchPreferenceSnapshot } from '../../../subtitle/SubtitleLanguagePreference'
+import {
+  defaultSubtitleAcquisitionService as subtitleService
+} from '../../../services/subtitleAcquisition/SubtitleAcquisitionService'
+import {
+  SubtitleAcquisitionError,
+  CachedSubtitleEntry
+} from '../../../services/subtitleAcquisition/SubtitleAcquisitionTypes'
 
 @ComponentV2
 struct VideoControls {
@@ -44,6 +44,18 @@ struct VideoControls {
   // ── 进度条 hover tooltip ──
   @Local hoverTimeMs: number = 0      // hover/焦点位置对应的时间（ms）
   @Local sliderWidth: number = 0      // Slider 组件实际宽度（vp）
+  /**
+   * 已下载字幕缓存列表（来自 SubtitleCacheManager.metadata.json）。
+   * 用户主动关闭字幕后仍可在"字幕"菜单看到，供重新启用。
+   * 加载时通过 `videoController.stableVideoSrcForCache` 拿稳定 key，
+   * 避免 SMB 代理 URL 端口漂移导致缓存目录 hash 不一致。
+   */
+  @Local cachedSubtitles: CachedSubtitleEntry[] = []
+  /**
+   * 过滤后的缓存字幕列表（剔除 `allSubtitleTracks` 中已展示的）。
+   * 避免菜单同一字幕在两个分组中重复出现。
+   */
+  @Local visibleCachedSubtitles: CachedSubtitleEntry[] = []
 
   /** 将毫秒格式化为 HH:MM:SS 或 MM:SS */
   private formatTime(ms: number): string {
@@ -157,6 +169,42 @@ struct VideoControls {
             this.enableAutoHide()
           })
         })
+
+        // 已下载字幕（来自 SubtitleCacheManager.metadata.json）
+        // 用户主动关闭字幕后仍可在此分组重新启用；
+        // 同时按 fileName 后缀对 allSubtitleTracks 做去重，避免双列。
+        //
+        // 不加"已下载字幕"标题：标题出现的时机（lastUsed 自动应用时无，禁用时有时无）会让用户感知到分组语义变化；
+        // 不带标题的列表与上方"关闭字幕 + allSubtitleTracks"组视觉一致，列表项内的副标题（"已下载 · 语言"）已能传达来源。
+        if (this.visibleCachedSubtitles.length > 0) {
+          ForEach(this.visibleCachedSubtitles, (entry: CachedSubtitleEntry) => {
+            ListItem() {
+              Row() {
+                Column({ space: 2 }) {
+                  Text(entry.fileName)
+                    .fontSize(16)
+                    .fontColor(Color.White)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text('已下载 · ' + (entry.language.length > 0 ? entry.language : '未知语言'))
+                    .fontSize(11)
+                    .fontColor('#FFA500')
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+              }
+              .width('100%')
+              .height(60)
+              .justifyContent(FlexAlign.SpaceBetween)
+              .padding({ left: 20, right: 20 })
+            }
+            .onClick(() => {
+              this.enableCachedSubtitle(entry).catch(() => {})
+              this.showSubtitleMenu = false
+              this.enableAutoHide()
+            })
+          }, (entry: CachedSubtitleEntry): string => entry.fileName)
+        }
 
         // 字幕延迟调整（仅在外部 SRT 字幕激活时显示；内嵌轨由播放器原生渲染，延迟不适用）
         if (this.videoController.activeSubtitleIndex >= 0 && this.videoController.hasSrtSubtitle) {
@@ -340,6 +388,10 @@ struct VideoControls {
           .onBlur(() => { this.subtitleButtonFocused = false })
           .onClick(() => {
             this.showSubtitleMenu = !this.showSubtitleMenu
+            // 打开字幕菜单时刷新"已下载"列表（dialog 打开后异步加载完成时也会触发重渲染）
+            if (this.showSubtitleMenu) {
+              this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+            }
             clearTimeout(this.closeTimer)
           })
 
@@ -585,11 +637,103 @@ struct VideoControls {
 
   aboutToAppear(): void {
     this.enableAutoHide()
+    // 加载已下载字幕缓存列表（fire-and-forget，菜单分组仅在 visibleCachedSubtitles.length > 0 时显示）
+    this.loadCachedSubtitles()
   }
 
   aboutToDisappear(): void {
     clearTimeout(this.closeTimer)
     clearTimeout(this.seekTimer)
+  }
+
+  private async loadCachedSubtitles(): Promise<void> {
+    try {
+      const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const filesDir: string = hostCtx.filesDir;
+      // SMB 源必须用 stableVideoSrcForCache 避免代理 URL 端口漂移导致 hash 不一致
+      const stableVideoSrc = this.videoController.stableVideoSrcForCache;
+      this.cachedSubtitles = await subtitleService.listCached({
+        filesDir,
+        stableVideoSrc,
+        sourceType: this.videoController.subtitleSourceType,
+        sourceId: this.videoController.subtitleSourceId
+      });
+      this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+    } catch {
+      this.cachedSubtitles = [];
+      this.visibleCachedSubtitles = [];
+    }
+  }
+
+  /**
+   * 剔除 `allSubtitleTracks` 中已展示的缓存条目，避免菜单重复。
+   * 匹配规则：缓存条目的 fileName 是否为任一轨道 URL 的后缀（与 SubtitleDispatcher 步骤 4 一致）。
+   */
+  private filterVisibleCached(cached: CachedSubtitleEntry[]): CachedSubtitleEntry[] {
+    const tracks = this.videoController.allSubtitleTracks;
+    const filtered: CachedSubtitleEntry[] = [];
+    for (let i = 0; i < cached.length; i++) {
+      const entry = cached[i];
+      const fileName = entry.fileName;
+      let existsInTracks = false;
+      for (let j = 0; j < tracks.length; j++) {
+        const trackUrl = tracks[j].url ?? '';
+        if (trackUrl.length > 0 && trackUrl.endsWith(fileName)) {
+          existsInTracks = true;
+          break;
+        }
+      }
+      if (!existsInTracks) {
+        filtered.push(entry);
+      }
+    }
+    return filtered;
+  }
+
+  /**
+   * 用户点击"已下载字幕"分组中的某条缓存条目。
+   *
+   * 编排：
+   * 1. `subtitleService.enableCached()` 计算本地路径（保持 Module 3 收口）
+   * 2. `videoController.addExternalSubtitle()` 挂载
+   * 3. `videoController.switchSubtitleTrack()` 自动切换到新轨道
+   * 4. `subtitleService.markLastUsed()` 异步写入 lastUsed + 覆盖 disabled binding
+   */
+  private async enableCachedSubtitle(entry: CachedSubtitleEntry): Promise<void> {
+    try {
+      const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const filesDir: string = hostCtx.filesDir;
+      const stableVideoSrc = this.videoController.stableVideoSrcForCache;
+      const sourceType = this.videoController.subtitleSourceType;
+      const sourceId = this.videoController.subtitleSourceId;
+      const outcome = await subtitleService.enableCached({
+        filesDir,
+        stableVideoSrc,
+        sourceType,
+        sourceId,
+        fileName: entry.fileName
+      });
+      await this.videoController.addExternalSubtitle(outcome.localPath);
+      const newIndex = this.videoController.allSubtitleTracks.length - 1;
+      if (newIndex >= 0) {
+        await this.videoController.switchSubtitleTrack(newIndex);
+      }
+      // markLastUsed 写 metadata.lastUsed，fire-and-forget。
+      // 关键：覆盖 disabled 标记 → 下次进入同视频，resolveSubtitle 步骤 1 命中 enabled binding 而非 disabled。
+      subtitleService.markLastUsed({
+        fileName: entry.fileName,
+        stableVideoSrc,
+        sourceType,
+        sourceId,
+        filesDir
+      }).catch(() => {});
+      // addExternalSubtitle 把这条字幕加到了 allSubtitleTracks 末尾，
+      // 重算过滤列表让"已下载"分组不再重复展示
+      this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+    } catch (e) {
+      const errMsg = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
+      console.error(`[SubtitleCache] 启用已下载字幕失败: ${errMsg}`);
+    }
   }
 }
 
@@ -1813,7 +1957,7 @@ export struct SubtitleSelectorDrawerDialog {
 
   /**
    * 触发在线字幕搜索。
-   * 流程：提取文件名 → 解析搜索词 → 读取语言偏好 → 调用 OpenSubtitlesClient.search()
+   * 流程：提取文件名 → 解析搜索词 → 读取语言偏好 → 调用 SubtitleAcquisitionService.search()。
    */
   private async startSearch(): Promise<void> {
     this.isSearching = true
@@ -1851,32 +1995,64 @@ export struct SubtitleSelectorDrawerDialog {
 
       console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${searchYear}, 季: ${searchSeason}, 集: ${searchEpisode}, tmdbId: ${searchTmdbId ?? 'none'}`)
 
-      const client = new OpenSubtitlesClient()
-      const results = await client.search(query, languages, searchYear, searchSeason, searchEpisode, searchMediaType, searchTmdbId)
+      // 搜索词构造仍属 UI 编排（刮削优先 vs 文件名回退），实际检索委托给 service。
+      const results = await subtitleService.search({
+        query,
+        languages,
+        year: searchYear,
+        seasonNumber: searchSeason,
+        episodeNumber: searchEpisode,
+        mediaType: searchMediaType,
+        tmdbId: searchTmdbId
+      });
 
       this.searchResults = results
       this.searchNoResults = results.length === 0
     } catch (e) {
-      if (e instanceof ProxyQuotaExceededError) {
-        this.showSearchToast('今日字幕搜索配额已用完，请在设置页填写您自己的 API Key', 4000)
-        this.showSearchResults = false
-      } else if (e instanceof ProxyUnavailableError) {
-        this.showSearchToast('字幕服务暂时不可用，请在设置页填写您自己的 API Key', 4000)
-        this.showSearchResults = false
-      } else if (e instanceof InvalidApiKeyError) {
-        this.showSearchToast('API Key 无效，请在设置页重新填写', 4000)
-        this.showSearchResults = false
-      } else {
-        this.showSearchToast('字幕搜索失败，请稍后重试', 4000)
-        this.showSearchResults = false
-      }
+      // 错误分类来自 service 的 SubtitleAcquisitionError.kind，UI 只决定 Toast 文案。
+      this.showSearchToast(this.toastMessageForAcquisitionError(e, '搜索'), 4000)
+      this.showSearchResults = false
     } finally {
       this.isSearching = false
     }
   }
 
   /**
+   * 根据 `SubtitleAcquisitionError.kind` 输出对应 Toast 文案。
+   * 搜索与下载共用同一组文案，避免 UI 重复维护。
+   */
+  private toastMessageForAcquisitionError(
+    e: object,
+    verb: '搜索' | '下载'
+  ): string {
+    // ArkTS 严格模式禁止在 object 上访问任意属性，因此用 instanceof 收窄后再读 kind。
+    if (e instanceof SubtitleAcquisitionError) {
+      const kind = e.kind;
+      switch (kind) {
+        case 'proxy_quota_exceeded':
+          return `今日字幕${verb}配额已用完，请在设置页填写您自己的 API Key`;
+        case 'proxy_unavailable':
+          return `字幕服务暂时不可用，请在设置页填写您自己的 API Key`;
+        case 'invalid_api_key':
+          return 'API Key 无效，请在设置页重新填写';
+        case 'download_failed':
+          return `字幕${verb}失败，请稍后重试`;
+        case 'unknown':
+        default:
+          return `字幕${verb}失败，请稍后重试`;
+      }
+    }
+    return `字幕${verb}失败，请稍后重试`;
+  }
+
+  /**
    * 下载并尝试加载用户选择的字幕条目。
+   *
+   * 编排：
+   * 1. `subtitleService.download()` 落盘字幕
+   * 2. `videoController.addExternalSubtitle()` 挂载
+   * 3. `videoController.switchSubtitleTrack()` 自动切换
+   * 4. `subtitleService.markLastUsed()` 异步记 lastUsed（fire-and-forget，失败不抛）
    */
   private async downloadSubtitle(result: SubtitleSearchResult): Promise<void> {
     if (this.isDownloading) {
@@ -1887,21 +2063,19 @@ export struct SubtitleSelectorDrawerDialog {
 
     try {
       const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const storageCtx: SubtitleStorageContext = { filesDir: hostCtx.filesDir }
-      const downloader = new SubtitleDownloader(storageCtx)
-      const downloadResult = await downloader.download(
-        result.fileId,
-        this.videoController.stableVideoSrcForCache,
-        this.sourceType,
-        this.sourceId,
-        result.languageCode,
-        result.downloadCount
-      )
+      const filesDir: string = hostCtx.filesDir
+      const downloadOutcome = await subtitleService.download({
+        result,
+        stableVideoSrc: this.videoController.stableVideoSrcForCache,
+        sourceType: this.sourceType,
+        sourceId: this.sourceId,
+        filesDir
+      });
 
       this.showSearchToast('字幕下载成功', 2000)
-      console.info(`[SubtitleSearch] 字幕已写入: ${downloadResult.localPath}`)
+      console.info(`[SubtitleSearch] 字幕已写入: ${downloadOutcome.localPath}`)
 
-      await this.videoController.addExternalSubtitle(downloadResult.localPath)
+      await this.videoController.addExternalSubtitle(downloadOutcome.localPath)
 
       // 下载成功后自动切换到该字幕轨道（新增轨道总是追加到列表末尾）
       const newSubtitleIndex = this.videoController.allSubtitleTracks.length - 1
@@ -1909,30 +2083,20 @@ export struct SubtitleSelectorDrawerDialog {
         await this.videoController.switchSubtitleTrack(newSubtitleIndex)
       }
 
-      const cacheManager = new SubtitleCacheManager()
-      await cacheManager.setLastUsedSubtitle(
-        hostCtx.filesDir,
-        this.sourceType,
-        this.sourceId,
-        this.videoController.stableVideoSrcForCache,
-        downloadResult.fileName
-      )
+      // 标记最近使用字幕：按 OpenSpec 3.4 scenario 2 失败不影响下载挂载，fire-and-forget。
+      subtitleService.markLastUsed({
+        fileName: downloadOutcome.fileName,
+        stableVideoSrc: this.videoController.stableVideoSrcForCache,
+        sourceType: this.sourceType,
+        sourceId: this.sourceId,
+        filesDir
+      }).catch(() => {});
 
       this.showSearchResults = false
     } catch (e) {
       const errMsg = (e as object as Record<string, string>)['message'] ?? JSON.stringify(e)
       console.error(`[SubtitleDownload] 下载异常 type=${(e as object)?.constructor?.name} msg=${errMsg}`)
-      if (e instanceof SubtitleDownloadError) {
-        this.showSearchToast('字幕下载失败，请稍后重试', 4000)
-      } else if (e instanceof InvalidApiKeyError) {
-        this.showSearchToast('API Key 无效，请在设置页重新填写', 4000)
-      } else if (e instanceof ProxyQuotaExceededError) {
-        this.showSearchToast('今日字幕搜索配额已用完，请在设置页填写您自己的 API Key', 4000)
-      } else if (e instanceof ProxyUnavailableError) {
-        this.showSearchToast('字幕服务暂时不可用，请在设置页填写您自己的 API Key', 4000)
-      } else {
-        this.showSearchToast('字幕下载失败，请稍后重试', 4000)
-      }
+      this.showSearchToast(this.toastMessageForAcquisitionError(e, '下载'), 4000)
     } finally {
       this.isDownloading = false
       this.downloadingFileId = -1

@@ -3436,15 +3436,15 @@ export class FileSourceDatabase {
         rs.close();
         return null;
       }
-      const entry: MediaProgressEntry = {
-        mediaKey: rs.getString(rs.getColumnIndex('media_key')),
-        positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
-        durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
-        lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
-        episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
-        seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
-        isWatched: rs.getLong(rs.getColumnIndex('is_watched'))
-      };
+      const entry = new MediaProgressEntry(
+        rs.getString(rs.getColumnIndex('media_key')),
+        rs.getLong(rs.getColumnIndex('position_ms')),
+        rs.getLong(rs.getColumnIndex('duration_ms')),
+        rs.getLong(rs.getColumnIndex('last_played_at')),
+        rs.getLong(rs.getColumnIndex('season_number')),
+        rs.getLong(rs.getColumnIndex('episode_number'))
+      );
+      entry.isWatched = rs.getLong(rs.getColumnIndex('is_watched'));
       rs.close();
       return entry;
     } catch (error) {
@@ -3587,15 +3587,15 @@ export class FileSourceDatabase {
         ` ORDER BY last_played_at DESC LIMIT 1`;
       rs = await this.rdbStore.querySql(sql, [`${episodePrefix}%`, oldKey]);
       if (rs.goToNextRow()) {
-        const entry: MediaProgressEntry = {
-          mediaKey: rs.getString(rs.getColumnIndex('media_key')),
-          positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
-          durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
-          lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
-          episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
-          seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
-          isWatched: rs.getLong(rs.getColumnIndex('is_watched')),
-        };
+        const entry = new MediaProgressEntry(
+          rs.getString(rs.getColumnIndex('media_key')),
+          rs.getLong(rs.getColumnIndex('position_ms')),
+          rs.getLong(rs.getColumnIndex('duration_ms')),
+          rs.getLong(rs.getColumnIndex('last_played_at')),
+          rs.getLong(rs.getColumnIndex('season_number')),
+          rs.getLong(rs.getColumnIndex('episode_number'))
+        );
+        entry.isWatched = rs.getLong(rs.getColumnIndex('is_watched'));
         return entry;
       }
       return null;
@@ -3626,15 +3626,15 @@ export class FileSourceDatabase {
       rs = await this.rdbStore.querySql(sql);
       const result: MediaProgressEntry[] = [];
       while (rs.goToNextRow()) {
-        const entry: MediaProgressEntry = {
-          mediaKey: rs.getString(rs.getColumnIndex('media_key')),
-          positionMs: rs.getLong(rs.getColumnIndex('position_ms')),
-          durationMs: rs.getLong(rs.getColumnIndex('duration_ms')),
-          lastPlayedAt: rs.getLong(rs.getColumnIndex('last_played_at')),
-          episodeNumber: rs.getLong(rs.getColumnIndex('episode_number')),
-          seasonNumber: rs.getLong(rs.getColumnIndex('season_number')),
-          isWatched: rs.getLong(rs.getColumnIndex('is_watched')),
-        };
+        const entry = new MediaProgressEntry(
+          rs.getString(rs.getColumnIndex('media_key')),
+          rs.getLong(rs.getColumnIndex('position_ms')),
+          rs.getLong(rs.getColumnIndex('duration_ms')),
+          rs.getLong(rs.getColumnIndex('last_played_at')),
+          rs.getLong(rs.getColumnIndex('season_number')),
+          rs.getLong(rs.getColumnIndex('episode_number'))
+        );
+        entry.isWatched = rs.getLong(rs.getColumnIndex('is_watched'));
         result.push(entry);
       }
       console.info(`[DB][getAllMediaProgress] 共 ${result.length} 条记录`);

@@ -35,7 +35,7 @@ TBD - created by archiving change fix-212-eac3-prepared-fallback. Update Purpose
 
 ### Requirement: AVPlayer codec fallback SHALL 保留并恢复当前续播位置
 
-当 AVPlayer 因 PREPARED 阶段 codec 检测或 error 回调判定当前媒体不受支持并触发 fallback 时，系统 MUST 在释放旧播放器实例前捕获当前可用播放位置与恢复决策，并将该恢复决策透传给接手的后端；恢复决策 MUST 同时包含恢复位置与是否自动播放，且当 fallback 发生在 seek 已完成、自动起播已决策但播放态回调尚未到达的窗口内时，系统 MUST 保留该“待自动播放”意图，而不能仅依赖 `isPlaying` 或 `isSeeking` 的瞬时状态推断；新的后端 ready 后 MUST 按该决策恢复到对应位置并继续执行自动播放或暂停语义。
+当 AVPlayer 因 PREPARED 阶段 codec 检测或 error 回调判定当前媒体不受支持并触发 fallback 时，系统 MUST 在释放旧播放器实例前捕获当前可用播放位置与恢复决策，并将该恢复决策透传给接手的后端；恢复决策 MUST 同时包含恢复位置与是否自动播放，且当 fallback 发生在 seek 已完成、自动起播已决策但播放态回调尚未到达的窗口内时，系统 MUST 保留该"待自动播放"意图，而不能仅依赖 `isPlaying` 或 `isSeeking` 的瞬时状态推断；新的后端 ready 后 MUST 按该决策恢复到对应位置并继续执行自动播放或暂停语义。该 fallback 编排 MUST 由统一的 playback backend service 执行，但恢复位置、自动播放意图与当前用户可见行为保持兼容。
 
 #### Scenario: PREPARED 阶段主动 fallback 时保留续播位置
 
@@ -50,6 +50,11 @@ TBD - created by archiving change fix-212-eac3-prepared-fallback. Update Purpose
 - **AND** 播放会话在切换前已有已知播放位置
 - **THEN** 系统将该位置与自动播放决策透传到 fallback 后端
 - **AND** fallback 完成后继续按原决策恢复播放
+
+#### Scenario: fallback 编排由 backend service 统一执行
+- **WHEN** 当前播放会话进入 unsupported format fallback 路径
+- **THEN** 系统 SHALL 通过统一的 playback backend service 执行 backend 切换、旧实例释放与新实例恢复
+- **AND** `VideoPlayerController` 对 UI 暴露的 fallback 结果保持不变
 
 #### Scenario: seek 完成后的自动起播窗口内 fallback 仍保留自动播放意图
 

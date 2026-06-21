@@ -16,20 +16,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Guard openspec tracking
+      - name: Guard openspec archive tracking
         shell: bash
         run: |
           set -euo pipefail
 
-          tracked_files="$(git --no-pager ls-files -- openspec)"
-          if [ -n "$tracked_files" ]; then
-            echo "::error title=OpenSpec Guard Failed::检测到 openspec 目录下存在被 Git 跟踪的文件。请执行 git rm --cached -r -- openspec，并保留 .gitignore 中的 /openspec 规则。"
+          tracked_archive="$(git --no-pager ls-files -- openspec/changes/archive)"
+          if [ -n "$tracked_archive" ]; then
+            echo "::error title=OpenSpec Guard Failed::检测到 openspec/changes/archive 目录下存在被 Git 跟踪的文件。请执行 git rm --cached -r -- openspec/changes/archive，并确认 .gitignore 中存在 /openspec/changes/archive 规则。"
             echo "OpenSpec Guard Failed"
-            echo "Tracked openspec files:"
-            printf "%s\n" "$tracked_files"
-            echo "Fix: git rm --cached -r -- openspec"
-            echo "Reminder: 保留 .gitignore 中的 /openspec 规则"
+            echo "Tracked archive files:"
+            printf "%s\n" "$tracked_archive"
+            echo "Fix: git rm --cached -r -- openspec/changes/archive"
+            echo "Reminder: .gitignore 中应保留 /openspec/changes/archive 规则"
             exit 1
           fi
 
-          echo "OpenSpec Guard passed: openspec 目录仍为未跟踪状态。"
+          echo "OpenSpec Guard passed: openspec/changes/archive 目录仍为未跟踪状态。"

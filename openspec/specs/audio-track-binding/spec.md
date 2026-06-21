@@ -12,7 +12,7 @@
 - **THEN** 系统不写入任何绑定，`AppPreferences` 无变化
 
 ### Requirement: 音频轨道绑定恢复
-系统 SHALL 在每次加载视频音轨完成后，查询该视频的音轨绑定，若绑定存在且 `displayName` 匹配当前轨道列表中的某条轨道，则自动切换到该轨道。
+系统 SHALL 在每次加载视频音轨完成后，查询该视频的音轨绑定，若绑定存在且 `displayName` 匹配当前轨道列表中的某条轨道，则自动切换到该轨道。该恢复决策 MUST 通过统一的 audio track routing service 计算，但绑定语义与用户可见结果保持兼容。
 
 #### Scenario: 绑定命中时自动恢复
 - **WHEN** `loadAudioTracks()` 完成轨道列表填充
@@ -37,3 +37,8 @@
 #### Scenario: 绑定 displayName 不在轨道列表时自动清除
 - **WHEN** `resolveAudioTrack()` 在轨道列表中未找到绑定的 `displayName`
 - **THEN** 系统调用 `clearAudioBinding()` 清除该视频的音轨绑定
+
+#### Scenario: 绑定恢复由 routing service 给出建议
+- **WHEN** 当前播放会话需要根据历史音轨绑定决定初始选轨
+- **THEN** 系统 SHALL 通过统一的 audio track routing service 解析目标轨道
+- **AND** 实际 `selectTrack` 执行仍由当前播放会话完成
