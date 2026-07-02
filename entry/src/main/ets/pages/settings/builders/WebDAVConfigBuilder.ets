@@ -5,6 +5,7 @@ import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import promptAction from '@ohos.promptAction'
 import { IBestButton } from "@ibestservices/ibest-ui"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
+import { FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSource, FileSourceType, WebDAVSourceConfig } from "../../../db/models/FileSourceEntity"
 import { CancellableFunction, DebounceUtil } from "../../../utils/DebounceUtil"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
@@ -78,12 +79,11 @@ struct WebDAVConfigBuilderComponent {
     this.loadingText = '加载中...'
 
     try {
-      const store = FileSourceStore.getState()
-
       // 确保缓存已加载
+      const store: FileSourceModel = FileSourceStore.getState()
       await store.loadFileSources()
 
-      const fileSource = store.getFileSourceById(this.editingFileSourceId)
+      const fileSource: FileSource | null = store.getFileSourceById(this.editingFileSourceId)
 
       if (fileSource) {
         const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig
@@ -306,7 +306,7 @@ struct WebDAVConfigBuilderComponent {
         createdAt: Date.now()
       }
 
-      const store = FileSourceStore.getState()
+      const store: FileSourceModel = FileSourceStore.getState()
       let sourceId: number
 
       if (this.isEditMode && this.editingFileSourceId) {

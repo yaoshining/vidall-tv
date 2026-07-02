@@ -1082,16 +1082,17 @@ export class VideoPlayerController {
         MetricsService.getInstance().recordPlaybackAttempt(false, 0, this.metricsMedia ?? undefined, sourceType);
       }
       
-      if (this.backend === 'native') {
-        this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
-        return;
-      }
-      // prepare 前的 IO 文件不存在错误：通知上层页面提示用户删除元数据
+      // prepare 前的 IO 文件不存在错误：无论使用什么播放器，都应通知上层页面提示用户删除元数据
       if (!this.hasPrepared && error.message.toLowerCase().includes('io resource not found')) {
         const videoId = this.progressContext?.videoId ?? -1;
         if (videoId > 0) {
           emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: videoId } });
         }
+      }
+
+      if (this.backend === 'native') {
+        this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
+        return;
       }
       this.isLoading = false;
       this.lastErrorMessage = this.normalizePlayerError(error.message);

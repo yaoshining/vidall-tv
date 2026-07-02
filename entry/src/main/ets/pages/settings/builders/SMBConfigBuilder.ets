@@ -2,6 +2,7 @@ import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
 import { IBestButton } from "@ibestservices/ibest-ui"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
+import { FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
 import promptAction from '@ohos.promptAction'
@@ -56,9 +57,9 @@ struct SMBConfigBuilderComponent {
     this.isLoading = true
     this.loadingText = '加载中...'
     try {
-      const store = FileSourceStore.getState()
+      const store: FileSourceModel = FileSourceStore.getState()
       await store.loadFileSources()
-      const fileSource = store.getFileSourceById(this.editingFileSourceId)
+      const fileSource: FileSource | null = store.getFileSourceById(this.editingFileSourceId)
       if (fileSource) {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
         this.serverName = fileSource.name
@@ -215,7 +216,7 @@ struct SMBConfigBuilderComponent {
 
     let originalCreatedAt: number = Date.now();
     if (this.isEditMode && this.editingFileSourceId !== undefined) {
-      const existing = FileSourceStore.getState().getFileSourceById(this.editingFileSourceId);
+      const existing: FileSource | null = FileSourceStore.getState().getFileSourceById(this.editingFileSourceId);
       if (existing) {
         originalCreatedAt = existing.createdAt;
       }
@@ -229,7 +230,7 @@ struct SMBConfigBuilderComponent {
         configJson: JSON.stringify(config),
         createdAt: originalCreatedAt
       }
-      const store = FileSourceStore.getState()
+      const store: FileSourceModel = FileSourceStore.getState()
       if (this.isEditMode && this.editingFileSourceId !== undefined) {
         fileSource.id = this.editingFileSourceId
         await store.updateFileSource(fileSource)

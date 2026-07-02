@@ -3,8 +3,10 @@ import { SidebarStore } from "../../stores/sidebar/SidebarStore"
 import { TabBarStore } from "../../stores/tabbar/TabBarStore"
 import { HomeTopBar } from "./topbar"
 import { TabContentBuilder } from "./tabs"
-import { TabItem, TabItemCode } from "../../stores/tabbar/TabBarModel"
+import { TabItem, TabItemCode, TabBarModel } from "../../stores/tabbar/TabBarModel"
 import { FileSourceStore } from "../../stores/files/FileSourceStore"
+import { FileSourceModel } from "../../stores/files/FileSourceModel"
+import { SidebarModel } from "../../stores/sidebar/SidebarModel"
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService"
 
 @ComponentV2
@@ -14,9 +16,9 @@ import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsSe
   height: 1575,
 })
 export struct HomePage {
-  tabBarModel = TabBarStore.getState()
-  sidebarModel = SidebarStore.getState()
-  fileSourceModel = FileSourceStore.getState()
+  tabBarModel: TabBarModel = TabBarStore.getState()
+  sidebarModel: SidebarModel = SidebarStore.getState()
+  fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local handlePopup: boolean = true;
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
 

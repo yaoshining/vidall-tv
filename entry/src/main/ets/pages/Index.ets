@@ -1,4 +1,5 @@
 import { SidebarStore } from '../stores/sidebar/SidebarStore';
+import { SidebarModel } from '../stores/sidebar/SidebarModel';
 import { FileExplorerPage } from './files';
 import { SmbFileExplorerPage } from './files/SmbFileExplorerPage';
 import { HomePage } from './home';
@@ -14,7 +15,7 @@ import { MediaResultPage } from './search';
 @Entry
 @ComponentV2
 struct Index {
-  sidebarModel = SidebarStore.getState()
+  sidebarModel: SidebarModel = SidebarStore.getState()
   @Provider('pageStack') pageStack: NavPathStack = new NavPathStack();
 
   @Builder
