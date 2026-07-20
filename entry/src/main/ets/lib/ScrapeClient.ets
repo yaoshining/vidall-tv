@@ -1,7 +1,6 @@
 import http from '@ohos.net.http';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
-import { isWeakSemanticTitleText } from './MediaTypeClassifier';
 
 // ─────────────────────────────────────────────
 // 公共数据结构
@@ -184,9 +183,9 @@ function isUsefulEnglishTerm(term: string): boolean {
  * 策略：
  * - 纯中文标题（无英文）：中文 → 完整标题
  * - 纯英文标题（无中文）：英文 → 完整标题
- * - 中英混合：优先英文（精度高），但若英文部分不足（冠词/太短），回退到中文
+ * - 中英混合：优先英文，同时保留中文，避免只用英文别名时产生歧义
  *
- * 例："权力的游戏 Game of Thrones" → ["Game of Thrones"]
+ * 例："权力的游戏 Game of Thrones" → ["Game of Thrones", "权力的游戏"]
  * 例："The 庆余年"                 → ["庆余年"]（英文仅为冠词，无意义）
  * 例："权力的游戏" → ["权力的游戏"]
  * 例："Game of Thrones" → ["Game of Thrones"]
@@ -202,15 +201,10 @@ export function buildSearchTitles(title: string): string[] {
 
   if (hasChinese && hasEnglish) {
     if (isUsefulEnglishTerm(englishPart)) {
-      // 英文部分有意义，优先用英文（精度高、不歧义）
       candidates.push(englishPart);
-    } else {
-      // 英文部分无意义（如冠词 "The"、单字母等），回退到中文
-      if (chinesePart.length >= 1) {
-        candidates.push(chinesePart);
-      } else {
-        candidates.push(title.trim());
-      }
+    }
+    if (chinesePart.length >= 1 && !candidates.includes(chinesePart)) {
+      candidates.push(chinesePart);
     }
   } else if (hasEnglish) {
     if (englishPart.length >= 2) { candidates.push(englishPart); }
@@ -222,6 +216,57 @@ export function buildSearchTitles(title: string): string[] {
     candidates.push(title.trim());
   }
   return candidates;
+}
+
+interface TvSearchCandidate {
+  title: string;
+  year?: number;
+}
+
+function extractSearchYear(title: string): number | undefined {
+  const match = title.match(/(?:^|[^0-9])((?:19|20)\d{2})(?:[^0-9]|$)/);
+  return match ? parseInt(match[1]) : undefined;
+}
+
+function removeSearchYear(title: string): string {
+  return title.replace(/[\[（(]\s*(?:19|20)\d{2}\s*[\]）)]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
+function buildTvSearchCandidates(parsedTitle: string, parsedYear: number | undefined, seriesHint?: string): TvSearchCandidate[] {
+  const candidates: TvSearchCandidate[] = [];
+  const appendTitle = (title: string, year?: number): void => {
+    const normalizedTitle = removeSearchYear(title);
+    if (normalizedTitle.length === 0 || candidates.some((candidate: TvSearchCandidate) => candidate.title === normalizedTitle)) {
+      return;
+    }
+    const candidate: TvSearchCandidate = { title: normalizedTitle, year };
+    candidates.push(candidate);
+  };
+
+  if (seriesHint !== undefined && seriesHint.trim().length > 0) {
+    appendTitle(seriesHint, extractSearchYear(seriesHint));
+  }
+  const fileTitleYear = parsedYear;
+  for (const title of buildSearchTitles(parsedTitle)) {
+    appendTitle(title, fileTitleYear);
+  }
+  return candidates;
+}
+
+function selectTvSearchResult(
+  results: TvSeriesScrapeResult[],
+  expectedYear: number | undefined
+): TvSeriesScrapeResult | null {
+  if (expectedYear === undefined) {
+    return results.length > 0 ? results[0] : null;
+  }
+  for (const result of results) {
+    const resultYear = extractSearchYear(result.firstAirDate ?? '');
+    if (resultYear === expectedYear) {
+      return result;
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────
@@ -677,17 +722,10 @@ export class ScrapeClient {
       console.warn(`[ScrapeClient] autoScrapeTvEpisode 跳过: mediaType=${effectiveMediaType} title="${parsed.title}" file=${fileName}`);
       return empty;
     }
-    const shouldUseSeriesHint = seriesHint !== undefined && seriesHint.length > 0 &&
-      (parsed.title.length === 0 || isWeakSemanticTitleText(parsed.title));
-    const effectiveTitle = shouldUseSeriesHint
-      ? seriesHint
-      : parsed.title;
-    if (effectiveTitle.length === 0) {
+    const searchCandidates = buildTvSearchCandidates(parsed.title, parsed.year, seriesHint);
+    if (searchCandidates.length === 0) {
       console.warn(`[ScrapeClient] autoScrapeTvEpisode 标题为空且无 seriesHint，跳过 file=${fileName}`);
       return empty;
-    }
-    if (effectiveTitle !== parsed.title) {
-      console.info(`[ScrapeClient] autoScrapeTvEpisode 使用 seriesHint="${seriesHint}" 作为搜索标题（文件名无剧名）: file="${fileName}"`);
     }
 
     // #191 支持显式季集号：优先使用显式参数，回退到 parseFileName 结果
@@ -695,28 +733,32 @@ export class ScrapeClient {
     const effectiveEpisodeNumber = explicitEpisodeNumber ?? parsed.episodeNumber;
     const effectiveSeasonNumber = explicitSeasonNumber ?? (explicitEpisodeNumber !== undefined ? 1 : parsed.seasonNumber);
 
-    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" → title="${effectiveTitle}" S${effectiveSeasonNumber ?? '?'}E${effectiveEpisodeNumber ?? '?'} year=${parsed.year ?? '?'}`);
-    const searchTitlesLog = buildSearchTitles(effectiveTitle);
-    console.info(`[ScrapeClient] autoScrapeTvEpisode 候选标题: ${JSON.stringify(searchTitlesLog)}`);
+    console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" S${effectiveSeasonNumber ?? '?'}E${effectiveEpisodeNumber ?? '?'}`);
+    console.info(`[ScrapeClient] autoScrapeTvEpisode 候选标题: ${JSON.stringify(searchCandidates)}`);
 
     await this.acquire();
     try {
       for (const provider of this.getActiveProviders()) {
         try {
-          const searchTitles = buildSearchTitles(effectiveTitle);
           let topSearch: TvSeriesScrapeResult | null = null;
-          for (const candidate of searchTitles) {
-            // 第一轮：带年份搜索（year= 参数，过滤精确）
-            let results = await provider.searchTv(candidate, parsed.year, 'zh-CN');
-            console.info(`[ScrapeClient] searchTv("${candidate}" year=${parsed.year ?? 'none'}) → ${results.length} 条结果${results.length > 0 ? ' 首条: ' + results[0].title + '(id=' + results[0].providerId + ')' : ''}`);
-            // 第二轮：带年份无结果时，降级为只用剧名搜索
-            if (results.length === 0 && parsed.year !== undefined) {
-              results = await provider.searchTv(candidate, undefined, 'zh-CN');
-              console.info(`[ScrapeClient] searchTv("${candidate}" 无年份降级) → ${results.length} 条结果${results.length > 0 ? ' 首条: ' + results[0].title + '(id=' + results[0].providerId + ')' : ''}`);
+          for (const candidate of searchCandidates) {
+            let results = await provider.searchTv(candidate.title, candidate.year, 'zh-CN');
+            topSearch = selectTvSearchResult(results, candidate.year);
+            console.info(
+              `[ScrapeClient] searchTv("${candidate.title}" year=${candidate.year ?? 'none'}) → ${results.length} 条结果` +
+              `${topSearch ? '，选中: ' + topSearch.title + '(id=' + topSearch.providerId + ')' : ''}`
+            );
+            // 带年份搜索没有精确年份候选时，允许降级查询，但仍拒绝年份冲突的条目。
+            if (!topSearch && candidate.year !== undefined) {
+              results = await provider.searchTv(candidate.title, undefined, 'zh-CN');
+              topSearch = selectTvSearchResult(results, candidate.year);
+              console.info(
+                `[ScrapeClient] searchTv("${candidate.title}" 无年份降级) → ${results.length} 条结果` +
+                `${topSearch ? '，选中: ' + topSearch.title + '(id=' + topSearch.providerId + ')' : ''}`
+              );
             }
-            if (results.length > 0) {
-              topSearch = results[0];
-              console.info(`[ScrapeClient] autoScrapeTvEpisode 命中候选标题="${candidate}" providerId=${topSearch.providerId}`);
+            if (topSearch) {
+              console.info(`[ScrapeClient] autoScrapeTvEpisode 命中候选标题="${candidate.title}" providerId=${topSearch.providerId}`);
               break;
             }
           }
@@ -735,16 +777,20 @@ export class ScrapeClient {
           let episode: TvEpisodeScrapeResult | null = null;
 
           if (effectiveSeasonNumber !== undefined) {
-            season = await provider.fetchSeason(series.providerId, effectiveSeasonNumber, 'zh-CN').catch((e: BusinessError) => {
-              console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${effectiveSeasonNumber}) 失败: ${JSON.stringify(e)}`);
-              return null;
-            });
+            try {
+              season = await provider.fetchSeason(series.providerId, effectiveSeasonNumber, 'zh-CN');
+            } catch (e) {
+              const err = e as BusinessError;
+              console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${effectiveSeasonNumber}) 失败: ${err.message}`);
+            }
             console.info(`[ScrapeClient] fetchSeason S${effectiveSeasonNumber} → ${season ? 'OK posterUrl=' + (season.posterUrl ? 'Y' : 'N') : 'null'}`);
             if (effectiveEpisodeNumber !== undefined) {
-              episode = await provider.fetchEpisode(series.providerId, effectiveSeasonNumber, effectiveEpisodeNumber, 'zh-CN').catch((e: BusinessError) => {
-                console.warn(`[ScrapeClient] fetchEpisode(${series.providerId}, S${effectiveSeasonNumber}E${effectiveEpisodeNumber}) 失败: ${JSON.stringify(e)}`);
-                return null;
-              });
+              try {
+                episode = await provider.fetchEpisode(series.providerId, effectiveSeasonNumber, effectiveEpisodeNumber, 'zh-CN');
+              } catch (e) {
+                const err = e as BusinessError;
+                console.warn(`[ScrapeClient] fetchEpisode(${series.providerId}, S${effectiveSeasonNumber}E${effectiveEpisodeNumber}) 失败: ${err.message}`);
+              }
               console.info(`[ScrapeClient] fetchEpisode E${effectiveEpisodeNumber} → ${episode ? 'OK title="' + (episode.title ?? '') + '"' : 'null'}`);
             }
           }
