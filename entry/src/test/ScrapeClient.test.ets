@@ -259,6 +259,116 @@ export default function scrapeClientTest() {
       }
     });
 
+    it('应按路径剧名和年份选择正确的电视剧候选', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-issue-234');
+      const incorrect = createTvSeriesScrapeResult('fake-issue-234', 'Climax!', 'tv-1954');
+      incorrect.firstAirDate = '1954-10-01';
+      const expected = createTvSeriesScrapeResult('fake-issue-234', '权欲之巅', 'tv-2026');
+      expected.firstAirDate = '2026-01-01';
+      fake.enqueueSearchTvResults([incorrect, expected]);
+      fake.enqueueFetchTvSeriesDetailResult(expected);
+      fake.enqueueFetchSeasonResult(null);
+      fake.enqueueFetchEpisodeResult(null);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeTvEpisode(
+        'Climax S01E01 - 第 1 集 - 1080p WEB-DL H264 AAC 2.0.mkv',
+        '权欲之巅(2026)',
+        'tv'
+      );
+
+      expect(result.series !== null).assertTrue();
+      if (result.series !== null) {
+        expect(result.series.providerId).assertEqual('tv-2026');
+        expect(result.series.title).assertEqual('权欲之巅');
+      }
+      expect(fake.getCallCount('searchTv')).assertEqual(1);
+      expect(fake.getCallCount('fetchTvSeriesDetail')).assertEqual(1);
+      const searchCall = fake.getLastCall('searchTv');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('权欲之巅');
+        expect(searchCall.year).assertEqual(2026);
+      }
+    });
+
+    it('应使用文件名年份约束同名路径剧集候选', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-issue-234-file-year');
+      const incorrect = createTvSeriesScrapeResult('fake-issue-234-file-year', 'Climax!', 'tv-1954');
+      incorrect.firstAirDate = '1954-10-01';
+      const expected = createTvSeriesScrapeResult('fake-issue-234-file-year', 'Climax', 'tv-2026');
+      expected.firstAirDate = '2026-01-01';
+      fake.enqueueSearchTvResults([incorrect, expected]);
+      fake.enqueueFetchTvSeriesDetailResult(expected);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeTvEpisode('Climax.(2026).S01E01.mkv', 'Climax', 'tv');
+
+      expect(result.series !== null).assertTrue();
+      if (result.series !== null) {
+        expect(result.series.providerId).assertEqual('tv-2026');
+      }
+      const searchCall = fake.getLastCall('searchTv');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Climax');
+        expect(searchCall.year).assertEqual(2026);
+      }
+    });
+
+    it('应清理未加括号和方括号包裹的路径年份', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-issue-234-normalize-year');
+      const show = createTvSeriesScrapeResult('fake-issue-234-normalize-year', 'Show', 'show-2026');
+      show.firstAirDate = '2026-01-01';
+      fake.enqueueSearchTvResults([show]);
+      fake.enqueueFetchTvSeriesDetailResult(show);
+      fake.enqueueSearchTvResults([show]);
+      fake.enqueueFetchTvSeriesDetailResult(show);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      await client.autoScrapeTvEpisode('Episode S01E01.mkv', 'Show 2026', 'tv');
+      const firstSearchCall = fake.getLastCall('searchTv');
+      expect(firstSearchCall !== null).assertTrue();
+      if (firstSearchCall !== null) {
+        expect(firstSearchCall.title).assertEqual('Show');
+        expect(firstSearchCall.year).assertEqual(2026);
+      }
+
+      await client.autoScrapeTvEpisode('Episode S01E02.mkv', 'Show【2026】', 'tv');
+      const secondSearchCall = fake.getLastCall('searchTv');
+      expect(secondSearchCall !== null).assertTrue();
+      if (secondSearchCall !== null) {
+        expect(secondSearchCall.title).assertEqual('Show');
+        expect(secondSearchCall.year).assertEqual(2026);
+      }
+    });
+
+    it('应拒绝与路径年份不一致的电视剧候选', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-issue-234-year-mismatch');
+      const incorrect = createTvSeriesScrapeResult('fake-issue-234-year-mismatch', 'Climax!', 'tv-1954');
+      incorrect.firstAirDate = '1954-10-01';
+      fake.enqueueSearchTvResults([incorrect]);
+      fake.enqueueSearchTvResults([incorrect]);
+      fake.enqueueSearchTvResults([]);
+      fake.enqueueSearchTvResults([]);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeTvEpisode('Climax S01E01.mkv', '权欲之巅(2026)', 'tv');
+
+      expect(result.series).assertEqual(null);
+      expect(result.season).assertEqual(null);
+      expect(result.episode).assertEqual(null);
+      expect(fake.getCallCount('fetchTvSeriesDetail')).assertEqual(0);
+    });
+
     /**
      * 测试用例 14：测试文件名解析 - 剧集编号识别
      */
@@ -354,10 +464,11 @@ export default function scrapeClientTest() {
   });
 
   describe('buildSearchTitles', () => {
-    it('中英混合标题只返回英文部分', 0, () => {
+    it('中英混合标题保留中英文候选', 0, () => {
       const titles: string[] = buildSearchTitles('流浪地球 The Wandering Earth');
-      expect(titles.length).assertLarger(0);
+      expect(titles.length).assertEqual(2);
       expect(titles[0].trim()).assertEqual('The Wandering Earth');
+      expect(titles[1].trim()).assertEqual('流浪地球');
     });
 
     it('纯中文标题返回中文', 0, () => {
