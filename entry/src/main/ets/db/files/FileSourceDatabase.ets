@@ -221,15 +221,27 @@ export class FileSourceDatabase {
   }
 
   private getNullableString(rs: relationalStore.ResultSet, index: number): string | undefined {
-    return rs.isColumnNull(index) ? undefined : rs.getString(index);
+    try {
+      return rs.isColumnNull(index) ? undefined : rs.getString(index);
+    } catch (_e) {
+      return undefined;
+    }
   }
 
   private getNullableLong(rs: relationalStore.ResultSet, index: number): number | undefined {
-    return rs.isColumnNull(index) ? undefined : rs.getLong(index);
+    try {
+      return rs.isColumnNull(index) ? undefined : rs.getLong(index);
+    } catch (_e) {
+      return undefined;
+    }
   }
 
   private getNullableDouble(rs: relationalStore.ResultSet, index: number): number | undefined {
-    return rs.isColumnNull(index) ? undefined : rs.getDouble(index);
+    try {
+      return rs.isColumnNull(index) ? undefined : rs.getDouble(index);
+    } catch (_e) {
+      return undefined;
+    }
   }
 
   private buildMovieSelectSql(suffix: string = ''): string {
@@ -241,6 +253,7 @@ export class FileSourceDatabase {
   }
 
   private mapMovieEntityFromProjectedRow(rs: relationalStore.ResultSet): MovieEntity {
+    try {
     const entity: MovieEntity = {
       id: rs.getLong(0),
       provider: rs.getString(1),
@@ -267,14 +280,19 @@ export class FileSourceDatabase {
       scrapedAt: rs.getLong(22)
     };
     return entity;
+    } catch (e) {
+      throw new Error(`mapMovieEntityFromProjectedRow failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   private mapTvSeriesEntityFromProjectedRow(rs: relationalStore.ResultSet): TvSeriesEntity {
-    const entity: TvSeriesEntity = {
-      id: rs.getLong(0),
-      provider: rs.getString(1),
-      providerId: rs.getString(2),
-      title: rs.getString(3),
+    let entity: TvSeriesEntity | null = null;
+    try {
+      entity = {
+        id: rs.getLong(0),
+        provider: rs.getString(1),
+        providerId: rs.getString(2),
+        title: rs.getString(3),
       originalTitle: this.getNullableString(rs, 4),
       overview: this.getNullableString(rs, 5),
       firstAirDate: this.getNullableString(rs, 6),
@@ -294,7 +312,10 @@ export class FileSourceDatabase {
       rawJson: this.getNullableString(rs, 20),
       scrapedAt: rs.getLong(21)
     };
-    return entity;
+    } catch (e) {
+      throw new Error(`mapTvSeriesEntityFromProjectedRow failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return entity!;
   }
 
   private async queryMovies(sql: string, args: relationalStore.ValueType[]): Promise<MovieEntity[]> {
@@ -2265,7 +2286,8 @@ export class FileSourceDatabase {
 
   private async cleanupOrphanScrapeMedia(): Promise<void> {
     if (this.rdbStore === null) { return; }
-    await this.rdbStore.executeSql(
+    try {
+      await this.rdbStore.executeSql(
       `DELETE FROM ${FileSourceDatabase.TABLE_TV_EPISODES} AS te ` +
       `WHERE NOT EXISTS (` +
       `  SELECT 1 FROM ${FileSourceDatabase.TABLE_SCRAPE_INFO} AS si ` +
@@ -2296,6 +2318,9 @@ export class FileSourceDatabase {
       `  WHERE si.movie_id = m.id` +
       `)`
     );
+    } catch (e) {
+      hilog.warn(0x0000, 'FileSourceDatabase', `cleanupOrphanScrapeMedia: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   private parseScrapeInfoEntity(rs: relationalStore.ResultSet): ScrapeInfoEntity {

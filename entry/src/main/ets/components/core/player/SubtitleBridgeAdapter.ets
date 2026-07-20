@@ -68,7 +68,7 @@ function tryDecode(bytes: Uint8Array, encoding: string): string {
     try {
       const decoder = new util.TextDecoder('utf-8');
       const ab: ArrayBuffer = toExactArrayBuffer(bytes);
-      const result = decoder.decode(ab as ESObject as Uint8Array);
+      const result = decoder.decodeToString(ab as ESObject as Uint8Array);
       if (result.length > 0) {
         return result;
       }
@@ -79,7 +79,7 @@ function tryDecode(bytes: Uint8Array, encoding: string): string {
   }
   const decoder = new util.TextDecoder(encoding);
   const ab: ArrayBuffer = toExactArrayBuffer(bytes);
-  return decoder.decode(ab as ESObject as Uint8Array);
+  return decoder.decodeToString(ab as ESObject as Uint8Array);
 }
 
 function buildByteArrayFromString(text: string): Uint8Array | null {
@@ -239,22 +239,26 @@ function decodeSubtitleBytes(arrayBuffer: ArrayBuffer): string {
 
   // UTF-8 BOM: EF BB BF
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-    const buf = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    return buf.toString('utf-8').replace(/^\uFEFF/, '');
+    try {
+      const buf = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      return buf.toString('utf-8').replace(/^\uFEFF/, '');
+    } catch (_e) {
+      // fall through
+    }
   }
 
   // UTF-16 LE BOM: FF FE
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
     const decoder = new util.TextDecoder('utf-16le', { ignoreBOM: true });
     const ab: ArrayBuffer = toExactArrayBuffer(bytes);
-    return decoder.decode(ab as ESObject as Uint8Array);
+    return decoder.decodeToString(ab as ESObject as Uint8Array);
   }
 
   // UTF-16 BE BOM: FE FF
   if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
     const decoder = new util.TextDecoder('utf-16be', { ignoreBOM: true });
     const ab: ArrayBuffer = toExactArrayBuffer(bytes);
-    return decoder.decode(ab as ESObject as Uint8Array);
+    return decoder.decodeToString(ab as ESObject as Uint8Array);
   }
 
   // 启发式检测：扫描前 4KB，判断是否为合法 UTF-8
@@ -625,13 +629,23 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     const isVtt = lower.endsWith('.vtt');
     const formatLabel = isAss ? 'ASS' : (isVtt ? 'VTT' : 'SRT');
 
-    const stat = fs.statSync(localPath);
-    const buf = new ArrayBuffer(stat.size);
-    const file = fs.openSync(localPath, fs.OpenMode.READ_ONLY);
-    fs.readSync(file.fd, buf);
-    fs.closeSync(file);
-
-    const text = decodeSubtitlePayload(buf);
+    let text = ''
+    try {
+      const stat = fs.statSync(localPath);
+      const buf = new ArrayBuffer(stat.size);
+      const file = fs.openSync(localPath, fs.OpenMode.READ_ONLY);
+      try {
+        fs.readSync(file.fd, buf);
+      } finally {
+        fs.closeSync(file);
+      }
+      text = decodeSubtitlePayload(buf);
+    } catch (e) {
+      const error = e as BusinessError;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[addLocalSubtitle] 读取或解码本地字幕失败: ${error.message}`);
+      throw new Error(`读取或解码本地字幕失败: ${error.message}`);
+    }
     const entries = isAss ? AssFileParser.parse(text) : SrtParser.parse(text);
 
     const baseName: string = ((this.videoData?.videoSrc ?? '').split('/').pop() ?? '').replace(/\.[^.]+$/, '');

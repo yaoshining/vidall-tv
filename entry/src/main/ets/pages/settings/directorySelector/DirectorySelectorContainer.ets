@@ -175,9 +175,12 @@ export async function createDirectorySelectorSourceDescriptor(
     throw new Error(`不支持的协议: ${params.protocol}`)
   }
   
-  // 初始化 provider
-  await provider.initWithConfig(config)
-  
+  try {
+    await provider.initWithConfig(config)
+  } catch (e) {
+    const cause = e as Error
+    throw new Error(`初始化目录提供者失败: ${cause.message}`)
+  }
   const descriptor: DirectorySelectorSourceDescriptor = {
     sourceId: params.sourceId,
     protocol: provider.getProtocolKey(),

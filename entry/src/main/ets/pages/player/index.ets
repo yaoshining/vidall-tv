@@ -310,13 +310,15 @@ export struct PlayerPage {
     }
     // 注入字幕缓存上下文（filesDir 由 UIAbilityContext 获取）
     try {
-      const abilityCtx = getContext(this) as common.UIAbilityContext;
-      const subtitleCacheCtx: SubtitleCacheContext = {
-        filesDir: abilityCtx.filesDir,
-        sourceType: '',
-        sourceId: ''
-      };
-      this.videoPlayerController.setSubtitleCacheContext(subtitleCacheCtx);
+      const hostCtx = this.getUIContext().getHostContext()
+      if (hostCtx) {
+        const subtitleCacheCtx: SubtitleCacheContext = {
+          filesDir: hostCtx.filesDir,
+          sourceType: '',
+          sourceId: ''
+        };
+        this.videoPlayerController.setSubtitleCacheContext(subtitleCacheCtx);
+      }
     } catch {
       // 获取 context 失败时，步骤 4 缓存查询将跳过
     }

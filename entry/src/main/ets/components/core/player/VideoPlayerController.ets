@@ -1083,10 +1083,19 @@ export class VideoPlayerController {
       }
       
       // prepare 前的 IO 文件不存在错误：无论使用什么播放器，都应通知上层页面提示用户删除元数据
-      if (!this.hasPrepared && error.message.toLowerCase().includes('io resource not found')) {
-        const videoId = this.progressContext?.videoId ?? -1;
-        if (videoId > 0) {
-          emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: videoId } });
+      // AVPlayer 在文件缺失时返回 code=20400007 / message="No such file or directory"，
+      // native 后端在文件缺失时返回 "io resource not found"。
+      if (!this.hasPrepared) {
+        const msg = error.message.toLowerCase();
+        const isFileNotFound = msg.includes('io resource not found')
+          || msg.includes('no such file')
+          || msg.includes('not found')
+          || msg.includes('404');
+        if (isFileNotFound) {
+          const videoId = this.progressContext?.videoId ?? -1;
+          if (videoId > 0) {
+            emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: videoId } });
+          }
         }
       }
 

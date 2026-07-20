@@ -57,16 +57,19 @@ struct HomeSettingBuilderComponent {
 
   private async loadCacheSize(): Promise<void> {
     try {
-      const filesDir = getContext(this).filesDir
-      const bytes = await new SubtitleCacheManager().getTotalCacheSizeBytes(filesDir)
-      this.cacheSizeText = formatCacheSize(bytes)
+      const context = this.getUIContext().getHostContext()
+      if (context) {
+        const filesDir = context.filesDir
+        const bytes = await new SubtitleCacheManager().getTotalCacheSizeBytes(filesDir)
+        this.cacheSizeText = formatCacheSize(bytes)
+      }
     } catch {
       this.cacheSizeText = ''
     }
   }
 
   private showCacheClearConfirm(): void {
-    AlertDialog.show({
+    this.getUIContext().showAlertDialog({
       title: '清理字幕缓存',
       message: '将清空所有已下载的字幕缓存，此操作不可恢复。',
       primaryButton: {
@@ -83,7 +86,12 @@ struct HomeSettingBuilderComponent {
   private doClearCache(): void {
     if (this.isClearingCache) { return }
     this.isClearingCache = true
-    const filesDir = getContext(this).filesDir
+    const context = this.getUIContext().getHostContext()
+    if (!context) {
+      this.isClearingCache = false
+      return
+    }
+    const filesDir = context.filesDir
     const mgr = new SubtitleCacheManager()
     mgr.clearAllSubtitleCaches(filesDir).then(() => {
       this.isClearingCache = false

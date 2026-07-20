@@ -2,7 +2,6 @@ import { SettingListItem } from "../SettingListItem";
 import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { AppPreferences, PrefKey } from "../../../utils/AppPreferences";
-import promptAction from '@ohos.promptAction';
 import { UmamiAnalyticsService } from "../../../services/analytics/UmamiAnalyticsService";
 import { UmamiEventData } from "../../../services/analytics/UmamiReporter";
 
@@ -10,6 +9,12 @@ import { UmamiEventData } from "../../../services/analytics/UmamiReporter";
 struct ResourceLibrarySettingBuilderComponent {
   @Local tmdbApiKey: string = '';
   @Local isLoading: boolean = false;
+
+  private showToastSafe(message: string, duration: number = 2000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (_e) {}
+  }
 
   aboutToAppear(): void {
     this.loadSettings();
@@ -50,14 +55,10 @@ struct ResourceLibrarySettingBuilderComponent {
         const evtData: UmamiEventData = { setting_key: 'TMDB_API_KEY', new_value: value ? 'set' : 'cleared' };
         UmamiAnalyticsService.getInstance().trackEvent('settings', 'settings_changed', evtData);
       }
-      this.getUIContext().getPromptAction().showToast({
-        message: value ? 'API Key 已保存' : 'API Key 已清除'
-      });
+      this.showToastSafe(value ? 'API Key 已保存' : 'API Key 已清除');
     } catch (error) {
       console.error('[ResourceLibrarySettingBuilder] 保存失败:', JSON.stringify(error));
-      this.getUIContext().getPromptAction().showToast({
-        message: '保存失败'
-      });
+      this.showToastSafe('保存失败，请检查存储权限后重试');
     } finally {
       this.isLoading = false;
     }
