@@ -131,15 +131,18 @@ export class SubtitleCacheManager {
     const metaPath = `${dir}/${METADATA_FILE_NAME}`;
     this.mkdirp(dir);
     const text = JSON.stringify(metadata, null, 2);
-    const file = fs.openSync(metaPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+    let file: fs.File | null = null;
     try {
+      file = fs.openSync(metaPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
       fs.writeSync(file.fd, text);
     } catch (e) {
-      fs.closeSync(file);
       const be = e as BusinessError;
       throw new Error(`[SubtitleCacheManager] writeMetadata 失败: ${be.message}`);
+    } finally {
+      if (file !== null) {
+        try { fs.closeSync(file); } catch (_ignored) {}
+      }
     }
-    fs.closeSync(file);
   }
 
   private async buildDir(

@@ -76,7 +76,11 @@ export struct CastDetailPage {
   @Local bioExpanded: boolean = false;
 
   private getCacheDir(): string {
-    return getContext(this).cacheDir + '/cast';
+    const context = this.getUIContext().getHostContext()
+    if (context) {
+      return context.cacheDir + '/cast'
+    }
+    return '/tmp/cast'
   }
 
   private getCachePath(): string {
@@ -104,8 +108,10 @@ export struct CastDetailPage {
               }
             }
           }
-        } finally {
-          searchReq.destroy();
+         } catch (_e) {
+           // search request or encoding failed
+         } finally {
+           searchReq.destroy();
         }
       }
       // 若仍为 0 则无 TMDB 数据，直接退出

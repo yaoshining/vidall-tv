@@ -13,7 +13,6 @@ import {
   Cloud115Icon,
   OtherIcon
 } from "./IconBuilders";
-import promptAction from '@ohos.promptAction';
 import { FileSourceStore } from "../../../stores/files/FileSourceStore";
 import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { FileSourceModel, DirectoryItem } from "../../../stores/files/FileSourceModel";
@@ -38,6 +37,12 @@ struct FileSourceSettingBuilderComponent {
   @Local deleteTarget: FileSource | null = null
   @Local isDeletingSource: boolean = false
 
+  private showToastSafe(message: string, duration: number = 2000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (_e) {}
+  }
+
   aboutToAppear(): void {
     // 加载文件源列表
     this.loadFileSources()
@@ -49,9 +54,7 @@ struct FileSourceSettingBuilderComponent {
       await this.fileSourceModel.loadFileSources()
     } catch (error) {
       console.error('FileSourceSettingBuilder: Failed to load file sources', JSON.stringify(error))
-      this.getUIContext().getPromptAction().showToast({
-        message: '加载文件源失败'
-      } as promptAction.ShowToastOptions)
+      this.showToastSafe('加载文件源失败')
     } finally {
       this.isLoading = false
     }
@@ -113,13 +116,10 @@ struct FileSourceSettingBuilderComponent {
 
     // 检查 id 是否存在
     if (!fileSource.id) {
-      this.getUIContext().getPromptAction().showToast({
-        message: '文件源 ID 不存在'
-      } as promptAction.ShowToastOptions)
+      this.showToastSafe('文件源 ID 不存在')
       return
     }
 
-    // 根据类型跳转到对应的编辑页面
     if (fileSource.type === FileSourceType.WEBDAV) {
       const params: Record<string, Object> = {}
       params['fileSourceId'] = fileSource.id as Object
@@ -129,9 +129,7 @@ struct FileSourceSettingBuilderComponent {
       params['fileSourceId'] = fileSource.id as Object
       this.controller.pushType(SettingType.SMB_CONFIG, params as Record<string, Object>)
     } else {
-      this.getUIContext().getPromptAction().showToast({
-        message: '暂不支持编辑该协议类型'
-      } as promptAction.ShowToastOptions)
+      this.showToastSafe('暂不支持编辑该协议类型')
     }
   }
 
@@ -155,14 +153,10 @@ struct FileSourceSettingBuilderComponent {
       this.isDeletingSource = true;
       await this.fileSourceModel.deleteFileSource(target.id);
       await this.fileSourceModel.loadFileSources(true);
-      this.getUIContext().getPromptAction().showToast({
-        message: '文件源已删除'
-      } as promptAction.ShowToastOptions);
+      this.showToastSafe('文件源已删除');
     } catch (error) {
       console.error('FileSourceSettingBuilder: 删除文件源失败', JSON.stringify(error));
-      this.getUIContext().getPromptAction().showToast({
-        message: '删除失败，请重试'
-      } as promptAction.ShowToastOptions);
+      this.showToastSafe('删除失败，请重试');
     } finally {
       this.isDeletingSource = false;
       this.showDeleteDialog = false;
@@ -190,9 +184,7 @@ struct FileSourceSettingBuilderComponent {
     const sourceId = target.fileSource.id;
     if (!sourceId) {
       console.warn('FileSourceSettingBuilder: fileSource.id 未加载，中止清理');
-      this.getUIContext().getPromptAction().showToast({
-        message: '文件源信息未加载，请稍后重试'
-      } as promptAction.ShowToastOptions);
+      this.showToastSafe('文件源信息未加载，请稍后重试');
       return;
     }
     try {
@@ -202,14 +194,10 @@ struct FileSourceSettingBuilderComponent {
         sourceId,
         target.directoryPath
       );
-      this.getUIContext().getPromptAction().showToast({
-        message: '目录已清理'
-      } as promptAction.ShowToastOptions);
+      this.showToastSafe('目录已清理');
     } catch (error) {
       console.error('FileSourceSettingBuilder: 清理失败', JSON.stringify(error));
-      this.getUIContext().getPromptAction().showToast({
-        message: '清理失败，请重试'
-      } as promptAction.ShowToastOptions);
+      this.showToastSafe('清理失败，请重试');
     } finally {
       this.isCleaningUp = false;
       this.showCleanupDialog = false;
@@ -234,9 +222,7 @@ struct FileSourceSettingBuilderComponent {
 
     // 检查 id 是否存在
     if (!fileSource.id) {
-      this.getUIContext().getPromptAction().showToast({
-        message: '文件源 ID 不存在'
-      } as promptAction.ShowToastOptions)
+      this.showToastSafe('文件源 ID 不存在')
       return
     }
 
@@ -247,9 +233,7 @@ struct FileSourceSettingBuilderComponent {
         this.controller.pushType(SettingType.DIRECTORY_SELECTOR, routeParams)
       } catch (error) {
         console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
-        this.getUIContext().getPromptAction().showToast({
-          message: '解析配置失败'
-        } as promptAction.ShowToastOptions)
+        this.showToastSafe('解析配置失败')
       }
     } else if (fileSource.type === FileSourceType.SMB) {
       try {
@@ -258,14 +242,10 @@ struct FileSourceSettingBuilderComponent {
         this.controller.pushType(SettingType.DIRECTORY_SELECTOR, routeParams)
       } catch (e) {
         console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
-        this.getUIContext().getPromptAction().showToast({
-          message: '解析 SMB 配置失败'
-        } as promptAction.ShowToastOptions)
+        this.showToastSafe('解析 SMB 配置失败')
       }
     } else {
-      this.getUIContext().getPromptAction().showToast({
-        message: '该类型暂不支持文件夹管理'
-      } as promptAction.ShowToastOptions)
+      this.showToastSafe('该类型暂不支持文件夹管理')
     }
   }
 

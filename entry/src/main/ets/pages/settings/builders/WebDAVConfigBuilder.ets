@@ -2,7 +2,6 @@ import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
 import SettingType from "../SettingType"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
-import promptAction from '@ohos.promptAction'
 import { IBestButton } from "@ibestservices/ibest-ui"
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSourceModel } from "../../../stores/files/FileSourceModel"
@@ -47,6 +46,12 @@ struct WebDAVConfigBuilderComponent {
   /**
    * 跳转到下一个输入框
    */
+  private showToastSafe(message: string, duration: number = 2000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (_e) {}
+  }
+
   private focusNext(): void {
     this.currentFocusIndex++
   }
@@ -95,16 +100,12 @@ struct WebDAVConfigBuilderComponent {
         this.port = config.port
         this.rootPath = config.rootPath
       } else {
-        this.getUIContext().getPromptAction().showToast({
-          message: '文件源不存在'
-        } as promptAction.ShowToastOptions)
+        this.showToastSafe('文件源不存在')
         this.controller.popType()
       }
     } catch (error) {
       console.error('Failed to load edit data:', JSON.stringify(error))
-      this.getUIContext().getPromptAction().showToast({
-        message: '加载数据失败'
-      } as promptAction.ShowToastOptions)
+      this.showToastSafe('加载数据失败')
       this.controller.popType()
     } finally {
       this.isLoading = false
@@ -119,32 +120,30 @@ struct WebDAVConfigBuilderComponent {
     // 验证必填字段
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '服务器名称')
     if (!nameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: nameResult.message })
+      this.showToastSafe(nameResult.message)
       return
     }
 
     const urlResult = ValidationUtil.validateNotEmpty(this.serverUrl, '服务器地址')
     if (!urlResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: urlResult.message })
+      this.showToastSafe(urlResult.message)
       return
     }
 
-    // 检查 URL 格式错误
     if (this.urlError) {
-      this.getUIContext().getPromptAction()
-        .showToast({ message: '请先修正 URL 格式错误' })
+      this.showToastSafe('请先修正 URL 格式错误')
       return
     }
 
     const usernameResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
     if (!usernameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: usernameResult.message })
+      this.showToastSafe(usernameResult.message)
       return
     }
 
     const passwordResult = ValidationUtil.validateNotEmpty(this.password, '密码')
     if (!passwordResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: passwordResult.message })
+      this.showToastSafe(passwordResult.message)
       return
     }
 
@@ -198,7 +197,7 @@ struct WebDAVConfigBuilderComponent {
       const result = await client.testConnection()
 
       if (result.success) {
-        this.getUIContext().getPromptAction().showToast({ message: '连接成功' })
+        this.showToastSafe('连接成功')
         if (UmamiAnalyticsService.isInitialized()) {
           const evtData: UmamiEventData = { source_type: FileSourceType.WEBDAV };
           UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connected', evtData);
@@ -244,38 +243,36 @@ struct WebDAVConfigBuilderComponent {
     // 验证必填字段
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '服务器名称')
     if (!nameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: nameResult.message })
+      this.showToastSafe(nameResult.message)
       return
     }
 
     const urlResult = ValidationUtil.validateNotEmpty(this.serverUrl, '服务器地址')
     if (!urlResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: urlResult.message })
+      this.showToastSafe(urlResult.message)
       return
     }
 
-    // 检查 URL 格式错误
     if (this.urlError) {
-      this.getUIContext().getPromptAction().showToast({ message: '请先修正 URL 格式错误' })
+      this.showToastSafe('请先修正 URL 格式错误')
       return
     }
 
     const usernameResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
     if (!usernameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: usernameResult.message })
+      this.showToastSafe(usernameResult.message)
       return
     }
 
     const passwordResult = ValidationUtil.validateNotEmpty(this.password, '密码')
     if (!passwordResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: passwordResult.message })
+      this.showToastSafe(passwordResult.message)
       return
     }
 
-    // 验证端口
     const portResult = ValidationUtil.validatePort(this.port)
     if (!portResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: portResult.message })
+      this.showToastSafe(portResult.message)
       return
     }
 

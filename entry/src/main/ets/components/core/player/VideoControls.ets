@@ -1952,7 +1952,9 @@ export struct SubtitleSelectorDrawerDialog {
 
   /** 显示 Toast 提示 */
   private showSearchToast(message: string, duration: number): void {
-    this.getUIContext().getPromptAction().showToast({ message: message, duration: duration })
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message, duration: duration })
+    } catch (_e) {}
   }
 
   /**

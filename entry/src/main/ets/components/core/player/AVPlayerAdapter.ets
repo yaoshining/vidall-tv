@@ -355,9 +355,17 @@ export class AVPlayerAdapter implements IPlayer {
         case AVPlayerState.INITIALIZED:
           // 设置 Surface 并触发 prepare
           player.surfaceId = this._surfaceId;
-          player.prepare().catch((err: BusinessError) => {
+          player.prepare().then(() => {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              'AVPlayer prepare 成功');
+          }).catch((err: BusinessError) => {
             hilog.error(CommonConstants.LOG_DOMAIN, TAG,
               `prepare 失败: code=${err.code} msg=${err.message}`);
+            // prepare 失败（如文件不存在 404）也通过 _onErrorCb 通知上层，
+            // 使 VideoPlayerController 的 onError 回调可以发射 FILE_INACCESSIBLE
+            if (this._onErrorCb) {
+              this._onErrorCb(new Error(err.message));
+            }
           });
           break;
         case AVPlayerState.PREPARED:

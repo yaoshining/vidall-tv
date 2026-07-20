@@ -5,7 +5,6 @@ import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSource, FileSourceType, SMBSourceConfig } from "../../../db/models/FileSourceEntity"
 import { ValidationUtil } from "../../../utils/ValidationUtil"
-import promptAction from '@ohos.promptAction'
 import { SMBClient } from '../../../lib/SMBClient'
 import { UmamiAnalyticsService } from "../../../services/analytics/UmamiAnalyticsService"
 import { UmamiEventData } from "../../../services/analytics/UmamiReporter"
@@ -69,11 +68,11 @@ struct SMBConfigBuilderComponent {
         this.domain = config.domain ?? ''
         this.port = config.port ?? 445
       } else {
-        this.getUIContext().getPromptAction().showToast({ message: '文件源不存在', duration: 2000 })
+        this.showToastSafe('文件源不存在')
         this.controller.popType()
       }
     } catch {
-      this.getUIContext().getPromptAction().showToast({ message: '加载数据失败', duration: 2000 })
+      this.showToastSafe('加载数据失败')
       this.controller.popType()
     } finally {
       this.isLoading = false
@@ -98,12 +97,12 @@ struct SMBConfigBuilderComponent {
   private async handleTestConnection(): Promise<void> {
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '名称')
     if (!nameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: nameResult.message, duration: 2000 })
+      this.showToastSafe(nameResult.message)
       return
     }
     const hostResult = ValidationUtil.validateNotEmpty(this.host, '服务器地址')
     if (!hostResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: hostResult.message, duration: 2000 })
+      this.showToastSafe(hostResult.message)
       return
     }
 
@@ -115,14 +114,13 @@ struct SMBConfigBuilderComponent {
       const client = SMBClient.fromSourceConfig(config)
       const result = await client.testConnection()
       if (result.success) {
-        this.getUIContext().getPromptAction().showToast({ message: '连接成功', duration: 2000 })
+        this.showToastSafe('连接成功')
         if (UmamiAnalyticsService.isInitialized()) {
           const evtData: UmamiEventData = { source_type: FileSourceType.SMB };
           UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connected', evtData);
         }
       } else {
         if (UmamiAnalyticsService.isInitialized()) {
-          // 从 result.error 提取可聚合的错误码
           const errMsg = result.error ?? '';
           const errorCode = errMsg.includes('AUTH') || errMsg.includes('401') || errMsg.includes('认证') ? 'AUTH_FAILED'
             : errMsg.includes('timeout') || errMsg.includes('超时') ? 'TIMEOUT'
@@ -131,13 +129,10 @@ struct SMBConfigBuilderComponent {
           const evtData: UmamiEventData = { source_type: FileSourceType.SMB, error_code: errorCode };
           UmamiAnalyticsService.getInstance().trackEvent('source', 'source_connect_failed', evtData);
         }
-        this.getUIContext().getPromptAction().showToast({
-          message: result.error ?? '连接失败',
-          duration: 3000
-        })
+        this.showToastSafe(result.error ?? '连接失败', 3000)
       }
     } catch {
-      this.getUIContext().getPromptAction().showToast({ message: '连接测试异常', duration: 2000 })
+      this.showToastSafe('连接测试异常')
     } finally {
       this.isLoading = false
       this.loadingText = ''
@@ -164,17 +159,17 @@ struct SMBConfigBuilderComponent {
     this.discoveredHosts = []
     try {
       const prefix = this.getSubnetPrefix()
-      this.getUIContext().getPromptAction().showToast({ message: `扫描 ${prefix}1-254:445...`, duration: 1500 })
+      this.showToastSafe(`扫描 ${prefix}1-254:445...`, 1500)
       const result = await SMBClient.discoverHosts(prefix, 1, 254, 445, 5000)
       if (result.error) {
-        this.getUIContext().getPromptAction().showToast({ message: `发现失败: ${result.error}`, duration: 3000 })
+        this.showToastSafe(`发现失败: ${result.error}`, 3000)
       } else if (result.hosts.length === 0) {
-        this.getUIContext().getPromptAction().showToast({ message: '未发现局域网 SMB 设备', duration: 2000 })
+        this.showToastSafe('未发现局域网 SMB 设备')
       } else {
         this.discoveredHosts = result.hosts
       }
     } catch {
-      this.getUIContext().getPromptAction().showToast({ message: '发现失败', duration: 2000 })
+      this.showToastSafe('发现失败')
     } finally {
       this.isDiscovering = false
     }
@@ -184,30 +179,36 @@ struct SMBConfigBuilderComponent {
     return this.isDiscovering ? '扫描中...' : '发现局域网设备'
   }
 
+  private showToastSafe(message: string, duration: number = 2000): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration })
+    } catch (_e) {}
+  }
+
   private async handleSave(): Promise<void> {
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '名称')
     if (!nameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: nameResult.message, duration: 2000 })
+      this.showToastSafe(nameResult.message)
       return
     }
     const hostResult = ValidationUtil.validateNotEmpty(this.host, '服务器地址')
     if (!hostResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: hostResult.message, duration: 2000 })
+      this.showToastSafe(hostResult.message)
       return
     }
     const usernameResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
     if (!usernameResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: usernameResult.message, duration: 2000 })
+      this.showToastSafe(usernameResult.message)
       return
     }
     const passwordResult = ValidationUtil.validateNotEmpty(this.password, '密码')
     if (!passwordResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: passwordResult.message, duration: 2000 })
+      this.showToastSafe(passwordResult.message)
       return
     }
     const portResult = ValidationUtil.validatePort(this.port)
     if (!portResult.valid) {
-      this.getUIContext().getPromptAction().showToast({ message: portResult.message, duration: 2000 })
+      this.showToastSafe(portResult.message)
       return
     }
 
@@ -237,7 +238,7 @@ struct SMBConfigBuilderComponent {
       } else {
         await store.addFileSource(fileSource)
       }
-      this.getUIContext().getPromptAction().showToast({ message: '保存成功', duration: 1500 })
+      this.showToastSafe('保存成功', 1500)
       this.controller.popType()
     } catch {
       this.getUIContext().showAlertDialog({

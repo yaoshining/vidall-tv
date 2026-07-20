@@ -269,7 +269,7 @@ export class LocalFileReporter implements MetricsReporter {
             fs.closeSync(file);
             
             const decoder = new util.TextDecoder('utf-8', { fatal: false, ignoreBOM: true });
-            const content = decoder.decodeWithStream(new Uint8Array(buffer, 0, readLen));
+            const content = decoder.decodeToString(new Uint8Array(buffer, 0, readLen));
             existingData = JSON.parse(content) as MetricsJSON;
           }
         } catch (e) {
