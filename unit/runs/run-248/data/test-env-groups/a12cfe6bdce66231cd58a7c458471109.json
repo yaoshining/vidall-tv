@@ -1,0 +1,1 @@
+{"id":"a12cfe6bdce66231cd58a7c458471109","fullName":"VideoPlayer 3.4 layout contract#FIT 且 ratio 未知时显式回退为 width + height + renderFit","name":"FIT 且 ratio 未知时显式回退为 width + height + renderFit","status":"passed","testResultsByEnv":{"default":"f3eef2955d628157bdc630206dc563c3"}}

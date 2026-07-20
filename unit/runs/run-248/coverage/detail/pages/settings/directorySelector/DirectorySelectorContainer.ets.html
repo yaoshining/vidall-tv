@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">52x</span>
+<span class="cline-any cline-yes">52x</span>
+<span class="cline-any cline-yes">52x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+/** 
+ * DirectorySelectorContainer 
+ *  
+ * 目录选择器容器，协议无关的路由参数处理 
+ * 使用 DirectoryProvider 接口实现协议解耦 
+ */ 
+ 
+import { SMBSourceConfig, WebDAVSourceConfig } from &quot;../../../db/models/FileSourceEntity&quot; 
+import {  
+  DirectoryProvider,  
+  DirectoryProviderConfig  
+} from &quot;../../../lib/DirectoryProvider&quot; 
+import { SmbDirectoryProvider } from &quot;../../../lib/SmbDirectoryProvider&quot; 
+import { WebDAVDirectoryProvider } from &quot;../../../lib/WebDAVDirectoryProvider&quot; 
+ 
+/** 
+ * 目录选择器条目（用于UI展示） 
+ */ 
+export interface DirectorySelectorEntry { 
+  key: string 
+  name: string 
+  path: string 
+} 
+ 
+/** 
+ * 路由参数接口 
+ */ 
+export interface DirectorySelectorRouteParams { 
+  sourceId: number 
+  protocol: &#39;webdav&#39; | &#39;smb&#39; 
+  username: string 
+  password: string 
+  protocolSpecific: Record&lt;string, Object&gt; 
+} 
+ 
+/** 
+ * 源描述符（包含实例化的 Provider） 
+ */ 
+export interface DirectorySelectorSourceDescriptor { 
+  sourceId: number 
+  protocol: string 
+  rootLabel: string 
+  endpointSummary: string 
+  provider: DirectoryProvider 
+} 
+ 
+/** 
+ * 从 Record 中读取字符串参数 
+ */ 
+function readStringParam(params: Record&lt;string, Object&gt;, key: string): string { 
+  const value = params[key] 
+  return typeof value === &#39;string&#39; ? value : &#39;&#39; 
+} 
+ 
+/** 
+ * 从 Record 中读取数字参数 
+ */ 
+function readNumberParam(params: Record&lt;string, Object&gt;, key: string): number | undefined { 
+  const value = params[key] 
+  return typeof value === &#39;number&#39; ? value : undefined 
+} 
+ 
+/** 
+ * 从路由参数解析为 DirectorySelectorRouteParams 
+ */ 
+export function createDirectorySelectorRouteParams( 
+  params: Record&lt;string, Object&gt; | undefined 
+): DirectorySelectorRouteParams | undefined { 
+  if (params === undefined) { 
+    return undefined 
+  } 
+   
+  const sourceId = readNumberParam(params, &#39;sourceId&#39;) 
+  if (sourceId === undefined || sourceId &lt;= 0) { 
+    return undefined 
+  } 
+   
+  const protocol = readStringParam(params, &#39;protocol&#39;) 
+  const username = readStringParam(params, &#39;username&#39;) 
+  const password = readStringParam(params, &#39;password&#39;) 
+   
+  // 提取协议特定参数 
+  const protocolSpecific: Record&lt;string, Object&gt; = {} 
+   
+  if (protocol === &#39;webdav&#39;) { 
+    const baseUrl = readStringParam(params, &#39;baseUrl&#39;) 
+    if (baseUrl.length === 0) { 
+      return undefined  // webdav 必须提供 baseUrl 
+    } 
+    protocolSpecific[&#39;baseUrl&#39;] = baseUrl 
+    protocolSpecific[&#39;tlsCertPolicy&#39;] = readStringParam(params, &#39;tlsCertPolicy&#39;) 
+  } else if (protocol === &#39;smb&#39;) { 
+    const host = readStringParam(params, &#39;host&#39;) 
+    if (host.length === 0) { 
+      return undefined  // smb 必须提供 host 
+    } 
+    protocolSpecific[&#39;host&#39;] = host 
+    protocolSpecific[&#39;port&#39;] = readNumberParam(params, &#39;port&#39;) ?? 445 
+    protocolSpecific[&#39;domain&#39;] = readStringParam(params, &#39;domain&#39;) 
+    protocolSpecific[&#39;shareName&#39;] = readStringParam(params, &#39;shareName&#39;) 
+  } else { 
+    // 兼容旧格式（通过 baseUrl/host 推断协议） 
+    const baseUrl = readStringParam(params, &#39;baseUrl&#39;) 
+    const host = readStringParam(params, &#39;host&#39;) 
+     
+    if (baseUrl.length &gt; 0) { 
+      protocolSpecific[&#39;baseUrl&#39;] = baseUrl 
+      protocolSpecific[&#39;tlsCertPolicy&#39;] = &#39;allow_self_signed&#39; 
+      const routeParams: DirectorySelectorRouteParams = { 
+        sourceId: sourceId, 
+        protocol: &#39;webdav&#39;, 
+        username: username, 
+        password: password, 
+        protocolSpecific: protocolSpecific 
+      } 
+      return routeParams 
+    } 
+     
+    if (host.length &gt; 0) { 
+      protocolSpecific[&#39;host&#39;] = host 
+      protocolSpecific[&#39;port&#39;] = readNumberParam(params, &#39;port&#39;) ?? 445 
+      protocolSpecific[&#39;domain&#39;] = readStringParam(params, &#39;domain&#39;) 
+      protocolSpecific[&#39;shareName&#39;] = &#39;&#39; 
+      const routeParams: DirectorySelectorRouteParams = { 
+        sourceId: sourceId, 
+        protocol: &#39;smb&#39;, 
+        username: username, 
+        password: password, 
+        protocolSpecific: protocolSpecific 
+      } 
+      return routeParams 
+    } 
+     
+    return undefined 
+  } 
+   
+  const routeParams: DirectorySelectorRouteParams = { 
+    sourceId: sourceId, 
+    protocol: protocol as &#39;webdav&#39; | &#39;smb&#39;, 
+    username: username, 
+    password: password, 
+    protocolSpecific: protocolSpecific 
+  } 
+  return routeParams 
+} 
+ 
+/** 
+ * 从路由参数创建 DirectoryProvider 实例 
+ */ 
+export async function createDirectorySelectorSourceDescriptor( 
+  params: DirectorySelectorRouteParams 
+): Promise&lt;DirectorySelectorSourceDescriptor&gt; { 
+  let provider: DirectoryProvider 
+  let config: DirectoryProviderConfig 
+   
+  if (params.protocol === &#39;webdav&#39;) { 
+    provider = new WebDAVDirectoryProvider() 
+    config = { 
+      protocol: &#39;webdav&#39;, 
+      sourceId: params.sourceId, 
+      username: params.username, 
+      password: params.password, 
+      protocolSpecific: params.protocolSpecific 
+    } 
+  } else if (params.protocol === &#39;smb&#39;) { 
+    provider = new SmbDirectoryProvider() 
+    config = { 
+      protocol: &#39;smb&#39;, 
+      sourceId: params.sourceId, 
+      username: params.username, 
+      password: params.password, 
+      protocolSpecific: params.protocolSpecific 
+    } 
+  } else { 
+    throw new Error(`不支持的协议: ${params.protocol}`) 
+  } 
+   
+  try { 
+    await provider.initWithConfig(config) 
+  } catch (e) { 
+    const cause = e as Error 
+    throw new Error(`初始化目录提供者失败: ${cause.message}`) 
+  } 
+  const descriptor: DirectorySelectorSourceDescriptor = { 
+    sourceId: params.sourceId, 
+    protocol: provider.getProtocolKey(), 
+    rootLabel: provider.getRootLabel(), 
+    endpointSummary: provider.getEndpointSummary(), 
+    provider: provider 
+  } 
+  return descriptor 
+} 
+ 
+/** 
+ * 从 WebDAV 配置构建路由参数 
+ */ 
+export function buildWebDavDirectorySelectorRouteParams( 
+  sourceId: number, 
+  config: WebDAVSourceConfig 
+): Record&lt;string, Object&gt; { 
+  // 构建 baseUrl 
+  let serverAddress = config.url 
+  let port = config.port 
+  if (serverAddress.includes(&#39;:&#39;)) { 
+    const parts = serverAddress.split(&#39;:&#39;) 
+    serverAddress = parts[0] 
+    const portInUrl = parseInt(parts[1], 10) 
+    if (!Number.isNaN(portInUrl)) { 
+      port = portInUrl 
+    } 
+  } 
+  let baseUrl = `${config.protocol}://${serverAddress}:${port}` 
+  const normalizedPath = config.rootPath.trim().length &gt; 0 ? config.rootPath.trim() : &#39;/&#39; 
+  if (normalizedPath !== &#39;/&#39;) { 
+    baseUrl += normalizedPath.startsWith(&#39;/&#39;) ? normalizedPath : &#39;/&#39; + normalizedPath 
+  } 
+   
+  const record: Record&lt;string, Object&gt; = {} 
+  record[&#39;sourceId&#39;] = sourceId 
+  record[&#39;protocol&#39;] = &#39;webdav&#39; 
+  record[&#39;username&#39;] = config.username 
+  record[&#39;password&#39;] = config.password 
+  record[&#39;baseUrl&#39;] = baseUrl 
+  record[&#39;tlsCertPolicy&#39;] = config.tlsCertPolicy ?? &#39;allow_self_signed&#39; 
+  return record 
+} 
+ 
+/** 
+ * 从 SMB 配置构建路由参数 
+ */ 
+export function buildSmbDirectorySelectorRouteParams( 
+  sourceId: number, 
+  config: SMBSourceConfig 
+): Record&lt;string, Object&gt; { 
+  const record: Record&lt;string, Object&gt; = {} 
+  record[&#39;sourceId&#39;] = sourceId 
+  record[&#39;protocol&#39;] = &#39;smb&#39; 
+  record[&#39;username&#39;] = config.username 
+  record[&#39;password&#39;] = config.password 
+  record[&#39;host&#39;] = config.host 
+  record[&#39;port&#39;] = config.port ?? 445 
+  record[&#39;domain&#39;] = config.domain ?? &#39;&#39; 
+  record[&#39;shareName&#39;] = &#39;&#39; 
+  return record 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Tue Jul 21 2026 02:35:51 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/pages/settings/directorySelector/DirectorySelectorContainer.ets","hash":"351c86ae121d901328b6ab356c1ec5996ec692b928cc0a034f30a89b31ef18a8","lineCnt":246,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"readStringParam","count":52,"regions":[{"startLoc":{"line":50,"col":1},"endLoc":{"line":53,"col":2},"count":52,"ignored":0},{"startLoc":{"line":51,"col":3},"endLoc":{"line":53,"col":2},"count":52,"ignored":0}],"branches":[{"startLoc":{"line":52,"col":10},"endLoc":{"line":52,"col":48},"trueCount":38,"falseCount":14,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"readNumberParam","count":18,"regions":[{"startLoc":{"line":58,"col":1},"endLoc":{"line":61,"col":2},"count":18,"ignored":0},{"startLoc":{"line":59,"col":3},"endLoc":{"line":61,"col":2},"count":18,"ignored":0}],"branches":[{"startLoc":{"line":60,"col":10},"endLoc":{"line":60,"col":55},"trueCount":17,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"createDirectorySelectorRouteParams","count":14,"regions":[{"startLoc":{"line":66,"col":1},"endLoc":{"line":145,"col":2},"count":14,"ignored":0},{"startLoc":{"line":92,"col":10},"endLoc":{"line":135,"col":4},"count":7,"ignored":0},{"startLoc":{"line":101,"col":10},"endLoc":{"line":135,"col":4},"count":4,"ignored":0},{"startLoc":{"line":119,"col":26},"endLoc":{"line":132,"col":6},"count":2,"ignored":0},{"startLoc":{"line":106,"col":29},"endLoc":{"line":117,"col":6},"count":2,"ignored":0},{"startLoc":{"line":92,"col":34},"endLoc":{"line":101,"col":4},"count":3,"ignored":0},{"startLoc":{"line":137,"col":3},"endLoc":{"line":145,"col":2},"count":4,"ignored":0},{"startLoc":{"line":85,"col":30},"endLoc":{"line":92,"col":4},"count":3,"ignored":0},{"startLoc":{"line":97,"col":5},"endLoc":{"line":101,"col":4},"count":2,"ignored":0},{"startLoc":{"line":69,"col":29},"endLoc":{"line":71,"col":4},"count":0,"ignored":0},{"startLoc":{"line":74,"col":48},"endLoc":{"line":76,"col":4},"count":4,"ignored":0},{"startLoc":{"line":87,"col":31},"endLoc":{"line":89,"col":6},"count":1,"ignored":0},{"startLoc":{"line":94,"col":28},"endLoc":{"line":96,"col":6},"count":1,"ignored":0},{"startLoc":{"line":90,"col":5},"endLoc":{"line":92,"col":4},"count":2,"ignored":0},{"startLoc":{"line":134,"col":5},"endLoc":{"line":135,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":69,"col":7},"endLoc":{"line":69,"col":27},"trueCount":0,"falseCount":14,"group":[],"ignored":0},{"startLoc":{"line":74,"col":7},"endLoc":{"line":74,"col":46},"trueCount":4,"falseCount":10,"group":[],"ignored":0},{"startLoc":{"line":85,"col":7},"endLoc":{"line":85,"col":28},"trueCount":3,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":87,"col":9},"endLoc":{"line":87,"col":29},"trueCount":1,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":92,"col":14},"endLoc":{"line":92,"col":32},"trueCount":3,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":94,"col":9},"endLoc":{"line":94,"col":26},"trueCount":1,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":106,"col":9},"endLoc":{"line":106,"col":27},"trueCount":2,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":119,"col":9},"endLoc":{"line":119,"col":24},"trueCount":2,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"createDirectorySelectorSourceDescriptor","count":6,"regions":[{"startLoc":{"line":150,"col":1},"endLoc":{"line":192,"col":2},"count":6,"ignored":0},{"startLoc":{"line":165,"col":10},"endLoc":{"line":176,"col":4},"count":4,"ignored":0},{"startLoc":{"line":156,"col":37},"endLoc":{"line":165,"col":4},"count":2,"ignored":0},{"startLoc":{"line":165,"col":41},"endLoc":{"line":174,"col":4},"count":2,"ignored":0},{"startLoc":{"line":184,"col":3},"endLoc":{"line":192,"col":2},"count":4,"ignored":0},{"startLoc":{"line":180,"col":5},"endLoc":{"line":183,"col":4},"count":0,"ignored":0},{"startLoc":{"line":174,"col":10},"endLoc":{"line":176,"col":4},"count":2,"ignored":0},{"startLoc":{"line":178,"col":7},"endLoc":{"line":180,"col":4},"count":4,"ignored":0}],"branches":[{"startLoc":{"line":156,"col":7},"endLoc":{"line":156,"col":35},"trueCount":2,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":165,"col":14},"endLoc":{"line":165,"col":39},"trueCount":2,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"buildWebDavDirectorySelectorRouteParams","count":2,"regions":[{"startLoc":{"line":197,"col":1},"endLoc":{"line":226,"col":2},"count":2,"ignored":0},{"startLoc":{"line":218,"col":3},"endLoc":{"line":226,"col":2},"count":2,"ignored":0},{"startLoc":{"line":204,"col":36},"endLoc":{"line":211,"col":4},"count":1,"ignored":0},{"startLoc":{"line":208,"col":35},"endLoc":{"line":210,"col":6},"count":1,"ignored":0},{"startLoc":{"line":214,"col":31},"endLoc":{"line":216,"col":4},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":204,"col":7},"endLoc":{"line":204,"col":34},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":208,"col":9},"endLoc":{"line":208,"col":33},"trueCount":1,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":213,"col":26},"endLoc":{"line":213,"col":90},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":214,"col":7},"endLoc":{"line":214,"col":29},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":215,"col":16},"endLoc":{"line":215,"col":86},"trueCount":1,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"buildSmbDirectorySelectorRouteParams","count":2,"regions":[{"startLoc":{"line":231,"col":1},"endLoc":{"line":245,"col":2},"count":2,"ignored":0},{"startLoc":{"line":235,"col":3},"endLoc":{"line":245,"col":2},"count":2,"ignored":0}],"branches":[],"ignored":0,"index":5}],"exeLine":{"0":8,"1":10,"2":11,"3":12,"4":13,"5":14,"6":19,"7":20,"8":21,"9":22,"10":28,"11":29,"12":30,"13":31,"14":32,"15":33,"16":39,"17":40,"18":41,"19":42,"20":43,"21":44,"22":50,"23":51,"24":52,"25":58,"26":59,"27":60,"28":66,"29":67,"30":68,"31":69,"32":70,"33":73,"34":74,"35":75,"36":78,"37":79,"38":80,"39":83,"40":85,"41":86,"42":87,"43":88,"44":90,"45":91,"46":92,"47":93,"48":94,"49":95,"50":97,"51":98,"52":99,"53":100,"54":101,"55":103,"56":104,"57":106,"58":107,"59":108,"60":109,"61":110,"62":111,"63":112,"64":113,"65":114,"66":116,"67":119,"68":120,"69":121,"70":122,"71":123,"72":124,"73":125,"74":126,"75":127,"76":128,"77":129,"78":131,"79":134,"80":137,"81":138,"82":139,"83":140,"84":141,"85":142,"86":144,"87":150,"88":151,"89":152,"90":153,"91":154,"92":156,"93":157,"94":158,"95":159,"96":160,"97":161,"98":162,"99":163,"100":165,"101":166,"102":167,"103":168,"104":169,"105":170,"106":171,"107":172,"108":174,"109":175,"110":178,"111":179,"112":180,"113":181,"114":182,"115":184,"116":185,"117":186,"118":187,"119":188,"120":189,"121":191,"122":197,"123":198,"124":199,"125":200,"126":202,"127":203,"128":204,"129":205,"130":206,"131":207,"132":208,"133":209,"134":212,"135":213,"136":214,"137":215,"138":218,"139":219,"140":220,"141":221,"142":222,"143":223,"144":224,"145":225,"146":231,"147":232,"148":233,"149":234,"150":235,"151":236,"152":237,"153":238,"154":239,"155":240,"156":241,"157":242,"158":243,"159":244},"summary":{"lines":{"total":138,"covered":134,"pct":97.1,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,52,52,52,-1,-1,-1,-1,-1,18,18,18,-1,-1,-1,-1,-1,14,14,14,14,0,-1,-1,14,14,4,-1,-1,14,14,14,-1,-1,14,-1,10,3,3,1,-1,2,2,7,3,3,1,-1,2,2,2,2,2,-1,4,4,-1,4,2,2,2,2,2,2,2,2,-1,2,-1,-1,2,2,2,2,2,2,2,2,2,2,2,-1,2,-1,-1,0,-1,-1,4,4,4,4,4,4,-1,4,-1,-1,-1,-1,-1,6,6,6,6,6,-1,6,2,2,2,2,2,2,2,-1,4,2,2,2,2,2,2,2,-1,2,2,-1,-1,4,4,4,0,0,-1,4,4,4,4,4,4,-1,4,-1,-1,-1,-1,-1,2,2,2,2,-1,2,2,2,1,1,1,1,1,-1,-1,2,2,2,1,-1,-1,2,2,2,2,2,2,2,2,-1,-1,-1,-1,-1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,-1,-1]},"functions":{"total":6,"covered":6,"pct":100},"branches":{"total":34,"covered":29,"pct":85.29}}},"title":"DirectorySelectorContainer.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

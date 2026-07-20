@@ -1,0 +1,1 @@
+{"id":"e9b5e82907d8ecb26d49c9d25adf2a14","fullName":"VideoPlayerController review regressions#initPlayer 调用真实 resetDisplayState 并将 ijkVideoRatio 重置为 0（Task 2.2）","name":"initPlayer 调用真实 resetDisplayState 并将 ijkVideoRatio 重置为 0（Task 2.2）","status":"passed","testResultsByEnv":{"default":"231dfd04d08c02e22f1b23dcae4fc5a8"}}

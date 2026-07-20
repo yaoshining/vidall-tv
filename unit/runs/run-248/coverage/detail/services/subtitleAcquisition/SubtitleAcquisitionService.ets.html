@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/subtitleAcquisition/SubtitleAcquisitionService.ets 
+// 
+// SubtitleAcquisitionService - 字幕获取用例层 façade。 
+// 
+// 目标：把 `SubtitleSelectorDrawerDialog` 中对 `OpenSubtitlesClient` / 
+// `SubtitleDownloader` / `SubtitleCacheManager` 的直接依赖收口到 service。 
+// 
+// 约束： 
+// 1. 不修改 `OpenSubtitlesClient` / `SubtitleDownloader` / `SubtitleCacheManager` 的现有签名。 
+// 2. 不修改 `VideoPlayerController.addExternalSubtitle` / `switchSubtitleTrack` 的现有签名。 
+// 3. UI 端不再 import 4 个具体 Error 类与 Client / Downloader / CacheManager。 
+// 
+// 设计要点： 
+// - 每次操作内 `new` 新的 Client / Downloader / CacheManager 实例，与原 `VideoControls` 内 
+//   行为一致（这些类本身无状态或仅依赖 filesDir 路径参数）。 
+// - 4 个 Error 类通过 `classifyAcquisitionError` 归一映射到 `SubtitleAcquisitionErrorKind`， 
+//   UI 按 `error.kind` 决定 Toast 文案。 
+// - `markLastUsed` 失败时仅 warn 不抛（按 OpenSpec 3.4 scenario 2：异常不阻断下载挂载结果）。 
+ 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { OpenSubtitlesClient } from &quot;../../lib/OpenSubtitlesClient&quot;; 
+import { 
+  SubtitleDownloader, 
+  buildSubtitlePath, 
+  sha256Hex 
+} from &quot;../../subtitle/SubtitleDownloader&quot;; 
+import { SubtitleCacheManager, CachedSubtitleEntry } from &quot;../../subtitle/SubtitleCacheManager&quot;; 
+import { 
+  SubtitleAcquisitionError, 
+  SubtitleClearLastUsedInput, 
+  SubtitleDownloadInput, 
+  SubtitleDownloadOutcome, 
+  SubtitleEnableCachedInput, 
+  SubtitleEnableCachedOutcome, 
+  SubtitleListCachedInput, 
+  SubtitleMarkLastUsedInput, 
+  SubtitleSearchInput, 
+  SubtitleSearchResult, 
+  classifyAcquisitionError 
+} from &quot;./SubtitleAcquisitionTypes&quot;; 
+ 
+const DOMAIN = 0x0002; 
+const TAG = &#39;SubtitleAcquisitionService&#39;; 
+ 
+/** service 公共方法集合。 */ 
+export class SubtitleAcquisitionService { 
+  /** 
+   * 搜索在线字幕。 
+   * 
+   * 抛出 `SubtitleAcquisitionError`，`error.kind` 决定 UI 端 Toast 文案。 
+   */ 
+  async search(input: SubtitleSearchInput): Promise&lt;SubtitleSearchResult[]&gt; { 
+    try { 
+      const client = new OpenSubtitlesClient(); 
+      const results = await client.search( 
+        input.query, 
+        input.languages, 
+        input.year, 
+        input.seasonNumber, 
+        input.episodeNumber, 
+        input.mediaType, 
+        input.tmdbId 
+      ); 
+      return results; 
+    } catch (e) { 
+      const kind = classifyAcquisitionError(e as object); 
+      const message = (e as Record&lt;string, string&gt;)[&#39;message&#39;] ?? JSON.stringify(e); 
+      hilog.warn(DOMAIN, TAG, `search failed: kind=${kind} msg=${message}`); 
+      throw new SubtitleAcquisitionError(kind, message); 
+    } 
+  } 
+ 
+  /** 
+   * 下载字幕。 
+   * 
+   * 抛出 `SubtitleAcquisitionError`。 
+   * 成功后返回 `localPath` / `fileName` 供 UI 调 `videoController.addExternalSubtitle`。 
+   */ 
+  async download(input: SubtitleDownloadInput): Promise&lt;SubtitleDownloadOutcome&gt; { 
+    try { 
+      const downloader = new SubtitleDownloader({ filesDir: input.filesDir }); 
+      const downloadResult = await downloader.download( 
+        input.result.fileId, 
+        input.stableVideoSrc, 
+        input.sourceType, 
+        input.sourceId, 
+        input.result.languageCode, 
+        input.result.downloadCount 
+      ); 
+      const outcome: SubtitleDownloadOutcome = { 
+        localPath: downloadResult.localPath, 
+        fileName: downloadResult.fileName, 
+        languageCode: input.result.languageCode 
+      }; 
+      return outcome; 
+    } catch (e) { 
+      const kind = classifyAcquisitionError(e as object); 
+      const message = (e as Record&lt;string, string&gt;)[&#39;message&#39;] ?? JSON.stringify(e); 
+      hilog.warn(DOMAIN, TAG, `download failed: kind=${kind} msg=${message}`); 
+      throw new SubtitleAcquisitionError(kind, message); 
+    } 
+  } 
+ 
+  /** 
+   * 标记最近使用字幕。 
+   * 
+   * 失败仅 warn，不抛（按 OpenSpec 3.4 scenario 2：异常不会改变当前下载字幕已经成功挂载的结果）。 
+   * 调用方可在 UI 编排中以 fire-and-forget 方式调用。 
+   */ 
+  async markLastUsed(input: SubtitleMarkLastUsedInput): Promise&lt;void&gt; { 
+    try { 
+      const cacheManager = new SubtitleCacheManager(); 
+      await cacheManager.setLastUsedSubtitle( 
+        input.filesDir, 
+        input.sourceType, 
+        input.sourceId, 
+        input.stableVideoSrc, 
+        input.fileName 
+      ); 
+    } catch (e) { 
+      const errMsg = (e as Record&lt;string, string&gt;)[&#39;message&#39;] ?? JSON.stringify(e); 
+      hilog.warn(DOMAIN, TAG, `markLastUsed failed (non-fatal): ${errMsg}`); 
+    } 
+  } 
+ 
+  /** 
+   * 清除最近使用字幕标记。 
+   * 
+   * 调用场景：仅在**显式重置最近使用记录**时调用（例如菜单中&quot;清除 lastUsed&quot;操作）。 
+   * 
+   * 注意：`SubtitleDispatcher` 当前已采用 disabled 绑定标记策略—— 
+   * 用户关闭字幕时通过 `clearUserBinding` 写入 `{ subtitleType: &#39;disabled&#39; }`， 
+   * `resolveSubtitle` 步骤 1 即返回 `{ type: &#39;user-specified&#39;, trackIndex: -1 }`， 
+   * 短路步骤 4 的 lastUsed 自动恢复。因此**用户主动关闭字幕**的场景**无需**调用本方法； 
+   * 错误的&quot;为防 lastUsed 恢复而调用&quot;会导致 lastUsed 指针丢失，影响后续手动选轨时缓存提示。 
+   * 
+   * 失败仅 warn，不抛（与 `markLastUsed` 风格一致）。 
+   */ 
+  async clearLastUsed(input: SubtitleClearLastUsedInput): Promise&lt;void&gt; { 
+    try { 
+      const cacheManager = new SubtitleCacheManager(); 
+      await cacheManager.clearLastUsedSubtitle( 
+        input.filesDir, 
+        input.sourceType, 
+        input.sourceId, 
+        input.stableVideoSrc 
+      ); 
+    } catch (e) { 
+      const errMsg = (e as Record&lt;string, string&gt;)[&#39;message&#39;] ?? JSON.stringify(e); 
+      hilog.warn(DOMAIN, TAG, `clearLastUsed failed (non-fatal): ${errMsg}`); 
+    } 
+  } 
+ 
+  /** 
+   * 列出某视频已下载的所有字幕缓存条目。 
+   * 
+   * 用于 UI 端在&quot;关闭字幕&quot;后仍能展示&quot;已下载字幕&quot;分组，供用户主动重新启用。 
+   * 失败返回空数组（与 `listCachedSubtitles` 实现一致），不抛。 
+   */ 
+  async listCached(input: SubtitleListCachedInput): Promise&lt;CachedSubtitleEntry[]&gt; { 
+    try { 
+      const cacheManager = new SubtitleCacheManager(); 
+      return await cacheManager.listCachedSubtitles( 
+        input.filesDir, 
+        input.sourceType, 
+        input.sourceId, 
+        input.stableVideoSrc 
+      ); 
+    } catch (e) { 
+      const errMsg = (e as Record&lt;string, string&gt;)[&#39;message&#39;] ?? JSON.stringify(e); 
+      hilog.warn(DOMAIN, TAG, `listCached failed: ${errMsg}`); 
+      return []; 
+    } 
+  } 
+ 
+  /** 
+   * 计算缓存字幕的本地绝对路径，供 UI 调 `videoController.addExternalSubtitle`。 
+   * 
+   * 之所以 service 暴露此路径而不是 UI 端自行调用 `buildSubtitlePath`： 
+   * 1. `buildSubtitlePath` 是 `SubtitleDownloader` 的内部实现细节，UI 不应直接 import 
+   * 2. 路径计算涉及 SHA-256（异步），service 统一封装避免 UI 端遗漏 await 
+   * 
+   * 调用时机：用户在字幕菜单&quot;已下载&quot;分组中点击某条缓存字幕。 
+   */ 
+  async enableCached(input: SubtitleEnableCachedInput): Promise&lt;SubtitleEnableCachedOutcome&gt; { 
+    const hash = await sha256Hex(input.stableVideoSrc); 
+    const localPath = buildSubtitlePath( 
+      input.filesDir, 
+      input.sourceType, 
+      input.sourceId, 
+      hash, 
+      input.fileName 
+    ); 
+    const outcome: SubtitleEnableCachedOutcome = { 
+      localPath, 
+      fileName: input.fileName 
+    }; 
+    return outcome; 
+  } 
+} 
+ 
+/** 默认 service 实例，便于 UI 端按需 import。 */ 
+export const defaultSubtitleAcquisitionService = new SubtitleAcquisitionService(); 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Tue Jul 21 2026 02:35:51 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/subtitleAcquisition/SubtitleAcquisitionService.ets","hash":"6a275b3ee3ae2eb239236167e0870c8e4155829129fe5cf3a655ab7513e2acfe","lineCnt":204,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"SubtitleAcquisitionService.search","count":0,"regions":[{"startLoc":{"line":52,"col":3},"endLoc":{"line":71,"col":4},"count":0,"ignored":0},{"startLoc":{"line":53,"col":9},"endLoc":{"line":65,"col":6},"count":0,"ignored":0},{"startLoc":{"line":65,"col":7},"endLoc":{"line":70,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"SubtitleAcquisitionService.download","count":0,"regions":[{"startLoc":{"line":79,"col":3},"endLoc":{"line":102,"col":4},"count":0,"ignored":0},{"startLoc":{"line":80,"col":9},"endLoc":{"line":96,"col":6},"count":0,"ignored":0},{"startLoc":{"line":96,"col":7},"endLoc":{"line":101,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"SubtitleAcquisitionService.markLastUsed","count":0,"regions":[{"startLoc":{"line":110,"col":3},"endLoc":{"line":124,"col":4},"count":0,"ignored":0},{"startLoc":{"line":111,"col":9},"endLoc":{"line":120,"col":6},"count":0,"ignored":0},{"startLoc":{"line":120,"col":7},"endLoc":{"line":123,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"SubtitleAcquisitionService.clearLastUsed","count":0,"regions":[{"startLoc":{"line":139,"col":3},"endLoc":{"line":152,"col":4},"count":0,"ignored":0},{"startLoc":{"line":140,"col":9},"endLoc":{"line":148,"col":6},"count":0,"ignored":0},{"startLoc":{"line":148,"col":7},"endLoc":{"line":151,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"SubtitleAcquisitionService.listCached","count":0,"regions":[{"startLoc":{"line":160,"col":3},"endLoc":{"line":174,"col":4},"count":0,"ignored":0},{"startLoc":{"line":161,"col":9},"endLoc":{"line":169,"col":6},"count":0,"ignored":0},{"startLoc":{"line":169,"col":7},"endLoc":{"line":173,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"SubtitleAcquisitionService.enableCached","count":0,"regions":[{"startLoc":{"line":185,"col":3},"endLoc":{"line":199,"col":4},"count":0,"ignored":0},{"startLoc":{"line":186,"col":5},"endLoc":{"line":199,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5}],"exeLine":{"0":20,"1":21,"2":22,"3":23,"4":24,"5":25,"6":26,"7":27,"8":28,"9":29,"10":30,"11":31,"12":32,"13":33,"14":34,"15":35,"16":36,"17":37,"18":38,"19":39,"20":40,"21":42,"22":43,"23":46,"24":52,"25":53,"26":54,"27":55,"28":56,"29":57,"30":58,"31":59,"32":60,"33":61,"34":62,"35":64,"36":65,"37":66,"38":67,"39":68,"40":69,"41":79,"42":80,"43":81,"44":82,"45":83,"46":84,"47":85,"48":86,"49":87,"50":88,"51":90,"52":91,"53":92,"54":93,"55":95,"56":96,"57":97,"58":98,"59":99,"60":100,"61":110,"62":111,"63":112,"64":113,"65":114,"66":115,"67":116,"68":117,"69":118,"70":120,"71":121,"72":122,"73":139,"74":140,"75":141,"76":142,"77":143,"78":144,"79":145,"80":146,"81":148,"82":149,"83":150,"84":160,"85":161,"86":162,"87":163,"88":164,"89":165,"90":166,"91":167,"92":169,"93":170,"94":171,"95":172,"96":185,"97":186,"98":187,"99":188,"100":189,"101":190,"102":191,"103":192,"104":194,"105":195,"106":196,"107":198,"108":203},"summary":{"lines":{"total":84,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,-1]},"functions":{"total":6,"covered":0,"pct":0},"branches":{"total":0,"covered":0,"pct":100}}},"title":"SubtitleAcquisitionService.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

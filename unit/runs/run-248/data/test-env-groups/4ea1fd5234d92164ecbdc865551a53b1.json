@@ -1,0 +1,1 @@
+{"id":"4ea1fd5234d92164ecbdc865551a53b1","fullName":"VideoPlayerController review regressions#fallback pending-resume 场景 onPlayerReady 会先进入 seek 再延后轨道初始化","name":"fallback pending-resume 场景 onPlayerReady 会先进入 seek 再延后轨道初始化","status":"passed","testResultsByEnv":{"default":"a8ad0523ce1adcd5284e3b8eb0e2eb78"}}

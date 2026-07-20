@@ -1,0 +1,12 @@
+[
+  {
+    "run_number": 248,
+    "timestamp": "2026-07-20T18:35:52Z",
+    "status": "pass",
+    "passed": 529,
+    "failed": 0,
+    "total": 529,
+    "report_href": "unit/runs/run-248/index.html",
+    "coverage_href": "unit/runs/run-248/coverage/index.html"
+  }
+]
