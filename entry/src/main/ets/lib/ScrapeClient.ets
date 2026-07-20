@@ -229,14 +229,29 @@ function extractSearchYear(title: string): number | undefined {
 }
 
 function removeSearchYear(title: string): string {
-  return title.replace(/[\[（(]\s*(?:19|20)\d{2}\s*[\]）)]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return title
+    .replace(/[\[【（(]\s*(?:19|20)\d{2}\s*[\]】）)]/g, ' ')
+    .replace(/(^|[^0-9])(?:19|20)\d{2}(?=$|[^0-9])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 function buildTvSearchCandidates(parsedTitle: string, parsedYear: number | undefined, seriesHint?: string): TvSearchCandidate[] {
   const candidates: TvSearchCandidate[] = [];
   const appendTitle = (title: string, year?: number): void => {
     const normalizedTitle = removeSearchYear(title);
-    if (normalizedTitle.length === 0 || candidates.some((candidate: TvSearchCandidate) => candidate.title === normalizedTitle)) {
+    if (normalizedTitle.length === 0) {
+      return;
+    }
+    const existingCandidate = candidates.find((candidate: TvSearchCandidate) => candidate.title === normalizedTitle);
+    if (existingCandidate !== undefined) {
+      // 保留路径标题优先级，但不要因去重而丢失文件名提供的年份约束。
+      if (existingCandidate.year === undefined && year !== undefined) {
+        existingCandidate.year = year;
+      } else if (existingCandidate.year !== year && year !== undefined) {
+        const candidate: TvSearchCandidate = { title: normalizedTitle, year };
+        candidates.push(candidate);
+      }
       return;
     }
     const candidate: TvSearchCandidate = { title: normalizedTitle, year };

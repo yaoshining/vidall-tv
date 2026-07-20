@@ -294,6 +294,61 @@ export default function scrapeClientTest() {
       }
     });
 
+    it('应使用文件名年份约束同名路径剧集候选', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-issue-234-file-year');
+      const incorrect = createTvSeriesScrapeResult('fake-issue-234-file-year', 'Climax!', 'tv-1954');
+      incorrect.firstAirDate = '1954-10-01';
+      const expected = createTvSeriesScrapeResult('fake-issue-234-file-year', 'Climax', 'tv-2026');
+      expected.firstAirDate = '2026-01-01';
+      fake.enqueueSearchTvResults([incorrect, expected]);
+      fake.enqueueFetchTvSeriesDetailResult(expected);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      const result = await client.autoScrapeTvEpisode('Climax.(2026).S01E01.mkv', 'Climax', 'tv');
+
+      expect(result.series !== null).assertTrue();
+      if (result.series !== null) {
+        expect(result.series.providerId).assertEqual('tv-2026');
+      }
+      const searchCall = fake.getLastCall('searchTv');
+      expect(searchCall !== null).assertTrue();
+      if (searchCall !== null) {
+        expect(searchCall.title).assertEqual('Climax');
+        expect(searchCall.year).assertEqual(2026);
+      }
+    });
+
+    it('应清理未加括号和方括号包裹的路径年份', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-issue-234-normalize-year');
+      const show = createTvSeriesScrapeResult('fake-issue-234-normalize-year', 'Show', 'show-2026');
+      show.firstAirDate = '2026-01-01';
+      fake.enqueueSearchTvResults([show]);
+      fake.enqueueFetchTvSeriesDetailResult(show);
+      fake.enqueueSearchTvResults([show]);
+      fake.enqueueFetchTvSeriesDetailResult(show);
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      await client.autoScrapeTvEpisode('Episode S01E01.mkv', 'Show 2026', 'tv');
+      const firstSearchCall = fake.getLastCall('searchTv');
+      expect(firstSearchCall !== null).assertTrue();
+      if (firstSearchCall !== null) {
+        expect(firstSearchCall.title).assertEqual('Show');
+        expect(firstSearchCall.year).assertEqual(2026);
+      }
+
+      await client.autoScrapeTvEpisode('Episode S01E02.mkv', 'Show【2026】', 'tv');
+      const secondSearchCall = fake.getLastCall('searchTv');
+      expect(secondSearchCall !== null).assertTrue();
+      if (secondSearchCall !== null) {
+        expect(secondSearchCall.title).assertEqual('Show');
+        expect(secondSearchCall.year).assertEqual(2026);
+      }
+    });
+
     it('应拒绝与路径年份不一致的电视剧候选', 0, async () => {
       const fake = new ScriptedFakeScrapeProvider('fake-issue-234-year-mismatch');
       const incorrect = createTvSeriesScrapeResult('fake-issue-234-year-mismatch', 'Climax!', 'tv-1954');
