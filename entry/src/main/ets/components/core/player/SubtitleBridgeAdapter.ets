@@ -641,7 +641,10 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
       }
       text = decodeSubtitlePayload(buf);
     } catch (e) {
-      return
+      const error = e as BusinessError;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `[addLocalSubtitle] 读取或解码本地字幕失败: ${error.message}`);
+      throw new Error(`读取或解码本地字幕失败: ${error.message}`);
     }
     const entries = isAss ? AssFileParser.parse(text) : SrtParser.parse(text);
 

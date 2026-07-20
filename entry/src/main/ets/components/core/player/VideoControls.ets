@@ -713,11 +713,13 @@ struct VideoControls {
         sourceId,
         fileName: entry.fileName
       });
+      const trackCountBeforeAppend = this.videoController.allSubtitleTracks.length;
       await this.videoController.addExternalSubtitle(outcome.localPath);
-      const newIndex = this.videoController.allSubtitleTracks.length - 1;
-      if (newIndex >= 0) {
-        await this.videoController.switchSubtitleTrack(newIndex);
+      if (this.videoController.allSubtitleTracks.length <= trackCountBeforeAppend) {
+        throw new Error('缓存字幕未能追加到轨道列表');
       }
+      const newIndex = this.videoController.allSubtitleTracks.length - 1;
+      await this.videoController.switchSubtitleTrack(newIndex);
       // markLastUsed 写 metadata.lastUsed，fire-and-forget。
       // 关键：覆盖 disabled 标记 → 下次进入同视频，resolveSubtitle 步骤 1 命中 enabled binding 而非 disabled。
       subtitleService.markLastUsed({
@@ -2077,13 +2079,15 @@ export struct SubtitleSelectorDrawerDialog {
       this.showSearchToast('字幕下载成功', 2000)
       console.info(`[SubtitleSearch] 字幕已写入: ${downloadOutcome.localPath}`)
 
+      const trackCountBeforeAppend = this.videoController.allSubtitleTracks.length
       await this.videoController.addExternalSubtitle(downloadOutcome.localPath)
-
-      // 下载成功后自动切换到该字幕轨道（新增轨道总是追加到列表末尾）
-      const newSubtitleIndex = this.videoController.allSubtitleTracks.length - 1
-      if (newSubtitleIndex >= 0) {
-        await this.videoController.switchSubtitleTrack(newSubtitleIndex)
+      if (this.videoController.allSubtitleTracks.length <= trackCountBeforeAppend) {
+        throw new Error('下载字幕未能追加到轨道列表')
       }
+
+      // 下载成功后自动切换到新追加的字幕轨道。
+      const newSubtitleIndex = this.videoController.allSubtitleTracks.length - 1
+      await this.videoController.switchSubtitleTrack(newSubtitleIndex)
 
       // 标记最近使用字幕：按 OpenSpec 3.4 scenario 2 失败不影响下载挂载，fire-and-forget。
       subtitleService.markLastUsed({

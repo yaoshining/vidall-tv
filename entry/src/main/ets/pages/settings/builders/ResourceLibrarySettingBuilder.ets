@@ -58,7 +58,7 @@ struct ResourceLibrarySettingBuilderComponent {
       this.showToastSafe(value ? 'API Key 已保存' : 'API Key 已清除');
     } catch (error) {
       console.error('[ResourceLibrarySettingBuilder] 保存失败:', JSON.stringify(error));
-      this.showToastSafe('保存失败');
+      this.showToastSafe('保存失败，请检查存储权限后重试');
     } finally {
       this.isLoading = false;
     }

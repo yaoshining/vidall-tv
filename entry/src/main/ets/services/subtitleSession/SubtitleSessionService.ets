@@ -174,15 +174,16 @@ export class SubtitleSessionService {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[loadSubtitleTracks] 步骤4命中缓存字幕，追加到轨道列表并切换: ${localPath}`);
       try {
+        const trackCountBeforeAppend = this.state.allSubtitleTracks.length;
         await subtitleAdapter.addLocalSubtitle(localPath);
         this.applyBridgeState(subtitleAdapter.getState());
-        const newIndex = this.state.allSubtitleTracks.length - 1;
-        if (newIndex >= 0) {
-          await subtitleAdapter.switchTrack(newIndex);
-          this.applyBridgeState(subtitleAdapter.getState());
-          return { resolution, appliedVia: 'append-and-switch', newTrackIndex: newIndex };
+        if (this.state.allSubtitleTracks.length <= trackCountBeforeAppend) {
+          throw new Error('缓存字幕未能追加到轨道列表');
         }
-        return { resolution, appliedVia: 'append-and-switch' };
+        const newIndex = this.state.allSubtitleTracks.length - 1;
+        await subtitleAdapter.switchTrack(newIndex);
+        this.applyBridgeState(subtitleAdapter.getState());
+        return { resolution, appliedVia: 'append-and-switch', newTrackIndex: newIndex };
       } catch (e) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `追加缓存字幕失败: ${String(e)}`);

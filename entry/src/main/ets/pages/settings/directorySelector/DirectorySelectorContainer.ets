@@ -178,8 +178,8 @@ export async function createDirectorySelectorSourceDescriptor(
   try {
     await provider.initWithConfig(config)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(`初始化目录提供者失败: ${msg}`)
+    const cause = e as Error
+    throw new Error(`初始化目录提供者失败: ${cause.message}`)
   }
   const descriptor: DirectorySelectorSourceDescriptor = {
     sourceId: params.sourceId,
