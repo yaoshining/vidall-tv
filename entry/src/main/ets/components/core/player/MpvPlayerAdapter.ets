@@ -49,6 +49,7 @@ export class MpvPlayerAdapter implements IPlayer {
 
   // ─── 状态 ───
   private _duration: number = 0;
+  private _durationHintMs: number = 0;
   private _currentTime: number = 0;
   private _isPrepared: boolean = false;
   private _isPlaying: boolean = false;
@@ -119,6 +120,7 @@ export class MpvPlayerAdapter implements IPlayer {
     this._isPrepared = false;
     this._isPlaying = false;
     this._duration = 0;
+    this._durationHintMs = videoData.durationHintMs ?? 0;
     this._currentTime = 0;
     this._isReleased = false;
     this._cachedTracks = [];
@@ -215,15 +217,30 @@ export class MpvPlayerAdapter implements IPlayer {
   seek(timeMs: number): void {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `seek() 入口: timeMs=${timeMs} isPrepared=${this._isPrepared} isReleased=${this._isReleased} duration=${this._duration}`);
-    if (!this._isPrepared || this._isReleased) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：尚未 prepared 或已 release');
+    if (this._isReleased) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：已 release');
+      this.onSeekCompleted();
       return;
     }
-    if (this._duration <= 0) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：duration 未知');
+    if (!this._isPrepared) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：尚未 prepared，触发 onSeekCompleted 防止 isSeeking 卡死');
+      this.onSeekCompleted();
       return;
     }
-    const percent = timeMs / this._duration;
+    // duration 为 0 时使用 hint fallback
+    let effectiveDuration = this._duration;
+    if (effectiveDuration <= 0 && this._durationHintMs > 0) {
+      effectiveDuration = this._durationHintMs;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `seek() duration 为 0，使用 hint fallback: ${effectiveDuration}`);
+    }
+    if (effectiveDuration <= 0) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'seek() 忽略：duration 和 hint 均未知，触发 onSeekCompleted 防止 isSeeking 卡死');
+      this.onSeekCompleted();
+      return;
+    }
+    const percent = timeMs / effectiveDuration;
     this._pendingSeekCount += 1;
     this.player.seekPercent(percent).then(() => {
       this.onSeekCompleted();
@@ -423,6 +440,8 @@ export class MpvPlayerAdapter implements IPlayer {
         this._isPlaying = true;
         if (!this._isPrepared) {
           this._isPrepared = true;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `onReady 触发: duration=${this._duration} hint=${this._durationHintMs}`);
           if (this._onReadyCb) { this._onReadyCb(); }
         }
         if (this._onPlayCb) { this._onPlayCb(); }
@@ -431,6 +450,8 @@ export class MpvPlayerAdapter implements IPlayer {
         this._isPlaying = false;
         if (!this._isPrepared) {
           this._isPrepared = true;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `onReady 触发(paused): duration=${this._duration} hint=${this._durationHintMs}`);
           if (this._onReadyCb) { this._onReadyCb(); }
         }
         if (this._onPausedCb) { this._onPausedCb(); }
@@ -458,6 +479,10 @@ export class MpvPlayerAdapter implements IPlayer {
     const durationMs = event.durationMs ?? 0;
     this._currentTime = positionMs;
     if (durationMs > 0) {
+      if (this._duration <= 0) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `position 事件首次设置 duration: ${durationMs}`);
+      }
       this._duration = durationMs;
     }
     if (this._onTimeUpdateCb) {
