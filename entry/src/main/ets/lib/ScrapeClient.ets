@@ -287,12 +287,18 @@ function scoreTvSearchResult(result: TvSeriesScrapeResult, searchQuery: string):
   if (title === query) { return 100; }
   if (originalTitle === query) { return 95; }
 
-  // 子串匹配
+  // 子串匹配（要求长度差异不超过 50%，避免短片段误匹配长标题）
   if (title.length > 0 && query.length > 0) {
-    if (title.includes(query) || query.includes(title)) { return 80; }
+    const lenRatio = Math.min(title.length, query.length) / Math.max(title.length, query.length);
+    if (lenRatio >= 0.5) {
+      if (title.includes(query) || query.includes(title)) { return 80; }
+    }
   }
   if (originalTitle.length > 0 && query.length > 0) {
-    if (originalTitle.includes(query) || query.includes(originalTitle)) { return 75; }
+    const lenRatio = Math.min(originalTitle.length, query.length) / Math.max(originalTitle.length, query.length);
+    if (lenRatio >= 0.5) {
+      if (originalTitle.includes(query) || query.includes(originalTitle)) { return 75; }
+    }
   }
 
   // 基础分：按 voteCount 给权重（高人气结果优先）
@@ -311,7 +317,27 @@ function selectTvSearchResult(
   if (results.length === 0) {
     return null;
   }
-  // 有年份约束时，优先匹配年份
+  // 有搜索词时，始终使用标题匹配评分选择最佳结果
+  if (searchQuery !== undefined && searchQuery.trim().length > 0) {
+    let bestResult: TvSeriesScrapeResult | null = null;
+    let bestScore = -1;
+    for (const result of results) {
+      let score = scoreTvSearchResult(result, searchQuery);
+      // 年份匹配加分
+      if (expectedYear !== undefined) {
+        const resultYear = extractSearchYear(result.firstAirDate ?? '');
+        if (resultYear === expectedYear) {
+          score += 15; // 年份匹配作为加分项，而非排他条件
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestResult = result;
+      }
+    }
+    return bestResult;
+  }
+  // 有年份约束但无搜索词时，优先匹配年份
   if (expectedYear !== undefined) {
     for (const result of results) {
       const resultYear = extractSearchYear(result.firstAirDate ?? '');
@@ -319,20 +345,6 @@ function selectTvSearchResult(
         return result;
       }
     }
-    // 年份精确匹配失败，降级到评分选择
-  }
-  // 有搜索词时，使用标题匹配评分选择最佳结果
-  if (searchQuery !== undefined && searchQuery.trim().length > 0) {
-    let bestResult: TvSeriesScrapeResult | null = null;
-    let bestScore = -1;
-    for (const result of results) {
-      const score = scoreTvSearchResult(result, searchQuery);
-      if (score > bestScore) {
-        bestScore = score;
-        bestResult = result;
-      }
-    }
-    return bestResult;
   }
   // 兜底：取第一条
   return results[0];
