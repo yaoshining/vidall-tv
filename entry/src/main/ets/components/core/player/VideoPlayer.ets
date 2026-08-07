@@ -593,18 +593,23 @@ export struct VideoPlayer {
                 this.controlsDialogController.open()
               }
             })
-            this.controller.initPlayer(this.data, this.surfaceId).then(() => {
-              this.controller.setMpvSurface(this.surfaceId)
-            }).catch((err: Error) => {
+            // 先 initPlayer（创建 MpvPlayerAdapter），等 onAreaChange 拿到有效宽高后再 setMpvSurface
+            this.controller.initPlayer(this.data, this.surfaceId).catch((err: Error) => {
               console.error(`[VideoPlayer] mpv init 异常: ${err.message}`)
               this.resetInitMode()
               this.backendMode = 'avplayer'
             })
           })
           .onAreaChange((_oldValue: Area, newValue: Area) => {
-            // 通知 mpv surfaceAdapter 尺寸变更
+            // MPV 需要 onAreaChange 拿到有效宽高后再绑定 surface
             if (this.controller.backend === 'mpv') {
-              this.controller.notifyMpvSurfaceResize(newValue)
+              const w = typeof newValue.width === 'number' ? newValue.width : 0
+              const h = typeof newValue.height === 'number' ? newValue.height : 0
+              if (w > 0 && h > 0 && this.surfaceId.length > 0 && !this.controller.isMpvSurfaceBound) {
+                this.controller.setMpvSurface(this.surfaceId, w, h)
+              } else if (this.controller.isMpvSurfaceBound) {
+                this.controller.notifyMpvSurfaceResize(newValue)
+              }
             }
           })
           .onClick(async () => {

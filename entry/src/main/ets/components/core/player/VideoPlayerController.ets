@@ -253,6 +253,12 @@ export class VideoPlayerController {
   private unsupportedFallbackLockedByUser: boolean = false;
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
+  /** MPV surface 是否已完成绑定（onLoad + 有效宽高） */
+  private mpvSurfaceBound: boolean = false
+  get isMpvSurfaceBound(): boolean { return this.mpvSurfaceBound }
+  /** 缓存最近一次 MPV XComponent 的有效宽高，供 reloadSource 使用 */
+  private mpvSurfaceWidth: number = 0
+  private mpvSurfaceHeight: number = 0
   @Trace duration = 0
   @Trace isPlaying = false
   @Trace isReady = false
@@ -1321,7 +1327,8 @@ export class VideoPlayerController {
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
     } else if (this.backend === 'mpv') {
       // MPV 使用 XComponentController 模式获取 surfaceId，
-      // VideoPlayer.ets 的 onLoad 回调会调用 setMpvSurface() 来完成绑定和 init
+      // VideoPlayer.ets 的 onAreaChange 回调会调用 setMpvSurface() 来完成绑定和 init
+      this.mpvSurfaceBound = false;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'MpvPlayerAdapter 已创建，等待 UI 层 setMpvSurface() 绑定 XComponent...');
     } else {
@@ -2028,11 +2035,14 @@ export class VideoPlayerController {
   }
 
   /**
-   * 供 VideoPlayer UI 层在 MPV XComponent.onLoad 回调中调用。
+   * 供 VideoPlayer UI 层在 MPV XComponent.onAreaChange 回调中调用。
    * 使用 XComponentController 模式获取 surfaceId，然后绑定 surface 并初始化播放。
    * 行为委托至 `PlaybackBackendService.bindMpvContext`。
+   * @param surfaceId XComponent surfaceId
+   * @param width XComponent 有效宽度（必须 > 0）
+   * @param height XComponent 有效高度（必须 > 0）
    */
-  async setMpvSurface(surfaceId: string): Promise<void> {
+  async setMpvSurface(surfaceId: string, width: number, height: number): Promise<void> {
     if (this.backend !== 'mpv') {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         'setMpvSurface() 被调用但 backend 不是 mpv，忽略');
@@ -2043,13 +2053,23 @@ export class VideoPlayerController {
         'setMpvSurface() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
       return;
     }
+    if (this.mpvSurfaceBound) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'setMpvSurface() surface 已绑定，忽略重复调用');
+      return;
+    }
+    this.mpvSurfaceWidth = width;
+    this.mpvSurfaceHeight = height;
     if (this.currentVideoData) {
       try {
         await this.backendService.bindMpvContext(
           this.player,
           surfaceId,
-          this.currentVideoData
+          this.currentVideoData,
+          width,
+          height
         );
+        this.mpvSurfaceBound = true;
       } catch (e) {
         const err = e as Error;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -2073,6 +2093,8 @@ export class VideoPlayerController {
     const width = typeof area.width === 'number' ? area.width : 0;
     const height = typeof area.height === 'number' ? area.height : 0;
     if (width > 0 && height > 0) {
+      this.mpvSurfaceWidth = width;
+      this.mpvSurfaceHeight = height;
       this.player.getSurfaceAdapter().onSizeChange(width, height).catch(() => {});
     }
   }
@@ -2116,7 +2138,9 @@ export class VideoPlayerController {
         }
         await this.setIjkContext(this.cachedIjkContext, this.cachedIjkComponentId);
       } else if (this.backend === 'mpv') {
-        await this.setMpvSurface(this.surfaceId);
+        // 重置绑定状态，使 setMpvSurface 可重新执行
+        this.mpvSurfaceBound = false;
+        await this.setMpvSurface(this.surfaceId, this.mpvSurfaceWidth, this.mpvSurfaceHeight);
       } else if (this.backend === 'native') {
         if (this.cachedNativeContext === undefined || this.cachedNativeComponentId.length === 0) {
           throw new Error('reloadSource missing native context');

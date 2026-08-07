@@ -320,13 +320,17 @@ export class PlaybackBackendService {
    * 绑定 MPV XComponent 上下文。
    *
    * MPV 使用 XComponentController 模式（与 avplayer 相同），
-   * 通过 MpvPlayerAdapter.getSurfaceAdapter().onLoad(surfaceId) 绑定 surface，
+   * 通过 MpvPlayerAdapter.getSurfaceAdapter().onLoad(surfaceId, width, height) 绑定 surface，
    * 然后调 init() 启动播放。
+   * @param width XComponent 有效宽度（必须 > 0，由 onAreaChange 提供）
+   * @param height XComponent 有效高度（必须 > 0，由 onAreaChange 提供）
    */
   async bindMpvContext(
     adapter: IPlayer | undefined,
     surfaceId: string,
-    videoData: VideoData
+    videoData: VideoData,
+    width: number,
+    height: number
   ): Promise<void> {
     if (!(adapter instanceof MpvPlayerAdapter)) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
@@ -334,9 +338,9 @@ export class PlaybackBackendService {
       return;
     }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setMpvSurface: 绑定 XComponent surfaceId=${surfaceId}，开始 init...`);
+      `setMpvSurface: 绑定 XComponent surfaceId=${surfaceId}，width=${width}，height=${height}，开始 init...`);
     try {
-      await adapter.getSurfaceAdapter().onLoad(surfaceId, 0, 0);
+      await adapter.getSurfaceAdapter().onLoad(surfaceId, width, height);
       await adapter.init(videoData, surfaceId);
     } catch (e) {
       const err = e as BusinessError;
