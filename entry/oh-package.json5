@@ -6,7 +6,8 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "libvidall_core_player_napi.so": "file:./src/main/cpp/types/libvidall_core_player_napi"
+    "libvidall_core_player_napi.so": "file:./src/main/cpp/types/libvidall_core_player_napi",
+    "@vidall/player": "file:./libs/vidall_player.har"
   }
 }
 

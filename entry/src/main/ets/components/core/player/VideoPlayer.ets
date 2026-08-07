@@ -574,6 +574,57 @@ export struct VideoPlayer {
           this.ijkViewportWidth = typeof newValue.width === 'number' ? newValue.width : 0
           this.ijkViewportHeight = typeof newValue.height === 'number' ? newValue.height : 0
         })
+      } else if (this.backendMode === 'mpv') {
+        // MPV 内核：使用 XComponentController 模式（与 avplayer 相同），通过 surfaceId 绑定
+        XComponent({
+          id: 'mpvPlayerXComponent',
+          type: XComponentType.SURFACE,
+          controller: this.xComponentController
+        })
+          .onLoad(() => {
+            if (!this.tryMarkInit('mpv')) {
+              return
+            }
+            this.surfaceId = this.xComponentController.getXComponentSurfaceId()
+            emitter.once(PlayerEvents.PREPARED, () => {
+              if (this.autoPlay) {
+                this.controller.play()
+              } else {
+                this.controlsDialogController.open()
+              }
+            })
+            this.controller.initPlayer(this.data, this.surfaceId).then(() => {
+              this.controller.setMpvSurface(this.surfaceId)
+            }).catch((err: Error) => {
+              console.error(`[VideoPlayer] mpv init 异常: ${err.message}`)
+              this.resetInitMode()
+              this.backendMode = 'avplayer'
+            })
+          })
+          .onAreaChange((_oldValue: Area, newValue: Area) => {
+            // 通知 mpv surfaceAdapter 尺寸变更
+            if (this.controller.backend === 'mpv') {
+              this.controller.notifyMpvSurfaceResize(newValue)
+            }
+          })
+          .onClick(async () => {
+            await this.controller.pause()
+            this.controlsDialogController.open()
+          })
+          .gesture(
+            SwipeGesture()
+              .onAction((event: SwipeGestureEvent) => {
+                if (!this.controlsOpened) {
+                  this.controlsDialogController.open()
+                } else {
+                  console.log('swipe direction: ' + JSON.stringify(event))
+                }
+              })
+          )
+          .width("100%")
+          .height("100%")
+          .renderFit(this.toRenderFit(this.aspectRatioMode))
+          .backgroundColor(Color.Black)
       } else if (this.backendMode === 'native') {
         Stack() {
           XComponent({
@@ -678,10 +729,54 @@ export struct VideoPlayer {
       this.clearIjkInitTimer()
       this.controlsDialogController.open()
     })
+    emitter.on(PlayerEvents.MPV_ERROR_FALLBACK, () => {
+      // MPV 播放失败，提示用户尝试 IJKPlayer
+      this.showMpvErrorFallbackDialog()
+    })
+    emitter.on(PlayerEvents.IJK_ERROR_FALLBACK, () => {
+      // IJKPlayer 播放失败，提示用户尝试 MPV
+      this.showIjkErrorFallbackDialog()
+    })
   }
 
   aboutToDisappear(): void {
     this.clearIjkInitTimer()
     emitter.off(PlayerEvents.COMPLETED.eventId)
+    emitter.off(PlayerEvents.MPV_ERROR_FALLBACK.eventId)
+    emitter.off(PlayerEvents.IJK_ERROR_FALLBACK.eventId)
+  }
+
+  private showMpvErrorFallbackDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: 'MPV 播放失败',
+      message: '当前视频无法使用 MPV 播放器播放，是否尝试切换到 IJKPlayer？',
+      primaryButton: {
+        value: '切换到 IJKPlayer',
+        action: () => {
+          this.controller.switchBackendInPlayback('ijkplayer')
+        }
+      },
+      secondaryButton: {
+        value: '关闭',
+        action: () => {}
+      }
+    })
+  }
+
+  private showIjkErrorFallbackDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: 'IJKPlayer 播放失败',
+      message: '当前视频无法使用 IJKPlayer 播放，是否尝试切换到 MPV 播放器？',
+      primaryButton: {
+        value: '切换到 MPV',
+        action: () => {
+          this.controller.switchBackendInPlayback('mpv')
+        }
+      },
+      secondaryButton: {
+        value: '关闭',
+        action: () => {}
+      }
+    })
   }
 }

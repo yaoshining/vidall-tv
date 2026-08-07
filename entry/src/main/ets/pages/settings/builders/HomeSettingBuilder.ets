@@ -14,6 +14,7 @@ import {
   navigateToSubtitleLanguagePreference
 } from "./HomeSettingBuilderModel";
 import { SubtitleCacheManager, formatCacheSize } from '../../../subtitle/SubtitleCacheManager';
+import { AppPreferences, PrefKey } from '../../../utils/AppPreferences';
 
 @Builder
 function vipTitleBuilder() {
@@ -38,10 +39,12 @@ struct HomeSettingBuilderComponent {
   @Local isSubtitleLanguageSummaryLoaded: boolean = false
   @Local private isClearingCache: boolean = false
   @Local private cacheSizeText: string = ''
+  @Local private playerFallbackValue: string = 'ijkplayer'
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
     this.loadCacheSize()
+    this.loadPlayerFallback()
   }
 
   private async loadSubtitlePreference(): Promise<void> {
@@ -66,6 +69,20 @@ struct HomeSettingBuilderComponent {
     } catch {
       this.cacheSizeText = ''
     }
+  }
+
+  private async loadPlayerFallback(): Promise<void> {
+    try {
+      const val = await AppPreferences.get(PrefKey.PLAYER_FALLBACK, 'ijkplayer')
+      this.playerFallbackValue = val
+    } catch {
+      this.playerFallbackValue = 'ijkplayer'
+    }
+  }
+
+  private async setPlayerFallback(value: string): Promise<void> {
+    this.playerFallbackValue = value
+    await AppPreferences.set(PrefKey.PLAYER_FALLBACK, value)
   }
 
   private showCacheClearConfirm(): void {
@@ -100,6 +117,21 @@ struct HomeSettingBuilderComponent {
     }).catch(() => {
       this.isClearingCache = false
       this.showToast('清理失败，请重试')
+    })
+  }
+
+  private showPlayerFallbackDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: '回退播放内核',
+      message: '当 AVPlayer 无法播放时，使用哪个播放器作为回退？\n\n· IJKPlayer: 成熟稳定，软解能力强\n· MPV (libmpv): 格式支持更广，图形字幕内嵌合成',
+      primaryButton: {
+        value: 'MPV (libmpv)',
+        action: () => { this.setPlayerFallback('mpv') }
+      },
+      secondaryButton: {
+        value: 'IJKPlayer',
+        action: () => { this.setPlayerFallback('ijkplayer') }
+      }
     })
   }
 
@@ -179,6 +211,18 @@ struct HomeSettingBuilderComponent {
       }
 
       OpenSubtitlesConfigBuilder()
+
+      SettingListItemGroup({
+        title: "播放器"
+      }) {
+        SettingListItem({
+          title: "回退播放内核",
+          value: this.playerFallbackValue === 'mpv' ? 'MPV (libmpv)' : 'IJKPlayer',
+          onItemClick: () => {
+            this.showPlayerFallbackDialog()
+          }
+        })
+      }
 
       SettingListItemGroup({
         title: "通用"

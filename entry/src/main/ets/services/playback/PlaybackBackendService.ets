@@ -36,6 +36,7 @@ import { IPlayer } from '../../components/core/player/IPlayer';
 import { AVPlayerAdapter } from '../../components/core/player/AVPlayerAdapter';
 import { IjkPlayerAdapter } from '../../components/core/player/IjkPlayerAdapter';
 import { VidAllPlayerAdapter } from '../../components/core/player/VidAllPlayerAdapter';
+import { MpvPlayerAdapter } from '../../components/core/player/MpvPlayerAdapter';
 import {
   AvSubtitleBridgeAdapter,
   IjkSubtitleBridgeAdapter,
@@ -239,6 +240,21 @@ export class PlaybackBackendService {
         });
       }
       adapter = ijkAdapter;
+    } else if (backend === 'mpv') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: 使用 MpvPlayerAdapter，等待 UI 层调用 setMpvSurface()');
+      const mpvAdapter = new MpvPlayerAdapter();
+      const mpvSubAdapter = new IjkSubtitleBridgeAdapter();
+      subtitleBridge = mpvSubAdapter;
+      subtitleBridgeKind = 'mpv';
+      // 内嵌字幕回调 — mpv 也通过 subtitleText 事件输出文本字幕
+      if (cb.onEmbeddedTimedText !== undefined) {
+        const onEmbedded = cb.onEmbeddedTimedText;
+        mpvAdapter.setOnEmbeddedSubtitleCallback((text: string) => {
+          onEmbedded(text);
+        });
+      }
+      adapter = mpvAdapter;
     } else {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 AVPlayerAdapter');
@@ -297,6 +313,36 @@ export class PlaybackBackendService {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `setIjkContext init 失败: ${err.message}`);
       throw new Error(`setIjkContext init 失败: ${err.message ?? 'unknown'}`);
+    }
+  }
+
+  /**
+   * 绑定 MPV XComponent 上下文。
+   *
+   * MPV 使用 XComponentController 模式（与 avplayer 相同），
+   * 通过 MpvPlayerAdapter.getSurfaceAdapter().onLoad(surfaceId) 绑定 surface，
+   * 然后调 init() 启动播放。
+   */
+  async bindMpvContext(
+    adapter: IPlayer | undefined,
+    surfaceId: string,
+    videoData: VideoData
+  ): Promise<void> {
+    if (!(adapter instanceof MpvPlayerAdapter)) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'bindMpvContext 收到非 MpvPlayerAdapter，跳过绑定');
+      return;
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `setMpvSurface: 绑定 XComponent surfaceId=${surfaceId}，开始 init...`);
+    try {
+      await adapter.getSurfaceAdapter().onLoad(surfaceId, 0, 0);
+      await adapter.init(videoData, surfaceId);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `setMpvSurface init 失败: ${err.message}`);
+      throw new Error(`setMpvSurface init 失败: ${err.message ?? 'unknown'}`);
     }
   }
 

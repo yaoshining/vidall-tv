@@ -8,6 +8,7 @@ import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
 import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
+import { MpvPlayerAdapter } from "./MpvPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeUtil } from "../../../utils/FfprobeUtil";
@@ -24,6 +25,7 @@ import { SmbAvSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
 import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 import { ParsedSubtitle } from "./SubtitleRenderer";
 import { PlaybackContext } from "./PlaybackContext";
+import { AppPreferences, PrefKey } from "../../../utils/AppPreferences";
 import {
   DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
   DEFAULT_EPISODE_AUTOPLAY_ENABLED
@@ -51,7 +53,7 @@ import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioR
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
 /** 播放内核类型 */
-export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
+export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'mpv' | 'ffmpeg' | 'native';
 
 export function resolveAiEnhanceEnabledByRuntime(runtimeSupported: boolean, requestedEnabled: boolean): boolean {
   return runtimeSupported && requestedEnabled;
@@ -224,7 +226,7 @@ export interface AudioTrackItem {
   codecName?: string;
 }
 
-export type UnsupportedFormatFallback = 'ijkplayer' | 'native';
+export type UnsupportedFormatFallback = 'ijkplayer' | 'mpv' | 'native';
 
 @ObservedV2
 export class VideoPlayerController {
@@ -812,6 +814,19 @@ export class VideoPlayerController {
     videoData.videoCodec = decision.videoCodecName;
     if (!this.unsupportedFallbackLockedByUser) {
       this.unsupportedFormatFallback = decision.fallback;
+      // 用户偏好覆盖：从 AppPreferences 读取 PLAYER_FALLBACK，若有效则覆盖自动决策
+      try {
+        const prefFallback = await AppPreferences.get(PrefKey.PLAYER_FALLBACK, 'ijkplayer');
+        if (prefFallback === 'ijkplayer' || prefFallback === 'mpv') {
+          if (this.unsupportedFormatFallback !== prefFallback) {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `用户偏好覆盖 fallback: ${this.unsupportedFormatFallback} → ${prefFallback}`);
+            this.unsupportedFormatFallback = prefFallback;
+          }
+        }
+      } catch {
+        // 读取偏好失败，保持自动决策
+      }
       if (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native') {
         this.backend = decision.preferredBackend;
       }
@@ -849,6 +864,7 @@ export class VideoPlayerController {
     }
 
     // native 后端已停止主路径接入（SMB 源现通过 HTTP 代理 + AVPlayer 播放），强制回退到 ijkplayer。
+    // 注意：mpv 不在此列 — mpv 是活跃后端，不应被拒绝。
     if (this.backend === 'native') {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         'native 播放后端已从主路径下线，自动回退到 ijkplayer');
@@ -1103,6 +1119,28 @@ export class VideoPlayerController {
         this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
         return;
       }
+      // mpv 播放失败：提示用户尝试 ijkplayer
+      if (this.backend === 'mpv') {
+        this.isLoading = false;
+        this.lastErrorMessage = this.normalizePlayerError(error.message);
+        this.rejectPendingReload(new Error(error.message));
+        // 发出 mpv 错误事件，由 VideoPlayer 页面展示切换对话框
+        emitter.emit(PlayerEvents.MPV_ERROR_FALLBACK, {
+          data: { errorMessage: this.lastErrorMessage }
+        });
+        return;
+      }
+      // ijkplayer 播放失败：提示用户尝试 mpv
+      if (this.backend === 'ijkplayer') {
+        this.isLoading = false;
+        this.lastErrorMessage = this.normalizePlayerError(error.message);
+        this.rejectPendingReload(new Error(error.message));
+        // 发出 ijk 错误事件，由 VideoPlayer 页面展示切换对话框
+        emitter.emit(PlayerEvents.IJK_ERROR_FALLBACK, {
+          data: { errorMessage: this.lastErrorMessage }
+        });
+        return;
+      }
       this.isLoading = false;
       this.lastErrorMessage = this.normalizePlayerError(error.message);
       this.rejectPendingReload(new Error(error.message));
@@ -1281,6 +1319,11 @@ export class VideoPlayerController {
       // 注意：VPE AI 画质增强不适用于 ijkplayer 路径（ijkplayer 使用 XComponent native hook 渲染）
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
+    } else if (this.backend === 'mpv') {
+      // MPV 使用 XComponentController 模式获取 surfaceId，
+      // VideoPlayer.ets 的 onLoad 回调会调用 setMpvSurface() 来完成绑定和 init
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'MpvPlayerAdapter 已创建，等待 UI 层 setMpvSurface() 绑定 XComponent...');
     } else {
       // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE；
       // VPE 增强仍由 controller 负责（service 不持有 aiEnhance 状态）。
@@ -1984,6 +2027,56 @@ export class VideoPlayerController {
     }
   }
 
+  /**
+   * 供 VideoPlayer UI 层在 MPV XComponent.onLoad 回调中调用。
+   * 使用 XComponentController 模式获取 surfaceId，然后绑定 surface 并初始化播放。
+   * 行为委托至 `PlaybackBackendService.bindMpvContext`。
+   */
+  async setMpvSurface(surfaceId: string): Promise<void> {
+    if (this.backend !== 'mpv') {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        'setMpvSurface() 被调用但 backend 不是 mpv，忽略');
+      return;
+    }
+    if (!this.player) {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        'setMpvSurface() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
+      return;
+    }
+    if (this.currentVideoData) {
+      try {
+        await this.backendService.bindMpvContext(
+          this.player,
+          surfaceId,
+          this.currentVideoData
+        );
+      } catch (e) {
+        const err = e as Error;
+        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+          `setMpvSurface init 失败: ${err.message}`);
+        this.rejectPendingReload(err);
+      }
+    }
+  }
+
+  /**
+   * 通知 MPV 播放器 XComponent 尺寸变更（onAreaChange 回调）。
+   * 由 VideoPlayer.ets 在 mpv 分支的 onAreaChange 中调用。
+   */
+  notifyMpvSurfaceResize(area: Area): void {
+    if (this.backend !== 'mpv' || !this.player) {
+      return;
+    }
+    if (!(this.player instanceof MpvPlayerAdapter)) {
+      return;
+    }
+    const width = typeof area.width === 'number' ? area.width : 0;
+    const height = typeof area.height === 'number' ? area.height : 0;
+    if (width > 0 && height > 0) {
+      this.player.getSurfaceAdapter().onSizeChange(width, height).catch(() => {});
+    }
+  }
+
   setNativeSeekDiagLogEnabled(enabled: boolean): void {
     this.nativeSeekDiagLogEnabled = enabled;
   }
@@ -2022,6 +2115,8 @@ export class VideoPlayerController {
           throw new Error('reloadSource missing ijk context');
         }
         await this.setIjkContext(this.cachedIjkContext, this.cachedIjkComponentId);
+      } else if (this.backend === 'mpv') {
+        await this.setMpvSurface(this.surfaceId);
       } else if (this.backend === 'native') {
         if (this.cachedNativeContext === undefined || this.cachedNativeComponentId.length === 0) {
           throw new Error('reloadSource missing native context');
@@ -2089,6 +2184,56 @@ export class VideoPlayerController {
     this.unsupportedFallbackLockedByUser = false;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       'unsupportedFormatFallback 已恢复自动策略');
+  }
+
+  /**
+   * 播放中切换内核（用户主动切换）。
+   * 保存当前进度 → 释放旧播放器 → 切换 backend → 重新 initPlayer → seek 到保存位置。
+   */
+  switchBackendInPlayback(targetBackend: PlayerBackend): void {
+    if (this.backend === targetBackend) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `switchBackendInPlayback: 已是 ${targetBackend}，无需切换`);
+      return;
+    }
+    if (targetBackend !== 'ijkplayer' && targetBackend !== 'mpv') {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `switchBackendInPlayback: 不支持切换到 ${targetBackend}，仅支持 ijkplayer/mpv`);
+      return;
+    }
+    const savedPosition = this.currentTime;
+    const savedDuration = this.duration;
+    const savedVideoData = this.currentVideoData;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `switchBackendInPlayback: ${this.backend} → ${targetBackend}, savedPosition=${savedPosition}ms`);
+
+    // 释放当前播放器
+    this.release().then(() => {
+      // 切换 backend
+      this.backend = targetBackend;
+      this.unsupportedFormatFallback = targetBackend;
+      this.unsupportedFallbackLockedByUser = true;
+
+      // 如果有视频数据，重新初始化
+      if (savedVideoData) {
+        this.initPlayer(savedVideoData, this.surfaceId).then(() => {
+          // seek 到保存的位置
+          if (savedPosition > 0 && savedDuration > 0) {
+            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+              `switchBackendInPlayback: seek to ${savedPosition}ms`);
+            this.seek(savedPosition, 'switch_backend').catch(() => {});
+          }
+          // 开始播放
+          this.play().catch(() => {});
+        }).catch(() => {
+          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+            `switchBackendInPlayback: 切换到 ${targetBackend} 失败`);
+        });
+      }
+    }).catch(() => {
+      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+        `switchBackendInPlayback: 释放当前播放器失败`);
+    });
   }
 
   /**
