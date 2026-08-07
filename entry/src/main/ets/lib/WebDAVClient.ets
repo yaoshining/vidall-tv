@@ -1386,17 +1386,16 @@ export class WebDAVClient {
   async listDirectory(path: string = '/'): Promise<WebDAVResource[]> {
     let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
     if (!basePath) {
-      basePath = '';
+      basePath = '/';
     }
 
     let fullPath = basePath + path;
-    if (!fullPath.startsWith('/')) {
-      fullPath = '/' + fullPath;
-    }
+    // 去除双斜杠（如 basePath='/' + path='/' → '//' → '/'）
+    fullPath = fullPath.replace(/\/+/g, '/');
 
     // 对路径中的空格等特殊字符进行 URL 编码，避免 HTTP 请求行格式错误（400 Bad Request）
     const encodedPath = this.encodeURIPath(fullPath);
-    console.info('Listing:', fullPath, '→ encoded:', encodedPath);
+    console.info('[WebDAVClient] listDirectory — baseUrl:', this.baseUrl, 'basePath:', basePath, 'path:', path, 'fullPath:', fullPath);
 
     const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
@@ -1492,6 +1491,13 @@ export class WebDAVClient {
         if (response.statusCode !== 207 && response.statusCode !== 200) {
           return { success: false, message: `服务器返回错误：HTTP ${response.statusCode}` };
         }
+        // HTTP 200 不一定是 WebDAV 响应，可能是普通 web 页面；需要验证内容
+        if (response.statusCode === 200) {
+          const body = response.data ?? '';
+          if (typeof body === 'string' && (body.includes('<html') || body.includes('<HTML'))) {
+            return { success: false, message: '服务器返回了网页而非 WebDAV 响应，请检查根路径(rootPath)配置' };
+          }
+        }
         console.info('WebDAV connection test successful');
         return { success: true, message: '连接成功' };
       } catch (error) {
@@ -1585,8 +1591,8 @@ export class WebDAVClient {
 
     try {
       if (xmlText.includes('<html') || xmlText.includes('<HTML')) {
-        console.error('Received HTML');
-        return resources;
+        console.error('[WebDAVClient] PROPFIND 返回 HTML 而非 WebDAV XML，可能 rootPath 配置不正确');
+        throw new Error('服务器返回了网页而非 WebDAV 响应，请检查 WebDAV 根路径(rootPath)配置是否正确');
       }
 
       const responsePattern = /<(?:D:)?response[^>]*>([\s\S]*?)<\/(?:D:)?response>/gi;

@@ -167,7 +167,7 @@ struct WebDAVConfigBuilderComponent {
         }
       }
 
-      // 构造基础 URL（协议://服务器:端口）
+      // 构造基础 URL（协议://服务器:端口/根路径）
       let baseUrl = `${this.protocol}://${serverAddress}:${port}`
 
       // 处理路径：如果为空或只有空格，使用默认值 /
@@ -176,12 +176,9 @@ struct WebDAVConfigBuilderComponent {
         path = '/'
       }
 
-      // 如果有路径且不是根路径，添加路径
-      if (path !== '/') {
-        // 确保路径以 / 开头
-        const formattedPath = path.startsWith('/') ? path : '/' + path
-        baseUrl = baseUrl + formattedPath
-      }
+      // 始终将 rootPath 加入 baseUrl，确保 WebDAVClient 知道实际的 WebDAV 挂载点
+      const formattedPath = path.startsWith('/') ? path : '/' + path
+      baseUrl = baseUrl + formattedPath
 
       const config: WebDAVConfig = {
         baseUrl: baseUrl,
@@ -333,11 +330,9 @@ struct WebDAVConfigBuilderComponent {
       // 构造基础 URL
       let baseUrl = `${this.protocol}://${serverAddress}:${port}`
 
-      // 添加路径
-      if (path !== '/') {
-        const formattedPath = path.startsWith('/') ? path : '/' + path
-        baseUrl = baseUrl + formattedPath
-      }
+      // 始终将 rootPath 加入 baseUrl，确保 WebDAVClient 知道实际的 WebDAV 挂载点
+      const formattedPath = path.startsWith('/') ? path : '/' + path
+      baseUrl = baseUrl + formattedPath
 
       // 跳转到文件夹选择器
       const params: Record<string, Object> = {}
@@ -345,7 +340,7 @@ struct WebDAVConfigBuilderComponent {
       params['baseUrl'] = baseUrl as Object
       params['username'] = this.username as Object
       params['password'] = this.password as Object
-      params['protocol'] = this.protocol as Object
+      params['protocol'] = 'webdav' as Object
       params['port'] = port as Object
       params['rootPath'] = path as Object
 

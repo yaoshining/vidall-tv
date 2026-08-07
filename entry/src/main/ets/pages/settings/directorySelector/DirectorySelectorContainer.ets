@@ -211,9 +211,8 @@ export function buildWebDavDirectorySelectorRouteParams(
   }
   let baseUrl = `${config.protocol}://${serverAddress}:${port}`
   const normalizedPath = config.rootPath.trim().length > 0 ? config.rootPath.trim() : '/'
-  if (normalizedPath !== '/') {
-    baseUrl += normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath
-  }
+  // 始终将 rootPath 加入 baseUrl，确保 WebDAVClient 知道实际的 WebDAV 挂载点
+  baseUrl += normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath
   
   const record: Record<string, Object> = {}
   record['sourceId'] = sourceId
