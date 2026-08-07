@@ -256,6 +256,10 @@ export class VideoPlayerController {
   /** MPV surface 是否已完成绑定（onLoad + 有效宽高） */
   private mpvSurfaceBound: boolean = false
   get isMpvSurfaceBound(): boolean { return this.mpvSurfaceBound }
+  // 缓存 onAreaChange 提前到达时的 surface 参数，等 initPlayer 完成后自动绑定
+  private pendingMpvSurfaceId: string = ''
+  private pendingMpvSurfaceWidth: number = 0
+  private pendingMpvSurfaceHeight: number = 0
   /** 缓存最近一次 MPV XComponent 的有效宽高，供 reloadSource 使用 */
   private mpvSurfaceWidth: number = 0
   private mpvSurfaceHeight: number = 0
@@ -1331,6 +1335,19 @@ export class VideoPlayerController {
       this.mpvSurfaceBound = false;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'MpvPlayerAdapter 已创建，等待 UI 层 setMpvSurface() 绑定 XComponent...');
+      // 检查是否有缓存的 surface 参数（onAreaChange 可能先于 initPlayer 触发）
+      if (this.pendingMpvSurfaceId.length > 0 && this.pendingMpvSurfaceWidth > 0 &&
+        this.pendingMpvSurfaceHeight > 0) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `initPlayer 检测到缓存的 surface 参数，自动绑定: w=${this.pendingMpvSurfaceWidth} h=${this.pendingMpvSurfaceHeight}`);
+        const sid = this.pendingMpvSurfaceId;
+        const sw = this.pendingMpvSurfaceWidth;
+        const sh = this.pendingMpvSurfaceHeight;
+        this.pendingMpvSurfaceId = '';
+        this.pendingMpvSurfaceWidth = 0;
+        this.pendingMpvSurfaceHeight = 0;
+        await this.setMpvSurface(sid, sw, sh);
+      }
     } else {
       // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE；
       // VPE 增强仍由 controller 负责（service 不持有 aiEnhance 状态）。
@@ -2049,8 +2066,13 @@ export class VideoPlayerController {
       return;
     }
     if (!this.player) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        'setMpvSurface() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
+      // player 还未初始化（fallback 场景 onAreaChange 可能先于 initPlayer 触发）
+      // 缓存参数，等 initPlayer 完成后自动绑定
+      this.pendingMpvSurfaceId = surfaceId;
+      this.pendingMpvSurfaceWidth = width;
+      this.pendingMpvSurfaceHeight = height;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `setMpvSurface() player 未初始化，缓存 surface 参数: id=${surfaceId.substring(0, 8)}... w=${width} h=${height}`);
       return;
     }
     if (this.mpvSurfaceBound) {
