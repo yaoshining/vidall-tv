@@ -268,20 +268,74 @@ function buildTvSearchCandidates(parsedTitle: string, parsedYear: number | undef
   return candidates;
 }
 
+/**
+ * 对 TMDB 搜索结果进行标题匹配评分。
+ * 评分规则：
+ * - 标题完全匹配（不区分大小写）：100分
+ * - 原始标题完全匹配：95分
+ * - 标题包含搜索词（子串匹配）：80分
+ * - 原始标题包含搜索词：75分
+ * - 搜索词包含标题（反向子串）：60分
+ * - 最低分：按 voteCount 权重给基础分（确保高人气结果有基础分）
+ */
+function scoreTvSearchResult(result: TvSeriesScrapeResult, searchQuery: string): number {
+  const query = searchQuery.toLowerCase().trim();
+  const title = (result.title ?? '').toLowerCase().trim();
+  const originalTitle = (result.originalTitle ?? '').toLowerCase().trim();
+
+  // 完全匹配
+  if (title === query) { return 100; }
+  if (originalTitle === query) { return 95; }
+
+  // 子串匹配
+  if (title.length > 0 && query.length > 0) {
+    if (title.includes(query) || query.includes(title)) { return 80; }
+  }
+  if (originalTitle.length > 0 && query.length > 0) {
+    if (originalTitle.includes(query) || query.includes(originalTitle)) { return 75; }
+  }
+
+  // 基础分：按 voteCount 给权重（高人气结果优先）
+  const voteCount = result.voteCount ?? 0;
+  if (voteCount >= 10000) { return 50; }
+  if (voteCount >= 1000) { return 40; }
+  if (voteCount >= 100) { return 30; }
+  return 20;
+}
+
 function selectTvSearchResult(
   results: TvSeriesScrapeResult[],
-  expectedYear: number | undefined
+  expectedYear: number | undefined,
+  searchQuery?: string
 ): TvSeriesScrapeResult | null {
-  if (expectedYear === undefined) {
-    return results.length > 0 ? results[0] : null;
+  if (results.length === 0) {
+    return null;
   }
-  for (const result of results) {
-    const resultYear = extractSearchYear(result.firstAirDate ?? '');
-    if (resultYear === expectedYear) {
-      return result;
+  // 有年份约束时，优先匹配年份
+  if (expectedYear !== undefined) {
+    for (const result of results) {
+      const resultYear = extractSearchYear(result.firstAirDate ?? '');
+      if (resultYear === expectedYear) {
+        return result;
+      }
     }
+    // 年份精确匹配失败，降级到评分选择
   }
-  return null;
+  // 有搜索词时，使用标题匹配评分选择最佳结果
+  if (searchQuery !== undefined && searchQuery.trim().length > 0) {
+    let bestResult: TvSeriesScrapeResult | null = null;
+    let bestScore = -1;
+    for (const result of results) {
+      const score = scoreTvSearchResult(result, searchQuery);
+      if (score > bestScore) {
+        bestScore = score;
+        bestResult = result;
+      }
+    }
+    return bestResult;
+  }
+  // 兜底：取第一条
+  return results[0];
 }
 
 // ─────────────────────────────────────────────
@@ -673,6 +727,12 @@ export class ScrapeClient {
   private runningCount: number = 0;
   private waitQueue: Array<() => void> = [];
   private readonly scrapeConcurrencyOverride?: number;
+  /**
+   * TV 系列搜索缓存：key 为标准化搜索词（小写），value 为已确认的 providerId。
+   * 同一刮削会话中，相同搜索词直接复用已确认的系列 ID，避免重复搜索导致不同匹配结果。
+   * 外部可通过 clearTvSeriesCache() 在刮削会话开始前清除。
+   */
+  private tvSeriesCache: Map<string, string> = new Map();
 
   constructor(config: ScrapeClientConfig) {
     this.scrapeConcurrencyOverride = config.scrapeConcurrency;
@@ -687,6 +747,21 @@ export class ScrapeClient {
 
   getProviderIds(): string[] {
     return Array.from(this.providers.keys());
+  }
+
+  /** 清除 TV 系列搜索缓存，在新的刮削会话开始时调用 */
+  clearTvSeriesCache(): void {
+    this.tvSeriesCache.clear();
+  }
+
+  /** 获取缓存中已确认的 TV 系列 providerId，未命中返回 undefined */
+  getCachedTvSeriesId(searchTitle: string): string | undefined {
+    return this.tvSeriesCache.get(searchTitle.toLowerCase().trim());
+  }
+
+  /** 缓存已确认的 TV 系列 providerId */
+  cacheTvSeriesId(searchTitle: string, providerId: string): void {
+    this.tvSeriesCache.set(searchTitle.toLowerCase().trim(), providerId);
   }
 
   /** 搜索电影，返回第一个命中的详情 */
@@ -751,32 +826,79 @@ export class ScrapeClient {
     console.info(`[ScrapeClient] autoScrapeTvEpisode 开始: file="${fileName}" S${effectiveSeasonNumber ?? '?'}E${effectiveEpisodeNumber ?? '?'}`);
     console.info(`[ScrapeClient] autoScrapeTvEpisode 候选标题: ${JSON.stringify(searchCandidates)}`);
 
+    // 缓存查找：同一刮削会话中，已确认的系列 ID 直接复用，避免重复搜索导致不同匹配
+    let cachedProviderId: string | undefined = undefined;
+    for (const candidate of searchCandidates) {
+      const cached = this.getCachedTvSeriesId(candidate.title);
+      if (cached !== undefined) {
+        cachedProviderId = cached;
+        console.info(`[ScrapeClient] autoScrapeTvEpisode 缓存命中: title="${candidate.title}" → providerId=${cached}`);
+        break;
+      }
+    }
+
     await this.acquire();
     try {
       for (const provider of this.getActiveProviders()) {
         try {
           let topSearch: TvSeriesScrapeResult | null = null;
-          for (const candidate of searchCandidates) {
-            let results = await provider.searchTv(candidate.title, candidate.year, 'zh-CN');
-            topSearch = selectTvSearchResult(results, candidate.year);
-            console.info(
-              `[ScrapeClient] searchTv("${candidate.title}" year=${candidate.year ?? 'none'}) → ${results.length} 条结果` +
-              `${topSearch ? '，选中: ' + topSearch.title + '(id=' + topSearch.providerId + ')' : ''}`
-            );
-            // 带年份搜索没有精确年份候选时，允许降级查询，但仍拒绝年份冲突的条目。
-            if (!topSearch && candidate.year !== undefined) {
-              results = await provider.searchTv(candidate.title, undefined, 'zh-CN');
-              topSearch = selectTvSearchResult(results, candidate.year);
-              console.info(
-                `[ScrapeClient] searchTv("${candidate.title}" 无年份降级) → ${results.length} 条结果` +
-                `${topSearch ? '，选中: ' + topSearch.title + '(id=' + topSearch.providerId + ')' : ''}`
-              );
-            }
-            if (topSearch) {
-              console.info(`[ScrapeClient] autoScrapeTvEpisode 命中候选标题="${candidate.title}" providerId=${topSearch.providerId}`);
-              break;
+
+          // 如果缓存命中，直接用缓存的 providerId 获取系列详情
+          if (cachedProviderId !== undefined) {
+            const seriesDetail = await provider.fetchTvSeriesDetail(cachedProviderId, 'zh-CN');
+            if (seriesDetail) {
+              const cachedResult: TvSeriesScrapeResult = {
+                provider: seriesDetail.provider,
+                providerId: seriesDetail.providerId,
+                title: seriesDetail.title,
+                originalTitle: seriesDetail.originalTitle,
+                overview: seriesDetail.overview,
+                firstAirDate: seriesDetail.firstAirDate,
+                rating: seriesDetail.rating,
+                voteCount: seriesDetail.voteCount,
+                posterPath: seriesDetail.posterPath,
+                backdropPath: seriesDetail.backdropPath,
+                posterUrl: seriesDetail.posterUrl,
+                backdropUrl: seriesDetail.backdropUrl,
+                genresJson: seriesDetail.genresJson,
+                castJson: seriesDetail.castJson,
+                numberOfSeasons: seriesDetail.numberOfSeasons,
+                originalLanguage: seriesDetail.originalLanguage,
+                originCountryJson: seriesDetail.originCountryJson,
+                rawJson: seriesDetail.rawJson
+              };
+              topSearch = cachedResult;
+              console.info(`[ScrapeClient] autoScrapeTvEpisode 缓存复用: title="${seriesDetail.title}" providerId=${seriesDetail.providerId}`);
+            } else {
+              console.warn(`[ScrapeClient] autoScrapeTvEpisode 缓存 providerId=${cachedProviderId} 获取详情失败，重新搜索`);
+              cachedProviderId = undefined;
             }
           }
+
+          if (!topSearch) {
+            for (const candidate of searchCandidates) {
+              let results = await provider.searchTv(candidate.title, candidate.year, 'zh-CN');
+              topSearch = selectTvSearchResult(results, candidate.year, candidate.title);
+              console.info(
+                `[ScrapeClient] searchTv("${candidate.title}" year=${candidate.year ?? 'none'}) → ${results.length} 条结果` +
+                `${topSearch ? '，选中: ' + topSearch.title + '(id=' + topSearch.providerId + ')' : ''}`
+              );
+              // 带年份搜索没有精确年份候选时，允许降级查询，但仍拒绝年份冲突的条目。
+              if (!topSearch && candidate.year !== undefined) {
+                results = await provider.searchTv(candidate.title, undefined, 'zh-CN');
+                topSearch = selectTvSearchResult(results, candidate.year, candidate.title);
+                console.info(
+                  `[ScrapeClient] searchTv("${candidate.title}" 无年份降级) → ${results.length} 条结果` +
+                  `${topSearch ? '，选中: ' + topSearch.title + '(id=' + topSearch.providerId + ')' : ''}`
+                );
+              }
+              if (topSearch) {
+                console.info(`[ScrapeClient] autoScrapeTvEpisode 命中候选标题="${candidate.title}" providerId=${topSearch.providerId}`);
+                break;
+              }
+            }
+          }
+
           if (!topSearch) {
             console.warn(`[ScrapeClient] autoScrapeTvEpisode 所有候选标题均无结果，跳过 provider=${provider.id}`);
             continue;
@@ -787,6 +909,11 @@ export class ScrapeClient {
             continue;
           }
           console.info(`[ScrapeClient] autoScrapeTvEpisode fetchTvSeriesDetail OK: title="${series.title}" posterUrl=${series.posterUrl ? 'Y' : 'N'}`);
+
+          // 缓存已确认的系列 ID，后续同搜索词直接复用
+          for (const candidate of searchCandidates) {
+            this.cacheTvSeriesId(candidate.title, series.providerId);
+          }
 
           let season: TvSeasonScrapeResult | null = null;
           let episode: TvEpisodeScrapeResult | null = null;
