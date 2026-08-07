@@ -213,6 +213,8 @@ export class MpvPlayerAdapter implements IPlayer {
   // ─── 播放控制 ───
 
   seek(timeMs: number): void {
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `seek() 入口: timeMs=${timeMs} isPrepared=${this._isPrepared} isReleased=${this._isReleased} duration=${this._duration}`);
     if (!this._isPrepared || this._isReleased) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：尚未 prepared 或已 release');
       return;

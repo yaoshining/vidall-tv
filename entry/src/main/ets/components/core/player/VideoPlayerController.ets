@@ -996,6 +996,13 @@ export class VideoPlayerController {
       }
       this.smbProxyActive = adapterHandle.smbProxyActive;
       this.sourceProtocol = adapterHandle.smbOriginalSrc.length > 0 ? 'SMB' : this.sourceProtocol;
+      // SMB 代理启动后，将代理 URL 写回 videoData，确保后续 init/setSurface 使用代理 URL
+      if (adapterHandle.effectiveVideoSrc.length > 0 &&
+        adapterHandle.effectiveVideoSrc !== videoData.videoSrc) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `initPlayer: videoSrc 替换为代理 URL: ${videoData.videoSrc.substring(0, 60)} → ${adapterHandle.effectiveVideoSrc.substring(0, 60)}`);
+        videoData.videoSrc = adapterHandle.effectiveVideoSrc;
+      }
       if (adapterHandle.subtitleBridge !== undefined) {
         this.subtitleAdapter = adapterHandle.subtitleBridge;
       } else {
@@ -2997,7 +3004,12 @@ export class VideoPlayerController {
   }
 
   async seek(time: number, autoplayDecisionSource: string = ''): Promise<void> {
-    if (!this.player) { return; }
+    if (!this.player) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `[seek] player 为 null，跳过 target=${time}`);
+      return;
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[seek] 入口: target=${time}ms isSeeking=${this.isSeeking} backend=${this.backend} duration=${this.duration}`);
     this.metricsSeekStartMs = Date.now();
     this.clearResumeSeekAutoplayFallbackState();
     let safeTime = time < 0 ? 0 : time;
