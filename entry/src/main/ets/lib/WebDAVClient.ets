@@ -1493,8 +1493,8 @@ export class WebDAVClient {
         }
         // HTTP 200 不一定是 WebDAV 响应，可能是普通 web 页面；需要验证内容
         if (response.statusCode === 200) {
-          const body = response.data ?? '';
-          if (typeof body === 'string' && (body.includes('<html') || body.includes('<HTML'))) {
+          const bodyStr: string = response.body;
+          if (bodyStr.includes('<html') || bodyStr.includes('<HTML')) {
             return { success: false, message: '服务器返回了网页而非 WebDAV 响应，请检查根路径(rootPath)配置' };
           }
         }
