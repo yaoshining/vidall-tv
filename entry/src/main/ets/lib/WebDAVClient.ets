@@ -1495,7 +1495,7 @@ export class WebDAVClient {
         if (response.statusCode === 200) {
           const bodyStr: string = response.body;
           if (bodyStr.includes('<html') || bodyStr.includes('<HTML')) {
-            return { success: false, message: '服务器返回了网页而非 WebDAV 响应，请检查根路径(rootPath)配置' };
+            return { success: false, message: '服务器返回了网页而非 WebDAV 响应，请检查端口和根路径(rootPath)配置是否正确' };
           }
         }
         console.info('WebDAV connection test successful');
@@ -1569,16 +1569,36 @@ export class WebDAVClient {
           resolve({ success: false, message: '无权限访问，请检查账户权限' });
           return;
         }
-        // OPTIONS 返回 200/207/405 都说明服务器可达
-        // 405 = 不支持 OPTIONS 但服务器存在；200/207 = 完全支持
-        if (statusCode === 200 || statusCode === 207 || statusCode === 405) {
-          console.info('WebDAV HTTPS connection test successful');
-          resolve({ success: true, message: '连接成功' });
+        // OPTIONS 仅验证服务器网络可达性，无法确认是否为 WebDAV 服务
+        // PROPFIND 已失败（可能非 WebDAV 端口或路径），不能仅凭 OPTIONS 成功就判定连接成功
+        if (statusCode === 200 || statusCode === 207) {
+          // OPTIONS 返回 200/207 只说明 HTTP 服务器可达，不一定是 WebDAV
+          // 需检查 DAV header 确认 WebDAV 支持
+          let hasDavHeader = false;
+          const headerObj = data.header;
+          if (headerObj !== null && headerObj !== undefined) {
+            const headerRecord = headerObj as Record<string, string>;
+            const davVal = headerRecord['DAV'] ?? headerRecord['dav'] ?? '';
+            if (davVal.length > 0) {
+              hasDavHeader = true;
+            }
+          }
+          if (hasDavHeader) {
+            console.info('WebDAV HTTPS connection test successful (DAV header confirmed)');
+            resolve({ success: true, message: '连接成功' });
+            return;
+          }
+          console.warn('WebDAV HTTPS OPTIONS OK but no DAV header, server may not be WebDAV');
+          resolve({ success: false, message: '服务器可达但未检测到 WebDAV 服务，请检查端口和根路径(rootPath)配置' });
           return;
         }
-        // 其他情况也认为连通（比如 400/404 说明服务器有响应）
+        if (statusCode === 405) {
+          // 405 = 不支持 OPTIONS 但服务器存在，无法确认是 WebDAV
+          resolve({ success: false, message: '服务器可达但不支持 WebDAV 协议，请检查端口和根路径(rootPath)配置' });
+          return;
+        }
         if (statusCode >= 100 && statusCode < 500) {
-          resolve({ success: true, message: `连接成功（HTTP ${statusCode}）` });
+          resolve({ success: false, message: `服务器返回 HTTP ${statusCode}，未确认是 WebDAV 服务，请检查端口和根路径配置` });
           return;
         }
         resolve({ success: false, message: `服务器返回错误：HTTP ${statusCode}` });
