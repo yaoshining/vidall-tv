@@ -819,6 +819,12 @@ export class VideoPlayerController {
     // `audioProbeSummary` / `trackAnalyses` 等诊断字段（不影响 `this.backend` / `this.unsupportedFormatFallback`）。
     const backendBeforeAutoRouting = this.backend;
     const decision = await this.resolveAudioRoutingDecision(videoData);
+    // 并发防护：ffprobe 异步期间若有更新的 initPlayer 入口，则放弃本次
+    if (currentSessionId !== this.playbackSessionId) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[initPlayer] sessionId 过期（${currentSessionId} ≠ ${this.playbackSessionId}），放弃本次初始化`);
+      return;
+    }
     videoData.ffmpegDecodeChannels = decision.preferredChannels;
     videoData.audioProbeSummary = decision.summary;
     videoData.videoCodec = decision.videoCodecName;
@@ -2262,19 +2268,29 @@ export class VideoPlayerController {
 
       // 如果有视频数据，重新初始化
       if (savedVideoData) {
-        this.initPlayer(savedVideoData, this.surfaceId).then(() => {
-          // seek 到保存的位置
-          if (savedPosition > 0 && savedDuration > 0) {
-            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `switchBackendInPlayback: seek to ${savedPosition}ms`);
-            this.seek(savedPosition, 'switch_backend').catch(() => {});
-          }
-          // 开始播放
-          this.play().catch(() => {});
-        }).catch(() => {
-          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-            `switchBackendInPlayback: 切换到 ${targetBackend} 失败`);
-        });
+        if (targetBackend === 'mpv') {
+          // MPV 后端：不在此处调 initPlayer，避免与 XComponent onLoad 的 initPlayer 并发冲突。
+          // XComponent 重建后 onLoad 会自动调用 initPlayer + setMpvSurface。
+          // 通过 pendingResumeState 保存恢复位置，MPV prepared 后 onPlayerReady 自动 seek 恢复。
+          this.savePendingResumeState(savedPosition, true, 'switch_backend', 'explicit',
+            'switch_backend_to_mpv', targetBackend);
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `switchBackendInPlayback: MPV 后端，等待 XComponent onLoad 自动初始化，savedPosition=${savedPosition}ms`);
+        } else {
+          this.initPlayer(savedVideoData, this.surfaceId).then(() => {
+            // seek 到保存的位置
+            if (savedPosition > 0 && savedDuration > 0) {
+              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+                `switchBackendInPlayback: seek to ${savedPosition}ms`);
+              this.seek(savedPosition, 'switch_backend').catch(() => {});
+            }
+            // 开始播放
+            this.play().catch(() => {});
+          }).catch(() => {
+            hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+              `switchBackendInPlayback: 切换到 ${targetBackend} 失败`);
+          });
+        }
       }
     }).catch(() => {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
