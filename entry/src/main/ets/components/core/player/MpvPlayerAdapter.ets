@@ -54,9 +54,12 @@ export class MpvPlayerAdapter implements IPlayer {
   private _isPrepared: boolean = false;
   private _isPlaying: boolean = false;
   private _isReleased: boolean = false;
+  /** play() 因内部状态未就绪被拒绝时置 true，等 state 变为 paused 后自动重试 */
+  private _pendingPlay: boolean = false;
 
   // ─── 轨道缓存 ───
   private _cachedTracks: PlayerTrack[] = [];
+  private _graphicSubtitleSelected: boolean = false;
 
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
@@ -119,12 +122,14 @@ export class MpvPlayerAdapter implements IPlayer {
 
     this._isPrepared = false;
     this._isPlaying = false;
+    this._pendingPlay = false;
     this._duration = 0;
     this._durationHintMs = videoData.durationHintMs ?? 0;
     this._currentTime = 0;
     this._isReleased = false;
     this._cachedTracks = [];
     this._pendingSeekCount = 0;
+    this._graphicSubtitleSelected = false;
 
     // 注册事件监听（在 attachSurface 之前，确保不遗漏事件）
     this.registerEventListeners();
@@ -150,13 +155,22 @@ export class MpvPlayerAdapter implements IPlayer {
     if (this._isReleased) {
       return;
     }
+    this._pendingPlay = false;
     try {
       await this.player.play();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'play() 已调用');
     } catch (e) {
       const err = e as BusinessError;
+      const msg = err.message ?? '';
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `play() 异常: ${err.message ?? 'unknown'}`);
+        `play() 异常: ${msg}`);
+      // VidAll_Player 在 seek 后内部状态未稳定时会拒绝 play()，
+      // 设置 _pendingPlay 标志，等 state 变为 paused/playing 后自动重试
+      if (msg.includes('prepared') || msg.includes('paused') || msg.includes('buffering') ||
+          msg.includes('media') || msg.includes('state')) {
+        this._pendingPlay = true;
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'play() 已标记 _pendingPlay，等待 state 事件后自动重试');
+      }
     }
   }
 
@@ -164,6 +178,8 @@ export class MpvPlayerAdapter implements IPlayer {
     if (this._isReleased) {
       return;
     }
+    // 主动暂停时清除 _pendingPlay，避免 pause 触发 paused 事件后自动重试 play
+    this._pendingPlay = false;
     try {
       await this.player.pause();
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'pause() 已调用');
@@ -209,6 +225,8 @@ export class MpvPlayerAdapter implements IPlayer {
     this._isReleased = true;
     this._isPrepared = false;
     this._isPlaying = false;
+    this._pendingPlay = false;
+    this._graphicSubtitleSelected = false;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'release() 完成');
   }
 
@@ -216,7 +234,7 @@ export class MpvPlayerAdapter implements IPlayer {
 
   seek(timeMs: number): void {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `seek() 入口: timeMs=${timeMs} isPrepared=${this._isPrepared} isReleased=${this._isReleased} duration=${this._duration}`);
+      `seek() 入口: timeMs=${timeMs} currentTime=${this._currentTime} isPrepared=${this._isPrepared} isReleased=${this._isReleased} duration=${this._duration} hint=${this._durationHintMs} isPlaying=${this._isPlaying}`);
     if (this._isReleased) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seek() 忽略：已 release');
       this.onSeekCompleted();
@@ -227,35 +245,82 @@ export class MpvPlayerAdapter implements IPlayer {
       this.onSeekCompleted();
       return;
     }
-    // duration 为 0 时使用 hint fallback
+    // seek 时清除 _pendingPlay，避免 seek 过程中 state 变化触发意外 play
+    this._pendingPlay = false;
+
+    // seekPercent 为绝对定位（基于 duration），不依赖 _currentTime，
+    // 且原生参数范围是 0~100（百分比数值），适配器内部完成 0~1 → 0~100 换算。
+    this.seekPercentImpl(timeMs);
+  }
+
+  /**
+   * 基于百分比的 seek 实现（主路径）
+   * 注意：MPV HAR 的 seekPercent 原生参数单位为 0~100（百分比数值），
+   * 代码内部用 0~1 的小数表示比例，调用前必须乘以 100。
+   * 传入 0~1 的小数会被原生层当作 0.X% 处理，导致 seek 目标缩小 100 倍
+   * （如 seekPercent(0.123154) 实际只 seek 到 0.12% 对应的位置）。
+   */
+  private seekPercentImpl(timeMs: number): void {
     let effectiveDuration = this._duration;
     if (effectiveDuration <= 0 && this._durationHintMs > 0) {
       effectiveDuration = this._durationHintMs;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `seek() duration 为 0，使用 hint fallback: ${effectiveDuration}`);
     }
     if (effectiveDuration <= 0) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'seek() 忽略：duration 和 hint 均未知，触发 onSeekCompleted 防止 isSeeking 卡死');
-      this.onSeekCompleted();
+        `seekPercent: 无法获取 duration(${this._duration})，hint=${this._durationHintMs}，fallback 到 seekRelative`);
+      this.seekRelativeFallback(timeMs);
       return;
     }
-    const percent = timeMs / effectiveDuration;
+    let percent = timeMs / effectiveDuration;
+    if (percent < 0) {
+      percent = 0;
+    }
+    if (percent > 1) {
+      percent = 1;
+    }
+    // 原生 seekPercent 参数为 0~100，必须在内部换算
+    const percentScale = percent * 100;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `seek(${timeMs}ms) → seekPercent(${percentScale.toFixed(4)} → 0-100) [duration=${effectiveDuration} currentTime=${this._currentTime}]`);
     this._pendingSeekCount += 1;
-    this.player.seekPercent(percent).then(() => {
+    this.player.seekPercent(percentScale).then(() => {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `seekPercent(${percentScale.toFixed(4)}) 完成 → onSeekCompleted，_pendingPlay=${this._pendingPlay}`);
+      this.onSeekCompleted();
+    }).catch((seekErr: BusinessError) => {
+      this.onSeekCompleted();
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `seekPercent(${percentScale.toFixed(4)}) 异常: ${seekErr.message ?? 'unknown'}，fallback 到 seekRelative`);
+      this.seekRelativeFallback(timeMs);
+    });
+  }
+
+  /**
+   * seekPercent 失败或 duration 不可用时的 fallback：使用 seekRelative(相对偏移)
+   */
+  private seekRelativeFallback(timeMs: number): void {
+    const relativeMs = timeMs - this._currentTime;
+    const relativeSeconds = relativeMs / 1000;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `seekRelative fallback: seek(${timeMs}ms) → seekRelative(${relativeSeconds.toFixed(3)}s) [currentTime=${this._currentTime}]`);
+    this._pendingSeekCount += 1;
+    this.player.seekRelative(relativeSeconds).then(() => {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `seekRelative(${relativeSeconds.toFixed(3)}s) 完成 → onSeekCompleted`);
       this.onSeekCompleted();
     }).catch(() => {
       this.onSeekCompleted();
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'seekPercent 异常');
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `seekRelative fallback 也失败，放弃本次 seek`);
     });
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `seek(${timeMs}ms) → seekPercent(${percent.toFixed(4)})`);
   }
 
   async forward(milliseconds: number): Promise<void> {
     if (!this._isPrepared || this._isReleased) {
       return;
     }
+    // seekRelative 前清除 _pendingPlay，避免竞态
+    this._pendingPlay = false;
     const seconds = milliseconds / 1000;
     this._pendingSeekCount += 1;
     try {
@@ -272,6 +337,8 @@ export class MpvPlayerAdapter implements IPlayer {
     if (!this._isPrepared || this._isReleased) {
       return;
     }
+    // seekRelative 前清除 _pendingPlay，避免竞态
+    this._pendingPlay = false;
     const seconds = -(milliseconds / 1000);
     this._pendingSeekCount += 1;
     try {
@@ -438,6 +505,11 @@ export class MpvPlayerAdapter implements IPlayer {
         break;
       case 'playing':
         this._isPlaying = true;
+        if (this._pendingPlay) {
+          // play() 之前被拒绝，但 libmpv 已自动进入 playing，清除标志
+          this._pendingPlay = false;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG, '_pendingPlay 清除: libmpv 已自动进入 playing');
+        }
         if (!this._isPrepared) {
           this._isPrepared = true;
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -448,6 +520,15 @@ export class MpvPlayerAdapter implements IPlayer {
         break;
       case 'paused':
         this._isPlaying = false;
+        if (this._pendingPlay) {
+          // play() 之前被拒绝（seek 后内部状态未就绪），现在状态已稳定，自动重试
+          this._pendingPlay = false;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG, '_pendingPlay 触发: state=paused，自动重试 play()');
+          this.player.play().catch((retryErr: BusinessError) => {
+            hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+              `play() 自动重试失败: ${retryErr.message ?? 'unknown'}`);
+          });
+        }
         if (!this._isPrepared) {
           this._isPrepared = true;
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -504,9 +585,11 @@ export class MpvPlayerAdapter implements IPlayer {
     }
     this._cachedTracks = tracks;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `tracks 事件: ${tracks.length} 条轨道`);
-    // 检查 PGS/VobSub 图形字幕，自动选中让 mpv 内嵌合成
-    this.autoSelectGraphicSubtitles(tracks);
+      `tracks 事件: ${tracks.length} 条轨道, graphicSubtitleSelected=${this._graphicSubtitleSelected}`);
+    // 仅首次选中第一条 PGS 图形字幕，避免 selectTrack 触发新 tracks 事件导致无限循环
+    if (!this._graphicSubtitleSelected) {
+      this.autoSelectFirstGraphicSubtitle(tracks);
+    }
   }
 
   private handleSubtitleTextEvent(event: PlayerEvent): void {
@@ -549,10 +632,11 @@ export class MpvPlayerAdapter implements IPlayer {
   }
 
   /**
-   * 自动选中 PGS/VobSub 图形字幕轨道，让 mpv 内嵌合成到视频帧。
+   * 选中第一条 PGS/VobSub 图形字幕轨道，让 mpv 内嵌合成到视频帧。
+   * 只选中一条，避免多 PGS 轨道同时选中导致崩溃。
    * 文本字幕由 TV 端 SubtitleBridgeAdapter 绘制，不选中。
    */
-  private autoSelectGraphicSubtitles(tracks: PlayerTrack[]): void {
+  private autoSelectFirstGraphicSubtitle(tracks: PlayerTrack[]): void {
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i];
       if (t.kind !== 'subtitle') {
@@ -562,11 +646,13 @@ export class MpvPlayerAdapter implements IPlayer {
       const isGraphic: boolean = this.isGraphicSubtitleCodec(codec);
       if (isGraphic && !t.selected) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `自动选中图形字幕轨道: id=${t.id} codec=${t.codec}`);
+          `选中第一条图形字幕轨道: id=${t.id} codec=${t.codec}`);
         this.player.selectTrack('subtitle', t.id).catch(() => {
           hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `自动选中图形字幕失败`);
+            `选中图形字幕失败`);
         });
+        this._graphicSubtitleSelected = true;
+        return; // 只选第一条，立即返回
       }
     }
   }

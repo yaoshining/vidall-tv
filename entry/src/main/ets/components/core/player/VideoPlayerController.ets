@@ -2072,6 +2072,10 @@ export class VideoPlayerController {
    * @param width XComponent 有效宽度（必须 > 0）
    * @param height XComponent 有效高度（必须 > 0）
    */
+  /**
+   * 绑定 MPV 播放器 XComponent surface。
+   * width/height 必须为物理像素（由 VideoPlayer.ets 在 onAreaChange 中 vp2px 转换后传入）。
+   */
   async setMpvSurface(surfaceId: string, width: number, height: number): Promise<void> {
     if (this.backend !== 'mpv') {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
@@ -2118,19 +2122,19 @@ export class VideoPlayerController {
    * 通知 MPV 播放器 XComponent 尺寸变更（onAreaChange 回调）。
    * 由 VideoPlayer.ets 在 mpv 分支的 onAreaChange 中调用。
    */
-  notifyMpvSurfaceResize(area: Area): void {
+  notifyMpvSurfaceResize(physicalWidth: number, physicalHeight: number): void {
     if (this.backend !== 'mpv' || !this.player) {
       return;
     }
     if (!(this.player instanceof MpvPlayerAdapter)) {
       return;
     }
-    const width = typeof area.width === 'number' ? area.width : 0;
-    const height = typeof area.height === 'number' ? area.height : 0;
-    if (width > 0 && height > 0) {
-      this.mpvSurfaceWidth = width;
-      this.mpvSurfaceHeight = height;
-      this.player.getSurfaceAdapter().onSizeChange(width, height).catch(() => {});
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `notifyMpvSurfaceResize: w=${physicalWidth} h=${physicalHeight} bound=${this.mpvSurfaceBound}`);
+    if (physicalWidth > 0 && physicalHeight > 0) {
+      this.mpvSurfaceWidth = physicalWidth;
+      this.mpvSurfaceHeight = physicalHeight;
+      this.player.getSurfaceAdapter().onSizeChange(physicalWidth, physicalHeight).catch(() => {});
     }
   }
 
@@ -2284,16 +2288,15 @@ export class VideoPlayerController {
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `switchBackendInPlayback: MPV 后端，等待 XComponent onLoad 自动初始化，savedPosition=${savedPosition}ms`);
         } else {
-          this.initPlayer(savedVideoData, this.surfaceId).then(() => {
-            // seek 到保存的位置
-            if (savedPosition > 0 && savedDuration > 0) {
-              hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-                `switchBackendInPlayback: seek to ${savedPosition}ms`);
-              this.seek(savedPosition, 'switch_backend').catch(() => {});
-            }
-            // 开始播放
-            this.play().catch(() => {});
-          }).catch(() => {
+          // ijkplayer 后端：同样使用 pendingResumeState 机制。
+          // initPlayer() 完成时 ijkplayer 的 prepareAsync 尚未就绪，
+          // 直接在 .then() 中调 seek/play 会被 IjkPlayerAdapter 忽略（_isPrepared=false）。
+          // 通过 pendingResumeState 让 onPlayerReady 在 prepared 后统一处理 seek 恢复。
+          this.savePendingResumeState(savedPosition, true, 'switch_backend', 'explicit',
+            'switch_backend_to_ijkplayer', targetBackend);
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `switchBackendInPlayback: ijkplayer 后端，通过 pendingResumeState 等待 prepared，savedPosition=${savedPosition}ms`);
+          this.initPlayer(savedVideoData, this.surfaceId).catch(() => {
             hilog.error(CommonConstants.LOG_DOMAIN, TAG,
               `switchBackendInPlayback: 切换到 ${targetBackend} 失败`);
           });
@@ -2476,6 +2479,19 @@ export class VideoPlayerController {
 
     if (pendingResumeState !== null && pendingResumeState.positionMs > 0 && this.player) {
       const safeResumeTimeMs = effectiveResumeTimeMs;
+      // MPV 后端 load 后会自动进入 playing 状态，必须先暂停再 seek，
+      // 否则 seekPercent 在播放中精度不足（尤其百分比很小时），
+      // 且 position 事件会不断更新 currentTime 导致 seek 目标被覆盖。
+      if (this.backend === 'mpv') {
+        try {
+          await this.player.pause();
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `onPlayerReady: MPV 自动播放已暂停，准备 seek 到 ${safeResumeTimeMs}ms`);
+        } catch (e) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `onPlayerReady: MPV pause 异常: ${(e as BusinessError).message ?? 'unknown'}`);
+        }
+      }
       this.currentTime = safeResumeTimeMs;
       this.progress = this.duration > 0 ? safeResumeTimeMs / this.duration : 0;
       this.subtitleAdapter.onSeekSync();
@@ -2976,6 +2992,9 @@ export class VideoPlayerController {
     this.clearResumeSeekAutoplayFallbackState();
     this.stopProgressTimer();
     this.saveProgressNow();
+    // 重置 MPV surface 绑定状态，避免 switchBackendInPlayback 后 onAreaChange
+    // 检查 isMpvSurfaceBound=true 而跳过 setMpvSurface，导致黑屏。
+    this.mpvSurfaceBound = false;
     if (this.backend === 'ffmpeg') {
       this.stopFfmpegRenderTimer();
       this.ffmpegFrameQueue = [];
@@ -3578,12 +3597,17 @@ export class VideoPlayerController {
 
       // 3. seek 到当前位置，强制音频解码器 flush 并从正确位置开始解码
       //    这样恢复播放时新音轨与视频帧完全对齐
-      if (wasPlaying && seekBack > 0) {
+      //    如果 resume seek 正在进行中，使用 resume 目标时间而不是 currentTime
+      //    （currentTime 可能还没更新到 seek 目标位置）
+      const seekTarget = this.pendingResumeSeekInFlight
+        ? this.pendingResumeSeekTargetMs
+        : seekBack;
+      if (wasPlaying && seekTarget > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[switchAudioTrack] seek flush 到 ${seekBack}ms`);
+          `[switchAudioTrack] seek flush 到 ${seekTarget}ms${this.pendingResumeSeekInFlight ? ' (resume seek 目标)' : ''}`);
         // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
         this.isSeeking = true;
-        this.player.seek(seekBack);
+        this.player.seek(seekTarget);
         // seekDone 回调里会调 play()，不需要在这里手动恢复
       } else if (wasPlaying) {
         // 时间为 0（片头），直接恢复播放

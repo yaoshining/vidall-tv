@@ -340,7 +340,11 @@ export class PlaybackBackendService {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `setMpvSurface: 绑定 XComponent surfaceId=${surfaceId}，width=${width}，height=${height}，开始 init...`);
     try {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `bindMpvContext: 调用 surfaceAdapter.onLoad(${surfaceId.substring(0, 8)}..., ${width}, ${height})`);
       await adapter.getSurfaceAdapter().onLoad(surfaceId, width, height);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `bindMpvContext: surfaceAdapter.onLoad 完成，开始 adapter.init()`);
       await adapter.init(videoData, surfaceId);
     } catch (e) {
       const err = e as BusinessError;

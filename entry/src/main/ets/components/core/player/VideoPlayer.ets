@@ -602,13 +602,18 @@ export struct VideoPlayer {
           })
           .onAreaChange((_oldValue: Area, newValue: Area) => {
             // MPV 需要 onAreaChange 拿到有效宽高后再绑定 surface
+            // onAreaChange 返回的是 VP（虚拟像素），VidAll_Player 需要物理像素
             if (this.controller.backend === 'mpv') {
-              const w = typeof newValue.width === 'number' ? newValue.width : 0
-              const h = typeof newValue.height === 'number' ? newValue.height : 0
+              const vpW = typeof newValue.width === 'number' ? newValue.width : 0
+              const vpH = typeof newValue.height === 'number' ? newValue.height : 0
+              const uiCtx = this.getUIContext()
+              const w = uiCtx.vp2px(vpW)
+              const h = uiCtx.vp2px(vpH)
+              console.info(`[VideoPlayer] mpv onAreaChange: vp=${vpW}x${vpH} px=${w}x${h} surfaceId=${this.surfaceId.substring(0, 8)}... bound=${this.controller.isMpvSurfaceBound}`)
               if (w > 0 && h > 0 && this.surfaceId.length > 0 && !this.controller.isMpvSurfaceBound) {
                 this.controller.setMpvSurface(this.surfaceId, w, h)
               } else if (this.controller.isMpvSurfaceBound) {
-                this.controller.notifyMpvSurfaceResize(newValue)
+                this.controller.notifyMpvSurfaceResize(w, h)
               }
             }
           })
