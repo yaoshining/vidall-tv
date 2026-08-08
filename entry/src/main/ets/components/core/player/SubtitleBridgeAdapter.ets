@@ -1234,6 +1234,70 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
   }
 }
 
+/**
+ * MPV 后端字幕桥接适配器。
+ *
+ * 与 IjkSubtitleBridgeAdapter 的差异：
+ * 1. loadInternalTracks 使用 player.getTrackInfos()（MPV tracks 事件缓存），
+ *    而非 FfprobeUtil.probe()——MPV 已有精确的轨道信息，无需额外探测。
+ * 2. onEmbeddedTimedText 不检查 currentSubtitleTrack：
+ *    MPV 的 subtitleText 事件自带选轨语义（选中文本字幕轨后才有输出），
+ *    而 ijk 的 onTimedText 在轨道未选中时也会回调空字符串。
+ * 3. 不需要 parseAssIfNeeded：libmpv 已将 ASS raw 转为纯文本后输出。
+ *
+ * spec 约束：MPV 后端默认不选中文本字幕轨，subtitleText 事件驱动 TV 端 SubtitleRenderer 绘制。
+ */
+export class MpvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
+  override onSeekSync(): void {
+    super.onSeekSync();
+    this.currentSubtitleText = '';
+  }
+
+  protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
+    const items: SubtitleTrackItem[] = [];
+    if (!this.player) {
+      return items;
+    }
+
+    const allTracks = await this.player.getTrackInfos();
+    const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
+    this.subtitleTracks = subtitleTracks;
+
+    for (let i = 0; i < subtitleTracks.length; i++) {
+      const track = subtitleTracks[i];
+      const hasLang = track.language !== undefined && track.language.length > 0;
+      const languageName = hasLang
+        ? FfprobeUtil.getLanguageDisplayName(track.language!)
+        : '';
+      const displayName = languageName.length > 0 ? languageName : `字幕 ${i + 1}`;
+      const item: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName,
+        internalIndex: track.trackIndex,
+        language: track.language
+      };
+      items.push(item);
+    }
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[MpvSub] 内嵌字幕轨道数=${items.length}`);
+    return items;
+  }
+
+  /**
+   * MPV 的 subtitleText 事件输出纯文本（libmpv 已解析 ASS raw），
+   * 不需要 parseAssIfNeeded，也不检查 currentSubtitleTrack：
+   * MPV subtitleText 仅在选中文本字幕轨后才有输出，自带选轨语义。
+   */
+  override onEmbeddedTimedText(text: string): void {
+    if (this.srtEntries.length > 0) {
+      return; // 外置 SRT 优先，不覆盖
+    }
+    // MPV 的 subtitleText 已是纯文本，直接赋值
+    this.currentSubtitleText = text;
+  }
+}
+
 export class NoSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
   private state: SubtitleBridgeState = {
     subtitleTracks: [],

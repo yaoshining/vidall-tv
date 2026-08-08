@@ -41,6 +41,7 @@ import {
   AvSubtitleBridgeAdapter,
   IjkSubtitleBridgeAdapter,
   ISubtitleBridgeAdapter,
+  MpvSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter
 } from '../../components/core/player/SubtitleBridgeAdapter';
 import { SmbAvSubtitleBridgeAdapter } from '../../components/core/player/SmbSubtitleBridgeAdapter';
@@ -244,7 +245,7 @@ export class PlaybackBackendService {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 MpvPlayerAdapter，等待 UI 层调用 setMpvSurface()');
       const mpvAdapter = new MpvPlayerAdapter();
-      const mpvSubAdapter = new IjkSubtitleBridgeAdapter();
+      const mpvSubAdapter = new MpvSubtitleBridgeAdapter();
       subtitleBridge = mpvSubAdapter;
       subtitleBridgeKind = 'mpv';
       // 内嵌字幕回调 — mpv 也通过 subtitleText 事件输出文本字幕

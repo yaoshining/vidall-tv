@@ -15,8 +15,10 @@ import { FfprobeUtil } from "../../../utils/FfprobeUtil";
 import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
 import {
   AvSubtitleBridgeAdapter,
+  BaseSubtitleBridgeAdapter,
   IjkSubtitleBridgeAdapter,
   ISubtitleBridgeAdapter,
+  MpvSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter,
   SubtitleBridgeState,
   SubtitleTrackItem
@@ -977,7 +979,13 @@ export class VideoPlayerController {
           onBuffering: () => {},
           onEmbeddedTimedText: (text: string) => {
             const bridge = this.subtitleAdapter;
-            if (currentSessionId !== this.playbackSessionId || !(bridge instanceof IjkSubtitleBridgeAdapter)) {
+            if (currentSessionId !== this.playbackSessionId) {
+              return;
+            }
+            // IjkSubtitleBridgeAdapter 和 MpvSubtitleBridgeAdapter 都继承 BaseSubtitleBridgeAdapter，
+            // 且都有 onEmbeddedTimedText 实现；AvSubtitleBridgeAdapter 使用 onSubtitleUpdate 路径，
+            // NoSubtitleBridgeAdapter 是空操作。只对有 onEmbeddedTimedText 实现的桥放行。
+            if (!(bridge instanceof BaseSubtitleBridgeAdapter)) {
               return;
             }
             bridge.onEmbeddedTimedText(text);
