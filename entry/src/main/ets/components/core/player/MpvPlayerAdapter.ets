@@ -59,7 +59,15 @@ export class MpvPlayerAdapter implements IPlayer {
 
   // ─── 轨道缓存 ───
   private _cachedTracks: PlayerTrack[] = [];
-  private _graphicSubtitleSelected: boolean = false;
+  /**
+   * 字幕轨道 id 偏移量。VidAll_Player HAR 中 NATIVE_TRACK_ID_OFFSET=100000，
+   * 且不同 kind（video/audio/subtitle）的 native id 独立从 1 开始编号，
+   * 导致 etsId = offset + nativeId 可能冲突（如 video id=1, audio id=1, subtitle id=1
+   * 均映射到 etsId=100001）。
+   * 为避免 selectTrack 时 id 冲突，在 getTrackInfos 输出时给字幕轨道加上此偏移，
+   * 在 selectTrack 收到带偏移的 id 时还原为原始 etsId 并限定 kind='subtitle'。
+   */
+  private static readonly SUBTITLE_ID_OFFSET: number = 500000;
 
   // ─── 回调存储 ───
   private _onReadyCb?: () => void;
@@ -90,6 +98,9 @@ export class MpvPlayerAdapter implements IPlayer {
   private static readonly SEEK_CONFIRM_TIMEOUT_MS: number = 3000;
   /** seek 位置确认容差（ms），position 在目标 ± 容差内视为 seek 完成 */
   private static readonly SEEK_POSITION_TOLERANCE_MS: number = 2000;
+
+  /** 标记 preparing 时是否已设置 sid=no + sub-visibility=no，避免重复调用 */
+  private _subtitleVisibilityDisabled: boolean = false;
 
   constructor() {
     const options: PlayerOptions = {
@@ -143,7 +154,7 @@ export class MpvPlayerAdapter implements IPlayer {
     this._seekTargetMs = -1;
     this._waitingForSeekCompletion = false;
     this._seekStartTime = 0;
-    this._graphicSubtitleSelected = false;
+    this._subtitleVisibilityDisabled = false;
 
     // 注册事件监听（在 attachSurface 之前，确保不遗漏事件）
     this.registerEventListeners();
@@ -242,7 +253,6 @@ export class MpvPlayerAdapter implements IPlayer {
     this._pendingPlay = false;
     this._waitingForSeekCompletion = false;
     this._seekTargetMs = -1;
-    this._graphicSubtitleSelected = false;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'release() 完成');
   }
 
@@ -406,12 +416,28 @@ export class MpvPlayerAdapter implements IPlayer {
     const result: TrackInfo[] = [];
     for (let i = 0; i < this._cachedTracks.length; i++) {
       const t = this._cachedTracks[i];
+      // video 轨道不暴露：VidAll_TV 不需要视频轨选择，且 video/audio/subtitle 的 etsId 冲突
+      if (t.kind === 'video') {
+        continue;
+      }
+      const codec = t.codec ?? '';
+      const mimeType = this.trackCodecToMimeType(codec, t.kind);
+      // 字幕轨道加偏移，避免与 audio 轨道 etsId 冲突
+      const trackIndex = t.kind === 'subtitle'
+        ? t.id + MpvPlayerAdapter.SUBTITLE_ID_OFFSET
+        : t.id;
       const item: TrackInfo = {
-        trackIndex: t.id,
+        trackIndex: trackIndex,
         trackType: t.kind as 'video' | 'audio' | 'subtitle',
-        mimeType: this.trackCodecToMimeType(t.codec ?? '', t.kind),
-        language: t.language ?? ''
+        mimeType: mimeType,
+        language: t.language ?? '',
+        codec: codec
       };
+      // 调试：字幕轨道的 codec→mimeType 映射
+      if (t.kind === 'subtitle') {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `getTrackInfos: subtitle etsId=${t.id} → trackIndex=${trackIndex} codec="${codec}" → mimeType="${mimeType}" lang="${t.language ?? ''}"`);
+      }
       result.push(item);
     }
     return result;
@@ -441,17 +467,22 @@ export class MpvPlayerAdapter implements IPlayer {
       }
       return;
     }
-    // 根据缓存查找轨道类型
-    const track = this.findTrackById(trackIndex);
+    // 检测是否为字幕轨道（带 SUBTITLE_ID_OFFSET 偏移）
+    const isSubtitleTrack = trackIndex >= MpvPlayerAdapter.SUBTITLE_ID_OFFSET;
+    const actualId = isSubtitleTrack ? trackIndex - MpvPlayerAdapter.SUBTITLE_ID_OFFSET : trackIndex;
+    const targetKind = isSubtitleTrack ? 'subtitle' as PlayerTrackKind : undefined;
+    // 根据缓存查找轨道类型。字幕操作限定 kind='subtitle'，
+    // 避免 etsId 冲突导致找到 video/audio 轨道。
+    const track = this.findTrackById(actualId, targetKind);
     if (track === null) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `selectTrack(${trackIndex}): 未找到对应轨道`);
+        `selectTrack(${trackIndex}): 未找到对应轨道 (actualId=${actualId} kind=${targetKind ?? 'any'})`);
       return;
     }
     try {
       await this.player.selectTrack(track.kind, track.id);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `selectTrack: kind=${track.kind} id=${track.id}`);
+        `selectTrack: kind=${track.kind} id=${track.id} (input=${trackIndex})`);
       // 选中字幕轨时，判断是否为文本字幕：
       // 文本字幕 → 设置 sub-visibility=no，禁止 mpv 内嵌渲染，由 TV 端 SubtitleRenderer 统一渲染
       // 图形字幕 → 保持 sub-visibility=yes，让 mpv 内嵌合成到视频帧
@@ -496,6 +527,44 @@ export class MpvPlayerAdapter implements IPlayer {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `setPlaybackSpeed(${speed}) 失败: ${err.message ?? 'unknown'}`);
     }
+  }
+
+  setPropertyString(property: string, value: string): void {
+    try {
+      this.player.setPropertyString(property, value);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `setPropertyString: ${property}=${value}`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `setPropertyString(${property}=${value}) 失败: ${err.message ?? 'unknown'}`);
+    }
+  }
+
+  /**
+   * 禁止 mpv 自动选字幕轨并关闭内嵌渲染。
+   * 在 preparing 状态时调用一次，防止 mpv 默认 sid=auto 选中首个字幕轨
+   * 导致 mpv 内嵌渲染与 SubtitleAdapter 双层显示。
+   */
+  private disableSubtitleVisibility(): void {
+    if (this._subtitleVisibilityDisabled) {
+      return;
+    }
+    this._subtitleVisibilityDisabled = true;
+    // 设置 sid=no 禁止 mpv 自动选中字幕轨
+    this.player.setPropertyString('sid', 'no').then(() => {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'disableSubtitleVisibility: sid=no 设置成功');
+    }).catch((e: BusinessError) => {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `disableSubtitleVisibility: sid=no 失败: ${e.message ?? 'unknown'}`);
+    });
+    // 同时关闭 sub-visibility，双重保险
+    this.player.setPropertyString('sub-visibility', 'no').then(() => {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'disableSubtitleVisibility: sub-visibility=no 设置成功');
+    }).catch((e: BusinessError) => {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `disableSubtitleVisibility: sub-visibility=no 失败: ${e.message ?? 'unknown'}`);
+    });
   }
 
   // ─── 事件回调注册 ───
@@ -621,6 +690,9 @@ export class MpvPlayerAdapter implements IPlayer {
     switch (state) {
       case 'preparing':
         // mpv 正在准备，还未 prepared
+        // 立即禁止自动选字幕轨 + 关闭内嵌渲染，避免 mpv 默认 sid=auto 选中首个字幕轨
+        // 导致 mpv 内嵌渲染 + SubtitleAdapter 双层显示
+        this.disableSubtitleVisibility();
         break;
       case 'playing':
         this._isPlaying = true;
@@ -715,11 +787,9 @@ export class MpvPlayerAdapter implements IPlayer {
     }
     this._cachedTracks = tracks;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `tracks 事件: ${tracks.length} 条轨道, graphicSubtitleSelected=${this._graphicSubtitleSelected}`);
-    // 仅首次选中第一条 PGS 图形字幕，避免 selectTrack 触发新 tracks 事件导致无限循环
-    if (!this._graphicSubtitleSelected) {
-      this.autoSelectFirstGraphicSubtitle(tracks);
-    }
+      `tracks 事件: ${tracks.length} 条轨道`);
+    // 字幕选轨统一由 SubtitleBridgeAdapter 管理
+    // 不再在此处 autoSelectFirstGraphicSubtitle，避免与 SubtitleBridgeAdapter 冲突
   }
 
   private handleSubtitleTextEvent(event: PlayerEvent): void {
@@ -758,37 +828,6 @@ export class MpvPlayerAdapter implements IPlayer {
     }
     if (this._onErrorCb) {
       this._onErrorCb(new Error(playerError.message));
-    }
-  }
-
-  /**
-   * 选中第一条 PGS/VobSub 图形字幕轨道，让 mpv 内嵌合成到视频帧。
-   * 只选中一条，避免多 PGS 轨道同时选中导致崩溃。
-   * 文本字幕由 TV 端 SubtitleBridgeAdapter 绘制，不选中。
-   */
-  private autoSelectFirstGraphicSubtitle(tracks: PlayerTrack[]): void {
-    for (let i = 0; i < tracks.length; i++) {
-      const t = tracks[i];
-      if (t.kind !== 'subtitle') {
-        continue;
-      }
-      const codec = (t.codec ?? '').toLowerCase();
-      const isGraphic: boolean = this.isGraphicSubtitleCodec(codec);
-      if (isGraphic && !t.selected) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `选中第一条图形字幕轨道: id=${t.id} codec=${t.codec}`);
-        this.player.selectTrack('subtitle', t.id).catch(() => {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `选中图形字幕失败`);
-        });
-        // 图形字幕需要 mpv 内嵌渲染合成到视频帧
-        this.player.setPropertyString('sub-visibility', 'yes').catch(() => {
-          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-            `设置 sub-visibility=yes 失败`);
-        });
-        this._graphicSubtitleSelected = true;
-        return; // 只选第一条，立即返回
-      }
     }
   }
 
@@ -834,10 +873,25 @@ export class MpvPlayerAdapter implements IPlayer {
     return source;
   }
 
-  private findTrackById(id: number): PlayerTrack | null {
+  /**
+   * 按 id 查找缓存轨道。可选指定 kind 以避免 etsId 冲突：
+   * VidAll_Player HAR 中 NATIVE_TRACK_ID_OFFSET=100000，不同 kind 的 native id
+   * 可能重复（如 video native id=1 → etsId=100001，audio native id=1 → etsId=100001），
+   * 指定 kind 可精确匹配目标轨道。
+   */
+  private findTrackById(id: number, kind?: PlayerTrackKind): PlayerTrack | null {
     for (let i = 0; i < this._cachedTracks.length; i++) {
-      if (this._cachedTracks[i].id === id) {
-        return this._cachedTracks[i];
+      const t = this._cachedTracks[i];
+      if (t.id === id && (kind === undefined || t.kind === kind)) {
+        return t;
+      }
+    }
+    // kind 精确匹配未找到时，降级到仅 id 匹配
+    if (kind !== undefined) {
+      for (let i = 0; i < this._cachedTracks.length; i++) {
+        if (this._cachedTracks[i].id === id) {
+          return this._cachedTracks[i];
+        }
       }
     }
     return null;

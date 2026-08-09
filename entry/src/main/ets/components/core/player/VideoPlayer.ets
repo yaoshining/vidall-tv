@@ -314,9 +314,10 @@ export struct VideoPlayer {
       }
     }
 
-    // 不足 8 个逗号，不是 ASS Dialogue 格式，原文返回
+    // 不足 8 个逗号，不是 ASS Dialogue 格式
     if (eighthCommaIdx < 0) {
-      return raw
+      // 剥离 HTML 标签（AVPlayer onSubtitleUpdate 可能包含 <font size="85.545"></font> 等）
+      return this.stripHtmlTags(raw)
     }
 
     // 检验第一个字段是否为数字（ASS Dialogue 的序号/Layer 总是数字）
@@ -325,7 +326,7 @@ export struct VideoPlayer {
       const firstField = raw.substring(0, firstCommaIdx).trim()
       if (firstField.length === 0) {
         // 第一字段为空，不是 ASS Dialogue
-        return raw
+        return this.stripHtmlTags(raw)
       }
       let isNum = true
       for (let i = 0; i < firstField.length; i++) {
@@ -336,12 +337,12 @@ export struct VideoPlayer {
         }
       }
       if (!isNum) {
-        // 第一字段不是纯数字，不是 ASS Dialogue，原文返回
-        return raw
+        // 第一字段不是纯数字，不是 ASS Dialogue
+        return this.stripHtmlTags(raw)
       }
     } else {
       // 没有逗号或第一个逗号在开头，不是 ASS Dialogue
-      return raw
+      return this.stripHtmlTags(raw)
     }
 
     // 确认是 ASS Dialogue，截取第 8 个逗号后的内容（Text 字段）
@@ -407,6 +408,33 @@ export struct VideoPlayer {
   }
 
   /**
+       * 剥离 HTML 标签（如 AVPlayer onSubtitleUpdate 中出现的
+       * `<font size="85.545"></font>`、`<b>`、`<i>` 等）。
+       * 保留标签间的文本内容，仅移除 <...> 标记本身。
+       */
+      private stripHtmlTags(text: string): string {
+   let result = ''
+   let i = 0
+   while (i < text.length) {
+     if (text[i] === '<') {
+       // 跳过到 >，移除整个标签
+       const end = text.indexOf('>', i + 1)
+       if (end >= 0) {
+         i = end + 1
+       } else {
+         // 未闭合 <：保留原字符
+         result += text[i]
+         i++
+       }
+     } else {
+       result += text[i]
+       i++
+     }
+   }
+   return result
+      }
+
+      /**
    * 转换字号：pt -> fp
    */
   private convertFontSize(parsed: ParsedSubtitle): void {

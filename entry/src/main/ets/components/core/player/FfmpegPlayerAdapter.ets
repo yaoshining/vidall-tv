@@ -165,6 +165,10 @@ export class FfmpegPlayerAdapter implements IPlayer {
       `setPlaybackSpeed(${speed}) 在 ffmpeg 后端暂不支持，已跳过`);
   }
 
+  setPropertyString(_property: string, _value: string): void {
+    // FFmpeg 后端不支持 setPropertyString
+  }
+
   onReady(callback: () => void): void {
     this._onReadyCb = callback;
   }
