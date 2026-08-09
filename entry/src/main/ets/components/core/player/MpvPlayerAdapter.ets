@@ -80,6 +80,17 @@ export class MpvPlayerAdapter implements IPlayer {
   // ─── seek Promise 追踪 ───
   private _pendingSeekCount: number = 0;
 
+  // ─── seek 完成确认追踪 ───
+  // mpv_command_async 的 Promise 只表示命令入队成功，不代表 seek 完成。
+  // 需要 position 事件确认到达目标位置后才触发 onSeekCompleted。
+  private _seekTargetMs: number = -1;
+  private _waitingForSeekCompletion: boolean = false;
+  private _seekStartTime: number = 0;
+  /** seek 超时阈值（ms），超时后强制触发 onSeekCompleted 防卡死 */
+  private static readonly SEEK_CONFIRM_TIMEOUT_MS: number = 3000;
+  /** seek 位置确认容差（ms），position 在目标 ± 容差内视为 seek 完成 */
+  private static readonly SEEK_POSITION_TOLERANCE_MS: number = 2000;
+
   constructor() {
     const options: PlayerOptions = {
       hardwareDecoding: 'auto'
@@ -129,6 +140,9 @@ export class MpvPlayerAdapter implements IPlayer {
     this._isReleased = false;
     this._cachedTracks = [];
     this._pendingSeekCount = 0;
+    this._seekTargetMs = -1;
+    this._waitingForSeekCompletion = false;
+    this._seekStartTime = 0;
     this._graphicSubtitleSelected = false;
 
     // 注册事件监听（在 attachSurface 之前，确保不遗漏事件）
@@ -226,6 +240,8 @@ export class MpvPlayerAdapter implements IPlayer {
     this._isPrepared = false;
     this._isPlaying = false;
     this._pendingPlay = false;
+    this._waitingForSeekCompletion = false;
+    this._seekTargetMs = -1;
     this._graphicSubtitleSelected = false;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'release() 完成');
   }
@@ -283,14 +299,22 @@ export class MpvPlayerAdapter implements IPlayer {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `seek(${timeMs}ms) → seekPercent(${percentScale.toFixed(4)} → 0-100) [duration=${effectiveDuration} currentTime=${this._currentTime}]`);
     this._pendingSeekCount += 1;
+    // 记录 seek 目标，等待 position 事件确认后再触发 onSeekCompleted
+    this._seekTargetMs = timeMs;
+    this._waitingForSeekCompletion = true;
+    this._seekStartTime = Date.now();
     this.player.seekPercent(percentScale).then(() => {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `seekPercent(${percentScale.toFixed(4)}) 完成 → onSeekCompleted，_pendingPlay=${this._pendingPlay}`);
-      this.onSeekCompleted();
+        `seekPercent(${percentScale.toFixed(4)}) 命令已提交，等待 position 确认 seek 完成`);
+      // 不立即触发 onSeekCompleted，由 handlePositionEvent 或超时兜底触发
+      this.checkSeekCompletionOrTimeout();
     }).catch((seekErr: BusinessError) => {
-      this.onSeekCompleted();
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `seekPercent(${percentScale.toFixed(4)}) 异常: ${seekErr.message ?? 'unknown'}，fallback 到 seekRelative`);
+      // seek 失败时清除等待状态，fallback 路径自己管理
+      this._waitingForSeekCompletion = false;
+      this._seekTargetMs = -1;
+      this.onSeekCompleted();
       this.seekRelativeFallback(timeMs);
     });
   }
@@ -304,14 +328,20 @@ export class MpvPlayerAdapter implements IPlayer {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `seekRelative fallback: seek(${timeMs}ms) → seekRelative(${relativeSeconds.toFixed(3)}s) [currentTime=${this._currentTime}]`);
     this._pendingSeekCount += 1;
+    // 记录 seek 目标，等待 position 确认
+    this._seekTargetMs = timeMs;
+    this._waitingForSeekCompletion = true;
+    this._seekStartTime = Date.now();
     this.player.seekRelative(relativeSeconds).then(() => {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `seekRelative(${relativeSeconds.toFixed(3)}s) 完成 → onSeekCompleted`);
-      this.onSeekCompleted();
+        `seekRelative(${relativeSeconds.toFixed(3)}s) 命令已提交，等待 position 确认 seek 完成`);
+      this.checkSeekCompletionOrTimeout();
     }).catch(() => {
-      this.onSeekCompleted();
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `seekRelative fallback 也失败，放弃本次 seek`);
+      this._waitingForSeekCompletion = false;
+      this._seekTargetMs = -1;
+      this.onSeekCompleted();
     });
   }
 
@@ -323,13 +353,21 @@ export class MpvPlayerAdapter implements IPlayer {
     this._pendingPlay = false;
     const seconds = milliseconds / 1000;
     this._pendingSeekCount += 1;
+    // 估算 seek 目标位置
+    this._seekTargetMs = this._currentTime + milliseconds;
+    this._waitingForSeekCompletion = true;
+    this._seekStartTime = Date.now();
     try {
       await this.player.seekRelative(seconds);
-      this.onSeekCompleted();
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `forward(${milliseconds}ms) 命令已提交，等待 position 确认`);
+      this.checkSeekCompletionOrTimeout();
     } catch (e) {
-      this.onSeekCompleted();
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `forward seekRelative 异常: ${String(e)}`);
+      this._waitingForSeekCompletion = false;
+      this._seekTargetMs = -1;
+      this.onSeekCompleted();
     }
   }
 
@@ -341,13 +379,24 @@ export class MpvPlayerAdapter implements IPlayer {
     this._pendingPlay = false;
     const seconds = -(milliseconds / 1000);
     this._pendingSeekCount += 1;
+    // 估算 seek 目标位置
+    this._seekTargetMs = this._currentTime - milliseconds;
+    if (this._seekTargetMs < 0) {
+      this._seekTargetMs = 0;
+    }
+    this._waitingForSeekCompletion = true;
+    this._seekStartTime = Date.now();
     try {
       await this.player.seekRelative(seconds);
-      this.onSeekCompleted();
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `backward(${milliseconds}ms) 命令已提交，等待 position 确认`);
+      this.checkSeekCompletionOrTimeout();
     } catch (e) {
-      this.onSeekCompleted();
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `backward seekRelative 异常: ${String(e)}`);
+      this._waitingForSeekCompletion = false;
+      this._seekTargetMs = -1;
+      this.onSeekCompleted();
     }
   }
 
@@ -383,6 +432,13 @@ export class MpvPlayerAdapter implements IPlayer {
             `selectTrack(null) 异常: ${String(e)}`);
         }
       }
+      // 关闭字幕时恢复 sub-visibility，为下次选中图形字幕做准备
+      try {
+        await this.player.setPropertyString('sub-visibility', 'yes');
+      } catch (e) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `setPropertyString('sub-visibility', 'yes') 异常: ${String(e)}`);
+      }
       return;
     }
     // 根据缓存查找轨道类型
@@ -396,6 +452,22 @@ export class MpvPlayerAdapter implements IPlayer {
       await this.player.selectTrack(track.kind, track.id);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `selectTrack: kind=${track.kind} id=${track.id}`);
+      // 选中字幕轨时，判断是否为文本字幕：
+      // 文本字幕 → 设置 sub-visibility=no，禁止 mpv 内嵌渲染，由 TV 端 SubtitleRenderer 统一渲染
+      // 图形字幕 → 保持 sub-visibility=yes，让 mpv 内嵌合成到视频帧
+      if (track.kind === 'subtitle') {
+        const codec = (track.codec ?? '').toLowerCase();
+        const isGraphic = this.isGraphicSubtitleCodec(codec);
+        try {
+          const visibility = isGraphic ? 'yes' : 'no';
+          await this.player.setPropertyString('sub-visibility', visibility);
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `selectTrack: 字幕类型=${isGraphic ? '图形' : '文本'} codec=${codec} → sub-visibility=${visibility}`);
+        } catch (e) {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `setPropertyString('sub-visibility') 异常: ${String(e)}`);
+        }
+      }
     } catch (e) {
       const err = e as BusinessError;
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
@@ -449,6 +521,53 @@ export class MpvPlayerAdapter implements IPlayer {
     if (this._pendingSeekCount === 0 && this._onSeekDoneCb) {
       this._onSeekDoneCb();
     }
+  }
+
+  /**
+   * seek 命令提交后，检查当前 position 是否已满足 seek 完成条件；
+   * 若不满足，启动超时兜底定时器。
+   * 由于 mpv_command_async 的 Promise 在命令入队时就 resolve，
+   * 此时 position 可能还没更新，需要等待下一个 position 事件。
+   */
+  private checkSeekCompletionOrTimeout(): void {
+    if (!this._waitingForSeekCompletion) {
+      return;
+    }
+    // 如果当前位置已满足条件，立即触发
+    if (this._seekTargetMs >= 0) {
+      const diff = Math.abs(this._currentTime - this._seekTargetMs);
+      if (diff <= MpvPlayerAdapter.SEEK_POSITION_TOLERANCE_MS) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `seek 立即确认: position=${this._currentTime}ms 目标=${this._seekTargetMs}ms 差值=${diff}ms`);
+        this._waitingForSeekCompletion = false;
+        this._seekTargetMs = -1;
+        this.onSeekCompleted();
+        return;
+      }
+    }
+    // position 还没更新到目标，启动超时兜底
+    const elapsed = Date.now() - this._seekStartTime;
+    const remaining = MpvPlayerAdapter.SEEK_CONFIRM_TIMEOUT_MS - elapsed;
+    if (remaining <= 0) {
+      // 已超时，强制触发
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `seek 超时(${elapsed}ms)，强制触发 onSeekCompleted，目标=${this._seekTargetMs}ms 当前=${this._currentTime}ms`);
+      this._waitingForSeekCompletion = false;
+      this._seekTargetMs = -1;
+      this.onSeekCompleted();
+      return;
+    }
+    // 延迟超时检查：用 setTimeout 模拟超时兜底
+    setTimeout(() => {
+      if (this._waitingForSeekCompletion) {
+        const elapsed2 = Date.now() - this._seekStartTime;
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `seek 超时兜底(${elapsed2}ms)，强制触发 onSeekCompleted，目标=${this._seekTargetMs}ms 当前=${this._currentTime}ms`);
+        this._waitingForSeekCompletion = false;
+        this._seekTargetMs = -1;
+        this.onSeekCompleted();
+      }
+    }, remaining);
   }
 
   private registerEventListeners(): void {
@@ -566,6 +685,17 @@ export class MpvPlayerAdapter implements IPlayer {
       }
       this._duration = durationMs;
     }
+    // 检查 seek 是否完成：position 接近目标位置时触发 onSeekCompleted
+    if (this._waitingForSeekCompletion && this._seekTargetMs >= 0) {
+      const diff = Math.abs(positionMs - this._seekTargetMs);
+      if (diff <= MpvPlayerAdapter.SEEK_POSITION_TOLERANCE_MS) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `seek 完成确认: position=${positionMs}ms 目标=${this._seekTargetMs}ms 差值=${diff}ms → onSeekCompleted`);
+        this._waitingForSeekCompletion = false;
+        this._seekTargetMs = -1;
+        this.onSeekCompleted();
+      }
+    }
     if (this._onTimeUpdateCb) {
       this._onTimeUpdateCb(positionMs);
     }
@@ -650,6 +780,11 @@ export class MpvPlayerAdapter implements IPlayer {
         this.player.selectTrack('subtitle', t.id).catch(() => {
           hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
             `选中图形字幕失败`);
+        });
+        // 图形字幕需要 mpv 内嵌渲染合成到视频帧
+        this.player.setPropertyString('sub-visibility', 'yes').catch(() => {
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `设置 sub-visibility=yes 失败`);
         });
         this._graphicSubtitleSelected = true;
         return; // 只选第一条，立即返回

@@ -1260,7 +1260,20 @@ export class MpvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     }
 
     const allTracks = await this.player.getTrackInfos();
-    const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle');
+    // 过滤字幕轨道，排除图形字幕（PGS/VobSub 等）
+    const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => {
+      if (t.trackType !== 'subtitle') {
+        return false;
+      }
+      // 图形字幕的 mimeType 以 "image/" 开头，不需要 TV 端渲染
+      const mime = t.mimeType ?? '';
+      if (mime.startsWith('image/')) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[MpvSub] 跳过图形字幕: index=${t.trackIndex} mime=${mime}`);
+        return false;
+      }
+      return true;
+    });
     this.subtitleTracks = subtitleTracks;
 
     for (let i = 0; i < subtitleTracks.length; i++) {
@@ -1280,7 +1293,7 @@ export class MpvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
     }
 
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[MpvSub] 内嵌字幕轨道数=${items.length}`);
+      `[MpvSub] 内嵌字幕轨道数=${items.length} (原始=${allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle').length})`);
     return items;
   }
 
