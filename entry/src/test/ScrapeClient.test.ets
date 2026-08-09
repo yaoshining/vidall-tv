@@ -40,6 +40,14 @@ export default function scrapeClientTest() {
       expect(query.episodeNumber).assertEqual(3);
     });
 
+    it('should parse NAS episode filename with separated season and episode markers', 0, () => {
+      const query: ParsedFileName = parseFileName('S01 4K EP 07.mkv');
+
+      expect(query.mediaType).assertEqual('tv');
+      expect(query.seasonNumber).assertEqual(1);
+      expect(query.episodeNumber).assertEqual(7);
+    });
+
     /**
      * 测试用例 3：测试文件名解析 - 复杂文件名
      */

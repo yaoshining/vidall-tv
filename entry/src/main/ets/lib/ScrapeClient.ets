@@ -136,8 +136,9 @@ export function parseFileName(fileName: string): ParsedFileName {
   const yearMatch = withoutExt.match(yearPattern);
   const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
 
-  // 季集
-  const episodeMatch = withoutExt.match(/[Ss](\d{1,2})[Ee](\d{1,3})/);
+  // 季集：兼容标准 S01E07 以及 NAS 常见的 "S01 4K EP 07" 命名。
+  const episodeMatch = withoutExt.match(/[Ss](\d{1,2})[Ee](\d{1,3})/) ??
+    withoutExt.match(/[Ss](\d{1,2})\b.*?\b[Ee][Pp]?\s*(\d{1,3})\b/);
   const seasonNumber = episodeMatch ? parseInt(episodeMatch[1]) : undefined;
   const episodeNumber = episodeMatch ? parseInt(episodeMatch[2]) : undefined;
   const mediaType: 'movie' | 'tv' = episodeMatch ? 'tv' : 'movie';
