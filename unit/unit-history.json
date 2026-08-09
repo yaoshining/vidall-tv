@@ -8,5 +8,14 @@
     "total": 529,
     "report_href": "unit/runs/run-248/index.html",
     "coverage_href": "unit/runs/run-248/coverage/index.html"
+  },
+  {
+    "run_number": 249,
+    "timestamp": "2026-08-09T13:15:05Z",
+    "status": "fail",
+    "passed": 0,
+    "failed": 0,
+    "total": 0,
+    "report_href": "unit/runs/run-249/index.html"
   }
 ]
