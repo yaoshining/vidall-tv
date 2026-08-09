@@ -41,6 +41,7 @@ class MockPlayer implements IPlayer {
   }
   setSubtitleDelay(_delayMs: number): void {}
   setPlaybackSpeed(_speed: number): void {}
+  setPropertyString(_property: string, _value: string): void {}
 
   onReady(_callback: () => void): void {}
   onPlay(_callback: () => void): void {}
