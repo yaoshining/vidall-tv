@@ -29,6 +29,7 @@ import {
 } from "../../db/models/FileSourceEntity";
 import { FfprobeTrack, FfprobeUtil } from "../../utils/FfprobeUtil";
 import { WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
+import buffer from '@ohos.buffer';
 import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import {
   PlaybackSourceIdentity,
@@ -247,7 +248,8 @@ export class SourceAdapterService {
    * `SeasonDetailPage` / `PlayHistoryPage.buildPlayUrl` 行为对齐：
    * - 端口兜底 445。
    * - 路径段 `decode → encode` 二次处理。
-   * - 不附带 Authorization 头（httpHeader 始终为空对象）。
+   * - MPV 直连采用无 userinfo URI，并通过 Basic Authorization 交由 VidAll_Player
+   *   的内部 native bridge 注入 Samba；AVPlayer/IJK 仍由后端服务使用原始 URI 建立代理。
    */
   private assembleSmbSource(
     configJson: string,
@@ -260,11 +262,15 @@ export class SourceAdapterService {
       return null;
     }
     const port = config.port ?? 445;
-    const user = encodeURIComponent(config.username ?? '');
-    const pass = encodeURIComponent(config.password ?? '');
     const encodedPath = encodeSmbPathSegments(filePath);
-    const url = `smb://${user}:${pass}@${config.host}:${port}${encodedPath}`;
-    const result: AssembledSource = { url, httpHeader: {} };
+    const url = `smb://${config.host}:${port}${encodedPath}`;
+    const username = config.username ?? '';
+    const password = config.password ?? '';
+    const credentials = buffer.from(`${username}:${password}`).toString('base64');
+    const httpHeader: Record<string, string> = username.length > 0 || password.length > 0
+      ? { 'Authorization': `Basic ${credentials}` }
+      : {};
+    const result: AssembledSource = { url, httpHeader };
     return result;
   }
 

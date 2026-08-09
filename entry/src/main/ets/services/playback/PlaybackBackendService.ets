@@ -31,6 +31,7 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CommonConstants } from '../../common/constants/CommonConstants';
+import buffer from '@ohos.buffer';
 import { VideoData } from '../../components/core/player/VideoData';
 import { IPlayer } from '../../components/core/player/IPlayer';
 import { AVPlayerAdapter } from '../../components/core/player/AVPlayerAdapter';
@@ -196,22 +197,29 @@ export class PlaybackBackendService {
       onBuffering: cb.onBuffering
     };
 
-    // SMB 代理启动
+    // AVPlayer/IJK 不支持直接拉取 SMB，需经 HTTP 代理。MPV 使用无 userinfo 的 SMB URI，
+    // 并保留 Basic Authorization 给 VidAll_Player 的内部 native bridge 解码后注入 Samba。
     let smbOriginalUrl = '';
     let smbProxyActive = false;
     let effectiveVideoSrc = videoData.videoSrc;
     if (videoData.videoSrc.startsWith('smb://')) {
       smbOriginalUrl = videoData.videoSrc;
-      const proxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalUrl);
-      if (proxyUrl.length > 0) {
-        effectiveVideoSrc = proxyUrl;
-        smbProxyActive = true;
+      if (backend === 'mpv') {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `SMB 源已通过代理 URL 转交 ${backend}（proxy started → rewritten to ${proxyUrl}）`);
+          'SMB 源直传 VidAll_Player MPV 后端，不启动 HTTP 代理');
       } else {
-        smbOriginalUrl = '';
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `SMB 代理启动失败，backend=${backend} 将使用原始 smb:// URL`);
+        const proxySmbUrl = this.buildSmbProxyUrl(smbOriginalUrl, videoData.httpHeader);
+        const proxyUrl = VidAllPlayerAdapter.startSmbProxy(proxySmbUrl);
+        if (proxyUrl.length > 0) {
+          effectiveVideoSrc = proxyUrl;
+          smbProxyActive = true;
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `SMB 源已通过代理 URL 转交 ${backend}（proxy started → rewritten to ${proxyUrl}）`);
+        } else {
+          smbOriginalUrl = '';
+          hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+            `SMB 代理启动失败，backend=${backend} 将使用原始 smb:// URL`);
+        }
       }
     }
 
@@ -392,6 +400,56 @@ export class PlaybackBackendService {
   }
 
   /**
+   * 仅为 AVPlayer/IJK 的本地代理恢复 URI userinfo；MPV 始终消费无凭据 URI 与 Basic header。
+   */
+  private buildSmbProxyUrl(smbUri: string, headers: Record<string, string> | undefined): string {
+    if (headers === undefined) {
+      return smbUri;
+    }
+    const headerNames = Object.keys(headers);
+    let authorization = '';
+    for (let index = 0; index < headerNames.length; index++) {
+      const name = headerNames[index];
+      if (name.toLowerCase() === 'authorization') {
+        authorization = headers[name];
+        break;
+      }
+    }
+    if (!authorization.startsWith('Basic ')) {
+      return smbUri;
+    }
+    try {
+      const credentials = buffer.from(authorization.substring('Basic '.length), 'base64').toString('utf-8');
+      const separator = credentials.indexOf(':');
+      if (separator < 0) {
+        return smbUri;
+      }
+      const username = credentials.substring(0, separator);
+      const password = credentials.substring(separator + 1);
+      if (username.length === 0 && password.length === 0) {
+        return smbUri;
+      }
+      const schemeEnd = smbUri.indexOf('://');
+      if (schemeEnd < 0) {
+        return smbUri;
+      }
+      const authorityStart = schemeEnd + 3;
+      const authorityEnd = smbUri.indexOf('/', authorityStart);
+      const authority = authorityEnd >= 0
+        ? smbUri.substring(authorityStart, authorityEnd)
+        : smbUri.substring(authorityStart);
+      if (authority.includes('@')) {
+        return smbUri;
+      }
+      const userInfo = `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
+      return `${smbUri.substring(0, authorityStart)}${userInfo}${smbUri.substring(authorityStart)}`;
+    } catch (_) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'SMB 代理认证解码失败，按匿名 SMB 启动代理');
+      return smbUri;
+    }
+  }
+
+  /**
    * SMB 代理重启：用于 avplayer → ijkplayer fallback 场景。
    * 行为与原 `VideoPlayerController.setIjkContext` 内部 SMB 处理字节级一致。
    */
@@ -399,7 +457,8 @@ export class PlaybackBackendService {
     if (smbOriginalSrc.length === 0) {
       return false;
     }
-    const newProxyUrl = VidAllPlayerAdapter.startSmbProxy(smbOriginalSrc);
+    const proxySmbUrl = this.buildSmbProxyUrl(smbOriginalSrc, videoData.httpHeader);
+    const newProxyUrl = VidAllPlayerAdapter.startSmbProxy(proxySmbUrl);
     if (newProxyUrl.length > 0) {
       videoData.videoSrc = newProxyUrl;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,

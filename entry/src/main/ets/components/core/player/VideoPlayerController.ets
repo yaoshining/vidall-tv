@@ -958,6 +958,15 @@ export class VideoPlayerController {
         '[initPlayer] MPV 忽略 ffprobe 预置音轨，等待 VidAll_Player 运行时轨道');
     }
 
+    // AVPlayer fallback 后 videoData 仍可能持有已释放的本地 SMB 代理 URL。
+    // MPV/VidAll_Player 可直接处理 smb://，切换时必须恢复原始地址。
+    if (this.backend === 'mpv' && this.smbOriginalSrc.length > 0 &&
+      videoData.videoSrc.startsWith('http://127.0.0.1')) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        'initPlayer: MPV fallback 恢复原始 SMB 源，跳过本地 HTTP 代理');
+      videoData.videoSrc = this.smbOriginalSrc;
+    }
+
     // 根据 backend 创建对应适配器（thin delegation to `PlaybackBackendService.prepareAdapter`）。
     //
     // 测试注入钩子：若子类覆写了 createAdapterForBackend() 并返回非 undefined，则跳过 service
@@ -3078,12 +3087,17 @@ export class VideoPlayerController {
     } else {
       this.preservePendingResumeAutoplayDecisionOnPaused = false;
     }
+    // 在 await pause() 前先占用 seek 状态。PREPARED 的监听器会同步启动音轨初始化，
+    // 延后标记会让自动选轨把刚恢复的进度又 flush 回初始 position。
+    const canDispatchSeek = !this.isSeeking;
+    if (canDispatchSeek) {
+      this.isSeeking = true;
+    }
     await this.pause();
     this.currentTime = safeTime;
     this.subtitleAdapter.onSeekSync();
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
-    if (!this.isSeeking) {
-      this.isSeeking = true;
+    if (canDispatchSeek) {
       try {
         this.player.seek(safeTime);
         if (autoplayDecisionSource.length > 0) {
@@ -3573,10 +3587,13 @@ export class VideoPlayerController {
     // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
+    // prepared 续播可能已在同一事件周期内发起。此时切轨仍可生效，但不能再 pause/seek，
+    // 否则会用初始 position 覆盖续播目标。
+    const shouldFlushAfterSwitch = wasPlaying && !this.isSeeking;
 
     try {
       // 1. 暂停视频（避免音轨切换期间画面继续走而音轨还在旧轨）
-      if (wasPlaying) {
+      if (shouldFlushAfterSwitch) {
         await this.player.pause();
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[switchAudioTrack] 暂停播放，当前时间=${seekBack}ms`);
@@ -3614,14 +3631,14 @@ export class VideoPlayerController {
       const seekTarget = this.pendingResumeSeekInFlight
         ? this.pendingResumeSeekTargetMs
         : seekBack;
-      if (wasPlaying && seekTarget > 0) {
+      if (shouldFlushAfterSwitch && seekTarget > 0) {
         hilog.info(CommonConstants.LOG_DOMAIN, TAG,
           `[switchAudioTrack] seek flush 到 ${seekTarget}ms${this.pendingResumeSeekInFlight ? ' (resume seek 目标)' : ''}`);
         // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
         this.isSeeking = true;
         this.player.seek(seekTarget);
         // seekDone 回调里会调 play()，不需要在这里手动恢复
-      } else if (wasPlaying) {
+      } else if (shouldFlushAfterSwitch) {
         // 时间为 0（片头），直接恢复播放
         await this.player.play();
       }
