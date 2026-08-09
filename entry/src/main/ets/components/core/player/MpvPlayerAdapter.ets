@@ -470,13 +470,13 @@ export class MpvPlayerAdapter implements IPlayer {
     // 检测是否为字幕轨道（带 SUBTITLE_ID_OFFSET 偏移）
     const isSubtitleTrack = trackIndex >= MpvPlayerAdapter.SUBTITLE_ID_OFFSET;
     const actualId = isSubtitleTrack ? trackIndex - MpvPlayerAdapter.SUBTITLE_ID_OFFSET : trackIndex;
-    const targetKind = isSubtitleTrack ? 'subtitle' as PlayerTrackKind : undefined;
-    // 根据缓存查找轨道类型。字幕操作限定 kind='subtitle'，
-    // 避免 etsId 冲突导致找到 video/audio 轨道。
+    const targetKind: PlayerTrackKind = isSubtitleTrack ? 'subtitle' : 'audio';
+    // VidAll_TV 仅对外暴露音频和字幕轨；非字幕 ID 始终按音频查找。
+    // VidAll_Player 不同 kind 的 ID 可重叠，必须指定 kind 才能稳定命中。
     const track = this.findTrackById(actualId, targetKind);
     if (track === null) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `selectTrack(${trackIndex}): 未找到对应轨道 (actualId=${actualId} kind=${targetKind ?? 'any'})`);
+        `selectTrack(${trackIndex}): 未找到对应轨道 (actualId=${actualId} kind=${targetKind})`);
       return;
     }
     try {

@@ -933,8 +933,9 @@ export class VideoPlayerController {
     this.activeAudioIndex = -1;
 
     // ── 预置音轨：从数据库已读取，立即填充，无需等播放器 ready ──
-    // 这样用户打开播放页就能立即看到音轨列表，不必等待 ijkplayer prepareAsync 完成
-    if (videoData.presetAudioTracks && videoData.presetAudioTracks.length > 0) {
+    // MPV 的 PlayerTrack.id 是 VidAll_Player 的运行时 ID，不能复用 ffprobe 预置流索引。
+    // 因此 MPV 必须等 getTrackInfos() 返回后再填充，确保回传 selectTrack 的 ID 可用。
+    if (this.backend !== 'mpv' && videoData.presetAudioTracks && videoData.presetAudioTracks.length > 0) {
       const presets = videoData.presetAudioTracks;
       const tracks: AudioTrackItem[] = [];
       for (let i = 0; i < presets.length; i++) {
@@ -952,6 +953,9 @@ export class VideoPlayerController {
       this.activeAudioIndex = 0;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[initPlayer] 预置音轨已提前填充: ${tracks.length} 条`);
+    } else if (this.backend === 'mpv') {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        '[initPlayer] MPV 忽略 ffprobe 预置音轨，等待 VidAll_Player 运行时轨道');
     }
 
     // 根据 backend 创建对应适配器（thin delegation to `PlaybackBackendService.prepareAdapter`）。
