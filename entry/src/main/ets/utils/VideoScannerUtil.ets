@@ -730,8 +730,11 @@ export class WebDAVAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        // #191 尝试从文件名提取显式集数（用于修复弱语义文件名关联）
-        const explicitEpisodeNum = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+        // 只有无法解析标准季集标记时，才将弱语义集数按第一季兜底。
+        const parsedFileName = parseFileName(fileName);
+        const explicitEpisodeNum = parsedFileName.episodeNumber === undefined
+          ? extractEpisodeNumberFromWeakSemanticFileName(fileName)
+          : undefined;
         const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
         const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
         if (!result.series) {
@@ -1308,8 +1311,11 @@ export class SMBAdapter implements ISourceAdapter {
       }
     } else {
       try {
-        // #191 尝试从文件名提取显式集数（用于修复弱语义文件名关联）
-        const explicitEpisodeNum = extractEpisodeNumberFromWeakSemanticFileName(fileName);
+        // 只有无法解析标准季集标记时，才将弱语义集数按第一季兜底。
+        const parsedFileName = parseFileName(fileName);
+        const explicitEpisodeNum = parsedFileName.episodeNumber === undefined
+          ? extractEpisodeNumberFromWeakSemanticFileName(fileName)
+          : undefined;
         const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
         const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
         if (!result.series) {
