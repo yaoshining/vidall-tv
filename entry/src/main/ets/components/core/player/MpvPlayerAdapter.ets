@@ -820,7 +820,8 @@ export class MpvPlayerAdapter implements IPlayer {
     hilog.error(CommonConstants.LOG_DOMAIN, TAG,
       `error 事件: domain=${playerError.domain} code=${playerError.code} msg=${playerError.message}`);
     // 格式不支持时触发 onUnsupportedFormat
-    if (playerError.domain === 'media') {
+    // 仅当 domain='media' 且错误码指向解码/格式问题时触发，避免将网络/IO错误误判为格式不支持
+    if (playerError.domain === 'media' && this.isUnsupportedFormatCode(playerError.code)) {
       if (this._onUnsupportedFormatCb) {
         this._onUnsupportedFormatCb();
         return;
@@ -829,6 +830,16 @@ export class MpvPlayerAdapter implements IPlayer {
     if (this._onErrorCb) {
       this._onErrorCb(new Error(playerError.message));
     }
+  }
+
+  /** 判断错误码是否指向格式不支持/解码失败 */
+  private isUnsupportedFormatCode(code: number): boolean {
+    // 常见格式不支持错误码范围：
+    // - AVPlayer: MSERR_UNSUPPORTED_FORMAT = 101 (media service error)
+    // - mpv: 通常为负值或 0，但 @vidall/player 会映射为正值
+    // 保守策略：错误码 > 0 且 < 200 时视为格式/解码问题
+    // 网络错误通常为 > 1000，IO错误为 > 500
+    return code > 0 && code < 200;
   }
 
   private isGraphicSubtitleCodec(codec: string): boolean {
