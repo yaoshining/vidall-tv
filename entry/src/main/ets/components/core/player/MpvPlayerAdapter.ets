@@ -833,13 +833,20 @@ export class MpvPlayerAdapter implements IPlayer {
   }
 
   /** 判断错误码是否指向格式不支持/解码失败 */
-  private isUnsupportedFormatCode(code: number): boolean {
-    // 常见格式不支持错误码范围：
-    // - AVPlayer: MSERR_UNSUPPORTED_FORMAT = 101 (media service error)
-    // - mpv: 通常为负值或 0，但 @vidall/player 会映射为正值
-    // 保守策略：错误码 > 0 且 < 200 时视为格式/解码问题
-    // 网络错误通常为 > 1000，IO错误为 > 500
-    return code > 0 && code < 200;
+  private isUnsupportedFormatCode(code: string): boolean {
+    // @vidall/player PlayerError.code 为字符串类型
+    // 常见格式不支持错误码：'FORMAT_UNSUPPORTED'、'CODEC_NOT_FOUND' 等
+    // 数值型错误码：> 0 且 < 200 视为格式/解码问题
+    const upperCode = code.toUpperCase();
+    if (upperCode.includes('UNSUPPORTED') || upperCode.includes('CODEC') ||
+      upperCode.includes('FORMAT') || upperCode.includes('DECODE')) {
+      return true;
+    }
+    const numVal = Number.parseInt(upperCode, 10);
+    if (!Number.isNaN(numVal) && numVal > 0 && numVal < 200) {
+      return true;
+    }
+    return false;
   }
 
   private isGraphicSubtitleCodec(codec: string): boolean {
