@@ -74,10 +74,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP"
           "$NODE_BIN" "$HVIGOR_WRAPPER" \
             --mode module -p module=entry@default \
-            -p product=default \
-            -p unit.test.replace.page=../../../.test/testability/pages/Index \
-            -p pageType=page -p isLocalTest=true -p unitTestMode=true \
-            -p buildRoot=.test \
             UnitTestBuild --no-daemon \
             --analyze=normal --parallel --incremental \
             2>&1 | tee "$RUNNER_TEMP/unit-test-build.log"
