@@ -117,5 +117,14 @@
     "total": 531,
     "report_href": "unit/runs/run-254/index.html",
     "coverage_href": "unit/runs/run-254/coverage/index.html"
+  },
+  {
+    "run_number": 255,
+    "timestamp": "2026-08-10T07:31:27Z",
+    "status": "fail",
+    "passed": 0,
+    "failed": 0,
+    "total": 0,
+    "report_href": "unit/runs/run-255/index.html"
   }
 ]
