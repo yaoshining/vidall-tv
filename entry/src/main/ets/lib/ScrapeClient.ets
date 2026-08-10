@@ -276,8 +276,8 @@ function buildTvSearchCandidates(parsedTitle: string, parsedYear: number | undef
  * - 原始标题完全匹配：95分
  * - 标题包含搜索词（子串匹配）：80分
  * - 原始标题包含搜索词：75分
- * - 搜索词包含标题（反向子串）：60分
- * - 最低分：按 voteCount 权重给基础分（确保高人气结果有基础分）
+ * - 无任何标题匹配：0分（拒绝完全无关的结果，即使高人气也不返回）
+ * - 有标题匹配时，按 voteCount 加少量权重作为同分 tiebreaker
  */
 function scoreTvSearchResult(result: TvSeriesScrapeResult, searchQuery: string): number {
   const query = searchQuery.toLowerCase().trim();
@@ -288,26 +288,31 @@ function scoreTvSearchResult(result: TvSeriesScrapeResult, searchQuery: string):
   if (title === query) { return 100; }
   if (originalTitle === query) { return 95; }
 
+  let titleScore = 0;
+
   // 子串匹配（要求长度差异不超过 50%，避免短片段误匹配长标题）
   if (title.length > 0 && query.length > 0) {
     const lenRatio = Math.min(title.length, query.length) / Math.max(title.length, query.length);
     if (lenRatio >= 0.5) {
-      if (title.includes(query) || query.includes(title)) { return 80; }
+      if (title.includes(query) || query.includes(title)) { titleScore = 80; }
     }
   }
-  if (originalTitle.length > 0 && query.length > 0) {
+  if (titleScore === 0 && originalTitle.length > 0 && query.length > 0) {
     const lenRatio = Math.min(originalTitle.length, query.length) / Math.max(originalTitle.length, query.length);
     if (lenRatio >= 0.5) {
-      if (originalTitle.includes(query) || query.includes(originalTitle)) { return 75; }
+      if (originalTitle.includes(query) || query.includes(originalTitle)) { titleScore = 75; }
     }
   }
 
-  // 基础分：按 voteCount 给权重（高人气结果优先）
+  // 无标题匹配：返回 0，拒绝完全无关的结果
+  if (titleScore === 0) { return 0; }
+
+  // 有标题匹配时，voteCount 作为少量 tiebreaker
   const voteCount = result.voteCount ?? 0;
-  if (voteCount >= 10000) { return 50; }
-  if (voteCount >= 1000) { return 40; }
-  if (voteCount >= 100) { return 30; }
-  return 20;
+  if (voteCount >= 10000) { return titleScore + 5; }
+  if (voteCount >= 1000) { return titleScore + 3; }
+  if (voteCount >= 100) { return titleScore + 1; }
+  return titleScore;
 }
 
 function selectTvSearchResult(
@@ -335,6 +340,10 @@ function selectTvSearchResult(
         bestScore = score;
         bestResult = result;
       }
+    }
+    // 最佳结果无标题匹配且无年份匹配（score <= 0）时，拒绝返回，避免误关联无关剧集
+    if (bestScore <= 0) {
+      return null;
     }
     return bestResult;
   }
