@@ -144,5 +144,14 @@
     "failed": 0,
     "total": 0,
     "report_href": "unit/runs/run-258/index.html"
+  },
+  {
+    "run_number": 257,
+    "timestamp": "2026-08-10T09:17:02Z",
+    "status": "pass",
+    "passed": 0,
+    "failed": 0,
+    "total": 0,
+    "report_href": "unit/runs/run-257/index.html"
   }
 ]
