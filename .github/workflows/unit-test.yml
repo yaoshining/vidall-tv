@@ -209,15 +209,11 @@ jobs:
           elif [ "$TOTAL" = "0" ] && grep -q "BUILD SUCCESSFUL" "$BUILD_LOG" 2>/dev/null; then STATUS="build_only"
           else STATUS="failed"; fi
 
-          # build_only 模式：从编译日志统计测试文件数作为补充信息
+          # build_only 模式：从测试源目录统计编译通过的测试文件数作为补充信息
           COMPILED_COUNT=0
-          if [ "$STATUS" = "build_only" ] && [ -f "$BUILD_LOG" ]; then
-            COMPILED_COUNT=$(grep -cE '\.test\.(ets|ts)' "$BUILD_LOG" 2>/dev/null || echo "0")
-            if [ "$COMPILED_COUNT" -eq 0 ]; then
-              # 回退：从测试源目录直接统计
-              COMPILED_COUNT=$(find "$WORK_DIR/entry/src/test" -name '*.test.ets' 2>/dev/null | wc -l | tr -d ' ')
-            fi
-            echo "📊 编译通过 $COMPILED_COUNT 个测试文件（设备端测试未执行）"
+          if [ "$STATUS" = "build_only" ]; then
+            COMPILED_COUNT=$(find "$WORK_DIR/entry/src/test" -name '*.test.ets' -type f 2>/dev/null | wc -l | awk '{print $1}')
+            echo "📊 编译通过 ${COMPILED_COUNT} 个测试文件（设备端测试未执行）"
           fi
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
