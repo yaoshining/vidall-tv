@@ -8,20 +8,33 @@
 
 ## Requirements
 
-### Requirement: unit-test workflow 在 iMac self-hosted runner 上执行 UnitTestBuild
-`unit-test.yml` SHALL 在打有 `harmonyos-tv-test` 标签的 iMac self-hosted runner 上执行 `UnitTestBuild`，使用 DevEco Studio 内置 SDK（`/Applications/DevEco-Studio.app/Contents/sdk`）和已检出的工程路径（`/Users/shiningyao/DevecostudioProjects/vidall-tv`）。
+### Requirement: unit-test workflow 在 iMac self-hosted runner 上执行两阶段测试
+`unit-test.yml` SHALL 在打有 `harmonyos-tv-test` 标签的 iMac self-hosted runner 上执行两阶段策略：第一阶段为 `UnitTestBuild` 编译门禁（必须通过），第二阶段为可选的设备端测试（`continue-on-error: true`）。
 
-#### Scenario: workflow_call 触发时成功构建
-- **WHEN** `ci-compile-check.yml` 的 `compile-check` job 通过后，通过 `workflow_call` 触发 `unit-test.yml`
-- **THEN** iMac runner 执行 `UnitTestBuild`，hvigor 退出码为 0，job 状态为 `success`
+#### Scenario: UnitTestBuild 编译门禁成功
+- **WHEN** `UnitTestBuild` 执行成功，hvigor 退出码为 0
+- **THEN** 编译步骤通过，继续执行设备端测试步骤
+- **AND** 即使设备端测试失败或超时，CI job 仍为 `success`
+
+#### Scenario: UnitTestBuild 编译门禁失败
+- **WHEN** 测试文件编译错误导致 hvigor 退出码非 0
+- **THEN** 编译步骤失败，job 状态为 `failure`，PR check 显示失败
+- **AND** 不执行设备端测试步骤
+
+#### Scenario: 设备端测试成功
+- **WHEN** 设备已连接且 hvigor `test` 命令在超时时间内完成
+- **THEN** 测试结果被解析并写入报告
+- **AND** CI job 状态为 `success`
+
+#### Scenario: 设备端测试超时或失败
+- **WHEN** 设备端测试因 hdc daemon 卡死而超时（5 分钟上限）或 hvigor 退出码非零
+- **THEN** 系统 SHALL 终止卡死进程并清理残留 hdc 进程
+- **AND** 该步骤标记为 `continue-on-error`，不阻塞 CI job
+- **AND** CI job 仍为 `success`（仅编译通过）
 
 #### Scenario: workflow_dispatch 手动触发时成功构建
 - **WHEN** 在 GitHub Actions 页面手动触发 `unit-test.yml`（workflow_dispatch）
 - **THEN** iMac runner 执行 `UnitTestBuild`，hvigor 退出码为 0
-
-#### Scenario: UnitTestBuild 失败时 job 以非零状态结束
-- **WHEN** 测试文件编译错误导致 hvigor 退出码非 0
-- **THEN** job 状态为 `failure`，PR check 显示失败
 
 ---
 
@@ -48,15 +61,15 @@
 ---
 
 ### Requirement: 构建日志上传为 GitHub Actions artifact
-`unit-test.yml` SHALL 在构建完成后（无论成功或失败，`if: always()`），将 `UnitTestBuild` 日志文件上传为 Actions artifact，供事后排查。
+`unit-test.yml` SHALL 在构建完成后（无论成功或失败，`if: always()`），将 `UnitTestBuild` 编译日志和设备端测试日志上传为 Actions artifact，供事后排查。
 
 #### Scenario: 构建成功时日志可下载
 - **WHEN** `UnitTestBuild` 成功
-- **THEN** Actions artifact 包含完整构建日志，保留至少 7 天
+- **THEN** Actions artifact 包含编译日志和设备端测试日志，保留至少 7 天
 
 #### Scenario: 构建失败时日志可下载
 - **WHEN** `UnitTestBuild` 失败
-- **THEN** Actions artifact 仍上传，包含编译错误详情
+- **THEN** Actions artifact 仍上传编译日志，包含编译错误详情
 
 ---
 
