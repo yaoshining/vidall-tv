@@ -105,10 +105,11 @@ Define the behavior contract for integrating the mpv-based `@vidall/player` back
 ### Requirement: MPV backend SHALL default to TV-side subtitle rendering
 `MpvPlayerAdapter` MUST 默认不选中任何 mpv 内嵌字幕轨（`sub-visibility=no` 等效行为），仅依赖 `subtitleText` 事件提供文本；PGS/VobSub 图形字幕除外。
 
-#### Scenario: Text subtitle rendered by TV
-- **WHEN** 当前字幕轨为 SRT/ASS/SSA/VTT 文本字幕
-- **THEN** `MpvPlayerAdapter` SHALL NOT 选中该轨道让 mpv 合成
-- **AND** `subtitleText` 事件 SHALL 持续驱动 TV 端 `SubtitleRenderer`
+#### Scenario: Text subtitle rendered by TV (default, no user selection)
+- **WHEN** 当前字幕轨为 SRT/ASS/SSA/VTT 文本字幕，且未通过 `selectTrack` 选中
+- **THEN** `MpvPlayerAdapter` SHALL 保持 `sub-visibility=no` 禁止 mpv 内嵌合成
+- **AND** `subtitleText` 事件 SHALL 为空字符串（未选中时不输出文本）
+- **AND** TV 端 `SubtitleRenderer` SHALL 不绘制（无字幕选中）
 
 #### Scenario: Graphic subtitle rendered by mpv
 - **WHEN** 用户通过 `selectTrack` 选中 PGS 或 VobSub 图形字幕轨
