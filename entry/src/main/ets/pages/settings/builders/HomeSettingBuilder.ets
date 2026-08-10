@@ -123,7 +123,7 @@ struct HomeSettingBuilderComponent {
   private showPlayerFallbackDialog(): void {
     this.getUIContext().showAlertDialog({
       title: '回退播放内核',
-      message: '当 AVPlayer 无法播放时，使用哪个播放器作为回退？\n\n· IJKPlayer: 成熟稳定，软解能力强\n· MPV (libmpv): 格式支持更广，图形字幕内嵌合成',
+      message: '当 AVPlayer 无法播放时，使用哪个播放器作为回退？\n\n· IJKPlayer: 成熟稳定，软解能力强\n· MPV (libmpv): 格式支持更广，图形字幕内嵌合成（仅支持真机）',
       primaryButton: {
         value: 'MPV (libmpv)',
         action: () => { this.setPlayerFallback('mpv') }
@@ -217,7 +217,7 @@ struct HomeSettingBuilderComponent {
       }) {
         SettingListItem({
           title: "回退播放内核",
-          value: this.playerFallbackValue === 'mpv' ? 'MPV (libmpv)' : 'IJKPlayer',
+          value: this.playerFallbackValue === 'mpv' ? 'MPV (libmpv) · 仅真机' : 'IJKPlayer',
           onItemClick: () => {
             this.showPlayerFallbackDialog()
           }
