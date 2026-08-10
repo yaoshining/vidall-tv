@@ -64,6 +64,26 @@ jobs:
           "$OHPM_BIN" install
           test -d "$WORK_DIR/oh_modules/@ibestservices/ibest-ui"
 
+      - name: 重启 HDC 并连接设备
+        shell: bash
+        run: |
+          set -euo pipefail
+          HDC_BIN="$OHOS_SDK_HOME/toolchains/hdc"
+          echo "=== 杀掉残留 hdc daemon ==="
+          "$HDC_BIN" kill 2>/dev/null || true
+          sleep 2
+          echo "=== 连接 TV 设备 ==="
+          "$HDC_BIN" tconn 192.168.3.85:5555
+          sleep 2
+          echo "=== 验证设备连接 ==="
+          TARGETS=$("$HDC_BIN" list targets 2>&1 || echo "")
+          if echo "$TARGETS" | grep -q "192.168.3.85"; then
+            echo "设备连接成功: $TARGETS"
+            "$HDC_BIN" shell echo hello
+          else
+            echo "警告: 设备未连接 ($TARGETS)，单测部署可能卡住"
+          fi
+
       - name: 执行单元测试
         shell: bash
         env:
