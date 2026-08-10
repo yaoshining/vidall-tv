@@ -93,10 +93,16 @@ jobs:
           set -eo pipefail
           cd "$WORK_DIR"
 
-          # 预热 hdc daemon 并连接设备
+          # ── 彻底清理所有残留 hdc 进程 ──
+          # 避免残留 daemon 与 hvigor test 内部启动的 hdc daemon 端口冲突导致卡死
           HDC_BIN="$OHOS_SDK_HOME/toolchains/hdc"
           "$HDC_BIN" kill 2>/dev/null || true
+          sleep 1
+          # 强制杀掉所有 hdc 相关进程（daemon 可能不响应 kill 命令）
+          ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
           sleep 2
+
+          # 验证设备可达（不启动长期 daemon）
           "$HDC_BIN" tconn 192.168.3.85:5555 2>/dev/null || true
           sleep 2
           TARGETS=$("$HDC_BIN" list targets 2>&1 || echo "")
@@ -105,6 +111,12 @@ jobs:
             exit 0
           fi
           echo "设备已连接: $TARGETS"
+
+          # 清理验证用的 hdc daemon，让 hvigor test 自己管理 daemon 生命周期
+          "$HDC_BIN" kill 2>/dev/null || true
+          sleep 1
+          ps aux | grep -E '[h]dc.*-m' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+          sleep 1
 
           # 执行设备端测试，带超时保护
           RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
@@ -116,8 +128,8 @@ jobs:
               2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           ) &
           TEST_PID=$!
-          # 最多等待 5 分钟
-          MAX_WAIT=300
+          # 最多等待 3 分钟（手动验证约 17 秒完成，超过 180s 一定异常）
+          MAX_WAIT=180
           ELAPSED=0
           while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
             sleep 5
@@ -125,11 +137,14 @@ jobs:
           done
           if kill -0 "$TEST_PID" 2>/dev/null; then
             echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程"
+            # 先尝试 SIGTERM，等待 5 秒
             kill "$TEST_PID" 2>/dev/null || true
-            # 等待子进程清理
+            sleep 5
+            # 如果还在运行，强制 SIGKILL
+            kill -9 "$TEST_PID" 2>/dev/null || true
             wait "$TEST_PID" 2>/dev/null || true
             # 清理可能残留的卡死 hdc 进程
-            ps aux | grep "hdc -m" | grep -v grep | awk "{print \$2}" | xargs kill 2>/dev/null || true
+            ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
             echo "⚠️ 设备端测试未在规定时间内完成，但不阻塞 CI"
             exit 0
           fi
@@ -193,6 +208,17 @@ jobs:
           elif [ "$FAILED" != "0" ] && [ "$TOTAL" != "0" ]; then STATUS="partial"
           elif [ "$TOTAL" = "0" ] && grep -q "BUILD SUCCESSFUL" "$BUILD_LOG" 2>/dev/null; then STATUS="build_only"
           else STATUS="failed"; fi
+
+          # build_only 模式：从编译日志统计测试文件数作为补充信息
+          COMPILED_COUNT=0
+          if [ "$STATUS" = "build_only" ] && [ -f "$BUILD_LOG" ]; then
+            COMPILED_COUNT=$(grep -cE '\.test\.(ets|ts)' "$BUILD_LOG" 2>/dev/null || echo "0")
+            if [ "$COMPILED_COUNT" -eq 0 ]; then
+              # 回退：从测试源目录直接统计
+              COMPILED_COUNT=$(find "$WORK_DIR/entry/src/test" -name '*.test.ets' 2>/dev/null | wc -l | tr -d ' ')
+            fi
+            echo "📊 编译通过 $COMPILED_COUNT 个测试文件（设备端测试未执行）"
+          fi
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # clone gh-pages（最多重试 3 次，规避 macOS LibreSSL 偶发 SSL 握手失败）
@@ -235,6 +261,7 @@ jobs:
             "passed": ${PASSED},
             "failed": ${FAILED},
             "total": ${TOTAL},
+            "compiled_count": ${COMPILED_COUNT},
             "run_number": "${GITHUB_RUN_NUMBER}",
             "timestamp": "${TIMESTAMP}",
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -328,7 +355,8 @@ jobs:
           # 写入 unit-history.json、coverage-history.json，并生成覆盖率汇总页
           export SITE_DIR RUN_NUMBER="${GITHUB_RUN_NUMBER}" RUN_STATUS="${STATUS}" \
             RUN_PASSED="${PASSED}" RUN_FAILED="${FAILED}" RUN_TOTAL="${TOTAL}" \
-            RUN_TIMESTAMP="${TIMESTAMP}" RUN_REPORT_DIR_ENV="${RUN_REPORT_DIR}"
+            RUN_TIMESTAMP="${TIMESTAMP}" RUN_REPORT_DIR_ENV="${RUN_REPORT_DIR}" \
+            COMPILED_COUNT="${COMPILED_COUNT}"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -384,6 +412,7 @@ jobs:
               'passed':      run_passed,
               'failed':      run_failed,
               'total':       run_total,
+              'compiled_count': int(os.environ.get('COMPILED_COUNT', '0')),
               'report_href': f'unit/runs/run-{run_number}/index.html',
           }
           if cov_report is not None:
@@ -535,6 +564,7 @@ jobs:
               pa   = h.get('passed', 0)
               fa   = h.get('failed', 0)
               tot  = h.get('total', 0)
+              cc   = h.get('compiled_count', 0)
               href = h.get('report_href', '#')
               cov  = h.get('coverage_href', '')
               badge = ('<span class="px-2 py-0.5 rounded text-xs font-semibold bg-green-900 text-green-300">通过</span>'
@@ -544,6 +574,12 @@ jobs:
                        '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-yellow-900 text-yellow-300">部分失败</span>'
                        if st == 'partial' else
                        '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-900 text-red-300">失败</span>')
+              if st == 'build_only' and cc > 0:
+                  rate_text = f'{cc} 文件已编译'
+              elif st == 'build_only':
+                  rate_text = '编译通过'
+              else:
+                  rate_text = f'{pa}/{tot}'
               cov_link = (f'<a href="../../{cov}" class="text-blue-400 hover:underline text-xs">覆盖率</a>'
                           if cov else '<span class="text-gray-700 text-xs">—</span>')
               rows += (
@@ -551,8 +587,8 @@ jobs:
                   f'<td class="py-3 px-4 text-gray-300 font-mono">#{rn}</td>'
                   f'<td class="py-3 px-4 text-gray-400 text-sm">{ts}</td>'
                   f'<td class="py-3 px-4">{badge}</td>'
-                  f'<td class="py-3 px-4 text-gray-300 text-sm">{pa}/{tot}'
-                  + (f' <span class="text-red-400">({fa}失败)</span>' if fa else '') + '</td>'
+                  f'<td class="py-3 px-4 text-gray-300 text-sm">{rate_text}'
+                  + (f' <span class="text-red-400">({fa}失败)</span>' if fa and st != 'build_only' else '') + '</td>'
                   f'<td class="py-3 px-4"><a href="../../{href}" class="text-blue-400 hover:underline text-sm">查看报告</a></td>'
                   f'<td class="py-3 px-4">{cov_link}</td>'
                   '</tr>'
@@ -624,17 +660,25 @@ jobs:
             icon, color, label = status_badge(s)
             if s:
               p, f, t = s.get('passed',0), s.get('failed',0), s.get('total',0)
-              rate = f'{p} / {t}'
+              cc = s.get('compiled_count', 0)
+              st = s.get('status', '')
+              if st == 'build_only' and cc > 0:
+                rate = f'{cc} 文件已编译'
+              elif st == 'build_only':
+                rate = '编译通过'
+              else:
+                rate = f'{p} / {t}'
+              rate_label = '编译通过' if st == 'build_only' else '用例通过'
               run_info = f'Run #{s.get("run_number","-")} &nbsp;·&nbsp; {s.get("timestamp","-")[:10]}'
             else:
-              rate = '—'; run_info = '暂无记录'
+              rate = '—'; rate_label = '用例通过'; run_info = '暂无记录'
             cov_btn = (f'      <a href="{coverage_href}" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;">覆盖率报告</a>'
                        if coverage_href else '')
             return '\n'.join(filter(None, [
               '  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;">',
               f'    <div style="font-size:1.1rem;font-weight:600;color:#e6edf3;">{title}</div>',
               f'    <div style="font-size:2rem;">{icon} <span style="font-size:1rem;color:{color};font-weight:500;">{label}</span></div>',
-              f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">用例通过</span></div>',
+              f'    <div style="font-size:1.5rem;font-weight:700;color:#e6edf3;">{rate} <span style="font-size:0.85rem;color:#8b949e;font-weight:400;">{rate_label}</span></div>',
               f'    <div style="font-size:0.85rem;color:#8b949e;">{run_info}</div>',
               '    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">',
               f'      <a href="{report_href}" style="background:#238636;color:#fff;border-radius:6px;padding:7px 16px;font-size:0.9rem;text-decoration:none;font-weight:500;">查看报告</a>',
