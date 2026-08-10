@@ -79,19 +79,14 @@ export struct FileSourceTab {
         }
       }
 
-      // 构造基础 URL
+      // 构造基础 URL，始终包含 rootPath
       let baseUrl = `${config.protocol}://${serverAddress}:${port}`
 
-      // 添加根路径
       const rootPath = config.rootPath || '/'
-      if (rootPath !== '/') {
-        const formattedPath = rootPath.startsWith('/') ? rootPath : '/' + rootPath
-        baseUrl = baseUrl + formattedPath
-      }
+      const formattedRootPath = rootPath.startsWith('/') ? rootPath : '/' + rootPath
+      baseUrl = baseUrl + formattedRootPath
 
-      // 将文件夹路径添加到 baseUrl
-      const fullPath = rootPath === '/' ? item.directoryPath : rootPath + item.directoryPath
-
+      // 将文件夹路径添加到 baseUrl（directoryPath 是相对于 rootPath 的路径）
       return {
         baseUrl: baseUrl + item.directoryPath,
         username: config.username,

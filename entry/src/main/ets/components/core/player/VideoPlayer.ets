@@ -314,9 +314,10 @@ export struct VideoPlayer {
       }
     }
 
-    // 不足 8 个逗号，不是 ASS Dialogue 格式，原文返回
+    // 不足 8 个逗号，不是 ASS Dialogue 格式
     if (eighthCommaIdx < 0) {
-      return raw
+      // 剥离 HTML 标签（AVPlayer onSubtitleUpdate 可能包含 <font size="85.545"></font> 等）
+      return this.stripHtmlTags(raw)
     }
 
     // 检验第一个字段是否为数字（ASS Dialogue 的序号/Layer 总是数字）
@@ -325,7 +326,7 @@ export struct VideoPlayer {
       const firstField = raw.substring(0, firstCommaIdx).trim()
       if (firstField.length === 0) {
         // 第一字段为空，不是 ASS Dialogue
-        return raw
+        return this.stripHtmlTags(raw)
       }
       let isNum = true
       for (let i = 0; i < firstField.length; i++) {
@@ -336,12 +337,12 @@ export struct VideoPlayer {
         }
       }
       if (!isNum) {
-        // 第一字段不是纯数字，不是 ASS Dialogue，原文返回
-        return raw
+        // 第一字段不是纯数字，不是 ASS Dialogue
+        return this.stripHtmlTags(raw)
       }
     } else {
       // 没有逗号或第一个逗号在开头，不是 ASS Dialogue
-      return raw
+      return this.stripHtmlTags(raw)
     }
 
     // 确认是 ASS Dialogue，截取第 8 个逗号后的内容（Text 字段）
@@ -407,6 +408,33 @@ export struct VideoPlayer {
   }
 
   /**
+       * 剥离 HTML 标签（如 AVPlayer onSubtitleUpdate 中出现的
+       * `<font size="85.545"></font>`、`<b>`、`<i>` 等）。
+       * 保留标签间的文本内容，仅移除 <...> 标记本身。
+       */
+      private stripHtmlTags(text: string): string {
+   let result = ''
+   let i = 0
+   while (i < text.length) {
+     if (text[i] === '<') {
+       // 跳过到 >，移除整个标签
+       const end = text.indexOf('>', i + 1)
+       if (end >= 0) {
+         i = end + 1
+       } else {
+         // 未闭合 <：保留原字符
+         result += text[i]
+         i++
+       }
+     } else {
+       result += text[i]
+       i++
+     }
+   }
+   return result
+      }
+
+      /**
    * 转换字号：pt -> fp
    */
   private convertFontSize(parsed: ParsedSubtitle): void {
@@ -574,6 +602,67 @@ export struct VideoPlayer {
           this.ijkViewportWidth = typeof newValue.width === 'number' ? newValue.width : 0
           this.ijkViewportHeight = typeof newValue.height === 'number' ? newValue.height : 0
         })
+      } else if (this.backendMode === 'mpv') {
+        // MPV 内核：使用 XComponentController 模式（与 avplayer 相同），通过 surfaceId 绑定
+        XComponent({
+          id: 'mpvPlayerXComponent',
+          type: XComponentType.SURFACE,
+          controller: this.xComponentController
+        })
+          .onLoad(() => {
+            if (!this.tryMarkInit('mpv')) {
+              return
+            }
+            this.surfaceId = this.xComponentController.getXComponentSurfaceId()
+            emitter.once(PlayerEvents.PREPARED, () => {
+              if (this.autoPlay) {
+                this.controller.play()
+              } else {
+                this.controlsDialogController.open()
+              }
+            })
+            // 先 initPlayer（创建 MpvPlayerAdapter），等 onAreaChange 拿到有效宽高后再 setMpvSurface
+            this.controller.initPlayer(this.data, this.surfaceId).catch((err: Error) => {
+              console.error(`[VideoPlayer] mpv init 异常: ${err.message}`)
+              this.resetInitMode()
+              this.backendMode = 'avplayer'
+            })
+          })
+          .onAreaChange((_oldValue: Area, newValue: Area) => {
+            // MPV 需要 onAreaChange 拿到有效宽高后再绑定 surface
+            // onAreaChange 返回的是 VP（虚拟像素），VidAll_Player 需要物理像素
+            if (this.controller.backend === 'mpv') {
+              const vpW = typeof newValue.width === 'number' ? newValue.width : 0
+              const vpH = typeof newValue.height === 'number' ? newValue.height : 0
+              const uiCtx = this.getUIContext()
+              const w = uiCtx.vp2px(vpW)
+              const h = uiCtx.vp2px(vpH)
+              console.info(`[VideoPlayer] mpv onAreaChange: vp=${vpW}x${vpH} px=${w}x${h} surfaceId=${this.surfaceId.substring(0, 8)}... bound=${this.controller.isMpvSurfaceBound}`)
+              if (w > 0 && h > 0 && this.surfaceId.length > 0 && !this.controller.isMpvSurfaceBound) {
+                this.controller.setMpvSurface(this.surfaceId, w, h)
+              } else if (this.controller.isMpvSurfaceBound) {
+                this.controller.notifyMpvSurfaceResize(w, h)
+              }
+            }
+          })
+          .onClick(async () => {
+            await this.controller.pause()
+            this.controlsDialogController.open()
+          })
+          .gesture(
+            SwipeGesture()
+              .onAction((event: SwipeGestureEvent) => {
+                if (!this.controlsOpened) {
+                  this.controlsDialogController.open()
+                } else {
+                  console.log('swipe direction: ' + JSON.stringify(event))
+                }
+              })
+          )
+          .width("100%")
+          .height("100%")
+          .renderFit(this.toRenderFit(this.aspectRatioMode))
+          .backgroundColor(Color.Black)
       } else if (this.backendMode === 'native') {
         Stack() {
           XComponent({
@@ -678,10 +767,54 @@ export struct VideoPlayer {
       this.clearIjkInitTimer()
       this.controlsDialogController.open()
     })
+    emitter.on(PlayerEvents.MPV_ERROR_FALLBACK, () => {
+      // MPV 播放失败，提示用户尝试 IJKPlayer
+      this.showMpvErrorFallbackDialog()
+    })
+    emitter.on(PlayerEvents.IJK_ERROR_FALLBACK, () => {
+      // IJKPlayer 播放失败，提示用户尝试 MPV
+      this.showIjkErrorFallbackDialog()
+    })
   }
 
   aboutToDisappear(): void {
     this.clearIjkInitTimer()
     emitter.off(PlayerEvents.COMPLETED.eventId)
+    emitter.off(PlayerEvents.MPV_ERROR_FALLBACK.eventId)
+    emitter.off(PlayerEvents.IJK_ERROR_FALLBACK.eventId)
+  }
+
+  private showMpvErrorFallbackDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: 'MPV 播放失败',
+      message: '当前视频无法使用 MPV 播放器播放，是否尝试切换到 IJKPlayer？',
+      primaryButton: {
+        value: '切换到 IJKPlayer',
+        action: () => {
+          this.controller.switchBackendInPlayback('ijkplayer')
+        }
+      },
+      secondaryButton: {
+        value: '关闭',
+        action: () => {}
+      }
+    })
+  }
+
+  private showIjkErrorFallbackDialog(): void {
+    this.getUIContext().showAlertDialog({
+      title: 'IJKPlayer 播放失败',
+      message: '当前视频无法使用 IJKPlayer 播放，是否尝试切换到 MPV 播放器？',
+      primaryButton: {
+        value: '切换到 MPV',
+        action: () => {
+          this.controller.switchBackendInPlayback('mpv')
+        }
+      },
+      secondaryButton: {
+        value: '关闭',
+        action: () => {}
+      }
+    })
   }
 }

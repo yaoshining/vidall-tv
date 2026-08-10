@@ -1386,17 +1386,16 @@ export class WebDAVClient {
   async listDirectory(path: string = '/'): Promise<WebDAVResource[]> {
     let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
     if (!basePath) {
-      basePath = '';
+      basePath = '/';
     }
 
     let fullPath = basePath + path;
-    if (!fullPath.startsWith('/')) {
-      fullPath = '/' + fullPath;
-    }
+    // 去除双斜杠（如 basePath='/' + path='/' → '//' → '/'）
+    fullPath = fullPath.replace(/\/+/g, '/');
 
     // 对路径中的空格等特殊字符进行 URL 编码，避免 HTTP 请求行格式错误（400 Bad Request）
     const encodedPath = this.encodeURIPath(fullPath);
-    console.info('Listing:', fullPath, '→ encoded:', encodedPath);
+    console.info('[WebDAVClient] listDirectory — baseUrl:', this.baseUrl, 'basePath:', basePath, 'path:', path, 'fullPath:', fullPath);
 
     const propfindBody = `<?xml version="1.0" encoding="utf-8" ?>
 <D:propfind xmlns:D="DAV:">
@@ -1492,6 +1491,13 @@ export class WebDAVClient {
         if (response.statusCode !== 207 && response.statusCode !== 200) {
           return { success: false, message: `服务器返回错误：HTTP ${response.statusCode}` };
         }
+        // HTTP 200 不一定是 WebDAV 响应，可能是普通 web 页面；需要验证内容
+        if (response.statusCode === 200) {
+          const bodyStr: string = response.body;
+          if (bodyStr.includes('<html') || bodyStr.includes('<HTML')) {
+            return { success: false, message: '服务器返回了网页而非 WebDAV 响应，请检查端口和根路径(rootPath)配置是否正确' };
+          }
+        }
         console.info('WebDAV connection test successful');
         return { success: true, message: '连接成功' };
       } catch (error) {
@@ -1563,16 +1569,36 @@ export class WebDAVClient {
           resolve({ success: false, message: '无权限访问，请检查账户权限' });
           return;
         }
-        // OPTIONS 返回 200/207/405 都说明服务器可达
-        // 405 = 不支持 OPTIONS 但服务器存在；200/207 = 完全支持
-        if (statusCode === 200 || statusCode === 207 || statusCode === 405) {
-          console.info('WebDAV HTTPS connection test successful');
-          resolve({ success: true, message: '连接成功' });
+        // OPTIONS 仅验证服务器网络可达性，无法确认是否为 WebDAV 服务
+        // PROPFIND 已失败（可能非 WebDAV 端口或路径），不能仅凭 OPTIONS 成功就判定连接成功
+        if (statusCode === 200 || statusCode === 207) {
+          // OPTIONS 返回 200/207 只说明 HTTP 服务器可达，不一定是 WebDAV
+          // 需检查 DAV header 确认 WebDAV 支持
+          let hasDavHeader = false;
+          const headerObj = data.header;
+          if (headerObj !== null && headerObj !== undefined) {
+            const headerRecord = headerObj as Record<string, string>;
+            const davVal = headerRecord['DAV'] ?? headerRecord['dav'] ?? '';
+            if (davVal.length > 0) {
+              hasDavHeader = true;
+            }
+          }
+          if (hasDavHeader) {
+            console.info('WebDAV HTTPS connection test successful (DAV header confirmed)');
+            resolve({ success: true, message: '连接成功' });
+            return;
+          }
+          console.warn('WebDAV HTTPS OPTIONS OK but no DAV header, server may not be WebDAV');
+          resolve({ success: false, message: '服务器可达但未检测到 WebDAV 服务，请检查端口和根路径(rootPath)配置' });
           return;
         }
-        // 其他情况也认为连通（比如 400/404 说明服务器有响应）
+        if (statusCode === 405) {
+          // 405 = 不支持 OPTIONS 但服务器存在，无法确认是 WebDAV
+          resolve({ success: false, message: '服务器可达但不支持 WebDAV 协议，请检查端口和根路径(rootPath)配置' });
+          return;
+        }
         if (statusCode >= 100 && statusCode < 500) {
-          resolve({ success: true, message: `连接成功（HTTP ${statusCode}）` });
+          resolve({ success: false, message: `服务器返回 HTTP ${statusCode}，未确认是 WebDAV 服务，请检查端口和根路径配置` });
           return;
         }
         resolve({ success: false, message: `服务器返回错误：HTTP ${statusCode}` });
@@ -1585,8 +1611,8 @@ export class WebDAVClient {
 
     try {
       if (xmlText.includes('<html') || xmlText.includes('<HTML')) {
-        console.error('Received HTML');
-        return resources;
+        console.error('[WebDAVClient] PROPFIND 返回 HTML 而非 WebDAV XML，可能 rootPath 配置不正确');
+        throw new Error('服务器返回了网页而非 WebDAV 响应，请检查 WebDAV 根路径(rootPath)配置是否正确');
       }
 
       const responsePattern = /<(?:D:)?response[^>]*>([\s\S]*?)<\/(?:D:)?response>/gi;

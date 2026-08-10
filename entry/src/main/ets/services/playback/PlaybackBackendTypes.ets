@@ -22,10 +22,10 @@ import type { IPlayer } from "../../components/core/player/IPlayer";
 import type { ISubtitleBridgeAdapter } from "../../components/core/player/SubtitleBridgeAdapter";
 
 /** 播放内核类型（service 内部命名，controller 已有同名类型，alias 复用）。 */
-export type ServicePlayerBackend = 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
+export type ServicePlayerBackend = 'avplayer' | 'ijkplayer' | 'mpv' | 'ffmpeg' | 'native';
 
 /** AVPlayer 遇到不支持格式时的回退目标（service 内部命名）。 */
-export type ServiceUnsupportedFormatFallback = 'ijkplayer' | 'native';
+export type ServiceUnsupportedFormatFallback = 'ijkplayer' | 'mpv' | 'native';
 
 /** 后端选择决策输入（ffprobe + preset 提示）。 */
 export interface PlaybackBackendProbeInput {
@@ -93,7 +93,7 @@ export const DEFAULT_BACKEND_DECISION: PlaybackBackendDecision = {
 };
 
 /** 字幕桥接 adapter 类型（service 内部命名以避免与 controller 现有类型冲突）。 */
-export type SubtitleBridgeKind = 'none' | 'av' | 'ijk' | 'smb-av';
+export type SubtitleBridgeKind = 'none' | 'av' | 'ijk' | 'mpv' | 'smb-av';
 
 /** Adapter 创建产物。 */
 export interface PlaybackAdapterHandle {
@@ -127,7 +127,8 @@ export type PlaybackFallbackReason =
   | 'native_error_callback'
   | 'native_ready_timeout'
   | 'precheck_probe_failed'
-  | 'manual_backend_switch';
+  | 'manual_backend_switch'
+  | 'mpv_error_callback';
 
 /** 后端 fallback 上下文。 */
 export interface PlaybackFallbackContext {

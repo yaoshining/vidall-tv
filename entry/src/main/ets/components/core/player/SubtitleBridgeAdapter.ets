@@ -561,6 +561,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
 
   async switchTrack(allIndex: number): Promise<void> {
     if (!this.player) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕] switchTrack(${allIndex}): player 未初始化`);
       return;
     }
 
@@ -575,6 +577,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     }
 
     if (allIndex >= this.allSubtitleTracks.length) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[字幕] switchTrack(${allIndex}): 超出范围 (total=${this.allSubtitleTracks.length})`);
       return;
     }
 
@@ -595,6 +599,8 @@ export class BaseSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {
     this.lastSrtText = '';
     const internalIndex = target.internalIndex ?? -1;
     this.currentSubtitleTrack = internalIndex;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[字幕] switchTrack: allIndex=${allIndex} internalIndex=${internalIndex} displayName=${target.displayName}`);
     await this.player.selectTrack(internalIndex);
   }
 
@@ -1214,7 +1220,11 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
       const languageName = hasLang
         ? FfprobeUtil.getLanguageDisplayName(track.language!)
         : '';
-      const displayName = languageName.length > 0 ? languageName : `字幕 ${i + 1}`;
+      // 字幕名添加格式标识：从 mimeType 或 codec 提取
+      const formatTag = this.extractFormatTag(track.mimeType, track.codec);
+      const displayName = languageName.length > 0
+        ? (formatTag.length > 0 ? `${languageName}(${formatTag})` : languageName)
+        : (formatTag.length > 0 ? `字幕 ${i + 1}(${formatTag})` : `字幕 ${i + 1}`);
       const item: SubtitleTrackItem = {
         kind: 'internal',
         displayName,
@@ -1232,6 +1242,151 @@ export class AvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
 
     return items;
   }
+
+  /** 从 mimeType 或 codec 提取字幕格式标识 */
+  private extractFormatTag(mimeType?: string, codec?: string): string {
+    // 优先从 codec 提取
+    if (codec !== undefined && codec.length > 0) {
+      return this.codecToFormatTag(codec);
+    }
+    // 回退到 mimeType
+    if (mimeType !== undefined && mimeType.length > 0) {
+      const lower = mimeType.toLowerCase();
+      if (lower.includes('subrip') || lower.includes('srt')) { return 'SRT'; }
+      if (lower.includes('ass') || lower.includes('ssa')) { return 'ASS'; }
+      if (lower.includes('webvtt') || lower.includes('vtt')) { return 'VTT'; }
+      if (lower.includes('ttml') || lower.includes('dfxp')) { return 'TTML'; }
+      if (lower.includes('pgs')) { return 'PGS'; }
+      if (lower.includes('vobsub')) { return 'VOBSUB'; }
+    }
+    return '';
+  }
+
+  /** codec 名称映射为格式标识 */
+  private codecToFormatTag(codec: string): string {
+    const lower = codec.toLowerCase();
+    if (lower === 'ass') { return 'ASS'; }
+    if (lower === 'ssa') { return 'SSA'; }
+    if (lower === 'subrip' || lower === 'srt') { return 'SRT'; }
+    if (lower === 'hdmv_pgs_subtitle' || lower === 'pgs') { return 'PGS'; }
+    if (lower === 'vobsub' || lower === 'dvd_subtitle') { return 'VOBSUB'; }
+    if (lower === 'webvtt' || lower === 'vtt') { return 'VTT'; }
+    if (lower === 'mov_text' || lower === 'tx3g') { return 'TX3G'; }
+    if (lower.length > 0) { return codec.toUpperCase(); }
+    return '';
+  }
+}
+
+/**
+ * MPV 后端字幕桥接适配器。
+ *
+ * 与 IjkSubtitleBridgeAdapter 的差异：
+ * 1. loadInternalTracks 使用 player.getTrackInfos()（MPV tracks 事件缓存），
+ *    而非 FfprobeUtil.probe()——MPV 已有精确的轨道信息，无需额外探测。
+ * 2. onEmbeddedTimedText 不检查 currentSubtitleTrack：
+ *    MPV 的 subtitleText 事件自带选轨语义（选中文本字幕轨后才有输出），
+ *    而 ijk 的 onTimedText 在轨道未选中时也会回调空字符串。
+ * 3. 不需要 parseAssIfNeeded：libmpv 已将 ASS raw 转为纯文本后输出。
+ *
+ * spec 约束：MPV 后端默认不选中文本字幕轨，subtitleText 事件驱动 TV 端 SubtitleRenderer 绘制。
+ */
+export class MpvSubtitleBridgeAdapter extends BaseSubtitleBridgeAdapter {
+  override onSeekSync(): void {
+    super.onSeekSync();
+    this.currentSubtitleText = '';
+  }
+
+  protected async loadInternalTracks(): Promise<SubtitleTrackItem[]> {
+    const items: SubtitleTrackItem[] = [];
+    if (!this.player) {
+      return items;
+    }
+
+    const allTracks = await this.player.getTrackInfos();
+    // 过滤字幕轨道，排除图形字幕（PGS/VobSub 等）
+    const subtitleTracks: TrackInfo[] = allTracks.filter((t: TrackInfo) => {
+      if (t.trackType !== 'subtitle') {
+        return false;
+      }
+      // 图形字幕过滤：mimeType 以 "image/" 开头 或 codec 包含已知图形字幕编解码器
+      const mime = t.mimeType ?? '';
+      const codec = t.codec ?? '';
+      const isGraphicMime = mime.startsWith('image/');
+      const isGraphicCodec = codec.includes('hdmv_pgs_subtitle') ||
+        codec.includes('vobsub') || codec.includes('dvd_subtitle');
+      if (isGraphicMime || isGraphicCodec) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[MpvSub] 跳过图形字幕: index=${t.trackIndex} mime=${mime} codec=${codec}`);
+        return false;
+      }
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[MpvSub] 保留文本字幕: index=${t.trackIndex} mime=${mime} codec=${codec} lang=${t.language ?? ''}`);
+      return true;
+    });
+    this.subtitleTracks = subtitleTracks;
+
+    for (let i = 0; i < subtitleTracks.length; i++) {
+      const track = subtitleTracks[i];
+      const hasLang = track.language !== undefined && track.language.length > 0;
+      const languageName = hasLang
+        ? FfprobeUtil.getLanguageDisplayName(track.language!)
+        : '';
+      // 字幕名添加格式标识：codec 映射为大写格式名，如 "ass" → "ASS", "subrip" → "SRT"
+      const codec = track.codec ?? '';
+      const formatTag = this.codecToFormatTag(codec);
+      const displayName = languageName.length > 0
+        ? (formatTag.length > 0 ? `${languageName}(${formatTag})` : languageName)
+        : (formatTag.length > 0 ? `字幕 ${i + 1}(${formatTag})` : `字幕 ${i + 1}`);
+      const item: SubtitleTrackItem = {
+        kind: 'internal',
+        displayName,
+        internalIndex: track.trackIndex,
+        language: track.language
+      };
+      items.push(item);
+    }
+
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[MpvSub] 内嵌字幕轨道数=${items.length} (原始=${allTracks.filter((t: TrackInfo) => t.trackType === 'subtitle').length})`);
+    return items;
+  }
+
+  /**
+  * 将 mpv codec 名称映射为用户友好的格式标识。
+  * 如 "ass" → "ASS", "subrip" → "SRT", "hdmv_pgs_subtitle" → "PGS"
+  */
+    private codecToFormatTag(codec: string): string {
+   const lower = codec.toLowerCase();
+   if (lower === 'ass') { return 'ASS'; }
+   if (lower === 'ssa') { return 'SSA'; }
+   if (lower === 'subrip' || lower === 'srt') { return 'SRT'; }
+   if (lower === 'hdmv_pgs_subtitle' || lower === 'pgs') { return 'PGS'; }
+   if (lower === 'vobsub' || lower === 'dvd_subtitle') { return 'VOBSUB'; }
+   if (lower === 'webvtt' || lower === 'vtt') { return 'VTT'; }
+   if (lower === 'mov_text' || lower === 'tx3g') { return 'TX3G'; }
+   if (lower.length > 0) { return codec.toUpperCase(); }
+   return '';
+    }
+
+    /**
+  * MPV 的 subtitleText 事件输出纯文本（libmpv 已解析 ASS raw），
+  * 不需要 parseAssIfNeeded，也不检查 currentSubtitleTrack：
+  * MPV subtitleText 仅在选中文本字幕轨后才有输出，自带选轨语义。
+  */
+    override onEmbeddedTimedText(text: string): void {
+   if (this.srtEntries.length > 0) {
+     return; // 外置 SRT 优先，不覆盖
+   }
+   // MPV 的 subtitleText 已是纯文本，直接赋值
+   this.currentSubtitleText = text;
+    }
+
+  /**
+   * MPV 后端 switchTrack 无需额外处理：
+   * - 选中文本字幕 → MpvPlayerAdapter.selectTrack 已设置 sub-visibility=no
+   * - 关闭字幕 → MpvPlayerAdapter.selectTrack(-1) 已设置 sub-visibility=yes
+   * - 外置字幕 → selectTrack(-1) 关闭内嵌轨，sub-visibility=yes 无害（无内嵌轨可渲染）
+   */
 }
 
 export class NoSubtitleBridgeAdapter implements ISubtitleBridgeAdapter {

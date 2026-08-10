@@ -32,5 +32,16 @@ export default function videoScannerUtilTest() {
       expect(context.seriesHint === undefined).assertTrue();
       expect(classification.mediaType).assertEqual('unknown');
     });
+
+    it('should classify NAS separated episode markers as TV', 0, () => {
+      const context: VideoScrapeContext = createVideoScrapeContext('/御赐小仵作', 1, false);
+      const classification = classifyVideoScrapeTarget(
+        'S01 4K EP 07.mkv',
+        '/御赐小仵作/S01 4K EP 07.mkv',
+        context
+      );
+
+      expect(classification.mediaType).assertEqual('tv');
+    });
   });
 }

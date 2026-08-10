@@ -15,6 +15,8 @@ export interface TrackInfo {
   mimeType?: string;
   /** 语言代码，如 "chi"、"eng" */
   language?: string;
+  /** 编解码器名称，如 "hdmv_pgs_subtitle"、"subrip"、"ass" */
+  codec?: string;
 }
 
 export interface SubtitleInfo {
@@ -63,6 +65,13 @@ export interface IPlayer {
    * 不支持的后端实现为空桩，打印警告日志，不抛异常。
    */
   setPlaybackSpeed(speed: number): void;
+
+  /**
+   * 设置播放器属性（字符串值）。
+   * 用于 MPV 后端设置 sub-visibility 等属性。
+   * 不支持的后端实现为空桩。
+   */
+  setPropertyString(property: string, value: string): void;
 
   // ─── 事件回调 ───
   onReady(callback: () => void): void;

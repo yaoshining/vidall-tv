@@ -701,6 +701,10 @@ export class VidAllPlayerAdapter implements IPlayer {
       `setPlaybackSpeed(${speed}) 在 native 后端暂不支持（NAPI bridge 尚未实现），已跳过`);
   }
 
+  setPropertyString(_property: string, _value: string): void {
+    // VidAllPlayer native 后端暂不支持 setPropertyString
+  }
+
   onReady(callback: () => void): void {
     this._onReadyCb = callback;
   }

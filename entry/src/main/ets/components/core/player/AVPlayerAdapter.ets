@@ -282,6 +282,10 @@ export class AVPlayerAdapter implements IPlayer {
     }
   }
 
+  setPropertyString(_property: string, _value: string): void {
+    // AVPlayer 不支持 setPropertyString
+  }
+
   /** 将浮点速率映射到 media.PlaybackSpeed 枚举，不支持的值回退到 1.0x */
   private speedToPlaybackSpeed(speed: number): media.PlaybackSpeed {
     if (speed === 0.5) { return media.PlaybackSpeed.SPEED_FORWARD_0_50_X; }

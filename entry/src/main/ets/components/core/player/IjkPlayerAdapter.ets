@@ -478,6 +478,10 @@ export class IjkPlayerAdapter implements IPlayer {
     }
   }
 
+  setPropertyString(_property: string, _value: string): void {
+    // IJKPlayer 不支持 setPropertyString
+  }
+
   // ─── 事件回调注册 ───
 
   onReady(callback: () => void): void { this._onReadyCb = callback; }

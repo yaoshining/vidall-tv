@@ -52,3 +52,19 @@
 - **AND** 当前运行环境不支持 VPE
 - **THEN** 系统自动回退为关闭增强的播放状态
 - **AND** 播放会话仍可正常开始
+
+---
+
+### Requirement: MPV 后端在 x86_64 模拟器上 SHALL 不可用
+
+MPV 播放后端依赖 VidAll_Player HAR（含 ARM 原生库），在 x86_64 模拟器上无法加载。系统 SHALL 在模拟器环境探测到不兼容架构时，阻止用户选择 MPV 并自动降级。
+
+#### Scenario: 模拟器上设置页隐藏或标记 MPV 不可用
+- **WHEN** 应用运行在 x86_64 模拟器
+- **THEN** 播放内核设置中 MPV 选项 SHALL 标注"仅支持真机"
+- **AND** 若用户尝试选择 MPV，SHALL 提示"当前设备不支持 mpv 内核，已自动回退到 ijkplayer"
+
+#### Scenario: 真机上 MPV 后端正常可用
+- **WHEN** 应用运行在 ARM 架构真机
+- **THEN** MPV 后端 SHALL 正常工作
+- **AND** 设置页 MPV 选项无限制标注

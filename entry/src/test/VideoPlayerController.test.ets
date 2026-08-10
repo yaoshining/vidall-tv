@@ -127,6 +127,7 @@ class MockFallbackPlayer implements IPlayer {
   selectTrack(_trackIndex: number): Promise<void> { return Promise.resolve() }
   setSubtitleDelay(_delayMs: number): void {}
   setPlaybackSpeed(_speed: number): void {}
+  setPropertyString(_property: string, _value: string): void {}
   onReady(_callback: () => void): void {}
   onPlay(_callback: () => void): void {}
   onPaused(_callback: () => void): void {}

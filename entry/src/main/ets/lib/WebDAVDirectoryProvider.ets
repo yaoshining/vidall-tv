@@ -229,6 +229,7 @@ export function createWebDAVProviderConfig(sourceId: number, webdavConfig: WebDA
   }
   let baseUrl = `${webdavConfig.protocol}://${serverAddress}:${port}`
   const normalizedPath = webdavConfig.rootPath.trim().length > 0 ? webdavConfig.rootPath.trim() : '/'
+  // rootPath 非 '/' 时加入 baseUrl；为 '/' 时 WebDAVClient 内部默认basePath为 '/'
   if (normalizedPath !== '/') {
     baseUrl += normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath
   }
