@@ -191,5 +191,15 @@
     "total": 0,
     "compiled_count": 0,
     "report_href": "unit/runs/run-263/index.html"
+  },
+  {
+    "run_number": 264,
+    "timestamp": "2026-08-10T12:43:41Z",
+    "status": "fail",
+    "passed": 0,
+    "failed": 0,
+    "total": 0,
+    "compiled_count": 0,
+    "report_href": "unit/runs/run-264/index.html"
   }
 ]
