@@ -127,7 +127,10 @@ jobs:
               test --no-daemon -p coverage=true \
               2>&1 | tee "$RUNNER_TEMP/unit-test.log"
           ) &
+          # 使用 setsid 将测试命令放入独立进程组，便于超时时终止完整进程树
+          setsid bash -c '$HVIGOR_CMD 2>&1 | tee "$UNIT_TEST_LOG"' &
           TEST_PID=$!
+          TEST_PGID=$(ps -o pgid= -p "$TEST_PID" | tr -d ' ' || echo "$TEST_PID")
           # 最多等待 3 分钟（手动验证约 17 秒完成，超过 180s 一定异常）
           MAX_WAIT=180
           ELAPSED=0
@@ -136,12 +139,12 @@ jobs:
             ELAPSED=$((ELAPSED + 5))
           done
           if kill -0 "$TEST_PID" 2>/dev/null; then
-            echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程"
-            # 先尝试 SIGTERM，等待 5 秒
-            kill "$TEST_PID" 2>/dev/null || true
+            echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程组"
+            # 先 SIGTERM 整个进程组，等待 5 秒
+            kill -- -"$TEST_PGID" 2>/dev/null || kill "$TEST_PID" 2>/dev/null || true
             sleep 5
-            # 如果还在运行，强制 SIGKILL
-            kill -9 "$TEST_PID" 2>/dev/null || true
+            # 如果还在运行，SIGKILL 整个进程组
+            kill -9 -- -"$TEST_PGID" 2>/dev/null || kill -9 "$TEST_PID" 2>/dev/null || true
             wait "$TEST_PID" 2>/dev/null || true
             # 清理可能残留的卡死 hdc 进程
             ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
