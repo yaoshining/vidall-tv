@@ -1,1 +1,0 @@
-{"id":"f37b11427110fbc2e664f81d8d97d829","fullName":"VideoPlayerController review regressions#ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek","name":"ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek","status":"passed","testResultsByEnv":{"default":"6d236ff855e7348b9fe236eb0a5d22ce"}}
