@@ -2,6 +2,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import hilog from '@ohos.hilog';
 import * as VidAllCorePlayerNapiModule from 'libvidall_core_player_napi.so';
 import { PresetAudioTrack, PresetSubtitleTrack } from '../components/core/player/VideoData';
+import buffer from '@ohos.buffer';
 
 export type HdrType = 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR';
 
@@ -382,21 +383,6 @@ export class FfprobeUtil {
     headers?: Record<string, string>,
     timeoutMs: number = 20000
   ): Promise<FfprobeResult> {
-    // SMB 源跳过 ffprobe 探测：FFmpeg 编译时未包含 smb:// 协议支持，强行探测必然报 Protocol not found
-    if (url.toLowerCase().startsWith('smb://')) {
-      console.info('[FfprobeUtil] SMB 源跳过 ffprobe 探测（不支持 smb:// 协议）');
-      const emptyResult: FfprobeResult = {
-        success: false,
-        durationMs: 0,
-        durationText: '00:00:00',
-        videoTracks: [],
-        audioTracks: [],
-        subtitleTracks: [],
-        errorMessage: 'SMB 源跳过探测：不支持 smb:// 协议'
-      };
-      return emptyResult;
-    }
-
     let headersStr = '';
     if (headers) {
       const keys = Object.keys(headers);
@@ -520,6 +506,54 @@ export class FfprobeUtil {
     return result;
   }
 
+  private static buildSmbProxySource(
+    smbUri: string,
+    headers: Record<string, string> | undefined
+  ): string {
+    const authorityStart = smbUri.indexOf('://') + 3;
+    if (authorityStart < 3) {
+      return smbUri;
+    }
+    const authorityEnd = smbUri.indexOf('/', authorityStart);
+    const authority = authorityEnd >= 0
+      ? smbUri.substring(authorityStart, authorityEnd)
+      : smbUri.substring(authorityStart);
+    if (authority.includes('@') || headers === undefined) {
+      return smbUri;
+    }
+
+    const names = Object.keys(headers);
+    let authorization = '';
+    for (let index = 0; index < names.length; index++) {
+      const name = names[index];
+      if (name.toLowerCase() === 'authorization') {
+        authorization = headers[name];
+        break;
+      }
+    }
+    if (!authorization.startsWith('Basic ')) {
+      return smbUri;
+    }
+
+    try {
+      const credentials = buffer.from(authorization.substring('Basic '.length), 'base64').toString('utf-8');
+      const separator = credentials.indexOf(':');
+      if (separator < 0) {
+        return smbUri;
+      }
+      const username = credentials.substring(0, separator);
+      const password = credentials.substring(separator + 1);
+      if (username.length === 0 && password.length === 0) {
+        return smbUri;
+      }
+      const userInfo = `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
+      return `${smbUri.substring(0, authorityStart)}${userInfo}${smbUri.substring(authorityStart)}`;
+    } catch {
+      console.warn('[FfprobeUtil] SMB Basic 认证解码失败，按匿名源探测');
+      return smbUri;
+    }
+  }
+
   /**
    * 通过 SMB HTTP 代理探测 SMB 视频文件的轨道信息。
    *
@@ -533,13 +567,16 @@ export class FfprobeUtil {
    * 由调用方决定是否阻断播放（降级策略：失败时空轨道、正常播放）。
    *
    * @param smbUrl   smb://user:pass@host:port/share/path 格式的完整 SMB URL
+   * @param headers   可选 Basic Authorization，内部仅供代理恢复 SMB 凭据
    * @param timeoutMs ffprobe 超时，默认 15000ms
    */
   static async probeSmb(
     smbUrl: string,
+    headers?: Record<string, string>,
     timeoutMs: number = 15000
   ): Promise<FfprobeResult> {
     console.info(`[FfprobeUtil] SMB probe via HTTP proxy: ${maskUrlForLog(smbUrl)}`);
+    const proxySmbUrl = FfprobeUtil.buildSmbProxySource(smbUrl, headers);
 
     // ── 先拿并发槽位，防止多文件快速滑动时代理并发创建失控 ─────────────────
     await FfprobeUtil.acquireProbeSlot();
@@ -549,7 +586,7 @@ export class FfprobeUtil {
       // ── 阶段 1：启动 SMB HTTP 代理（native player prepare 异步回调）──────────
       const napi = getSmbProbeNapi();
       playerHandle = napi.createPlayer();
-      napi.setSource(playerHandle, smbUrl);
+      napi.setSource(playerHandle, proxySmbUrl);
 
       // probe 不需要实际渲染；XComponent 传 dummy 值（C++ 骨架阶段仅存储 id，不立即绑定 surface）
       const dummyCtx: SmbProbeOnlyContext = {};

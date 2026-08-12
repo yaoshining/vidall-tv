@@ -93,7 +93,7 @@ function codecCompatibilityRank(codec: string): number {
  *    （avplayer 启动后由 `loadAudioTracks` + `findInitialAudioTrackIndex` 切到该轨道，避免无声）
  * 2. 整组音轨全部 rank≥3（仅 TrueHD / MLP / DTS / Audio Vivid 等软解罕见或 DTS）→ preferredBackend=avplayer
  *    + fallback=ijkplayer（让 avplayer 失败后自动切 ijkplayer 软解）
- * 3. 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer（保守）
+ * 3. 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
  * 4. detectedCodec / detectedChannels 取整组中 rank 最低的轨道（最兼容），不再是 probe[0]
  */
 export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDecision {
@@ -147,15 +147,12 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
     `precheckProbeFailed=${input.precheckProbeFailed}`;
 
   // preferredBackend 决策（关键修复：TrueHD+AC-3 混合时不能默认 TrueHD）
-  // 1. 探测完全失败且无任何音轨提示 → ijkplayer（保守）
+  // 1. 探测完全失败且无任何音轨提示 → 仍先尝试 avplayer
   // 2. 整组音轨存在至少一条 rank≤2 轨道（硬解 / AC-3 / EAC-3）→ avplayer
   //    （avplayer 启动后由 loadAudioTracks 切到该轨道）
   // 3. 整组音轨全部 rank≥3（仅 TrueHD / MLP / Audio Vivid / DTS）→ avplayer + fallback=ijkplayer
   //    （让 avplayer 失败后自动切 ijkplayer 软解；同时避免"全部 rank3"误判为 ijkplayer）
-  let preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
-  if (input.precheckProbeFailed && trackCount === 0 && !input.presetHasAudio) {
-    preferredBackend = 'ijkplayer';
-  }
+  const preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
 
   const decision: AudioRoutingDecision = {
     preferredBackend,
@@ -422,7 +419,7 @@ export class AudioTrackRoutingService {
    * 行为：
    * - 整组音轨存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer
    * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer + fallback=ijkplayer
-   * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer
+   * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
    * - 初始选轨由 controller 调用 `resolveInitialTrackIndex` 决定（与 backend route 决策解耦）
    */
   async resolveRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
@@ -444,8 +441,14 @@ export class AudioTrackRoutingService {
     const probeVideoTracks: ProbeVideo[] = [];
 
     try {
-      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
+      const probe = videoData.videoSrc.toLowerCase().startsWith('smb://')
+        ? await FfprobeUtil.probeSmb(videoData.videoSrc, videoData.httpHeader, 9000)
+        : await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
       probeSuccess = probe.success;
+      if (!probe.success) {
+        precheckProbeFailed = true;
+        precheckProbeError = probe.errorMessage ?? '媒体探测失败';
+      }
       if (probe.success && probe.audioTracks.length > 0) {
         const first = probe.audioTracks[0];
         probeCodec = first.codecName;

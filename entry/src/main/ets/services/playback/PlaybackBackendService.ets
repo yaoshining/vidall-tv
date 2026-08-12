@@ -120,7 +120,7 @@ export class PlaybackBackendService {
    * - 整组音轨存在至少一条稳态可硬解轨道 → preferredBackend=avplayer（让 avplayer 尝试，
    *   由 `loadAudioTracks` 阶段的 `resolveInitialTrackIndex` 选中最优可硬解轨）
    * - 整组音轨全部应软解 → preferredBackend=avplayer + fallback=ijkplayer
-   * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer
+   * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
    */
   async chooseBackend(videoData: VideoData): Promise<PlaybackBackendDecision> {
     try {
@@ -199,6 +199,7 @@ export class PlaybackBackendService {
 
     // AVPlayer/IJK 不支持直接拉取 SMB，需经 HTTP 代理。MPV 使用无 userinfo 的 SMB URI，
     // 并保留 Basic Authorization 给 VidAll_Player 的内部 native bridge 解码后注入 Samba。
+    this.normalizeSmbPlaybackSource(videoData);
     let smbOriginalUrl = '';
     let smbProxyActive = false;
     let effectiveVideoSrc = videoData.videoSrc;
@@ -396,6 +397,54 @@ export class PlaybackBackendService {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `setNativeContext init 失败: ${err.message}`);
       throw new Error(`setNativeContext init 失败: ${err.message ?? 'unknown'}`);
+    }
+  }
+
+  /** 将历史入口的 URI userinfo 转为独立 Basic header，避免 MPV 拒绝媒体 URI。 */
+  private normalizeSmbPlaybackSource(videoData: VideoData): void {
+    const smbUri = videoData.videoSrc;
+    const schemeEnd = smbUri.indexOf('://');
+    if (schemeEnd < 0) {
+      return;
+    }
+    const authorityStart = schemeEnd + 3;
+    const authorityEnd = smbUri.indexOf('/', authorityStart);
+    const authority = authorityEnd >= 0
+      ? smbUri.substring(authorityStart, authorityEnd)
+      : smbUri.substring(authorityStart);
+    const atIndex = authority.lastIndexOf('@');
+    if (atIndex < 0) {
+      return;
+    }
+
+    const userInfo = authority.substring(0, atIndex);
+    const separator = userInfo.indexOf(':');
+    const encodedUsername = separator >= 0 ? userInfo.substring(0, separator) : userInfo;
+    const encodedPassword = separator >= 0 ? userInfo.substring(separator + 1) : '';
+    try {
+      const username = decodeURIComponent(encodedUsername);
+      const password = decodeURIComponent(encodedPassword);
+      const headerNames = videoData.httpHeader === undefined ? [] : Object.keys(videoData.httpHeader);
+      let hasAuthorization = false;
+      for (let index = 0; index < headerNames.length; index++) {
+        if (headerNames[index].toLowerCase() === 'authorization') {
+          hasAuthorization = true;
+          break;
+        }
+      }
+      if (!hasAuthorization && (username.length > 0 || password.length > 0)) {
+        if (videoData.httpHeader === undefined) {
+          videoData.httpHeader = {};
+        }
+        const credentials = buffer.from(`${username}:${password}`).toString('base64');
+        videoData.httpHeader['Authorization'] = `Basic ${credentials}`;
+      }
+      const hostPort = authority.substring(atIndex + 1);
+      const suffix = authorityEnd >= 0 ? smbUri.substring(authorityEnd) : '';
+      videoData.videoSrc = `${smbUri.substring(0, authorityStart)}${hostPort}${suffix}`;
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '已规范化 SMB 播放源：URI userinfo 已迁移到 header');
+    } catch {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'SMB URI userinfo 解码失败，保持原始播放源');
     }
   }
 

@@ -12,6 +12,7 @@ import { isVideoFile } from '../../utils/VideoFileUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { FileExplorerContext } from '../../components/core/player/PlaybackContext'
 import { UmamiAnalyticsService } from '../../services/analytics/UmamiAnalyticsService'
+import buffer from '@ohos.buffer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 对外导出的路由参数接口
@@ -186,23 +187,28 @@ export struct SmbFileExplorerPage {
     return url.replace(/smb:\/\/[^@]+@/, 'smb://***@')
   }
 
-  // ── 构造 SMB 播放 URL（内嵌凭据供播放器使用）──────────────────────────────
-  // 注意：凭据仅用于 libsmb2 认证，不得将完整 URL 记录到日志。
-  //       日志输出请统一使用 maskSmbUrl() 脱敏后的版本。
+  // ── 构造 SMB 播放源 ───────────────────────────────────────────────────────
 
-  private buildPlaybackUrl(filePath: string): string {
-    const host = this.config.host
-    const port = this.config.port ?? 445
-    const username = encodeURIComponent(this.config.username)
-    const password = encodeURIComponent(this.config.password)
-
-    // filePath 格式：/<shareName>/sub/path/file.mkv
+  private normalizePlaybackPath(filePath: string): string {
     let normalized = filePath
     if (!normalized.startsWith('/')) {
       normalized = '/' + normalized
     }
+    return normalized
+  }
 
-    return `smb://${username}:${password}@${host}:${port}${normalized}`
+  /** MPV 只接受无 userinfo 的 SMB URI；认证通过独立 header 传递。 */
+  private buildPlaybackUrl(filePath: string): string {
+    const port = this.config.port ?? 445
+    return `smb://${this.config.host}:${port}${this.normalizePlaybackPath(filePath)}`
+  }
+
+  private buildPlaybackHeaders(): Record<string, string> {
+    if (this.config.username.length === 0 && this.config.password.length === 0) {
+      return {}
+    }
+    const credentials = buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')
+    return { 'Authorization': `Basic ${credentials}` }
   }
 
   // ── 文件点击处理 ────────────────────────────────────────────────────────────
@@ -249,13 +255,14 @@ export struct SmbFileExplorerPage {
 
   private async playVideo(file: SmbFileInfo): Promise<void> {
     const url = this.buildPlaybackUrl(file.path)
+    const playbackHeaders = this.buildPlaybackHeaders()
     console.info('[SmbExplorer] 播放视频: ' + this.maskSmbUrl(url))
 
     // ── 探测音轨/字幕轨信息（失败时降级为空轨道，不阻断播放主流程）────────────
     let presetAudioTracks: PresetAudioTrack[] = []
     let presetSubtitleTracks: PresetSubtitleTrack[] = []
     try {
-      const probeResult = await FfprobeUtil.probeSmb(url, 15000)
+      const probeResult = await FfprobeUtil.probeSmb(url, playbackHeaders, 15000)
       if (probeResult.success) {
         console.info(
           '[SmbExplorer] 轨道探测成功: 音轨=' + probeResult.audioTracks.length.toString() +
@@ -273,6 +280,7 @@ export struct SmbFileExplorerPage {
 
     const pageParam: PlayerPageParam = {
       url: url,
+      httpHeader: playbackHeaders,
       title: file.name,
       presetAudioTracks: presetAudioTracks.length > 0 ? presetAudioTracks : undefined,
       presetSubtitleTracks: presetSubtitleTracks.length > 0 ? presetSubtitleTracks : undefined,
