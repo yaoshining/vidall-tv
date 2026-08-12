@@ -2,7 +2,7 @@ import { IBestToast } from "@ibestservices/ibest-ui";
 import { WebDavFileExplorerAdapter } from "../../components/core/file/FileExplorerAdapter";
 import { FileExplorer } from "../../components/core/file/FileExplorer";
 import { FileExplorerController } from "../../components/core/file/FileExplorerController";
-import { WebDAVClient, WebDAVConfig, WebDAVResource } from "../../lib/WebDAVClient";
+import { buildWebDavHttpHeader, WebDAVClient, WebDAVConfig, WebDAVResource } from "../../lib/WebDAVClient";
 import { PlayerPage, PlayerPageParam } from "../player";
 import { common } from "@kit.AbilityKit";
 import { util } from "@kit.ArkTS";
@@ -254,7 +254,7 @@ export struct FileExplorerPage {
   private async playVideo(path: string, displayName: string) {
     const url = this.client.getFullUrl(path);
     const authHeader = this.client.getAuthHeaderPublic();
-    const httpHeader: Record<string, string> = { 'Authorization': authHeader };
+    const httpHeader = buildWebDavHttpHeader(authHeader);
 
     console.info(`[playVideo] 开始 — path="${path}" displayName="${displayName}" url="${url}"`);
 

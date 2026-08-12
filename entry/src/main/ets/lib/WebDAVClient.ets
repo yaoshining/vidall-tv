@@ -125,6 +125,15 @@ export function sanitizeUrlForAudit(rawUrl: string): string {
   return rawUrl.replace(/:\/\/([^:@]+):([^@]+)@/, '://***:***@');
 }
 
+/** 仅在存在有效凭据时向媒体请求附加 Authorization。 */
+export function buildWebDavHttpHeader(authHeader: string): Record<string, string> {
+  if (authHeader.length === 0) {
+    return {};
+  }
+  const headers: Record<string, string> = { 'Authorization': authHeader };
+  return headers;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface WebDAVConfig {
@@ -225,12 +234,17 @@ export class WebDAVClient {
    * 获取完整的 WebDAV URL（用于流式播放）
    */
   public getFullUrl(path: string): string {
-    let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-    const normalizedPath = this.decodeXmlEntities(path);
-    let fullPath = basePath + (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath);
-    fullPath = this.encodeURIPath(fullPath);
+    return `${this.isHttps ? 'https' : 'http'}://${this.host}:${this.port}${this.buildEncodedPath(path)}`;
+  }
 
-    return `${this.isHttps ? 'https' : 'http'}://${this.host}:${this.port}${fullPath}`;
+  /**
+   * 合并服务根路径和资源路径，确保所有请求使用相同的路径规范化规则。
+   */
+  private buildEncodedPath(remotePath: string): string {
+    const basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+    // 文件浏览器会把选中目录拼入 baseUrl，仅规整路径段，避免产生重复斜杠。
+    const fullPath = `${basePath}/${remotePath}`.replace(/\/{2,}/g, '/');
+    return this.encodeURIPath(fullPath);
   }
 
   private getAuthHeader(): string {
@@ -893,9 +907,7 @@ export class WebDAVClient {
       throw error;
     }
 
-    let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-    let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
-    fullPath = this.encodeURIPath(fullPath);
+    const fullPath = this.buildEncodedPath(remotePath);
 
     const downloadHeaders: Record<string, string> = {
       'User-Agent': 'WebDAV-Client/1.0',
@@ -1266,10 +1278,8 @@ export class WebDAVClient {
         }
       });
 
-      // 构建完整路径并编码
-      let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
-      let fullPath = basePath + (remotePath.startsWith('/') ? remotePath : '/' + remotePath);
-      fullPath = this.encodeURIPath(fullPath);
+      // 与播放地址使用同一套路径规范化和编码逻辑。
+      const fullPath = this.buildEncodedPath(remotePath);
 
       console.info('Download path (encoded):', fullPath);
 

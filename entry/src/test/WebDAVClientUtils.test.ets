@@ -1,5 +1,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  buildWebDavHttpHeader,
+  WebDAVClient,
   classifyTlsError,
   isTlsError,
   normalizeTlsCertPolicy,
@@ -7,6 +9,59 @@ import {
 } from '../main/ets/lib/WebDAVClient';
 
 export default function webDAVClientUtilsTest() {
+  describe('buildWebDavHttpHeader', () => {
+    it('未配置凭据时不传 Authorization', 0, () => {
+      const headers = buildWebDavHttpHeader('');
+
+      expect(Object.keys(headers).length).assertEqual(0);
+      expect(headers.Authorization === undefined).assertTrue();
+    });
+
+    it('存在凭据时保留 Authorization', 0, () => {
+      const headers = buildWebDavHttpHeader('Basic dXNlcjpwYXNz');
+
+      expect(headers.Authorization).assertEqual('Basic dXNlcjpwYXNz');
+    });
+  });
+
+  describe('getFullUrl', () => {
+    it('合并根目录和资源路径时不保留重复斜杠', 0, () => {
+      const client = new WebDAVClient({
+        baseUrl: 'https://dav.example.com:5006//Videos/',
+        username: 'user',
+        password: 'pass'
+      });
+
+      const url = client.getFullUrl('/TV Series/episode 01.mkv');
+
+      expect(url).assertEqual('https://dav.example.com:5006/Videos/TV%20Series/episode%2001.mkv');
+    });
+
+    it('保留协议分隔符并补齐缺失的资源路径斜杠', 0, () => {
+      const client = new WebDAVClient({
+        baseUrl: 'http://dav.example.com:80/Videos',
+        username: 'user',
+        password: 'pass'
+      });
+
+      const url = client.getFullUrl('episode.mkv');
+
+      expect(url).assertEqual('http://dav.example.com:80/Videos/episode.mkv');
+    });
+
+    it('保留资源名中已解码的 XML 实体文本', 0, () => {
+      const client = new WebDAVClient({
+        baseUrl: 'https://dav.example.com:5006/Videos',
+        username: 'user',
+        password: 'pass'
+      });
+
+      const url = client.getFullUrl('/literal &amp; name.mkv');
+
+      expect(url).assertEqual('https://dav.example.com:5006/Videos/literal%20%26amp%3B%20name.mkv');
+    });
+  });
+
   // ─── classifyTlsError ────────────────────────────────────────────────────
 
   describe('classifyTlsError', () => {
