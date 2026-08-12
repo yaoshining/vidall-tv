@@ -1478,5 +1478,19 @@ export default function videoPlayerControllerTest() {
       expect(result).assertEqual(1)
     })
 
+    it('4.6 AVPlayer AAC MIME：同语言 E-AC-3 与 audio/mp4a-latm 并存时选择 AAC', 0, () => {
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const eac3Track: AudioTrackItem = {
+        trackIndex: 1, displayName: '中文 (E-AC-3)', language: 'chi', mimeType: 'audio/eac3'
+      }
+      const aacTrack: AudioTrackItem = {
+        trackIndex: 2, displayName: '中文 (AAC)', language: 'chi', mimeType: 'audio/mp4a-latm'
+      }
+      accessor.audioTracks = [eac3Track, aacTrack]
+      const result = accessor.findInitialAudioTrackIndex()
+      expect(result).assertEqual(1)
+    })
+
   })
 }

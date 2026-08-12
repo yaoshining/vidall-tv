@@ -268,13 +268,22 @@ function normalizeChannelsForSort(ch: number): number {
   return 8;
 }
 
+/** 将 AVPlayer MIME 与 ffprobe codec 统一为路由使用的 codec 名。 */
+function normalizeAudioCodec(rawCodec: string): string {
+  const codec = rawCodec.toLowerCase().replace('audio/', '').split('-').join('');
+  if (codec === 'mp4alatm' || codec === 'mp4a' || codec === 'aaclatm') {
+    return 'aac';
+  }
+  return codec;
+}
+
 /** 判断音轨是否"系统级可用"（与原 `isAudioTrackPlayable` 等价）。
  *  含义：AVPlayer 不进入 onUnsupportedFormat 路径；TrueHD / MLP / Audio Vivid 等"软解罕见"
  *  仍被视为"可用"，但兼容性更差，由 `codecCompatibilityRank` 进一步排序。
  */
 function isAudioTrackPlayable(track: AudioTrackItem): boolean {
-  const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
-  const codec = raw.replace('audio/', '').split('-').join('');
+  const raw = (track.codecName ?? track.mimeType) ?? '';
+  const codec = normalizeAudioCodec(raw);
   // 注意：不能把 TrueHD / AC-3 一律视为不可用，否则"全部不可用"会回退到 track 0。
   // 这里仅过滤"完全无法识别的未知 codec"，硬解 / 软解兼容性由 rank 决定。
   if (codec.length === 0) {
@@ -294,8 +303,8 @@ function isAudioTrackPlayable(track: AudioTrackItem): boolean {
 
 /** 提取音轨的归一化 codec 字符串（用于日志与排序）。 */
 function getNormalizedCodec(track: AudioTrackItem): string {
-  const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
-  return raw.replace('audio/', '').split('-').join('');
+  const raw = (track.codecName ?? track.mimeType) ?? '';
+  return normalizeAudioCodec(raw);
 }
 
 /**
