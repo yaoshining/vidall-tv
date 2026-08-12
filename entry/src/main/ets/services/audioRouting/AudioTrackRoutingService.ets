@@ -93,7 +93,7 @@ function codecCompatibilityRank(codec: string): number {
  *    （avplayer 启动后由 `loadAudioTracks` + `findInitialAudioTrackIndex` 切到该轨道，避免无声）
  * 2. 整组音轨全部 rank≥3（仅 TrueHD / MLP / DTS / Audio Vivid 等软解罕见或 DTS）→ preferredBackend=avplayer
  *    + fallback=ijkplayer（让 avplayer 失败后自动切 ijkplayer 软解）
- * 3. 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer（保守）
+ * 3. 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
  * 4. detectedCodec / detectedChannels 取整组中 rank 最低的轨道（最兼容），不再是 probe[0]
  */
 export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDecision {
@@ -147,15 +147,12 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
     `precheckProbeFailed=${input.precheckProbeFailed}`;
 
   // preferredBackend 决策（关键修复：TrueHD+AC-3 混合时不能默认 TrueHD）
-  // 1. 探测完全失败且无任何音轨提示 → ijkplayer（保守）
+  // 1. 探测完全失败且无任何音轨提示 → 仍先尝试 avplayer
   // 2. 整组音轨存在至少一条 rank≤2 轨道（硬解 / AC-3 / EAC-3）→ avplayer
   //    （avplayer 启动后由 loadAudioTracks 切到该轨道）
   // 3. 整组音轨全部 rank≥3（仅 TrueHD / MLP / Audio Vivid / DTS）→ avplayer + fallback=ijkplayer
   //    （让 avplayer 失败后自动切 ijkplayer 软解；同时避免"全部 rank3"误判为 ijkplayer）
-  let preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
-  if (input.precheckProbeFailed && trackCount === 0 && !input.presetHasAudio) {
-    preferredBackend = 'ijkplayer';
-  }
+  const preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
 
   const decision: AudioRoutingDecision = {
     preferredBackend,
@@ -271,13 +268,22 @@ function normalizeChannelsForSort(ch: number): number {
   return 8;
 }
 
+/** 将 AVPlayer MIME 与 ffprobe codec 统一为路由使用的 codec 名。 */
+export function normalizeAudioCodec(rawCodec: string): string {
+  const codec = rawCodec.toLowerCase().replace('audio/', '').split('-').join('');
+  if (codec === 'mp4alatm' || codec === 'mp4a' || codec === 'aaclatm') {
+    return 'aac';
+  }
+  return codec;
+}
+
 /** 判断音轨是否"系统级可用"（与原 `isAudioTrackPlayable` 等价）。
  *  含义：AVPlayer 不进入 onUnsupportedFormat 路径；TrueHD / MLP / Audio Vivid 等"软解罕见"
  *  仍被视为"可用"，但兼容性更差，由 `codecCompatibilityRank` 进一步排序。
  */
 function isAudioTrackPlayable(track: AudioTrackItem): boolean {
-  const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
-  const codec = raw.replace('audio/', '').split('-').join('');
+  const raw = (track.codecName ?? track.mimeType) ?? '';
+  const codec = normalizeAudioCodec(raw);
   // 注意：不能把 TrueHD / AC-3 一律视为不可用，否则"全部不可用"会回退到 track 0。
   // 这里仅过滤"完全无法识别的未知 codec"，硬解 / 软解兼容性由 rank 决定。
   if (codec.length === 0) {
@@ -297,8 +303,8 @@ function isAudioTrackPlayable(track: AudioTrackItem): boolean {
 
 /** 提取音轨的归一化 codec 字符串（用于日志与排序）。 */
 function getNormalizedCodec(track: AudioTrackItem): string {
-  const raw = ((track.codecName ?? track.mimeType) ?? '').toLowerCase();
-  return raw.replace('audio/', '').split('-').join('');
+  const raw = (track.codecName ?? track.mimeType) ?? '';
+  return normalizeAudioCodec(raw);
 }
 
 /**
@@ -422,7 +428,7 @@ export class AudioTrackRoutingService {
    * 行为：
    * - 整组音轨存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer
    * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer + fallback=ijkplayer
-   * - 探测完全失败且无任何音轨提示 → preferredBackend=ijkplayer
+   * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
    * - 初始选轨由 controller 调用 `resolveInitialTrackIndex` 决定（与 backend route 决策解耦）
    */
   async resolveRoutingDecision(videoData: VideoData): Promise<AudioRoutingDecision> {
@@ -444,8 +450,14 @@ export class AudioTrackRoutingService {
     const probeVideoTracks: ProbeVideo[] = [];
 
     try {
-      const probe = await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
+      const probe = videoData.videoSrc.toLowerCase().startsWith('smb://')
+        ? await FfprobeUtil.probeSmb(videoData.videoSrc, videoData.httpHeader, 9000)
+        : await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000);
       probeSuccess = probe.success;
+      if (!probe.success) {
+        precheckProbeFailed = true;
+        precheckProbeError = probe.errorMessage ?? '媒体探测失败';
+      }
       if (probe.success && probe.audioTracks.length > 0) {
         const first = probe.audioTracks[0];
         probeCodec = first.codecName;
@@ -478,7 +490,7 @@ export class AudioTrackRoutingService {
     const seenCodecs = new Set<string>();
     for (let i = 0; i < probeAudioTracks.length; i++) {
       const t = probeAudioTracks[i];
-      const codec = t.codec.toLowerCase();
+      const codec = normalizeAudioCodec(t.codec);
       if (seenCodecs.has(codec)) {
         continue;
       }
@@ -494,7 +506,7 @@ export class AudioTrackRoutingService {
     }
     // preset hint 补充：仅在 probe 为空时使用
     if (trackAnalyses.length === 0 && presetHint.codecName.length > 0) {
-      const codec = presetHint.codecName.toLowerCase();
+      const codec = normalizeAudioCodec(presetHint.codecName);
       trackAnalyses.push({
         index: 0,
         codec,

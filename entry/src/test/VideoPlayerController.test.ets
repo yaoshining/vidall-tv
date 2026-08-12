@@ -15,6 +15,7 @@ import {
 } from '../main/ets/components/core/player/SubtitleBridgeAdapter';
 import { PresetAudioTrack, VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
+import { normalizeAudioCodec } from '../main/ets/services/audioRouting/AudioTrackRoutingService';
 
 interface VideoPlayerControllerAccessor {
   backend: PlayerBackend
@@ -1398,6 +1399,9 @@ export default function videoPlayerControllerTest() {
   // codec-aware 音轨候选选择器（#214 修复）
   // ─────────────────────────────────────────────────────────────────────────
   describe('findInitialAudioTrackIndex - codec-aware 音轨选择', () => {
+    it('4.0 探测失败回退 preset 时将 AAC MIME 归一化', 0, () => {
+      expect(normalizeAudioCodec('audio/mp4a-latm')).assertEqual('aac')
+    })
 
     it('4.1 可播偏好命中：偏好轨 codec 可播放时直接返回 0', 0, () => {
       const ctrl = new TestVideoPlayerController()
@@ -1475,6 +1479,20 @@ export default function videoPlayerControllerTest() {
       accessor.audioTracks = [ac3Track, aacTrack]
       const result = accessor.findInitialAudioTrackIndex()
       // audio/ac-3 归一化后为 "ac3"，命中黑名单，应降级到 index=1 的 AAC 轨
+      expect(result).assertEqual(1)
+    })
+
+    it('4.6 AVPlayer AAC MIME：同语言 E-AC-3 与 audio/mp4a-latm 并存时选择 AAC', 0, () => {
+      const ctrl = new TestVideoPlayerController()
+      const accessor = accessController(ctrl)
+      const eac3Track: AudioTrackItem = {
+        trackIndex: 1, displayName: '中文 (E-AC-3)', language: 'chi', mimeType: 'audio/eac3'
+      }
+      const aacTrack: AudioTrackItem = {
+        trackIndex: 2, displayName: '中文 (AAC)', language: 'chi', mimeType: 'audio/mp4a-latm'
+      }
+      accessor.audioTracks = [eac3Track, aacTrack]
+      const result = accessor.findInitialAudioTrackIndex()
       expect(result).assertEqual(1)
     })
 
