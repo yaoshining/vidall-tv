@@ -261,5 +261,15 @@
     "total": 0,
     "compiled_count": 56,
     "report_href": "unit/runs/run-271/index.html"
+  },
+  {
+    "run_number": 272,
+    "timestamp": "2026-08-12T14:01:17Z",
+    "status": "pass",
+    "passed": 0,
+    "failed": 0,
+    "total": 0,
+    "compiled_count": 56,
+    "report_href": "unit/runs/run-272/index.html"
   }
 ]
