@@ -28,7 +28,7 @@ import {
   WebDAVSourceConfig
 } from "../../db/models/FileSourceEntity";
 import { FfprobeTrack, FfprobeUtil } from "../../utils/FfprobeUtil";
-import { WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
+import { buildWebDavHttpHeader, WebDAVClient, WebDAVConfig } from "../../lib/WebDAVClient";
 import buffer from '@ohos.buffer';
 import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import {
@@ -236,8 +236,7 @@ export class SourceAdapterService {
     const client = new WebDAVClient(webdavConfig);
     const url = client.getFullUrl(filePath);
     const authHeader = client.getAuthHeaderPublic();
-    const httpHeader: Record<string, string> =
-      authHeader.length > 0 ? { 'Authorization': authHeader } : {};
+    const httpHeader = buildWebDavHttpHeader(authHeader);
     const result: AssembledSource = { url, httpHeader };
     return result;
   }

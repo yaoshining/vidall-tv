@@ -125,6 +125,15 @@ export function sanitizeUrlForAudit(rawUrl: string): string {
   return rawUrl.replace(/:\/\/([^:@]+):([^@]+)@/, '://***:***@');
 }
 
+/** 仅在存在有效凭据时向媒体请求附加 Authorization。 */
+export function buildWebDavHttpHeader(authHeader: string): Record<string, string> {
+  if (authHeader.length === 0) {
+    return {};
+  }
+  const headers: Record<string, string> = { 'Authorization': authHeader };
+  return headers;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface WebDAVConfig {

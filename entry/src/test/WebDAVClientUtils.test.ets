@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
+  buildWebDavHttpHeader,
   classifyTlsError,
   isTlsError,
   normalizeTlsCertPolicy,
@@ -7,6 +8,21 @@ import {
 } from '../main/ets/lib/WebDAVClient';
 
 export default function webDAVClientUtilsTest() {
+  describe('buildWebDavHttpHeader', () => {
+    it('未配置凭据时不传 Authorization', 0, () => {
+      const headers = buildWebDavHttpHeader('');
+
+      expect(Object.keys(headers).length).assertEqual(0);
+      expect(headers.Authorization === undefined).assertTrue();
+    });
+
+    it('存在凭据时保留 Authorization', 0, () => {
+      const headers = buildWebDavHttpHeader('Basic dXNlcjpwYXNz');
+
+      expect(headers.Authorization).assertEqual('Basic dXNlcjpwYXNz');
+    });
+  });
+
   // ─── classifyTlsError ────────────────────────────────────────────────────
 
   describe('classifyTlsError', () => {
