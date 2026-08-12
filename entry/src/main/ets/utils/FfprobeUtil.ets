@@ -610,7 +610,7 @@ export class FfprobeUtil {
 
   /**
    * 从媒体文件中提取指定内嵌字幕流的所有字幕条目。
-   * 内部使用 VidAll_TV 自己的 libffmpeg.so（支持 subrip 解码器）。
+   * 内部使用 VidAll_TV 集成的 FFmpeg 8 动态库（支持 subrip 解码器）。
    * 返回 {startMs, endMs, text} 数组，可直接作为 SrtEntry[] 使用。
    */
   static async extractEmbeddedSubtitles(
