@@ -48,6 +48,18 @@ export default function webDAVClientUtilsTest() {
 
       expect(url).assertEqual('http://dav.example.com:80/Videos/episode.mkv');
     });
+
+    it('保留资源名中已解码的 XML 实体文本', 0, () => {
+      const client = new WebDAVClient({
+        baseUrl: 'https://dav.example.com:5006/Videos',
+        username: 'user',
+        password: 'pass'
+      });
+
+      const url = client.getFullUrl('/literal &amp; name.mkv');
+
+      expect(url).assertEqual('https://dav.example.com:5006/Videos/literal%20%26amp%3B%20name.mkv');
+    });
   });
 
   // ─── classifyTlsError ────────────────────────────────────────────────────
