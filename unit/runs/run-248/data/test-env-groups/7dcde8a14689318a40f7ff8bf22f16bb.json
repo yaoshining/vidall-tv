@@ -1,1 +1,0 @@
-{"id":"7dcde8a14689318a40f7ff8bf22f16bb","fullName":"VideoPlayer 3.4 layout contract#STRETCH 保持明确的 width + height + renderFit 拉伸路径，且不启用 clip","name":"STRETCH 保持明确的 width + height + renderFit 拉伸路径，且不启用 clip","status":"passed","testResultsByEnv":{"default":"42bc76d5fc80f17a472c3fc3782f95ca"}}

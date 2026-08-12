@@ -1,1 +1,0 @@
-{"id":"f0f2f77bdaecb88cd4708e8e6e0b1f5f","fullName":"VideoPlayerController review regressions#ijkVideoRatio 可通过回调语义写入并读出（Task 2.3 回调注入后行为）","name":"ijkVideoRatio 可通过回调语义写入并读出（Task 2.3 回调注入后行为）","status":"passed","testResultsByEnv":{"default":"1e007bc26b9259275b4e2ad068824a00"}}

@@ -1,1 +1,0 @@
-{"id":"c0ce3a9c5f6381f5ec1721cb280178df","fullName":"VideoPlayer 3.4 layout contract#FIT 且 ratio > 0 时在内层 XComponent 上使用 width + aspectRatio，且不设置 height / renderFit","name":"FIT 且 ratio > 0 时在内层 XComponent 上使用 width + aspectRatio，且不设置 height / renderFit","status":"passed","testResultsByEnv":{"default":"fe1ed7dbcbc4a0506fcc97f4a4d22b27"}}

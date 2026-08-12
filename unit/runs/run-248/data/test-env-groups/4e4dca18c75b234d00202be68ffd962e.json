@@ -1,1 +1,0 @@
-{"id":"4e4dca18c75b234d00202be68ffd962e","fullName":"VideoPlayer 3.4 layout contract#FILL 在窄视频场景走显式 cover 尺寸 + clip 路径，不再依赖 renderFit","name":"FILL 在窄视频场景走显式 cover 尺寸 + clip 路径，不再依赖 renderFit","status":"passed","testResultsByEnv":{"default":"90a9cfd16e309cc8890fe4e65a0d78b2"}}
