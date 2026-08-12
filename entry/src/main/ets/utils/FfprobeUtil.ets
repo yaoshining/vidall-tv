@@ -548,7 +548,7 @@ export class FfprobeUtil {
       }
       const userInfo = `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
       return `${smbUri.substring(0, authorityStart)}${userInfo}${smbUri.substring(authorityStart)}`;
-    } catch {
+    } catch (e) {
       console.warn('[FfprobeUtil] SMB Basic 认证解码失败，按匿名源探测');
       return smbUri;
     }

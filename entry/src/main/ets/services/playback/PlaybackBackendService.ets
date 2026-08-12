@@ -407,6 +407,9 @@ export class PlaybackBackendService {
     if (schemeEnd < 0) {
       return;
     }
+    if (smbUri.substring(0, schemeEnd).toLowerCase() !== 'smb') {
+      return;
+    }
     const authorityStart = schemeEnd + 3;
     const authorityEnd = smbUri.indexOf('/', authorityStart);
     const authority = authorityEnd >= 0
@@ -443,7 +446,7 @@ export class PlaybackBackendService {
       const suffix = authorityEnd >= 0 ? smbUri.substring(authorityEnd) : '';
       videoData.videoSrc = `${smbUri.substring(0, authorityStart)}${hostPort}${suffix}`;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG, '已规范化 SMB 播放源：URI userinfo 已迁移到 header');
-    } catch {
+    } catch (e) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'SMB URI userinfo 解码失败，保持原始播放源');
     }
   }

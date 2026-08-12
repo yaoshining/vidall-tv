@@ -269,7 +269,7 @@ function normalizeChannelsForSort(ch: number): number {
 }
 
 /** 将 AVPlayer MIME 与 ffprobe codec 统一为路由使用的 codec 名。 */
-function normalizeAudioCodec(rawCodec: string): string {
+export function normalizeAudioCodec(rawCodec: string): string {
   const codec = rawCodec.toLowerCase().replace('audio/', '').split('-').join('');
   if (codec === 'mp4alatm' || codec === 'mp4a' || codec === 'aaclatm') {
     return 'aac';
@@ -490,7 +490,7 @@ export class AudioTrackRoutingService {
     const seenCodecs = new Set<string>();
     for (let i = 0; i < probeAudioTracks.length; i++) {
       const t = probeAudioTracks[i];
-      const codec = t.codec.toLowerCase();
+      const codec = normalizeAudioCodec(t.codec);
       if (seenCodecs.has(codec)) {
         continue;
       }
@@ -506,7 +506,7 @@ export class AudioTrackRoutingService {
     }
     // preset hint 补充：仅在 probe 为空时使用
     if (trackAnalyses.length === 0 && presetHint.codecName.length > 0) {
-      const codec = presetHint.codecName.toLowerCase();
+      const codec = normalizeAudioCodec(presetHint.codecName);
       trackAnalyses.push({
         index: 0,
         codec,

@@ -15,6 +15,7 @@ import {
 } from '../main/ets/components/core/player/SubtitleBridgeAdapter';
 import { PresetAudioTrack, VideoData } from '../main/ets/components/core/player/VideoData';
 import { VideoDataType } from '../main/ets/components/core/player/Constants';
+import { normalizeAudioCodec } from '../main/ets/services/audioRouting/AudioTrackRoutingService';
 
 interface VideoPlayerControllerAccessor {
   backend: PlayerBackend
@@ -1398,6 +1399,9 @@ export default function videoPlayerControllerTest() {
   // codec-aware 音轨候选选择器（#214 修复）
   // ─────────────────────────────────────────────────────────────────────────
   describe('findInitialAudioTrackIndex - codec-aware 音轨选择', () => {
+    it('4.0 探测失败回退 preset 时将 AAC MIME 归一化', 0, () => {
+      expect(normalizeAudioCodec('audio/mp4a-latm')).assertEqual('aac')
+    })
 
     it('4.1 可播偏好命中：偏好轨 codec 可播放时直接返回 0', 0, () => {
       const ctrl = new TestVideoPlayerController()
