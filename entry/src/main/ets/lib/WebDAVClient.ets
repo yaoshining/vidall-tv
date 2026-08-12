@@ -234,9 +234,10 @@ export class WebDAVClient {
    * 获取完整的 WebDAV URL（用于流式播放）
    */
   public getFullUrl(path: string): string {
-    let basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
+    const basePath = this.baseUrl.replace(/^https?:\/\/[^:\/]+(?::\d+)?/, '');
     const normalizedPath = this.decodeXmlEntities(path);
-    let fullPath = basePath + (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath);
+    // 文件浏览器会把选中目录拼入 baseUrl，仅规整路径段，避免产生重复斜杠。
+    let fullPath = `${basePath}/${normalizedPath}`.replace(/\/{2,}/g, '/');
     fullPath = this.encodeURIPath(fullPath);
 
     return `${this.isHttps ? 'https' : 'http'}://${this.host}:${this.port}${fullPath}`;
