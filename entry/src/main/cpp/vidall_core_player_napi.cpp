@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <limits>
 #include <thread>
 #include <atomic>
 
@@ -4179,7 +4180,14 @@ struct SmbListDirContext {
 };
 
 static inline uint64_t SmbTimeToUnixMilliseconds(uint64_t seconds, uint64_t nanoseconds) {
-    return seconds * 1000ULL + nanoseconds / 1000000ULL;
+    constexpr uint64_t NANOSECONDS_PER_SECOND = 1000000000ULL;
+    constexpr uint64_t NANOSECONDS_PER_MILLISECOND = 1000000ULL;
+    const uint64_t fractionalMilliseconds = nanoseconds / NANOSECONDS_PER_MILLISECOND;
+    if (nanoseconds >= NANOSECONDS_PER_SECOND ||
+        seconds > (std::numeric_limits<uint64_t>::max() - fractionalMilliseconds) / 1000ULL) {
+        return 0;
+    }
+    return seconds * 1000ULL + fractionalMilliseconds;
 }
 
 static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
