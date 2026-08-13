@@ -19,6 +19,8 @@ import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../compo
 import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
 import { defaultSourceAdapterService as sourceAdapter } from "../../services/sourceAdapter/SourceAdapterService";
+import { PlaybackSourceIdentity } from "../../services/sourceAdapter/PlaybackSource";
+import { normalizePlayerBackend } from "../../services/playback/PlaybackBackendTypes";
 import {
   PlaybackProgressService,
   PlaybackProgressContext,
@@ -88,6 +90,7 @@ export interface PlayerPageParam {
 
 export interface ResolvedEpisodePlaybackSource {
   url: string;
+  sourceIdentity: PlaybackSourceIdentity;
   httpHeader?: Record<string, string>;
   durationHintMs?: number;
   presetAudioTracks?: PresetAudioTrack[];
@@ -196,6 +199,8 @@ export function buildMediaLibraryEpisodeSwitchParam(
     preferredBackend: currentParam.preferredBackend,
     presetAudioTracks: resolvedSource.presetAudioTracks,
     presetSubtitleTracks: resolvedSource.presetSubtitleTracks,
+    fileSourceType: resolvedSource.sourceIdentity.sourceType,
+    fileSourceId: resolvedSource.sourceIdentity.sourceId,
     mediaKey,
     startPositionMs: resolvedSource.startPositionMs,
     playbackContext: mediaLibraryContext
@@ -231,6 +236,8 @@ export function buildFileExplorerEpisodeSwitchParam(
     httpHeader: currentParam.httpHeader,
     title: selectedItem.title,
     preferredBackend: currentParam.preferredBackend,
+    fileSourceType: currentParam.fileSourceType,
+    fileSourceId: currentParam.fileSourceId,
     playbackContext: context
   };
   return nextParam;
@@ -579,11 +586,7 @@ export struct PlayerPage {
     const token = this.pageParamToken;
     this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     if (pageParam.preferredBackend) {
-      const preferredBackend = pageParam.preferredBackend;
-      const runtimeBackend: PlayerBackend = preferredBackend === 'native' || preferredBackend === 'ffmpeg'
-        ? 'mpv'
-        : preferredBackend;
-      this.videoPlayerController.backend = runtimeBackend;
+      this.videoPlayerController.backend = normalizePlayerBackend(pageParam.preferredBackend);
     }
     this.videoData = this.buildVideoDataFromParam(pageParam);
     this.videoPlayerController.progressContext = null;
@@ -614,7 +617,7 @@ export struct PlayerPage {
 
   private async resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
     // 第一阶段：协议拼装与已落库元数据已收口到 SourceAdapterService。
-    // 后续字段映射仍由 PlayerPage 维护，确保 ResolvedEpisodePlaybackSource 现有契约不变。
+    // 页面层负责映射切集所需字段，并保留稳定的播放源标识。
     const resolved = await sourceAdapter.resolveEpisode({
       sourceId: item.sourceId,
       filePath: item.videoPath,
@@ -624,7 +627,8 @@ export struct PlayerPage {
       return null;
     }
     const resolvedSource: ResolvedEpisodePlaybackSource = {
-      url: resolved.url
+      url: resolved.url,
+      sourceIdentity: resolved.sourceIdentity
     };
     if (Object.keys(resolved.httpHeader).length > 0) {
       resolvedSource.httpHeader = resolved.httpHeader;

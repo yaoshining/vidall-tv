@@ -557,6 +557,7 @@ class ResumeDecisionEpisodeSwitchPage extends TestEpisodeSwitchPage {
     }
     const nextResolvedSource: ResolvedEpisodePlaybackSource = {
       url: resolvedSource.url,
+      sourceIdentity: resolvedSource.sourceIdentity,
       httpHeader: resolvedSource.httpHeader,
       durationHintMs: resolvedSource.durationHintMs,
       presetAudioTracks: resolvedSource.presetAudioTracks,
@@ -609,6 +610,10 @@ function buildResolvedSource(url: string): ResolvedEpisodePlaybackSource {
   httpHeader.Authorization = 'Basic token'
   const resolvedSource: ResolvedEpisodePlaybackSource = {
     url,
+    sourceIdentity: {
+      sourceType: 'webdav',
+      sourceId: '200'
+    },
     httpHeader,
     durationHintMs: 1800000
   }
@@ -745,6 +750,8 @@ export default function playerPageTest() {
         expect(nextParam.videoId).assertEqual(102)
         expect(nextParam.seasonNumber).assertEqual(1)
         expect(nextParam.episodeNumber).assertEqual(3)
+        expect(nextParam.fileSourceType).assertEqual('webdav')
+        expect(nextParam.fileSourceId).assertEqual('200')
         expect(nextParam.mediaKey).assertEqual('media_progress_episode_tmdb_tmdb-9527_s1_e3')
         expect(nextParam.playbackContext?.currentIndex).assertEqual(0)
       }
