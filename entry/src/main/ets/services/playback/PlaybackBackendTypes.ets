@@ -2,12 +2,7 @@
 //
 // PlaybackBackendService 的类型契约。
 //
-// 背景：原 `VideoPlayerController.initPlayer()` 负责：
-//   1. 自动音频路由决策（resolveAudioRoutingDecision）
-//   2. 适配器工厂（IjkPlayerAdapter / AVPlayerAdapter / VidAllPlayerAdapter）
-//   3. SMB 代理生命周期（startSmbProxy / cleanupOrphanedProxies）
-//   4. XComponent 上下文绑定时序（setIjkContext / setNativeContext）
-//   5. unsupported format / native → IJK fallback 编排
+// `VideoPlayerController` 通过本契约编排 AVPlayer 主路径与 MPV 唯一回退路径。
 //
 // Module 4 目标：以上职责由 `PlaybackBackendService` 统一编排，
 // `VideoPlayerController` 退化为 façade 并把状态投影到现有 `@Trace` 字段。
@@ -22,10 +17,17 @@ import type { IPlayer } from "../../components/core/player/IPlayer";
 import type { ISubtitleBridgeAdapter } from "../../components/core/player/SubtitleBridgeAdapter";
 
 /** 播放内核类型（service 内部命名，controller 已有同名类型，alias 复用）。 */
-export type ServicePlayerBackend = 'avplayer' | 'ijkplayer' | 'mpv' | 'ffmpeg' | 'native';
+export type ServicePlayerBackend = 'avplayer' | 'mpv';
 
-/** AVPlayer 遇到不支持格式时的回退目标（service 内部命名）。 */
-export type ServiceUnsupportedFormatFallback = 'ijkplayer' | 'mpv' | 'native';
+/** AVPlayer 遇到不支持格式或初始化失败时的唯一回退目标。 */
+export type ServiceUnsupportedFormatFallback = 'mpv';
+
+/** 历史入口值仅在边界归一化，绝不进入运行时后端状态。 */
+export type LegacyPlayerBackend = 'native' | 'ffmpeg';
+
+export function normalizePlayerBackend(backend: ServicePlayerBackend | LegacyPlayerBackend): ServicePlayerBackend {
+  return backend === 'avplayer' ? 'avplayer' : 'mpv';
+}
 
 /** 后端选择决策输入（ffprobe + preset 提示）。 */
 export interface PlaybackBackendProbeInput {
@@ -77,7 +79,7 @@ export interface PlaybackBackendDecision {
 /** 默认后端决策（探测未启动时使用）。 */
 export const DEFAULT_BACKEND_DECISION: PlaybackBackendDecision = {
   preferredBackend: 'avplayer',
-  fallback: 'ijkplayer',
+  fallback: 'mpv',
   preferredChannels: 2,
   summary: 'default: 未探测到音轨细节',
   detectedCodec: 'unknown',
@@ -93,7 +95,7 @@ export const DEFAULT_BACKEND_DECISION: PlaybackBackendDecision = {
 };
 
 /** 字幕桥接 adapter 类型（service 内部命名以避免与 controller 现有类型冲突）。 */
-export type SubtitleBridgeKind = 'none' | 'av' | 'ijk' | 'mpv' | 'smb-av';
+export type SubtitleBridgeKind = 'none' | 'av' | 'mpv' | 'smb-av';
 
 /** Adapter 创建产物。 */
 export interface PlaybackAdapterHandle {
@@ -107,10 +109,6 @@ export interface PlaybackAdapterHandle {
   subtitleBridgeKind: SubtitleBridgeKind;
   /** 启动 SMB 代理后写回 videoData.videoSrc（用于 controller 持有原始 URL 记录）。 */
   effectiveVideoSrc: string;
-  /** 若原始视频源是 smb://，记录原始 URL（用于 fallback 时重启代理）。 */
-  smbOriginalSrc: string;
-  /** 代理是否处于活动态（释放时触发 cleanupOrphanedProxies）。 */
-  smbProxyActive: boolean;
   /** 错误回调：仅在 adapter 创建阶段失败时填充。 */
   errorMessage?: string;
 }
@@ -124,10 +122,8 @@ export interface PlaybackAdapterContext {
 /** 后端 fallback 触发原因。 */
 export type PlaybackFallbackReason =
   | 'avplayer_unsupported_format'
-  | 'native_error_callback'
-  | 'native_ready_timeout'
+  | 'avplayer_init_failure'
   | 'precheck_probe_failed'
-  | 'manual_backend_switch'
   | 'mpv_error_callback';
 
 /** 后端 fallback 上下文。 */
@@ -159,7 +155,7 @@ export interface ResumeAutoplayDecision {
 export function buildDefaultBackendDecision(): PlaybackBackendDecision {
   const decision: PlaybackBackendDecision = {
     preferredBackend: 'avplayer',
-    fallback: 'ijkplayer',
+    fallback: 'mpv',
     preferredChannels: 2,
     summary: 'default: 未探测到音轨细节',
     detectedCodec: 'unknown',

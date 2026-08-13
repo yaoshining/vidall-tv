@@ -1,33 +1,28 @@
 import { PlayerEvents, VideoDataType } from "./Constants";
-import { VideoData, PresetAudioTrack } from "./VideoData";
+import { VideoData } from "./VideoData";
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from "@kit.PerformanceAnalysisKit";
 import { CommonConstants } from "../../../common/constants/CommonConstants";
 import { millisecondsToTime } from "../../../utils/TimeUtil";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
-import { IjkPlayerAdapter } from "./IjkPlayerAdapter";
-import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
 import { MpvPlayerAdapter } from "./MpvPlayerAdapter";
+import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeUtil } from "../../../utils/FfprobeUtil";
-import { FfmpegVideoFrameUtil } from "../../../utils/FfmpegVideoFrameUtil";
 import {
   AvSubtitleBridgeAdapter,
   BaseSubtitleBridgeAdapter,
-  IjkSubtitleBridgeAdapter,
   ISubtitleBridgeAdapter,
   MpvSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter,
   SubtitleBridgeState,
   SubtitleTrackItem
 } from "./SubtitleBridgeAdapter";
-import { SmbAvSubtitleBridgeAdapter } from "./SmbSubtitleBridgeAdapter";
 import { VpeEnhancerUtil, VpeQualityLevel } from "../../../utils/VpeEnhancerUtil";
 import { ParsedSubtitle } from "./SubtitleRenderer";
 import { PlaybackContext } from "./PlaybackContext";
-import { AppPreferences, PrefKey } from "../../../utils/AppPreferences";
 import {
   DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS,
   DEFAULT_EPISODE_AUTOPLAY_ENABLED
@@ -37,7 +32,7 @@ import { MediaIdentity } from "../../../services/metrics/MetricsReporter";
 import { SubtitleDispatcher, SubtitleCacheContext } from "../../../subtitle/SubtitleDispatcher";
 import { AudioDispatcher } from "../../../audio/AudioDispatcher";
 // ─── Runtime session services (Module 4: refactor-player-runtime-session-services) ───
-import { playbackBackendService, PlaybackBackendService, PlaybackAdapterCallbacks } from
+import { playbackBackendService, PlaybackBackendService } from
   "../../../services/playback/PlaybackBackendService";
 import type { PlaybackBackendDecision } from
   "../../../services/playback/PlaybackBackendTypes";
@@ -46,8 +41,6 @@ import { SubtitleSessionService } from
 import {
   audioTrackRoutingService,
   AudioTrackRoutingService,
-  PresetAudioHint,
-  readPresetAudioHint,
   findInitialAudioTrackIndex as serviceFindInitialAudioTrackIndex
 } from "../../../services/audioRouting/AudioTrackRoutingService";
 import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioRoutingTypes";
@@ -55,7 +48,7 @@ import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioR
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
 /** 播放内核类型 */
-export type PlayerBackend = 'avplayer' | 'ijkplayer' | 'mpv' | 'ffmpeg' | 'native';
+export type PlayerBackend = 'avplayer' | 'mpv';
 
 export function resolveAiEnhanceEnabledByRuntime(runtimeSupported: boolean, requestedEnabled: boolean): boolean {
   return runtimeSupported && requestedEnabled;
@@ -85,38 +78,10 @@ export enum AspectRatioMode {
 const TAG = '[VideoPlayerController]';
 const METRICS_TAG = 'VidAll_Metrics';
 const GENERIC_SYSTEM_ERROR = 'system error';
-const DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED = false;
-const NATIVE_READY_GUARD_MS = 3500;
 const RESUME_SEEK_AUTOPLAY_FALLBACK_MS = 1500;
 const ENABLE_SESSION_DIAG_LOG = false;
-const FFMPEG_PREVIEW_RENDER_FPS = 8;
-const FFMPEG_PREVIEW_CHUNK_SECONDS = 0.8;
-const FFMPEG_PREVIEW_LOW_WATERMARK_FRAMES = 5;
-const FFMPEG_PREVIEW_MAX_QUEUE_FRAMES = 18;
-const FFMPEG_PREVIEW_DECODE_TIMEOUT_MS = 4000;
-const FFMPEG_PREVIEW_MAX_WIDTH = 640;
-const FFMPEG_PREVIEW_JPEG_QUALITY = 8;
-const FFMPEG_PREVIEW_LEAD_SECONDS = 0.1;
-const FFMPEG_PREVIEW_SYNC_OFFSET_MS = 80;
-const FFMPEG_PREVIEW_MAX_LAG_DROP_MS = 240;
-const FFMPEG_PREVIEW_STALL_STEP_MAX_MS = 1200;
-const FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS = 400;
-const FFMPEG_PREVIEW_EXTRACT_STUCK_MS = 1500;
-const FFMPEG_PREVIEW_EXTRACT_HARD_TIMEOUT_MS = 6500;
 /** 支持的播放速率白名单；控制器层对外输入做归一化，避免后端静默降级导致 UI 显示不一致 */
 const SUPPORTED_SPEEDS: number[] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-const FFMPEG_PREVIEW_SINGLE_FRAME_INTERVAL_MS = 180;
-const FFMPEG_PREVIEW_FORCE_RESTART_INTERVAL_MS = 2200;
-const FFMPEG_PREVIEW_FORCE_RESTART_LAG_MS = 1800;
-const FFMPEG_PREVIEW_FORCE_RESTART_SAME_TICKS = 10;
-const FFMPEG_PREVIEW_EMPTY_QUEUE_CATCHUP_INTERVAL_MS = 600;
-const ENABLE_FFMPEG_PREVIEW_DIAG_LOG = true;
-const FFMPEG_PREVIEW_DIAG_LOG_INTERVAL_MS = 1000;
-
-interface FfmpegQueuedFrame {
-  uri: string;
-  ptsMs: number;
-}
 
 // AudioRoutingDecision 与 PresetAudioHint 已迁移到 AudioTrackRoutingService：
 //   import type { AudioRoutingDecision, PresetAudioHint } from
@@ -183,9 +148,6 @@ interface PendingResumeAutoplayResultState {
   autoplayDecisionOrigin: string;
 }
 
-interface NativeXComponentFallbackContext {
-}
-
 const SYSTEM_HARD_PREFERRED_CODECS: string[] = [
   'aac', 'mp3', 'opus', 'flac', 'pcm', 'vorbis'
 ];
@@ -228,41 +190,27 @@ export interface AudioTrackItem {
   codecName?: string;
 }
 
-export type UnsupportedFormatFallback = 'ijkplayer' | 'mpv' | 'native';
+export type UnsupportedFormatFallback = 'mpv';
 
 @ObservedV2
 export class VideoPlayerController {
-  /**
-   * 播放内核选择，默认 'avplayer'。
-   * 切换为 'ijkplayer' 后，VideoPlayer UI 层需要使用 libraryname='ijkplayer_napi'
-   * 的 XComponent，并在 onLoad 回调中调用 controller.setIjkContext(context, id)。
-   * 'native'/'ffmpeg' 后端已停止主路径接入，仅保留代码供参考；正常播放不应出现这两个值。
-   */
+  /** 运行时播放后端：AVPlayer 主路径，MPV 唯一回退路径。 */
   @Trace backend: PlayerBackend = 'avplayer';
 
-  /** AI 画质增强开关（仅 avplayer 路径有效；ijkplayer 路径因渲染方式不同暂不支持） */
+  /** AI 画质增强开关（仅 avplayer 路径有效） */
   @Trace aiEnhanceEnabled: boolean = true;
-  /** 当前运行环境的 VPE 运行时探测结果 */
   @Trace aiEnhanceRuntimeSupported: boolean = false;
-  /** AI 画质增强质量档位 */
   @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
 
-  /** 当前使用的播放内核实例 */
   private player?: IPlayer;
-  /** AVPlayer 遇到不支持格式时，自动回退的后端类型 */
-  @Trace unsupportedFormatFallback: UnsupportedFormatFallback = 'ijkplayer';
-  /** 是否已由外部显式设置回退策略（为 true 时不再自动覆盖） */
-  private unsupportedFallbackLockedByUser: boolean = false;
+  readonly unsupportedFormatFallback: UnsupportedFormatFallback = 'mpv';
   @Trace name: ResourceStr = ''
   @Trace surfaceId: string = ''
-  /** MPV surface 是否已完成绑定（onLoad + 有效宽高） */
   private mpvSurfaceBound: boolean = false
   get isMpvSurfaceBound(): boolean { return this.mpvSurfaceBound }
-  // 缓存 onAreaChange 提前到达时的 surface 参数，等 initPlayer 完成后自动绑定
   private pendingMpvSurfaceId: string = ''
   private pendingMpvSurfaceWidth: number = 0
   private pendingMpvSurfaceHeight: number = 0
-  /** 缓存最近一次 MPV XComponent 的有效宽高，供 reloadSource 使用 */
   private mpvSurfaceWidth: number = 0
   private mpvSurfaceHeight: number = 0
   @Trace duration = 0
@@ -273,47 +221,21 @@ export class VideoPlayerController {
   @Trace currentBufferTime = 0
   @Trace isLoading = false
   @Trace lastErrorMessage: string = ''
-  /** 音频能力探测文案（用于 UI 展示） */
   @Trace audioCapabilityText: string = ''
-  /** ffmpeg 模式首帧预览图（file:// URI） */
-  @Trace ffmpegPreviewUri: string = ''
   @Trace progress = 0
-  /** 内嵌字幕轨道列表（来自 getTrackInfos） */
   @Trace subtitleTracks: TrackInfo[] = []
   @Trace currentSubtitleTrack: number = -1
   @Trace currentSubtitleText: string = ''
   @Trace subtitleUpdateCounter: number = 0
   @Trace allSubtitleTracks: SubtitleTrackItem[] = [];
   @Trace activeSubtitleIndex: number = -1;
-  /**
-   * 字幕延迟偏移（单位 ms）。
-   * 正值表示字幕延迟显示（字幕偏慢，向后调），负值表示提前显示（字幕偏快，向前调）。
-   * 作用于外部 SRT/ASS/VTT 字幕时间轴查找，见 onTimeUpdate 回调。
-   */
   @Trace subtitleDelayMs: number = 0;
-  /** 当前帧解析后的字幕数据，由 VideoPlayer @Monitor 写入，供播放器页独立渲染层直接读取 */
   @Trace parsedSubtitle: ParsedSubtitle | null = null;
-  /** 音轨列表 */
   @Trace audioTracks: AudioTrackItem[] = [];
   @Trace activeAudioIndex: number = -1;
-  /** 当前播放源的协议类型标识（如 'SMB'），用于 UI 展示与路由决策 */
   @Trace sourceProtocol: string = '';
-  /** 画面比例模式，默认为适应（等比保留黑边） */
   @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
-  /**
-   * ijkplayer 上报的视频原始宽高比（width / height）。
-   * 0 表示尚未收到比例信息（初始态或切换视频时重置）。
-   * 由 adapter 回调写入（Task 2.3/2.4），供 UI 层计算实际渲染尺寸使用。
-   */
-  @Trace ijkVideoRatio: number = 0;
-  /** 当前播放速率，默认 1.0（正常速度）。支持档位：0.5/0.75/1.0/1.25/1.5/2.0 */
   @Trace playbackSpeed: number = 1.0;
-  /** 复用同一 XComponent 切源时缓存的 IJK context */
-  private cachedIjkContext?: object;
-  private cachedIjkComponentId: string = '';
-  /** 复用同一 XComponent 切源时缓存的 native context */
-  private cachedNativeContext?: object;
-  private cachedNativeComponentId: string = '';
   private pendingReloadToken: number = 0;
   private activeReloadToken: number = 0;
   private reloadTimeoutId?: number;
@@ -324,6 +246,8 @@ export class VideoPlayerController {
   /** 字幕缓存上下文，由外部（player page）注入后用于步骤 4 缓存查询 */
   private subtitleCacheContext?: SubtitleCacheContext;
   private currentVideoData?: VideoData;
+  private currentOriginalVideoSrc: string = '';
+  private forceMpvForNextInit: boolean = false;
   private timeToSeek = -1
   private subtitleClearTimer?: number
   private subtitleRemainingTime: number = 0
@@ -371,10 +295,6 @@ export class VideoPlayerController {
   private hasPrepared: boolean = false;
   /** 已完成 ready 恢复消费的会话+后端标识，避免同一后端重复 ready 再次消费 pending resume */
   private consumedReadyResumeToken: string = '';
-  /** native seek 诊断开关（默认关闭） */
-  private nativeSeekDiagLogEnabled: boolean = DEFAULT_NATIVE_SEEK_DIAG_LOG_ENABLED;
-  /** native 初始化就绪保护定时器：超时后自动回退到 ijkplayer */
-  private nativeReadyGuardTimer?: number;
   /** 后端自动 fallback / 实例重建时待恢复的续播状态（一次性消费） */
   private pendingResumeState: PendingResumeState | null = null;
   /** 当前播放会话显式记录的“恢复后是否自动播放”决策 */
@@ -413,49 +333,8 @@ export class VideoPlayerController {
   private resumeSeekAutoplayFallbackSessionId: number = 0;
   /** resume seek 自动恢复播放是否已由超时兜底触发 */
   private resumeSeekAutoplayFallbackTriggered: boolean = false;
-  /** SMB 源当前是否通过 HTTP 代理运行（用于 release 时触发 cleanupOrphanedProxies） */
-  private smbProxyActive: boolean = false;
-  /** 保存原始 smb:// URL，供 avplayer→ijkplayer fallback 时重新启动代理 */
-  private smbOriginalSrc: string = '';
-  /** 一次性控制：本次 seek 完成后不自动恢复播放 */
+  /** 一次性控制：本次 seek 完成后不自动恢复播放。 */
   private suppressPlayAfterSeekOnce: boolean = false;
-  /** ffmpeg 动态预览：当前是否正在抽帧 */
-  private ffmpegPreviewExtracting: boolean = false;
-  /** ffmpeg 连续预览：渲染定时器 */
-  private ffmpegRenderTimer?: number;
-  /** ffmpeg 连续预览：待渲染帧队列 */
-  private ffmpegFrameQueue: FfmpegQueuedFrame[] = [];
-  /** ffmpeg 连续预览：当前解码到的媒体时间（毫秒） */
-  private ffmpegDecodedUntilMs: number = 0;
-  /** ffmpeg 连续预览：流水号，用于隔离旧解码回调 */
-  private ffmpegPipelineToken: number = 0;
-  /** ffmpeg 连续预览：上一帧渲染时刻（系统时间） */
-  private ffmpegLastRenderTickAtMs: number = 0;
-  /** ffmpeg 连续预览：最近一次观测到的播放时间 */
-  private ffmpegLastObservedPlaybackMs: number = -1;
-  /** ffmpeg 连续预览：播放时钟停滞时的兜底推进量 */
-  private ffmpegStallAdvanceMs: number = 0;
-  /** ffmpeg 连续预览：下次允许解码的最早时间（系统时间） */
-  private ffmpegNextDecodeAllowedAtMs: number = 0;
-  /** ffmpeg 连续预览：诊断日志节流 */
-  private ffmpegLastDiagLogAtMs: number = 0;
-  /** ffmpeg 连续预览：最近一次渲染到 UI 的帧 URI */
-  private ffmpegLastRenderedUri: string = '';
-  /** ffmpeg 连续预览：最近一次渲染帧的 pts */
-  private ffmpegLastRenderedPtsMs: number = -1;
-  /** ffmpeg 连续预览：同一帧连续命中次数 */
-  private ffmpegSameFrameTicks: number = 0;
-  /** ffmpeg 连续预览：当前 chunk 解码启动时刻 */
-  private ffmpegExtractStartAtMs: number = 0;
-  /** ffmpeg 连续预览：解码卡住时的单帧追帧是否进行中 */
-  private ffmpegCatchupExtracting: boolean = false;
-  /** ffmpeg 连续预览：上次强制重启解码时间（系统时间） */
-  private ffmpegLastForceRestartAtMs: number = 0;
-  /** ffmpeg 连续预览：空队列追帧节流时间（系统时间） */
-  private ffmpegLastEmptyQueueCatchupAtMs: number = 0;
-  /** ffmpeg 连续预览：远程 chunk 不稳定时切到单帧模式 */
-  private ffmpegSingleFrameMode: boolean = false;
-
   private get pendingBackendResumeTimeMs(): number {
     return this.pendingResumeState?.positionMs ?? -1;
   }
@@ -512,8 +391,8 @@ export class VideoPlayerController {
     if (videoData === undefined) {
       return '';
     }
-    if (this.smbOriginalSrc.length > 0 && videoData.videoSrc.startsWith('http://127.0.0.1')) {
-      return this.smbOriginalSrc;
+    if (videoData === this.currentVideoData && this.currentOriginalVideoSrc.length > 0) {
+      return this.currentOriginalVideoSrc;
     }
     return videoData.videoSrc;
   }
@@ -523,8 +402,9 @@ export class VideoPlayerController {
    * 下载字幕写缓存与读缓存必须使用同一路径，否则 SHA-256 hash 不同导致缓存永远无法命中。
    */
   get stableVideoSrcForCache(): string {
-    const raw = this.currentVideoData?.videoSrc ?? '';
-    return this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : raw;
+    return this.currentOriginalVideoSrc.length > 0
+      ? this.currentOriginalVideoSrc
+      : (this.currentVideoData?.videoSrc ?? '');
   }
 
   /**
@@ -719,9 +599,6 @@ export class VideoPlayerController {
     this.pauseSubtitleTimer();
     this.stopProgressTimer();
     this.saveProgressNow();
-    if (this.backend === 'ffmpeg') {
-      this.stopFfmpegRenderTimer();
-    }
   }
 
   private resolvePendingResumeAutoplayDecision(
@@ -744,14 +621,7 @@ export class VideoPlayerController {
     };
   }
 
-  /**
-   * 初始化播放器。
-   * - backend='avplayer'：直接用 surfaceId 初始化，与之前行为一致。
-   * - backend='ijkplayer'：创建 IjkPlayerAdapter，surfaceId 暂时忽略，
-   *   需要 VideoPlayer UI 层在 XComponent.onLoad 里调用 setIjkContext()。
-    * - backend='native'：创建 VidAllPlayerAdapter，等待 UI 层在 XComponent.onLoad 里绑定 context。
-    * - backend='ffmpeg'：已禁用主路径接入，收到后自动回退 ijkplayer。
-   */
+  /** 初始化 AVPlayer 主路径或 MPV 回退路径。 */
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     this.playbackSessionId += 1;
     const currentSessionId = this.playbackSessionId;
@@ -767,33 +637,11 @@ export class VideoPlayerController {
     this.hasPrepared = false;
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
+    if (!this.forceMpvForNextInit) {
+      this.currentOriginalVideoSrc = videoData.videoSrc;
+    }
     this.surfaceId = surfaceId;
     this.lastTimeUpdateMs = -1;
-    this.ffmpegPreviewExtracting = false;
-    this.stopFfmpegRenderTimer();
-    this.ffmpegFrameQueue = [];
-    this.ffmpegDecodedUntilMs = 0;
-    this.ffmpegPipelineToken += 1;
-    this.ffmpegLastRenderTickAtMs = 0;
-    this.ffmpegLastObservedPlaybackMs = -1;
-    this.ffmpegStallAdvanceMs = 0;
-    this.ffmpegNextDecodeAllowedAtMs = 0;
-    this.ffmpegLastDiagLogAtMs = 0;
-    this.ffmpegLastRenderedUri = '';
-    this.ffmpegLastRenderedPtsMs = -1;
-    this.ffmpegSameFrameTicks = 0;
-    this.ffmpegExtractStartAtMs = 0;
-    this.ffmpegCatchupExtracting = false;
-    this.ffmpegLastForceRestartAtMs = 0;
-    this.ffmpegLastEmptyQueueCatchupAtMs = 0;
-    this.ffmpegSingleFrameMode = false;
-    this.clearNativeReadyGuardTimer();
-    // 清理上一次 SMB 源遗留的孤立代理线程（keepProxy=true 释放后），防止线程泄漏
-    // 委托给 PlaybackBackendService.cleanupOrphanedProxies（service 集中管理）
-    if (this.smbProxyActive) {
-      this.backendService.cleanupOrphanedProxies();
-      this.smbProxyActive = false;
-    }
     const shouldPreservePendingResume = this.shouldPreservePendingResume(videoData);
     if (!shouldPreservePendingResume) {
       this.clearPendingResumeState();
@@ -815,13 +663,9 @@ export class VideoPlayerController {
         `[session=${currentSessionId}] initPlayer start backend=${this.backend}`);
     }
 
-    // 若外部未显式锁定策略，则根据探测结果自动选择硬解/软解路由。
-    // 决策通过 `backendService.chooseBackend` 计算（Fix #3：backend route 主路径必须经 backend service）。
-    // 关键（Fix W3）：即使锁定 fallback 策略，也始终让 `backendService.chooseBackend` 跑一遍以刷新
-    // `audioProbeSummary` / `trackAnalyses` 等诊断字段（不影响 `this.backend` / `this.unsupportedFormatFallback`）。
+    // Route selection always resolves to AVPlayer or MPV; MPV is the only fallback.
     const backendBeforeAutoRouting = this.backend;
     const decision = await this.resolveAudioRoutingDecision(videoData);
-    // 并发防护：ffprobe 异步期间若有更新的 initPlayer 入口，则放弃本次
     if (currentSessionId !== this.playbackSessionId) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `[initPlayer] sessionId 过期（${currentSessionId} ≠ ${this.playbackSessionId}），放弃本次初始化`);
@@ -830,32 +674,18 @@ export class VideoPlayerController {
     videoData.ffmpegDecodeChannels = decision.preferredChannels;
     videoData.audioProbeSummary = decision.summary;
     videoData.videoCodec = decision.videoCodecName;
-    if (!this.unsupportedFallbackLockedByUser) {
-      this.unsupportedFormatFallback = decision.fallback;
-      // 用户偏好覆盖：从 AppPreferences 读取 PLAYER_FALLBACK，若有效则覆盖自动决策
-      try {
-        const prefFallback = await AppPreferences.get(PrefKey.PLAYER_FALLBACK, 'ijkplayer');
-        if (prefFallback === 'ijkplayer' || prefFallback === 'mpv') {
-          if (this.unsupportedFormatFallback !== prefFallback) {
-            hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-              `用户偏好覆盖 fallback: ${this.unsupportedFormatFallback} → ${prefFallback}`);
-            this.unsupportedFormatFallback = prefFallback;
-          }
-        }
-      } catch {
-        // 读取偏好失败，保持自动决策
+    if (this.forceMpvForNextInit) {
+      this.backend = 'mpv';
+      this.forceMpvForNextInit = false;
+      if (this.currentOriginalVideoSrc.startsWith('smb://')) {
+        videoData.videoSrc = this.currentOriginalVideoSrc;
       }
-      if (this.backend === 'avplayer' || this.backend === 'ffmpeg' || this.backend === 'native') {
-        this.backend = decision.preferredBackend;
-      }
-      if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
-        this.logFallbackEvent(
-          'precheck_probe_failed',
-          backendBeforeAutoRouting,
-          this.backend,
-          decision.precheckProbeError
-        );
-      }
+    } else {
+      this.backend = decision.preferredBackend;
+    }
+    if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
+      this.logFallbackEvent('precheck_probe_failed', backendBeforeAutoRouting, this.backend,
+        decision.precheckProbeError);
     }
     // 关键：详细打印整组音轨分析（用于 verify 真机回溯；不论是否锁定 fallback 都打印）
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -874,32 +704,6 @@ export class VideoPlayerController {
       `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
       `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
     this.logAudioCapabilityReport(decision);
-
-    if (this.backend === 'ffmpeg') {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'ffmpeg 播放后端已从主路径下线，自动回退到 ijkplayer');
-      this.backend = 'ijkplayer';
-    }
-
-    // native 后端已停止主路径接入（SMB 源现通过 HTTP 代理 + AVPlayer 播放），强制回退到 ijkplayer。
-    // 注意：mpv 不在此列 — mpv 是活跃后端，不应被拒绝。
-    if (this.backend === 'native') {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'native 播放后端已从主路径下线，自动回退到 ijkplayer');
-      this.backend = 'ijkplayer';
-    }
-
-    // SMB 源（smb://）的代理启动已由 `PlaybackBackendService.prepareAdapter` 统一处理。
-    // controller 不再直接调用 `VidAllPlayerAdapter.startSmbProxy`，避免双启动。
-    // controller 持有 service 写回的 smbOriginalSrc（已写在下面的 prepareAdapter 调用之后）。
-    //
-    // 旧的"非 SMB 源清空 smbOriginalSrc"逻辑仍然保留（用于 initPlayer 二次调用的 fallback 场景）：
-    if (!videoData.videoSrc.startsWith('smb://') && !videoData.videoSrc.startsWith('http://127.0.0.1')) {
-      // 非 SMB、非本地代理 URL（即真正的非 SMB 播放源），才清空缓存。
-      // fallback 场景下第二次 initPlayer() 收到的是上一次代理的 http://127.0.0.1:PORT/... URL，
-      // 不能清空 smbOriginalSrc，否则 setIjkContext() 无法重启代理。
-      this.smbOriginalSrc = '';
-    }
 
     // 指标埋点：play_start — backend 已最终确定，记录本次播放启动意图
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
@@ -958,15 +762,6 @@ export class VideoPlayerController {
         '[initPlayer] MPV 忽略 ffprobe 预置音轨，等待 VidAll_Player 运行时轨道');
     }
 
-    // AVPlayer fallback 后 videoData 仍可能持有已释放的本地 SMB 代理 URL。
-    // MPV/VidAll_Player 可直接处理 smb://，切换时必须恢复原始地址。
-    if (this.backend === 'mpv' && this.smbOriginalSrc.length > 0 &&
-      videoData.videoSrc.startsWith('http://127.0.0.1')) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: MPV fallback 恢复原始 SMB 源，跳过本地 HTTP 代理');
-      videoData.videoSrc = this.smbOriginalSrc;
-    }
-
     // 根据 backend 创建对应适配器（thin delegation to `PlaybackBackendService.prepareAdapter`）。
     //
     // 测试注入钩子：若子类覆写了 createAdapterForBackend() 并返回非 undefined，则跳过 service
@@ -995,28 +790,17 @@ export class VideoPlayerController {
             if (currentSessionId !== this.playbackSessionId) {
               return;
             }
-            // IjkSubtitleBridgeAdapter 和 MpvSubtitleBridgeAdapter 都继承 BaseSubtitleBridgeAdapter，
-            // 且都有 onEmbeddedTimedText 实现；AvSubtitleBridgeAdapter 使用 onSubtitleUpdate 路径，
+            // MPV 字幕桥继承 BaseSubtitleBridgeAdapter；AVPlayer 使用 onSubtitleUpdate 路径，
             // NoSubtitleBridgeAdapter 是空操作。只对有 onEmbeddedTimedText 实现的桥放行。
             if (!(bridge instanceof BaseSubtitleBridgeAdapter)) {
               return;
             }
             bridge.onEmbeddedTimedText(text);
             this.applySubtitleBridgeState(bridge.getState());
-          },
-          onVideoRatio: (ratio: number) => {
-            if (currentSessionId !== this.playbackSessionId) {
-              return;
-            }
-            this.ijkVideoRatio = ratio;
           }
         }
       );
-      if (adapterHandle.smbOriginalSrc.length > 0) {
-        this.smbOriginalSrc = adapterHandle.smbOriginalSrc;
-      }
-      this.smbProxyActive = adapterHandle.smbProxyActive;
-      this.sourceProtocol = adapterHandle.smbOriginalSrc.length > 0 ? 'SMB' : this.sourceProtocol;
+      this.sourceProtocol = videoData.videoSrc.startsWith('smb://') ? 'SMB' : this.sourceProtocol;
       // SMB 代理启动后，将代理 URL 写回 videoData，确保后续 init/setSurface 使用代理 URL
       if (adapterHandle.effectiveVideoSrc.length > 0 &&
         adapterHandle.effectiveVideoSrc !== videoData.videoSrc) {
@@ -1031,9 +815,12 @@ export class VideoPlayerController {
       }
       const adapter: IPlayer | undefined = adapterHandle.player;
       if (adapter === undefined) {
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          'initPlayer: PlaybackBackendService.prepareAdapter 未返回 player，降级到 AVPlayerAdapter');
-        this.player = this.createAvPlayerAdapter();
+        const adapterError = 'PlaybackBackendService.prepareAdapter did not return a player';
+        if (this.backend === 'avplayer') {
+          this.fallbackAvPlayerToMpv('avplayer_init_failure', adapterError);
+        } else {
+          this.handleTerminalPlayerError(adapterError);
+        }
         return;
       }
       this.player = adapter;
@@ -1072,9 +859,6 @@ export class VideoPlayerController {
       }
       this.stopProgressTimer();
       this.saveProgressNow();
-      if (this.backend === 'ffmpeg') {
-        this.stopFfmpegRenderTimer();
-      }
       emitter.emit(PlayerEvents.COMPLETED);
     });
     p.onStopped(() => {
@@ -1084,9 +868,6 @@ export class VideoPlayerController {
       this.clearPendingResumeAutoplayDecision();
       this.isPlaying = false;
       this.stopProgressTimer();
-      if (this.backend === 'ffmpeg') {
-        this.stopFfmpegRenderTimer();
-      }
     });
     p.onTimeUpdate((currentTime: number) => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -1112,13 +893,7 @@ export class VideoPlayerController {
         this.duration = playerDuration;
       }
       this.progress = this.duration > 0 ? currentTime / this.duration : 0;
-      if (this.backend === 'ffmpeg' && this.isPlaying) {
-        this.scheduleFfmpegDecodeIfNeeded(currentTime);
-      }
       this.subtitleAdapter.onTimeUpdate(currentTime);
-      if (this.backend === 'native' && this.isPlaying && currentTime > 0) {
-        this.clearNativeReadyGuardTimer();
-      }
       const subtitleState = this.subtitleAdapter.getState();
       if (subtitleState.hasExternalActive) {
         this.applySubtitleBridgeState(subtitleState);
@@ -1126,7 +901,7 @@ export class VideoPlayerController {
       this.logSubtitleTimeline(currentTime);
     });
     p.onError((error: Error) => {
-      if (currentSessionId !== this.playbackSessionId) {
+      if (currentSessionId !== this.playbackSessionId || this.player !== p) {
         return;
       }
       hilog.error(CommonConstants.LOG_DOMAIN, TAG, `播放器错误: ${error.message}`);
@@ -1144,8 +919,7 @@ export class VideoPlayerController {
       
       // prepare 前的 IO 文件不存在错误：无论使用什么播放器，都应通知上层页面提示用户删除元数据
       // AVPlayer 在文件缺失时返回 code=20400007 / message="No such file or directory"，
-      // native 后端在文件缺失时返回 "io resource not found"。
-      if (!this.hasPrepared) {
+            if (!this.hasPrepared) {
         const msg = error.message.toLowerCase();
         const isFileNotFound = msg.includes('io resource not found')
           || msg.includes('no such file')
@@ -1159,35 +933,11 @@ export class VideoPlayerController {
         }
       }
 
-      if (this.backend === 'native') {
-        this.fallbackNativeToIjk('native_error_callback', 'native 错误回调触发，已自动回退到 IJK 播放', error.message);
+      if (this.backend === 'avplayer' && !this.hasPrepared) {
+        this.fallbackAvPlayerToMpv('avplayer_init_failure', error.message);
         return;
       }
-      // mpv 播放失败：提示用户尝试 ijkplayer
-      if (this.backend === 'mpv') {
-        this.isLoading = false;
-        this.lastErrorMessage = this.normalizePlayerError(error.message);
-        this.rejectPendingReload(new Error(error.message));
-        // 发出 mpv 错误事件，由 VideoPlayer 页面展示切换对话框
-        emitter.emit(PlayerEvents.MPV_ERROR_FALLBACK, {
-          data: { errorMessage: this.lastErrorMessage }
-        });
-        return;
-      }
-      // ijkplayer 播放失败：提示用户尝试 mpv
-      if (this.backend === 'ijkplayer') {
-        this.isLoading = false;
-        this.lastErrorMessage = this.normalizePlayerError(error.message);
-        this.rejectPendingReload(new Error(error.message));
-        // 发出 ijk 错误事件，由 VideoPlayer 页面展示切换对话框
-        emitter.emit(PlayerEvents.IJK_ERROR_FALLBACK, {
-          data: { errorMessage: this.lastErrorMessage }
-        });
-        return;
-      }
-      this.isLoading = false;
-      this.lastErrorMessage = this.normalizePlayerError(error.message);
-      this.rejectPendingReload(new Error(error.message));
+      this.handleTerminalPlayerError(error.message);
     });
     p.onBuffering((isBuffering: boolean) => {
       if (currentSessionId !== this.playbackSessionId) {
@@ -1199,20 +949,16 @@ export class VideoPlayerController {
       }
     });
     p.onUnsupportedFormat(() => {
-      if (currentSessionId !== this.playbackSessionId) {
+      if (currentSessionId !== this.playbackSessionId || this.player !== p) {
         return;
       }
-      const targetBackend: PlayerBackend = this.unsupportedFormatFallback;
-      this.logFallbackEvent('avplayer_unsupported_format', 'avplayer', targetBackend);
+      const targetBackend: PlayerBackend = 'mpv';
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer 不支持当前格式，自动切换到 ${targetBackend}...`);
-      this.isLoading = true;
-      this.capturePendingResumeForFallback('avplayer_unsupported_format');
       // 不干预用户字幕绑定：fallback 是系统行为，不应覆盖用户的主动选择。
       // 若用户之前关闭过字幕（disabled），resolveSubtitle 步骤 1 会正确返回 none。
       // 若用户之前选中了某条字幕，binding 保留，步骤 1 会正确恢复。
-      const rawFbVideoSrc = this.currentVideoData?.videoSrc ?? '';
-      const fbVideoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawFbVideoSrc;
+      const fbVideoPath = this.stableVideoSrcForCache;
       if (fbVideoPath.length > 0) {
         this.subtitleDispatcher.getUserBinding(fbVideoPath).then((binding) => {
           if (binding !== null) {
@@ -1221,26 +967,16 @@ export class VideoPlayerController {
           }
         }).catch(() => {});
       }
-      // 先把 player 引用清空，防止后续调用
-      const oldPlayer = this.player;
-      this.player = undefined;
-      // 切换 backend（@Trace），触发 VideoPlayer UI 重建。
-      this.backend = targetBackend;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `backend 已切换为 ${targetBackend}，等待 UI 层重建...`);
-      // 异步释放旧 player（不等待，不影响切换流程）
-      oldPlayer?.release().catch(() => {});
+      this.fallbackAvPlayerToMpv('avplayer_unsupported_format');
     });
     p.onSeekDone(() => {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
-      // 指标埋点：seek_result（非 native 后端在此记录；native 在 VidAllPlayerAdapter 内分别记录 done/timeout）
-      if (this.backend !== 'native') {
-        const seekElapsed = Date.now() - this.metricsSeekStartMs;
-        hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
-          `{"event":"seek_result","backend":"${this.backend}","result":"done","elapsed_ms":${seekElapsed}}`);
-      }
+      // 指标埋点：seek_result
+      const seekElapsed = Date.now() - this.metricsSeekStartMs;
+      hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
+        `{"event":"seek_result","backend":"${this.backend}","result":"done","elapsed_ms":${seekElapsed}}`);
       const resumeSeekInFlight = this.pendingResumeSeekInFlight;
       const resumeSeekSource = this.pendingResumeSeekSource;
       const resumeSeekCaptureBackend = this.pendingResumeSeekCaptureBackend;
@@ -1357,23 +1093,12 @@ export class VideoPlayerController {
 
     // 注：this.player 已在上面 `this.player = adapter` 提前赋值（service 编排后立刻投影到 @Trace 字段）。
 
-    if (this.backend === 'ijkplayer') {
-      // IjkPlayer 需要先由 UI 层绑定 XComponent context，
-      // VideoPlayer.ets 的 onLoad 回调会调用 setIjkContext() 来完成真正的 init
-      // 注意：VPE AI 画质增强不适用于 ijkplayer 路径（ijkplayer 使用 XComponent native hook 渲染）
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'IjkPlayerAdapter 已创建，等待 UI 层 setIjkContext() 绑定 XComponent...');
-    } else if (this.backend === 'mpv') {
-      // MPV 使用 XComponentController 模式获取 surfaceId，
-      // VideoPlayer.ets 的 onAreaChange 回调会调用 setMpvSurface() 来完成绑定和 init
+    if (this.backend === 'mpv') {
       this.mpvSurfaceBound = false;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'MpvPlayerAdapter 已创建，等待 UI 层 setMpvSurface() 绑定 XComponent...');
-      // 检查是否有缓存的 surface 参数（onAreaChange 可能先于 initPlayer 触发）
       if (this.pendingMpvSurfaceId.length > 0 && this.pendingMpvSurfaceWidth > 0 &&
         this.pendingMpvSurfaceHeight > 0) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `initPlayer 检测到缓存的 surface 参数，自动绑定: w=${this.pendingMpvSurfaceWidth} h=${this.pendingMpvSurfaceHeight}`);
         const sid = this.pendingMpvSurfaceId;
         const sw = this.pendingMpvSurfaceWidth;
         const sh = this.pendingMpvSurfaceHeight;
@@ -1383,16 +1108,12 @@ export class VideoPlayerController {
         await this.setMpvSurface(sid, sw, sh);
       }
     } else {
-      // avplayer 路径：若 AI 画质增强已开启，尝试在播放器与显示层之间插入 VPE；
-      // VPE 增强仍由 controller 负责（service 不持有 aiEnhance 状态）。
       const effectiveSurfaceId = this.tryCreateVpeEnhancer(surfaceId);
       try {
         await this.player?.init(videoData, effectiveSurfaceId);
       } catch (e) {
         const err = e as BusinessError;
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `init 失败: code=${err.code} msg=${err.message}`);
-        this.rejectPendingReload(new Error(err.message));
+        this.fallbackAvPlayerToMpv('avplayer_init_failure', err.message ?? 'AVPlayer init failed');
       }
     }
   }
@@ -1416,10 +1137,7 @@ export class VideoPlayerController {
    */
   protected resetDisplayState(): void {
     this.audioCapabilityText = '';
-    this.ffmpegPreviewUri = '';
     this.sourceProtocol = '';
-    // 切换视频时清零 ijkplayer 宽高比，防止旧 ratio 残留影响下一个视频的渲染（Task 2.2）
-    this.ijkVideoRatio = 0;
   }
 
   // ─── VPE AI 画质增强 ──────────────────────────────────────────
@@ -1537,552 +1255,12 @@ export class VideoPlayerController {
     return displaySurfaceId;
   }
 
-  private prepareFfmpegPreview(videoData: VideoData): void {
-    this.ffmpegFrameQueue = [];
-    this.ffmpegDecodedUntilMs = 0;
-    this.ffmpegPreviewExtracting = false;
-    this.ffmpegLastRenderTickAtMs = 0;
-    this.ffmpegLastObservedPlaybackMs = -1;
-    this.ffmpegStallAdvanceMs = 0;
-    this.ffmpegNextDecodeAllowedAtMs = 0;
-    this.ffmpegLastDiagLogAtMs = 0;
-    this.ffmpegLastRenderedUri = '';
-    this.ffmpegLastRenderedPtsMs = -1;
-    this.ffmpegSameFrameTicks = 0;
-    this.ffmpegExtractStartAtMs = 0;
-    this.ffmpegCatchupExtracting = false;
-    this.ffmpegLastForceRestartAtMs = 0;
-    this.ffmpegLastEmptyQueueCatchupAtMs = 0;
-    this.ffmpegSingleFrameMode = false;
-    const token = ++this.ffmpegPipelineToken;
-    this.decodeFfmpegFrameChunk(videoData, 100, token);
-  }
-
-  private startFfmpegRenderTimer(): void {
-    if (this.ffmpegRenderTimer !== undefined) {
-      return;
-    }
-    const renderIntervalMs = Math.max(60, Math.floor(1000 / FFMPEG_PREVIEW_RENDER_FPS));
-    this.ffmpegLastRenderTickAtMs = Date.now();
-    this.ffmpegLastObservedPlaybackMs = this.currentTime;
-    this.ffmpegStallAdvanceMs = 0;
-    this.ffmpegRenderTimer = setInterval(() => {
-      const now = Date.now();
-      const tickDeltaMs = Math.max(0, now - this.ffmpegLastRenderTickAtMs);
-      this.ffmpegLastRenderTickAtMs = now;
-
-      if (this.currentTime > this.ffmpegLastObservedPlaybackMs + 5) {
-        this.ffmpegLastObservedPlaybackMs = this.currentTime;
-        this.ffmpegStallAdvanceMs = 0;
-      } else if (this.isPlaying) {
-        const stalled = this.ffmpegStallAdvanceMs + tickDeltaMs;
-        this.ffmpegStallAdvanceMs = Math.min(FFMPEG_PREVIEW_STALL_STEP_MAX_MS, stalled);
-      }
-
-      const targetPtsMs = Math.max(0,
-        this.currentTime + FFMPEG_PREVIEW_SYNC_OFFSET_MS + this.ffmpegStallAdvanceMs);
-
-      // 丢弃明显落后的旧帧，避免“停一下再跳一下”。
-      while (this.ffmpegFrameQueue.length > 1 &&
-        targetPtsMs - this.ffmpegFrameQueue[0].ptsMs > FFMPEG_PREVIEW_MAX_LAG_DROP_MS) {
-        this.ffmpegFrameQueue.shift();
-      }
-
-      // 选择不超过目标时钟的最新帧进行渲染。
-      while (this.ffmpegFrameQueue.length > 1 && this.ffmpegFrameQueue[1].ptsMs <= targetPtsMs) {
-        this.ffmpegFrameQueue.shift();
-      }
-
-      // 队列只剩 1 帧且严重落后时，主动淘汰以触发空队列追帧。
-      if (this.ffmpegFrameQueue.length === 1 &&
-        targetPtsMs - this.ffmpegFrameQueue[0].ptsMs > FFMPEG_PREVIEW_MAX_LAG_DROP_MS * 2) {
-        this.ffmpegFrameQueue.shift();
-      }
-
-      if (this.ffmpegFrameQueue.length > 0) {
-        const currentFrame = this.ffmpegFrameQueue[0];
-        if (currentFrame.uri === this.ffmpegLastRenderedUri) {
-          this.ffmpegSameFrameTicks += 1;
-        } else {
-          this.ffmpegSameFrameTicks = 0;
-          this.ffmpegLastRenderedUri = currentFrame.uri;
-        }
-        this.ffmpegLastRenderedPtsMs = currentFrame.ptsMs;
-        this.ffmpegPreviewUri = currentFrame.uri;
-      }
-      this.logFfmpegPreviewTick(targetPtsMs);
-      this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
-      this.tryCatchupFrameWhileExtracting(targetPtsMs);
-      this.tryCatchupFrameWhenQueueEmpty(targetPtsMs);
-    }, renderIntervalMs);
-  }
-
-  private stopFfmpegRenderTimer(): void {
-    if (this.ffmpegRenderTimer !== undefined) {
-      clearInterval(this.ffmpegRenderTimer);
-      this.ffmpegRenderTimer = undefined;
-    }
-    this.ffmpegLastRenderTickAtMs = 0;
-    this.ffmpegLastObservedPlaybackMs = -1;
-    this.ffmpegStallAdvanceMs = 0;
-    this.ffmpegNextDecodeAllowedAtMs = 0;
-    this.ffmpegLastDiagLogAtMs = 0;
-    this.ffmpegLastRenderedUri = '';
-    this.ffmpegLastRenderedPtsMs = -1;
-    this.ffmpegSameFrameTicks = 0;
-    this.ffmpegExtractStartAtMs = 0;
-    this.ffmpegCatchupExtracting = false;
-    this.ffmpegLastForceRestartAtMs = 0;
-    this.ffmpegLastEmptyQueueCatchupAtMs = 0;
-    this.ffmpegSingleFrameMode = false;
-  }
-
-  private scheduleFfmpegDecodeIfNeeded(currentTimeMs: number): void {
-    const restartVideoData = this.currentVideoData;
-    if (!restartVideoData) {
-      return;
-    }
-    if (this.ffmpegPreviewExtracting) {
-      return;
-    }
-    if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_LOW_WATERMARK_FRAMES) {
-      return;
-    }
-    if (Date.now() < this.ffmpegNextDecodeAllowedAtMs) {
-      return;
-    }
-
-    const leadMs = Math.floor(FFMPEG_PREVIEW_LEAD_SECONDS * 1000);
-    const expectedStartMs = Math.max(currentTimeMs + leadMs, this.ffmpegDecodedUntilMs);
-    const token = this.ffmpegPipelineToken;
-    if (this.ffmpegSingleFrameMode) {
-      this.ffmpegNextDecodeAllowedAtMs = Date.now() + FFMPEG_PREVIEW_SINGLE_FRAME_INTERVAL_MS;
-      this.decodeFfmpegSingleFrameFallback(restartVideoData, expectedStartMs, token);
-      return;
-    }
-    this.decodeFfmpegFrameChunk(restartVideoData, expectedStartMs, token);
-  }
-
-  private decodeFfmpegFrameChunk(videoData: VideoData, startTimeMs: number, token: number): void {
-    this.ffmpegPreviewExtracting = true;
-    this.ffmpegExtractStartAtMs = Date.now();
-    const startSeconds = Math.max(0, startTimeMs) / 1000;
-    const prefixPath = `/data/storage/el2/base/cache/vidall_ffmpeg_seq_${token}_${Date.now()}`;
-    FfmpegVideoFrameUtil.extractFrameSequenceToJpeg(
-      videoData.videoSrc,
-      prefixPath,
-      videoData.httpHeader,
-      startSeconds,
-      FFMPEG_PREVIEW_CHUNK_SECONDS,
-      FFMPEG_PREVIEW_RENDER_FPS,
-      FFMPEG_PREVIEW_DECODE_TIMEOUT_MS,
-      { quality: FFMPEG_PREVIEW_JPEG_QUALITY, maxWidth: FFMPEG_PREVIEW_MAX_WIDTH }
-    ).then((result) => {
-      if (token !== this.ffmpegPipelineToken) {
-        this.ffmpegPreviewExtracting = false;
-        this.ffmpegExtractStartAtMs = 0;
-        return;
-      }
-      if (result.success && result.outputPaths.length > 0) {
-        const frameCount = Math.min(result.outputPaths.length, result.frameTimesMs.length);
-        this.ffmpegSingleFrameMode = false;
-        for (let i = 0; i < frameCount; i++) {
-          if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_MAX_QUEUE_FRAMES) {
-            break;
-          }
-          const queued: FfmpegQueuedFrame = {
-            uri: 'file://' + result.outputPaths[i],
-            ptsMs: result.frameTimesMs[i]
-          };
-          this.ffmpegFrameQueue.push(queued);
-        }
-        const chunkMs = Math.floor(FFMPEG_PREVIEW_CHUNK_SECONDS * 1000);
-        this.ffmpegDecodedUntilMs = Math.max(this.ffmpegDecodedUntilMs, startTimeMs + chunkMs);
-        this.ffmpegNextDecodeAllowedAtMs = 0;
-        if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-          const firstPts = result.frameTimesMs.length > 0 ? result.frameTimesMs[0] : -1;
-          const lastPts = result.frameTimesMs.length > 0
-            ? result.frameTimesMs[result.frameTimesMs.length - 1]
-            : -1;
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[ffmpeg-preview] chunk ok token=${token} start=${startTimeMs}ms ` +
-            `frames=${frameCount} queue=${this.ffmpegFrameQueue.length} firstPts=${firstPts} lastPts=${lastPts} ` +
-            `decodedUntil=${this.ffmpegDecodedUntilMs}`);
-        }
-        if (this.ffmpegPreviewUri.length === 0 && this.ffmpegFrameQueue.length > 0) {
-          this.ffmpegPreviewUri = this.ffmpegFrameQueue[0].uri;
-        }
-        this.ffmpegPreviewExtracting = false;
-        this.ffmpegExtractStartAtMs = 0;
-        if (this.isPlaying) {
-          this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
-        }
-      } else {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `ffmpeg 连续帧解码失败: ${result.errorMessage ?? 'unknown'}, start=${startTimeMs}, ` +
-          `queue=${this.ffmpegFrameQueue.length}, decodedUntil=${this.ffmpegDecodedUntilMs}`);
-        this.decodeFfmpegSingleFrameFallback(videoData, startTimeMs, token);
-        return;
-      }
-    }).catch(() => {
-      if (token !== this.ffmpegPipelineToken) {
-        this.ffmpegPreviewExtracting = false;
-        this.ffmpegExtractStartAtMs = 0;
-        return;
-      }
-      this.decodeFfmpegSingleFrameFallback(videoData, startTimeMs, token);
-    });
-  }
-
-  private decodeFfmpegSingleFrameFallback(videoData: VideoData, startTimeMs: number, token: number): void {
-    const outputPath = `/data/storage/el2/base/cache/vidall_ffmpeg_fallback_${token}_${Date.now()}.jpg`;
-    const seekSeconds = Math.max(0, startTimeMs) / 1000;
-
-    FfmpegVideoFrameUtil.extractFrameToJpeg(
-      videoData.videoSrc,
-      outputPath,
-      videoData.httpHeader,
-      seekSeconds,
-      FFMPEG_PREVIEW_DECODE_TIMEOUT_MS,
-      { quality: FFMPEG_PREVIEW_JPEG_QUALITY, maxWidth: FFMPEG_PREVIEW_MAX_WIDTH }
-    ).then((single) => {
-      if (token !== this.ffmpegPipelineToken) {
-        this.ffmpegPreviewExtracting = false;
-        return;
-      }
-
-      if (single.success) {
-        const queued: FfmpegQueuedFrame = {
-          uri: 'file://' + single.outputPath,
-          ptsMs: startTimeMs
-        };
-        if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_MAX_QUEUE_FRAMES) {
-          this.ffmpegFrameQueue.shift();
-        }
-        this.ffmpegFrameQueue.push(queued);
-        this.ffmpegDecodedUntilMs = Math.max(this.ffmpegDecodedUntilMs, startTimeMs + 300);
-        this.ffmpegNextDecodeAllowedAtMs = 0;
-        if (this.ffmpegPreviewUri.length === 0) {
-          this.ffmpegPreviewUri = queued.uri;
-        }
-        if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `[ffmpeg-preview] single fallback ok token=${token} pts=${startTimeMs} queue=${this.ffmpegFrameQueue.length}`);
-        }
-      } else {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `ffmpeg 单帧兜底失败: ${single.errorMessage ?? 'unknown'}`);
-        this.ffmpegNextDecodeAllowedAtMs = Date.now() + FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS;
-      }
-
-      this.ffmpegPreviewExtracting = false;
-      this.ffmpegExtractStartAtMs = 0;
-      if (this.isPlaying) {
-        this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
-      }
-    }).catch(() => {
-      if (token !== this.ffmpegPipelineToken) {
-        this.ffmpegPreviewExtracting = false;
-        return;
-      }
-      this.ffmpegNextDecodeAllowedAtMs = Date.now() + FFMPEG_PREVIEW_DECODE_RETRY_DELAY_MS;
-      this.ffmpegPreviewExtracting = false;
-      this.ffmpegExtractStartAtMs = 0;
-    });
-  }
-
-  private tryCatchupFrameWhileExtracting(targetPtsMs: number): void {
-    if (!this.isPlaying) {
-      return;
-    }
-    const videoData = this.currentVideoData;
-    if (!videoData) {
-      return;
-    }
-    if (!this.ffmpegPreviewExtracting) {
-      return;
-    }
-    if (this.ffmpegCatchupExtracting) {
-      return;
-    }
-    if (this.ffmpegExtractStartAtMs <= 0) {
-      return;
-    }
-    const extractingElapsedMs = Date.now() - this.ffmpegExtractStartAtMs;
-    if (!this.ffmpegSingleFrameMode && this.ffmpegFrameQueue.length === 0 &&
-      extractingElapsedMs >= FFMPEG_PREVIEW_EXTRACT_STUCK_MS) {
-      this.ffmpegSingleFrameMode = true;
-      this.ffmpegPipelineToken += 1;
-      this.ffmpegPreviewExtracting = false;
-      this.ffmpegExtractStartAtMs = 0;
-      this.ffmpegCatchupExtracting = false;
-      this.ffmpegNextDecodeAllowedAtMs = 0;
-      const singleModeToken = this.ffmpegPipelineToken;
-      if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `[ffmpeg-preview] switch to single-frame mode elapsed=${extractingElapsedMs} ` +
-          `target=${targetPtsMs} token=${singleModeToken}`);
-      }
-      this.decodeFfmpegSingleFrameFallback(videoData, Math.max(0, targetPtsMs), singleModeToken);
-      return;
-    }
-    if (extractingElapsedMs > FFMPEG_PREVIEW_EXTRACT_HARD_TIMEOUT_MS) {
-      // 单次提帧任务超时过久，切断旧流水线并直接追当前时钟，避免长期卡在同一帧。
-      this.ffmpegSingleFrameMode = true;
-      this.ffmpegPipelineToken += 1;
-      this.ffmpegPreviewExtracting = false;
-      this.ffmpegExtractStartAtMs = 0;
-      this.ffmpegCatchupExtracting = false;
-      this.ffmpegNextDecodeAllowedAtMs = 0;
-      this.ffmpegLastForceRestartAtMs = Date.now();
-      const rescueToken = this.ffmpegPipelineToken;
-      if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `[ffmpeg-preview] extracting hard-timeout rescue elapsed=${extractingElapsedMs} ` +
-          `target=${targetPtsMs} token=${rescueToken}`);
-      }
-      this.decodeFfmpegSingleFrameFallback(videoData, Math.max(0, targetPtsMs), rescueToken);
-      return;
-    }
-    if (extractingElapsedMs < FFMPEG_PREVIEW_EXTRACT_STUCK_MS) {
-      return;
-    }
-
-    this.ffmpegCatchupExtracting = true;
-    const token = this.ffmpegPipelineToken;
-    const seekMs = Math.max(0, targetPtsMs);
-    const outputPath = `/data/storage/el2/base/cache/vidall_ffmpeg_catchup_${token}_${Date.now()}.jpg`;
-
-    FfmpegVideoFrameUtil.extractFrameToJpeg(
-      videoData.videoSrc,
-      outputPath,
-      videoData.httpHeader,
-      seekMs / 1000,
-      FFMPEG_PREVIEW_DECODE_TIMEOUT_MS,
-      { quality: FFMPEG_PREVIEW_JPEG_QUALITY, maxWidth: FFMPEG_PREVIEW_MAX_WIDTH }
-    ).then((single) => {
-      this.ffmpegCatchupExtracting = false;
-      if (token !== this.ffmpegPipelineToken) {
-        return;
-      }
-      if (!single.success) {
-        return;
-      }
-
-      const queued: FfmpegQueuedFrame = {
-        uri: 'file://' + single.outputPath,
-        ptsMs: seekMs
-      };
-      if (this.ffmpegFrameQueue.length >= FFMPEG_PREVIEW_MAX_QUEUE_FRAMES) {
-        this.ffmpegFrameQueue.shift();
-      }
-      this.ffmpegFrameQueue.push(queued);
-      this.ffmpegDecodedUntilMs = Math.max(this.ffmpegDecodedUntilMs, seekMs);
-      if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-          `[ffmpeg-preview] catchup frame ok token=${token} pts=${seekMs} queue=${this.ffmpegFrameQueue.length}`);
-      }
-    }).catch(() => {
-      this.ffmpegCatchupExtracting = false;
-    });
-  }
-
-  private maybeForceRestartDecode(targetPtsMs: number): void {
-    // 当前阶段禁用激进重启，避免重复打断导致解码任务饥饿。
-    void targetPtsMs;
-    return;
-    // 历史强制重启逻辑已停用，暂保留注释以便后续回溯。
-    // if (!this.isPlaying) {
-    //   return;
-    // }
-    // if (!this.currentVideoData) {
-    //   return;
-    // }
-    // if (!this.ffmpegPreviewExtracting) {
-    //   return;
-    // }
-    // if (this.ffmpegExtractStartAtMs <= 0) {
-    //   return;
-    // }
-    // if (this.ffmpegLastRenderedPtsMs < 0) {
-    //   return;
-    // }
-    // if (this.ffmpegSameFrameTicks < FFMPEG_PREVIEW_FORCE_RESTART_SAME_TICKS) {
-    //   return;
-    // }
-    // const lagMs = targetPtsMs - this.ffmpegLastRenderedPtsMs;
-    // if (lagMs < FFMPEG_PREVIEW_FORCE_RESTART_LAG_MS) {
-    //   return;
-    // }
-    // const now = Date.now();
-    // if (now - this.ffmpegLastForceRestartAtMs < FFMPEG_PREVIEW_FORCE_RESTART_INTERVAL_MS) {
-    //   return;
-    // }
-    // this.ffmpegLastForceRestartAtMs = now;
-    // this.ffmpegPipelineToken += 1;
-    // this.ffmpegPreviewExtracting = false;
-    // this.ffmpegExtractStartAtMs = 0;
-    // this.ffmpegCatchupExtracting = false;
-    // this.ffmpegFrameQueue = [];
-    // const leadMs = Math.floor(FFMPEG_PREVIEW_LEAD_SECONDS * 1000);
-    // const restartStartMs = Math.max(0, this.currentTime + leadMs);
-    // this.ffmpegDecodedUntilMs = restartStartMs;
-    // if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-    //   hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-    //     `[ffmpeg-preview] force restart decode lag=${lagMs} sameTicks=${this.ffmpegSameFrameTicks} ` +
-    //     `target=${targetPtsMs} rendered=${this.ffmpegLastRenderedPtsMs} restartStart=${restartStartMs}`);
-    // }
-    // this.decodeFfmpegFrameChunk(this.currentVideoData, restartStartMs, this.ffmpegPipelineToken);
-  }
-
-  private tryCatchupFrameWhenQueueEmpty(targetPtsMs: number): void {
-    if (!this.isPlaying) {
-      return;
-    }
-    const videoData = this.currentVideoData;
-    if (!videoData) {
-      return;
-    }
-    if (this.ffmpegFrameQueue.length > 0) {
-      return;
-    }
-    if (this.ffmpegPreviewExtracting || this.ffmpegCatchupExtracting) {
-      return;
-    }
-    const now = Date.now();
-    if (now - this.ffmpegLastEmptyQueueCatchupAtMs < FFMPEG_PREVIEW_EMPTY_QUEUE_CATCHUP_INTERVAL_MS) {
-      return;
-    }
-    this.ffmpegLastEmptyQueueCatchupAtMs = now;
-
-    if (ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `[ffmpeg-preview] empty queue catchup trigger target=${targetPtsMs} t=${this.currentTime}`);
-    }
-
-    this.decodeFfmpegSingleFrameFallback(videoData, Math.max(0, targetPtsMs), this.ffmpegPipelineToken);
-  }
-
-  private logFfmpegPreviewTick(targetPtsMs: number): void {
-    if (!ENABLE_FFMPEG_PREVIEW_DIAG_LOG) {
-      return;
-    }
-    const now = Date.now();
-    if (now - this.ffmpegLastDiagLogAtMs < FFMPEG_PREVIEW_DIAG_LOG_INTERVAL_MS) {
-      return;
-    }
-    this.ffmpegLastDiagLogAtMs = now;
-
-    let headPts = -1;
-    let nextPts = -1;
-    if (this.ffmpegFrameQueue.length > 0) {
-      headPts = this.ffmpegFrameQueue[0].ptsMs;
-    }
-    if (this.ffmpegFrameQueue.length > 1) {
-      nextPts = this.ffmpegFrameQueue[1].ptsMs;
-    }
-
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `[ffmpeg-preview] tick t=${this.currentTime} target=${targetPtsMs} ` +
-      `queue=${this.ffmpegFrameQueue.length} headPts=${headPts} nextPts=${nextPts} ` +
-      `renderPts=${this.ffmpegLastRenderedPtsMs} sameTicks=${this.ffmpegSameFrameTicks} ` +
-      `decodedUntil=${this.ffmpegDecodedUntilMs} extracting=${this.ffmpegPreviewExtracting} ` +
-      `stallAdvance=${this.ffmpegStallAdvanceMs} singleMode=${this.ffmpegSingleFrameMode}`);
-  }
-
   /**
    * 注入字幕缓存上下文，用于步骤 4 本地缓存自动加载。
    * 由 player page 在持有 UIAbilityContext 后调用，注入 filesDir 等信息。
    */
   setSubtitleCacheContext(ctx: SubtitleCacheContext): void {
     this.subtitleCacheContext = ctx;
-  }
-
-  /**
-   * 时序说明（thin delegation to `PlaybackBackendService.bindIjkContext`）：
-   * 1. UI 层先注册 emitter.once(PREPARED)
-   * 2. UI 层调 initPlayer()（创建 IjkPlayerAdapter 但不调 native_setup）
-   * 3. UI 层调 setIjkContext()（setContext → native_setup → setDataSource → prepareAsync）
-   *
-   * service 负责：
-   * - SMB fallback 时的代理重启
-   * - adapter.init 编排
-   * controller 负责：
-   * - 校验 backend / player 就绪
-   * - 缓存 context/componentId 供 reloadSource 复用
-   * - init 失败的 rejectPendingReload
-   */
-  async setIjkContext(context: object, xComponentId: string): Promise<void> {
-    if (this.backend !== 'ijkplayer') {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'setIjkContext() 被调用但 backend 不是 ijkplayer，忽略');
-      return;
-    }
-    if (!this.player) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        'setIjkContext() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
-      return;
-    }
-    this.cachedIjkContext = context;
-    this.cachedIjkComponentId = xComponentId;
-    if (this.currentVideoData) {
-      // 委托 SMB 代理重启给 service
-      if (this.smbOriginalSrc.length > 0) {
-        this.backendService.restartSmbProxyForFallback(this.smbOriginalSrc, this.currentVideoData);
-      }
-      try {
-        await this.backendService.bindIjkContext(
-          this.player,
-          context,
-          xComponentId,
-          this.currentVideoData,
-          this.surfaceId
-        );
-      } catch (e) {
-        const err = e as Error;
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `setIjkContext init 失败: ${err.message}`);
-        this.rejectPendingReload(err);
-      }
-    }
-  }
-
-  /**
-   * 供 VideoPlayer UI 层在 native so XComponent.onLoad 回调中调用。
-   * 当前阶段仅完成原生播放器骨架绑定，真实解码/渲染链路后续接入。
-   * 行为已迁移至 `PlaybackBackendService.bindNativeContext`，controller 仅保留 façade 校验与回退。
-   */
-  async setNativeContext(context: object, xComponentId: string): Promise<void> {
-    if (this.backend !== 'native') {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'setNativeContext() 被调用但 backend 不是 native，忽略');
-      return;
-    }
-    if (!this.player) {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        'setNativeContext() 被调用但 player 未初始化，可能 initPlayer() 还未完成');
-      return;
-    }
-    this.cachedNativeContext = context;
-    this.cachedNativeComponentId = xComponentId;
-    this.startNativeReadyGuard(this.playbackSessionId);
-    if (this.currentVideoData) {
-      try {
-        await this.backendService.bindNativeContext(
-          this.player,
-          context,
-          xComponentId,
-          this.currentVideoData,
-          this.surfaceId
-        );
-      } catch (e) {
-        const err = e as Error;
-        hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-          `setNativeContext init 失败: ${err.message}`);
-        this.rejectPendingReload(err);
-        this.fallbackNativeToIjk('native_init_error', 'native 初始化失败，已自动回退到 IJK 播放', err.message);
-      }
-    }
   }
 
   /**
@@ -2134,7 +1312,7 @@ export class VideoPlayerController {
         const err = e as Error;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
           `setMpvSurface init 失败: ${err.message}`);
-        this.rejectPendingReload(err);
+        this.handleTerminalPlayerError(err.message);
       }
     }
   }
@@ -2157,10 +1335,6 @@ export class VideoPlayerController {
       this.mpvSurfaceHeight = physicalHeight;
       this.player.getSurfaceAdapter().onSizeChange(physicalWidth, physicalHeight).catch(() => {});
     }
-  }
-
-  setNativeSeekDiagLogEnabled(enabled: boolean): void {
-    this.nativeSeekDiagLogEnabled = enabled;
   }
 
   async reloadSource(videoData: VideoData, autoPlay: boolean = true): Promise<void> {
@@ -2192,20 +1366,9 @@ export class VideoPlayerController {
     });
     try {
       await this.initPlayer(videoData, this.surfaceId);
-      if (this.backend === 'ijkplayer') {
-        if (this.cachedIjkContext === undefined || this.cachedIjkComponentId.length === 0) {
-          throw new Error('reloadSource missing ijk context');
-        }
-        await this.setIjkContext(this.cachedIjkContext, this.cachedIjkComponentId);
-      } else if (this.backend === 'mpv') {
-        // 重置绑定状态，使 setMpvSurface 可重新执行
+      if (this.backend === 'mpv') {
         this.mpvSurfaceBound = false;
         await this.setMpvSurface(this.surfaceId, this.mpvSurfaceWidth, this.mpvSurfaceHeight);
-      } else if (this.backend === 'native') {
-        if (this.cachedNativeContext === undefined || this.cachedNativeComponentId.length === 0) {
-          throw new Error('reloadSource missing native context');
-        }
-        await this.setNativeContext(this.cachedNativeContext, this.cachedNativeComponentId);
       }
       await reloadPromise;
       if (autoPlay) {
@@ -2242,122 +1405,6 @@ export class VideoPlayerController {
     if (reject !== undefined) {
       reject(error);
     }
-  }
-
-  private clearCachedXComponentState(): void {
-    this.cachedIjkContext = undefined;
-    this.cachedIjkComponentId = '';
-    this.cachedNativeContext = undefined;
-    this.cachedNativeComponentId = '';
-  }
-
-  /**
-   * 设置 AVPlayer 遇到格式不支持时的回退后端。
-   *
-    * 默认先尝试 native，若 native 不可用会自动继续回退到 ijkplayer。
-   */
-  setUnsupportedFormatFallback(fallback: UnsupportedFormatFallback): void {
-    this.unsupportedFormatFallback = fallback;
-    this.unsupportedFallbackLockedByUser = true;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `unsupportedFormatFallback 已更新为 ${fallback}`);
-  }
-
-  /** 清除外部锁定，恢复根据音轨自动选择回退策略。 */
-  resetUnsupportedFormatFallbackAutoPolicy(): void {
-    this.unsupportedFallbackLockedByUser = false;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      'unsupportedFormatFallback 已恢复自动策略');
-  }
-
-  /**
-   * 播放中切换内核（用户主动切换）。
-   * 保存当前进度 → 释放旧播放器 → 切换 backend → 重新 initPlayer → seek 到保存位置。
-   */
-  switchBackendInPlayback(targetBackend: PlayerBackend): void {
-    if (this.backend === targetBackend) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `switchBackendInPlayback: 已是 ${targetBackend}，无需切换`);
-      return;
-    }
-    if (targetBackend !== 'ijkplayer' && targetBackend !== 'mpv') {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `switchBackendInPlayback: 不支持切换到 ${targetBackend}，仅支持 ijkplayer/mpv`);
-      return;
-    }
-    const savedPosition = this.currentTime;
-    const savedDuration = this.duration;
-    const savedVideoData = this.currentVideoData;
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `switchBackendInPlayback: ${this.backend} → ${targetBackend}, savedPosition=${savedPosition}ms`);
-
-    // 释放当前播放器
-    this.release().then(() => {
-      // 切换 backend
-      this.backend = targetBackend;
-      this.unsupportedFormatFallback = targetBackend;
-      this.unsupportedFallbackLockedByUser = true;
-
-      // 如果有视频数据，重新初始化
-      if (savedVideoData) {
-        if (targetBackend === 'mpv') {
-          // MPV 后端：不在此处调 initPlayer，避免与 XComponent onLoad 的 initPlayer 并发冲突。
-          // XComponent 重建后 onLoad 会自动调用 initPlayer + setMpvSurface。
-          // 通过 pendingResumeState 保存恢复位置，MPV prepared 后 onPlayerReady 自动 seek 恢复。
-          this.savePendingResumeState(savedPosition, true, 'switch_backend', 'explicit',
-            'switch_backend_to_mpv', targetBackend);
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `switchBackendInPlayback: MPV 后端，等待 XComponent onLoad 自动初始化，savedPosition=${savedPosition}ms`);
-        } else {
-          // ijkplayer 后端：同样使用 pendingResumeState 机制。
-          // initPlayer() 完成时 ijkplayer 的 prepareAsync 尚未就绪，
-          // 直接在 .then() 中调 seek/play 会被 IjkPlayerAdapter 忽略（_isPrepared=false）。
-          // 通过 pendingResumeState 让 onPlayerReady 在 prepared 后统一处理 seek 恢复。
-          this.savePendingResumeState(savedPosition, true, 'switch_backend', 'explicit',
-            'switch_backend_to_ijkplayer', targetBackend);
-          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-            `switchBackendInPlayback: ijkplayer 后端，通过 pendingResumeState 等待 prepared，savedPosition=${savedPosition}ms`);
-          this.initPlayer(savedVideoData, this.surfaceId).catch(() => {
-            hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-              `switchBackendInPlayback: 切换到 ${targetBackend} 失败`);
-          });
-        }
-      }
-    }).catch(() => {
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `switchBackendInPlayback: 释放当前播放器失败`);
-    });
-  }
-
-  /**
-   * 依据预置音轨信息判断是否优先回退 ffmpeg。
-   * 命中 AC-3/E-AC-3/DTS/TrueHD 时返回 true。
-   */
-  private shouldPreferFfmpegFallback(videoData: VideoData): boolean {
-    const tracks = videoData.presetAudioTracks;
-    if (!tracks || tracks.length === 0) {
-      return false;
-    }
-
-    for (let i = 0; i < tracks.length; i++) {
-      const track = tracks[i];
-      const mime = (track.mimeType ?? '').toLowerCase();
-      const name = track.displayName.toLowerCase();
-      if (
-        mime.includes('ac-3') ||
-        mime.includes('eac3') ||
-        mime.includes('dts') ||
-        mime.includes('truehd') ||
-        name.includes('ac-3') ||
-        name.includes('e-ac-3') ||
-        name.includes('eac3') ||
-        name.includes('dts') ||
-        name.includes('truehd')
-      ) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**
@@ -2421,16 +1468,6 @@ export class VideoPlayerController {
     return '2.0';
   }
 
-  // ─── 路由决策 / 初始选轨 helpers 已迁移至 `AudioTrackRoutingService` ───
-  // - readPresetAudioHint
-  // - inferTrackChannels
-  // - normalizeChannelsForSort
-  // - normalizeTargetChannels
-  // - isLikelySystemHardDecodeSupported
-  // - isAudioTrackPlayable
-  // controller 仅保留 façade 调用 `audioRoutingService.resolveRoutingDecision` /
-  // `serviceFindInitialAudioTrackIndex`，并把状态投影到 @Trace 字段。
-
   /**
    * codec-aware 初始音轨候选选择器（thin delegation to `AudioTrackRoutingService`）。
    *
@@ -2456,7 +1493,6 @@ export class VideoPlayerController {
       return;
     }
     this.consumedReadyResumeToken = readyResumeToken;
-    this.clearNativeReadyGuardTimer();
     this.hasPrepared = true;
     const playerDuration = this.player?.duration ?? 0;
     this.duration = playerDuration > 0
@@ -2642,56 +1678,29 @@ export class VideoPlayerController {
     }
   }
 
-  private clearNativeReadyGuardTimer(): void {
-    if (this.nativeReadyGuardTimer !== undefined) {
-      clearTimeout(this.nativeReadyGuardTimer);
-      this.nativeReadyGuardTimer = undefined;
-    }
-  }
-
-  private startNativeReadyGuard(sessionId: number): void {
-    this.clearNativeReadyGuardTimer();
-    this.nativeReadyGuardTimer = setTimeout(() => {
-      this.nativeReadyGuardTimer = undefined;
-      if (sessionId !== this.playbackSessionId) {
-        return;
-      }
-      if (this.backend !== 'native') {
-        return;
-      }
-      if (!this.isReady) {
-        this.fallbackNativeToIjk('native_ready_timeout', 'native 初始化超时，已自动回退到 IJK 播放');
-        return;
-      }
-      if (!this.isPlaying) {
-        return;
-      }
-      const currentDuration = this.player?.duration ?? this.duration;
-      const currentPosition = this.player?.currentTime ?? this.currentTime;
-      if (currentDuration <= 0 && currentPosition <= 100) {
-        this.fallbackNativeToIjk('native_no_timeline_output', 'native 未输出可播时间轴，已自动回退到 IJK 播放');
-      }
-    }, NATIVE_READY_GUARD_MS);
-  }
-
-  private fallbackNativeToIjk(fallbackReason: string, userMessage: string, detailMessage: string = ''): void {
-    if (this.backend !== 'native') {
+  private fallbackAvPlayerToMpv(reason: string, detailMessage: string = ''): void {
+    if (this.backend !== 'avplayer') {
       return;
     }
-    const fallbackPosition = this.player?.currentTime ?? this.currentTime;
-    const safeFallbackPosition = fallbackPosition > 0 ? fallbackPosition : 0;
-    const autoplayDecision = this.resolvePendingResumeAutoplayDecision(this.isPlaying, 'transient_player_state');
-    this.logFallbackEvent(fallbackReason, 'native', 'ijkplayer', detailMessage);
-    hilog.warn(CommonConstants.LOG_DOMAIN, TAG, userMessage);
-    this.lastErrorMessage = userMessage;
+    this.capturePendingResumeForFallback(reason);
+    this.logFallbackEvent(reason, 'avplayer', 'mpv', detailMessage);
     this.isLoading = true;
-    this.clearNativeReadyGuardTimer();
-    this.savePendingResumeState(safeFallbackPosition, autoplayDecision.shouldResumePlay,
-      autoplayDecision.source, autoplayDecision.origin, fallbackReason, 'native');
+    this.forceMpvForNextInit = true;
+    if (this.currentVideoData !== undefined && this.currentOriginalVideoSrc.startsWith('smb://')) {
+      this.currentVideoData.videoSrc = this.currentOriginalVideoSrc;
+    }
     const oldPlayer = this.player;
     this.player = undefined;
-    this.backend = 'ijkplayer';
+    VidAllPlayerAdapter.releaseSmbProxy();
+    this.backend = 'mpv';
     oldPlayer?.release().catch(() => {});
+  }
+
+  private handleTerminalPlayerError(message: string): void {
+    this.isLoading = false;
+    this.isPlaying = false;
+    this.lastErrorMessage = this.normalizePlayerError(message);
+    this.rejectPendingReload(new Error(message));
   }
 
   private capturePendingResumeForFallback(source: string): void {
@@ -2788,10 +1797,6 @@ export class VideoPlayerController {
     }
     this.resumeSubtitleTimer();
     this.startProgressTimer();
-    if (this.backend === 'ffmpeg') {
-      this.startFfmpegRenderTimer();
-      this.scheduleFfmpegDecodeIfNeeded(this.currentTime);
-    }
     emitter.emit(PlayerEvents.PLAYING);
   }
 
@@ -2848,14 +1853,6 @@ export class VideoPlayerController {
     return '***';
   }
 
-  private safeErrorMessage(e: Object): string {
-    const err = e as BusinessError;
-    if (typeof err.message === 'string' && err.message.length > 0) {
-      return err.message;
-    }
-    return JSON.stringify(err);
-  }
-
   async play(): Promise<void> {
     if (!this.player) {
       this.recordPendingResumeAutoplayResult('play_no_player', true);
@@ -2879,114 +1876,10 @@ export class VideoPlayerController {
     if (msg.length === 0) {
       return '播放器内部错误，请重试';
     }
-    const nativeArgumentError = this.resolveNativeArgumentErrorHint(msg);
-    if (nativeArgumentError.length > 0) {
-      return nativeArgumentError;
-    }
-    const nativeStateCode = this.extractNativeStateCode(msg);
-    if (nativeStateCode > 0) {
-      return this.resolveNativeStateErrorHint(nativeStateCode);
-    }
-    if (msg.includes('[NAPI/')) {
-      const hintText = this.extractNativeHint(msg);
-      if (hintText.length > 0) {
-        return `原生播放器调用失败：${hintText}`;
-      }
-      return '原生播放器调用失败，请重试';
-    }
     if (msg.toLowerCase() === GENERIC_SYSTEM_ERROR) {
       return '播放器内部错误，请重试';
     }
     return msg;
-  }
-
-  private resolveNativeArgumentErrorHint(message: string): string {
-    const lower = message.toLowerCase();
-    if (lower.includes('invalid player handle')) {
-      return '播放器实例已失效，请退出后重试';
-    }
-    if (lower.includes('player handle overflow')) {
-      return '播放器实例异常，请重启应用后重试';
-    }
-    if (lower.includes('requires (handle')) {
-      return '播放器调用参数缺失，请重试';
-    }
-    if (lower.includes('must be int32')) {
-      return '播放器调用参数类型错误，请重试';
-    }
-    if (lower.includes('must be int64')) {
-      return '播放器调用参数范围错误，请重试';
-    }
-    if (lower.includes('must be string')) {
-      return '播放器调用字符串参数错误，请重试';
-    }
-    if (lower.includes('must be object')) {
-      return '播放器渲染上下文参数错误，请重试';
-    }
-    if (lower.includes('must be function') || lower.includes('failed to create callback references')) {
-      return '播放器回调注册失败，请重试';
-    }
-    if (lower.includes('failed to read args')) {
-      return '播放器调用参数读取失败，请重试';
-    }
-    return '';
-  }
-
-  private extractNativeStateCode(message: string): number {
-    if (!message.startsWith('[')) {
-      return -1;
-    }
-    const end = message.indexOf(']');
-    if (end <= 1) {
-      return -1;
-    }
-    const codeText = message.substring(1, end).trim();
-    if (codeText.length === 0) {
-      return -1;
-    }
-    const parsed = Number(codeText);
-    if (!Number.isFinite(parsed)) {
-      return -1;
-    }
-    return Math.trunc(parsed);
-  }
-
-  private extractNativeHint(message: string): string {
-    const hintKey = 'hint=';
-    const hintIndex = message.indexOf(hintKey);
-    if (hintIndex < 0) {
-      return '';
-    }
-    const hintText = message.substring(hintIndex + hintKey.length).trim();
-    if (hintText.length === 0) {
-      return '';
-    }
-    return hintText;
-  }
-
-  private resolveNativeStateErrorHint(code: number): string {
-    if (code === 1001) {
-      return '播放器初始化失败：未设置播放地址';
-    }
-    if (code === 1002) {
-      return '播放器初始化失败：未绑定渲染组件';
-    }
-    if (code === 1003) {
-      return '播放器尚未就绪，暂时无法播放';
-    }
-    if (code === 1004) {
-      return '播放器尚未就绪，暂时无法切换轨道';
-    }
-    if (code === 1005) {
-      return '播放器尚未就绪，暂时无法暂停';
-    }
-    if (code === 1006) {
-      return '播放器尚未就绪，暂时无法跳转进度';
-    }
-    if (code === 1007) {
-      return '轨道切换参数无效，请刷新后重试';
-    }
-    return `播放器状态异常（错误码 ${code}）`;
   }
 
   async pause(): Promise<void> {
@@ -2995,10 +1888,13 @@ export class VideoPlayerController {
       this.clearPendingResumeAutoplayDecision();
       this.suppressPlayAfterSeekOnce = true;
     }
-    await this.player?.pause().catch((err: BusinessError) => {
+    try {
+      await this.player?.pause();
+    } catch (e) {
+      const err = e as BusinessError;
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `pause 失败: code=${err.code} msg=${err.message}`);
-    });
+    }
   }
 
   async toggle(): Promise<void> {
@@ -3007,23 +1903,12 @@ export class VideoPlayerController {
 
   async release(): Promise<void> {
     this.rejectPendingReload(new Error('player released'));
-    this.clearCachedXComponentState();
-    this.clearNativeReadyGuardTimer();
     this.pendingResumeAutoplayResultState = null;
     this.clearResumeSeekAutoplayFallbackState();
     this.stopProgressTimer();
     this.saveProgressNow();
-    // 重置 MPV surface 绑定状态，避免 switchBackendInPlayback 后 onAreaChange
-    // 检查 isMpvSurfaceBound=true 而跳过 setMpvSurface，导致黑屏。
+    // 重置 MPV surface 绑定状态，避免后续绑定被误判为重复调用。
     this.mpvSurfaceBound = false;
-    if (this.backend === 'ffmpeg') {
-      this.stopFfmpegRenderTimer();
-      this.ffmpegFrameQueue = [];
-      this.ffmpegPreviewExtracting = false;
-      this.ffmpegDecodedUntilMs = 0;
-      this.ffmpegPipelineToken += 1;
-      this.ffmpegSingleFrameMode = false;
-    }
     if (this.subtitleClearTimer) {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;
@@ -3034,11 +1919,7 @@ export class VideoPlayerController {
       await this.player.release().catch(() => {});
       this.player = undefined;
     }
-    // 清理 SMB 代理孤立线程（keepProxy=true 释放后遗留）——委托给 backend service
-    if (this.smbProxyActive) {
-      this.backendService.cleanupOrphanedProxies();
-      this.smbProxyActive = false;
-    }
+    VidAllPlayerAdapter.releaseSmbProxy();
     // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
     VpeEnhancerUtil.destroyEnhancer();
   }
@@ -3055,30 +1936,12 @@ export class VideoPlayerController {
     let safeTime = time < 0 ? 0 : time;
     if (this.duration > 0 && safeTime > this.duration) {
       safeTime = this.duration;
-    } else if (this.nativeSeekDiagLogEnabled && this.duration <= 0 && safeTime > 0) {
+    } else if (this.duration <= 0 && safeTime > 0) {
       const now = Date.now();
       if (now - this.lastSeekDurationUnknownLogMs >= 3000) {
         this.lastSeekDurationUnknownLogMs = now;
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `[seek] duration 未就绪，暂不做上限裁剪 target=${safeTime}`);
-      }
-    }
-    if (this.backend === 'ffmpeg') {
-      this.ffmpegFrameQueue = [];
-      this.ffmpegDecodedUntilMs = safeTime;
-      this.ffmpegPipelineToken += 1;
-      this.ffmpegPreviewExtracting = false;
-      this.ffmpegLastRenderTickAtMs = 0;
-      this.ffmpegLastObservedPlaybackMs = safeTime;
-      this.ffmpegStallAdvanceMs = 0;
-      this.ffmpegNextDecodeAllowedAtMs = 0;
-      const seekVideoData = this.currentVideoData;
-      if (seekVideoData) {
-        if (this.ffmpegSingleFrameMode) {
-          this.decodeFfmpegSingleFrameFallback(seekVideoData, safeTime, this.ffmpegPipelineToken);
-        } else {
-          this.decodeFfmpegFrameChunk(seekVideoData, safeTime, this.ffmpegPipelineToken);
-        }
       }
     }
     if (autoplayDecisionSource.length > 0) {
@@ -3104,8 +1967,7 @@ export class VideoPlayerController {
           this.armResumeSeekAutoplayFallback(this.playbackSessionId);
         }
       } catch (seekErr) {
-        // seek 调用失败（如 native 地底抛异常）：重置 isSeeking 防止永久卡住。
-        // onError 回调已在 callNativeVoid 里触发，此处仅做状态修复。
+        // 同步 seek 失败时重置状态，避免后续 seek 永久排队。
         this.isSeeking = false;
         this.clearResumeSeekAutoplayFallbackState();
         this.clearPendingResumeAutoplayDecision();
@@ -3214,10 +2076,9 @@ export class VideoPlayerController {
       durationMs: this.duration > 0 ? this.duration : ctx.durationMs,
       updatedAt: Date.now()
     };
-    FileSourceDatabase.getInstance().upsertPlayProgress(progress).catch((e: BusinessError) => {
-        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-          `进度写入失败: code=${e.code} msg=${e.message}`);
-      });
+    FileSourceDatabase.getInstance().upsertPlayProgress(progress).catch(() => {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '进度写入失败');
+    });
   }
 
   @Computed
@@ -3314,7 +2175,7 @@ export class VideoPlayerController {
       this.subtitleAdapter,
       this.player,
       this.currentVideoData,
-      this.smbOriginalSrc,
+      this.currentOriginalVideoSrc,
       cacheCtx
     );
     // 同步 service session state 到 controller 的 @Trace 字段
@@ -3348,15 +2209,11 @@ export class VideoPlayerController {
             `displayName=${t.displayName} mime=${t.mimeType ?? ''} ` +
             `codecName=${t.codecName ?? ''} lang=${t.language ?? ''}`);
         }
-        if (this.backend === 'ffmpeg') {
-          this.activeAudioIndex = 0;
-          return;
-        }
-        await this.selectInitialAudioTrackByService();
+            await this.selectInitialAudioTrackByService();
         return;
       }
 
-      // ── player.getTrackInfos()（AVPlayer 原生 / IjkPlayer getMediaInfo 解析）──
+      // ── player.getTrackInfos()（AVPlayer / MPV 运行时轨道）──
       const allTracks = await this.player.getTrackInfos();
       const audioTracksInfo = allTracks.filter((t: TrackInfo) => t.trackType === 'audio');
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -3380,11 +2237,7 @@ export class VideoPlayerController {
       this.audioTracks = tracks;
 
       if (this.audioTracks.length > 0) {
-        if (this.backend === 'ffmpeg') {
-          this.activeAudioIndex = 0;
-        } else {
-          await this.selectInitialAudioTrackByService();
-        }
+        await this.selectInitialAudioTrackByService();
       }
     } catch (e) {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -3399,8 +2252,8 @@ export class VideoPlayerController {
    * - 无用户绑定 → codec-aware 默认选轨
    */
   private async selectInitialAudioTrackByService(): Promise<void> {
-    const videoPath = this.smbOriginalSrc.length > 0
-      ? this.smbOriginalSrc
+    const videoPath = this.currentOriginalVideoSrc.length > 0
+      ? this.currentOriginalVideoSrc
       : (this.currentVideoData?.videoSrc ?? '');
     if (videoPath.length === 0) {
       await this.switchAudioTrack(serviceFindInitialAudioTrackIndex(this.audioTracks));
@@ -3525,7 +2378,7 @@ export class VideoPlayerController {
    * - 清除字幕定时器
    * - subtitleAdapter.switchTrack
    * - 应用 binding directive（disabled / external-local-file / internal）
-   * - SMB 源代理 URL 端口随机，必须用 smbOriginalSrc 作为绑定 key
+   * - SMB 源使用初始化前的原始 URL 作为稳定绑定 key
    */
   async switchSubtitleTrack(allIndex: number): Promise<void> {
     if (this.subtitleClearTimer !== undefined) {
@@ -3538,14 +2391,14 @@ export class VideoPlayerController {
     const directive = await this.subtitleSessionSvc.switchToTrack(
       this.subtitleAdapter,
       this.currentVideoData,
-      this.smbOriginalSrc,
+      this.currentOriginalVideoSrc,
       allIndex
     );
     this.applySubtitleBridgeState(this.subtitleAdapter.getState());
 
     // 应用 binding directive 持久化
     const rawVideoSrc = this.currentVideoData?.videoSrc ?? '';
-    const videoPath = this.smbOriginalSrc.length > 0 ? this.smbOriginalSrc : rawVideoSrc;
+    const videoPath = this.currentOriginalVideoSrc.length > 0 ? this.currentOriginalVideoSrc : rawVideoSrc;
     if (videoPath.length > 0) {
       if (directive.type === 'disabled') {
         this.subtitleDispatcher.clearUserBinding(videoPath).catch(() => {});
@@ -3576,13 +2429,6 @@ export class VideoPlayerController {
       return;
     }
 
-    // ffmpeg 当前阶段固定首音轨软解，不执行 pause/seek/play 切轨流程，避免重入导致时间回跳。
-    if (this.backend === 'ffmpeg') {
-      this.activeAudioIndex = trackIndex;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[switchAudioTrack] ffmpeg 后端仅更新 UI 选中项: index=${trackIndex}`);
-      return;
-    }
 
     // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
     const wasPlaying = this.isPlaying;

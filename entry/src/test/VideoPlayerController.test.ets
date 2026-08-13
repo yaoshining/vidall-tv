@@ -31,15 +31,13 @@ interface VideoPlayerControllerAccessor {
   preparedResumeAutoplayDecisionExplicit: boolean
   hasPreparedResumeAutoplayDecisionExplicit: boolean
   preparedResumeAutoplayDecisionSource: string
-  cachedIjkContext?: object
-  cachedIjkComponentId: string
-  cachedNativeContext?: object
-  cachedNativeComponentId: string
   currentTime: number
   duration: number
   progress: number
   isPlaying: boolean
   isSeeking: boolean
+  isLoading: boolean
+  lastErrorMessage: string
   subtitleTracks: TrackInfo[]
   currentSubtitleTrack: number
   allSubtitleTracks: SubtitleTrackItem[]
@@ -54,6 +52,8 @@ interface VideoPlayerControllerAccessor {
   pendingReloadReject?: (error: Error) => void
   pendingResumeAutoplayResultState: PendingResumeAutoplayResultStateSnapshot | null
   handlePlayerPlayEvent(sessionId: number): void
+  fallbackAvPlayerToMpv(reason: string, detailMessage?: string): void
+  handleTerminalPlayerError(message: string): void
   capturePendingResumeForFallback(source: string): void
   handlePlayerPaused(): void
   continuePendingReadyAfterSeek(): Promise<void>
@@ -95,14 +95,6 @@ interface PendingResumeAutoplayResultStateSnapshot {
   autoplayDecision: string
   autoplayDecisionSource: string
   autoplayDecisionOrigin: string
-}
-
-/** 用于访问 ijkVideoRatio 字段的 accessor 接口（Task 2.1/2.2 TDD 用） */
-interface IjkVideoRatioAccessor {
-  ijkVideoRatio: number
-}
-
-interface TestXComponentContext {
 }
 
 class MockFallbackPlayer implements IPlayer {
@@ -423,31 +415,6 @@ class ReloadPreparedPendingFailureController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
-/**
- * Task 2.2 TDD spy：验证真实 initPlayer 调用了 resetDisplayState。
- * override resetDisplayState() 而非 initPlayer，确保生产代码路径被真实执行。
- */
-class ResetDisplayStateSpyController extends VideoPlayerController {
-  resetDisplayStateCalled: boolean = false;
-  private resolveResetDisplayStateWaiter?: () => void
-  private readonly resetDisplayStateWaiter: Promise<void> = new Promise<void>((resolve: () => void): void => {
-    this.resolveResetDisplayStateWaiter = resolve
-  })
-
-  protected override resetDisplayState(): void {
-    this.resetDisplayStateCalled = true;
-    this.resolveResetDisplayStateWaiter?.()
-    this.resolveResetDisplayStateWaiter = undefined
-    super.resetDisplayState();
-  }
-
-  waitForResetDisplayStateCall(): Promise<void> {
-    return this.resetDisplayStateWaiter
-  }
-
-  saveProgressNow(): void {}
-}
-
 function buildVideoData(name: string): VideoData {
   return {
     type: VideoDataType.FILE_URI,
@@ -522,24 +489,6 @@ export default function videoPlayerControllerTest() {
       expect(rejectedMessage).assertEqual('reload superseded')
     })
 
-    it('release 会清理缓存的 xcomponent context 与 component id', 0, async () => {
-      const controller = new TestVideoPlayerController()
-      const accessor = accessController(controller)
-      const ijkContext: TestXComponentContext = {}
-      const nativeContext: TestXComponentContext = {}
-      accessor.cachedIjkContext = ijkContext as object
-      accessor.cachedIjkComponentId = 'ijk-component'
-      accessor.cachedNativeContext = nativeContext as object
-      accessor.cachedNativeComponentId = 'native-component'
-
-      await controller.release()
-
-      expect(accessor.cachedIjkContext === undefined).assertTrue()
-      expect(accessor.cachedIjkComponentId).assertEqual('')
-      expect(accessor.cachedNativeContext === undefined).assertTrue()
-      expect(accessor.cachedNativeComponentId).assertEqual('')
-    })
-
     it('运行时探测失败时会强制关闭画质增强请求', 0, () => {
       expect(resolveAiEnhanceEnabledByRuntime(false, true)).assertFalse()
       expect(resolveAiEnhanceEnabledByRuntime(false, false)).assertFalse()
@@ -549,7 +498,7 @@ export default function videoPlayerControllerTest() {
     it('仅在 avplayer 且运行时支持时显示画质增强设置', 0, () => {
       expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer')).assertTrue()
       expect(shouldShowAiEnhanceSettingsByRuntime(false, 'avplayer')).assertFalse()
-      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'ijkplayer')).assertFalse()
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'mpv')).assertFalse()
     })
 
     it('VPE 未提供输入 surface 时回退到基础播放 surface', 0, () => {
@@ -557,53 +506,10 @@ export default function videoPlayerControllerTest() {
       expect(resolveEffectivePlaybackSurfaceId('display-surface', 'vpe-input-surface')).assertEqual('vpe-input-surface')
     })
 
-    // ── Task 2.1：ijkVideoRatio 属性默认值 ──────────────────────────────────
-    it('ijkVideoRatio 初始值为 0（Task 2.1）', 0, () => {
-      const controller = new VideoPlayerController()
-      const accessor = controller as Object as IjkVideoRatioAccessor
-      expect(accessor.ijkVideoRatio).assertEqual(0)
-    })
-
-    // ── Task 2.2：initPlayer 调用 resetDisplayState，ijkVideoRatio 被清零 ───
-    // 验证策略：spy override resetDisplayState()，通过 promise 等待真实调用发生，
-    // 不再依赖 initPlayer 内部 await 排布或“同步阶段立即断言”的时序假设。
-    it('initPlayer 调用真实 resetDisplayState 并将 ijkVideoRatio 重置为 0（Task 2.2）', 0, async () => {
-      const controller = new ResetDisplayStateSpyController()
-      const ratioAccessor = controller as Object as IjkVideoRatioAccessor
-      ratioAccessor.ijkVideoRatio = 1.7778
-
-      const initPromise = controller.initPlayer(buildVideoData('task-2-2-spy'), 'surface-spy')
-      const resetOrInitSettled = Promise.race<void>([
-        controller.waitForResetDisplayStateCall(),
-        initPromise.then((): void => {}, (): void => {})
-      ])
-
-      await resetOrInitSettled
-      expect(controller.resetDisplayStateCalled).assertTrue()
-      expect(ratioAccessor.ijkVideoRatio).assertEqual(0)
-
-      await initPromise.catch(() => {})
-    })
-
-    // ── Task 2.3/2.4：ijkVideoRatio 回调注入语义验证 ─────────────────────────
-    // 注入到 IjkPlayerAdapter 的回调行为：调用后 ijkVideoRatio 可被写入并读出。
-    // 限制说明：IjkPlayerAdapter 构造器依赖 native .so，无法在 UnitTestBuild 环境中
-    // 实例化，因此无法测试"initPlayer 实际注入了回调"。本用例验证注入后的回调语义：
-    // 若回调中执行 this.ijkVideoRatio = ratio，field 能被正确更新。
-    it('ijkVideoRatio 可通过回调语义写入并读出（Task 2.3 回调注入后行为）', 0, () => {
-      const controller = new VideoPlayerController()
-      const accessor = controller as Object as IjkVideoRatioAccessor
-      // 模拟 setOnVideoRatioCallback 注入后，DAR 回调触发时的写入路径
-      const simulatedCallback = (ratio: number): void => {
-        accessor.ijkVideoRatio = ratio
-      }
-      simulatedCallback(1.7778)
-      expect(Math.abs(accessor.ijkVideoRatio - 1.7778) < 1e-9).assertTrue()
-    })
-
-    it('fallback 到 ijkplayer 前会保留 seek flush 的续播位置与自动续播意图', 0, () => {
+    it('AVPlayer fallback 到 MPV 会切换后端并保留续播位置与自动续播意图', 0, () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
+      accessor.backend = 'avplayer'
       accessor.player = new MockFallbackPlayer()
       accessor.currentTime = 501626
       accessor.duration = 2684598
@@ -613,11 +519,27 @@ export default function videoPlayerControllerTest() {
       accessor.pendingBackendResumeTimeMs = -1
       accessor.pendingBackendResumePlay = false
 
-      accessor.capturePendingResumeForFallback('test_fallback')
+      accessor.fallbackAvPlayerToMpv('test_fallback')
 
+      expect(accessor.backend).assertEqual('mpv')
       expect(accessor.pendingBackendResumeTimeMs).assertEqual(501626)
       expect(accessor.pendingBackendResumePlay).assertTrue()
       expect(accessor.currentTime).assertEqual(501626)
+    })
+
+    it('MPV 终端错误会停止加载和播放并保留可展示错误', 0, () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.backend = 'mpv'
+      accessor.isLoading = true
+      accessor.isPlaying = true
+
+      accessor.handleTerminalPlayerError('MPV decoder failed')
+
+      expect(accessor.backend).assertEqual('mpv')
+      expect(accessor.isLoading).assertFalse()
+      expect(accessor.isPlaying).assertFalse()
+      expect(accessor.lastErrorMessage).assertEqual('MPV decoder failed')
     })
 
     it('reloadSource 自动播放路径会写入 prepared decision，并在 initPlayer 启动时转正消费', 0, async () => {
@@ -837,11 +759,11 @@ export default function videoPlayerControllerTest() {
       }
     })
 
-    it('ijkplayer onPrepared 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {
+    it('MPV onReady 时会消费 fallback 保留的续播点并执行 seek', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)
       const player = new MockFallbackPlayer()
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = player
       accessor.currentTime = 0
       accessor.duration = player.duration
@@ -867,7 +789,7 @@ export default function videoPlayerControllerTest() {
       const events: string[] = []
       const player = new RecordingFallbackPlayer(events)
       const subtitleAdapter = new RecordingSubtitleAdapter(events)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = player
       accessor.subtitleAdapter = subtitleAdapter
       accessor.currentTime = 0
@@ -891,7 +813,7 @@ export default function videoPlayerControllerTest() {
       const events: string[] = []
       const player = new RecordingFallbackPlayer(events)
       const subtitleAdapter = new RecordingSubtitleAdapter(events)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = player
       accessor.subtitleAdapter = subtitleAdapter
       accessor.currentVideoData = buildVideoData('fallback-pending-resume')
@@ -923,7 +845,7 @@ export default function videoPlayerControllerTest() {
       const events: string[] = []
       const player = new RecordingFallbackPlayer(events)
       const subtitleAdapter = new RecordingSubtitleAdapter(events)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = player
       accessor.subtitleAdapter = subtitleAdapter
       accessor.currentTime = 0
@@ -955,7 +877,7 @@ export default function videoPlayerControllerTest() {
       const events: string[] = []
       const player = new RecordingFallbackPlayer(events)
       const subtitleAdapter = new RecordingSubtitleAdapter(events)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = player
       accessor.subtitleAdapter = subtitleAdapter
       accessor.currentTime = 0
@@ -1001,7 +923,7 @@ export default function videoPlayerControllerTest() {
       const fallbackEvents: string[] = []
       const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
       const fallbackSubtitleAdapter = new RecordingSubtitleAdapter(fallbackEvents)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = fallbackPlayer
       accessor.subtitleAdapter = fallbackSubtitleAdapter
       accessor.currentVideoData = buildVideoData('episode-fallback')
@@ -1044,7 +966,7 @@ export default function videoPlayerControllerTest() {
       const fallbackEvents: string[] = []
       const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
       const fallbackSubtitleAdapter = new RecordingSubtitleAdapter(fallbackEvents)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = fallbackPlayer
       accessor.subtitleAdapter = fallbackSubtitleAdapter
       accessor.currentVideoData = buildVideoData('episode-pause-fallback')
@@ -1070,7 +992,7 @@ export default function videoPlayerControllerTest() {
       const player = new MockFallbackPlayer()
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1097,7 +1019,7 @@ export default function videoPlayerControllerTest() {
       const player = new MockFallbackPlayer()
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1126,7 +1048,7 @@ export default function videoPlayerControllerTest() {
       const player = new MockFallbackPlayer()
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1158,7 +1080,7 @@ export default function videoPlayerControllerTest() {
       const player = new MockFallbackPlayer()
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1190,7 +1112,7 @@ export default function videoPlayerControllerTest() {
       const accessor = accessController(controller)
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1223,7 +1145,7 @@ export default function videoPlayerControllerTest() {
       const accessor = accessController(controller)
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1248,7 +1170,7 @@ export default function videoPlayerControllerTest() {
       const player = new RejectingFallbackPlayer()
       const pendingResultState: PendingResumeAutoplayResultStateSnapshot = {
         resumeSource: 'seek_done_resume',
-        captureBackend: 'ijkplayer',
+        captureBackend: 'mpv',
         pendingResumeMs: 3200,
         effectiveResumeMs: 3200,
         shouldResumePlay: true,
@@ -1274,7 +1196,7 @@ export default function videoPlayerControllerTest() {
       const events: string[] = []
       const player = new RecordingFallbackPlayer(events)
       const subtitleAdapter = new RecordingSubtitleAdapter(events)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = player
       accessor.subtitleAdapter = subtitleAdapter
       accessor.currentTime = 0
@@ -1315,7 +1237,7 @@ export default function videoPlayerControllerTest() {
       const fallbackEvents: string[] = []
       const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
       const fallbackSubtitleAdapter = new RecordingSubtitleAdapter(fallbackEvents)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = fallbackPlayer
       accessor.subtitleAdapter = fallbackSubtitleAdapter
       accessor.currentTime = 0
@@ -1341,7 +1263,7 @@ export default function videoPlayerControllerTest() {
       const firstSessionEvents: string[] = []
       const firstSessionPlayer = new RecordingFallbackPlayer(firstSessionEvents)
       const firstSessionSubtitleAdapter = new RecordingSubtitleAdapter(firstSessionEvents)
-      accessor.backend = 'ijkplayer'
+      accessor.backend = 'mpv'
       accessor.player = firstSessionPlayer
       accessor.subtitleAdapter = firstSessionSubtitleAdapter
       accessor.playbackSessionId = 1
@@ -1357,7 +1279,7 @@ export default function videoPlayerControllerTest() {
       await accessor.onPlayerReady()
       await accessor.continuePendingReadyAfterSeek()
 
-      expect(accessor.consumedReadyResumeToken).assertEqual('1:ijkplayer')
+      expect(accessor.consumedReadyResumeToken).assertEqual('1:mpv')
       expect(firstSessionPlayer.seekCalls.length).assertEqual(1)
       expect(firstSessionPlayer.playCallCount).assertEqual(1)
 
@@ -1381,7 +1303,7 @@ export default function videoPlayerControllerTest() {
       await accessor.onPlayerReady()
       await accessor.continuePendingReadyAfterSeek()
 
-      expect(accessor.consumedReadyResumeToken).assertEqual('2:ijkplayer')
+      expect(accessor.consumedReadyResumeToken).assertEqual('2:mpv')
       expect(secondSessionEvents.length).assertEqual(6)
       expect(secondSessionEvents[0]).assertEqual('subtitle:onSeekSync')
       expect(secondSessionEvents[1]).assertEqual('player:seek:28123')

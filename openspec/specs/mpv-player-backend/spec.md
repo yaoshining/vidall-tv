@@ -6,18 +6,23 @@ Define the behavior contract for integrating the mpv-based `@vidall/player` back
 
 ## Requirements
 
-### Requirement: MPV backend SHALL be registered as a selectable playback backend
-系统 MUST 在 `PlaybackBackendService` 的后端枚举中注册 `'mpv'` 作为可选播放后端，与现有 `'avplayer'` / `'ijkplayer'` 并列，且不影响现有后端的任何行为。
+### Requirement: MPV 后端必须注册为回退播放后端
+系统 MUST 注册 `'mpv'` 为 AVPlayer 的唯一回退播放后端，同时保留 MPV adapter 的既有播放能力。
 
-#### Scenario: Backend enumeration includes mpv
+#### Scenario: 后端枚举包含 MPV
 - **WHEN** 系统初始化播放后端选择逻辑
-- **THEN** `'mpv'` SHALL 作为有效的 `PlayerBackend` 值存在
-- **AND** 现有 `'avplayer'` / `'ijkplayer'` 后端行为 SHALL 保持不变
+- **THEN** `'mpv'` SHALL 作为有效后端值存在
+- **AND** 活跃后端集合 SHALL 仅包含 AVPlayer 与 MPV
 
-#### Scenario: mpv adapter creation
+#### Scenario: AVPlayer 回退到 MPV
+- **WHEN** AVPlayer 无法播放当前媒体
+- **THEN** 系统 SHALL 创建 MPV adapter 接手播放
+- **AND** 用户无需选择回退内核
+
+#### Scenario: 创建 MPV adapter
 - **WHEN** 后端决策结果为 `'mpv'`
-- **THEN** `PlaybackBackendService` SHALL 创建 `MpvPlayerAdapter` 实例
-- **AND** 该实例 SHALL 实现 `IPlayer` 接口的全部方法与回调注册
+- **THEN** playback backend service SHALL 创建 MPV adapter 实例
+- **AND** 该实例 SHALL 实现统一播放器接口的全部方法与回调注册
 
 ### Requirement: MPV backend SHALL use XComponentController surface binding mode
 系统 MUST 使用 `XComponentController` 模式（而非 `libraryname` 模式）为 mpv 后端绑定 XComponent Surface，与 avplayer 分支的绑定方式一致。

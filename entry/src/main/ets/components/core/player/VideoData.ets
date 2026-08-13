@@ -1,8 +1,8 @@
 import { VideoDataType } from "./Constants";
 
-/** 预置音轨信息（用于 ijkplayer 无法自动枚举时手动注入） */
+/** 预置音轨信息（用于播放器就绪前展示与初始选轨） */
 export interface PresetAudioTrack {
-  /** IjkPlayer selectTrack() 使用的流索引 */
+  /** ffprobe 流索引 */
   trackIndex: number;
   /** 显示名称，如 "粤语 (E-AC-3)" */
   displayName: string;
@@ -30,13 +30,13 @@ export interface PresetAudioTrack {
 }
 
 /**
- * 预置字幕轨信息（用于 ijkplayer 字幕轨枚举）
+ * 预置字幕轨信息。
  *
  * 由调用方（播放页）根据 ffprobe 探测结果或数据库记录手动注入，
- * 供 VideoPlayerController.loadSubtitleTracks() 在 ijkplayer 后端下使用。
+ * 供播放器就绪后展示和选择字幕轨。
  */
 export interface PresetSubtitleTrack {
-  /** ffprobe 流索引（IjkPlayer selectTrack() 参数） */
+  /** ffprobe 流索引 */
   trackIndex: number;
   /** 显示名称，如 "中文 (SRT)"、"英语 (ASS)" */
   displayName: string;
@@ -68,15 +68,12 @@ export interface VideoData {
   /** 下载字幕文件时使用的 HTTP 请求头（如 Authorization: Basic xxx） */
   subtitleHeaders?: Record<string, string>;
   /**
-   * 预置音轨列表（可选）。
-   * 当 backend='ijkplayer' 且 IjkPlayer 无法自动枚举多音轨时使用。
-   * 由调用方（播放页）根据文件元数据手动填充。
+   * 预置音轨列表（可选），由调用方根据文件元数据手动填充。
    */
   presetAudioTracks?: PresetAudioTrack[];
   /**
-   * 预置字幕轨列表（可选）。
-   * 当 backend='ijkplayer' 时，通过 ffprobe 或数据库预先填充，
-   * 供 VideoPlayerController 在 onReady 后直接展示字幕选项，无需等待 getTrackInfos()。
+   * 预置字幕轨列表（可选），通过 ffprobe 或数据库预先填充，
+   * 供 VideoPlayerController 在 onReady 后展示字幕选项。
    */
   presetSubtitleTracks?: PresetSubtitleTrack[];
 
@@ -96,7 +93,7 @@ export interface VideoData {
 
   /**
    * 视频编码名称（可选），由 ffprobe 探测填充，如 'hevc', 'h264'。
-   * 用于 IjkPlayerAdapter 决策是否开启硬解（HEVC 硬解在 HDR/DV 内容下会花屏）。
+   * 用于播放路由诊断和能力判断。
    */
   videoCodec?: string;
 

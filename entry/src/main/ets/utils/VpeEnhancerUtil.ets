@@ -55,7 +55,7 @@ function qualityToLevel(quality: VpeQualityLevel): number {
  *   VpeEnhancerUtil.destroyEnhancer();
  *
  * 注意：
- * - 仅适用于 AVPlayer 路径；ijkplayer 使用 XComponent native hook，无法插入 VPE
+ * - 仅适用于 AVPlayer 路径；MPV 使用独立 XComponent surface，不插入 VPE
  * - 不支持的设备返回空字符串，不抛异常
  * - 单例：同时只能存在一个 VPE 实例
  */

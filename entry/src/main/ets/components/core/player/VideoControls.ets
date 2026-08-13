@@ -1,5 +1,5 @@
 import { debounce } from "@ibestservices/ibest-ui"
-import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
+import { VideoPlayerController, SubtitleTrackItem, AudioTrackItem, AspectRatioMode } from "./VideoPlayerController"
 import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { LengthMetrics } from "@kit.ArkUI"
@@ -1747,47 +1747,6 @@ export struct PlayerSettingsDialog {
                 .justifyContent(FlexAlign.Start)
                 .width('100%')
               }
-            }
-
-            // ── 播放内核切换 ─────────────────────────────────────────────
-            Column({ space: 12 }) {
-              Text('播放内核')
-                .fontSize(32)
-                .fontColor('#EFF2FB')
-                .fontWeight(FontWeight.Medium)
-                .alignSelf(ItemAlign.Start)
-
-              Row({ space: 12 }) {
-                Text('IJKPlayer')
-                  .fontSize(26)
-                  .fontColor(this.videoController.backend === 'ijkplayer' ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.videoController.backend === 'ijkplayer' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius(99)
-                  .border({ width: this.videoController.backend === 'ijkplayer' ? 2 : 1, color: this.videoController.backend === 'ijkplayer' ? '#fffefe' : '#45ffffff' })
-                  .focusable(true)
-                  .onClick(() => {
-                    if (this.videoController.backend !== 'ijkplayer') {
-                      this.videoController.switchBackendInPlayback('ijkplayer')
-                    }
-                  })
-
-                Text('MPV')
-                  .fontSize(26)
-                  .fontColor(this.videoController.backend === 'mpv' ? '#F3F7FF' : '#D7DCE7')
-                  .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                  .backgroundColor(this.videoController.backend === 'mpv' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                  .borderRadius(99)
-                  .border({ width: this.videoController.backend === 'mpv' ? 2 : 1, color: this.videoController.backend === 'mpv' ? '#fffefe' : '#45ffffff' })
-                  .focusable(true)
-                  .onClick(() => {
-                    if (this.videoController.backend !== 'mpv') {
-                      this.videoController.switchBackendInPlayback('mpv')
-                    }
-                  })
-              }
-              .justifyContent(FlexAlign.Start)
-              .width('100%')
             }
           }
           .padding({ left: 26, right: 26, top: 18, bottom: 28 })

@@ -108,14 +108,4 @@ export class PlayerEvents {
     eventId: 16,
     priority: emitter.EventPriority.HIGH
   };
-  /** MPV 播放失败，提示用户尝试 IJKPlayer */
-  static readonly MPV_ERROR_FALLBACK: emitter.InnerEvent = {
-    eventId: 17,
-    priority: emitter.EventPriority.HIGH
-  };
-  /** IJKPlayer 播放失败，提示用户尝试 MPV */
-  static readonly IJK_ERROR_FALLBACK: emitter.InnerEvent = {
-    eventId: 18,
-    priority: emitter.EventPriority.HIGH
-  };
 }

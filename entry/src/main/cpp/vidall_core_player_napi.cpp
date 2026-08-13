@@ -1438,8 +1438,9 @@ struct NativePlayerSkeletonState {
   SmbAVIOContext  *smbAvioOpaque   = nullptr;  // 由 SmbCleanupResources 负责 delete
   AVIOContext     *ffmpegAvio      = nullptr;  // 由 SmbCleanupResources 负责 free
   AVFormatContext *ffmpegFmt       = nullptr;  // 由 SmbCleanupResources 负责 close
-  std::thread      smbPlayThread;              // 播放线程；joinable 时表示线程正在运行
-  // shared_ptr 使停止标志生命周期独立于 state，防止 keepProxy=true 时 state 析构后出现 UAF
+  std::thread      smbPlayThread;              // 代理 accept 线程；joinable 时表示线程正在运行
+  std::mutex       smbHandlerMutex;
+  std::vector<std::thread> smbHandlerThreads;  // Release 前统一等待所有请求结束
   std::shared_ptr<std::atomic<bool>> smbStopFlag { std::make_shared<std::atomic<bool>>(false) };
   std::atomic<bool>    smbPauseFlag {false};   // 通知播放线程暂停（原子）
   std::atomic<int64_t> smbSeekTargetMs {-1};   // ≥0 时表示待执行的 seek 目标（原子）
@@ -1449,31 +1450,6 @@ static std::unordered_map<int32_t, NativePlayerSkeletonState> g_players;
 static int32_t g_nextHandle = 1;
 // A4：保护 g_players 跨线程访问（XC 表面回调来自 UI 线程，AV 回调来自媒体线程）
 static std::mutex g_playersMutex;
-
-// keepProxy=true 场景下，smbPlayThread 在 state 析构前被 move 到此处持有，
-// 防止 ~thread() 在 joinable 时被调用触发 std::terminate。
-// 每个元素是 {thread, stopFlag}，stopFlag 共享所有权防止 UAF。
-static std::mutex g_orphanedProxiesMutex;
-static std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> g_orphanedProxies;
-
-// 清理所有孤立代理线程：通知停止并 join，防止进程退出时 std::terminate。
-// 调用时机：
-//   1. Release(handle, keepProxy=false) 时顺带清扫历史孤立代理；
-//   2. JS 层 ijkplayer 播放完成后主动调用 cleanupOrphanedProxies() NAPI。
-static void CleanupOrphanedProxies() {
-    std::vector<std::pair<std::thread, std::shared_ptr<std::atomic<bool>>>> toClean;
-    {
-        std::lock_guard<std::mutex> lock(g_orphanedProxiesMutex);
-        toClean.swap(g_orphanedProxies);
-    }
-    for (auto &entry : toClean) {
-        entry.second->store(true, std::memory_order_relaxed);
-        if (entry.first.joinable()) {
-            entry.first.join();
-        }
-    }
-    // toClean 析构时 thread 已不 joinable，安全销毁
-}
 
 // 修复 #48-A5：pending window 缓存
 // 根因：RegisterCallback 在 SetXComponent（onLoad 回调）中调用时 surface 已创建完毕，
@@ -2031,7 +2007,9 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 }
 
 static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
-                                std::shared_ptr<std::atomic<bool>> stopFlag) {
+                                std::shared_ptr<std::atomic<bool>> stopFlag,
+                                std::mutex *handlerMutex,
+                                std::vector<std::thread> *handlerThreads) {
     while (!stopFlag->load(std::memory_order_relaxed)) {
         struct pollfd pfd;
         pfd.fd = serverFd; pfd.events = POLLIN; pfd.revents = 0;
@@ -2039,9 +2017,10 @@ static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
         if (!(pfd.revents & POLLIN)) continue;
         int clientFd = accept(serverFd, nullptr, nullptr);
         if (clientFd < 0) continue;
-        std::thread([clientFd, comps]() {
+        std::lock_guard<std::mutex> lock(*handlerMutex);
+        handlerThreads->emplace_back([clientFd, comps]() {
             SmbProxyHandleRequest(clientFd, comps);
-        }).detach();
+        });
     }
     close(serverFd);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "accept loop exited");
@@ -2066,7 +2045,8 @@ static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponent
     getsockname(serverFd, reinterpret_cast<struct sockaddr *>(&addr), &addrLen);
     int port = ntohs(addr.sin_port);
     state.smbStopFlag->store(false, std::memory_order_relaxed);
-    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, state.smbStopFlag);
+    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, state.smbStopFlag,
+                                      &state.smbHandlerMutex, &state.smbHandlerThreads);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "proxy started port=%{public}d host=%{public}s share=%{public}s",
                  port, comps.host.c_str(), comps.share.c_str());
@@ -2078,6 +2058,16 @@ static void SmbStopProxy(NativePlayerSkeletonState &state) {
     state.smbStopFlag->store(true, std::memory_order_relaxed);
     if (state.smbPlayThread.joinable()) {
         state.smbPlayThread.join();
+    }
+    std::vector<std::thread> handlers;
+    {
+        std::lock_guard<std::mutex> lock(state.smbHandlerMutex);
+        handlers.swap(state.smbHandlerThreads);
+    }
+    for (std::thread &handler : handlers) {
+        if (handler.joinable()) {
+            handler.join();
+        }
     }
     state.isSmbPlayback = false;
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "proxy stopped");
@@ -2092,18 +2082,9 @@ static void SmbStopProxy(NativePlayerSkeletonState & /*state*/) {}
 
 #endif // VIDALL_HAS_LIBSMB2
 
-static void ResetRuntimeState(NativePlayerSkeletonState &state, bool keepProxy = false) {
-  if (!keepProxy) {
-    SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
-    state.proxyPlayUrl.clear();
-  } else if (state.smbPlayThread.joinable()) {
-    // keepProxy=true：代理线程需继续服务 ijkplayer，但 state 即将析构。
-    // 将 thread + shared stopFlag 转移至全局 orphaned 列表，防止 ~thread() 在
-    // joinable 时被调用触发 std::terminate（SIGABRT, #78）。
-    // stopFlag 使用 shared_ptr 共享所有权，保证线程退出前不会出现悬挂访问（UAF）。
-    std::lock_guard<std::mutex> orphanLock(g_orphanedProxiesMutex);
-    g_orphanedProxies.emplace_back(std::move(state.smbPlayThread), state.smbStopFlag);
-  }
+static void ResetRuntimeState(NativePlayerSkeletonState &state) {
+  SmbStopProxy(state);  // 停止 SMB HTTP 代理（如果正在运行）
+  state.proxyPlayUrl.clear();
   state.prepared = false;
   state.playing = false;
   state.pendingPrepare = false;  // A5修复: 切换 surface 时清除延迟标志
@@ -2556,7 +2537,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
       EmitError(state, ERR_SMB_PREPARE_FAILED, "prepare failed: invalid smb:// URL");
       return ReturnUndefinedOrThrow(env, "prepare failed to create return value");
     }
-    SmbStopProxy(state);  // 清理旧代理（防止 surface 切换后残留，含上次 keepProxy 遗留代理）
+    SmbStopProxy(state);  // 清理 surface 切换前的旧代理
     state.proxyPlayUrl.clear();
     int proxyPort = SmbStartProxy(state, comps);
     if (proxyPort < 0) {
@@ -2574,7 +2555,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
     playUrl = "http://127.0.0.1:" + std::to_string(proxyPort) + "/"
               + PercentEncodePathSegment(comps.share) + "/"
               + PercentEncodePath(comps.subPath);
-    // 存储 proxy URL，供 GetProxyUrl NAPI 返回给 JS 层（SMB fallback 到 ijkplayer 时使用）
+    // 存储 proxy URL，供 GetProxyUrl NAPI 返回给 JS 层（ffprobe 与 SMB 字幕使用）
     state.proxyPlayUrl = playUrl;
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "SMB rewritten to %{public}s", playUrl.c_str());
@@ -2992,22 +2973,16 @@ static napi_value SelectTrack(napi_env env, napi_callback_info info) {
 }
 
 static napi_value Release(napi_env env, napi_callback_info info) {
-  // 支持可选的 keepProxy 参数：Release(handle, keepProxy=false)
-  // 当 keepProxy=true 时，SMB HTTP 代理线程不会被停止，允许 ijkplayer 在 fallback 后继续使用代理 URL。
-  size_t argc = 2;
-  napi_value args[2] = { nullptr, nullptr };
+  size_t argc = 1;
+  napi_value args[1] = { nullptr };
   if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
-    ThrowTypeError(env, "release requires (handle[, keepProxy])");
+    ThrowTypeError(env, "release requires (handle)");
     return nullptr;
   }
   int32_t handle = 0;
   if (napi_get_value_int32(env, args[0], &handle) != napi_ok) {
     ThrowTypeError(env, "release handle must be int32");
     return nullptr;
-  }
-  bool keepProxy = false;
-  if (argc >= 2 && args[1] != nullptr) {
-    napi_get_value_bool(env, args[1], &keepProxy);
   }
   // PR#49（问题3）：分两段持锁：
   //   ① 持锁找到 state 指针后立即释放，避免 OH_AVPlayer_Release（阻塞）期间持有 g_playersMutex
@@ -3034,13 +3009,7 @@ static napi_value Release(napi_env env, napi_callback_info info) {
     OH_AVPlayer_Release(state.avPlayer); // 阻塞直到媒体线程所有回调执行完毕
     state.avPlayer = nullptr;
   }
-  // keepProxy=true 时跳过 SmbStopProxy，保持代理线程继续服务 ijkplayer；
-  // proxyPlayUrl 保留供 JS 层在 erase 后已不可访问前读取（erase 前已读完）。
-  // keepProxy=false 时顺带清扫历史孤立代理（fix #1：防止进程退出时 std::terminate）。
-  ResetRuntimeState(state, keepProxy);
-  if (!keepProxy) {
-    CleanupOrphanedProxies();
-  }
+  ResetRuntimeState(state);
   state.url.clear();
   state.headersJson.clear();
   state.xComponentId.clear();
@@ -3057,7 +3026,7 @@ static napi_value Release(napi_env env, napi_callback_info info) {
 
 // GetProxyUrl(handle) → string
 // 返回当前 SMB 播放的 HTTP 代理 URL（如 http://127.0.0.1:PORT/share/path/file.mkv）。
-// 在 native player 失败时由 JS 层调用，将 proxy URL 传给 ijkplayer 进行 fallback 软解。
+// AVPlayer、ffprobe 和字幕读取等普通代理调用方可使用该 URL。
 // 若 handle 无效或尚未 prepare SMB 源，返回空字符串，不 crash。
 static napi_value GetProxyUrl(napi_env env, napi_callback_info info) {
   int32_t handle = 0;
@@ -3083,15 +3052,6 @@ static napi_value GetProxyUrl(napi_env env, napi_callback_info info) {
   napi_value result = nullptr;
   napi_create_string_utf8(env, proxyUrl.c_str(), proxyUrl.size(), &result);
   return result;
-}
-
-// CleanupOrphanedProxies() → undefined
-// 停止并 join 所有因 keepProxy=true 而孤立的 SMB 代理线程。
-// 应在 ijkplayer 播放完成（onStop / onError）后由 JS 层主动调用，
-// 防止进程退出时 joinable thread 析构触发 std::terminate。
-static napi_value CleanupOrphanedProxiesNapi(napi_env env, napi_callback_info /*info*/) {
-  CleanupOrphanedProxies();
-  return ReturnUndefinedOrThrow(env, "cleanupOrphanedProxies failed to create return value");
 }
 
 static napi_value GetCurrentTime(napi_env env, napi_callback_info info) {
@@ -3494,19 +3454,8 @@ static napi_value DownloadToFile(napi_env env, napi_callback_info info) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 设备解码能力查询（供 ijkplayer 硬解决策使用）
+// 音频解码能力查询
 // ─────────────────────────────────────────────────────────────────────────────
-
-struct VideoCapResult {
-  bool capabilityKnown = false;
-  bool supported = false;
-  bool isHardware = false;
-  int maxWidth = 0;
-  int maxHeight = 0;
-  std::string decoderName;
-  std::string mimeType;
-  std::string errorMessage;
-};
 
 struct AudioCapResult {
   bool capabilityKnown = false;
@@ -3517,13 +3466,6 @@ struct AudioCapResult {
   std::string mimeType;
   std::string errorMessage;
 };
-
-static std::string BuildVideoMime(const std::string &codecOrMime) {
-  if (codecOrMime == "h264" || codecOrMime == "avc" || codecOrMime == "video/avc") return "video/avc";
-  if (codecOrMime == "h265" || codecOrMime == "hevc" || codecOrMime == "video/hevc") return "video/hevc";
-  if (codecOrMime == "vp9"  || codecOrMime == "video/x-vnd.on2.vp9") return "video/x-vnd.on2.vp9";
-  return codecOrMime;
-}
 
 static std::string BuildAudioMime(const std::string &codecOrMime) {
   if (codecOrMime == "aac"  || codecOrMime == "audio/mp4a-latm") return "audio/mp4a-latm";
@@ -3537,36 +3479,6 @@ static napi_value MakeStringField(napi_env env, const std::string &s) {
   napi_value v = nullptr;
   napi_create_string_utf8(env, s.c_str(), NAPI_AUTO_LENGTH, &v);
   return v;
-}
-
-static VideoCapResult QueryVideoCapInternal(const std::string &codecOrMime) {
-  VideoCapResult r;
-  r.mimeType = BuildVideoMime(codecOrMime);
-  r.capabilityKnown = true;
-
-  // 先查硬件解码器
-  OH_AVCapability *cap = OH_AVCodec_GetCapabilityByCategory(r.mimeType.c_str(), false, HARDWARE);
-  bool isHw = true;
-  if (cap == nullptr) {
-    // 回退到任意解码器
-    cap = OH_AVCodec_GetCapability(r.mimeType.c_str(), false);
-    isHw = (cap != nullptr) && OH_AVCapability_IsHardware(cap);
-  }
-  if (cap == nullptr) {
-    r.errorMessage = "decoder not found";
-    return r;
-  }
-
-  r.supported = true;
-  r.isHardware = isHw;
-  const char *name = OH_AVCapability_GetName(cap);
-  if (name) r.decoderName = name;
-  OH_AVRange wr = {0, 0}, hr = {0, 0};
-  OH_AVCapability_GetVideoWidthRange(cap, &wr);
-  OH_AVCapability_GetVideoHeightRange(cap, &hr);
-  r.maxWidth  = wr.maxVal;
-  r.maxHeight = hr.maxVal;
-  return r;
 }
 
 static AudioCapResult QueryAudioCapInternal(const std::string &codecOrMime) {
@@ -3593,39 +3505,6 @@ static AudioCapResult QueryAudioCapInternal(const std::string &codecOrMime) {
   OH_AVCapability_GetAudioChannelCountRange(cap, &ch);
   r.maxChannels = ch.maxVal;
   return r;
-}
-
-static napi_value QueryVideoDecoderCapability(napi_env env, napi_callback_info info) {
-  size_t argc = 1;
-  napi_value args[1];
-  if (napi_get_cb_info(env, info, &argc, args, nullptr, nullptr) != napi_ok || argc < 1) {
-    ThrowTypeError(env, "queryVideoDecoderCapability requires (codecOrMime)");
-    return nullptr;
-  }
-  char buf[128] = {0};
-  size_t len = 0;
-  if (napi_get_value_string_utf8(env, args[0], buf, sizeof(buf), &len) != napi_ok) {
-    ThrowTypeError(env, "queryVideoDecoderCapability codecOrMime must be string");
-    return nullptr;
-  }
-
-  VideoCapResult cap = QueryVideoCapInternal(std::string(buf, len));
-
-  napi_value result = nullptr;
-  if (napi_create_object(env, &result) != napi_ok) {
-    ThrowTypeError(env, "queryVideoDecoderCapability failed to create result");
-    return nullptr;
-  }
-  auto set = [&](const char *k, napi_value v) { napi_set_named_property(env, result, k, v); };
-  set("capabilityKnown", CreateBoolean(env, cap.capabilityKnown));
-  set("supported",       CreateBoolean(env, cap.supported));
-  set("isHardware",      CreateBoolean(env, cap.isHardware));
-  set("maxWidth",        CreateInt32(env, cap.maxWidth));
-  set("maxHeight",       CreateInt32(env, cap.maxHeight));
-  set("decoderName",     MakeStringField(env, cap.decoderName));
-  set("mimeType",        MakeStringField(env, cap.mimeType));
-  set("errorMessage",    MakeStringField(env, cap.errorMessage));
-  return result;
 }
 
 static napi_value QueryAudioDecoderCapability(napi_env env, napi_callback_info info) {
@@ -5535,7 +5414,6 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "selectTrack", nullptr, SelectTrack, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getProxyUrl", nullptr, GetProxyUrl, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "cleanupOrphanedProxies", nullptr, CleanupOrphanedProxiesNapi, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getCurrentTime", nullptr, GetCurrentTime, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getDuration", nullptr, GetDuration, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "setCallbacks", nullptr, SetCallbacks, nullptr, nullptr, nullptr, napi_default, nullptr },
@@ -5544,7 +5422,6 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "webdavRequest", nullptr, WebdavRequest, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "downloadToFile", nullptr, DownloadToFile, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "getNativeCapabilities", nullptr, GetNativeCapabilities, nullptr, nullptr, nullptr, napi_default, nullptr },
-    { "queryVideoDecoderCapability", nullptr, QueryVideoDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "queryAudioDecoderCapability", nullptr, QueryAudioDecoderCapability, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "isVpeDetailEnhancerSupported", nullptr, IsVpeDetailEnhancerSupported, nullptr, nullptr, nullptr, napi_default, nullptr },
     { "createVpeDetailEnhancer", nullptr, CreateVpeDetailEnhancer, nullptr, nullptr, nullptr, napi_default, nullptr },

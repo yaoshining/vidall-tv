@@ -4,7 +4,6 @@
   "dependencies": {
     "@ibestservices/ibest-ui": "2.2.0",
     "@hadss/state_store": "^1.0.1",
-    "@yaoshining/ijkplayer": "file:./package/ijkplayer.har",
     "pinyin-pro": "^3.26.0",
     "lucide": "^1.1.0"
   },

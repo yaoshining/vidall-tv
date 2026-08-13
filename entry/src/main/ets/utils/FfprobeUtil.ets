@@ -68,7 +68,7 @@ interface SmbProbeNapiBridge {
   ) => void;
   prepare: (handle: number) => void;
   getProxyUrl: (handle: number) => string;
-  release: (handle: number, keepProxy?: boolean) => void;
+  release: (handle: number) => void;
 }
 
 function getSmbProbeNapi(): SmbProbeNapiBridge {
@@ -633,14 +633,17 @@ export class FfprobeUtil {
       console.warn(`[FfprobeUtil] SMB proxy 启动失败，跳过探测: ${msg}`);
       return FfprobeUtil.buildErrorResult(maskUrlForLog(smbUrl), `SMB proxy 启动失败: ${msg}`);
     } finally {
-      // 无论成功/失败，始终释放并发槽位与临时 player（代理随之停止）
-      FfprobeUtil.releaseProbeSlot();
-      if (playerHandle > 0) {
-        try {
-          getSmbProbeNapi().release(playerHandle);
-        } catch {
-          /* 释放失败不抛出 */
+      // 先停止临时 player 的代理，再放行下一个探测任务。
+      try {
+        if (playerHandle > 0) {
+          try {
+            getSmbProbeNapi().release(playerHandle);
+          } catch {
+            /* 释放失败不抛出 */
+          }
         }
+      } finally {
+        FfprobeUtil.releaseProbeSlot();
       }
     }
   }

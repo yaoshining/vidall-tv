@@ -193,7 +193,7 @@ export class SubtitleDispatcher {
   /**
    * 强制清空用户字幕绑定（不写 disabled 标记）。
    *
-   * 调用场景：avplayer → ijkplayer 格式回退时。fallback 不是用户主动行为，
+   * 调用场景：AVPlayer → MPV 格式回退时。fallback 不是用户主动行为，
    * 应当不继承 disabled 状态，让 `resolveSubtitle` 步骤 4 仍能命中 lastUsed 自动恢复缓存字幕。
    *
    * 与 `clearUserBinding` 的区别：

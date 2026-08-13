@@ -10,7 +10,7 @@
 // 由 `SubtitleSessionService` 负责「会话内字幕状态」与「字幕获取」的分层。
 //
 // 与 `SubtitleBridgeAdapter` 的关系：
-// - bridge adapter 仅负责后端字幕桥接（IJK / AV / SMB-AV）；
+// - bridge adapter 仅负责后端字幕桥接（MPV / AV / SMB-AV）；
 // - session service 负责会话级状态投影 + 调度器裁决（步骤 1 / 步骤 4）应用。
 //
 // 兼容性：
@@ -59,7 +59,7 @@ export interface SubtitleSessionState {
 /** 初始化 session 入参。 */
 export interface SubtitleSessionInitInput {
   /** 当前 backend 对应的字幕桥接 adapter（由 backend service 创建）。 */
-  bridgeKind: 'none' | 'av' | 'ijk' | 'smb-av';
+  bridgeKind: 'none' | 'av' | 'mpv' | 'smb-av';
   /** 当前会话稳定视频路径（用于 SMB / 缓存查询）。 */
   stableVideoPath: string;
   /** 可选缓存上下文（用于步骤 4 命中）。 */

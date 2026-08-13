@@ -14,19 +14,19 @@
 
 #### Scenario: Resolve SMB playback source
 - **WHEN** 播放入口传入 SMB 文件源与文件路径
-- **THEN** source adapter service SHALL 返回可供播放器消费的 SMB 播放 URL，并保留稳定 source identity 供字幕缓存与后续协议处理使用
+- **THEN** source adapter service SHALL 返回适合目标保留后端消费的 SMB 播放 URL
+- **AND** 系统 SHALL 保留稳定 source identity 供字幕缓存与后续协议处理使用
 
 #### Scenario: MPV backend consumes SMB source directly
 - **WHEN** 播放后端为 `'mpv'` 且文件源为 SMB
-- **THEN** source adapter service SHALL 返回无 userinfo 的 SMB URI（`smb://host:port/path`）
-- **AND** SHALL 通过 `Authorization: Basic <base64(username:password)>` header 传递认证信息
-- **AND** VidAll_Player 的内部 native bridge SHALL 解码 Basic 认证并注入 Samba 会话
+- **THEN** source adapter service SHALL 返回无 userinfo 的 SMB URI
+- **AND** SHALL 通过 Authorization header 传递认证信息
 - **AND** 系统 SHALL NOT 启动 SMB HTTP 代理
 
-#### Scenario: AVPlayer/IJK backend consumes SMB source via HTTP proxy
-- **WHEN** 播放后端为 `'avplayer'` 或 `'ijkplayer'` 且文件源为 SMB
-- **THEN** source adapter service SHALL 返回带 userinfo 的原始 SMB URI 供代理模块启动 HTTP 代理
-- **AND** 系统 SHALL 将代理 URL 转交播放器消费
+#### Scenario: AVPlayer backend consumes SMB source via HTTP proxy
+- **WHEN** 播放后端为 `'avplayer'` 且文件源为 SMB
+- **THEN** source adapter service SHALL 返回可供代理模块处理的 SMB URI
+- **AND** 系统 SHALL 将代理 URL 转交 AVPlayer 消费
 
 ### Requirement: Episode source switching SHALL reuse the same resolution contract
 播放器内切换剧集时，系统 MUST 复用与初始播放入口一致的 source resolution contract，以避免媒体库入口与切集入口出现协议装配差异。

@@ -3,8 +3,7 @@ import { VideoDataType } from "../../components/core/player/Constants";
 import { VideoData, PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import {
   VideoPlayerController,
-  type PlayerBackend,
-  type UnsupportedFormatFallback
+  type PlayerBackend
 } from "../../components/core/player/VideoPlayerController";
 import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
 import { common } from "@kit.AbilityKit";
@@ -20,6 +19,8 @@ import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../compo
 import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
 import { defaultSourceAdapterService as sourceAdapter } from "../../services/sourceAdapter/SourceAdapterService";
+import { PlaybackSourceIdentity } from "../../services/sourceAdapter/PlaybackSource";
+import { normalizePlayerBackend } from "../../services/playback/PlaybackBackendTypes";
 import {
   PlaybackProgressService,
   PlaybackProgressContext,
@@ -36,7 +37,7 @@ export interface PlayerPageParam {
   durationHintMs?: number;
   /** 预置音轨列表（可选），用于 EAC-3/AC-3 等 AVPlayer 无法探测的格式 */
   presetAudioTracks?: PresetAudioTrack[];
-  /** 预置字幕轨列表（可选），来自 ffprobe 探测结果，供 ijkplayer 后端字幕枚举 */
+  /** 预置字幕轨列表（可选），来自 ffprobe 探测结果，供播放器后端字幕枚举 */
   presetSubtitleTracks?: PresetSubtitleTrack[];
   /** 视频 DB id（用于进度持久化） */
   videoId?: number;
@@ -46,10 +47,8 @@ export interface PlayerPageParam {
   seasonNumber?: number;
   /** 集号，电影为 0 */
   episodeNumber?: number;
-  /** 可选：强制指定播放后端（当前建议 avplayer / ijkplayer / native） */
-  preferredBackend?: PlayerBackend;
-  /** 可选：AVPlayer 不支持格式时的自动回退后端 */
-  unsupportedFormatFallback?: UnsupportedFormatFallback;
+  /** 可选：指定播放后端；native / ffmpeg 仅作为历史入参兼容并映射到 mpv */
+  preferredBackend?: PlayerBackend | 'native' | 'ffmpeg';
   /**
    * 媒体级进度 key（由 MediaProgressStore.seriesKey / movieKey 生成）。
    * 设置后，播放器使用媒体级进度续播（直接 seek，不弹续播弹窗），
@@ -91,6 +90,7 @@ export interface PlayerPageParam {
 
 export interface ResolvedEpisodePlaybackSource {
   url: string;
+  sourceIdentity: PlaybackSourceIdentity;
   httpHeader?: Record<string, string>;
   durationHintMs?: number;
   presetAudioTracks?: PresetAudioTrack[];
@@ -197,9 +197,10 @@ export function buildMediaLibraryEpisodeSwitchParam(
     seasonNumber,
     episodeNumber,
     preferredBackend: currentParam.preferredBackend,
-    unsupportedFormatFallback: currentParam.unsupportedFormatFallback,
     presetAudioTracks: resolvedSource.presetAudioTracks,
     presetSubtitleTracks: resolvedSource.presetSubtitleTracks,
+    fileSourceType: resolvedSource.sourceIdentity.sourceType,
+    fileSourceId: resolvedSource.sourceIdentity.sourceId,
     mediaKey,
     startPositionMs: resolvedSource.startPositionMs,
     playbackContext: mediaLibraryContext
@@ -235,7 +236,8 @@ export function buildFileExplorerEpisodeSwitchParam(
     httpHeader: currentParam.httpHeader,
     title: selectedItem.title,
     preferredBackend: currentParam.preferredBackend,
-    unsupportedFormatFallback: currentParam.unsupportedFormatFallback,
+    fileSourceType: currentParam.fileSourceType,
+    fileSourceId: currentParam.fileSourceId,
     playbackContext: context
   };
   return nextParam;
@@ -336,8 +338,7 @@ export struct PlayerPage {
   private getBackendDebugText(): string {
     const proto = this.videoPlayerController.sourceProtocol;
     const rawBackend = this.videoPlayerController.backend;
-    // SMB 源实际走 OH_AVPlayer + C++ HTTP 代理，显示更具体的标签
-    const backendLabel = (rawBackend === 'native' && proto === 'SMB')
+    const backendLabel = (rawBackend === 'avplayer' && proto === 'SMB')
       ? 'avplayer(smb-proxy)'
       : rawBackend;
     const protoSuffix = proto.length > 0 ? ` | ${proto}` : '';
@@ -585,12 +586,7 @@ export struct PlayerPage {
     const token = this.pageParamToken;
     this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     if (pageParam.preferredBackend) {
-      this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
-        ? 'ijkplayer'
-        : pageParam.preferredBackend;
-    }
-    if (pageParam.unsupportedFormatFallback) {
-      this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
+      this.videoPlayerController.backend = normalizePlayerBackend(pageParam.preferredBackend);
     }
     this.videoData = this.buildVideoDataFromParam(pageParam);
     this.videoPlayerController.progressContext = null;
@@ -621,7 +617,7 @@ export struct PlayerPage {
 
   private async resolveEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedEpisodePlaybackSource | null> {
     // 第一阶段：协议拼装与已落库元数据已收口到 SourceAdapterService。
-    // 后续字段映射仍由 PlayerPage 维护，确保 ResolvedEpisodePlaybackSource 现有契约不变。
+    // 页面层负责映射切集所需字段，并保留稳定的播放源标识。
     const resolved = await sourceAdapter.resolveEpisode({
       sourceId: item.sourceId,
       filePath: item.videoPath,
@@ -631,7 +627,8 @@ export struct PlayerPage {
       return null;
     }
     const resolvedSource: ResolvedEpisodePlaybackSource = {
-      url: resolved.url
+      url: resolved.url,
+      sourceIdentity: resolved.sourceIdentity
     };
     if (Object.keys(resolved.httpHeader).length > 0) {
       resolvedSource.httpHeader = resolved.httpHeader;

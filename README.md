@@ -11,7 +11,7 @@ VidAll TV 是一款面向 HarmonyOS TV 的家庭影视播放器与媒体管理�
 | 🎞️ 媒体库 | 已实现 | 海报墙展示电影与剧集，支持详情页与继续观看 |
 | 🎭 元数据刮削 | 已实现 | 接入 TMDB，用于电影、剧集、演员等信息展示 |
 | 🔎 搜索 | 已实现 | 支持库内搜索与结果页浏览 |
-| 🎬 播放器 | 已实现 | AVPlayer、IJKPlayer、原生桥接能力协同工作 |
+| 🎬 播放器 | 已实现 | AVPlayer 主路径，遇到不支持或初始化失败时固定回退 MPV；MPV 失败进入统一播放错误 |
 | ✨ AI 画质增强 | 已实现 | 基于 VPE，当前仅在 AVPlayer 路径可用 |
 
 ## 功能概览
@@ -49,7 +49,7 @@ VidAll TV 是一款面向 HarmonyOS TV 的家庭影视播放器与媒体管理�
 - SMBClient：SMB 连接测试、目录浏览、SMB URL 构建
 - VideoScannerUtil：按文件源与目录递归扫描视频
 - VideoInfoUtil / FfprobeUtil：补充媒体信息探测与轨道信息整理
-- VideoPlayerController：协调 AVPlayer、IJKPlayer、字幕桥接与 AI 画质增强
+- VideoPlayerController：协调 AVPlayer 主路径、MPV 回退、字幕桥接与 AI 画质增强
 - FileSourceDatabase：管理 file_sources、videos、scrape_info、movies、tv_series、play_progress 等表
 
 ## 环境要求
@@ -224,7 +224,7 @@ Worker 代码位于 `proxy/opensubtitles-worker/`，对应两套环境：
 | 问题 | 说明 |
 |---|---|
 | AC-3 / DTS 兼容性有限 | AVPlayer 对部分音频格式支持不足，个别资源需要回退或后续增强 |
-| VPE 仅支持 AVPlayer 路径 | IJKPlayer 与 SMB 相关回退链路不走 VPE |
+| VPE 仅支持 AVPlayer 路径 | MPV 回退路径不启用 VPE |
 | SMB 媒体信息预探测能力有限 | 部分 SMB 资源的轨道信息依赖播放阶段或额外探测逻辑 |
 | 运行效果依赖设备能力 | 不同电视设备在解码、VPE、字幕轨信息上存在差异 |
 

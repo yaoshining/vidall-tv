@@ -74,7 +74,7 @@ export interface ResolvePlaybackSourceRequest {
  * fileSourceId 等字段。
  */
 export interface ResolvedPlaybackSource {
-  /** 已编码的播放 URL（直接喂给 AVPlayer / IjkPlayer / native backend） */
+  /** 已编码的播放 URL（直接喂给 AVPlayer / MPV / native backend） */
   url: string;
   /**
    * HTTP 请求头。空时返回空对象（而非 undefined），便于调用方直接赋值。

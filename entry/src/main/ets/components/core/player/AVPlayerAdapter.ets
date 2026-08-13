@@ -33,7 +33,7 @@ const UNSUPPORTED_AUDIO_CODECS: string[] = [
  * 封装 HarmonyOS media.AVPlayer 的所有操作，实现 IPlayer 接口。
  * VideoPlayerController 通过 IPlayer 接口调用，不直接依赖此类。
  *
- * 扩展其他内核时（如 IjkPlayer），新建对应 Adapter 实现 IPlayer 即可，
+ * 扩展其他内核时，新建对应 Adapter 实现 IPlayer 即可，
  * VideoPlayerController 无需任何改动。
  */
 export class AVPlayerAdapter implements IPlayer {
@@ -468,7 +468,7 @@ export class AVPlayerAdapter implements IPlayer {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `AVPlayer error: code=${code} msg=${bizErr.message}`);
 
-      // 格式/流不支持 → 触发 fallback 切换 ijkplayer
+      // 格式/流不支持 → 触发 fallback 切换 MPV
       if (code === 5400106 || code === 5400103) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `格式不支持 (code=${code})，触发 onUnsupportedFormat`);
