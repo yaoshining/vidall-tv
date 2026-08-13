@@ -50,7 +50,7 @@ const SOFT_ONLY_KEYWORDS: string[] = [
 /**
  * codec 兼容性等级（数字越小越优先，作为初轨选择与 route decision 的排序依据）。
  *
- * 关键点：AC-3 / EAC-3 虽属软解，但在 HarmonyOS 平台普遍有 ijkplayer / 系统软解支持；
+ * 关键点：AC-3 / EAC-3 虽属软解，但 MPV 可作为系统播放失败后的兼容后端；
  * TrueHD / MLP / Audio Vivid 解码链不成熟，默认应排在 AC-3 之后。
  *
  * 1 = 系统稳态可硬解（HARD_PREFERRED）
@@ -92,7 +92,7 @@ function codecCompatibilityRank(codec: string): number {
  * 1. 整组音轨存在至少一条 rank≤1（硬解）或 rank≤2（AC-3/EAC-3 软解常见）轨道 → preferredBackend=avplayer
  *    （avplayer 启动后由 `loadAudioTracks` + `findInitialAudioTrackIndex` 切到该轨道，避免无声）
  * 2. 整组音轨全部 rank≥3（仅 TrueHD / MLP / DTS / Audio Vivid 等软解罕见或 DTS）→ preferredBackend=avplayer
- *    + fallback=ijkplayer（让 avplayer 失败后自动切 ijkplayer 软解）
+ *    + fallback=mpv（让 AVPlayer 失败后自动切 MPV 软解）
  * 3. 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
  * 4. detectedCodec / detectedChannels 取整组中 rank 最低的轨道（最兼容），不再是 probe[0]
  */
@@ -150,13 +150,13 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
   // 1. 探测完全失败且无任何音轨提示 → 仍先尝试 avplayer
   // 2. 整组音轨存在至少一条 rank≤2 轨道（硬解 / AC-3 / EAC-3）→ avplayer
   //    （avplayer 启动后由 loadAudioTracks 切到该轨道）
-  // 3. 整组音轨全部 rank≥3（仅 TrueHD / MLP / Audio Vivid / DTS）→ avplayer + fallback=ijkplayer
-  //    （让 avplayer 失败后自动切 ijkplayer 软解；同时避免"全部 rank3"误判为 ijkplayer）
-  const preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native' = 'avplayer';
+  // 3. 整组音轨全部 rank≥3（仅 TrueHD / MLP / Audio Vivid / DTS）→ avplayer + fallback=mpv
+  //    （让 AVPlayer 失败后自动切 MPV 软解）
+  const preferredBackend: 'avplayer' | 'mpv' = 'avplayer';
 
   const decision: AudioRoutingDecision = {
     preferredBackend,
-    fallback: 'ijkplayer',
+    fallback: 'mpv',
     preferredChannels,
     summary,
     detectedCodec,
@@ -289,7 +289,7 @@ function isAudioTrackPlayable(track: AudioTrackItem): boolean {
   if (codec.length === 0) {
     return false;
   }
-  // 若 codec 在 SOFT_ONLY_KEYWORDS 中，视为"软解可用"——avplayer/ijkplayer 都能尝试播放
+  // 若 codec 在 SOFT_ONLY_KEYWORDS 中，视为软解可用，AVPlayer 失败后由 MPV 接管
   if (SOFT_ONLY_KEYWORDS.indexOf(codec) >= 0) {
     return true;
   }
@@ -427,7 +427,7 @@ export class AudioTrackRoutingService {
    *
    * 行为：
    * - 整组音轨存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer
-   * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer + fallback=ijkplayer
+   * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer + fallback=mpv
    * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
    * - 初始选轨由 controller 调用 `resolveInitialTrackIndex` 决定（与 backend route 决策解耦）
    */

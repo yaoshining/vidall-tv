@@ -27,7 +27,7 @@ export interface SubtitleInfo {
 
 /**
  * 统一播放器接口
- * 所有播放内核（AVPlayer、IjkPlayer 等）均须实现此接口，
+ * 所有播放内核（AVPlayer、MPV）均须实现此接口，
  * VideoPlayerController 只依赖此接口，不依赖具体内核。
  */
 export interface IPlayer {
@@ -83,7 +83,7 @@ export interface IPlayer {
   onError(callback: (error: Error) => void): void;
   /**
    * 格式不支持回调：播放器遇到无法解码的格式时触发（如 AVPlayer 遇到 AC-3/EAC-3）。
-   * VideoPlayerController 收到此回调后会自动切换到 ijkplayer。
+   * VideoPlayerController 收到此回调后会自动回退到 MPV。
    */
   onUnsupportedFormat(callback: () => void): void;
   onSeekDone(callback: () => void): void;

@@ -6,47 +6,13 @@ import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
-import {
-  resolveIjkPlayerLayoutConfig,
-  IjkPlayerLayoutConfig,
-  resolveRenderFitForAspectRatioMode
-} from "./VideoPlayerLayoutUtil"
-
-class IjkXComponentLayoutModifier implements AttributeModifier<XComponentAttribute> {
-  private readonly mode: AspectRatioMode
-  private readonly videoRatio: number
-  private readonly viewportWidth: number
-  private readonly viewportHeight: number
-
-  constructor(mode: AspectRatioMode, videoRatio: number, viewportWidth: number, viewportHeight: number) {
-    this.mode = mode
-    this.videoRatio = videoRatio
-    this.viewportWidth = viewportWidth
-    this.viewportHeight = viewportHeight
-  }
-
-  applyNormalAttribute(instance: XComponentAttribute): void {
-    const config = resolveIjkPlayerLayoutConfig(this.mode, this.videoRatio, this.viewportWidth, this.viewportHeight)
-    instance.width(config.width)
-    if (config.height !== undefined) {
-      instance.height(config.height)
-    }
-    if (config.aspectRatio !== undefined) {
-      instance.aspectRatio(config.aspectRatio)
-    }
-    if (config.renderFit !== undefined) {
-      instance.renderFit(config.renderFit)
-    }
-    instance.backgroundColor(config.xComponentBackgroundColor)
-  }
-}
+import { resolveRenderFitForAspectRatioMode } from "./VideoPlayerLayoutUtil"
 
 @ComponentV2
 export struct VideoPlayer {
   private xComponentController = new XComponentController()
   private surfaceId: string = ''
   private initMode: string = ''
-  private ijkInitTimer?: number
   @Require @Param controller: VideoPlayerController
   @Require @Param data: VideoData
   @Require @Param onEpisodeSelect: (item: PlaybackContextItem) => Promise<boolean>
@@ -56,10 +22,6 @@ export struct VideoPlayer {
   @Local backendMode: PlayerBackend = 'avplayer'
   /** 镜像 controller.aspectRatioMode，用于驱动 renderFit 响应式更新 */
   @Local aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT
-  /** 镜像 controller.ijkVideoRatio，用于驱动 ijkplayer 内层 XComponent 的显式布局切换。 */
-  @Local ijkVideoRatio: number = 0
-  @Local ijkViewportWidth: number = 0
-  @Local ijkViewportHeight: number = 0
   /**
    * 字幕选择器抽屉「退出搜索结果」回调。
    * 由 SubtitleSelectorDrawerDialog.aboutToAppear 注册；
@@ -73,7 +35,6 @@ export struct VideoPlayer {
 
   @Monitor('controller.backend')
   onBackendChange(): void {
-    this.clearIjkInitTimer()
     this.backendMode = this.controller.backend
     // backend 切换后允许新分支重新初始化。
     this.initMode = ''
@@ -84,13 +45,6 @@ export struct VideoPlayer {
   onAspectRatioModeChange(): void {
     this.aspectRatioMode = this.controller.aspectRatioMode
     console.info(`[VideoPlayer] 画面比例变更 → mode=${this.aspectRatioMode}, renderFit=${this.toRenderFit(this.aspectRatioMode)}`)
-  }
-
-  /** 3.2 镜像 controller.ijkVideoRatio：DAR 回调更新后同步到本地状态，驱动 Stack 响应式重排 */
-  @Monitor('controller.ijkVideoRatio')
-  onIjkVideoRatioChange(): void {
-    this.ijkVideoRatio = this.controller.ijkVideoRatio
-    console.info(`[VideoPlayer] ijkVideoRatio 变更 → ${this.ijkVideoRatio}`)
   }
 
   /** 将画面比例模式映射到 XComponent.renderFit */
@@ -111,13 +65,6 @@ export struct VideoPlayer {
     this.initMode = ''
   }
 
-  private clearIjkInitTimer(): void {
-    if (this.ijkInitTimer !== undefined) {
-      clearTimeout(this.ijkInitTimer)
-      this.ijkInitTimer = undefined
-    }
-  }
-
   private isPlaybackCompletedState(): boolean {
     const duration = this.controller.duration
     const current = this.controller.currentTime
@@ -125,15 +72,6 @@ export struct VideoPlayer {
       return false
     }
     return current >= duration
-  }
-
-  private resolveIjkLayoutConfig(): IjkPlayerLayoutConfig {
-    return resolveIjkPlayerLayoutConfig(
-      this.aspectRatioMode,
-      this.ijkVideoRatio,
-      this.ijkViewportWidth,
-      this.ijkViewportHeight
-    )
   }
 
   /** 从 VideoData 推断字幕存储用的 sourceType 字符串 */
@@ -527,81 +465,6 @@ export struct VideoPlayer {
           .height("100%")
           .renderFit(this.toRenderFit(this.aspectRatioMode))
           .backgroundColor(Color.Black)
-      } else if (this.backendMode === 'ijkplayer') {
-        // IjkPlayer 内核：必须用 libraryname 模式，不能用 XComponentController
-        // ⚠️ libraryname 模式的 XComponent 原生层会抢占触摸事件，onClick/gesture 无效，
-        //    需要在上方叠加透明触摸层来拦截交互。
-        Stack({ alignContent: Alignment.Center }) {
-          XComponent({
-            id: 'ijkPlayerXComponent',
-            type: XComponentType.SURFACE,
-            libraryname: 'ijkplayer_napi'
-          })
-            .onLoad((context: object) => {
-              if (!this.tryMarkInit('ijkplayer')) {
-                return
-              }
-              // ⚠️ 必须先注册 PREPARED 监听，再触发 init！
-              emitter.once(PlayerEvents.PREPARED, () => {
-                if (this.autoPlay) {
-                  this.controller.play()
-                } else {
-                  this.controlsDialogController.open()
-                }
-              })
-              // ⚠️ 用 setTimeout 延迟，确保 XComponent Surface 的 native 层已完全 ready
-              this.clearIjkInitTimer()
-              this.ijkInitTimer = setTimeout(() => {
-                this.ijkInitTimer = undefined
-                if (this.controller.backend !== 'ijkplayer' || this.initMode !== 'ijkplayer') {
-                  this.resetInitMode()
-                  return
-                }
-                this.surfaceId = 'ijkPlayerXComponent'
-                this.controller.initPlayer(this.data, this.surfaceId).then(() => {
-                  this.controller.setIjkContext(context, 'ijkPlayerXComponent')
-                }).catch((err: Error) => {
-                  console.error(`[VideoPlayer] ijk init 异常: ${err.message}`)
-                  this.resetInitMode()
-                  this.backendMode = 'avplayer'
-                })
-              }, 100)
-            })
-            .attributeModifier(new IjkXComponentLayoutModifier(
-              this.aspectRatioMode,
-              this.ijkVideoRatio,
-              this.ijkViewportWidth,
-              this.ijkViewportHeight
-            ))
-
-          // 透明触摸拦截层：专门处理点击和手势，解决 libraryname 模式事件不透传问题
-          Stack()
-            .width("100%")
-            .height("100%")
-            .backgroundColor(Color.Transparent)
-            .onClick(async () => {
-              await this.controller.pause()
-              this.controlsDialogController.open()
-            })
-            .gesture(
-              SwipeGesture()
-                .onAction((event: SwipeGestureEvent) => {
-                  if (!this.controlsOpened) {
-                    this.controlsDialogController.open()
-                  } else {
-                    console.log('swipe direction: ' + JSON.stringify(event))
-                  }
-                })
-            )
-        }
-        .width("100%")
-        .height("100%")
-        .clip(this.resolveIjkLayoutConfig().clipViewport)
-        .backgroundColor(this.resolveIjkLayoutConfig().outerStackBackgroundColor)
-        .onAreaChange((_oldValue, newValue) => {
-          this.ijkViewportWidth = typeof newValue.width === 'number' ? newValue.width : 0
-          this.ijkViewportHeight = typeof newValue.height === 'number' ? newValue.height : 0
-        })
       } else if (this.backendMode === 'mpv') {
         // MPV 内核：使用 XComponentController 模式（与 avplayer 相同），通过 surfaceId 绑定
         XComponent({
@@ -622,10 +485,9 @@ export struct VideoPlayer {
               }
             })
             // 先 initPlayer（创建 MpvPlayerAdapter），等 onAreaChange 拿到有效宽高后再 setMpvSurface
-            this.controller.initPlayer(this.data, this.surfaceId).catch((err: Error) => {
-              console.error(`[VideoPlayer] mpv init 异常: ${err.message}`)
+            this.controller.initPlayer(this.data, this.surfaceId).catch(() => {
+              console.error('[VideoPlayer] mpv init 异常')
               this.resetInitMode()
-              this.backendMode = 'avplayer'
             })
           })
           .onAreaChange((_oldValue: Area, newValue: Area) => {
@@ -663,90 +525,6 @@ export struct VideoPlayer {
           .height("100%")
           .renderFit(this.toRenderFit(this.aspectRatioMode))
           .backgroundColor(Color.Black)
-      } else if (this.backendMode === 'native') {
-        Stack() {
-          XComponent({
-            id: 'nativePlayerXComponent',
-            type: XComponentType.SURFACE,
-            libraryname: 'vidall_core_player_napi'
-          })
-            .onLoad((context: object) => {
-              if (!this.tryMarkInit('native')) {
-                return
-              }
-              emitter.once(PlayerEvents.PREPARED, () => {
-                if (this.autoPlay) {
-                  this.controller.play()
-                } else {
-                  this.controlsDialogController.open()
-                }
-              })
-              this.clearIjkInitTimer()
-              this.ijkInitTimer = setTimeout(() => {
-                this.ijkInitTimer = undefined
-                if (this.controller.backend !== 'native' || this.initMode !== 'native') {
-                  this.resetInitMode()
-                  return
-                }
-                this.surfaceId = 'nativePlayerXComponent'
-                this.controller.initPlayer(this.data, this.surfaceId).then(() => {
-                  this.controller.setNativeContext(context, 'nativePlayerXComponent')
-                }).catch((err: Error) => {
-                  console.error(`[VideoPlayer] native init 异常: ${err.message}`)
-                  this.resetInitMode()
-                  this.backendMode = 'avplayer'
-                })
-              }, 100)
-            })
-            .width("100%")
-            .height("100%")
-            .renderFit(this.toRenderFit(this.aspectRatioMode))
-            .backgroundColor(Color.Black)
-
-          Stack()
-            .width("100%")
-            .height("100%")
-            .backgroundColor(Color.Transparent)
-            .onClick(async () => {
-              await this.controller.pause()
-              this.controlsDialogController.open()
-            })
-            .gesture(
-              SwipeGesture()
-                .onAction((event: SwipeGestureEvent) => {
-                  if (!this.controlsOpened) {
-                    this.controlsDialogController.open()
-                  } else {
-                    console.log('swipe direction: ' + JSON.stringify(event))
-                  }
-                })
-            )
-        }
-        .width("100%")
-        .height("100%")
-      } else {
-        Column({ space: 12 }) {
-          Text('FFmpeg 实验后端已下线')
-            .fontSize(24)
-            .fontColor(Color.White)
-            .fontWeight(FontWeight.Medium)
-          Text('当前版本已恢复到 AVPlayer / IjkPlayer 主播放方案。')
-            .fontSize(16)
-            .fontColor('#B3FFFFFF')
-          Text('FFmpeg 相关代码已保留，但不再进入主路径。')
-            .fontSize(14)
-            .fontColor('#80FFFFFF')
-        }
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-        .width("100%")
-        .height("100%")
-        .backgroundColor(Color.Black)
-        .onAppear(() => {
-          this.resetInitMode()
-          this.controller.backend = 'ijkplayer'
-          this.backendMode = 'ijkplayer'
-        })
       }
 
       // 字幕显示层已移至播放器页 RelativeContainer 顶层（独立于 XComponent GPU 合成层）
@@ -760,61 +538,14 @@ export struct VideoPlayer {
   aboutToAppear(): void {
     this.backendMode = this.controller.backend
     this.aspectRatioMode = this.controller.aspectRatioMode
-    // 3.3 初始化镜像：若 controller 在 aboutToAppear 前已有 ijkVideoRatio（理论上不发生，防御性读取）
-    this.ijkVideoRatio = this.controller.ijkVideoRatio
     this.initMode = ''
     emitter.on(PlayerEvents.COMPLETED, () => {
-      this.clearIjkInitTimer()
-      this.controlsDialogController.open()
-    })
-    emitter.on(PlayerEvents.MPV_ERROR_FALLBACK, () => {
-      // MPV 播放失败，提示用户尝试 IJKPlayer
-      this.showMpvErrorFallbackDialog()
-    })
-    emitter.on(PlayerEvents.IJK_ERROR_FALLBACK, () => {
-      // IJKPlayer 播放失败，提示用户尝试 MPV
-      this.showIjkErrorFallbackDialog()
+        this.controlsDialogController.open()
     })
   }
 
   aboutToDisappear(): void {
-    this.clearIjkInitTimer()
     emitter.off(PlayerEvents.COMPLETED.eventId)
-    emitter.off(PlayerEvents.MPV_ERROR_FALLBACK.eventId)
-    emitter.off(PlayerEvents.IJK_ERROR_FALLBACK.eventId)
   }
 
-  private showMpvErrorFallbackDialog(): void {
-    this.getUIContext().showAlertDialog({
-      title: 'MPV 播放失败',
-      message: '当前视频无法使用 MPV 播放器播放，是否尝试切换到 IJKPlayer？',
-      primaryButton: {
-        value: '切换到 IJKPlayer',
-        action: () => {
-          this.controller.switchBackendInPlayback('ijkplayer')
-        }
-      },
-      secondaryButton: {
-        value: '关闭',
-        action: () => {}
-      }
-    })
-  }
-
-  private showIjkErrorFallbackDialog(): void {
-    this.getUIContext().showAlertDialog({
-      title: 'IJKPlayer 播放失败',
-      message: '当前视频无法使用 IJKPlayer 播放，是否尝试切换到 MPV 播放器？',
-      primaryButton: {
-        value: '切换到 MPV',
-        action: () => {
-          this.controller.switchBackendInPlayback('mpv')
-        }
-      },
-      secondaryButton: {
-        value: '关闭',
-        action: () => {}
-      }
-    })
-  }
 }

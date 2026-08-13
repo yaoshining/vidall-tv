@@ -86,20 +86,6 @@ export interface NativeCapabilities {
 /** 查询 native 层能力（libcurl/ffmpeg 是否可用及版本信息） */
 export const getNativeCapabilities: () => NativeCapabilities;
 
-export interface VideoDecoderCapability {
-  capabilityKnown: boolean;
-  supported: boolean;
-  isHardware: boolean;
-  maxWidth: number;
-  maxHeight: number;
-  decoderName: string;
-  mimeType: string;
-  errorMessage: string;
-}
-
-/** 查询设备对指定视频编码的硬件解码能力 */
-export const queryVideoDecoderCapability: (codecOrMime: string) => VideoDecoderCapability;
-
 export interface AudioDecoderCapability {
   capabilityKnown: boolean;
   supported: boolean;

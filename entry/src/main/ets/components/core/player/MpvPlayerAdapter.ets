@@ -32,7 +32,7 @@ type MediaSourceKind = 'localFile' | 'http' | 'https' | 'hls' | 'dash' | 'localh
  *
  * 实现 IPlayer 接口，封装 @vidall/player (libmpv) 的所有操作。
  *
- * 与 IjkPlayerAdapter 的关键差异：
+ * MPV surface 接入的关键点：
  * 1. XComponent 使用 XComponentController 模式拿 surfaceId（非 libraryname），
  *    通过 XComponentSurfaceAdapter 管理 attachSurface/resizeSurface/detachSurface 生命周期。
  * 2. 无需定时器轮询 currentTime — position 事件由 mpv time-pos 属性驱动。

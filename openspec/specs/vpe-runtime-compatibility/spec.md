@@ -55,16 +55,15 @@
 
 ---
 
-### Requirement: MPV 后端在 x86_64 模拟器上 SHALL 不可用
+### Requirement: MPV 后端在不兼容架构上 SHALL 安全失败
+MPV 播放后端依赖包含目标架构原生库的播放器包。系统 MUST 在运行环境与 MPV 原生库不兼容时阻止加载 MPV，并进入统一播放错误处理，不得回退到已移除的播放内核。
 
-MPV 播放后端依赖 VidAll_Player HAR（含 ARM 原生库），在 x86_64 模拟器上无法加载。系统 SHALL 在模拟器环境探测到不兼容架构时，阻止用户选择 MPV 并自动降级。
+#### Scenario: 不兼容架构触发统一播放错误
+- **WHEN** AVPlayer 无法播放当前媒体
+- **AND** 当前运行架构无法加载 MPV 原生库
+- **THEN** 系统 SHALL 显示统一播放错误
 
-#### Scenario: 模拟器上设置页隐藏或标记 MPV 不可用
-- **WHEN** 应用运行在 x86_64 模拟器
-- **THEN** 播放内核设置中 MPV 选项 SHALL 标注"仅支持真机"
-- **AND** 若用户尝试选择 MPV，SHALL 提示"当前设备不支持 mpv 内核，已自动回退到 ijkplayer"
-
-#### Scenario: 真机上 MPV 后端正常可用
-- **WHEN** 应用运行在 ARM 架构真机
+#### Scenario: ARM 真机上 MPV 后端正常可用
+- **WHEN** 应用运行在 MPV 原生库支持的 ARM 真机
 - **THEN** MPV 后端 SHALL 正常工作
-- **AND** 设置页 MPV 选项无限制标注
+- **AND** AVPlayer 失败后 SHALL 能够回退到 MPV

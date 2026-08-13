@@ -8,7 +8,7 @@
 //
 // 约束：
 // 1. 不修改 `PlayerPageParam` 字段，保持现有播放入口契约。
-// 2. 不重写 AVPlayer / IJK / Native adapter；只负责"播放前一刻"的源解析。
+// 2. 不重写 AVPlayer / MPV / Native adapter；只负责"播放前一刻"的源解析。
 // 3. 不在本 service 内做 ffprobe 回填；只读取 DB 中已落库的轨道元数据。
 //
 // 与 ServiceLocator 的关系：
@@ -248,7 +248,7 @@ export class SourceAdapterService {
    * - 端口兜底 445。
    * - 路径段 `decode → encode` 二次处理。
    * - MPV 直连采用无 userinfo URI，并通过 Basic Authorization 交由 VidAll_Player
-   *   的内部 native bridge 注入 Samba；AVPlayer/IJK 仍由后端服务使用原始 URI 建立代理。
+   *   的内部 native bridge 注入 Samba；AVPlayer 仍由后端服务使用原始 URI 建立代理。
    */
   private assembleSmbSource(
     configJson: string,

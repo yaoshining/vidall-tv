@@ -68,7 +68,7 @@ interface SmbProbeNapiBridge {
   ) => void;
   prepare: (handle: number) => void;
   getProxyUrl: (handle: number) => string;
-  release: (handle: number, keepProxy?: boolean) => void;
+  release: (handle: number) => void;
 }
 
 function getSmbProbeNapi(): SmbProbeNapiBridge {

@@ -3,7 +3,6 @@ import buffer from '@ohos.buffer';
 import {
   AvSubtitleBridgeAdapter,
   decodeSubtitlePayload,
-  IjkSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter
 } from '../main/ets/components/core/player/SubtitleBridgeAdapter';
 import { IPlayer, SubtitleInfo, TrackInfo } from '../main/ets/components/core/player/IPlayer';
@@ -98,30 +97,6 @@ export default function subtitleBridgeAdapterTest() {
       expect(state.allSubtitleTracks.length).assertEqual(1);
       expect(state.activeSubtitleIndex).assertEqual(-1);
       expect(player.selectedTrack).assertEqual(-99);
-      done();
-    });
-
-    it('IjkSubtitleBridgeAdapter: 当前策略下隐藏内嵌字幕轨', 0, async (done: () => void) => {
-      const player = new MockPlayer();
-      const adapter = new IjkSubtitleBridgeAdapter();
-      const videoData: VideoData = {
-        type: VideoDataType.FILE_URI,
-        videoSrc: 'file:///movie.mkv',
-        presetSubtitleTracks: [
-          { trackIndex: 5, displayName: '中文 (SRT)' }
-        ]
-      };
-
-      await adapter.init(player, videoData);
-      let state = adapter.getState();
-        expect(state.allSubtitleTracks.length).assertEqual(0);
-        expect(state.activeSubtitleIndex).assertEqual(-1);
-        expect(player.selectedTrack).assertEqual(-99);
-
-      await adapter.switchTrack(-1);
-      state = adapter.getState();
-      expect(state.activeSubtitleIndex).assertEqual(-1);
-      expect(player.selectedTrack).assertEqual(-1);
       done();
     });
 

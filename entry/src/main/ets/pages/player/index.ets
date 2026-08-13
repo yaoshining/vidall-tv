@@ -3,8 +3,7 @@ import { VideoDataType } from "../../components/core/player/Constants";
 import { VideoData, PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import {
   VideoPlayerController,
-  type PlayerBackend,
-  type UnsupportedFormatFallback
+  type PlayerBackend
 } from "../../components/core/player/VideoPlayerController";
 import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
 import { common } from "@kit.AbilityKit";
@@ -36,7 +35,7 @@ export interface PlayerPageParam {
   durationHintMs?: number;
   /** 预置音轨列表（可选），用于 EAC-3/AC-3 等 AVPlayer 无法探测的格式 */
   presetAudioTracks?: PresetAudioTrack[];
-  /** 预置字幕轨列表（可选），来自 ffprobe 探测结果，供 ijkplayer 后端字幕枚举 */
+  /** 预置字幕轨列表（可选），来自 ffprobe 探测结果，供播放器后端字幕枚举 */
   presetSubtitleTracks?: PresetSubtitleTrack[];
   /** 视频 DB id（用于进度持久化） */
   videoId?: number;
@@ -46,10 +45,8 @@ export interface PlayerPageParam {
   seasonNumber?: number;
   /** 集号，电影为 0 */
   episodeNumber?: number;
-  /** 可选：强制指定播放后端（当前建议 avplayer / ijkplayer / native） */
-  preferredBackend?: PlayerBackend;
-  /** 可选：AVPlayer 不支持格式时的自动回退后端 */
-  unsupportedFormatFallback?: UnsupportedFormatFallback;
+  /** 可选：指定播放后端；native / ffmpeg 仅作为历史入参兼容并映射到 mpv */
+  preferredBackend?: PlayerBackend | 'native' | 'ffmpeg';
   /**
    * 媒体级进度 key（由 MediaProgressStore.seriesKey / movieKey 生成）。
    * 设置后，播放器使用媒体级进度续播（直接 seek，不弹续播弹窗），
@@ -197,7 +194,6 @@ export function buildMediaLibraryEpisodeSwitchParam(
     seasonNumber,
     episodeNumber,
     preferredBackend: currentParam.preferredBackend,
-    unsupportedFormatFallback: currentParam.unsupportedFormatFallback,
     presetAudioTracks: resolvedSource.presetAudioTracks,
     presetSubtitleTracks: resolvedSource.presetSubtitleTracks,
     mediaKey,
@@ -235,7 +231,6 @@ export function buildFileExplorerEpisodeSwitchParam(
     httpHeader: currentParam.httpHeader,
     title: selectedItem.title,
     preferredBackend: currentParam.preferredBackend,
-    unsupportedFormatFallback: currentParam.unsupportedFormatFallback,
     playbackContext: context
   };
   return nextParam;
@@ -336,8 +331,7 @@ export struct PlayerPage {
   private getBackendDebugText(): string {
     const proto = this.videoPlayerController.sourceProtocol;
     const rawBackend = this.videoPlayerController.backend;
-    // SMB 源实际走 OH_AVPlayer + C++ HTTP 代理，显示更具体的标签
-    const backendLabel = (rawBackend === 'native' && proto === 'SMB')
+    const backendLabel = (rawBackend === 'avplayer' && proto === 'SMB')
       ? 'avplayer(smb-proxy)'
       : rawBackend;
     const protoSuffix = proto.length > 0 ? ` | ${proto}` : '';
@@ -585,12 +579,11 @@ export struct PlayerPage {
     const token = this.pageParamToken;
     this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     if (pageParam.preferredBackend) {
-      this.videoPlayerController.backend = pageParam.preferredBackend === 'ffmpeg'
-        ? 'ijkplayer'
-        : pageParam.preferredBackend;
-    }
-    if (pageParam.unsupportedFormatFallback) {
-      this.videoPlayerController.setUnsupportedFormatFallback(pageParam.unsupportedFormatFallback);
+      const preferredBackend = pageParam.preferredBackend;
+      const runtimeBackend: PlayerBackend = preferredBackend === 'native' || preferredBackend === 'ffmpeg'
+        ? 'mpv'
+        : preferredBackend;
+      this.videoPlayerController.backend = runtimeBackend;
     }
     this.videoData = this.buildVideoDataFromParam(pageParam);
     this.videoPlayerController.progressContext = null;

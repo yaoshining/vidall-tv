@@ -63,9 +63,9 @@ export interface AudioRoutingInput {
 /** 路由决策输出。 */
 export interface AudioRoutingDecision {
   /** 推荐 backend。 */
-  preferredBackend: 'avplayer' | 'ijkplayer' | 'ffmpeg' | 'native';
-  /** AVPlayer 报 unsupported format 时回退目标。 */
-  fallback: 'ijkplayer' | 'native';
+  preferredBackend: 'avplayer' | 'mpv';
+  /** AVPlayer 报 unsupported format 时固定回退到 MPV。 */
+  fallback: 'mpv';
   /** ffmpeg 软解声道计划。 */
   preferredChannels: number;
   /** 诊断摘要。 */
@@ -94,7 +94,7 @@ export interface AudioRoutingDecision {
 /** 默认路由决策（探测未启动时使用）。 */
 export const DEFAULT_AUDIO_ROUTING_DECISION: AudioRoutingDecision = {
   preferredBackend: 'avplayer',
-  fallback: 'ijkplayer',
+  fallback: 'mpv',
   preferredChannels: 2,
   summary: 'default: 未探测到音轨细节',
   detectedCodec: 'unknown',

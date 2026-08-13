@@ -4,43 +4,29 @@
 //
 // 目标：把 `VideoPlayerController` 中以下职责迁移到本 service：
 //   1. 自动音频路由决策（`resolveAudioRoutingDecision`）
-//   2. 适配器工厂（`IjkPlayerAdapter` / `AVPlayerAdapter` / `VidAllPlayerAdapter`）
-//   3. SMB 代理生命周期（`VidAllPlayerAdapter.startSmbProxy` / `cleanupOrphanedProxies`）
-//   4. XComponent 上下文绑定时序（`setIjkContext` / `setNativeContext`）
-//   5. unsupported format / native → IJK fallback 编排
-//
-// 约束：
-// - 不修改 `IPlayer` / `AVPlayerAdapter` / `IjkPlayerAdapter` / `VidAllPlayerAdapter` 现有签名。
-// - 不修改 `VideoPlayerController.initPlayer` / `setIjkContext` / `setNativeContext` 公开方法签名；
-//   旧方法保留为 thin wrapper 调用本 service。
-// - 不修改 `VideoPlayer` UI 触发入口；UI 仍调用 controller.setIjkContext(...) /
-//   controller.setNativeContext(...)。
+//   2. AVPlayer、MPV 与兼容后端的 adapter 工厂
+//   3. AVPlayer 所需的 SMB HTTP 代理生命周期
+//   4. MPV XComponent surface 绑定时序
+//   5. unsupported format → MPV fallback 编排
 //
 // 设计要点：
 // - `chooseBackend(videoData)` 返回 backend decision（pure service）。
-// - `prepareAdapter(decision, context)` 编排 SMB 代理 + 工厂 + 上下文时序。
-// - `bindIjkContext(adapter, context, id)` / `bindNativeContext(...)` 处理 XComponent 时序。
-// - `release()` 释放 adapter + 清理 SMB 代理。
+// - `prepareAdapter(decision, context)` 编排 SMB 源处理、工厂和事件绑定。
+// - `bindMpvSurface(adapter, surfaceId)` 处理 MPV XComponent 时序。
+// - `release()` 释放 adapter；代理跟随 native bridge 的普通生命周期结束。
 // - 续播状态由 controller 持有（service 不持有 resume session 状态）。
-//
-// 兼容性：
-// - controller 内的 `initPlayer` / `setIjkContext` / `setNativeContext` /
-//   `release` 旧方法保留为 thin wrapper 调用本 service，确保外部 import 兼容。
 // - `PlayerBackend` / `UnsupportedFormatFallback` 由 `PlaybackBackendTypes.ets` re-export。
 
-import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CommonConstants } from '../../common/constants/CommonConstants';
 import buffer from '@ohos.buffer';
 import { VideoData } from '../../components/core/player/VideoData';
 import { IPlayer } from '../../components/core/player/IPlayer';
 import { AVPlayerAdapter } from '../../components/core/player/AVPlayerAdapter';
-import { IjkPlayerAdapter } from '../../components/core/player/IjkPlayerAdapter';
 import { VidAllPlayerAdapter } from '../../components/core/player/VidAllPlayerAdapter';
 import { MpvPlayerAdapter } from '../../components/core/player/MpvPlayerAdapter';
 import {
   AvSubtitleBridgeAdapter,
-  IjkSubtitleBridgeAdapter,
   ISubtitleBridgeAdapter,
   MpvSubtitleBridgeAdapter,
   NoSubtitleBridgeAdapter
@@ -84,10 +70,8 @@ export interface PlaybackAdapterCallbacks {
   onSeekDone: () => void;
   onSubtitleUpdate: (info: PlaybackSubtitleInfo) => void;
   onBuffering: (isBuffering: boolean) => void;
-  /** IJK 字幕桥接：onEmbeddedTimedText 由 controller 注入并传递。 */
+  /** MPV 内嵌字幕回调。 */
   onEmbeddedTimedText?: (text: string) => void;
-  /** IJK 视频比例回调（prepared 后 DAR）。 */
-  onVideoRatio?: (ratio: number) => void;
 }
 
 const EMPTY_CALLBACKS: PlaybackAdapterCallbacks = {
@@ -119,7 +103,7 @@ export class PlaybackBackendService {
    * - 探测 ffprobe 失败时降级 preset hint
    * - 整组音轨存在至少一条稳态可硬解轨道 → preferredBackend=avplayer（让 avplayer 尝试，
    *   由 `loadAudioTracks` 阶段的 `resolveInitialTrackIndex` 选中最优可硬解轨）
-   * - 整组音轨全部应软解 → preferredBackend=avplayer + fallback=ijkplayer
+   * - 整组音轨全部应软解 → preferredBackend=avplayer + fallback=mpv
    * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
    */
   async chooseBackend(videoData: VideoData): Promise<PlaybackBackendDecision> {
@@ -154,13 +138,10 @@ export class PlaybackBackendService {
    * 准备 adapter 工厂。
    *
    * 流程：
-   * 1. 启动 SMB 代理（如适用）
-   * 2. 根据 backend 选 factory：ijkplayer → IjkPlayerAdapter；其余 → AVPlayerAdapter
+   * 1. 为 AVPlayer 启动 SMB HTTP 代理（如适用），MPV 保持 SMB 直连
+   * 2. 根据 backend 创建 MPV 或 AVPlayer adapter
    * 3. 注入字幕桥接 adapter
    * 4. 注册所有 IPlayer 事件回调
-   *
-   * 注：UI 触发入口（`setIjkContext` / `setNativeContext`）由 controller 持有，
-   * service 暴露 `bindIjkContext` / `bindNativeContext` 供 controller 调用。
    */
   prepareAdapter(
     videoData: VideoData,
@@ -180,8 +161,7 @@ export class PlaybackBackendService {
       onSeekDone: callbacks.onSeekDone ?? EMPTY_CALLBACKS.onSeekDone,
       onSubtitleUpdate: callbacks.onSubtitleUpdate ?? EMPTY_CALLBACKS.onSubtitleUpdate,
       onBuffering: callbacks.onBuffering ?? EMPTY_CALLBACKS.onBuffering,
-      onEmbeddedTimedText: callbacks.onEmbeddedTimedText,
-      onVideoRatio: callbacks.onVideoRatio
+      onEmbeddedTimedText: callbacks.onEmbeddedTimedText
     };
     const effectiveCallbacks: PlaybackAdapterCallbacks = {
       onReady: cb.onReady,
@@ -197,11 +177,10 @@ export class PlaybackBackendService {
       onBuffering: cb.onBuffering
     };
 
-    // AVPlayer/IJK 不支持直接拉取 SMB，需经 HTTP 代理。MPV 使用无 userinfo 的 SMB URI，
+    // AVPlayer 不支持直接拉取 SMB，需经 HTTP 代理。MPV 使用无 userinfo 的 SMB URI，
     // 并保留 Basic Authorization 给 VidAll_Player 的内部 native bridge 解码后注入 Samba。
     this.normalizeSmbPlaybackSource(videoData);
     let smbOriginalUrl = '';
-    let smbProxyActive = false;
     let effectiveVideoSrc = videoData.videoSrc;
     if (videoData.videoSrc.startsWith('smb://')) {
       smbOriginalUrl = videoData.videoSrc;
@@ -213,7 +192,6 @@ export class PlaybackBackendService {
         const proxyUrl = VidAllPlayerAdapter.startSmbProxy(proxySmbUrl);
         if (proxyUrl.length > 0) {
           effectiveVideoSrc = proxyUrl;
-          smbProxyActive = true;
           hilog.info(CommonConstants.LOG_DOMAIN, TAG,
             `SMB 源已通过代理 URL 转交 ${backend}（proxy started → rewritten to ${proxyUrl}）`);
         } else {
@@ -228,29 +206,7 @@ export class PlaybackBackendService {
     let subtitleBridge: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
     let subtitleBridgeKind: SubtitleBridgeKind = 'none';
 
-    if (backend === 'ijkplayer') {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'initPlayer: 使用 IjkPlayerAdapter，等待 UI 层调用 setIjkContext()');
-      const ijkAdapter = new IjkPlayerAdapter();
-      const ijkSubAdapter = new IjkSubtitleBridgeAdapter();
-      subtitleBridge = ijkSubAdapter;
-      subtitleBridgeKind = 'ijk';
-      // 内嵌字幕回调
-      if (cb.onEmbeddedTimedText !== undefined) {
-        const onEmbedded = cb.onEmbeddedTimedText;
-        ijkAdapter.setOnEmbeddedSubtitleCallback((text: string) => {
-          onEmbedded(text);
-        });
-      }
-      // 视频比例回调（prepared 后 DAR）
-      if (cb.onVideoRatio !== undefined) {
-        const onRatio = cb.onVideoRatio;
-        ijkAdapter.setOnVideoRatioCallback((ratio: number) => {
-          onRatio(ratio);
-        });
-      }
-      adapter = ijkAdapter;
-    } else if (backend === 'mpv') {
+    if (backend === 'mpv') {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'initPlayer: 使用 MpvPlayerAdapter，等待 UI 层调用 setMpvSurface()');
       const mpvAdapter = new MpvPlayerAdapter();
@@ -287,43 +243,8 @@ export class PlaybackBackendService {
       subtitleBridge,
       subtitleBridgeKind,
       effectiveVideoSrc,
-      smbOriginalSrc: smbOriginalUrl,
-      smbProxyActive
     };
     return handle;
-  }
-
-  /**
-   * 绑定 IJK XComponent 上下文。
-   *
-   * 行为与原 `VideoPlayerController.setIjkContext` 字节级一致：
-   * - 校验 adapter 类型
-   * - setPendingContext 由 adapter 持有
-   * - 调 adapter.init(videoData, surfaceId)
-   */
-  async bindIjkContext(
-    adapter: IPlayer | undefined,
-    context: object,
-    xComponentId: string,
-    videoData: VideoData,
-    surfaceId: string
-  ): Promise<void> {
-    if (!(adapter instanceof IjkPlayerAdapter)) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'bindIjkContext 收到非 IjkPlayerAdapter，跳过绑定');
-      return;
-    }
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setIjkContext: 绑定 XComponent id=${xComponentId}，开始完整 init 流程...`);
-    adapter.setPendingContext(context, xComponentId);
-    try {
-      await adapter.init(videoData, surfaceId);
-    } catch (e) {
-      const err = e as BusinessError;
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `setIjkContext init 失败: ${err.message}`);
-      throw new Error(`setIjkContext init 失败: ${err.message ?? 'unknown'}`);
-    }
   }
 
   /**
@@ -361,42 +282,6 @@ export class PlaybackBackendService {
       hilog.error(CommonConstants.LOG_DOMAIN, TAG,
         `setMpvSurface init 失败: ${err.message}`);
       throw new Error(`setMpvSurface init 失败: ${err.message ?? 'unknown'}`);
-    }
-  }
-
-  /**
-   * 绑定 native XComponent 上下文。
-   *
-   * 行为与原 `VideoPlayerController.setNativeContext` 字节级一致。
-   */
-  async bindNativeContext(
-    adapter: IPlayer | undefined,
-    context: object,
-    xComponentId: string,
-    videoData: VideoData,
-    surfaceId: string
-  ): Promise<void> {
-    if (!(adapter instanceof VidAllPlayerAdapter)) {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'bindNativeContext 收到非 VidAllPlayerAdapter，跳过绑定');
-      return;
-    }
-    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-      `setNativeContext: 绑定 XComponent id=${xComponentId}，开始 native 骨架 init...`);
-    let safeContext: object = context;
-    if (safeContext === null || safeContext === undefined) {
-      const fallbackContext: Record<string, string> = {};
-      safeContext = fallbackContext as object;
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        `setNativeContext: onLoad context 为空，使用空对象兜底 id=${xComponentId}`);
-    }
-    try {
-      await adapter.initWithContext(videoData, surfaceId, safeContext, xComponentId);
-    } catch (e) {
-      const err = e as BusinessError;
-      hilog.error(CommonConstants.LOG_DOMAIN, TAG,
-        `setNativeContext init 失败: ${err.message}`);
-      throw new Error(`setNativeContext init 失败: ${err.message ?? 'unknown'}`);
     }
   }
 
@@ -452,7 +337,7 @@ export class PlaybackBackendService {
   }
 
   /**
-   * 仅为 AVPlayer/IJK 的本地代理恢复 URI userinfo；MPV 始终消费无凭据 URI 与 Basic header。
+   * 仅为 AVPlayer 的本地代理恢复 URI userinfo；MPV 始终消费无凭据 URI 与 Basic header。
    */
   private buildSmbProxyUrl(smbUri: string, headers: Record<string, string> | undefined): string {
     if (headers === undefined) {
@@ -501,35 +386,6 @@ export class PlaybackBackendService {
     }
   }
 
-  /**
-   * SMB 代理重启：用于 avplayer → ijkplayer fallback 场景。
-   * 行为与原 `VideoPlayerController.setIjkContext` 内部 SMB 处理字节级一致。
-   */
-  restartSmbProxyForFallback(smbOriginalSrc: string, videoData: VideoData): boolean {
-    if (smbOriginalSrc.length === 0) {
-      return false;
-    }
-    const proxySmbUrl = this.buildSmbProxyUrl(smbOriginalSrc, videoData.httpHeader);
-    const newProxyUrl = VidAllPlayerAdapter.startSmbProxy(proxySmbUrl);
-    if (newProxyUrl.length > 0) {
-      videoData.videoSrc = newProxyUrl;
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[setIjkContext] SMB fallback 重启代理成功: ${newProxyUrl}`);
-      return true;
-    }
-    videoData.videoSrc = smbOriginalSrc;
-    hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-      `[setIjkContext] SMB fallback 代理重启失败，已回退到原始 SMB URL: ${smbOriginalSrc}`);
-    return false;
-  }
-
-  /**
-   * 清理 SMB 孤立代理线程。controller 在切换源前调用，避免 keepProxy=true 释放后的线程泄漏。
-   */
-  cleanupOrphanedProxies(): void {
-    VidAllPlayerAdapter.cleanupOrphanedProxies();
-  }
-
   /** 释放 adapter 与 SMB 代理。 */
   async release(handle: PlaybackAdapterHandle | undefined): Promise<void> {
     if (handle === undefined) {
@@ -542,9 +398,6 @@ export class PlaybackBackendService {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `adapter.release 失败: ${String(e)}`);
       }
-    }
-    if (handle.smbProxyActive) {
-      VidAllPlayerAdapter.cleanupOrphanedProxies();
     }
   }
 

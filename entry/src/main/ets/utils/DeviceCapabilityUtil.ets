@@ -1,30 +1,6 @@
 import { audio } from '@kit.AudioKit';
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import * as VidAllCapNapiModule from 'libvidall_core_player_napi.so';
-import type { VideoDecoderCapability } from 'libvidall_core_player_napi.so';
-
-// ─── NAPI Bridge ─────────────────────────────────────────────────────────────
-
-interface DevCapNapiBridge {
-  queryVideoDecoderCapability: (codecOrMime: string) => VideoDecoderCapability;
-}
-
-interface DevCapNapiBridgeModule {
-  default?: DevCapNapiBridge;
-}
-
-function getVidAllCorePlayerNapi(): DevCapNapiBridge {
-  const mod = VidAllCapNapiModule as DevCapNapiBridgeModule | DevCapNapiBridge | undefined;
-  if (mod === undefined) {
-    throw new Error('libvidall_core_player_napi.so 未加载');
-  }
-  const def = (mod as DevCapNapiBridgeModule).default;
-  if (def !== undefined) {
-    return def as DevCapNapiBridge;
-  }
-  return mod as DevCapNapiBridge;
-}
 
 // ─────────────────────────────────────────────
 // 常量定义（ArkTS 不支持 as const，用 namespace 替代）
@@ -162,12 +138,6 @@ export interface PlaybackSupportResult {
   matchedUnsupportedKeywords: string[];
   containerExt: string;
   message: string;
-}
-
-/** ijkplayer 硬件解码支持结果 */
-export interface IjkHwDecodeSupport {
-  h264: boolean;
-  h265: boolean;
 }
 
 // ─────────────────────────────────────────────
@@ -367,54 +337,7 @@ export class DeviceCapabilityUtil {
     });
   }
 
-  // ── 4. ijkplayer 硬件解码可用性查询 ─────────────────────────────
-
-  private static _ijkHwDecodeH264: boolean | undefined = undefined;
-  private static _ijkHwDecodeH265: boolean | undefined = undefined;
-
-  /**
-   * 查询设备是否支持 H264/H265 硬件解码（供 IjkPlayerAdapter 使用）。
-   * 结果缓存，整个 App 生命周期只查询一次。
-   *
-   * 注意：鸿蒙 ArkTS 层暂无公开的 getMediaCapability API（该能力在 Native C 层），
-   * 当前保守返回 false（全部软解），待官方开放 ArkTS 接口后可补充实现。
-   */
-  static async checkIjkHardwareDecodeSupport(): Promise<IjkHwDecodeSupport> {
-    if (DeviceCapabilityUtil._ijkHwDecodeH264 !== undefined &&
-        DeviceCapabilityUtil._ijkHwDecodeH265 !== undefined) {
-      const cached: IjkHwDecodeSupport = {
-        h264: DeviceCapabilityUtil._ijkHwDecodeH264,
-        h265: DeviceCapabilityUtil._ijkHwDecodeH265
-      };
-      return cached;
-    }
-
-    // 通过 NAPI 查询设备实际硬件解码能力
-    let h264 = false;
-    let h265 = false;
-    try {
-      const r264 = getVidAllCorePlayerNapi().queryVideoDecoderCapability('video/avc');
-      const r265 = getVidAllCorePlayerNapi().queryVideoDecoderCapability('video/hevc');
-      h264 = r264.supported && r264.isHardware;
-      h265 = r265.supported && r265.isHardware;
-    } catch (e) {
-      const err = e as BusinessError;
-      console.warn(`${DeviceCapabilityUtil.TAG} NAPI 查询硬件解码失败，回退软解: ${err.message ?? JSON.stringify(e)}`);
-    }
-
-    DeviceCapabilityUtil._ijkHwDecodeH264 = h264;
-    DeviceCapabilityUtil._ijkHwDecodeH265 = h265;
-
-    console.info(
-      `${DeviceCapabilityUtil.TAG} 硬件解码查询: H264=${h264 ? '✅' : '❌(软解)'} ` +
-      `H265=${h265 ? '✅' : '❌(软解)'}`
-    );
-
-    const result: IjkHwDecodeSupport = { h264, h265 };
-    return result;
-  }
-
-  // ── 5. 多声道输出能力检测 ─────────────────────────────────────────
+  // ── 4. 多声道输出能力检测 ─────────────────────────────────────────
 
   private static _multiChannelSupported: boolean | undefined = undefined;
 

@@ -6,8 +6,6 @@ import scrapeClientTest from './ScrapeClient.test';
 import mediaTypeClassifierContractTest from './MediaTypeClassifierContract.test';
 import debounceUtilTest from './DebounceUtil.test';
 import videoDataTest from './VideoData.test';
-import ijkSubtitleBridgeTest from './IjkSubtitleBridge.test';
-import ijkPlayerAdapterDarTest from './IjkPlayerAdapterDar.test';
 import subtitleBridgeAdapterTest from './SubtitleBridgeAdapter.test';
 import smbSubtitleBridgeTest from './SmbSubtitleBridge.test';
 import webDAVClientUtilsTest from './WebDAVClientUtils.test';
@@ -59,8 +57,6 @@ export default function testsuite() {
   mediaTypeClassifierContractTest();
   debounceUtilTest();
   videoDataTest();
-  ijkSubtitleBridgeTest();
-  ijkPlayerAdapterDarTest();
   subtitleBridgeAdapterTest();
   smbSubtitleBridgeTest();
   webDAVClientUtilsTest();
