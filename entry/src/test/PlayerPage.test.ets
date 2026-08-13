@@ -159,6 +159,7 @@ class CountingEpisodeSwitchController extends TestPlayerPageController implement
   private calls: EpisodeSelectNoOpSideEffectCalls
   lastVideoSrc: string = ''
   prepareResumeAutoplayDecisionCalls: string[] = []
+  reloadObserver?: () => void
 
   constructor(context: MediaLibraryContext, calls: EpisodeSelectNoOpSideEffectCalls) {
     super(context)
@@ -173,6 +174,9 @@ class CountingEpisodeSwitchController extends TestPlayerPageController implement
   async reloadSource(videoData: PlayerPageVideoDataAccessor, _autoPlay: boolean): Promise<void> {
     this.calls.reloadSource += 1
     this.lastVideoSrc = videoData.videoSrc
+    if (this.reloadObserver !== undefined) {
+      this.reloadObserver()
+    }
   }
 
   prepareResumeAutoplayDecision(shouldResumePlay: boolean, source: string): void {
@@ -1216,6 +1220,38 @@ export default function playerPageTest() {
       expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(2)
     })
 
+    it('handleEpisodeSelect 在 reload 前更新页面播放源，避免重建组件重新初始化旧集', 0, async () => {
+      const context = buildEpisodeSwitchContext(0)
+      const calls: EpisodeSelectNoOpSideEffectCalls = {
+        persistCurrentPlaybackState: 0,
+        reloadSource: 0,
+        resumePlaybackForParam: 0,
+        saveProgressNow: 0,
+        play: 0
+      }
+      const page = new ResumeDecisionEpisodeSwitchPage(
+        context,
+        calls,
+        'https://example.com/s01e02.mkv',
+        0
+      )
+      page.currentPageParam = buildEpisodeSwitchParam(context)
+      page.videoData = { videoSrc: 'https://example.com/s01e01.mkv' }
+      const controller = page.videoPlayerController as CountingEpisodeSwitchController
+      let pageSourceDuringReload: string = ''
+      let pageEpisodeDuringReload: number = 0
+      controller.reloadObserver = (): void => {
+        pageSourceDuringReload = page.videoData?.videoSrc ?? ''
+        pageEpisodeDuringReload = page.currentPageParam?.episodeNumber ?? 0
+      }
+
+      const didSwitch = await page.handleEpisodeSelect(context.items[1])
+
+      expect(didSwitch).assertTrue()
+      expect(pageSourceDuringReload).assertEqual('https://example.com/s01e02.mkv')
+      expect(pageEpisodeDuringReload).assertEqual(2)
+    })
+
     it('handleEpisodeSelect 在 prepare 后 reload 失败时会清理新 prepared decision', 0, async () => {
       const context = buildEpisodeSwitchContext(0)
       const page = new EpisodeSwitchFailureCleanupPage(context, 'https://example.com/s01e02.mkv')
@@ -1230,6 +1266,10 @@ export default function playerPageTest() {
         updatedAt: 1
       }
       page.currentPageParam = buildEpisodeSwitchParam(context)
+      page.videoData = { videoSrc: 'https://example.com/s01e01.mkv' }
+      page.currentMediaKey = 'media_progress_episode_tmdb_tmdb-9527_s1_e1'
+      page.currentMediaSeason = 1
+      page.currentMediaEpisode = 1
       controller.progressContext = previousProgressContext
 
       const didSwitch = await page.handleEpisodeSelect(context.items[1])
@@ -1238,6 +1278,11 @@ export default function playerPageTest() {
       expect(controller.preparedDecisionActive).assertFalse()
       expect(controller.preparedDecisionSource).assertEqual('')
       expect(controller.progressContext?.episodeNumber ?? 0).assertEqual(1)
+      expect(page.currentPageParam?.episodeNumber ?? 0).assertEqual(1)
+      expect(page.videoData?.videoSrc ?? '').assertEqual('https://example.com/s01e01.mkv')
+      expect(page.currentMediaKey).assertEqual('media_progress_episode_tmdb_tmdb-9527_s1_e1')
+      expect(page.currentMediaSeason).assertEqual(1)
+      expect(page.currentMediaEpisode).assertEqual(1)
     })
 
     it('handleEpisodeSelect 会在解析新播放源前推进 pageParamToken', 0, async () => {
