@@ -4178,10 +4178,8 @@ struct SmbListDirContext {
     std::string errorMessage;
 };
 
-// Windows FILETIME（100ns intervals since 1601-01-01）转为 POSIX 秒
-static inline int64_t WinTimeToUnix(uint64_t winTime) {
-    if (winTime == 0) return 0;
-    return (int64_t)(winTime / 10000000ULL) - (int64_t)11644473600LL;
+static inline uint64_t SmbTimeToUnixMilliseconds(uint64_t seconds, uint64_t nanoseconds) {
+    return seconds * 1000ULL + nanoseconds / 1000000ULL;
 }
 
 static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
@@ -4228,7 +4226,7 @@ static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
         }
         entry.isDirectory = (ent->st.smb2_type == SMB2_TYPE_DIRECTORY);
         entry.size = ent->st.smb2_size;
-        entry.lastModified = (uint64_t)WinTimeToUnix(ent->st.smb2_mtime) * 1000ULL;  // 转毫秒
+        entry.lastModified = SmbTimeToUnixMilliseconds(ent->st.smb2_mtime, ent->st.smb2_mtime_nsec);
         ctx->files.push_back(std::move(entry));
     }
     smb2_closedir(smb2, dir);
