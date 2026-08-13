@@ -27,6 +27,11 @@ export class EpisodePlaybackManager {
   private countdownSeconds: number = DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS
   private activeEpisodeKey: string = ''
   private suppressedEpisodeKey: string = ''
+  private estimatedPositionMs: number = 0
+  private lastObservedPositionMs: number = 0
+  private lastSyncAtMs: number = 0
+
+  private static readonly POSITION_ROLLBACK_TOLERANCE_MS: number = 1000
 
   updateSettings(enabled: boolean, countdownSeconds: number): void {
     this.autoplayEnabled = enabled
@@ -36,6 +41,27 @@ export class EpisodePlaybackManager {
   clear(): void {
     this.activeEpisodeKey = ''
     this.suppressedEpisodeKey = ''
+    this.resetEstimatedPosition()
+  }
+
+  private resetEstimatedPosition(): void {
+    this.estimatedPositionMs = 0
+    this.lastObservedPositionMs = 0
+    this.lastSyncAtMs = 0
+  }
+
+  private updateEstimatedPosition(currentTimeMs: number, nowMs: number, isPlaying: boolean): number {
+    const safeCurrentTimeMs = Math.max(currentTimeMs, 0)
+    if (this.lastSyncAtMs <= 0 ||
+      safeCurrentTimeMs + EpisodePlaybackManager.POSITION_ROLLBACK_TOLERANCE_MS < this.lastObservedPositionMs) {
+      this.estimatedPositionMs = safeCurrentTimeMs
+    } else {
+      const elapsedMs = isPlaying ? Math.max(nowMs - this.lastSyncAtMs, 0) : 0
+      this.estimatedPositionMs = Math.max(safeCurrentTimeMs, this.estimatedPositionMs + elapsedMs)
+    }
+    this.lastObservedPositionMs = safeCurrentTimeMs
+    this.lastSyncAtMs = nowMs
+    return this.estimatedPositionMs
   }
 
   cancelCurrentEpisode(): void {
@@ -48,21 +74,30 @@ export class EpisodePlaybackManager {
     this.cancelCurrentEpisode()
   }
 
-  sync(playbackContext: PlaybackContext | undefined, currentTimeMs: number, durationMs: number): EpisodePlaybackManagerState {
+  sync(
+    playbackContext: PlaybackContext | undefined,
+    currentTimeMs: number,
+    durationMs: number,
+    nowMs: number = Date.now(),
+    isPlaying: boolean = true
+  ): EpisodePlaybackManagerState {
     const context = this.getContextForAutoplay(playbackContext)
     const currentEpisodeKey = this.getCurrentEpisodeKeyFromContext(context)
     if (currentEpisodeKey !== this.activeEpisodeKey) {
       this.activeEpisodeKey = currentEpisodeKey
       this.suppressedEpisodeKey = ''
+      this.resetEstimatedPosition()
     }
     if (!this.autoplayEnabled || context === undefined || durationMs <= 0 || currentEpisodeKey.length === 0) {
+      this.resetEstimatedPosition()
       return buildIdleEpisodePlaybackManagerState()
     }
     const nextItem = this.getNextItemFromContext(context)
     if (nextItem === null || this.suppressedEpisodeKey === currentEpisodeKey) {
       return buildIdleEpisodePlaybackManagerState()
     }
-    const remainingMs = durationMs - Math.max(currentTimeMs, 0)
+    const estimatedPositionMs = this.updateEstimatedPosition(currentTimeMs, nowMs, isPlaying)
+    const remainingMs = durationMs - estimatedPositionMs
     if (remainingMs > this.countdownSeconds * 1000) {
       return buildIdleEpisodePlaybackManagerState()
     }

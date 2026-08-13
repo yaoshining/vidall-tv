@@ -799,7 +799,9 @@ export struct PlayerPage {
     const state = this.episodePlaybackManager.sync(
       this.videoPlayerController.playbackContext,
       this.videoPlayerController.currentTime,
-      this.videoPlayerController.duration
+      this.videoPlayerController.duration,
+      Date.now(),
+      this.videoPlayerController.isPlaying
     )
     this.applyEpisodeAutoplayOverlayState(state)
     if (state.shouldPlayNext && state.nextItem !== null) {
