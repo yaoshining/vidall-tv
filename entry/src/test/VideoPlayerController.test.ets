@@ -22,6 +22,7 @@ interface VideoPlayerControllerAccessor {
   surfaceId: string
   player?: IPlayer
   currentVideoData?: VideoData
+  currentOriginalVideoSrc: string
   playbackSessionId: number
   consumedReadyResumeToken: string
   pendingResumeState: PendingResumeStateSnapshot | null
@@ -277,6 +278,15 @@ class TestVideoPlayerController extends VideoPlayerController {
   saveProgressNow(): void {}
 }
 
+class SurfaceInitVideoPlayerController extends TestVideoPlayerController {
+  initializedVideoData?: VideoData
+
+  async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
+    this.initializedVideoData = videoData
+    await super.initPlayer(videoData, surfaceId)
+  }
+}
+
 class DiagnosticVideoPlayerController extends TestVideoPlayerController {
   readonly resumeLogs: ResumeDiagnosticRecordSnapshot[] = []
 
@@ -469,6 +479,32 @@ function findResumeLog(
 
 export default function videoPlayerControllerTest() {
   describe('VideoPlayerController review regressions', () => {
+    it('XComponent 首次挂载使用组件传入的播放源', 0, async () => {
+      const controller = new SurfaceInitVideoPlayerController()
+      const initialVideoData = buildVideoData('initial-surface-source')
+
+      await controller.initPlayerForSurface(initialVideoData, 'surface-initial')
+
+      expect(controller.initializedVideoData).assertEqual(initialVideoData)
+      expect(controller.surfaceId).assertEqual('surface-initial')
+    })
+
+    it('XComponent 重建忽略组件旧源并恢复控制器当前原始源', 0, async () => {
+      const controller = new SurfaceInitVideoPlayerController()
+      const accessor = accessController(controller)
+      const staleVideoData = buildVideoData('episode-one')
+      const activeVideoData = buildVideoData('episode-two')
+      activeVideoData.videoSrc = 'http://127.0.0.1:34559/episode-two.mp4'
+      accessor.currentVideoData = activeVideoData
+      accessor.currentOriginalVideoSrc = 'smb://server/share/episode-two.mkv'
+
+      await controller.initPlayerForSurface(staleVideoData, 'surface-recreated')
+
+      expect(controller.initializedVideoData).assertEqual(activeVideoData)
+      expect(activeVideoData.videoSrc).assertEqual('smb://server/share/episode-two.mkv')
+      expect(controller.surfaceId).assertEqual('surface-recreated')
+    })
+
     it('reloadSource 再次触发时会先拒绝上一个待完成回调', 0, async () => {
       const controller = new TestVideoPlayerController()
       const accessor = accessController(controller)

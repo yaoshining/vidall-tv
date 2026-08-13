@@ -621,6 +621,26 @@ export class VideoPlayerController {
     };
   }
 
+  /**
+   * XComponent 重建时使用控制器当前播放源，避免组件旧实例以过期 @Param 抢占切集会话。
+   * 首次挂载尚无控制器播放源时，才使用组件传入的初始数据。
+   */
+  async initPlayerForSurface(initialVideoData: VideoData, surfaceId: string): Promise<void> {
+    const activeVideoData = this.currentVideoData;
+    if (activeVideoData === undefined) {
+      await this.initPlayer(initialVideoData, surfaceId);
+      return;
+    }
+    if (this.currentOriginalVideoSrc.length > 0) {
+      activeVideoData.videoSrc = this.currentOriginalVideoSrc;
+    }
+    if (activeVideoData !== initialVideoData) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        '[initPlayerForSurface] 忽略 XComponent 过期播放源，沿用控制器当前播放源');
+    }
+    await this.initPlayer(activeVideoData, surfaceId);
+  }
+
   /** 初始化 AVPlayer 主路径或 MPV 回退路径。 */
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     this.playbackSessionId += 1;

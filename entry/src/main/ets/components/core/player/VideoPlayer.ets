@@ -450,7 +450,7 @@ export struct VideoPlayer {
                 this.controlsDialogController.open()
               }
             })
-            this.controller.initPlayer(this.data, this.surfaceId)
+            this.controller.initPlayerForSurface(this.data, this.surfaceId)
           })
           .onClick(async () => {
             await this.controller.pause()
@@ -490,7 +490,7 @@ export struct VideoPlayer {
               }
             })
             // 先 initPlayer（创建 MpvPlayerAdapter），等 onAreaChange 拿到有效宽高后再 setMpvSurface
-            this.controller.initPlayer(this.data, this.surfaceId).catch((error: BusinessError) => {
+            this.controller.initPlayerForSurface(this.data, this.surfaceId).catch((error: BusinessError) => {
               this.handleMpvInitError(error)
             })
           })
