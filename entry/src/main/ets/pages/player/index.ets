@@ -672,6 +672,10 @@ export struct PlayerPage {
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;
     const previousPageParamToken = this.pageParamToken;
+    const previousVideoData = this.videoData;
+    const previousMediaKey = this.currentMediaKey;
+    const previousMediaSeason = this.currentMediaSeason;
+    const previousMediaEpisode = this.currentMediaEpisode;
     this.pageParamToken += 1;
     this.videoPlayerController.discardPreparedResumeAutoplayDecision();
     let keepNextPageParamToken = false;
@@ -704,6 +708,12 @@ export struct PlayerPage {
       this.videoPlayerController.progressContext = nextParam.videoId !== undefined && nextParam.videoId > 0
         ? this.buildProgressContext(nextParam)
         : null;
+      // 后端切换会重建 XComponent；先更新页面源，避免 onLoad 用旧集再次初始化播放器。
+      this.currentPageParam = nextParam;
+      this.videoData = nextVideoData;
+      this.currentMediaKey = nextParam.mediaKey ?? '';
+      this.currentMediaSeason = nextParam.seasonNumber ?? 0;
+      this.currentMediaEpisode = nextParam.episodeNumber ?? 0;
       await this.videoPlayerController.reloadSource(nextVideoData, false);
       if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
         const fileExplorerContext = playbackContext as FileExplorerContext;
@@ -714,11 +724,6 @@ export struct PlayerPage {
           return false;
         }
       }
-      this.currentPageParam = nextParam;
-      this.videoData = nextVideoData;
-      this.currentMediaKey = nextParam.mediaKey ?? '';
-      this.currentMediaSeason = nextParam.seasonNumber ?? 0;
-      this.currentMediaEpisode = nextParam.episodeNumber ?? 0;
       this.showResumeDialog = false;
       this.pendingSeekMs = -1;
       keepNextPageParamToken = true;
@@ -730,6 +735,11 @@ export struct PlayerPage {
       return false;
     } finally {
       if (!keepNextPageParamToken) {
+        this.currentPageParam = currentParam;
+        this.videoData = previousVideoData;
+        this.currentMediaKey = previousMediaKey;
+        this.currentMediaSeason = previousMediaSeason;
+        this.currentMediaEpisode = previousMediaEpisode;
         this.pageParamToken = previousPageParamToken;
       }
       this.episodeSwitching = false;
@@ -799,7 +809,9 @@ export struct PlayerPage {
     const state = this.episodePlaybackManager.sync(
       this.videoPlayerController.playbackContext,
       this.videoPlayerController.currentTime,
-      this.videoPlayerController.duration
+      this.videoPlayerController.duration,
+      Date.now(),
+      this.videoPlayerController.isPlaying
     )
     this.applyEpisodeAutoplayOverlayState(state)
     if (state.shouldPlayNext && state.nextItem !== null) {

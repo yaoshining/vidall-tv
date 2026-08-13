@@ -621,12 +621,41 @@ export class VideoPlayerController {
     };
   }
 
+  /**
+   * XComponent 重建时使用控制器当前播放源，避免组件旧实例以过期 @Param 抢占切集会话。
+   * 首次挂载尚无控制器播放源时，才使用组件传入的初始数据。
+   */
+  async initPlayerForSurface(initialVideoData: VideoData, surfaceId: string): Promise<void> {
+    const activeVideoData = this.currentVideoData;
+    if (activeVideoData === undefined) {
+      await this.initPlayer(initialVideoData, surfaceId);
+      return;
+    }
+    if (this.currentOriginalVideoSrc.length > 0) {
+      activeVideoData.videoSrc = this.currentOriginalVideoSrc;
+    }
+    if (activeVideoData !== initialVideoData) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        '[initPlayerForSurface] 忽略 XComponent 过期播放源，沿用控制器当前播放源');
+    }
+    await this.initPlayer(activeVideoData, surfaceId);
+  }
+
   /** 初始化 AVPlayer 主路径或 MPV 回退路径。 */
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     this.playbackSessionId += 1;
     const currentSessionId = this.playbackSessionId;
     this.metricsLoadStartMs = Date.now();
     this.metricsMedia = null;
+    const previousSourceKey = this.buildPendingResumeSourceKey(this.currentVideoData);
+    const nextSourceKey = this.buildPendingResumeSourceKey(videoData);
+    // 切集后异步探测完成前也不能继续暴露上一集的尾部进度。
+    if (previousSourceKey.length > 0 && previousSourceKey !== nextSourceKey) {
+      this.duration = 0;
+      this.currentTime = 0;
+      this.currentBufferTime = 0;
+      this.progress = 0;
+    }
     // 先重置可展示状态，避免在异步预处理期间继续暴露上次播放残留。
     this.resetDisplayState();
     // 在适配器注册回调前提前查询媒体标识，回调内同步使用，避免异步改造回调签名
@@ -1276,28 +1305,27 @@ export class VideoPlayerController {
    * width/height 必须为物理像素（由 VideoPlayer.ets 在 onAreaChange 中 vp2px 转换后传入）。
    */
   async setMpvSurface(surfaceId: string, width: number, height: number): Promise<void> {
-    if (this.backend !== 'mpv') {
-      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
-        'setMpvSurface() 被调用但 backend 不是 mpv，忽略');
+    if (surfaceId.length === 0 || width <= 0 || height <= 0) {
       return;
     }
-    if (!this.player) {
-      // player 还未初始化（fallback 场景 onAreaChange 可能先于 initPlayer 触发）
-      // 缓存参数，等 initPlayer 完成后自动绑定
-      this.pendingMpvSurfaceId = surfaceId;
-      this.pendingMpvSurfaceWidth = width;
-      this.pendingMpvSurfaceHeight = height;
+    // surface 生命周期独立于播放器异步创建；始终先保存最新参数，避免 fallback 期间丢失事件。
+    this.pendingMpvSurfaceId = surfaceId;
+    this.pendingMpvSurfaceWidth = width;
+    this.pendingMpvSurfaceHeight = height;
+    this.mpvSurfaceWidth = width;
+    this.mpvSurfaceHeight = height;
+    if (this.backend !== 'mpv' || !this.player) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `setMpvSurface() player 未初始化，缓存 surface 参数: id=${surfaceId.substring(0, 8)}... w=${width} h=${height}`);
+        `setMpvSurface() 等待 MPV player，缓存 surface 参数: id=${surfaceId.substring(0, 8)}... w=${width} h=${height}`);
       return;
     }
     if (this.mpvSurfaceBound) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        'setMpvSurface() surface 已绑定，忽略重复调用');
+      this.notifyMpvSurfaceResize(width, height);
       return;
     }
-    this.mpvSurfaceWidth = width;
-    this.mpvSurfaceHeight = height;
+    this.pendingMpvSurfaceId = '';
+    this.pendingMpvSurfaceWidth = 0;
+    this.pendingMpvSurfaceHeight = 0;
     if (this.currentVideoData) {
       try {
         await this.backendService.bindMpvContext(

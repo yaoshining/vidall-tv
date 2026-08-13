@@ -42,6 +42,22 @@ export default function episodePlaybackManagerTest() {
       expect(autoplayState.nextItem?.videoPath ?? '').assertEqual('/series/s01e02.mkv')
     })
 
+    it('播放器末尾不再上报进度时倒计时仍会结束', 0, () => {
+      const manager: EpisodePlaybackManager = new EpisodePlaybackManager()
+      const context = buildMediaLibraryContext(0)
+
+      manager.updateSettings(true, 8)
+      const initialState: EpisodePlaybackManagerState = manager.sync(context, 1797000, 1800000, 1000)
+      expect(initialState.remainingSeconds).assertEqual(3)
+
+      const frozenState: EpisodePlaybackManagerState = manager.sync(context, 1797000, 1800000, 2500)
+      expect(frozenState.remainingSeconds).assertEqual(2)
+
+      const autoplayState: EpisodePlaybackManagerState = manager.sync(context, 1797000, 1800000, 4000)
+      expect(autoplayState.visible).assertFalse()
+      expect(autoplayState.shouldPlayNext).assertTrue()
+    })
+
     it('关闭自动下一集后即使接近结束也不展示倒计时', 0, () => {
       const manager: EpisodePlaybackManager = new EpisodePlaybackManager()
       const context = buildMediaLibraryContext(0)
