@@ -36,12 +36,13 @@ function(import_ffmpeg_library target library)
   set_target_properties(${target} PROPERTIES IMPORTED_LOCATION ${library_path})
 endfunction()
 
-import_ffmpeg_library(ffmpeg_avutil libavutil.so)
-import_ffmpeg_library(ffmpeg_swresample libswresample.so)
-import_ffmpeg_library(ffmpeg_avcodec libavcodec.so)
-import_ffmpeg_library(ffmpeg_avformat libavformat.so)
-import_ffmpeg_library(ffmpeg_swscale libswscale.so)
-import_ffmpeg_library(ffmpeg_avfilter libavfilter.so)
+# 直接链接 SONAME 文件，避免为链接名和完整版本名各打包一份相同二进制。
+import_ffmpeg_library(ffmpeg_avutil libavutil.so.60)
+import_ffmpeg_library(ffmpeg_swresample libswresample.so.6)
+import_ffmpeg_library(ffmpeg_avcodec libavcodec.so.62)
+import_ffmpeg_library(ffmpeg_avformat libavformat.so.62)
+import_ffmpeg_library(ffmpeg_swscale libswscale.so.9)
+import_ffmpeg_library(ffmpeg_avfilter libavfilter.so.11)
 
 target_include_directories(vidall_core_player_napi PRIVATE
     ${FFMPEG_INCLUDE_DIR}
