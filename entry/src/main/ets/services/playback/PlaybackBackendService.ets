@@ -386,7 +386,7 @@ export class PlaybackBackendService {
     }
   }
 
-  /** 释放 adapter 与 SMB 代理。 */
+  /** 释放 adapter；独立 SMB 代理由会话调用方显式释放。 */
   async release(handle: PlaybackAdapterHandle | undefined): Promise<void> {
     if (handle === undefined) {
       return;

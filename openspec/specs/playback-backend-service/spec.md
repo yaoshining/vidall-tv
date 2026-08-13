@@ -13,7 +13,7 @@ Centralize playback backend orchestration — adapter selection, lifecycle manag
 - **THEN** playback backend service SHALL 产出最终选用的 backend、相关 adapter 实例以及后续 fallback 所需的运行时上下文
 - **AND** 活跃 backend 集合 SHALL 包含 `'avplayer'` 与 `'mpv'`
 
-#### Scenario: Backend decision respects user fallback preference
+#### Scenario: 后端决策忽略已弃用的用户回退偏好
 - **WHEN** AVPlayer 探测为无法播放当前视频
 - **THEN** playback backend service SHALL 忽略已弃用的用户回退偏好并选择 `'mpv'` 作为唯一回退后端
 - **AND** playback backend service SHALL NOT 继续读取或持久化回退内核偏好

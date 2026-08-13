@@ -7,6 +7,7 @@ import { millisecondsToTime } from "../../../utils/TimeUtil";
 import { IPlayer, TrackInfo } from "./IPlayer";
 import { AVPlayerAdapter } from "./AVPlayerAdapter";
 import { MpvPlayerAdapter } from "./MpvPlayerAdapter";
+import { VidAllPlayerAdapter } from "./VidAllPlayerAdapter";
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../../db/models/MediaEntity";
 import { FfprobeUtil } from "../../../utils/FfprobeUtil";
@@ -1690,6 +1691,7 @@ export class VideoPlayerController {
     }
     const oldPlayer = this.player;
     this.player = undefined;
+    VidAllPlayerAdapter.releaseSmbProxy();
     this.backend = 'mpv';
     oldPlayer?.release().catch(() => {});
   }
@@ -1917,6 +1919,7 @@ export class VideoPlayerController {
       await this.player.release().catch(() => {});
       this.player = undefined;
     }
+    VidAllPlayerAdapter.releaseSmbProxy();
     // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
     VpeEnhancerUtil.destroyEnhancer();
   }

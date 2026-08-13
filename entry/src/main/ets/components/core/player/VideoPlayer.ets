@@ -1,7 +1,7 @@
 import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
 import { VideoData } from "./VideoData"
 import { VideoPlayerController, type PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
-import { emitter } from "@kit.BasicServicesKit"
+import { BusinessError, emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents, VideoDataType } from "./Constants"
 import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./SubtitleRenderer"
 import { millisecondsToTime } from "../../../utils/TimeUtil"
@@ -32,6 +32,11 @@ export struct VideoPlayer {
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
   private _lastRawText: string = ''
   private _lastParsedSubtitle: ParsedSubtitle | null = null
+
+  private handleMpvInitError(error: BusinessError): void {
+    console.error(`[VideoPlayer] mpv init 异常: code=${error.code} msg=${error.message}`)
+    this.resetInitMode()
+  }
 
   @Monitor('controller.backend')
   onBackendChange(): void {
@@ -485,9 +490,8 @@ export struct VideoPlayer {
               }
             })
             // 先 initPlayer（创建 MpvPlayerAdapter），等 onAreaChange 拿到有效宽高后再 setMpvSurface
-            this.controller.initPlayer(this.data, this.surfaceId).catch(() => {
-              console.error('[VideoPlayer] mpv init 异常')
-              this.resetInitMode()
+            this.controller.initPlayer(this.data, this.surfaceId).catch((error: BusinessError) => {
+              this.handleMpvInitError(error)
             })
           })
           .onAreaChange((_oldValue: Area, newValue: Area) => {

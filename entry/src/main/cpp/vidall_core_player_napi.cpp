@@ -1438,7 +1438,9 @@ struct NativePlayerSkeletonState {
   SmbAVIOContext  *smbAvioOpaque   = nullptr;  // 由 SmbCleanupResources 负责 delete
   AVIOContext     *ffmpegAvio      = nullptr;  // 由 SmbCleanupResources 负责 free
   AVFormatContext *ffmpegFmt       = nullptr;  // 由 SmbCleanupResources 负责 close
-  std::thread      smbPlayThread;              // 播放线程；joinable 时表示线程正在运行
+  std::thread      smbPlayThread;              // 代理 accept 线程；joinable 时表示线程正在运行
+  std::mutex       smbHandlerMutex;
+  std::vector<std::thread> smbHandlerThreads;  // Release 前统一等待所有请求结束
   std::shared_ptr<std::atomic<bool>> smbStopFlag { std::make_shared<std::atomic<bool>>(false) };
   std::atomic<bool>    smbPauseFlag {false};   // 通知播放线程暂停（原子）
   std::atomic<int64_t> smbSeekTargetMs {-1};   // ≥0 时表示待执行的 seek 目标（原子）
@@ -2005,7 +2007,9 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 }
 
 static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
-                                std::shared_ptr<std::atomic<bool>> stopFlag) {
+                                std::shared_ptr<std::atomic<bool>> stopFlag,
+                                std::mutex *handlerMutex,
+                                std::vector<std::thread> *handlerThreads) {
     while (!stopFlag->load(std::memory_order_relaxed)) {
         struct pollfd pfd;
         pfd.fd = serverFd; pfd.events = POLLIN; pfd.revents = 0;
@@ -2013,9 +2017,10 @@ static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
         if (!(pfd.revents & POLLIN)) continue;
         int clientFd = accept(serverFd, nullptr, nullptr);
         if (clientFd < 0) continue;
-        std::thread([clientFd, comps]() {
+        std::lock_guard<std::mutex> lock(*handlerMutex);
+        handlerThreads->emplace_back([clientFd, comps]() {
             SmbProxyHandleRequest(clientFd, comps);
-        }).detach();
+        });
     }
     close(serverFd);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "accept loop exited");
@@ -2040,7 +2045,8 @@ static int SmbStartProxy(NativePlayerSkeletonState &state, const SmbUrlComponent
     getsockname(serverFd, reinterpret_cast<struct sockaddr *>(&addr), &addrLen);
     int port = ntohs(addr.sin_port);
     state.smbStopFlag->store(false, std::memory_order_relaxed);
-    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, state.smbStopFlag);
+    state.smbPlayThread = std::thread(SmbProxyAcceptLoop, serverFd, comps, state.smbStopFlag,
+                                      &state.smbHandlerMutex, &state.smbHandlerThreads);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy",
                  "proxy started port=%{public}d host=%{public}s share=%{public}s",
                  port, comps.host.c_str(), comps.share.c_str());
@@ -2052,6 +2058,16 @@ static void SmbStopProxy(NativePlayerSkeletonState &state) {
     state.smbStopFlag->store(true, std::memory_order_relaxed);
     if (state.smbPlayThread.joinable()) {
         state.smbPlayThread.join();
+    }
+    std::vector<std::thread> handlers;
+    {
+        std::lock_guard<std::mutex> lock(state.smbHandlerMutex);
+        handlers.swap(state.smbHandlerThreads);
+    }
+    for (std::thread &handler : handlers) {
+        if (handler.joinable()) {
+            handler.join();
+        }
     }
     state.isSmbPlayback = false;
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "proxy stopped");

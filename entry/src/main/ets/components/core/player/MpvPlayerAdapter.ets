@@ -794,9 +794,6 @@ export class MpvPlayerAdapter implements IPlayer {
 
   private handleSubtitleTextEvent(event: PlayerEvent): void {
     const text = event.subtitleText ?? '';
-    if (text.length === 0) {
-      return;
-    }
     // 透传到 VideoPlayerController → SubtitleBridgeAdapter.onEmbeddedTimedText
     if (this._onEmbeddedSubtitleCb) {
       this._onEmbeddedSubtitleCb(text);
