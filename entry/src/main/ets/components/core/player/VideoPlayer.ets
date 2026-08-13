@@ -504,10 +504,9 @@ export struct VideoPlayer {
               const w = uiCtx.vp2px(vpW)
               const h = uiCtx.vp2px(vpH)
               console.info(`[VideoPlayer] mpv onAreaChange: vp=${vpW}x${vpH} px=${w}x${h} surfaceId=${this.surfaceId.substring(0, 8)}... bound=${this.controller.isMpvSurfaceBound}`)
-              if (w > 0 && h > 0 && this.surfaceId.length > 0 && !this.controller.isMpvSurfaceBound) {
+              if (w > 0 && h > 0 && this.surfaceId.length > 0) {
+                // 无论播放器是否就绪都上报；Controller 会缓存 surface 并在 MPV adapter 创建后绑定。
                 this.controller.setMpvSurface(this.surfaceId, w, h)
-              } else if (this.controller.isMpvSurfaceBound) {
-                this.controller.notifyMpvSurfaceResize(w, h)
               }
             }
           })

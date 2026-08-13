@@ -48,6 +48,9 @@ interface VideoPlayerControllerAccessor {
   activeAudioIndex: number
   pendingBackendResumeTimeMs: number
   pendingBackendResumePlay: boolean
+  pendingMpvSurfaceId: string
+  pendingMpvSurfaceWidth: number
+  pendingMpvSurfaceHeight: number
   subtitleAdapter: ISubtitleBridgeAdapter
   pendingReloadResolve?: () => void
   pendingReloadReject?: (error: Error) => void
@@ -503,6 +506,32 @@ export default function videoPlayerControllerTest() {
       expect(controller.initializedVideoData).assertEqual(activeVideoData)
       expect(activeVideoData.videoSrc).assertEqual('smb://server/share/episode-two.mkv')
       expect(controller.surfaceId).assertEqual('surface-recreated')
+    })
+
+    it('MPV player 尚未创建时会缓存最新 surface 参数', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.backend = 'mpv'
+      accessor.player = undefined
+
+      await controller.setMpvSurface('surface-before-player', 1920, 1080)
+
+      expect(accessor.pendingMpvSurfaceId).assertEqual('surface-before-player')
+      expect(accessor.pendingMpvSurfaceWidth).assertEqual(1920)
+      expect(accessor.pendingMpvSurfaceHeight).assertEqual(1080)
+    })
+
+    it('fallback 后端尚未切成 MPV 时也会缓存 surface 参数', 0, async () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.backend = 'avplayer'
+      accessor.player = undefined
+
+      await controller.setMpvSurface('surface-during-fallback', 1280, 720)
+
+      expect(accessor.pendingMpvSurfaceId).assertEqual('surface-during-fallback')
+      expect(accessor.pendingMpvSurfaceWidth).assertEqual(1280)
+      expect(accessor.pendingMpvSurfaceHeight).assertEqual(720)
     })
 
     it('reloadSource 再次触发时会先拒绝上一个待完成回调', 0, async () => {
