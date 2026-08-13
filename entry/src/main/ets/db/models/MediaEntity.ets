@@ -347,3 +347,34 @@ export class SearchHistoryEntry {
   searchedAt: number = 0;
 }
 
+// ─────────────────────────────────────────────
+// 媒体搜索选项
+// ─────────────────────────────────────────────
+
+/** 媒体搜索选项（用于 searchMediaItems） */
+export interface SearchMediaOptions {
+  /** 媒体类型过滤：'movie' | 'tv' | 'all'，默认 'all' */
+  mediaType?: 'movie' | 'tv' | 'all';
+  /** 类别关键词，模糊匹配 genres_json */
+  genre?: string;
+  /** 最低评分（含），对应 COALESCE(m.rating, ts.rating) */
+  minRating?: number;
+  /** 年份起始（含），用于十年段筛选，例如 2020 表示 2020s 的起点 */
+  yearFrom?: number;
+  /** 年份截止（含），用于十年段筛选，例如 2029 表示 2020s 的终点 */
+  yearTo?: number;
+  /** 排序方式：rating（默认）| year | title */
+  sortBy?: 'rating' | 'year' | 'title';
+  /** 最大返回条数，默认 50 */
+  limit?: number;
+  /**
+   * 观看进度过滤
+   * 'unseen'  - 未看：media_progress 表无记录，或 position_ms = 0
+   * 'partial' - 未看完：有进度且 position_ms < duration_ms * 0.9
+   * 'done'    - 已看完：position_ms >= duration_ms * 0.9
+   */
+  watchProgress?: 'unseen' | 'partial' | 'done';
+  /** 制作国过滤：ISO 3166-1 代码，如 "CN"、"JP"、"US"，LIKE 匹配 origin_country_json */
+  originCountry?: string;
+}
+

@@ -1,5 +1,5 @@
-import { FileSourceDatabase, SearchMediaOptions } from '../../db/files/FileSourceDatabase';
-import { MediaItem, SeriesGroup } from '../../db/models/MediaEntity';
+import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
+import { MediaItem, SeriesGroup, SearchMediaOptions } from '../../db/models/MediaEntity';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 
