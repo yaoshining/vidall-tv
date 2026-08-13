@@ -22,7 +22,7 @@ import {
   resolveSelectedPlaybackRateIndex,
   syncPlayerSettingsSelectionMirrorState,
   shouldApplyEpisodeAutoplaySettingsLoad
-} from '../main/ets/components/core/player/VideoControls'
+} from '../main/ets/components/core/player/PlayerSettingsDialog'
 import {
   buildEpisodeAnchorRanges,
   buildEpisodeAnchorScrollRequest,

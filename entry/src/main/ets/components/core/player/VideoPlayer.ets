@@ -1,4 +1,6 @@
-import { VideoControlsDialog, PlayerSettingsDialog, SubtitleSelectorDrawerDialog } from "./VideoControls"
+import { VideoControlsDialog } from "./VideoControls"
+import { PlayerSettingsDialog } from "./PlayerSettingsDialog"
+import { SubtitleSelectorDrawerDialog } from "./SubtitleSelectorDrawerDialog"
 import { VideoData } from "./VideoData"
 import { VideoPlayerController, type PlayerBackend, AspectRatioMode } from "./VideoPlayerController"
 import { BusinessError, emitter } from "@kit.BasicServicesKit"
