@@ -198,7 +198,7 @@ export struct SubtitleSelectorDrawerDialog {
   private showSearchToast(message: string, duration: number): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: message, duration: duration })
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   /**
@@ -318,7 +318,6 @@ export struct SubtitleSelectorDrawerDialog {
         filesDir
       });
 
-      this.showSearchToast('字幕下载成功', 2000)
       console.info(`[SubtitleSearch] 字幕已写入: ${downloadOutcome.localPath}`)
 
       const trackCountBeforeAppend = this.videoController.allSubtitleTracks.length
@@ -330,6 +329,9 @@ export struct SubtitleSelectorDrawerDialog {
       // 下载成功后自动切换到新追加的字幕轨道。
       const newSubtitleIndex = this.videoController.allSubtitleTracks.length - 1
       await this.videoController.switchSubtitleTrack(newSubtitleIndex)
+
+      // 仅在字幕轨道追加并切换成功后才提示成功，避免挂载/切换失败时出现「成功+失败」连续提示。
+      this.showSearchToast('字幕下载成功', 2000)
 
       // 标记最近使用字幕：按 OpenSpec 3.4 scenario 2 失败不影响下载挂载，fire-and-forget。
       subtitleService.markLastUsed({
