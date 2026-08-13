@@ -58,6 +58,14 @@ export default function fileExplorerControllerTest() {
       expect(resource.isHidden).assertFalse()
       expect(resource.lastModifiedMs).assertEqual(1714000000123)
     })
+
+    it('SMB 资源缺少有效修改时间时不显示 Unix 起始日期', 0, () => {
+      const resource: FileExplorerResource = createFileExplorerResourceFromSmb(
+        makeSmbFileInfo('share', '/share', true, 0)
+      )
+
+      expect(resource.lastModifiedMs === undefined).assertTrue()
+    })
   })
 
   describe('FileExplorerController unified resources', () => {

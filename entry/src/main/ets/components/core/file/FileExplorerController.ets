@@ -194,7 +194,7 @@ export function createFileExplorerResourceFromSmb(file: SmbFileInfo): FileExplor
     path: file.path,
     isDirectory: file.isDirectory,
     size: file.size,
-    lastModifiedMs: file.lastModifiedMs,
+    lastModifiedMs: file.lastModifiedMs > 0 ? file.lastModifiedMs : undefined,
     isHidden: file.name.startsWith('.'),
     sourceType: 'smb'
   };
