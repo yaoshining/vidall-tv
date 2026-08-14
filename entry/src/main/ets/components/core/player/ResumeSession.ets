@@ -195,6 +195,27 @@ export class ResumeSession {
     this.suppressPlayAfterSeek = false;
   }
 
+  /** 开始一次续播 seek（对应原 onPlayerReady 中的 resume seek dispatch 字段赋值） */
+  beginResumeSeek(source: string, captureBackend: ResumeBackend, targetMs: number, autoPlay: boolean): void {
+    this.suppressPlayAfterSeek = true;
+    this.trackInitAfterSeek = true;
+    this.trackInitResumePlay = autoPlay;
+    this.seekInFlight = true;
+    this.seekSource = source;
+    this.seekCaptureBackend = captureBackend;
+    this.seekTargetMs = targetMs;
+    this.seekAutoPlay = autoPlay;
+  }
+
+  /** 清空续播 seek 的 dispatch 字段（对应原 continuePendingReadyAfterSeek 中的散落清空） */
+  clearSeekDispatch(): void {
+    this.seekInFlight = false;
+    this.seekSource = '';
+    this.seekCaptureBackend = 'avplayer';
+    this.seekTargetMs = -1;
+    this.seekAutoPlay = false;
+  }
+
   /** 清空结果观察上下文 */
   clearResult(): void {
     this.result = null;

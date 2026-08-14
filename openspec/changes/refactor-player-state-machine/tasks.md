@@ -28,9 +28,9 @@
 
 ## 4. 状态转换收口（D4）
 
-- [ ] 4.1 把 `fallbackAvPlayerToMpv` 中的状态编排收口到 `transitionTo` + `ResumeSession.capture`
-- [ ] 4.2 清理 `seek` / `onPlayerReady` 中散落的状态重置，改为调用对象方法
-- [ ] 4.3 编译 + 单测，确认转换语义不变
+- [x] 4.1 把 `fallbackAvPlayerToMpv` 中的状态编排收口到 `transitionTo` + `ResumeSession.capture`
+- [x] 4.2 清理 `seek` / `onPlayerReady` 中散落的状态重置，改为调用对象方法
+- [x] 4.3 编译 + 单测，确认转换语义不变
 
 ## 5. 清理旧字段
 

@@ -927,11 +927,7 @@ export class VideoPlayerController {
           this.logResumeDiagnostic('resume_autoplay_decision', resumeSeekSource, resumeSeekCaptureBackend,
             resumeSeekTargetMs, resumeSeekTargetMs, resumeSeekAutoPlay, 'queued_seek', this.timeToSeek,
             resumeAutoplayDecisionSource, resumeAutoplayDecisionOrigin);
-          this.resumeSession.seekInFlight = false;
-          this.resumeSession.seekSource = '';
-          this.resumeSession.seekCaptureBackend = 'avplayer';
-          this.resumeSession.seekTargetMs = -1;
-          this.resumeSession.seekAutoPlay = false;
+          this.resumeSession.clearSeekDispatch();
         }
         this.player?.seek(this.timeToSeek);
         this.timeToSeek = -1;
@@ -940,11 +936,7 @@ export class VideoPlayerController {
       }
       const shouldContinuePendingReadyAfterSeek = this.resumeSession.trackInitAfterSeek;
       if (resumeSeekInFlight) {
-        this.resumeSession.seekInFlight = false;
-        this.resumeSession.seekSource = '';
-        this.resumeSession.seekCaptureBackend = 'avplayer';
-        this.resumeSession.seekTargetMs = -1;
-        this.resumeSession.seekAutoPlay = false;
+        this.resumeSession.clearSeekDispatch();
       }
       this.isSeeking = false;
       if (shouldContinuePendingReadyAfterSeek) {
@@ -1459,14 +1451,7 @@ export class VideoPlayerController {
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
       this.isSeeking = true;
       this.transitionTo(PlaybackState.SEEKING);
-      this.resumeSession.suppressPlayAfterSeek = true;
-      this.resumeSession.trackInitAfterSeek = true;
-      this.resumeSession.trackInitResumePlay = shouldResumePlay;
-      this.resumeSession.seekInFlight = true;
-      this.resumeSession.seekSource = resumeSource;
-      this.resumeSession.seekCaptureBackend = resumeCaptureBackend;
-      this.resumeSession.seekTargetMs = safeResumeTimeMs;
-      this.resumeSession.seekAutoPlay = shouldResumePlay;
+      this.resumeSession.beginResumeSeek(resumeSource, resumeCaptureBackend, safeResumeTimeMs, shouldResumePlay);
       this.primePendingResumeAutoplayResult(resumeSource, resumeCaptureBackend, resumeTimeMs,
         safeResumeTimeMs, shouldResumePlay, shouldResumePlay ? 'play_after_seek' : 'suppress_after_seek',
         resumeAutoplayDecisionSource, resumeAutoplayDecisionOrigin);
@@ -1590,6 +1575,7 @@ export class VideoPlayerController {
     this.capturePendingResumeForFallback(reason);
     this.logFallbackEvent(reason, 'avplayer', 'mpv', detailMessage);
     this.isLoading = true;
+    this.transitionTo(PlaybackState.PREPARING);
     this.forceMpvForNextInit = true;
     if (this.currentVideoData !== undefined && this.currentOriginalVideoSrc.startsWith('smb://')) {
       this.currentVideoData.videoSrc = this.currentOriginalVideoSrc;
