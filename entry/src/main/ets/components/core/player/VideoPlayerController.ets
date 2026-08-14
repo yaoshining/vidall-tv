@@ -44,6 +44,7 @@ import {
   findInitialAudioTrackIndex as serviceFindInitialAudioTrackIndex
 } from "../../../services/audioRouting/AudioTrackRoutingService";
 import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioRoutingTypes";
+import { PlaybackState } from "./PlaybackState";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -196,6 +197,13 @@ export type UnsupportedFormatFallback = 'mpv';
 export class VideoPlayerController {
   /** 运行时播放后端：AVPlayer 主路径，MPV 唯一回退路径。 */
   @Trace backend: PlayerBackend = 'avplayer';
+
+  /**
+   * 显式播放状态（D1 镜像迁移）。
+   * 与旧字段 isReady/isPlaying/isSeeking/isLoading/hasPrepared 并存，
+   * 后续逐步把读取方迁移到本字段后再删除旧字段。
+   */
+  private state: PlaybackState = PlaybackState.IDLE;
 
   /** AI 画质增强开关（仅 avplayer 路径有效） */
   @Trace aiEnhanceEnabled: boolean = true;
@@ -356,6 +364,20 @@ export class VideoPlayerController {
     pendingState.autoplayDecisionSource = autoplayDecision.source;
     pendingState.autoplayDecisionOrigin = autoplayDecision.origin;
     this.prunePendingResumeState();
+  }
+
+  /**
+   * 状态转移（D1 镜像迁移）。
+   * 仅同步 `state` 字段用于日志/诊断与后续收敛，不改动旧字段的写入逻辑。
+   */
+  private transitionTo(nextState: PlaybackState): void {
+    if (this.state !== nextState) {
+      if (ENABLE_SESSION_DIAG_LOG) {
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+          `[session=${this.playbackSessionId}] state ${this.state} → ${nextState}`);
+      }
+      this.state = nextState;
+    }
   }
 
   private ensurePendingResumeState(): PendingResumeState {
@@ -596,6 +618,7 @@ export class VideoPlayerController {
       this.clearPendingResumeAutoplayDecision();
     }
     this.isPlaying = false;
+    this.transitionTo(PlaybackState.PAUSED);
     this.pauseSubtitleTimer();
     this.stopProgressTimer();
     this.saveProgressNow();
@@ -693,6 +716,7 @@ export class VideoPlayerController {
     }
 
     // Route selection always resolves to AVPlayer or MPV; MPV is the only fallback.
+    this.transitionTo(PlaybackState.ROUTING);
     const backendBeforeAutoRouting = this.backend;
     const decision = await this.resolveAudioRoutingDecision(videoData);
     if (currentSessionId !== this.playbackSessionId) {
@@ -854,6 +878,8 @@ export class VideoPlayerController {
       }
       this.player = adapter;
     }
+
+    this.transitionTo(PlaybackState.PREPARING);
 
     // Register IPlayer event callbacks (shared path for both service and test adapter).
     const p = this.player as IPlayer;
@@ -1529,6 +1555,7 @@ export class VideoPlayerController {
     this.currentTime = this.player?.currentTime ?? 0;
     this.isReady = true;
     this.isLoading = false;
+    this.transitionTo(PlaybackState.PREPARED);
     const firstFrameElapsed = Date.now() - this.metricsLoadStartMs;
     hilog.info(CommonConstants.LOG_DOMAIN, METRICS_TAG,
       `{"event":"first_frame","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"elapsed_ms":${firstFrameElapsed}}`);
@@ -1582,6 +1609,7 @@ export class VideoPlayerController {
       this.subtitleAdapter.onSeekSync();
       this.applySubtitleBridgeState(this.subtitleAdapter.getState());
       this.isSeeking = true;
+      this.transitionTo(PlaybackState.SEEKING);
       this.suppressPlayAfterSeekOnce = true;
       this.pendingReadyTrackInitAfterSeek = true;
       this.pendingReadyTrackInitResumePlay = shouldResumePlay;
@@ -1727,6 +1755,7 @@ export class VideoPlayerController {
   private handleTerminalPlayerError(message: string): void {
     this.isLoading = false;
     this.isPlaying = false;
+    this.transitionTo(PlaybackState.ERROR);
     this.lastErrorMessage = this.normalizePlayerError(message);
     this.rejectPendingReload(new Error(message));
   }
@@ -1817,6 +1846,7 @@ export class VideoPlayerController {
     this.clearPendingResumeAutoplayDecision();
     this.isPlaying = true;
     this.isLoading = false;
+    this.transitionTo(PlaybackState.PLAYING);
     // 成功播放后清理历史错误，避免底部长期显示旧报错。
     this.lastErrorMessage = '';
     if (ENABLE_SESSION_DIAG_LOG) {
@@ -1930,6 +1960,7 @@ export class VideoPlayerController {
   }
 
   async release(): Promise<void> {
+    this.transitionTo(PlaybackState.IDLE);
     this.rejectPendingReload(new Error('player released'));
     this.pendingResumeAutoplayResultState = null;
     this.clearResumeSeekAutoplayFallbackState();
@@ -1983,6 +2014,7 @@ export class VideoPlayerController {
     const canDispatchSeek = !this.isSeeking;
     if (canDispatchSeek) {
       this.isSeeking = true;
+      this.transitionTo(PlaybackState.SEEKING);
     }
     await this.pause();
     this.currentTime = safeTime;
@@ -2510,6 +2542,7 @@ export class VideoPlayerController {
           `[switchAudioTrack] seek flush 到 ${seekTarget}ms${this.pendingResumeSeekInFlight ? ' (resume seek 目标)' : ''}`);
         // 借用 seek() 的暂停-seek-恢复流程：isSeeking=true，seekDone 后自动 play()
         this.isSeeking = true;
+        this.transitionTo(PlaybackState.SEEKING);
         this.player.seek(seekTarget);
         // seekDone 回调里会调 play()，不需要在这里手动恢复
       } else if (shouldFlushAfterSwitch) {

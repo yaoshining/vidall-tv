@@ -1,13 +1,13 @@
 ## 1. PlaybackState 枚举镜像迁移（D1）
 
-- [ ] 1.1 新增 `PlaybackState` 枚举（`IDLE/ROUTING/PREPARING/PREPARED/PLAYING/PAUSED/SEEKING/ERROR/RELEASING`）
-- [ ] 1.2 在 `VideoPlayerController` 新增 `state` 字段与 `transitionTo(state)` 私有方法
-- [ ] 1.3 在 `initPlayer` 的会话生命周期写入点镜像同步 `state`（进入 ROUTING/PREPARING 等）
-- [ ] 1.4 在 `onPlayerReady` 镜像同步 `state = PREPARED`
-- [ ] 1.5 在 `onPlay` / `onPause` 镜像同步 `state = PLAYING/PAUSED`
-- [ ] 1.6 在 `seek` 镜像同步 `state = SEEKING`（与 `isSeeking` 并存）
-- [ ] 1.7 在 `handleTerminalPlayerError` / `release` 镜像同步 `state = ERROR/IDLE`
-- [ ] 1.8 编译 `assembleHap` + 跑 `VideoPlayerController.test.ets`，确认镜像阶段行为不变
+- [x] 1.1 新增 `PlaybackState` 枚举（`IDLE/ROUTING/PREPARING/PREPARED/PLAYING/PAUSED/SEEKING/ERROR/RELEASING`）
+- [x] 1.2 在 `VideoPlayerController` 新增 `state` 字段与 `transitionTo(state)` 私有方法
+- [x] 1.3 在 `initPlayer` 的会话生命周期写入点镜像同步 `state`（进入 ROUTING/PREPARING 等）
+- [x] 1.4 在 `onPlayerReady` 镜像同步 `state = PREPARED`
+- [x] 1.5 在 `onPlay` / `onPause` 镜像同步 `state = PLAYING/PAUSED`
+- [x] 1.6 在 `seek` 镜像同步 `state = SEEKING`（与 `isSeeking` 并存）
+- [x] 1.7 在 `handleTerminalPlayerError` / `release` 镜像同步 `state = ERROR/IDLE`
+- [x] 1.8 编译 `assembleHap` + 跑 `VideoPlayerController.test.ets`，确认镜像阶段行为不变
 
 ## 2. ReloadSession 收敛（D3，风险最低先行）
 
