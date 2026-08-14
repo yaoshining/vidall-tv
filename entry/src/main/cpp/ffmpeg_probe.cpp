@@ -268,6 +268,11 @@ static void CompleteFfprobeAsync(napi_env env, napi_status status, void *data) {
     }
   }
 
+  // 取消或其他非 napi_ok 状态且无错误信息时，保证 Promise 一定被 reject，避免永久挂起
+  if (status != napi_ok && context->errorMessage.empty()) {
+    context->errorMessage = "ffprobe async work cancelled or failed";
+  }
+
   if (!context->errorMessage.empty()) {
     napi_value messageValue = nullptr;
     napi_value errorValue = nullptr;

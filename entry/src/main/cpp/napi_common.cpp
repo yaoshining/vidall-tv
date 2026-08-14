@@ -138,6 +138,13 @@ SmbUrlComponents ParseSmbUrl(const std::string &url) {
   return c;
 }
 
+std::string BuildSmbConnectHost(const std::string &host, int64_t port) {
+  if (port > 0 && port != 445) {
+    return host + ":" + std::to_string(port);
+  }
+  return host;
+}
+
 // ============================================================================
 // 错误抛出 / 值构造 / 参数读取
 // ============================================================================
@@ -289,20 +296,24 @@ std::string FfmpegErrorToString(int errnum) {
 // ============================================================================
 // libavformat 网络层初始化（修复 SIGSEGV #169）
 // ============================================================================
-static std::once_flag g_avNetworkInitFlag;
+static std::mutex g_avNetworkInitMutex;
+static bool g_avNetworkInitialized = false;
 static std::atomic<bool> g_avNetworkReady{ false };
 std::mutex g_ffmpegNetworkMutex;
 
 void VidAllEnsureAvNetworkInit() {
-  std::call_once(g_avNetworkInitFlag, []() {
-    int ret = avformat_network_init();
-    if (ret >= 0) {
-      g_avNetworkReady.store(true);
-    } else {
-      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAllEnsureAvNetworkInit",
-                   "avformat_network_init failed: %d", ret);
-    }
-  });
+  std::lock_guard<std::mutex> initLock(g_avNetworkInitMutex);
+  if (g_avNetworkInitialized) {
+    return;
+  }
+  int ret = avformat_network_init();
+  if (ret >= 0) {
+    g_avNetworkInitialized = true;
+    g_avNetworkReady.store(true);
+  } else {
+    OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAllEnsureAvNetworkInit",
+                 "avformat_network_init failed: %d", ret);
+  }
 }
 
 bool VidAllAvNetworkReady() {
@@ -310,9 +321,13 @@ bool VidAllAvNetworkReady() {
 }
 
 void VidAllDeinitAvNetwork() {
-  std::lock_guard<std::mutex> lock(g_ffmpegNetworkMutex);
-  if (g_avNetworkReady.exchange(false)) {
-    avformat_network_deinit();
+  {
+    std::lock_guard<std::mutex> lock(g_ffmpegNetworkMutex);
+    if (g_avNetworkReady.exchange(false)) {
+      avformat_network_deinit();
+    }
   }
+  std::lock_guard<std::mutex> initLock(g_avNetworkInitMutex);
+  g_avNetworkInitialized = false;
 }
 

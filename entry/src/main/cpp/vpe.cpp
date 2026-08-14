@@ -8,6 +8,7 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <cstdlib>
 #include <mutex>
 #include <algorithm>
 #include <cctype>
@@ -189,6 +190,7 @@ static bool LoadVpeRuntimeLocked() {
         g_vpeRuntimeSymbols.qualityLevelKey, errorDetail)) {
     dlclose(g_vpeLibraryHandle);
     g_vpeLibraryHandle = nullptr;
+    g_vpeRuntimeSymbols = VpeRuntimeSymbols{};
     MarkVpeRuntimeUnsupportedLocked(errorDetail);
     return false;
   }
@@ -306,8 +308,7 @@ napi_value IsVpeDetailEnhancerSupported(napi_env env, napi_callback_info /*info*
 // 成功返回 VPE 输入 surfaceId；失败/不支持返回空字符串（不抛异常）
 napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
   size_t argc = 2;
-  napi_value argv[2];
-  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  napi_value argv[2] = { nullptr, nullptr };
 
   auto returnEmpty = [&]() -> napi_value {
     napi_value empty;
@@ -315,12 +316,18 @@ napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
     return empty;
   };
 
+  if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok) {
+    return returnEmpty();
+  }
   if (argc < 2) return returnEmpty();
 
   char surfaceIdBuf[32] = {0};
   size_t strLen = 0;
-  napi_get_value_string_utf8(env, argv[0], surfaceIdBuf, sizeof(surfaceIdBuf), &strLen);
-  if (strLen == 0) return returnEmpty();
+  if (napi_get_value_string_utf8(env, argv[0], surfaceIdBuf, sizeof(surfaceIdBuf), &strLen) != napi_ok) {
+    return returnEmpty();
+  }
+  // 拒绝空串与被截断的输入（strLen == sizeof(buf) 表示可能被截断）
+  if (strLen == 0 || strLen >= sizeof(surfaceIdBuf)) return returnEmpty();
 
   int32_t qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
   napi_get_value_int32(env, argv[1], &qualityLevel);
@@ -350,9 +357,13 @@ napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
 
   // 设置质量等级
   OH_AVFormat* param = OH_AVFormat_Create();
-  OH_AVFormat_SetIntValue(param, *g_vpeRuntimeSymbols.qualityLevelKey, qualityLevel);
-  g_vpeRuntimeSymbols.setParameter(g_vpeProcessor, param); // 失败不致命，使用默认
-  OH_AVFormat_Destroy(param);
+  if (param == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: OH_AVFormat_Create failed, skip quality parameter");
+  } else {
+    OH_AVFormat_SetIntValue(param, *g_vpeRuntimeSymbols.qualityLevelKey, qualityLevel);
+    g_vpeRuntimeSymbols.setParameter(g_vpeProcessor, param); // 失败不致命，使用默认
+    OH_AVFormat_Destroy(param);
+  }
 
   // 注册回调（必须在 Start 前）
   if (g_vpeRuntimeSymbols.createCallback(&g_vpeCallback) != VIDEO_PROCESSING_SUCCESS || g_vpeCallback == nullptr) {
@@ -368,8 +379,15 @@ napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
     return returnEmpty();
   }
 
-  // 从 surfaceId 字符串恢复 uint64_t
-  uint64_t displaySurfaceId = strtoull(surfaceIdBuf, nullptr, 10);
+  // 从 surfaceId 字符串恢复 uint64_t，并校验解析终点与溢出
+  char *endPtr = nullptr;
+  errno = 0;
+  uint64_t displaySurfaceId = strtoull(surfaceIdBuf, &endPtr, 10);
+  if (endPtr == surfaceIdBuf || *endPtr != '\0' || errno == ERANGE) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: invalid surfaceId: %{public}s", surfaceIdBuf);
+    DestroyVpeInstanceLocked();
+    return returnEmpty();
+  }
   if (OH_NativeWindow_CreateNativeWindowFromSurfaceId(displaySurfaceId, &g_vpeDisplayWindow) != 0) {
     OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: CreateNativeWindowFromSurfaceId failed for id=%{public}s", surfaceIdBuf);
     DestroyVpeInstanceLocked();
@@ -431,20 +449,27 @@ napi_value DestroyVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
 // level: 0=NONE(透传/关闭), 1=LOW, 2=MEDIUM, 3=HIGH
 napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
   size_t argc = 1;
-  napi_value argv[1];
-  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
-
-  int32_t qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
-  if (argc >= 1) {
-    napi_get_value_int32(env, argv[0], &qualityLevel);
-    if (qualityLevel < VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_NONE ||
-        qualityLevel > VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_HIGH) {
-      qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_NONE;
-    }
-  }
+  napi_value argv[1] = { nullptr };
 
   napi_value undef;
   napi_get_undefined(env, &undef);
+
+  if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok) {
+    return undef;
+  }
+
+  int32_t qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
+  if (argc >= 1) {
+    if (napi_get_value_int32(env, argv[0], &qualityLevel) != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: updateQuality invalid level argument");
+      return undef;
+    }
+    // 边界保护：越界回退到 MEDIUM（与 CreateVpeDetailEnhancer 一致）
+    if (qualityLevel < VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_NONE ||
+        qualityLevel > VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_HIGH) {
+      qualityLevel = VIDEO_DETAIL_ENHANCER_QUALITY_LEVEL_MEDIUM;
+    }
+  }
 
   std::lock_guard<std::mutex> lock(g_vpeMutex);
   if (!g_vpeProcessor) {
@@ -453,6 +478,10 @@ napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
   }
 
   OH_AVFormat* param = OH_AVFormat_Create();
+  if (param == nullptr) {
+    OH_LOG_Print(LOG_APP, LOG_WARN, 0xFF00, "VidAll", "VPE: OH_AVFormat_Create failed for quality update");
+    return undef;
+  }
   OH_AVFormat_SetIntValue(param, *g_vpeRuntimeSymbols.qualityLevelKey, qualityLevel);
   VideoProcessing_ErrorCode ret = g_vpeRuntimeSymbols.setParameter(g_vpeProcessor, param);
   OH_AVFormat_Destroy(param);

@@ -165,7 +165,7 @@ static void ExecuteSmbTestConnection(napi_env /*env*/, void *data) {
     smb2_set_timeout(smb2, timeoutSec);
     // 当 shareName 为空时，连接 IPC$（纯认证验证，不依赖具体共享名）
     const char *connectShare = ctx->shareName.empty() ? "IPC$" : ctx->shareName.c_str();
-    int ret = smb2_connect_share(smb2, ctx->host.c_str(), connectShare,
+    int ret = smb2_connect_share(smb2, BuildSmbConnectHost(ctx->host, ctx->port).c_str(), connectShare,
                                   ctx->username.empty() ? nullptr : ctx->username.c_str());
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
@@ -245,8 +245,9 @@ static void ExecuteSmbListDirectory(napi_env /*env*/, void *data) {
     if (!ctx->password.empty()) smb2_set_password(smb2, ctx->password.c_str());
     if (!ctx->domain.empty()) smb2_set_domain(smb2, ctx->domain.c_str());
     int timeoutSec = (ctx->timeoutMs > 0) ? (int)(ctx->timeoutMs / 1000) : 10;
+    if (timeoutSec < 1) timeoutSec = 1;
     smb2_set_timeout(smb2, timeoutSec);
-    int ret = smb2_connect_share(smb2, ctx->host.c_str(), ctx->shareName.c_str(),
+    int ret = smb2_connect_share(smb2, BuildSmbConnectHost(ctx->host, ctx->port).c_str(), ctx->shareName.c_str(),
                                   ctx->username.empty() ? nullptr : ctx->username.c_str());
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
@@ -321,7 +322,7 @@ static void ExecuteSmbListShares(napi_env /*env*/, void *data) {
     smb2_set_timeout(smb2, timeoutSec);
 
     // 连接到 IPC$ 共享（SMB 共享枚举的标准路径）
-    int ret = smb2_connect_share(smb2, ctx->host.c_str(), "IPC$",
+    int ret = smb2_connect_share(smb2, BuildSmbConnectHost(ctx->host, ctx->port).c_str(), "IPC$",
                                   ctx->username.empty() ? nullptr : ctx->username.c_str());
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
@@ -474,7 +475,7 @@ static void ExecuteSmbReadTextFile(napi_env /*env*/, void *data) {
     if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
     smb2_set_timeout(smb2, ctx->timeoutSeconds); // Fix C: 使用可配置超时（原硬编码 30s）
 
-    int ret = smb2_connect_share(smb2, comps.host.c_str(), comps.share.c_str(),
+    int ret = smb2_connect_share(smb2, BuildSmbConnectHost(comps.host, comps.port).c_str(), comps.share.c_str(),
                                   comps.user.empty() ? nullptr : comps.user.c_str());
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
@@ -611,7 +612,7 @@ static void ExecuteSmbDownloadFile(napi_env /*env*/, void *data) {
     if (!comps.password.empty()) smb2_set_password(smb2, comps.password.c_str());
     smb2_set_timeout(smb2, ctx->timeoutSeconds);
 
-    int ret = smb2_connect_share(smb2, comps.host.c_str(), comps.share.c_str(),
+    int ret = smb2_connect_share(smb2, BuildSmbConnectHost(comps.host, comps.port).c_str(), comps.share.c_str(),
                                  comps.user.empty() ? nullptr : comps.user.c_str());
     if (ret < 0) {
         const char *errStr = smb2_get_error(smb2);
@@ -1361,10 +1362,13 @@ napi_value SmbReadTextFile(napi_env env, napi_callback_info info) {
 #else
     {
         napi_value errorMsg = nullptr;
-        napi_create_string_utf8(env,
+        napi_value errorObj = nullptr;
+        if (napi_create_string_utf8(env,
             "SMB protocol not available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
-            NAPI_AUTO_LENGTH, &errorMsg);
-        napi_reject_deferred(env, deferred, errorMsg);
+            NAPI_AUTO_LENGTH, &errorMsg) == napi_ok &&
+            napi_create_error(env, nullptr, errorMsg, &errorObj) == napi_ok) {
+            napi_reject_deferred(env, deferred, errorObj);
+        }
     }
 #endif
 
@@ -1440,10 +1444,13 @@ napi_value SmbDownloadFile(napi_env env, napi_callback_info info) {
 #else
     {
         napi_value errorMsg = nullptr;
-        napi_create_string_utf8(env,
+        napi_value errorObj = nullptr;
+        if (napi_create_string_utf8(env,
             "SMB protocol not available: libsmb2 not compiled (VIDALL_HAS_LIBSMB2=0)",
-            NAPI_AUTO_LENGTH, &errorMsg);
-        napi_reject_deferred(env, deferred, errorMsg);
+            NAPI_AUTO_LENGTH, &errorMsg) == napi_ok &&
+            napi_create_error(env, nullptr, errorMsg, &errorObj) == napi_ok) {
+            napi_reject_deferred(env, deferred, errorObj);
+        }
     }
 #endif
 

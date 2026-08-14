@@ -48,6 +48,7 @@ std::string PercentDecode(const std::string &s);
 std::string PercentEncodePathSegment(const std::string &s);
 std::string PercentEncodePath(const std::string &path);
 SmbUrlComponents ParseSmbUrl(const std::string &url);
+std::string BuildSmbConnectHost(const std::string &host, int64_t port);
 
 // ============================================================================
 // 错误抛出 / 参数读取 / 值构造

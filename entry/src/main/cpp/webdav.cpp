@@ -149,6 +149,7 @@ static CurlRequestResult RunCurlRequest(
   (void)headerLines;
   (void)body;
   (void)timeoutMs;
+  (void)allowSelfSigned;
   result.error = "libcurl disabled";
   return result;
 #else
@@ -219,6 +220,7 @@ static CurlDownloadResult RunCurlDownloadToFile(
   (void)body;
   (void)timeoutMs;
   (void)outputPath;
+  (void)allowSelfSigned;
   result.error = "libcurl disabled";
   return result;
 #else
@@ -370,6 +372,19 @@ static void CompleteWebdavRequestAsync(napi_env env, napi_status status, void *d
   delete context;
 }
 
+// Promise 已创建后、后续设置失败时，先 reject deferred 再清理，避免 deferred 泄漏 / Promise 悬空
+static void RejectDeferredWithError(napi_env env, napi_deferred deferred, const char *message) {
+  if (deferred == nullptr) {
+    return;
+  }
+  napi_value msg = nullptr;
+  napi_value err = nullptr;
+  if (napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &msg) == napi_ok &&
+      napi_create_error(env, nullptr, msg, &err) == napi_ok) {
+    napi_reject_deferred(env, deferred, err);
+  }
+}
+
 napi_value WebdavRequest(napi_env env, napi_callback_info info) {
   size_t argc = 6;
   napi_value args[6] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
@@ -428,6 +443,7 @@ napi_value WebdavRequest(napi_env env, napi_callback_info info) {
 
   napi_value resourceName = nullptr;
   if (napi_create_string_utf8(env, "webdavRequestAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+    RejectDeferredWithError(env, context->deferred, "webdavRequest failed to create resource name");
     delete context;
     ThrowTypeError(env, "webdavRequest failed to create resource name");
     return nullptr;
@@ -435,12 +451,14 @@ napi_value WebdavRequest(napi_env env, napi_callback_info info) {
 
   if (napi_create_async_work(env, nullptr, resourceName,
       ExecuteWebdavRequestAsync, CompleteWebdavRequestAsync, context, &context->work) != napi_ok) {
+    RejectDeferredWithError(env, context->deferred, "webdavRequest failed to create async work");
     delete context;
     ThrowTypeError(env, "webdavRequest failed to create async work");
     return nullptr;
   }
 
   if (napi_queue_async_work(env, context->work) != napi_ok) {
+    RejectDeferredWithError(env, context->deferred, "webdavRequest failed to queue async work");
     napi_delete_async_work(env, context->work);
     delete context;
     ThrowTypeError(env, "webdavRequest failed to queue async work");
@@ -594,6 +612,7 @@ napi_value DownloadToFile(napi_env env, napi_callback_info info) {
 
   napi_value resourceName = nullptr;
   if (napi_create_string_utf8(env, "downloadToFileAsync", NAPI_AUTO_LENGTH, &resourceName) != napi_ok) {
+    RejectDeferredWithError(env, context->deferred, "downloadToFile failed to create resource name");
     delete context;
     ThrowTypeError(env, "downloadToFile failed to create resource name");
     return nullptr;
@@ -601,12 +620,14 @@ napi_value DownloadToFile(napi_env env, napi_callback_info info) {
 
   if (napi_create_async_work(env, nullptr, resourceName,
       ExecuteDownloadToFileAsync, CompleteDownloadToFileAsync, context, &context->work) != napi_ok) {
+    RejectDeferredWithError(env, context->deferred, "downloadToFile failed to create async work");
     delete context;
     ThrowTypeError(env, "downloadToFile failed to create async work");
     return nullptr;
   }
 
   if (napi_queue_async_work(env, context->work) != napi_ok) {
+    RejectDeferredWithError(env, context->deferred, "downloadToFile failed to queue async work");
     napi_delete_async_work(env, context->work);
     delete context;
     ThrowTypeError(env, "downloadToFile failed to queue async work");

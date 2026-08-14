@@ -61,6 +61,10 @@ struct SmbAVIOContext {
     struct smb2fh       *fh       = nullptr;
     int64_t              fileSize = 0;
 };
+struct SmbHandlerThread {
+    std::thread                    thread;
+    std::shared_ptr<std::atomic<bool>> done;
+};
 struct NativePlayerSkeletonState {
   std::string url;
   std::string headersJson;
@@ -106,7 +110,7 @@ struct NativePlayerSkeletonState {
   AVFormatContext *ffmpegFmt       = nullptr;  // 由 SmbCleanupResources 负责 close
   std::thread      smbPlayThread;              // 代理 accept 线程；joinable 时表示线程正在运行
   std::mutex       smbHandlerMutex;
-  std::vector<std::thread> smbHandlerThreads;  // Release 前统一等待所有请求结束
+  std::vector<SmbHandlerThread> smbHandlerThreads;  // Release 前统一等待所有请求结束；运行期定期回收已完成线程
   std::shared_ptr<std::atomic<bool>> smbStopFlag { std::make_shared<std::atomic<bool>>(false) };
   std::atomic<bool>    smbPauseFlag {false};   // 通知播放线程暂停（原子）
   std::atomic<int64_t> smbSeekTargetMs {-1};   // ≥0 时表示待执行的 seek 目标（原子）
@@ -514,10 +518,7 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
     // smb2_set_port() 在此版本 libsmb2 中不存在。
     // libsmb2 的 smb2_connect_share() server 参数支持 "host:port" 格式（经由 getaddrinfo 解析），
     // 在非标准端口时构造 "host:port" 字符串传入，445 端口无需拼接。
-    std::string connectHost = comps.host;
-    if (comps.port > 0 && comps.port != 445) {
-        connectHost = comps.host + ":" + std::to_string(comps.port);
-    }
+    std::string connectHost = BuildSmbConnectHost(comps.host, comps.port);
 
     int ret = smb2_connect_share(smb2, connectHost.c_str(), comps.share.c_str(),
                                   comps.user.empty() ? nullptr : comps.user.c_str());
@@ -558,6 +559,17 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
     }
     int64_t fileSize = static_cast<int64_t>(st.smb2_size);
     if (fileSize <= 0) fileSize = 0;
+
+    // 显式校验：rangeStart 越界（>= fileSize）或空文件请求非零起点 → 416
+    if ((fileSize > 0 && rangeStart >= fileSize) || (fileSize == 0 && rangeStart > 0)) {
+        smb2_close(smb2, fh);
+        smb2_disconnect_share(smb2);
+        smb2_destroy_context(smb2);
+        const char *e = "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        (void)write(clientFd, e, strlen(e));
+        close(clientFd);
+        return;
+    }
 
     if (rangeEnd < 0 || rangeEnd >= fileSize) rangeEnd = (fileSize > 0) ? fileSize - 1 : 0;
     int64_t contentLen = (fileSize > 0) ? (rangeEnd - rangeStart + 1) : 0;
@@ -629,7 +641,7 @@ static void SmbProxyHandleRequest(int clientFd, SmbUrlComponents comps) {
 static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
                                 std::shared_ptr<std::atomic<bool>> stopFlag,
                                 std::mutex *handlerMutex,
-                                std::vector<std::thread> *handlerThreads) {
+                                std::vector<SmbHandlerThread> *handlerThreads) {
     while (!stopFlag->load(std::memory_order_relaxed)) {
         struct pollfd pfd;
         pfd.fd = serverFd; pfd.events = POLLIN; pfd.revents = 0;
@@ -637,10 +649,32 @@ static void SmbProxyAcceptLoop(int serverFd, SmbUrlComponents comps,
         if (!(pfd.revents & POLLIN)) continue;
         int clientFd = accept(serverFd, nullptr, nullptr);
         if (clientFd < 0) continue;
-        std::lock_guard<std::mutex> lock(*handlerMutex);
-        handlerThreads->emplace_back([clientFd, comps]() {
-            SmbProxyHandleRequest(clientFd, comps);
-        });
+        auto done = std::make_shared<std::atomic<bool>>(false);
+        {
+            std::lock_guard<std::mutex> lock(*handlerMutex);
+            handlerThreads->push_back(SmbHandlerThread{
+                std::thread([clientFd, comps, done]() {
+                    SmbProxyHandleRequest(clientFd, comps);
+                    done->store(true, std::memory_order_relaxed);
+                }),
+                done
+            });
+        }
+        // 定期回收已完成的 handler 线程，避免长会话线程累积
+        {
+            std::lock_guard<std::mutex> lock(*handlerMutex);
+            auto it = handlerThreads->begin();
+            while (it != handlerThreads->end()) {
+                if (it->done->load(std::memory_order_relaxed)) {
+                    if (it->thread.joinable()) {
+                        it->thread.join();
+                    }
+                    it = handlerThreads->erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
     }
     close(serverFd);
     OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll/SmbProxy", "accept loop exited");
@@ -679,14 +713,14 @@ static void SmbStopProxy(NativePlayerSkeletonState &state) {
     if (state.smbPlayThread.joinable()) {
         state.smbPlayThread.join();
     }
-    std::vector<std::thread> handlers;
+    std::vector<SmbHandlerThread> handlers;
     {
         std::lock_guard<std::mutex> lock(state.smbHandlerMutex);
         handlers.swap(state.smbHandlerThreads);
     }
-    for (std::thread &handler : handlers) {
-        if (handler.joinable()) {
-            handler.join();
+    for (SmbHandlerThread &handler : handlers) {
+        if (handler.thread.joinable()) {
+            handler.thread.join();
         }
     }
     state.isSmbPlayback = false;
@@ -972,16 +1006,26 @@ static void OnXCSurfaceCreated(OH_NativeXComponent *component, void *window) {
   bool found = false;
   for (auto &pair : g_players) {
     if (pair.second.xComponentId == xcId) {
-      pair.second.nativeWindow = static_cast<OHNativeWindow *>(window);
-      pair.second.surfaceReady = true;
-      found = true;
-      // A5修复: 若 avPlayer 已创建，立即绑定 surface
-      if (pair.second.avPlayer != nullptr) {
-        OH_AVPlayer_SetVideoSurface(pair.second.avPlayer, pair.second.nativeWindow);
-        // 若 Prepare() 因 surface 未就绪而延迟，现在补发 Prepare
-        if (pair.second.pendingPrepare) {
+      OHNativeWindow *win = static_cast<OHNativeWindow *>(window);
+      OH_AVPlayer *player = nullptr;
+      bool needPrepare = false;
+      {
+        // 用 stateMutex 保护 nativeWindow/surfaceReady/pendingPrepare，避免与 Prepare 竞态
+        std::lock_guard<std::mutex> surfaceLock(pair.second.stateMutex);
+        pair.second.nativeWindow = win;
+        pair.second.surfaceReady = true;
+        player = pair.second.avPlayer;
+        if (player != nullptr && pair.second.pendingPrepare) {
           pair.second.pendingPrepare = false;
-          OH_AVPlayer_Prepare(pair.second.avPlayer);
+          needPrepare = true;
+        }
+      }
+      found = true;
+      // A5修复: 若 avPlayer 已创建，立即绑定 surface（SDK 调用在锁外，避免回调死锁）
+      if (player != nullptr) {
+        OH_AVPlayer_SetVideoSurface(player, win);
+        if (needPrepare) {
+          OH_AVPlayer_Prepare(player);
         }
       }
       break;
@@ -1016,6 +1060,7 @@ static void OnXCSurfaceDestroyed(OH_NativeXComponent *component, void *window) {
   std::lock_guard<std::mutex> lock(g_playersMutex); // A4: 保护 g_players 跨线程遍历
   for (auto &pair : g_players) {
     if (pair.second.xComponentId == xcId) {
+      std::lock_guard<std::mutex> surfaceLock(pair.second.stateMutex);
       pair.second.nativeWindow = nullptr;
       pair.second.surfaceReady = false;
       break;
@@ -1080,8 +1125,11 @@ napi_value SetXComponent(napi_env env, napi_callback_info info) {
     OH_AVPlayer_Release(state->avPlayer);
     state->avPlayer = nullptr;
   }
-  state->nativeWindow = nullptr;
-  state->surfaceReady = false;
+  {
+    std::lock_guard<std::mutex> surfaceLock(state->stateMutex);
+    state->nativeWindow = nullptr;
+    state->surfaceReady = false;
+  }
 
   // 切换渲染目标后重置骨架态，避免旧 prepared/时间轴状态延续到新 surface。
   ResetRuntimeState(*state);
@@ -1099,8 +1147,11 @@ napi_value SetXComponent(napi_env env, napi_callback_info info) {
     std::lock_guard<std::mutex> pendingLock(g_playersMutex);
     auto pendingIt = g_pendingWindows.find(xComponentId);
     if (pendingIt != g_pendingWindows.end()) {
-      state->nativeWindow = pendingIt->second.nativeWindow;
-      state->surfaceReady = true;
+      {
+        std::lock_guard<std::mutex> surfaceLock(state->stateMutex);
+        state->nativeWindow = pendingIt->second.nativeWindow;
+        state->surfaceReady = true;
+      }
       g_pendingWindows.erase(pendingIt);
       OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll",
                    "SetXComponent: 从 pending 恢复 nativeWindow=%p xcId=%s",
@@ -1200,10 +1251,17 @@ napi_value Prepare(napi_env env, napi_callback_info info) {
 
   // 绑定渲染 Surface：必须在 OH_AVPlayer_Prepare 之前调用
   // A5修复: 若 surface 未就绪，设置 pendingPrepare 标志，等 OnSurfaceCreated 回调后再 Prepare
-  if (state.nativeWindow != nullptr) {
-    OH_AVPlayer_SetVideoSurface(state.avPlayer, state.nativeWindow);
-  } else {
-    state.pendingPrepare = true;
+  // 用 stateMutex 保护 nativeWindow/pendingPrepare 读写，避免与 surface 回调竞态
+  OHNativeWindow *targetWindow = nullptr;
+  {
+    std::lock_guard<std::mutex> surfaceLock(state.stateMutex);
+    targetWindow = state.nativeWindow;
+    if (targetWindow == nullptr) {
+      state.pendingPrepare = true;
+    }
+  }
+  if (targetWindow != nullptr) {
+    OH_AVPlayer_SetVideoSurface(state.avPlayer, targetWindow);
   }
 
   // A4：注册媒体状态回调（在 Prepare 调用前注册）
