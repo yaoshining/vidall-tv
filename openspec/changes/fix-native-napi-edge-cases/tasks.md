@@ -41,4 +41,9 @@
 
 - [x] 8.1 assembleHap 构建通过
 - [x] 8.2 真机安装启动冒烟通过
-- [ ] 8.3 openspec validate
+- [x] 8.3 openspec validate
+
+## 9. 复核新增修复
+
+- [x] 9.1 vpe.cpp 未初始化 napi_value 全部初始化 + 返回值检查（含桩函数）
+- [x] 9.2 player_core.cpp napi_create_threadsafe_function 返回值检查（6 处）

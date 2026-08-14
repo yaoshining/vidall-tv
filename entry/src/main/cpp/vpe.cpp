@@ -299,8 +299,10 @@ static void DestroyVpeInstanceLocked() {
 napi_value IsVpeDetailEnhancerSupported(napi_env env, napi_callback_info /*info*/) {
   std::lock_guard<std::mutex> lock(g_vpeMutex);
   const bool supported = ProbeVpeRuntimeSupportLocked();
-  napi_value result;
-  napi_get_boolean(env, supported, &result);
+  napi_value result = nullptr;
+  if (napi_get_boolean(env, supported, &result) != napi_ok) {
+    return nullptr;
+  }
   return result;
 }
 
@@ -311,8 +313,10 @@ napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
   napi_value argv[2] = { nullptr, nullptr };
 
   auto returnEmpty = [&]() -> napi_value {
-    napi_value empty;
-    napi_create_string_utf8(env, "", 0, &empty);
+    napi_value empty = nullptr;
+    if (napi_create_string_utf8(env, "", 0, &empty) != napi_ok) {
+      return nullptr;
+    }
     return empty;
   };
 
@@ -429,8 +433,10 @@ napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info info) {
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VPE: Created OK — inputSurfaceId=%{public}s quality=%{public}d",
     inputIdBuf, qualityLevel);
 
-  napi_value result;
-  napi_create_string_utf8(env, inputIdBuf, NAPI_AUTO_LENGTH, &result);
+  napi_value result = nullptr;
+  if (napi_create_string_utf8(env, inputIdBuf, NAPI_AUTO_LENGTH, &result) != napi_ok) {
+    return nullptr;
+  }
   return result;
 }
 
@@ -439,8 +445,10 @@ napi_value DestroyVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
   std::lock_guard<std::mutex> lock(g_vpeMutex);
   DestroyVpeInstanceLocked();
   OH_LOG_Print(LOG_APP, LOG_INFO, 0xFF00, "VidAll", "VPE: Destroyed");
-  napi_value undef;
-  napi_get_undefined(env, &undef);
+  napi_value undef = nullptr;
+  if (napi_get_undefined(env, &undef) != napi_ok) {
+    return nullptr;
+  }
   return undef;
 }
 
@@ -451,8 +459,10 @@ napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argv[1] = { nullptr };
 
-  napi_value undef;
-  napi_get_undefined(env, &undef);
+  napi_value undef = nullptr;
+  if (napi_get_undefined(env, &undef) != napi_ok) {
+    return nullptr;
+  }
 
   if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok) {
     return undef;
@@ -493,16 +503,24 @@ napi_value UpdateVpeQuality(napi_env env, napi_callback_info info) {
 
 #else // !VIDALL_HAS_VPE — 桩函数（无 VPE 支持时保持 NAPI 表完整）
 napi_value IsVpeDetailEnhancerSupported(napi_env env, napi_callback_info /*info*/) {
-  napi_value r; napi_get_boolean(env, false, &r); return r;
+  napi_value r = nullptr;
+  if (napi_get_boolean(env, false, &r) != napi_ok) { return nullptr; }
+  return r;
 }
 napi_value CreateVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
-  napi_value r; napi_create_string_utf8(env, "", 0, &r); return r;
+  napi_value r = nullptr;
+  if (napi_create_string_utf8(env, "", 0, &r) != napi_ok) { return nullptr; }
+  return r;
 }
 napi_value DestroyVpeDetailEnhancer(napi_env env, napi_callback_info /*info*/) {
-  napi_value r; napi_get_undefined(env, &r); return r;
+  napi_value r = nullptr;
+  if (napi_get_undefined(env, &r) != napi_ok) { return nullptr; }
+  return r;
 }
 napi_value UpdateVpeQuality(napi_env env, napi_callback_info /*info*/) {
-  napi_value r; napi_get_undefined(env, &r); return r;
+  napi_value r = nullptr;
+  if (napi_get_undefined(env, &r) != napi_ok) { return nullptr; }
+  return r;
 }
 #endif // VIDALL_HAS_VPE
 

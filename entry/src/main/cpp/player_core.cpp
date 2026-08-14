@@ -1369,9 +1369,9 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
   // A4：为每个回调额外创建 threadsafe function，供媒体线程异步回调 ArkTS
   // call_js_cb 均为无捕获 lambda（可隐式转换为函数指针），在 JS 线程上执行
   {
-    napi_value resName;
+    napi_value resName = nullptr;
     napi_create_string_utf8(env, "tsfOnPrepared", NAPI_AUTO_LENGTH, &resName);
-    napi_create_threadsafe_function(
+    napi_status tsfStatus = napi_create_threadsafe_function(
       env, args[1], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
         // PR#49（问题4）：prepared 时同步发出 buffering=false，确保 UI 退出加载态
@@ -1382,11 +1382,14 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         EmitBufferingChange(*st, false);
       },
       &state.tsfOnPrepared);
+    if (tsfStatus != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "setCallbacks: create tsfOnPrepared failed status=%d", tsfStatus);
+    }
   }
   {
-    napi_value resName;
+    napi_value resName = nullptr;
     napi_create_string_utf8(env, "tsfOnCompleted", NAPI_AUTO_LENGTH, &resName);
-    napi_create_threadsafe_function(
+    napi_status tsfStatus = napi_create_threadsafe_function(
       env, args[4], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
         // PR#49（问题4）：completed 时同步发出 buffering=false
@@ -1397,11 +1400,14 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         EmitBufferingChange(*st, false);
       },
       &state.tsfOnCompleted);
+    if (tsfStatus != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "setCallbacks: create tsfOnCompleted failed status=%d", tsfStatus);
+    }
   }
   {
-    napi_value resName;
+    napi_value resName = nullptr;
     napi_create_string_utf8(env, "tsfOnTimeUpdate", NAPI_AUTO_LENGTH, &resName);
-    napi_create_threadsafe_function(
+    napi_status tsfStatus = napi_create_threadsafe_function(
       env, args[3], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
         // ctx = NativePlayerSkeletonState*，读取当前播放位置
@@ -1413,11 +1419,14 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         napi_call_function(tsfEnv, undef, jsCb, 1, &timeValue, nullptr);
       },
       &state.tsfOnTimeUpdate);
+    if (tsfStatus != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "setCallbacks: create tsfOnTimeUpdate failed status=%d", tsfStatus);
+    }
   }
   {
-    napi_value resName;
+    napi_value resName = nullptr;
     napi_create_string_utf8(env, "tsfOnError", NAPI_AUTO_LENGTH, &resName);
-    napi_create_threadsafe_function(
+    napi_status tsfStatus = napi_create_threadsafe_function(
       env, args[2], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
         // PR#49（问题5）：data = heap ErrorData*，携带 code+msg，此处负责 delete
@@ -1438,13 +1447,16 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         }
       },
       &state.tsfOnError);
+    if (tsfStatus != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "setCallbacks: create tsfOnError failed status=%d", tsfStatus);
+    }
   }
   // PR#49（问题4/7）：为 AV_PLAYING/AV_PAUSED/error 创建 buffering=false TSF；
   //                    为 AV_INFO_TYPE_SEEKDONE 创建 seekDone TSF
   if (hasBufferingArg) {
-    napi_value resName;
+    napi_value resName = nullptr;
     napi_create_string_utf8(env, "tsfOnBufferingFalse", NAPI_AUTO_LENGTH, &resName);
-    napi_create_threadsafe_function(
+    napi_status tsfStatus = napi_create_threadsafe_function(
       env, args[5], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
         // 直接调用 onBufferingChange(false)；不使用 ctx，由 jsCb（args[5]）接收
@@ -1455,11 +1467,14 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         napi_call_function(tsfEnv, undef, jsCb, 1, &boolFalse, nullptr);
       },
       &state.tsfOnBufferingFalse);
+    if (tsfStatus != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "setCallbacks: create tsfOnBufferingFalse failed status=%d", tsfStatus);
+    }
   }
   if (hasSeekDoneArg) {
-    napi_value resName;
+    napi_value resName = nullptr;
     napi_create_string_utf8(env, "tsfOnSeekDone", NAPI_AUTO_LENGTH, &resName);
-    napi_create_threadsafe_function(
+    napi_status tsfStatus = napi_create_threadsafe_function(
       env, args[6], nullptr, resName, 0, 1, nullptr, nullptr, statePtr,
       [](napi_env tsfEnv, napi_value jsCb, void *ctx, void *data) {
         napi_value undef;
@@ -1467,6 +1482,9 @@ napi_value SetCallbacks(napi_env env, napi_callback_info info) {
         napi_call_function(tsfEnv, undef, jsCb, 0, nullptr, nullptr);
       },
       &state.tsfOnSeekDone);
+    if (tsfStatus != napi_ok) {
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAll", "setCallbacks: create tsfOnSeekDone failed status=%d", tsfStatus);
+    }
   }
 
   // 若回调在 prepared 之后才注册，主动补发一次状态，避免上层错过时序。
