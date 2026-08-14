@@ -11,10 +11,10 @@
 
 ## 2. ReloadSession 收敛（D3，风险最低先行）
 
-- [ ] 2.1 新增 `ReloadSession` 类（含 token/timeout/resolve/reject）
-- [ ] 2.2 用 `reloadSession` 字段替换 5 个旧 reload 字段
-- [ ] 2.3 迁移 `reloadSource` / `resolvePendingReload` / `rejectPendingReload` / `clearPendingReloadState` 到 `ReloadSession`
-- [ ] 2.4 编译 + 单测，确认 reload 行为不变
+- [x] 2.1 新增 `ReloadSession` 类（含 token/timeout/resolve/reject）
+- [x] 2.2 用 `reloadSession` 字段替换 5 个旧 reload 字段
+- [x] 2.3 迁移 `reloadSource` / `resolvePendingReload` / `rejectPendingReload` / `clearPendingReloadState` 到 `ReloadSession`
+- [x] 2.4 编译 + 单测，确认 reload 行为不变
 
 ## 3. ResumeSession 收敛（D2）
 

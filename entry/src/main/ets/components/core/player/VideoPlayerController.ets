@@ -45,6 +45,7 @@ import {
 } from "../../../services/audioRouting/AudioTrackRoutingService";
 import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioRoutingTypes";
 import { PlaybackState } from "./PlaybackState";
+import { ReloadSession } from "./ReloadSession";
 
 export type { SubtitleTrackItem } from "./SubtitleBridgeAdapter";
 
@@ -244,11 +245,8 @@ export class VideoPlayerController {
   @Trace sourceProtocol: string = '';
   @Trace aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT;
   @Trace playbackSpeed: number = 1.0;
-  private pendingReloadToken: number = 0;
-  private activeReloadToken: number = 0;
-  private reloadTimeoutId?: number;
-  private pendingReloadResolve?: () => void;
-  private pendingReloadReject?: (error: Error) => void;
+  /** 源重载事务（收敛原 pendingReloadToken/activeReloadToken/reloadTimeoutId/pendingReloadResolve/pendingReloadReject） */
+  private readonly reloadSession: ReloadSession = new ReloadSession();
   private subtitleAdapter: ISubtitleBridgeAdapter = new NoSubtitleBridgeAdapter();
   private readonly subtitleDispatcher: SubtitleDispatcher = new SubtitleDispatcher();
   /** 字幕缓存上下文，由外部（player page）注入后用于步骤 4 缓存查询 */
@@ -1405,18 +1403,8 @@ export class VideoPlayerController {
     if (autoPlay) {
       this.prepareResumeAutoplayDecision(true, 'reload_source_autoplay');
     }
-    const reloadToken = this.pendingReloadToken + 1;
-    this.pendingReloadToken = reloadToken;
-    this.activeReloadToken = reloadToken;
     const reloadPromise = new Promise<void>((resolve, reject) => {
-      this.pendingReloadResolve = resolve;
-      this.pendingReloadReject = reject;
-      this.reloadTimeoutId = setTimeout(() => {
-        if (reloadToken !== this.activeReloadToken) {
-          return;
-        }
-        this.rejectPendingReload(new Error('reloadSource prepared timeout'));
-      }, 15000);
+      this.reloadSession.begin(resolve, reject);
     });
     try {
       await this.initPlayer(videoData, this.surfaceId);
@@ -1436,29 +1424,12 @@ export class VideoPlayerController {
     }
   }
 
-  private clearPendingReloadState(): void {
-    if (this.reloadTimeoutId !== undefined) {
-      clearTimeout(this.reloadTimeoutId);
-      this.reloadTimeoutId = undefined;
-    }
-    this.pendingReloadResolve = undefined;
-    this.pendingReloadReject = undefined;
-  }
-
   private resolvePendingReload(): void {
-    const resolve = this.pendingReloadResolve;
-    this.clearPendingReloadState();
-    if (resolve !== undefined) {
-      resolve();
-    }
+    this.reloadSession.resolvePending();
   }
 
   private rejectPendingReload(error: Error): void {
-    const reject = this.pendingReloadReject;
-    this.clearPendingReloadState();
-    if (reject !== undefined) {
-      reject(error);
-    }
+    this.reloadSession.rejectPending(error);
   }
 
   /**
