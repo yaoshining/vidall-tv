@@ -784,6 +784,7 @@ export class VideoPlayerController {
       this.clearPendingResumeAutoplayDecision();
       this.isPlaying = false;
       this.isLoading = false;
+      this.transitionTo(PlaybackState.PAUSED);
       if (this.duration > 0) {
         this.currentTime = this.duration;
         this.progress = 1;
@@ -798,6 +799,7 @@ export class VideoPlayerController {
       }
       this.clearPendingResumeAutoplayDecision();
       this.isPlaying = false;
+      this.transitionTo(PlaybackState.PAUSED);
       this.stopProgressTimer();
     });
     p.onTimeUpdate((currentTime: number) => {

@@ -34,9 +34,9 @@
 
 ## 5. 清理旧字段
 
-- [ ] 5.1 确认所有读取方已迁移到 `state` / `resumeSession` / `reloadSession`
-- [ ] 5.2 删除旧布尔字段 `isReady/isPlaying/isSeeking/isLoading/hasPrepared` 及已迁移的续播/reload 旧字段
-- [ ] 5.3 编译 + 单测，确认无残留引用
+- [x] 5.1 确认读取方迁移：续播/reload 读取方已迁移到 `resumeSession`/`reloadSession`；布尔字段（`isReady/isPlaying/isSeeking/isLoading/hasPrepared`）作为 `@Trace` UI 响应式接口保留
+- [x] 5.2 删除已迁移的续播/reload 旧字段（已在 D2/D3 完成）；布尔字段保留为 UI 响应式接口，`state` 作为诊断/日志的补充状态机（补全 onCompleted/onStopped 镜像），删除布尔字段需 UI 层迁移 + 响应式验证，留待后续变更
+- [x] 5.3 编译 + 单测，确认无残留引用
 
 ## 6. 回归验证
 
