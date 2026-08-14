@@ -40,6 +40,6 @@
 
 ## 6. 回归验证
 
-- [ ] 6.1 `assembleHap`（product=default）编译通过
-- [ ] 6.2 `UnitTestBuild` 全量单测通过（重点 `VideoPlayerController.test.ets` 48 用例）
+- [x] 6.1 `assembleHap`（product=default）编译通过
+- [x] 6.2 `UnitTestBuild` 全量单测通过（重点 `VideoPlayerController.test.ets` 48 用例）
 - [ ] 6.3 真机回归：AVPlayer 播放、MPV 回退、切集续播、seek 恢复播放、自动下一集
