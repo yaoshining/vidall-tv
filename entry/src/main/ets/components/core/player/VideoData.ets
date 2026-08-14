@@ -110,6 +110,12 @@ export interface VideoData {
   tmdbId?: string;
 
   /**
+   * IMDb ID（tt + 数字，可选），电影或剧集系列级别。
+   * 传给字幕搜索 `imdb_id` 参数，优先于 tmdbId 做精准匹配。
+   */
+  imdbId?: string;
+
+  /**
    * 文件源类型（可选），如 'webdav'、'smb'、'local'、'network'。
    * 由调用方从 FileSource.type 转换后传入，用于字幕本地缓存分桶。
    */

@@ -83,6 +83,8 @@ export interface SubtitleSearchInput {
   mediaType?: 'movie' | 'tv';
   /** TMDB ID 数字字符串，启用精准匹配。 */
   tmdbId?: string;
+  /** IMDb ID（tt + 数字），存在时优先于 tmdbId 精准匹配。 */
+  imdbId?: string;
 }
 
 /** 下载输入。 */

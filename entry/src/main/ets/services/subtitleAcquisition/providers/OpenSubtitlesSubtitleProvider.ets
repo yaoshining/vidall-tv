@@ -36,7 +36,8 @@ export class OpenSubtitlesSubtitleProvider implements SubtitleProvider {
       input.seasonNumber,
       input.episodeNumber,
       input.mediaType,
-      input.tmdbId
+      input.tmdbId,
+      input.imdbId
     );
     return osResults.map((r: OsSearchResult): SubtitleSearchResult => {
       const result: SubtitleSearchResult = {

@@ -24,6 +24,8 @@ export struct SubtitleSelectorDrawerDialog {
   scrapeOriginalTitle: string = ''
   /** TMDB ID（可选），用于 OpenSubtitles tmdb_id 精准匹配 */
   tmdbId: string = ''
+  /** IMDb ID（可选，tt + 数字），存在时优先于 tmdbId 精准匹配 */
+  imdbId: string = ''
   /**
    * 由 VideoPlayer 注入：注册一个「尝试退出搜索结果」的回调。
    * 当 VideoPlayer 的 onWillDismiss 拦截到返回键时，调用此处注册的函数：
@@ -237,6 +239,7 @@ export struct SubtitleSelectorDrawerDialog {
       let searchEpisode: number | undefined = parsed.episodeNumber
       let searchMediaType: 'movie' | 'tv' | undefined = parsed.mediaType
       let searchTmdbId: string | undefined = undefined
+      let searchImdbId: string | undefined = undefined
 
       if (this.scrapeOriginalTitle.length > 0) {
         // 有刮削原始标题，直接使用
@@ -250,11 +253,14 @@ export struct SubtitleSelectorDrawerDialog {
       if (this.tmdbId.length > 0) {
         searchTmdbId = this.tmdbId
       }
+      if (this.imdbId.length > 0) {
+        searchImdbId = this.imdbId
+      }
 
       const snapshot = await loadSubtitleSearchPreferenceSnapshot()
       const languages = snapshot.languagesParam
 
-      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${searchYear}, 季: ${searchSeason}, 集: ${searchEpisode}, tmdbId: ${searchTmdbId ?? 'none'}`)
+      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${searchYear}, 季: ${searchSeason}, 集: ${searchEpisode}, tmdbId: ${searchTmdbId ?? 'none'}, imdbId: ${searchImdbId ?? 'none'}`)
 
       // 搜索词构造仍属 UI 编排（刮削优先 vs 文件名回退），实际检索委托给 service。
       const results = await subtitleService.search({
@@ -264,7 +270,8 @@ export struct SubtitleSelectorDrawerDialog {
         seasonNumber: searchSeason,
         episodeNumber: searchEpisode,
         mediaType: searchMediaType,
-        tmdbId: searchTmdbId
+        tmdbId: searchTmdbId,
+        imdbId: searchImdbId
       });
 
       this.searchResults = results

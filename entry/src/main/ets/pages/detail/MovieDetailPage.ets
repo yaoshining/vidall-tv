@@ -1,4 +1,5 @@
 import { MediaItem, MovieEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
+import { extractImdbIdFromRawJson } from '../../lib/ScrapeClient';
 import { PlayerPageParam, PlayerPage } from '../player/index';
 import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
@@ -366,6 +367,7 @@ export struct MovieDetailPage {
         mediaKey: mKey,
         scrapeOriginalTitle: this.movieEntity?.originalTitle ?? item.originalTitle,
         tmdbId: this.movieEntity?.providerId ?? item.providerId,
+        imdbId: extractImdbIdFromRawJson(this.movieEntity?.rawJson),
         fileSourceType,
         fileSourceId
       };

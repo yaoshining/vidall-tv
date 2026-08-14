@@ -77,8 +77,18 @@ export async function aggregateSubtitleSearch(
   if (failures.length === providers.length) {
     throw failures[0];
   }
-  return SubtitleDeduplicator.dedupe(merged);
+  const deduped = SubtitleDeduplicator.dedupe(merged);
+  // 按下载量降序排序（热门字幕优先）；sort 稳定，下载量相同时保持原顺序（OpenSubtitles 在前）。
+  deduped.sort((a: SubtitleSearchResult, b: SubtitleSearchResult): number => b.downloadCount - a.downloadCount);
+  return deduped;
 }
+
+/**
+ * 后续优化（待评估，未实现）：
+ *  3. 标题兜底时补全 year + type=movie/episode 的稳定传递（已传，需实测剧集场景）。
+ *  4. SubHub tmdb_id 搜索疑似失效（返回 NO_RESULTS），已改用 imdb_id 优先规避；待排 SubHub 侧问题。
+ *  5. releaseName 展示清洗（去发布组/分辨率等冗余）。
+ */
 
 /** service 公共方法集合。 */
 export class SubtitleAcquisitionService {

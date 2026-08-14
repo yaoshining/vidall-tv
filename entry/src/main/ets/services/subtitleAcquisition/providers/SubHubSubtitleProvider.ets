@@ -45,7 +45,8 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       season: input.seasonNumber,
       episode: input.episodeNumber,
       type: input.mediaType === 'movie' ? 'movie' : (input.mediaType === 'tv' ? 'episode' : undefined),
-      tmdbId: this.parseTmdbId(input.tmdbId)
+      tmdbId: this.parseTmdbId(input.tmdbId),
+      imdbId: input.imdbId !== undefined && input.imdbId.length > 0 ? input.imdbId : undefined
     });
     return outcome.results.map((r: ShSearchResult): SubtitleSearchResult => {
       const result: SubtitleSearchResult = {

@@ -167,6 +167,7 @@ export struct VideoPlayer {
       sourceId: this.data.fileSourceId ?? '0',
       scrapeOriginalTitle: this.data.scrapeOriginalTitle,
       tmdbId: this.data.tmdbId,
+      imdbId: this.data.imdbId,
       // 注册回调：onWillDismiss 拦截返回键时，先调用此函数尝试退出搜索结果视图
       onRegisterResetSearch: (fn: () => boolean) => {
         this.subtitleTryHideSearch = fn
