@@ -956,6 +956,7 @@ export class VideoPlayerController {
             resumeAutoplayDecisionSource, resumeAutoplayDecisionOrigin);
         }
         this.recordPendingResumeAutoplayResult('paused', true);
+        this.transitionTo(PlaybackState.PAUSED);
         this.resumeSession.suppressPlayAfterSeek = false;
       } else {
         if (resumeSeekInFlight) {
@@ -1797,7 +1798,7 @@ export class VideoPlayerController {
   }
 
   async release(): Promise<void> {
-    this.transitionTo(PlaybackState.IDLE);
+    this.transitionTo(PlaybackState.RELEASING);
     this.rejectPendingReload(new Error('player released'));
     this.resumeSession.result = null;
     this.clearResumeSeekAutoplayFallbackState();
@@ -1818,6 +1819,7 @@ export class VideoPlayerController {
     VidAllPlayerAdapter.releaseSmbProxy();
     // 释放 VPE 实例（播放器已销毁后再销毁 VPE，避免 Surface 竞争）
     VpeEnhancerUtil.destroyEnhancer();
+    this.transitionTo(PlaybackState.IDLE);
   }
 
   async seek(time: number, autoplayDecisionSource: string = ''): Promise<void> {
@@ -1866,6 +1868,7 @@ export class VideoPlayerController {
       } catch (seekErr) {
         // 同步 seek 失败时重置状态，避免后续 seek 永久排队。
         this.isSeeking = false;
+        this.transitionTo(PlaybackState.PAUSED);
         this.clearResumeSeekAutoplayFallbackState();
         this.clearPendingResumeAutoplayDecision();
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
