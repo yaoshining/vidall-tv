@@ -46,6 +46,8 @@ export struct SubtitleSelectorDrawerDialog {
   @State searchResults: SubtitleSearchResult[] = []
   /** 搜索完成但无结果 */
   @State searchNoResults: boolean = false
+  /** 当前搜索解析出的季集标签，如 "S01E01"，用于面板展示便于核对 */
+  @State searchSeasonEpisode: string = ''
   /** 正在下载字幕 */
   @State isDownloading: boolean = false
   /** 正在下载的条目 subtitleId（用于 UI 高亮） */
@@ -146,6 +148,15 @@ export struct SubtitleSelectorDrawerDialog {
     return lastSlash >= 0 ? path.substring(lastSlash + 1) : path
   }
 
+  /** 搜索面板标题：展示中文片名 + 解析出的季集，便于核对搜索目标。 */
+  private searchPanelTitle(): string {
+    if (this.displayTitle.length === 0) {
+      return '在线搜索字幕'
+    }
+    const se = this.searchSeasonEpisode.length > 0 ? ` ${this.searchSeasonEpisode}` : ''
+    return `搜索「${this.displayTitle}」${se}字幕`
+  }
+
   /** 格式化下载次数：≥1000 时显示 k */
   private formatDownloadCount(count: number): string {
     if (count >= 1000) {
@@ -233,6 +244,13 @@ export struct SubtitleSelectorDrawerDialog {
     try {
       const fileName = this.extractFileName()
       const parsed = parseFileName(fileName)
+      if (parsed.seasonNumber !== undefined && parsed.episodeNumber !== undefined) {
+        const s = parsed.seasonNumber.toString().padStart(2, '0')
+        const e = parsed.episodeNumber.toString().padStart(2, '0')
+        this.searchSeasonEpisode = `S${s}E${e}`
+      } else {
+        this.searchSeasonEpisode = ''
+      }
 
       // 优先使用刮削数据：originalTitle 质量远高于文件名解析
       let query: string
@@ -408,9 +426,7 @@ export struct SubtitleSelectorDrawerDialog {
                 this.showSearchResults = false
               })
           }
-          Text(this.showSearchResults
-            ? (this.displayTitle.length > 0 ? `搜索「${this.displayTitle}」字幕` : '在线搜索字幕')
-            : '字幕')
+          Text(this.showSearchResults ? this.searchPanelTitle() : '字幕')
             .fontSize(34)
             .fontColor('#F3F6FB')
             .fontWeight(FontWeight.Bold)
