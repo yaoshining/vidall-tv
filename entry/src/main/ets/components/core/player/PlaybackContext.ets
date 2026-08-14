@@ -3,13 +3,7 @@ import { MediaItem, TvEpisodeEntity } from '../../../db/models/MediaEntity';
 import { EpisodeGroupMatcher, EpisodeGroupMatchResult, EpisodeGroupMatchItem } from './EpisodeGroupMatcher';
 import { FileExplorerResource } from '../file/FileExplorerController';
 import { isVideoFile } from '../../../utils/VideoFileUtil';
-
-function tmdbImageUrl(path: string | undefined, width: string): string {
-  if (path === undefined || path.length === 0) {
-    return '';
-  }
-  return `https://image.tmdb.org/t/p/${width}${path}`;
-}
+import { tmdbImageUrl } from '../../../utils/MediaFormatUtil';
 
 // 播放上下文条目接口
 export interface PlaybackContextItem {

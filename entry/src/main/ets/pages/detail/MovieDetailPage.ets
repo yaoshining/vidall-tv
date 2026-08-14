@@ -7,31 +7,9 @@ import http from '@ohos.net.http';
 import image from '@ohos.multimedia.image';
 import effectKit from '@ohos.effectKit';
 import { millisecondsToTime } from '../../utils/TimeUtil';
+import { tmdbImageUrl, formatYear, parseGenresArr, toOpaqueColor } from '../../utils/MediaFormatUtil';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage';
-
-// ─────────────────────────────────────────────
-// TMDB 图片 URL 工具
-// ─────────────────────────────────────────────
-
-/**
- * 按指定宽度档位构造 TMDB 图片 URL。
- * width 取值：'w185' | 'w300' | 'w342' | 'w500' | 'w780' | 'w1280' | 'original'
- */
-function tmdbImageUrl(path: string | undefined, width: string): string {
-  if (!path || path.length === 0) { return ''; }
-  return 'https://image.tmdb.org/t/p/' + width + path;
-}
-
-function formatYear(date: string | undefined): string {
-  if (!date || date.length < 4) { return ''; }
-  return date.substring(0, 4);
-}
-
-function parseGenresArr(json: string | undefined): string[] {
-  if (!json) { return []; }
-  try { return JSON.parse(json) as string[]; } catch (e) { return []; }
-}
 
 /**
  * 将电影时长格式化为 h:mm:ss 字符串。
@@ -111,11 +89,6 @@ export struct MovieDetailPage {
   @Local hoveredActionKey: string = '';
 
   // ── 属性计算方法 ──────────────────────────────────
-
-  /** 将 #RRGGBB 转为完全不透明的 #FFRRGGBB（ARGB 8位），用于渐变颜色 */
-  private toOpaqueColor(hex: string): string {
-    return '#FF' + hex.substring(1);
-  }
 
   /**
    * Backdrop URL（高清 w1280）。
@@ -560,7 +533,7 @@ export struct MovieDetailPage {
         .width('100%').height('68%')
         .linearGradient({
           angle: 180,
-          colors: [['#00000000', 0.0], [this.toOpaqueColor(this.dominantBgColor), 1.0]]
+          colors: [['#00000000', 0.0], [toOpaqueColor(this.dominantBgColor), 1.0]]
         })
         .position({ left: 0, bottom: 0 })
         .hitTestBehavior(HitTestMode.Transparent)
@@ -570,7 +543,7 @@ export struct MovieDetailPage {
         .width('55%').height('100%')
         .linearGradient({
           angle: 90,
-          colors: [[this.toOpaqueColor(this.dominantBgColor), 0.0], ['#00000000', 1.0]]
+          colors: [[toOpaqueColor(this.dominantBgColor), 0.0], ['#00000000', 1.0]]
         })
         .position({ left: 0, top: 0 })
         .hitTestBehavior(HitTestMode.Transparent)

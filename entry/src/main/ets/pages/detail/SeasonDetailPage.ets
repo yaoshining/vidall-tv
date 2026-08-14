@@ -13,25 +13,11 @@ import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/pla
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from '../../components/core/player/Constants'
 import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
+import { tmdbImageUrl, formatYear, parseGenresArr, translateJob, toChineseSeasonLabel, buildEpisodeCode, isGenericSeasonTitle, toOpaqueColor } from '../../utils/MediaFormatUtil'
 
 // ─────────────────────────────────────────────
 // 工具函数
 // ─────────────────────────────────────────────
-
-function tmdbImageUrl(path: string | undefined, width: string): string {
-  if (!path || path.length === 0) { return ''; }
-  return `https://image.tmdb.org/t/p/${width}${path}`;
-}
-
-function formatYear(date: string | undefined): string {
-  if (!date || date.length < 4) { return ''; }
-  return date.substring(0, 4);
-}
-
-function parseGenresArr(json: string | undefined): string[] {
-  if (!json) { return []; }
-  try { return JSON.parse(json) as string[]; } catch (e) { return []; }
-}
 
 /** 将毫秒格式化为 "Xh Ym" 或 "Ym" */
 function formatDuration(ms: number | undefined): string {
@@ -113,22 +99,6 @@ interface TmdbSeriesRawJson {
   credits?: TmdbSeriesCredits;
 }
 
-/** 将 TMDB crew job 翻译为中文职位 */
-function translateJob(job: string): string {
-  if (job === 'Director') { return '导演'; }
-  if (job === 'Writer' || job === 'Screenplay' || job === 'Story') { return '编剧'; }
-  if (job === 'Editor') { return '剪辑师'; }
-  if (job === 'Director of Photography') { return '摄影指导'; }
-  if (job === 'Producer') { return '制片人'; }
-  if (job === 'Executive Producer') { return '执行制片人'; }
-  if (job === 'Composer' || job === 'Original Music Composer') { return '作曲'; }
-  if (job === 'Art Direction' || job === 'Production Design') { return '艺术指导'; }
-  if (job === 'Costume Design') { return '服装设计'; }
-  if (job === 'Casting') { return '选角导演'; }
-  if (job === 'Visual Effects Supervisor') { return '视效总监'; }
-  return job;
-}
-
 /** 集条目：持有文件媒体信息（播放用）+ 集元数据（展示用） */
 interface SeasonEpisodeItem {
   mediaItem: MediaItem;
@@ -179,7 +149,7 @@ export struct SeasonDetailPage {
   private getSeasonLabel(): string {
     const n = this.getSeasonNumber();
     const base = n === 0 ? '特别篇' : `第 ${n} 季`;
-    if (this.seasonTitle.length > 0 && !this.isGenericSeasonTitle(this.seasonTitle, n)) {
+    if (this.seasonTitle.length > 0 && !isGenericSeasonTitle(this.seasonTitle, n)) {
       return `${base}：${this.seasonTitle}`;
     }
     if (this.group?.seasonLabel !== undefined && this.group.seasonLabel.length > 0) {
@@ -188,26 +158,10 @@ export struct SeasonDetailPage {
     return base;
   }
 
-  private toChineseSeasonLabel(n: number): string {
-    if (n <= 0) { return '特别篇'; }
-    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
-      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
-    if (n < chineseNums.length) {
-      return `第${chineseNums[n]}季`;
-    }
-    return `第${n}季`;
-  }
-
-  private buildEpisodeCode(seasonNumber: number, episodeNumber: number): string {
-    const sn = seasonNumber > 0 ? seasonNumber : 0;
-    const en = episodeNumber > 0 ? episodeNumber : 0;
-    return `S${sn}:E${en}`;
-  }
-
   private getSeasonNameForPlayer(): string {
     const n = this.getSeasonNumber();
     const title = this.seasonTitle.trim();
-    if (title.length > 0 && !this.isGenericSeasonTitle(title, n)) {
+    if (title.length > 0 && !isGenericSeasonTitle(title, n)) {
       return title;
     }
     return '';
@@ -217,10 +171,10 @@ export struct SeasonDetailPage {
     const seriesTitle = this.getSeriesTitle().length > 0 ? this.getSeriesTitle() : (episode.title ?? episode.fileName);
     const sn = episode.seasonNumber ?? this.getSeasonNumber();
     const en = episode.episodeNumber ?? 0;
-    const seasonLabel = this.toChineseSeasonLabel(sn);
+    const seasonLabel = toChineseSeasonLabel(sn);
     const seasonName = this.getSeasonNameForPlayer();
     const epName = episodeName.trim();
-    const code = this.buildEpisodeCode(sn, en);
+    const code = buildEpisodeCode(sn, en);
     const seasonPart = seasonName.length > 0 ? `${seasonLabel} ${seasonName}` : seasonLabel;
     return `${seriesTitle} ${seasonPart}-${code}-${epName}`;
   }
@@ -248,20 +202,6 @@ export struct SeasonDetailPage {
       return `第${en}集`;
     }
     return fileName.length > 0 ? fileName : '未知集名';
-  }
-
-  /** 判断季名是否是通用季名（即和 base 含义相同，不需要拼接显示） */
-  private isGenericSeasonTitle(title: string, n: number): boolean {
-    const t = title.trim().toLowerCase();
-    // 匹配 "season 1"、"season1"、"第1季"、"第一季"、"第 1 季" 等
-    if (/^season\s*\d+$/.test(t)) { return true; }
-    if (/^第\s*\d+\s*季$/.test(t)) { return true; }
-    const chineseNums = ['零','一','二','三','四','五','六','七','八','九','十',
-      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
-    if (n >= 0 && n < chineseNums.length) {
-      if (t === `第${chineseNums[n]}季`) { return true; }
-    }
-    return false;
   }
 
   private getBackdropUrl(): string {
@@ -292,8 +232,6 @@ export struct SeasonDetailPage {
   private isOverviewLong(): boolean { return this.getOverview().length > 100; }
 
   private getOverviewShort(): string { return this.getOverview().substring(0, 100) + '...'; }
-
-  private toOpaqueColor(hex: string): string { return '#FF' + hex.substring(1); }
 
   private getDialogPosterUrl(): string {
     // 优先用季海报
@@ -1041,13 +979,13 @@ export struct SeasonDetailPage {
       // 底部渐变遮罩
       Column()
         .width('100%').height('68%')
-        .linearGradient({ angle: 180, colors: [['#00000000', 0.0], [this.toOpaqueColor(this.dominantBgColor), 1.0]] })
+        .linearGradient({ angle: 180, colors: [['#00000000', 0.0], [toOpaqueColor(this.dominantBgColor), 1.0]] })
         .position({ left: 0, bottom: 0 })
 
       // 左侧渐变遮罩
       Column()
         .width('55%').height('100%')
-        .linearGradient({ angle: 90, colors: [[this.toOpaqueColor(this.dominantBgColor), 0.0], ['#00000000', 1.0]] })
+        .linearGradient({ angle: 90, colors: [[toOpaqueColor(this.dominantBgColor), 0.0], ['#00000000', 1.0]] })
         .position({ left: 0, top: 0 })
 
       // 底部内容：左侧标题/元信息/简介
