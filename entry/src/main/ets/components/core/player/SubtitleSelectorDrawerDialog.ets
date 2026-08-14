@@ -22,6 +22,8 @@ export struct SubtitleSelectorDrawerDialog {
   sourceId: string = '0'
   /** 刮削得到的原始标题（英文，可选），优先用于 OpenSubtitles 搜索 */
   scrapeOriginalTitle: string = ''
+  /** 当前视频显示名（中文，可选），用于搜索面板展示，便于用户识别 */
+  displayTitle: string = ''
   /** TMDB ID（可选），用于 OpenSubtitles tmdb_id 精准匹配 */
   tmdbId: string = ''
   /** IMDb ID（可选，tt + 数字），存在时优先于 tmdbId 精准匹配 */
@@ -406,10 +408,14 @@ export struct SubtitleSelectorDrawerDialog {
                 this.showSearchResults = false
               })
           }
-          Text(this.showSearchResults ? '在线搜索字幕' : '字幕')
+          Text(this.showSearchResults
+            ? (this.displayTitle.length > 0 ? `搜索「${this.displayTitle}」字幕` : '在线搜索字幕')
+            : '字幕')
             .fontSize(34)
             .fontColor('#F3F6FB')
             .fontWeight(FontWeight.Bold)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .height(48)
         .width('100%')

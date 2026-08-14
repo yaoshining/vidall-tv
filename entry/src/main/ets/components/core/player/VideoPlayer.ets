@@ -92,6 +92,18 @@ export struct VideoPlayer {
     return 'network'
   }
 
+  /** 提取 VideoData.name 的字符串形式（ResourceStr → string），供字幕面板展示中文标题。 */
+  private resolveDisplayTitle(): string {
+    const name = this.data.name;
+    if (name === undefined) {
+      return ''
+    }
+    if (typeof name === 'string') {
+      return name
+    }
+    return ''
+  }
+
   controlsDialogController = new CustomDialogController({
     builder: VideoControlsDialog({
       videoController: this.controller,
@@ -168,6 +180,7 @@ export struct VideoPlayer {
       scrapeOriginalTitle: this.data.scrapeOriginalTitle,
       tmdbId: this.data.tmdbId,
       imdbId: this.data.imdbId,
+      displayTitle: this.resolveDisplayTitle(),
       // 注册回调：onWillDismiss 拦截返回键时，先调用此函数尝试退出搜索结果视图
       onRegisterResetSearch: (fn: () => boolean) => {
         this.subtitleTryHideSearch = fn
