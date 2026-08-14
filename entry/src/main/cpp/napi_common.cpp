@@ -299,7 +299,7 @@ void VidAllEnsureAvNetworkInit() {
     if (ret >= 0) {
       g_avNetworkReady.store(true);
     } else {
-      OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, "VidAllEnsureAvNetworkInit",
+      OH_LOG_Print(LOG_APP, LOG_ERROR, 0xFF00, "VidAllEnsureAvNetworkInit",
                    "avformat_network_init failed: %d", ret);
     }
   });

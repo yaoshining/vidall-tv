@@ -22,7 +22,7 @@
 #include <multimedia/player_framework/native_avformat.h>
 #include <multimedia/player_framework/native_avcapability.h>
 #include <multimedia/player_framework/native_avcodec_base.h>
-#ifdef VIDALL_HAS_VPE
+#if VIDALL_HAS_VPE
 #include <multimedia/video_processing_engine/video_processing.h>
 #include <multimedia/video_processing_engine/video_processing_types.h>
 #endif // VIDALL_HAS_VPE
@@ -66,20 +66,6 @@ struct FfprobeAsyncContext {
   std::string errorMessage;
 };
 
-static int ProbeInterruptCallback(void *opaque) {
-  if (opaque == nullptr) {
-    return 0;
-  }
-  ProbeInterruptContext *context = static_cast<ProbeInterruptContext *>(opaque);
-  if (context->timeoutUs <= 0) {
-    return 0;
-  }
-  const int64_t nowUs = av_gettime_relative();
-  if (nowUs - context->startTimeUs >= context->timeoutUs) {
-    return 1;
-  }
-  return 0;
-}
 static std::string CodecTypeToString(AVMediaType mediaType) {
   switch (mediaType) {
     case AVMEDIA_TYPE_VIDEO:

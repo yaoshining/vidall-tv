@@ -12,18 +12,18 @@
 | 71~545 | SMB URL/percent、错误、JSON、curl 工具 | ~475 |
 | 546~853 | ffprobe | ~308 |
 | 854~1398 | 字幕提取 | ~545 |
-| 1399~3130 | 播放器核心（AVPlayer 代理） | ~1732 |
+| 1399~3129 | 播放器核心（AVPlayer 代理） | ~1731 |
 | 3130~3460 | WebDAV | ~330 |
 | 3461~3597 | 音频能力查询 | ~137 |
 | 3598~4013 | VPE 画质增强 | ~416 |
-| 4022~5408 | SMB 操作 | ~1387 |
+| 4014~5408 | SMB 操作 | ~1394 |
 | 5409~5501 | Init + 模块注册 + 析构 | ~93 |
 
 ## 依赖图谱（grep 逐符号确认）
 
 - **错误抛出**（`ThrowTypeError`/`ThrowRangeError`/`ReadUtf8String`）：被**所有域**使用 → 共享。
 - **JSON 工具**（`JsonEscape`/`AppendJson*Field`/`FfmpegErrorToString`）：ffprobe + 字幕 + SMB → 共享。
-- **SMB URL**（`SmbUrlComponents`/`ParseSmbUrl`/`Percent*`/`SmbAVIOContext`）：player core + smb ops → 共享。
+- **SMB URL**（`SmbUrlComponents`/`ParseSmbUrl`/`Percent*`）：player core + smb ops → 共享；`SmbAVIOContext`（依赖 libsmb2 类型）仅 player core 使用 → 归入 player_core。
 - **curl**（`RunCurlRequest`/`RunCurlDownloadToFile`/`FormatCurlError` 等）：**仅 WebDAV** → 归入 `webdav.cpp`。
 - **FFmpeg 网络全局**（`EnsureAvNetworkInit`/`g_avNetworkReady`/`g_ffmpegNetworkMutex`）：ffprobe + 字幕 + 析构函数 → 共享（通过访问函数暴露）。
 - **VPE 全局**（`g_vpe*`）：仅在 3598~3992 内部，**零跨域引用** → 独立叶子。
@@ -33,7 +33,7 @@
 
 ### D1：共享工具抽到 `napi_common.h/.cpp`
 
-`napi_common.h` 声明、`napi_common.cpp` 定义：`SmbUrlComponents`、`SmbAVIOContext`、`PercentDecode`、`PercentEncodePathSegment`、`PercentEncodePath`、`ParseSmbUrl`、`ThrowTypeError`、`ThrowRangeError`、`ReadUtf8String`、`JsonEscape`、`AppendJsonStringField`、`AppendJsonIntField`、`FfmpegErrorToString`，以及 FFmpeg 网络访问函数（`VidAllEnsureAvNetworkInit` / `VidAllAvNetworkReady` / `VidAllDeinitAvNetwork`）。
+`napi_common.h` 声明、`napi_common.cpp` 定义：`SmbUrlComponents`、`PercentDecode`、`PercentEncodePathSegment`、`PercentEncodePath`、`ParseSmbUrl`、`ThrowTypeError`、`ThrowRangeError`、`ReadUtf8String`、`JsonEscape`、`AppendJsonStringField`、`AppendJsonIntField`、`FfmpegErrorToString`、`ProbeInterruptContext`、`ProbeInterruptCallback`，以及 FFmpeg 网络访问函数（`VidAllEnsureAvNetworkInit` / `VidAllAvNetworkReady` / `VidAllDeinitAvNetwork`）与 `g_ffmpegNetworkMutex`。
 
 条件编译宏兜底（`VIDALL_HAS_LIBCURL` / `VIDALL_HAS_LIBSMB2` / `VIDALL_HAS_VPE` 等 `#if !defined`）上移到 `napi_common.h`，所有 `.cpp` 先 include 它。
 

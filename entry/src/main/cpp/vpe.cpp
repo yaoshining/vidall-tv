@@ -22,7 +22,7 @@
 #include <multimedia/player_framework/native_avformat.h>
 #include <multimedia/player_framework/native_avcapability.h>
 #include <multimedia/player_framework/native_avcodec_base.h>
-#ifdef VIDALL_HAS_VPE
+#if VIDALL_HAS_VPE
 #include <multimedia/video_processing_engine/video_processing.h>
 #include <multimedia/video_processing_engine/video_processing_types.h>
 #endif // VIDALL_HAS_VPE
@@ -58,7 +58,7 @@ namespace vidall {
 
 // ============================================================
 
-#ifdef VIDALL_HAS_VPE
+#if VIDALL_HAS_VPE
 
 static OH_VideoProcessing*    g_vpeProcessor  = nullptr;
 static OHNativeWindow*        g_vpeInputWindow  = nullptr;
