@@ -10,6 +10,14 @@ endif()
 include_directories(${NATIVERENDER_ROOT_PATH})
 
 add_library(vidall_core_player_napi SHARED
+  napi_common.cpp
+  ffmpeg_probe.cpp
+  subtitle_extract.cpp
+  webdav.cpp
+  audio_capability.cpp
+  vpe.cpp
+  smb_ops.cpp
+  player_core.cpp
   vidall_core_player_napi.cpp
 )
 
