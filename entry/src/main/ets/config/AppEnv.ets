@@ -48,4 +48,24 @@ export class AppEnv {
   static readonly OS_PROXY_BASE_URL: string = AppEnv.IS_PRODUCTION
     ? 'https://os-proxy.vidall.app/v1'
     : `http://${AppEnv.DEV_PROXY_HOST}:8787/v1`;
+
+  /**
+   * SubHub 统一字幕出口网关 host。
+   * - 线上服务：公共域名 subhub.softeehub.com
+   * - 本地自建：localhost:3000（如需自建，可在演示页手动覆盖 base URL）
+   */
+  private static readonly PROD_SUBHUB_HOST: string = 'subhub.softeehub.com';
+
+  /**
+   * SubHub 公共 base URL（无尾斜杠）。
+   * 线上服务已部署，无论 debug/release 构建都固定指向 subhub.softeehub.com；
+   * 本地自建环境可在演示页「连接配置」里手动覆盖为 http://localhost:3000。
+   */
+  static readonly SUBHUB_BASE_URL: string = `https://${AppEnv.PROD_SUBHUB_HOST}`;
+
+  /**
+   * SubHub Caller Key（对外字幕 API 的 Bearer 鉴权凭据）。
+   * ⚠️ 账户体系建立前暂用常量；正式接入时应改用 BuildProfile/secret 注入，避免明文进 git。
+   */
+  static readonly SUBHUB_API_KEY: string = 'subhub_live_KE9pl9UT4-Eo_zhSJedlDXn_i5xeVlax8Rlcs3Rn8wQ';
 }

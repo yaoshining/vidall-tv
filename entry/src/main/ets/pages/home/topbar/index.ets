@@ -5,6 +5,7 @@ import { BasicClock } from "../../../components/common/BasicClock"
 import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
 import { SearchWorkspacePage } from "../../search"
+import { SubHubDemoPage } from "../../subhub/SubHubDemoPage"
 
 @ComponentV2
 export struct HomeTopBar {
@@ -80,6 +81,17 @@ export struct HomeTopBar {
           btnBorderColor: Color.Transparent,
           iconBuilder: (): void => this.settingLucideIconBuilder('cloud-download')
         }).bindTips('获取云端数据')
+
+        IBestButton({
+          text: "字幕演示",
+          buttonSize: "small",
+          btnBorderColor: Color.Transparent,
+          onBtnClick: () => {
+            this.pageStack.pushPath({
+              name: SubHubDemoPage.PAGE_NAME
+            })
+          }
+        }).bindTips('SubHub 字幕搜索/下载演示')
 
         IBestButton({
           buttonSize: "small",

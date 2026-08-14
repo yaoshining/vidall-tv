@@ -18,9 +18,7 @@
 // - `markLastUsed` 失败时仅 warn 不抛（按 OpenSpec 3.4 scenario 2：异常不阻断下载挂载结果）。
 
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { OpenSubtitlesClient } from "../../lib/OpenSubtitlesClient";
 import {
-  SubtitleDownloader,
   buildSubtitlePath,
   sha256Hex
 } from "../../subtitle/SubtitleDownloader";
@@ -38,30 +36,63 @@ import {
   SubtitleSearchResult,
   classifyAcquisitionError
 } from "./SubtitleAcquisitionTypes";
+import { SubtitleProvider, SubtitleDownloadContext } from "./providers/SubtitleProvider";
+import { SubtitleProviderResolver } from "./providers/SubtitleProviderResolver";
+import { OpenSubtitlesSubtitleProvider } from "./providers/OpenSubtitlesSubtitleProvider";
+import { SubHubSubtitleProvider } from "./providers/SubHubSubtitleProvider";
+import { SubtitleDeduplicator } from "./providers/SubtitleDeduplicator";
 
 const DOMAIN = 0x0002;
 const TAG = 'SubtitleAcquisitionService';
 
+/**
+ * 并发聚合多个 provider 的搜索结果（保持 provider 顺序），去重后返回。
+ * 单 provider 失败 SHALL 不阻塞其它 provider；仅当所有 provider 都失败时才抛错。
+ * 导出为独立函数以便单测注入 mock provider。
+ */
+export async function aggregateSubtitleSearch(
+  providers: SubtitleProvider[],
+  input: SubtitleSearchInput
+): Promise<SubtitleSearchResult[]> {
+  const failures: Error[] = [];
+  const resultsByProvider: SubtitleSearchResult[][] = await Promise.all(
+    providers.map(async (provider: SubtitleProvider): Promise<SubtitleSearchResult[]> => {
+      try {
+        return await provider.search(input);
+      } catch (e) {
+        const err = e as Error;
+        failures.push(err);
+        hilog.warn(DOMAIN, TAG, `${provider.source} search failed: ${err.message ?? JSON.stringify(e)}`);
+        return [];
+      }
+    })
+  );
+  const merged: SubtitleSearchResult[] = [];
+  for (let i = 0; i < resultsByProvider.length; i++) {
+    const list = resultsByProvider[i];
+    for (let j = 0; j < list.length; j++) {
+      merged.push(list[j]);
+    }
+  }
+  if (failures.length === providers.length) {
+    throw failures[0];
+  }
+  return SubtitleDeduplicator.dedupe(merged);
+}
+
 /** service 公共方法集合。 */
 export class SubtitleAcquisitionService {
   /**
-   * 搜索在线字幕。
+   * 搜索在线字幕（多 provider 聚合）。
    *
-   * 抛出 `SubtitleAcquisitionError`，`error.kind` 决定 UI 端 Toast 文案。
+   * 按 `SubtitleProviderResolver` 决定 provider 集合（无 Key 仅 SubHub；有 Key 为
+   * OpenSubtitles 直连 + SubHub），并发搜索后按「OpenSubtitles 在前、SubHub 在后」合并，
+   * 去重后返回。单 provider 失败不阻塞其它 provider；全部失败才抛出错误。
    */
   async search(input: SubtitleSearchInput): Promise<SubtitleSearchResult[]> {
     try {
-      const client = new OpenSubtitlesClient();
-      const results = await client.search(
-        input.query,
-        input.languages,
-        input.year,
-        input.seasonNumber,
-        input.episodeNumber,
-        input.mediaType,
-        input.tmdbId
-      );
-      return results;
+      const providers = await new SubtitleProviderResolver().resolveProviders();
+      return await aggregateSubtitleSearch(providers, input);
     } catch (e) {
       const kind = classifyAcquisitionError(e as object);
       const message = (e as Record<string, string>)['message'] ?? JSON.stringify(e);
@@ -71,27 +102,25 @@ export class SubtitleAcquisitionService {
   }
 
   /**
-   * 下载字幕。
+   * 下载字幕（按来源分派）。
    *
    * 抛出 `SubtitleAcquisitionError`。
    * 成功后返回 `localPath` / `fileName` 供 UI 调 `videoController.addExternalSubtitle`。
    */
   async download(input: SubtitleDownloadInput): Promise<SubtitleDownloadOutcome> {
     try {
-      const downloader = new SubtitleDownloader({ filesDir: input.filesDir });
-      const downloadResult = await downloader.download(
-        input.result.fileId,
-        input.stableVideoSrc,
-        input.sourceType,
-        input.sourceId,
-        input.result.languageCode,
-        input.result.downloadCount
-      );
-      const outcome: SubtitleDownloadOutcome = {
-        localPath: downloadResult.localPath,
-        fileName: downloadResult.fileName,
-        languageCode: input.result.languageCode
+      const ctx: SubtitleDownloadContext = {
+        stableVideoSrc: input.stableVideoSrc,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        filesDir: input.filesDir
       };
+      let outcome: SubtitleDownloadOutcome;
+      if (input.result.source === 'subhub') {
+        outcome = await new SubHubSubtitleProvider().download(input.result, ctx);
+      } else {
+        outcome = await new OpenSubtitlesSubtitleProvider().download(input.result, ctx);
+      }
       return outcome;
     } catch (e) {
       const kind = classifyAcquisitionError(e as object);

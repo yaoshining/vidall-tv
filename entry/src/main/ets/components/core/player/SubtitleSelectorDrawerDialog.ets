@@ -44,8 +44,8 @@ export struct SubtitleSelectorDrawerDialog {
   @State searchNoResults: boolean = false
   /** 正在下载字幕 */
   @State isDownloading: boolean = false
-  /** 正在下载的条目 fileId（用于 UI 高亮） */
-  @State downloadingFileId: number = -1
+  /** 正在下载的条目 subtitleId（用于 UI 高亮） */
+  @State downloadingSubtitleId: string = ''
 
   aboutToAppear(): void {
     this.panelOffsetX = 72
@@ -194,6 +194,21 @@ export struct SubtitleSelectorDrawerDialog {
     return 'rgba(29, 78, 216, 0.31)'
   }
 
+  /** 来源 chip 文案：opensubtitles → 直连，subhub → SubHub */
+  private getSourceLabel(source: string): string {
+    return source === 'opensubtitles' ? '直连' : 'SubHub'
+  }
+
+  /** 来源 chip 文字颜色 */
+  private getSourceChipTextColor(source: string): string {
+    return source === 'opensubtitles' ? '#4ADE80' : '#6B9EE0'
+  }
+
+  /** 来源 chip 背景颜色 */
+  private getSourceChipFillColor(source: string): string {
+    return source === 'opensubtitles' ? 'rgba(74, 222, 128, 0.16)' : 'rgba(107, 158, 224, 0.16)'
+  }
+
   /** 显示 Toast 提示 */
   private showSearchToast(message: string, duration: number): void {
     try {
@@ -283,6 +298,14 @@ export struct SubtitleSelectorDrawerDialog {
           return 'API Key 无效，请在设置页重新填写';
         case 'download_failed':
           return `字幕${verb}失败，请稍后重试`;
+        case 'subhub_auth_invalid':
+          return '字幕服务配置异常，请稍后重试';
+        case 'subhub_quota_exhausted':
+          return '字幕源配额已耗尽，请稍后重试';
+        case 'subhub_unavailable':
+          return '字幕源暂时不可用，请稍后重试';
+        case 'subhub_not_found':
+          return '字幕已失效，请重新搜索';
         case 'unknown':
         default:
           return `字幕${verb}失败，请稍后重试`;
@@ -305,7 +328,7 @@ export struct SubtitleSelectorDrawerDialog {
       return
     }
     this.isDownloading = true
-    this.downloadingFileId = result.fileId
+    this.downloadingSubtitleId = result.subtitleId
 
     try {
       const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext
@@ -349,7 +372,7 @@ export struct SubtitleSelectorDrawerDialog {
       this.showSearchToast(this.toastMessageForAcquisitionError(e, '下载'), 4000)
     } finally {
       this.isDownloading = false
-      this.downloadingFileId = -1
+      this.downloadingSubtitleId = ''
     }
   }
 
@@ -621,6 +644,19 @@ export struct SubtitleSelectorDrawerDialog {
                       .borderRadius(12)
                       .backgroundColor(this.getResultBadgeFillColor(this.getResultLanguageTag(result.languageCode)))
 
+                      Row() {
+                        Text(this.getSourceLabel(result.source))
+                          .fontSize(12)
+                          .fontWeight(600)
+                          .fontColor(this.getSourceChipTextColor(result.source))
+                      }
+                      .height(24)
+                      .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(12)
+                      .backgroundColor(this.getSourceChipFillColor(result.source))
+
                       Column({ space: 4 }) {
                         Text(result.fileName)
                           .fontSize(16)
@@ -637,7 +673,7 @@ export struct SubtitleSelectorDrawerDialog {
                       .layoutWeight(1)
                       .alignItems(HorizontalAlign.Start)
 
-                      if (this.isDownloading && this.downloadingFileId === result.fileId) {
+                      if (this.isDownloading && this.downloadingSubtitleId === result.subtitleId) {
                         LoadingProgress()
                           .width(24)
                           .height(24)

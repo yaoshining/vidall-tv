@@ -111,6 +111,45 @@ export function buildSubtitlePath(
   return `${buildSubtitleDir(filesDir, sourceType, sourceId, filePathHash)}/${fileName}`;
 }
 
+/**
+ * 将字幕二进制内容写入本地规范路径（OpenSubtitles 与 SubHub 下载共用）。
+ * 规范：{filesDir}/subtitles/{sourceType}_{sourceId}/{filePathHash}/{fileName}
+ * 返回写入后的本地绝对路径。
+ */
+export async function writeSubtitleContentToCache(
+  filesDir: string,
+  sourceType: string,
+  sourceId: string,
+  videoPath: string,
+  fileName: string,
+  content: ArrayBuffer
+): Promise<string> {
+  const filePathHash = await sha256Hex(videoPath);
+  const dirPath = buildSubtitleDir(filesDir, sourceType, sourceId, filePathHash);
+  const localPath = buildSubtitlePath(filesDir, sourceType, sourceId, filePathHash, fileName);
+
+  // 递归创建目录（目录已存在时忽略 EEXIST）
+  try {
+    fs.mkdirSync(dirPath, true);
+  } catch (e) {
+    const be = e as BusinessError;
+    if (be.code !== 13900015) {
+      console.warn(`[SubtitleDownloader] mkdirSync warning code=${be.code}: ${be.message}`);
+    }
+  }
+
+  const fileHandle = fs.openSync(localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+  try {
+    fs.writeSync(fileHandle.fd, content);
+  } catch (e) {
+    fs.closeSync(fileHandle);
+    const be = e as BusinessError;
+    throw new SubtitleDownloadError(`字幕文件写入失败: ${be.message ?? JSON.stringify(e)}`);
+  }
+  fs.closeSync(fileHandle);
+  return localPath;
+}
+
 // ─────────────────────────────────────────────
 // SubtitleDownloader
 // ─────────────────────────────────────────────
@@ -163,25 +202,6 @@ export class SubtitleDownloader {
     const link = linkInfo.link;
     const fileName = linkInfo.fileName;
 
-    // Task 4.2 - 计算路径 hash（前 16 字节 = 32 hex 字符）
-    const filePathHash = await sha256Hex(videoPath);
-
-    // Task 4.2 - 构造存储路径
-    const dirPath = buildSubtitleDir(this.context.filesDir, sourceType, sourceId, filePathHash);
-    const localPath = buildSubtitlePath(this.context.filesDir, sourceType, sourceId, filePathHash, fileName);
-
-    // Task 4.3 - 递归创建目录
-    try {
-      fs.mkdirSync(dirPath, true);
-    } catch (e) {
-      // 目录已存在时 mkdirSync 可能抛出，忽略该错误
-      const be = e as BusinessError;
-      // 13900015（EEXIST）属于正常情况，其他错误仍记录但不中断
-      if (be.code !== 13900015) {
-        console.warn(`[SubtitleDownloader] mkdirSync warning code=${be.code}: ${be.message}`);
-      }
-    }
-
     // Task 4.3 - 下载文件内容（ArrayBuffer）
     let arrayBuffer: ArrayBuffer;
     const req = http.createHttp();
@@ -206,16 +226,10 @@ export class SubtitleDownloader {
       throw new SubtitleDownloadError(`字幕文件下载异常: ${be.message ?? JSON.stringify(e)}`);
     }
 
-    // Task 4.3 - 写入文件
-    const fileHandle = fs.openSync(localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-    try {
-      fs.writeSync(fileHandle.fd, arrayBuffer);
-    } catch (e) {
-      fs.closeSync(fileHandle);
-      const be = e as BusinessError;
-      throw new SubtitleDownloadError(`字幕文件写入失败: ${be.message ?? JSON.stringify(e)}`);
-    }
-    fs.closeSync(fileHandle);
+    // Task 4.3 - 计算路径 hash 并写入文件
+    const localPath = await writeSubtitleContentToCache(
+      this.context.filesDir, sourceType, sourceId, videoPath, fileName, arrayBuffer
+    );
 
     const result: DownloadResult = {
       localPath: localPath,

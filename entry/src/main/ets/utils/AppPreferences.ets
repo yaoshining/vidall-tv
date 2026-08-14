@@ -44,6 +44,8 @@ export class PrefKey {
   static readonly SUBTITLE_BINDING_PREFIX = 'subtitle_binding';
   /** 用户音轨绑定前缀，完整 key = audio_binding_<sha256前12位> */
   static readonly AUDIO_BINDING_PREFIX = 'audio_binding';
+  /** SubHub 演示页 Caller Key（调试用，用户在演示页输入并持久化） */
+  static readonly SUBHUB_DEMO_CALLER_KEY = 'subhub_demo_caller_key';
 }
 
 // ─────────────────────────────────────────────

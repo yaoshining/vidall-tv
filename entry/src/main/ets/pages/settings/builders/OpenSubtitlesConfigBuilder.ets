@@ -44,7 +44,7 @@ struct OpenSubtitlesConfigBuilderComponent {
     if (!this.isKeyLoaded) {
       return '正在加载…'
     }
-    return this.apiKey.length > 0 ? '自定义 Key · 直连' : '官方代理 · 推荐'
+    return this.apiKey.length > 0 ? '自定义 Key · 直连' : 'SubHub · 推荐'
   }
 
   /** 脱敏显示：****+后4位；Key 长度 ≤ 4 时全部遮掩 */
@@ -86,7 +86,7 @@ struct OpenSubtitlesConfigBuilderComponent {
       this.apiKey = this.editingKey
       this.isExpanded = false
       this.showToast(
-        this.editingKey.length > 0 ? 'API Key 已保存，已切换为直连模式' : 'API Key 已清除，已切换为官方代理'
+        this.editingKey.length > 0 ? 'API Key 已保存，已切换为直连模式' : 'API Key 已清除，已切换为 SubHub'
       )
     } catch {
       this.showToast('保存失败，请重试')
@@ -100,7 +100,7 @@ struct OpenSubtitlesConfigBuilderComponent {
       await AppPreferences.set(PrefKey.OPENSUBTITLES_API_KEY, '')
       this.apiKey = ''
       this.isExpanded = false
-      this.showToast('API Key 已清除，已切换为官方代理')
+      this.showToast('API Key 已清除，已切换为 SubHub')
     } catch {
       this.showToast('清除失败，请重试')
     }
