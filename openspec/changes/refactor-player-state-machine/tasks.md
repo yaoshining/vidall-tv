@@ -18,13 +18,13 @@
 
 ## 3. ResumeSession 收敛（D2）
 
-- [ ] 3.1 新增 `ResumeSession` 类（内部按 pending / decision / seek / result 分区）
-- [ ] 3.2 迁移 `PendingResumeState` 核心数据（positionMs/shouldResumePlay/sourceKey/reason/captureBackend）与 capture/preserve/consume 生命周期
-- [ ] 3.3 迁移自动播放决策 6 字段（pending/prepared × explicit/has/source）到 `ResumeSession.decision`
-- [ ] 3.4 迁移 resume seek 7 字段 + 超时兜底 3 字段到 `ResumeSession.seek`
-- [ ] 3.5 迁移 `pendingResumeAutoplayResultState` 到 `ResumeSession.result`
-- [ ] 3.6 将 `initPlayer` 中 20+ 行续播重置语句收敛为 `resumeSession.reset()` / `resumeSession = null`
-- [ ] 3.7 编译 + 单测，确认续播/回退/seek 恢复行为不变
+- [x] 3.1 新增 `ResumeSession` 类（内部按 pending / decision / seek / result 分区）
+- [x] 3.2 迁移 `PendingResumeState` 核心数据（positionMs/shouldResumePlay/sourceKey/reason/captureBackend）与 capture/preserve/consume 生命周期
+- [x] 3.3 迁移自动播放决策 6 字段（pending/prepared × explicit/has/source）到 `ResumeSession.decision`
+- [x] 3.4 迁移 resume seek 7 字段 + 超时兜底 3 字段到 `ResumeSession.seek`
+- [x] 3.5 迁移 `pendingResumeAutoplayResultState` 到 `ResumeSession.result`
+- [x] 3.6 将 `initPlayer` 中 20+ 行续播重置语句收敛为 `resumeSession.reset()` / `resumeSession = null`
+- [x] 3.7 编译 + 单测，确认续播/回退/seek 恢复行为不变
 
 ## 4. 状态转换收口（D4）
 
