@@ -12,7 +12,6 @@ import { CastDetailPage } from './detail/CastDetailPage';
 import { PlayHistoryPage } from './history/PlayHistoryPage';
 import { SearchWorkspacePage } from './search';
 import { MediaResultPage } from './search';
-import { SubHubDemoPage } from './subhub/SubHubDemoPage';
 @Entry
 @ComponentV2
 struct Index {
@@ -43,8 +42,6 @@ struct Index {
       SearchWorkspacePage();
     } else if (name === MediaResultPage.PAGE_NAME) {
       MediaResultPage();
-    } else if (name === SubHubDemoPage.PAGE_NAME) {
-      SubHubDemoPage();
     }
   }
 
