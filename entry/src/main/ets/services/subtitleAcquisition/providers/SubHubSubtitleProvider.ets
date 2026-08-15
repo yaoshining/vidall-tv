@@ -37,12 +37,13 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
   }
 
   async search(input: SubtitleSearchInput): Promise<SubtitleSearchResult[]> {
-    // 不向 SubHub 传 language：xunlei 的 languages 参数与 OpenSubtitles 语言码不一致，
-    // 传了会把迅雷的中文字幕过滤成空。改为抓全量后在本地过滤（见 SubtitleLanguageFilter）。
+    // 传 language：opensubtitles 依赖服务端按语言过滤（不传会被其它语言结果淹没，
+    // 中文结果排不进前 50 条）。xunlei 侧由 SubHub PR #203 归一化后再过滤，App 端不处理。
     const outcome = await this.client.search({
       title: input.query,
       // xunlei provider 需要 query（映射上游 name）；与 title 同值，避免 skipped_missing_fields
       query: input.query,
+      language: this.firstLanguage(input.languages),
       year: input.year,
       season: input.seasonNumber,
       episode: input.episodeNumber,
@@ -62,7 +63,7 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       return result;
     });
 
-    // 中文向偏好时，本地过滤非中文字幕（迅雷 language 字段不可信，按 releaseName 优先判定）
+    // 双保险：中文向偏好时本地再过滤一道（language 字段可靠时优先，迅雷脏值时按 releaseName）。
     if (isChineseLanguagePreference(input.languages)) {
       return mapped.filter((r: SubtitleSearchResult): boolean =>
         isChineseSubtitle(r.fileName, r.languageCode)
@@ -104,6 +105,17 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       languageCode: result.languageCode
     };
     return outcome;
+  }
+
+  /** 取偏好语言列表的首个语言码（SubHub 的 language 只接受单个值）。 */
+  private firstLanguage(languages: string): string | undefined {
+    const trimmed = languages.trim();
+    if (trimmed.length === 0) {
+      return undefined;
+    }
+    const first = trimmed.split(',')[0];
+    const lang = first.trim();
+    return lang.length > 0 ? lang : undefined;
   }
 
   /** 解析 TMDB ID 字符串为数字（非法/为空返回 undefined）。 */

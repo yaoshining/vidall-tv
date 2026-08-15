@@ -54,13 +54,21 @@ export default function subtitleLanguageFilterTest() {
     });
   });
 
-  describe('isChineseSubtitle_languageFallback', () => {
+  describe('isChineseSubtitle_languagePriority', () => {
     it('detects zh-CN language code', 0, () => {
       expect(isChineseSubtitle('Game.of.Thrones.S01E01.zh-CN.srt', 'zh-CN')).assertTrue();
     });
 
     it('rejects en language code', 0, () => {
       expect(isChineseSubtitle('Game.of.Thrones.S01E01.en.srt', 'en')).assertFalse();
+    });
+
+    it('language zh-CN wins over releaseName .en marker', 0, () => {
+      expect(isChineseSubtitle('Game.of.Thrones.S01E01.en.srt', 'zh-CN')).assertTrue();
+    });
+
+    it('keeps bilingual zh-CN,en', 0, () => {
+      expect(isChineseSubtitle('Game.of.Thrones.S01E01.zh-CN.en.srt', 'zh-CN,en')).assertTrue();
     });
   });
 }
