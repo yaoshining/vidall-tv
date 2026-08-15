@@ -116,6 +116,18 @@ export interface VideoData {
   imdbId?: string;
 
   /**
+   * 季号（可选），来自刮削数据，优先于文件名解析。
+   * 用于字幕搜索的 season 精准定位。
+   */
+  seasonNumber?: number;
+
+  /**
+   * 集号（可选），来自刮削数据，优先于文件名解析。
+   * 用于字幕搜索的 episode 精准定位。
+   */
+  episodeNumber?: number;
+
+  /**
    * 文件源类型（可选），如 'webdav'、'smb'、'local'、'network'。
    * 由调用方从 FileSource.type 转换后传入，用于字幕本地缓存分桶。
    */

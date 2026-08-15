@@ -28,6 +28,10 @@ export struct SubtitleSelectorDrawerDialog {
   tmdbId: string = ''
   /** IMDb ID（可选，tt + 数字），存在时优先于 tmdbId 精准匹配 */
   imdbId: string = ''
+  /** 季号（可选），来自刮削数据，优先于文件名解析 */
+  seasonNumber?: number
+  /** 集号（可选），来自刮削数据，优先于文件名解析 */
+  episodeNumber?: number
   /**
    * 由 VideoPlayer 注入：注册一个「尝试退出搜索结果」的回调。
    * 当 VideoPlayer 的 onWillDismiss 拦截到返回键时，调用此处注册的函数：
@@ -253,9 +257,17 @@ export struct SubtitleSelectorDrawerDialog {
     try {
       const fileName = this.extractFileName()
       const parsed = parseFileName(fileName)
-      if (parsed.seasonNumber !== undefined && parsed.episodeNumber !== undefined) {
-        const s = parsed.seasonNumber.toString().padStart(2, '0')
-        const e = parsed.episodeNumber.toString().padStart(2, '0')
+
+      // 季集：优先使用刮削数据（文件名如 "S01 4K EP 02" 可能解析不出或解析成垃圾标题）
+      const seasonFromScrape = this.seasonNumber !== undefined && this.seasonNumber > 0
+        ? this.seasonNumber : undefined;
+      const episodeFromScrape = this.episodeNumber !== undefined && this.episodeNumber > 0
+        ? this.episodeNumber : undefined;
+      const effectiveSeason = seasonFromScrape ?? parsed.seasonNumber;
+      const effectiveEpisode = episodeFromScrape ?? parsed.episodeNumber;
+      if (effectiveSeason !== undefined && effectiveEpisode !== undefined) {
+        const s = effectiveSeason.toString().padStart(2, '0')
+        const e = effectiveEpisode.toString().padStart(2, '0')
         this.searchSeasonEpisode = `S${s}E${e}`
       } else {
         this.searchSeasonEpisode = ''
@@ -264,9 +276,10 @@ export struct SubtitleSelectorDrawerDialog {
       // 优先使用刮削数据：originalTitle 质量远高于文件名解析
       let query: string
       let searchYear: number | undefined = parsed.year
-      let searchSeason: number | undefined = parsed.seasonNumber
-      let searchEpisode: number | undefined = parsed.episodeNumber
-      let searchMediaType: 'movie' | 'tv' | undefined = parsed.mediaType
+      let searchSeason: number | undefined = effectiveSeason
+      let searchEpisode: number | undefined = effectiveEpisode
+      let searchMediaType: 'movie' | 'tv' | undefined =
+        (effectiveSeason !== undefined && effectiveEpisode !== undefined) ? 'tv' : parsed.mediaType
       let searchTmdbId: string | undefined = undefined
       let searchImdbId: string | undefined = undefined
 
@@ -274,9 +287,14 @@ export struct SubtitleSelectorDrawerDialog {
         // 有刮削原始标题，直接使用
         query = this.scrapeOriginalTitle
       } else {
-        // 无刮削数据，回退到文件名解析
+        // 无刮削原始标题，回退到文件名解析
         const titles = buildSearchTitles(parsed.title)
-        query = titles.length > 0 ? titles[0] : parsed.title
+        const fileTitle = titles.length > 0 ? titles[0] : parsed.title
+        // 文件名标题为垃圾（空/纯数字/仅 Sxx）时，回退到显示名（中文片名）
+        const isGarbage = fileTitle.trim().length === 0
+          || /^\d+$/.test(fileTitle.trim())
+          || /^S\d{1,2}$/i.test(fileTitle.trim());
+        query = isGarbage && this.displayTitle.trim().length > 0 ? this.displayTitle.trim() : fileTitle;
       }
 
       if (this.tmdbId.length > 0) {

@@ -180,6 +180,8 @@ export struct VideoPlayer {
       scrapeOriginalTitle: this.data.scrapeOriginalTitle,
       tmdbId: this.data.tmdbId,
       imdbId: this.data.imdbId,
+      seasonNumber: this.data.seasonNumber,
+      episodeNumber: this.data.episodeNumber,
       displayTitle: this.resolveDisplayTitle(),
       // 注册回调：onWillDismiss 拦截返回键时，先调用此函数尝试退出搜索结果视图
       onRegisterResetSearch: (fn: () => boolean) => {

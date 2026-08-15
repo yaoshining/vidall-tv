@@ -401,6 +401,12 @@ export struct PlayerPage {
     if (pageParam.imdbId) {
       nextVideoData.imdbId = pageParam.imdbId;
     }
+    if (pageParam.seasonNumber !== undefined && pageParam.seasonNumber > 0) {
+      nextVideoData.seasonNumber = pageParam.seasonNumber;
+    }
+    if (pageParam.episodeNumber !== undefined && pageParam.episodeNumber > 0) {
+      nextVideoData.episodeNumber = pageParam.episodeNumber;
+    }
     if (pageParam.fileSourceType) {
       nextVideoData.fileSourceType = pageParam.fileSourceType;
     }
