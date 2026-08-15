@@ -38,6 +38,8 @@ export struct SubtitleSelectorDrawerDialog {
 
   @State panelOffsetX: number = 72
   @State panelOpacity: number = 0
+  /** 是否展开面板（加宽以查看更多结果内容） */
+  @State panelExpanded: boolean = false
   /** 是否显示搜索结果面板（替换字幕轨道列表） */
   @State showSearchResults: boolean = false
   /** 正在搜索中 */
@@ -67,6 +69,13 @@ export struct SubtitleSelectorDrawerDialog {
         return true
       }
       return false
+    })
+  }
+
+  /** 展开/收起面板（加宽查看结果 vs 收窄减少遮挡）。 */
+  private togglePanelExpand(): void {
+    this.getUIContext().animateTo({ duration: 250, curve: Curve.EaseOut }, () => {
+      this.panelExpanded = !this.panelExpanded
     })
   }
 
@@ -432,6 +441,28 @@ export struct SubtitleSelectorDrawerDialog {
             .fontWeight(FontWeight.Bold)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+
+          // 展开/收起按钮：加宽查看更多结果 vs 收窄减少遮挡
+          Row({ space: 4 }) {
+            Text(this.panelExpanded ? '⟩' : '⟨')
+              .fontSize(20)
+              .fontColor('#97A9CD')
+            Text(this.panelExpanded ? '收起' : '展开')
+              .fontSize(14)
+              .fontColor('#97A9CD')
+          }
+          .height(36)
+          .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('rgba(255, 255, 255, 0.07)')
+          .borderRadius(18)
+          .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
+          .focusable(true)
+          .onClick(() => {
+            this.togglePanelExpand()
+          })
         }
         .height(48)
         .width('100%')
@@ -753,7 +784,7 @@ export struct SubtitleSelectorDrawerDialog {
           }
         }
       }
-      .width('33.33%')
+      .width(this.panelExpanded ? '60%' : '33.33%')
       .height('100%')
       .padding(32)
       .backgroundColor('rgba(5, 10, 20, 0.91)')
