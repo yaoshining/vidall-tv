@@ -16,6 +16,7 @@ import {
   SubtitleDownloadOutcome
 } from '../SubtitleAcquisitionTypes';
 import { SubtitleProvider, SubtitleDownloadContext } from './SubtitleProvider';
+import { isChineseLanguagePreference, isChineseSubtitle } from './SubtitleLanguageFilter';
 
 export class SubHubSubtitleProvider implements SubtitleProvider {
   readonly source: 'subhub' = 'subhub';
@@ -36,11 +37,12 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
   }
 
   async search(input: SubtitleSearchInput): Promise<SubtitleSearchResult[]> {
+    // 不向 SubHub 传 language：xunlei 的 languages 参数与 OpenSubtitles 语言码不一致，
+    // 传了会把迅雷的中文字幕过滤成空。改为抓全量后在本地过滤（见 SubtitleLanguageFilter）。
     const outcome = await this.client.search({
       title: input.query,
       // xunlei provider 需要 query（映射上游 name）；与 title 同值，避免 skipped_missing_fields
       query: input.query,
-      language: this.firstLanguage(input.languages),
       year: input.year,
       season: input.seasonNumber,
       episode: input.episodeNumber,
@@ -48,7 +50,7 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       tmdbId: this.parseTmdbId(input.tmdbId),
       imdbId: input.imdbId !== undefined && input.imdbId.length > 0 ? input.imdbId : undefined
     });
-    return outcome.results.map((r: ShSearchResult): SubtitleSearchResult => {
+    const mapped: SubtitleSearchResult[] = outcome.results.map((r: ShSearchResult): SubtitleSearchResult => {
       const result: SubtitleSearchResult = {
         subtitleId: r.id,
         source: 'subhub',
@@ -59,6 +61,14 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       };
       return result;
     });
+
+    // 中文向偏好时，本地过滤非中文字幕（迅雷 language 字段不可信，按 releaseName 优先判定）
+    if (isChineseLanguagePreference(input.languages)) {
+      return mapped.filter((r: SubtitleSearchResult): boolean =>
+        isChineseSubtitle(r.fileName, r.languageCode)
+      );
+    }
+    return mapped;
   }
 
   async download(result: SubtitleSearchResult, ctx: SubtitleDownloadContext): Promise<SubtitleDownloadOutcome> {
@@ -96,17 +106,7 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
     return outcome;
   }
 
-  /** 取偏好语言列表的首个语言码（SubHub 的 language 只接受单个值）。 */
-  private firstLanguage(languages: string): string | undefined {
-    const trimmed = languages.trim();
-    if (trimmed.length === 0) {
-      return undefined;
-    }
-    const first = trimmed.split(',')[0];
-    const lang = first.trim();
-    return lang.length > 0 ? lang : undefined;
-  }
-
+  /** 解析 TMDB ID 字符串为数字（非法/为空返回 undefined）。 */
   private parseTmdbId(tmdbId?: string): number | undefined {
     if (tmdbId === undefined || tmdbId.trim().length === 0) {
       return undefined;
