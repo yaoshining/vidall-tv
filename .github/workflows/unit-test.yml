@@ -136,15 +136,26 @@ jobs:
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
+          # 递归收集指定 PID 的全部后代（后序遍历：最深后代先输出）。
+          # 必须先收集再杀：若先杀父进程，macOS 会把其后代重托管给 launchd，pgrep -P 就再也找不到它们。
+          collect_descendants() {
+            local pid="$1" child
+            for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+              collect_descendants "$child"
+              printf '%s\n' "$child"
+            done
+          }
+
           if kill -0 "$TEST_PID" 2>/dev/null; then
             echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程树"
-            # 先 SIGTERM 主进程与其直接子进程，等待 5 秒
+            DESC_PIDS=$(collect_descendants "$TEST_PID")
+            # 先 SIGTERM：从最深后代 → 父进程，等待 5 秒
+            for pid in $DESC_PIDS; do kill "$pid" 2>/dev/null || true; done
             kill "$TEST_PID" 2>/dev/null || true
-            pkill -P "$TEST_PID" 2>/dev/null || true
             sleep 5
-            # 如果还在运行，SIGKILL
+            # 再 SIGKILL：从最深后代 → 父进程
+            for pid in $DESC_PIDS; do kill -9 "$pid" 2>/dev/null || true; done
             kill -9 "$TEST_PID" 2>/dev/null || true
-            pkill -9 -P "$TEST_PID" 2>/dev/null || true
             wait "$TEST_PID" 2>/dev/null || true
             # 清理可能残留的卡死 hdc 进程
             ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
