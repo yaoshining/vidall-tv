@@ -1,3 +1,4 @@
 # 复制本文件为 local.properties 后填入真实值（local.properties 已被 .gitignore 忽略，勿提交真实值）。
-# 构建期由 hvigor/subhub-secret-plugin.ts 读取并注入到 BuildProfile.SUBHUB_API_KEY。
-subhub.api.key=
+# 构建期由 hvigor/build-env-inject-plugin.ts 读取并注入到 BuildProfile.SUBHUB_API_KEY。
+# 键名约定：app.env.<FIELD>，与 build-profile.json5 的 buildProfileFields 声明字段一一对应。
+app.env.SUBHUB_API_KEY=

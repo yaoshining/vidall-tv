@@ -77,26 +77,33 @@ npm run deploy:production             # 部署
 - 生产环境：使用 `wrangler secret put --env production`。
 - `.dev.vars.example` 仅包含字段名，不含真实值，**可以**提交到版本控制。
 
-## 三、SubHub Caller Key 的构建期注入
+## 三、构建期环境变量注入（通用机制）
 
-SubHub Caller Key（`BuildProfile.SUBHUB_API_KEY`）不在源码或仓库中保存明文，而是由 `hvigor/subhub-secret-plugin.ts` 在构建时注入：
+客户端可见配置或受客户端约束的凭据（如 SubHub Caller Key `BuildProfile.SUBHUB_API_KEY`）不在源码或仓库中保存明文，而是由 `hvigor/build-env-inject-plugin.ts` 在构建时按「声明即 schema」注入：`build-profile.json5` 的 `buildOption.arkOptions.buildProfileFields` 声明了哪些字段可注入，插件只为这些已声明字段取值。
 
-| 来源 | 说明 |
-|------|------|
-| `local.properties` 的 `subhub.api.key=` | 本地开发首选（`local.properties` 已被 `.gitignore` 忽略） |
-| 环境变量 `SUBHUB_API_KEY` | 为 CI / release 预留 |
+> ⚠️ **边界**：`BuildProfile.<FIELD>` 会编译进客户端构建产物。本机制**仅用于客户端可见配置或受客户端约束的凭据**；**禁止**注入服务端私有密钥（签名私钥、数据库密码、仅服务端持有的 API Key），否则凭据会随安装包泄露。
 
-读取优先级：`local.properties` → 环境变量 → 空默认值。都未配置时构建仍成功，但 SubHub 请求会被 `SubHubClient` 明确拒绝（归类为 `subhub_auth_invalid`，UI 提示「字幕服务配置异常」）。
+| 来源 | 键名约定 |
+|------|----------|
+| `local.properties` 的 `app.env.<FIELD>=` | 本地开发首选（`local.properties` 已被 `.gitignore` 忽略） |
+| 环境变量 `APP_ENV_<FIELD>` | 为 CI / release 预留 |
+
+读取优先级：`local.properties` → 环境变量 → 空默认值。都未配置时构建仍成功，SubHub 请求会被 `SubHubClient` 明确拒绝（归类为 `subhub_auth_invalid`，UI 提示「字幕服务配置异常」）。
+
+**扩展新变量步骤**：
+1. `build-profile.json5` 的 `buildProfileFields` 加 `"FOO": ""`（空默认值提交）。
+2. 提供 `app.env.FOO`（local.properties）或 `APP_ENV_FOO`（环境变量）。
+3. 代码读 `BuildProfile.FOO`。无需改插件。
 
 ```bash
 # 本地验证注入
 cp local.properties.example local.properties
-# 编辑 local.properties 填入 subhub.api.key= 真实值（勿提交）
+# 编辑 local.properties 填入 app.env.SUBHUB_API_KEY= 真实值（勿提交）
 ```
 
-- `build-profile.json5` 的两个 product 都提交了 `buildOption.arkOptions.buildProfileFields.SUBHUB_API_KEY = ""` 空默认值。
+- `build-profile.json5` 的两个 product 都提交了 `buildOption.arkOptions.buildProfileFields.SUBHUB_API_KEY = ""` 空默认值（声明即 schema）。
 - `local.properties.example` 仅含字段名，可提交；`local.properties` 含真实值，**禁止**提交。
-- **CI 注入**：`.github/workflows/release-build.yml` 在自托管 macOS runner 上构建 production 签名包，通过 GitHub Secret `SUBHUB_API_KEY` 注入 Caller Key（hvigor 插件读取环境变量），并注入 release 签名证书（`RELEASE_CERT_BASE64` / `RELEASE_P12_BASE64` / `RELEASE_PROFILE_BASE64` / `RELEASE_MATERIAL_BASE64`）。公共 GitHub runner（`ci-compile-check.yml`）只能做 OpenHarmony 编译检查，无法构建/签名 HarmonyOS release 包。
+- **CI 注入**：`.github/workflows/release-build.yml` 在自托管 macOS runner 上构建 production 签名包，通过 GitHub Secret `SUBHUB_API_KEY` 映射到环境变量 `APP_ENV_SUBHUB_API_KEY` 注入 Caller Key（hvigor 插件读取环境变量），并注入 release 签名证书（`RELEASE_CERT_BASE64` / `RELEASE_P12_BASE64` / `RELEASE_PROFILE_BASE64` / `RELEASE_MATERIAL_BASE64`）。公共 GitHub runner（`ci-compile-check.yml`）只能做 OpenHarmony 编译检查，无法构建/签名 HarmonyOS release 包。
 
 ## 四、新增环境相关配置时的约束
 
