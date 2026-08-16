@@ -191,7 +191,7 @@ export default function subtitleAggregationTest() {
         });
         return { responseCode: 200, result: body, headers: {} };
       };
-      const client = new SubHubClient(undefined, undefined, executor);
+      const client = new SubHubClient(undefined, 'test-caller-key', executor);
       const provider = new SubHubSubtitleProvider(client);
       const results = await provider.search({ query: 'Inception', languages: 'zh-CN,en' });
 
@@ -217,7 +217,7 @@ export default function subtitleAggregationTest() {
         });
         return { responseCode: 200, result: body, headers: {} };
       };
-      const client = new SubHubClient(undefined, undefined, executor);
+      const client = new SubHubClient(undefined, 'test-caller-key', executor);
       const provider = new SubHubSubtitleProvider(client);
       await provider.search({
         query: 'Climax',
@@ -228,6 +228,48 @@ export default function subtitleAggregationTest() {
       // 英文原名走 title 给 opensubtitles，中文显示名走 query 给 xunlei
       expect(capturedUrl.indexOf('title=Climax') >= 0).assertTrue();
       expect(capturedUrl.indexOf('query=%E6%9D%83%E6%AC%B2%E4%B9%8B%E5%B7%85') >= 0).assertTrue();
+    });
+  });
+
+  // ── 5.4.1 SubHubClient 空 Caller Key 拒绝 ──
+  describe('SubHubClient_empty_caller_key', () => {
+    it('throws AUTHENTICATION_REQUIRED when caller key is empty on search', 0, async () => {
+      let executorCalled = false;
+      const executor: SubHubHttpExecutor = async (
+        url: string, method: string, headers: Record<string, string>, expectArrayBuffer: boolean
+      ): Promise<SubHubHttpResponse> => {
+        executorCalled = true;
+        return { responseCode: 200, result: '{}', headers: {} };
+      };
+      const client = new SubHubClient(undefined, '', executor);
+      let caughtCode = '';
+      let caughtStatus = -1;
+      try {
+        await client.search({ title: 'Inception' });
+      } catch (e) {
+        caughtCode = (e as SubHubApiError).code;
+        caughtStatus = (e as SubHubApiError).statusCode;
+      }
+      expect(caughtCode).assertEqual('AUTHENTICATION_REQUIRED');
+      expect(caughtStatus).assertEqual(0);
+      // 空 key 时不得发起请求（不得静默省略 Authorization 头）
+      expect(executorCalled).assertFalse();
+    });
+
+    it('throws AUTHENTICATION_REQUIRED when caller key is empty on download', 0, async () => {
+      const client = new SubHubClient(undefined, '');
+      let caughtCode = '';
+      try {
+        await client.download('opensubtitles:p:123', 'subtitle.srt');
+      } catch (e) {
+        caughtCode = (e as SubHubApiError).code;
+      }
+      expect(caughtCode).assertEqual('AUTHENTICATION_REQUIRED');
+    });
+
+    it('classifies empty-key AUTHENTICATION_REQUIRED as subhub_auth_invalid', 0, () => {
+      expect(classifyAcquisitionError(new SubHubApiError('AUTHENTICATION_REQUIRED', 0, '未配置')))
+        .assertEqual('subhub_auth_invalid');
     });
   });
 

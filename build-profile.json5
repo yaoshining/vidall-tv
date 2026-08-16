@@ -39,6 +39,11 @@
           "strictMode": {
             "caseSensitiveCheck": true,
             "useNormalizedOHMUrl": true
+          },
+          "arkOptions": {
+            "buildProfileFields": {
+              "SUBHUB_API_KEY": ""
+            }
           }
         }
       },
@@ -52,6 +57,11 @@
           "strictMode": {
             "caseSensitiveCheck": true,
             "useNormalizedOHMUrl": true
+          },
+          "arkOptions": {
+            "buildProfileFields": {
+              "SUBHUB_API_KEY": ""
+            }
           }
         }
       }

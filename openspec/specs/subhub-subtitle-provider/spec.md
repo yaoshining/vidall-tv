@@ -50,11 +50,16 @@
 
 ### Requirement: SubHub 请求必须携带 Caller Key 鉴权
 
-系统 SHALL 在每次 SubHub 搜索与下载请求中携带 `Authorization: Bearer <CallerKey>` 头，Caller Key 来自应用配置。
+系统 SHALL 在每次 SubHub 搜索与下载请求中携带 `Authorization: Bearer <CallerKey>` 头，Caller Key 来自构建期注入的 `BuildProfile.SUBHUB_API_KEY`（源码与仓库不保存明文）。
 
 #### Scenario: 请求携带 Bearer 鉴权
 - **WHEN** 系统发起 SubHub 搜索或下载请求
 - **THEN** 请求头包含 `Authorization: Bearer <CallerKey>`
+
+#### Scenario: Caller Key 未配置
+- **WHEN** `BuildProfile.SUBHUB_API_KEY` 为空字符串
+- **THEN** 系统 SHALL 在发起任何 HTTP 请求前明确拒绝该请求并报配置异常
+- **AND** 不得发送缺失 `Authorization` 头的请求
 
 ### Requirement: SubHub 错误必须归类为业务错误
 
