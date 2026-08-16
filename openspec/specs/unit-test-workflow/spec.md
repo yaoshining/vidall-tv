@@ -38,17 +38,21 @@
 
 ---
 
-### Requirement: 设备端 test 步骤检测 OhmUrl 归一化冲突并显式跳过
-`unit-test.yml` 的「执行设备端单测（test）」步骤 SHALL 在 `hvigor test` 编译失败且日志命中 `Failed to resolve OhmUrl` 或 `10311002` 时，输出引用 issue #262 的 `::warning::` 注解与「显式跳过」日志，并以退出码 0 结束（不阻塞 CI）。
+### Requirement: 设备端 test 步骤正确采集退出码并防御性检测 OhmUrl 冲突
+`unit-test.yml` 的「执行设备端单测（test）」步骤 SHALL 通过 `set +e; wait "$TEST_PID"; HVIGOR_EXIT=$?; set -e` 采集 hvigor 真实退出码（不得用 `wait ... || true` 吞掉），并在日志命中 `Failed to resolve OhmUrl` 或 `10311002` 时输出引用 issue #262 的 `::warning::` 注解与「显式跳过」日志、以退出码 0 结束（不阻塞 CI）。
 
 #### Scenario: 命中 OhmUrl 冲突时显式跳过
-- **WHEN** `hvigor test` 因 `@ohos/hypium`（`useNormalizedOHMUrl: false`）与字节码 HAR（强制 `true`）的归一化 OhmUrl 配置互斥而编译失败（日志含 `Failed to resolve OhmUrl` 或 `10311002`）
+- **WHEN** `hvigor test` 以非零退出码结束且日志含 `Failed to resolve OhmUrl` 或 `10311002`（issue #262 曾报告 `@ohos/hypium` 与字节码 HAR 的归一化 OhmUrl 冲突）
 - **THEN** 步骤输出 `::warning title=issue-262::` 注解与「显式跳过设备端测试」日志
-- **AND** 步骤以退出码 0 结束，CI job 仍为 `success`（状态记为 `build_only`，不误报 `passed`）
+- **AND** 步骤以退出码 0 结束，CI job 仍为 `success`
 
 #### Scenario: 非 OhmUrl 的编译/运行失败仍按非阻塞处理
 - **WHEN** `hvigor test` 退出码非零但日志未命中 OhmUrl 特征
 - **THEN** 步骤输出「hvigor test 退出码非零，但不阻塞 CI」并退出码 0
+
+#### Scenario: 设备端测试超时保护
+- **WHEN** 设备端 `test` 在 `MAX_WAIT=480` 秒内未完成（CI 冷构建 + 打包 + 部署 + 跑用例耗时超过原 180s）
+- **THEN** 步骤终止测试进程树、清理 hdc 进程，输出「设备端测试未在规定时间内完成」并退出码 0（不阻塞 CI）
 
 ---
 
@@ -74,8 +78,8 @@
 
 #### Scenario: test 步骤经后台进程采集真实退出码
 - **WHEN** 设备端 `test` 步骤以 `> "$UNIT_TEST_LOG" 2>&1 &` 后台启动 hvigor（不经管道/`tee`）
-- **THEN** `$!` 指向 hvigor 真实进程，`wait "$TEST_PID"` 返回 hvigor 真实退出码
-- **AND** 不得再以未定义变量（`HVIGOR_CMD`/`UNIT_TEST_LOG`）启动第二份测试命令或依赖 macOS 不存在的 `setsid`
+- **THEN** `$!` 指向 hvigor 真实进程，`set +e; wait "$TEST_PID"; HVIGOR_EXIT=$?; set -e` 返回 hvigor 真实退出码
+- **AND** 不得使用 `wait "$TEST_PID" || true`（会令 `$?` 恒为 0），也不得以未定义变量（`HVIGOR_CMD`/`UNIT_TEST_LOG`）启动第二份测试命令或依赖 macOS 不存在的 `setsid`
 
 ---
 
