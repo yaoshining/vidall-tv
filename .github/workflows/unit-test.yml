@@ -120,17 +120,14 @@ jobs:
 
           # 执行设备端测试，带超时保护
           RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
-          # 用子进程+计时器实现超时，避免 hdc daemon 卡死无限等待
-          (
-            "$NODE_BIN" "$HVIGOR_WRAPPER" \
-              --mode module -p module=entry@default \
-              test --no-daemon -p coverage=true \
-              2>&1 | tee "$RUNNER_TEMP/unit-test.log"
-          ) &
-          # 使用 setsid 将测试命令放入独立进程组，便于超时时终止完整进程树
-          setsid bash -c '$HVIGOR_CMD 2>&1 | tee "$UNIT_TEST_LOG"' &
+          UNIT_TEST_LOG="$RUNNER_TEMP/unit-test.log"
+          # 单次启动并直接重定向到日志文件（不用 tee），使 $! 指向 hvigor 真实进程，
+          # 从而能正确采集退出码并做超时终止；macOS 无 setsid，改用 kill + pkill 清理进程树。
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            --mode module -p module=entry@default \
+            test --no-daemon -p coverage=true \
+            > "$UNIT_TEST_LOG" 2>&1 &
           TEST_PID=$!
-          TEST_PGID=$(ps -o pgid= -p "$TEST_PID" | tr -d ' ' || echo "$TEST_PID")
           # 最多等待 3 分钟（手动验证约 17 秒完成，超过 180s 一定异常）
           MAX_WAIT=180
           ELAPSED=0
@@ -139,12 +136,14 @@ jobs:
             ELAPSED=$((ELAPSED + 5))
           done
           if kill -0 "$TEST_PID" 2>/dev/null; then
-            echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程组"
-            # 先 SIGTERM 整个进程组，等待 5 秒
-            kill -- -"$TEST_PGID" 2>/dev/null || kill "$TEST_PID" 2>/dev/null || true
+            echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程树"
+            # 先 SIGTERM 主进程与其直接子进程，等待 5 秒
+            kill "$TEST_PID" 2>/dev/null || true
+            pkill -P "$TEST_PID" 2>/dev/null || true
             sleep 5
-            # 如果还在运行，SIGKILL 整个进程组
-            kill -9 -- -"$TEST_PGID" 2>/dev/null || kill -9 "$TEST_PID" 2>/dev/null || true
+            # 如果还在运行，SIGKILL
+            kill -9 "$TEST_PID" 2>/dev/null || true
+            pkill -9 -P "$TEST_PID" 2>/dev/null || true
             wait "$TEST_PID" 2>/dev/null || true
             # 清理可能残留的卡死 hdc 进程
             ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
@@ -155,9 +154,19 @@ jobs:
           HVIGOR_EXIT=$?
 
           if [ "$HVIGOR_EXIT" -ne 0 ]; then
+            # issue #262：@ohos/hypium（useNormalizedOHMUrl:false）与字节码 HAR（强制 true）互斥，
+            # 导致 test 任务编译期 OhmUrl 解析失败（错误码 10311002）。检测到该特征时显式告警并跳过，
+            # 避免与其它运行时失败混为一谈、长期静默。
+            if grep -qE 'Failed to resolve OhmUrl|10311002' "$UNIT_TEST_LOG"; then
+              echo "::warning title=issue-262::设备端单测因 OhmUrl 归一化冲突被跳过（@ohos/hypium 与字节码 HAR 互斥），详见 issue #262"
+              echo "⚠️ 检测到 OhmUrl 解析失败（issue #262），显式跳过设备端测试"
+              exit 0
+            fi
             echo "⚠️ hvigor test 退出码非零（$HVIGOR_EXIT），但不阻塞 CI"
             exit 0
           fi
+          # 输出测试日志尾部便于排查
+          tail -n 40 "$UNIT_TEST_LOG" || true
 
           if [ -f "$RESULT_TXT" ]; then
             TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1 || true)
