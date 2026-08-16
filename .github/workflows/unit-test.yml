@@ -122,7 +122,7 @@ jobs:
           RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
           UNIT_TEST_LOG="$RUNNER_TEMP/unit-test.log"
           # 单次启动并直接重定向到日志文件（不用 tee），使 $! 指向 hvigor 真实进程，
-          # 从而能正确采集退出码并做超时终止；macOS 无 setsid，改用 kill + pkill 清理进程树。
+          # 从而能正确采集退出码并做超时终止；macOS 无 setsid，改用 kill + pgrep 递归清理进程树。
           "$NODE_BIN" "$HVIGOR_WRAPPER" \
             --mode module -p module=entry@default \
             test --no-daemon -p coverage=true \
