@@ -21,6 +21,10 @@ export default function subtitleRelevanceFilterTest() {
     it('keeps CJK characters', 0, () => {
       expect(normalizeForMatch('长安的荔枝.ass')).assertEqual('长安的荔枝ass');
     });
+
+    it('keeps Korean Hangul characters', 0, () => {
+      expect(normalizeForMatch('우씨왕후.E01.srt')).assertEqual('우씨왕후e01srt');
+    });
   });
 
   describe('isTitleRelevant', () => {
@@ -49,6 +53,10 @@ export default function subtitleRelevanceFilterTest() {
 
     it('matches Chinese query via whole-string fallback', 0, () => {
       expect(isTitleRelevant('御赐小仵作_02_中文(简体).ass', '御赐小仵作', '御赐小仵作')).assertTrue();
+    });
+
+    it('matches Korean query via whole-string fallback', 0, () => {
+      expect(isTitleRelevant('우씨왕후KR.E01.srt', '우씨왕후', '于氏王后')).assertTrue();
     });
 
     it('passes when no reference title is provided', 0, () => {

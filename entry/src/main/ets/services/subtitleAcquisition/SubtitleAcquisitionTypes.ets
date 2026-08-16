@@ -157,7 +157,8 @@ export type { CachedSubtitleEntry };
 export function classifyAcquisitionError(e: object): SubtitleAcquisitionErrorKind {
   if (e instanceof SubHubApiError) {
     const code = (e as SubHubApiError).code;
-    if (code === 'CALLER_KEY_INVALID' || code === 'CALLER_KEY_SUSPENDED' || code === 'FORBIDDEN') {
+    if (code === 'AUTHENTICATION_REQUIRED' || code === 'CALLER_KEY_INVALID'
+      || code === 'CALLER_KEY_SUSPENDED' || code === 'FORBIDDEN') {
       return 'subhub_auth_invalid';
     }
     if (code === 'PROVIDER_CREDENTIAL_EXHAUSTED') {

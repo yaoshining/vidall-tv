@@ -15,8 +15,8 @@ export function normalizeReleaseName(name: string): string {
   n = n.replace(/[\[\(\{][^\]\)\}]*[\]\)\}]/g, ' ');
   // 去 -RARBG 之类发布组后缀
   n = n.replace(/-rarbg\b/gi, ' ');
-  // 压缩连续非字母数字为单个空格
-  n = n.replace(/[^a-z0-9]+/g, ' ');
+  // 压缩连续非字母数字为单个空格（保留 CJK 汉字与韩文音节，避免纯中文/韩文标题被清成空指纹）
+  n = n.replace(/[^a-z0-9\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]+/g, ' ');
   return n.trim();
 }
 

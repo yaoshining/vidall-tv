@@ -47,6 +47,14 @@ export default function subtitleDeduplicatorTest() {
     it('strips release group markers', 0, () => {
       expect(normalizeReleaseName('The.Wandering.Earth.2019-[YTS.MX]')).assertEqual('the wandering earth 2019');
     });
+
+    it('preserves Chinese title', 0, () => {
+      expect(normalizeReleaseName('长安的荔枝.ass')).assertEqual('长安的荔枝');
+    });
+
+    it('preserves Korean title', 0, () => {
+      expect(normalizeReleaseName('우씨왕후.E01.srt')).assertEqual('우씨왕후 e01');
+    });
   });
 
   describe('SubtitleDeduplicator_dedupe', () => {

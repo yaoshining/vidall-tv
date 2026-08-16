@@ -243,7 +243,9 @@ export class OpenSubtitlesClient {
     // 有 imdb_id 时优先按 imdb_id 定位；其次 tmdb_id；都没有才文本搜索
     let url: string;
     if (imdbId !== undefined && imdbId.length > 0) {
-      url = `${baseUrl}/subtitles?imdb_id=${encodeURIComponent(imdbId)}&languages=${encodedLangs}`;
+      // OpenSubtitles REST API v1 的 imdb_id 只接受纯数字，去掉 "tt" 前缀
+      const numericImdbId = imdbId.replace(/^tt/i, '');
+      url = `${baseUrl}/subtitles?imdb_id=${encodeURIComponent(numericImdbId)}&languages=${encodedLangs}`;
     } else if (tmdbId !== undefined && tmdbId.length > 0) {
       url = `${baseUrl}/subtitles?tmdb_id=${tmdbId}&languages=${encodedLangs}`;
     } else {

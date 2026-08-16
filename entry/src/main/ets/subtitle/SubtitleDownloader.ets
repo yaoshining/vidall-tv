@@ -124,6 +124,11 @@ export async function writeSubtitleContentToCache(
   fileName: string,
   content: ArrayBuffer
 ): Promise<string> {
+  // 拒绝路径片段/目录穿越：fileName 只接受单个文件名
+  if (fileName.length === 0 || fileName === '.' || fileName === '..'
+    || fileName.includes('/') || fileName.includes('\\')) {
+    throw new SubtitleDownloadError('字幕文件名非法');
+  }
   const filePathHash = await sha256Hex(videoPath);
   const dirPath = buildSubtitleDir(filesDir, sourceType, sourceId, filePathHash);
   const localPath = buildSubtitlePath(filesDir, sourceType, sourceId, filePathHash, fileName);

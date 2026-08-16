@@ -84,12 +84,7 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       ctx.filesDir, ctx.sourceType, ctx.sourceId, ctx.stableVideoSrc, downloaded.fileName, downloaded.content
     );
 
-    // 发布下载完成事件，供 UI 刷新缓存列表
-    emitter.emit({ eventId: SUBTITLE_DOWNLOADED_EVENT_ID }, {
-      data: { localPath: localPath, fileName: downloaded.fileName }
-    });
-
-    // 写入字幕缓存 metadata（fire-and-forget，失败不影响下载结果）
+    // 先写缓存 metadata（失败仅 warn，不阻断下载结果），再发布事件，确保监听方读到已更新的 metadata
     const cacheEntry: CachedSubtitleEntry = {
       fileName: downloaded.fileName,
       language: result.languageCode,
@@ -97,10 +92,15 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
       source: 'subhub',
       subDownloadCount: result.downloadCount
     };
-    this.cacheManager.saveSubtitle(
+    await this.cacheManager.saveSubtitle(
       ctx.filesDir, ctx.sourceType, ctx.sourceId, ctx.stableVideoSrc, cacheEntry
     ).catch(() => {
       console.warn('[SubHubProvider] saveSubtitle 失败（非致命）');
+    });
+
+    // 发布下载完成事件，供 UI 刷新缓存列表
+    emitter.emit({ eventId: SUBTITLE_DOWNLOADED_EVENT_ID }, {
+      data: { localPath: localPath, fileName: downloaded.fileName }
     });
 
     const outcome: SubtitleDownloadOutcome = {

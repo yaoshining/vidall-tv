@@ -30,9 +30,10 @@ import { SubtitleSearchResult } from "../SubtitleAcquisitionTypes";
 const STOP_WORDS = ['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to',
   'for', 'with', 'by', 'de', 'la', 'le', 'el', 'der', 'die', 'das'];
 
-/** 归一化：小写 + 仅保留 [a-z0-9] 与 CJK 汉字。 */
+/** 归一化：小写 + 仅保留 [a-z0-9]、CJK 汉字与韩文音节。 */
 export function normalizeForMatch(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '');
+  return value.toLowerCase()
+    .replace(/[^a-z0-9\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/g, '');
 }
 
 /** 提取英文显著 token：去停用词、去纯数字、去长度<2、去季集标记（s01/e02）。 */
