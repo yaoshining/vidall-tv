@@ -39,8 +39,8 @@ jobs:
       HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
       OHPM_BIN: /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm
       JAVA_HOME: /Applications/DevEco-Studio.app/Contents/jbr/Contents/Home
-      # SubHub Caller Key 构建期注入：hvigor/subhub-secret-plugin.ts 读取该环境变量
-      SUBHUB_API_KEY: ${{ secrets.SUBHUB_API_KEY }}
+      # SubHub Caller Key 构建期注入：hvigor/build-env-inject-plugin.ts 读取 APP_ENV_SUBHUB_API_KEY（映射到 GitHub Secret SUBHUB_API_KEY）
+      APP_ENV_SUBHUB_API_KEY: ${{ secrets.SUBHUB_API_KEY }}
 
     steps:
       - name: 检出代码
