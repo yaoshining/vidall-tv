@@ -1,7 +1,7 @@
 import { SeriesGroup, TvSeriesEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity, MediaProgressEntry } from '../../db/models/MediaEntity'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { MediaProgressStore } from '../../db/MediaProgressStore'
-import { ScrapeCredit } from '../../lib/ScrapeClient'
+import { ScrapeCredit, extractImdbIdFromRawJson } from '../../lib/ScrapeClient'
 import { SeasonDetailPage } from './SeasonDetailPage'
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences'
 import { PlayerPageParam, PlayerPage } from '../player/index'
@@ -702,6 +702,7 @@ export struct SeriesDetailPage {
         playbackContext,
         scrapeOriginalTitle: this.seriesEntity?.originalTitle,
         tmdbId: this.seriesEntity?.providerId,
+        imdbId: extractImdbIdFromRawJson(this.seriesEntity?.rawJson),
         fileSourceType,
         fileSourceId
       };

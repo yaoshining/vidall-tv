@@ -77,6 +77,11 @@ export interface PlayerPageParam {
    */
   tmdbId?: string;
   /**
+   * IMDb ID（tt + 数字，可选）。电影或剧集系列级别。
+   * 用于字幕搜索 `imdb_id` 精准匹配，优先于 tmdbId。
+   */
+  imdbId?: string;
+  /**
    * 文件源类型（可选），如 'webdav'、'smb'。透传到 VideoData.fileSourceType，
    * 用于字幕本地缓存分桶策略中的 sourceType 字段。
    */
@@ -194,6 +199,9 @@ export function buildMediaLibraryEpisodeSwitchParam(
     durationHintMs: resolvedSource.durationHintMs,
     videoId: selectedItem.videoId,
     seriesProviderId,
+    scrapeOriginalTitle: currentParam.scrapeOriginalTitle,
+    tmdbId: currentParam.tmdbId,
+    imdbId: currentParam.imdbId,
     seasonNumber,
     episodeNumber,
     preferredBackend: currentParam.preferredBackend,
@@ -392,6 +400,15 @@ export struct PlayerPage {
     } else if (pageParam.seriesProviderId && pageParam.seriesProviderId.length > 0) {
       // TV series: seriesProviderId IS the TMDB series ID, reuse for subtitle search
       nextVideoData.tmdbId = pageParam.seriesProviderId;
+    }
+    if (pageParam.imdbId) {
+      nextVideoData.imdbId = pageParam.imdbId;
+    }
+    if (pageParam.seasonNumber !== undefined && pageParam.seasonNumber > 0) {
+      nextVideoData.seasonNumber = pageParam.seasonNumber;
+    }
+    if (pageParam.episodeNumber !== undefined && pageParam.episodeNumber > 0) {
+      nextVideoData.episodeNumber = pageParam.episodeNumber;
     }
     if (pageParam.fileSourceType) {
       nextVideoData.fileSourceType = pageParam.fileSourceType;

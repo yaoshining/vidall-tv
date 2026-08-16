@@ -32,6 +32,8 @@ export interface MovieScrapeResult {
   providerId: string;
   title: string;
   originalTitle?: string;
+  /** IMDb ID（格式 tt + 数字），用于字幕精准匹配。 */
+  imdbId?: string;
   overview?: string;
   releaseDate?: string;
   rating?: number;
@@ -55,6 +57,8 @@ export interface TvSeriesScrapeResult {
   providerId: string;
   title: string;
   originalTitle?: string;
+  /** IMDb ID（格式 tt + 数字），用于字幕精准匹配。 */
+  imdbId?: string;
   overview?: string;
   firstAirDate?: string;
   rating?: number;
@@ -217,6 +221,35 @@ export function buildSearchTitles(title: string): string[] {
     candidates.push(title.trim());
   }
   return candidates;
+}
+
+/**
+ * 从刮削结果 rawJson 中提取 IMDb ID（格式 tt + 数字）。
+ * 电影详情 rawJson 直接含 `imdb_id`；剧集详情含 `external_ids.imdb_id`。
+ * 解析失败或缺失返回空字符串。
+ */
+export function extractImdbIdFromRawJson(rawJson?: string): string {
+  if (rawJson === undefined || rawJson.length === 0) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(rawJson) as Record<string, Object>;
+    const direct = parsed['imdb_id'];
+    if (typeof direct === 'string' && direct.length > 0) {
+      return direct;
+    }
+    const externalIds = parsed['external_ids'];
+    if (externalIds !== undefined && externalIds !== null) {
+      const ext = externalIds as Record<string, Object>;
+      const imdb = ext['imdb_id'];
+      if (typeof imdb === 'string' && imdb.length > 0) {
+        return imdb;
+      }
+    }
+    return '';
+  } catch {
+    return '';
+  }
 }
 
 interface TvSearchCandidate {
@@ -439,6 +472,7 @@ interface TmdbMovieDetail {
   id: number;
   title?: string;
   original_title?: string;
+  imdb_id?: string;
   overview?: string;
   release_date?: string;
   vote_average?: number;
@@ -450,6 +484,10 @@ interface TmdbMovieDetail {
   runtime?: number;
   credits?: TmdbCredits;
   production_countries?: TmdbProductionCountry[];
+}
+
+interface TmdbExternalIds {
+  imdb_id?: string;
 }
 
 interface TmdbTvDetail {
@@ -468,6 +506,7 @@ interface TmdbTvDetail {
   episode_run_time?: number[];
   credits?: TmdbCredits;
   origin_country?: string[];
+  external_ids?: TmdbExternalIds;
 }
 
 interface TmdbSeasonDetail {
@@ -587,6 +626,7 @@ export class TmdbProvider implements IScrapeProvider {
       providerId: String(item.id),
       title: item.title ?? '',
       originalTitle: item.original_title ?? undefined,
+      imdbId: item.imdb_id ?? undefined,
       overview: item.overview ?? undefined,
       releaseDate: item.release_date ?? undefined,
       rating: item.vote_average ?? undefined,
@@ -612,7 +652,7 @@ export class TmdbProvider implements IScrapeProvider {
   }
 
   async fetchTvSeriesDetail(providerId: string, language: string = 'zh-CN'): Promise<TvSeriesScrapeResult | null> {
-    const url = `${TMDB_BASE_URL}/tv/${providerId}?api_key=${this.apiKey}&language=${language}&append_to_response=credits`;
+    const url = `${TMDB_BASE_URL}/tv/${providerId}?api_key=${this.apiKey}&language=${language}&append_to_response=credits,external_ids`;
     const rawJson = await this.httpGet(url);
     const item = JSON.parse(rawJson) as TmdbTvDetail;
     const cast: ScrapeCredit[] = (item.credits?.cast ?? []).slice(0, 20).map(c => {
@@ -624,6 +664,7 @@ export class TmdbProvider implements IScrapeProvider {
       providerId: String(item.id),
       title: item.name ?? '',
       originalTitle: item.original_name ?? undefined,
+      imdbId: item.external_ids?.imdb_id ?? undefined,
       overview: item.overview ?? undefined,
       firstAirDate: item.first_air_date ?? undefined,
       rating: item.vote_average ?? undefined,

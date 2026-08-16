@@ -233,15 +233,20 @@ export class OpenSubtitlesClient {
     seasonNumber?: number,
     episodeNumber?: number,
     mediaType?: 'movie' | 'tv',
-    tmdbId?: string
+    tmdbId?: string,
+    imdbId?: string
   ): Promise<SubtitleSearchResult[]> {
     const baseUrl = await this.resolveBaseUrl();
     const isDirect = await this.isDirectMode();
     const headers = await this.buildHeaders();
     const encodedLangs = encodeURIComponent(languages);
-    // 有 tmdb_id 时直接用 ID 查询，精准度远高于文本搜索
+    // 有 imdb_id 时优先按 imdb_id 定位；其次 tmdb_id；都没有才文本搜索
     let url: string;
-    if (tmdbId !== undefined && tmdbId.length > 0) {
+    if (imdbId !== undefined && imdbId.length > 0) {
+      // OpenSubtitles REST API v1 的 imdb_id 只接受纯数字，去掉 "tt" 前缀
+      const numericImdbId = imdbId.replace(/^tt/i, '');
+      url = `${baseUrl}/subtitles?imdb_id=${encodeURIComponent(numericImdbId)}&languages=${encodedLangs}`;
+    } else if (tmdbId !== undefined && tmdbId.length > 0) {
       url = `${baseUrl}/subtitles?tmdb_id=${tmdbId}&languages=${encodedLangs}`;
     } else {
       const encodedQuery = encodeURIComponent(query);

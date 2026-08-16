@@ -1,7 +1,7 @@
 import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity, MediaProgressEntry } from '../../db/models/MediaEntity'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
-import { ScrapeCredit } from '../../lib/ScrapeClient'
+import { ScrapeCredit, extractImdbIdFromRawJson } from '../../lib/ScrapeClient'
 import { PlayerPageParam, PlayerPage } from '../player/index'
 import { MediaProgressStore } from '../../db/MediaProgressStore'
 import http from '@ohos.net.http'
@@ -896,6 +896,7 @@ export struct SeasonDetailPage {
         playbackContext,
         scrapeOriginalTitle: this.seriesEntity?.originalTitle,
         tmdbId: this.seriesEntity?.providerId,
+        imdbId: extractImdbIdFromRawJson(this.seriesEntity?.rawJson),
         fileSourceType,
         fileSourceId
       };

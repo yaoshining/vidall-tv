@@ -22,8 +22,16 @@ export struct SubtitleSelectorDrawerDialog {
   sourceId: string = '0'
   /** 刮削得到的原始标题（英文，可选），优先用于 OpenSubtitles 搜索 */
   scrapeOriginalTitle: string = ''
+  /** 当前视频显示名（中文，可选），用于搜索面板展示，便于用户识别 */
+  displayTitle: string = ''
   /** TMDB ID（可选），用于 OpenSubtitles tmdb_id 精准匹配 */
   tmdbId: string = ''
+  /** IMDb ID（可选，tt + 数字），存在时优先于 tmdbId 精准匹配 */
+  imdbId: string = ''
+  /** 季号（可选），来自刮削数据，优先于文件名解析 */
+  seasonNumber?: number
+  /** 集号（可选），来自刮削数据，优先于文件名解析 */
+  episodeNumber?: number
   /**
    * 由 VideoPlayer 注入：注册一个「尝试退出搜索结果」的回调。
    * 当 VideoPlayer 的 onWillDismiss 拦截到返回键时，调用此处注册的函数：
@@ -34,6 +42,8 @@ export struct SubtitleSelectorDrawerDialog {
 
   @State panelOffsetX: number = 72
   @State panelOpacity: number = 0
+  /** 是否展开面板（加宽以查看更多结果内容） */
+  @State panelExpanded: boolean = false
   /** 是否显示搜索结果面板（替换字幕轨道列表） */
   @State showSearchResults: boolean = false
   /** 正在搜索中 */
@@ -42,10 +52,12 @@ export struct SubtitleSelectorDrawerDialog {
   @State searchResults: SubtitleSearchResult[] = []
   /** 搜索完成但无结果 */
   @State searchNoResults: boolean = false
+  /** 当前搜索解析出的季集标签，如 "S01E01"，用于面板展示便于核对 */
+  @State searchSeasonEpisode: string = ''
   /** 正在下载字幕 */
   @State isDownloading: boolean = false
-  /** 正在下载的条目 fileId（用于 UI 高亮） */
-  @State downloadingFileId: number = -1
+  /** 正在下载的条目 subtitleId（用于 UI 高亮） */
+  @State downloadingSubtitleId: string = ''
 
   aboutToAppear(): void {
     this.panelOffsetX = 72
@@ -61,6 +73,13 @@ export struct SubtitleSelectorDrawerDialog {
         return true
       }
       return false
+    })
+  }
+
+  /** 展开/收起面板（加宽查看结果 vs 收窄减少遮挡）。 */
+  private togglePanelExpand(): void {
+    this.getUIContext().animateTo({ duration: 250, curve: Curve.EaseOut }, () => {
+      this.panelExpanded = !this.panelExpanded
     })
   }
 
@@ -142,6 +161,29 @@ export struct SubtitleSelectorDrawerDialog {
     return lastSlash >= 0 ? path.substring(lastSlash + 1) : path
   }
 
+  /** 搜索面板标题：展示中文片名 + 解析出的季集，便于核对搜索目标。 */
+  private searchPanelTitle(): string {
+    if (this.displayTitle.length === 0) {
+      return '在线搜索字幕'
+    }
+    const se = this.searchSeasonEpisode.length > 0 ? ` ${this.searchSeasonEpisode}` : ''
+    return `搜索「${this.displayTitle}」${se}字幕`
+  }
+
+  /**
+   * 从「剧集完整显示名」提取干净剧名，供字幕搜索使用。
+   * 例："山河枕 第一季-S1:E1-拦路示爱 掩人耳目" → "山河枕"；
+   *     "长安的荔枝"（电影）→ 原样返回。
+   */
+  private extractCleanSeriesTitle(fullTitle: string): string {
+    let t = fullTitle.trim();
+    // 去掉 "-S1:E1-集名" 及其后（季集码）
+    t = t.replace(/[-_]\s*S\d{1,2}\s*:\s*E\d{1,3}.*$/i, '');
+    // 去掉尾部季名 "第X季" / "特别篇" / "Season N"
+    t = t.replace(/\s*(第[一二三四五六七八九十\d]+季|特别篇|Season\s*\d+)\s*$/i, '');
+    return t.trim();
+  }
+
   /** 格式化下载次数：≥1000 时显示 k */
   private formatDownloadCount(count: number): string {
     if (count >= 1000) {
@@ -194,6 +236,21 @@ export struct SubtitleSelectorDrawerDialog {
     return 'rgba(29, 78, 216, 0.31)'
   }
 
+  /** 来源 chip 文案：opensubtitles → 直连，subhub → SubHub */
+  private getSourceLabel(source: string): string {
+    return source === 'opensubtitles' ? '直连' : 'SubHub'
+  }
+
+  /** 来源 chip 文字颜色 */
+  private getSourceChipTextColor(source: string): string {
+    return source === 'opensubtitles' ? '#4ADE80' : '#6B9EE0'
+  }
+
+  /** 来源 chip 背景颜色 */
+  private getSourceChipFillColor(source: string): string {
+    return source === 'opensubtitles' ? 'rgba(74, 222, 128, 0.16)' : 'rgba(107, 158, 224, 0.16)'
+  }
+
   /** 显示 Toast 提示 */
   private showSearchToast(message: string, duration: number): void {
     try {
@@ -215,31 +272,59 @@ export struct SubtitleSelectorDrawerDialog {
       const fileName = this.extractFileName()
       const parsed = parseFileName(fileName)
 
+      // 季集：优先使用刮削数据（文件名如 "S01 4K EP 02" 可能解析不出或解析成垃圾标题）
+      const seasonFromScrape = this.seasonNumber !== undefined && this.seasonNumber > 0
+        ? this.seasonNumber : undefined;
+      const episodeFromScrape = this.episodeNumber !== undefined && this.episodeNumber > 0
+        ? this.episodeNumber : undefined;
+      const effectiveSeason = seasonFromScrape ?? parsed.seasonNumber;
+      const effectiveEpisode = episodeFromScrape ?? parsed.episodeNumber;
+      if (effectiveSeason !== undefined && effectiveEpisode !== undefined) {
+        const s = effectiveSeason.toString().padStart(2, '0')
+        const e = effectiveEpisode.toString().padStart(2, '0')
+        this.searchSeasonEpisode = `S${s}E${e}`
+      } else {
+        this.searchSeasonEpisode = ''
+      }
+
       // 优先使用刮削数据：originalTitle 质量远高于文件名解析
       let query: string
       let searchYear: number | undefined = parsed.year
-      let searchSeason: number | undefined = parsed.seasonNumber
-      let searchEpisode: number | undefined = parsed.episodeNumber
-      let searchMediaType: 'movie' | 'tv' | undefined = parsed.mediaType
+      let searchSeason: number | undefined = effectiveSeason
+      let searchEpisode: number | undefined = effectiveEpisode
+      let searchMediaType: 'movie' | 'tv' | undefined =
+        (effectiveSeason !== undefined && effectiveEpisode !== undefined) ? 'tv' : parsed.mediaType
       let searchTmdbId: string | undefined = undefined
+      let searchImdbId: string | undefined = undefined
+
+      // 干净的中文剧名/片名：从完整显示名里剥掉 " 第X季-Sx:Ex-集名" 后缀，供搜索与相关性过滤使用。
+      const cleanDisplayTitle = this.extractCleanSeriesTitle(this.displayTitle)
 
       if (this.scrapeOriginalTitle.length > 0) {
         // 有刮削原始标题，直接使用
         query = this.scrapeOriginalTitle
       } else {
-        // 无刮削数据，回退到文件名解析
+        // 无刮削原始标题，回退到文件名解析
         const titles = buildSearchTitles(parsed.title)
-        query = titles.length > 0 ? titles[0] : parsed.title
+        const fileTitle = titles.length > 0 ? titles[0] : parsed.title
+        // 文件名标题为垃圾（空/纯数字/仅 Sxx）时，回退到显示名（中文片名）
+        const isGarbage = fileTitle.trim().length === 0
+          || /^\d+$/.test(fileTitle.trim())
+          || /^S\d{1,2}$/i.test(fileTitle.trim());
+        query = isGarbage && cleanDisplayTitle.length > 0 ? cleanDisplayTitle : fileTitle;
       }
 
       if (this.tmdbId.length > 0) {
         searchTmdbId = this.tmdbId
       }
+      if (this.imdbId.length > 0) {
+        searchImdbId = this.imdbId
+      }
 
       const snapshot = await loadSubtitleSearchPreferenceSnapshot()
       const languages = snapshot.languagesParam
 
-      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${searchYear}, 季: ${searchSeason}, 集: ${searchEpisode}, tmdbId: ${searchTmdbId ?? 'none'}`)
+      console.info(`[SubtitleSearch] 搜索词: "${query}", 语言: "${languages}", 年份: ${searchYear}, 季: ${searchSeason}, 集: ${searchEpisode}, tmdbId: ${searchTmdbId ?? 'none'}, imdbId: ${searchImdbId ?? 'none'}`)
 
       // 搜索词构造仍属 UI 编排（刮削优先 vs 文件名回退），实际检索委托给 service。
       const results = await subtitleService.search({
@@ -249,7 +334,9 @@ export struct SubtitleSelectorDrawerDialog {
         seasonNumber: searchSeason,
         episodeNumber: searchEpisode,
         mediaType: searchMediaType,
-        tmdbId: searchTmdbId
+        tmdbId: searchTmdbId,
+        imdbId: searchImdbId,
+        displayTitle: cleanDisplayTitle
       });
 
       this.searchResults = results
@@ -283,6 +370,14 @@ export struct SubtitleSelectorDrawerDialog {
           return 'API Key 无效，请在设置页重新填写';
         case 'download_failed':
           return `字幕${verb}失败，请稍后重试`;
+        case 'subhub_auth_invalid':
+          return '字幕服务配置异常，请稍后重试';
+        case 'subhub_quota_exhausted':
+          return '字幕源配额已耗尽，请稍后重试';
+        case 'subhub_unavailable':
+          return '字幕源暂时不可用，请稍后重试';
+        case 'subhub_not_found':
+          return '字幕已失效，请重新搜索';
         case 'unknown':
         default:
           return `字幕${verb}失败，请稍后重试`;
@@ -305,7 +400,7 @@ export struct SubtitleSelectorDrawerDialog {
       return
     }
     this.isDownloading = true
-    this.downloadingFileId = result.fileId
+    this.downloadingSubtitleId = result.subtitleId
 
     try {
       const hostCtx = this.getUIContext().getHostContext() as common.UIAbilityContext
@@ -349,7 +444,7 @@ export struct SubtitleSelectorDrawerDialog {
       this.showSearchToast(this.toastMessageForAcquisitionError(e, '下载'), 4000)
     } finally {
       this.isDownloading = false
-      this.downloadingFileId = -1
+      this.downloadingSubtitleId = ''
     }
   }
 
@@ -376,10 +471,34 @@ export struct SubtitleSelectorDrawerDialog {
                 this.showSearchResults = false
               })
           }
-          Text(this.showSearchResults ? '在线搜索字幕' : '字幕')
+          Text(this.showSearchResults ? this.searchPanelTitle() : '字幕')
             .fontSize(34)
             .fontColor('#F3F6FB')
             .fontWeight(FontWeight.Bold)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+
+          // 展开/收起按钮：加宽查看更多结果 vs 收窄减少遮挡
+          Row({ space: 4 }) {
+            Text(this.panelExpanded ? '⟩' : '⟨')
+              .fontSize(20)
+              .fontColor('#97A9CD')
+            Text(this.panelExpanded ? '收起' : '展开')
+              .fontSize(14)
+              .fontColor('#97A9CD')
+          }
+          .height(36)
+          .padding({ left: 12, right: 12 })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('rgba(255, 255, 255, 0.07)')
+          .borderRadius(18)
+          .border({ width: 1, color: 'rgba(255, 255, 255, 0.19)' })
+          .focusable(true)
+          .onClick(() => {
+            this.togglePanelExpand()
+          })
         }
         .height(48)
         .width('100%')
@@ -621,6 +740,19 @@ export struct SubtitleSelectorDrawerDialog {
                       .borderRadius(12)
                       .backgroundColor(this.getResultBadgeFillColor(this.getResultLanguageTag(result.languageCode)))
 
+                      Row() {
+                        Text(this.getSourceLabel(result.source))
+                          .fontSize(12)
+                          .fontWeight(600)
+                          .fontColor(this.getSourceChipTextColor(result.source))
+                      }
+                      .height(24)
+                      .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+                      .justifyContent(FlexAlign.Center)
+                      .alignItems(VerticalAlign.Center)
+                      .borderRadius(12)
+                      .backgroundColor(this.getSourceChipFillColor(result.source))
+
                       Column({ space: 4 }) {
                         Text(result.fileName)
                           .fontSize(16)
@@ -637,7 +769,7 @@ export struct SubtitleSelectorDrawerDialog {
                       .layoutWeight(1)
                       .alignItems(HorizontalAlign.Start)
 
-                      if (this.isDownloading && this.downloadingFileId === result.fileId) {
+                      if (this.isDownloading && this.downloadingSubtitleId === result.subtitleId) {
                         LoadingProgress()
                           .width(24)
                           .height(24)
@@ -688,7 +820,7 @@ export struct SubtitleSelectorDrawerDialog {
           }
         }
       }
-      .width('33.33%')
+      .width(this.panelExpanded ? '60%' : '33.33%')
       .height('100%')
       .padding(32)
       .backgroundColor('rgba(5, 10, 20, 0.91)')
