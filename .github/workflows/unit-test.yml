@@ -51,7 +51,23 @@ jobs:
           set -euo pipefail
           cd "$WORK_DIR"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags "$REPO_URL" "$TARGET_SHA"
+          # macOS LibreSSL 下 GitHub HTTP/2 偶发 RPC 中断（curl 92 / early EOF），
+          # 改用 HTTP/1.1 并带重试，避免瞬态网络错误导致 CI 假失败。
+          git config --global http.version HTTP/1.1
+          FETCHED=false
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "$REPO_URL" "$TARGET_SHA"; then
+              echo "git fetch 成功（第 $attempt 次尝试）"
+              FETCHED=true
+              break
+            fi
+            echo "git fetch 第 $attempt 次失败，${attempt}0 秒后重试..."
+            sleep $((attempt * 10))
+          done
+          if [ "$FETCHED" != "true" ]; then
+            echo "错误：git fetch 重试 3 次仍失败"
+            exit 1
+          fi
           git checkout --force --detach FETCH_HEAD
           git clean -fdx
           echo "checked out sha: $(git rev-parse HEAD)"
