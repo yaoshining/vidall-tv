@@ -30,7 +30,7 @@ jobs:
       - self-hosted
       - macOS
       - harmonyos-tv-test
-    timeout-minutes: 12
+    timeout-minutes: 20
 
     env:
       DEVECO_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk
@@ -51,7 +51,26 @@ jobs:
           set -euo pipefail
           cd "$WORK_DIR"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags "$REPO_URL" "$TARGET_SHA"
+          # macOS LibreSSL 下 GitHub HTTP/2 偶发 RPC 中断（curl 92 / early EOF），
+          # 改用 HTTP/1.1 并带重试，避免瞬态网络错误导致 CI 假失败；
+          # lowSpeed 限制让卡死的 fetch 在 ~20s 内快速失败，而不是挂满整段 job 时间预算。
+          git config --global http.version HTTP/1.1
+          git config --global http.lowSpeedLimit 1000
+          git config --global http.lowSpeedTime 20
+          FETCHED=false
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "$REPO_URL" "$TARGET_SHA"; then
+              echo "git fetch 成功（第 $attempt 次尝试）"
+              FETCHED=true
+              break
+            fi
+            echo "git fetch 第 $attempt 次失败，${attempt}0 秒后重试..."
+            sleep $((attempt * 10))
+          done
+          if [ "$FETCHED" != "true" ]; then
+            echo "错误：git fetch 重试 3 次仍失败"
+            exit 1
+          fi
           git checkout --force --detach FETCH_HEAD
           git clean -fdx
           echo "checked out sha: $(git rev-parse HEAD)"
@@ -120,44 +139,67 @@ jobs:
 
           # 执行设备端测试，带超时保护
           RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
-          # 用子进程+计时器实现超时，避免 hdc daemon 卡死无限等待
-          (
-            "$NODE_BIN" "$HVIGOR_WRAPPER" \
-              --mode module -p module=entry@default \
-              test --no-daemon -p coverage=true \
-              2>&1 | tee "$RUNNER_TEMP/unit-test.log"
-          ) &
-          # 使用 setsid 将测试命令放入独立进程组，便于超时时终止完整进程树
-          setsid bash -c '$HVIGOR_CMD 2>&1 | tee "$UNIT_TEST_LOG"' &
+          UNIT_TEST_LOG="$RUNNER_TEMP/unit-test.log"
+          # 单次启动并直接重定向到日志文件（不用 tee），使 $! 指向 hvigor 真实进程，
+          # 从而能正确采集退出码并做超时终止；macOS 无 setsid，改用 kill + pgrep 递归清理进程树。
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            --mode module -p module=entry@default \
+            test --no-daemon -p coverage=true \
+            > "$UNIT_TEST_LOG" 2>&1 &
           TEST_PID=$!
-          TEST_PGID=$(ps -o pgid= -p "$TEST_PID" | tr -d ' ' || echo "$TEST_PID")
-          # 最多等待 3 分钟（手动验证约 17 秒完成，超过 180s 一定异常）
-          MAX_WAIT=180
+          # 最多等待 8 分钟：CI 冷构建（实测 UnitTestArkTS 单步 ~37s）+ 打包 + 部署设备 + 跑 500+ 用例，
+          # 原 180s 会误杀正常构建；job 仍有 timeout-minutes: 20 兜底，设备真卡死也不会无限等待。
+          MAX_WAIT=480
           ELAPSED=0
           while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
+          # 递归收集指定 PID 的全部后代（后序遍历：最深后代先输出）。
+          # 必须先收集再杀：若先杀父进程，macOS 会把其后代重托管给 launchd，pgrep -P 就再也找不到它们。
+          collect_descendants() {
+            local pid="$1" child
+            for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+              collect_descendants "$child"
+              printf '%s\n' "$child"
+            done
+          }
+
           if kill -0 "$TEST_PID" 2>/dev/null; then
-            echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程组"
-            # 先 SIGTERM 整个进程组，等待 5 秒
-            kill -- -"$TEST_PGID" 2>/dev/null || kill "$TEST_PID" 2>/dev/null || true
+            echo "⚠️ 设备端测试超时（${MAX_WAIT}s），终止进程树"
+            DESC_PIDS=$(collect_descendants "$TEST_PID")
+            # 先 SIGTERM：从最深后代 → 父进程，等待 5 秒
+            for pid in $DESC_PIDS; do kill "$pid" 2>/dev/null || true; done
+            kill "$TEST_PID" 2>/dev/null || true
             sleep 5
-            # 如果还在运行，SIGKILL 整个进程组
-            kill -9 -- -"$TEST_PGID" 2>/dev/null || kill -9 "$TEST_PID" 2>/dev/null || true
+            # 再 SIGKILL：从最深后代 → 父进程
+            for pid in $DESC_PIDS; do kill -9 "$pid" 2>/dev/null || true; done
+            kill -9 "$TEST_PID" 2>/dev/null || true
             wait "$TEST_PID" 2>/dev/null || true
             # 清理可能残留的卡死 hdc 进程
             ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
             echo "⚠️ 设备端测试未在规定时间内完成，但不阻塞 CI"
             exit 0
           fi
-          wait "$TEST_PID" || true
+          # 注意：不能用 `wait ... || true`，否则 `$?` 恒为 0，hvigor 真实退出码被吞掉
+          set +e
+          wait "$TEST_PID"
           HVIGOR_EXIT=$?
+          set -e
 
           if [ "$HVIGOR_EXIT" -ne 0 ]; then
+            # 防御性检测（issue #262 曾在部分环境出现）：@ohos/hypium 与字节码 HAR 的归一化 OhmUrl
+            # 冲突会以「Failed to resolve OhmUrl（10311002）」呈现；命中即显式告警跳过，避免静默。
+            if grep -qE 'Failed to resolve OhmUrl|10311002' "$UNIT_TEST_LOG"; then
+              echo "::warning title=issue-262::设备端单测因 OhmUrl 归一化冲突被跳过（@ohos/hypium 与字节码 HAR 互斥），详见 issue #262"
+              echo "⚠️ 检测到 OhmUrl 解析失败（issue #262），显式跳过设备端测试"
+              exit 0
+            fi
             echo "⚠️ hvigor test 退出码非零（$HVIGOR_EXIT），但不阻塞 CI"
             exit 0
           fi
+          # 输出测试日志尾部便于排查
+          tail -n 40 "$UNIT_TEST_LOG" || true
 
           if [ -f "$RESULT_TXT" ]; then
             TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1 || true)
