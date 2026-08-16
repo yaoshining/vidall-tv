@@ -128,8 +128,9 @@ jobs:
             test --no-daemon -p coverage=true \
             > "$UNIT_TEST_LOG" 2>&1 &
           TEST_PID=$!
-          # 最多等待 3 分钟（手动验证约 17 秒完成，超过 180s 一定异常）
-          MAX_WAIT=180
+          # 最多等待 8 分钟：CI 冷构建（实测 UnitTestArkTS 单步 ~37s）+ 打包 + 部署设备 + 跑 500+ 用例，
+          # 原 180s 会误杀正常构建；job 仍有 timeout-minutes: 12 兜底，设备真卡死也不会无限等待。
+          MAX_WAIT=480
           ELAPSED=0
           while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
             sleep 5
@@ -150,13 +151,15 @@ jobs:
             echo "⚠️ 设备端测试未在规定时间内完成，但不阻塞 CI"
             exit 0
           fi
-          wait "$TEST_PID" || true
+          # 注意：不能用 `wait ... || true`，否则 `$?` 恒为 0，hvigor 真实退出码被吞掉
+          set +e
+          wait "$TEST_PID"
           HVIGOR_EXIT=$?
+          set -e
 
           if [ "$HVIGOR_EXIT" -ne 0 ]; then
-            # issue #262：@ohos/hypium（useNormalizedOHMUrl:false）与字节码 HAR（强制 true）互斥，
-            # 导致 test 任务编译期 OhmUrl 解析失败（错误码 10311002）。检测到该特征时显式告警并跳过，
-            # 避免与其它运行时失败混为一谈、长期静默。
+            # 防御性检测（issue #262 曾在部分环境出现）：@ohos/hypium 与字节码 HAR 的归一化 OhmUrl
+            # 冲突会以「Failed to resolve OhmUrl（10311002）」呈现；命中即显式告警跳过，避免静默。
             if grep -qE 'Failed to resolve OhmUrl|10311002' "$UNIT_TEST_LOG"; then
               echo "::warning title=issue-262::设备端单测因 OhmUrl 归一化冲突被跳过（@ohos/hypium 与字节码 HAR 互斥），详见 issue #262"
               echo "⚠️ 检测到 OhmUrl 解析失败（issue #262），显式跳过设备端测试"
