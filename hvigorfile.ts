@@ -3,5 +3,5 @@ import { subhubSecretPlugin } from './hvigor/subhub-secret-plugin';
 
 export default {
   system: appTasks, /* Built-in plugin of Hvigor. It cannot be modified. */
-  plugins: [subhubSecretPlugin()]       /* Custom plugin to extend the functionality of Hvigor. */
+  plugins: [subhubSecretPlugin()]       /* 用于扩展 Hvigor 功能的自定义插件。 */
 }

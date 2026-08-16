@@ -1,4 +1,4 @@
-name: Release 构建（production 签名包）
+name: 发布构建（production 签名包）
 
 # 在自托管 macOS runner（带完整 HarmonyOS SDK 6.x）上构建 production 签名 HAP。
 # 公共 GitHub runner（ubuntu）只能做 OpenHarmony 编译检查，无法构建/签名 HarmonyOS release 包。
@@ -13,7 +13,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: harmonyos-release-build
@@ -43,10 +43,12 @@ jobs:
       SUBHUB_API_KEY: ${{ secrets.SUBHUB_API_KEY }}
 
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Restore release signing certificates
+      - name: 还原 release 签名证书
         shell: bash
         env:
           RELEASE_CERT_BASE64: ${{ secrets.RELEASE_CERT_BASE64 }}
@@ -85,7 +87,17 @@ jobs:
           if material_b64:
               tar_bytes = base64.b64decode(material_b64)
               with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode='r:gz') as tf:
-                  tf.extractall(cert_dir)
+                  root = cert_dir.resolve()
+                  safe_members = []
+                  for member in tf.getmembers():
+                      target = (root / member.name).resolve()
+                      inside = os.path.commonpath([str(root), str(target)]) == str(root)
+                      if not inside or member.issym() or member.islnk():
+                          raise ValueError(f'不安全的 tar 成员: {member.name}')
+                      if not member.isdir() and not member.isfile():
+                          raise ValueError(f'不支持的 tar 成员类型: {member.name}')
+                      safe_members.append(member)
+                  tf.extractall(root, members=safe_members)
               print(f'还原 release material 目录 -> {cert_dir}/material')
           else:
               missing.append('RELEASE_MATERIAL_BASE64')
@@ -113,7 +125,7 @@ jobs:
           print('build-profile.json5 已更新 release 证书路径')
           PY
 
-      - name: Restore Harmony dependencies
+      - name: 还原 Harmony 依赖
         shell: bash
         run: |
           set -euo pipefail
@@ -121,7 +133,7 @@ jobs:
           "$OHPM_BIN" install
           test -d "$GITHUB_WORKSPACE/oh_modules/@ibestservices/ibest-ui"
 
-      - name: Verify self-hosted runner environment
+      - name: 校验自托管 runner 环境
         shell: bash
         run: |
           set -euo pipefail
@@ -137,7 +149,7 @@ jobs:
             echo "- SDK: $OHOS_SDK_HOME"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build production HAP
+      - name: 构建 production HAP
         shell: bash
         run: |
           set -euo pipefail
@@ -150,7 +162,7 @@ jobs:
             2>&1 | tee "$LOG_DIR/assemble-release.log"
           exit ${PIPESTATUS[0]}
 
-      - name: Resolve HAP output
+      - name: 解析 HAP 产物
         shell: bash
         run: |
           set -euo pipefail
@@ -165,7 +177,7 @@ jobs:
           echo "RELEASE_HAP=$APP_HAP" >> "$GITHUB_ENV"
           echo "- Release HAP: $APP_HAP" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload release HAP artifact
+      - name: 上传 release HAP 制品
         uses: actions/upload-artifact@v4
         with:
           name: vidall-tv-release-${{ github.sha }}
