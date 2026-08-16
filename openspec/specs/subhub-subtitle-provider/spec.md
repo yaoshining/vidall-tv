@@ -58,7 +58,7 @@
 
 #### Scenario: Caller Key 未配置
 - **WHEN** `BuildProfile.SUBHUB_API_KEY` 为空字符串
-- **THEN** 系统 SHALL 在发起任何 HTTP 请求前明确拒绝该请求并报配置异常
+- **THEN** 系统 SHALL 在发起任何 HTTP 请求前拒绝该请求，抛出 `AUTHENTICATION_REQUIRED` 错误并归类为 `subhub_auth_invalid`
 - **AND** 不得发送缺失 `Authorization` 头的请求
 
 ### Requirement: SubHub 错误必须归类为业务错误
