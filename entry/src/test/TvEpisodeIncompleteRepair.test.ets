@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { ScrapeInfoEntity } from '../main/ets/db/models/MediaEntity';
-import { shouldRepairIncompleteTvEpisode } from '../main/ets/utils/VideoScannerUtil';
+import { shouldRepairIncompleteTvEpisode } from '../main/ets/utils/VideoScannerHelpers';
 
 /**
  * 测试目标：验证 #191 修复覆盖 QA 真机证据场景

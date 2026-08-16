@@ -36,6 +36,38 @@ import {
 } from '../../../../main/ets/lib/OpenSubtitlesClient';
 import { aggregateSubtitleSearch } from '../../../../main/ets/services/subtitleAcquisition/SubtitleAcquisitionService';
 
+// SubHub 搜索响应的 mock JSON 结构（显式声明类型，满足 ArkTS 严格模式对无类型对象字面量的限制）
+interface MockSubHubRawResult {
+  download_count: number;
+}
+
+interface MockSubHubSearchResult {
+  id: string;
+  provider: string;
+  language: string | null;
+  releaseName: string | null;
+  format: string;
+  downloadUrl: string;
+  score: number | null;
+  raw: MockSubHubRawResult | null;
+}
+
+interface MockSubHubProviderFailure {
+  provider: string;
+  reason: string;
+  message: string;
+}
+
+interface MockSubHubSearchData {
+  status: string;
+  results: MockSubHubSearchResult[];
+  provider_failures: MockSubHubProviderFailure[];
+}
+
+interface MockSubHubSearchResponse {
+  data: MockSubHubSearchData;
+}
+
 class InMemoryStore implements AppPreferencesStore {
   private readonly values: Map<string, string | number> = new Map<string, string | number>();
 
@@ -173,7 +205,7 @@ export default function subtitleAggregationTest() {
         url: string, method: string, headers: Record<string, string>, expectArrayBuffer: boolean
       ): Promise<SubHubHttpResponse> => {
         capturedUrl = url;
-        const body = JSON.stringify({
+        const response: MockSubHubSearchResponse = {
           data: {
             status: 'success',
             results: [{
@@ -188,7 +220,8 @@ export default function subtitleAggregationTest() {
             }],
             provider_failures: []
           }
-        });
+        };
+        const body = JSON.stringify(response);
         return { responseCode: 200, result: body, headers: {} };
       };
       const client = new SubHubClient(undefined, 'test-caller-key', executor);
@@ -212,9 +245,10 @@ export default function subtitleAggregationTest() {
         url: string, method: string, headers: Record<string, string>, expectArrayBuffer: boolean
       ): Promise<SubHubHttpResponse> => {
         capturedUrl = url;
-        const body = JSON.stringify({
+        const response: MockSubHubSearchResponse = {
           data: { status: 'success', results: [], provider_failures: [] }
-        });
+        };
+        const body = JSON.stringify(response);
         return { responseCode: 200, result: body, headers: {} };
       };
       const client = new SubHubClient(undefined, 'test-caller-key', executor);
