@@ -85,6 +85,8 @@ export interface SubtitleSearchInput {
   tmdbId?: string;
   /** IMDb ID（tt + 数字），存在时优先于 tmdbId 精准匹配。 */
   imdbId?: string;
+  /** 用户可见标题（中文名优先），用于标题相关性过滤。 */
+  displayTitle?: string;
 }
 
 /** 下载输入。 */

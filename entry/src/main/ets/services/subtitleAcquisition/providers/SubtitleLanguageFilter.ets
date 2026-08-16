@@ -40,6 +40,22 @@ function isEnglishLangTag(lang: string): boolean {
   return ENGLISH_LANG_RE.test(lang);
 }
 
+/**
+ * releaseName 是否带「显式非中文语言」标记（西语/英文/韩文/日语…）。
+ * 用于纠正迅雷脏 language 字段：迅雷把所有结果都标成 zh-CN，实际语言藏在 releaseName
+ * （如 "月鳞绮纪 11_西语_终稿" / "…_英文_…" / "…_韩文_…"）。
+ * 双语例外（中英/双语/简英/繁英）仍算中文（含中文轨）。
+ */
+function hasExplicitNonChineseLanguage(fileName: string): boolean {
+  const rel = fileName.toLowerCase();
+  const nonChinese = /(西语|西班牙|英文|英语|韩文|韩语|日语|日文|法语|德语|俄语|泰语|越南|葡萄牙|葡语|意大利|意语)/;
+  if (!nonChinese.test(rel)) {
+    return false;
+  }
+  const bilingual = /(中英|双语|简英|繁英|中英韩|中韩英)/;
+  return !bilingual.test(rel);
+}
+
 /** 仅靠 releaseName 启发式判定是否为中文（用于 language 字段不可信的场景）。 */
 function isChineseByReleaseName(fileName: string): boolean {
   const rel = (fileName ?? '').toLowerCase();
@@ -66,6 +82,12 @@ function isChineseByReleaseName(fileName: string): boolean {
  */
 export function isChineseSubtitle(fileName: string, languageCode: string): boolean {
   const lang = (languageCode ?? '').toLowerCase();
+
+  // 0) releaseName 显式非中文语言标记 → 排除（即使 language 字段错标为 zh-CN）。
+  //    迅雷把所有结果标 zh-CN，真实语言（西语/英文/韩文…）藏在 releaseName 里。
+  if (hasExplicitNonChineseLanguage(fileName)) {
+    return false;
+  }
 
   // 1) language 字段是中文族（含双语 zh-CN,en / CHSEN）→ 保留
   if (isChineseLangTag(lang)) {

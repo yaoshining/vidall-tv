@@ -41,6 +41,7 @@ import { SubtitleProviderResolver } from "./providers/SubtitleProviderResolver";
 import { OpenSubtitlesSubtitleProvider } from "./providers/OpenSubtitlesSubtitleProvider";
 import { SubHubSubtitleProvider } from "./providers/SubHubSubtitleProvider";
 import { SubtitleDeduplicator } from "./providers/SubtitleDeduplicator";
+import { filterByTitleRelevance } from "./providers/SubtitleRelevanceFilter";
 
 const DOMAIN = 0x0002;
 const TAG = 'SubtitleAcquisitionService';
@@ -78,9 +79,13 @@ export async function aggregateSubtitleSearch(
     throw failures[0];
   }
   const deduped = SubtitleDeduplicator.dedupe(merged);
+  // 标题相关性过滤：始终生效，去掉片名模糊匹配 / imdb_id 错误映射产生的无关结果。
+  // （实测 imdb_id 精确匹配也会返回错误影片字幕：山河枕 → 一枕山河踏月来、于氏王后 → 인현왕후의男子，
+  //   因此不能因「有 ID」就跳过过滤；正确 ID 匹配的结果本就会命中标题，过滤是无损 no-op。）
+  const relevant = filterByTitleRelevance(deduped, input.query, input.displayTitle);
   // 按下载量降序排序（热门字幕优先）；sort 稳定，下载量相同时保持原顺序（OpenSubtitles 在前）。
-  deduped.sort((a: SubtitleSearchResult, b: SubtitleSearchResult): number => b.downloadCount - a.downloadCount);
-  return deduped;
+  relevant.sort((a: SubtitleSearchResult, b: SubtitleSearchResult): number => b.downloadCount - a.downloadCount);
+  return relevant;
 }
 
 /**

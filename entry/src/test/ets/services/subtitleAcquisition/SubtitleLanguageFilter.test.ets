@@ -71,4 +71,26 @@ export default function subtitleLanguageFilterTest() {
       expect(isChineseSubtitle('Game.of.Thrones.S01E01.zh-CN.en.srt', 'zh-CN,en')).assertTrue();
     });
   });
+
+  describe('isChineseSubtitle_explicitNonChineseLanguage', () => {
+    it('rejects 西语 (Spanish) even when language=zh-CN', 0, () => {
+      expect(isChineseSubtitle('月鳞绮纪 11_西语_终稿_20260326.srt', 'zh-CN')).assertFalse();
+    });
+
+    it('rejects 英文 (English) even when language=zh-CN', 0, () => {
+      expect(isChineseSubtitle('月鳞绮纪_10_英文_终稿_20260327.srt', 'zh-CN')).assertFalse();
+    });
+
+    it('rejects 韩文 (Korean) even when language=zh-CN', 0, () => {
+      expect(isChineseSubtitle('月鳞绮纪 06_韩文_终稿_20260327.srt', 'zh-CN')).assertFalse();
+    });
+
+    it('keeps 中文 release name', 0, () => {
+      expect(isChineseSubtitle('月鳞绮纪_10_中文_终稿.srt', 'zh-CN')).assertTrue();
+    });
+
+    it('keeps bilingual 中英', 0, () => {
+      expect(isChineseSubtitle('月鳞绮纪_10_中英_终稿.srt', 'zh-CN')).assertTrue();
+    });
+  });
 }

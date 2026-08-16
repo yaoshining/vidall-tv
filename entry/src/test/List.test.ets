@@ -47,6 +47,10 @@ import subtitleDispatcherTest from './SubtitleDispatcher.test';
 import subtitleCacheManagerTest from './ets/subtitle/SubtitleCacheManager.test';
 import playHistoryPageTest from './PlayHistoryPage.test';
 import continueWatchCardTest from './ContinueWatchCard.test';
+import subtitleDeduplicatorTest from './ets/services/subtitleAcquisition/SubtitleDeduplicator.test';
+import subtitleAggregationTest from './ets/services/subtitleAcquisition/SubtitleAggregation.test';
+import subtitleLanguageFilterTest from './ets/services/subtitleAcquisition/SubtitleLanguageFilter.test';
+import subtitleRelevanceFilterTest from './ets/services/subtitleAcquisition/SubtitleRelevanceFilter.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -96,4 +100,8 @@ export default function testsuite() {
   subtitleCacheManagerTest();
   playHistoryPageTest();
   continueWatchCardTest();
+  subtitleDeduplicatorTest();
+  subtitleAggregationTest();
+  subtitleLanguageFilterTest();
+  subtitleRelevanceFilterTest();
 }

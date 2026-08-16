@@ -170,6 +170,20 @@ export struct SubtitleSelectorDrawerDialog {
     return `搜索「${this.displayTitle}」${se}字幕`
   }
 
+  /**
+   * 从「剧集完整显示名」提取干净剧名，供字幕搜索使用。
+   * 例："山河枕 第一季-S1:E1-拦路示爱 掩人耳目" → "山河枕"；
+   *     "长安的荔枝"（电影）→ 原样返回。
+   */
+  private extractCleanSeriesTitle(fullTitle: string): string {
+    let t = fullTitle.trim();
+    // 去掉 "-S1:E1-集名" 及其后（季集码）
+    t = t.replace(/[-_]\s*S\d{1,2}\s*:\s*E\d{1,3}.*$/i, '');
+    // 去掉尾部季名 "第X季" / "特别篇" / "Season N"
+    t = t.replace(/\s*(第[一二三四五六七八九十\d]+季|特别篇|Season\s*\d+)\s*$/i, '');
+    return t.trim();
+  }
+
   /** 格式化下载次数：≥1000 时显示 k */
   private formatDownloadCount(count: number): string {
     if (count >= 1000) {
@@ -283,6 +297,9 @@ export struct SubtitleSelectorDrawerDialog {
       let searchTmdbId: string | undefined = undefined
       let searchImdbId: string | undefined = undefined
 
+      // 干净的中文剧名/片名：从完整显示名里剥掉 " 第X季-Sx:Ex-集名" 后缀，供搜索与相关性过滤使用。
+      const cleanDisplayTitle = this.extractCleanSeriesTitle(this.displayTitle)
+
       if (this.scrapeOriginalTitle.length > 0) {
         // 有刮削原始标题，直接使用
         query = this.scrapeOriginalTitle
@@ -294,7 +311,7 @@ export struct SubtitleSelectorDrawerDialog {
         const isGarbage = fileTitle.trim().length === 0
           || /^\d+$/.test(fileTitle.trim())
           || /^S\d{1,2}$/i.test(fileTitle.trim());
-        query = isGarbage && this.displayTitle.trim().length > 0 ? this.displayTitle.trim() : fileTitle;
+        query = isGarbage && cleanDisplayTitle.length > 0 ? cleanDisplayTitle : fileTitle;
       }
 
       if (this.tmdbId.length > 0) {
@@ -318,7 +335,8 @@ export struct SubtitleSelectorDrawerDialog {
         episodeNumber: searchEpisode,
         mediaType: searchMediaType,
         tmdbId: searchTmdbId,
-        imdbId: searchImdbId
+        imdbId: searchImdbId,
+        displayTitle: cleanDisplayTitle
       });
 
       this.searchResults = results

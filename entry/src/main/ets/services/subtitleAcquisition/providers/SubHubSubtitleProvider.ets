@@ -41,8 +41,12 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
     // 中文结果排不进前 50 条）。xunlei 侧由 SubHub PR #203 归一化后再过滤，App 端不处理。
     const outcome = await this.client.search({
       title: input.query,
-      // xunlei provider 需要 query（映射上游 name）；与 title 同值，避免 skipped_missing_fields
-      query: input.query,
+      // xunlei provider 用 query（映射上游 name）：传中文显示名以命中「中文名命名」的字幕
+      // （如韩剧 权欲之巅 的迅雷结果叫 "权欲之巅KR.E01"，英文名 "Climax" 匹配不到）；
+      // 无中文显示名时回退英文原名。
+      query: (input.displayTitle !== undefined && input.displayTitle.trim().length > 0)
+        ? input.displayTitle.trim()
+        : input.query,
       language: this.firstLanguage(input.languages),
       year: input.year,
       season: input.seasonNumber,

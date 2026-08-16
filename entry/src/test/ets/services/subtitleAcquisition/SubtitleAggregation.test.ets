@@ -205,6 +205,30 @@ export default function subtitleAggregationTest() {
       // 只传首个语言码给 SubHub
       expect(capturedUrl.indexOf('language=zh-CN') >= 0).assertTrue();
     });
+
+    it('passes Chinese displayTitle as query for xunlei matching', 0, async () => {
+      let capturedUrl = '';
+      const executor: SubHubHttpExecutor = async (
+        url: string, method: string, headers: Record<string, string>, expectArrayBuffer: boolean
+      ): Promise<SubHubHttpResponse> => {
+        capturedUrl = url;
+        const body = JSON.stringify({
+          data: { status: 'success', results: [], provider_failures: [] }
+        });
+        return { responseCode: 200, result: body, headers: {} };
+      };
+      const client = new SubHubClient(undefined, undefined, executor);
+      const provider = new SubHubSubtitleProvider(client);
+      await provider.search({
+        query: 'Climax',
+        displayTitle: '权欲之巅',
+        languages: 'zh-CN'
+      });
+
+      // 英文原名走 title 给 opensubtitles，中文显示名走 query 给 xunlei
+      expect(capturedUrl.indexOf('title=Climax') >= 0).assertTrue();
+      expect(capturedUrl.indexOf('query=%E6%9D%83%E6%AC%B2%E4%B9%8B%E5%B7%85') >= 0).assertTrue();
+    });
   });
 
   // ── 5.5 aggregateSubtitleSearch ──
