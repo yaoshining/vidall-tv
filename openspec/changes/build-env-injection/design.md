@@ -15,6 +15,7 @@
 - 不引入加密存储、secret 来源分类或字段级校验（保持「空默认值提交、真实值不提交」的既有安全边界）。
 - 不重命名 GitHub Secret（`SUBHUB_API_KEY` 名称保留，仅 CI 侧环境变量名变化）。
 - 不改动 `build-profile.json5` 的声明结构（仍为平铺的 `Record<string, string>`）。
+- **不注入服务端私有密钥**：`BuildProfile.<FIELD>` 会编译进客户端产物，本机制只承载客户端可见配置或受客户端约束的凭据（如客户端直接使用的 Caller Key）；服务端私有密钥（签名私钥、数据库密码、仅服务端持有的 API Key）禁止声明到 `buildProfileFields`。
 
 ## Decisions
 
@@ -24,7 +25,7 @@
 - **备选**：直接 `fs.readFileSync` + 正则/JSON5 解析 `build-profile.json5` —— 重复解析、需处理 JSON5 语法，且与 hvigor 内部已加载的 profile 可能不一致，弃用。
 
 ### 2. 通用解析器：local.properties 解析一次，键名用前缀常量
-`local.properties` 每个构建只解析一次，产出 key→value map；`resolveFieldValue(projectDir, field)` 按 `local.properties['app.env.' + field]` → `process.env['APP_ENV_' + field]` → `''` 顺序取首个非空值。
+`local.properties` 每个构建只解析一次，产出 key→value map；`resolveFieldValue(localProps, field)` 按 `local.properties['app.env.' + field]` → `process.env['APP_ENV_' + field]` → `''` 顺序取首个非空值，并返回实际来源（`local.properties` / `环境变量`）供日志记录。
 - **为什么**：字段数量少但语义上「逐字段重读文件」浪费且散；解析一次成 map 后每个字段 O(1) 查表。前缀常量 `LOCAL_PROPS_PREFIX = 'app.env.'`、`ENV_PREFIX = 'APP_ENV_'` 集中定义，避免魔法字符串散落。
 - **备选**：每字段调用一次 `readLocalPropertiesKey(projectDir, key)` 现读现查 —— 简单，但同一文件被读 N 次；功能等价，仅实现取舍。
 
@@ -48,6 +49,7 @@
 - [local.properties 解析失败/文件缺失] → 按未配置处理，回退环境变量，最终空默认，构建不失败（沿用现状 try/catch）。
 - [意外注入未声明字段] → 插件只遍历 `buildProfileFields` 的键，天然隔离；spec 用「未声明不注入」显式约束。
 - [CI Secret 名与 env 名混淆] → GitHub Secret 名 `SUBHUB_API_KEY` 不变，仅 workflow 中 `env:` 键改为 `APP_ENV_SUBHUB_API_KEY`，注释同步说明二者映射。
+- [服务端私有密钥误注入客户端产物] → `BuildProfile.<FIELD>` 会随客户端构建产物发布；已在 spec 与插件注释明确「仅用于客户端可见配置或受客户端约束的凭据，禁止注入服务端私有密钥」。
 
 ## Migration Plan
 

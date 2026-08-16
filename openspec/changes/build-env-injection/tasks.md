@@ -3,7 +3,7 @@
 - [x] 1.1 将 `hvigor/subhub-secret-plugin.ts` 重命名为 `hvigor/build-env-inject-plugin.ts`
 - [x] 1.2 删除硬编码的 `KEY_FIELD` / `LOCAL_PROPS_KEY`，改为 `LOCAL_PROPS_PREFIX = 'app.env.'` 与 `ENV_PREFIX = 'APP_ENV_'`
 - [x] 1.3 将 `readLocalPropertiesKey` 泛化为「解析一次 `local.properties` 产出 key→value map」
-- [x] 1.4 新增 `resolveFieldValue(projectDir, field)`：local.properties → 环境变量 → 空字符串
+- [x] 1.4 新增 `resolveFieldValue(localProps, field)`：local.properties → 环境变量 → 空字符串，并返回实际来源
 - [x] 1.5 `subhubSecretPlugin()` 改为 `buildEnvInjectPlugin()`，`pluginId` 改为 `build-env-inject-plugin`，遍历各 product 的 `buildProfileFields` 键逐个注入（非空才写入，空值保持默认）
 
 ## 2. 注册与配置

@@ -1,11 +1,16 @@
 /**
  * 通用构建期环境变量注入插件。
  *
- * 目的：把密钥/配置从源码/仓库中移除，改为构建时从
+ * 目的：把客户端可见配置/受客户端约束的凭据从源码/仓库中移除，改为构建时从
  * 1) gitignored 的 local.properties 的 `app.env.<FIELD>=` 行
  * 2) 环境变量 `APP_ENV_<FIELD>`
  * 读取，并写入 build-profile.json5 的 buildOption.arkOptions.buildProfileFields，
  * 供 ArkTS 侧通过 `BuildProfile.<FIELD>` 读取。
+ *
+ * ⚠️ 边界：`BuildProfile.<FIELD>` 会被编译进客户端构建产物，本机制仅用于注入
+ * 客户端可见配置或受客户端约束的凭据（如客户端直接使用的 Caller Key）。
+ * 禁止注入服务端私有密钥（签名私钥、数据库密码、服务端 API Key 等），
+ * 否则凭据会随安装包泄露。
  *
  * 注入字段清单 = buildProfileFields 中已声明的字段（「声明即 schema」），
  * 未声明的字段一律不注入。都未配置时保持 build-profile.json5 中的空默认值
@@ -78,17 +83,20 @@ function readLocalProperties(projectDir: string): Map<string, string> {
   return result;
 }
 
-/** 按优先级解析字段值：local.properties → 环境变量 → 空。 */
-function resolveFieldValue(localProps: Map<string, string>, field: string): string {
+/** 按优先级解析字段值：local.properties → 环境变量 → 空，并返回实际来源。 */
+function resolveFieldValue(
+  localProps: Map<string, string>,
+  field: string
+): { value: string; source?: string } {
   const fromLocal = localProps.get(LOCAL_PROPS_PREFIX + field);
   if (fromLocal !== undefined && fromLocal.length > 0) {
-    return fromLocal;
+    return { value: fromLocal, source: 'local.properties' };
   }
   const fromEnv = process.env[ENV_PREFIX + field];
   if (fromEnv !== undefined && fromEnv.length > 0) {
-    return fromEnv;
+    return { value: fromEnv, source: '环境变量' };
   }
-  return '';
+  return { value: '' };
 }
 
 export function buildEnvInjectPlugin(): HvigorPlugin {
@@ -114,11 +122,11 @@ export function buildEnvInjectPlugin(): HvigorPlugin {
             continue;
           }
           for (const field of Object.keys(fields)) {
-            const value = resolveFieldValue(localProps, field);
+            const { value, source } = resolveFieldValue(localProps, field);
             if (value.length > 0) {
               fields[field] = value;
               injectedCount += 1;
-              console.info(`[build-env-inject-plugin] 已注入 ${field}（来自 local.properties / 环境变量）`);
+              console.info(`[build-env-inject-plugin] 已注入 ${field}（来自 ${source}）`);
             }
           }
         }

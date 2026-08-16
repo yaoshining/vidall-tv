@@ -1,6 +1,6 @@
 ## Purpose
 
-定义构建期环境变量注入机制的通用契约：以 `build-profile.json5` 的 `buildProfileFields` 声明为可注入字段清单，按约定键名从 `local.properties` / 环境变量取值并在构建期写入，供 ArkTS 侧通过 `BuildProfile.<FIELD>` 读取。
+定义构建期环境变量注入机制的通用契约：以 `build-profile.json5` 的 `buildProfileFields` 声明为可注入字段清单，按约定键名从 `local.properties` / 环境变量取值并在构建期写入，供 ArkTS 侧通过 `BuildProfile.<FIELD>` 读取。该机制仅用于注入客户端可见配置或受客户端约束的凭据。
 
 ## ADDED Requirements
 
@@ -15,6 +15,19 @@
 #### Scenario: 未声明字段不注入
 - **WHEN** `local.properties` 或环境变量存在 `app.env.X` / `APP_ENV_X`，但 `X` 未在 `buildProfileFields` 声明
 - **THEN** 系统 SHALL NOT 将 `X` 注入 `BuildProfile`
+
+### Requirement: buildProfileFields 仅承载客户端可见配置
+
+`buildProfileFields` 及本注入机制 SHALL 仅用于注入客户端可见的配置或受客户端约束的凭据（如客户端直接使用的 Caller Key）。注入值会随客户端构建产物发布，因此系统 SHALL NOT 注入服务端私有密钥（如签名私钥、数据库密码、仅服务端持有的 API Key）。
+
+#### Scenario: 注入客户端可见配置
+- **WHEN** 声明的字段为客户端直接使用的配置或凭据（如 Caller Key）
+- **THEN** 系统允许通过本机制注入
+
+#### Scenario: 禁止注入服务端私有密钥
+- **WHEN** 某字段的值属于仅服务端应持有的私有密钥
+- **THEN** 该字段 SHALL NOT 被声明到 `buildProfileFields`
+- **AND** 系统 SHALL NOT 通过本机制将其注入客户端构建产物
 
 ### Requirement: 从 local.properties 的 app.env.<FIELD> 读取
 

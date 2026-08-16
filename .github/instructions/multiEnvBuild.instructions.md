@@ -79,7 +79,9 @@ npm run deploy:production             # 部署
 
 ## 三、构建期环境变量注入（通用机制）
 
-密钥/配置（如 SubHub Caller Key `BuildProfile.SUBHUB_API_KEY`）不在源码或仓库中保存明文，而是由 `hvigor/build-env-inject-plugin.ts` 在构建时按「声明即 schema」注入：`build-profile.json5` 的 `buildOption.arkOptions.buildProfileFields` 声明了哪些字段可注入，插件只为这些已声明字段取值。
+客户端可见配置或受客户端约束的凭据（如 SubHub Caller Key `BuildProfile.SUBHUB_API_KEY`）不在源码或仓库中保存明文，而是由 `hvigor/build-env-inject-plugin.ts` 在构建时按「声明即 schema」注入：`build-profile.json5` 的 `buildOption.arkOptions.buildProfileFields` 声明了哪些字段可注入，插件只为这些已声明字段取值。
+
+> ⚠️ **边界**：`BuildProfile.<FIELD>` 会编译进客户端构建产物。本机制**仅用于客户端可见配置或受客户端约束的凭据**；**禁止**注入服务端私有密钥（签名私钥、数据库密码、仅服务端持有的 API Key），否则凭据会随安装包泄露。
 
 | 来源 | 键名约定 |
 |------|----------|

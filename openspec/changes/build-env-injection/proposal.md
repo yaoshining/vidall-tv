@@ -1,12 +1,13 @@
 ## Why
 
-issue #258 引入的构建期注入插件 `hvigor/subhub-secret-plugin.ts` 目前只服务 `SUBHUB_API_KEY` 一个变量：键名（`subhub.api.key=` / 环境变量 `SUBHUB_API_KEY`）被硬编码在插件里，每新增一个要注入的配置或密钥都要改插件代码。本变更把该机制通用化，使**任意**已在 `build-profile.json5` 的 `buildOption.arkOptions.buildProfileFields` 声明的字段都能通过 `local.properties` / 环境变量注入，扩展新变量无需改插件。
+issue #258 引入的构建期注入插件 `hvigor/subhub-secret-plugin.ts` 目前只服务 `SUBHUB_API_KEY` 一个变量：键名（`subhub.api.key=` / 环境变量 `SUBHUB_API_KEY`）被硬编码在插件里，每新增一个要注入的客户端可见配置或受客户端约束的凭据都要改插件代码。本变更把该机制通用化，使**任意**已在 `build-profile.json5` 的 `buildOption.arkOptions.buildProfileFields` 声明的字段都能通过 `local.properties` / 环境变量注入，扩展新变量无需改插件。
 
 ## What Changes
 
 - **插件改名并通用化**：`hvigor/subhub-secret-plugin.ts` → `hvigor/build-env-inject-plugin.ts`（`buildEnvInjectPlugin()`），不再硬编码单个字段，改为遍历 `buildProfileFields` 中**已声明**的字段逐个注入。
 - **注入键约定**：`local.properties` 键统一为 `app.env.<FIELD>`（如 `app.env.SUBHUB_API_KEY=`）；环境变量名统一为 `APP_ENV_<FIELD>`（如 `APP_ENV_SUBHUB_API_KEY`）；优先级 `local.properties` → 环境变量 → 空默认值。
 - **注入范围**：仅注入已在 `buildProfileFields` 声明的字段；未声明字段即使存在 `app.env.X` / `APP_ENV_X` 也一律不注入。
+- **安全边界**：`BuildProfile.<FIELD>` 会编译进客户端产物，本机制仅用于注入**客户端可见配置或受客户端约束的凭据**（如客户端直接使用的 Caller Key）；禁止注入服务端私有密钥（签名私钥、数据库密码、仅服务端持有的 API Key）。
 - **`hvigorfile.ts`**：插件注册名由 `subhubSecretPlugin` 改为 `buildEnvInjectPlugin`。
 - **`build-profile.json5`**：保持不变（两个 product 均提交 `SUBHUB_API_KEY = ""` 空默认值，即「声明即 schema」）。
 - **`local.properties` / `local.properties.example`**：键名 `subhub.api.key` → `app.env.SUBHUB_API_KEY`（`local.properties` 已被 `.gitignore` 忽略，真实值不提交）。
@@ -20,7 +21,7 @@ issue #258 引入的构建期注入插件 `hvigor/subhub-secret-plugin.ts` 目�
 
 ### New Capabilities
 
-- `build-env-injection`: 构建期环境变量注入机制的通用契约——「声明即 schema」、`local.properties` 键名 `app.env.<FIELD>`、环境变量名 `APP_ENV_<FIELD>`、优先级与「仅注入已声明字段」的边界。
+- `build-env-injection`: 构建期环境变量注入机制的通用契约——「声明即 schema」、`local.properties` 键名 `app.env.<FIELD>`、环境变量名 `APP_ENV_<FIELD>`、优先级、「仅注入已声明字段」与「仅承载客户端可见配置、禁止服务端私有密钥」的边界。
 
 ### Modified Capabilities
 
