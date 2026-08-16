@@ -2,7 +2,9 @@
 
 ### Requirement: 搜索必须聚合多个字幕 provider 的结果
 
-系统 SHALL 根据 `OPENSUBTITLES_API_KEY` 是否存在选择 provider 集合：未设置 Key 时仅使用 SubHub provider；已设置 Key 时使用 OpenSubtitles（直连）provider 与 SubHub provider。系统 SHALL 并发调用所有 provider，结果按「OpenSubtitles 在前、SubHub 在后」的顺序合并，并按内容指纹去重（碰撞时保留 OpenSubtitles 结果）。单 provider 失败 SHALL 不阻塞其它 provider 的结果返回；仅当所有 provider 都失败时才抛出错误。
+系统 SHALL 根据 `OPENSUBTITLES_API_KEY` 是否存在选择 provider 集合：未设置 Key 时仅使用 SubHub provider；已设置 Key 时使用 OpenSubtitles（直连）provider 与 SubHub provider。系统 SHALL 并发调用所有 provider，结果按「OpenSubtitles 在前、SubHub 在后」的顺序合并，并按内容指纹去重（碰撞时保留 OpenSubtitles 结果）。去重后 SHALL 按 `downloadCount` 降序排序（同下载量时保持合并顺序，即 OpenSubtitles 在前）。单 provider 失败 SHALL 不阻塞其它 provider 的结果返回；仅当所有 provider 都失败时才抛出错误。
+
+> 注：`downloadCount` 排序是用户体系引入前的临时策略。引入用户/权益体系后，需按用户是否具备 SubHub 访问权限（如 Pro 用户或每日普通用户限额）调整排序与过滤，约束条件待定。
 
 #### Scenario: 未设置 Key 时仅搜索 SubHub
 - **WHEN** 用户未配置 `OPENSUBTITLES_API_KEY` 并触发在线字幕搜索
@@ -12,7 +14,8 @@
 #### Scenario: 已设置 Key 时直连结果在前
 - **WHEN** 用户已配置 `OPENSUBTITLES_API_KEY` 并触发在线字幕搜索
 - **THEN** 系统并发调用 OpenSubtitles（直连）与 SubHub provider
-- **AND** 返回结果中 `source=opensubtitles` 的结果排在 `source=subhub` 之前
+- **AND** 合并顺序保持 `source=opensubtitles` 的结果在前
+- **AND** 最终展示按 `downloadCount` 降序（同下载量时 OpenSubtitles 在前）
 
 #### Scenario: 去重时保留 OpenSubtitles 结果
 - **WHEN** OpenSubtitles 与 SubHub 返回了内容指纹相同（归一化文件名 + 语言码相同）的结果
