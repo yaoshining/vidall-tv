@@ -2,7 +2,8 @@ import { describe, it, expect } from '@ohos/hypium';
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
-import { VideoScannerUtil, ScanResult } from '../main/ets/utils/VideoScannerUtil';
+import { VideoScannerUtil } from '../main/ets/utils/VideoScannerUtil';
+import { ScanResult } from '../main/ets/utils/VideoScannerTypes';
 
 /**
  * VideoScanner 集成测试（运行在 UnitTestBuild，context 通过 abilityDelegatorRegistry 获取）

@@ -1,10 +1,10 @@
 import { describe, it, expect } from '@ohos/hypium';
 import {
-  VideoScrapeContext,
   classifyVideoScrapeTarget,
   createVideoScrapeContext,
   hasSeasonSiblingDirectory
-} from '../main/ets/utils/VideoScannerUtil';
+} from '../main/ets/utils/VideoScannerHelpers';
+import { VideoScrapeContext } from '../main/ets/utils/VideoScannerTypes';
 
 export default function videoScannerUtilTest() {
   describe('VideoScannerUtil mixed directory scan helpers', () => {

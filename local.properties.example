@@ -1,0 +1,3 @@
+# 复制本文件为 local.properties 后填入真实值（local.properties 已被 .gitignore 忽略，勿提交真实值）。
+# 构建期由 hvigor/subhub-secret-plugin.ts 读取并注入到 BuildProfile.SUBHUB_API_KEY。
+subhub.api.key=

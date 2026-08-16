@@ -240,6 +240,16 @@ export class SubHubClient {
     return headers;
   }
 
+  /**
+   * 请求前校验 Caller Key 已配置：为空时明确拒绝，而不是静默省略 Authorization 头。
+   * 抛出的错误会被 classifyAcquisitionError 归类为 subhub_auth_invalid。
+   */
+  private requireCallerKey(): void {
+    if (this.callerKey.length === 0) {
+      throw new SubHubApiError('AUTHENTICATION_REQUIRED', 0, 'SubHub Caller Key 未配置，无法访问字幕服务');
+    }
+  }
+
   private async doRequest(
     url: string,
     method: string,
@@ -305,6 +315,7 @@ export class SubHubClient {
    * HTTP 404 + code=NO_RESULTS 视为无结果（返回空列表），不抛错。
    */
   async search(input: SubHubSearchInput): Promise<SubHubSearchOutcome> {
+    this.requireCallerKey();
     let url = `${this.baseUrl}/api/subtitles/search?title=${encodeURIComponent(input.title)}`;
     if (input.year !== undefined) {
       url += `&year=${input.year}`;
@@ -386,6 +397,7 @@ export class SubHubClient {
    * @param fallbackFileName  无法从 Content-Disposition 解析文件名时的兜底文件名。
    */
   async download(subtitleId: string, fallbackFileName: string): Promise<SubHubDownloadResult> {
+    this.requireCallerKey();
     const url = `${this.baseUrl}/api/subtitles/download?subtitleId=${encodeURIComponent(subtitleId)}`;
     const resp = await this.doRequest(url, 'GET', true);
 

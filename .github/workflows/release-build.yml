@@ -1,0 +1,186 @@
+name: 发布构建（production 签名包）
+
+# 在自托管 macOS runner（带完整 HarmonyOS SDK 6.x）上构建 production 签名 HAP。
+# 公共 GitHub runner（ubuntu）只能做 OpenHarmony 编译检查，无法构建/签名 HarmonyOS release 包。
+
+on:
+  workflow_dispatch:
+    inputs:
+      runnerLabel:
+        description: 自托管 runner 标签
+        required: true
+        default: harmonyos-tv-test
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harmonyos-release-build
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  release-build:
+    name: 构建并上传 production 签名包
+    runs-on:
+      - self-hosted
+      - macOS
+      - ${{ inputs.runnerLabel }}
+    timeout-minutes: 45
+
+    env:
+      DEVECO_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk
+      OHOS_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+      HARMONY_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
+      NODE_BIN: /Applications/DevEco-Studio.app/Contents/tools/node/bin/node
+      HVIGOR_WRAPPER: /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw.js
+      OHPM_BIN: /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm
+      JAVA_HOME: /Applications/DevEco-Studio.app/Contents/jbr/Contents/Home
+      # SubHub Caller Key 构建期注入：hvigor/subhub-secret-plugin.ts 读取该环境变量
+      SUBHUB_API_KEY: ${{ secrets.SUBHUB_API_KEY }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 还原 release 签名证书
+        shell: bash
+        env:
+          RELEASE_CERT_BASE64: ${{ secrets.RELEASE_CERT_BASE64 }}
+          RELEASE_P12_BASE64: ${{ secrets.RELEASE_P12_BASE64 }}
+          RELEASE_PROFILE_BASE64: ${{ secrets.RELEASE_PROFILE_BASE64 }}
+          RELEASE_MATERIAL_BASE64: ${{ secrets.RELEASE_MATERIAL_BASE64 }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, json, base64, os, sys, tarfile, io
+          from pathlib import Path
+
+          cert_dir = Path(os.environ['RUNNER_TEMP']) / 'release-signing'
+          cert_dir.mkdir(parents=True, exist_ok=True)
+
+          files = {
+              'certpath':  ('RELEASE_CERT_BASE64',    'release.cer'),
+              'storeFile': ('RELEASE_P12_BASE64',     'release.p12'),
+              'profile':   ('RELEASE_PROFILE_BASE64', 'release.p7b'),
+          }
+          new_paths = {}
+          missing = []
+          for key, (env_var, filename) in files.items():
+              b64 = os.environ.get(env_var, '').strip()
+              if not b64:
+                  missing.append(env_var)
+                  continue
+              dest = cert_dir / filename
+              dest.write_bytes(base64.b64decode(b64))
+              dest.chmod(0o600)
+              new_paths[key] = str(dest)
+              print(f'还原 release 证书: {key} -> {dest}')
+
+          material_b64 = os.environ.get('RELEASE_MATERIAL_BASE64', '').strip()
+          if material_b64:
+              tar_bytes = base64.b64decode(material_b64)
+              with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode='r:gz') as tf:
+                  root = cert_dir.resolve()
+                  safe_members = []
+                  for member in tf.getmembers():
+                      target = (root / member.name).resolve()
+                      inside = os.path.commonpath([str(root), str(target)]) == str(root)
+                      if not inside or member.issym() or member.islnk():
+                          raise ValueError(f'不安全的 tar 成员: {member.name}')
+                      if not member.isdir() and not member.isfile():
+                          raise ValueError(f'不支持的 tar 成员类型: {member.name}')
+                      safe_members.append(member)
+                  tf.extractall(root, members=safe_members)
+              print(f'还原 release material 目录 -> {cert_dir}/material')
+          else:
+              missing.append('RELEASE_MATERIAL_BASE64')
+
+          if missing:
+              print(f'ERROR: 缺少 release 签名 Secret: {missing}', file=sys.stderr)
+              print('请配置 RELEASE_CERT_BASE64 / RELEASE_P12_BASE64 / RELEASE_PROFILE_BASE64 / RELEASE_MATERIAL_BASE64', file=sys.stderr)
+              sys.exit(1)
+
+          # 仅 patch "release" signing config 的证书路径（production 构建只使用该 config）
+          bp_path = Path('build-profile.json5')
+          content = bp_path.read_text(encoding='utf-8')
+          content = re.sub(r',(\s*[}\]])', r'\1', content)  # 去尾逗号（JSON5 -> JSON）
+          content = re.sub(r'//[^\n]*', '', content)        # 去行注释
+          data = json.loads(content)
+
+          release_cfg = next((c for c in data['app']['signingConfigs'] if c.get('name') == 'release'), None)
+          if release_cfg is None:
+              print('ERROR: 未找到 release signing config', file=sys.stderr)
+              sys.exit(1)
+          for key, new_path in new_paths.items():
+              release_cfg['material'][key] = new_path
+
+          bp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          print('build-profile.json5 已更新 release 证书路径')
+          PY
+
+      - name: 还原 Harmony 依赖
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          "$OHPM_BIN" install
+          test -d "$GITHUB_WORKSPACE/oh_modules/@ibestservices/ibest-ui"
+
+      - name: 校验自托管 runner 环境
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$NODE_BIN"
+          test -f "$HVIGOR_WRAPPER"
+          test -d "$OHOS_SDK_HOME/toolchains"
+          printf 'sdk.dir=%s\n' "$DEVECO_SDK_HOME" > "$GITHUB_WORKSPACE/local.properties"
+          mkdir -p "$GITHUB_WORKSPACE/.ci/release"
+          {
+            echo "## Release 构建环境"
+            echo "- Runner: $RUNNER_NAME"
+            echo "- Workspace: $GITHUB_WORKSPACE"
+            echo "- SDK: $OHOS_SDK_HOME"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 构建 production HAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          LOG_DIR="$GITHUB_WORKSPACE/.ci/release"
+          set -o pipefail
+          "$NODE_BIN" "$HVIGOR_WRAPPER" \
+            --mode module -p module=entry@default -p product=production \
+            assembleHap --no-daemon --analyze=normal --parallel \
+            2>&1 | tee "$LOG_DIR/assemble-release.log"
+          exit ${PIPESTATUS[0]}
+
+      - name: 解析 HAP 产物
+        shell: bash
+        run: |
+          set -euo pipefail
+          # production 包路径（与 product=default 的 entry/build/default/... 对应）
+          APP_HAP="$GITHUB_WORKSPACE/entry/build/production/outputs/default/entry-default-signed.hap"
+          if [[ ! -f "$APP_HAP" ]]; then
+            echo "预期路径不存在，执行 find 兜底..."
+            find "$GITHUB_WORKSPACE/entry/build" -type f -name '*.hap'
+            APP_HAP="$(find "$GITHUB_WORKSPACE/entry/build" -type f -name '*-signed.hap' | head -1)"
+            [[ -n "$APP_HAP" ]] || { echo "未找到签名 HAP"; exit 1; }
+          fi
+          echo "RELEASE_HAP=$APP_HAP" >> "$GITHUB_ENV"
+          echo "- Release HAP: $APP_HAP" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传 release HAP 制品
+        uses: actions/upload-artifact@v4
+        with:
+          name: vidall-tv-release-${{ github.sha }}
+          path: ${{ env.RELEASE_HAP }}
+          if-no-files-found: error
+          retention-days: 30

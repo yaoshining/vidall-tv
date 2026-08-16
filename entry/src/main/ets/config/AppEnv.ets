@@ -65,7 +65,8 @@ export class AppEnv {
 
   /**
    * SubHub Caller Key（对外字幕 API 的 Bearer 鉴权凭据）。
-   * ⚠️ 账户体系建立前暂用常量；正式接入时应改用 BuildProfile/secret 注入，避免明文进 git。
+   * 构建期由 hvigor 插件从 local.properties / 环境变量注入到 BuildProfile，
+   * 源码与仓库不保存明文；未注入时为空字符串，SubHubClient 会在请求前明确拒绝。
    */
-  static readonly SUBHUB_API_KEY: string = 'subhub_live_KE9pl9UT4-Eo_zhSJedlDXn_i5xeVlax8Rlcs3Rn8wQ';
+  static readonly SUBHUB_API_KEY: string = BuildProfile.SUBHUB_API_KEY as string;
 }

@@ -10,7 +10,7 @@ import {
   extractSeriesHintFromFilePath
 } from '../main/ets/lib/MediaTypeClassifier';
 import { parseFileName } from '../main/ets/lib/ScrapeClient';
-import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerUtil';
+import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerHelpers';
 
 interface WeakSemanticRegressionSample {
   name: string;
