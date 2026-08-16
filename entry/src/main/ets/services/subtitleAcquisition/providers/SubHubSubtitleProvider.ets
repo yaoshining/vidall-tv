@@ -69,9 +69,14 @@ export class SubHubSubtitleProvider implements SubtitleProvider {
 
     // 双保险：中文向偏好时本地再过滤一道（language 字段可靠时优先，迅雷脏值时按 releaseName）。
     if (isChineseLanguagePreference(input.languages)) {
-      return mapped.filter((r: SubtitleSearchResult): boolean =>
+      const filtered = mapped.filter((r: SubtitleSearchResult): boolean =>
         isChineseSubtitle(r.fileName, r.languageCode)
       );
+      // 避免「过滤后全空」静默无感知：有结果被全部滤掉时记一条日志
+      if (mapped.length > 0 && filtered.length === 0) {
+        console.warn(`[SubHubProvider] 中文过滤清空了全部 ${mapped.length} 条结果（language/releaseName 均不可用）`);
+      }
+      return filtered;
     }
     return mapped;
   }

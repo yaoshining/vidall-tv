@@ -19,16 +19,16 @@
 
 ### Requirement: OPENSUBTITLES_API_KEY 必须持久化到 AppPreferences
 
-系统 SHALL 将用户填写的 API Key 存入 `AppPreferences.OPENSUBTITLES_API_KEY`（PrefKey 新增项）。该值 SHALL 在 App 启动时自动读取，读取失败时回退为空字符串（触发 SubHub 通道）。
+系统 SHALL 将用户填写的 API Key 存入 `AppPreferences` 的 `PrefKey.OPENSUBTITLES_API_KEY`。该值 SHALL 在 App 启动时自动读取，读取失败时回退为空字符串（触发 SubHub 通道）。
 
 #### Scenario: 保存 Key 后立即生效
 - **WHEN** 用户在设置页保存 API Key
 - **THEN** 下一次字幕搜索使用直连模式（OpenSubtitles 直连结果优先，并拼接 SubHub 结果）
 - **AND** 无需重启 App
 
-#### Scenario: 清空 Key 后恢复代理模式
+#### Scenario: 清空 Key 后恢复 SubHub 模式
 - **WHEN** 用户清空 API Key 输入框并保存
-- **THEN** `AppPreferences.OPENSUBTITLES_API_KEY` 存储空字符串
+- **THEN** `PrefKey.OPENSUBTITLES_API_KEY` 存储空字符串
 - **AND** 下一次字幕搜索恢复仅使用 SubHub 通道
 
 ## REMOVED Requirements

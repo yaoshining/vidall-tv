@@ -1,4 +1,5 @@
 import http from '@ohos.net.http';
+import buffer from '@ohos.buffer';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { AppEnv } from '../config/AppEnv';
 
@@ -176,11 +177,19 @@ export function extractFileNameFromContentDisposition(headerValue: string): stri
 
 /** 从错误响应体解析统一错误结构；无法解析时返回 null。 */
 function parseErrorPayload(result: string | ArrayBuffer): SubHubErrorPayload | null {
-  if (typeof result !== 'string' || result.length === 0) {
+  let text: string;
+  if (typeof result === 'string') {
+    text = result;
+  } else {
+    // 下载路径 expectArrayBuffer=true，错误体是 ArrayBuffer，先解码为 UTF-8 字符串
+    const bytes = new Uint8Array(result);
+    text = buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf-8');
+  }
+  if (text.length === 0) {
     return null;
   }
   try {
-    const parsed = JSON.parse(result) as SubHubErrorResponse;
+    const parsed = JSON.parse(text) as SubHubErrorResponse;
     if (parsed.error !== undefined && parsed.error.code !== undefined) {
       return parsed.error;
     }
