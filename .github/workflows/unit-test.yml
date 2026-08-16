@@ -30,7 +30,7 @@ jobs:
       - self-hosted
       - macOS
       - harmonyos-tv-test
-    timeout-minutes: 12
+    timeout-minutes: 20
 
     env:
       DEVECO_SDK_HOME: /Applications/DevEco-Studio.app/Contents/sdk
@@ -52,8 +52,11 @@ jobs:
           cd "$WORK_DIR"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           # macOS LibreSSL 下 GitHub HTTP/2 偶发 RPC 中断（curl 92 / early EOF），
-          # 改用 HTTP/1.1 并带重试，避免瞬态网络错误导致 CI 假失败。
+          # 改用 HTTP/1.1 并带重试，避免瞬态网络错误导致 CI 假失败；
+          # lowSpeed 限制让卡死的 fetch 在 ~20s 内快速失败，而不是挂满整段 job 时间预算。
           git config --global http.version HTTP/1.1
+          git config --global http.lowSpeedLimit 1000
+          git config --global http.lowSpeedTime 20
           FETCHED=false
           for attempt in 1 2 3; do
             if git fetch --no-tags "$REPO_URL" "$TARGET_SHA"; then
@@ -145,7 +148,7 @@ jobs:
             > "$UNIT_TEST_LOG" 2>&1 &
           TEST_PID=$!
           # 最多等待 8 分钟：CI 冷构建（实测 UnitTestArkTS 单步 ~37s）+ 打包 + 部署设备 + 跑 500+ 用例，
-          # 原 180s 会误杀正常构建；job 仍有 timeout-minutes: 12 兜底，设备真卡死也不会无限等待。
+          # 原 180s 会误杀正常构建；job 仍有 timeout-minutes: 20 兜底，设备真卡死也不会无限等待。
           MAX_WAIT=480
           ELAPSED=0
           while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
