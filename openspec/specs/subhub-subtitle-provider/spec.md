@@ -1,8 +1,10 @@
+# subhub-subtitle-provider Specification
+
 ## Purpose
 
 定义 SubHub 字幕 provider 的行为契约：通过 SubHub 统一字幕出口 API 搜索与下载字幕，并把 SubHub 响应映射为统一的字幕搜索结果，供字幕获取服务聚合。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: SubHub 搜索结果必须映射为统一搜索结果
 

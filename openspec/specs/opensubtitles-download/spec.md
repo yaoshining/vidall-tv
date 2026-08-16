@@ -2,7 +2,7 @@
 
 ## Purpose
 
-定义字幕文件下载的完整链路契约，包括通过 OpenSubtitles `/download` 接口获取临时 URL、使用 `@ohos.net.http` 写入本地沙盒规范路径，以及与搜索通道共用同一代理/直连策略。
+定义字幕文件下载的完整链路契约，包括通过 OpenSubtitles `/download` 接口获取临时 URL、使用 `@ohos.net.http` 写入本地沙盒规范路径，以及下载通道的路由策略。
 
 ## Requirements
 
@@ -27,13 +27,16 @@
 - **THEN** 系统自动递归创建目录后写入文件
 - **AND** 不因目录缺失导致写入失败
 
----
+### Requirement: OpenSubtitles 下载仅在直连模式下发生
 
-### Requirement: 下载通道必须与搜索通道共用同一代理/直连策略
+系统 SHALL 仅在 `AppPreferences.OPENSUBTITLES_API_KEY` 已设置时通过 OpenSubtitles 下载字幕（`POST /download` 获取临时链接后下载）；未设置 Key 时的字幕下载 SHALL 由字幕获取服务路由到 SubHub。
 
-系统 SHALL 复用 `OpenSubtitlesClient` 的通道选择逻辑（代理优先，设置 Key 后直连），`POST /download` 请求也经由相同通道发送。
+#### Scenario: 已设置 Key 时通过 OpenSubtitles 下载
+- **WHEN** 用户已配置 `OPENSUBTITLES_API_KEY` 并选择一条 `source=opensubtitles` 的字幕
+- **THEN** `POST /download` 请求直接发往 `api.opensubtitles.com`
+- **AND** 请求携带 `Api-Key: <用户 Key>` header
 
-#### Scenario: 未设置 Key 时下载请求经由代理
-- **WHEN** 用户未配置 `OPENSUBTITLES_API_KEY`
-- **THEN** `POST /download` 请求发往 Cloudflare Worker 代理
-- **AND** 携带 `X-Device-Id` header
+#### Scenario: 未设置 Key 时下载走 SubHub
+- **WHEN** 用户未配置 `OPENSUBTITLES_API_KEY` 并选择一条字幕
+- **THEN** 该字幕来源为 `subhub`
+- **AND** 下载通过 SubHub 完成
