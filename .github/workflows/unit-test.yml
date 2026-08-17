@@ -819,11 +819,22 @@ jobs:
 
       - name: 上传测试产物
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-results-${{ github.run_number }}
-          path: |
-            ${{ runner.temp }}/unit-test-build.log
-            ${{ runner.temp }}/unit-test.log
-          if-no-files-found: warn
-          retention-days: 7
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 不再依赖 actions/upload-artifact@v4：该 action 需在 Set up job 阶段从 codeload.github.com
+          # 匿名下载，云代理出口 IP 常被 429 限流导致整个 job 卡在 Set up job。改用 GITHUB_TOKEN
+          # 直接走 artifacts REST API 上传（带鉴权，限流额度高得多）。
+          set -uo pipefail
+          cd "$RUNNER_TEMP" || exit 0
+          zip -q unit-test-results.zip unit-test-build.log unit-test.log 2>/dev/null || true
+          if [ ! -f unit-test-results.zip ]; then
+            echo "无日志文件可上传，跳过"
+            exit 0
+          fi
+          curl -sL --fail -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/zip" \
+            --data-binary @unit-test-results.zip \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=unit-test-results-${GITHUB_RUN_NUMBER}" \
+            || echo "⚠️ 产物上传失败（不阻塞 CI）"
