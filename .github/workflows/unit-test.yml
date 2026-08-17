@@ -142,9 +142,12 @@ jobs:
           UNIT_TEST_LOG="$RUNNER_TEMP/unit-test.log"
           # 单次启动并直接重定向到日志文件（不用 tee），使 $! 指向 hvigor 真实进程，
           # 从而能正确采集退出码并做超时终止；macOS 无 setsid，改用 kill + pgrep 递归清理进程树。
+          # 与 UnitTestBuild 步骤保持一致加 --incremental --parallel：否则 `test` 会忽略上一步的
+          # 增量缓存做全量重建（native C++ + 全量 ArkTS），在 CI 冷缓存机器上远超 480s。
           "$NODE_BIN" "$HVIGOR_WRAPPER" \
             --mode module -p module=entry@default \
             test --no-daemon -p coverage=true \
+            --analyze=normal --parallel --incremental \
             > "$UNIT_TEST_LOG" 2>&1 &
           TEST_PID=$!
           # 最多等待 8 分钟：CI 冷构建（实测 UnitTestArkTS 单步 ~37s）+ 打包 + 部署设备 + 跑 500+ 用例，
@@ -154,6 +157,12 @@ jobs:
           while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
             sleep 5
             ELAPSED=$((ELAPSED + 5))
+            # 每 30s 打印一次进度与 hvigor test 日志尾部：`test` 输出重定向到文件后，
+            # 前台静默会让 UI 误判为卡死；这里直接透出当前卡在哪个阶段（构建/部署/跑用例）。
+            if [ $((ELAPSED % 30)) -eq 0 ]; then
+              echo "⏳ 设备端测试已等待 ${ELAPSED}s / ${MAX_WAIT}s"
+              tail -n 3 "$UNIT_TEST_LOG" 2>/dev/null || true
+            fi
           done
           # 递归收集指定 PID 的全部后代（后序遍历：最深后代先输出）。
           # 必须先收集再杀：若先杀父进程，macOS 会把其后代重托管给 launchd，pgrep -P 就再也找不到它们。
