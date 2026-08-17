@@ -149,9 +149,10 @@ jobs:
             --analyze=normal --parallel --incremental \
             > "$UNIT_TEST_LOG" 2>&1 &
           TEST_PID=$!
-          # 最多等待 8 分钟：CI 冷构建（实测 UnitTestArkTS 单步 ~37s）+ 打包 + 部署设备 + 跑 500+ 用例，
-          # 原 180s 会误杀正常构建；job 仍有 timeout-minutes: 20 兜底，设备真卡死也不会无限等待。
-          MAX_WAIT=480
+          # 真机用例实测 ~18-40s（UnitTestArkTS ~37s + 部署 + 跑用例）。若 hvigor test 找不到设备
+          # 会回退本地 Previewer 永久卡死，等 480s 纯属浪费；90s 足以覆盖正常完成，卡死时快速止损。
+          # job 仍有 timeout-minutes: 20 兜底。
+          MAX_WAIT=90
           ELAPSED=0
           while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
             sleep 5
