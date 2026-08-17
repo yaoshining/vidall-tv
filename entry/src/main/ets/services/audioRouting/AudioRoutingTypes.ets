@@ -48,6 +48,10 @@ export interface AudioRoutingInput {
   probeVideoCodecName: string;
   /** ffprobe 首条视频轨的 HDR 类型（'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'），探测失败传 ''。 */
   probeVideoHdrType: string;
+  /** ffprobe 首条视频轨的宽度（像素），探测失败/缺失为 undefined。 */
+  probeVideoWidth?: number;
+  /** ffprobe 首条视频轨的高度（像素），探测失败/缺失为 undefined。 */
+  probeVideoHeight?: number;
   probeSuccess: boolean;
   probeError: string;
   /** 探测是否失败（service 内部用于决策）。 */
@@ -91,6 +95,10 @@ export interface AudioRoutingDecision {
   videoCodecName: string;
   /** 视频 HDR 类型（来自 ffprobe 首条 video track）：'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'，'' 表示未知（探测失败/无视频轨）。 */
   videoHdrType: string;
+  /** 视频宽度（像素，来自 ffprobe 首条 video track），探测失败/缺失为 undefined。 */
+  videoWidth?: number;
+  /** 视频高度（像素，来自 ffprobe 首条 video track），探测失败/缺失为 undefined。 */
+  videoHeight?: number;
   /** 整组音轨分析结果。 */
   trackAnalyses: AudioTrackAnalysis[];
 }
@@ -111,6 +119,8 @@ export const DEFAULT_AUDIO_ROUTING_DECISION: AudioRoutingDecision = {
   precheckProbeError: '',
   videoCodecName: '',
   videoHdrType: '',
+  videoWidth: undefined,
+  videoHeight: undefined,
   trackAnalyses: []
 };
 

@@ -1,5 +1,4 @@
 import { VideoPlayerController, AspectRatioMode } from "./VideoPlayerController"
-import { VpeQualityLevel } from "../../../utils/VpeEnhancerUtil"
 import { hilog } from "@kit.PerformanceAnalysisKit"
 import { EpisodeListPanel } from './EpisodeListPanel'
 import { PlaybackContextItem, MediaLibraryContext, PlaybackContext } from './PlaybackContext'
@@ -438,7 +437,6 @@ export struct PlayerSettingsDialog {
   @State private speedHoveredIndex: number = -1
   private readonly aspectRatioOptions: AspectRatioOption[] = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS
   @State private aiEnhanceOn: boolean = true
-  @State private aiEnhanceQuality: VpeQualityLevel = 'medium'
   @State private autoplayEnabled: boolean = true
   @State private autoplayCountdownSeconds: number = 8
   @State private autoplayToggleFocusedIndex: number = -1
@@ -571,7 +569,6 @@ export struct PlayerSettingsDialog {
   aboutToAppear(): void {
     this.syncSelectionMirrorState()
     this.aiEnhanceOn = this.videoController.getResolvedAiEnhanceEnabled();
-    this.aiEnhanceQuality = this.videoController.aiEnhanceQuality;
     this.arFocusedIndex = -1;
     this.speedFocusedIndex = -1;
     this.arHoveredIndex = -1;
@@ -943,46 +940,17 @@ export struct PlayerSettingsDialog {
                       this.videoController.disableAiEnhance();
                     })
 
-                  Text('低')
+                  Text('开启')
                     .fontSize(26)
-                    .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#F3F7FF' : '#D7DCE7')
+                    .fontColor(this.aiEnhanceOn ? '#F3F7FF' : '#D7DCE7')
                     .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                    .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
+                    .backgroundColor(this.aiEnhanceOn ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
                     .borderRadius(99)
-                    .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'low' ? '#fffefe' : '#45ffffff' })
+                    .border({ width: this.aiEnhanceOn ? 2 : 1, color: this.aiEnhanceOn ? '#fffefe' : '#45ffffff' })
                     .onClick(() => {
-                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击低');
+                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击开启（档位自动）');
                       this.aiEnhanceOn = true;
-                      this.aiEnhanceQuality = 'low';
-                      this.videoController.setAiEnhance('low');
-                    })
-
-                  Text('中')
-                    .fontSize(26)
-                    .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#F3F7FF' : '#D7DCE7')
-                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                    .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                    .borderRadius(99)
-                    .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'medium' ? '#fffefe' : '#45ffffff' })
-                    .onClick(() => {
-                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击中');
-                      this.aiEnhanceOn = true;
-                      this.aiEnhanceQuality = 'medium';
-                      this.videoController.setAiEnhance('medium');
-                    })
-
-                  Text('高')
-                    .fontSize(26)
-                    .fontColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#F3F7FF' : '#D7DCE7')
-                    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-                    .backgroundColor(this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.1)')
-                    .borderRadius(99)
-                    .border({ width: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? 2 : 1, color: this.aiEnhanceOn && this.aiEnhanceQuality === 'high' ? '#fffefe' : '#45ffffff' })
-                    .onClick(() => {
-                      hilog.info(0x0000, 'PlayerSettingsDialog', '画质增强: 点击高');
-                      this.aiEnhanceOn = true;
-                      this.aiEnhanceQuality = 'high';
-                      this.videoController.setAiEnhance('high');
+                      this.videoController.setAiEnhance();
                     })
                 }
                 .justifyContent(FlexAlign.Start)

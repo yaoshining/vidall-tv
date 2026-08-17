@@ -105,6 +105,18 @@ export interface VideoData {
   videoHdrType?: string;
 
   /**
+   * 源视频宽度（像素，可选），由 ffprobe 探测填充。
+   * 用于 VPE 画质增强按缩放比例自动选档；undefined 表示探测失败/未知。
+   */
+  videoWidth?: number;
+
+  /**
+   * 源视频高度（像素，可选），由 ffprobe 探测填充。
+   * 用于 VPE 画质增强按缩放比例自动选档；undefined 表示探测失败/未知。
+   */
+  videoHeight?: number;
+
+  /**
    * 刮削得到的原始标题（英文），如 "The Bad Kids"。
    * 优先用于 OpenSubtitles 搜索，避免文件名中文/混合标题解析失败。
    */
