@@ -131,11 +131,10 @@ jobs:
           fi
           echo "设备已连接: $TARGETS"
 
-          # 清理验证用的 hdc daemon，让 hvigor test 自己管理 daemon 生命周期
-          "$HDC_BIN" kill 2>/dev/null || true
-          sleep 1
-          ps aux | grep -E '[h]dc.*-m' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
-          sleep 1
+          # 关键：不要在这里 kill hdc daemon。电视是 TCP 设备（tconn 192.168.3.85:5555），
+          # tconn 状态只存在于当前 daemon 内存中；一旦 kill，hvigor test 内部新起的 daemon
+          # 不会重新 tconn，导致「找不到设备 → test 卡死在 Darwin 之后」。上面已 kill 过残留
+          # daemon 并重新 tconn，这个 daemon 是干净的，直接留给 hvigor test 用即可。
 
           # 执行设备端测试，带超时保护
           RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
