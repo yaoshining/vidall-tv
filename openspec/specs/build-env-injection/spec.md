@@ -1,9 +1,8 @@
+# build-env-injection Specification
+
 ## Purpose
-
 定义构建期环境变量注入机制的通用契约：以 `build-profile.json5` 的 `buildProfileFields` 声明为可注入字段清单，按约定键名从 `local.properties` / 环境变量取值并在构建期写入，供 ArkTS 侧通过 `BuildProfile.<FIELD>` 读取。该机制仅用于注入客户端可见配置或受客户端约束的凭据。
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: buildProfileFields 声明即 schema
 
 系统 SHALL 将 `build-profile.json5` 中 `buildOption.arkOptions.buildProfileFields` 声明的字段视为唯一的可注入字段清单，注入机制 SHALL 只处理该清单内的字段。声明的空默认值（如 `"FOO": ""`）SHALL 随仓库提交。
@@ -73,3 +72,4 @@
 #### Scenario: 大小写敏感拼接
 - **WHEN** 声明字段为 `SUBHUB_API_KEY`
 - **THEN** 读取 `local.properties` 的 `app.env.SUBHUB_API_KEY` 与环境变量 `APP_ENV_SUBHUB_API_KEY`
+
