@@ -42,4 +42,4 @@
 - [x] 7.2 `openspec validate --strict issue-255-hdr-vpe-black-screen` 通过
 - [x] 7.3 `assembleHap` 编译通过（native C++ + ArkTS）
 - [x] 7.4 `UnitTestBuild` 编译通过
-- [ ] 7.5 真机验证：HDR 出现「[VPE] 跳过创建: HDR 视频不启用 VPE」且无 `29210006`；SDR 仍「[VPE] 管线建立」（待 EDIS-790A 真机样本确认）
+- [x] 7.5 真机验证：HDR 出现「[VPE] 跳过创建: HDR 视频不启用 VPE」且无 `29210006`；SDR 仍「[VPE] 管线建立」
