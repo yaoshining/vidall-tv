@@ -1,5 +1,8 @@
-## ADDED Requirements
+# vpe-quality-selection Specification
 
+## Purpose
+TBD - created by archiving change vpe-auto-quality-by-scaling. Update Purpose after archive.
+## Requirements
 ### Requirement: 用户开启画质增强 SHALL 必启用 VPE（至少低档）
 
 当用户开启画质增强且运行时条件满足时，系统 SHALL 建立 VPE 增强管线（最低 LOW 档），缩放比例只决定档位高低，不决定是否启用。
@@ -98,3 +101,4 @@ ffprobe 探测出的源视频宽高 SHALL 沿 routing decision 链路透传到�
 - **WHEN** ffprobe 探测失败或未返回宽高
 - **THEN** 控制器中的源宽高 SHALL 为缺失（undefined）
 - **AND** 自动选档 SHALL 返回 LOW（以低档启用，保证开关生效）
+
