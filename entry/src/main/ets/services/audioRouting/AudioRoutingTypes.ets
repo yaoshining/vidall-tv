@@ -46,6 +46,8 @@ export interface AudioRoutingInput {
   probeCodecName: string;
   probeChannels: number;
   probeVideoCodecName: string;
+  /** ffprobe 首条视频轨的 HDR 类型（'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'），探测失败传 ''。 */
+  probeVideoHdrType: string;
   probeSuccess: boolean;
   probeError: string;
   /** 探测是否失败（service 内部用于决策）。 */
@@ -87,6 +89,8 @@ export interface AudioRoutingDecision {
   precheckProbeError: string;
   /** 视频编码名称（来自 ffprobe 首条 video track）。 */
   videoCodecName: string;
+  /** 视频 HDR 类型（来自 ffprobe 首条 video track），'' 表示未知/SDR。 */
+  videoHdrType: string;
   /** 整组音轨分析结果。 */
   trackAnalyses: AudioTrackAnalysis[];
 }
@@ -106,6 +110,7 @@ export const DEFAULT_AUDIO_ROUTING_DECISION: AudioRoutingDecision = {
   precheckProbeFailed: false,
   precheckProbeError: '',
   videoCodecName: '',
+  videoHdrType: '',
   trackAnalyses: []
 };
 

@@ -72,6 +72,8 @@ export interface PlaybackBackendDecision {
   precheckProbeFailed: boolean;
   precheckProbeError: string;
   videoCodecName: string;
+  /** 视频 HDR 类型（'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'|''），'' 表示未知/SDR。 */
+  videoHdrType: string;
   /** 整组音轨分析详情（调试用）。 */
   trackAnalyses: BackendTrackAnalysis[];
 }
@@ -91,6 +93,7 @@ export const DEFAULT_BACKEND_DECISION: PlaybackBackendDecision = {
   precheckProbeFailed: false,
   precheckProbeError: '',
   videoCodecName: '',
+  videoHdrType: '',
   trackAnalyses: []
 };
 
@@ -167,6 +170,7 @@ export function buildDefaultBackendDecision(): PlaybackBackendDecision {
     precheckProbeFailed: false,
     precheckProbeError: '',
     videoCodecName: '',
+    videoHdrType: '',
     trackAnalyses: []
   };
   return decision;

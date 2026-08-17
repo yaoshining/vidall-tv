@@ -98,6 +98,13 @@ export interface VideoData {
   videoCodec?: string;
 
   /**
+   * 视频 HDR 类型（可选），由 ffprobe 探测填充：
+   * 'HDR10' | 'HLG' | 'DOLBY_VISION' | 'SDR'。
+   * undefined 视为未知/SDR。用于 VPE（AI 画质增强）门控：HDR 视频不启用 VPE。
+   */
+  videoHdrType?: string;
+
+  /**
    * 刮削得到的原始标题（英文），如 "The Bad Kids"。
    * 优先用于 OpenSubtitles 搜索，避免文件名中文/混合标题解析失败。
    */

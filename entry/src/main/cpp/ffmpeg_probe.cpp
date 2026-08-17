@@ -35,6 +35,7 @@ extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 #include <libswscale/swscale.h>
 }
@@ -140,6 +141,21 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
       if (codecpar->bit_rate > 0) {
         AppendJsonStringField(json, "bit_rate", std::to_string(codecpar->bit_rate), firstField);
       }
+      // 视频色彩元数据：供 TS 侧 FfprobeUtil.parseHdrType 判定 HDR。
+      // color_transfer 是关键字段：AVCOL_TRC_SMPTE2084(16)=HDR10、AVCOL_TRC_ARIB_STD_B67(18)=HLG。
+      const char *pixFmtName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(codecpar->format));
+      if (pixFmtName != nullptr) {
+        AppendJsonStringField(json, "pix_fmt", std::string(pixFmtName), firstField);
+      }
+      const char *profileName = avcodec_profile_name(codecpar->codec_id, codecpar->profile);
+      if (profileName != nullptr) {
+        AppendJsonStringField(json, "profile", std::string(profileName), firstField);
+      }
+      AppendJsonIntField(json, "bits_per_raw_sample", codecpar->bits_per_raw_sample, firstField);
+      AppendJsonIntField(json, "color_primaries", static_cast<int64_t>(codecpar->color_primaries), firstField);
+      AppendJsonIntField(json, "color_transfer", static_cast<int64_t>(codecpar->color_trc), firstField);
+      AppendJsonIntField(json, "color_space", static_cast<int64_t>(codecpar->color_space), firstField);
+      AppendJsonIntField(json, "color_range", static_cast<int64_t>(codecpar->color_range), firstField);
     } else if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (codecpar->sample_rate > 0) {
         AppendJsonStringField(json, "sample_rate", std::to_string(codecpar->sample_rate), firstField);

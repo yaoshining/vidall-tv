@@ -5,7 +5,8 @@ import {
   PlayerBackend,
   resolveAiEnhanceEnabledByRuntime,
   shouldShowAiEnhanceSettingsByRuntime,
-  resolveEffectivePlaybackSurfaceId
+  resolveEffectivePlaybackSurfaceId,
+  isHdrVideo
 } from '../main/ets/components/core/player/VideoPlayerController';
 import { IPlayer, SubtitleInfo, TrackInfo } from '../main/ets/components/core/player/IPlayer';
 import {
@@ -564,6 +565,21 @@ export default function videoPlayerControllerTest() {
       expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer')).assertTrue()
       expect(shouldShowAiEnhanceSettingsByRuntime(false, 'avplayer')).assertFalse()
       expect(shouldShowAiEnhanceSettingsByRuntime(true, 'mpv')).assertFalse()
+    })
+
+    it('HDR 视频不显示画质增强设置', 0, () => {
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer', true)).assertFalse()
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer', false)).assertTrue()
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'mpv', true)).assertFalse()
+    })
+
+    it('isHdrVideo 正确判定 HDR 类型', 0, () => {
+      expect(isHdrVideo('HDR10')).assertTrue()
+      expect(isHdrVideo('HLG')).assertTrue()
+      expect(isHdrVideo('DOLBY_VISION')).assertTrue()
+      expect(isHdrVideo('SDR')).assertFalse()
+      expect(isHdrVideo('')).assertFalse()
+      expect(isHdrVideo(undefined)).assertFalse()
     })
 
     it('VPE 未提供输入 surface 时回退到基础播放 surface', 0, () => {
