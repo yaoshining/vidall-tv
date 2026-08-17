@@ -169,6 +169,8 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
     precheckProbeError: input.precheckProbeError,
     videoCodecName: (input.probeVideoCodecName ?? '').toLowerCase(),
     videoHdrType: input.probeVideoHdrType ?? '',
+    videoWidth: input.probeVideoWidth,
+    videoHeight: input.probeVideoHeight,
     trackAnalyses: tracks
   };
   return decision;
@@ -440,6 +442,8 @@ export class AudioTrackRoutingService {
     let precheckProbeError = '';
     let videoCodecName = '';
     let probeVideoHdrType = '';
+    let probeVideoWidth: number | undefined = undefined;
+    let probeVideoHeight: number | undefined = undefined;
     let probeSuccess = false;
     interface ProbeAudio {
       codec: string;
@@ -478,6 +482,8 @@ export class AudioTrackRoutingService {
         videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
         // 未知/缺失统一用空串表示；已知类型为 'SDR' | 'HDR10' | 'HLG' | 'DOLBY_VISION'。
         probeVideoHdrType = probe.videoTracks[0].hdrType ?? '';
+        probeVideoWidth = probe.videoTracks[0].width;
+        probeVideoHeight = probe.videoTracks[0].height;
         for (let i = 0; i < probe.videoTracks.length; i++) {
           const v: ProbeVideo = { codec: (probe.videoTracks[i].codecName ?? '').toLowerCase() };
           probeVideoTracks.push(v);
@@ -528,6 +534,8 @@ export class AudioTrackRoutingService {
       probeChannels,
       probeVideoCodecName: videoCodecName,
       probeVideoHdrType,
+      probeVideoWidth,
+      probeVideoHeight,
       probeSuccess,
       probeError: precheckProbeError,
       precheckProbeFailed,

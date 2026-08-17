@@ -6,7 +6,8 @@ import {
   resolveAiEnhanceEnabledByRuntime,
   shouldShowAiEnhanceSettingsByRuntime,
   resolveEffectivePlaybackSurfaceId,
-  isHdrVideo
+  isHdrVideo,
+  resolveVpeQualityByScaling
 } from '../main/ets/components/core/player/VideoPlayerController';
 import { IPlayer, SubtitleInfo, TrackInfo } from '../main/ets/components/core/player/IPlayer';
 import {
@@ -581,6 +582,47 @@ export default function videoPlayerControllerTest() {
       expect(isHdrVideo('SDR')).assertFalse()
       expect(isHdrVideo('')).assertFalse()
       expect(isHdrVideo(undefined)).assertFalse()
+    })
+
+    it('resolveVpeQualityByScaling 按缩放比例自动选档', 0, () => {
+      // 大幅放大（源 960x540 → 显示 3840x2160，scale=4）→ high
+      expect(resolveVpeQualityByScaling(960, 540, 3840, 2160)).assertEqual('high')
+      // 中等放大（源 2560x1440 → 显示 3840x2160，scale=1.5）→ medium
+      expect(resolveVpeQualityByScaling(2560, 1440, 3840, 2160)).assertEqual('medium')
+      // 轻微放大（源 1920x1080 → 显示 2560x1440，scale≈1.33）→ low
+      expect(resolveVpeQualityByScaling(1920, 1080, 2560, 1440)).assertEqual('low')
+      // 1:1（源=显示 1920x1080）→ low
+      expect(resolveVpeQualityByScaling(1920, 1080, 1920, 1080)).assertEqual('low')
+      // 缩小（源 1920x1080 → 显示 1280x720）→ low
+      expect(resolveVpeQualityByScaling(1920, 1080, 1280, 720)).assertEqual('low')
+    })
+
+    it('resolveVpeQualityByScaling 源分辨率超限返回 null（不启用）', 0, () => {
+      // 超上限（4K 源 3840x2160）
+      expect(resolveVpeQualityByScaling(3840, 2160, 3840, 2160)).assertEqual(null)
+      // 低于下限（16x16）
+      expect(resolveVpeQualityByScaling(16, 16, 1920, 1080)).assertEqual(null)
+    })
+
+    it('resolveVpeQualityByScaling 大幅放大但源小于 HIGH 下限退 medium', 0, () => {
+      // 源 320x180（<512）→ 显示 3840x2160，scale=12 → medium
+      expect(resolveVpeQualityByScaling(320, 180, 3840, 2160)).assertEqual('medium')
+    })
+
+    it('resolveVpeQualityByScaling 数据缺失返回 low（保证开启即生效）', 0, () => {
+      expect(resolveVpeQualityByScaling(undefined, undefined, 3840, 2160)).assertEqual('low')
+      expect(resolveVpeQualityByScaling(1920, 1080, undefined, undefined)).assertEqual('low')
+      expect(resolveVpeQualityByScaling(0, 1080, 3840, 2160)).assertEqual('low')
+    })
+
+    it('自动选档与 HDR 门控叠加：HDR 不启用、非超限 SDR 启用', 0, () => {
+      // HDR 视频无论如何都门控（isHdrVideo true）
+      expect(isHdrVideo('HDR10')).assertTrue()
+      expect(isHdrVideo('HLG')).assertTrue()
+      // SDR 源在输入范围内返回档位（非 null = 会建 VPE）
+      expect(resolveVpeQualityByScaling(1920, 1080, 3840, 2160)).assertEqual('medium')
+      // SDR 源超限返回 null（不建 VPE）
+      expect(resolveVpeQualityByScaling(3840, 2160, 3840, 2160)).assertEqual(null)
     })
 
     it('controller 对 HDR 视频隐藏画质增强设置、对 SDR 显示', 0, () => {

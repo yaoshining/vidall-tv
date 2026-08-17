@@ -2,6 +2,7 @@ import { PlayerEvents, VideoDataType } from "./Constants";
 import { VideoData } from "./VideoData";
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from "@kit.PerformanceAnalysisKit";
+import { display } from '@kit.ArkUI';
 import { CommonConstants } from "../../../common/constants/CommonConstants";
 import { millisecondsToTime } from "../../../utils/TimeUtil";
 import { IPlayer, TrackInfo } from "./IPlayer";
@@ -80,6 +81,65 @@ export function resolveEffectivePlaybackSurfaceId(displaySurfaceId: string, vpeS
     return vpeSurfaceId;
   }
   return displaySurfaceId;
+}
+
+// ─── VPE 画质增强：按缩放比例自动选档 ──────────────────────────
+
+/** Detail Enhancer 输入分辨率硬约束（来自官方《视频缩放》文档）：宽高上限。 */
+export const VPE_SOURCE_MAX_DIMENSION = 2000;
+/** Detail Enhancer 输入分辨率硬约束：宽高下限。 */
+export const VPE_SOURCE_MIN_DIMENSION = 32;
+/** HIGH 档输入分辨率下限（宽高均需 ≥ 该值）。 */
+export const VPE_HIGH_MIN_DIMENSION = 512;
+/** 缩放比例阈值：达到该值前使用 LOW 档。 */
+export const VPE_SCALE_MEDIUM_THRESHOLD = 1.5;
+/** 缩放比例阈值：达到该值前使用 MEDIUM 档，之后使用 HIGH 档。 */
+export const VPE_SCALE_HIGH_THRESHOLD = 2.0;
+
+/** 显示目标尺寸（物理像素）。 */
+export interface DisplaySize {
+  width: number;
+  height: number;
+}
+
+/**
+ * 按缩放比例解析 VPE 画质增强档位。
+ *
+ * 返回 null 仅表示「无法启用」（源分辨率超出 Detail Enhancer 输入硬约束）；
+ * 其余情况都返回一个档位，最低为 low（用户开启即生效）。
+ * 缩放比例 = max(显示宽/源宽, 显示高/源高)。
+ */
+export function resolveVpeQualityByScaling(
+  srcW: number | undefined,
+  srcH: number | undefined,
+  dispW: number | undefined,
+  dispH: number | undefined
+): VpeQualityLevel | null {
+  // 源宽高都已知（有效正数）时，检查 Detail Enhancer 输入硬约束
+  if (typeof srcW === 'number' && typeof srcH === 'number' && srcW > 0 && srcH > 0) {
+    if (srcW > VPE_SOURCE_MAX_DIMENSION || srcH > VPE_SOURCE_MAX_DIMENSION) {
+      return null;
+    }
+    if (srcW < VPE_SOURCE_MIN_DIMENSION || srcH < VPE_SOURCE_MIN_DIMENSION) {
+      return null;
+    }
+  }
+  // 数据缺失（源宽高或显示尺寸任一缺失/≤0）→ low（最低档保证「开启即生效」）
+  if (!srcW || !srcH || !dispW || !dispH || srcW <= 0 || srcH <= 0 || dispW <= 0 || dispH <= 0) {
+    return 'low';
+  }
+  const scale = Math.max(dispW / srcW, dispH / srcH);
+  if (scale < VPE_SCALE_MEDIUM_THRESHOLD) {
+    return 'low';
+  }
+  if (scale < VPE_SCALE_HIGH_THRESHOLD) {
+    return 'medium';
+  }
+  // scale >= 2.0：HIGH 档要求输入宽高均 ≥ 512，否则退 medium
+  if (srcW >= VPE_HIGH_MIN_DIMENSION && srcH >= VPE_HIGH_MIN_DIMENSION) {
+    return 'high';
+  }
+  return 'medium';
 }
 
 /** 画面比例模式 */
@@ -197,7 +257,12 @@ export class VideoPlayerController {
   /** AI 画质增强开关（仅 avplayer 路径有效） */
   @Trace aiEnhanceEnabled: boolean = true;
   @Trace aiEnhanceRuntimeSupported: boolean = false;
-  @Trace aiEnhanceQuality: VpeQualityLevel = 'medium';
+  /** 当前已解析档位（按缩放比例自动计算，仅用于展示/日志，不再由用户设置）。 */
+  @Trace aiEnhanceQuality: VpeQualityLevel = 'low';
+  /** 显示区域宽度（物理像素，由 XComponent onAreaChange 上报缓存；0 表示尚未上报）。 */
+  private displayWidth: number = 0;
+  /** 显示区域高度（物理像素，由 XComponent onAreaChange 上报缓存；0 表示尚未上报）。 */
+  private displayHeight: number = 0;
 
   private player?: IPlayer;
   readonly unsupportedFormatFallback: UnsupportedFormatFallback = 'mpv';
@@ -613,6 +678,8 @@ export class VideoPlayerController {
     videoData.audioProbeSummary = decision.summary;
     videoData.videoCodec = decision.videoCodecName;
     videoData.videoHdrType = decision.videoHdrType;
+    videoData.videoWidth = decision.videoWidth;
+    videoData.videoHeight = decision.videoHeight;
     if (this.forceMpvForNextInit) {
       this.backend = 'mpv';
       this.forceMpvForNextInit = false;
@@ -631,7 +698,8 @@ export class VideoPlayerController {
       `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
       `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
       `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}, ` +
-      `videoHdrType=${decision.videoHdrType.length > 0 ? decision.videoHdrType : '未知'}`);
+      `videoHdrType=${decision.videoHdrType.length > 0 ? decision.videoHdrType : '未知'}, ` +
+      `videoSize=${decision.videoWidth ?? '?'}x${decision.videoHeight ?? '?'}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);
     for (let i = 0; i < decision.trackAnalyses.length; i++) {
@@ -1080,23 +1148,76 @@ export class VideoPlayerController {
   // ─── VPE AI 画质增强 ──────────────────────────────────────────
 
   /**
-   * 开启/切换 AI 画质增强。
-   * - VPE 已运行：直接更新质量参数（不重建管线，不影响播放）
-   * - VPE 未运行（首次启用）：下次 initPlayer 时才会创建（当前播放不影响）
+   * 开启 AI 画质增强（档位由系统按缩放比例自动选择，用户不指定）。
+   * - VPE 已运行：重算档位并在变化时运行中换档（不重建管线）
+   * - VPE 未运行：下次 initPlayer 时创建，档位由 resolveVpeQualityByScaling 决定
    */
-  setAiEnhance(quality: VpeQualityLevel = 'low'): void {
+  setAiEnhance(): void {
     const runtimeSupported = this.syncAiEnhanceAvailability();
     if (!runtimeSupported) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `[VPE] 运行时不可用，忽略启用请求: quality=${quality}`);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, '[VPE] 运行时不可用，忽略启用请求');
       return;
     }
     this.aiEnhanceEnabled = true;
-    this.aiEnhanceQuality = quality;
     if (VpeEnhancerUtil.isRunning) {
-      VpeEnhancerUtil.updateQuality(quality);
+      // 强制切回自动档位：关闭时 VPE 已切到 NONE 透传，而 aiEnhanceQuality 仍停留在旧档位，
+      // 若不强制则「档位未变化」判断会跳过 updateQuality，导致开启后画面仍无增强。
+      this.applyAutoQuality(true);
     }
-    // VPE 未运行时无需操作，下次播放时 initPlayer 会按 aiEnhanceEnabled/Quality 创建
+    // VPE 未运行时无需操作，下次播放时 initPlayer 会按自动档位创建
+  }
+
+  /**
+   * 由 XComponent onAreaChange 上报显示区域物理像素，供 VPE 自动选档使用。
+   * 显示尺寸后到（晚于 initPlayer）时重算档位，变化则运行中换档。
+   */
+  updateDisplaySize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    const changed = this.displayWidth !== width || this.displayHeight !== height;
+    this.displayWidth = width;
+    this.displayHeight = height;
+    if (changed && VpeEnhancerUtil.isRunning) {
+      this.applyAutoQuality();
+    }
+  }
+
+  /** 计算当前应选档位并应用（运行中换档，不重建管线）。force 时无条件切回自动档位。 */
+  private applyAutoQuality(force: boolean = false): void {
+    const quality = this.resolveAutoQuality();
+    if (quality !== null && (force || quality !== this.aiEnhanceQuality)) {
+      this.aiEnhanceQuality = quality;
+      VpeEnhancerUtil.updateQuality(quality);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[VPE] 自动档位更新: ${quality}${force ? ' (强制)' : ''}`);
+    }
+  }
+
+  /** 按当前源视频分辨率与显示尺寸计算自动档位。 */
+  private resolveAutoQuality(): VpeQualityLevel | null {
+    const srcW = this.currentVideoData?.videoWidth;
+    const srcH = this.currentVideoData?.videoHeight;
+    const disp = this.resolveDisplaySizeForVpe();
+    return resolveVpeQualityByScaling(srcW, srcH, disp?.width, disp?.height);
+  }
+
+  /** 解析显示目标尺寸：优先 XComponent 缓存，其次屏幕物理像素，都无则 undefined。 */
+  private resolveDisplaySizeForVpe(): DisplaySize | undefined {
+    if (this.displayWidth > 0 && this.displayHeight > 0) {
+      const cached: DisplaySize = { width: this.displayWidth, height: this.displayHeight };
+      return cached;
+    }
+    try {
+      const d = display.getDefaultDisplaySync();
+      if (d && d.width > 0 && d.height > 0) {
+        const screen: DisplaySize = { width: d.width, height: d.height };
+        return screen;
+      }
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `[VPE] 读取屏幕尺寸失败: ${String(e)}`);
+    }
+    return undefined;
   }
 
   /**
@@ -1196,10 +1317,18 @@ export class VideoPlayerController {
         `[VPE] 跳过创建: HDR 视频不启用 VPE (hdrType=${videoHdrType})`);
       return displaySurfaceId;
     }
-    const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, this.aiEnhanceQuality);
+    const resolvedQuality = this.resolveAutoQuality();
+    if (resolvedQuality === null) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        '[VPE] 跳过创建: 源分辨率超出 Detail Enhancer 输入约束');
+      return displaySurfaceId;
+    }
+    this.aiEnhanceQuality = resolvedQuality;
+    const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, resolvedQuality);
     const effectiveSurfaceId = resolveEffectivePlaybackSurfaceId(displaySurfaceId, vpeSurfaceId);
     if (effectiveSurfaceId !== displaySurfaceId) {
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[VPE] 管线建立: vpeSurfaceId=${vpeSurfaceId}`);
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[VPE] 管线建立: vpeSurfaceId=${vpeSurfaceId} quality=${resolvedQuality}`);
       return effectiveSurfaceId;
     }
     hilog.warn(CommonConstants.LOG_DOMAIN, TAG, '[VPE] 创建失败，回退到原始 surfaceId');

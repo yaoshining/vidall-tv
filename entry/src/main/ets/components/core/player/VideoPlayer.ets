@@ -470,6 +470,17 @@ export struct VideoPlayer {
             })
             this.controller.initPlayerForSurface(this.data, this.surfaceId)
           })
+          .onAreaChange((_oldValue: Area, newValue: Area) => {
+            // 上报显示区域物理像素给 VPE 自动选档（onAreaChange 返回 VP，需 vp2px 转物理像素）
+            const vpW = typeof newValue.width === 'number' ? newValue.width : 0
+            const vpH = typeof newValue.height === 'number' ? newValue.height : 0
+            const uiCtx = this.getUIContext()
+            const w = uiCtx.vp2px(vpW)
+            const h = uiCtx.vp2px(vpH)
+            if (w > 0 && h > 0) {
+              this.controller.updateDisplaySize(w, h)
+            }
+          })
           .onClick(async () => {
             await this.controller.pause()
             this.controlsDialogController.open()
@@ -522,6 +533,10 @@ export struct VideoPlayer {
               const w = uiCtx.vp2px(vpW)
               const h = uiCtx.vp2px(vpH)
               console.info(`[VideoPlayer] mpv onAreaChange: vp=${vpW}x${vpH} px=${w}x${h} surfaceId=${this.surfaceId.substring(0, 8)}... bound=${this.controller.isMpvSurfaceBound}`)
+              if (w > 0 && h > 0) {
+                // 复用同一显示尺寸缓存，供后端切回 avplayer 时 VPE 自动选档使用
+                this.controller.updateDisplaySize(w, h)
+              }
               if (w > 0 && h > 0 && this.surfaceId.length > 0) {
                 // 无论播放器是否就绪都上报；Controller 会缓存 surface 并在 MPV adapter 创建后绑定。
                 this.controller.setMpvSurface(this.surfaceId, w, h)
