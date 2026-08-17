@@ -476,7 +476,8 @@ export class AudioTrackRoutingService {
       }
       if (probe.success && probe.videoTracks.length > 0) {
         videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
-        probeVideoHdrType = probe.videoTracks[0].hdrType ?? 'SDR';
+        // 未知/缺失统一用空串表示；已知类型为 'SDR' | 'HDR10' | 'HLG' | 'DOLBY_VISION'。
+        probeVideoHdrType = probe.videoTracks[0].hdrType ?? '';
         for (let i = 0; i < probe.videoTracks.length; i++) {
           const v: ProbeVideo = { codec: (probe.videoTracks[i].codecName ?? '').toLowerCase() };
           probeVideoTracks.push(v);

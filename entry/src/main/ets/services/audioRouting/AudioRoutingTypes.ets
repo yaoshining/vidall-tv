@@ -89,7 +89,7 @@ export interface AudioRoutingDecision {
   precheckProbeError: string;
   /** 视频编码名称（来自 ffprobe 首条 video track）。 */
   videoCodecName: string;
-  /** 视频 HDR 类型（来自 ffprobe 首条 video track），'' 表示未知/SDR。 */
+  /** 视频 HDR 类型（来自 ffprobe 首条 video track）：'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'，'' 表示未知（探测失败/无视频轨）。 */
   videoHdrType: string;
   /** 整组音轨分析结果。 */
   trackAnalyses: AudioTrackAnalysis[];

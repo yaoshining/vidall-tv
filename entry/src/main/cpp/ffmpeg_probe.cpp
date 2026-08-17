@@ -34,6 +34,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
+#include <libavutil/dovi_meta.h>
 #include <libavutil/error.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
@@ -156,6 +157,20 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
       AppendJsonIntField(json, "color_transfer", static_cast<int64_t>(codecpar->color_trc), firstField);
       AppendJsonIntField(json, "color_space", static_cast<int64_t>(codecpar->color_space), firstField);
       AppendJsonIntField(json, "color_range", static_cast<int64_t>(codecpar->color_range), firstField);
+      // Dolby Vision 配置（AV_PKT_DATA_DOVI_CONF coded side data）：
+      // 输出 dv_profile / dv_level / dv_bl_signal_compatibility_id，供 parseHdrType 识别 DV。
+      // 注意：FFmpeg 8 的 AVStream 已不再公开 side_data，DOVI 配置只能从 codecpar->coded_side_data 读取。
+      const AVPacketSideData *doviSideData = av_packet_side_data_get(
+          codecpar->coded_side_data, codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+      if (doviSideData != nullptr && doviSideData->data != nullptr &&
+          doviSideData->size >= sizeof(AVDOVIDecoderConfigurationRecord)) {
+        const AVDOVIDecoderConfigurationRecord *dovi =
+            reinterpret_cast<const AVDOVIDecoderConfigurationRecord *>(doviSideData->data);
+        AppendJsonIntField(json, "dv_profile", dovi->dv_profile, firstField);
+        AppendJsonIntField(json, "dv_level", dovi->dv_level, firstField);
+        AppendJsonIntField(json, "dv_bl_signal_compatibility_id",
+            dovi->dv_bl_signal_compatibility_id, firstField);
+      }
     } else if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (codecpar->sample_rate > 0) {
         AppendJsonStringField(json, "sample_rate", std::to_string(codecpar->sample_rate), firstField);

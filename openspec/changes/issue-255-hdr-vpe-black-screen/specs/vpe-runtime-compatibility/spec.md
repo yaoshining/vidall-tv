@@ -31,6 +31,12 @@
 - **WHEN** 当前播放视频为 HDR
 - **THEN** 播放器设置页 SHALL NOT 展示可操作的「画质增强」选项
 
+#### Scenario: SDR 切换到 HDR 时销毁残留 VPE
+- **WHEN** 播放源从 SDR 切换到 HDR
+- **AND** 之前 SDR 会话已建立 VPE 增强管线
+- **THEN** 系统 SHALL 销毁旧的 VPE 实例后再跳过新会话的 VPE 创建
+- **AND** 新会话使用原始显示 surface 走 AVPlayer 原生渲染
+
 ### Requirement: ffprobe 探测结果 SHALL 输出视频色彩元数据
 
 native ffprobe 探测 SHALL 在视频流中输出色彩元数据字段，供上层判定 HDR 类型与色彩空间。
@@ -39,3 +45,8 @@ native ffprobe 探测 SHALL 在视频流中输出色彩元数据字段，供上�
 - **WHEN** ffprobe 探测一个包含视频流的媒体
 - **THEN** 探测结果的视频流 SHALL 包含 `color_transfer`（含 SMPTE ST 2084 / ARIB STD-B67 对应的数值）与 `color_primaries` / `color_space` / `color_range` / `pix_fmt` 等字段
 - **AND** 上层 SHALL 可依据这些字段判定 HDR10 / HLG / SDR
+
+#### Scenario: Dolby Vision 视频流输出 DOVI 配置
+- **WHEN** ffprobe 探测到包含 Dolby Vision 配置（`AV_PKT_DATA_DOVI_CONF`）的视频流
+- **THEN** 探测结果 SHALL 包含 `dv_profile` / `dv_level` / `dv_bl_signal_compatibility_id` 字段
+- **AND** 上层 SHALL 可依据 `dv_profile` 判定 Dolby Vision

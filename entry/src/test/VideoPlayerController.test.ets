@@ -23,6 +23,7 @@ interface VideoPlayerControllerAccessor {
   surfaceId: string
   player?: IPlayer
   currentVideoData?: VideoData
+  aiEnhanceRuntimeSupported: boolean
   currentOriginalVideoSrc: string
   playbackSessionId: number
   consumedReadyResumeToken: string
@@ -580,6 +581,19 @@ export default function videoPlayerControllerTest() {
       expect(isHdrVideo('SDR')).assertFalse()
       expect(isHdrVideo('')).assertFalse()
       expect(isHdrVideo(undefined)).assertFalse()
+    })
+
+    it('controller 对 HDR 视频隐藏画质增强设置、对 SDR 显示', 0, () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.aiEnhanceRuntimeSupported = true
+      accessor.backend = 'avplayer'
+      const videoData = buildVideoData('hdr-sample')
+      videoData.videoHdrType = 'HDR10'
+      accessor.currentVideoData = videoData
+      expect(controller.shouldShowAiEnhanceSettings()).assertFalse()
+      videoData.videoHdrType = 'SDR'
+      expect(controller.shouldShowAiEnhanceSettings()).assertTrue()
     })
 
     it('VPE 未提供输入 surface 时回退到基础播放 surface', 0, () => {

@@ -631,7 +631,7 @@ export class VideoPlayerController {
       `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
       `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
       `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}, ` +
-      `videoHdrType=${decision.videoHdrType || 'SDR'}`);
+      `videoHdrType=${decision.videoHdrType.length > 0 ? decision.videoHdrType : '未知'}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);
     for (let i = 0; i < decision.trackAnalyses.length; i++) {
@@ -1188,6 +1188,10 @@ export class VideoPlayerController {
       return displaySurfaceId;
     }
     if (isHdrVideo(videoHdrType)) {
+      // SDR → HDR 切换时清理旧增强器，避免旧实例继续持有已释放的 surface。
+      if (VpeEnhancerUtil.isRunning) {
+        VpeEnhancerUtil.destroyEnhancer();
+      }
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[VPE] 跳过创建: HDR 视频不启用 VPE (hdrType=${videoHdrType})`);
       return displaySurfaceId;

@@ -29,7 +29,7 @@ FFmpeg `AVCodecParameters.color_trc` 是 HDR 的标准判定依据：`AVCOL_TRC_
 ### 2. native 侧只补输出、不改 FFmpeg
 `BuildProbeJson` 追加 `pix_fmt`/`profile`/`bits_per_raw_sample`/`color_primaries`/`color_transfer`/`color_space`/`color_range`，全部来自 `AVCodecParameters` 已有字段。
 - **为什么**：这些字段在 FFmpeg 8 的 `AVCodecParameters` 中已存在，`av_get_pix_fmt_name` / `avcodec_profile_name` 也已导出；只需读取并写入 JSON，无需重编 `.so`。
-- **边界**：本捆绑 FFmpeg 的 `AVStream` 无 `side_data`、无 `av_stream_get_side_data`，故 DV 的 `dv_profile` 侧数据无法输出。DV 依赖 `color_trc`（通常 16/18）与 `profile` 字符串含 "Dolby Vision" 兜底，best-effort。
+- **Dolby Vision**：本捆绑 FFmpeg 8 的 `AVStream` 已不再公开 `side_data`，但 DOVI 配置可从 `AVCodecParameters.coded_side_data` 读取（`AV_PKT_DATA_DOVI_CONF` → `AVDOVIDecoderConfigurationRecord`），输出 `dv_profile` / `dv_level` / `dv_bl_signal_compatibility_id`，使 `parseHdrType` 能识别仅含 DOVI 配置（无 HDR10 BL）的 DV 内容。
 
 ### 3. HDR 类型经 routing decision 透传（不另起 probe）
 HDR 类型随 `resolveRoutingDecision` 内的既有 ffprobe 结果（`probe.videoTracks[0]`）提取，沿 `AudioRoutingDecision.videoHdrType` → `PlaybackBackendDecision.videoHdrType` → `VideoData.videoHdrType` 传递。
@@ -39,6 +39,7 @@ HDR 类型随 `resolveRoutingDecision` 内的既有 ffprobe 结果（`probe.vide
 ### 4. VPE 门控放在 `tryCreateVpeEnhancer`（按当前视频内容）
 在 `tryCreateVpeEnhancer` 内，`isHdrVideo(this.currentVideoData?.videoHdrType)` 为 true 时直接返回 `displaySurfaceId`。
 - **为什么**：VPE 只对 `backend==='avplayer'` 生效，且 `currentVideoData` 在 `initPlayer` 内已同步赋值；门控点单一、覆盖所有 avplayer 入口。
+- **SDR→HDR 切换清理**：HDR 分支在返回前若检测到 VPE 正在运行则调用 `destroyEnhancer()`，避免旧增强器继续持有已释放的 surface（此时旧 player 已在 `initPlayer` 中释放，销毁安全）。
 - **不强制改写 `aiEnhanceEnabled`**：HDR 是「当前视频内容」属性，不是运行时能力或用户偏好；跳过 VPE 是每会话行为，切回 SDR 自动恢复。设置区通过 `shouldShowAiEnhanceSettings()` 对 HDR 隐藏，避免用户看到「已开启」的误导。
 
 ### 5. 纯函数 `isHdrVideo` / 扩展 `shouldShowAiEnhanceSettingsByRuntime`
@@ -48,5 +49,5 @@ HDR 类型随 `resolveRoutingDecision` 内的既有 ffprobe 结果（`probe.vide
 ## Risks / Trade-offs
 
 - **AVPlayer 原生 HDR 渲染能力未经真机确认**：本变更假设「仅 VPE 破坏渲染」。若真机证明 AVPlayer 原生也黑屏，需启用方向 2（HDR 路由 mpv，见关联 issue）。
-- **DV 识别不精确**：无 side data 时 DV 可能被归为 HDR10（`color_trc=16`），结果仍会跳过 VPE，行为安全。
+- **DV 识别依赖 coded_side_data 被填充**：DOVI 配置在 `avformat_find_stream_info` 后应写入 `codecpar->coded_side_data`；若某容器/样本未填充，仍回退 `color_trc`（HDR10 BL 时=16）与 `profile` 字符串兜底，结果仍会跳过 VPE，行为安全。
 - **JSON 体积微增**：每个视频流多约 7 个字段，可忽略。
