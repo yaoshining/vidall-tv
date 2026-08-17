@@ -83,6 +83,24 @@ jobs:
           "$OHPM_BIN" install
           test -d "$WORK_DIR/oh_modules/@ibestservices/ibest-ui"
 
+      - name: 恢复签名证书
+        shell: bash
+        env:
+          DEBUG_CERT_TGZ: ${{ secrets.DEBUG_CERT_TGZ }}
+        run: |
+          set -euo pipefail
+          cd "$WORK_DIR"
+          # debug 签名证书不提交仓库，构建前从 secret 解出到 certs/debug/。
+          # build-profile.json5 已改为相对路径 certs/debug/...，此处还原后即可签名。
+          if [ -n "$DEBUG_CERT_TGZ" ]; then
+            echo "$DEBUG_CERT_TGZ" | base64 -d | tar xzf -
+            test -f certs/debug/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.p12 \
+              || (echo "⚠️ 证书解包失败" && exit 1)
+            echo "✅ 签名证书已就绪"
+          else
+            echo "⚠️ 未配置 DEBUG_CERT_TGZ secret，签名可能失败"
+          fi
+
       - name: 编译单元测试（UnitTestBuild）
         shell: bash
         env:

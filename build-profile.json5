@@ -5,12 +5,12 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "/Users/yaoshining/.ohos/config/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.cer",
+          "certpath": "certs/debug/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.cer",
           "keyAlias": "debugKey",
           "keyPassword": "0000001BDD0FFC0566F7AC27232083718D91C70635EEAD560975780CBB12406AC93756885151A9A22BF414",
-          "profile": "/Users/yaoshining/.ohos/config/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.p7b",
+          "profile": "certs/debug/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "/Users/yaoshining/.ohos/config/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.p12",
+          "storeFile": "certs/debug/default_yaoshining-solid-bassoon_xyfb_gDCc5ZwgcPn2vF1CwBng6z8np3rIReo3ucA56o=.p12",
           "storePassword": "0000001B889DBB21889593B34454AEF19DEF1BE22B1A1382F897A2B33F21BC5AEE92624EEB8B9CAAA252AC"
         }
       },
