@@ -125,6 +125,7 @@ export class PlaybackBackendService {
         precheckProbeFailed: decision.precheckProbeFailed,
         precheckProbeError: decision.precheckProbeError,
         videoCodecName: decision.videoCodecName,
+        videoHdrType: decision.videoHdrType,
         trackAnalyses: decision.trackAnalyses
       };
     } catch (e) {

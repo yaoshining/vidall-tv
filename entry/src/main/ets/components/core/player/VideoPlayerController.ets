@@ -62,8 +62,17 @@ export function resolveAiEnhanceEnabledByRuntime(runtimeSupported: boolean, requ
   return runtimeSupported && requestedEnabled;
 }
 
-export function shouldShowAiEnhanceSettingsByRuntime(runtimeSupported: boolean, backend: PlayerBackend): boolean {
-  return runtimeSupported && backend === 'avplayer';
+/** 判断视频 HDR 类型是否属于 HDR（HDR10/HLG/Dolby Vision）。undefined/''/'SDR' 均为 false。 */
+export function isHdrVideo(hdrType: string | undefined): boolean {
+  return hdrType === 'HDR10' || hdrType === 'HLG' || hdrType === 'DOLBY_VISION';
+}
+
+export function shouldShowAiEnhanceSettingsByRuntime(
+  runtimeSupported: boolean,
+  backend: PlayerBackend,
+  isHdr: boolean = false
+): boolean {
+  return runtimeSupported && backend === 'avplayer' && !isHdr;
 }
 
 export function resolveEffectivePlaybackSurfaceId(displaySurfaceId: string, vpeSurfaceId: string): string {
@@ -603,6 +612,7 @@ export class VideoPlayerController {
     videoData.ffmpegDecodeChannels = decision.preferredChannels;
     videoData.audioProbeSummary = decision.summary;
     videoData.videoCodec = decision.videoCodecName;
+    videoData.videoHdrType = decision.videoHdrType;
     if (this.forceMpvForNextInit) {
       this.backend = 'mpv';
       this.forceMpvForNextInit = false;
@@ -620,7 +630,8 @@ export class VideoPlayerController {
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
       `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
-      `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}`);
+      `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}, ` +
+      `videoHdrType=${decision.videoHdrType.length > 0 ? decision.videoHdrType : '未知'}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);
     for (let i = 0; i < decision.trackAnalyses.length; i++) {
@@ -1105,7 +1116,11 @@ export class VideoPlayerController {
   }
 
   shouldShowAiEnhanceSettings(): boolean {
-    return shouldShowAiEnhanceSettingsByRuntime(this.aiEnhanceRuntimeSupported, this.backend);
+    return shouldShowAiEnhanceSettingsByRuntime(
+      this.aiEnhanceRuntimeSupported,
+      this.backend,
+      isHdrVideo(this.currentVideoData?.videoHdrType)
+    );
   }
 
   private syncAiEnhanceAvailability(): boolean {
@@ -1164,11 +1179,21 @@ export class VideoPlayerController {
    */
   private tryCreateVpeEnhancer(displaySurfaceId: string): string {
     const runtimeSupported = this.syncAiEnhanceAvailability();
+    const videoHdrType = this.currentVideoData?.videoHdrType;
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[VPE] tryCreate: supported=${runtimeSupported} enabled=${this.aiEnhanceEnabled} backend=${this.backend} quality=${this.aiEnhanceQuality}`);
     if (!runtimeSupported || !this.aiEnhanceEnabled || this.backend !== 'avplayer') {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[VPE] 跳过创建: supported=${runtimeSupported} enabled=${this.aiEnhanceEnabled} backend=${this.backend}`);
+      return displaySurfaceId;
+    }
+    if (isHdrVideo(videoHdrType)) {
+      // SDR → HDR 切换时清理旧增强器，避免旧实例继续持有已释放的 surface。
+      if (VpeEnhancerUtil.isRunning) {
+        VpeEnhancerUtil.destroyEnhancer();
+      }
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[VPE] 跳过创建: HDR 视频不启用 VPE (hdrType=${videoHdrType})`);
       return displaySurfaceId;
     }
     const vpeSurfaceId = VpeEnhancerUtil.createEnhancer(displaySurfaceId, this.aiEnhanceQuality);

@@ -5,7 +5,8 @@ import {
   PlayerBackend,
   resolveAiEnhanceEnabledByRuntime,
   shouldShowAiEnhanceSettingsByRuntime,
-  resolveEffectivePlaybackSurfaceId
+  resolveEffectivePlaybackSurfaceId,
+  isHdrVideo
 } from '../main/ets/components/core/player/VideoPlayerController';
 import { IPlayer, SubtitleInfo, TrackInfo } from '../main/ets/components/core/player/IPlayer';
 import {
@@ -22,6 +23,7 @@ interface VideoPlayerControllerAccessor {
   surfaceId: string
   player?: IPlayer
   currentVideoData?: VideoData
+  aiEnhanceRuntimeSupported: boolean
   currentOriginalVideoSrc: string
   playbackSessionId: number
   consumedReadyResumeToken: string
@@ -564,6 +566,34 @@ export default function videoPlayerControllerTest() {
       expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer')).assertTrue()
       expect(shouldShowAiEnhanceSettingsByRuntime(false, 'avplayer')).assertFalse()
       expect(shouldShowAiEnhanceSettingsByRuntime(true, 'mpv')).assertFalse()
+    })
+
+    it('HDR 视频不显示画质增强设置', 0, () => {
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer', true)).assertFalse()
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'avplayer', false)).assertTrue()
+      expect(shouldShowAiEnhanceSettingsByRuntime(true, 'mpv', true)).assertFalse()
+    })
+
+    it('isHdrVideo 正确判定 HDR 类型', 0, () => {
+      expect(isHdrVideo('HDR10')).assertTrue()
+      expect(isHdrVideo('HLG')).assertTrue()
+      expect(isHdrVideo('DOLBY_VISION')).assertTrue()
+      expect(isHdrVideo('SDR')).assertFalse()
+      expect(isHdrVideo('')).assertFalse()
+      expect(isHdrVideo(undefined)).assertFalse()
+    })
+
+    it('controller 对 HDR 视频隐藏画质增强设置、对 SDR 显示', 0, () => {
+      const controller = new TestVideoPlayerController()
+      const accessor = accessController(controller)
+      accessor.aiEnhanceRuntimeSupported = true
+      accessor.backend = 'avplayer'
+      const videoData = buildVideoData('hdr-sample')
+      videoData.videoHdrType = 'HDR10'
+      accessor.currentVideoData = videoData
+      expect(controller.shouldShowAiEnhanceSettings()).assertFalse()
+      videoData.videoHdrType = 'SDR'
+      expect(controller.shouldShowAiEnhanceSettings()).assertTrue()
     })
 
     it('VPE 未提供输入 surface 时回退到基础播放 surface', 0, () => {

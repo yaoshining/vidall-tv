@@ -34,7 +34,9 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/dict.h>
+#include <libavutil/dovi_meta.h>
 #include <libavutil/error.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/time.h>
 #include <libswscale/swscale.h>
 }
@@ -139,6 +141,35 @@ static std::string BuildProbeJson(AVFormatContext *formatContext) {
       AppendJsonStringField(json, "avg_frame_rate", RationalToString(stream->avg_frame_rate), firstField);
       if (codecpar->bit_rate > 0) {
         AppendJsonStringField(json, "bit_rate", std::to_string(codecpar->bit_rate), firstField);
+      }
+      // 视频色彩元数据：供 TS 侧 FfprobeUtil.parseHdrType 判定 HDR。
+      // color_transfer 是关键字段：AVCOL_TRC_SMPTE2084(16)=HDR10、AVCOL_TRC_ARIB_STD_B67(18)=HLG。
+      const char *pixFmtName = av_get_pix_fmt_name(static_cast<AVPixelFormat>(codecpar->format));
+      if (pixFmtName != nullptr) {
+        AppendJsonStringField(json, "pix_fmt", std::string(pixFmtName), firstField);
+      }
+      const char *profileName = avcodec_profile_name(codecpar->codec_id, codecpar->profile);
+      if (profileName != nullptr) {
+        AppendJsonStringField(json, "profile", std::string(profileName), firstField);
+      }
+      AppendJsonIntField(json, "bits_per_raw_sample", codecpar->bits_per_raw_sample, firstField);
+      AppendJsonIntField(json, "color_primaries", static_cast<int64_t>(codecpar->color_primaries), firstField);
+      AppendJsonIntField(json, "color_transfer", static_cast<int64_t>(codecpar->color_trc), firstField);
+      AppendJsonIntField(json, "color_space", static_cast<int64_t>(codecpar->color_space), firstField);
+      AppendJsonIntField(json, "color_range", static_cast<int64_t>(codecpar->color_range), firstField);
+      // Dolby Vision 配置（AV_PKT_DATA_DOVI_CONF coded side data）：
+      // 输出 dv_profile / dv_level / dv_bl_signal_compatibility_id，供 parseHdrType 识别 DV。
+      // 注意：FFmpeg 8 的 AVStream 已不再公开 side_data，DOVI 配置只能从 codecpar->coded_side_data 读取。
+      const AVPacketSideData *doviSideData = av_packet_side_data_get(
+          codecpar->coded_side_data, codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+      if (doviSideData != nullptr && doviSideData->data != nullptr &&
+          doviSideData->size >= sizeof(AVDOVIDecoderConfigurationRecord)) {
+        const AVDOVIDecoderConfigurationRecord *dovi =
+            reinterpret_cast<const AVDOVIDecoderConfigurationRecord *>(doviSideData->data);
+        AppendJsonIntField(json, "dv_profile", dovi->dv_profile, firstField);
+        AppendJsonIntField(json, "dv_level", dovi->dv_level, firstField);
+        AppendJsonIntField(json, "dv_bl_signal_compatibility_id",
+            dovi->dv_bl_signal_compatibility_id, firstField);
       }
     } else if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (codecpar->sample_rate > 0) {
