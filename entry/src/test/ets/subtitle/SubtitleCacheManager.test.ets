@@ -67,10 +67,9 @@ function cleanSourceDir(filesDir: string, sourceType: string, sourceId: string):
 // ─────────────────────────────────────────────
 // 获取可写目录
 // ─────────────────────────────────────────────
-// 设备端测试中 getAppContext().filesDir 返回空字符串（ApplicationContext 无沙盒路径），
-// getCurrentTopAbility().context.filesDir 也为空。唯一可靠来源是通过 TestAbility 的
-// onCreate 将 this.context 存入 globalThis.testAbilityContext（CI workflow 已注入）。
-// 如果 globalThis 上无 testAbilityContext（如本地预览模式），则降级到 getAppContext。
+// 设备端测试中 getAppContext().filesDir / getCurrentTopAbility().context.filesDir
+// 返回空字符串。唯一可靠来源是通过 TestAbility 的 onCreate 将 this.context
+// 存入 globalThis.testAbilityContext（CI workflow 已注入）。
 // ─────────────────────────────────────────────
 
 interface TestAbilityContext {
@@ -89,16 +88,10 @@ function resolveFilesDir(): string {
   if (cachedFilesDir.length > 0) {
     return cachedFilesDir;
   }
-  // 优先从 TestAbility 注入的 context 获取
+  // 从 TestAbility 注入的 context 获取（CI workflow 在 UnitTestBuild 前注入）
   const g = globalThis as GlobalThisWithTestContext;
   if (g.testAbilityContext && g.testAbilityContext.filesDir.length > 0) {
     cachedFilesDir = g.testAbilityContext.filesDir;
-    return cachedFilesDir;
-  }
-  // 降级：尝试 getAppContext（本地开发/预览模式可能有效）
-  const appCtx = getAppContext();
-  if (appCtx.filesDir.length > 0) {
-    cachedFilesDir = appCtx.filesDir;
     return cachedFilesDir;
   }
   // 所有途径均失败，返回空字符串（测试会因路径无效而报错，便于诊断）
