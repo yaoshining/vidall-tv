@@ -124,5 +124,12 @@
     "lines_pct": 29.08,
     "functions_pct": 25.44,
     "branches_pct": 23.55
+  },
+  {
+    "run_number": 364,
+    "timestamp": "2026-08-18T11:24:40Z",
+    "lines_pct": 29.08,
+    "functions_pct": 25.44,
+    "branches_pct": 23.55
   }
 ]
