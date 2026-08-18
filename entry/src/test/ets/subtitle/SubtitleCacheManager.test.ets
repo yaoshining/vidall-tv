@@ -70,11 +70,9 @@ function cleanSourceDir(filesDir: string, sourceType: string, sourceId: string):
 // ─────────────────────────────────────────────
 // 设备端测试中 getAppContext().filesDir 等属性可能返回空字符串
 // （ApplicationContext 在测试环境中无完整沙盒路径）。
-// 当 context API 均返回空时，fallback 到设备端已知沙盒路径。
+// 当 context API 均返回空时，fallback 到设备端已知沙盒路径，
+// 并手动创建 files 子目录、验证可写性。
 // ─────────────────────────────────────────────
-
-/** HarmonyOS entry 模块在设备端的 filesDir 沙盒路径（固定值） */
-const DEVICE_FILES_DIR = '/data/storage/el2/base/haps/entry/files';
 
 let cachedFilesDir: string = '';
 
@@ -98,8 +96,37 @@ function resolveFilesDir(): string {
     // getAppContext 不可用，继续 fallback
   }
 
-  // 路径2：使用设备端已知沙盒路径
-  cachedFilesDir = DEVICE_FILES_DIR;
+  // 路径2：使用设备端已知沙盒路径，并确保 files 子目录存在
+  const sandboxBase = '/data/storage/el2/base/haps/entry';
+  const filesDir = `${sandboxBase}/files`;
+  try {
+    // 确保 filesDir 存在（HAP 安装后 sandboxBase 已由系统创建，但 files 子目录可能尚未创建）
+    if (!fs.accessSync(filesDir)) {
+      fs.mkdirSync(filesDir, true);
+    }
+    // 验证可写性
+    const testFile = `${filesDir}/.write_test`;
+    const fd = fs.openSync(testFile, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE);
+    fs.closeSync(fd);
+    fs.unlinkSync(testFile);
+    cachedFilesDir = filesDir;
+  } catch (e) {
+    // sandboxBase 路径不可用，尝试 cacheDir
+    const cacheDir = `${sandboxBase}/cache`;
+    try {
+      if (!fs.accessSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, true);
+      }
+      const testFile = `${cacheDir}/.write_test`;
+      const fd = fs.openSync(testFile, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE);
+      fs.closeSync(fd);
+      fs.unlinkSync(testFile);
+      cachedFilesDir = cacheDir;
+    } catch {
+      // 完全不可用，返回空字符串（测试会失败，但至少能诊断）
+      return '';
+    }
+  }
   return cachedFilesDir;
 }
 
