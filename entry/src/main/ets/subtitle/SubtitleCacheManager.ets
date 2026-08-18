@@ -1,4 +1,5 @@
 import fs from '@ohos.file.fs';
+import util from '@ohos.util';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { sha256Hex, buildSubtitleDir, buildSubtitlePath } from './SubtitleDownloader';
 
@@ -101,13 +102,10 @@ export class SubtitleCacheManager {
       }
       const file = fs.openSync(metaPath, fs.OpenMode.READ_ONLY);
       const buf = new ArrayBuffer(stat.size);
-      fs.readSync(file.fd, buf);
+      const readLen = fs.readSync(file.fd, buf);
       fs.closeSync(file);
-      const bytes = new Uint8Array(buf);
-      let text = '';
-      for (let i = 0; i < bytes.length; i++) {
-        text += String.fromCharCode(bytes[i]);
-      }
+      const decoder = new util.TextDecoder('utf-8', { fatal: false, ignoreBOM: true });
+      const text = decoder.decodeToString(new Uint8Array(buf, 0, readLen));
       const parsed = JSON.parse(text) as Record<string, string | CachedSubtitleEntry[]>;
       if (!parsed['videoPath'] || !parsed['subtitles']) {
         return null;
@@ -131,10 +129,12 @@ export class SubtitleCacheManager {
     const metaPath = `${dir}/${METADATA_FILE_NAME}`;
     this.mkdirp(dir);
     const text = JSON.stringify(metadata, null, 2);
+    const encoder = new util.TextEncoder();
+    const uint8Array = encoder.encodeInto(text);
     let file: fs.File | null = null;
     try {
       file = fs.openSync(metaPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      fs.writeSync(file.fd, text);
+      fs.writeSync(file.fd, uint8Array.buffer);
     } catch (e) {
       const be = e as BusinessError;
       throw new Error(`[SubtitleCacheManager] writeMetadata 失败: ${be.message}`);
