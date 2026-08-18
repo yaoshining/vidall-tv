@@ -77,9 +77,16 @@ async function resolveFilesDir(): Promise<string> {
     return cachedFilesDir;
   }
   const delegator = abilityDelegatorRegistry.getAbilityDelegator();
+  // getAppContext().filesDir 在测试环境返回空字符串，
+  // 需通过 getCurrentTopAbility() 获取 UIAbility 的 context
+  const appCtx = delegator.getAppContext() as Context;
+  console.info(`[TEST] getAppContext().filesDir="${appCtx.filesDir}"`);
   const ability = await delegator.getCurrentTopAbility();
-  const ctx = ability.context as Context;
+  const abilityCtx = ability.context;
+  console.info(`[TEST] ability.context.filesDir="${abilityCtx.filesDir}"`);
+  const ctx = abilityCtx as Context;
   cachedFilesDir = ctx.filesDir;
+  console.info(`[TEST] resolved filesDir="${cachedFilesDir}"`);
   return cachedFilesDir;
 }
 
