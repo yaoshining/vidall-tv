@@ -584,9 +584,9 @@ export default function videoPlayerControllerTest() {
       expect(isHdrVideo(undefined)).assertFalse()
     })
 
-    it('resolveVpeQualityByScaling 按缩放比例自动选档', 0, () => {
-      // 大幅放大（源 960x540 → 显示 3840x2160，scale=4）→ high
-      expect(resolveVpeQualityByScaling(960, 540, 3840, 2160)).assertEqual('high')
+    it('resolveVpeQualityByScaling 按缩放比例自动选档（最高 medium）', 0, () => {
+      // 大幅放大（源 960x540 → 显示 3840x2160，scale=4）→ medium（最高档）
+      expect(resolveVpeQualityByScaling(960, 540, 3840, 2160)).assertEqual('medium')
       // 中等放大（源 2560x1440 → 显示 3840x2160，scale=1.5）→ medium
       expect(resolveVpeQualityByScaling(2560, 1440, 3840, 2160)).assertEqual('medium')
       // 轻微放大（源 1920x1080 → 显示 2560x1440，scale≈1.33）→ low
@@ -602,11 +602,6 @@ export default function videoPlayerControllerTest() {
       expect(resolveVpeQualityByScaling(3840, 2160, 3840, 2160)).assertEqual(null)
       // 低于下限（16x16）
       expect(resolveVpeQualityByScaling(16, 16, 1920, 1080)).assertEqual(null)
-    })
-
-    it('resolveVpeQualityByScaling 大幅放大但源小于 HIGH 下限退 medium', 0, () => {
-      // 源 320x180（<512）→ 显示 3840x2160，scale=12 → medium
-      expect(resolveVpeQualityByScaling(320, 180, 3840, 2160)).assertEqual('medium')
     })
 
     it('resolveVpeQualityByScaling 数据缺失返回 low（保证开启即生效）', 0, () => {

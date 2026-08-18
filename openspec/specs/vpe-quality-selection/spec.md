@@ -1,7 +1,8 @@
 # vpe-quality-selection Specification
 
 ## Purpose
-TBD - created by archiving change vpe-auto-quality-by-scaling. Update Purpose after archive.
+
+定义 VPE（Detail Enhancer）画质增强档位的自动选择策略：按源视频与显示分辨率的缩放比例自动选择档位（LOW/MEDIUM，最高 MEDIUM），取代用户手动选择档位；用户仅保留「关闭/开启」开关。最高档为 MEDIUM 是为了保留鸿鹄画质芯片的启动动画反馈（HIGH 档无该动画且肉眼增益难辨，用户感受优先）。
 ## Requirements
 ### Requirement: 用户开启画质增强 SHALL 必启用 VPE（至少低档）
 
@@ -31,23 +32,15 @@ TBD - created by archiving change vpe-auto-quality-by-scaling. Update Purpose af
 
 ### Requirement: 画质增强档位 SHALL 按缩放比例自动选择
 
-系统 SHALL 根据源视频分辨率与显示分辨率计算缩放比例，自动选择画质增强档位（LOW/MEDIUM/HIGH），取代用户手动选择档位。
+系统 SHALL 根据源视频分辨率与显示分辨率计算缩放比例，自动选择画质增强档位（LOW/MEDIUM，最高 MEDIUM），取代用户手动选择档位。
 
-#### Scenario: 大幅放大选择高质量档
-- **WHEN** 源视频宽高在 (32,2000] 内，缩放比例 ≥ 2.0，且源宽高均 ≥ 512
-- **THEN** 系统 SHALL 使用 HIGH 档建立 VPE 增强管线
-
-#### Scenario: 中等放大选择中质量档
-- **WHEN** 源视频宽高在 (32,2000] 内，且缩放比例在 [1.5, 2.0) 区间
+#### Scenario: 达到缩放阈值选择中质量档
+- **WHEN** 源视频宽高在 (32,2000] 内，且缩放比例 ≥ 1.5
 - **THEN** 系统 SHALL 使用 MEDIUM 档建立 VPE 增强管线
 
-#### Scenario: 轻微放大或未放大选择低质量档
+#### Scenario: 未达到缩放阈值选择低质量档
 - **WHEN** 源视频宽高在 (32,2000] 内，且缩放比例 < 1.5（含 1:1 与缩小）
 - **THEN** 系统 SHALL 使用 LOW 档建立 VPE 增强管线
-
-#### Scenario: 大幅放大但源分辨率低于 HIGH 档下限
-- **WHEN** 缩放比例 ≥ 2.0，但源宽或高 < 512
-- **THEN** 系统 SHALL 使用 MEDIUM 档（HIGH 档输入要求 [512,2000]，源过小不可用）
 
 #### Scenario: 自动选档与 HDR 门控叠加
 - **WHEN** 当前视频为 HDR（HDR10/HLG/DV）

@@ -89,12 +89,8 @@ export function resolveEffectivePlaybackSurfaceId(displaySurfaceId: string, vpeS
 export const VPE_SOURCE_MAX_DIMENSION = 2000;
 /** Detail Enhancer 输入分辨率硬约束：宽高下限。 */
 export const VPE_SOURCE_MIN_DIMENSION = 32;
-/** HIGH 档输入分辨率下限（宽高均需 ≥ 该值）。 */
-export const VPE_HIGH_MIN_DIMENSION = 512;
-/** 缩放比例阈值：达到该值前使用 LOW 档。 */
+/** 缩放比例阈值：达到该值前使用 LOW 档，之后使用 MEDIUM 档（最高档，保留鸿鹄动画）。 */
 export const VPE_SCALE_MEDIUM_THRESHOLD = 1.5;
-/** 缩放比例阈值：达到该值前使用 MEDIUM 档，之后使用 HIGH 档。 */
-export const VPE_SCALE_HIGH_THRESHOLD = 2.0;
 
 /** 显示目标尺寸（物理像素）。 */
 export interface DisplaySize {
@@ -108,6 +104,8 @@ export interface DisplaySize {
  * 返回 null 仅表示「无法启用」（源分辨率超出 Detail Enhancer 输入硬约束）；
  * 其余情况都返回一个档位，最低为 low（用户开启即生效）。
  * 缩放比例 = max(显示宽/源宽, 显示高/源高)。
+ *
+ * 最高档为 medium：high 档无鸿鹄画质芯片启动动画且肉眼增益难辨，用户感受优先。
  */
 export function resolveVpeQualityByScaling(
   srcW: number | undefined,
@@ -131,13 +129,6 @@ export function resolveVpeQualityByScaling(
   const scale = Math.max(dispW / srcW, dispH / srcH);
   if (scale < VPE_SCALE_MEDIUM_THRESHOLD) {
     return 'low';
-  }
-  if (scale < VPE_SCALE_HIGH_THRESHOLD) {
-    return 'medium';
-  }
-  // scale >= 2.0：HIGH 档要求输入宽高均 ≥ 512，否则退 medium
-  if (srcW >= VPE_HIGH_MIN_DIMENSION && srcH >= VPE_HIGH_MIN_DIMENSION) {
-    return 'high';
   }
   return 'medium';
 }
