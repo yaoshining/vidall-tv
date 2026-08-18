@@ -67,6 +67,23 @@ function cleanSourceDir(filesDir: string, sourceType: string, sourceId: string):
 }
 
 // ─────────────────────────────────────────────
+// 获取可写目录（getAppContext().filesDir 在测试环境为空，需从 AbilityContext 获取）
+// ─────────────────────────────────────────────
+
+let cachedFilesDir: string = '';
+
+async function resolveFilesDir(): Promise<string> {
+  if (cachedFilesDir.length > 0) {
+    return cachedFilesDir;
+  }
+  const delegator = abilityDelegatorRegistry.getAbilityDelegator();
+  const ability = await delegator.getCurrentTopAbility();
+  const ctx = ability.context as Context;
+  cachedFilesDir = ctx.filesDir;
+  return cachedFilesDir;
+}
+
+// ─────────────────────────────────────────────
 // 测试套件
 // ─────────────────────────────────────────────
 
@@ -76,14 +93,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      let dir: string = ctx.filesDir;
-      if (dir.length === 0) dir = ctx.cacheDir;
-      if (dir.length === 0) dir = ctx.tempDir;
-      if (dir.length === 0) dir = ctx.preferencesDir;
-      filesDir = dir;
+      filesDir = await resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -153,14 +165,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      let dir: string = ctx.filesDir;
-      if (dir.length === 0) dir = ctx.cacheDir;
-      if (dir.length === 0) dir = ctx.tempDir;
-      if (dir.length === 0) dir = ctx.preferencesDir;
-      filesDir = dir;
+      filesDir = await resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -178,14 +185,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      let dir: string = ctx.filesDir;
-      if (dir.length === 0) dir = ctx.cacheDir;
-      if (dir.length === 0) dir = ctx.tempDir;
-      if (dir.length === 0) dir = ctx.preferencesDir;
-      filesDir = dir;
+      filesDir = await resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -237,14 +239,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      let dir: string = ctx.filesDir;
-      if (dir.length === 0) dir = ctx.cacheDir;
-      if (dir.length === 0) dir = ctx.tempDir;
-      if (dir.length === 0) dir = ctx.preferencesDir;
-      filesDir = dir;
+      filesDir = await resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
