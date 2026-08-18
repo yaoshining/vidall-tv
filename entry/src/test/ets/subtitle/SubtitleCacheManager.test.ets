@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from '@ohos/hypium';
 import fs from '@ohos.file.fs';
+import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Context } from '@ohos.abilityAccessCtrl';
 import {
   SubtitleCacheManager,
@@ -12,8 +13,8 @@ import { sha256Hex, buildSubtitleDir } from '../../../main/ets/subtitle/Subtitle
 // ─────────────────────────────────────────────
 
 const SOURCE_TYPE = 'webdav';
-/** 每个测试用独立 sourceId，彻底隔离跨运行和运行内的数据污染 */
-const _RUN_EPOCH = Date.now().toString(36);
+/** 每个测试用独立 sourceId，彻底隔离跨运行和运行内的数据污染；追加随机后缀避免同毫秒多进程碰撞 */
+const _RUN_EPOCH = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 let _testCounter = 0;
 let SOURCE_ID = 'test-42'; // 会在每个 beforeEach 里更新
 const VIDEO_PATH = 'http://192.168.1.1/dav/films/movie.mkv';
@@ -76,8 +77,9 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
-      filesDir = (getContext(this) as Context).filesDir;
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
     });
 
@@ -148,8 +150,9 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
-      filesDir = (getContext(this) as Context).filesDir;
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
     });
 
@@ -168,8 +171,9 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
-      filesDir = (getContext(this) as Context).filesDir;
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
     });
 
@@ -222,8 +226,9 @@ export default function subtitleCacheManagerTest() {
     let manager: SubtitleCacheManager;
 
     beforeEach(() => {
-      filesDir = (getContext(this) as Context).filesDir;
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
+      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+      filesDir = ctx.filesDir;
       manager = new SubtitleCacheManager();
     });
 

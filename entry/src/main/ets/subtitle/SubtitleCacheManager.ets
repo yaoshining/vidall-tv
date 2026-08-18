@@ -99,18 +99,41 @@ export class SubtitleCacheManager {
   }
 
   /**
-   * 序列化并写入 metadata.json（覆盖写）。
+   * 循环写入全部字节，处理 writeSync 部分写入（返回实际写入字节数小于预期）的场景。
+   */
+  private writeAllSync(fd: number, data: Uint8Array): void {
+    let written = 0;
+    while (written < data.length) {
+      // 每次写入剩余数据的独立拷贝，避免视图共享底层 buffer 导致越界写入
+      const remaining = new Uint8Array(data.length - written);
+      remaining.set(data.subarray(written));
+      const n = fs.writeSync(fd, remaining.buffer);
+      if (n <= 0) {
+        throw new Error(`writeSync 写入中断：返回 ${n}`);
+      }
+      written += n;
+    }
+  }
+
+  /**
+   * 序列化并写入 metadata.json。
+   * 先写临时文件，完整写入并关闭后再原子重命名替换原文件，
+   * 避免直接 TRUNC 覆盖时部分写入导致 metadata.json 被截断。
    */
   async writeMetadata(dir: string, metadata: SubtitleMetadata): Promise<void> {
     const metaPath = `${dir}/${METADATA_FILE_NAME}`;
+    const tmpPath = `${metaPath}.tmp`;
     this.mkdirp(dir);
     const text = JSON.stringify(metadata, null, 2);
     const encoder = new util.TextEncoder();
     const uint8Array = encoder.encodeInto(text);
     let file: fs.File | null = null;
     try {
-      file = fs.openSync(metaPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      fs.writeSync(file.fd, uint8Array.buffer);
+      file = fs.openSync(tmpPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      this.writeAllSync(file.fd, uint8Array);
+      fs.closeSync(file);
+      file = null;
+      fs.renameSync(tmpPath, metaPath);
     } catch (e) {
       const be = e as BusinessError;
       throw new Error(`[SubtitleCacheManager] writeMetadata 失败: ${be.message}`);
@@ -118,6 +141,7 @@ export class SubtitleCacheManager {
       if (file !== null) {
         try { fs.closeSync(file); } catch (_ignored) {}
       }
+      try { fs.unlinkSync(tmpPath); } catch (_ignored) {}
     }
   }
 

@@ -195,6 +195,9 @@ jobs:
           HVIGOR_EXIT=$?
           set -e
 
+          # 输出测试日志尾部便于排查（无论成功失败都打印，hvigor 失败时能看到真实错误）
+          tail -n 40 "$UNIT_TEST_LOG" || true
+
           if [ "$HVIGOR_EXIT" -ne 0 ]; then
             # 防御性检测（issue #262 曾在部分环境出现）：@ohos/hypium 与字节码 HAR 的归一化 OhmUrl
             # 冲突会以「Failed to resolve OhmUrl（10311002）」呈现；命中即显式告警跳过，避免静默。
@@ -206,21 +209,26 @@ jobs:
             echo "❌ hvigor test 退出码非零（$HVIGOR_EXIT），测试失败"
             exit "$HVIGOR_EXIT"
           fi
-          # 输出测试日志尾部便于排查
-          tail -n 40 "$UNIT_TEST_LOG" || true
 
           if [ -f "$RESULT_TXT" ]; then
             TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1 || true)
+            if [ -z "$TESTS_LINE" ]; then
+              echo "❌ test_result.txt 缺少 Tests run 汇总行（文件为空或已损坏）"
+              exit 1
+            fi
             TOTAL=$(echo "$TESTS_LINE" | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
             FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
             ERRORS=$(echo "$TESTS_LINE" | grep -oE 'Error: [0-9]+' | grep -oE '[0-9]+' || echo "0")
             echo "📊 设备端测试结果：$TESTS_LINE"
+            if [ "$TOTAL" -le 0 ]; then
+              echo "❌ test_result.txt 未包含有效用例数（Tests run: 0 或解析失败）"
+              exit 1
+            fi
             if [ "$FAILED" != "0" ] || [ "$ERRORS" != "0" ]; then
               echo "❌ 存在 ${FAILED} 个失败 + ${ERRORS} 个错误"
               exit 1
-            else
-              echo "✅ 所有测试通过"
             fi
+            echo "✅ 所有测试通过"
           else
             echo "❌ test_result.txt 未找到"
             exit 1
