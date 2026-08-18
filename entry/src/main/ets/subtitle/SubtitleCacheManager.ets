@@ -223,7 +223,7 @@ export class SubtitleCacheManager {
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message} (code: ${err.code})`);
-      throw new Error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message} (code: ${err.code})`);
+      throw new Error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message}`);
     }
   }
 
