@@ -89,23 +89,27 @@ jobs:
           set -uo pipefail
           # hvigor 自动生成的 TestAbility 模板不会在 onCreate 中暴露 context，
           # 导致设备端测试中 getAppContext().filesDir / getCurrentTopAbility().context.filesDir
-          # 返回空字符串。通过修改模板文件，在 onCreate 中将 this.context 存入 globalThis，
+          # 返回空字符串。通过修改模板文件，在 onWindowStageCreate 中将 this.context 存入 globalThis，
           # 测试代码即可通过 globalThis.testAbilityContext.filesDir 获取有效的沙盒路径。
+          # 注意：onCreate 时 context.filesDir 可能尚未初始化，故注入到 onWindowStageCreate。
           TEMPLATE_FILE="$DEVECO_SDK_HOME/../tools/hvigor/hvigor-ohos-plugin/node_modules/@ohos/coverage/lib/src/commandLine/localTest/testTemplate.js"
           if [ ! -f "$TEMPLATE_FILE" ]; then
             echo "::warning::TestAbility 模板文件未找到（$TEMPLATE_FILE），跳过注入"
             exit 0
           fi
-          # 检查是否已注入（幂等）
+          # 先清除任何已有注入（幂等：确保干净状态）
           if grep -q 'testAbilityContext' "$TEMPLATE_FILE"; then
-            echo "TestAbility context 已注入，跳过"
-            exit 0
+            sed -i '' '/testAbilityContext/d' "$TEMPLATE_FILE"
+            echo "已清除旧注入"
           fi
-          # 在 onCreate 方法体的 hilog.info 行后插入 globalThis.testAbilityContext = this.context
-          # 模板内容：hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate');
-          sed -i '' "s|hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate');|&\\n            globalThis.testAbilityContext = this.context;|" "$TEMPLATE_FILE"
+          # 在 onWindowStageCreate 方法体的 hilog.info 行后插入:
+          #   globalThis.testAbilityContext = this.context;
+          #   hilog.info(0x0000, 'testTag', '%{public}s', 'testAbilityContext.filesDir = ' + this.context.filesDir);
+          # 模板内容：hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+          sed -i '' "s|hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');|&\\n            globalThis.testAbilityContext = this.context;\\n            hilog.info(0x0000, 'testTag', '%{public}s', 'testAbilityContext.filesDir = ' + this.context.filesDir);|" "$TEMPLATE_FILE"
           if grep -q 'testAbilityContext' "$TEMPLATE_FILE"; then
-            echo "✅ TestAbility context 注入成功"
+            echo "✅ TestAbility context 注入成功（onWindowStageCreate）"
+            grep 'testAbilityContext' "$TEMPLATE_FILE"
           else
             echo "::warning::TestAbility context 注入失败，sed 未匹配目标行"
           fi

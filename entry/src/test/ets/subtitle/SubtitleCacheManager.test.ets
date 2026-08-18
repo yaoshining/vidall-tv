@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from '@ohos/hypium';
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from '@ohos/hypium';
 import fs from '@ohos.file.fs';
+import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
+import UIAbility from '@ohos.app.ability.UIAbility';
 import {
   SubtitleCacheManager,
   CachedSubtitleEntry
@@ -67,9 +69,10 @@ function cleanSourceDir(filesDir: string, sourceType: string, sourceId: string):
 // ─────────────────────────────────────────────
 // 获取可写目录
 // ─────────────────────────────────────────────
-// 设备端测试中 getAppContext().filesDir / getCurrentTopAbility().context.filesDir
-// 返回空字符串。唯一可靠来源是通过 TestAbility 的 onCreate 将 this.context
-// 存入 globalThis.testAbilityContext（CI workflow 已注入）。
+// 设备端测试中 getAppContext().filesDir 返回空字符串（ApplicationContext 无沙盒路径）。
+// 需要通过 getCurrentTopActivity() 获取 UIAbility 实例的 UIAbilityContext，
+// 其 filesDir 属性在 Ability 完全初始化后才有值。
+// 同时也检查 globalThis.testAbilityContext（CI workflow 注入的 TestAbility context）。
 // ─────────────────────────────────────────────
 
 interface TestAbilityContext {
@@ -84,16 +87,50 @@ interface GlobalThisWithTestContext {
 
 let cachedFilesDir: string = '';
 
-function resolveFilesDir(): string {
+async function resolveFilesDirAsync(): Promise<string> {
   if (cachedFilesDir.length > 0) {
     return cachedFilesDir;
   }
-  // 从 TestAbility 注入的 context 获取（CI workflow 在 UnitTestBuild 前注入）
+
+  // 路径1：从 TestAbility 注入的 context 获取（CI workflow 在 UnitTestBuild 前注入）
   const g = globalThis as GlobalThisWithTestContext;
   if (g.testAbilityContext && g.testAbilityContext.filesDir.length > 0) {
     cachedFilesDir = g.testAbilityContext.filesDir;
     return cachedFilesDir;
   }
+
+  // 路径2：通过 AbilityDelegatorRegistry 获取当前 Ability 的 context
+  try {
+    const delegator = abilityDelegatorRegistry.getAbilityDelegator();
+    const ability: UIAbility = await delegator.getCurrentTopAbility();
+    if (ability && ability.context && ability.context.filesDir.length > 0) {
+      cachedFilesDir = ability.context.filesDir;
+      return cachedFilesDir;
+    }
+    // filesDir 为空，尝试 cacheDir
+    if (ability && ability.context && ability.context.cacheDir.length > 0) {
+      cachedFilesDir = ability.context.cacheDir;
+      return cachedFilesDir;
+    }
+  } catch {
+    // getCurrentTopAbility 失败，继续尝试下一条路径
+  }
+
+  // 路径3：从 getAppContext 获取
+  try {
+    const appContext = abilityDelegatorRegistry.getAbilityDelegator().getAppContext();
+    if (appContext && appContext.filesDir.length > 0) {
+      cachedFilesDir = appContext.filesDir;
+      return cachedFilesDir;
+    }
+    if (appContext && appContext.cacheDir.length > 0) {
+      cachedFilesDir = appContext.cacheDir;
+      return cachedFilesDir;
+    }
+  } catch {
+    // getAppContext 失败
+  }
+
   // 所有途径均失败，返回空字符串（测试会因路径无效而报错，便于诊断）
   return '';
 }
@@ -108,9 +145,12 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
+    beforeAll(async () => {
+      filesDir = await resolveFilesDirAsync();
+    });
+
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      filesDir = resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -180,9 +220,12 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
+    beforeAll(async () => {
+      filesDir = await resolveFilesDirAsync();
+    });
+
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      filesDir = resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -200,9 +243,12 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
+    beforeAll(async () => {
+      filesDir = await resolveFilesDirAsync();
+    });
+
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      filesDir = resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -254,9 +300,12 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
+    beforeAll(async () => {
+      filesDir = await resolveFilesDirAsync();
+    });
+
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      filesDir = resolveFilesDir();
       manager = new SubtitleCacheManager();
     });
 
