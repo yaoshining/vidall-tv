@@ -33,6 +33,83 @@ export interface SubtitleMetadata {
 const MAX_CACHED_SUBTITLES = 10;
 const METADATA_FILE_NAME = 'metadata.json';
 
+/**
+ * 纯 JS UTF-8 解码（多字节安全）。
+ * 设备端 util.TextDecoder / fs.readTextSync 可能返回空字符串，这里不依赖它们。
+ */
+function decodeUtf8(bytes: Uint8Array): string {
+  let result = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const b0 = bytes[i];
+    if (b0 < 0x80) {
+      result += String.fromCharCode(b0);
+      i += 1;
+    } else if ((b0 & 0xE0) === 0xC0 && i + 1 < bytes.length) {
+      const cp = ((b0 & 0x1F) << 6) | (bytes[i + 1] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 2;
+    } else if ((b0 & 0xF0) === 0xE0 && i + 2 < bytes.length) {
+      const cp = ((b0 & 0x0F) << 12) | ((bytes[i + 1] & 0x3F) << 6) | (bytes[i + 2] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 3;
+    } else if ((b0 & 0xF8) === 0xF0 && i + 3 < bytes.length) {
+      const cp = ((b0 & 0x07) << 18) | ((bytes[i + 1] & 0x3F) << 12) |
+        ((bytes[i + 2] & 0x3F) << 6) | (bytes[i + 3] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 4;
+    } else {
+      result += String.fromCharCode(0xFFFD);
+      i += 1;
+    }
+  }
+  return result;
+}
+
+/**
+ * 纯 JS UTF-8 编码。
+ * 设备端 util.TextEncoder.encodeInto 可能返回空 Uint8Array，这里不依赖它。
+ */
+function encodeUtf8(text: string): Uint8Array {
+  const bytes: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) {
+      bytes.push(code);
+    } else if (code < 0x800) {
+      bytes.push(0xC0 | (code >> 6));
+      bytes.push(0x80 | (code & 0x3F));
+    } else if (code >= 0xD800 && code <= 0xDBFF && i + 1 < text.length) {
+      const lo = text.charCodeAt(i + 1);
+      if (lo >= 0xDC00 && lo <= 0xDFFF) {
+        const cp = 0x10000 + ((code - 0xD800) << 10) + (lo - 0xDC00);
+        bytes.push(0xF0 | (cp >> 18));
+        bytes.push(0x80 | ((cp >> 12) & 0x3F));
+        bytes.push(0x80 | ((cp >> 6) & 0x3F));
+        bytes.push(0x80 | (cp & 0x3F));
+        i += 1;
+      } else {
+        bytes.push(0xEF);
+        bytes.push(0xBF);
+        bytes.push(0xBD);
+      }
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      bytes.push(0xEF);
+      bytes.push(0xBF);
+      bytes.push(0xBD);
+    } else {
+      bytes.push(0xE0 | (code >> 12));
+      bytes.push(0x80 | ((code >> 6) & 0x3F));
+      bytes.push(0x80 | (code & 0x3F));
+    }
+  }
+  const result = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    result[i] = bytes[i];
+  }
+  return result;
+}
+
 // ─────────────────────────────────────────────
 // SubtitleCacheManager
 // ─────────────────────────────────────────────
@@ -101,13 +178,9 @@ export class SubtitleCacheManager {
       }
       const file = fs.openSync(metaPath, fs.OpenMode.READ_ONLY);
       const buf = new ArrayBuffer(stat.size);
-      fs.readSync(file.fd, buf);
+      const readLen = fs.readSync(file.fd, buf);
       fs.closeSync(file);
-      const bytes = new Uint8Array(buf);
-      let text = '';
-      for (let i = 0; i < bytes.length; i++) {
-        text += String.fromCharCode(bytes[i]);
-      }
+      const text = decodeUtf8(new Uint8Array(buf, 0, readLen));
       const parsed = JSON.parse(text) as Record<string, string | CachedSubtitleEntry[]>;
       if (!parsed['videoPath'] || !parsed['subtitles']) {
         return null;
@@ -125,16 +198,40 @@ export class SubtitleCacheManager {
   }
 
   /**
-   * 序列化并写入 metadata.json（覆盖写）。
+   * 循环写入全部字节，处理 writeSync 部分写入（返回实际写入字节数小于预期）的场景。
+   */
+  private writeAllSync(fd: number, data: Uint8Array): void {
+    let written = 0;
+    while (written < data.length) {
+      // 每次写入剩余数据的独立拷贝，避免视图共享底层 buffer 导致越界写入
+      const remaining = new Uint8Array(data.length - written);
+      remaining.set(data.subarray(written));
+      const n = fs.writeSync(fd, remaining.buffer);
+      if (n <= 0) {
+        throw new Error(`writeSync 写入中断：返回 ${n}`);
+      }
+      written += n;
+    }
+  }
+
+  /**
+   * 序列化并写入 metadata.json。
+   * 先写临时文件，完整写入并关闭后再原子重命名替换原文件，
+   * 避免直接 TRUNC 覆盖时部分写入导致 metadata.json 被截断。
    */
   async writeMetadata(dir: string, metadata: SubtitleMetadata): Promise<void> {
     const metaPath = `${dir}/${METADATA_FILE_NAME}`;
+    const tmpPath = `${metaPath}.tmp`;
     this.mkdirp(dir);
     const text = JSON.stringify(metadata, null, 2);
+    const bytes = encodeUtf8(text);
     let file: fs.File | null = null;
     try {
-      file = fs.openSync(metaPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      fs.writeSync(file.fd, text);
+      file = fs.openSync(tmpPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      this.writeAllSync(file.fd, bytes);
+      fs.closeSync(file);
+      file = null;
+      fs.renameSync(tmpPath, metaPath);
     } catch (e) {
       const be = e as BusinessError;
       throw new Error(`[SubtitleCacheManager] writeMetadata 失败: ${be.message}`);
@@ -142,6 +239,7 @@ export class SubtitleCacheManager {
       if (file !== null) {
         try { fs.closeSync(file); } catch (_ignored) {}
       }
+      try { fs.unlinkSync(tmpPath); } catch (_ignored) {}
     }
   }
 
@@ -245,7 +343,9 @@ export class SubtitleCacheManager {
 
       await this.writeMetadata(dir, metadata);
     } catch (e) {
-      console.error(`[SubtitleCacheManager] saveSubtitle 失败: ${String(e)}`);
+      const err = e as BusinessError;
+      console.error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message} (code: ${err.code})`);
+      throw new Error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message}`);
     }
   }
 

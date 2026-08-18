@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from '@ohos/hypium';
-import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
-import { Context } from '@ohos.abilityAccessCtrl';
 import fs from '@ohos.file.fs';
+import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
+import UIAbility from '@ohos.app.ability.UIAbility';
+import { Context } from '@ohos.abilityAccessCtrl';
 import {
   SubtitleCacheManager,
   CachedSubtitleEntry
@@ -13,8 +14,8 @@ import { sha256Hex, buildSubtitleDir } from '../../../main/ets/subtitle/Subtitle
 // ─────────────────────────────────────────────
 
 const SOURCE_TYPE = 'webdav';
-/** 每个测试用独立 sourceId，彻底隔离跨运行和运行内的数据污染 */
-const _RUN_EPOCH = Date.now().toString(36);
+/** 每个测试用独立 sourceId，彻底隔离跨运行和运行内的数据污染；追加随机后缀避免同毫秒多进程碰撞 */
+const _RUN_EPOCH = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 let _testCounter = 0;
 let SOURCE_ID = 'test-42'; // 会在每个 beforeEach 里更新
 const VIDEO_PATH = 'http://192.168.1.1/dav/films/movie.mkv';
@@ -67,6 +68,76 @@ function cleanSourceDir(filesDir: string, sourceType: string, sourceId: string):
 }
 
 // ─────────────────────────────────────────────
+// 获取可写目录
+// ─────────────────────────────────────────────
+// 设备端本地单测环境中，ApplicationContext/UIAbilityContext 的 filesDir/cacheDir 等
+// 目录属性均返回空字符串（无完整沙盒路径），导致字幕缓存路径退化为 /subtitles/... 而
+// mkdir 失败。这里优先取 context 目录，均不可用时兜底到系统 /tmp（经写入探测验证可用）。
+// 仅缓存通过实际写入校验的有效路径，不缓存硬编码的沙盒路径。
+// ─────────────────────────────────────────────
+
+let filesDirPromise: Promise<string> | null = null;
+
+function tryProbeDir(dir: string): boolean {
+  try {
+    const probe = `${dir}/.subtitle_cache_probe_${Date.now()}`;
+    const fd = fs.openSync(probe, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+    fs.closeSync(fd);
+    fs.unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveFilesDir(): Promise<string> {
+  const candidates: string[] = [];
+  const delegator = abilityDelegatorRegistry.getAbilityDelegator();
+
+  // 路径1：当前顶部 Ability 的 UIAbilityContext
+  try {
+    const ability: UIAbility = await delegator.getCurrentTopAbility();
+    if (ability && ability.context) {
+      candidates.push(ability.context.filesDir);
+      candidates.push(ability.context.cacheDir);
+      candidates.push(ability.context.tempDir);
+      candidates.push(ability.context.databaseDir);
+      candidates.push(ability.context.preferencesDir);
+    }
+  } catch {
+    // 本地单测环境可能无顶部 Ability，继续使用 ApplicationContext
+  }
+
+  // 路径2：ApplicationContext
+  const appCtx = delegator.getAppContext() as Context;
+  if (appCtx) {
+    candidates.push(appCtx.filesDir);
+    candidates.push(appCtx.cacheDir);
+    candidates.push(appCtx.tempDir);
+    candidates.push(appCtx.databaseDir);
+    candidates.push(appCtx.preferencesDir);
+  }
+
+  // 路径3：context 目录均不可用时，兜底系统临时目录 /tmp
+  candidates.push('/tmp');
+
+  for (let i = 0; i < candidates.length; i++) {
+    const dir = candidates[i];
+    if (dir && dir.length > 0 && tryProbeDir(dir)) {
+      return dir;
+    }
+  }
+  throw new Error('无法获取可写的测试目录');
+}
+
+function getFilesDir(): Promise<string> {
+  if (filesDirPromise === null) {
+    filesDirPromise = resolveFilesDir();
+  }
+  return filesDirPromise;
+}
+
+// ─────────────────────────────────────────────
 // 测试套件
 // ─────────────────────────────────────────────
 
@@ -76,10 +147,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      filesDir = await getFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -149,10 +219,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      filesDir = await getFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -170,10 +239,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      filesDir = await getFilesDir();
       manager = new SubtitleCacheManager();
     });
 
@@ -225,10 +293,9 @@ export default function subtitleCacheManagerTest() {
     let filesDir: string = '';
     let manager: SubtitleCacheManager;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
-      const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      filesDir = await getFilesDir();
       manager = new SubtitleCacheManager();
     });
 

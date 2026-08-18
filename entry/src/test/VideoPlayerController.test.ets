@@ -28,13 +28,8 @@ interface VideoPlayerControllerAccessor {
   currentOriginalVideoSrc: string
   playbackSessionId: number
   consumedReadyResumeToken: string
-  pendingResumeState: PendingResumeStateSnapshot | null
-  pendingResumeAutoplayDecisionExplicit: boolean
-  hasPendingResumeAutoplayDecisionExplicit: boolean
-  pendingResumeAutoplayDecisionSource: string
-  preparedResumeAutoplayDecisionExplicit: boolean
-  hasPreparedResumeAutoplayDecisionExplicit: boolean
-  preparedResumeAutoplayDecisionSource: string
+  resumeSession: ResumeSessionAccessor
+  reloadSession: ReloadSessionAccessor
   currentTime: number
   duration: number
   progress: number
@@ -55,9 +50,6 @@ interface VideoPlayerControllerAccessor {
   pendingMpvSurfaceWidth: number
   pendingMpvSurfaceHeight: number
   subtitleAdapter: ISubtitleBridgeAdapter
-  pendingReloadResolve?: () => void
-  pendingReloadReject?: (error: Error) => void
-  pendingResumeAutoplayResultState: PendingResumeAutoplayResultStateSnapshot | null
   handlePlayerPlayEvent(sessionId: number): void
   fallbackAvPlayerToMpv(reason: string, detailMessage?: string): void
   handleTerminalPlayerError(message: string): void
@@ -102,6 +94,21 @@ interface PendingResumeAutoplayResultStateSnapshot {
   autoplayDecision: string
   autoplayDecisionSource: string
   autoplayDecisionOrigin: string
+}
+
+interface ResumeSessionAccessor {
+  pending: PendingResumeStateSnapshot | null
+  decisionExplicit: boolean
+  hasDecisionExplicit: boolean
+  decisionSource: string
+  preparedExplicit: boolean
+  hasPreparedExplicit: boolean
+  preparedSource: string
+  result: PendingResumeAutoplayResultStateSnapshot | null
+}
+
+interface ReloadSessionAccessor {
+  begin(resolve: () => void, reject: (error: Error) => void): void
 }
 
 class MockFallbackPlayer implements IPlayer {
@@ -395,12 +402,12 @@ class ReloadPreparedLifecycleController extends VideoPlayerController {
 
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     const beforeAccessor = accessController(this)
-    this.preparedStateSeenInReload = beforeAccessor.hasPreparedResumeAutoplayDecisionExplicit
-    this.preparedSourceSeenInReload = beforeAccessor.preparedResumeAutoplayDecisionSource
+    this.preparedStateSeenInReload = beforeAccessor.resumeSession.hasPreparedExplicit
+    this.preparedSourceSeenInReload = beforeAccessor.resumeSession.preparedSource
     super.initPlayer(videoData, surfaceId).catch(() => {})
     const afterAccessor = accessController(this)
-    this.pendingStateSeenAfterInit = afterAccessor.hasPendingResumeAutoplayDecisionExplicit
-    this.pendingSourceSeenAfterInit = afterAccessor.pendingResumeAutoplayDecisionSource
+    this.pendingStateSeenAfterInit = afterAccessor.resumeSession.hasDecisionExplicit
+    this.pendingSourceSeenAfterInit = afterAccessor.resumeSession.decisionSource
     afterAccessor.resolvePendingReload()
   }
 
@@ -423,8 +430,8 @@ class ReloadPreparedPendingFailureController extends VideoPlayerController {
   async initPlayer(videoData: VideoData, surfaceId: string): Promise<void> {
     super.initPlayer(videoData, surfaceId).catch(() => {})
     const accessor = accessController(this)
-    this.pendingStateSeenBeforeFailure = accessor.hasPendingResumeAutoplayDecisionExplicit
-    this.pendingSourceSeenBeforeFailure = accessor.pendingResumeAutoplayDecisionSource
+    this.pendingStateSeenBeforeFailure = accessor.resumeSession.hasDecisionExplicit
+    this.pendingSourceSeenBeforeFailure = accessor.resumeSession.decisionSource
     throw new Error('init failed after pending decision')
   }
 
@@ -543,10 +550,12 @@ export default function videoPlayerControllerTest() {
       accessor.backend = 'avplayer'
       accessor.surfaceId = 'surface-review'
       let rejectedMessage = ''
-      accessor.pendingReloadResolve = (): void => {}
-      accessor.pendingReloadReject = (error: Error): void => {
-        rejectedMessage = error.message
-      }
+      accessor.reloadSession.begin(
+        (): void => {},
+        (error: Error): void => {
+          rejectedMessage = error.message
+        }
+      )
 
       const secondReload = controller.reloadSource(buildVideoData('second'), false)
       await flushMicrotasks()
@@ -587,8 +596,8 @@ export default function videoPlayerControllerTest() {
     it('resolveVpeQualityByScaling 按缩放比例自动选档（最高 medium）', 0, () => {
       // 大幅放大（源 960x540 → 显示 3840x2160，scale=4）→ medium（最高档）
       expect(resolveVpeQualityByScaling(960, 540, 3840, 2160)).assertEqual('medium')
-      // 中等放大（源 2560x1440 → 显示 3840x2160，scale=1.5）→ medium
-      expect(resolveVpeQualityByScaling(2560, 1440, 3840, 2160)).assertEqual('medium')
+      // 中等放大（源 1920x1080 → 显示 2880x1620，scale=1.5）→ medium
+      expect(resolveVpeQualityByScaling(1920, 1080, 2880, 1620)).assertEqual('medium')
       // 轻微放大（源 1920x1080 → 显示 2560x1440，scale≈1.33）→ low
       expect(resolveVpeQualityByScaling(1920, 1080, 2560, 1440)).assertEqual('low')
       // 1:1（源=显示 1920x1080）→ low
@@ -614,7 +623,7 @@ export default function videoPlayerControllerTest() {
       // HDR 视频无论如何都门控（isHdrVideo true）
       expect(isHdrVideo('HDR10')).assertTrue()
       expect(isHdrVideo('HLG')).assertTrue()
-      // SDR 源在输入范围内返回档位（非 null = 会建 VPE）
+      // SDR 源在输入范围内、scale=2.0 ≥ 1.5 → medium（最高档，非 null = 会建 VPE）
       expect(resolveVpeQualityByScaling(1920, 1080, 3840, 2160)).assertEqual('medium')
       // SDR 源超限返回 null（不建 VPE）
       expect(resolveVpeQualityByScaling(3840, 2160, 3840, 2160)).assertEqual(null)
@@ -685,10 +694,10 @@ export default function videoPlayerControllerTest() {
       expect(controller.preparedSourceSeenInReload).assertEqual('reload_source_autoplay')
       expect(controller.pendingStateSeenAfterInit).assertTrue()
       expect(controller.pendingSourceSeenAfterInit).assertEqual('reload_source_autoplay')
-      expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
-      expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
-      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
-      expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('reload_source_autoplay')
+      expect(accessor.resumeSession.hasPreparedExplicit).assertFalse()
+      expect(accessor.resumeSession.preparedSource).assertEqual('')
+      expect(accessor.resumeSession.hasDecisionExplicit).assertTrue()
+      expect(accessor.resumeSession.decisionSource).assertEqual('reload_source_autoplay')
       expect(controller.playCallCount).assertEqual(1)
     })
 
@@ -706,8 +715,8 @@ export default function videoPlayerControllerTest() {
       }
 
       expect(rejectedMessage).assertEqual('reloadSource requires surfaceId')
-      expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
-      expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
+      expect(accessor.resumeSession.hasPreparedExplicit).assertFalse()
+      expect(accessor.resumeSession.preparedSource).assertEqual('')
     })
 
     it('reloadSource 在 prepared 已转成 pending 后失败时会同时清理 prepared 与 pending decision', 0, async () => {
@@ -726,10 +735,10 @@ export default function videoPlayerControllerTest() {
       expect(controller.pendingStateSeenBeforeFailure).assertTrue()
       expect(controller.pendingSourceSeenBeforeFailure).assertEqual('episode_switch_prepared_resume')
       expect(rejectedMessage).assertEqual('init failed after pending decision')
-      expect(accessor.hasPreparedResumeAutoplayDecisionExplicit).assertFalse()
-      expect(accessor.preparedResumeAutoplayDecisionSource).assertEqual('')
-      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertFalse()
-      expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('')
+      expect(accessor.resumeSession.hasPreparedExplicit).assertFalse()
+      expect(accessor.resumeSession.preparedSource).assertEqual('')
+      expect(accessor.resumeSession.hasDecisionExplicit).assertFalse()
+      expect(accessor.resumeSession.decisionSource).assertEqual('')
     })
 
     it('公共 seek 入口会为新会话初始化链路记录显式自动续播决策来源', 0, async () => {
@@ -746,9 +755,9 @@ export default function videoPlayerControllerTest() {
 
       expect(player.seekCalls.length).assertEqual(1)
       expect(player.seekCalls[0]).assertEqual(3200)
-      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
-      expect(accessor.pendingResumeAutoplayDecisionExplicit).assertTrue()
-      expect(accessor.pendingResumeAutoplayDecisionSource).assertEqual('prepared_resume_seek')
+      expect(accessor.resumeSession.hasDecisionExplicit).assertTrue()
+      expect(accessor.resumeSession.decisionExplicit).assertTrue()
+      expect(accessor.resumeSession.decisionSource).assertEqual('prepared_resume_seek')
     })
 
     it('prepared resume seek 超时兜底会恢复一次播放且晚到 seekDone 不会重复 play', 0, async () => {
@@ -843,11 +852,11 @@ export default function videoPlayerControllerTest() {
       accessor.isSeeking = false
 
       await controller.seek(3200, 'prepared_resume_seek')
-      expect(accessor.hasPendingResumeAutoplayDecisionExplicit).assertTrue()
+      expect(accessor.resumeSession.hasDecisionExplicit).assertTrue()
       accessor.isSeeking = false
       accessor.capturePendingResumeForFallback('test_fallback')
 
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
+      expect(accessor.resumeSession.pending?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
       expect(accessor.pendingBackendResumePlay).assertTrue()
     })
 
@@ -1048,9 +1057,9 @@ export default function videoPlayerControllerTest() {
       accessor.isSeeking = false
       accessor.capturePendingResumeForFallback('avplayer_unsupported_format')
 
-      expect(accessor.pendingResumeState?.positionMs ?? 0).assertEqual(245000)
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
-      expect(accessor.pendingResumeState?.shouldResumePlay ?? false).assertTrue()
+      expect(accessor.resumeSession.pending?.positionMs ?? 0).assertEqual(245000)
+      expect(accessor.resumeSession.pending?.autoplayDecisionSource ?? '').assertEqual('prepared_resume_seek')
+      expect(accessor.resumeSession.pending?.shouldResumePlay ?? false).assertTrue()
 
       const fallbackEvents: string[] = []
       const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
@@ -1091,9 +1100,9 @@ export default function videoPlayerControllerTest() {
       controller.rememberResumeAutoplayDecision(false, 'episode_switch_pause_resume')
       accessor.capturePendingResumeForFallback('avplayer_unsupported_format')
 
-      expect(accessor.pendingResumeState?.positionMs ?? 0).assertEqual(245000)
-      expect(accessor.pendingResumeState?.autoplayDecisionSource ?? '').assertEqual('episode_switch_pause_resume')
-      expect(accessor.pendingResumeState?.shouldResumePlay ?? true).assertFalse()
+      expect(accessor.resumeSession.pending?.positionMs ?? 0).assertEqual(245000)
+      expect(accessor.resumeSession.pending?.autoplayDecisionSource ?? '').assertEqual('episode_switch_pause_resume')
+      expect(accessor.resumeSession.pending?.shouldResumePlay ?? true).assertFalse()
 
       const fallbackEvents: string[] = []
       const fallbackPlayer = new RecordingFallbackPlayer(fallbackEvents)
@@ -1133,7 +1142,7 @@ export default function videoPlayerControllerTest() {
         autoplayDecisionOrigin: 'explicit'
       }
       accessor.player = player
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
 
@@ -1162,7 +1171,7 @@ export default function videoPlayerControllerTest() {
       player.duration = 654321
       accessor.player = player
       accessor.duration = 0
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
 
@@ -1195,7 +1204,7 @@ export default function videoPlayerControllerTest() {
       }
       accessor.player = player
       accessor.currentVideoData = videoData
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
 
@@ -1227,7 +1236,7 @@ export default function videoPlayerControllerTest() {
       }
       accessor.player = player
       accessor.currentVideoData = videoData
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
 
@@ -1254,7 +1263,7 @@ export default function videoPlayerControllerTest() {
       }
       await controller.initPlayer(buildVideoDataWithPresetAudio('task-3-1-play-started'), 'surface-play-started')
       expect(accessor.player === player).assertTrue()
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
       expect(player.playCallCount).assertEqual(1)
@@ -1285,7 +1294,7 @@ export default function videoPlayerControllerTest() {
         autoplayDecisionSource: 'prepared_resume_seek',
         autoplayDecisionOrigin: 'explicit'
       }
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
 
@@ -1311,7 +1320,7 @@ export default function videoPlayerControllerTest() {
         autoplayDecisionOrigin: 'explicit'
       }
       accessor.player = player
-      accessor.pendingResumeAutoplayResultState = pendingResultState
+      accessor.resumeSession.result = pendingResultState
 
       await controller.play()
 
