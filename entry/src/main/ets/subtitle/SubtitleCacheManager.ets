@@ -1,5 +1,4 @@
 import fs from '@ohos.file.fs';
-import util from '@ohos.util';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { sha256Hex, buildSubtitleDir, buildSubtitlePath } from './SubtitleDownloader';
 
@@ -34,6 +33,39 @@ export interface SubtitleMetadata {
 const MAX_CACHED_SUBTITLES = 10;
 const METADATA_FILE_NAME = 'metadata.json';
 
+/**
+ * 纯 JS UTF-8 解码（多字节安全）。
+ * 设备端 util.TextDecoder / fs.readTextSync 可能返回空字符串，这里不依赖它们。
+ */
+function decodeUtf8(bytes: Uint8Array): string {
+  let result = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const b0 = bytes[i];
+    if (b0 < 0x80) {
+      result += String.fromCharCode(b0);
+      i += 1;
+    } else if ((b0 & 0xE0) === 0xC0 && i + 1 < bytes.length) {
+      const cp = ((b0 & 0x1F) << 6) | (bytes[i + 1] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 2;
+    } else if ((b0 & 0xF0) === 0xE0 && i + 2 < bytes.length) {
+      const cp = ((b0 & 0x0F) << 12) | ((bytes[i + 1] & 0x3F) << 6) | (bytes[i + 2] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 3;
+    } else if ((b0 & 0xF8) === 0xF0 && i + 3 < bytes.length) {
+      const cp = ((b0 & 0x07) << 18) | ((bytes[i + 1] & 0x3F) << 12) |
+        ((bytes[i + 2] & 0x3F) << 6) | (bytes[i + 3] & 0x3F);
+      result += String.fromCodePoint(cp);
+      i += 4;
+    } else {
+      result += String.fromCharCode(0xFFFD);
+      i += 1;
+    }
+  }
+  return result;
+}
+
 // ─────────────────────────────────────────────
 // SubtitleCacheManager
 // ─────────────────────────────────────────────
@@ -51,16 +83,40 @@ export class SubtitleCacheManager {
   // ──────────────────────────────────────────
 
   /**
-   * 递归创建多级目录（目录已存在时忽略 EEXIST）。
-   * 与 SubtitleDownloader.writeSubtitleContentToCache 保持一致的设备端验证模式。
+   * 逐段创建多级目录（兼容不支持 recursion 参数的 SDK 版本）。
+   * 从目标路径向上查找第一个已存在的祖先目录，再从上往下逐级创建。
    */
   private mkdirp(dirPath: string): void {
-    try {
-      fs.mkdirSync(dirPath, true);
-    } catch (e) {
-      const be = e as BusinessError;
-      if (be.code !== 13900015) {
-        throw new Error(`mkdirSync(${dirPath}) failed: ${be.message} (code: ${be.code})`);
+    // 从目标向上找到第一个存在的祖先
+    const toCreate: string[] = [];
+    let current = dirPath;
+    while (current.length > 1) {
+      let exists = false;
+      try {
+        fs.statSync(current);
+        exists = true;
+      } catch {
+        // 不存在
+      }
+      if (exists) {
+        break;
+      }
+      toCreate.push(current);
+      const lastSlash = current.lastIndexOf('/');
+      if (lastSlash <= 0) {
+        break;
+      }
+      current = current.substring(0, lastSlash);
+    }
+    // 从上到下依次创建缺失的目录
+    for (let i = toCreate.length - 1; i >= 0; i--) {
+      try {
+        fs.mkdirSync(toCreate[i]);
+      } catch (e) {
+        const be = e as BusinessError;
+        if (be.code !== 13900015) {
+          throw new Error(`mkdirSync(${toCreate[i]}) failed: ${be.message} (code: ${be.code})`);
+        }
       }
     }
   }
@@ -80,8 +136,7 @@ export class SubtitleCacheManager {
       const buf = new ArrayBuffer(stat.size);
       const readLen = fs.readSync(file.fd, buf);
       fs.closeSync(file);
-      const decoder = new util.TextDecoder('utf-8', { fatal: false, ignoreBOM: true });
-      const text = decoder.decodeToString(new Uint8Array(buf, 0, readLen));
+      const text = decodeUtf8(new Uint8Array(buf, 0, readLen));
       const parsed = JSON.parse(text) as Record<string, string | CachedSubtitleEntry[]>;
       if (!parsed['videoPath'] || !parsed['subtitles']) {
         return null;
@@ -99,23 +154,6 @@ export class SubtitleCacheManager {
   }
 
   /**
-   * 循环写入全部字节，处理 writeSync 部分写入（返回实际写入字节数小于预期）的场景。
-   */
-  private writeAllSync(fd: number, data: Uint8Array): void {
-    let written = 0;
-    while (written < data.length) {
-      // 每次写入剩余数据的独立拷贝，避免视图共享底层 buffer 导致越界写入
-      const remaining = new Uint8Array(data.length - written);
-      remaining.set(data.subarray(written));
-      const n = fs.writeSync(fd, remaining.buffer);
-      if (n <= 0) {
-        throw new Error(`writeSync 写入中断：返回 ${n}`);
-      }
-      written += n;
-    }
-  }
-
-  /**
    * 序列化并写入 metadata.json。
    * 先写临时文件，完整写入并关闭后再原子重命名替换原文件，
    * 避免直接 TRUNC 覆盖时部分写入导致 metadata.json 被截断。
@@ -125,12 +163,14 @@ export class SubtitleCacheManager {
     const tmpPath = `${metaPath}.tmp`;
     this.mkdirp(dir);
     const text = JSON.stringify(metadata, null, 2);
-    const encoder = new util.TextEncoder();
-    const uint8Array = encoder.encodeInto(text);
     let file: fs.File | null = null;
     try {
       file = fs.openSync(tmpPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      this.writeAllSync(file.fd, uint8Array);
+      // 直接写字符串（writeSync 内部按 utf-8 编码）；返回实际写入字节数，0 表示写入失败
+      const written = fs.writeSync(file.fd, text);
+      if (written <= 0) {
+        throw new Error(`writeSync 写入中断：返回 ${written}`);
+      }
       fs.closeSync(file);
       file = null;
       fs.renameSync(tmpPath, metaPath);
