@@ -1,0 +1,2185 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">67x</span>
+<span class="cline-any cline-yes">61x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">61x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">67x</span>
+<span class="cline-any cline-yes">61x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">67x</span>
+<span class="cline-any cline-yes">67x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">67x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-yes">67x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">95x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { VideoPlayerController, AspectRatioMode } from &quot;./VideoPlayerController&quot; 
+import { hilog } from &quot;@kit.PerformanceAnalysisKit&quot; 
+import { EpisodeListPanel } from &#39;./EpisodeListPanel&#39; 
+import { PlaybackContextItem, MediaLibraryContext, PlaybackContext } from &#39;./PlaybackContext&#39; 
+import { 
+  loadEpisodeAutoplaySettings, 
+  saveEpisodeAutoplayCountdownSeconds, 
+  saveEpisodeAutoplayEnabled 
+} from &#39;./EpisodeAutoplayPreferences&#39; 
+ 
+interface AspectRatioOption { 
+  label: string; 
+  mode: AspectRatioMode; 
+} 
+ 
+interface SpeedOption { 
+  label: string; 
+  speed: number; 
+} 
+ 
+interface AutoplayToggleOption { 
+  label: string; 
+  enabled: boolean; 
+} 
+ 
+interface AutoplayCountdownOption { 
+  label: string; 
+  seconds: number; 
+} 
+ 
+const PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [ 
+  { label: &#39;适应&#39;, mode: AspectRatioMode.FIT }, 
+  { label: &#39;填充&#39;, mode: AspectRatioMode.FILL }, 
+  { label: &#39;拉伸&#39;, mode: AspectRatioMode.STRETCH }, 
+] 
+ 
+const PLAYER_SETTINGS_SPEED_OPTIONS: SpeedOption[] = [ 
+  { label: &#39;0.5x&#39;, speed: 0.5 }, 
+  { label: &#39;0.75x&#39;, speed: 0.75 }, 
+  { label: &#39;1.0x&#39;, speed: 1.0 }, 
+  { label: &#39;1.25x&#39;, speed: 1.25 }, 
+  { label: &#39;1.5x&#39;, speed: 1.5 }, 
+  { label: &#39;2.0x&#39;, speed: 2.0 }, 
+] 
+ 
+const PLAYER_SETTINGS_AUTOPLAY_TOGGLE_OPTIONS: AutoplayToggleOption[] = [ 
+  { label: &#39;开启&#39;, enabled: true }, 
+  { label: &#39;关闭&#39;, enabled: false }, 
+] 
+ 
+const PLAYER_SETTINGS_AUTOPLAY_COUNTDOWN_OPTIONS: AutoplayCountdownOption[] = [ 
+  { label: &#39;3s&#39;, seconds: 3 }, 
+  { label: &#39;5s&#39;, seconds: 5 }, 
+  { label: &#39;8s&#39;, seconds: 8 }, 
+  { label: &#39;10s&#39;, seconds: 10 }, 
+] 
+ 
+const PLAYER_SETTINGS_CHIP_HEIGHT: number = 68 
+const PLAYER_SETTINGS_CHIP_RADIUS: number = 22 
+const PLAYER_SETTINGS_CHIP_FONT_SIZE: number = 18 
+const PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING: number = 18 
+const PLAYER_SETTINGS_CHIP_VERTICAL_PADDING: number = 10 
+const PLAYER_SETTINGS_CHIP_GAP: number = 10 
+const PLAYER_SETTINGS_CHIP_SCALE_FOCUSED: number = 1.04 
+const DEFAULT_PLAYBACK_RATE_INDEX: number = 2 
+const PLAYER_SETTINGS_DIAGNOSTIC_PREFIX: string = &#39;[#player-settings]&#39; 
+const PLAYER_SETTINGS_DIAGNOSTIC_TAG: string = &#39;PlayerSettingsDialog&#39; 
+const PLAYER_SETTINGS_DIAGNOSTIC_LOG_ENABLED: boolean = false 
+ 
+export interface PlayerSettingsChipStyleState { 
+  isFocused: boolean 
+  isHovered: boolean 
+  isSelected: boolean 
+  // 兼容保留：沿用旧的 outline 语义字段，供已有测试/样式语义判断继续读取。 
+  // 当前值芯片真实渲染已改为 borderWidth / borderColor，这组字段不再直接驱动 SelectionOptionChip 的边框。 
+  showFocusOutline: boolean 
+  showSelectedOutline: boolean 
+  showWaveIcon: boolean 
+  scale: number 
+  shadowRadius: number 
+  shadowColor: string 
+  backgroundColor: string 
+  labelColor: string 
+  focusBorderWidth: number 
+  selectedBorderWidth: number 
+  height: number 
+  borderRadius: number 
+  labelFontSize: number 
+  horizontalPadding: number 
+  verticalPadding: number 
+  groupGap: number 
+  // 当前实际渲染来源：SelectionOptionChip 通过这组真实边框字段输出 UI。 
+  borderWidth: number 
+  borderColor: string 
+} 
+ 
+export interface PlayerSettingsSpeedChipRenderModel { 
+  label: string 
+  speed: number 
+  styleState: PlayerSettingsChipStyleState 
+} 
+ 
+export interface PlayerSettingsAspectRatioChipRenderModel { 
+  label: string 
+  mode: AspectRatioMode 
+  styleState: PlayerSettingsChipStyleState 
+} 
+ 
+export interface PlayerSettingsAutoplayToggleChipRenderModel { 
+  label: string 
+  enabled: boolean 
+  styleState: PlayerSettingsChipStyleState 
+} 
+ 
+export interface PlayerSettingsAutoplayCountdownChipRenderModel { 
+  label: string 
+  seconds: number 
+  styleState: PlayerSettingsChipStyleState 
+} 
+ 
+export interface PlayerSettingsDiagnosticVisualSnapshot { 
+  idx: number 
+  label: string 
+  roles: string 
+  styleState: PlayerSettingsChipStyleState 
+} 
+ 
+export function buildPlayerSettingsSelectionChipKey(optionKey: string, label: string): string { 
+  return `${optionKey}:${label}` 
+} 
+ 
+export function buildPlayerSettingsSelectionStateKey(optionKey: string, isSelected: boolean): string { 
+  return `${optionKey}:${isSelected ? &#39;selected&#39; : &#39;not-selected&#39;}` 
+} 
+ 
+export function getPlayerSettingsChipStyleState( 
+  isFocused: boolean, 
+  isSelected: boolean, 
+  isHovered: boolean = false 
+): PlayerSettingsChipStyleState { 
+  const isEmphasized = isFocused || isHovered 
+  const styleState: PlayerSettingsChipStyleState = { 
+    isFocused, 
+    isHovered, 
+    isSelected, 
+    showFocusOutline: false, 
+    showSelectedOutline: false, 
+    showWaveIcon: false, 
+    scale: isEmphasized ? PLAYER_SETTINGS_CHIP_SCALE_FOCUSED : 1, 
+    shadowRadius: isEmphasized ? 12 : 0, 
+    shadowColor: isEmphasized ? &#39;#386EA8E0&#39; : &#39;#00000000&#39;, 
+    backgroundColor: isSelected ? &#39;rgba(255, 255, 255, 0.28)&#39; : 
+      isEmphasized ? &#39;rgba(255, 255, 255, 0.22)&#39; : &#39;rgba(255, 255, 255, 0.12)&#39;, 
+    labelColor: isSelected ? &#39;#F9FCFF&#39; : isEmphasized ? &#39;#F3F7FF&#39; : &#39;#E8EDF5&#39;, 
+    focusBorderWidth: 0, 
+    selectedBorderWidth: 0, 
+    height: PLAYER_SETTINGS_CHIP_HEIGHT, 
+    borderRadius: PLAYER_SETTINGS_CHIP_RADIUS, 
+    labelFontSize: PLAYER_SETTINGS_CHIP_FONT_SIZE, 
+    horizontalPadding: PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING, 
+    verticalPadding: PLAYER_SETTINGS_CHIP_VERTICAL_PADDING, 
+    groupGap: PLAYER_SETTINGS_CHIP_GAP, 
+    borderWidth: 0, 
+    borderColor: &#39;#00000000&#39; 
+  } 
+  return styleState 
+} 
+ 
+export function getPlayerSettingsValueChipStyleState( 
+  isFocused: boolean, 
+  isSelected: boolean, 
+  isHovered: boolean = false 
+): PlayerSettingsChipStyleState { 
+  const isEmphasized = isFocused || isHovered 
+  const scale = isSelected ? 1.05 : 
+    isFocused ? PLAYER_SETTINGS_CHIP_SCALE_FOCUSED : 
+    isHovered ? 1.02 : 1 
+  const borderWidth = isSelected || isEmphasized ? 2 : 1 
+  const shadowRadius = isSelected ? 14 : isFocused ? 12 : isHovered ? 8 : 0 
+  const shadowColor = isSelected ? &#39;#33597FB8&#39; : 
+    isFocused ? &#39;#386EA8E0&#39; : 
+    isHovered ? &#39;#2A6EA8E0&#39; : &#39;#00000000&#39; 
+  const styleState: PlayerSettingsChipStyleState = { 
+    isFocused, 
+    isHovered, 
+    isSelected, 
+    showFocusOutline: false, 
+    showSelectedOutline: false, 
+    showWaveIcon: false, 
+    scale, 
+    shadowRadius, 
+    shadowColor, 
+    backgroundColor: isSelected ? &#39;rgba(255, 255, 255, 0.45)&#39; : 
+      isEmphasized ? &#39;rgba(255, 255, 255, 0.18)&#39; : &#39;rgba(255, 255, 255, 0.1)&#39;, 
+    labelColor: isSelected ? &#39;#F3F7FF&#39; : isEmphasized ? &#39;#EFF2FB&#39; : &#39;#D7DCE7&#39;, 
+    // 兼容保留：旧测试和语义判断仍读取 focusBorderWidth / selectedBorderWidth。 
+    // 当前值芯片的真实边框渲染以下方 borderWidth / borderColor 为准。 
+    focusBorderWidth: isSelected ? 0 : isEmphasized ? 2 : 0, 
+    selectedBorderWidth: isSelected ? 2 : 0, 
+    height: PLAYER_SETTINGS_CHIP_HEIGHT, 
+    borderRadius: PLAYER_SETTINGS_CHIP_RADIUS, 
+    labelFontSize: PLAYER_SETTINGS_CHIP_FONT_SIZE, 
+    horizontalPadding: PLAYER_SETTINGS_CHIP_HORIZONTAL_PADDING, 
+    verticalPadding: PLAYER_SETTINGS_CHIP_VERTICAL_PADDING, 
+    groupGap: PLAYER_SETTINGS_CHIP_GAP, 
+    borderWidth, 
+    borderColor: isSelected ? &#39;#fffefe&#39; : isEmphasized ? &#39;#66A9D8FF&#39; : &#39;#45ffffff&#39; 
+  } 
+  return styleState 
+} 
+ 
+function getPlayerSettingsAutoplayChipStyleState( 
+  isFocused: boolean, 
+  isSelected: boolean, 
+  isHovered: boolean = false 
+): PlayerSettingsChipStyleState { 
+  if (isSelected) { 
+    return getPlayerSettingsValueChipStyleState(isFocused, true, isHovered) 
+  } 
+  if (isFocused || isHovered) { 
+    return getPlayerSettingsChipStyleState(isFocused, false, isHovered) 
+  } 
+  return getPlayerSettingsValueChipStyleState(false, false, false) 
+} 
+ 
+export function buildPlaybackSpeedChipRenderModels( 
+  playbackSpeed: number, 
+  focusedIndex: number = -1, 
+  hoveredIndex: number = -1 
+): PlayerSettingsSpeedChipRenderModel[] { 
+  const renderModels: PlayerSettingsSpeedChipRenderModel[] = [] 
+  const selectedIndex = resolveSelectedPlaybackRateIndex(playbackSpeed) 
+  for (let idx = 0; idx &lt; PLAYER_SETTINGS_SPEED_OPTIONS.length; idx++) { 
+    const option = PLAYER_SETTINGS_SPEED_OPTIONS[idx] 
+    const isSelected = selectedIndex === idx 
+    const styleState = getPlayerSettingsValueChipStyleState( 
+      focusedIndex === idx, 
+      isSelected, 
+      hoveredIndex === idx 
+    ) 
+    const renderModel: PlayerSettingsSpeedChipRenderModel = { 
+      label: option.label, 
+      speed: option.speed, 
+      styleState 
+    } 
+    renderModels.push(renderModel) 
+  } 
+  return renderModels 
+} 
+ 
+export function buildAspectRatioChipRenderModels( 
+  currentMode: AspectRatioMode, 
+  focusedIndex: number = -1, 
+  hoveredIndex: number = -1 
+): PlayerSettingsAspectRatioChipRenderModel[] { 
+  const renderModels: PlayerSettingsAspectRatioChipRenderModel[] = [] 
+  for (let idx = 0; idx &lt; PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS.length; idx++) { 
+    const option = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS[idx] 
+    const isSelected = isAspectRatioOptionSelected(currentMode, option.mode) 
+    const styleState = getPlayerSettingsValueChipStyleState( 
+      focusedIndex === idx, 
+      isSelected, 
+      hoveredIndex === idx 
+    ) 
+    const renderModel: PlayerSettingsAspectRatioChipRenderModel = { 
+      label: option.label, 
+      mode: option.mode, 
+      styleState 
+    } 
+    renderModels.push(renderModel) 
+  } 
+  return renderModels 
+} 
+ 
+export function buildAutoplayToggleChipRenderModels( 
+  autoplayEnabled: boolean, 
+  focusedIndex: number = -1, 
+  hoveredIndex: number = -1 
+): PlayerSettingsAutoplayToggleChipRenderModel[] { 
+  const renderModels: PlayerSettingsAutoplayToggleChipRenderModel[] = [] 
+  for (let idx = 0; idx &lt; PLAYER_SETTINGS_AUTOPLAY_TOGGLE_OPTIONS.length; idx++) { 
+    const option = PLAYER_SETTINGS_AUTOPLAY_TOGGLE_OPTIONS[idx] 
+    const styleState = getPlayerSettingsAutoplayChipStyleState( 
+      focusedIndex === idx, 
+      autoplayEnabled === option.enabled, 
+      hoveredIndex === idx 
+    ) 
+    const renderModel: PlayerSettingsAutoplayToggleChipRenderModel = { 
+      label: option.label, 
+      enabled: option.enabled, 
+      styleState 
+    } 
+    renderModels.push(renderModel) 
+  } 
+  return renderModels 
+} 
+ 
+export function buildAutoplayCountdownChipRenderModels( 
+  autoplayCountdownSeconds: number, 
+  focusedIndex: number = -1, 
+  hoveredIndex: number = -1 
+): PlayerSettingsAutoplayCountdownChipRenderModel[] { 
+  const renderModels: PlayerSettingsAutoplayCountdownChipRenderModel[] = [] 
+  for (let idx = 0; idx &lt; PLAYER_SETTINGS_AUTOPLAY_COUNTDOWN_OPTIONS.length; idx++) { 
+    const option = PLAYER_SETTINGS_AUTOPLAY_COUNTDOWN_OPTIONS[idx] 
+    const styleState = getPlayerSettingsAutoplayChipStyleState( 
+      focusedIndex === idx, 
+      autoplayCountdownSeconds === option.seconds, 
+      hoveredIndex === idx 
+    ) 
+    const renderModel: PlayerSettingsAutoplayCountdownChipRenderModel = { 
+      label: option.label, 
+      seconds: option.seconds, 
+      styleState 
+    } 
+    renderModels.push(renderModel) 
+  } 
+  return renderModels 
+} 
+ 
+export function resolveSelectedPlaybackRateIndex(playbackSpeed: number): number { 
+  switch (playbackSpeed) { 
+    case 0.5: 
+      return 0 
+    case 0.75: 
+      return 1 
+    case 1.0: 
+      return 2 
+    case 1.25: 
+      return 3 
+    case 1.5: 
+      return 4 
+    case 2.0: 
+      return 5 
+    default: 
+      return DEFAULT_PLAYBACK_RATE_INDEX 
+  } 
+} 
+ 
+export function isAspectRatioOptionSelected( 
+  currentMode: AspectRatioMode, 
+  optionMode: AspectRatioMode 
+): boolean { 
+  return currentMode === optionMode 
+} 
+ 
+export interface PlayerSettingsSelectionMirrorState { 
+  playbackSpeed: number 
+  aspectRatioMode: AspectRatioMode 
+} 
+ 
+export function createPlayerSettingsSelectionMirrorState( 
+  playbackSpeed: number, 
+  aspectRatioMode: AspectRatioMode 
+): PlayerSettingsSelectionMirrorState { 
+  const mirrorState: PlayerSettingsSelectionMirrorState = { 
+    playbackSpeed, 
+    aspectRatioMode 
+  } 
+  return mirrorState 
+} 
+ 
+export function syncPlayerSettingsSelectionMirrorState( 
+  currentState: PlayerSettingsSelectionMirrorState, 
+  playbackSpeed: number, 
+  aspectRatioMode: AspectRatioMode 
+): PlayerSettingsSelectionMirrorState { 
+  if (currentState.playbackSpeed === playbackSpeed &amp;&amp; currentState.aspectRatioMode === aspectRatioMode) { 
+    return currentState 
+  } 
+  const nextState: PlayerSettingsSelectionMirrorState = { 
+    playbackSpeed, 
+    aspectRatioMode 
+  } 
+  return nextState 
+} 
+ 
+export function shouldApplyEpisodeAutoplaySettingsLoad( 
+  requestToken: number, 
+  currentToken: number, 
+  isDirty: boolean 
+): boolean { 
+  return requestToken === currentToken &amp;&amp; !isDirty 
+} 
+ 
+export function formatPlayerSettingsDiagnosticLog(scope: string, detail: string): string { 
+  return `${PLAYER_SETTINGS_DIAGNOSTIC_PREFIX} ${scope}: ${detail}` 
+} 
+ 
+export function formatPlayerSettingsVisualSnapshotDetail( 
+  group: string, 
+  snapshot: PlayerSettingsDiagnosticVisualSnapshot 
+): string { 
+  return `group=${group} idx=${snapshot.idx} label=${snapshot.label} roles=${snapshot.roles} ` + 
+    `isSelected=${snapshot.styleState.isSelected} isHovered=${snapshot.styleState.isHovered} ` + 
+    `isFocused=${snapshot.styleState.isFocused} backgroundColor=${snapshot.styleState.backgroundColor} ` + 
+    `borderWidth=${snapshot.styleState.borderWidth} borderColor=${snapshot.styleState.borderColor} ` + 
+    `shadowRadius=${snapshot.styleState.shadowRadius} shadowColor=${snapshot.styleState.shadowColor} ` + 
+    `scale=${snapshot.styleState.scale} labelColor=${snapshot.styleState.labelColor}` 
+} 
+ 
+export function buildPlayerSettingsVisualSnapshotSummary( 
+  group: string, 
+  snapshots: Array&lt;PlayerSettingsDiagnosticVisualSnapshot&gt; 
+): string { 
+  const details: Array&lt;string&gt; = [] 
+  for (let idx = 0; idx &lt; snapshots.length; idx++) { 
+    details.push(formatPlayerSettingsVisualSnapshotDetail(group, snapshots[idx])) 
+  } 
+  return details.join(&#39; || &#39;) 
+} 
+ 
+export function formatPlayerSettingsEventSequenceDetail( 
+  eventType: string, 
+  idx: number, 
+  label: string, 
+  nextState: string, 
+  focusedIndex: number, 
+  hoveredIndex: number, 
+  selectedIndex: number 
+): string { 
+  return `eventType=${eventType} idx=${idx} label=${label} next=${nextState} ` + 
+    `focusedIndex=${focusedIndex} hoveredIndex=${hoveredIndex} selectedIndex=${selectedIndex}` 
+} 
+ 
+@CustomDialog 
+export struct PlayerSettingsDialog { 
+  controller: CustomDialogController 
+  @Require videoController: VideoPlayerController 
+  @Require onOpenSubtitleSelector: () =&gt; void 
+  @Require onEpisodeSelect: (item: PlaybackContextItem) =&gt; Promise&lt;boolean&gt; 
+  @State private mirroredPlaybackSpeed: number = 1.0 
+  @State private mirroredAspectRatioMode: AspectRatioMode = AspectRatioMode.FIT 
+  @State private arFocusedIndex: number = -1 
+  @State private speedFocusedIndex: number = -1 
+  @State private arHoveredIndex: number = -1 
+  @State private speedHoveredIndex: number = -1 
+  private readonly aspectRatioOptions: AspectRatioOption[] = PLAYER_SETTINGS_ASPECT_RATIO_OPTIONS 
+  @State private aiEnhanceOn: boolean = true 
+  @State private autoplayEnabled: boolean = true 
+  @State private autoplayCountdownSeconds: number = 8 
+  @State private autoplayToggleFocusedIndex: number = -1 
+  @State private autoplayCountdownFocusedIndex: number = -1 
+  @State private autoplayToggleHoveredIndex: number = -1 
+  @State private autoplayCountdownHoveredIndex: number = -1 
+  private readonly autoplayToggleOptions: Array&lt;boolean&gt; = [true, false] 
+  private readonly autoplayCountdownOptions: Array&lt;number&gt; = [3, 5, 8, 10] 
+  private autoplaySettingsLoadToken: number = 0 
+  private autoplaySettingsDirty: boolean = false 
+ 
+  private logPlayerSettingsDiagnostic(scope: string, detail: string): void { 
+    if (!PLAYER_SETTINGS_DIAGNOSTIC_LOG_ENABLED) { 
+      return 
+    } 
+    hilog.debug(0x0000, PLAYER_SETTINGS_DIAGNOSTIC_TAG, formatPlayerSettingsDiagnosticLog(scope, detail)) 
+  } 
+ 
+  private resolveAspectRatioSelectedIndex(mode: AspectRatioMode): number { 
+    for (let idx = 0; idx &lt; this.aspectRatioOptions.length; idx++) { 
+      if (isAspectRatioOptionSelected(mode, this.aspectRatioOptions[idx].mode)) { 
+        return idx 
+      } 
+    } 
+    return -1 
+  } 
+ 
+  private logSpeedInteractionEvent(eventType: string, idx: number, label: string, nextState: string): void { 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;interaction/speed&#39;, 
+      formatPlayerSettingsEventSequenceDetail( 
+        eventType, 
+        idx, 
+        label, 
+        nextState, 
+        this.speedFocusedIndex, 
+        this.speedHoveredIndex, 
+        resolveSelectedPlaybackRateIndex(this.mirroredPlaybackSpeed) 
+      ) 
+    ) 
+  } 
+ 
+  private logAspectRatioInteractionEvent(eventType: string, idx: number, label: string, nextState: string): void { 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;interaction/aspect-ratio&#39;, 
+      formatPlayerSettingsEventSequenceDetail( 
+        eventType, 
+        idx, 
+        label, 
+        nextState, 
+        this.arFocusedIndex, 
+        this.arHoveredIndex, 
+        this.resolveAspectRatioSelectedIndex(this.mirroredAspectRatioMode) 
+      ) 
+    ) 
+  } 
+ 
+  private applySelectionMirrorState(state: PlayerSettingsSelectionMirrorState): void { 
+    const beforePlaybackSpeed = this.mirroredPlaybackSpeed 
+    const beforeAspectRatioMode = this.mirroredAspectRatioMode 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;state/applySelectionMirrorState-before&#39;, 
+      `playbackSpeed=${beforePlaybackSpeed} aspectRatioMode=${beforeAspectRatioMode} nextPlaybackSpeed=${state.playbackSpeed} nextAspectRatioMode=${state.aspectRatioMode}` 
+    ) 
+    this.mirroredPlaybackSpeed = state.playbackSpeed 
+    this.mirroredAspectRatioMode = state.aspectRatioMode 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;state/applySelectionMirrorState-after&#39;, 
+      `playbackSpeed=${this.mirroredPlaybackSpeed} aspectRatioMode=${this.mirroredAspectRatioMode}` 
+    ) 
+  } 
+ 
+  private syncSelectionMirrorState(): void { 
+    const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState( 
+      this.mirroredPlaybackSpeed, 
+      this.mirroredAspectRatioMode 
+    ) 
+    const nextState: PlayerSettingsSelectionMirrorState = syncPlayerSettingsSelectionMirrorState( 
+      currentState, 
+      this.videoController.playbackSpeed, 
+      this.videoController.aspectRatioMode 
+    ) 
+    this.applySelectionMirrorState(nextState) 
+  } 
+ 
+  private updatePlaybackSpeedSelection(speed: number): void { 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;state/updatePlaybackSpeedSelection-enter&#39;, 
+      `targetSpeed=${speed} beforePlaybackSpeed=${this.mirroredPlaybackSpeed} beforeAspectRatioMode=${this.mirroredAspectRatioMode}` 
+    ) 
+    const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState( 
+      this.mirroredPlaybackSpeed, 
+      this.mirroredAspectRatioMode 
+    ) 
+    const nextState: PlayerSettingsSelectionMirrorState = syncPlayerSettingsSelectionMirrorState( 
+      currentState, 
+      speed, 
+      this.mirroredAspectRatioMode 
+    ) 
+    this.applySelectionMirrorState(nextState) 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;state/updatePlaybackSpeedSelection-after&#39;, 
+      `afterPlaybackSpeed=${this.mirroredPlaybackSpeed} afterAspectRatioMode=${this.mirroredAspectRatioMode}` 
+    ) 
+    this.videoController.setPlaybackSpeed(speed) 
+  } 
+ 
+  private updateAspectRatioSelection(mode: AspectRatioMode): void { 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;state/updateAspectRatioSelection-enter&#39;, 
+      `targetAspectRatioMode=${mode} beforePlaybackSpeed=${this.mirroredPlaybackSpeed} beforeAspectRatioMode=${this.mirroredAspectRatioMode}` 
+    ) 
+    const currentState: PlayerSettingsSelectionMirrorState = createPlayerSettingsSelectionMirrorState( 
+      this.mirroredPlaybackSpeed, 
+      this.mirroredAspectRatioMode 
+    ) 
+    const nextState: PlayerSettingsSelectionMirrorState = syncPlayerSettingsSelectionMirrorState( 
+      currentState, 
+      this.mirroredPlaybackSpeed, 
+      mode 
+    ) 
+    this.applySelectionMirrorState(nextState) 
+    this.logPlayerSettingsDiagnostic( 
+      &#39;state/updateAspectRatioSelection-after&#39;, 
+      `afterPlaybackSpeed=${this.mirroredPlaybackSpeed} afterAspectRatioMode=${this.mirroredAspectRatioMode}` 
+    ) 
+    this.videoController.setAspectRatioMode(mode) 
+  } 
+ 
+  aboutToAppear(): void { 
+    this.syncSelectionMirrorState() 
+    this.aiEnhanceOn = this.videoController.getResolvedAiEnhanceEnabled(); 
+    this.arFocusedIndex = -1; 
+    this.speedFocusedIndex = -1; 
+    this.arHoveredIndex = -1; 
+    this.speedHoveredIndex = -1; 
+    this.autoplayToggleFocusedIndex = -1; 
+    this.autoplayCountdownFocusedIndex = -1; 
+    this.autoplayToggleHoveredIndex = -1; 
+    this.autoplayCountdownHoveredIndex = -1; 
+    this.autoplayEnabled = this.videoController.episodeAutoplayEnabled; 
+    this.autoplayCountdownSeconds = this.videoController.episodeAutoplayCountdownSeconds; 
+    this.autoplaySettingsDirty = false 
+    this.autoplaySettingsLoadToken += 1 
+    const currentLoadToken = this.autoplaySettingsLoadToken 
+    loadEpisodeAutoplaySettings().then((settings) =&gt; { 
+      if (!shouldApplyEpisodeAutoplaySettingsLoad( 
+        currentLoadToken, 
+        this.autoplaySettingsLoadToken, 
+        this.autoplaySettingsDirty 
+      )) { 
+        return 
+      } 
+      this.autoplayEnabled = settings.enabled; 
+      this.autoplayCountdownSeconds = settings.countdownSeconds; 
+      this.videoController.episodeAutoplayEnabled = settings.enabled; 
+      this.videoController.episodeAutoplayCountdownSeconds = settings.countdownSeconds; 
+    }).catch(() =&gt; {}) 
+  } 
+ 
+  aboutToDisappear(): void { 
+    this.arFocusedIndex = -1; 
+    this.speedFocusedIndex = -1; 
+    this.arHoveredIndex = -1; 
+    this.speedHoveredIndex = -1; 
+    this.autoplayToggleFocusedIndex = -1; 
+    this.autoplayCountdownFocusedIndex = -1; 
+    this.autoplayToggleHoveredIndex = -1; 
+    this.autoplayCountdownHoveredIndex = -1; 
+  } 
+ 
+  /** 当 playbackContext 是媒体库上下文时返回，否则返回 undefined */ 
+  private getMediaLibraryContext(): MediaLibraryContext | undefined { 
+    const ctx = this.videoController.playbackContext 
+    if (ctx !== undefined &amp;&amp; ctx.contextType === &#39;media_library&#39;) { 
+      return ctx as MediaLibraryContext 
+    } 
+    return undefined 
+  } 
+ 
+  @Builder 
+  private SettingsChip(label: string, selected: boolean) { 
+    Text(label) 
+      .fontSize(26) 
+      .fontColor(selected ? &#39;#F3F7FF&#39; : &#39;#D7DCE7&#39;) 
+      .padding({ left: 20, right: 20, top: 10, bottom: 10 }) 
+      .backgroundColor(selected ? &#39;rgba(255, 255, 255, 0.45)&#39; : &#39;rgba(255, 255, 255, 0.1)&#39;) 
+      .borderRadius(&quot;50%&quot;) 
+      .border({ width: selected ? 2 : 1, color: selected ? &#39;#fffefe&#39; : &#39;#45ffffff&#39; }) 
+      .shadow({ radius: selected ? 8 : 0, color: selected ? &#39;#33597FB8&#39; : &#39;#00ffffff&#39; }) 
+  } 
+ 
+  @Builder 
+  private SelectionOptionChip(label: string, styleState: PlayerSettingsChipStyleState) { 
+    Row() { 
+      Text(label) 
+        .fontSize(styleState.labelFontSize) 
+        .fontColor(styleState.labelColor) 
+        .fontWeight(styleState.isSelected ? FontWeight.Medium : FontWeight.Regular) 
+        .maxLines(1) 
+    } 
+    .height(styleState.height) 
+    .padding({ left: styleState.horizontalPadding, right: styleState.horizontalPadding }) 
+    .justifyContent(FlexAlign.Center) 
+    .backgroundColor(styleState.backgroundColor) 
+    .border({ width: styleState.borderWidth, color: styleState.borderColor }) 
+    .borderRadius(styleState.borderRadius) 
+    .shadow({ radius: styleState.shadowRadius, color: styleState.shadowColor }) 
+    .scale({ x: styleState.scale, y: styleState.scale }) 
+    .animation({ duration: 180, curve: Curve.EaseInOut }) 
+  } 
+ 
+  private getSpeedChipRenderModels(): PlayerSettingsSpeedChipRenderModel[] { 
+    return buildPlaybackSpeedChipRenderModels( 
+      this.mirroredPlaybackSpeed, 
+      this.speedFocusedIndex, 
+      this.speedHoveredIndex 
+    ) 
+  } 
+ 
+  private getAspectRatioChipRenderModels(): PlayerSettingsAspectRatioChipRenderModel[] { 
+    return buildAspectRatioChipRenderModels( 
+      this.mirroredAspectRatioMode, 
+      this.arFocusedIndex, 
+      this.arHoveredIndex 
+    ) 
+  } 
+ 
+  private getAutoplayToggleChipStyleState(idx: number): PlayerSettingsChipStyleState { 
+    return getPlayerSettingsAutoplayChipStyleState( 
+      this.autoplayToggleFocusedIndex === idx, 
+      this.autoplayEnabled === this.autoplayToggleOptions[idx], 
+      this.autoplayToggleHoveredIndex === idx 
+    ) 
+  } 
+ 
+  private getAutoplayCountdownChipStyleState(idx: number): PlayerSettingsChipStyleState { 
+    return getPlayerSettingsAutoplayChipStyleState( 
+      this.autoplayCountdownFocusedIndex === idx, 
+      this.autoplayCountdownSeconds === this.autoplayCountdownOptions[idx], 
+      this.autoplayCountdownHoveredIndex === idx 
+    ) 
+  } 
+ 
+  private updateEpisodeAutoplayEnabled(enabled: boolean): void { 
+    this.autoplaySettingsDirty = true 
+    this.autoplayEnabled = enabled 
+    this.videoController.episodeAutoplayEnabled = enabled 
+    saveEpisodeAutoplayEnabled(enabled).catch(() =&gt; {}) 
+  } 
+ 
+  private updateEpisodeAutoplayCountdownSeconds(seconds: number): void { 
+    this.autoplaySettingsDirty = true 
+    this.autoplayCountdownSeconds = seconds 
+    this.videoController.episodeAutoplayCountdownSeconds = seconds 
+    saveEpisodeAutoplayCountdownSeconds(seconds).catch(() =&gt; {}) 
+  } 
+ 
+  build() { 
+    Stack({ alignContent: Alignment.BottomStart }) { 
+      Column() 
+        .width(&#39;100%&#39;) 
+        .height(&#39;100%&#39;) 
+        .backgroundColor(Color.Transparent) 
+ 
+      Scroll() { 
+        Column({ space: 0 }) { 
+          // ── 选集/文件列表区域（有播放上下文时显示）──────────────────────── 
+          if (this.videoController.playbackContext !== undefined) { 
+            EpisodeListPanel({ 
+              context: this.videoController.playbackContext as PlaybackContext, 
+              onSelect: (item: PlaybackContextItem) =&gt; { 
+                this.onEpisodeSelect(item).then((didSwitch: boolean) =&gt; { 
+                  if (didSwitch) { 
+                    this.controller.close() 
+                  } 
+                }).catch(() =&gt; {}) 
+              } 
+            }) 
+          } 
+ 
+          // ── 倍速播放 &amp; 其他设置 ───────────────────────────────────────────── 
+          Column({ space: 28 }) { 
+            Column({ space: 12 }) { 
+              Text(&#39;倍速播放&#39;) 
+                .fontSize(32) 
+                .fontColor(&#39;#EFF2FB&#39;) 
+                .fontWeight(FontWeight.Medium) 
+                .alignSelf(ItemAlign.Start) 
+ 
+              Row({ space: PLAYER_SETTINGS_CHIP_GAP }) { 
+                ForEach(this.getSpeedChipRenderModels(), (model: PlayerSettingsSpeedChipRenderModel, idx: number) =&gt; { 
+                  Row() { 
+                    Text(model.label) 
+                      .fontSize(model.styleState.labelFontSize) 
+                      .fontColor(model.styleState.labelColor) 
+                      .fontWeight(model.styleState.isSelected ? FontWeight.Medium : FontWeight.Regular) 
+                      .maxLines(1) 
+                  } 
+                    .height(model.styleState.height) 
+                    .padding({ 
+                      left: model.styleState.horizontalPadding, 
+                      right: model.styleState.horizontalPadding 
+                    }) 
+                    .justifyContent(FlexAlign.Center) 
+                    .backgroundColor(model.styleState.backgroundColor) 
+                    .border({ width: model.styleState.borderWidth, color: model.styleState.borderColor }) 
+                    .borderRadius(model.styleState.borderRadius) 
+                    .shadow({ radius: model.styleState.shadowRadius, color: model.styleState.shadowColor }) 
+                    .scale({ x: model.styleState.scale, y: model.styleState.scale }) 
+                    .animation({ duration: 180, curve: Curve.EaseInOut }) 
+                    .focusable(true) 
+                    .onFocus(() =&gt; { 
+                      this.speedFocusedIndex = idx 
+                      this.logSpeedInteractionEvent(&#39;focus&#39;, idx, model.label, `focusedIndex=${idx}`) 
+                    }) 
+                    .onBlur(() =&gt; { 
+                      this.speedFocusedIndex = -1 
+                      this.logSpeedInteractionEvent(&#39;blur&#39;, idx, model.label, &#39;focusedIndex=-1&#39;) 
+                    }) 
+                    .onHover((isHover: boolean) =&gt; { 
+                      this.speedHoveredIndex = isHover ? idx : -1 
+                      this.logSpeedInteractionEvent( 
+                        &#39;hover&#39;, 
+                        idx, 
+                        model.label, 
+                        `hoveredIndex=${this.speedHoveredIndex}` 
+                      ) 
+                    }) 
+                     .onClick(() =&gt; { 
+                       this.logSpeedInteractionEvent(&#39;click&#39;, idx, model.label, `requestedSpeed=${model.speed}`) 
+                       this.updatePlaybackSpeedSelection(model.speed) 
+                     }) 
+                }, (model: PlayerSettingsSpeedChipRenderModel) =&gt; 
+                  buildPlayerSettingsSelectionStateKey(model.speed.toString(), model.styleState.isSelected)) 
+              } 
+               .justifyContent(FlexAlign.Start) 
+               .width(&#39;100%&#39;) 
+              } 
+ 
+ 
+            Column({ space: 12 }) { 
+              Text(&#39;画面比例&#39;) 
+                .fontSize(32) 
+                .fontColor(&#39;#EFF2FB&#39;) 
+                .fontWeight(FontWeight.Medium) 
+                .alignSelf(ItemAlign.Start) 
+ 
+              Row({ space: PLAYER_SETTINGS_CHIP_GAP }) { 
+                ForEach(this.getAspectRatioChipRenderModels(), (model: PlayerSettingsAspectRatioChipRenderModel, idx: number) =&gt; { 
+                  Row() { 
+                    Text(model.label) 
+                      .fontSize(model.styleState.labelFontSize) 
+                      .fontColor(model.styleState.labelColor) 
+                      .fontWeight(model.styleState.isSelected ? FontWeight.Medium : FontWeight.Regular) 
+                      .maxLines(1) 
+                  } 
+                    .height(model.styleState.height) 
+                    .padding({ 
+                      left: model.styleState.horizontalPadding, 
+                      right: model.styleState.horizontalPadding 
+                    }) 
+                    .justifyContent(FlexAlign.Center) 
+                    .backgroundColor(model.styleState.backgroundColor) 
+                    .border({ width: model.styleState.borderWidth, color: model.styleState.borderColor }) 
+                    .borderRadius(model.styleState.borderRadius) 
+                    .shadow({ radius: model.styleState.shadowRadius, color: model.styleState.shadowColor }) 
+                    .scale({ x: model.styleState.scale, y: model.styleState.scale }) 
+                    .animation({ duration: 180, curve: Curve.EaseInOut }) 
+                    .focusable(true) 
+                    .onFocus(() =&gt; { 
+                      this.arFocusedIndex = idx 
+                      this.logAspectRatioInteractionEvent(&#39;focus&#39;, idx, model.label, `focusedIndex=${idx}`) 
+                    }) 
+                    .onBlur(() =&gt; { 
+                      this.arFocusedIndex = -1 
+                      this.logAspectRatioInteractionEvent(&#39;blur&#39;, idx, model.label, &#39;focusedIndex=-1&#39;) 
+                    }) 
+                    .onHover((isHover: boolean) =&gt; { 
+                      this.arHoveredIndex = isHover ? idx : -1 
+                      this.logAspectRatioInteractionEvent( 
+                        &#39;hover&#39;, 
+                        idx, 
+                        model.label, 
+                        `hoveredIndex=${this.arHoveredIndex}` 
+                      ) 
+                    }) 
+                     .onClick(() =&gt; { 
+                       this.logAspectRatioInteractionEvent( 
+                         &#39;click&#39;, 
+                         idx, 
+                         model.label, 
+                        `requestedAspectRatioMode=${model.mode}` 
+                       ) 
+                       this.updateAspectRatioSelection(model.mode) 
+                     }) 
+                }, (model: PlayerSettingsAspectRatioChipRenderModel) =&gt; 
+                  buildPlayerSettingsSelectionStateKey(model.mode.toString(), model.styleState.isSelected)) 
+              } 
+               .justifyContent(FlexAlign.Start) 
+               .width(&#39;100%&#39;) 
+              } 
+ 
+            Column({ space: 12 }) { 
+              Text(&#39;字幕管理&#39;) 
+                .fontSize(32) 
+                .fontColor(&#39;#EFF2FB&#39;) 
+                .fontWeight(FontWeight.Medium) 
+                .alignSelf(ItemAlign.Start) 
+ 
+              Row() { 
+                this.SettingsChip(&#39;选择字幕&#39;, this.videoController.activeSubtitleIndex &gt;= 0) 
+              } 
+              .onClick(() =&gt; { 
+                this.onOpenSubtitleSelector() 
+              }) 
+            } 
+ 
+            if (this.videoController.playbackContext !== undefined) { 
+              Column({ space: 12 }) { 
+                Text(&#39;自动下一集&#39;) 
+                  .fontSize(32) 
+                  .fontColor(&#39;#EFF2FB&#39;) 
+                  .fontWeight(FontWeight.Medium) 
+                  .alignSelf(ItemAlign.Start) 
+ 
+                Row({ space: PLAYER_SETTINGS_CHIP_GAP }) { 
+                  ForEach(this.autoplayToggleOptions, (enabled: boolean, idx: number) =&gt; { 
+                    Row() { 
+                      this.SelectionOptionChip(enabled ? &#39;开启&#39; : &#39;关闭&#39;, this.getAutoplayToggleChipStyleState(idx)) 
+                    } 
+                    .focusable(true) 
+                    .onFocus(() =&gt; { this.autoplayToggleFocusedIndex = idx }) 
+                    .onBlur(() =&gt; { this.autoplayToggleFocusedIndex = -1 }) 
+                    .onHover((isHover: boolean) =&gt; { 
+                      this.autoplayToggleHoveredIndex = isHover ? idx : -1 
+                    }) 
+                    .onClick(() =&gt; { 
+                      this.updateEpisodeAutoplayEnabled(enabled) 
+                    }) 
+                  }, (enabled: boolean) =&gt; buildPlayerSettingsSelectionStateKey( 
+                    enabled ? &#39;enabled&#39; : &#39;disabled&#39;, 
+                    this.autoplayEnabled === enabled 
+                  )) 
+                } 
+                .justifyContent(FlexAlign.Start) 
+                .width(&#39;100%&#39;) 
+              } 
+ 
+              Column({ space: 12 }) { 
+                Text(&#39;倒计时秒数&#39;) 
+                  .fontSize(32) 
+                  .fontColor(&#39;#EFF2FB&#39;) 
+                  .fontWeight(FontWeight.Medium) 
+                  .alignSelf(ItemAlign.Start) 
+ 
+                Row({ space: PLAYER_SETTINGS_CHIP_GAP }) { 
+                  ForEach(this.autoplayCountdownOptions, (seconds: number, idx: number) =&gt; { 
+                    Row() { 
+                      this.SelectionOptionChip(`${seconds}s`, this.getAutoplayCountdownChipStyleState(idx)) 
+                    } 
+                    .focusable(true) 
+                    .onFocus(() =&gt; { this.autoplayCountdownFocusedIndex = idx }) 
+                    .onBlur(() =&gt; { this.autoplayCountdownFocusedIndex = -1 }) 
+                    .onHover((isHover: boolean) =&gt; { 
+                      this.autoplayCountdownHoveredIndex = isHover ? idx : -1 
+                    }) 
+                    .onClick(() =&gt; { 
+                      this.updateEpisodeAutoplayCountdownSeconds(seconds) 
+                    }) 
+                  }, (seconds: number) =&gt; buildPlayerSettingsSelectionStateKey( 
+                    seconds.toString(), 
+                    this.autoplayCountdownSeconds === seconds 
+                  )) 
+                } 
+                .justifyContent(FlexAlign.Start) 
+                .width(&#39;100%&#39;) 
+              } 
+            } 
+ 
+            if (this.videoController.shouldShowAiEnhanceSettings()) { 
+              Column({ space: 12 }) { 
+                Text(&#39;画质增强&#39;) 
+                  .fontSize(32) 
+                  .fontColor(&#39;#EFF2FB&#39;) 
+                  .fontWeight(FontWeight.Medium) 
+                  .alignSelf(ItemAlign.Start) 
+ 
+                Row({ space: 12 }) { 
+                  // 直接内联 Text + onClick，绕过 @CustomDialog @Builder 参数不刷新问题 
+                  Text(&#39;关闭&#39;) 
+                    .fontSize(26) 
+                    .fontColor(!this.aiEnhanceOn ? &#39;#F3F7FF&#39; : &#39;#D7DCE7&#39;) 
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 }) 
+                    .backgroundColor(!this.aiEnhanceOn ? &#39;rgba(255, 255, 255, 0.45)&#39; : &#39;rgba(255, 255, 255, 0.1)&#39;) 
+                    .borderRadius(99) 
+                    .border({ width: !this.aiEnhanceOn ? 2 : 1, color: !this.aiEnhanceOn ? &#39;#fffefe&#39; : &#39;#45ffffff&#39; }) 
+                    .onClick(() =&gt; { 
+                      hilog.info(0x0000, &#39;PlayerSettingsDialog&#39;, &#39;画质增强: 点击关闭&#39;); 
+                      this.aiEnhanceOn = false; 
+                      this.videoController.disableAiEnhance(); 
+                    }) 
+ 
+                  Text(&#39;开启&#39;) 
+                    .fontSize(26) 
+                    .fontColor(this.aiEnhanceOn ? &#39;#F3F7FF&#39; : &#39;#D7DCE7&#39;) 
+                    .padding({ left: 20, right: 20, top: 10, bottom: 10 }) 
+                    .backgroundColor(this.aiEnhanceOn ? &#39;rgba(255, 255, 255, 0.45)&#39; : &#39;rgba(255, 255, 255, 0.1)&#39;) 
+                    .borderRadius(99) 
+                    .border({ width: this.aiEnhanceOn ? 2 : 1, color: this.aiEnhanceOn ? &#39;#fffefe&#39; : &#39;#45ffffff&#39; }) 
+                    .onClick(() =&gt; { 
+                      hilog.info(0x0000, &#39;PlayerSettingsDialog&#39;, &#39;画质增强: 点击开启（档位自动）&#39;); 
+                      this.aiEnhanceOn = true; 
+                      this.videoController.setAiEnhance(); 
+                    }) 
+                } 
+                .justifyContent(FlexAlign.Start) 
+                .width(&#39;100%&#39;) 
+              } 
+            } 
+          } 
+          .padding({ left: 26, right: 26, top: 18, bottom: 28 }) 
+          .alignItems(HorizontalAlign.Start) 
+          .width(&#39;100%&#39;) 
+        } 
+        .alignItems(HorizontalAlign.Start) 
+        .width(&#39;100%&#39;) 
+      } 
+      .scrollBar(BarState.Off) 
+      .width(&#39;100%&#39;) 
+      .height(&#39;55%&#39;) 
+      .backgroundColor(Color.Transparent) 
+      .borderRadius({ topLeft: 24, topRight: 24 }) 
+      .nestedScroll({ scrollForward: NestedScrollMode.SELF_ONLY, scrollBackward: NestedScrollMode.SELF_ONLY }) 
+    } 
+    .width(&#39;100%&#39;) 
+    .height(&#39;100%&#39;) 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Tue Aug 18 2026 20:05:06 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/components/core/player/PlayerSettingsDialog.ets","hash":"eeef019b602b4e707d5d7ed30e06f4f9159b9e2bc497170f62fb697c2a8ca69d","lineCnt":979,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":430,"col":36},"endLoc":{"line":430,"col":46},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":431,"col":29},"endLoc":{"line":431,"col":76},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"buildPlayerSettingsSelectionChipKey","count":4,"regions":[{"startLoc":{"line":128,"col":1},"endLoc":{"line":130,"col":2},"count":4,"ignored":0},{"startLoc":{"line":129,"col":3},"endLoc":{"line":130,"col":2},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"buildPlayerSettingsSelectionStateKey","count":18,"regions":[{"startLoc":{"line":132,"col":1},"endLoc":{"line":134,"col":2},"count":18,"ignored":0},{"startLoc":{"line":133,"col":3},"endLoc":{"line":134,"col":2},"count":18,"ignored":0}],"branches":[{"startLoc":{"line":133,"col":26},"endLoc":{"line":133,"col":66},"trueCount":12,"falseCount":6,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"getPlayerSettingsChipStyleState","count":2,"regions":[{"startLoc":{"line":136,"col":1},"endLoc":{"line":167,"col":2},"count":2,"ignored":0},{"startLoc":{"line":141,"col":3},"endLoc":{"line":167,"col":2},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":149,"col":12},"endLoc":{"line":149,"col":65},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":150,"col":19},"endLoc":{"line":150,"col":40},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":151,"col":18},"endLoc":{"line":151,"col":58},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":152,"col":22},"endLoc":{"line":153,"col":79},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":153,"col":7},"endLoc":{"line":153,"col":79},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":154,"col":17},"endLoc":{"line":154,"col":78},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":154,"col":42},"endLoc":{"line":154,"col":78},"trueCount":2,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"getPlayerSettingsValueChipStyleState","count":95,"regions":[{"startLoc":{"line":169,"col":1},"endLoc":{"line":210,"col":2},"count":95,"ignored":0},{"startLoc":{"line":174,"col":3},"endLoc":{"line":210,"col":2},"count":95,"ignored":0}],"branches":[{"startLoc":{"line":175,"col":17},"endLoc":{"line":177,"col":25},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":176,"col":5},"endLoc":{"line":177,"col":25},"trueCount":6,"falseCount":61,"group":[],"ignored":0},{"startLoc":{"line":177,"col":5},"endLoc":{"line":177,"col":25},"trueCount":4,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":178,"col":23},"endLoc":{"line":178,"col":57},"trueCount":38,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":179,"col":24},"endLoc":{"line":179,"col":76},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":179,"col":42},"endLoc":{"line":179,"col":76},"trueCount":6,"falseCount":61,"group":[],"ignored":0},{"startLoc":{"line":179,"col":59},"endLoc":{"line":179,"col":76},"trueCount":4,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":180,"col":23},"endLoc":{"line":182,"col":42},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":181,"col":5},"endLoc":{"line":182,"col":42},"trueCount":6,"falseCount":61,"group":[],"ignored":0},{"startLoc":{"line":182,"col":5},"endLoc":{"line":182,"col":42},"trueCount":4,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":193,"col":22},"endLoc":{"line":194,"col":78},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":194,"col":7},"endLoc":{"line":194,"col":78},"trueCount":10,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":195,"col":17},"endLoc":{"line":195,"col":78},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":195,"col":42},"endLoc":{"line":195,"col":78},"trueCount":10,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":198,"col":23},"endLoc":{"line":198,"col":60},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":198,"col":40},"endLoc":{"line":198,"col":60},"trueCount":10,"falseCount":57,"group":[],"ignored":0},{"startLoc":{"line":199,"col":26},"endLoc":{"line":199,"col":44},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":207,"col":18},"endLoc":{"line":207,"col":83},"trueCount":28,"falseCount":67,"group":[],"ignored":0},{"startLoc":{"line":207,"col":43},"endLoc":{"line":207,"col":83},"trueCount":10,"falseCount":57,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"getPlayerSettingsAutoplayChipStyleState","count":36,"regions":[{"startLoc":{"line":212,"col":1},"endLoc":{"line":224,"col":2},"count":36,"ignored":0},{"startLoc":{"line":217,"col":19},"endLoc":{"line":219,"col":4},"count":12,"ignored":0},{"startLoc":{"line":220,"col":31},"endLoc":{"line":222,"col":4},"count":2,"ignored":0},{"startLoc":{"line":223,"col":3},"endLoc":{"line":224,"col":2},"count":22,"ignored":0}],"branches":[{"startLoc":{"line":217,"col":7},"endLoc":{"line":217,"col":17},"trueCount":12,"falseCount":24,"group":[],"ignored":0},{"startLoc":{"line":220,"col":7},"endLoc":{"line":220,"col":29},"trueCount":2,"falseCount":22,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"buildPlaybackSpeedChipRenderModels","count":6,"regions":[{"startLoc":{"line":226,"col":1},"endLoc":{"line":249,"col":2},"count":6,"ignored":0},{"startLoc":{"line":233,"col":3},"endLoc":{"line":247,"col":4},"count":36,"ignored":0},{"startLoc":{"line":248,"col":3},"endLoc":{"line":249,"col":2},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"buildAspectRatioChipRenderModels","count":6,"regions":[{"startLoc":{"line":251,"col":1},"endLoc":{"line":273,"col":2},"count":6,"ignored":0},{"startLoc":{"line":257,"col":3},"endLoc":{"line":271,"col":4},"count":18,"ignored":0},{"startLoc":{"line":272,"col":3},"endLoc":{"line":273,"col":2},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"buildAutoplayToggleChipRenderModels","count":6,"regions":[{"startLoc":{"line":275,"col":1},"endLoc":{"line":296,"col":2},"count":6,"ignored":0},{"startLoc":{"line":281,"col":3},"endLoc":{"line":294,"col":4},"count":12,"ignored":0},{"startLoc":{"line":295,"col":3},"endLoc":{"line":296,"col":2},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"buildAutoplayCountdownChipRenderModels","count":6,"regions":[{"startLoc":{"line":298,"col":1},"endLoc":{"line":319,"col":2},"count":6,"ignored":0},{"startLoc":{"line":304,"col":3},"endLoc":{"line":317,"col":4},"count":24,"ignored":0},{"startLoc":{"line":318,"col":3},"endLoc":{"line":319,"col":2},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":10},{"name":"resolveSelectedPlaybackRateIndex","count":8,"regions":[{"startLoc":{"line":321,"col":1},"endLoc":{"line":338,"col":2},"count":8,"ignored":0},{"startLoc":{"line":323,"col":5},"endLoc":{"line":324,"col":15},"count":0,"ignored":0},{"startLoc":{"line":325,"col":5},"endLoc":{"line":326,"col":15},"count":0,"ignored":0},{"startLoc":{"line":327,"col":5},"endLoc":{"line":328,"col":15},"count":1,"ignored":0},{"startLoc":{"line":329,"col":5},"endLoc":{"line":330,"col":15},"count":2,"ignored":0},{"startLoc":{"line":331,"col":5},"endLoc":{"line":332,"col":15},"count":4,"ignored":0},{"startLoc":{"line":333,"col":5},"endLoc":{"line":334,"col":15},"count":0,"ignored":0},{"startLoc":{"line":335,"col":5},"endLoc":{"line":336,"col":41},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":323,"col":10},"endLoc":{"line":323,"col":13},"trueCount":0,"falseCount":8,"group":[0,1,2,3,4,5,6],"ignored":0},{"startLoc":{"line":325,"col":10},"endLoc":{"line":325,"col":14},"trueCount":0,"falseCount":8,"group":[0,1,2,3,4,5,6],"ignored":0},{"startLoc":{"line":327,"col":10},"endLoc":{"line":327,"col":13},"trueCount":1,"falseCount":7,"group":[0,1,2,3,4,5,6],"ignored":0},{"startLoc":{"line":329,"col":10},"endLoc":{"line":329,"col":14},"trueCount":2,"falseCount":6,"group":[0,1,2,3,4,5,6],"ignored":0},{"startLoc":{"line":331,"col":10},"endLoc":{"line":331,"col":13},"trueCount":4,"falseCount":4,"group":[0,1,2,3,4,5,6],"ignored":0},{"startLoc":{"line":333,"col":10},"endLoc":{"line":333,"col":13},"trueCount":0,"falseCount":8,"group":[0,1,2,3,4,5,6],"ignored":0},{"startLoc":{"line":335,"col":5},"endLoc":{"line":335,"col":5},"trueCount":1,"falseCount":7,"group":[0,1,2,3,4,5,6],"ignored":0}],"ignored":0,"index":11},{"name":"isAspectRatioOptionSelected","count":20,"regions":[{"startLoc":{"line":340,"col":1},"endLoc":{"line":345,"col":2},"count":20,"ignored":0},{"startLoc":{"line":344,"col":3},"endLoc":{"line":345,"col":2},"count":20,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"createPlayerSettingsSelectionMirrorState","count":2,"regions":[{"startLoc":{"line":352,"col":1},"endLoc":{"line":361,"col":2},"count":2,"ignored":0},{"startLoc":{"line":356,"col":3},"endLoc":{"line":361,"col":2},"count":2,"ignored":0}],"branches":[],"ignored":0,"index":13},{"name":"syncPlayerSettingsSelectionMirrorState","count":2,"regions":[{"startLoc":{"line":363,"col":1},"endLoc":{"line":376,"col":2},"count":2,"ignored":0},{"startLoc":{"line":371,"col":3},"endLoc":{"line":376,"col":2},"count":2,"ignored":0},{"startLoc":{"line":368,"col":105},"endLoc":{"line":370,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":368,"col":7},"endLoc":{"line":368,"col":103},"trueCount":0,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"shouldApplyEpisodeAutoplaySettingsLoad","count":3,"regions":[{"startLoc":{"line":378,"col":1},"endLoc":{"line":384,"col":2},"count":3,"ignored":0},{"startLoc":{"line":383,"col":3},"endLoc":{"line":384,"col":2},"count":3,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"formatPlayerSettingsDiagnosticLog","count":1,"regions":[{"startLoc":{"line":386,"col":1},"endLoc":{"line":388,"col":2},"count":1,"ignored":0},{"startLoc":{"line":387,"col":3},"endLoc":{"line":388,"col":2},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":16},{"name":"formatPlayerSettingsVisualSnapshotDetail","count":1,"regions":[{"startLoc":{"line":390,"col":1},"endLoc":{"line":400,"col":2},"count":1,"ignored":0},{"startLoc":{"line":394,"col":3},"endLoc":{"line":400,"col":2},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":17},{"name":"buildPlayerSettingsVisualSnapshotSummary","count":1,"regions":[{"startLoc":{"line":402,"col":1},"endLoc":{"line":411,"col":2},"count":1,"ignored":0},{"startLoc":{"line":407,"col":3},"endLoc":{"line":409,"col":4},"count":1,"ignored":0},{"startLoc":{"line":410,"col":3},"endLoc":{"line":411,"col":2},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"formatPlayerSettingsEventSequenceDetail","count":1,"regions":[{"startLoc":{"line":413,"col":1},"endLoc":{"line":424,"col":2},"count":1,"ignored":0},{"startLoc":{"line":422,"col":3},"endLoc":{"line":424,"col":2},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":19},{"name":"setController","count":0,"regions":[{"startLoc":{"line":428,"col":3},"endLoc":{"line":428,"col":13},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":20},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":430,"col":36},"endLoc":{"line":430,"col":46},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":21},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":431,"col":29},"endLoc":{"line":431,"col":76},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":22},{"name":"mirroredPlaybackSpeed","count":0,"regions":[{"startLoc":{"line":432,"col":18},"endLoc":{"line":432,"col":39},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":23},{"name":"mirroredPlaybackSpeed","count":0,"regions":[{"startLoc":{"line":432,"col":18},"endLoc":{"line":432,"col":47},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":24},{"name":"mirroredAspectRatioMode","count":0,"regions":[{"startLoc":{"line":433,"col":18},"endLoc":{"line":433,"col":41},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":25},{"name":"mirroredAspectRatioMode","count":0,"regions":[{"startLoc":{"line":433,"col":18},"endLoc":{"line":433,"col":58},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":26},{"name":"arFocusedIndex","count":0,"regions":[{"startLoc":{"line":434,"col":18},"endLoc":{"line":434,"col":32},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":27},{"name":"arFocusedIndex","count":0,"regions":[{"startLoc":{"line":434,"col":18},"endLoc":{"line":434,"col":40},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":28},{"name":"speedFocusedIndex","count":0,"regions":[{"startLoc":{"line":435,"col":18},"endLoc":{"line":435,"col":35},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":29},{"name":"speedFocusedIndex","count":0,"regions":[{"startLoc":{"line":435,"col":18},"endLoc":{"line":435,"col":43},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":30},{"name":"arHoveredIndex","count":0,"regions":[{"startLoc":{"line":436,"col":18},"endLoc":{"line":436,"col":32},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":31},{"name":"arHoveredIndex","count":0,"regions":[{"startLoc":{"line":436,"col":18},"endLoc":{"line":436,"col":40},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":32},{"name":"speedHoveredIndex","count":0,"regions":[{"startLoc":{"line":437,"col":18},"endLoc":{"line":437,"col":35},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":33},{"name":"speedHoveredIndex","count":0,"regions":[{"startLoc":{"line":437,"col":18},"endLoc":{"line":437,"col":43},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":34},{"name":"aiEnhanceOn","count":0,"regions":[{"startLoc":{"line":439,"col":18},"endLoc":{"line":439,"col":29},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":35},{"name":"aiEnhanceOn","count":0,"regions":[{"startLoc":{"line":439,"col":18},"endLoc":{"line":439,"col":38},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":36},{"name":"autoplayEnabled","count":0,"regions":[{"startLoc":{"line":440,"col":18},"endLoc":{"line":440,"col":33},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":37},{"name":"autoplayEnabled","count":0,"regions":[{"startLoc":{"line":440,"col":18},"endLoc":{"line":440,"col":42},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":38},{"name":"autoplayCountdownSeconds","count":0,"regions":[{"startLoc":{"line":441,"col":18},"endLoc":{"line":441,"col":42},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":39},{"name":"autoplayCountdownSeconds","count":0,"regions":[{"startLoc":{"line":441,"col":18},"endLoc":{"line":441,"col":50},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":40},{"name":"autoplayToggleFocusedIndex","count":0,"regions":[{"startLoc":{"line":442,"col":18},"endLoc":{"line":442,"col":44},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":41},{"name":"autoplayToggleFocusedIndex","count":0,"regions":[{"startLoc":{"line":442,"col":18},"endLoc":{"line":442,"col":52},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":42},{"name":"autoplayCountdownFocusedIndex","count":0,"regions":[{"startLoc":{"line":443,"col":18},"endLoc":{"line":443,"col":47},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":43},{"name":"autoplayCountdownFocusedIndex","count":0,"regions":[{"startLoc":{"line":443,"col":18},"endLoc":{"line":443,"col":55},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":44},{"name":"autoplayToggleHoveredIndex","count":0,"regions":[{"startLoc":{"line":444,"col":18},"endLoc":{"line":444,"col":44},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":45},{"name":"autoplayToggleHoveredIndex","count":0,"regions":[{"startLoc":{"line":444,"col":18},"endLoc":{"line":444,"col":52},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":46},{"name":"autoplayCountdownHoveredIndex","count":0,"regions":[{"startLoc":{"line":445,"col":18},"endLoc":{"line":445,"col":47},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":47},{"name":"autoplayCountdownHoveredIndex","count":0,"regions":[{"startLoc":{"line":445,"col":18},"endLoc":{"line":445,"col":55},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":48},{"name":"logPlayerSettingsDiagnostic","count":0,"regions":[{"startLoc":{"line":451,"col":3},"endLoc":{"line":456,"col":4},"count":0,"ignored":0},{"startLoc":{"line":452,"col":50},"endLoc":{"line":454,"col":6},"count":0,"ignored":0},{"startLoc":{"line":455,"col":5},"endLoc":{"line":456,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":452,"col":9},"endLoc":{"line":452,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":49},{"name":"resolveAspectRatioSelectedIndex","count":0,"regions":[{"startLoc":{"line":458,"col":3},"endLoc":{"line":465,"col":4},"count":0,"ignored":0},{"startLoc":{"line":459,"col":5},"endLoc":{"line":463,"col":6},"count":0,"ignored":0},{"startLoc":{"line":460,"col":81},"endLoc":{"line":462,"col":8},"count":0,"ignored":0},{"startLoc":{"line":464,"col":5},"endLoc":{"line":465,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":460,"col":11},"endLoc":{"line":460,"col":79},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":50},{"name":"logSpeedInteractionEvent","count":0,"regions":[{"startLoc":{"line":467,"col":3},"endLoc":{"line":480,"col":4},"count":0,"ignored":0},{"startLoc":{"line":468,"col":5},"endLoc":{"line":480,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":51},{"name":"logAspectRatioInteractionEvent","count":0,"regions":[{"startLoc":{"line":482,"col":3},"endLoc":{"line":495,"col":4},"count":0,"ignored":0},{"startLoc":{"line":483,"col":5},"endLoc":{"line":495,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":52},{"name":"applySelectionMirrorState","count":0,"regions":[{"startLoc":{"line":497,"col":3},"endLoc":{"line":510,"col":4},"count":0,"ignored":0},{"startLoc":{"line":498,"col":5},"endLoc":{"line":510,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":53},{"name":"syncSelectionMirrorState","count":0,"regions":[{"startLoc":{"line":512,"col":3},"endLoc":{"line":523,"col":4},"count":0,"ignored":0},{"startLoc":{"line":513,"col":5},"endLoc":{"line":523,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":54},{"name":"updatePlaybackSpeedSelection","count":0,"regions":[{"startLoc":{"line":525,"col":3},"endLoc":{"line":545,"col":4},"count":0,"ignored":0},{"startLoc":{"line":526,"col":5},"endLoc":{"line":545,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":55},{"name":"updateAspectRatioSelection","count":0,"regions":[{"startLoc":{"line":547,"col":3},"endLoc":{"line":567,"col":4},"count":0,"ignored":0},{"startLoc":{"line":548,"col":5},"endLoc":{"line":567,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":56},{"name":"aboutToAppear","count":0,"regions":[{"startLoc":{"line":569,"col":3},"endLoc":{"line":598,"col":4},"count":0,"ignored":0},{"startLoc":{"line":570,"col":5},"endLoc":{"line":598,"col":4},"count":0,"ignored":0},{"startLoc":{"line":593,"col":7},"endLoc":{"line":597,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":57},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":585,"col":40},"endLoc":{"line":597,"col":6},"count":0,"ignored":0},{"startLoc":{"line":590,"col":10},"endLoc":{"line":592,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":586,"col":11},"endLoc":{"line":590,"col":8},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":58},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":597,"col":14},"endLoc":{"line":597,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":59},{"name":"aboutToDisappear","count":0,"regions":[{"startLoc":{"line":600,"col":3},"endLoc":{"line":609,"col":4},"count":0,"ignored":0},{"startLoc":{"line":601,"col":5},"endLoc":{"line":609,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":60},{"name":"getMediaLibraryContext","count":0,"regions":[{"startLoc":{"line":612,"col":3},"endLoc":{"line":618,"col":4},"count":0,"ignored":0},{"startLoc":{"line":614,"col":67},"endLoc":{"line":616,"col":6},"count":0,"ignored":0},{"startLoc":{"line":617,"col":5},"endLoc":{"line":618,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":614,"col":9},"endLoc":{"line":614,"col":65},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":61},{"name":"SettingsChip","count":0,"regions":[{"startLoc":{"line":620,"col":3},"endLoc":{"line":630,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":62},{"name":"anonymous_7","count":0,"regions":[{"startLoc":{"line":622,"col":5},"endLoc":{"line":629,"col":88},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":624,"col":18},"endLoc":{"line":624,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":626,"col":24},"endLoc":{"line":626,"col":91},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":628,"col":24},"endLoc":{"line":628,"col":40},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":628,"col":49},"endLoc":{"line":628,"col":83},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":629,"col":25},"endLoc":{"line":629,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":629,"col":50},"endLoc":{"line":629,"col":86},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":63},{"name":"SelectionOptionChip","count":0,"regions":[{"startLoc":{"line":632,"col":3},"endLoc":{"line":650,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":64},{"name":"anonymous_8","count":0,"regions":[{"startLoc":{"line":634,"col":5},"endLoc":{"line":649,"col":15},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":65},{"name":"anonymous_9","count":0,"regions":[{"startLoc":{"line":635,"col":7},"endLoc":{"line":639,"col":20},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":638,"col":21},"endLoc":{"line":638,"col":83},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":66},{"name":"getSpeedChipRenderModels","count":0,"regions":[{"startLoc":{"line":652,"col":3},"endLoc":{"line":658,"col":4},"count":0,"ignored":0},{"startLoc":{"line":653,"col":5},"endLoc":{"line":658,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":67},{"name":"getAspectRatioChipRenderModels","count":0,"regions":[{"startLoc":{"line":660,"col":3},"endLoc":{"line":666,"col":4},"count":0,"ignored":0},{"startLoc":{"line":661,"col":5},"endLoc":{"line":666,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":68},{"name":"getAutoplayToggleChipStyleState","count":0,"regions":[{"startLoc":{"line":668,"col":3},"endLoc":{"line":674,"col":4},"count":0,"ignored":0},{"startLoc":{"line":669,"col":5},"endLoc":{"line":674,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":69},{"name":"getAutoplayCountdownChipStyleState","count":0,"regions":[{"startLoc":{"line":676,"col":3},"endLoc":{"line":682,"col":4},"count":0,"ignored":0},{"startLoc":{"line":677,"col":5},"endLoc":{"line":682,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":70},{"name":"updateEpisodeAutoplayEnabled","count":0,"regions":[{"startLoc":{"line":684,"col":3},"endLoc":{"line":689,"col":4},"count":0,"ignored":0},{"startLoc":{"line":685,"col":5},"endLoc":{"line":689,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":71},{"name":"anonymous_10","count":0,"regions":[{"startLoc":{"line":688,"col":47},"endLoc":{"line":688,"col":55},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":72},{"name":"updateEpisodeAutoplayCountdownSeconds","count":0,"regions":[{"startLoc":{"line":691,"col":3},"endLoc":{"line":696,"col":4},"count":0,"ignored":0},{"startLoc":{"line":692,"col":5},"endLoc":{"line":696,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":73},{"name":"anonymous_11","count":0,"regions":[{"startLoc":{"line":695,"col":56},"endLoc":{"line":695,"col":64},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":74},{"name":"initialRender","count":0,"regions":[{"startLoc":{"line":698,"col":3},"endLoc":{"line":977,"col":4},"count":0,"ignored":0},{"startLoc":{"line":762,"col":23},"endLoc":{"line":768,"col":22},"count":0,"ignored":0},{"startLoc":{"line":820,"col":23},"endLoc":{"line":826,"col":22},"count":0,"ignored":0},{"startLoc":{"line":939,"col":23},"endLoc":{"line":941,"col":22},"count":0,"ignored":0},{"startLoc":{"line":952,"col":23},"endLoc":{"line":954,"col":22},"count":0,"ignored":0},{"startLoc":{"line":754,"col":23},"endLoc":{"line":755,"col":22},"count":0,"ignored":0},{"startLoc":{"line":758,"col":23},"endLoc":{"line":759,"col":22},"count":0,"ignored":0},{"startLoc":{"line":771,"col":24},"endLoc":{"line":772,"col":23},"count":0,"ignored":0},{"startLoc":{"line":812,"col":23},"endLoc":{"line":813,"col":22},"count":0,"ignored":0},{"startLoc":{"line":816,"col":23},"endLoc":{"line":817,"col":22},"count":0,"ignored":0},{"startLoc":{"line":834,"col":24},"endLoc":{"line":835,"col":23},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":75},{"name":"anonymous_12","count":0,"regions":[{"startLoc":{"line":699,"col":5},"endLoc":{"line":976,"col":19},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":76},{"name":"anonymous_13","count":0,"regions":[{"startLoc":{"line":700,"col":7},"endLoc":{"line":703,"col":43},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":77},{"name":"anonymous_14","count":0,"regions":[{"startLoc":{"line":705,"col":7},"endLoc":{"line":973,"col":110},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":78},{"name":"anonymous_15","count":0,"regions":[{"startLoc":{"line":706,"col":9},"endLoc":{"line":966,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":79},{"name":"anonymous_16","count":0,"regions":[{"startLoc":{"line":708,"col":11},"endLoc":{"line":719,"col":12},"count":0,"ignored":0},{"startLoc":{"line":708,"col":67},"endLoc":{"line":719,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":708,"col":15},"endLoc":{"line":708,"col":65},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":80},{"name":"anonymous_17","count":0,"regions":[{"startLoc":{"line":709,"col":13},"endLoc":{"line":717,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":81},{"name":"anonymous_18","count":0,"regions":[{"startLoc":{"line":709,"col":13},"endLoc":{"line":717,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":82},{"name":"anonymous_19","count":0,"regions":[{"startLoc":{"line":711,"col":25},"endLoc":{"line":717,"col":16},"count":0,"ignored":0},{"startLoc":{"line":712,"col":17},"endLoc":{"line":717,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":83},{"name":"anonymous_20","count":0,"regions":[{"startLoc":{"line":712,"col":49},"endLoc":{"line":716,"col":18},"count":0,"ignored":0},{"startLoc":{"line":713,"col":34},"endLoc":{"line":715,"col":20},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":713,"col":23},"endLoc":{"line":713,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":84},{"name":"anonymous_21","count":0,"regions":[{"startLoc":{"line":716,"col":26},"endLoc":{"line":716,"col":34},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":85},{"name":"anonymous_24","count":0,"regions":[{"startLoc":{"line":722,"col":11},"endLoc":{"line":963,"col":24},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":86},{"name":"anonymous_25","count":0,"regions":[{"startLoc":{"line":723,"col":13},"endLoc":{"line":723,"col":33},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":87},{"name":"anonymous_26","count":0,"regions":[{"startLoc":{"line":724,"col":15},"endLoc":{"line":728,"col":43},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":88},{"name":"anonymous_27","count":0,"regions":[{"startLoc":{"line":730,"col":15},"endLoc":{"line":777,"col":29},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":89},{"name":"anonymous_28","count":0,"regions":[{"startLoc":{"line":731,"col":17},"endLoc":{"line":774,"col":108},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":90},{"name":"anonymous_29","count":0,"regions":[{"startLoc":{"line":731,"col":102},"endLoc":{"line":732,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":91},{"name":"anonymous_30","count":0,"regions":[{"startLoc":{"line":732,"col":19},"endLoc":{"line":772,"col":23},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":92},{"name":"anonymous_31","count":0,"regions":[{"startLoc":{"line":752,"col":30},"endLoc":{"line":755,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":93},{"name":"anonymous_32","count":0,"regions":[{"startLoc":{"line":756,"col":29},"endLoc":{"line":759,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":94},{"name":"anonymous_33","count":0,"regions":[{"startLoc":{"line":760,"col":30},"endLoc":{"line":768,"col":22},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":761,"col":48},"endLoc":{"line":761,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":95},{"name":"anonymous_34","count":0,"regions":[{"startLoc":{"line":769,"col":31},"endLoc":{"line":772,"col":23},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":96},{"name":"anonymous_35","count":0,"regions":[{"startLoc":{"line":733,"col":21},"endLoc":{"line":737,"col":34},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":736,"col":35},"endLoc":{"line":736,"col":103},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":97},{"name":"anonymous_36","count":0,"regions":[{"startLoc":{"line":773,"col":20},"endLoc":{"line":774,"col":108},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":98},{"name":"anonymous_37","count":0,"regions":[{"startLoc":{"line":781,"col":13},"endLoc":{"line":781,"col":33},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":99},{"name":"anonymous_38","count":0,"regions":[{"startLoc":{"line":782,"col":15},"endLoc":{"line":786,"col":43},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":100},{"name":"anonymous_39","count":0,"regions":[{"startLoc":{"line":788,"col":15},"endLoc":{"line":840,"col":29},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":101},{"name":"anonymous_40","count":0,"regions":[{"startLoc":{"line":789,"col":17},"endLoc":{"line":837,"col":107},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":102},{"name":"anonymous_41","count":0,"regions":[{"startLoc":{"line":789,"col":114},"endLoc":{"line":790,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":103},{"name":"anonymous_42","count":0,"regions":[{"startLoc":{"line":790,"col":19},"endLoc":{"line":835,"col":23},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":104},{"name":"anonymous_43","count":0,"regions":[{"startLoc":{"line":810,"col":30},"endLoc":{"line":813,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":105},{"name":"anonymous_44","count":0,"regions":[{"startLoc":{"line":814,"col":29},"endLoc":{"line":817,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":106},{"name":"anonymous_45","count":0,"regions":[{"startLoc":{"line":818,"col":30},"endLoc":{"line":826,"col":22},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":819,"col":45},"endLoc":{"line":819,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":107},{"name":"anonymous_46","count":0,"regions":[{"startLoc":{"line":827,"col":31},"endLoc":{"line":835,"col":23},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":108},{"name":"anonymous_47","count":0,"regions":[{"startLoc":{"line":791,"col":21},"endLoc":{"line":795,"col":34},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":794,"col":35},"endLoc":{"line":794,"col":103},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":109},{"name":"anonymous_48","count":0,"regions":[{"startLoc":{"line":836,"col":20},"endLoc":{"line":837,"col":107},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":110},{"name":"anonymous_49","count":0,"regions":[{"startLoc":{"line":843,"col":13},"endLoc":{"line":843,"col":33},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":111},{"name":"anonymous_50","count":0,"regions":[{"startLoc":{"line":844,"col":15},"endLoc":{"line":848,"col":43},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":112},{"name":"anonymous_51","count":0,"regions":[{"startLoc":{"line":850,"col":15},"endLoc":{"line":855,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":113},{"name":"anonymous_52","count":0,"regions":[{"startLoc":{"line":853,"col":24},"endLoc":{"line":855,"col":16},"count":0,"ignored":0},{"startLoc":{"line":854,"col":17},"endLoc":{"line":855,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":114},{"name":"anonymous_53","count":0,"regions":[{"startLoc":{"line":858,"col":13},"endLoc":{"line":918,"col":14},"count":0,"ignored":0},{"startLoc":{"line":858,"col":69},"endLoc":{"line":918,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":858,"col":17},"endLoc":{"line":858,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":115},{"name":"anonymous_54","count":0,"regions":[{"startLoc":{"line":859,"col":15},"endLoc":{"line":889,"col":21},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":116},{"name":"anonymous_55","count":0,"regions":[{"startLoc":{"line":859,"col":15},"endLoc":{"line":859,"col":35},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":117},{"name":"anonymous_56","count":0,"regions":[{"startLoc":{"line":860,"col":17},"endLoc":{"line":864,"col":45},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":118},{"name":"anonymous_57","count":0,"regions":[{"startLoc":{"line":866,"col":17},"endLoc":{"line":886,"col":30},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":119},{"name":"anonymous_58","count":0,"regions":[{"startLoc":{"line":867,"col":19},"endLoc":{"line":883,"col":20},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":120},{"name":"anonymous_59","count":0,"regions":[{"startLoc":{"line":867,"col":74},"endLoc":{"line":868,"col":24},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":869,"col":48},"endLoc":{"line":869,"col":69},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":121},{"name":"anonymous_60","count":0,"regions":[{"startLoc":{"line":868,"col":21},"endLoc":{"line":879,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":122},{"name":"anonymous_61","count":0,"regions":[{"startLoc":{"line":872,"col":30},"endLoc":{"line":872,"col":77},"count":0,"ignored":0},{"startLoc":{"line":872,"col":38},"endLoc":{"line":872,"col":77},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":123},{"name":"anonymous_62","count":0,"regions":[{"startLoc":{"line":873,"col":29},"endLoc":{"line":873,"col":75},"count":0,"ignored":0},{"startLoc":{"line":873,"col":37},"endLoc":{"line":873,"col":75},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":124},{"name":"anonymous_63","count":0,"regions":[{"startLoc":{"line":874,"col":30},"endLoc":{"line":876,"col":22},"count":0,"ignored":0},{"startLoc":{"line":875,"col":23},"endLoc":{"line":876,"col":22},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":875,"col":57},"endLoc":{"line":875,"col":75},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":125},{"name":"anonymous_64","count":0,"regions":[{"startLoc":{"line":877,"col":30},"endLoc":{"line":879,"col":22},"count":0,"ignored":0},{"startLoc":{"line":878,"col":23},"endLoc":{"line":879,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":126},{"name":"anonymous_65","count":0,"regions":[{"startLoc":{"line":880,"col":22},"endLoc":{"line":883,"col":20},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":881,"col":21},"endLoc":{"line":881,"col":53},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":127},{"name":"anonymous_66","count":0,"regions":[{"startLoc":{"line":889,"col":15},"endLoc":{"line":889,"col":35},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":128},{"name":"anonymous_67","count":0,"regions":[{"startLoc":{"line":890,"col":17},"endLoc":{"line":894,"col":45},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":129},{"name":"anonymous_68","count":0,"regions":[{"startLoc":{"line":896,"col":17},"endLoc":{"line":916,"col":30},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":130},{"name":"anonymous_69","count":0,"regions":[{"startLoc":{"line":897,"col":19},"endLoc":{"line":913,"col":20},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":131},{"name":"anonymous_70","count":0,"regions":[{"startLoc":{"line":897,"col":76},"endLoc":{"line":898,"col":24},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":132},{"name":"anonymous_71","count":0,"regions":[{"startLoc":{"line":898,"col":21},"endLoc":{"line":909,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":133},{"name":"anonymous_72","count":0,"regions":[{"startLoc":{"line":902,"col":30},"endLoc":{"line":902,"col":80},"count":0,"ignored":0},{"startLoc":{"line":902,"col":38},"endLoc":{"line":902,"col":80},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":134},{"name":"anonymous_73","count":0,"regions":[{"startLoc":{"line":903,"col":29},"endLoc":{"line":903,"col":78},"count":0,"ignored":0},{"startLoc":{"line":903,"col":37},"endLoc":{"line":903,"col":78},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":135},{"name":"anonymous_74","count":0,"regions":[{"startLoc":{"line":904,"col":30},"endLoc":{"line":906,"col":22},"count":0,"ignored":0},{"startLoc":{"line":905,"col":23},"endLoc":{"line":906,"col":22},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":905,"col":60},"endLoc":{"line":905,"col":78},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":136},{"name":"anonymous_75","count":0,"regions":[{"startLoc":{"line":907,"col":30},"endLoc":{"line":909,"col":22},"count":0,"ignored":0},{"startLoc":{"line":908,"col":23},"endLoc":{"line":909,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":137},{"name":"anonymous_76","count":0,"regions":[{"startLoc":{"line":910,"col":22},"endLoc":{"line":913,"col":20},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":138},{"name":"anonymous_78","count":0,"regions":[{"startLoc":{"line":920,"col":13},"endLoc":{"line":959,"col":14},"count":0,"ignored":0},{"startLoc":{"line":920,"col":69},"endLoc":{"line":959,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":920,"col":17},"endLoc":{"line":920,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":139},{"name":"anonymous_79","count":0,"regions":[{"startLoc":{"line":921,"col":15},"endLoc":{"line":921,"col":21},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":140},{"name":"anonymous_80","count":0,"regions":[{"startLoc":{"line":921,"col":15},"endLoc":{"line":921,"col":35},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":141},{"name":"anonymous_81","count":0,"regions":[{"startLoc":{"line":922,"col":17},"endLoc":{"line":926,"col":45},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":142},{"name":"anonymous_82","count":0,"regions":[{"startLoc":{"line":928,"col":17},"endLoc":{"line":957,"col":30},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":143},{"name":"anonymous_83","count":0,"regions":[{"startLoc":{"line":930,"col":19},"endLoc":{"line":941,"col":22},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":932,"col":32},"endLoc":{"line":932,"col":73},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":934,"col":38},"endLoc":{"line":934,"col":114},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":936,"col":38},"endLoc":{"line":936,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":936,"col":72},"endLoc":{"line":936,"col":115},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":144},{"name":"anonymous_84","count":0,"regions":[{"startLoc":{"line":937,"col":30},"endLoc":{"line":941,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":145},{"name":"anonymous_85","count":0,"regions":[{"startLoc":{"line":943,"col":19},"endLoc":{"line":954,"col":22},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":945,"col":32},"endLoc":{"line":945,"col":72},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":947,"col":38},"endLoc":{"line":947,"col":113},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":949,"col":38},"endLoc":{"line":949,"col":62},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":949,"col":71},"endLoc":{"line":949,"col":113},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":146},{"name":"anonymous_86","count":0,"regions":[{"startLoc":{"line":950,"col":30},"endLoc":{"line":954,"col":22},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":147}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":7,"7":8,"8":9,"9":11,"10":12,"11":13,"12":16,"13":17,"14":18,"15":21,"16":22,"17":23,"18":26,"19":27,"20":28,"21":31,"22":32,"23":33,"24":34,"25":37,"26":38,"27":39,"28":40,"29":41,"30":42,"31":43,"32":46,"33":47,"34":48,"35":51,"36":52,"37":53,"38":54,"39":55,"40":58,"41":59,"42":60,"43":61,"44":62,"45":63,"46":64,"47":65,"48":66,"49":67,"50":68,"51":70,"52":71,"53":72,"54":73,"55":76,"56":77,"57":78,"58":79,"59":80,"60":81,"61":82,"62":83,"63":84,"64":85,"65":86,"66":87,"67":88,"68":89,"69":90,"70":91,"71":93,"72":94,"73":97,"74":98,"75":99,"76":100,"77":103,"78":104,"79":105,"80":106,"81":109,"82":110,"83":111,"84":112,"85":115,"86":116,"87":117,"88":118,"89":121,"90":122,"91":123,"92":124,"93":125,"94":128,"95":129,"96":132,"97":133,"98":136,"99":137,"100":138,"101":139,"102":140,"103":141,"104":142,"105":143,"106":144,"107":145,"108":146,"109":147,"110":148,"111":149,"112":150,"113":151,"114":152,"115":153,"116":154,"117":155,"118":156,"119":157,"120":158,"121":159,"122":160,"123":161,"124":162,"125":163,"126":164,"127":166,"128":169,"129":170,"130":171,"131":172,"132":173,"133":174,"134":175,"135":176,"136":177,"137":178,"138":179,"139":180,"140":181,"141":182,"142":183,"143":184,"144":185,"145":186,"146":187,"147":188,"148":189,"149":190,"150":191,"151":192,"152":193,"153":194,"154":195,"155":198,"156":199,"157":200,"158":201,"159":202,"160":203,"161":204,"162":205,"163":206,"164":207,"165":209,"166":212,"167":213,"168":214,"169":215,"170":216,"171":217,"172":218,"173":220,"174":221,"175":223,"176":226,"177":227,"178":228,"179":229,"180":230,"181":231,"182":232,"183":233,"184":234,"185":235,"186":236,"187":237,"188":238,"189":239,"190":241,"191":242,"192":243,"193":244,"194":246,"195":248,"196":251,"197":252,"198":253,"199":254,"200":255,"201":256,"202":257,"203":258,"204":259,"205":260,"206":261,"207":262,"208":263,"209":265,"210":266,"211":267,"212":268,"213":270,"214":272,"215":275,"216":276,"217":277,"218":278,"219":279,"220":280,"221":281,"222":282,"223":283,"224":284,"225":285,"226":286,"227":288,"228":289,"229":290,"230":291,"231":293,"232":295,"233":298,"234":299,"235":300,"236":301,"237":302,"238":303,"239":304,"240":305,"241":306,"242":307,"243":308,"244":309,"245":311,"246":312,"247":313,"248":314,"249":316,"250":318,"251":321,"252":322,"253":323,"254":324,"255":325,"256":326,"257":327,"258":328,"259":329,"260":330,"261":331,"262":332,"263":333,"264":334,"265":335,"266":336,"267":340,"268":341,"269":342,"270":343,"271":344,"272":347,"273":348,"274":349,"275":352,"276":353,"277":354,"278":355,"279":356,"280":357,"281":358,"282":360,"283":363,"284":364,"285":365,"286":366,"287":367,"288":368,"289":369,"290":371,"291":372,"292":373,"293":375,"294":378,"295":379,"296":380,"297":381,"298":382,"299":383,"300":386,"301":387,"302":390,"303":391,"304":392,"305":393,"306":394,"307":395,"308":396,"309":397,"310":398,"311":399,"312":402,"313":403,"314":404,"315":405,"316":406,"317":407,"318":408,"319":410,"320":413,"321":414,"322":415,"323":416,"324":417,"325":418,"326":419,"327":420,"328":421,"329":422,"330":423,"331":427,"332":428,"333":429,"334":430,"335":431,"336":432,"337":433,"338":434,"339":435,"340":436,"341":437,"342":438,"343":439,"344":440,"345":441,"346":442,"347":443,"348":444,"349":445,"350":446,"351":447,"352":448,"353":449,"354":451,"355":452,"356":453,"357":455,"358":458,"359":459,"360":460,"361":461,"362":464,"363":467,"364":468,"365":469,"366":470,"367":471,"368":472,"369":473,"370":474,"371":475,"372":476,"373":477,"374":482,"375":483,"376":484,"377":485,"378":486,"379":487,"380":488,"381":489,"382":490,"383":491,"384":492,"385":497,"386":498,"387":499,"388":500,"389":501,"390":502,"391":504,"392":505,"393":506,"394":507,"395":508,"396":512,"397":513,"398":514,"399":515,"400":517,"401":518,"402":519,"403":520,"404":522,"405":525,"406":526,"407":527,"408":528,"409":530,"410":531,"411":532,"412":534,"413":535,"414":536,"415":537,"416":539,"417":540,"418":541,"419":542,"420":544,"421":547,"422":548,"423":549,"424":550,"425":552,"426":553,"427":554,"428":556,"429":557,"430":558,"431":559,"432":561,"433":562,"434":563,"435":564,"436":566,"437":569,"438":570,"439":571,"440":572,"441":573,"442":574,"443":575,"444":576,"445":577,"446":578,"447":579,"448":580,"449":581,"450":582,"451":583,"452":584,"453":585,"454":586,"455":587,"456":588,"457":589,"458":590,"459":591,"460":593,"461":594,"462":595,"463":596,"464":597,"465":600,"466":601,"467":602,"468":603,"469":604,"470":605,"471":606,"472":607,"473":608,"474":612,"475":613,"476":614,"477":615,"478":617,"479":621,"480":622,"481":623,"482":624,"483":625,"484":626,"485":627,"486":628,"487":629,"488":633,"489":634,"490":635,"491":636,"492":637,"493":638,"494":639,"495":641,"496":642,"497":643,"498":644,"499":645,"500":646,"501":647,"502":648,"503":649,"504":652,"505":653,"506":654,"507":655,"508":656,"509":660,"510":661,"511":662,"512":663,"513":664,"514":668,"515":669,"516":670,"517":671,"518":672,"519":676,"520":677,"521":678,"522":679,"523":680,"524":684,"525":685,"526":686,"527":687,"528":688,"529":691,"530":692,"531":693,"532":694,"533":695,"534":698,"535":699,"536":700,"537":701,"538":702,"539":703,"540":705,"541":706,"542":708,"543":709,"544":710,"545":711,"546":712,"547":713,"548":714,"549":716,"550":722,"551":723,"552":724,"553":725,"554":726,"555":727,"556":728,"557":730,"558":731,"559":732,"560":733,"561":734,"562":735,"563":736,"564":737,"565":739,"566":740,"567":741,"568":742,"569":744,"570":745,"571":746,"572":747,"573":748,"574":749,"575":750,"576":751,"577":752,"578":753,"579":754,"580":756,"581":757,"582":758,"583":760,"584":761,"585":762,"586":763,"587":764,"588":765,"589":766,"590":769,"591":770,"592":771,"593":773,"594":774,"595":776,"596":777,"597":781,"598":782,"599":783,"600":784,"601":785,"602":786,"603":788,"604":789,"605":790,"606":791,"607":792,"608":793,"609":794,"610":795,"611":797,"612":798,"613":799,"614":800,"615":802,"616":803,"617":804,"618":805,"619":806,"620":807,"621":808,"622":809,"623":810,"624":811,"625":812,"626":814,"627":815,"628":816,"629":818,"630":819,"631":820,"632":821,"633":822,"634":823,"635":824,"636":827,"637":828,"638":829,"639":830,"640":831,"641":832,"642":834,"643":836,"644":837,"645":839,"646":840,"647":843,"648":844,"649":845,"650":846,"651":847,"652":848,"653":850,"654":851,"655":853,"656":854,"657":858,"658":859,"659":860,"660":861,"661":862,"662":863,"663":864,"664":866,"665":867,"666":868,"667":869,"668":871,"669":872,"670":873,"671":874,"672":875,"673":877,"674":878,"675":880,"676":881,"677":882,"678":885,"679":886,"680":889,"681":890,"682":891,"683":892,"684":893,"685":894,"686":896,"687":897,"688":898,"689":899,"690":901,"691":902,"692":903,"693":904,"694":905,"695":907,"696":908,"697":910,"698":911,"699":912,"700":915,"701":916,"702":920,"703":921,"704":922,"705":923,"706":924,"707":925,"708":926,"709":928,"710":930,"711":931,"712":932,"713":933,"714":934,"715":935,"716":936,"717":937,"718":938,"719":939,"720":940,"721":943,"722":944,"723":945,"724":946,"725":947,"726":948,"727":949,"728":950,"729":951,"730":952,"731":953,"732":956,"733":957,"734":961,"735":962,"736":963,"737":965,"738":966,"739":968,"740":969,"741":970,"742":971,"743":972,"744":973,"745":975,"746":976},"summary":{"lines":{"total":643,"covered":230,"pct":35.77,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4,4,-1,-1,18,18,-1,-1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,-1,2,-1,-1,95,95,95,95,95,95,95,67,61,95,61,95,67,61,95,95,95,95,95,95,95,95,95,95,95,67,67,-1,-1,67,95,95,95,95,95,95,95,95,67,-1,95,-1,-1,36,36,36,36,36,36,12,-1,24,2,-1,22,-1,-1,6,6,6,6,6,6,6,36,36,36,36,36,36,36,-1,36,36,36,36,-1,36,-1,6,-1,-1,6,6,6,6,6,6,18,18,18,18,18,18,18,-1,18,18,18,18,-1,18,-1,6,-1,-1,6,6,6,6,6,6,12,12,12,12,12,12,-1,12,12,12,12,-1,12,-1,6,-1,-1,6,6,6,6,6,6,24,24,24,24,24,24,-1,24,24,24,24,-1,24,-1,6,-1,-1,8,8,8,0,8,0,8,1,8,2,8,4,8,0,8,1,-1,-1,-1,20,20,20,20,20,-1,-1,-1,-1,-1,-1,-1,2,2,2,2,2,2,2,-1,2,-1,-1,2,2,2,2,2,2,0,-1,2,2,2,-1,2,-1,-1,3,3,3,3,3,3,-1,-1,1,1,-1,-1,1,1,1,1,1,1,1,1,1,1,-1,-1,1,1,1,1,1,1,1,-1,1,-1,-1,1,1,1,1,1,1,1,1,1,1,1,-1,-1,-1,-1,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,0,0,0,-1,0,-1,-1,0,0,0,0,-1,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,-1,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,0,0,-1,0,0,0,0,-1,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,0,0,-1,0,0,0,0,-1,0,0,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,-1,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,0,0,0,-1,0,0,-1,0,0,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,-1,0,0,-1,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,-1,0,0,-1,0,0,0,-1,-1,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,-1,0,0,-1,0,0,0,-1,-1,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,0,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,-1,-1,-1,0,0,0,-1,0,0,-1,0,0,0,0,0,0,-1,0,0,-1,-1,-1]},"functions":{"total":148,"covered":18,"pct":12.16},"branches":{"total":129,"covered":56,"pct":43.41}}},"title":"PlayerSettingsDialog.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
