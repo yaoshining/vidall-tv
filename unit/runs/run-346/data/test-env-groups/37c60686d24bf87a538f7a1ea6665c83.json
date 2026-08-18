@@ -1,1 +1,0 @@
-{"id":"37c60686d24bf87a538f7a1ea6665c83","fullName":"OpenSubtitlesClient_error_mapping#should throw InvalidApiKeyError when direct channel returns HTTP 401","name":"should throw InvalidApiKeyError when direct channel returns HTTP 401","status":"passed","testResultsByEnv":{"default":"d7a6e364c61a15669d3be953b0a8a51c"}}
