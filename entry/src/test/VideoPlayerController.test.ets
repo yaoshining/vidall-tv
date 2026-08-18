@@ -596,8 +596,8 @@ export default function videoPlayerControllerTest() {
     it('resolveVpeQualityByScaling 按缩放比例自动选档（最高 medium）', 0, () => {
       // 大幅放大（源 960x540 → 显示 3840x2160，scale=4）→ medium（最高档）
       expect(resolveVpeQualityByScaling(960, 540, 3840, 2160)).assertEqual('medium')
-      // 中等放大（源 2560x1440 → 显示 3840x2160，scale=1.5）→ medium
-      expect(resolveVpeQualityByScaling(2560, 1440, 3840, 2160)).assertEqual('medium')
+      // 中等放大（源 1920x1080 → 显示 2880x1620，scale=1.5）→ medium
+      expect(resolveVpeQualityByScaling(1920, 1080, 2880, 1620)).assertEqual('medium')
       // 轻微放大（源 1920x1080 → 显示 2560x1440，scale≈1.33）→ low
       expect(resolveVpeQualityByScaling(1920, 1080, 2560, 1440)).assertEqual('low')
       // 1:1（源=显示 1920x1080）→ low
@@ -623,8 +623,8 @@ export default function videoPlayerControllerTest() {
       // HDR 视频无论如何都门控（isHdrVideo true）
       expect(isHdrVideo('HDR10')).assertTrue()
       expect(isHdrVideo('HLG')).assertTrue()
-      // SDR 源在输入范围内、scale=2.0 且源宽高均≥512 → HIGH（非 null = 会建 VPE）
-      expect(resolveVpeQualityByScaling(1920, 1080, 3840, 2160)).assertEqual('high')
+      // SDR 源在输入范围内、scale=2.0 ≥ 1.5 → medium（最高档，非 null = 会建 VPE）
+      expect(resolveVpeQualityByScaling(1920, 1080, 3840, 2160)).assertEqual('medium')
       // SDR 源超限返回 null（不建 VPE）
       expect(resolveVpeQualityByScaling(3840, 2160, 3840, 2160)).assertEqual(null)
     })
