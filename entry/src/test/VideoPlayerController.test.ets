@@ -623,8 +623,8 @@ export default function videoPlayerControllerTest() {
       // HDR 视频无论如何都门控（isHdrVideo true）
       expect(isHdrVideo('HDR10')).assertTrue()
       expect(isHdrVideo('HLG')).assertTrue()
-      // SDR 源在输入范围内返回档位（非 null = 会建 VPE）
-      expect(resolveVpeQualityByScaling(1920, 1080, 3840, 2160)).assertEqual('medium')
+      // SDR 源在输入范围内、scale=2.0 且源宽高均≥512 → HIGH（非 null = 会建 VPE）
+      expect(resolveVpeQualityByScaling(1920, 1080, 3840, 2160)).assertEqual('high')
       // SDR 源超限返回 null（不建 VPE）
       expect(resolveVpeQualityByScaling(3840, 2160, 3840, 2160)).assertEqual(null)
     })

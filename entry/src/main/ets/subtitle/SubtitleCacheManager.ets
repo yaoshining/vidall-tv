@@ -51,40 +51,16 @@ export class SubtitleCacheManager {
   // ──────────────────────────────────────────
 
   /**
-   * 逐段创建多级目录（兼容不支持 recursion 参数的 SDK 版本）。
-   * 从目标路径向上查找第一个已存在的祖先目录，再从上往下逐级创建。
+   * 递归创建多级目录（目录已存在时忽略 EEXIST）。
+   * 与 SubtitleDownloader.writeSubtitleContentToCache 保持一致的设备端验证模式。
    */
   private mkdirp(dirPath: string): void {
-    // 从目标向上找到第一个存在的祖先
-    const toCreate: string[] = [];
-    let current = dirPath;
-    while (current.length > 1) {
-      let exists = false;
-      try {
-        fs.statSync(current);
-        exists = true;
-      } catch {
-        // 不存在
-      }
-      if (exists) {
-        break;
-      }
-      toCreate.push(current);
-      const lastSlash = current.lastIndexOf('/');
-      if (lastSlash <= 0) {
-        break;
-      }
-      current = current.substring(0, lastSlash);
-    }
-    // 从上到下依次创建缺失的目录
-    for (let i = toCreate.length - 1; i >= 0; i--) {
-      try {
-        fs.mkdirSync(toCreate[i]);
-      } catch (e) {
-        const be = e as BusinessError;
-        if (be.code !== 13900015) {
-          throw new Error(`mkdirSync(${toCreate[i]}) failed: ${be.message} (code: ${be.code})`);
-        }
+    try {
+      fs.mkdirSync(dirPath, true);
+    } catch (e) {
+      const be = e as BusinessError;
+      if (be.code !== 13900015) {
+        throw new Error(`mkdirSync(${dirPath}) failed: ${be.message} (code: ${be.code})`);
       }
     }
   }
