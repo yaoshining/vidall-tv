@@ -66,6 +66,50 @@ function decodeUtf8(bytes: Uint8Array): string {
   return result;
 }
 
+/**
+ * 纯 JS UTF-8 编码。
+ * 设备端 util.TextEncoder.encodeInto 可能返回空 Uint8Array，这里不依赖它。
+ */
+function encodeUtf8(text: string): Uint8Array {
+  const bytes: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) {
+      bytes.push(code);
+    } else if (code < 0x800) {
+      bytes.push(0xC0 | (code >> 6));
+      bytes.push(0x80 | (code & 0x3F));
+    } else if (code >= 0xD800 && code <= 0xDBFF && i + 1 < text.length) {
+      const lo = text.charCodeAt(i + 1);
+      if (lo >= 0xDC00 && lo <= 0xDFFF) {
+        const cp = 0x10000 + ((code - 0xD800) << 10) + (lo - 0xDC00);
+        bytes.push(0xF0 | (cp >> 18));
+        bytes.push(0x80 | ((cp >> 12) & 0x3F));
+        bytes.push(0x80 | ((cp >> 6) & 0x3F));
+        bytes.push(0x80 | (cp & 0x3F));
+        i += 1;
+      } else {
+        bytes.push(0xEF);
+        bytes.push(0xBF);
+        bytes.push(0xBD);
+      }
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      bytes.push(0xEF);
+      bytes.push(0xBF);
+      bytes.push(0xBD);
+    } else {
+      bytes.push(0xE0 | (code >> 12));
+      bytes.push(0x80 | ((code >> 6) & 0x3F));
+      bytes.push(0x80 | (code & 0x3F));
+    }
+  }
+  const result = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    result[i] = bytes[i];
+  }
+  return result;
+}
+
 // ─────────────────────────────────────────────
 // SubtitleCacheManager
 // ─────────────────────────────────────────────
@@ -154,6 +198,23 @@ export class SubtitleCacheManager {
   }
 
   /**
+   * 循环写入全部字节，处理 writeSync 部分写入（返回实际写入字节数小于预期）的场景。
+   */
+  private writeAllSync(fd: number, data: Uint8Array): void {
+    let written = 0;
+    while (written < data.length) {
+      // 每次写入剩余数据的独立拷贝，避免视图共享底层 buffer 导致越界写入
+      const remaining = new Uint8Array(data.length - written);
+      remaining.set(data.subarray(written));
+      const n = fs.writeSync(fd, remaining.buffer);
+      if (n <= 0) {
+        throw new Error(`writeSync 写入中断：返回 ${n}`);
+      }
+      written += n;
+    }
+  }
+
+  /**
    * 序列化并写入 metadata.json。
    * 先写临时文件，完整写入并关闭后再原子重命名替换原文件，
    * 避免直接 TRUNC 覆盖时部分写入导致 metadata.json 被截断。
@@ -163,14 +224,11 @@ export class SubtitleCacheManager {
     const tmpPath = `${metaPath}.tmp`;
     this.mkdirp(dir);
     const text = JSON.stringify(metadata, null, 2);
+    const bytes = encodeUtf8(text);
     let file: fs.File | null = null;
     try {
       file = fs.openSync(tmpPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-      // 直接写字符串（writeSync 内部按 utf-8 编码）；返回实际写入字节数，0 表示写入失败
-      const written = fs.writeSync(file.fd, text);
-      if (written <= 0) {
-        throw new Error(`writeSync 写入中断：返回 ${written}`);
-      }
+      this.writeAllSync(file.fd, bytes);
       fs.closeSync(file);
       file = null;
       fs.renameSync(tmpPath, metaPath);
