@@ -221,7 +221,7 @@ export class SubtitleCacheManager {
 
       await this.writeMetadata(dir, metadata);
     } catch (e) {
-      throw new Error(`[SubtitleCacheManager] saveSubtitle 失败: ${String(e)}`);
+      console.error(`[SubtitleCacheManager] saveSubtitle 失败: ${String(e)}`);
     }
   }
 

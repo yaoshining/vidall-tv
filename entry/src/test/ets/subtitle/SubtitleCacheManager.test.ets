@@ -79,7 +79,11 @@ export default function subtitleCacheManagerTest() {
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      let dir: string = ctx.filesDir;
+      if (dir.length === 0) dir = ctx.cacheDir;
+      if (dir.length === 0) dir = ctx.tempDir;
+      if (dir.length === 0) dir = ctx.preferencesDir;
+      filesDir = dir;
       manager = new SubtitleCacheManager();
     });
 
@@ -152,7 +156,11 @@ export default function subtitleCacheManagerTest() {
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      let dir: string = ctx.filesDir;
+      if (dir.length === 0) dir = ctx.cacheDir;
+      if (dir.length === 0) dir = ctx.tempDir;
+      if (dir.length === 0) dir = ctx.preferencesDir;
+      filesDir = dir;
       manager = new SubtitleCacheManager();
     });
 
@@ -173,7 +181,11 @@ export default function subtitleCacheManagerTest() {
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      let dir: string = ctx.filesDir;
+      if (dir.length === 0) dir = ctx.cacheDir;
+      if (dir.length === 0) dir = ctx.tempDir;
+      if (dir.length === 0) dir = ctx.preferencesDir;
+      filesDir = dir;
       manager = new SubtitleCacheManager();
     });
 
@@ -228,7 +240,11 @@ export default function subtitleCacheManagerTest() {
     beforeEach(() => {
       SOURCE_ID = `test-${_RUN_EPOCH}-${++_testCounter}`;
       const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-      filesDir = ctx.filesDir;
+      let dir: string = ctx.filesDir;
+      if (dir.length === 0) dir = ctx.cacheDir;
+      if (dir.length === 0) dir = ctx.tempDir;
+      if (dir.length === 0) dir = ctx.preferencesDir;
+      filesDir = dir;
       manager = new SubtitleCacheManager();
     });
 
