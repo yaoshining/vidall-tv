@@ -222,8 +222,8 @@ export class SubtitleCacheManager {
       await this.writeMetadata(dir, metadata);
     } catch (e) {
       const err = e as BusinessError;
-      console.error(`[SubtitleCacheManager] saveSubtitle 失败 (filesDir=${filesDir}): ${err.message} (code: ${err.code})`);
-      throw new Error(`[SubtitleCacheManager] saveSubtitle 失败 (filesDir=${filesDir}): ${err.message} (code: ${err.code})`);
+      console.error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message} (code: ${err.code})`);
+      throw new Error(`[SubtitleCacheManager] saveSubtitle 失败: ${err.message} (code: ${err.code})`);
     }
   }
 
