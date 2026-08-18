@@ -1,1 +1,0 @@
-{"id":"60073f342ab577d11664862f569aa306","fullName":"MediaLibraryContextTest#buildItems 优先使用剧集 stillUrl 填充缩略图字段且不再依赖 posterLocalPath","name":"buildItems 优先使用剧集 stillUrl 填充缩略图字段且不再依赖 posterLocalPath","status":"passed","testResultsByEnv":{"default":"81324ebad750affc6f6f25cbd9f6e07d"}}
