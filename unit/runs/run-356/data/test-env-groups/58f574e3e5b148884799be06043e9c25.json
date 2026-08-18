@@ -1,0 +1,1 @@
+{"id":"58f574e3e5b148884799be06043e9c25","fullName":"VideoPlayerController review regressions#fallback capture 会在 seekDone 到 onPlay 窗口内保留显式自动播放决策","name":"fallback capture 会在 seekDone 到 onPlay 窗口内保留显式自动播放决策","status":"passed","testResultsByEnv":{"default":"d4e452bd309dfd038e169d10b6405f3b"}}
