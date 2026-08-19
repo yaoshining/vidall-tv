@@ -7,6 +7,8 @@ import { VideoServerTypeIcon } from "./IconBuilders";
 import { VideoServerStore } from "../../../stores/servers/VideoServerStore";
 import { VideoServerModel, videoServerTypeLabel } from "../../../stores/servers/VideoServerModel";
 import { VideoServer, VideoServerType } from "../../../db/models/VideoServerEntity";
+import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel";
+import { BusinessError } from "@kit.BasicServicesKit";
 
 @ComponentV2
 struct VideoServerSettingBuilderComponent {
@@ -34,7 +36,7 @@ struct VideoServerSettingBuilderComponent {
       this.isLoading = true
       await this.videoServerModel.loadVideoServers(true)
     } catch (error) {
-      console.error('VideoServerSettingBuilder: Failed to load video servers', (error as Error).message ?? String(error))
+      console.error('VideoServerSettingBuilder: Failed to load video servers', (error as BusinessError).message ?? String(error))
       this.showToastSafe('加载影视服务器失败')
     } finally {
       this.isLoading = false
@@ -78,9 +80,13 @@ struct VideoServerSettingBuilderComponent {
     try {
       this.isDeletingServer = true
       await this.videoServerModel.deleteVideoServer(target.id)
+      // 若删除的是当前激活源，回退到文件源（与首页 tab 保持一致）
+      if (SourceSwitchModel.getState().getActiveServerId() === target.id) {
+        await SourceSwitchModel.getState().setFileSource()
+      }
       this.showToastSafe('服务器已删除')
     } catch (error) {
-      console.error('VideoServerSettingBuilder: 删除服务器失败', (error as Error).message ?? String(error))
+      console.error('VideoServerSettingBuilder: 删除服务器失败', (error as BusinessError).message ?? String(error))
       this.showToastSafe('删除失败，请重试')
     } finally {
       this.isDeletingServer = false

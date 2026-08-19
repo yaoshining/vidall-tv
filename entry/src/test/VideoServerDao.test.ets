@@ -1,6 +1,6 @@
 import { describe, beforeAll, afterAll, it, expect } from '@ohos/hypium';
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
-import { Context } from '@ohos.abilityAccessCtrl';
+import { Context } from '@kit.AbilityKit';
 import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
 
 /**

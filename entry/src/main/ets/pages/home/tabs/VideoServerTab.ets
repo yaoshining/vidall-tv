@@ -1,4 +1,5 @@
 import { LengthMetrics } from "@kit.ArkUI"
+import { BusinessError } from "@kit.BasicServicesKit"
 import { VideoServer, VideoServerType } from "../../../db/models/VideoServerEntity"
 import { VideoServerStore } from "../../../stores/servers/VideoServerStore"
 import { VideoServerModel, videoServerTypeLabel } from "../../../stores/servers/VideoServerModel"
@@ -31,7 +32,7 @@ export struct VideoServerTab {
       // 校验当前源仍有效（服务器被删则回退文件源）
       await this.sourceSwitchModel.load(this.videoServerModel.videoServers.map(s => s.id ?? -1))
     } catch (error) {
-      console.error('VideoServerTab: 加载服务器失败', (error as Error).message ?? String(error))
+      console.error('VideoServerTab: 加载服务器失败', (error as BusinessError).message ?? String(error))
     } finally {
       this.isLoading = false
     }
@@ -100,7 +101,7 @@ export struct VideoServerTab {
       }
       this.showToastSafe('服务器已删除')
     } catch (error) {
-      console.error('VideoServerTab: 删除服务器失败', (error as Error).message ?? String(error))
+      console.error('VideoServerTab: 删除服务器失败', (error as BusinessError).message ?? String(error))
       this.showToastSafe('删除失败，请重试')
     } finally {
       this.isDeletingServer = false

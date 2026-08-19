@@ -1,4 +1,5 @@
 import { JsonHttpClient } from './JsonHttpClient';
+import { BusinessError } from "@kit.BasicServicesKit";
 import {
   VideoServerLibrary,
   VideoServerMediaItem,
@@ -199,7 +200,14 @@ export class PlexClient {
   async reportPlaying(itemId: string, positionMs: number, durationMs: number): Promise<void> {
     const url = `${this.buildBaseUrl()}/:/timeline?ratingKey=${itemId}&state=playing` +
       `&time=${Math.round(positionMs)}&duration=${Math.round(durationMs)}`;
-    await JsonHttpClient.get(url, this.headers());
+    try {
+      const resp = await JsonHttpClient.get(url, this.headers());
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        console.warn(`[PlexClient] reportPlaying 失败 status=${resp.statusCode}`);
+      }
+    } catch (e) {
+      console.warn('[PlexClient] reportPlaying 异常', (e as BusinessError).message);
+    }
   }
 
   /**
@@ -208,7 +216,14 @@ export class PlexClient {
   async reportStopped(itemId: string, positionMs: number, durationMs: number): Promise<void> {
     const url = `${this.buildBaseUrl()}/:/timeline?ratingKey=${itemId}&state=stopped` +
       `&time=${Math.round(positionMs)}&duration=${Math.round(durationMs)}`;
-    await JsonHttpClient.get(url, this.headers());
+    try {
+      const resp = await JsonHttpClient.get(url, this.headers());
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        console.warn(`[PlexClient] reportStopped 失败 status=${resp.statusCode}`);
+      }
+    } catch (e) {
+      console.warn('[PlexClient] reportStopped 异常', (e as BusinessError).message);
+    }
   }
 
   /**
@@ -217,7 +232,14 @@ export class PlexClient {
   async reportProgress(itemId: string, positionMs: number, durationMs: number): Promise<void> {
     const url = `${this.buildBaseUrl()}/:/timeline?ratingKey=${itemId}&state=playing` +
       `&time=${Math.round(positionMs)}&duration=${Math.round(durationMs)}`;
-    await JsonHttpClient.get(url, this.headers());
+    try {
+      const resp = await JsonHttpClient.get(url, this.headers());
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        console.warn(`[PlexClient] reportProgress 失败 status=${resp.statusCode}`);
+      }
+    } catch (e) {
+      console.warn('[PlexClient] reportProgress 异常', (e as BusinessError).message);
+    }
   }
 
   async getHome(): Promise<VideoServerHome> {
@@ -394,7 +416,8 @@ export class PlexClient {
           continue;
         }
         const role = String(r['role'] ?? '');
-        const personId = String(r['id'] ?? '');
+        // 人员标识优先用 tagKey（Plex 人员唯一 ID）；Role.id 只是该条目内的角色条目 ID
+        const personId = String(r['tagKey'] ?? r['id'] ?? '');
         const thumb = String(r['thumb'] ?? '');
         const imageUrl = thumb.length > 0 ? this.absoluteImageUrl(this.buildBaseUrl(), thumb, this.config.token) : '';
         cast.push({ name, role, imageUrl, personId });
@@ -411,7 +434,7 @@ export class PlexClient {
       name: '', overview: '', birthDate: '', birthPlace: '', imageUrl: '', credits: []
     };
     try {
-      const resp = await JsonHttpClient.get(`${this.buildBaseUrl()}/library/metadata/${personId}`, this.headers());
+      const resp = await JsonHttpClient.get(`${this.buildBaseUrl()}/library/people/${personId}`, this.headers());
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         const parsed = JSON.parse(resp.body) as Record<string, Object>;
         const mediaContainer = parsed['MediaContainer'] as Record<string, Object> | undefined;

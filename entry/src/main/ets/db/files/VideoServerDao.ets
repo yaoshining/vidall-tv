@@ -38,7 +38,8 @@ export class VideoServerDao {
           config[key] = await CryptoUtil.decrypt(value);
         } catch (error) {
           console.error('VideoServerDao: Failed to decrypt sensitive field', key, JSON.stringify(error));
-          // 解密失败时保持密文状态
+          // 解密失败时清空该字段，避免密文被当作凭据使用，并在保存时被二次加密导致数据损坏。
+          config[key] = '';
         }
       }
     }

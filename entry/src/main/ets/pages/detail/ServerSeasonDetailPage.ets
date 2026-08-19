@@ -154,22 +154,25 @@ export struct ServerSeasonDetailPage {
       if (buf === undefined || buf.byteLength === 0) { return; }
 
       const imgSrc = image.createImageSource(buf);
-      const pixelMap = await imgSrc.createPixelMap({
-        desiredSize: { width: 64, height: 36 },
-        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
-      });
-      imgSrc.release();
+      let pixelMap: image.PixelMap | undefined;
+      try {
+        pixelMap = await imgSrc.createPixelMap({
+          desiredSize: { width: 64, height: 36 },
+          desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+        });
+        const picker = await effectKit.createColorPicker(pixelMap);
+        const mainColor = picker.getMainColorSync();
 
-      const picker = await effectKit.createColorPicker(pixelMap);
-      const mainColor = picker.getMainColorSync();
-      pixelMap.release();
-
-      const darken = (v: number): number => Math.round(v * 0.4);
-      const toHex = (v: number): string => { const h = v.toString(16); return h.length < 2 ? '0' + h : h; };
-      const r = darken(mainColor.red & 0xFF);
-      const g = darken(mainColor.green & 0xFF);
-      const b = darken(mainColor.blue & 0xFF);
-      this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
+        const darken = (v: number): number => Math.round(v * 0.4);
+        const toHex = (v: number): string => { const h = v.toString(16); return h.length < 2 ? '0' + h : h; };
+        const r = darken(mainColor.red & 0xFF);
+        const g = darken(mainColor.green & 0xFF);
+        const b = darken(mainColor.blue & 0xFF);
+        this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
+      } finally {
+        pixelMap?.release();
+        imgSrc.release();
+      }
     } catch (e) {
       console.warn('[ServerSeasonDetailPage] extractDominantColor failed', (e as BusinessError).message ?? String(e));
     }

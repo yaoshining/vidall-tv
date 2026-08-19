@@ -1,4 +1,5 @@
 import { LengthMetrics } from "@kit.ArkUI"
+import { BusinessError } from "@kit.BasicServicesKit"
 import { SidebarStore } from "../../stores/sidebar/SidebarStore"
 import { TabBarStore } from "../../stores/tabbar/TabBarStore"
 import { HomeTopBar } from "./topbar"
@@ -47,14 +48,10 @@ export struct HomePage {
   private async loadSourceState(): Promise<void> {
     try {
       await this.videoServerModel.loadVideoServers(true)
-    } catch (error) {
-      console.warn('[HomePage] 加载影视服务器列表失败', (error as Error).message ?? String(error))
-    }
-    // 服务器列表加载失败时仍尝试恢复持久化的数据源状态，避免用户上次选择被静默丢弃。
-    try {
+      // 仅在服务器列表成功加载后再恢复数据源，避免临时数据库错误时用不完整列表误判服务器已删除而回退文件源
       await this.sourceSwitchModel.load(this.videoServerModel.videoServers.map(s => s.id ?? -1))
     } catch (error) {
-      console.warn('[HomePage] 恢复数据源状态失败', (error as Error).message ?? String(error))
+      console.warn('[HomePage] 加载数据源状态失败', (error as BusinessError).message ?? String(error))
     }
   }
 

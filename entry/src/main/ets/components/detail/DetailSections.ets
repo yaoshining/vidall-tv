@@ -227,9 +227,6 @@ export struct DetailEpisodesSection {
       .textAlign(TextAlign.Center)
       .backgroundColor(this.actionCircleBg(ep, action)).borderRadius(22)
       .border({ width: this.isActionFocused(ep, action) ? 2 : 1, color: this.actionCircleBorder(ep, action) })
-      .focusable(true)
-      .onFocus(() => { this.focusedActionKey = this.buildActionKey(ep, action); })
-      .onBlur(() => { this.clearActionFocusIfMatches(ep, action); })
       .onHover((isHover: boolean) => {
         if (isHover) {
           this.hoveredActionKey = this.buildActionKey(ep, action);
@@ -369,6 +366,7 @@ export struct DetailEpisodesSection {
             .border({ width: 2, color: this.rowBorderColor(ep) })
             .alignItems(VerticalAlign.Top)
             .focusable(true)
+            .onClick(() => { this.onEpisodeClick(ep) })
             .onFocus(() => { this.focusedRowId = ep.id; })
             .onBlur(() => { this.clearRowFocusIfMatches(ep); })
             .onHover((isHover: boolean) => {

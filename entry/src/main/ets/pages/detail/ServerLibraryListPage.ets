@@ -29,25 +29,31 @@ export struct ServerLibraryListPage {
   @Local isLoading: boolean = true
   @Local isLoadingMore: boolean = false
   @Local error: string = ''
+  /** 服务端分页偏移量（独立于去重后的 items.length） */
+  private serverOffset: number = 0
 
   private async loadPage(startIndex: number): Promise<void> {
-    await this.videoServerModel.loadVideoServers(startIndex === 0)
-    const server: VideoServer | null = this.videoServerModel.getVideoServerById(this.serverId)
-    if (!server) {
-      this.error = '服务器不存在'
-      this.isLoading = false
-      this.isLoadingMore = false
-      return
-    }
     try {
+      await this.videoServerModel.loadVideoServers(startIndex === 0)
+      const server: VideoServer | null = this.videoServerModel.getVideoServerById(this.serverId)
+      if (!server) {
+        this.error = '服务器不存在'
+        return
+      }
       if (server.type === VideoServerType.PLEX) {
         const page = await PlexClient.fromConfigJson(server.configJson).getLibraryItems(this.libraryId, startIndex, PAGE_SIZE)
         this.items = this.mergeItems(startIndex, page.items)
         this.total = page.total
+        this.serverOffset = startIndex + page.items.length
       } else {
         const page = await JellyfinClient.fromConfigJson(server.configJson).getLibraryItems(this.libraryId, this.libraryType, startIndex, PAGE_SIZE)
         this.items = this.mergeItems(startIndex, page.items)
         this.total = page.total
+        this.serverOffset = startIndex + page.items.length
+      }
+      if (startIndex > 0 && this.serverOffset === startIndex) {
+        // 空页：服务端无更多数据，停止继续加载
+        this.total = startIndex
       }
     } catch (e) {
       if (startIndex === 0) {
@@ -82,16 +88,17 @@ export struct ServerLibraryListPage {
     if (this.isLoading || this.isLoadingMore) {
       return
     }
-    if (this.items.length >= this.total) {
+    if (this.serverOffset >= this.total) {
       return
     }
     this.isLoadingMore = true
-    this.loadPage(this.items.length).catch(() => {})
+    this.loadPage(this.serverOffset).catch(() => {})
   }
 
   private retry(): void {
     this.isLoading = true
     this.error = ''
+    this.serverOffset = 0
     this.loadPage(0).catch(() => {})
   }
 

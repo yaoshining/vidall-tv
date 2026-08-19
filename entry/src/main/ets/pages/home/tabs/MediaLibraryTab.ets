@@ -23,7 +23,7 @@ import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import { PlayHistoryPage } from "../../history/PlayHistoryPage"
-import { emitter } from "@kit.BasicServicesKit"
+import { emitter, BusinessError } from "@kit.BasicServicesKit"
 import { PlayerPage, PlayerPageParam } from "../../player/index"
 import { PlayerEvents } from "../../../components/core/player/Constants"
 import { MediaResultPage, MediaResultPageParam } from "../../search/MediaResultPage"
@@ -702,7 +702,9 @@ export struct MediaLibraryTab {
       } else {
         // 服务器媒体：重新拉取首页，刷新「继续观看」进度条
         console.info('[MediaLibraryTab][REFRESH] 服务器媒体，刷新继续观看');
-        this.refreshServerHomeSilently();
+        this.refreshServerHomeSilently().catch((e: Error) => {
+          console.warn('[MediaLibraryTab] 静默刷新服务器首页失败', e.message)
+        });
       }
     });
     FileSourceDatabase.onReady(() => {
@@ -718,7 +720,9 @@ export struct MediaLibraryTab {
 
   @Monitor('sourceSwitchModel.activeSource')
   onActiveSourceChange(): void {
-    this.loadActiveSourceContent()
+    this.loadActiveSourceContent().catch((e: Error) => {
+      console.warn('[MediaLibraryTab] 加载数据源内容失败', e.message)
+    })
   }
 
   private async loadActiveSourceContent(): Promise<void> {
@@ -738,38 +742,37 @@ export struct MediaLibraryTab {
       this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
       return
     }
-    // 强制重载：避免首帧凭据解密竞态导致拿到旧/密文配置
-    await this.videoServerModel.loadVideoServers(true)
-    let server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
-    if (!server) {
-      this.serverError = '服务器不存在'
-      this.serverLibraries = []
-      this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
-      return
-    }
     this.serverLoading = true
     this.serverError = ''
     try {
-      await this.fetchServerHome(server)
-    } catch (e) {
-      console.warn('[MediaLibraryTab] 首次加载服务器失败，重试一次', (e as Error).message)
-      // 鉴权失败可能是凭据解密竞态，强制重读后再试一次
+      // 强制重载：避免首帧凭据解密竞态导致拿到旧/密文配置
       await this.videoServerModel.loadVideoServers(true)
-      server = this.videoServerModel.getVideoServerById(serverId)
+      let server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
       if (!server) {
         this.serverError = '服务器不存在'
         this.serverLibraries = []
         this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
-        this.serverLoading = false
         return
       }
       try {
         await this.fetchServerHome(server)
-      } catch (e2) {
-        this.serverLibraries = []
-        this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
-        this.serverError = (e2 as Error).message ?? '无法连接服务器'
+      } catch (e) {
+        console.warn('[MediaLibraryTab] 首次加载服务器失败，重试一次', (e as Error).message)
+        // 鉴权失败可能是凭据解密竞态，强制重读后再试一次
+        await this.videoServerModel.loadVideoServers(true)
+        server = this.videoServerModel.getVideoServerById(serverId)
+        if (!server) {
+          this.serverError = '服务器不存在'
+          this.serverLibraries = []
+          this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+          return
+        }
+        await this.fetchServerHome(server)
       }
+    } catch (e2) {
+      this.serverLibraries = []
+      this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+      this.serverError = (e2 as Error).message ?? '无法连接服务器'
     } finally {
       this.serverLoading = false
     }
@@ -795,12 +798,12 @@ export struct MediaLibraryTab {
     if (serverId === undefined) {
       return
     }
-    await this.videoServerModel.loadVideoServers(true)
-    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
-    if (!server) {
-      return
-    }
     try {
+      await this.videoServerModel.loadVideoServers(true)
+      const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+      if (!server) {
+        return
+      }
       if (server.type === VideoServerType.PLEX) {
         this.serverHome = await PlexClient.fromConfigJson(server.configJson).getHome()
       } else {
@@ -860,7 +863,7 @@ export struct MediaLibraryTab {
         })
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
-      console.warn('[MediaLibraryTab] 打开播放器失败', (e as Error).message ?? String(e))
+      console.warn('[MediaLibraryTab] 打开播放器失败', (e as BusinessError).message ?? String(e))
       try {
         this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
       } catch (_e) {}

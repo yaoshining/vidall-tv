@@ -1127,7 +1127,7 @@ export struct PlayerPage {
     }
     const posMs = this.videoPlayerController.currentTime
     const durMs = this.videoPlayerController.duration
-    if (posMs <= 0) {
+    if (!this.videoPlayerController.isPlaying || posMs <= 0) {
       return
     }
     const playSessionId = param.serverPlaySessionId ?? ''

@@ -12,6 +12,7 @@ export struct SourceSwitchDialog {
   @Event onClose: () => void = () => {}
   @Local videoServerModel: VideoServerModel = VideoServerStore.getState()
   sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
+  @Local focusedKey: string = ''
 
   private handleSelectFileSource(): void {
     this.sourceSwitchModel.setFileSource().catch(() => {})
@@ -58,7 +59,12 @@ export struct SourceSwitchDialog {
         .padding({ left: 16, right: 16 })
         .borderRadius(8)
         .backgroundColor(this.isFileSourceActive() ? '#2A4A6B' : '#333333')
+        .border({ width: 2, color: this.focusedKey === 'file' ? '#4A9FFF' : '#00FFFFFF' })
         .hoverEffect(HoverEffect.Highlight)
+        .focusable(true)
+        .defaultFocus(true)
+        .onFocus(() => { this.focusedKey = 'file' })
+        .onBlur(() => { if (this.focusedKey === 'file') { this.focusedKey = '' } })
         .onClick(() => {
           this.handleSelectFileSource()
         })
@@ -94,7 +100,11 @@ export struct SourceSwitchDialog {
           .padding({ left: 16, right: 16 })
           .borderRadius(8)
           .backgroundColor(this.isServerActive(server) ? '#2A4A6B' : '#333333')
+          .border({ width: 2, color: this.focusedKey === 'server_' + String(server.id ?? 0) ? '#4A9FFF' : '#00FFFFFF' })
           .hoverEffect(HoverEffect.Highlight)
+          .focusable(true)
+          .onFocus(() => { this.focusedKey = 'server_' + String(server.id ?? 0) })
+          .onBlur(() => { if (this.focusedKey === 'server_' + String(server.id ?? 0)) { this.focusedKey = '' } })
           .onClick(() => {
             this.handleSelectServer(server)
           })

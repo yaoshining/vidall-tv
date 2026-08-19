@@ -33,21 +33,28 @@ export class JsonHttpClient {
       if (body !== undefined) {
         options.extraData = body;
       }
-      req.request(url, options, (err, data) => {
-        if (err) {
-          const bizErr = err as BusinessError;
+      try {
+        req.request(url, options, (err, data) => {
+          if (err) {
+            const bizErr = err as BusinessError;
+            req.destroy();
+            reject(new Error(bizErr.message || 'HTTP request failed'));
+            return;
+          }
+          const response: JsonHttpResponse = {
+            statusCode: data.responseCode as number,
+            body: typeof data.result === 'string' ? data.result : ''
+          };
+          resolve(response);
+          // 成功路径在读取 responseCode / result 后再销毁请求对象。
           req.destroy();
-          reject(new Error(bizErr.message || 'HTTP request failed'));
-          return;
-        }
-        const response: JsonHttpResponse = {
-          statusCode: data.responseCode as number,
-          body: typeof data.result === 'string' ? data.result : ''
-        };
-        resolve(response);
-        // 成功路径在读取 responseCode / result 后再销毁请求对象。
+        });
+      } catch (e) {
+        // req.request 同步抛出（如 URL 非法）时释放请求对象，避免 Promise 悬挂与资源泄漏。
+        const bizErr = e as BusinessError;
         req.destroy();
-      });
+        reject(new Error(bizErr.message || 'HTTP request failed'));
+      }
     });
   }
 
