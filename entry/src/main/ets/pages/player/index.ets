@@ -27,6 +27,7 @@ import {
   PersistOutcome
 } from "../../services/playbackProgress/PlaybackProgressService";
 import { PlaybackResumeDecision } from "../../services/playbackProgress/PlaybackResumeDecision";
+import { reportServerPlaybackStopped, reportServerPlaybackProgress } from "../../lib/ServerProgressReporter";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -91,6 +92,23 @@ export interface PlayerPageParam {
    * 透传到 VideoData.fileSourceId，用于字幕缓存分桶的 sourceId 字段。
    */
   fileSourceId?: string;
+  /**
+   * 影视服务器类型（可选），如 'jellyfin' / 'emby' / 'plex'。
+   * 用于退出播放时将进度上报回服务器。
+   */
+  serverType?: string;
+  /**
+   * 影视服务器条目 ID（可选）。退出播放时随 serverType 上报进度。
+   */
+  serverItemId?: string;
+  /**
+   * 影视服务器配置 JSON（可选，凭据已解密）。用于上报进度时重建客户端。
+   */
+  serverConfigJson?: string;
+  /**
+   * 影视服务器播放会话 ID（可选）。Jellyfin/Emby 上报进度时关联同一会话。
+   */
+  serverPlaySessionId?: string;
 }
 
 export interface ResolvedEpisodePlaybackSource {
@@ -386,6 +404,12 @@ export struct PlayerPage {
     if (pageParam.durationHintMs !== undefined && pageParam.durationHintMs > 0) {
       nextVideoData.durationHintMs = pageParam.durationHintMs;
     }
+    // 服务器媒体续播：把起始位置传给控制器，让控制器在 mpv 自动播放前先 seek，
+    // 避免「先从头播放再 seek」的二次播放。文件源续播仍走 decidePlayResume。
+    if (pageParam.serverItemId !== undefined && pageParam.serverItemId.length > 0 &&
+        pageParam.startPositionMs !== undefined && pageParam.startPositionMs > 0) {
+      nextVideoData.seekTime = pageParam.startPositionMs;
+    }
     if (pageParam.presetAudioTracks && pageParam.presetAudioTracks.length > 0) {
       nextVideoData.presetAudioTracks = pageParam.presetAudioTracks;
     }
@@ -543,6 +567,17 @@ export struct PlayerPage {
         return;
       }
       const videoId = pageParam.videoId ?? 0;
+      // 服务器媒体（无 mediaKey / videoId）且带续播位置：起始位置已通过 VideoData.seekTime
+      // 传给控制器，onPlayerReady 会在 mpv 自动播放前先 seek，这里不再重复 seek（避免二次播放）。
+      const directStartMs = pageParam.startPositionMs ?? 0;
+      if (videoId <= 0 && directStartMs > 0) {
+        return;
+      }
+      // 服务器媒体无续播位置（videoId<=0 且 startPositionMs==0）：
+      // 交给 VideoPlayer 的自动播放，避免这里再 play() 一次造成双播。
+      if (videoId <= 0) {
+        return;
+      }
       // 走 service 决策视频级续播。`onResumeDialog` 回调已通过 service 配置注入，
       // 会负责设置 pendingSeekMs / showResumeDialog / savedPositionMs / totalDurationMs。
       this.getProgressService().decidePlayResume({
@@ -622,6 +657,11 @@ export struct PlayerPage {
     this.episodePlaybackManager.clear();
     if (pageParam.videoId !== undefined && pageParam.videoId > 0) {
       this.videoPlayerController.progressContext = this.buildProgressContext(pageParam);
+      this.registerPreparedResume(pageParam, token);
+    } else if (pageParam.serverItemId !== undefined && pageParam.serverItemId.length > 0) {
+      // 服务器媒体：无 mediaKey/videoId，仍注册 prepared 续播以应用 startPositionMs。
+      // 不调 prepareResumeAutoplayDecision，避免「先从头自动播放、再 seek 续播」的双播；
+      // seek(..., 'prepared_resume_seek') 内部会在 seek 完成后自动恢复播放。
       this.registerPreparedResume(pageParam, token);
     }
     this.videoPlayerController.playbackContext = pageParam.playbackContext;
@@ -1027,6 +1067,7 @@ export struct PlayerPage {
       // 订阅 App 切后台事件，确保进度立即落盘
       emitter.on(PlayerEvents.APP_BACKGROUND, () => {
         this.getProgressService().persistNow().catch(() => {});
+        this.reportServerPeriodicProgress();
       });
       // 订阅文件不存在事件：记录 videoId 并自动退出播放页
       emitter.on(PlayerEvents.FILE_INACCESSIBLE, (event: emitter.EventData) => {
@@ -1042,6 +1083,7 @@ export struct PlayerPage {
       // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
       this.mediaProgressTimerId = setInterval(() => {
         this.getProgressService().persistNow().catch(() => {});
+        this.reportServerPeriodicProgress();
       }, 10000);
       this.episodeAutoplayTimerId = setInterval(() => {
         this.syncEpisodeAutoplayState()
@@ -1068,6 +1110,58 @@ export struct PlayerPage {
       }
     })
     .hideTitleBar(true)
+  }
+
+  /**
+   * 周期性把影视服务器播放进度上报回服务器（不结束会话）。
+   * 仅在服务器媒体（serverItemId/serverType 存在）时生效。
+   */
+  private reportServerPeriodicProgress(): void {
+    const param = this.currentPageParam
+    if (!param || !param.serverItemId || !param.serverType) {
+      return
+    }
+    const configJson = param.serverConfigJson ?? ''
+    if (configJson.length === 0) {
+      return
+    }
+    const posMs = this.videoPlayerController.currentTime
+    const durMs = this.videoPlayerController.duration
+    if (posMs <= 0) {
+      return
+    }
+    const playSessionId = param.serverPlaySessionId ?? ''
+    reportServerPlaybackProgress(param.serverType, configJson, param.serverItemId, playSessionId, posMs, durMs)
+      .catch((e: Error) => {
+        console.warn('[PlayerPage] 周期性上报服务器进度失败', e.message)
+      })
+  }
+
+  /**
+   * 退出播放器时，把影视服务器的播放进度上报回服务器。
+   * 返回是否已上报（用于决定是否 emit 刷新事件）。
+   */
+  private reportServerProgress(posMs: number, durMs: number): Promise<boolean> {
+    const param = this.currentPageParam
+    if (!param || !param.serverItemId || !param.serverType) {
+      return Promise.resolve(false)
+    }
+    const configJson = param.serverConfigJson ?? ''
+    if (configJson.length === 0) {
+      return Promise.resolve(false)
+    }
+    const playSessionId = param.serverPlaySessionId ?? ''
+    try {
+      return reportServerPlaybackStopped(param.serverType, configJson, param.serverItemId, playSessionId, posMs, durMs)
+        .then(() => true)
+        .catch((e: Error) => {
+          console.warn('[PlayerPage] 上报服务器进度失败', e.message)
+          return true
+        })
+    } catch (e) {
+      console.warn('[PlayerPage] 上报服务器进度异常', JSON.stringify(e))
+      return Promise.resolve(true)
+    }
   }
 
   aboutToDisappear(): void {
@@ -1100,6 +1194,12 @@ export struct PlayerPage {
       // service 异常时仍 emit，保持与原"save 失败仍 emit"路径兼容。
       console.warn('[PlayerPage][REFRESH] persistNow 失败，仍 emit MEDIA_PROGRESS_SAVED');
       emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+    });
+    this.reportServerProgress(posMs, durMs).then((reported: boolean) => {
+      if (reported) {
+        // 服务器媒体：上报完成后通知首页刷新「继续观看」进度
+        emitter.emit(PlayerEvents.MEDIA_PROGRESS_SAVED);
+      }
     });
     this.videoPlayerController.saveProgressNow()
     this.videoPlayerController.release()

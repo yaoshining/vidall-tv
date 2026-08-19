@@ -463,7 +463,10 @@ export struct VideoPlayer {
             // ⚠️ 先注册 PREPARED 监听再触发 init，避免快速回调时事件丢失
             emitter.once(PlayerEvents.PREPARED, () => {
               if (this.autoPlay) {
-                this.controller.play()
+                // 续播 seek 已在进行时，跳过立即 play，避免「先从头播放再 seek」的双播
+                if (!this.controller.isSeeking) {
+                  this.controller.play()
+                }
               } else {
                 this.controlsDialogController.open()
               }
@@ -513,7 +516,10 @@ export struct VideoPlayer {
             this.surfaceId = this.xComponentController.getXComponentSurfaceId()
             emitter.once(PlayerEvents.PREPARED, () => {
               if (this.autoPlay) {
-                this.controller.play()
+                // 续播 seek 已在进行时，跳过立即 play，避免「先从头播放再 seek」的双播
+                if (!this.controller.isSeeking) {
+                  this.controller.play()
+                }
               } else {
                 this.controlsDialogController.open()
               }

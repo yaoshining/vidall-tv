@@ -40,6 +40,20 @@ struct VideoControls {
    */
   @Local visibleCachedSubtitles: CachedSubtitleEntry[] = []
 
+  /**
+   * 播放状态变化时刷新「自动隐藏」定时器：
+   * 仅在开始播放（isPlaying → true）时启动定时器。
+   * 暂停（isPlaying → false）时不在这里清定时器——切音轨会先 pause 再 play，
+   * 若在 pause 时清掉 forceStart 的定时器、又因 play 事件时序错过重启，控件就永不隐藏；
+   * 暂停态的清理由各交互入口的显式 clearTimeout/enableAutoHide 负责。
+   */
+  @Monitor('videoController.isPlaying')
+  onPlayingChange(): void {
+    if (this.videoController.isPlaying) {
+      this.enableAutoHide()
+    }
+  }
+
   /** 将毫秒格式化为 HH:MM:SS 或 MM:SS */
   private formatTime(ms: number): string {
     const totalSec = Math.floor(ms / 1000)

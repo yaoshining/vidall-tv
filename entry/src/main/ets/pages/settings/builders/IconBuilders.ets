@@ -1,4 +1,5 @@
 import { FileSourceType } from "../../../db/models/FileSourceEntity"
+import { VideoServerType } from "../../../db/models/VideoServerEntity"
 
 @Builder
 export function SmbIcon() {
@@ -80,6 +81,49 @@ function getSourceIconResource(type: FileSourceType): Resource {
 @Builder
 export function SourceTypeIcon(type: FileSourceType) {
   Image(getSourceIconResource(type))
+    .width(30)
+    .height(30)
+    .objectFit(ImageFit.Contain)
+}
+
+// ── 影视服务器图标 ───────────────────────────────────────────
+
+function getVideoServerIconResource(type: VideoServerType): Resource {
+  switch (type) {
+    case VideoServerType.JELLYFIN: return $r('app.media.jellyfin');
+    case VideoServerType.EMBY:     return $r('app.media.emby');
+    case VideoServerType.PLEX:     return $r('app.media.plex');
+    default:                       return $r('app.media.cloud_drive');
+  }
+}
+
+@Builder
+export function JellyfinIcon() {
+  Image($r('app.media.jellyfin'))
+    .width(30)
+    .height(30)
+    .objectFit(ImageFit.Contain)
+}
+
+@Builder
+export function EmbyIcon() {
+  Image($r('app.media.emby'))
+    .width(30)
+    .height(30)
+    .objectFit(ImageFit.Contain)
+}
+
+@Builder
+export function PlexIcon() {
+  Image($r('app.media.plex'))
+    .width(30)
+    .height(30)
+    .objectFit(ImageFit.Contain)
+}
+
+@Builder
+export function VideoServerTypeIcon(type: VideoServerType) {
+  Image(getVideoServerIconResource(type))
     .width(30)
     .height(30)
     .objectFit(ImageFit.Contain)

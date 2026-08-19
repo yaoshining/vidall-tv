@@ -44,6 +44,8 @@ export class PrefKey {
   static readonly SUBTITLE_BINDING_PREFIX = 'subtitle_binding';
   /** 用户音轨绑定前缀，完整 key = audio_binding_<sha256前12位> */
   static readonly AUDIO_BINDING_PREFIX = 'audio_binding';
+  /** 媒体库当前数据源（JSON 序列化的 ActiveMediaSource） */
+  static readonly ACTIVE_MEDIA_SOURCE = 'active_media_source';
 }
 
 // ─────────────────────────────────────────────

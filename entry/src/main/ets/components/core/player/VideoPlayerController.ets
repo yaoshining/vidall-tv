@@ -1564,7 +1564,8 @@ export class VideoPlayerController {
     }
 
     const resumeTimeMs = pendingResumeState?.positionMs ?? -1;
-    const shouldResumePlay = pendingResumeState?.shouldResumePlay ?? false;
+    // 服务器媒体续播（seekTime>0）也应 seek 后自动续播。
+    const shouldResumePlay = (pendingResumeState?.shouldResumePlay ?? false) || (this.currentVideoData?.seekTime ?? 0) > 0;
     const resumeSource = pendingResumeState?.reason ?? '';
     const resumeCaptureBackend = pendingResumeState?.captureBackend ?? this.backend;
     const resumeAutoplayDecisionSource = pendingResumeState?.autoplayDecisionSource ?? '';
@@ -1572,14 +1573,17 @@ export class VideoPlayerController {
     const effectiveResumeTimeMs = resumeTimeMs > 0 && this.duration > 0 && resumeTimeMs > this.duration
       ? this.duration
       : (resumeTimeMs > 0 ? resumeTimeMs : 0);
+    // 服务器媒体续播：起始位置通过 VideoData.seekTime 传入（回退 fallback 未捕获到的续播位置）。
+    const seekStartMs = this.currentVideoData?.seekTime ?? 0;
+    const resumeTargetMs = effectiveResumeTimeMs > 0 ? effectiveResumeTimeMs : seekStartMs;
     if (pendingResumeState !== null) {
       this.logResumeDiagnostic('resume_pending_consume', resumeSource, resumeCaptureBackend, resumeTimeMs,
         effectiveResumeTimeMs, shouldResumePlay, 'pending', -1,
         resumeAutoplayDecisionSource, resumeAutoplayDecisionOrigin);
     }
 
-    if (pendingResumeState !== null && pendingResumeState.positionMs > 0 && this.player) {
-      const safeResumeTimeMs = effectiveResumeTimeMs;
+    if (resumeTargetMs > 0 && this.player) {
+      const safeResumeTimeMs = resumeTargetMs;
       // MPV 后端 load 后会自动进入 playing 状态，必须先暂停再 seek，
       // 否则 seekPercent 在播放中精度不足（尤其百分比很小时），
       // 且 position 事件会不断更新 currentTime 导致 seek 目标被覆盖。
