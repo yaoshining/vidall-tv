@@ -34,9 +34,9 @@ export class JsonHttpClient {
         options.extraData = body;
       }
       req.request(url, options, (err, data) => {
-        req.destroy();
         if (err) {
           const bizErr = err as BusinessError;
+          req.destroy();
           reject(new Error(bizErr.message || 'HTTP request failed'));
           return;
         }
@@ -45,6 +45,8 @@ export class JsonHttpClient {
           body: typeof data.result === 'string' ? data.result : ''
         };
         resolve(response);
+        // 成功路径在读取 responseCode / result 后再销毁请求对象。
+        req.destroy();
       });
     });
   }

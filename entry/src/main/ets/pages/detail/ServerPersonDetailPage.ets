@@ -162,7 +162,7 @@ export struct ServerPersonDetailPage {
                     .maxLines(this.bioExpanded ? 100 : 4)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-                  if (this.overview().length > 200) {
+                  if (this.overview().length > 120) {
                     Text(this.bioExpanded ? '收起' : '展开')
                       .fontSize(13).fontColor('#1B78F2')
                       .focusable(true)

@@ -164,7 +164,7 @@ export struct ServerSeasonDetailPage {
       const b = darken(mainColor.blue & 0xFF);
       this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
     } catch (e) {
-      console.warn('[ServerSeasonDetailPage] extractDominantColor failed', JSON.stringify(e));
+      console.warn('[ServerSeasonDetailPage] extractDominantColor failed', (e as Error).message ?? String(e));
     }
   }
 
@@ -191,10 +191,13 @@ export struct ServerSeasonDetailPage {
         header = client.getStreamHeader()
       }
       const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
+      const episodeTitle = ep.title.length > 0
+        ? `${this.seriesTitle} ${this.seasonName} 第${ep.episodeNumber}集 ${ep.title}`
+        : `${this.seriesTitle} ${this.seasonName} 第${ep.episodeNumber}集`
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
-        title: `${this.seriesTitle} ${this.seasonName}`,
+        title: episodeTitle,
         startPositionMs: ep.positionMs > 0 ? ep.positionMs : undefined,
         durationHintMs: ep.durationMs > 0 ? ep.durationMs : undefined,
         serverType: server.type,
@@ -374,7 +377,8 @@ export struct ServerSeasonDetailPage {
     const result: DetailEpisode[] = []
     for (const ep of this.episodes) {
       const label = (ep.title ?? '').length > 0 ? `第${ep.episodeNumber}集 · ${ep.title}` : `第${ep.episodeNumber}集`
-      const progress = ep.durationMs > 0 && ep.positionMs > 0 ? ep.positionMs / ep.durationMs : 0
+      const raw = ep.durationMs > 0 && ep.positionMs > 0 ? ep.positionMs / ep.durationMs : 0
+      const progress = raw > 1 ? 1 : raw
       result.push({
         id: ep.id,
         label,

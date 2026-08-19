@@ -4,7 +4,7 @@ import { VideoServerStore } from "../../../stores/servers/VideoServerStore"
 import { VideoServerModel, videoServerTypeLabel } from "../../../stores/servers/VideoServerModel"
 import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel"
 import { VideoServerTypeIcon } from "../../settings/builders/IconBuilders"
-import { TabBarModel } from "../../../stores/tabbar/TabBarModel"
+import { TabBarModel, TabItem, TabItemCode } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
@@ -31,7 +31,7 @@ export struct VideoServerTab {
       // 校验当前源仍有效（服务器被删则回退文件源）
       await this.sourceSwitchModel.load(this.videoServerModel.videoServers.map(s => s.id ?? -1))
     } catch (error) {
-      console.error('VideoServerTab: 加载服务器失败', JSON.stringify(error))
+      console.error('VideoServerTab: 加载服务器失败', (error as Error).message ?? String(error))
     } finally {
       this.isLoading = false
     }
@@ -72,9 +72,12 @@ export struct VideoServerTab {
   }
 
   private handleCardClick(server: VideoServer): void {
-    // 点击卡片设为当前源并切到媒体库
+    // 点击卡片设为当前源并切到媒体库（按 code 定位，避免硬编码 tab 索引）
     this.sourceSwitchModel.setVideoServer(server)
-    this.tabBarModel.currentTabIndex = 0
+    const index = this.tabBarModel.tabs.findIndex((t: TabItem) => t.code === TabItemCode.MEDIA_LIBRARY)
+    if (index >= 0) {
+      this.tabBarModel.currentTabIndex = index
+    }
   }
 
   private handleDelete(server: VideoServer): void {
@@ -96,7 +99,7 @@ export struct VideoServerTab {
       }
       this.showToastSafe('服务器已删除')
     } catch (error) {
-      console.error('VideoServerTab: 删除服务器失败', JSON.stringify(error))
+      console.error('VideoServerTab: 删除服务器失败', (error as Error).message ?? String(error))
       this.showToastSafe('删除失败，请重试')
     } finally {
       this.isDeletingServer = false

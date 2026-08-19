@@ -52,6 +52,20 @@ struct VideoServerConfigBuilderComponent {
     return this.isPlex() ? 32400 : 8096
   }
 
+  /** 从配置 JSON 读取端口：兼容 number（现格式）与 string（历史数据），无效时回退默认端口 */
+  private parsePort(raw: Object): number {
+    if (typeof raw === 'number' && !isNaN(raw) && raw > 0) {
+      return raw
+    }
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      const parsed = parseInt(raw.trim(), 10)
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed
+      }
+    }
+    return this.defaultPort()
+  }
+
   private typeTitle(): string {
     switch (this.serverType) {
       case 'jellyfin': return 'Jellyfin'
@@ -102,17 +116,16 @@ struct VideoServerConfigBuilderComponent {
         } else {
           this.serverType = 'jellyfin'
         }
-        const config = JSON.parse(server.configJson) as Record<string, string>
-        this.serverUrl = config['url'] ?? ''
+        const config = JSON.parse(server.configJson) as Record<string, Object>
+        this.serverUrl = typeof config['url'] === 'string' ? config['url'] : ''
         this.protocol = config['protocol'] === 'https' ? 'https' : 'http'
-        const portNum = parseInt(config['port'] ?? '', 10)
-        this.port = isNaN(portNum) ? this.defaultPort() : portNum
-        this.basePath = config['basePath'] ?? ''
+        this.port = this.parsePort(config['port'])
+        this.basePath = typeof config['basePath'] === 'string' ? config['basePath'] : ''
         this.authMethod = config['authMethod'] === 'password' ? 'password' : 'apikey'
-        this.apiKey = config['apiKey'] ?? ''
-        this.username = config['username'] ?? ''
-        this.password = config['password'] ?? ''
-        this.token = config['token'] ?? ''
+        this.apiKey = typeof config['apiKey'] === 'string' ? config['apiKey'] : ''
+        this.username = typeof config['username'] === 'string' ? config['username'] : ''
+        this.password = typeof config['password'] === 'string' ? config['password'] : ''
+        this.token = typeof config['token'] === 'string' ? config['token'] : ''
       } else {
         this.showToastSafe('服务器不存在')
         this.controller.popType()
@@ -370,7 +383,12 @@ struct VideoServerConfigBuilderComponent {
           .type(InputType.Number)
           .enabled(!this.isLoading)
           .onChange((value: string) => {
-            const portNum = parseInt(value)
+            const trimmed = value.trim()
+            if (trimmed.length === 0) {
+              this.port = this.defaultPort()
+              return
+            }
+            const portNum = parseInt(trimmed, 10)
             if (!isNaN(portNum)) {
               this.port = portNum
             }

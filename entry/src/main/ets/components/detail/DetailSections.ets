@@ -97,7 +97,7 @@ export struct DetailCastSection {
                   this.onCastClick(c)
                 }
               })
-            }, (c: DetailCastMember) => c.name + '_' + c.role)
+            }, (c: DetailCastMember, idx: number) => c.name + '_' + c.role + '_' + idx.toString())
           }
           .padding({ left: 80, right: 80 })
         }

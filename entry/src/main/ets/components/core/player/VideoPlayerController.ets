@@ -1556,7 +1556,6 @@ export class VideoPlayerController {
     }
 
     const pendingResumeState = this.consumePendingResumeState();
-    emitter.emit(PlayerEvents.PREPARED);
     if (this.playbackSpeed !== 1.0 && this.player) {
       this.player.setPlaybackSpeed(this.playbackSpeed);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -1574,7 +1573,11 @@ export class VideoPlayerController {
       ? this.duration
       : (resumeTimeMs > 0 ? resumeTimeMs : 0);
     // 服务器媒体续播：起始位置通过 VideoData.seekTime 传入（回退 fallback 未捕获到的续播位置）。
-    const seekStartMs = this.currentVideoData?.seekTime ?? 0;
+    // 按当前媒体时长裁剪，避免服务器保存的越界进度直接传给 player.seek()。
+    const rawSeekStartMs = this.currentVideoData?.seekTime ?? 0;
+    const seekStartMs = this.duration > 0
+      ? Math.min(Math.max(rawSeekStartMs, 0), this.duration)
+      : Math.max(rawSeekStartMs, 0);
     const resumeTargetMs = effectiveResumeTimeMs > 0 ? effectiveResumeTimeMs : seekStartMs;
     if (pendingResumeState !== null) {
       this.logResumeDiagnostic('resume_pending_consume', resumeSource, resumeCaptureBackend, resumeTimeMs,
@@ -1613,8 +1616,12 @@ export class VideoPlayerController {
       this.player.seek(safeResumeTimeMs);
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `后端切换续播定位: backend=${this.backend} time=${safeResumeTimeMs}`);
+      // 先建立 isSeeking 再发 PREPARED，避免 VideoPlayer 监听器在续播 seek 进行中立即 play 导致「先从头播再跳」。
+      emitter.emit(PlayerEvents.PREPARED);
       return;
     }
+
+    emitter.emit(PlayerEvents.PREPARED);
 
     await this.finalizePlayerReadyTrackInitialization(readySessionId);
     if (pendingResumeState !== null && pendingResumeState.shouldResumePlay && !this.isPlaying) {

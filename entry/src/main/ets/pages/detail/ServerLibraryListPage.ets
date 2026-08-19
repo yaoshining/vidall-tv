@@ -30,7 +30,7 @@ export struct ServerLibraryListPage {
   @Local error: string = ''
 
   private async loadPage(startIndex: number): Promise<void> {
-    await this.videoServerModel.loadVideoServers(true)
+    await this.videoServerModel.loadVideoServers(startIndex === 0)
     const server: VideoServer | null = this.videoServerModel.getVideoServerById(this.serverId)
     if (!server) {
       this.error = '服务器不存在'
@@ -41,11 +41,11 @@ export struct ServerLibraryListPage {
     try {
       if (server.type === VideoServerType.PLEX) {
         const page = await PlexClient.fromConfigJson(server.configJson).getLibraryItems(this.libraryId, startIndex, PAGE_SIZE)
-        this.items = startIndex === 0 ? page.items : this.items.concat(page.items)
+        this.items = this.mergeItems(startIndex, page.items)
         this.total = page.total
       } else {
         const page = await JellyfinClient.fromConfigJson(server.configJson).getLibraryItems(this.libraryId, this.libraryType, startIndex, PAGE_SIZE)
-        this.items = startIndex === 0 ? page.items : this.items.concat(page.items)
+        this.items = this.mergeItems(startIndex, page.items)
         this.total = page.total
       }
     } catch (e) {
@@ -56,6 +56,25 @@ export struct ServerLibraryListPage {
       this.isLoading = false
       this.isLoadingMore = false
     }
+  }
+
+  /** 分页追加时按 id 去重，避免服务器在两次请求间插入/重排导致 ForEach 键重复 */
+  private mergeItems(startIndex: number, incoming: VideoServerMediaItem[]): VideoServerMediaItem[] {
+    if (startIndex === 0) {
+      return incoming
+    }
+    const seen = new Set<string>()
+    for (const it of this.items) {
+      seen.add(it.id)
+    }
+    const merged: VideoServerMediaItem[] = this.items.slice()
+    for (const it of incoming) {
+      if (!seen.has(it.id)) {
+        seen.add(it.id)
+        merged.push(it)
+      }
+    }
+    return merged
   }
 
   private loadMore(): void {

@@ -119,8 +119,11 @@ export struct ServerMediaDetailPage {
   }
 
   private async play(): Promise<void> {
+    if (this.isPlaying) {
+      return
+    }
     const target = this.playTarget()
-    if (!target || this.isPlaying) {
+    if (!target) {
       if (this.isSeries() && this.nextUp === null) {
         this.showToastSafe('未找到可播放的集')
       }

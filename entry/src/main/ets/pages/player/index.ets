@@ -1156,11 +1156,12 @@ export struct PlayerPage {
         .then(() => true)
         .catch((e: Error) => {
           console.warn('[PlayerPage] 上报服务器进度失败', e.message)
-          return true
+          return false
         })
     } catch (e) {
-      console.warn('[PlayerPage] 上报服务器进度异常', JSON.stringify(e))
-      return Promise.resolve(true)
+      const err = e as Error
+      console.warn('[PlayerPage] 上报服务器进度异常', err.message ?? String(e))
+      return Promise.resolve(false)
     }
   }
 

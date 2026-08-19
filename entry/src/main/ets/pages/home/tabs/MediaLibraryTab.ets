@@ -817,10 +817,16 @@ export struct MediaLibraryTab {
   private async openContinueWatching(item: VideoServerMediaItem): Promise<void> {
     const serverId = this.sourceSwitchModel.getActiveServerId()
     if (serverId === undefined) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
       return
     }
     const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
     if (!server) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
       return
     }
     try {
@@ -854,7 +860,7 @@ export struct MediaLibraryTab {
         })
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
-      console.warn('[MediaLibraryTab] 打开播放器失败', JSON.stringify(e))
+      console.warn('[MediaLibraryTab] 打开播放器失败', (e as Error).message ?? String(e))
       try {
         this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
       } catch (_e) {}
@@ -1539,7 +1545,7 @@ export struct MediaLibraryTab {
                 showProgress: true,
                 onItemClick: () => { this.openContinueWatching(item).catch(() => {}) }
               })
-            }, (item: VideoServerMediaItem) => 'cw_' + item.id + '_' + item.progress.toFixed(3))
+            }, (item: VideoServerMediaItem) => 'cw_' + item.id)
           }
         }
         // 接下来（16:9 横向滚动）

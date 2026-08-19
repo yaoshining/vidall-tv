@@ -39,8 +39,9 @@ export class VideoServerModel {
       this.lastUpdateTime = now;
       console.info(`VideoServerModel: Loaded ${this.videoServers.length} video server(s)`);
     } catch (error) {
-      console.error('VideoServerModel: Failed to load video servers', JSON.stringify(error));
-      throw new Error('Failed to load video servers: ' + JSON.stringify(error));
+      const msg = VideoServerModel.describeError(error);
+      console.error('VideoServerModel: Failed to load video servers', msg);
+      throw new Error('Failed to load video servers: ' + msg);
     }
   }
 
@@ -59,8 +60,9 @@ export class VideoServerModel {
       console.info(`VideoServerModel: Added video server with id ${rowId}`);
       return rowId;
     } catch (error) {
-      console.error('VideoServerModel: Failed to add video server', JSON.stringify(error));
-      throw new Error('Failed to add video server: ' + JSON.stringify(error));
+      const msg = VideoServerModel.describeError(error);
+      console.error('VideoServerModel: Failed to add video server', msg);
+      throw new Error('Failed to add video server: ' + msg);
     }
   }
 
@@ -80,8 +82,9 @@ export class VideoServerModel {
       this.videoServers = this.videoServers.map(item => item.id === server.id ? server : item);
       this.lastUpdateTime = Date.now();
     } catch (error) {
-      console.error('VideoServerModel: Failed to update video server', JSON.stringify(error));
-      throw new Error('Failed to update video server: ' + JSON.stringify(error));
+      const msg = VideoServerModel.describeError(error);
+      console.error('VideoServerModel: Failed to update video server', msg);
+      throw new Error('Failed to update video server: ' + msg);
     }
   }
 
@@ -99,8 +102,9 @@ export class VideoServerModel {
       }
       this.lastUpdateTime = Date.now();
     } catch (error) {
-      console.error('VideoServerModel: Failed to delete video server', JSON.stringify(error));
-      throw new Error('Failed to delete video server: ' + JSON.stringify(error));
+      const msg = VideoServerModel.describeError(error);
+      console.error('VideoServerModel: Failed to delete video server', msg);
+      throw new Error('Failed to delete video server: ' + msg);
     }
   }
 
@@ -118,6 +122,12 @@ export class VideoServerModel {
   invalidateCache(): void {
     this.isLoaded = false;
     this.lastUpdateTime = 0;
+  }
+
+  /** 从异常对象提取可读信息（Error.message 优先，非 Error 值回退到字符串化） */
+  private static describeError(error: Object): string {
+    const err = error as Error;
+    return (err && err.message) ? err.message : String(error);
   }
 }
 
