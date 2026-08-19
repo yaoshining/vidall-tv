@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import http from &#39;@ohos.net.http&#39;; 
+import { BusinessError } from &#39;@kit.BasicServicesKit&#39;; 
+ 
+/** 
+ * 通用 JSON HTTP 响应结构 
+ */ 
+export interface JsonHttpResponse { 
+  statusCode: number; 
+  body: string; 
+} 
+ 
+/** 
+ * 影视服务器客户端共用的 JSON HTTP 传输层。 
+ * 基于 @ohos.net.http，承载 GET/POST JSON 请求（Jellyfin / Emby / Plex 均为标准 REST）。 
+ */ 
+export class JsonHttpClient { 
+  private static request( 
+    method: http.RequestMethod, 
+    url: string, 
+    headers: Record&lt;string, string&gt;, 
+    body: string | undefined, 
+    timeoutMs: number 
+  ): Promise&lt;JsonHttpResponse&gt; { 
+    return new Promise((resolve, reject) =&gt; { 
+      const req = http.createHttp(); 
+      const options: http.HttpRequestOptions = { 
+        method, 
+        header: headers, 
+        connectTimeout: timeoutMs, 
+        readTimeout: timeoutMs, 
+        expectDataType: http.HttpDataType.STRING 
+      }; 
+      if (body !== undefined) { 
+        options.extraData = body; 
+      } 
+      req.request(url, options, (err, data) =&gt; { 
+        if (err) { 
+          const bizErr = err as BusinessError; 
+          req.destroy(); 
+          reject(new Error(bizErr.message || &#39;HTTP request failed&#39;)); 
+          return; 
+        } 
+        const response: JsonHttpResponse = { 
+          statusCode: data.responseCode as number, 
+          body: typeof data.result === &#39;string&#39; ? data.result : &#39;&#39; 
+        }; 
+        resolve(response); 
+        // 成功路径在读取 responseCode / result 后再销毁请求对象。 
+        req.destroy(); 
+      }); 
+    }); 
+  } 
+ 
+  static get(url: string, headers: Record&lt;string, string&gt;, timeoutMs: number = 10000): Promise&lt;JsonHttpResponse&gt; { 
+    return JsonHttpClient.request(http.RequestMethod.GET, url, headers, undefined, timeoutMs); 
+  } 
+ 
+  static post( 
+    url: string, 
+    headers: Record&lt;string, string&gt;, 
+    body: string, 
+    timeoutMs: number = 10000 
+  ): Promise&lt;JsonHttpResponse&gt; { 
+    return JsonHttpClient.request(http.RequestMethod.POST, url, headers, body, timeoutMs); 
+  } 
+ 
+  /** 
+   * 将 HTTP 状态码 / 错误信息映射为可读的中文失败原因。 
+   */ 
+  static classifyError(statusCode: number, message: string): string { 
+    if (statusCode === 401 || statusCode === 403) { 
+      return &#39;鉴权失败，请检查凭据&#39;; 
+    } 
+    const lower = message.toLowerCase(); 
+    if (lower.includes(&#39;timeout&#39;) || lower.includes(&#39;timed out&#39;)) { 
+      return &#39;连接超时&#39;; 
+    } 
+    if (lower.includes(&#39;refused&#39;) || lower.includes(&#39;econnrefused&#39;)) { 
+      return &#39;连接被拒绝&#39;; 
+    } 
+    if (lower.includes(&#39;unknownhost&#39;) || lower.includes(&#39;getaddrinfo&#39;) || lower.includes(&#39;nodename&#39;)) { 
+      return &#39;无法解析服务器地址&#39;; 
+    } 
+    if (statusCode &gt; 0) { 
+      return `服务器返回错误 (${statusCode})`; 
+    } 
+    return message.length &gt; 0 ? message : &#39;未知错误&#39;; 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Thu Aug 20 2026 01:05:18 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/lib/JsonHttpClient.ets","hash":"98477054e6bf0c6651e368e07c989830ca43f2d2f8963baa2da16af844ff7368","lineCnt":90,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"JsonHttpClient.request","count":0,"regions":[{"startLoc":{"line":17,"col":3},"endLoc":{"line":52,"col":4},"count":0,"ignored":0},{"startLoc":{"line":24,"col":5},"endLoc":{"line":52,"col":4},"count":0,"ignored":0},{"startLoc":{"line":36,"col":7},"endLoc":{"line":51,"col":6},"count":0,"ignored":0},{"startLoc":{"line":43,"col":9},"endLoc":{"line":50,"col":8},"count":0,"ignored":0},{"startLoc":{"line":39,"col":11},"endLoc":{"line":42,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":24,"col":24},"endLoc":{"line":51,"col":6},"count":0,"ignored":0},{"startLoc":{"line":33,"col":31},"endLoc":{"line":35,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":33,"col":11},"endLoc":{"line":33,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":36,"col":33},"endLoc":{"line":50,"col":8},"count":0,"ignored":0},{"startLoc":{"line":37,"col":18},"endLoc":{"line":42,"col":10},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":37,"col":13},"endLoc":{"line":37,"col":16},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":45,"col":17},"endLoc":{"line":45,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"JsonHttpClient.get","count":0,"regions":[{"startLoc":{"line":54,"col":3},"endLoc":{"line":56,"col":4},"count":0,"ignored":0},{"startLoc":{"line":55,"col":5},"endLoc":{"line":56,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"JsonHttpClient.post","count":0,"regions":[{"startLoc":{"line":58,"col":3},"endLoc":{"line":65,"col":4},"count":0,"ignored":0},{"startLoc":{"line":64,"col":5},"endLoc":{"line":65,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"JsonHttpClient.classifyError","count":0,"regions":[{"startLoc":{"line":70,"col":3},"endLoc":{"line":88,"col":4},"count":0,"ignored":0},{"startLoc":{"line":71,"col":51},"endLoc":{"line":73,"col":6},"count":0,"ignored":0},{"startLoc":{"line":75,"col":67},"endLoc":{"line":77,"col":6},"count":0,"ignored":0},{"startLoc":{"line":78,"col":70},"endLoc":{"line":80,"col":6},"count":0,"ignored":0},{"startLoc":{"line":81,"col":103},"endLoc":{"line":83,"col":6},"count":0,"ignored":0},{"startLoc":{"line":84,"col":25},"endLoc":{"line":86,"col":6},"count":0,"ignored":0},{"startLoc":{"line":87,"col":5},"endLoc":{"line":88,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":71,"col":9},"endLoc":{"line":71,"col":49},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":75,"col":9},"endLoc":{"line":75,"col":65},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":78,"col":9},"endLoc":{"line":78,"col":68},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":81,"col":9},"endLoc":{"line":81,"col":101},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":84,"col":9},"endLoc":{"line":84,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":87,"col":12},"endLoc":{"line":87,"col":49},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5}],"exeLine":{"0":1,"1":2,"2":7,"3":8,"4":9,"5":16,"6":17,"7":18,"8":19,"9":20,"10":21,"11":22,"12":23,"13":24,"14":25,"15":26,"16":27,"17":28,"18":29,"19":30,"20":31,"21":33,"22":34,"23":36,"24":37,"25":38,"26":39,"27":40,"28":41,"29":43,"30":44,"31":45,"32":47,"33":49,"34":54,"35":55,"36":58,"37":59,"38":60,"39":61,"40":62,"41":63,"42":64,"43":70,"44":71,"45":72,"46":74,"47":75,"48":76,"49":78,"50":79,"51":81,"52":82,"53":84,"54":85,"55":87},"summary":{"lines":{"total":50,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,-1,0,0,0,-1,0,-1,0,-1,-1,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,-1,-1,-1]},"functions":{"total":6,"covered":0,"pct":0},"branches":{"total":18,"covered":0,"pct":0}}},"title":"JsonHttpClient.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
