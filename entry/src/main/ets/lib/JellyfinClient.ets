@@ -107,6 +107,8 @@ export interface VideoServerEpisode {
   durationMs: number;
   rating: number;
   positionMs: number;
+  /** 最近播放时间（毫秒时间戳），未知为 0；用于跨季「继续上次观看」选择最近播放的未完播集 */
+  lastPlayedDate: number;
 }
 
 /**
@@ -159,18 +161,34 @@ export class JellyfinClient {
   }
 
   static fromConfigJson(configJson: string): JellyfinClient {
-    const raw = JSON.parse(configJson) as Record<string, string>;
-    const protocol = (raw['protocol'] === 'https' ? 'https' : 'http');
-    const port = parseInt(raw['port'] ?? '', 10);
+    const raw = JSON.parse(configJson) as Record<string, Object>;
+    const protocolStr = typeof raw['protocol'] === 'string' ? raw['protocol'] : 'http';
+    const protocol = protocolStr === 'https' ? 'https' : 'http';
+    const rawPort = raw['port'];
+    let port = 8096;
+    if (typeof rawPort === 'number' && !isNaN(rawPort)) {
+      port = rawPort;
+    } else if (typeof rawPort === 'string' && rawPort.trim().length > 0) {
+      const parsed = parseInt(rawPort.trim(), 10);
+      if (!isNaN(parsed)) {
+        port = parsed;
+      }
+    }
+    const authStr = typeof raw['authMethod'] === 'string' ? raw['authMethod'] : 'apikey';
+    const urlVal = raw['url'];
+    const basePathVal = raw['basePath'];
+    const apiKeyVal = raw['apiKey'];
+    const usernameVal = raw['username'];
+    const passwordVal = raw['password'];
     return new JellyfinClient({
       protocol,
-      url: raw['url'] ?? '',
-      port: isNaN(port) ? 8096 : port,
-      basePath: raw['basePath'],
-      authMethod: (raw['authMethod'] === 'password' ? 'password' : 'apikey'),
-      apiKey: raw['apiKey'],
-      username: raw['username'],
-      password: raw['password']
+      url: typeof urlVal === 'string' ? urlVal : '',
+      port,
+      basePath: typeof basePathVal === 'string' ? basePathVal : undefined,
+      authMethod: (authStr === 'password' ? 'password' : 'apikey'),
+      apiKey: typeof apiKeyVal === 'string' ? apiKeyVal : undefined,
+      username: typeof usernameVal === 'string' ? usernameVal : undefined,
+      password: typeof passwordVal === 'string' ? passwordVal : undefined
     });
   }
 
@@ -685,7 +703,7 @@ export class JellyfinClient {
     await this.authenticate();
     const userId = await this.ensureUserId();
     const resp = await JsonHttpClient.get(
-      `${this.buildBaseUrl()}/Shows/${seriesId}/Episodes?userId=${userId}&SeasonId=${seasonId}&Fields=Overview`,
+      `${this.buildBaseUrl()}/Shows/${seriesId}/Episodes?userId=${userId}&SeasonId=${seasonId}&Fields=Overview&enableUserData=true`,
       this.authHeaders()
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
@@ -723,14 +741,22 @@ export class JellyfinClient {
         rating = cr;
       }
       let positionMs = 0;
+      let lastPlayedDate = 0;
       const userData = item['UserData'] as Record<string, Object> | undefined;
       if (userData !== undefined) {
         const pt = userData['PlaybackPositionTicks'];
         if (typeof pt === 'number') {
           positionMs = Math.round(pt / 10000);
         }
+        const lp = userData['LastPlayedDate'];
+        if (typeof lp === 'string' && lp.length >= 19) {
+          const t = Date.parse(lp.substring(0, 19));
+          if (!isNaN(t)) {
+            lastPlayedDate = t;
+          }
+        }
       }
-      result.push({ id, episodeNumber, seasonNumber, title, overview, stillUrl, durationMs, rating, positionMs });
+      result.push({ id, episodeNumber, seasonNumber, title, overview, stillUrl, durationMs, rating, positionMs, lastPlayedDate });
     }
     return result;
   }

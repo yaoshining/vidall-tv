@@ -4,6 +4,7 @@ import { VideoServerType } from "../../db/models/VideoServerEntity"
 import { JellyfinClient, VideoServerPersonDetail, VideoServerMediaItem } from "../../lib/JellyfinClient"
 import { PlexClient } from "../../lib/PlexClient"
 import { ServerMediaDetailPage, ServerMediaDetailPageParam } from "./ServerMediaDetailPage"
+import { BusinessError } from "@kit.BasicServicesKit"
 
 export interface ServerPersonDetailPageParam {
   serverId: number
@@ -26,14 +27,16 @@ export struct ServerPersonDetailPage {
   @Local detail: VideoServerPersonDetail | null = null
   @Local isLoading: boolean = true
   @Local bioExpanded: boolean = false
+  @Local error: string = ''
 
   private async loadData(): Promise<void> {
     this.isLoading = true
+    this.error = ''
     try {
       await this.videoServerModel.loadVideoServers(true)
       const server = this.videoServerModel.getVideoServerById(this.serverId)
       if (!server) {
-        this.isLoading = false
+        this.error = '服务器不存在'
         return
       }
       if (server.type === VideoServerType.PLEX) {
@@ -42,7 +45,7 @@ export struct ServerPersonDetailPage {
         this.detail = await JellyfinClient.fromConfigJson(server.configJson).getPersonDetail(this.personId)
       }
     } catch (e) {
-      console.warn('[ServerPersonDetailPage] 加载失败', (e as Error).message)
+      this.error = (e as BusinessError).message ?? '加载失败'
     } finally {
       this.isLoading = false
     }
@@ -99,6 +102,20 @@ export struct ServerPersonDetailPage {
         if (this.isLoading) {
           Column() {
             Text('加载中…').fontSize(16).fontColor('#888888')
+          }
+          .width('100%').height('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+        } else if (this.error.length > 0) {
+          Column({ space: 12 }) {
+            Text(this.error).fontSize(16).fontColor('#FF6B6B')
+            Text('重试')
+              .fontSize(15).fontColor('#1B78F2')
+              .focusable(true)
+              .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+              .border({ width: 1, color: '#1B78F2' })
+              .borderRadius(6)
+              .onClick(() => { this.loadData().catch(() => {}) })
           }
           .width('100%').height('100%')
           .justifyContent(FlexAlign.Center)

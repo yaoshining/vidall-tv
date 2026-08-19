@@ -13,7 +13,7 @@ import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
 import { millisecondsToTime } from "../../utils/TimeUtil";
 import { PlayerEvents } from "../../components/core/player/Constants";
-import { emitter } from "@kit.BasicServicesKit";
+import { emitter, BusinessError } from "@kit.BasicServicesKit";
 import { SubtitleSegment } from "../../components/core/player/SubtitleRenderer";
 import { EpisodePlaybackManager, EpisodePlaybackManagerState } from "../../components/core/player/EpisodePlaybackManager";
 import { loadEpisodeAutoplaySettings } from "../../components/core/player/EpisodeAutoplayPreferences";
@@ -1132,8 +1132,8 @@ export struct PlayerPage {
     }
     const playSessionId = param.serverPlaySessionId ?? ''
     reportServerPlaybackProgress(param.serverType, configJson, param.serverItemId, playSessionId, posMs, durMs)
-      .catch((e: Error) => {
-        console.warn('[PlayerPage] 周期性上报服务器进度失败', e.message)
+      .catch((e: BusinessError) => {
+        console.warn('[PlayerPage] 周期性上报服务器进度失败', e.message ?? String(e))
       })
   }
 
@@ -1154,12 +1154,12 @@ export struct PlayerPage {
     try {
       return reportServerPlaybackStopped(param.serverType, configJson, param.serverItemId, playSessionId, posMs, durMs)
         .then(() => true)
-        .catch((e: Error) => {
-          console.warn('[PlayerPage] 上报服务器进度失败', e.message)
+        .catch((e: BusinessError) => {
+          console.warn('[PlayerPage] 上报服务器进度失败', e.message ?? String(e))
           return false
         })
     } catch (e) {
-      const err = e as Error
+      const err = e as BusinessError
       console.warn('[PlayerPage] 上报服务器进度异常', err.message ?? String(e))
       return Promise.resolve(false)
     }

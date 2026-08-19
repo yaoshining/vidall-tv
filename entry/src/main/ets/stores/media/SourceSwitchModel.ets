@@ -48,26 +48,26 @@ export class SourceSwitchModel {
     return this.activeSource.kind === 'videoServer' ? this.activeSource.serverId : undefined;
   }
 
-  setFileSource(): void {
+  async setFileSource(): Promise<void> {
     this.activeSource = { kind: 'fileSource' };
-    this.persist();
+    await this.persist();
   }
 
-  setVideoServer(server: VideoServer): void {
-    if (!server.id) {
+  async setVideoServer(server: VideoServer): Promise<void> {
+    if (server.id === undefined) {
       return;
     }
     this.activeSource = { kind: 'videoServer', serverId: server.id, name: server.name };
-    this.persist();
+    await this.persist();
   }
 
   /**
    * 服务器改名 / 配置更新后同步当前源的名称（供 Home 按钮与切换弹窗实时刷新）。
    */
-  syncServerName(server: VideoServer): void {
+  async syncServerName(server: VideoServer): Promise<void> {
     if (this.activeSource.kind === 'videoServer' && this.activeSource.serverId === server.id) {
       this.activeSource = { kind: 'videoServer', serverId: server.id, name: server.name };
-      this.persist();
+      await this.persist();
     }
   }
 
@@ -84,8 +84,8 @@ export class SourceSwitchModel {
       }
       const parsed = JSON.parse(raw) as ActiveMediaSource;
       if (parsed.kind === 'videoServer') {
-        const serverId = parsed.serverId ?? -1;
-        if (existingServerIds.includes(serverId)) {
+        const serverId = parsed.serverId;
+        if (serverId !== undefined && existingServerIds.includes(serverId)) {
           this.activeSource = parsed;
           return;
         }
@@ -104,7 +104,7 @@ export class SourceSwitchModel {
     try {
       await AppPreferences.set(PrefKey.ACTIVE_MEDIA_SOURCE, JSON.stringify(this.activeSource));
     } catch (e) {
-      console.warn('[SourceSwitchModel] 持久化失败', JSON.stringify(e));
+      console.warn('[SourceSwitchModel] 持久化失败', (e as Error).message ?? String(e));
     }
   }
 }

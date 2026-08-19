@@ -39,14 +39,26 @@ export class PlexClient {
   }
 
   static fromConfigJson(configJson: string): PlexClient {
-    const raw = JSON.parse(configJson) as Record<string, string>;
-    const protocol = (raw['protocol'] === 'https' ? 'https' : 'http');
-    const port = parseInt(raw['port'] ?? '', 10);
+    const raw = JSON.parse(configJson) as Record<string, Object>;
+    const protocolStr = typeof raw['protocol'] === 'string' ? raw['protocol'] : 'http';
+    const protocol = protocolStr === 'https' ? 'https' : 'http';
+    const rawPort = raw['port'];
+    let port = 32400;
+    if (typeof rawPort === 'number' && !isNaN(rawPort)) {
+      port = rawPort;
+    } else if (typeof rawPort === 'string' && rawPort.trim().length > 0) {
+      const parsed = parseInt(rawPort.trim(), 10);
+      if (!isNaN(parsed)) {
+        port = parsed;
+      }
+    }
+    const urlVal = raw['url'];
+    const tokenVal = raw['token'];
     return new PlexClient({
       protocol,
-      url: raw['url'] ?? '',
-      port: isNaN(port) ? 32400 : port,
-      token: raw['token'] ?? ''
+      url: typeof urlVal === 'string' ? urlVal : '',
+      port,
+      token: typeof tokenVal === 'string' ? tokenVal : ''
     });
   }
 
@@ -66,6 +78,13 @@ export class PlexClient {
     };
   }
 
+  /** 所有需要鉴权的请求在发起前统一校验 X-Plex-Token 是否存在 */
+  private ensureToken(): void {
+    if (this.config.token.length === 0) {
+      throw new Error('缺少 X-Plex-Token');
+    }
+  }
+
   async testConnection(): Promise<ConnectionTestResult> {
     try {
       await this.getLibraries();
@@ -77,9 +96,7 @@ export class PlexClient {
   }
 
   async getLibraries(): Promise<VideoServerLibrary[]> {
-    if (this.config.token.length === 0) {
-      throw new Error('缺少 X-Plex-Token');
-    }
+    this.ensureToken();
     const resp = await JsonHttpClient.get(`${this.buildBaseUrl()}/library/sections`, this.headers());
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw new Error(JsonHttpClient.classifyError(resp.statusCode, '获取媒体库失败'));
@@ -115,6 +132,7 @@ export class PlexClient {
    * 获取某个媒体库下的视频列表（分页）。
    */
   async getLibraryItems(libraryId: string, startIndex: number, limit: number): Promise<VideoServerLibraryPage> {
+    this.ensureToken();
     const resp = await JsonHttpClient.get(
       `${this.buildBaseUrl()}/library/sections/${encodeURIComponent(libraryId)}/all` +
         `?X-Plex-Container-Start=${startIndex}&X-Plex-Container-Size=${limit}`,
@@ -555,7 +573,12 @@ export class PlexClient {
       if (typeof viewOffset === 'number') {
         positionMs = viewOffset;
       }
-      result.push({ id, episodeNumber, seasonNumber, title, overview, stillUrl, durationMs, rating, positionMs });
+      let lastPlayedDate = 0;
+      const lastViewedAt = item['lastViewedAt'] as number | undefined;
+      if (typeof lastViewedAt === 'number' && lastViewedAt > 0) {
+        lastPlayedDate = lastViewedAt * 1000;
+      }
+      result.push({ id, episodeNumber, seasonNumber, title, overview, stillUrl, durationMs, rating, positionMs, lastPlayedDate });
     }
     return result;
   }

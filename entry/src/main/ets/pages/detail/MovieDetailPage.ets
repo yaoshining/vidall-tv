@@ -85,6 +85,8 @@ export struct MovieDetailPage {
   @Local mediaProgress: MediaProgressEntry | null = null;
   @Local hasActiveProgress: boolean = false;
   @Local movieEntity: MovieEntity | null = null;
+  /** 演职人员展示数据（movieEntity 加载完成后计算一次，避免每次渲染重复解析 JSON） */
+  @Local castList: DetailCastMember[] = [];
   /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
   @Local dominantBgColor: string = '#111111';
   @Local showOverviewDialog: boolean = false;
@@ -322,6 +324,7 @@ export struct MovieDetailPage {
         providerId !== undefined && providerId.length > 0) {
       db.getMovieByProviderId(provider, providerId).then((m: MovieEntity | null) => {
         this.movieEntity = m;
+        this.castList = this.castMembers();
         // movieEntity 加载后提取背景色
         const backdropUrl = this.getBackdropUrl();
         if (backdropUrl.length > 0) { this.extractDominantColor(backdropUrl); }
@@ -813,7 +816,7 @@ export struct MovieDetailPage {
             this.HeroSection()
             // 无 SeasonsSection（电影无季集结构）
             DetailCastSection({
-              members: this.castMembers(),
+              members: this.castList,
               onCastClick: (c: DetailCastMember) => {
                 const personId = parseInt(c.personId)
                 if (personId > 0) {

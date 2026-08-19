@@ -8,6 +8,7 @@ import { reportServerPlaybackStarted } from "../../lib/ServerProgressReporter"
 import { toOpaqueColor } from "../../utils/MediaFormatUtil"
 import { ServerSeasonDetailPage, ServerSeasonDetailPageParam } from "./ServerSeasonDetailPage"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
+import { BusinessError } from "@kit.BasicServicesKit"
 import {
   DetailCastSection,
   DetailSeasonsSection,
@@ -37,9 +38,12 @@ export struct ServerMediaDetailPage {
   @Local error: string = ''
   @Local isPlaying: boolean = false
   @Local showOverviewDialog: boolean = false
-  @Local dominantBgColor: string = '#111111'
+  /** 页面背景固定深灰（此页不提取主色，与季详情页的提取逻辑保持独立） */
+  private readonly dominantBgColor: string = '#111111'
   /** 剧集详情页的「接下来」单集（续播集/第一集），用于播放与进度展示 */
   @Local nextUp: VideoServerMediaItem | null = null
+  /** 首次 onShown 跳过静默刷新（onReady 已发起首次加载），避免首帧重复请求 */
+  @Local initialLoadDone: boolean = false
 
   private showToastSafe(message: string): void {
     try {
@@ -78,14 +82,14 @@ export struct ServerMediaDetailPage {
             this.nextUp = await client.getNextUp(this.itemId)
           }
         } catch (e) {
-          console.warn('[ServerMediaDetailPage] 获取季列表/下一集失败', (e as Error).message)
+          console.warn('[ServerMediaDetailPage] 获取季列表/下一集失败', (e as BusinessError).message)
         }
       } else {
         this.nextUp = null
       }
     } catch (e) {
       if (!silent) {
-        this.error = (e as Error).message ?? '加载详情失败'
+        this.error = (e as BusinessError).message ?? '加载详情失败'
       }
     } finally {
       if (!silent) {
@@ -164,7 +168,7 @@ export struct ServerMediaDetailPage {
         .catch(() => {})
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
-      console.warn('[ServerMediaDetailPage] 播放失败', (e as Error).message)
+      console.warn('[ServerMediaDetailPage] 播放失败', (e as BusinessError).message)
       this.showToastSafe('播放失败，请重试')
     } finally {
       this.isPlaying = false
@@ -537,7 +541,11 @@ export struct ServerMediaDetailPage {
       }
     })
     .onShown(() => {
-      // 从播放器返回后静默刷新续播位置 / 进度
+      // 首次显示由 onReady 发起加载，跳过静默刷新；之后（如从播放器返回）才刷新续播位置 / 进度
+      if (!this.initialLoadDone) {
+        this.initialLoadDone = true
+        return
+      }
       if (this.itemId.length > 0) {
         this.loadDetail(true)
       }

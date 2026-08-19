@@ -9,6 +9,12 @@ import { JellyfinIcon, EmbyIcon, PlexIcon } from "./IconBuilders"
 struct AddVideoServerBuilderComponent {
   @Consumer('settingsController') controller: SettingsController = new SettingsController()
 
+  private pushConfig(type: SettingType, serverType: string): void {
+    const params: Record<string, Object> = {}
+    params['serverType'] = serverType as Object
+    this.controller.pushType(type, params)
+  }
+
   build() {
     SettingContainer({
       title: "添加影视服务器"
@@ -21,9 +27,7 @@ struct AddVideoServerBuilderComponent {
           iconBuilder: JellyfinIcon,
           isLink: true,
           onItemClick: () => {
-            const params: Record<string, Object> = {}
-            params['serverType'] = 'jellyfin' as Object
-            this.controller.pushType(SettingType.JELLYFIN_CONFIG, params)
+            this.pushConfig(SettingType.JELLYFIN_CONFIG, 'jellyfin')
           }
         })
 
@@ -32,9 +36,7 @@ struct AddVideoServerBuilderComponent {
           iconBuilder: EmbyIcon,
           isLink: true,
           onItemClick: () => {
-            const params: Record<string, Object> = {}
-            params['serverType'] = 'emby' as Object
-            this.controller.pushType(SettingType.EMBY_CONFIG, params)
+            this.pushConfig(SettingType.EMBY_CONFIG, 'emby')
           }
         })
 
@@ -43,9 +45,7 @@ struct AddVideoServerBuilderComponent {
           iconBuilder: PlexIcon,
           isLink: true,
           onItemClick: () => {
-            const params: Record<string, Object> = {}
-            params['serverType'] = 'plex' as Object
-            this.controller.pushType(SettingType.PLEX_CONFIG, params)
+            this.pushConfig(SettingType.PLEX_CONFIG, 'plex')
           }
         })
       }

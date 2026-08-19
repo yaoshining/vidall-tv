@@ -33,6 +33,8 @@ struct VideoServerConfigBuilderComponent {
   // Loading 状态
   @Local isLoading: boolean = false
   @Local loadingText: string = ''
+  /** 正在进行的操作（驱动按钮 loading），避免依赖 loadingText 文案比较 */
+  @Local pendingAction: 'none' | 'test' | 'save' = 'none'
 
   private serverType: ServerTypeParam = 'jellyfin'
   private isEditMode: boolean = false
@@ -158,6 +160,37 @@ struct VideoServerConfigBuilderComponent {
     return true
   }
 
+  /** 鉴权字段校验（Plex token / API Key / 用户名密码），连接测试与保存共用 */
+  private validateAuth(): boolean {
+    if (this.isPlex()) {
+      const tokenResult = ValidationUtil.validateNotEmpty(this.token, 'X-Plex-Token')
+      if (!tokenResult.valid) {
+        this.showToastSafe(tokenResult.message)
+        return false
+      }
+      return true
+    }
+    if (this.authMethod === 'apikey') {
+      const keyResult = ValidationUtil.validateNotEmpty(this.apiKey, 'API Key')
+      if (!keyResult.valid) {
+        this.showToastSafe(keyResult.message)
+        return false
+      }
+      return true
+    }
+    const uResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
+    if (!uResult.valid) {
+      this.showToastSafe(uResult.message)
+      return false
+    }
+    const pResult = ValidationUtil.validateNotEmpty(this.password, '密码')
+    if (!pResult.valid) {
+      this.showToastSafe(pResult.message)
+      return false
+    }
+    return true
+  }
+
   private buildConfigJson(): string {
     if (this.isPlex()) {
       const config: PlexServerConfig = {
@@ -194,36 +227,13 @@ struct VideoServerConfigBuilderComponent {
   }
 
   private async handleTestConnection(): Promise<void> {
-    if (!this.validateCommon()) {
+    if (!this.validateCommon() || !this.validateAuth()) {
       return
-    }
-    if (this.isPlex()) {
-      const tokenResult = ValidationUtil.validateNotEmpty(this.token, 'X-Plex-Token')
-      if (!tokenResult.valid) {
-        this.showToastSafe(tokenResult.message)
-        return
-      }
-    } else if (this.authMethod === 'apikey') {
-      const keyResult = ValidationUtil.validateNotEmpty(this.apiKey, 'API Key')
-      if (!keyResult.valid) {
-        this.showToastSafe(keyResult.message)
-        return
-      }
-    } else {
-      const uResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
-      if (!uResult.valid) {
-        this.showToastSafe(uResult.message)
-        return
-      }
-      const pResult = ValidationUtil.validateNotEmpty(this.password, '密码')
-      if (!pResult.valid) {
-        this.showToastSafe(pResult.message)
-        return
-      }
     }
 
     this.isLoading = true
     this.loadingText = '连接测试中...'
+    this.pendingAction = 'test'
     try {
       const result = await this.testConnectionInternal()
       if (result.success) {
@@ -237,40 +247,18 @@ struct VideoServerConfigBuilderComponent {
     } finally {
       this.isLoading = false
       this.loadingText = ''
+      this.pendingAction = 'none'
     }
   }
 
   private async handleSave(): Promise<void> {
-    if (!this.validateCommon()) {
+    if (!this.validateCommon() || !this.validateAuth()) {
       return
-    }
-    if (this.isPlex()) {
-      const tokenResult = ValidationUtil.validateNotEmpty(this.token, 'X-Plex-Token')
-      if (!tokenResult.valid) {
-        this.showToastSafe(tokenResult.message)
-        return
-      }
-    } else if (this.authMethod === 'apikey') {
-      const keyResult = ValidationUtil.validateNotEmpty(this.apiKey, 'API Key')
-      if (!keyResult.valid) {
-        this.showToastSafe(keyResult.message)
-        return
-      }
-    } else {
-      const uResult = ValidationUtil.validateNotEmpty(this.username, '用户名')
-      if (!uResult.valid) {
-        this.showToastSafe(uResult.message)
-        return
-      }
-      const pResult = ValidationUtil.validateNotEmpty(this.password, '密码')
-      if (!pResult.valid) {
-        this.showToastSafe(pResult.message)
-        return
-      }
     }
 
     this.isLoading = true
     this.loadingText = '保存中...'
+    this.pendingAction = 'save'
 
     let originalCreatedAt: number = Date.now()
     if (this.isEditMode && this.editingServerId !== undefined) {
@@ -295,7 +283,7 @@ struct VideoServerConfigBuilderComponent {
         await store.addVideoServer(server)
       }
       // 服务器改名后同步当前源名称（Home 按钮 / 切换弹窗实时刷新）
-      SourceSwitchModel.getState().syncServerName(server)
+      await SourceSwitchModel.getState().syncServerName(server)
       this.showToastSafe('保存成功', 1500)
       this.controller.popType()
     } catch {
@@ -310,6 +298,7 @@ struct VideoServerConfigBuilderComponent {
     } finally {
       this.isLoading = false
       this.loadingText = ''
+      this.pendingAction = 'none'
     }
   }
 
@@ -456,7 +445,7 @@ struct VideoServerConfigBuilderComponent {
             btnWidth: '100%',
             plain: true,
             btnFontSize: 20,
-            loading: this.isLoading && this.loadingText === '连接测试中...',
+            loading: this.pendingAction === 'test',
             onBtnClick: () => {
               this.handleTestConnection()
             }
@@ -472,7 +461,7 @@ struct VideoServerConfigBuilderComponent {
             fontColor: Color.Black,
             btnWidth: '100%',
             btnFontSize: 20,
-            loading: this.isLoading && this.loadingText === '保存中...',
+            loading: this.pendingAction === 'save',
             onBtnClick: () => {
               this.handleSave()
             }

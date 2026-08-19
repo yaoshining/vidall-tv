@@ -75,7 +75,7 @@ export class VideoServerDao {
   async updateVideoServer(server: VideoServer): Promise<void> {
     const store = this.core.getStore();
 
-    if (!server.id) {
+    if (server.id === undefined) {
       throw new Error('Video server id is required for update');
     }
 

@@ -252,12 +252,17 @@ export struct SeriesDetailPage {
     return result
   }
 
+  /** 季标识生成规则（列表 id 与点击反查共用，保证一致） */
+  private seasonKey(s: TmdbRawSeason): string {
+    return String(s.id ?? s.season_number ?? 0)
+  }
+
   /** 季列表统一展示数据 */
   private seasonList(): DetailSeason[] {
     const result: DetailSeason[] = []
     for (const s of this.seasons) {
       result.push({
-        id: String(s.id ?? s.season_number ?? 0),
+        id: this.seasonKey(s),
         label: this.getSeasonLabel(s),
         posterUrl: this.getSeasonPosterUrl(s)
       })
@@ -1471,7 +1476,7 @@ export struct SeriesDetailPage {
             DetailSeasonsSection({
               seasons: this.seasonList(),
               onSeasonClick: (ds: DetailSeason) => {
-                const s = this.seasons.find(x => String(x.id ?? x.season_number ?? 0) === ds.id)
+                const s = this.seasons.find(x => this.seasonKey(x) === ds.id)
                 if (!s) { return }
                 const seasonGroup: SeriesGroup = {
                   title: this.getTitle(),

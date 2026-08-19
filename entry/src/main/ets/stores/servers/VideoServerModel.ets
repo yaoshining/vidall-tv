@@ -19,6 +19,9 @@ export class VideoServerModel {
   // 最后更新时间
   private lastUpdateTime: number = 0;
 
+  // 进行中的加载请求，用于并发去重（多个调用方共享同一次数据库读取与解密）
+  private loadingPromise: Promise<void> | null = null;
+
   /**
    * 加载影视服务器列表
    * @param forceReload 是否强制重新加载
@@ -31,6 +34,18 @@ export class VideoServerModel {
       return;
     }
 
+    if (this.loadingPromise !== null) {
+      return this.loadingPromise;
+    }
+    this.loadingPromise = this.doLoad(now);
+    try {
+      await this.loadingPromise;
+    } finally {
+      this.loadingPromise = null;
+    }
+  }
+
+  private async doLoad(now: number): Promise<void> {
     try {
       console.info('VideoServerModel: Loading video servers from database');
       const database = FileSourceDatabase.getInstance();
@@ -70,7 +85,7 @@ export class VideoServerModel {
    * 更新影视服务器
    */
   async updateVideoServer(server: VideoServer): Promise<void> {
-    if (!server.id) {
+    if (server.id === undefined) {
       throw new Error('Video server id is required for update');
     }
 

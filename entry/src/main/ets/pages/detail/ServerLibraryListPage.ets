@@ -4,6 +4,7 @@ import { VideoServer, VideoServerType } from "../../db/models/VideoServerEntity"
 import { JellyfinClient, VideoServerMediaItem } from "../../lib/JellyfinClient"
 import { PlexClient } from "../../lib/PlexClient"
 import { ServerMediaDetailPage, ServerMediaDetailPageParam } from "./ServerMediaDetailPage"
+import { BusinessError } from "@kit.BasicServicesKit"
 
 export interface ServerLibraryListPageParam {
   serverId: number
@@ -50,7 +51,7 @@ export struct ServerLibraryListPage {
       }
     } catch (e) {
       if (startIndex === 0) {
-        this.error = (e as Error).message ?? '加载失败'
+        this.error = (e as BusinessError).message ?? '加载失败'
       }
     } finally {
       this.isLoading = false
@@ -86,6 +87,12 @@ export struct ServerLibraryListPage {
     }
     this.isLoadingMore = true
     this.loadPage(this.items.length).catch(() => {})
+  }
+
+  private retry(): void {
+    this.isLoading = true
+    this.error = ''
+    this.loadPage(0).catch(() => {})
   }
 
   private openDetail(item: VideoServerMediaItem): void {
@@ -161,8 +168,15 @@ export struct ServerLibraryListPage {
           }
           .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
         } else if (this.error.length > 0) {
-          Column() {
+          Column({ space: 16 }) {
             Text(this.error).fontSize(16).fontColor('#FF6B6B')
+            Text('重试')
+              .fontSize(15).fontColor('#1B78F2')
+              .focusable(true)
+              .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+              .border({ width: 1, color: '#1B78F2' })
+              .borderRadius(6)
+              .onClick(() => { this.retry() })
           }
           .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
         } else {

@@ -14,12 +14,12 @@ export struct SourceSwitchDialog {
   sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
 
   private handleSelectFileSource(): void {
-    this.sourceSwitchModel.setFileSource()
+    this.sourceSwitchModel.setFileSource().catch(() => {})
     this.onClose()
   }
 
   private handleSelectServer(server: VideoServer): void {
-    this.sourceSwitchModel.setVideoServer(server)
+    this.sourceSwitchModel.setVideoServer(server).catch(() => {})
     this.onClose()
   }
 

@@ -57,23 +57,24 @@ export struct VideoServerTab {
   }
 
   private openEdit(server: VideoServer): void {
-    if (!server.id) {
+    if (server.id === undefined) {
       this.showToastSafe('服务器 ID 不存在')
       return
     }
+    const param: SettingsPageParam = {
+      type: this.settingTypeFor(server.type),
+      serverType: server.type,
+      serverId: server.id
+    }
     this.pageStack.pushPath({
       name: SettingsPage.PAGE_NAME,
-      param: {
-        type: this.settingTypeFor(server.type),
-        serverType: server.type,
-        serverId: server.id
-      } as SettingsPageParam
+      param: param
     })
   }
 
   private handleCardClick(server: VideoServer): void {
     // 点击卡片设为当前源并切到媒体库（按 code 定位，避免硬编码 tab 索引）
-    this.sourceSwitchModel.setVideoServer(server)
+    this.sourceSwitchModel.setVideoServer(server).catch(() => {})
     const index = this.tabBarModel.tabs.findIndex((t: TabItem) => t.code === TabItemCode.MEDIA_LIBRARY)
     if (index >= 0) {
       this.tabBarModel.currentTabIndex = index
@@ -87,7 +88,7 @@ export struct VideoServerTab {
 
   private async confirmDeleteServer(): Promise<void> {
     const target = this.deleteTarget
-    if (!target || !target.id) {
+    if (target === null || target.id === undefined) {
       return
     }
     try {
@@ -95,7 +96,7 @@ export struct VideoServerTab {
       await this.videoServerModel.deleteVideoServer(target.id)
       // 若删除的是当前源，回退到文件源
       if (this.sourceSwitchModel.getActiveServerId() === target.id) {
-        this.sourceSwitchModel.setFileSource()
+        await this.sourceSwitchModel.setFileSource()
       }
       this.showToastSafe('服务器已删除')
     } catch (error) {

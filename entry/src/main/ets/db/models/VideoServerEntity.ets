@@ -27,11 +27,6 @@ export interface JellyfinServerConfig {
   username?: string;
   /** 密码（authMethod=password 时使用） */
   password?: string;
-  /**
-   * TLS 证书校验策略（可选，默认 'strict'）。
-   * 'allow_self_signed' 仅在内网自签名证书场景下受控启用。
-   */
-  tlsCertPolicy?: 'strict' | 'allow_self_signed';
 }
 
 /**
@@ -51,8 +46,6 @@ export interface PlexServerConfig {
   protocol: 'http' | 'https';
   /** X-Plex-Token */
   token: string;
-  /** TLS 证书校验策略（可选，默认 'strict'） */
-  tlsCertPolicy?: 'strict' | 'allow_self_signed';
 }
 
 /**

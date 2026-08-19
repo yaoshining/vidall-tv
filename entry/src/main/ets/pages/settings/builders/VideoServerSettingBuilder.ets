@@ -55,7 +55,7 @@ struct VideoServerSettingBuilderComponent {
   }
 
   handleEdit(server: VideoServer): void {
-    if (!server.id) {
+    if (server.id === undefined) {
       this.showToastSafe('服务器 ID 不存在')
       return
     }
@@ -72,7 +72,7 @@ struct VideoServerSettingBuilderComponent {
 
   async confirmDeleteServer(): Promise<void> {
     const target = this.deleteTarget
-    if (!target || !target.id) {
+    if (target === null || target.id === undefined) {
       return
     }
     try {

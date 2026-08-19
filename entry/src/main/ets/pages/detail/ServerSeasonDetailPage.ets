@@ -9,6 +9,7 @@ import { PlexClient } from "../../lib/PlexClient"
 import { PlayerPage, PlayerPageParam } from "../player/index"
 import { reportServerPlaybackStarted } from "../../lib/ServerProgressReporter"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
+import { BusinessError } from "@kit.BasicServicesKit"
 import {
   DetailCastSection,
   DetailEpisodesSection,
@@ -56,6 +57,8 @@ export struct ServerSeasonDetailPage {
   @Local dominantBgColor: string = '#111111'
   /** 整剧「接下来」单集（用于跨季「继续上次观看」入口） */
   @Local nextUp: VideoServerMediaItem | null = null
+  /** 首次 onShown 跳过静默刷新（onReady 已发起首次加载），避免首帧重复请求 */
+  @Local initialLoadDone: boolean = false
 
   private showToastSafe(message: string): void {
     try {
@@ -78,39 +81,43 @@ export struct ServerSeasonDetailPage {
         return
       }
       if (server.type === VideoServerType.PLEX) {
-        this.episodes = await PlexClient.fromConfigJson(server.configJson).getEpisodes(this.seriesId, this.seasonId)
+        const client = PlexClient.fromConfigJson(server.configJson)
+        this.episodes = await client.getEpisodes(this.seriesId, this.seasonId)
+        try {
+          this.nextUp = await client.getNextUp(this.seriesId)
+        } catch (e) {
+          console.warn('[ServerSeasonDetailPage] 获取下一集失败', (e as BusinessError).message)
+        }
+        try {
+          const d = await client.getItemDetail(this.seriesId)
+          this.cast = d.cast
+          this.seriesBackdropUrl = d.media.backdropUrl
+          this.seriesYear = d.year
+          this.seriesRating = d.rating
+          this.seriesGenres = d.genres
+          this.seriesOverview = d.overview
+        } catch (e) {
+          console.warn('[ServerSeasonDetailPage] 获取系列详情失败', (e as BusinessError).message)
+        }
       } else {
-        this.episodes = await JellyfinClient.fromConfigJson(server.configJson).getEpisodes(this.seriesId, this.seasonId)
-      }
-      try {
-        if (server.type === VideoServerType.PLEX) {
-          this.nextUp = await PlexClient.fromConfigJson(server.configJson).getNextUp(this.seriesId)
-        } else {
-          this.nextUp = await JellyfinClient.fromConfigJson(server.configJson).getNextUp(this.seriesId)
+        const client = JellyfinClient.fromConfigJson(server.configJson)
+        this.episodes = await client.getEpisodes(this.seriesId, this.seasonId)
+        try {
+          this.nextUp = await client.getNextUp(this.seriesId)
+        } catch (e) {
+          console.warn('[ServerSeasonDetailPage] 获取下一集失败', (e as BusinessError).message)
         }
-      } catch (e) {
-        console.warn('[ServerSeasonDetailPage] 获取下一集失败', (e as Error).message)
-      }
-      try {
-        if (server.type === VideoServerType.PLEX) {
-          const d = await PlexClient.fromConfigJson(server.configJson).getItemDetail(this.seriesId)
+        try {
+          const d = await client.getItemDetail(this.seriesId)
           this.cast = d.cast
           this.seriesBackdropUrl = d.media.backdropUrl
           this.seriesYear = d.year
           this.seriesRating = d.rating
           this.seriesGenres = d.genres
           this.seriesOverview = d.overview
-        } else {
-          const d = await JellyfinClient.fromConfigJson(server.configJson).getItemDetail(this.seriesId)
-          this.cast = d.cast
-          this.seriesBackdropUrl = d.media.backdropUrl
-          this.seriesYear = d.year
-          this.seriesRating = d.rating
-          this.seriesGenres = d.genres
-          this.seriesOverview = d.overview
+        } catch (e) {
+          console.warn('[ServerSeasonDetailPage] 获取系列详情失败', (e as BusinessError).message)
         }
-      } catch (e) {
-        console.warn('[ServerSeasonDetailPage] 获取系列详情失败', (e as Error).message)
       }
       if (!silent) {
         const bd = this.backdropUrl()
@@ -120,7 +127,7 @@ export struct ServerSeasonDetailPage {
       }
     } catch (e) {
       if (!silent) {
-        this.error = (e as Error).message ?? '加载集列表失败'
+        this.error = (e as BusinessError).message ?? '加载集列表失败'
       }
     } finally {
       if (!silent) {
@@ -164,7 +171,7 @@ export struct ServerSeasonDetailPage {
       const b = darken(mainColor.blue & 0xFF);
       this.dominantBgColor = '#' + toHex(r) + toHex(g) + toHex(b);
     } catch (e) {
-      console.warn('[ServerSeasonDetailPage] extractDominantColor failed', (e as Error).message ?? String(e));
+      console.warn('[ServerSeasonDetailPage] extractDominantColor failed', (e as BusinessError).message ?? String(e));
     }
   }
 
@@ -209,7 +216,7 @@ export struct ServerSeasonDetailPage {
         .catch(() => {})
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
-      console.warn('[ServerSeasonDetailPage] 播放失败', (e as Error).message)
+      console.warn('[ServerSeasonDetailPage] 播放失败', (e as BusinessError).message)
       this.showToastSafe('播放失败，请重试')
     } finally {
       this.isPlaying = false
@@ -241,12 +248,20 @@ export struct ServerSeasonDetailPage {
     let best: VideoServerEpisode | undefined = undefined
     for (const ep of this.episodes) {
       if (ep.positionMs > 0 && ep.durationMs > 0 && (ep.positionMs / ep.durationMs) < 0.95) {
-        if (best === undefined || ep.positionMs > best.positionMs) {
+        if (best === undefined || this.isMoreRecent(ep, best)) {
           best = ep
         }
       }
     }
     return best ?? (this.episodes.length > 0 ? this.episodes[0] : undefined)
+  }
+
+  /** 优先按最近播放时间比较未完播集；缺少播放时间时回退到续播位置大小 */
+  private isMoreRecent(a: VideoServerEpisode, b: VideoServerEpisode): boolean {
+    if (a.lastPlayedDate > 0 || b.lastPlayedDate > 0) {
+      return a.lastPlayedDate > b.lastPlayedDate
+    }
+    return a.positionMs > b.positionMs
   }
 
   private heroPlayLabel(): string {
@@ -331,7 +346,7 @@ export struct ServerSeasonDetailPage {
         .catch(() => {})
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
-      console.warn('[ServerSeasonDetailPage] 播放失败', (e as Error).message)
+      console.warn('[ServerSeasonDetailPage] 播放失败', (e as BusinessError).message)
       this.showToastSafe('播放失败，请重试')
     } finally {
       this.isPlaying = false
@@ -463,7 +478,11 @@ export struct ServerSeasonDetailPage {
       }
     })
     .onShown(() => {
-      // 从播放器返回后静默刷新集进度（进度条 / 已看状态）
+      // 首次显示由 onReady 发起加载，跳过静默刷新；之后（如从播放器返回）才刷新集进度
+      if (!this.initialLoadDone) {
+        this.initialLoadDone = true
+        return
+      }
       if (this.seriesId.length > 0) {
         this.loadEpisodes(true)
       }
