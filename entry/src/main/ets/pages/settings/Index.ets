@@ -1,8 +1,10 @@
 import { AddFileSourceBuilder } from "./builders/AddFileSourceBuilder"
+import { AddVideoServerBuilder } from "./builders/AddVideoServerBuilder"
 import { FileSourceSettingBuilder } from "./builders/FileSourceSettingBuilder"
 import { HomeSettingBuilder } from "./builders/HomeSettingBuilder"
 import { ResourceLibrarySettingBuilder } from "./builders/ResourceLibrarySettingBuilder"
 import { VideoServerSettingBuilder } from "./builders/VideoServerSettingBuilder"
+import { VideoServerConfigBuilder } from "./builders/VideoServerConfigBuilder"
 import { WebDAVConfigBuilder } from "./builders/WebDAVConfigBuilder"
 import { SMBConfigBuilder } from "./builders/SMBConfigBuilder"
 import { DirectorySelectorBuilder } from "./builders/DirectorySelectorBuilder"
@@ -13,6 +15,10 @@ import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsSe
 
 export interface SettingsPageParam {
   type: SettingType
+  /** 直接进入某类型配置表单时透传的服务器类型（jellyfin/emby/plex） */
+  serverType?: string
+  /** 编辑模式下的服务器 ID */
+  serverId?: number
 }
 
 @ComponentV2
@@ -28,7 +34,12 @@ export struct SettingsPage {
       this.controller.type === SettingType.WEBDAV_CONFIG ||
       this.controller.type === SettingType.SMB_CONFIG ||
       this.controller.type === SettingType.DIRECTORY_SELECTOR ||
-      this.controller.type === SettingType.SMB_DIRECTORY_SELECTOR) {
+      this.controller.type === SettingType.SMB_DIRECTORY_SELECTOR ||
+      this.controller.type === SettingType.VIDEO_SERVER ||
+      this.controller.type === SettingType.ADD_VIDEO_SERVER ||
+      this.controller.type === SettingType.JELLYFIN_CONFIG ||
+      this.controller.type === SettingType.EMBY_CONFIG ||
+      this.controller.type === SettingType.PLEX_CONFIG) {
       return '/settings/sources';
     }
     return '/settings/player';
@@ -80,6 +91,14 @@ export struct SettingsPage {
             if (this.controller.type === SettingType.VIDEO_SERVER) {
               VideoServerSettingBuilder()
             }
+            if (this.controller.type === SettingType.ADD_VIDEO_SERVER) {
+              AddVideoServerBuilder()
+            }
+            if (this.controller.type === SettingType.JELLYFIN_CONFIG ||
+              this.controller.type === SettingType.EMBY_CONFIG ||
+              this.controller.type === SettingType.PLEX_CONFIG) {
+              VideoServerConfigBuilder()
+            }
             if (this.controller.type === SettingType.RESOURCE_LIBRARY) {
               ResourceLibrarySettingBuilder()
             }
@@ -117,6 +136,15 @@ export struct SettingsPage {
       const param = context.pathInfo.param as SettingsPageParam
       if (param) {
         this.controller.reset(param.type)
+        // 直连编辑场景：把服务器类型/ID 透传给配置表单 builder
+        if (param.serverId !== undefined) {
+          const p: Record<string, Object> = {}
+          if (param.serverType !== undefined) {
+            p['serverType'] = param.serverType
+          }
+          p['serverId'] = param.serverId
+          this.controller.params = p
+        }
       }
       // reset 之后上报，此时 controller.type 已是正确值
       if (UmamiAnalyticsService.isInitialized()) {

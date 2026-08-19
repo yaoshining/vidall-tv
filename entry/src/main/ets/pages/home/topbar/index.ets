@@ -1,14 +1,17 @@
 import { IBestButton, IBestDivider, IBestIcon, IBestToast } from "@ibestservices/ibest-ui"
 import { LengthMetrics } from "@kit.ArkUI"
-import { LucideCloudDownload } from "lucide"
+import { LucideCloudDownload, LucideServer } from "lucide"
 import { BasicClock } from "../../../components/common/BasicClock"
 import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
 import { SearchWorkspacePage } from "../../search"
+import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel"
 
 @ComponentV2
 export struct HomeTopBar {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
+  @Event onHomeClick: () => void = () => {}
+  sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
 
   @Builder
   settingIBestIconBuilder(name: string) {
@@ -22,6 +25,11 @@ export struct HomeTopBar {
   settingLucideIconBuilder(name: string) {
     if (name === 'cloud-download') {
       LucideCloudDownload({
+        iconSize: 20,
+        strokeColor: Color.White
+      }).margin({ end: LengthMetrics.vp(4) })
+    } else if (name === 'server') {
+      LucideServer({
         iconSize: 20,
         strokeColor: Color.White
       }).margin({ end: LengthMetrics.vp(4) })
@@ -60,10 +68,13 @@ export struct HomeTopBar {
         })
         IBestDivider({ vertical: true })
         IBestButton({
-          text: "Home",
+          text: this.sourceSwitchModel.getDisplayName(),
           buttonSize: "small",
           btnBorderColor: Color.Transparent,
-          iconBuilder: (): void => this.settingIBestIconBuilder('sort')
+          iconBuilder: (): void => this.settingIBestIconBuilder('sort'),
+          onBtnClick: () => {
+            this.onHomeClick()
+          }
         })
 
         IBestButton({
@@ -95,6 +106,21 @@ export struct HomeTopBar {
           iconBuilder: (): void => this.settingHuaweiIconBuilder($r('sys.symbol.folder_badge_plus'))
         })
           .bindTips('添加/修改文件源')
+
+        IBestButton({
+          buttonSize: "small",
+          btnBorderColor: Color.Transparent,
+          onBtnClick: () => {
+            this.pageStack.pushPath({
+              name: SettingsPage.PAGE_NAME,
+              param: {
+                type: SettingType.ADD_VIDEO_SERVER
+              } as SettingsPageParam
+            })
+          },
+          iconBuilder: (): void => this.settingLucideIconBuilder('server')
+        })
+          .bindTips('添加影视服务器')
       }
 
       Flex({

@@ -1,6 +1,7 @@
 import { Context } from '@ohos.abilityAccessCtrl';
 import { emitter } from "@kit.BasicServicesKit";
 import { FileSource, FileSourceDirectory, DirStatus } from '../models/FileSourceEntity';
+import { VideoServer } from '../models/VideoServerEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
   MediaItem, MediaStats, SeriesGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry,
@@ -9,6 +10,7 @@ import {
 import { DATABASE_READY } from './DbConstants';
 import { FileSourceDbCore } from './FileSourceDbCore';
 import { FileSourceDao } from './FileSourceDao';
+import { VideoServerDao } from './VideoServerDao';
 import { VideoDao } from './VideoDao';
 import { MediaContentDao } from './MediaContentDao';
 import { ScrapeInfoDao } from './ScrapeInfoDao';
@@ -30,6 +32,7 @@ export class FileSourceDatabase {
   // 数据库连接核心 + 各表数据访问
   private core: FileSourceDbCore;
   private fileSourceDao: FileSourceDao;
+  private videoServerDao: VideoServerDao;
   private videoDao: VideoDao;
   private mediaContentDao: MediaContentDao;
   private scrapeInfoDao: ScrapeInfoDao;
@@ -40,6 +43,7 @@ export class FileSourceDatabase {
   private constructor() {
     this.core = new FileSourceDbCore();
     this.fileSourceDao = new FileSourceDao(this.core);
+    this.videoServerDao = new VideoServerDao(this.core);
     this.videoDao = new VideoDao(this.core);
     this.mediaContentDao = new MediaContentDao(this.core);
     this.scrapeInfoDao = new ScrapeInfoDao(this.core);
@@ -125,6 +129,30 @@ export class FileSourceDatabase {
 
   async clearMediaAndDirectoryForDir(dirId: number, sourceId: number, directoryPath: string): Promise<void> {
     await this.fileSourceDao.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath);
+  }
+
+  // ─────────────────────────────────────────────
+  // video_servers
+  // ─────────────────────────────────────────────
+
+  async insertVideoServer(server: VideoServer): Promise<number> {
+    return this.videoServerDao.insertVideoServer(server);
+  }
+
+  async updateVideoServer(server: VideoServer): Promise<void> {
+    await this.videoServerDao.updateVideoServer(server);
+  }
+
+  async deleteVideoServer(id: number): Promise<void> {
+    await this.videoServerDao.deleteVideoServer(id);
+  }
+
+  async getVideoServerById(id: number): Promise<VideoServer | null> {
+    return this.videoServerDao.getVideoServerById(id);
+  }
+
+  async getAllVideoServers(): Promise<VideoServer[]> {
+    return this.videoServerDao.getAllVideoServers();
   }
 
   // ─────────────────────────────────────────────

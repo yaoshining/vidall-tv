@@ -1,5 +1,14 @@
 import { SeriesGroup, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, MediaItem, PlayProgressEntity, MediaProgressEntry } from '../../db/models/MediaEntity'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
+import {
+  DetailCastSection,
+  DetailOverviewDialog,
+  DetailCastMember,
+  DetailHeroSection,
+  DetailHeroData,
+  DetailEpisodesSection,
+  DetailEpisode
+} from '../../components/detail/DetailSections'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeCredit, extractImdbIdFromRawJson } from '../../lib/ScrapeClient'
 import { PlayerPageParam, PlayerPage } from '../player/index'
@@ -251,10 +260,67 @@ export struct SeasonDetailPage {
     return g.slice(0, 3).join(' / ');
   }
 
+  /** 演职人员统一展示数据（映射到公用组件） */
+  private castMembers(): DetailCastMember[] {
+    const result: DetailCastMember[] = []
+    for (const c of this.cast) {
+      result.push({
+        name: c.name ?? '',
+        role: c.role ?? '',
+        imageUrl: (c.profilePath ?? '').length > 0 ? tmdbImageUrl(c.profilePath ?? '', 'w185') : '',
+        personId: c.personId !== undefined && c.personId !== null && c.personId > 0 ? String(c.personId) : ''
+      })
+    }
+    return result
+  }
+
   private getEpisodeCount(): string {
     const cnt = this.seasonEpisodes.length;
     if (cnt <= 0) { return ''; }
     return `${cnt} 集`;
+  }
+
+  /** 集列表统一展示数据（映射到公用组件） */
+  private episodeList(): DetailEpisode[] {
+    const result: DetailEpisode[] = []
+    for (const ep of this.seasonEpisodes) {
+      const mediaItem = ep.mediaItem
+      const progress = this.getEpisodeProgress(mediaItem)
+      result.push({
+        id: String(mediaItem.id ?? -1),
+        label: this.getEpisodeLabel(ep),
+        overview: this.getEpisodeOverview(ep),
+        stillUrl: this.getEpisodeStillUrl(ep),
+        durationText: this.getEpisodeDuration(ep),
+        ratingText: this.getEpisodeRatingText(ep),
+        progressPercent: progress,
+        watched: this.isEpisodeWatched(mediaItem),
+        placeholderText: String(mediaItem.episodeNumber ?? 0)
+      })
+    }
+    return result
+  }
+
+  /** Hero 区统一数据（映射到公用组件） */
+  private heroData(): DetailHeroData {
+    const showCross = this.shouldShowCrossSeasonEntry();
+    return {
+      backdropUrl: this.getBackdropUrl(),
+      dominantBgColor: this.dominantBgColor,
+      supertitle: this.getSeriesTitle(),
+      title: this.getSeasonLabel(),
+      year: this.getYear(),
+      ratingText: this.getRatingText(),
+      countText: this.getEpisodeCount(),
+      genres: this.getGenres(),
+      overview: this.getOverview(),
+      playLabel: this.getHeroPlayLabel(),
+      onPlayClick: () => { this.handleHeroPlayClick(); },
+      crossSeasonLabel: showCross ? this.getCrossSeasonLabel() : '',
+      crossSeasonMetaLabel: showCross ? this.getCrossSeasonMetaLabel() : '',
+      onCrossSeasonClick: () => { this.handleCrossSeasonClick(); },
+      onShowOverview: () => { this.showOverviewDialog = true; }
+    }
   }
 
   // ── 集条目辅助 ──────────────────────────────────
@@ -961,589 +1027,6 @@ export struct SeasonDetailPage {
     }).catch(() => {});
   }
 
-  // ── Builders ──────────────────────────────────
-
-  @Builder
-  HeroSection() {
-    Stack({ alignContent: Alignment.BottomStart }) {
-      // 背景图
-      if (this.getBackdropUrl().length > 0) {
-        Image(this.getBackdropUrl())
-          .width('100%').height('100%')
-          .objectFit(ImageFit.Cover)
-      } else {
-        Column()
-          .width('100%').height('100%')
-          .linearGradient({ angle: 135, colors: [['#1A1A2E', 0.0], ['#16213E', 0.5], ['#0F3460', 1.0]] })
-      }
-
-      // 底部渐变遮罩
-      Column()
-        .width('100%').height('68%')
-        .linearGradient({ angle: 180, colors: [['#00000000', 0.0], [toOpaqueColor(this.dominantBgColor), 1.0]] })
-        .position({ left: 0, bottom: 0 })
-
-      // 左侧渐变遮罩
-      Column()
-        .width('55%').height('100%')
-        .linearGradient({ angle: 90, colors: [[toOpaqueColor(this.dominantBgColor), 0.0], ['#00000000', 1.0]] })
-        .position({ left: 0, top: 0 })
-
-      // 底部内容：左侧标题/元信息/简介
-      Column({ space: 14 }) {
-        // 剧名副标题
-        if (this.getSeriesTitle().length > 0) {
-          Text(this.getSeriesTitle())
-            .fontSize(18).fontColor('#BBBBBB').fontWeight(FontWeight.Medium)
-        }
-
-        // 季标题（大）
-        Text(this.getSeasonLabel())
-          .fontSize(52).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          .textShadow({ radius: 8, color: '#88000000', offsetX: 2, offsetY: 2 })
-          .constraintSize({ maxWidth: 720 })
-
-        // 元信息行：年份 + 评分 + 集数 + 类型标签
-        Row({ space: 12 }) {
-          if (this.getYear().length > 0) {
-            Text(this.getYear())
-              .fontSize(18).fontColor('#CCCCCC').fontWeight(FontWeight.Medium)
-          }
-          if (this.getRatingText().length > 0) {
-            Row({ space: 4 }) {
-              Text('★').fontSize(16).fontColor('#FFA500')
-              Text(this.getRatingText())
-                .fontSize(18).fontColor('#FFA500').fontWeight(FontWeight.Bold)
-            }
-          }
-          if (this.getEpisodeCount().length > 0) {
-            Text(this.getEpisodeCount())
-              .fontSize(14).fontColor('#CCCCCC')
-              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-              .borderRadius(4).border({ width: 1, color: '#55FFFFFF' })
-          }
-          ForEach(this.getGenres().slice(0, 2), (genre: string) => {
-            Text(genre)
-              .fontSize(14).fontColor('#CCCCCC')
-              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-              .borderRadius(4).border({ width: 1, color: '#55FFFFFF' })
-          }, (genre: string) => genre)
-        }
-        .alignItems(VerticalAlign.Center)
-
-        // 简介
-        if (this.getOverview().length > 0) {
-          if (this.isOverviewLong()) {
-            Text() {
-              Span(this.getOverviewShort())
-                .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-              Span('更多')
-                .fontSize(16).fontColor('#1B78F2').fontWeight(FontWeight.Medium)
-                .focusable(true)
-                .onClick(() => { this.showOverviewDialog = true; })
-            }
-            .constraintSize({ maxWidth: 700 })
-          } else {
-            Text(this.getOverview())
-              .fontSize(16).fontColor('#BBBBBB').lineHeight(26)
-              .constraintSize({ maxWidth: 700 })
-          }
-        }
-
-        // 操作区：主入口与辅助动作分层，突出当前季播放动作
-        Column({ space: 12 }) {
-          Row({ space: 14 }) {
-            Row({ space: 10 }) {
-              Text('▶').fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Bold)
-              Text(this.getHeroPlayLabel()).fontSize(17).fontColor(Color.White).fontWeight(FontWeight.Bold)
-            }
-            .height(64)
-            .padding({ left: 26, right: 26, top: 14, bottom: 14 })
-            .backgroundColor(this.getHeroPlayButtonBgColor()).borderRadius(10)
-            .border({ width: 2, color: this.getHeroPlayButtonBorderColor() })
-            .shadow({ radius: 18, color: this.getHeroPlayButtonShadowColor(), offsetX: 0, offsetY: 10 })
-            .scale({ x: this.getHeroPrimaryButtonScale(), y: this.getHeroPrimaryButtonScale() })
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .focusable(true)
-            .onFocus(() => { this.focusedHeroActionKey = 'play'; })
-            .onBlur(() => { this.clearHeroActionFocusIfMatches('play'); })
-            .onHover((isHover: boolean) => {
-              if (isHover) {
-                this.hoveredHeroActionKey = 'play';
-              } else {
-                this.clearHeroActionHoverIfMatches('play');
-              }
-            })
-            .onClick(() => { this.handleHeroPlayClick(); })
-
-            if (this.shouldShowCrossSeasonEntry()) {
-              Column({ space: 4 }) {
-                Row({ space: 8 }) {
-                  Text('↩').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('cross'))
-                  Text(this.getCrossSeasonLabel())
-                    .fontSize(14).fontColor(this.getHeroSecondaryTitleColor('cross')).fontWeight(FontWeight.Bold)
-                }
-                .alignItems(VerticalAlign.Center)
-
-                Text(this.getCrossSeasonMetaLabel())
-                  .fontSize(12).fontColor(this.getHeroSecondaryMetaColor('cross'))
-              }
-              .alignItems(HorizontalAlign.Start)
-              .height(64)
-              .padding({ left: 18, right: 18, top: 12, bottom: 12 })
-              .backgroundColor(this.getHeroSecondaryButtonBgColor('cross')).borderRadius(10)
-              .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('cross') })
-              .shadow({ radius: 14, color: this.getHeroSecondaryButtonShadowColor('cross'), offsetX: 0, offsetY: 8 })
-              .scale({ x: this.getHeroSecondaryButtonScale('cross'), y: this.getHeroSecondaryButtonScale('cross') })
-              .justifyContent(FlexAlign.Center)
-              .focusable(true)
-              .onFocus(() => { this.focusedHeroActionKey = 'cross'; })
-              .onBlur(() => { this.clearHeroActionFocusIfMatches('cross'); })
-              .onHover((isHover: boolean) => {
-                if (isHover) {
-                  this.hoveredHeroActionKey = 'cross';
-                } else {
-                  this.clearHeroActionHoverIfMatches('cross');
-                }
-              })
-              .onClick(() => { this.handleCrossSeasonClick(); })
-            }
-          }
-          .alignItems(VerticalAlign.Center)
-          .alignSelf(ItemAlign.Start)
-
-          Row({ space: 12 }) {
-            Row({ space: 8 }) {
-              Text('✓').fontSize(16).fontColor(this.getHeroSecondaryTitleColor('wish'))
-              Text('想看').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('wish')).fontWeight(FontWeight.Medium)
-            }
-            .height(44)
-            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-            .backgroundColor(this.getHeroSecondaryButtonBgColor('wish')).borderRadius(8)
-            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('wish') })
-            .shadow({ radius: 12, color: this.getHeroSecondaryButtonShadowColor('wish'), offsetX: 0, offsetY: 6 })
-            .scale({ x: this.getHeroSecondaryButtonScale('wish'), y: this.getHeroSecondaryButtonScale('wish') })
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .focusable(true)
-            .onFocus(() => { this.focusedHeroActionKey = 'wish'; })
-            .onBlur(() => { this.clearHeroActionFocusIfMatches('wish'); })
-            .onHover((isHover: boolean) => {
-              if (isHover) {
-                this.hoveredHeroActionKey = 'wish';
-              } else {
-                this.clearHeroActionHoverIfMatches('wish');
-              }
-            })
-
-            Row({ space: 8 }) {
-              Text('♥').fontSize(16).fontColor(this.getHeroSecondaryTitleColor('favorite'))
-              Text('收藏').fontSize(14).fontColor(this.getHeroSecondaryTitleColor('favorite')).fontWeight(FontWeight.Medium)
-            }
-            .height(44)
-            .padding({ left: 18, right: 18, top: 10, bottom: 10 })
-            .backgroundColor(this.getHeroSecondaryButtonBgColor('favorite')).borderRadius(8)
-            .border({ width: 2, color: this.getHeroSecondaryButtonBorderColor('favorite') })
-            .shadow({ radius: 12, color: this.getHeroSecondaryButtonShadowColor('favorite'), offsetX: 0, offsetY: 6 })
-            .scale({ x: this.getHeroSecondaryButtonScale('favorite'), y: this.getHeroSecondaryButtonScale('favorite') })
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Center)
-            .focusable(true)
-            .onFocus(() => { this.focusedHeroActionKey = 'favorite'; })
-            .onBlur(() => { this.clearHeroActionFocusIfMatches('favorite'); })
-            .onHover((isHover: boolean) => {
-              if (isHover) {
-                this.hoveredHeroActionKey = 'favorite';
-              } else {
-                this.clearHeroActionHoverIfMatches('favorite');
-              }
-            })
-          }
-          .alignItems(VerticalAlign.Center)
-          .alignSelf(ItemAlign.Start)
-        }
-        .alignItems(HorizontalAlign.Start)
-      }
-      .alignItems(HorizontalAlign.Start)
-      .padding({ left: 80, right: 80, bottom: 52 })
-      .width('65%')
-    }
-    .width('100%').aspectRatio(1.778)
-  }
-
-  /** 集列表区 */
-  @Builder
-  EpisodesSection() {
-    if (this.seasonEpisodes.length > 0) {
-      Column({ space: 0 }) {
-        // 标题行
-        Row() {
-          Text('集')
-            .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          Blank()
-          Row({ space: 8 }) {
-            Text('‹')
-              .fontSize(22).fontColor('#CCCCCC')
-              .width(36).height(36)
-              .textAlign(TextAlign.Center)
-              .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(18)
-            Text('›')
-              .fontSize(22).fontColor('#CCCCCC')
-              .width(36).height(36)
-              .textAlign(TextAlign.Center)
-              .backgroundColor(this.getEpisodeActionButtonBgColor()).borderRadius(18)
-          }
-        }
-        .width('100%')
-        .padding({ left: 80, right: 80, top: 36, bottom: 20 })
-        .alignItems(VerticalAlign.Center)
-
-        // 集条目列表
-        ForEach(this.seasonEpisodes, (ep: SeasonEpisodeItem, idx: number) => {
-          Column({ space: 0 }) {
-            // 分割线（首条不加）
-            if (idx > 0) {
-              Divider().color('#24282D').strokeWidth(1)
-            }
-
-            // 集条目行
-            Row({ space: 28 }) {
-              // 缩略图 + 播放覆盖
-              Stack({ alignContent: Alignment.Center }) {
-                if (this.getEpisodeStillUrl(ep).length > 0) {
-                  Image(this.getEpisodeStillUrl(ep))
-                    .width(310).height(174)
-                    .borderRadius(6).objectFit(ImageFit.Cover)
-                } else {
-                  Column() {
-                    Text(String(ep.mediaItem.episodeNumber ?? 0))
-                      .fontSize(28).fontColor('#555555').fontWeight(FontWeight.Bold)
-                  }
-                  .width(310).height(174)
-                  .backgroundColor('#1E1E1E').borderRadius(6)
-                  .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-                }
-                // 播放按钮覆盖
-                Column() {
-                  SymbolGlyph($r('sys.symbol.play_fill'))
-                    .fontColor([Color.White])
-                    .fontSize(28)
-                }
-                .backgroundColor('rgba(200, 200, 200, 0.2)')
-                .backdropBlur(40)
-                .padding(14)
-                .borderRadius(99)
-                .border({ width: 1, color: 'rgba(255, 255, 255, 0.2)' })
-                .shadow({ radius: 20, color: 'rgba(0, 0, 0, 0.4)' })
-                .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-                .hitTestBehavior(HitTestMode.Transparent)
-
-                // 进度条（有进度时显示）
-                if (this.getEpisodeProgress(ep.mediaItem) > 0) {
-                  Column() {
-                    Column()
-                      .width(this.getProgressPercent(ep))
-                      .height('100%')
-                      .backgroundColor('#1B78F2').borderRadius(2)
-                      .alignSelf(ItemAlign.Start)
-                  }
-                  .alignItems(HorizontalAlign.Start)
-                  .width(310).height(4)
-                  .backgroundColor('#2E2E2E').borderRadius(2)
-                  .position({ left: 0, bottom: 0 })
-                  .hitTestBehavior(HitTestMode.Transparent)
-                }
-              }
-              .width(310).height(174)
-              .borderRadius(6).clip(true)
-              .onClick(() => { this.playEpisode(ep.mediaItem); })
-
-              // 信息列
-              Column({ space: 12 }) {
-                // 集标题
-                Text(this.getEpisodeLabel(ep))
-                  .fontSize(20).fontColor(Color.White).fontWeight(FontWeight.Bold)
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-
-                // 元数据行：时长 + 评分
-                Row({ space: 16 }) {
-                  if (this.getEpisodeDuration(ep).length > 0) {
-                    Text(this.getEpisodeDuration(ep))
-                      .fontSize(15).fontColor('#888888')
-                  }
-                  if (this.getEpisodeRatingText(ep).length > 0) {
-                    Row({ space: 4 }) {
-                      Text('★').fontSize(14).fontColor('#F5B942')
-                      Text(this.getEpisodeRatingText(ep))
-                        .fontSize(15).fontColor('#CCCCCC').fontWeight(FontWeight.Medium)
-                    }
-                  }
-                  if (this.isEpisodeWatched(ep.mediaItem)) {
-                    Text('✓ 已看')
-                      .fontSize(13).fontColor('#1B78F2')
-                      .padding({ left: 8, right: 8, top: 2, bottom: 2 })
-                      .backgroundColor('#192840').borderRadius(3)
-                  }
-                }
-                .alignItems(VerticalAlign.Center)
-
-                // 简介
-                if (this.getEpisodeOverview(ep).length > 0) {
-                  Text(this.getEpisodeOverview(ep))
-                    .fontSize(15).fontColor('#AAAAAA').lineHeight(24)
-                    .height(96)
-                    .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }
-              }
-              .layoutWeight(1)
-              .alignItems(HorizontalAlign.Start)
-              .justifyContent(FlexAlign.Start)
-              .onClick(() => { this.playEpisode(ep.mediaItem); })
-
-              // 操作按钮行
-              Row({ space: 8 }) {
-                Text('ⓘ')
-                  .fontSize(18).fontColor('#B5BBC4')
-                  .width(44).height(44)
-                  .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'info')).borderRadius(22)
-                  .border({ width: this.isEpisodeActionFocused(ep, 'info') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'info') })
-                  .focusable(true)
-                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'info'); })
-                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'info'); })
-                  .onHover((isHover: boolean) => {
-                    if (isHover) {
-                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'info');
-                    } else {
-                      this.clearEpisodeActionHoverIfMatches(ep, 'info');
-                    }
-                  })
-                Text('✓')
-                  .fontSize(18).fontColor('#B5BBC4')
-                  .width(44).height(44)
-                  .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'check')).borderRadius(22)
-                  .border({ width: this.isEpisodeActionFocused(ep, 'check') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'check') })
-                  .focusable(true)
-                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'check'); })
-                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'check'); })
-                  .onHover((isHover: boolean) => {
-                    if (isHover) {
-                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'check');
-                    } else {
-                      this.clearEpisodeActionHoverIfMatches(ep, 'check');
-                    }
-                  })
-                Text('♥')
-                  .fontSize(18).fontColor('#B5BBC4')
-                  .width(44).height(44)
-                  .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'heart')).borderRadius(22)
-                  .border({ width: this.isEpisodeActionFocused(ep, 'heart') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'heart') })
-                  .focusable(true)
-                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'heart'); })
-                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'heart'); })
-                  .onHover((isHover: boolean) => {
-                    if (isHover) {
-                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'heart');
-                    } else {
-                      this.clearEpisodeActionHoverIfMatches(ep, 'heart');
-                    }
-                  })
-                Text('⋮')
-                  .fontSize(18).fontColor('#C6CCD4')
-                  .width(44).height(44)
-                  .textAlign(TextAlign.Center)
-                  .backgroundColor(this.getEpisodeActionCircleBg(ep, 'more')).borderRadius(22)
-                  .border({ width: this.isEpisodeActionFocused(ep, 'more') ? 2 : 1, color: this.getEpisodeActionCircleBorder(ep, 'more') })
-                  .focusable(true)
-                  .onFocus(() => { this.focusedEpisodeActionKey = this.buildEpisodeActionKey(ep, 'more'); })
-                  .onBlur(() => { this.clearEpisodeActionFocusIfMatches(ep, 'more'); })
-                  .onHover((isHover: boolean) => {
-                    if (isHover) {
-                      this.hoveredEpisodeActionKey = this.buildEpisodeActionKey(ep, 'more');
-                    } else {
-                      this.clearEpisodeActionHoverIfMatches(ep, 'more');
-                    }
-                  })
-              }
-              .alignSelf(ItemAlign.Center)
-            }
-            .width('100%')
-            .padding({ left: 80, right: 80, top: 20, bottom: 20 })
-            .backgroundColor(this.getEpisodeRowBgColor(ep))
-            .borderRadius(8)
-            .border({ width: 2, color: this.getEpisodeRowBorderColor(ep) })
-            .alignItems(VerticalAlign.Top)
-            .focusable(true)
-            .onFocus(() => { this.focusedEpisodeRowId = this.getEpisodeRowId(ep); })
-            .onBlur(() => { this.clearEpisodeRowFocusIfMatches(ep); })
-            .onHover((isHover: boolean) => {
-              if (isHover) {
-                this.hoveredEpisodeRowId = this.getEpisodeRowId(ep);
-              } else {
-                this.clearEpisodeRowHoverIfMatches(ep);
-              }
-            })
-            .animation({ duration: 140, curve: Curve.EaseInOut })
-          }
-          .width('100%')
-        }, (ep: SeasonEpisodeItem) => String(ep.mediaItem.id))
-
-        Column().height(36)
-      }
-      .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.dominantBgColor)
-    }
-  }
-
-  /** 演职人员横向滚动列表 */
-  @Builder
-  CastSection() {
-    if (this.cast.length > 0) {
-      Column({ space: 0 }) {
-        Text('演职人员')
-          .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          .padding({ left: 80, top: 36, bottom: 20 })
-
-        Scroll() {
-          Row({ space: 24 }) {
-            ForEach(this.cast.slice(0, 15), (c: ScrapeCredit) => {
-              Column({ space: 8 }) {
-                if ((c.profilePath ?? '').length > 0) {
-                  Image(tmdbImageUrl(c.profilePath, 'w185'))
-                    .width(110).aspectRatio(2 / 3)
-                    .objectFit(ImageFit.Cover).borderRadius(6)
-                    .hoverEffect(HoverEffect.Scale)
-                } else {
-                  Column() {
-                    Text((c.name != null && c.name.length > 0) ? c.name.substring(0, 1) : '?')
-                      .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
-                  }
-                  .width(110).aspectRatio(2 / 3).borderRadius(6)
-                  .backgroundColor('#2A2A2A')
-                  .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-                  .hoverEffect(HoverEffect.Scale)
-                }
-                Text(c.name ?? '')
-                  .fontSize(14).fontColor(Color.White)
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width(110).textAlign(TextAlign.Center)
-                if (c.role != null && c.role.length > 0) {
-                  Text(c.role)
-                    .fontSize(12).fontColor('#777777')
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    .width(110).textAlign(TextAlign.Center)
-                }
-              }
-              .width(110).alignItems(HorizontalAlign.Center)
-              .focusable(true)
-              .onClick(() => {
-                const name = c.name ?? '';
-                const profilePath = c.profilePath ?? '';
-                if (name.length === 0 && profilePath.length === 0) { return; }
-                const param: CastDetailPageParam = {
-                  personId: c.personId ?? 0,
-                  name: name
-                };
-                this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
-              })
-            }, (c: ScrapeCredit) => c.name ?? '')
-          }
-          .padding({ left: 80, right: 80 })
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.None)
-
-        Column().height(36)
-      }
-      .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.dominantBgColor)
-    }
-  }
-
-  /** 简介全文弹窗 */
-  @Builder
-  OverviewDialog() {
-    if (this.showOverviewDialog) {
-      Stack({ alignContent: Alignment.Center }) {
-        Column()
-          .width('100%').height('100%')
-          .backgroundColor('#BB000000')
-          .onClick(() => { this.showOverviewDialog = false; })
-
-        Column() {
-          Row() {
-            Text('简介')
-              .fontSize(26).fontColor('#F0F0F0').fontWeight(FontWeight.Bold)
-              .layoutWeight(1).textAlign(TextAlign.Center)
-            Text('✕')
-              .fontSize(20).fontColor('#888892')
-              .width(48).height(48)
-              .textAlign(TextAlign.Center)
-              .borderRadius(24).backgroundColor('#2A2A2E')
-              .onClick(() => { this.showOverviewDialog = false; })
-          }
-          .alignItems(VerticalAlign.Center)
-          .padding({ left: 24, right: 24 })
-          .height(80).width('100%')
-          .backgroundColor('#1E1E22')
-
-          Divider().color('#2E2E34').strokeWidth(1)
-
-          Row() {
-            Column({ space: 20 }) {
-              Image(this.getDialogPosterUrl())
-                .width(124).height(174).borderRadius(6)
-                .objectFit(ImageFit.Cover).backgroundColor('#2A2A2E')
-              Text(this.getSeasonLabel())
-                .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#F0F0F0')
-                .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .lineHeight(28).width('100%')
-              if (this.getSeriesTitle().length > 0) {
-                Text(this.getSeriesTitle())
-                  .fontSize(14).fontColor('#888888')
-                  .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width('100%')
-              }
-              Column({ space: 8 }) {
-                if (this.getGenresText().length > 0) {
-                  Text(`风格：${this.getGenresText()}`).fontSize(18).fontColor('#AAAAAA')
-                }
-                if (this.getYear().length > 0) {
-                  Text(this.getYear()).fontSize(18).fontColor('#AAAAAA')
-                }
-              }
-              .alignItems(HorizontalAlign.Start).width('100%')
-            }
-            .width('28%').padding({ left: 48, right: 32, top: 48, bottom: 48 })
-            .alignItems(HorizontalAlign.Start)
-
-            Divider().vertical(true).color('#2A2A2E').strokeWidth(1).height('100%')
-
-            Scroll() {
-              Text(this.getOverview())
-                .fontSize(20).fontColor('#C8C8D0').lineHeight(36).width('100%')
-            }
-            .scrollable(ScrollDirection.Vertical)
-            .scrollBar(BarState.Auto)
-            .scrollBarColor('#555560')
-            .layoutWeight(1)
-            .padding({ left: 40, right: 40, top: 48, bottom: 48 })
-          }
-          .alignItems(VerticalAlign.Top).layoutWeight(1)
-        }
-        .width('85%').height('88%')
-        .backgroundColor('#18181C').borderRadius(16)
-        .border({ width: 1, color: '#2A2A2E' }).clip(true)
-      }
-      .width('100%').height('100%')
-    }
-  }
-
   // ── 构建 ──────────────────────────────────────
 
   build() {
@@ -1552,9 +1035,26 @@ export struct SeasonDetailPage {
         // 主体滚动内容
         Scroll() {
           Column() {
-            this.HeroSection()
-            this.EpisodesSection()
-            this.CastSection()
+            DetailHeroSection({ data: this.heroData() })
+            DetailEpisodesSection({
+              episodes: this.episodeList(),
+              onEpisodeClick: (e: DetailEpisode) => {
+                const orig = this.seasonEpisodes.find(x => String(x.mediaItem.id ?? -1) === e.id)
+                if (orig !== undefined) {
+                  this.playEpisode(orig.mediaItem)
+                }
+              }
+            })
+            DetailCastSection({
+              members: this.castMembers(),
+              onCastClick: (c: DetailCastMember) => {
+                const personId = parseInt(c.personId)
+                if (personId > 0) {
+                  const param: CastDetailPageParam = { personId: personId, name: c.name }
+                  this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param)
+                }
+              }
+            })
             Column().height(80)
           }
           .width('100%')
@@ -1565,7 +1065,16 @@ export struct SeasonDetailPage {
         .edgeEffect(EdgeEffect.None)
 
         // 简介全文弹窗
-        this.OverviewDialog()
+        DetailOverviewDialog({
+          visible: this.showOverviewDialog,
+          title: this.getSeriesTitle(),
+          posterUrl: this.getDialogPosterUrl(),
+          overview: this.getOverview(),
+          genresText: this.getGenresText(),
+          runtimeText: '',
+          year: this.getYear(),
+          onClose: () => { this.showOverviewDialog = false }
+        })
 
 
       }

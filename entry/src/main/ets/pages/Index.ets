@@ -1,5 +1,6 @@
 import { SidebarStore } from '../stores/sidebar/SidebarStore';
 import { SidebarModel } from '../stores/sidebar/SidebarModel';
+import { SourceSwitchModel } from '../stores/media/SourceSwitchModel';
 import { FileExplorerPage } from './files';
 import { SmbFileExplorerPage } from './files/SmbFileExplorerPage';
 import { HomePage } from './home';
@@ -9,6 +10,10 @@ import { SeriesDetailPage } from './detail/SeriesDetailPage';
 import { SeasonDetailPage } from './detail/SeasonDetailPage';
 import { MovieDetailPage } from './detail/MovieDetailPage';
 import { CastDetailPage } from './detail/CastDetailPage';
+import { ServerMediaDetailPage } from './detail/ServerMediaDetailPage';
+import { ServerSeasonDetailPage } from './detail/ServerSeasonDetailPage';
+import { ServerPersonDetailPage } from './detail/ServerPersonDetailPage';
+import { ServerLibraryListPage } from './detail/ServerLibraryListPage';
 import { PlayHistoryPage } from './history/PlayHistoryPage';
 import { SearchWorkspacePage } from './search';
 import { MediaResultPage } from './search';
@@ -17,6 +22,16 @@ import { MediaResultPage } from './search';
 struct Index {
   sidebarModel: SidebarModel = SidebarStore.getState()
   @Provider('pageStack') pageStack: NavPathStack = new NavPathStack();
+
+  onBackPress(): boolean {
+    // 数据源切换弹窗打开时，返回键仅关闭弹窗，不退出 App
+    const model = SourceSwitchModel.getState();
+    if (model.sourceSwitchDialogVisible) {
+      model.sourceSwitchDialogVisible = false;
+      return true;
+    }
+    return false;
+  }
 
   @Builder
   PageBuilder(name: string) {
@@ -36,6 +51,14 @@ struct Index {
       SeasonDetailPage();
     } else if (name === CastDetailPage.PAGE_NAME) {
       CastDetailPage();
+    } else if (name === ServerMediaDetailPage.PAGE_NAME) {
+      ServerMediaDetailPage();
+    } else if (name === ServerSeasonDetailPage.PAGE_NAME) {
+      ServerSeasonDetailPage();
+    } else if (name === ServerPersonDetailPage.PAGE_NAME) {
+      ServerPersonDetailPage();
+    } else if (name === ServerLibraryListPage.PAGE_NAME) {
+      ServerLibraryListPage();
     } else if (name === PlayHistoryPage.PAGE_NAME) {
       PlayHistoryPage();
     } else if (name === SearchWorkspacePage.PAGE_NAME) {

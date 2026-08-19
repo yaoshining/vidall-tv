@@ -23,9 +23,25 @@ import { MovieDetailPage } from "../../detail/MovieDetailPage"
 import { FfprobeUtil } from "../../../utils/FfprobeUtil"
 import { WebDAVClient, WebDAVConfig } from "../../../lib/WebDAVClient"
 import { PlayHistoryPage } from "../../history/PlayHistoryPage"
-import { emitter } from "@kit.BasicServicesKit"
+import { emitter, BusinessError } from "@kit.BasicServicesKit"
+import { PlayerPage, PlayerPageParam } from "../../player/index"
 import { PlayerEvents } from "../../../components/core/player/Constants"
 import { MediaResultPage, MediaResultPageParam } from "../../search/MediaResultPage"
+import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel"
+import { VideoServerStore } from "../../../stores/servers/VideoServerStore"
+import { VideoServerModel } from "../../../stores/servers/VideoServerModel"
+import { VideoServer, VideoServerType } from "../../../db/models/VideoServerEntity"
+import {
+  JellyfinClient,
+  VideoServerLibrary,
+  VideoServerHome,
+  VideoServerMediaItem,
+  VideoServerLatestSection
+} from "../../../lib/JellyfinClient"
+import { PlexClient } from "../../../lib/PlexClient"
+import { reportServerPlaybackStarted } from "../../../lib/ServerProgressReporter"
+import { ServerMediaDetailPage, ServerMediaDetailPageParam } from "../../detail/ServerMediaDetailPage"
+import { ServerLibraryListPage, ServerLibraryListPageParam } from "../../detail/ServerLibraryListPage"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -36,6 +52,11 @@ const LANDSCAPE_ASPECT_RATIO = 16/9;
 
 const WIDE_WIDTH = 360;
 // const WIDE_HEIGHT = 135;
+
+// 影视服务器媒体库卡片尺寸
+const SERVER_WIDE_WIDTH = 360;          // 16:9 宽卡
+const SERVER_POSTER_WIDTH = 181;        // 181 x 272 海报卡
+const SERVER_POSTER_ASPECT = 181 / 272;
 // ─────────────────────────────────────────────
 // 工具函数
 // ─────────────────────────────────────────────
@@ -380,6 +401,150 @@ struct MixedCard {
 }
 
 // ─────────────────────────────────────────────
+// 影视服务器卡片：16:9 宽卡 / 181x272 海报卡 / 媒体库卡
+// ─────────────────────────────────────────────
+@ComponentV2
+struct ServerWideCard {
+  @Require @Param item: VideoServerMediaItem
+  @Param showProgress: boolean = false
+  @Event onItemClick: () => void = () => {}
+  @Local isHovered: boolean = false
+
+  private imageUrl(): string {
+    if (this.item.backdropUrl.length > 0) {
+      return this.item.backdropUrl
+    }
+    return this.item.posterUrl
+  }
+
+  build() {
+    Column({ space: 4 }) {
+      Stack({ alignContent: Alignment.BottomStart }) {
+        if (this.imageUrl().length > 0) {
+          Image(this.imageUrl())
+            .width(SERVER_WIDE_WIDTH)
+            .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+            .objectFit(ImageFit.Cover)
+        } else {
+          Column() {
+            Text(this.item.title)
+              .fontSize(12).fontColor('#CCCCCC').textAlign(TextAlign.Center)
+              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).padding(8)
+          }
+          .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
+          .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
+        }
+        if (this.showProgress && this.item.progress > 0) {
+          Stack({ alignContent: Alignment.Start }) {
+            Column().width(SERVER_WIDE_WIDTH).height(4).backgroundColor('rgba(0,0,0,0.6)')
+            Column().width(SERVER_WIDE_WIDTH * this.item.progress).height(4).backgroundColor('#4A9FFF')
+          }
+          .width(SERVER_WIDE_WIDTH).height(4).position({ left: 0, bottom: 0 })
+        }
+      }
+      .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
+      .borderRadius(6).clip(true)
+      .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+      .onHover((isHover: boolean) => { this.isHovered = isHover })
+
+      Text(this.item.title)
+        .fontSize(15).fontColor('#DDDDDD').maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(SERVER_WIDE_WIDTH).textAlign(TextAlign.Center)
+      if (this.item.subtitle.length > 0) {
+        Text(this.item.subtitle)
+          .fontSize(11).fontColor('#888888').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width(SERVER_WIDE_WIDTH).textAlign(TextAlign.Center)
+      }
+    }
+    .width(SERVER_WIDE_WIDTH)
+    .onClick(() => { this.onItemClick() })
+  }
+}
+
+@ComponentV2
+struct ServerPosterCard {
+  @Require @Param item: VideoServerMediaItem
+  @Event onItemClick: () => void = () => {}
+  @Local isHovered: boolean = false
+
+  build() {
+    Column({ space: 4 }) {
+      Stack({ alignContent: Alignment.TopStart }) {
+        if (this.item.posterUrl.length > 0) {
+          Image(this.item.posterUrl)
+            .width(SERVER_POSTER_WIDTH)
+            .aspectRatio(SERVER_POSTER_ASPECT)
+            .objectFit(ImageFit.Cover)
+        } else {
+          Column() {
+            Text(this.item.title)
+              .fontSize(11).fontColor('#CCCCCC').textAlign(TextAlign.Center)
+              .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).padding(8)
+          }
+          .width(SERVER_POSTER_WIDTH).aspectRatio(SERVER_POSTER_ASPECT)
+          .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
+        }
+      }
+      .width(SERVER_POSTER_WIDTH).aspectRatio(SERVER_POSTER_ASPECT)
+      .borderRadius(6).clip(true)
+      .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+      .onHover((isHover: boolean) => { this.isHovered = isHover })
+
+      Text(this.item.title)
+        .fontSize(15).fontColor('#DDDDDD').maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(SERVER_POSTER_WIDTH).textAlign(TextAlign.Center)
+      if (this.item.subtitle.length > 0) {
+        Text(this.item.subtitle)
+          .fontSize(11).fontColor('#888888').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width(SERVER_POSTER_WIDTH).textAlign(TextAlign.Center)
+      }
+    }
+    .width(SERVER_POSTER_WIDTH)
+    .onClick(() => { this.onItemClick() })
+  }
+}
+
+@ComponentV2
+struct ServerLibraryCard {
+  @Require @Param library: VideoServerLibrary
+  @Event onItemClick: () => void = () => {}
+  @Local isHovered: boolean = false
+
+  build() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.library.imageUrl.length > 0) {
+        Image(this.library.imageUrl)
+          .width(SERVER_WIDE_WIDTH)
+          .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+          .objectFit(ImageFit.Cover)
+      } else {
+        Column() {
+          Text(this.library.name)
+            .fontSize(18).fontWeight(FontWeight.Bold)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width(SERVER_WIDE_WIDTH - 40)
+        }
+        .width(SERVER_WIDE_WIDTH)
+        .aspectRatio(LANDSCAPE_ASPECT_RATIO)
+        .backgroundColor('#1C1C1C')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      }
+    }
+    .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
+    .borderRadius(6).clip(true)
+    .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+    .onHover((isHover: boolean) => { this.isHovered = isHover })
+    .focusable(true)
+    .onClick(() => { this.onItemClick() })
+  }
+}
+
+// ─────────────────────────────────────────────
 // 通用分组行（横向滚动）
 // ─────────────────────────────────────────────
 @ComponentV2
@@ -490,6 +655,12 @@ export struct MediaLibraryTab {
   @Local isScanning: boolean = false
   @Local isViewAllFocused: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
+  @Local sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
+  videoServerModel: VideoServerModel = VideoServerStore.getState()
+  @Local serverLibraries: VideoServerLibrary[] = []
+  @Local serverHome: VideoServerHome = { continueWatching: [], nextUp: [], latest: [] }
+  @Local serverLoading: boolean = false
+  @Local serverError: string = ''
 
   aboutToAppear(): void {
     FileSourceDatabase.onReady(() => {
@@ -521,12 +692,23 @@ export struct MediaLibraryTab {
     });
     // 播放器退出时刷新继续播放栏
     emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
-      console.info('[MediaLibraryTab][REFRESH] 收到 MEDIA_PROGRESS_SAVED 事件，触发 loadContinueWatching');
-      this.model.loadContinueWatching().then(() => {
-        console.info(`[MediaLibraryTab][REFRESH] loadContinueWatching 完成，列表长度=${this.model.continueWatchingList.length}`);
-      }).catch(() => {
-        console.warn('[MediaLibraryTab][REFRESH] loadContinueWatching 失败');
-      });
+      if (this.sourceSwitchModel.isFileSource()) {
+        console.info('[MediaLibraryTab][REFRESH] 收到 MEDIA_PROGRESS_SAVED 事件，触发 loadContinueWatching');
+        this.model.loadContinueWatching().then(() => {
+          console.info(`[MediaLibraryTab][REFRESH] loadContinueWatching 完成，列表长度=${this.model.continueWatchingList.length}`);
+        }).catch(() => {
+          console.warn('[MediaLibraryTab][REFRESH] loadContinueWatching 失败');
+        });
+      } else {
+        // 服务器媒体：重新拉取首页，刷新「继续观看」进度条
+        console.info('[MediaLibraryTab][REFRESH] 服务器媒体，刷新继续观看');
+        this.refreshServerHomeSilently().catch((e: Error) => {
+          console.warn('[MediaLibraryTab] 静默刷新服务器首页失败', e.message)
+        });
+      }
+    });
+    FileSourceDatabase.onReady(() => {
+      this.loadActiveSourceContent();
     });
     console.info('[MediaLibraryTab][REFRESH] emitter 订阅已注册 eventId=15');
   }
@@ -534,6 +716,193 @@ export struct MediaLibraryTab {
   aboutToDisappear(): void {
     console.info('[MediaLibraryTab][REFRESH] aboutToDisappear 调用，取消订阅 eventId=15');
     emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
+  }
+
+  @Monitor('sourceSwitchModel.activeSource')
+  onActiveSourceChange(): void {
+    this.loadActiveSourceContent().catch((e: Error) => {
+      console.warn('[MediaLibraryTab] 加载数据源内容失败', e.message)
+    })
+  }
+
+  private async loadActiveSourceContent(): Promise<void> {
+    if (this.sourceSwitchModel.isFileSource()) {
+      this.serverLibraries = []
+      this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+      this.serverError = ''
+      return
+    }
+    await this.loadServerHome()
+  }
+
+  private async loadServerHome(): Promise<void> {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      this.serverLibraries = []
+      this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+      return
+    }
+    this.serverLoading = true
+    this.serverError = ''
+    try {
+      // 强制重载：避免首帧凭据解密竞态导致拿到旧/密文配置
+      await this.videoServerModel.loadVideoServers(true)
+      let server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+      if (!server) {
+        this.serverError = '服务器不存在'
+        this.serverLibraries = []
+        this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+        return
+      }
+      try {
+        await this.fetchServerHome(server)
+      } catch (e) {
+        console.warn('[MediaLibraryTab] 首次加载服务器失败，重试一次', (e as Error).message)
+        // 鉴权失败可能是凭据解密竞态，强制重读后再试一次
+        await this.videoServerModel.loadVideoServers(true)
+        server = this.videoServerModel.getVideoServerById(serverId)
+        if (!server) {
+          this.serverError = '服务器不存在'
+          this.serverLibraries = []
+          this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+          return
+        }
+        await this.fetchServerHome(server)
+      }
+    } catch (e2) {
+      this.serverLibraries = []
+      this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
+      this.serverError = (e2 as Error).message ?? '无法连接服务器'
+    } finally {
+      this.serverLoading = false
+    }
+  }
+
+  private async fetchServerHome(server: VideoServer): Promise<void> {
+    if (server.type === VideoServerType.PLEX) {
+      const client = PlexClient.fromConfigJson(server.configJson)
+      this.serverLibraries = await client.getLibraries()
+      this.serverHome = await client.getHome()
+    } else {
+      const client = JellyfinClient.fromConfigJson(server.configJson)
+      this.serverLibraries = await client.getLibraries()
+      this.serverHome = await client.getHome()
+    }
+  }
+
+  /**
+   * 播放器退出后静默刷新服务器首页（仅更新 continueWatching 等分区，不显示 loading）。
+   */
+  private async refreshServerHomeSilently(): Promise<void> {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      return
+    }
+    try {
+      await this.videoServerModel.loadVideoServers(true)
+      const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+      if (!server) {
+        return
+      }
+      if (server.type === VideoServerType.PLEX) {
+        this.serverHome = await PlexClient.fromConfigJson(server.configJson).getHome()
+      } else {
+        this.serverHome = await JellyfinClient.fromConfigJson(server.configJson).getHome()
+      }
+    } catch (e) {
+      console.warn('[MediaLibraryTab] 刷新服务器继续观看失败', (e as Error).message)
+    }
+  }
+
+  /**
+   * 「继续观看」点击：用 App 内播放器播放该条目（与文件源继续观看一致）。
+   */
+  private async openContinueWatching(item: VideoServerMediaItem): Promise<void> {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
+      return
+    }
+    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+    if (!server) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
+      return
+    }
+    try {
+      let url = ''
+      let header: Record<string, string> = {}
+      if (server.type === VideoServerType.PLEX) {
+        const client = PlexClient.fromConfigJson(server.configJson)
+        url = await client.getStreamUrl(item.id)
+        header = client.getStreamHeader()
+      } else {
+        const client = JellyfinClient.fromConfigJson(server.configJson)
+        url = await client.getStreamUrl(item.id)
+        header = client.getStreamHeader()
+      }
+      const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+      const param: PlayerPageParam = {
+        url: url,
+        httpHeader: header,
+        title: item.title,
+        startPositionMs: item.positionMs > 0 ? item.positionMs : undefined,
+        durationHintMs: item.durationMs > 0 ? item.durationMs : undefined,
+        serverType: server.type,
+        serverItemId: item.id,
+        serverConfigJson: server.configJson,
+        serverPlaySessionId: playSessionId
+      }
+      // 上报播放开始（会话建立），与退出时的 stopped 共用同一 playSessionId
+      reportServerPlaybackStarted(server.type, server.configJson, item.id, playSessionId, item.positionMs, item.durationMs)
+        .catch((e: Error) => {
+          console.warn('[MediaLibraryTab] 上报播放开始失败', e.message)
+        })
+      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
+    } catch (e) {
+      console.warn('[MediaLibraryTab] 打开播放器失败', (e as BusinessError).message ?? String(e))
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
+      } catch (_e) {}
+    }
+  }
+
+  /**
+   * 点击「接下来」/「最近添加的」条目：进入对应的电视剧 / 电影详情页。
+   * 剧集（接下来）打开其所属系列详情。
+   */
+  private openServerItemDetail(item: VideoServerMediaItem): void {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      return
+    }
+    const targetId = item.type === 'episode' && item.seriesId.length > 0 ? item.seriesId : item.id
+    const param: ServerMediaDetailPageParam = {
+      serverId: serverId,
+      itemId: targetId,
+      title: item.title
+    }
+    this.pageStack.pushPathByName(ServerMediaDetailPage.PAGE_NAME, param)
+  }
+
+  /**
+   * 点击媒体库卡片：进入该媒体库的视频列表页（网格、分页）。
+   */
+  private openLibrary(lib: VideoServerLibrary): void {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      return
+    }
+    const param: ServerLibraryListPageParam = {
+      serverId: serverId,
+      libraryId: lib.id,
+      libraryName: lib.name,
+      libraryType: lib.type ?? ''
+    }
+    this.pageStack.pushPathByName(ServerLibraryListPage.PAGE_NAME, param)
   }
 
   private async startIncrementalScan(): Promise<void> {
@@ -1143,22 +1512,106 @@ export struct MediaLibraryTab {
     .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
-  build() {
+  @Builder
+  ServerHomeView() {
     Column() {
-      this.ContinueWatchingSection()
-      if (this.model.isLoading) {
-        this.LoadingView()
-      } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
-        this.EmptyView()
-        this.StatsAndScan()
+      if (this.serverLoading) {
+        Column() {
+          LoadingProgress().width(40).height(40).color('#AAAAAA')
+          Text('加载中...').fontSize(13).fontColor('#888888').margin({ top: 12 })
+        }
+        .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      } else if (this.serverError.length > 0) {
+        Column() {
+          Text('无法连接服务器').fontSize(16).fontColor('#666666')
+          Text(this.serverError).fontSize(12).fontColor('#444444').margin({ top: 8 })
+        }
+        .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
-        this.RecentlyAddedSection()
-        this.MoviesSection()
-        this.TvShowsSection()
-        this.UnwatchedSection()
-        this.StatsAndScan()
+        // 我的媒体库（16:9 横向滚动）
+        if (this.serverLibraries.length > 0) {
+          SectionRow({ title: '我的媒体库' }) {
+            ForEach(this.serverLibraries, (lib: VideoServerLibrary) => {
+              ServerLibraryCard({
+                library: lib,
+                onItemClick: () => { this.openLibrary(lib) }
+              })
+            }, (lib: VideoServerLibrary) => lib.id + lib.name)
+          }
+        }
+        // 继续观看（16:9 横向滚动，带进度条）
+        if (this.serverHome.continueWatching.length > 0) {
+          SectionRow({ title: '继续观看' }) {
+            ForEach(this.serverHome.continueWatching, (item: VideoServerMediaItem) => {
+              ServerWideCard({
+                item: item,
+                showProgress: true,
+                onItemClick: () => { this.openContinueWatching(item).catch(() => {}) }
+              })
+            }, (item: VideoServerMediaItem) => 'cw_' + item.id)
+          }
+        }
+        // 接下来（16:9 横向滚动）
+        if (this.serverHome.nextUp.length > 0) {
+          SectionRow({ title: '接下来' }) {
+            ForEach(this.serverHome.nextUp, (item: VideoServerMediaItem) => {
+              ServerWideCard({
+                item: item,
+                showProgress: false,
+                onItemClick: () => { this.openServerItemDetail(item) }
+              })
+            }, (item: VideoServerMediaItem) => 'next_' + item.id)
+          }
+        }
+        // 最近添加的 X（按媒体库，181x272 海报横向滚动）
+        ForEach(this.serverHome.latest, (section: VideoServerLatestSection) => {
+          SectionRow({ title: '最近添加的 ' + section.libraryName }) {
+            ForEach(section.items, (item: VideoServerMediaItem) => {
+              ServerPosterCard({
+                item: item,
+                onItemClick: () => { this.openServerItemDetail(item) }
+              })
+            }, (item: VideoServerMediaItem) => 'latest_' + section.libraryName + '_' + item.id)
+          }
+        }, (section: VideoServerLatestSection) => section.libraryName)
+
+        if (this.serverLibraries.length === 0 &&
+          this.serverHome.continueWatching.length === 0 &&
+          this.serverHome.nextUp.length === 0 &&
+          this.serverHome.latest.length === 0) {
+          Column() {
+            Text('该服务器暂无内容').fontSize(16).fontColor('#666666')
+          }
+          .width('100%').height(200).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+        }
       }
     }
     .width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  build() {
+    if (!this.sourceSwitchModel.isFileSource()) {
+      Column() {
+        this.ServerHomeView()
+      }
+      .width('100%').alignItems(HorizontalAlign.Start)
+    } else {
+      Column() {
+        this.ContinueWatchingSection()
+        if (this.model.isLoading) {
+          this.LoadingView()
+        } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
+          this.EmptyView()
+          this.StatsAndScan()
+        } else {
+          this.RecentlyAddedSection()
+          this.MoviesSection()
+          this.TvShowsSection()
+          this.UnwatchedSection()
+          this.StatsAndScan()
+        }
+      }
+      .width('100%').alignItems(HorizontalAlign.Start)
+    }
   }
 }

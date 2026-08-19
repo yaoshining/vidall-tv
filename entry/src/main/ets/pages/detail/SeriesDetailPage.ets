@@ -13,6 +13,13 @@ import { millisecondsToTime } from '../../utils/TimeUtil'
 import { FfprobeUtil } from '../../utils/FfprobeUtil'
 import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/player/VideoData'
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage'
+import {
+  DetailCastSection,
+  DetailSeasonsSection,
+  DetailOverviewDialog,
+  DetailCastMember,
+  DetailSeason
+} from '../../components/detail/DetailSections'
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from '../../components/core/player/Constants'
 import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
@@ -229,6 +236,38 @@ export struct SeriesDetailPage {
     const g = this.getGenres();
     if (g.length === 0) { return ''; }
     return g.slice(0, 3).join(' / ');
+  }
+
+  /** 演职人员统一展示数据（映射到公用组件） */
+  private castMembers(): DetailCastMember[] {
+    const result: DetailCastMember[] = []
+    for (const c of this.cast) {
+      result.push({
+        name: c.name ?? '',
+        role: c.role ?? '',
+        imageUrl: (c.profilePath ?? '').length > 0 ? tmdbImageUrl(c.profilePath ?? '', 'w185') : '',
+        personId: c.personId !== undefined && c.personId !== null && c.personId > 0 ? String(c.personId) : ''
+      })
+    }
+    return result
+  }
+
+  /** 季标识生成规则（列表 id 与点击反查共用，保证一致） */
+  private seasonKey(s: TmdbRawSeason): string {
+    return String(s.id ?? s.season_number ?? 0)
+  }
+
+  /** 季列表统一展示数据 */
+  private seasonList(): DetailSeason[] {
+    const result: DetailSeason[] = []
+    for (const s of this.seasons) {
+      result.push({
+        id: this.seasonKey(s),
+        label: this.getSeasonLabel(s),
+        posterUrl: this.getSeasonPosterUrl(s)
+      })
+    }
+    return result
   }
 
   /** 非特别篇的总集数之和 */
@@ -1434,8 +1473,38 @@ export struct SeriesDetailPage {
         Scroll() {
           Column() {
             this.HeroSection()
-            this.SeasonsSection()
-            this.CastSection()
+            DetailSeasonsSection({
+              seasons: this.seasonList(),
+              onSeasonClick: (ds: DetailSeason) => {
+                const s = this.seasons.find(x => this.seasonKey(x) === ds.id)
+                if (!s) { return }
+                const seasonGroup: SeriesGroup = {
+                  title: this.getTitle(),
+                  tvSeriesId: this.seriesEntity?.id,
+                  seasonNumber: s.season_number ?? 0,
+                  seasonLabel: this.getSeasonLabel(s),
+                  seasonPosterUrl: this.getSeasonPosterUrl(s),
+                  posterUrl: this.seriesEntity?.posterUrl ?? this.group?.posterUrl,
+                  posterLocalPath: this.seriesEntity?.posterLocalPath ?? this.group?.posterLocalPath,
+                  backdropUrl: this.seriesEntity?.backdropUrl ?? this.group?.backdropUrl,
+                  rating: this.seriesEntity?.rating ?? this.group?.rating,
+                  episodeCount: s.episode_count ?? 0,
+                  episodes: [],
+                  latestScannedAt: 0
+                };
+                this.pageStack.pushPathByName(SeasonDetailPage.PAGE_NAME, seasonGroup);
+              }
+            })
+            DetailCastSection({
+              members: this.castMembers(),
+              onCastClick: (c: DetailCastMember) => {
+                const personId = parseInt(c.personId)
+                if (personId > 0) {
+                  const param: CastDetailPageParam = { personId: personId, name: c.name }
+                  this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param)
+                }
+              }
+            })
             this.SimilarSection()
             Column().height(80)
           }
@@ -1447,7 +1516,16 @@ export struct SeriesDetailPage {
         .edgeEffect(EdgeEffect.None)
 
         // 简介全文弹窗
-        this.OverviewDialog()
+        DetailOverviewDialog({
+          visible: this.showOverviewDialog,
+          title: this.getTitle(),
+          posterUrl: this.getDialogPosterUrl(),
+          overview: this.getOverview(),
+          genresText: this.getGenresText(),
+          runtimeText: '',
+          year: this.getYear(),
+          onClose: () => { this.showOverviewDialog = false }
+        })
 
 
       }

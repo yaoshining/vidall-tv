@@ -51,6 +51,9 @@ import subtitleDeduplicatorTest from './ets/services/subtitleAcquisition/Subtitl
 import subtitleAggregationTest from './ets/services/subtitleAcquisition/SubtitleAggregation.test';
 import subtitleLanguageFilterTest from './ets/services/subtitleAcquisition/SubtitleLanguageFilter.test';
 import subtitleRelevanceFilterTest from './ets/services/subtitleAcquisition/SubtitleRelevanceFilter.test';
+import sourceSwitchModelTest from './SourceSwitchModel.test';
+import videoServerLabelsTest from './VideoServerLabels.test';
+import videoServerDaoTest from './VideoServerDao.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -104,4 +107,7 @@ export default function testsuite() {
   subtitleAggregationTest();
   subtitleLanguageFilterTest();
   subtitleRelevanceFilterTest();
+  sourceSwitchModelTest();
+  videoServerLabelsTest();
+  videoServerDaoTest();
 }

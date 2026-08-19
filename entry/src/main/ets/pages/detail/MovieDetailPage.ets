@@ -11,6 +11,11 @@ import { millisecondsToTime } from '../../utils/TimeUtil';
 import { tmdbImageUrl, formatYear, parseGenresArr, toOpaqueColor } from '../../utils/MediaFormatUtil';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { CastDetailPage, CastDetailPageParam } from './CastDetailPage';
+import {
+  DetailCastSection,
+  DetailOverviewDialog,
+  DetailCastMember
+} from '../../components/detail/DetailSections';
 
 /**
  * 将电影时长格式化为 h:mm:ss 字符串。
@@ -80,6 +85,8 @@ export struct MovieDetailPage {
   @Local mediaProgress: MediaProgressEntry | null = null;
   @Local hasActiveProgress: boolean = false;
   @Local movieEntity: MovieEntity | null = null;
+  /** 演职人员展示数据（movieEntity 加载完成后计算一次，避免每次渲染重复解析 JSON） */
+  @Local castList: DetailCastMember[] = [];
   /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
   @Local dominantBgColor: string = '#111111';
   @Local showOverviewDialog: boolean = false;
@@ -234,6 +241,20 @@ export struct MovieDetailPage {
     return result;
   }
 
+  /** 演职人员统一展示数据（映射到公用组件） */
+  private castMembers(): DetailCastMember[] {
+    const result: DetailCastMember[] = [];
+    for (const c of this.buildCastCrewList()) {
+      result.push({
+        name: c.name ?? '',
+        role: c.role ?? '',
+        imageUrl: (c.profilePath ?? '').length > 0 ? tmdbImageUrl(c.profilePath ?? '', 'w185') : '',
+        personId: c.personId !== undefined && c.personId !== null && c.personId > 0 ? String(c.personId) : ''
+      });
+    }
+    return result;
+  }
+
   // ── 数据加载 ──────────────────────────────────
 
   /**
@@ -303,6 +324,7 @@ export struct MovieDetailPage {
         providerId !== undefined && providerId.length > 0) {
       db.getMovieByProviderId(provider, providerId).then((m: MovieEntity | null) => {
         this.movieEntity = m;
+        this.castList = this.castMembers();
         // movieEntity 加载后提取背景色
         const backdropUrl = this.getBackdropUrl();
         if (backdropUrl.length > 0) { this.extractDominantColor(backdropUrl); }
@@ -633,7 +655,7 @@ export struct MovieDetailPage {
             ForEach(this.buildCastCrewList().slice(0, 15), (c: CastCrewItem) => {
               Column({ space: 8 }) {
                 // 人物照片（长方形）
-                if (c.profilePath !== undefined && c.profilePath.length > 0) {
+                if ((c.profilePath ?? '').length > 0) {
                   Image(tmdbImageUrl(c.profilePath, 'w185'))
                     .width(110).aspectRatio(2 / 3)
                     .objectFit(ImageFit.Cover).borderRadius(6)
@@ -793,7 +815,16 @@ export struct MovieDetailPage {
           Column() {
             this.HeroSection()
             // 无 SeasonsSection（电影无季集结构）
-            this.CastSection()
+            DetailCastSection({
+              members: this.castList,
+              onCastClick: (c: DetailCastMember) => {
+                const personId = parseInt(c.personId)
+                if (personId > 0) {
+                  const param: CastDetailPageParam = { personId: personId, name: c.name }
+                  this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param)
+                }
+              }
+            })
             Column().height(80)
           }
           .width('100%')
@@ -804,7 +835,16 @@ export struct MovieDetailPage {
         .edgeEffect(EdgeEffect.None)
 
         // 简介全文弹窗
-        this.OverviewDialog()
+        DetailOverviewDialog({
+          visible: this.showOverviewDialog,
+          title: this.getTitle(),
+          posterUrl: this.getPosterUrl(),
+          overview: this.getOverview(),
+          genresText: this.getGenresText(),
+          runtimeText: this.getRuntimeText(),
+          year: this.getYear(),
+          onClose: () => { this.showOverviewDialog = false }
+        })
 
 
       }

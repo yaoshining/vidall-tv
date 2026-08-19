@@ -5,7 +5,7 @@ import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   DB_VERSION, DEFAULT_DB_NAME, DATABASE_READY,
-  TABLE_FILE_SOURCES, TABLE_DIRECTORIES, TABLE_VIDEOS, TABLE_SCRAPE_INFO,
+  TABLE_FILE_SOURCES, TABLE_VIDEO_SERVERS, TABLE_DIRECTORIES, TABLE_VIDEOS, TABLE_SCRAPE_INFO,
   TABLE_MOVIES, TABLE_TV_SERIES, TABLE_TV_SEASONS, TABLE_TV_EPISODES,
   TABLE_PLAY_PROGRESS, TABLE_MEDIA_PROGRESS, TABLE_SEARCH_HISTORY
 } from './DbConstants';
@@ -133,6 +133,8 @@ export class FileSourceDbCore {
       await this.ensureVideosSchema(this.rdbStore);
       // 防御性 schema 兼容：补建媒体核心表，覆盖 user_version 已对齐但历史库缺表的场景
       await this.createMediaTablesV3(this.rdbStore);
+      // 防御性 schema 兼容：补建 video_servers 表，覆盖 user_version 已对齐但历史库缺表的场景
+      await this.createVideoServersTable(this.rdbStore);
 
       // 防御性 schema 兼容：补齐 movies/tv_series origin_country_json 列（v7 新增，幂等）
       await this.ensureOriginCountrySchema(this.rdbStore);
@@ -267,6 +269,8 @@ export class FileSourceDbCore {
           UNIQUE(keyword)
         )
       `);
+      // video_servers：影视服务器配置（Jellyfin / Emby / Plex）
+      await this.createVideoServersTable(rdbStore);
       console.info('FileSourceDatabase: Tables created (v3)');
     } catch (error) {
       console.error('FileSourceDatabase: Failed to create tables', JSON.stringify(error));
@@ -474,6 +478,21 @@ export class FileSourceDbCore {
   }
 
   /**
+   * 创建 video_servers 表（IF NOT EXISTS，供 onCreate / 迁移 / 防御性补表复用）。
+   */
+  private async createVideoServersTable(rdbStore: relationalStore.RdbStore): Promise<void> {
+    await rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS ${TABLE_VIDEO_SERVERS} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        config_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `);
+  }
+
+  /**
    * 版本升级入口：按 currentVersion 逐步执行各版本迁移步骤，
    * 确保从任意旧版本升级都能经过所有中间版本的 DDL 变更。
    */
@@ -567,6 +586,12 @@ export class FileSourceDbCore {
         }
         currentVersion = 11;
         console.info('[DB] 已迁移到 v11：新增拼音字段（回填将在后台异步执行）');
+      }
+      if (currentVersion < 12) {
+        // v12：新增 video_servers 表，存储影视服务器配置
+        await this.createVideoServersTable(rdbStore);
+        currentVersion = 12;
+        console.info('[DB] 已迁移到 v12：新增 video_servers 表');
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
