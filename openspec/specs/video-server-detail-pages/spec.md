@@ -70,13 +70,27 @@
 - **WHEN** 用户点击视频列表页中的某一条目
 - **THEN** 进入该条目的详情页
 
-### Requirement: 服务器缩略图与最近添加接口
-系统 SHALL 对服务器首页「继续观看/接下来」的剧集缩略图使用剧集 Thumb（16:9 横版），「最近添加」使用 /Items/Latest 接口。
+### Requirement: 服务器缩略图
+系统 SHALL 对服务器首页「继续观看/接下来」的剧集缩略图使用剧集 Thumb（16:9 横版）。
 
 #### Scenario: 继续观看/接下来缩略图
 - **WHEN** 服务器首页展示「继续观看」或「接下来」分区的剧集条目
 - **THEN** 缩略图使用该剧集的 Thumb 横版图（16:9），而非集截图
 
-#### Scenario: 最近添加接口
-- **WHEN** 服务器首页展示「最近添加的 X」分区
-- **THEN** 通过 /Users/{userId}/Items/Latest 接口拉取，并按媒体库拆分展示
+### Requirement: 最近添加接口（Jellyfin / Emby）
+系统 SHALL 对 Jellyfin / Emby 服务器首页的「最近添加」分区通过 /Users/{userId}/Items/Latest 接口拉取，请求头携带 X-Emby-Token 认证，按媒体库拆分展示。
+
+#### Scenario: Jellyfin / Emby 最近添加
+- **WHEN** Jellyfin / Emby 服务器首页展示「最近添加的 X」分区
+- **THEN** 通过 GET /Users/{userId}/Items/Latest?ParentId={libraryId}&Limit=16&Fields=PrimaryImageAspectRatio,Overview&EnableImages=true&EnableImageTypes=Primary 接口拉取，请求头携带 X-Emby-Token（用户名密码认证通过 POST /Users/AuthenticateByName 获取 AccessToken，API Key 认证直接使用 API Key），按 ParentId 对应的媒体库拆分展示
+
+### Requirement: 最近添加接口（Plex）
+系统 SHALL 对 Plex 服务器首页的「最近添加」分区通过 /library/sections/{id}/recentlyAdded 接口拉取，请求头携带 X-Plex-Token 认证，并将 MediaContainer.Metadata 映射为统一的媒体条目模型。
+
+#### Scenario: Plex 最近添加
+- **WHEN** Plex 服务器首页展示「最近添加的 X」分区
+- **THEN** 通过 GET /library/sections/{sectionKey}/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=16 接口拉取，请求头携带 X-Plex-Token（非查询参数），响应中的 MediaContainer.Metadata 数组映射为统一条目模型（title→标题、year→年份、thumb→缩略图、ratingKey→条目 ID、type→类型 movie/season/show/episode），按 sectionKey 对应的媒体库拆分展示
+
+#### Scenario: Plex 分页加载
+- **WHEN** 用户滚动到 Plex「最近添加」分区底部
+- **THEN** 下一页请求的 X-Plex-Container-Start 取上一页响应的 offset + size，保持 X-Plex-Container-Size=16；当 offset + size >= totalSize 时停止加载，若响应缺少 totalSize 则在 Metadata 数量少于 16 时停止加载
