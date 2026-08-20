@@ -102,9 +102,9 @@ export interface PlayerPageParam {
    */
   serverItemId?: string;
   /**
-   * 影视服务器配置 JSON（可选，凭据已解密）。用于上报进度时重建客户端。
+   * 影视服务器 ID（可选，对应 VideoServer.id）。用于按需从数据库读取配置，避免凭据长期驻留导航参数。
    */
-  serverConfigJson?: string;
+  serverId?: number;
   /**
    * 影视服务器播放会话 ID（可选）。Jellyfin/Emby 上报进度时关联同一会话。
    */
@@ -229,7 +229,11 @@ export function buildMediaLibraryEpisodeSwitchParam(
     fileSourceId: resolvedSource.sourceIdentity.sourceId,
     mediaKey,
     startPositionMs: resolvedSource.startPositionMs,
-    playbackContext: mediaLibraryContext
+    playbackContext: mediaLibraryContext,
+    serverType: currentParam.serverType,
+    serverItemId: currentParam.serverItemId,
+    serverId: currentParam.serverId,
+    serverPlaySessionId: currentParam.serverPlaySessionId
   };
   return nextParam;
 }
@@ -1114,24 +1118,22 @@ export struct PlayerPage {
 
   /**
    * 周期性把影视服务器播放进度上报回服务器（不结束会话）。
-   * 仅在服务器媒体（serverItemId/serverType 存在）时生效。
+   * 仅在服务器媒体（serverItemId/serverType/serverId 存在）时生效。
+   * 按 serverId 从数据库按需读取配置，避免凭据长期驻留导航参数。
    */
   private reportServerPeriodicProgress(): void {
     const param = this.currentPageParam
-    if (!param || !param.serverItemId || !param.serverType) {
+    if (!param || !param.serverItemId || !param.serverType || param.serverId === undefined) {
       return
     }
-    const configJson = param.serverConfigJson ?? ''
-    if (configJson.length === 0) {
-      return
-    }
+    const serverId = param.serverId
     const posMs = this.videoPlayerController.currentTime
     const durMs = this.videoPlayerController.duration
     if (!this.videoPlayerController.isPlaying || posMs <= 0) {
       return
     }
     const playSessionId = param.serverPlaySessionId ?? ''
-    reportServerPlaybackProgress(param.serverType, configJson, param.serverItemId, playSessionId, posMs, durMs)
+    reportServerPlaybackProgress(param.serverType, serverId, param.serverItemId, playSessionId, posMs, durMs)
       .catch((e: BusinessError) => {
         console.warn('[PlayerPage] 周期性上报服务器进度失败', e.message ?? String(e))
       })
@@ -1140,19 +1142,17 @@ export struct PlayerPage {
   /**
    * 退出播放器时，把影视服务器的播放进度上报回服务器。
    * 返回是否已上报（用于决定是否 emit 刷新事件）。
+   * 按 serverId 从数据库按需读取配置，避免凭据长期驻留导航参数。
    */
   private reportServerProgress(posMs: number, durMs: number): Promise<boolean> {
     const param = this.currentPageParam
-    if (!param || !param.serverItemId || !param.serverType) {
+    if (!param || !param.serverItemId || !param.serverType || param.serverId === undefined) {
       return Promise.resolve(false)
     }
-    const configJson = param.serverConfigJson ?? ''
-    if (configJson.length === 0) {
-      return Promise.resolve(false)
-    }
+    const serverId = param.serverId
     const playSessionId = param.serverPlaySessionId ?? ''
     try {
-      return reportServerPlaybackStopped(param.serverType, configJson, param.serverItemId, playSessionId, posMs, durMs)
+      return reportServerPlaybackStopped(param.serverType, serverId, param.serverItemId, playSessionId, posMs, durMs)
         .then(() => true)
         .catch((e: BusinessError) => {
           console.warn('[PlayerPage] 上报服务器进度失败', e.message ?? String(e))
