@@ -1,6 +1,8 @@
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { VideoServer, VideoServerType } from "../../db/models/VideoServerEntity";
 import { BusinessError } from "@kit.BasicServicesKit";
+import SettingType from "../../pages/settings/SettingType";
+import { SourceSwitchModel } from "../media/SourceSwitchModel";
 
 /**
  * 影视服务器缓存管理类。
@@ -125,6 +127,18 @@ export class VideoServerModel {
   }
 
   /**
+   * 删除影视服务器并处理当前源回退（统一删除流程）。
+   * 若被删除的服务器恰好是当前激活源，自动回退到文件源。
+   */
+  async deleteVideoServerWithFallback(id: number): Promise<void> {
+    await this.deleteVideoServer(id);
+    const sourceSwitch = SourceSwitchModel.getState();
+    if (sourceSwitch.getActiveServerId() === id) {
+      await sourceSwitch.setFileSource();
+    }
+  }
+
+  /**
    * 根据 ID 获取影视服务器
    */
   getVideoServerById(id: number): VideoServer | null {
@@ -138,6 +152,22 @@ export class VideoServerModel {
   invalidateCache(): void {
     this.isLoaded = false;
     this.lastUpdateTime = 0;
+  }
+}
+
+/**
+ * 影视服务器类型 → 设置页类型映射（供 VideoServerTab / VideoServerSettingBuilder 共享）
+ */
+export function settingTypeFor(serverType: VideoServerType): SettingType {
+  switch (serverType) {
+    case VideoServerType.JELLYFIN:
+      return SettingType.JELLYFIN_CONFIG
+    case VideoServerType.EMBY:
+      return SettingType.EMBY_CONFIG
+    case VideoServerType.PLEX:
+      return SettingType.PLEX_CONFIG
+    default:
+      return SettingType.JELLYFIN_CONFIG
   }
 }
 
