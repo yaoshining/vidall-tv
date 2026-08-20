@@ -766,7 +766,8 @@ export struct MediaLibraryTab {
         this.serverLibraries = result.libraries
         this.serverHome = result.home
       } catch (e) {
-        console.warn('[MediaLibraryTab] 首次加载服务器失败，重试一次', (e as Error).message)
+        const error = e as BusinessError
+        console.warn('[MediaLibraryTab] 首次加载服务器失败，重试一次', error.message)
         // 鉴权失败可能是凭据解密竞态，强制重读后再试一次
         await this.videoServerModel.loadVideoServers(true)
         if (this._serverHomeSeq !== seq) return
@@ -784,9 +785,10 @@ export struct MediaLibraryTab {
       }
     } catch (e2) {
       if (this._serverHomeSeq !== seq) return
+      const error = e2 as BusinessError
       this.serverLibraries = []
       this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
-      this.serverError = (e2 as Error).message ?? '无法连接服务器'
+      this.serverError = error.message ?? '无法连接服务器'
     } finally {
       // 仅当序号仍为最新时才置 loading=false，避免后续请求被误关
       if (this._serverHomeSeq === seq) {
@@ -833,7 +835,8 @@ export struct MediaLibraryTab {
      this.serverHome = result.home
    } catch (e) {
      if (this._serverHomeSeq !== seq) return
-     console.warn('[MediaLibraryTab] 刷新服务器继续观看失败', (e as Error).message)
+     const error = e as BusinessError
+     console.warn('[MediaLibraryTab] 刷新服务器继续观看失败', error.message)
    }
   }
 
