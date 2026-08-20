@@ -1,1 +1,0 @@
-{"id":"877d8c63236bd054745a3cf820c35d3e","fullName":"VideoPlayerController review regressions#fallback pending-resume 保持暂停时会记录 paused 结果日志","name":"fallback pending-resume 保持暂停时会记录 paused 结果日志","status":"passed","testResultsByEnv":{"default":"ff4e3d6ff9b50e2884a6d66f3b874c4b"}}
