@@ -2,12 +2,12 @@ import { SettingListItem } from "../SettingListItem";
 import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
 import { SettingsController } from "../SettingsController";
-import SettingType from "../SettingType";
 import { VideoServerTypeIcon } from "./IconBuilders";
 import { VideoServerStore } from "../../../stores/servers/VideoServerStore";
-import { VideoServerModel, videoServerTypeLabel } from "../../../stores/servers/VideoServerModel";
-import { VideoServer, VideoServerType } from "../../../db/models/VideoServerEntity";
-import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel";
+import { VideoServerModel, videoServerTypeLabel, settingTypeFor } from "../../../stores/servers/VideoServerModel";
+import { VideoServer } from "../../../db/models/VideoServerEntity";
+import { DeleteServerDialog } from "../../../components/dialogs/DeleteServerDialog";
+import SettingType from "../SettingType";
 import { BusinessError } from "@kit.BasicServicesKit";
 
 @ComponentV2
@@ -43,19 +43,6 @@ struct VideoServerSettingBuilderComponent {
     }
   }
 
-  private settingTypeFor(serverType: VideoServerType): SettingType {
-    switch (serverType) {
-      case VideoServerType.JELLYFIN:
-        return SettingType.JELLYFIN_CONFIG
-      case VideoServerType.EMBY:
-        return SettingType.EMBY_CONFIG
-      case VideoServerType.PLEX:
-        return SettingType.PLEX_CONFIG
-      default:
-        return SettingType.JELLYFIN_CONFIG
-    }
-  }
-
   handleEdit(server: VideoServer): void {
     if (server.id === undefined) {
       this.showToastSafe('服务器 ID 不存在')
@@ -64,7 +51,7 @@ struct VideoServerSettingBuilderComponent {
     const params: Record<string, Object> = {}
     params['serverType'] = server.type as Object
     params['serverId'] = server.id as Object
-    this.controller.pushType(this.settingTypeFor(server.type), params)
+    this.controller.pushType(settingTypeFor(server.type), params)
   }
 
   handleDelete(server: VideoServer): void {
@@ -79,11 +66,7 @@ struct VideoServerSettingBuilderComponent {
     }
     try {
       this.isDeletingServer = true
-      await this.videoServerModel.deleteVideoServer(target.id)
-      // 若删除的是当前激活源，回退到文件源（与首页 tab 保持一致）
-      if (SourceSwitchModel.getState().getActiveServerId() === target.id) {
-        await SourceSwitchModel.getState().setFileSource()
-      }
+      await this.videoServerModel.deleteVideoServerWithFallback(target.id)
       this.showToastSafe('服务器已删除')
     } catch (error) {
       console.error('VideoServerSettingBuilder: 删除服务器失败', (error as BusinessError).message ?? String(error))
@@ -163,51 +146,17 @@ struct VideoServerSettingBuilderComponent {
       }
 
       // ── 删除服务器确认弹窗 ──
-      if (this.showDeleteDialog) {
-        Column() {
-          Column() {
-            Text('删除影视服务器')
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .margin({ bottom: 12 })
-            Text('确认删除该影视服务器？此操作仅移除服务器配置，不影响其他数据。')
-              .fontSize(14)
-              .fontColor($r('sys.color.font_secondary'))
-              .textAlign(TextAlign.Start)
-              .margin({ bottom: 20 })
-            Row() {
-              Button('取消')
-                .layoutWeight(1)
-                .margin({ right: 8 })
-                .fontColor($r('sys.color.font_primary'))
-                .backgroundColor($r('sys.color.comp_background_tertiary'))
-                .onClick(() => {
-                  this.showDeleteDialog = false
-                  this.deleteTarget = null
-                })
-              Button(this.isDeletingServer ? '删除中...' : '确认删除')
-                .layoutWeight(1)
-                .fontColor(Color.White)
-                .backgroundColor('#FF4444')
-                .enabled(!this.isDeletingServer)
-                .onClick(() => {
-                  this.confirmDeleteServer()
-                })
-            }
-            .width('100%')
-          }
-          .width(360)
-          .padding(24)
-          .backgroundColor($r('sys.color.comp_background_primary'))
-          .borderRadius(12)
+      DeleteServerDialog({
+        visible: this.showDeleteDialog,
+        isDeleting: this.isDeletingServer,
+        onCancel: () => {
+          this.showDeleteDialog = false
+          this.deleteTarget = null
+        },
+        onConfirm: () => {
+          this.confirmDeleteServer()
         }
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#80000000')
-        .onClick(() => {})
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-      }
+      })
     }
     .width('100%')
     .height('100%')
