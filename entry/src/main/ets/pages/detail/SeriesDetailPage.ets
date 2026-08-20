@@ -104,8 +104,6 @@ export struct SeriesDetailPage {
   @Local showOverviewDialog: boolean = false
   /** 从 backdrop 提取的深色背景色，格式 #RRGGBB，提取失败保持默认 */
   @Local dominantBgColor: string = '#111111'
-  /** 当前选中显示的季号（-1 = 未选） */
-  @Local selectedSeasonNumber: number = -1
   /** 播放进度映射（key = videoId，文件级，用于集列表进度条） */
   @Local progressMap: Map<number, PlayProgressEntity> = new Map()
   /** 媒体级播放进度（用于 ContinueWatchingCard 续播入口） */
@@ -212,10 +210,6 @@ export struct SeriesDetailPage {
       return `第${en}集`;
     }
     return fileName.length > 0 ? fileName : '未知集名';
-  }
-
-  private getCastProfileUrl(c: ScrapeCredit): string {
-    return tmdbImageUrl(c.profilePath, 'w185');
   }
 
   /** overview 是否超过 100 字 */
@@ -485,10 +479,7 @@ export struct SeriesDetailPage {
       await this.refreshPlaybackState();
 
       // 默认高亮第一季
-      if (this.seasons.length > 0) {
-        this.selectedSeasonNumber = this.seasons[0].season_number ?? 0;
-      }
-    } catch (e) {
+      } catch (e) {
       console.error('[SeriesDetailPage] loadData failed', JSON.stringify(e));
     } finally {
       this.isLoading = false;
@@ -648,10 +639,6 @@ export struct SeriesDetailPage {
   }
 
   // ── Builders ──────────────────────────────────
-
-  private selectSeason(seasonNumber: number): void {
-    this.selectedSeasonNumber = seasonNumber;
-  }
 
   /**
    * 点击集 → 导航到播放器
@@ -1148,152 +1135,7 @@ export struct SeriesDetailPage {
     .width('100%').aspectRatio(1.778)
   }
 
-  /** 季列表（横向滚动，带海报）+ 集列表（点击季后展开） */
-  @Builder
-  SeasonsSection() {
-    if (this.seasons.length > 0) {
-      Column({ space: 0 }) {
-        Text('季')
-          .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          .padding({ left: 80, top: 36, bottom: 20 })
-
-        Scroll() {
-          Row({ space: 16 }) {
-            ForEach(this.seasons, (s: TmdbRawSeason) => {
-              Column({ space: 8 }) {
-                // 季海报
-                Stack({ alignContent: Alignment.Bottom }) {
-                  if (this.getSeasonPosterUrl(s).length > 0) {
-                    Image(this.getSeasonPosterUrl(s))
-                      .width(140).aspectRatio(2 / 3)
-                      .objectFit(ImageFit.Cover).borderRadius(6)
-                      .hoverEffect(HoverEffect.Scale)
-                  } else {
-                    Column() {
-                      Text(this.getSeasonLabel(s))
-                        .fontSize(14).fontColor('#CCCCCC')
-                        .textAlign(TextAlign.Center)
-                    }
-                    .width(140).aspectRatio(2 / 3)
-                    .backgroundColor('#2A2A2A').borderRadius(6)
-                    .justifyContent(FlexAlign.Center)
-                    .hoverEffect(HoverEffect.Scale)
-                  }
-                }
-                .width(140).aspectRatio(2 / 3)
-                .borderRadius(6).clip(true)
-
-                // 第N季标签
-                Text(this.getSeasonLabel(s))
-                  .fontSize(14)
-                  .fontColor('#CCCCCC')
-                  .fontWeight(FontWeight.Normal)
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width(140).textAlign(TextAlign.Center)
-              }
-              .width(140).alignItems(HorizontalAlign.Start)
-              .onClick(() => {
-                // 构造 SeriesGroup 跳转季详情页
-                const seasonGroup: SeriesGroup = {
-                  title: this.getTitle(),
-                  tvSeriesId: this.seriesEntity?.id,
-                  seasonNumber: s.season_number ?? 0,
-                  seasonLabel: this.getSeasonLabel(s),
-                  seasonPosterUrl: this.getSeasonPosterUrl(s),
-                  posterUrl: this.seriesEntity?.posterUrl ?? this.group?.posterUrl,
-                  posterLocalPath: this.seriesEntity?.posterLocalPath ?? this.group?.posterLocalPath,
-                  backdropUrl: this.seriesEntity?.backdropUrl ?? this.group?.backdropUrl,
-                  rating: this.seriesEntity?.rating ?? this.group?.rating,
-                  episodeCount: s.episode_count ?? 0,
-                  episodes: [],
-                  latestScannedAt: 0
-                };
-                this.pageStack.pushPathByName(SeasonDetailPage.PAGE_NAME, seasonGroup);
-              })
-            }, (s: TmdbRawSeason) => String(s.id ?? s.season_number ?? 0))
-          }
-          .padding({ left: 80, right: 80 })
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.None)
-
-        Column().height(36)
-      }
-      .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.dominantBgColor)
-    }
-  }
-
-
-
-  /** 演职人员横向滚动列表 */
-  @Builder
-  CastSection() {
-    if (this.cast.length > 0) {
-      Column({ space: 0 }) {
-        Text('演职人员')
-          .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
-          .padding({ left: 80, top: 36, bottom: 20 })
-
-        Scroll() {
-          Row({ space: 24 }) {
-            ForEach(this.cast.slice(0, 15), (c: ScrapeCredit) => {
-              Column({ space: 8 }) {
-                // 人物照片（长方形）
-                if (this.getCastProfileUrl(c).length > 0) {
-                  Image(this.getCastProfileUrl(c))
-                    .width(110).aspectRatio(2 / 3)
-                    .objectFit(ImageFit.Cover).borderRadius(6)
-                    .hoverEffect(HoverEffect.Scale)
-                } else {
-                  Column() {
-                    Text((c.name != null && c.name.length > 0) ? c.name.substring(0, 1) : '?')
-                      .fontSize(30).fontColor(Color.White).fontWeight(FontWeight.Bold)
-                  }
-                  .width(110).aspectRatio(2 / 3).borderRadius(6)
-                  .backgroundColor('#2A2A2A')
-                  .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-                  .hoverEffect(HoverEffect.Scale)
-                }
-                // 演员名
-                Text(c.name ?? '')
-                  .fontSize(14).fontColor(Color.White)
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width(110).textAlign(TextAlign.Center)
-                // 饰演角色
-                if (c.role != null && c.role.length > 0) {
-                  Text(c.role)
-                    .fontSize(12).fontColor('#777777')
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    .width(110).textAlign(TextAlign.Center)
-                }
-              }
-              .width(110).alignItems(HorizontalAlign.Center)
-              .focusable(true)
-              .onClick(() => {
-                const castName = c.name ?? '';
-                const castProfile = c.profilePath ?? '';
-                if (castName.length === 0 && castProfile.length === 0) { return; }
-                const param: CastDetailPageParam = { personId: c.personId ?? 0, name: castName };
-                this.pageStack.pushPathByName(CastDetailPage.PAGE_NAME, param);
-              })
-            }, (c: ScrapeCredit) => c.name ?? '')
-          }
-          .padding({ left: 80, right: 80 })
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.None)
-
-        Column().height(36)
-      }
-      .width('100%').alignItems(HorizontalAlign.Start)
-      .backgroundColor(this.dominantBgColor)
-    }
-  }
-
-  /** 相似剧横向滚动（0 条时整个 section 不渲染） */
+  // ── 构建 ──────────────────────────────────────
   @Builder
   SimilarSection() {
     if (this.similarSeries.length > 0) {
@@ -1359,108 +1201,6 @@ export struct SeriesDetailPage {
       }
       .width('100%').alignItems(HorizontalAlign.Start)
       .backgroundColor(this.dominantBgColor)
-    }
-  }
-
-  /** 简介全文弹窗覆盖层 */
-  @Builder
-  OverviewDialog() {
-    if (this.showOverviewDialog) {
-      Stack({ alignContent: Alignment.Center }) {
-        // 半透明遮罩
-        Column()
-          .width('100%').height('100%')
-          .backgroundColor('#BB000000')
-          .onClick(() => { this.showOverviewDialog = false; })
-
-        // 卡片主体
-        Column() {
-          // ── 标题栏 ──────────────────────────────
-          Row() {
-            Text('简介')
-              .fontSize(26).fontColor('#F0F0F0').fontWeight(FontWeight.Bold)
-              .layoutWeight(1).textAlign(TextAlign.Center)
-            Text('✕')
-              .fontSize(20).fontColor('#888892')
-              .width(48).height(48)
-              .textAlign(TextAlign.Center)
-              .borderRadius(24)
-              .backgroundColor('#2A2A2E')
-              .onClick(() => { this.showOverviewDialog = false; })
-          }
-          .alignItems(VerticalAlign.Center)
-          .padding({ left: 24, right: 24, top: 0, bottom: 0 })
-          .height(80)
-          .width('100%')
-          .backgroundColor('#1E1E22')
-
-          // 分隔线
-          Divider().color('#2E2E34').strokeWidth(1)
-
-          // ── 内容区（左右双面板）────────────────────
-          Row() {
-            // 左面板：海报 + 剧集元数据
-            Column({ space: 20 }) {
-              // 海报缩略图
-              Image(this.getDialogPosterUrl())
-                .width(124).height(174)
-                .borderRadius(6)
-                .objectFit(ImageFit.Cover)
-                .backgroundColor('#2A2A2E')
-
-              // 剧集标题
-              Text(this.getTitle())
-                .fontSize(22).fontWeight(FontWeight.Bold).fontColor('#F0F0F0')
-                .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .lineHeight(32)
-                .width('100%')
-
-              // 元数据
-              Column({ space: 8 }) {
-                if (this.getGenresText().length > 0) {
-                  Text(`风格：${this.getGenresText()}`)
-                    .fontSize(18).fontColor('#AAAAAA')
-                }
-                if (this.getTotalEpisodesText().length > 0) {
-                  Text(`${this.getTotalEpisodesText()}`)
-                    .fontSize(18).fontColor('#AAAAAA')
-                }
-                if (this.getYear().length > 0) {
-                  Text(`${this.getYear()}`)
-                    .fontSize(18).fontColor('#AAAAAA')
-                }
-              }
-              .alignItems(HorizontalAlign.Start).width('100%')
-            }
-            .width('28%')
-            .padding({ left: 48, right: 32, top: 48, bottom: 48 })
-            .alignItems(HorizontalAlign.Start)
-
-            // 垂直分隔线
-            Divider().vertical(true).color('#2A2A2E').strokeWidth(1).height('100%')
-
-            // 右面板：全文简介
-            Scroll() {
-              Text(this.getOverview())
-                .fontSize(20).fontColor('#C8C8D0').lineHeight(36)
-                .width('100%')
-            }
-            .scrollable(ScrollDirection.Vertical)
-            .scrollBar(BarState.Auto)
-            .scrollBarColor('#555560')
-            .layoutWeight(1)
-            .padding({ left: 40, right: 40, top: 48, bottom: 48 })
-          }
-          .alignItems(VerticalAlign.Top)
-          .layoutWeight(1)
-        }
-        .width('85%').height('88%')
-        .backgroundColor('#18181C')
-        .borderRadius(16)
-        .border({ width: 1, color: '#2A2A2E' })
-        .clip(true)
-      }
-      .width('100%').height('100%')
     }
   }
 
