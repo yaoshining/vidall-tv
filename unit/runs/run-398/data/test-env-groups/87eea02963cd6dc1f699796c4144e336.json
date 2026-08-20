@@ -1,1 +1,1 @@
-{"id":"87eea02963cd6dc1f699796c4144e336","fullName":"VideoPlayerController review regressions#resume 日志仅保留 SMB 协议，不暴露主机与共享路径信息","name":"resume 日志仅保留 SMB 协议，不暴露主机与共享路径信息","status":"passed","testResultsByEnv":{"default":"e5c1e57e8ccf2d3b9f27ac8af6a6b7d6"}}
+{"id":"87eea02963cd6dc1f699796c4144e336","fullName":"VideoPlayerController review regressions#resume 日志仅保留 SMB 协议，不暴露主机与共享路径信息","name":"resume 日志仅保留 SMB 协议，不暴露主机与共享路径信息","status":"passed","testResultsByEnv":{"default":"4e52f0b42b15ab10208a547c1b8d5959"}}

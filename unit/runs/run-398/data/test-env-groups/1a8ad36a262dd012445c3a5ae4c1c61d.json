@@ -1,1 +1,1 @@
-{"id":"1a8ad36a262dd012445c3a5ae4c1c61d","fullName":"ValidationUtil.validateUrl#包含 https:// 前缀应返回无效","name":"包含 https:// 前缀应返回无效","status":"passed","testResultsByEnv":{"default":"adacb3a14dbe8af623fea76cf7b8803f"}}
+{"id":"1a8ad36a262dd012445c3a5ae4c1c61d","fullName":"ValidationUtil.validateUrl#包含 https:// 前缀应返回无效","name":"包含 https:// 前缀应返回无效","status":"passed","testResultsByEnv":{"default":"70c2d473ce4734ea1aff92d700388152"}}

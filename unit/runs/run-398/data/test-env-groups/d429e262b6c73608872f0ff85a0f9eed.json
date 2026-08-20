@@ -1,1 +1,1 @@
-{"id":"d429e262b6c73608872f0ff85a0f9eed","fullName":"getFullUrl#保留协议分隔符并补齐缺失的资源路径斜杠","name":"保留协议分隔符并补齐缺失的资源路径斜杠","status":"passed","testResultsByEnv":{"default":"3af437ad6786857a1b27518a3969e286"}}
+{"id":"d429e262b6c73608872f0ff85a0f9eed","fullName":"getFullUrl#保留协议分隔符并补齐缺失的资源路径斜杠","name":"保留协议分隔符并补齐缺失的资源路径斜杠","status":"passed","testResultsByEnv":{"default":"46d5519fdfb1820c871db02635bd926a"}}

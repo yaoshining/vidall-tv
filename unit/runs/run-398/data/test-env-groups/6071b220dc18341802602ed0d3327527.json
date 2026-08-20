@@ -1,1 +1,1 @@
-{"id":"6071b220dc18341802602ed0d3327527","fullName":"EntitlementService Interface Contract#canAccessContent 应返回 Promise<boolean> 类型","name":"canAccessContent 应返回 Promise<boolean> 类型","status":"passed","testResultsByEnv":{"default":"fef6bc7e9e79d4340974c804650b79fd"}}
+{"id":"6071b220dc18341802602ed0d3327527","fullName":"EntitlementService Interface Contract#canAccessContent 应返回 Promise<boolean> 类型","name":"canAccessContent 应返回 Promise<boolean> 类型","status":"passed","testResultsByEnv":{"default":"f165a46f8304812519795ec1a5678b27"}}

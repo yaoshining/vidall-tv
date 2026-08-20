@@ -1,1 +1,1 @@
-{"id":"6d9aa58ef9326a864beb779507e818cb","fullName":"VideoPlayerController review regressions#选集切换续播在 unsupported fallback 后会恢复位置并自动播放","name":"选集切换续播在 unsupported fallback 后会恢复位置并自动播放","status":"passed","testResultsByEnv":{"default":"b42708ef281c87fe49b52fa831210540"}}
+{"id":"6d9aa58ef9326a864beb779507e818cb","fullName":"VideoPlayerController review regressions#选集切换续播在 unsupported fallback 后会恢复位置并自动播放","name":"选集切换续播在 unsupported fallback 后会恢复位置并自动播放","status":"passed","testResultsByEnv":{"default":"f6b1d8fd6927d1a3803baf012c9db144"}}
