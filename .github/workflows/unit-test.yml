@@ -610,37 +610,40 @@ jobs:
             echo "Allure 报告中未生成 history 目录，从 unit-history.json 手动构建 history-trend.json..."
           fi
           # 确保 unit/history/history-trend.json 存在（Allure 不生成时手动补充，避免 history 死循环）
-          if [[ ! -f "$SITE_DIR/unit/history/history-trend.json" ]] && [[ -f "$SITE_DIR/unit/unit-history.json" ]]; then
-            mkdir -p "$SITE_DIR/unit/history"
-            python3 - <<'PY'
-            import json
-            import os
-            from pathlib import Path
-
-            site_dir = os.environ['SITE_DIR']
-            hist_path = Path(site_dir) / 'unit' / 'unit-history.json'
-            out_path = Path(site_dir) / 'unit' / 'history' / 'history-trend.json'
-            data = json.loads(hist_path.read_text(encoding='utf-8'))
-            trend = []
-            for h in data:
-                trend.append({
-                    'statistic': {
-                        'passed': h.get('passed', 0),
-                        'failed': h.get('failed', 0),
-                        'broken': h.get('broken', 0),
-                        'skipped': 0,
-                        'unknown': 0,
-                        'total': h.get('total', 0),
-                    },
-                    'buildOrder': h.get('run_number', 0),
-                    'reportUrl': f"../runs/run-{h.get('run_number', 0)}/",
-                    'name': f"#{h.get('run_number', 0)}",
-                    'time': h.get('timestamp', ''),
-                })
-            out_path.write_text(json.dumps(trend, ensure_ascii=False, indent=2), encoding='utf-8')
-            print(f'history-trend.json 已手动构建（{len(trend)} 条）')
-            PY
-          fi
+          # 注意：heredoc 结束符 PY 必须顶格（不能在 if 块内缩进），所以先写脚本再条件执行
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          site_dir = os.environ.get('SITE_DIR', '')
+          hist_path = Path(site_dir) / 'unit' / 'unit-history.json'
+          out_path = Path(site_dir) / 'unit' / 'history' / 'history-trend.json'
+          if not hist_path.exists():
+              print('unit-history.json 不存在，跳过 history-trend.json 构建')
+              raise SystemExit(0)
+          if out_path.exists():
+              print('history-trend.json 已存在，跳过手动构建')
+              raise SystemExit(0)
+          Path(site_dir).joinpath('unit', 'history').mkdir(parents=True, exist_ok=True)
+          data = json.loads(hist_path.read_text(encoding='utf-8'))
+          trend = []
+          for h in data:
+              trend.append({
+                  'statistic': {
+                      'passed': h.get('passed', 0),
+                      'failed': h.get('failed', 0),
+                      'broken': h.get('broken', 0),
+                      'skipped': 0,
+                      'unknown': 0,
+                      'total': h.get('total', 0),
+                  },
+                  'buildOrder': h.get('run_number', 0),
+                  'reportUrl': f"../runs/run-{h.get('run_number', 0)}/",
+                  'name': f"#{h.get('run_number', 0)}",
+                  'time': h.get('timestamp', ''),
+              })
+          out_path.write_text(json.dumps(trend, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(f'history-trend.json 已手动构建（{len(trend)} 条）')
+          PY
 
           # 更新 unit/index.html 重定向到最新 run
           mkdir -p unit
