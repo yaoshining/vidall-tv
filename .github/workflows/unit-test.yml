@@ -837,10 +837,11 @@ jobs:
 
           # 清理旧 runs：
           #   Step 1：先删除不在 unit-history.json 中的孤儿 runs（保护有效历史记录）
-          #   Step 2：再按数量保留最近 20 次（避免 gh-pages 无限膨胀导致 push HTTP 400）
+          #   Step 2：清理老 runs 的 coverage/detail（行级覆盖文件，占大量文件数）
+          #   Step 3：再按数量保留最近 N 次（避免 EdgeOne Pages 文件数超限 + gh-pages push HTTP 400）
           # 注意：macOS bash 3.2 无 mapfile，BSD head 不支持负行号，需用 POSIX 写法
           if [ -d "unit/runs" ]; then
-            KEEP=20
+            KEEP=8
             # Step 1：找出 unit-history.json 中记录的合法 run numbers，删除孤儿
             if [ -f "unit/unit-history.json" ]; then
               VALID_RUNS=$(python3 -c "import json;d=json.load(open('unit/unit-history.json'));print(' '.join(str(e['run_number']) for e in d if 'run_number' in e))" 2>/dev/null || true)
@@ -856,7 +857,22 @@ jobs:
                 fi
               done
             fi
-            # Step 2：超出 KEEP 时，按编号从小到大删除最旧的
+            # Step 2：清理老 runs 的 coverage/detail（行级覆盖文件占大量文件数，最新 2 个 run 保留）
+            DETAIL_KEEP=2
+            if [ -d "unit/runs" ]; then
+              DETAIL_RUNS=$(ls -1d unit/runs/run-* 2>/dev/null | sort -t- -k2 -n | tail -n "$DETAIL_KEEP")
+              for run_dir in $(ls -1d unit/runs/run-* 2>/dev/null); do
+                is_recent=0
+                for keep_dir in $DETAIL_RUNS; do
+                  if [ "$run_dir" = "$keep_dir" ]; then is_recent=1; break; fi
+                done
+                if [ "$is_recent" = "0" ] && [ -d "$run_dir/coverage/detail" ]; then
+                  echo "清理老 run 的 coverage/detail: $run_dir/coverage/detail"
+                  rm -rf "$run_dir/coverage/detail"
+                fi
+              done
+            fi
+            # Step 3：超出 KEEP 时，按编号从小到大删除最旧的
             TOTAL_RUNS=$(ls -1d unit/runs/run-* 2>/dev/null | wc -l | tr -d ' ')
             if [ "$TOTAL_RUNS" -gt "$KEEP" ]; then
               DELETE_COUNT=$((TOTAL_RUNS - KEEP))
