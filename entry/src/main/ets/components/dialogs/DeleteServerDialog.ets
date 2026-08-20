@@ -33,6 +33,7 @@ export struct DeleteServerDialog {
               .margin({ right: 8 })
               .fontColor($r('sys.color.font_primary'))
               .backgroundColor($r('sys.color.comp_background_tertiary'))
+              .enabled(!this.isDeleting)
               .onClick(() => {
                 this.onCancel()
               })

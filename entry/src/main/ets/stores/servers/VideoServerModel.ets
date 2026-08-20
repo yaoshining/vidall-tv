@@ -129,12 +129,18 @@ export class VideoServerModel {
   /**
    * 删除影视服务器并处理当前源回退（统一删除流程）。
    * 若被删除的服务器恰好是当前激活源，自动回退到文件源。
+   * 源回退的持久化失败不中断删除流程（服务器已删除不可恢复，
+   * 残余的无效源引用会在下次 load() 时自动回退）。
    */
   async deleteVideoServerWithFallback(id: number): Promise<void> {
     await this.deleteVideoServer(id);
     const sourceSwitch = SourceSwitchModel.getState();
     if (sourceSwitch.getActiveServerId() === id) {
-      await sourceSwitch.setFileSource();
+      try {
+        await sourceSwitch.setFileSource();
+      } catch (e) {
+        console.warn('VideoServerModel: 源回退持久化失败，将在下次加载时自动恢复', (e as BusinessError).message ?? String(e));
+      }
     }
   }
 
