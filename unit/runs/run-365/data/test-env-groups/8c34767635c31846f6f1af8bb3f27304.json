@@ -1,1 +1,0 @@
-{"id":"8c34767635c31846f6f1af8bb3f27304","fullName":"VideoPlayerController review regressions#MPV player 尚未创建时会缓存最新 surface 参数","name":"MPV player 尚未创建时会缓存最新 surface 参数","status":"passed","testResultsByEnv":{"default":"abadeb83236110fff5d5747f38ae47dd"}}
