@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/sourceAdapter/SourceAdapterService.ets 
+// 
+// SourceAdapterService - 统一播放源解析与稳定 identity 收口服务。 
+// 
+// 目标：把原本散落在 PlayerPage、MovieDetailPage、SeasonDetailPage、 
+// PlayHistoryPage、FileExplorerPage 中的 WebDAV / SMB / local 协议拼装逻辑， 
+// 统一收敛到一个 service。 
+// 
+// 约束： 
+// 1. 不修改 `PlayerPageParam` 字段，保持现有播放入口契约。 
+// 2. 不重写 AVPlayer / MPV / Native adapter；只负责&quot;播放前一刻&quot;的源解析。 
+// 3. 不在本 service 内做 ffprobe 回填；只读取 DB 中已落库的轨道元数据。 
+// 
+// 与 ServiceLocator 的关系： 
+// - 默认通过 ServiceLocator.get&lt;SourceAdapterService&gt;(&#39;source-adapter&#39;) 获取。 
+// - 测试可通过 ServiceLocator.register(&#39;source-adapter&#39;, mock) 替换。 
+// 
+// 设计取舍： 
+// - 不引入新依赖（继续使用 WebDAVClient / FileSourceDatabase）。 
+// - 协议拼装结果与既有各入口保持字节级一致（端口兜底、rootPath 前导 `/`、 
+//   httpHeader 是否为空对象等）。 
+ 
+import { FileSourceDatabase } from &quot;../../db/files/FileSourceDatabase&quot;; 
+import { 
+  FileSource, 
+  FileSourceType, 
+  SMBSourceConfig, 
+  WebDAVSourceConfig 
+} from &quot;../../db/models/FileSourceEntity&quot;; 
+import { FfprobeTrack, FfprobeUtil } from &quot;../../utils/FfprobeUtil&quot;; 
+import { buildWebDavHttpHeader, WebDAVClient, WebDAVConfig } from &quot;../../lib/WebDAVClient&quot;; 
+import buffer from &#39;@ohos.buffer&#39;; 
+import { PresetAudioTrack, PresetSubtitleTrack } from &quot;../../components/core/player/VideoData&quot;; 
+import { 
+  PlaybackSourceIdentity, 
+  PlaybackSourceType, 
+  ResolvePlaybackSourceRequest, 
+  ResolvedPlaybackSource, 
+  fileSourceIdFromIdentity, 
+  fileSourceTypeFromIdentity 
+} from &quot;./PlaybackSource&quot;; 
+ 
+/** 
+ * 已知协议类型集合。 
+ * 用于判断 `fileSource.type` 是否需要走 service 的协议拼装路径， 
+ * 其它类型（如 &#39;aliyun&#39;、&#39;baidu&#39; 等云盘）由后续 adapter 接入，本期不支持。 
+ */ 
+const KNOWN_SOURCE_TYPES: ReadonlyArray&lt;PlaybackSourceType&gt; = [&#39;webdav&#39;, &#39;smb&#39;, &#39;local&#39;]; 
+ 
+/** 
+ * `loadSourceMetadata` 的返回结构。 
+ * 显式 interface 避免 ArkTS `arkts-no-obj-literals-as-types` 与 
+ * `arkts-no-untyped-obj-literals` 报错。 
+ */ 
+interface SourceMetadata { 
+  durationHintMs: number; 
+  presetAudioTracks: PresetAudioTrack[] | undefined; 
+  presetSubtitleTracks: PresetSubtitleTrack[] | undefined; 
+  startPositionMs: number; 
+} 
+ 
+/** 
+ * `assembleWebDavSource` / `assembleSmbSource` 的返回结构。 
+ */ 
+interface AssembledSource { 
+  url: string; 
+  httpHeader: Record&lt;string, string&gt;; 
+} 
+ 
+/** 
+ * watch 判定阈值，与 `PlayerPage.resolveEpisodePlaybackSource` 现有行为保持一致。 
+ * &gt;=95% 视为已完播，不返回 startPositionMs。 
+ */ 
+const WATCHED_THRESHOLD = 0.95; 
+ 
+/** 
+ * 路径段编码工具，对齐原 `PlayHistoryPage.buildPlayUrl` 中 SMB 路径段处理逻辑： 
+ * 1. 先 `decodeURIComponent`，避免对已编码段再次编码。 
+ * 2. 再 `encodeURIComponent`，确保空格/中文被正确处理。 
+ */ 
+function encodeSmbPathSegments(rawPath: string): string { 
+  return rawPath.split(&#39;/&#39;).map((seg: string): string =&gt; { 
+    if (seg.length === 0) { 
+      return &#39;&#39;; 
+    } 
+    let decoded: string = seg; 
+    try { 
+      decoded = decodeURIComponent(seg); 
+    } catch { 
+      decoded = seg; 
+    } 
+    return encodeURIComponent(decoded); 
+  }).join(&#39;/&#39;); 
+} 
+ 
+/** 
+ * 判定 `fileSource.type` 是否在 service 支持范围内。 
+ */ 
+export function isSupportedSourceType(type: string): boolean { 
+  return KNOWN_SOURCE_TYPES.indexOf(type) &gt;= 0; 
+} 
+ 
+/** 
+ * 构造稳定的 source identity。 
+ * 规则：永远使用 `${sourceType}:${sourceId}`，并把 sourceId 转成字符串以避免 number→string 隐式转换带来的不稳定。 
+ */ 
+export function buildSourceIdentity( 
+  sourceType: PlaybackSourceType, 
+  sourceId: number 
+): PlaybackSourceIdentity { 
+  return { 
+    sourceType, 
+    sourceId: sourceId &gt; 0 ? sourceId.toString() : &#39;&#39; 
+  }; 
+} 
+ 
+/** 
+ * SourceAdapterService - 协议无关的播放源解析 service。 
+ * 
+ * 公共 API： 
+ * - `resolveEpisode(req)`：从 DB 取 FileSource → 解析协议 → 回填轨道/进度 → 输出 ResolvedPlaybackSource。 
+ * - `resolveFromFileSource(fileSource, filePath, videoId?)`：当调用方已拿到 FileSource 时复用本 service， 
+ *   避免重复查 DB（如详情页已经查过一次）。 
+ */ 
+export class SourceAdapterService { 
+  /** 
+   * 完整解析入口：根据 sourceId 反查 FileSource，再走协议拼装。 
+   * 若 sourceId 缺失或 DB 中不存在，返回 `null`，由调用方决定如何处理。 
+   */ 
+  async resolveEpisode(req: ResolvePlaybackSourceRequest): Promise&lt;ResolvedPlaybackSource | null&gt; { 
+    if (req.sourceId === undefined || req.sourceId &lt;= 0) { 
+      return null; 
+    } 
+    const fileSource = await FileSourceDatabase.getInstance().getFileSourceById(req.sourceId); 
+    if (fileSource === null) { 
+      return null; 
+    } 
+    const videoId = req.videoId ?? 0; 
+    return this.resolveFromFileSource(fileSource, req.filePath, videoId); 
+  } 
+ 
+  /** 
+   * 从已查到的 FileSource 直接解析，避免重复查 DB。 
+   * 
+   * 调用方负责保证 `fileSource` 是当前生效的（type / configJson 与 DB 一致）。 
+   * 协议类型不在 service 支持范围内时返回 `null`。 
+   */ 
+  async resolveFromFileSource( 
+    fileSource: FileSource, 
+    filePath: string, 
+    videoId: number = 0 
+  ): Promise&lt;ResolvedPlaybackSource | null&gt; { 
+    if (fileSource.id === undefined) { 
+      return null; 
+    } 
+    if (!isSupportedSourceType(fileSource.type)) { 
+      return null; 
+    } 
+    const sourceType = fileSource.type as PlaybackSourceType; 
+    let url = &#39;&#39;; 
+    let httpHeader: Record&lt;string, string&gt; = {}; 
+    if (sourceType === &#39;webdav&#39;) { 
+      const assembled = this.assembleWebDavSource(fileSource.configJson, filePath); 
+      if (assembled === null) { 
+        return null; 
+      } 
+      url = assembled.url; 
+      httpHeader = assembled.httpHeader; 
+    } else if (sourceType === &#39;smb&#39;) { 
+      const assembled = this.assembleSmbSource(fileSource.configJson, filePath); 
+      if (assembled === null) { 
+        return null; 
+      } 
+      url = assembled.url; 
+      httpHeader = assembled.httpHeader; 
+    } else { 
+      // local 暂保留为直接使用 filePath 
+      url = filePath; 
+    } 
+    const sourceIdentity = buildSourceIdentity(sourceType, fileSource.id); 
+    const meta = await this.loadSourceMetadata(filePath, videoId); 
+    const result: ResolvedPlaybackSource = { 
+      url, 
+      httpHeader, 
+      sourceIdentity 
+    }; 
+    if (meta.durationHintMs &gt; 0) { 
+      result.durationHintMs = meta.durationHintMs; 
+    } 
+    if (meta.presetAudioTracks !== undefined) { 
+      result.presetAudioTracks = meta.presetAudioTracks; 
+    } 
+    if (meta.presetSubtitleTracks !== undefined) { 
+      result.presetSubtitleTracks = meta.presetSubtitleTracks; 
+    } 
+    if (meta.startPositionMs &gt; 0) { 
+      result.startPositionMs = meta.startPositionMs; 
+    } 
+    return result; 
+  } 
+ 
+  /** 
+   * WebDAV URL + Authorization 拼装。 
+   * 与原 `PlayerPage.resolveEpisodePlaybackSource` / `MovieDetailPage.play` / 
+   * `PlayHistoryPage.buildPlayUrl` 行为对齐： 
+   * - 端口兜底：https→443，http→80（与 player index 一致）。 
+   * - rootPath 不强制前导 `/`，对齐 player index 既有实现。 
+   * - authHeader 为空时不写入 Authorization 头（httpHeader 返回空对象）。 
+   */ 
+  private assembleWebDavSource( 
+    configJson: string, 
+    filePath: string 
+  ): AssembledSource | null { 
+    let config: WebDAVSourceConfig; 
+    try { 
+      config = JSON.parse(configJson) as WebDAVSourceConfig; 
+    } catch { 
+      return null; 
+    } 
+    const protocol = config.protocol ?? &#39;http&#39;; 
+    const host = config.url ?? &#39;&#39;; 
+    const port = config.port ?? (protocol === &#39;https&#39; ? 443 : 80); 
+    const rootPath = (config.rootPath ?? &#39;&#39;).replace(/\/$/, &#39;&#39;); 
+    // 补齐前导斜杠：用户配置 `rootPath: &quot;dav&quot;` 时，必须变成 `/dav`， 
+    // 否则 baseUrl 会拼成 `http://host:portdav`，WebDAVClient.getFullUrl 会生成错误 URL。 
+    const normalizedRootPath = rootPath.length &gt; 0 &amp;&amp; !rootPath.startsWith(&#39;/&#39;) 
+      ? `/${rootPath}` 
+      : rootPath; 
+    const baseUrl = `${protocol}://${host}:${port}${normalizedRootPath}`; 
+    const webdavConfig: WebDAVConfig = { 
+      baseUrl, 
+      username: config.username ?? &#39;&#39;, 
+      password: config.password ?? &#39;&#39;, 
+      timeout: 30000 
+    }; 
+    const client = new WebDAVClient(webdavConfig); 
+    const url = client.getFullUrl(filePath); 
+    const authHeader = client.getAuthHeaderPublic(); 
+    const httpHeader = buildWebDavHttpHeader(authHeader); 
+    const result: AssembledSource = { url, httpHeader }; 
+    return result; 
+  } 
+ 
+  /** 
+   * SMB URL 拼装。 
+   * 与原 `PlayerPage.resolveEpisodePlaybackSource` / `MovieDetailPage.play` / 
+   * `SeasonDetailPage` / `PlayHistoryPage.buildPlayUrl` 行为对齐： 
+   * - 端口兜底 445。 
+   * - 路径段 `decode → encode` 二次处理。 
+   * - MPV 直连采用无 userinfo URI，并通过 Basic Authorization 交由 VidAll_Player 
+   *   的内部 native bridge 注入 Samba；AVPlayer 仍由后端服务使用原始 URI 建立代理。 
+   */ 
+  private assembleSmbSource( 
+    configJson: string, 
+    filePath: string 
+  ): AssembledSource | null { 
+    let config: SMBSourceConfig; 
+    try { 
+      config = JSON.parse(configJson) as SMBSourceConfig; 
+    } catch { 
+      return null; 
+    } 
+    const port = config.port ?? 445; 
+    const encodedPath = encodeSmbPathSegments(filePath); 
+    const url = `smb://${config.host}:${port}${encodedPath}`; 
+    const username = config.username ?? &#39;&#39;; 
+    const password = config.password ?? &#39;&#39;; 
+    const credentials = buffer.from(`${username}:${password}`).toString(&#39;base64&#39;); 
+    const httpHeader: Record&lt;string, string&gt; = username.length &gt; 0 || password.length &gt; 0 
+      ? { &#39;Authorization&#39;: `Basic ${credentials}` } 
+      : {}; 
+    const result: AssembledSource = { url, httpHeader }; 
+    return result; 
+  } 
+ 
+  /** 
+   * 从 DB 读取时长、预置轨道、play_progress，并应用 watched 判定。 
+   * 
+   * 返回类型 SourceMetadata 为显式 interface，避免在 ArkTS 严格模式下 
+   * 使用 `Record&lt;string, Object&gt;` 等绕过类型检查的写法。 
+   */ 
+  private async loadSourceMetadata( 
+    filePath: string, 
+    videoId: number 
+  ): Promise&lt;SourceMetadata&gt; { 
+    const db = FileSourceDatabase.getInstance(); 
+    const videoEntity = await db.getVideoByPath(filePath); 
+    const meta: SourceMetadata = { 
+      durationHintMs: 0, 
+      presetAudioTracks: undefined, 
+      presetSubtitleTracks: undefined, 
+      startPositionMs: 0 
+    }; 
+    if (videoEntity !== null) { 
+      if (videoEntity.durationMs !== undefined &amp;&amp; videoEntity.durationMs !== null &amp;&amp; videoEntity.durationMs &gt; 0) { 
+        meta.durationHintMs = videoEntity.durationMs; 
+      } 
+      if (videoEntity.audioTracksJson !== undefined &amp;&amp; videoEntity.audioTracksJson !== null &amp;&amp; 
+          videoEntity.audioTracksJson.length &gt; 0) { 
+        const audioTracks = JSON.parse(videoEntity.audioTracksJson) as FfprobeTrack[]; 
+        const mapped = FfprobeUtil.toPresetAudioTracks(audioTracks); 
+        if (mapped.length &gt; 0) { 
+          meta.presetAudioTracks = mapped; 
+        } 
+      } 
+      if (videoEntity.subtitleTracksJson !== undefined &amp;&amp; videoEntity.subtitleTracksJson !== null &amp;&amp; 
+          videoEntity.subtitleTracksJson.length &gt; 0) { 
+        const subtitleTracks = JSON.parse(videoEntity.subtitleTracksJson) as FfprobeTrack[]; 
+        const mapped = FfprobeUtil.toPresetSubtitleTracks(subtitleTracks); 
+        if (mapped.length &gt; 0) { 
+          meta.presetSubtitleTracks = mapped; 
+        } 
+      } 
+    } 
+    if (videoId &gt; 0) { 
+      const savedProgress = await db.getPlayProgress(videoId); 
+      if (savedProgress !== null &amp;&amp; savedProgress.positionMs &gt; 0) { 
+        const isWatched = savedProgress.durationMs &gt; 0 
+          &amp;&amp; savedProgress.positionMs &gt;= savedProgress.durationMs * WATCHED_THRESHOLD; 
+        if (!isWatched) { 
+          meta.startPositionMs = savedProgress.positionMs; 
+        } 
+      } 
+    } 
+    return meta; 
+  } 
+} 
+ 
+/** 
+ * 默认 service 实例，便于 EntryAbility.onCreate 中一次性注册。 
+ */ 
+export const defaultSourceAdapterService = new SourceAdapterService(); 
+ 
+/** 
+ * `identityToPlayerPageParams` 的返回结构。 
+ */ 
+export interface PlayerPageIdentityParams { 
+  fileSourceType: string; 
+  fileSourceId: string; 
+} 
+ 
+/** 
+ * 便捷桥接函数：直接消费 `ResolvedPlaybackSource` 输出与现有字段命名兼容的元组， 
+ * 减少调用方代码量。 
+ * 
+ * 用法： 
+ * ```typescript 
+ * const resolved = await SourceAdapterService.resolveEpisode(...); 
+ * if (resolved !== null) { 
+ *   const params = identityToPlayerPageParams(resolved.sourceIdentity); 
+ *   const fileSourceType = params.fileSourceType; 
+ *   const fileSourceId = params.fileSourceId; 
+ * } 
+ * ``` 
+ * 
+ * 不使用对象解构（`const { fileSourceType, fileSourceId } = ...`），因为 ArkTS 
+ * 严格模式禁止解构声明。 
+ */ 
+export function identityToPlayerPageParams(identity: PlaybackSourceIdentity): PlayerPageIdentityParams { 
+  return { 
+    fileSourceType: fileSourceTypeFromIdentity(identity), 
+    fileSourceId: fileSourceIdFromIdentity(identity) 
+  }; 
+} 
+ 
+// 显式 re-export 方便 mock 测试。 
+export { FileSourceType }; 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Thu Aug 20 2026 21:25:31 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/sourceAdapter/SourceAdapterService.ets","hash":"95f8aad2e44f54aeb840fda69fc89f755c45e7094bf2d65a689c09382614b931","lineCnt":368,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"encodeSmbPathSegments","count":0,"regions":[{"startLoc":{"line":81,"col":1},"endLoc":{"line":94,"col":2},"count":0,"ignored":0},{"startLoc":{"line":82,"col":3},"endLoc":{"line":94,"col":2},"count":0,"ignored":0},{"startLoc":{"line":92,"col":5},"endLoc":{"line":93,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":82,"col":33},"endLoc":{"line":93,"col":4},"count":0,"ignored":0},{"startLoc":{"line":83,"col":27},"endLoc":{"line":85,"col":6},"count":0,"ignored":0},{"startLoc":{"line":87,"col":9},"endLoc":{"line":89,"col":6},"count":0,"ignored":0},{"startLoc":{"line":89,"col":7},"endLoc":{"line":91,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":83,"col":9},"endLoc":{"line":83,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"isSupportedSourceType","count":0,"regions":[{"startLoc":{"line":99,"col":1},"endLoc":{"line":101,"col":2},"count":0,"ignored":0},{"startLoc":{"line":100,"col":3},"endLoc":{"line":101,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"buildSourceIdentity","count":0,"regions":[{"startLoc":{"line":107,"col":1},"endLoc":{"line":115,"col":2},"count":0,"ignored":0},{"startLoc":{"line":111,"col":3},"endLoc":{"line":115,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":113,"col":15},"endLoc":{"line":113,"col":54},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"SourceAdapterService.resolveEpisode","count":0,"regions":[{"startLoc":{"line":130,"col":3},"endLoc":{"line":140,"col":4},"count":0,"ignored":0},{"startLoc":{"line":131,"col":58},"endLoc":{"line":133,"col":6},"count":0,"ignored":0},{"startLoc":{"line":135,"col":30},"endLoc":{"line":137,"col":6},"count":0,"ignored":0},{"startLoc":{"line":138,"col":5},"endLoc":{"line":140,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":131,"col":9},"endLoc":{"line":131,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":135,"col":9},"endLoc":{"line":135,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"SourceAdapterService.resolveFromFileSource","count":0,"regions":[{"startLoc":{"line":148,"col":3},"endLoc":{"line":200,"col":4},"count":0,"ignored":0},{"startLoc":{"line":169,"col":12},"endLoc":{"line":179,"col":6},"count":0,"ignored":0},{"startLoc":{"line":162,"col":34},"endLoc":{"line":169,"col":6},"count":0,"ignored":0},{"startLoc":{"line":169,"col":38},"endLoc":{"line":176,"col":6},"count":0,"ignored":0},{"startLoc":{"line":176,"col":12},"endLoc":{"line":179,"col":6},"count":0,"ignored":0},{"startLoc":{"line":153,"col":38},"endLoc":{"line":155,"col":6},"count":0,"ignored":0},{"startLoc":{"line":156,"col":50},"endLoc":{"line":158,"col":6},"count":0,"ignored":0},{"startLoc":{"line":164,"col":31},"endLoc":{"line":166,"col":8},"count":0,"ignored":0},{"startLoc":{"line":171,"col":31},"endLoc":{"line":173,"col":8},"count":0,"ignored":0},{"startLoc":{"line":187,"col":34},"endLoc":{"line":189,"col":6},"count":0,"ignored":0},{"startLoc":{"line":190,"col":47},"endLoc":{"line":192,"col":6},"count":0,"ignored":0},{"startLoc":{"line":193,"col":50},"endLoc":{"line":195,"col":6},"count":0,"ignored":0},{"startLoc":{"line":196,"col":35},"endLoc":{"line":198,"col":6},"count":0,"ignored":0},{"startLoc":{"line":167,"col":7},"endLoc":{"line":169,"col":6},"count":0,"ignored":0},{"startLoc":{"line":174,"col":7},"endLoc":{"line":176,"col":6},"count":0,"ignored":0},{"startLoc":{"line":199,"col":5},"endLoc":{"line":200,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":153,"col":9},"endLoc":{"line":153,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":156,"col":9},"endLoc":{"line":156,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":162,"col":9},"endLoc":{"line":162,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":164,"col":11},"endLoc":{"line":164,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":169,"col":16},"endLoc":{"line":169,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":171,"col":11},"endLoc":{"line":171,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":187,"col":9},"endLoc":{"line":187,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":190,"col":9},"endLoc":{"line":190,"col":45},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":193,"col":9},"endLoc":{"line":193,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":196,"col":9},"endLoc":{"line":196,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"SourceAdapterService.assembleWebDavSource","count":0,"regions":[{"startLoc":{"line":210,"col":3},"endLoc":{"line":242,"col":4},"count":0,"ignored":0},{"startLoc":{"line":220,"col":5},"endLoc":{"line":242,"col":4},"count":0,"ignored":0},{"startLoc":{"line":215,"col":9},"endLoc":{"line":217,"col":6},"count":0,"ignored":0},{"startLoc":{"line":217,"col":7},"endLoc":{"line":219,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":222,"col":34},"endLoc":{"line":222,"col":65},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":226,"col":32},"endLoc":{"line":228,"col":17},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"SourceAdapterService.assembleSmbSource","count":0,"regions":[{"startLoc":{"line":253,"col":3},"endLoc":{"line":274,"col":4},"count":0,"ignored":0},{"startLoc":{"line":263,"col":5},"endLoc":{"line":274,"col":4},"count":0,"ignored":0},{"startLoc":{"line":258,"col":9},"endLoc":{"line":260,"col":6},"count":0,"ignored":0},{"startLoc":{"line":260,"col":7},"endLoc":{"line":262,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":269,"col":48},"endLoc":{"line":271,"col":11},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"SourceAdapterService.loadSourceMetadata","count":0,"regions":[{"startLoc":{"line":282,"col":3},"endLoc":{"line":326,"col":4},"count":0,"ignored":0},{"startLoc":{"line":294,"col":31},"endLoc":{"line":314,"col":6},"count":0,"ignored":0},{"startLoc":{"line":315,"col":22},"endLoc":{"line":324,"col":6},"count":0,"ignored":0},{"startLoc":{"line":299,"col":51},"endLoc":{"line":305,"col":8},"count":0,"ignored":0},{"startLoc":{"line":307,"col":54},"endLoc":{"line":313,"col":8},"count":0,"ignored":0},{"startLoc":{"line":317,"col":67},"endLoc":{"line":323,"col":8},"count":0,"ignored":0},{"startLoc":{"line":295,"col":114},"endLoc":{"line":297,"col":8},"count":0,"ignored":0},{"startLoc":{"line":302,"col":32},"endLoc":{"line":304,"col":10},"count":0,"ignored":0},{"startLoc":{"line":310,"col":32},"endLoc":{"line":312,"col":10},"count":0,"ignored":0},{"startLoc":{"line":320,"col":25},"endLoc":{"line":322,"col":10},"count":0,"ignored":0},{"startLoc":{"line":325,"col":5},"endLoc":{"line":326,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":294,"col":9},"endLoc":{"line":294,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":295,"col":11},"endLoc":{"line":295,"col":112},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":298,"col":11},"endLoc":{"line":299,"col":49},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":302,"col":13},"endLoc":{"line":302,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":306,"col":11},"endLoc":{"line":307,"col":52},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":310,"col":13},"endLoc":{"line":310,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":315,"col":9},"endLoc":{"line":315,"col":20},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":317,"col":11},"endLoc":{"line":317,"col":65},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":320,"col":13},"endLoc":{"line":320,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":8},{"name":"identityToPlayerPageParams","count":0,"regions":[{"startLoc":{"line":359,"col":1},"endLoc":{"line":364,"col":2},"count":0,"ignored":0},{"startLoc":{"line":360,"col":3},"endLoc":{"line":364,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":9}],"exeLine":{"0":23,"1":24,"2":25,"3":26,"4":27,"5":28,"6":29,"7":30,"8":31,"9":32,"10":33,"11":34,"12":35,"13":36,"14":37,"15":38,"16":39,"17":40,"18":41,"19":48,"20":55,"21":56,"22":57,"23":58,"24":59,"25":65,"26":66,"27":67,"28":74,"29":81,"30":82,"31":83,"32":84,"33":86,"34":87,"35":88,"36":89,"37":90,"38":92,"39":93,"40":99,"41":100,"42":107,"43":108,"44":109,"45":110,"46":111,"47":112,"48":113,"49":125,"50":130,"51":131,"52":132,"53":134,"54":135,"55":136,"56":138,"57":139,"58":148,"59":149,"60":150,"61":151,"62":152,"63":153,"64":154,"65":156,"66":157,"67":159,"68":160,"69":161,"70":162,"71":163,"72":164,"73":165,"74":167,"75":168,"76":169,"77":170,"78":171,"79":172,"80":174,"81":175,"82":176,"83":178,"84":180,"85":181,"86":182,"87":183,"88":184,"89":185,"90":187,"91":188,"92":190,"93":191,"94":193,"95":194,"96":196,"97":197,"98":199,"99":210,"100":211,"101":212,"102":213,"103":214,"104":215,"105":216,"106":217,"107":218,"108":220,"109":221,"110":222,"111":223,"112":226,"113":227,"114":228,"115":229,"116":230,"117":231,"118":232,"119":233,"120":234,"121":236,"122":237,"123":238,"124":239,"125":240,"126":241,"127":253,"128":254,"129":255,"130":256,"131":257,"132":258,"133":259,"134":260,"135":261,"136":263,"137":264,"138":265,"139":266,"140":267,"141":268,"142":269,"143":270,"144":271,"145":272,"146":273,"147":282,"148":283,"149":284,"150":285,"151":286,"152":287,"153":288,"154":289,"155":290,"156":291,"157":292,"158":294,"159":295,"160":296,"161":298,"162":299,"163":300,"164":301,"165":302,"166":303,"167":306,"168":307,"169":308,"170":309,"171":310,"172":311,"173":315,"174":316,"175":317,"176":318,"177":319,"178":320,"179":321,"180":325,"181":332,"182":337,"183":338,"184":339,"185":359,"186":360,"187":361,"188":362,"189":367},"summary":{"lines":{"total":155,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,-1,0,0,0,0,0,-1,0,0,-1,-1,-1,-1,-1,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,-1,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,0,0,0,-1,0,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,-1,-1,-1,-1,-1,-1]},"functions":{"total":10,"covered":0,"pct":0},"branches":{"total":52,"covered":0,"pct":0}}},"title":"SourceAdapterService.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

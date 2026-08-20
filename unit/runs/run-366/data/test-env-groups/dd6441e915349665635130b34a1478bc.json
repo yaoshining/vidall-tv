@@ -1,1 +1,0 @@
-{"id":"dd6441e915349665635130b34a1478bc","fullName":"VideoPlayerController review regressions#resolveVpeQualityByScaling 数据缺失返回 low（保证开启即生效）","name":"resolveVpeQualityByScaling 数据缺失返回 low（保证开启即生效）","status":"passed","testResultsByEnv":{"default":"d4ebdaec1a44fb7a3179fa240bfb657a"}}
