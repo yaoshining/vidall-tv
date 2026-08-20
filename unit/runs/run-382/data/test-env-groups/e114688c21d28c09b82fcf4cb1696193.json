@@ -1,1 +1,0 @@
-{"id":"e114688c21d28c09b82fcf4cb1696193","fullName":"VideoPlayerController review regressions#fallback 切换后新后端首次 onPlayerReady 仍会消费 pending resume","name":"fallback 切换后新后端首次 onPlayerReady 仍会消费 pending resume","status":"passed","testResultsByEnv":{"default":"f8b628fe7098b5874ae911fd6a4c2927"}}

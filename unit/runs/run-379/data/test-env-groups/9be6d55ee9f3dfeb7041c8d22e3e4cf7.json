@@ -1,1 +1,0 @@
-{"id":"9be6d55ee9f3dfeb7041c8d22e3e4cf7","fullName":"VideoControls.player settings selection state#画面比例 chip 渲染模型直接由当前比例驱动，避免参数化 Builder 选中态丢失","name":"画面比例 chip 渲染模型直接由当前比例驱动，避免参数化 Builder 选中态丢失","status":"passed","testResultsByEnv":{"default":"217df43c8cd7c8fe2c19a7934ff29c22"}}
