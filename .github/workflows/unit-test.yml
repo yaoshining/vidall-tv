@@ -387,13 +387,24 @@ jobs:
 
           # 复制 Allure history（Allure 3 格式；跳过旧 Allure 2 history 避免不兼容）
           # Allure 3 history 文件包含 history-trend.json，Allure 2 格式不含此文件
+          HISTORY_COPIED=false
           if [[ -d "$SITE_DIR/unit/history" ]] && [[ -f "$SITE_DIR/unit/history/history-trend.json" ]]; then
             echo "复制 Allure 3 历史 trend 数据..."
             cp -R "$SITE_DIR/unit/history" "$ALLURE_RESULTS_DIR/history"
+            HISTORY_COPIED=true
           else
-            echo "未找到 Allure 3 兼容 history，从本次开始建立新趋势图"
+            echo "unit/history 中未找到 Allure 3 兼容 history-trend.json，尝试从最近 run 恢复..."
             # 清除旧 Allure 2 history，避免污染
             rm -rf "$SITE_DIR/unit/history"
+            # 尝试从最近一次 run 的报告中恢复 history（修复 history 丢失后的死循环问题）
+            LATEST_RUN_DIR=$(ls -1d "$SITE_DIR"/unit/runs/run-* 2>/dev/null | sort -t- -k3 -n | tail -1)
+            if [[ -n "$LATEST_RUN_DIR" ]] && [[ -d "$LATEST_RUN_DIR/history" ]] && [[ -f "$LATEST_RUN_DIR/history/history-trend.json" ]]; then
+              echo "从 $LATEST_RUN_DIR 恢复 history..."
+              cp -R "$LATEST_RUN_DIR/history" "$ALLURE_RESULTS_DIR/history"
+              HISTORY_COPIED=true
+            else
+              echo "未找到可恢复的 history，从本次开始建立新趋势图"
+            fi
           fi
 
           # 生成 Allure 3 HTML 报告
@@ -590,9 +601,42 @@ jobs:
 
           # 回写 Allure history 到 gh-pages（供下次 run 使用趋势图）
           if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
+            echo "回写 Allure history 到 unit/history/..."
             mkdir -p "$SITE_DIR/unit/history"
             rm -rf "$SITE_DIR/unit/history"/*
             cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/unit/history/"
+            echo "Allure history 回写完成"
+          else
+            echo "Allure 报告中未生成 history 目录，从 unit-history.json 手动构建 history-trend.json..."
+          fi
+          # 确保 unit/history/history-trend.json 存在（Allure 不生成时手动补充，避免 history 死循环）
+          if [[ ! -f "$SITE_DIR/unit/history/history-trend.json" ]] && [[ -f "$SITE_DIR/unit/unit-history.json" ]]; then
+            mkdir -p "$SITE_DIR/unit/history"
+            python3 -c "
+import json
+from pathlib import Path
+hist_path = Path('$SITE_DIR') / 'unit' / 'unit-history.json'
+out_path = Path('$SITE_DIR') / 'unit' / 'history' / 'history-trend.json'
+data = json.loads(hist_path.read_text(encoding='utf-8'))
+trend = []
+for h in data:
+    trend.append({
+        'statistic': {
+            'passed': h.get('passed', 0),
+            'failed': h.get('failed', 0),
+            'broken': h.get('broken', 0),
+            'skipped': 0,
+            'unknown': 0,
+            'total': h.get('total', 0)
+        },
+        'buildOrder': h.get('run_number', 0),
+        'reportUrl': f'../runs/run-{h.get(\"run_number\", 0)}/',
+        'name': f'#{h.get(\"run_number\", 0)}',
+        'time': h.get('timestamp', '')
+    })
+out_path.write_text(json.dumps(trend, ensure_ascii=False, indent=2), encoding='utf-8')
+print(f'history-trend.json 已手动构建（{len(trend)} 条）')
+"
           fi
 
           # 更新 unit/index.html 重定向到最新 run
