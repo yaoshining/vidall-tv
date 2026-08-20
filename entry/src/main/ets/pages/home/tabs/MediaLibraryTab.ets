@@ -36,7 +36,8 @@ import {
   VideoServerLibrary,
   VideoServerHome,
   VideoServerMediaItem,
-  VideoServerLatestSection
+  VideoServerLatestSection,
+  ServerHomeResult
 } from "../../../lib/JellyfinClient"
 import { PlexClient } from "../../../lib/PlexClient"
 import { reportServerPlaybackStarted } from "../../../lib/ServerProgressReporter"
@@ -661,6 +662,8 @@ export struct MediaLibraryTab {
   @Local serverHome: VideoServerHome = { continueWatching: [], nextUp: [], latest: [] }
   @Local serverLoading: boolean = false
   @Local serverError: string = ''
+  // 请求序号守卫：快速切换服务器时丢弃过期响应
+  private _serverHomeSeq: number = 0
 
   aboutToAppear(): void {
     FileSourceDatabase.onReady(() => {
@@ -742,11 +745,14 @@ export struct MediaLibraryTab {
       this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
       return
     }
+    // 递增序号，后续 async 断点后检查是否仍为最新
+    const seq = ++this._serverHomeSeq
     this.serverLoading = true
     this.serverError = ''
     try {
       // 强制重载：避免首帧凭据解密竞态导致拿到旧/密文配置
       await this.videoServerModel.loadVideoServers(true)
+      if (this._serverHomeSeq !== seq) return // 已被更新的请求取代
       let server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
       if (!server) {
         this.serverError = '服务器不存在'
@@ -755,11 +761,15 @@ export struct MediaLibraryTab {
         return
       }
       try {
-        await this.fetchServerHome(server)
+        const result = await this.fetchServerHome(server)
+        if (this._serverHomeSeq !== seq) return
+        this.serverLibraries = result.libraries
+        this.serverHome = result.home
       } catch (e) {
         console.warn('[MediaLibraryTab] 首次加载服务器失败，重试一次', (e as Error).message)
         // 鉴权失败可能是凭据解密竞态，强制重读后再试一次
         await this.videoServerModel.loadVideoServers(true)
+        if (this._serverHomeSeq !== seq) return
         server = this.videoServerModel.getVideoServerById(serverId)
         if (!server) {
           this.serverError = '服务器不存在'
@@ -767,26 +777,37 @@ export struct MediaLibraryTab {
           this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
           return
         }
-        await this.fetchServerHome(server)
+        const result = await this.fetchServerHome(server)
+        if (this._serverHomeSeq !== seq) return
+        this.serverLibraries = result.libraries
+        this.serverHome = result.home
       }
     } catch (e2) {
+      if (this._serverHomeSeq !== seq) return
       this.serverLibraries = []
       this.serverHome = { continueWatching: [], nextUp: [], latest: [] }
       this.serverError = (e2 as Error).message ?? '无法连接服务器'
     } finally {
-      this.serverLoading = false
+      // 仅当序号仍为最新时才置 loading=false，避免后续请求被误关
+      if (this._serverHomeSeq === seq) {
+        this.serverLoading = false
+      }
     }
   }
 
-  private async fetchServerHome(server: VideoServer): Promise<void> {
+  private async fetchServerHome(server: VideoServer): Promise<ServerHomeResult> {
     if (server.type === VideoServerType.PLEX) {
       const client = PlexClient.fromConfigJson(server.configJson)
-      this.serverLibraries = await client.getLibraries()
-      this.serverHome = await client.getHome()
+      const libraries: VideoServerLibrary[] = await client.getLibraries()
+      const home: VideoServerHome = await client.getHome()
+      const result: ServerHomeResult = { libraries, home }
+      return result
     } else {
       const client = JellyfinClient.fromConfigJson(server.configJson)
-      this.serverLibraries = await client.getLibraries()
-      this.serverHome = await client.getHome()
+      const libraries: VideoServerLibrary[] = await client.getLibraries()
+      const home: VideoServerHome = await client.getHome()
+      const result: ServerHomeResult = { libraries, home }
+      return result
     }
   }
 
@@ -798,20 +819,22 @@ export struct MediaLibraryTab {
     if (serverId === undefined) {
       return
     }
-    try {
-      await this.videoServerModel.loadVideoServers(true)
-      const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
-      if (!server) {
-        return
-      }
-      if (server.type === VideoServerType.PLEX) {
-        this.serverHome = await PlexClient.fromConfigJson(server.configJson).getHome()
-      } else {
-        this.serverHome = await JellyfinClient.fromConfigJson(server.configJson).getHome()
-      }
-    } catch (e) {
-      console.warn('[MediaLibraryTab] 刷新服务器继续观看失败', (e as Error).message)
-    }
+   const seq = ++this._serverHomeSeq
+   try {
+     await this.videoServerModel.loadVideoServers(true)
+     if (this._serverHomeSeq !== seq) return
+     const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+     if (!server) {
+       return
+     }
+     const result = await this.fetchServerHome(server)
+     if (this._serverHomeSeq !== seq) return
+     this.serverLibraries = result.libraries
+     this.serverHome = result.home
+   } catch (e) {
+     if (this._serverHomeSeq !== seq) return
+     console.warn('[MediaLibraryTab] 刷新服务器继续观看失败', (e as Error).message)
+   }
   }
 
   /**

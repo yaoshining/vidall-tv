@@ -129,6 +129,12 @@ export interface VideoServerHome {
   latest: VideoServerLatestSection[];
 }
 
+/** fetchServerHome 返回的聚合结果，供调用方在序号守卫后统一写入 */
+export interface ServerHomeResult {
+  libraries: VideoServerLibrary[];
+  home: VideoServerHome;
+}
+
 /**
  * Jellyfin / Emby 客户端配置（运行时解析，凭据已解密）
  */
