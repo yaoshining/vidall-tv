@@ -387,13 +387,24 @@ jobs:
 
           # 复制 Allure history（Allure 3 格式；跳过旧 Allure 2 history 避免不兼容）
           # Allure 3 history 文件包含 history-trend.json，Allure 2 格式不含此文件
+          HISTORY_COPIED=false
           if [[ -d "$SITE_DIR/unit/history" ]] && [[ -f "$SITE_DIR/unit/history/history-trend.json" ]]; then
             echo "复制 Allure 3 历史 trend 数据..."
             cp -R "$SITE_DIR/unit/history" "$ALLURE_RESULTS_DIR/history"
+            HISTORY_COPIED=true
           else
-            echo "未找到 Allure 3 兼容 history，从本次开始建立新趋势图"
+            echo "unit/history 中未找到 Allure 3 兼容 history-trend.json，尝试从最近 run 恢复..."
             # 清除旧 Allure 2 history，避免污染
             rm -rf "$SITE_DIR/unit/history"
+            # 尝试从最近一次 run 的报告中恢复 history（修复 history 丢失后的死循环问题）
+            LATEST_RUN_DIR=$(ls -1d "$SITE_DIR"/unit/runs/run-* 2>/dev/null | sort -t- -k3 -n | tail -1)
+            if [[ -n "$LATEST_RUN_DIR" ]] && [[ -d "$LATEST_RUN_DIR/history" ]] && [[ -f "$LATEST_RUN_DIR/history/history-trend.json" ]]; then
+              echo "从 $LATEST_RUN_DIR 恢复 history..."
+              cp -R "$LATEST_RUN_DIR/history" "$ALLURE_RESULTS_DIR/history"
+              HISTORY_COPIED=true
+            else
+              echo "未找到可恢复的 history，从本次开始建立新趋势图"
+            fi
           fi
 
           # 生成 Allure 3 HTML 报告
@@ -590,10 +601,49 @@ jobs:
 
           # 回写 Allure history 到 gh-pages（供下次 run 使用趋势图）
           if [[ -d "$ALLURE_REPORT_DIR/history" ]]; then
+            echo "回写 Allure history 到 unit/history/..."
             mkdir -p "$SITE_DIR/unit/history"
             rm -rf "$SITE_DIR/unit/history"/*
             cp -R "$ALLURE_REPORT_DIR/history/." "$SITE_DIR/unit/history/"
+            echo "Allure history 回写完成"
+          else
+            echo "Allure 报告中未生成 history 目录，从 unit-history.json 手动构建 history-trend.json..."
           fi
+          # 确保 unit/history/history-trend.json 存在（Allure 不生成时手动补充，避免 history 死循环）
+          # 注意：heredoc 结束符 PY 必须顶格（不能在 if 块内缩进），所以先写脚本再条件执行
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          site_dir = os.environ.get('SITE_DIR', '')
+          hist_path = Path(site_dir) / 'unit' / 'unit-history.json'
+          out_path = Path(site_dir) / 'unit' / 'history' / 'history-trend.json'
+          if not hist_path.exists():
+              print('unit-history.json 不存在，跳过 history-trend.json 构建')
+              raise SystemExit(0)
+          if out_path.exists():
+              print('history-trend.json 已存在，跳过手动构建')
+              raise SystemExit(0)
+          Path(site_dir).joinpath('unit', 'history').mkdir(parents=True, exist_ok=True)
+          data = json.loads(hist_path.read_text(encoding='utf-8'))
+          trend = []
+          for h in data:
+              trend.append({
+                  'statistic': {
+                      'passed': h.get('passed', 0),
+                      'failed': h.get('failed', 0),
+                      'broken': h.get('broken', 0),
+                      'skipped': 0,
+                      'unknown': 0,
+                      'total': h.get('total', 0),
+                  },
+                  'buildOrder': h.get('run_number', 0),
+                  'reportUrl': f"../runs/run-{h.get('run_number', 0)}/",
+                  'name': f"#{h.get('run_number', 0)}",
+                  'time': h.get('timestamp', ''),
+              })
+          out_path.write_text(json.dumps(trend, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(f'history-trend.json 已手动构建（{len(trend)} 条）')
+          PY
 
           # 更新 unit/index.html 重定向到最新 run
           mkdir -p unit
@@ -787,10 +837,11 @@ jobs:
 
           # 清理旧 runs：
           #   Step 1：先删除不在 unit-history.json 中的孤儿 runs（保护有效历史记录）
-          #   Step 2：再按数量保留最近 20 次（避免 gh-pages 无限膨胀导致 push HTTP 400）
+          #   Step 2：清理老 runs 的 coverage/detail（行级覆盖文件，占大量文件数）
+          #   Step 3：再按数量保留最近 N 次（避免 EdgeOne Pages 文件数超限 + gh-pages push HTTP 400）
           # 注意：macOS bash 3.2 无 mapfile，BSD head 不支持负行号，需用 POSIX 写法
           if [ -d "unit/runs" ]; then
-            KEEP=20
+            KEEP=8
             # Step 1：找出 unit-history.json 中记录的合法 run numbers，删除孤儿
             if [ -f "unit/unit-history.json" ]; then
               VALID_RUNS=$(python3 -c "import json;d=json.load(open('unit/unit-history.json'));print(' '.join(str(e['run_number']) for e in d if 'run_number' in e))" 2>/dev/null || true)
@@ -806,7 +857,22 @@ jobs:
                 fi
               done
             fi
-            # Step 2：超出 KEEP 时，按编号从小到大删除最旧的
+            # Step 2：清理老 runs 的 coverage/detail（行级覆盖文件占大量文件数，最新 2 个 run 保留）
+            DETAIL_KEEP=2
+            if [ -d "unit/runs" ]; then
+              DETAIL_RUNS=$(ls -1d unit/runs/run-* 2>/dev/null | sort -t- -k2 -n | tail -n "$DETAIL_KEEP")
+              for run_dir in $(ls -1d unit/runs/run-* 2>/dev/null); do
+                is_recent=0
+                for keep_dir in $DETAIL_RUNS; do
+                  if [ "$run_dir" = "$keep_dir" ]; then is_recent=1; break; fi
+                done
+                if [ "$is_recent" = "0" ] && [ -d "$run_dir/coverage/detail" ]; then
+                  echo "清理老 run 的 coverage/detail: $run_dir/coverage/detail"
+                  rm -rf "$run_dir/coverage/detail"
+                fi
+              done
+            fi
+            # Step 3：超出 KEEP 时，按编号从小到大删除最旧的
             TOTAL_RUNS=$(ls -1d unit/runs/run-* 2>/dev/null | wc -l | tr -d ' ')
             if [ "$TOTAL_RUNS" -gt "$KEEP" ]; then
               DELETE_COUNT=$((TOTAL_RUNS - KEEP))

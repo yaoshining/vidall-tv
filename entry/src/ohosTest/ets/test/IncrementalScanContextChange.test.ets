@@ -1,10 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
-import {
-  classifyVideoScrapeTarget,
-  hasSeasonSiblingDirectory,
-  createVideoScrapeContext,
-  VideoScrapeContext
-} from '../../../main/ets/utils/VideoScannerUtil';
+import { classifyVideoScrapeTarget, hasSeasonSiblingDirectory, createVideoScrapeContext } from '../../../main/ets/utils/VideoScannerHelpers';
+import { VideoScrapeContext } from '../../../main/ets/utils/VideoScannerTypes';
 import {
   isWeakSemanticTitleText,
   isSeasonDirectorySegment
