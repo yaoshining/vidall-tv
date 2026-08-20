@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/subtitleAcquisition/providers/SubtitleLanguageFilter.ets 
+// 
+// SubHub 结果的语言过滤（App 侧兜底）。 
+// 
+// 背景：SubHub 的 xunlei provider 返回的 `language` 字段不规范（空串 / &quot;默认&quot; / 
+// &quot;CHSEN_权游&quot; 等），而 releaseName 里通常带有语言信号。因此 App 侧对 SubHub 不传 
+// `language`，改为本地过滤。 
+// 
+// 判定优先级：language 字段（可靠时）优先于 releaseName 启发式；只有 language 字段 
+// 为空/不可信（迅雷）时才用 releaseName 判定。这样能避免「releaseName 带 .en 的 
+// 中文/双语字幕（language=zh-CN,en）被误判成英文」。 
+// 
+// SubHub 侧会在 adapter 层做权威归一化（见 issue #202），本文件是 App 侧的双保险。 
+ 
+/** 中文语言码正则（zh / zho / chi / chs / cht / chn / cn）。 */ 
+const CHINESE_LANG_RE = /(zh|zho|chi|chs|cht|chn|cn)/i; 
+ 
+/** 英文语言码正则（en / eng / english）。 */ 
+const ENGLISH_LANG_RE = /(en|eng|english)/i; 
+ 
+/** 判断语言偏好列表是否「中文向」（如 &quot;zh-CN,zh-TW&quot;）。 */ 
+export function isChineseLanguagePreference(languagesParam: string): boolean { 
+  const parts = languagesParam.split(&#39;,&#39;); 
+  for (let i = 0; i &lt; parts.length; i++) { 
+    const t = parts[i].trim().toLowerCase(); 
+    if (CHINESE_LANG_RE.test(t) || t.includes(&#39;中文&#39;) || t.includes(&#39;简&#39;) || t.includes(&#39;繁&#39;)) { 
+      return true; 
+    } 
+  } 
+  return false; 
+} 
+ 
+/** language 字段是否为中文族（含双语 zh-CN,en / CHSEN）。 */ 
+function isChineseLangTag(lang: string): boolean { 
+  return CHINESE_LANG_RE.test(lang) || lang.includes(&#39;中文&#39;) || lang.includes(&#39;简&#39;) || lang.includes(&#39;繁&#39;); 
+} 
+ 
+/** language 字段是否为英文族。 */ 
+function isEnglishLangTag(lang: string): boolean { 
+  return ENGLISH_LANG_RE.test(lang); 
+} 
+ 
+/** 
+ * releaseName 是否带「显式非中文语言」标记（西语/英文/韩文/日语…）。 
+ * 用于纠正迅雷脏 language 字段：迅雷把所有结果都标成 zh-CN，实际语言藏在 releaseName 
+ * （如 &quot;月鳞绮纪 11_西语_终稿&quot; / &quot;…_英文_…&quot; / &quot;…_韩文_…&quot;）。 
+ * 双语例外（中英/双语/简英/繁英）仍算中文（含中文轨）。 
+ */ 
+function hasExplicitNonChineseLanguage(fileName: string): boolean { 
+  const rel = fileName.toLowerCase(); 
+  const nonChinese = /(西语|西班牙|英文|英语|韩文|韩语|日语|日文|法语|德语|俄语|泰语|越南|葡萄牙|葡语|意大利|意语)/; 
+  if (!nonChinese.test(rel)) { 
+    return false; 
+  } 
+  const bilingual = /(中英|双语|简英|繁英|中英韩|中韩英)/; 
+  return !bilingual.test(rel); 
+} 
+ 
+/** 仅靠 releaseName 启发式判定是否为中文（用于 language 字段不可信的场景）。 */ 
+function isChineseByReleaseName(fileName: string): boolean { 
+  const rel = (fileName ?? &#39;&#39;).toLowerCase(); 
+ 
+  // 1) 显式英文标记（en/eng/english，词边界）→ 非中文；中英双语除外 
+  if (/(^|[_ .\-])(en|eng|english)([_ .\-]|$)/.test(rel)) { 
+    if (!/(中英|双语|chsen|en.?chs|chs.?en)/.test(rel)) { 
+      return false; 
+    } 
+  } 
+ 
+  // 2) 显式中文标记 
+  if (/(_zh|_zho|_chi|_chs|_cht|简体|繁体|简中|繁中|中文|中英|双语|chinese)/.test(rel)) { 
+    return true; 
+  } 
+ 
+  // 3) releaseName 含汉字（CJK 统一表意文字，天然排除韩文谚文/日文假名） 
+  return /[\u4e00-\u9fff\u3400-\u4dbf]/.test(fileName); 
+} 
+ 
+/** 
+ * 判断一条字幕是否为中文。 
+ * language 字段优先（可靠），仅当其不可信（空/迅雷脏值）时才用 releaseName 启发式。 
+ */ 
+export function isChineseSubtitle(fileName: string, languageCode: string): boolean { 
+  const lang = (languageCode ?? &#39;&#39;).toLowerCase(); 
+ 
+  // 0) releaseName 显式非中文语言标记 → 排除（即使 language 字段错标为 zh-CN）。 
+  //    迅雷把所有结果标 zh-CN，真实语言（西语/英文/韩文…）藏在 releaseName 里。 
+  if (hasExplicitNonChineseLanguage(fileName)) { 
+    return false; 
+  } 
+ 
+  // 1) language 字段是中文族（含双语 zh-CN,en / CHSEN）→ 保留 
+  if (isChineseLangTag(lang)) { 
+    return true; 
+  } 
+  // 2) language 字段是英文族 → 排除 
+  if (isEnglishLangTag(lang)) { 
+    return false; 
+  } 
+  // 3) language 字段为空/不可信 → releaseName 启发式 
+  return isChineseByReleaseName(fileName); 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Thu Aug 20 2026 21:31:46 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/subtitleAcquisition/providers/SubtitleLanguageFilter.ets","hash":"60f729e13d2f1dc87452336daf667fb9ab46bd692f6d4a2732a09efe86cb2f78","lineCnt":103,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"isChineseLanguagePreference","count":5,"regions":[{"startLoc":{"line":22,"col":1},"endLoc":{"line":31,"col":2},"count":5,"ignored":0},{"startLoc":{"line":24,"col":3},"endLoc":{"line":29,"col":4},"count":5,"ignored":0},{"startLoc":{"line":26,"col":92},"endLoc":{"line":28,"col":6},"count":4,"ignored":0},{"startLoc":{"line":30,"col":3},"endLoc":{"line":31,"col":2},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":26,"col":9},"endLoc":{"line":26,"col":90},"trueCount":4,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"isChineseLangTag","count":14,"regions":[{"startLoc":{"line":34,"col":1},"endLoc":{"line":36,"col":2},"count":14,"ignored":0},{"startLoc":{"line":35,"col":3},"endLoc":{"line":36,"col":2},"count":14,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"isEnglishLangTag","count":7,"regions":[{"startLoc":{"line":39,"col":1},"endLoc":{"line":41,"col":2},"count":7,"ignored":0},{"startLoc":{"line":40,"col":3},"endLoc":{"line":41,"col":2},"count":7,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"hasExplicitNonChineseLanguage","count":17,"regions":[{"startLoc":{"line":49,"col":1},"endLoc":{"line":57,"col":2},"count":17,"ignored":0},{"startLoc":{"line":52,"col":30},"endLoc":{"line":54,"col":4},"count":14,"ignored":0},{"startLoc":{"line":55,"col":3},"endLoc":{"line":57,"col":2},"count":3,"ignored":0}],"branches":[{"startLoc":{"line":52,"col":7},"endLoc":{"line":52,"col":28},"trueCount":14,"falseCount":3,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"isChineseByReleaseName","count":6,"regions":[{"startLoc":{"line":60,"col":1},"endLoc":{"line":77,"col":2},"count":6,"ignored":0},{"startLoc":{"line":64,"col":59},"endLoc":{"line":68,"col":4},"count":1,"ignored":0},{"startLoc":{"line":65,"col":53},"endLoc":{"line":67,"col":6},"count":1,"ignored":0},{"startLoc":{"line":71,"col":75},"endLoc":{"line":73,"col":4},"count":3,"ignored":0},{"startLoc":{"line":76,"col":3},"endLoc":{"line":77,"col":2},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":64,"col":7},"endLoc":{"line":64,"col":57},"trueCount":1,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":65,"col":9},"endLoc":{"line":65,"col":51},"trueCount":1,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":71,"col":7},"endLoc":{"line":71,"col":73},"trueCount":3,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"isChineseSubtitle","count":17,"regions":[{"startLoc":{"line":83,"col":1},"endLoc":{"line":102,"col":2},"count":17,"ignored":0},{"startLoc":{"line":88,"col":48},"endLoc":{"line":90,"col":4},"count":3,"ignored":0},{"startLoc":{"line":93,"col":31},"endLoc":{"line":95,"col":4},"count":7,"ignored":0},{"startLoc":{"line":97,"col":31},"endLoc":{"line":99,"col":4},"count":1,"ignored":0},{"startLoc":{"line":101,"col":3},"endLoc":{"line":102,"col":2},"count":6,"ignored":0}],"branches":[{"startLoc":{"line":88,"col":7},"endLoc":{"line":88,"col":46},"trueCount":3,"falseCount":14,"group":[],"ignored":0},{"startLoc":{"line":93,"col":7},"endLoc":{"line":93,"col":29},"trueCount":7,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":97,"col":7},"endLoc":{"line":97,"col":29},"trueCount":1,"falseCount":6,"group":[],"ignored":0}],"ignored":0,"index":5}],"exeLine":{"0":16,"1":19,"2":22,"3":23,"4":24,"5":25,"6":26,"7":27,"8":30,"9":34,"10":35,"11":39,"12":40,"13":49,"14":50,"15":51,"16":52,"17":53,"18":55,"19":56,"20":60,"21":61,"22":64,"23":65,"24":66,"25":71,"26":72,"27":76,"28":83,"29":84,"30":88,"31":89,"32":93,"33":94,"34":97,"35":98,"36":101},"summary":{"lines":{"total":35,"covered":35,"pct":100,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,5,5,5,5,5,4,-1,-1,1,-1,-1,-1,14,14,-1,-1,-1,7,7,-1,-1,-1,-1,-1,-1,-1,-1,17,17,17,17,14,-1,3,3,-1,-1,-1,6,6,-1,-1,6,1,1,-1,-1,-1,-1,5,3,-1,-1,-1,2,-1,-1,-1,-1,-1,-1,17,17,-1,-1,-1,17,3,-1,-1,-1,14,7,-1,-1,7,1,-1,-1,6,-1,-1]},"functions":{"total":6,"covered":6,"pct":100},"branches":{"total":16,"covered":15,"pct":93.75}}},"title":"SubtitleLanguageFilter.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
