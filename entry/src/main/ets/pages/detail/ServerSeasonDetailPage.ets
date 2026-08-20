@@ -212,10 +212,10 @@ export struct ServerSeasonDetailPage {
         durationHintMs: ep.durationMs > 0 ? ep.durationMs : undefined,
         serverType: server.type,
         serverItemId: ep.id,
-        serverConfigJson: server.configJson,
+        serverId: server.id,
         serverPlaySessionId: playSessionId
       }
-      reportServerPlaybackStarted(server.type, server.configJson, ep.id, playSessionId, ep.positionMs, ep.durationMs)
+      reportServerPlaybackStarted(server.type, server.id ?? 0, ep.id, playSessionId, ep.positionMs, ep.durationMs)
         .catch(() => {})
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
@@ -342,10 +342,10 @@ export struct ServerSeasonDetailPage {
         durationHintMs: item.durationMs > 0 ? item.durationMs : undefined,
         serverType: server.type,
         serverItemId: item.id,
-        serverConfigJson: server.configJson,
+        serverId: server.id,
         serverPlaySessionId: playSessionId
       }
-      reportServerPlaybackStarted(server.type, server.configJson, item.id, playSessionId, item.positionMs, item.durationMs)
+      reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch(() => {})
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {

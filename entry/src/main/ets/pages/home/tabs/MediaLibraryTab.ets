@@ -879,11 +879,11 @@ export struct MediaLibraryTab {
         durationHintMs: item.durationMs > 0 ? item.durationMs : undefined,
         serverType: server.type,
         serverItemId: item.id,
-        serverConfigJson: server.configJson,
+        serverId: server.id,
         serverPlaySessionId: playSessionId
       }
       // 上报播放开始（会话建立），与退出时的 stopped 共用同一 playSessionId
-      reportServerPlaybackStarted(server.type, server.configJson, item.id, playSessionId, item.positionMs, item.durationMs)
+      reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch((e: Error) => {
           console.warn('[MediaLibraryTab] 上报播放开始失败', e.message)
         })

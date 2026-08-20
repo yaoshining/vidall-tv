@@ -161,10 +161,10 @@ export struct ServerMediaDetailPage {
         durationHintMs: target.durationMs > 0 ? target.durationMs : undefined,
         serverType: server.type,
         serverItemId: target.id,
-        serverConfigJson: server.configJson,
+        serverId: server.id,
         serverPlaySessionId: playSessionId
       }
-      reportServerPlaybackStarted(server.type, server.configJson, target.id, playSessionId, target.positionMs, target.durationMs)
+      reportServerPlaybackStarted(server.type, server.id ?? 0, target.id, playSessionId, target.positionMs, target.durationMs)
         .catch(() => {})
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {

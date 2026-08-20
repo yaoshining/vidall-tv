@@ -1,5 +1,6 @@
 import { JellyfinClient } from './JellyfinClient';
 import { PlexClient } from './PlexClient';
+import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 
 /**
  * 单个 playSessionId 的串行队列状态。
@@ -19,23 +20,38 @@ interface SessionQueueState {
  * - started 内部鉴权 + getPlaybackInfo 完成前，后续 progress 排队等待；
  * - stopped 等待此前所有请求完成后执行，并阻止后续 progress 入队；
  * - stopped 完成后清理该会话状态。
+ *
+ * 所有方法接收 serverId，内部按需从数据库读取配置，避免凭据长期驻留调用方。
  */
 class ServerReportQueue {
   private sessions: Map<string, SessionQueueState> = new Map();
 
   /**
+   * 按 serverId 从数据库读取 configJson；读不到返回空字符串。
+   */
+  private async readConfigJson(serverId: number): Promise<string> {
+    try {
+      const server = await FileSourceDatabase.getInstance().getVideoServerById(serverId);
+      return server?.configJson ?? '';
+    } catch (e) {
+      console.warn('[ServerReportQueue] 读取服务器配置失败, serverId=' + serverId, (e as Error).message ?? String(e));
+      return '';
+    }
+  }
+
+  /**
    * 入队一个 started 任务。
    */
   enqueueStarted(
-    serverType: string, serverConfigJson: string, itemId: string,
+    serverType: string, serverId: number, itemId: string,
     playSessionId: string, positionMs: number, durationMs: number
   ): Promise<void> {
     if (playSessionId.length === 0) {
-      return this.executeStarted(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+      return this.executeStarted(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
     }
     const state = this.ensureState(playSessionId);
     const next = state.tail.then(() => {
-      return this.executeStarted(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+      return this.executeStarted(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
     }).catch(() => {});
     state.tail = next;
     return next;
@@ -45,11 +61,11 @@ class ServerReportQueue {
    * 入队一个 progress 任务。
    */
   enqueueProgress(
-    serverType: string, serverConfigJson: string, itemId: string,
+    serverType: string, serverId: number, itemId: string,
     playSessionId: string, positionMs: number, durationMs: number
   ): Promise<void> {
     if (playSessionId.length === 0) {
-      return this.executeProgress(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+      return this.executeProgress(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
     }
     const state = this.ensureState(playSessionId);
     if (state.stopped) {
@@ -57,7 +73,7 @@ class ServerReportQueue {
       return Promise.resolve();
     }
     const next = state.tail.then(() => {
-      return this.executeProgress(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+      return this.executeProgress(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
     }).catch(() => {});
     state.tail = next;
     return next;
@@ -67,16 +83,16 @@ class ServerReportQueue {
    * 入队一个 stopped 任务。
    */
   enqueueStopped(
-    serverType: string, serverConfigJson: string, itemId: string,
+    serverType: string, serverId: number, itemId: string,
     playSessionId: string, positionMs: number, durationMs: number
   ): Promise<void> {
     if (playSessionId.length === 0) {
-      return this.executeStopped(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+      return this.executeStopped(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
     }
     const state = this.ensureState(playSessionId);
     state.stopped = true;
     const next = state.tail.then(() => {
-      return this.executeStopped(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+      return this.executeStopped(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
     }).then(() => {
       this.sessions.delete(playSessionId);
     }).catch(() => {
@@ -97,37 +113,51 @@ class ServerReportQueue {
   }
 
   private async executeStarted(
-    serverType: string, serverConfigJson: string, itemId: string,
+    serverType: string, serverId: number, itemId: string,
     playSessionId: string, positionMs: number, durationMs: number
   ): Promise<void> {
+    const configJson = await this.readConfigJson(serverId);
+    if (configJson.length === 0) {
+      console.warn('[ServerReportQueue] started 跳过：读取服务器配置为空, serverId=' + serverId);
+      return;
+    }
     if (serverType === 'plex') {
-      await PlexClient.fromConfigJson(serverConfigJson).reportPlaying(itemId, positionMs, durationMs);
+      await PlexClient.fromConfigJson(configJson).reportPlaying(itemId, positionMs, durationMs);
     } else {
-      const client = JellyfinClient.fromConfigJson(serverConfigJson);
+      const client = JellyfinClient.fromConfigJson(configJson);
       const mediaSourceId = await client.getPlaybackInfo(itemId);
       await client.reportPlaying(playSessionId, itemId, mediaSourceId, positionMs);
     }
   }
 
   private async executeProgress(
-    serverType: string, serverConfigJson: string, itemId: string,
+    serverType: string, serverId: number, itemId: string,
     playSessionId: string, positionMs: number, durationMs: number
   ): Promise<void> {
+    const configJson = await this.readConfigJson(serverId);
+    if (configJson.length === 0) {
+      return;
+    }
     if (serverType === 'plex') {
-      await PlexClient.fromConfigJson(serverConfigJson).reportProgress(itemId, positionMs, durationMs);
+      await PlexClient.fromConfigJson(configJson).reportProgress(itemId, positionMs, durationMs);
     } else {
-      await JellyfinClient.fromConfigJson(serverConfigJson).reportProgress(playSessionId, itemId, positionMs, false);
+      await JellyfinClient.fromConfigJson(configJson).reportProgress(playSessionId, itemId, positionMs, false);
     }
   }
 
   private async executeStopped(
-    serverType: string, serverConfigJson: string, itemId: string,
+    serverType: string, serverId: number, itemId: string,
     playSessionId: string, positionMs: number, durationMs: number
   ): Promise<void> {
+    const configJson = await this.readConfigJson(serverId);
+    if (configJson.length === 0) {
+      console.warn('[ServerReportQueue] stopped 跳过：读取服务器配置为空, serverId=' + serverId);
+      return;
+    }
     if (serverType === 'plex') {
-      await PlexClient.fromConfigJson(serverConfigJson).reportStopped(itemId, positionMs, durationMs);
+      await PlexClient.fromConfigJson(configJson).reportStopped(itemId, positionMs, durationMs);
     } else {
-      await JellyfinClient.fromConfigJson(serverConfigJson).reportStopped(playSessionId, itemId, positionMs);
+      await JellyfinClient.fromConfigJson(configJson).reportStopped(playSessionId, itemId, positionMs);
     }
   }
 }
@@ -138,43 +168,46 @@ const globalQueue = new ServerReportQueue();
 /**
  * 上报影视服务器播放开始（会话建立）。按 playSessionId 串行化执行。
  * Jellyfin/Emby 需要 playSessionId 关联整个会话；Plex 通过 ratingKey 关联。
+ * 内部按 serverId 从数据库按需读取配置，避免凭据长期驻留调用方。
  */
 export function reportServerPlaybackStarted(
   serverType: string,
-  serverConfigJson: string,
+  serverId: number,
   itemId: string,
   playSessionId: string,
   positionMs: number,
   durationMs: number
 ): Promise<void> {
-  return globalQueue.enqueueStarted(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+  return globalQueue.enqueueStarted(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
 }
 
 /**
  * 周期性上报影视服务器播放进度（不结束会话）。按 playSessionId 串行化执行。
+ * 内部按 serverId 从数据库按需读取配置，避免凭据长期驻留调用方。
  */
 export function reportServerPlaybackProgress(
   serverType: string,
-  serverConfigJson: string,
+  serverId: number,
   itemId: string,
   playSessionId: string,
   positionMs: number,
   durationMs: number
 ): Promise<void> {
-  return globalQueue.enqueueProgress(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+  return globalQueue.enqueueProgress(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
 }
 
 /**
  * 上报影视服务器播放停止（退出播放器时调用），供服务器「继续观看」续播。
  * 按 playSessionId 串行化执行；stopped 后不再接受该会话的 progress。
+ * 内部按 serverId 从数据库按需读取配置，避免凭据长期驻留调用方。
  */
 export function reportServerPlaybackStopped(
   serverType: string,
-  serverConfigJson: string,
+  serverId: number,
   itemId: string,
   playSessionId: string,
   positionMs: number,
   durationMs: number
 ): Promise<void> {
-  return globalQueue.enqueueStopped(serverType, serverConfigJson, itemId, playSessionId, positionMs, durationMs);
+  return globalQueue.enqueueStopped(serverType, serverId, itemId, playSessionId, positionMs, durationMs);
 }
