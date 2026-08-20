@@ -1,4 +1,5 @@
 import { JsonHttpClient } from './JsonHttpClient';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
  * 顶层媒体库 / 视图描述（供媒体库切换后展示）
@@ -482,28 +483,46 @@ export class JellyfinClient {
       console.warn('[JellyfinClient] 接下来获取失败', (e as Error).message);
     }
 
-    // 最近添加（按媒体库）
-    const latest: VideoServerLatestSection[] = [];
+    // 最近添加（按媒体库，并发请求）
     const libraries = await this.getLibraries();
-    for (const lib of libraries) {
-      try {
-        const latestResp = await JsonHttpClient.get(
-          `${baseUrl}/Users/${userId}/Items/Latest?Limit=16&Fields=PrimaryImageAspectRatio%2CPath` +
-            `&ImageTypeLimit=1&EnableImageTypes=Primary%2CBackdrop%2CThumb&ParentId=${encodeURIComponent(lib.id)}`,
-          headers
-        );
-        if (latestResp.statusCode >= 200 && latestResp.statusCode < 300) {
-          const items = this.parseItems(latestResp.body);
-          if (items.length > 0) {
-            latest.push({ libraryName: lib.name, items });
-          }
-        }
-      } catch (e) {
-        console.warn(`[JellyfinClient] 媒体库 ${lib.name} 最近添加获取失败`, (e as Error).message);
+    const latestTasks: Promise<VideoServerLatestSection | null>[] = libraries.map((lib: VideoServerLibrary) =>
+      this.fetchLatestForLibrary(baseUrl, userId, headers, lib.id, lib.name)
+    );
+    const latestResults = await Promise.all(latestTasks);
+    const latest: VideoServerLatestSection[] = [];
+    for (const result of latestResults) {
+      if (result !== null) {
+        latest.push(result);
       }
     }
 
     return { continueWatching, nextUp, latest };
+  }
+
+  /**
+   * 获取单个媒体库的「最近添加」数据（供 Promise.all 并发调用）。
+   */
+  private async fetchLatestForLibrary(
+    baseUrl: string, userId: string, headers: Record<string, string>,
+    libraryId: string, libraryName: string
+  ): Promise<VideoServerLatestSection | null> {
+    try {
+      const latestResp = await JsonHttpClient.get(
+        `${baseUrl}/Users/${userId}/Items/Latest?Limit=16&Fields=PrimaryImageAspectRatio%2CPath` +
+          `&ImageTypeLimit=1&EnableImageTypes=Primary%2CBackdrop%2CThumb&ParentId=${encodeURIComponent(libraryId)}`,
+        headers
+      );
+      if (latestResp.statusCode >= 200 && latestResp.statusCode < 300) {
+        const items = this.parseItems(latestResp.body);
+        if (items.length > 0) {
+          const section: VideoServerLatestSection = { libraryName, items };
+          return section;
+        }
+      }
+    } catch (e) {
+      console.warn(`[JellyfinClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as BusinessError).message);
+    }
+    return null;
   }
 
   /**

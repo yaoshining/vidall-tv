@@ -257,27 +257,45 @@ export class PlexClient {
       console.warn('[PlexClient] onDeck 获取失败', (e as Error).message);
     }
 
-    // 最近添加（按媒体库）
-    const latest: VideoServerLatestSection[] = [];
+    // 最近添加（按媒体库，并发请求）
     const libraries = await this.getLibraries();
-    for (const lib of libraries) {
-      try {
-        const resp = await JsonHttpClient.get(
-          `${baseUrl}/library/sections/${encodeURIComponent(lib.id)}/recentlyAdded`,
-          headers
-        );
-        if (resp.statusCode >= 200 && resp.statusCode < 300) {
-          const items = this.parseMetadata(resp.body);
-          if (items.length > 0) {
-            latest.push({ libraryName: lib.name, items });
-          }
-        }
-      } catch (e) {
-        console.warn(`[PlexClient] 媒体库 ${lib.name} 最近添加获取失败`, (e as Error).message);
+    const latestTasks: Promise<VideoServerLatestSection | null>[] = libraries.map((lib: VideoServerLibrary) =>
+      this.fetchLatestForLibrary(baseUrl, headers, lib.id, lib.name)
+    );
+    const latestResults = await Promise.all(latestTasks);
+    const latest: VideoServerLatestSection[] = [];
+    for (const result of latestResults) {
+      if (result !== null) {
+        latest.push(result);
       }
     }
 
     return { continueWatching, nextUp: [], latest };
+  }
+
+  /**
+   * 获取单个媒体库的「最近添加」数据（供 Promise.all 并发调用）。
+   */
+  private async fetchLatestForLibrary(
+    baseUrl: string, headers: Record<string, string>,
+    libraryId: string, libraryName: string
+  ): Promise<VideoServerLatestSection | null> {
+    try {
+      const resp = await JsonHttpClient.get(
+        `${baseUrl}/library/sections/${encodeURIComponent(libraryId)}/recentlyAdded`,
+        headers
+      );
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        const items = this.parseMetadata(resp.body);
+        if (items.length > 0) {
+          const section: VideoServerLatestSection = { libraryName, items };
+          return section;
+        }
+      }
+    } catch (e) {
+      console.warn(`[PlexClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as BusinessError).message);
+    }
+    return null;
   }
 
   private parseMetadata(body: string): VideoServerMediaItem[] {
