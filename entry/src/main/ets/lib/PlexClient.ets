@@ -293,7 +293,7 @@ export class PlexClient {
         }
       }
     } catch (e) {
-      console.warn(`[PlexClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as Error).message);
+      console.warn(`[PlexClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as BusinessError).message);
     }
     return null;
   }

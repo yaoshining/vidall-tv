@@ -1,4 +1,5 @@
 import { JsonHttpClient } from './JsonHttpClient';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
  * 顶层媒体库 / 视图描述（供媒体库切换后展示）
@@ -519,7 +520,7 @@ export class JellyfinClient {
         }
       }
     } catch (e) {
-      console.warn(`[JellyfinClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as Error).message);
+      console.warn(`[JellyfinClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as BusinessError).message);
     }
     return null;
   }
