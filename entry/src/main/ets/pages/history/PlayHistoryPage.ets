@@ -347,6 +347,9 @@ export struct PlayHistoryPage {
       presetSubtitleTracks: presetResult.presetSubtitleTracks,
       mediaKey: fromStart ? undefined : item.mediaKey,
       startPositionMs: fromStart ? 0 : (item.positionMs > 0 ? item.positionMs : undefined),
+      // 透传封面字段，供系统媒体中心（AVSession）展示海报
+      posterLocalPath: item.posterLocalPath.length > 0 ? item.posterLocalPath : undefined,
+      posterUrl: item.posterUrl.length > 0 ? item.posterUrl : undefined,
     };
     this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
   }

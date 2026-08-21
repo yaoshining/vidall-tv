@@ -213,7 +213,10 @@ export struct ServerSeasonDetailPage {
         serverType: server.type,
         serverItemId: ep.id,
         serverId: server.id,
-        serverPlaySessionId: playSessionId
+        serverPlaySessionId: playSessionId,
+        // 透传封面字段，供系统媒体中心（AVSession）展示海报
+        posterUrl: this.seasonPosterUrl.length > 0 ? this.seasonPosterUrl : undefined,
+        backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, ep.id, playSessionId, ep.positionMs, ep.durationMs)
         .catch(() => {})
@@ -343,7 +346,10 @@ export struct ServerSeasonDetailPage {
         serverType: server.type,
         serverItemId: item.id,
         serverId: server.id,
-        serverPlaySessionId: playSessionId
+        serverPlaySessionId: playSessionId,
+        // 透传封面字段，供系统媒体中心（AVSession）展示海报
+        posterUrl: this.seasonPosterUrl.length > 0 ? this.seasonPosterUrl : undefined,
+        backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch(() => {})

@@ -60,6 +60,20 @@ export function buildContinueWatchPlayerParam(input: ContinueWatchPlayerParamInp
   if (input.fileSourceId !== undefined) {
     param.fileSourceId = input.fileSourceId;
   }
+  // 透传封面字段，供系统媒体中心（AVSession）展示海报
+  const item = input.item;
+  if (item.backdropLocalPath !== undefined && item.backdropLocalPath.length > 0) {
+    param.backdropLocalPath = item.backdropLocalPath;
+  }
+  if (item.posterLocalPath !== undefined && item.posterLocalPath.length > 0) {
+    param.posterLocalPath = item.posterLocalPath;
+  }
+  if (item.backdropUrl !== undefined && item.backdropUrl.length > 0) {
+    param.backdropUrl = item.backdropUrl;
+  }
+  if (item.posterUrl !== undefined && item.posterUrl.length > 0) {
+    param.posterUrl = item.posterUrl;
+  }
   return param;
 }
 

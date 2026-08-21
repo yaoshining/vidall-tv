@@ -744,7 +744,12 @@ export struct SeasonDetailPage {
         tmdbId: this.seriesEntity?.providerId,
         imdbId: extractImdbIdFromRawJson(this.seriesEntity?.rawJson),
         fileSourceType,
-        fileSourceId
+        fileSourceId,
+        // 透传封面字段，供系统媒体中心（AVSession）展示海报
+        posterLocalPath: this.seriesEntity?.posterLocalPath ?? undefined,
+        posterUrl: this.seriesEntity?.posterUrl ?? undefined,
+        backdropLocalPath: this.seriesEntity?.backdropLocalPath ?? undefined,
+        backdropUrl: this.seriesEntity?.backdropUrl ?? undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
         if (popInfo.result !== null && popInfo.result !== undefined) {

@@ -391,7 +391,12 @@ export struct MovieDetailPage {
         tmdbId: this.movieEntity?.providerId ?? item.providerId,
         imdbId: extractImdbIdFromRawJson(this.movieEntity?.rawJson),
         fileSourceType,
-        fileSourceId
+        fileSourceId,
+        // 透传封面字段，供系统媒体中心（AVSession）展示海报
+        posterLocalPath: this.item?.posterLocalPath ?? undefined,
+        posterUrl: this.movieEntity?.posterUrl ?? this.item?.posterUrl ?? undefined,
+        backdropLocalPath: this.movieEntity?.backdropLocalPath ?? this.item?.backdropLocalPath ?? undefined,
+        backdropUrl: this.movieEntity?.backdropUrl ?? this.item?.backdropUrl ?? undefined
       };
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
