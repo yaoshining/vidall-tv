@@ -7,7 +7,10 @@ import {
   classifyMediaType,
   createFileNameSemanticInfo,
   createMediaTypeClassificationResult,
-  extractSeriesHintFromFilePath
+  extractSeriesHintFromFilePath,
+  extractSeasonNumberFromDirectoryName,
+  stripSeasonSuffixFromDirectoryName,
+  isSeasonDirectorySegment
 } from '../main/ets/lib/MediaTypeClassifier';
 import { parseFileName } from '../main/ets/lib/ScrapeClient';
 import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerHelpers';
@@ -173,6 +176,65 @@ export default function mediaTypeClassifierContractTest() {
       expect(explicitFalseClassification.reason).assertEqual('insufficient-evidence');
       expect(omittedClassification.mediaType).assertEqual('unknown');
       expect(omittedClassification.reason).assertEqual('insufficient-evidence');
+    });
+
+    // ─── #254 中文季号后缀目录名 ───
+
+    it('should recognize Chinese season suffix directory as season directory', 0, () => {
+      expect(isSeasonDirectorySegment('御赐小仵作第二季')).assertTrue();
+      expect(isSeasonDirectorySegment('庆余年第二部')).assertTrue();
+      expect(isSeasonDirectorySegment('我的剧第3季')).assertTrue();
+      expect(isSeasonDirectorySegment('御赐小仵作')).assertFalse();
+    });
+
+    it('should extract season number from Chinese season suffix directory names', 0, () => {
+      expect(extractSeasonNumberFromDirectoryName('御赐小仵作第二季')).assertEqual(2);
+      expect(extractSeasonNumberFromDirectoryName('庆余年第二部')).assertEqual(2);
+      expect(extractSeasonNumberFromDirectoryName('我的剧第3季')).assertEqual(3);
+      expect(extractSeasonNumberFromDirectoryName('我的剧第三季')).assertEqual(3);
+      expect(extractSeasonNumberFromDirectoryName('第二季')).assertEqual(2);
+      expect(extractSeasonNumberFromDirectoryName('Season 2')).assertEqual(2);
+      expect(extractSeasonNumberFromDirectoryName('S02')).assertEqual(2);
+      expect(extractSeasonNumberFromDirectoryName('御赐小仵作')).assertEqual(undefined);
+    });
+
+    it('should strip Chinese season suffix to extract series title from directory name', 0, () => {
+      expect(stripSeasonSuffixFromDirectoryName('御赐小仵作第二季')).assertEqual('御赐小仵作');
+      expect(stripSeasonSuffixFromDirectoryName('庆余年第二部')).assertEqual('庆余年');
+      expect(stripSeasonSuffixFromDirectoryName('我的剧第3季')).assertEqual('我的剧');
+      expect(stripSeasonSuffixFromDirectoryName('第二季')).assertEqual(undefined);
+      expect(stripSeasonSuffixFromDirectoryName('御赐小仵作')).assertEqual(undefined);
+    });
+
+    it('should extract correct series hint from Chinese season suffix directory path', 0, () => {
+      // #254: "御赐小仵作第二季" 应提取出 "御赐小仵作" 而非整个目录名
+      const hint = extractSeriesHintFromFilePath('/Videos/TV Series/御赐小仵作第二季/01.mp4');
+      expect(hint).assertEqual('御赐小仵作');
+    });
+
+    it('should still extract series hint correctly for standard Season N directories', 0, () => {
+      const hint = extractSeriesHintFromFilePath('/电视剧/狂飙/Season 1/19 4K.mp4');
+      expect(hint).assertEqual('狂飙');
+    });
+
+    // ─── #254 中文大季号回归（CodeRabbit 评审） ───
+
+    it('should parse Chinese season numbers beyond 29', 0, () => {
+      expect(extractSeasonNumberFromDirectoryName('长剧第三十季')).assertEqual(30);
+      expect(extractSeasonNumberFromDirectoryName('长剧第三十一季')).assertEqual(31);
+      expect(extractSeasonNumberFromDirectoryName('长剧第五十季')).assertEqual(50);
+      expect(extractSeasonNumberFromDirectoryName('长剧第九十九季')).assertEqual(99);
+    });
+
+    it('should parse Chinese season numbers at hundred level', 0, () => {
+      expect(extractSeasonNumberFromDirectoryName('超级剧第一百季')).assertEqual(100);
+      expect(extractSeasonNumberFromDirectoryName('超级剧第一百零三季')).assertEqual(103);
+      expect(extractSeasonNumberFromDirectoryName('超级剧第一百二十季')).assertEqual(120);
+    });
+
+    it('should strip season suffix for large Chinese season numbers', 0, () => {
+      expect(stripSeasonSuffixFromDirectoryName('长剧第三十季')).assertEqual('长剧');
+      expect(stripSeasonSuffixFromDirectoryName('超级剧第一百季')).assertEqual('超级剧');
     });
   });
 }

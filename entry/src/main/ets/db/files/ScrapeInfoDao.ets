@@ -142,6 +142,22 @@ export class ScrapeInfoDao {
     }
   }
 
+  /** 删除指定 tv_series_id 下所有 scrape_info，再级联清理孤立媒体数据 */
+  async clearScrapeInfoByTvSeriesId(tvSeriesId: number): Promise<void> {
+    if (!this.core.isReady()) { return; }
+    const store = this.core.getStore();
+    try {
+      const pred = new relationalStore.RdbPredicates(TABLE_SCRAPE_INFO);
+      pred.equalTo('tv_series_id', tvSeriesId);
+      await store.delete(pred);
+      await this.cleanupOrphanScrapeMedia();
+      console.info(`[DB][clearScrapeInfoByTvSeriesId] tvSeriesId=${tvSeriesId} 已清理`);
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `clearScrapeInfoByTvSeriesId 失败: ${err.message}`);
+    }
+  }
+
   async clearScrapeInfoForVideo(videoId: number): Promise<void> {
     const store = this.core.getStore();
     try {

@@ -119,6 +119,8 @@ export struct SeriesDetailPage {
   /** ContinueWatchingCard 主按钮交互状态 */
   @Local focusedContinueActionKey: string = ''
   @Local hoveredContinueActionKey: string = ''
+  /** 删除系列确认弹窗 */
+  @Local showDeleteDialog: boolean = false
 
   private progressRefreshCallback: () => void = () => {};
 
@@ -768,6 +770,33 @@ export struct SeriesDetailPage {
     });
   }
 
+  /** 弹窗确认删除整个系列的所有数据（刮削信息、播放进度、历史记录） */
+  private confirmDeleteSeries(): void {
+    const tvSeriesId = this.seriesEntity?.id;
+    const providerId = this.seriesEntity?.providerId;
+    if (tvSeriesId === undefined || providerId === undefined) { return; }
+    this.getUIContext().showAlertDialog({
+      title: '删除系列数据',
+      message: `将删除「${this.getTitle()}」的所有刮削信息、播放进度和历史记录，删除后可重新刮削。此操作不可撤销。`,
+      autoCancel: true,
+      primaryButton: {
+        value: '删除',
+        fontColor: '#FF5252',
+        action: () => {
+          FileSourceDatabase.getInstance().deleteSeriesAllData(tvSeriesId, providerId)
+            .then(() => {
+              this.pageStack.pop();
+            })
+            .catch(() => {});
+        }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
+  }
+
   /** 删除后重新从 DB 加载集列表（不重新刮削，仅刷新本地数据） */
   private reloadEpisodes(): void {
     const seriesId = this.seriesEntity?.id;
@@ -1246,6 +1275,19 @@ export struct SeriesDetailPage {
               }
             })
             this.SimilarSection()
+            // 删除系列按钮（临时，用于测试重新刮削）
+            Row() {
+              Button('删除系列数据')
+                .fontSize(14)
+                .fontColor('#FF5252')
+                .backgroundColor(Color.Transparent)
+                .border({ width: 1, color: '#FF5252', radius: 8 })
+                .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+                .onClick(() => { this.confirmDeleteSeries(); })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
+            .margin({ top: 24, bottom: 16 })
             Column().height(80)
           }
           .width('100%')
