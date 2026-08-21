@@ -1,0 +1,2029 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">51x</span>
+<span class="cline-any cline-yes">51x</span>
+<span class="cline-any cline-yes">51x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import relationalStore from &#39;@ohos.data.relationalStore&#39;; 
+import { Context } from &#39;@ohos.abilityAccessCtrl&#39;; 
+import { toPinyinFull, toPinyinInitials } from &#39;../../utils/PinyinUtil&#39;; 
+import { BusinessError, emitter } from &quot;@kit.BasicServicesKit&quot;; 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { 
+  DB_VERSION, DEFAULT_DB_NAME, DATABASE_READY, 
+  TABLE_FILE_SOURCES, TABLE_VIDEO_SERVERS, TABLE_DIRECTORIES, TABLE_VIDEOS, TABLE_SCRAPE_INFO, 
+  TABLE_MOVIES, TABLE_TV_SERIES, TABLE_TV_SEASONS, TABLE_TV_EPISODES, 
+  TABLE_PLAY_PROGRESS, TABLE_MEDIA_PROGRESS, TABLE_SEARCH_HISTORY 
+} from &#39;./DbConstants&#39;; 
+ 
+// ───────────────────────────────────────────── 
+// 用于从 raw_json 回填 origin_country_json 的最小解析接口 
+// ───────────────────────────────────────────── 
+interface RawMovieJson { 
+  production_countries?: RawProductionCountry[]; 
+} 
+interface RawProductionCountry { 
+  iso_3166_1: string; 
+} 
+interface RawTvJson { 
+  origin_country?: string[]; 
+} 
+ 
+/** 
+ * 文件源数据库连接核心：持有 rdbStore，负责初始化、schema 创建与版本迁移、 
+ * 防御性补列、历史数据回填，以及供各 DAO 复用的低层 ResultSet 辅助方法。 
+ */ 
+export class FileSourceDbCore { 
+  private static databaseNameOverride: string | null = null; 
+ 
+  private rdbStore: relationalStore.RdbStore | null = null; 
+  private context: Context | null = null; 
+  // 防止并发初始化：保存正在进行的 init Promise，供后续调用方直接等待 
+  private initPromise: Promise&lt;void&gt; | null = null; 
+ 
+  constructor(context?: Context) { 
+    if (context) { 
+      this.context = context; 
+    } 
+  } 
+ 
+  /** 测试隔离：设置数据库名覆盖值，随门面单例重置一起生效 */ 
+  static setDatabaseNameOverride(databaseName: string | null): void { 
+    FileSourceDbCore.databaseNameOverride = databaseName; 
+  } 
+ 
+  static getDatabaseName(): string { 
+    return FileSourceDbCore.databaseNameOverride ?? DEFAULT_DB_NAME; 
+  } 
+ 
+  setContext(context: Context): void { 
+    this.context = context; 
+  } 
+ 
+  /** 获取底层 RdbStore，未初始化时抛错（与原 FileSourceDatabase 行为一致） */ 
+  getStore(): relationalStore.RdbStore { 
+    if (this.rdbStore === null) { 
+      throw new Error(&#39;Database not initialized&#39;); 
+    } 
+    return this.rdbStore; 
+  } 
+ 
+  /** 数据库是否已就绪（供门面 onReady 判断） */ 
+  isReady(): boolean { 
+    return this.rdbStore !== null; 
+  } 
+ 
+  /** 
+   * 初始化数据库 
+   */ 
+  async init(): Promise&lt;void&gt; { 
+    if (this.rdbStore !== null) { 
+      return; // 已经初始化 
+    } 
+ 
+    // 防止并发调用：若已有正在进行的 init，直接等待其完成 
+    if (this.initPromise !== null) { 
+      return this.initPromise; 
+    } 
+ 
+    if (this.context === null) { 
+      throw new Error(&#39;Context is not set&#39;); 
+    } 
+ 
+    this.initPromise = this.doInit(this.context); 
+    try { 
+      await this.initPromise; 
+    } finally { 
+      this.initPromise = null; 
+    } 
+  } 
+ 
+  private async doInit(ctx: Context): Promise&lt;void&gt; { 
+    try { 
+      const config: relationalStore.StoreConfig = { 
+        name: FileSourceDbCore.getDatabaseName(), 
+        securityLevel: relationalStore.SecurityLevel.S1 
+      }; 
+ 
+      this.rdbStore = await relationalStore.getRdbStore(ctx, config); 
+ 
+      // ── 手动版本管理（PRAGMA user_version）── 
+      // 读取当前版本 
+      const verRs = await this.rdbStore.querySql(&#39;PRAGMA user_version&#39;); 
+      let currentVersion = 0; 
+      if (verRs.goToFirstRow()) { 
+        currentVersion = verRs.getLong(verRs.getColumnIndex(&#39;user_version&#39;)); 
+      } 
+      verRs.close(); 
+      console.info(`FileSourceDatabase: 当前 user_version=${currentVersion}, 目标 version=${DB_VERSION}`); 
+ 
+      if (currentVersion === 0) { 
+        // 全新安装 
+        await this.onCreate(this.rdbStore); 
+      } else if (currentVersion &lt; DB_VERSION) { 
+        // 需要升级 
+        await this.onUpgrade(this.rdbStore, currentVersion, DB_VERSION); 
+      } else { 
+        // 版本一致，但仍做防御性 schema 补全（应对手动降级/异常情况） 
+        await this.ensureScrapeInfoSchema(this.rdbStore); 
+      } 
+ 
+      // 版本不一致时（含旧版和全新安装）也做一次 schema 补全 
+      if (currentVersion !== DB_VERSION) { 
+        await this.ensureScrapeInfoSchema(this.rdbStore); 
+        await this.rdbStore.executeSql(`PRAGMA user_version = ${DB_VERSION}`); 
+        console.info(`FileSourceDatabase: user_version 已更新为 ${DB_VERSION}`); 
+      } 
+ 
+      // 防御性 schema 兼容：补齐 videos 扫描更新标记列 
+      await this.ensureVideosSchema(this.rdbStore); 
+      // 防御性 schema 兼容：补建媒体核心表，覆盖 user_version 已对齐但历史库缺表的场景 
+      await this.createMediaTablesV3(this.rdbStore); 
+      // 防御性 schema 兼容：补建 video_servers 表，覆盖 user_version 已对齐但历史库缺表的场景 
+      await this.createVideoServersTable(this.rdbStore); 
+ 
+      // 防御性 schema 兼容：补齐 movies/tv_series origin_country_json 列（v7 新增，幂等） 
+      await this.ensureOriginCountrySchema(this.rdbStore); 
+      // 防御性 schema 兼容：补齐 tv_series 历史缺失列，避免旧库在读取详情时因列漂移失败 
+      await this.ensureTvSeriesSchema(this.rdbStore); 
+ 
+      // 防御性修复：确保 provider+provider_id 唯一索引已被移除（v8 起允许多文件源对应同一 TMDB 内容） 
+      await this.dropScrapeInfoProviderPidIndex(this.rdbStore); 
+ 
+      // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用） 
+      await this.backfillOriginCountryFromRawJson(); 
+      // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件） 
+      this.backfillPinyinFields(this.rdbStore!).catch(() =&gt; {}); 
+      emitter.emit(DATABASE_READY); 
+      console.info(&#39;FileSourceDatabase: Database initialized successfully&#39;); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to initialize database&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to initialize database: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  private async getLastInsertedRowId(): Promise&lt;number&gt; { 
+    return this.queryFirstLong(&#39;SELECT last_insert_rowid()&#39;, []); 
+  } 
+ 
+  private async querySingleId(sql: string, args: relationalStore.ValueType[]): Promise&lt;number&gt; { 
+    return this.queryFirstLong(sql, args); 
+  } 
+ 
+  private async queryFirstLong(sql: string, args: relationalStore.ValueType[]): Promise&lt;number&gt; { 
+    if (this.rdbStore === null) { return -1; } 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await this.rdbStore.querySql(sql, args); 
+      if (rs.goToFirstRow()) { 
+        return rs.getLong(0); 
+      } 
+      return -1; 
+    } catch (e) { 
+      console.error(`[DB][queryFirstLong] sql=${sql} args=${JSON.stringify(args)} error=${JSON.stringify(e)}`); 
+      return -1; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  private getNullableString(rs: relationalStore.ResultSet, index: number): string | undefined { 
+    try { 
+      return rs.isColumnNull(index) ? undefined : rs.getString(index); 
+    } catch (_e) { 
+      return undefined; 
+    } 
+  } 
+ 
+  private getNullableLong(rs: relationalStore.ResultSet, index: number): number | undefined { 
+    try { 
+      return rs.isColumnNull(index) ? undefined : rs.getLong(index); 
+    } catch (_e) { 
+      return undefined; 
+    } 
+  } 
+ 
+  private getNullableDouble(rs: relationalStore.ResultSet, index: number): number | undefined { 
+    try { 
+      return rs.isColumnNull(index) ? undefined : rs.getDouble(index); 
+    } catch (_e) { 
+      return undefined; 
+    } 
+  } 
+ 
+  /** 查询第一列 long 值的便捷方法（供 DAO 复用） */ 
+  async queryFirstLongValue(sql: string, args: relationalStore.ValueType[]): Promise&lt;number&gt; { 
+    return this.queryFirstLong(sql, args); 
+  } 
+ 
+  /** 查询单条 id 的便捷方法（供 DAO 复用） */ 
+  async querySingleIdValue(sql: string, args: relationalStore.ValueType[]): Promise&lt;number&gt; { 
+    return this.querySingleId(sql, args); 
+  } 
+ 
+  /** 获取最近插入的行 id（供 DAO 复用） */ 
+  async lastInsertedRowId(): Promise&lt;number&gt; { 
+    return this.getLastInsertedRowId(); 
+  } 
+ 
+  /** 从 ResultSet 安全读取可空字符串（供 DAO 复用） */ 
+  nullableString(rs: relationalStore.ResultSet, index: number): string | undefined { 
+    return this.getNullableString(rs, index); 
+  } 
+ 
+  /** 从 ResultSet 安全读取可空长整数（供 DAO 复用） */ 
+  nullableLong(rs: relationalStore.ResultSet, index: number): number | undefined { 
+    return this.getNullableLong(rs, index); 
+  } 
+ 
+  /** 从 ResultSet 安全读取可空浮点数（供 DAO 复用） */ 
+  nullableDouble(rs: relationalStore.ResultSet, index: number): number | undefined { 
+    return this.getNullableDouble(rs, index); 
+  } 
+ 
+  /** 
+   * 创建全部表（新安装） 
+   */ 
+  private async onCreate(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+      await rdbStore.executeSql(` 
+        CREATE TABLE IF NOT EXISTS ${TABLE_FILE_SOURCES} ( 
+          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          name TEXT NOT NULL, 
+          type TEXT NOT NULL, 
+          config_json TEXT NOT NULL, 
+          created_at INTEGER NOT NULL 
+        ) 
+      `); 
+      await rdbStore.executeSql(` 
+        CREATE TABLE IF NOT EXISTS ${TABLE_DIRECTORIES} ( 
+          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          source_id INTEGER NOT NULL, 
+          directory_path TEXT NOT NULL, 
+          custom_name TEXT, 
+          dir_status TEXT NOT NULL DEFAULT &#39;active&#39;, 
+          FOREIGN KEY(source_id) REFERENCES ${TABLE_FILE_SOURCES}(id) ON DELETE CASCADE 
+        ) 
+      `); 
+      await this.createMediaTablesV3(rdbStore); 
+      // search_history：持久化搜索关键词，keyword 唯一 
+      await rdbStore.executeSql(` 
+        CREATE TABLE IF NOT EXISTS ${TABLE_SEARCH_HISTORY} ( 
+          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          keyword TEXT NOT NULL, 
+          searched_at INTEGER NOT NULL, 
+          UNIQUE(keyword) 
+        ) 
+      `); 
+      // video_servers：影视服务器配置（Jellyfin / Emby / Plex） 
+      await this.createVideoServersTable(rdbStore); 
+      console.info(&#39;FileSourceDatabase: Tables created (v3)&#39;); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to create tables&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to create tables: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 创建 v3 全部媒体表 */ 
+  private async createMediaTablesV3(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+    // videos 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_VIDEOS} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        source_id INTEGER NOT NULL, 
+        directory_path TEXT NOT NULL, 
+        file_path TEXT NOT NULL UNIQUE, 
+        file_name TEXT NOT NULL, 
+        file_size INTEGER, 
+        last_modified TEXT, 
+        content_type TEXT, 
+        duration_ms INTEGER, 
+        width INTEGER, 
+        height INTEGER, 
+        frame_rate REAL, 
+        video_codec TEXT, 
+        audio_tracks_json TEXT, 
+        subtitle_tracks_json TEXT, 
+        updated_in_last_scan INTEGER NOT NULL DEFAULT 0, 
+        scanned_at INTEGER NOT NULL, 
+        FOREIGN KEY(source_id) REFERENCES ${TABLE_FILE_SOURCES}(id) 
+      ) 
+    `); 
+    // movies 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_MOVIES} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        provider TEXT NOT NULL, 
+        provider_id TEXT NOT NULL, 
+        title TEXT NOT NULL, 
+        original_title TEXT, 
+        overview TEXT, 
+        release_date TEXT, 
+        rating REAL, 
+        vote_count INTEGER, 
+        poster_path TEXT, 
+        backdrop_path TEXT, 
+        poster_url TEXT, 
+        backdrop_url TEXT, 
+        poster_local_path TEXT, 
+        backdrop_local_path TEXT, 
+        genres_json TEXT, 
+        cast_json TEXT, 
+        directors_json TEXT, 
+        runtime INTEGER, 
+        original_language TEXT, 
+        origin_country_json TEXT, 
+        raw_json TEXT, 
+        scraped_at INTEGER NOT NULL, 
+        title_pinyin TEXT, 
+        title_initials TEXT, 
+        UNIQUE(provider, provider_id) 
+      ) 
+    `); 
+    // tv_series 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_TV_SERIES} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        provider TEXT NOT NULL, 
+        provider_id TEXT NOT NULL, 
+        title TEXT NOT NULL, 
+        original_title TEXT, 
+        overview TEXT, 
+        first_air_date TEXT, 
+        rating REAL, 
+        vote_count INTEGER, 
+        poster_path TEXT, 
+        backdrop_path TEXT, 
+        poster_url TEXT, 
+        backdrop_url TEXT, 
+        poster_local_path TEXT, 
+        backdrop_local_path TEXT, 
+        genres_json TEXT, 
+        cast_json TEXT, 
+        number_of_seasons INTEGER, 
+        original_language TEXT, 
+        origin_country_json TEXT, 
+        raw_json TEXT, 
+        scraped_at INTEGER NOT NULL, 
+        title_pinyin TEXT, 
+        title_initials TEXT, 
+        UNIQUE(provider, provider_id) 
+      ) 
+    `); 
+    // tv_seasons 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_TV_SEASONS} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        series_id INTEGER NOT NULL, 
+        provider TEXT NOT NULL, 
+        provider_id TEXT NOT NULL, 
+        season_number INTEGER NOT NULL, 
+        title TEXT, 
+        overview TEXT, 
+        air_date TEXT, 
+        episode_count INTEGER, 
+        poster_path TEXT, 
+        poster_url TEXT, 
+        poster_local_path TEXT, 
+        raw_json TEXT, 
+        scraped_at INTEGER NOT NULL, 
+        FOREIGN KEY(series_id) REFERENCES ${TABLE_TV_SERIES}(id) ON DELETE CASCADE, 
+        UNIQUE(series_id, season_number) 
+      ) 
+    `); 
+    // tv_episodes 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_TV_EPISODES} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        series_id INTEGER NOT NULL, 
+        season_id INTEGER, 
+        provider TEXT NOT NULL, 
+        provider_id TEXT NOT NULL, 
+        season_number INTEGER NOT NULL, 
+        episode_number INTEGER NOT NULL, 
+        title TEXT, 
+        overview TEXT, 
+        air_date TEXT, 
+        runtime INTEGER, 
+        rating REAL, 
+        still_path TEXT, 
+        still_url TEXT, 
+        raw_json TEXT, 
+        scraped_at INTEGER NOT NULL, 
+        FOREIGN KEY(series_id) REFERENCES ${TABLE_TV_SERIES}(id) ON DELETE CASCADE, 
+        FOREIGN KEY(season_id) REFERENCES ${TABLE_TV_SEASONS}(id), 
+        UNIQUE(series_id, season_number, episode_number) 
+      ) 
+    `); 
+    // scrape_info（桥表） 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_SCRAPE_INFO} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        video_id INTEGER NOT NULL UNIQUE, 
+        provider TEXT NOT NULL, 
+        provider_id TEXT NOT NULL, 
+        media_type TEXT NOT NULL, 
+        title TEXT NOT NULL, 
+        original_title TEXT, 
+        movie_id INTEGER, 
+        tv_series_id INTEGER, 
+        episode_id INTEGER, 
+        season_number INTEGER, 
+        episode_number INTEGER, 
+        scraped_at INTEGER NOT NULL, 
+        FOREIGN KEY(video_id) REFERENCES ${TABLE_VIDEOS}(id) ON DELETE CASCADE, 
+        FOREIGN KEY(movie_id) REFERENCES ${TABLE_MOVIES}(id), 
+        FOREIGN KEY(tv_series_id) REFERENCES ${TABLE_TV_SERIES}(id), 
+        FOREIGN KEY(episode_id) REFERENCES ${TABLE_TV_EPISODES}(id) 
+      ) 
+    `); 
+    // play_progress（含媒体库上下文关联的播放进度表） 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_PLAY_PROGRESS} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        video_id INTEGER NOT NULL, 
+        series_provider_id TEXT NOT NULL DEFAULT &#39;&#39;, 
+        season_number INTEGER NOT NULL DEFAULT 0, 
+        episode_number INTEGER NOT NULL DEFAULT 0, 
+        position_ms INTEGER NOT NULL DEFAULT 0, 
+        duration_ms INTEGER NOT NULL DEFAULT 0, 
+        updated_at INTEGER NOT NULL, 
+        FOREIGN KEY(video_id) REFERENCES ${TABLE_VIDEOS}(id) ON DELETE CASCADE, 
+        UNIQUE(video_id) 
+      ) 
+    `); 
+    console.info(&#39;FileSourceDatabase: v3 media tables created&#39;); 
+ 
+    // media_progress（媒体级播放进度，以 media_key 为主键） 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_MEDIA_PROGRESS} ( 
+        media_key TEXT PRIMARY KEY, 
+        position_ms INTEGER NOT NULL DEFAULT 0, 
+        duration_ms INTEGER NOT NULL DEFAULT 0, 
+        last_played_at INTEGER NOT NULL, 
+        episode_number INTEGER NOT NULL DEFAULT 0, 
+        season_number INTEGER NOT NULL DEFAULT 0, 
+        is_watched INTEGER NOT NULL DEFAULT 0 
+      ) 
+    `); 
+    // 防御性补列：表已存在时补齐 is_watched（幂等，列已存在时忽略） 
+    try { 
+      await rdbStore.executeSql( 
+        `ALTER TABLE ${TABLE_MEDIA_PROGRESS} ADD COLUMN is_watched INTEGER NOT NULL DEFAULT 0` 
+      ); 
+    } catch (e) { 
+      // 列已存在时正常忽略 
+    } 
+    console.info(&#39;FileSourceDatabase: media_progress table created&#39;); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `createMediaTablesV3 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 
+   * 创建 video_servers 表（IF NOT EXISTS，供 onCreate / 迁移 / 防御性补表复用）。 
+   */ 
+  private async createVideoServersTable(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    await rdbStore.executeSql(` 
+      CREATE TABLE IF NOT EXISTS ${TABLE_VIDEO_SERVERS} ( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        name TEXT NOT NULL, 
+        type TEXT NOT NULL, 
+        config_json TEXT NOT NULL, 
+        created_at INTEGER NOT NULL 
+      ) 
+    `); 
+  } 
+ 
+  /** 
+   * 版本升级入口：按 currentVersion 逐步执行各版本迁移步骤， 
+   * 确保从任意旧版本升级都能经过所有中间版本的 DDL 变更。 
+   */ 
+  private async onUpgrade(rdbStore: relationalStore.RdbStore, oldVersion: number, newVersion: number): Promise&lt;void&gt; { 
+    console.info(`FileSourceDatabase: Upgrading ${oldVersion} → ${newVersion}`); 
+    // 用 currentVersion 追踪迁移进度，避免 oldVersion 固定导致跳步 
+    let currentVersion = oldVersion; 
+    try { 
+      if (currentVersion &lt; 4 &amp;&amp; currentVersion &lt; newVersion) { 
+        const fromVersion = currentVersion; 
+        await this.migrateToV4(rdbStore); 
+        currentVersion = 4; 
+        console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`); 
+      } 
+      if (currentVersion &lt; 5 &amp;&amp; currentVersion &lt; newVersion) { 
+        const fromVersion = currentVersion; 
+        await this.migrateV4ToV5(rdbStore); 
+        currentVersion = 5; 
+        console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`); 
+      } 
+      if (currentVersion &lt; 6 &amp;&amp; currentVersion &lt; newVersion) { 
+        const fromVersion = currentVersion; 
+        await this.migrateV5ToV6(rdbStore); 
+        currentVersion = 6; 
+        console.info(`[DB] 迁移: v${fromVersion} → v${currentVersion} 完成`); 
+      } 
+      if (currentVersion &lt; 7 &amp;&amp; currentVersion &lt; newVersion) { 
+        await this.ensureOriginCountrySchema(rdbStore); 
+        currentVersion = 7; 
+        console.info(&#39;[DB] 已迁移到 v7：movies/tv_series 新增 origin_country_json&#39;); 
+      } 
+      if (currentVersion &lt; 8) { 
+        // 移除 scrape_info.(provider,provider_id) 唯一索引：多个文件源可以对应同一 TMDB 条目 
+        await rdbStore.executeSql(`DROP INDEX IF EXISTS idx_scrape_info_provider_pid_uq`); 
+        // 清理孤立 scrape_info（video_id 不在 videos 表中，由历史 INSERT OR REPLACE 产生） 
+        await rdbStore.executeSql( 
+          `DELETE FROM ${TABLE_SCRAPE_INFO} WHERE video_id NOT IN (SELECT id FROM ${TABLE_VIDEOS})` 
+        ); 
+        currentVersion = 8; 
+        console.info(&#39;[DB] 已迁移到 v8：移除 scrape_info 唯一索引，清理孤立刮削数据&#39;); 
+      } 
+      if (currentVersion &lt; 9) { 
+        // v9：file_source_directories 新增 dir_status 列，追踪目录可达性 
+        try { 
+          await rdbStore.executeSql( 
+            `ALTER TABLE ${TABLE_DIRECTORIES} ADD COLUMN dir_status TEXT NOT NULL DEFAULT &#39;active&#39;` 
+          ); 
+        } catch (e) { 
+          // 列已存在时忽略（幂等） 
+          console.warn(&#39;[DB] v9 ALTER TABLE dir_status: 列可能已存在，已忽略&#39;, JSON.stringify(e)); 
+        } 
+        currentVersion = 9; 
+        console.info(&#39;[DB] 已迁移到 v9：file_source_directories 新增 dir_status 列&#39;); 
+      } 
+      if (currentVersion &lt; 10) { 
+        // v10：media_progress 新增 is_watched 列，用于完播标记，避免删除进度记录 
+        try { 
+          await rdbStore.executeSql( 
+            `ALTER TABLE ${TABLE_MEDIA_PROGRESS} ADD COLUMN is_watched INTEGER NOT NULL DEFAULT 0` 
+          ); 
+        } catch (e) { 
+          // 列已存在时忽略（幂等） 
+          console.warn(&#39;[DB] v10 ALTER TABLE is_watched: 列可能已存在，已忽略&#39;, JSON.stringify(e)); 
+        } 
+        // 回填历史完播数据：position_ms &gt;= duration_ms * 0.95 或剩余 &lt; 60 秒视为已看完 
+        await rdbStore.executeSql( 
+          `UPDATE ${TABLE_MEDIA_PROGRESS}` + 
+          ` SET is_watched = 1` + 
+          ` WHERE is_watched = 0 AND duration_ms &gt; 0 AND (` + 
+          `   (duration_ms - position_ms) &lt; 60000 OR` + 
+          `   CAST(position_ms AS REAL) &gt;= CAST(duration_ms AS REAL) * 0.95` + 
+          ` )` 
+        ); 
+        currentVersion = 10; 
+        console.info(&#39;[DB] 已迁移到 v10：media_progress 新增 is_watched 完播标记列，并回填历史完播数据&#39;); 
+      } 
+      if (currentVersion &lt; 11) { 
+        // v11：movies / tv_series 新增 title_pinyin / title_initials 拼音字段 
+        const tables: string[] = [&#39;movies&#39;, &#39;tv_series&#39;]; 
+        for (const tbl of tables) { 
+          try { 
+            await rdbStore.executeSql(`ALTER TABLE ${tbl} ADD COLUMN title_pinyin TEXT`); 
+          } catch (e) { 
+            console.warn(`[DB] v11 ALTER ${tbl} title_pinyin: 列已存在，已忽略`); 
+          } 
+          try { 
+            await rdbStore.executeSql(`ALTER TABLE ${tbl} ADD COLUMN title_initials TEXT`); 
+          } catch (e) { 
+            console.warn(`[DB] v11 ALTER ${tbl} title_initials: 列已存在，已忽略`); 
+          } 
+        } 
+        currentVersion = 11; 
+        console.info(&#39;[DB] 已迁移到 v11：新增拼音字段（回填将在后台异步执行）&#39;); 
+      } 
+      if (currentVersion &lt; 12) { 
+        // v12：新增 video_servers 表，存储影视服务器配置 
+        await this.createVideoServersTable(rdbStore); 
+        currentVersion = 12; 
+        console.info(&#39;[DB] 已迁移到 v12：新增 video_servers 表&#39;); 
+      } 
+      console.info(&#39;FileSourceDatabase: Upgrade complete&#39;); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Upgrade failed&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Upgrade failed: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 迁移至 v4：清除旧版媒体表，重建含完整最新结构的媒体表 
+   * （包含 play_progress、media_progress 等后续版本表，均以 IF NOT EXISTS 保护）。 
+   * 适用于从 v1/v2/v3 任意版本升级的场景。 
+   * 注意：DROP 顺序需遵守外键依赖（先子表再父表）。 
+   */ 
+  private async migrateToV4(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+    const dropOrder: string[] = [ 
+      &#39;scrape_info&#39;, &#39;play_history&#39;, &#39;tv_episodes&#39;, &#39;tv_seasons&#39;, 
+      &#39;videos&#39;, &#39;movies&#39;, &#39;tv_series&#39; 
+    ]; 
+    for (const t of dropOrder) { 
+      await rdbStore.executeSql(`DROP TABLE IF EXISTS ${t}`); 
+      console.info(`FileSourceDatabase: DROP TABLE ${t}`); 
+    } 
+    await this.createMediaTablesV3(rdbStore); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `migrateToV4 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 
+   * 迁移至 v5：用带上下文字段的 play_progress 取代 play_history。 
+   * 复用 createMediaTablesV3 建表，避免与主建表逻辑重复定义。 
+   */ 
+  private async migrateV4ToV5(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+    await rdbStore.executeSql(`DROP TABLE IF EXISTS play_history`); 
+    console.info(`FileSourceDatabase: DROP TABLE play_history`); 
+    await this.createMediaTablesV3(rdbStore); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `migrateV4ToV5 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 
+   * 迁移至 v6：新增媒体级播放进度表 media_progress， 
+   * 以及旧版本升级时未自动建立的 search_history 表。 
+   * 复用 createMediaTablesV3 建表，避免与主建表逻辑重复定义。 
+   */ 
+  private async migrateV5ToV6(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+    await this.createMediaTablesV3(rdbStore); 
+    // 旧版本升级时 onCreate 不再执行，需在此补建 search_history 表 
+    await rdbStore.executeSql( 
+      `CREATE TABLE IF NOT EXISTS ${TABLE_SEARCH_HISTORY} (` + 
+      &#39;id INTEGER PRIMARY KEY AUTOINCREMENT, &#39; + 
+      &#39;keyword TEXT NOT NULL, &#39; + 
+      &#39;searched_at INTEGER NOT NULL DEFAULT 0, &#39; + 
+      &#39;UNIQUE(keyword))&#39; 
+    ); 
+    console.info(`FileSourceDatabase: CREATE TABLE search_history`); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `migrateV5ToV6 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 确保 videos 表存在扫描更新标记列 */ 
+  private async ensureOriginCountrySchema(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+      await rdbStore.executeSql( 
+        `ALTER TABLE ${TABLE_MOVIES} ADD COLUMN origin_country_json TEXT` 
+      ); 
+    } catch { 
+      // 列已存在时忽略 
+    } 
+    try { 
+      await rdbStore.executeSql( 
+        `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN origin_country_json TEXT` 
+      ); 
+    } catch { 
+      // 列已存在时忽略 
+    } 
+  } 
+ 
+  private async ensureTvSeriesSchema(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    const alterCols: string[] = [ 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN original_title TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN overview TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN first_air_date TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN rating REAL`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN vote_count INTEGER`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN poster_path TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN backdrop_path TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN poster_url TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN backdrop_url TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN poster_local_path TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN backdrop_local_path TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN genres_json TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN cast_json TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN number_of_seasons INTEGER`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN original_language TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN origin_country_json TEXT`, 
+      `ALTER TABLE ${TABLE_TV_SERIES} ADD COLUMN raw_json TEXT` 
+    ]; 
+    for (const sql of alterCols) { 
+      try { 
+        await rdbStore.executeSql(sql); 
+      } catch { 
+        // 列已存在时忽略 
+      } 
+    } 
+  } 
+ 
+  private async ensureVideosSchema(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+      await rdbStore.executeSql( 
+        `ALTER TABLE ${TABLE_VIDEOS} ADD COLUMN updated_in_last_scan INTEGER NOT NULL DEFAULT 0` 
+      ); 
+    } catch { 
+      // 列已存在时忽略 
+    } 
+  } 
+ 
+  /** 
+   * 确保 scrape_info 表有 v3 所需的列（旧设备升级兼容） 
+   * SQLite ALTER TABLE ADD COLUMN 若列已存在会报错，try/catch 忽略即可 
+   */ 
+  private async ensureScrapeInfoSchema(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    const alterCols: string[] = [ 
+      `ALTER TABLE ${TABLE_SCRAPE_INFO} ADD COLUMN movie_id INTEGER`, 
+      `ALTER TABLE ${TABLE_SCRAPE_INFO} ADD COLUMN tv_series_id INTEGER`, 
+      `ALTER TABLE ${TABLE_SCRAPE_INFO} ADD COLUMN episode_id INTEGER`, 
+      `ALTER TABLE ${TABLE_SCRAPE_INFO} ADD COLUMN season_number INTEGER`, 
+      `ALTER TABLE ${TABLE_SCRAPE_INFO} ADD COLUMN episode_number INTEGER`, 
+    ]; 
+    for (const sql of alterCols) { 
+      try { 
+        await rdbStore.executeSql(sql); 
+      } catch { 
+        // 列已存在时 SQLite 报错，忽略 
+      } 
+    } 
+    // 同时确保新表（movies/tv_series/tv_seasons/tv_episodes）存在 
+    await this.createMediaTablesV3(rdbStore); 
+    // 确保 (tv_series_id, episode_id) 索引存在，供多版本去重查询使用 
+    try { 
+      await rdbStore.executeSql( 
+        `CREATE INDEX IF NOT EXISTS idx_scrape_info_tvs_ep` + 
+        ` ON ${TABLE_SCRAPE_INFO}(tv_series_id, episode_id)` 
+      ); 
+    } catch { 
+      // 索引已存在时忽略 
+    } 
+  } 
+ 
+  /** 
+   * 确保 scrape_info 的 provider+provider_id 联合唯一索引已被移除。 
+   * v8 起允许多个文件源（WebDAV/SMB）指向同一 TMDB 内容，不能再用该索引限制写入。 
+   */ 
+  private async dropScrapeInfoProviderPidIndex(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    try { 
+      await rdbStore.executeSql(`DROP INDEX IF EXISTS idx_scrape_info_provider_pid_uq`); 
+      console.info(&#39;[DB] scrape_info provider+provider_id 唯一索引已移除（多文件源兼容）&#39;); 
+    } catch (e) { 
+      console.warn(&#39;[DB] 移除 scrape_info 唯一索引失败: &#39; + JSON.stringify(e)); 
+    } 
+  } 
+ 
+  /** 
+   * 从 raw_json 为历史数据回填 origin_country_json。 
+   * 
+   * v7 迁移仅添加了列，未对已有数据赋值，导致老数据 origin_country_json=NULL， 
+   * 地区筛选 LIKE 条件对 NULL 值永远不匹配，选具体地区后结果为空。 
+   * 本方法在 DB init 后作为后台任务异步执行，补全全部 NULL 行。 
+   */ 
+  private async backfillOriginCountryFromRawJson(): Promise&lt;void&gt; { 
+    if (this.rdbStore === null) { 
+      return; 
+    } 
+    let movieUpdated = 0; 
+    let tvUpdated = 0; 
+    try { 
+      // ── 回填 movies：从 raw_json.production_countries[*].iso_3166_1 ── 
+      let movieRs: relationalStore.ResultSet | null = null; 
+      try { 
+        movieRs = await this.rdbStore.querySql( 
+          `SELECT id, raw_json FROM ${TABLE_MOVIES} WHERE raw_json IS NOT NULL AND (origin_country_json IS NULL OR TRIM(origin_country_json) = &#39;&#39; OR origin_country_json NOT LIKE &#39;%&quot;%&#39;)` 
+        ); 
+        interface MovieRow { id: number; rawJson: string } 
+        const rows: MovieRow[] = []; 
+        while (movieRs.goToNextRow()) { 
+          const id = movieRs.getLong(movieRs.getColumnIndex(&#39;id&#39;)); 
+          const rawJson = movieRs.getString(movieRs.getColumnIndex(&#39;raw_json&#39;)); 
+          const row: MovieRow = { id, rawJson }; 
+          rows.push(row); 
+        } 
+        for (const row of rows) { 
+          try { 
+            const parsed = JSON.parse(row.rawJson) as RawMovieJson; 
+            const countries = parsed.production_countries; 
+            if (countries &amp;&amp; countries.length &gt; 0) { 
+              const codes: string[] = countries.map((c: RawProductionCountry): string =&gt; c.iso_3166_1); 
+              const countryJson: string = JSON.stringify(codes); 
+              await this.rdbStore!.executeSql( 
+                `UPDATE ${TABLE_MOVIES} SET origin_country_json = ? WHERE id = ?`, 
+                [countryJson, row.id] 
+              ); 
+              movieUpdated++; 
+            } 
+          } catch (e) { 
+            // 单条 raw_json 格式异常时跳过，不中止整体回填 
+          } 
+        } 
+      } finally { 
+        try { movieRs?.close(); } catch { } 
+      } 
+ 
+      // ── 回填 tv_series：从 raw_json.origin_country ── 
+      let tvRs: relationalStore.ResultSet | null = null; 
+      try { 
+        tvRs = await this.rdbStore.querySql( 
+          `SELECT id, raw_json FROM ${TABLE_TV_SERIES} WHERE raw_json IS NOT NULL AND (origin_country_json IS NULL OR TRIM(origin_country_json) = &#39;&#39; OR origin_country_json NOT LIKE &#39;%&quot;%&#39;)` 
+        ); 
+        interface TvRow { id: number; rawJson: string } 
+        const tvRows: TvRow[] = []; 
+        while (tvRs.goToNextRow()) { 
+          const id = tvRs.getLong(tvRs.getColumnIndex(&#39;id&#39;)); 
+          const rawJson = tvRs.getString(tvRs.getColumnIndex(&#39;raw_json&#39;)); 
+          const row: TvRow = { id, rawJson }; 
+          tvRows.push(row); 
+        } 
+        for (const row of tvRows) { 
+          try { 
+            const parsed = JSON.parse(row.rawJson) as RawTvJson; 
+            const countries = parsed.origin_country; 
+            if (countries &amp;&amp; countries.length &gt; 0) { 
+              const countryJson: string = JSON.stringify(countries); 
+              await this.rdbStore!.executeSql( 
+                `UPDATE ${TABLE_TV_SERIES} SET origin_country_json = ? WHERE id = ?`, 
+                [countryJson, row.id] 
+              ); 
+              tvUpdated++; 
+            } 
+          } catch (e) { 
+            // 单条 raw_json 格式异常时跳过 
+          } 
+        } 
+      } finally { 
+        try { tvRs?.close(); } catch { } 
+      } 
+ 
+      console.info(`[DB][backfillOriginCountry] 完成：movies=${movieUpdated} tv_series=${tvUpdated}`); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      console.warn(`[DB][backfillOriginCountry] 异常 code=${err.code} msg=${err.message}`); 
+    } 
+  } 
+ 
+  private async backfillPinyinFields(rdbStore: relationalStore.RdbStore): Promise&lt;void&gt; { 
+    const tables: string[] = [&#39;movies&#39;, &#39;tv_series&#39;]; 
+    for (const tbl of tables) { 
+      // ── 第一步：先将全量行读入内存，关闭 ResultSet ── 
+      // 避免在游标未关闭时对同一表执行 UPDATE，防止游标失效/锁冲突 
+      interface PinyinRow { id: number; title: string } 
+      const rows: PinyinRow[] = []; 
+      let rs: relationalStore.ResultSet | null = null; 
+      try { 
+        rs = await rdbStore.querySql(`SELECT id, title FROM ${tbl} WHERE title IS NOT NULL`); 
+        while (rs.goToNextRow()) { 
+          const row: PinyinRow = { 
+            id: rs.getLong(rs.getColumnIndex(&#39;id&#39;)), 
+            title: rs.getString(rs.getColumnIndex(&#39;title&#39;)) 
+          }; 
+          rows.push(row); 
+        } 
+      } catch (e) { 
+        const msg: string = (e instanceof Error) ? e.message : String(e); 
+        console.warn(`[DB] v11 读取 ${tbl} 拼音回填数据失败: ${msg}`); 
+      } finally { 
+        try { rs?.close(); } catch { } 
+      } 
+ 
+      // ── 第二步：ResultSet 已关闭，再批量 UPDATE ── 
+      try { 
+        for (const row of rows) { 
+          const full = toPinyinFull(row.title); 
+          const initials = toPinyinInitials(row.title); 
+          await rdbStore.executeSql( 
+            `UPDATE ${tbl} SET title_pinyin = ?, title_initials = ? WHERE id = ?`, 
+            [full, initials, row.id] 
+          ); 
+        } 
+        console.info(`[DB] v11 回填 ${tbl} 拼音字段完成，共 ${rows.length} 条`); 
+      } catch (e) { 
+        const msg: string = (e instanceof Error) ? e.message : String(e); 
+        console.warn(`[DB] v11 回填 ${tbl} 失败: ${msg}`); 
+      } 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 15:51:13 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/db/files/FileSourceDbCore.ets","hash":"8b065736f61d25c078be41cee220d814cc0c614a948829f8cb382ed9a3c37cbc","lineCnt":901,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"FileSourceDbCore.constructor","count":4,"regions":[{"startLoc":{"line":38,"col":3},"endLoc":{"line":42,"col":4},"count":4,"ignored":0},{"startLoc":{"line":39,"col":18},"endLoc":{"line":41,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":39,"col":9},"endLoc":{"line":39,"col":16},"trueCount":0,"falseCount":4,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"FileSourceDbCore.setDatabaseNameOverride","count":4,"regions":[{"startLoc":{"line":45,"col":3},"endLoc":{"line":47,"col":4},"count":4,"ignored":0},{"startLoc":{"line":46,"col":5},"endLoc":{"line":47,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"FileSourceDbCore.getDatabaseName","count":3,"regions":[{"startLoc":{"line":49,"col":3},"endLoc":{"line":51,"col":4},"count":3,"ignored":0},{"startLoc":{"line":50,"col":5},"endLoc":{"line":51,"col":4},"count":3,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"FileSourceDbCore.setContext","count":7,"regions":[{"startLoc":{"line":53,"col":3},"endLoc":{"line":55,"col":4},"count":7,"ignored":0},{"startLoc":{"line":54,"col":5},"endLoc":{"line":55,"col":4},"count":7,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"FileSourceDbCore.getStore","count":5,"regions":[{"startLoc":{"line":58,"col":3},"endLoc":{"line":63,"col":4},"count":5,"ignored":0},{"startLoc":{"line":59,"col":33},"endLoc":{"line":61,"col":6},"count":0,"ignored":0},{"startLoc":{"line":62,"col":5},"endLoc":{"line":63,"col":4},"count":5,"ignored":0}],"branches":[{"startLoc":{"line":59,"col":9},"endLoc":{"line":59,"col":31},"trueCount":0,"falseCount":5,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"FileSourceDbCore.isReady","count":1,"regions":[{"startLoc":{"line":66,"col":3},"endLoc":{"line":68,"col":4},"count":1,"ignored":0},{"startLoc":{"line":67,"col":5},"endLoc":{"line":68,"col":4},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"FileSourceDbCore.init","count":12,"regions":[{"startLoc":{"line":73,"col":3},"endLoc":{"line":93,"col":4},"count":12,"ignored":0},{"startLoc":{"line":74,"col":33},"endLoc":{"line":76,"col":6},"count":5,"ignored":0},{"startLoc":{"line":79,"col":36},"endLoc":{"line":81,"col":6},"count":4,"ignored":0},{"startLoc":{"line":83,"col":32},"endLoc":{"line":85,"col":6},"count":0,"ignored":0},{"startLoc":{"line":88,"col":9},"endLoc":{"line":90,"col":6},"count":3,"ignored":0},{"startLoc":{"line":90,"col":15},"endLoc":{"line":92,"col":6},"count":3,"ignored":0}],"branches":[{"startLoc":{"line":74,"col":9},"endLoc":{"line":74,"col":31},"trueCount":5,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":79,"col":9},"endLoc":{"line":79,"col":34},"trueCount":4,"falseCount":3,"group":[],"ignored":0},{"startLoc":{"line":83,"col":9},"endLoc":{"line":83,"col":30},"trueCount":0,"falseCount":3,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"FileSourceDbCore.doInit","count":3,"regions":[{"startLoc":{"line":95,"col":3},"endLoc":{"line":157,"col":4},"count":3,"ignored":0},{"startLoc":{"line":96,"col":9},"endLoc":{"line":153,"col":6},"count":3,"ignored":0},{"startLoc":{"line":133,"col":7},"endLoc":{"line":153,"col":6},"count":3,"ignored":0},{"startLoc":{"line":117,"col":14},"endLoc":{"line":123,"col":8},"count":0,"ignored":0},{"startLoc":{"line":126,"col":42},"endLoc":{"line":130,"col":8},"count":3,"ignored":0},{"startLoc":{"line":153,"col":7},"endLoc":{"line":156,"col":6},"count":0,"ignored":0},{"startLoc":{"line":114,"col":33},"endLoc":{"line":117,"col":8},"count":3,"ignored":0},{"startLoc":{"line":117,"col":47},"endLoc":{"line":120,"col":8},"count":0,"ignored":0},{"startLoc":{"line":120,"col":14},"endLoc":{"line":123,"col":8},"count":0,"ignored":0},{"startLoc":{"line":108,"col":33},"endLoc":{"line":110,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":108,"col":11},"endLoc":{"line":108,"col":31},"trueCount":0,"falseCount":3,"group":[],"ignored":0},{"startLoc":{"line":114,"col":11},"endLoc":{"line":114,"col":31},"trueCount":3,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":117,"col":18},"endLoc":{"line":117,"col":45},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":126,"col":11},"endLoc":{"line":126,"col":40},"trueCount":3,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":150,"col":55},"endLoc":{"line":150,"col":63},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"FileSourceDbCore.getLastInsertedRowId","count":0,"regions":[{"startLoc":{"line":159,"col":3},"endLoc":{"line":161,"col":4},"count":0,"ignored":0},{"startLoc":{"line":160,"col":5},"endLoc":{"line":161,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"FileSourceDbCore.querySingleId","count":0,"regions":[{"startLoc":{"line":163,"col":3},"endLoc":{"line":165,"col":4},"count":0,"ignored":0},{"startLoc":{"line":164,"col":5},"endLoc":{"line":165,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":10},{"name":"FileSourceDbCore.queryFirstLong","count":0,"regions":[{"startLoc":{"line":167,"col":3},"endLoc":{"line":182,"col":4},"count":0,"ignored":0},{"startLoc":{"line":170,"col":9},"endLoc":{"line":176,"col":6},"count":0,"ignored":0},{"startLoc":{"line":176,"col":7},"endLoc":{"line":179,"col":6},"count":0,"ignored":0},{"startLoc":{"line":179,"col":15},"endLoc":{"line":181,"col":6},"count":0,"ignored":0},{"startLoc":{"line":172,"col":30},"endLoc":{"line":174,"col":8},"count":0,"ignored":0},{"startLoc":{"line":175,"col":7},"endLoc":{"line":176,"col":6},"count":0,"ignored":0},{"startLoc":{"line":168,"col":33},"endLoc":{"line":168,"col":47},"count":0,"ignored":0},{"startLoc":{"line":180,"col":11},"endLoc":{"line":180,"col":27},"count":0,"ignored":0},{"startLoc":{"line":180,"col":28},"endLoc":{"line":180,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":168,"col":9},"endLoc":{"line":168,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":172,"col":11},"endLoc":{"line":172,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":11},{"name":"FileSourceDbCore.getNullableString","count":0,"regions":[{"startLoc":{"line":184,"col":3},"endLoc":{"line":190,"col":4},"count":0,"ignored":0},{"startLoc":{"line":185,"col":9},"endLoc":{"line":187,"col":6},"count":0,"ignored":0},{"startLoc":{"line":187,"col":7},"endLoc":{"line":189,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":186,"col":14},"endLoc":{"line":186,"col":70},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":12},{"name":"FileSourceDbCore.getNullableLong","count":0,"regions":[{"startLoc":{"line":192,"col":3},"endLoc":{"line":198,"col":4},"count":0,"ignored":0},{"startLoc":{"line":193,"col":9},"endLoc":{"line":195,"col":6},"count":0,"ignored":0},{"startLoc":{"line":195,"col":7},"endLoc":{"line":197,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":194,"col":14},"endLoc":{"line":194,"col":68},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"FileSourceDbCore.getNullableDouble","count":0,"regions":[{"startLoc":{"line":200,"col":3},"endLoc":{"line":206,"col":4},"count":0,"ignored":0},{"startLoc":{"line":201,"col":9},"endLoc":{"line":203,"col":6},"count":0,"ignored":0},{"startLoc":{"line":203,"col":7},"endLoc":{"line":205,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":202,"col":14},"endLoc":{"line":202,"col":70},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"FileSourceDbCore.queryFirstLongValue","count":0,"regions":[{"startLoc":{"line":209,"col":3},"endLoc":{"line":211,"col":4},"count":0,"ignored":0},{"startLoc":{"line":210,"col":5},"endLoc":{"line":211,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"FileSourceDbCore.querySingleIdValue","count":0,"regions":[{"startLoc":{"line":214,"col":3},"endLoc":{"line":216,"col":4},"count":0,"ignored":0},{"startLoc":{"line":215,"col":5},"endLoc":{"line":216,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":16},{"name":"FileSourceDbCore.lastInsertedRowId","count":0,"regions":[{"startLoc":{"line":219,"col":3},"endLoc":{"line":221,"col":4},"count":0,"ignored":0},{"startLoc":{"line":220,"col":5},"endLoc":{"line":221,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":17},{"name":"FileSourceDbCore.nullableString","count":0,"regions":[{"startLoc":{"line":224,"col":3},"endLoc":{"line":226,"col":4},"count":0,"ignored":0},{"startLoc":{"line":225,"col":5},"endLoc":{"line":226,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"FileSourceDbCore.nullableLong","count":0,"regions":[{"startLoc":{"line":229,"col":3},"endLoc":{"line":231,"col":4},"count":0,"ignored":0},{"startLoc":{"line":230,"col":5},"endLoc":{"line":231,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":19},{"name":"FileSourceDbCore.nullableDouble","count":0,"regions":[{"startLoc":{"line":234,"col":3},"endLoc":{"line":236,"col":4},"count":0,"ignored":0},{"startLoc":{"line":235,"col":5},"endLoc":{"line":236,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":20},{"name":"FileSourceDbCore.onCreate","count":3,"regions":[{"startLoc":{"line":241,"col":3},"endLoc":{"line":279,"col":4},"count":3,"ignored":0},{"startLoc":{"line":242,"col":9},"endLoc":{"line":275,"col":6},"count":3,"ignored":0},{"startLoc":{"line":275,"col":7},"endLoc":{"line":278,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":21},{"name":"FileSourceDbCore.createMediaTablesV3","count":9,"regions":[{"startLoc":{"line":282,"col":3},"endLoc":{"line":478,"col":4},"count":9,"ignored":0},{"startLoc":{"line":283,"col":9},"endLoc":{"line":473,"col":6},"count":9,"ignored":0},{"startLoc":{"line":473,"col":7},"endLoc":{"line":477,"col":6},"count":0,"ignored":0},{"startLoc":{"line":465,"col":9},"endLoc":{"line":469,"col":6},"count":9,"ignored":0},{"startLoc":{"line":469,"col":7},"endLoc":{"line":471,"col":6},"count":0,"ignored":0},{"startLoc":{"line":472,"col":5},"endLoc":{"line":473,"col":6},"count":9,"ignored":0}],"branches":[],"ignored":0,"index":22},{"name":"FileSourceDbCore.createVideoServersTable","count":6,"regions":[{"startLoc":{"line":483,"col":3},"endLoc":{"line":493,"col":4},"count":6,"ignored":0},{"startLoc":{"line":484,"col":5},"endLoc":{"line":493,"col":4},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":23},{"name":"FileSourceDbCore.onUpgrade","count":0,"regions":[{"startLoc":{"line":499,"col":3},"endLoc":{"line":601,"col":4},"count":0,"ignored":0},{"startLoc":{"line":503,"col":9},"endLoc":{"line":597,"col":6},"count":0,"ignored":0},{"startLoc":{"line":550,"col":32},"endLoc":{"line":571,"col":8},"count":0,"ignored":0},{"startLoc":{"line":572,"col":32},"endLoc":{"line":589,"col":8},"count":0,"ignored":0},{"startLoc":{"line":537,"col":31},"endLoc":{"line":549,"col":8},"count":0,"ignored":0},{"startLoc":{"line":575,"col":9},"endLoc":{"line":586,"col":10},"count":0,"ignored":0},{"startLoc":{"line":561,"col":9},"endLoc":{"line":571,"col":8},"count":0,"ignored":0},{"startLoc":{"line":527,"col":31},"endLoc":{"line":536,"col":8},"count":0,"ignored":0},{"startLoc":{"line":504,"col":62},"endLoc":{"line":509,"col":8},"count":0,"ignored":0},{"startLoc":{"line":510,"col":62},"endLoc":{"line":515,"col":8},"count":0,"ignored":0},{"startLoc":{"line":516,"col":62},"endLoc":{"line":521,"col":8},"count":0,"ignored":0},{"startLoc":{"line":590,"col":32},"endLoc":{"line":595,"col":8},"count":0,"ignored":0},{"startLoc":{"line":522,"col":62},"endLoc":{"line":526,"col":8},"count":0,"ignored":0},{"startLoc":{"line":539,"col":13},"endLoc":{"line":543,"col":10},"count":0,"ignored":0},{"startLoc":{"line":552,"col":13},"endLoc":{"line":556,"col":10},"count":0,"ignored":0},{"startLoc":{"line":597,"col":7},"endLoc":{"line":600,"col":6},"count":0,"ignored":0},{"startLoc":{"line":543,"col":11},"endLoc":{"line":546,"col":10},"count":0,"ignored":0},{"startLoc":{"line":556,"col":11},"endLoc":{"line":559,"col":10},"count":0,"ignored":0},{"startLoc":{"line":576,"col":15},"endLoc":{"line":578,"col":12},"count":0,"ignored":0},{"startLoc":{"line":578,"col":13},"endLoc":{"line":580,"col":12},"count":0,"ignored":0},{"startLoc":{"line":581,"col":15},"endLoc":{"line":583,"col":12},"count":0,"ignored":0},{"startLoc":{"line":583,"col":13},"endLoc":{"line":585,"col":12},"count":0,"ignored":0},{"startLoc":{"line":547,"col":9},"endLoc":{"line":549,"col":8},"count":0,"ignored":0},{"startLoc":{"line":587,"col":9},"endLoc":{"line":589,"col":8},"count":0,"ignored":0},{"startLoc":{"line":596,"col":7},"endLoc":{"line":597,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":504,"col":11},"endLoc":{"line":504,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":510,"col":11},"endLoc":{"line":510,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":516,"col":11},"endLoc":{"line":516,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":522,"col":11},"endLoc":{"line":522,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":527,"col":11},"endLoc":{"line":527,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":537,"col":11},"endLoc":{"line":537,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":550,"col":11},"endLoc":{"line":550,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":572,"col":11},"endLoc":{"line":572,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":590,"col":11},"endLoc":{"line":590,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":24},{"name":"FileSourceDbCore.migrateToV4","count":0,"regions":[{"startLoc":{"line":609,"col":3},"endLoc":{"line":625,"col":4},"count":0,"ignored":0},{"startLoc":{"line":610,"col":9},"endLoc":{"line":620,"col":6},"count":0,"ignored":0},{"startLoc":{"line":620,"col":7},"endLoc":{"line":624,"col":6},"count":0,"ignored":0},{"startLoc":{"line":615,"col":5},"endLoc":{"line":618,"col":6},"count":0,"ignored":0},{"startLoc":{"line":619,"col":5},"endLoc":{"line":620,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":25},{"name":"FileSourceDbCore.migrateV4ToV5","count":0,"regions":[{"startLoc":{"line":631,"col":3},"endLoc":{"line":641,"col":4},"count":0,"ignored":0},{"startLoc":{"line":632,"col":9},"endLoc":{"line":636,"col":6},"count":0,"ignored":0},{"startLoc":{"line":636,"col":7},"endLoc":{"line":640,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":26},{"name":"FileSourceDbCore.migrateV5ToV6","count":0,"regions":[{"startLoc":{"line":648,"col":3},"endLoc":{"line":665,"col":4},"count":0,"ignored":0},{"startLoc":{"line":649,"col":9},"endLoc":{"line":660,"col":6},"count":0,"ignored":0},{"startLoc":{"line":660,"col":7},"endLoc":{"line":664,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":27},{"name":"FileSourceDbCore.ensureOriginCountrySchema","count":3,"regions":[{"startLoc":{"line":668,"col":3},"endLoc":{"line":683,"col":4},"count":3,"ignored":0},{"startLoc":{"line":669,"col":9},"endLoc":{"line":673,"col":6},"count":3,"ignored":0},{"startLoc":{"line":676,"col":9},"endLoc":{"line":680,"col":6},"count":3,"ignored":0},{"startLoc":{"line":673,"col":7},"endLoc":{"line":675,"col":6},"count":0,"ignored":0},{"startLoc":{"line":680,"col":7},"endLoc":{"line":682,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":28},{"name":"FileSourceDbCore.ensureTvSeriesSchema","count":3,"regions":[{"startLoc":{"line":685,"col":3},"endLoc":{"line":712,"col":4},"count":3,"ignored":0},{"startLoc":{"line":705,"col":5},"endLoc":{"line":711,"col":6},"count":51,"ignored":0},{"startLoc":{"line":706,"col":11},"endLoc":{"line":708,"col":8},"count":51,"ignored":0},{"startLoc":{"line":708,"col":9},"endLoc":{"line":710,"col":8},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":29},{"name":"FileSourceDbCore.ensureVideosSchema","count":3,"regions":[{"startLoc":{"line":714,"col":3},"endLoc":{"line":722,"col":4},"count":3,"ignored":0},{"startLoc":{"line":715,"col":9},"endLoc":{"line":719,"col":6},"count":3,"ignored":0},{"startLoc":{"line":719,"col":7},"endLoc":{"line":721,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":30},{"name":"FileSourceDbCore.ensureScrapeInfoSchema","count":3,"regions":[{"startLoc":{"line":728,"col":3},"endLoc":{"line":754,"col":4},"count":3,"ignored":0},{"startLoc":{"line":736,"col":5},"endLoc":{"line":742,"col":6},"count":15,"ignored":0},{"startLoc":{"line":746,"col":9},"endLoc":{"line":751,"col":6},"count":3,"ignored":0},{"startLoc":{"line":737,"col":11},"endLoc":{"line":739,"col":8},"count":15,"ignored":0},{"startLoc":{"line":739,"col":9},"endLoc":{"line":741,"col":8},"count":0,"ignored":0},{"startLoc":{"line":751,"col":7},"endLoc":{"line":753,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":31},{"name":"FileSourceDbCore.dropScrapeInfoProviderPidIndex","count":3,"regions":[{"startLoc":{"line":760,"col":3},"endLoc":{"line":767,"col":4},"count":3,"ignored":0},{"startLoc":{"line":761,"col":9},"endLoc":{"line":764,"col":6},"count":3,"ignored":0},{"startLoc":{"line":764,"col":7},"endLoc":{"line":766,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":32},{"name":"FileSourceDbCore.backfillOriginCountryFromRawJson","count":3,"regions":[{"startLoc":{"line":776,"col":3},"endLoc":{"line":857,"col":4},"count":3,"ignored":0},{"startLoc":{"line":782,"col":9},"endLoc":{"line":853,"col":6},"count":3,"ignored":0},{"startLoc":{"line":785,"col":11},"endLoc":{"line":814,"col":8},"count":3,"ignored":0},{"startLoc":{"line":820,"col":11},"endLoc":{"line":848,"col":8},"count":3,"ignored":0},{"startLoc":{"line":797,"col":9},"endLoc":{"line":813,"col":10},"count":0,"ignored":0},{"startLoc":{"line":832,"col":9},"endLoc":{"line":847,"col":10},"count":0,"ignored":0},{"startLoc":{"line":798,"col":15},"endLoc":{"line":810,"col":12},"count":0,"ignored":0},{"startLoc":{"line":833,"col":15},"endLoc":{"line":844,"col":12},"count":0,"ignored":0},{"startLoc":{"line":801,"col":52},"endLoc":{"line":809,"col":14},"count":0,"ignored":0},{"startLoc":{"line":836,"col":52},"endLoc":{"line":843,"col":14},"count":0,"ignored":0},{"startLoc":{"line":791,"col":9},"endLoc":{"line":796,"col":10},"count":0,"ignored":0},{"startLoc":{"line":826,"col":9},"endLoc":{"line":831,"col":10},"count":0,"ignored":0},{"startLoc":{"line":853,"col":7},"endLoc":{"line":856,"col":6},"count":0,"ignored":0},{"startLoc":{"line":777,"col":33},"endLoc":{"line":779,"col":6},"count":0,"ignored":0},{"startLoc":{"line":814,"col":17},"endLoc":{"line":816,"col":8},"count":3,"ignored":0},{"startLoc":{"line":810,"col":13},"endLoc":{"line":812,"col":12},"count":0,"ignored":0},{"startLoc":{"line":848,"col":17},"endLoc":{"line":850,"col":8},"count":3,"ignored":0},{"startLoc":{"line":844,"col":13},"endLoc":{"line":846,"col":12},"count":0,"ignored":0},{"startLoc":{"line":852,"col":7},"endLoc":{"line":853,"col":6},"count":3,"ignored":0},{"startLoc":{"line":815,"col":13},"endLoc":{"line":815,"col":34},"count":3,"ignored":0},{"startLoc":{"line":815,"col":35},"endLoc":{"line":815,"col":44},"count":0,"ignored":0},{"startLoc":{"line":849,"col":13},"endLoc":{"line":849,"col":31},"count":3,"ignored":0},{"startLoc":{"line":849,"col":32},"endLoc":{"line":849,"col":41},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":777,"col":9},"endLoc":{"line":777,"col":31},"trueCount":0,"falseCount":3,"group":[],"ignored":0},{"startLoc":{"line":801,"col":17},"endLoc":{"line":801,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":836,"col":17},"endLoc":{"line":836,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":33},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":802,"col":53},"endLoc":{"line":802,"col":102},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":34},{"name":"FileSourceDbCore.backfillPinyinFields","count":3,"regions":[{"startLoc":{"line":859,"col":3},"endLoc":{"line":899,"col":4},"count":3,"ignored":0},{"startLoc":{"line":861,"col":5},"endLoc":{"line":898,"col":6},"count":6,"ignored":0},{"startLoc":{"line":884,"col":11},"endLoc":{"line":894,"col":8},"count":6,"ignored":0},{"startLoc":{"line":867,"col":11},"endLoc":{"line":876,"col":8},"count":6,"ignored":0},{"startLoc":{"line":885,"col":9},"endLoc":{"line":892,"col":10},"count":0,"ignored":0},{"startLoc":{"line":869,"col":9},"endLoc":{"line":875,"col":10},"count":0,"ignored":0},{"startLoc":{"line":876,"col":9},"endLoc":{"line":879,"col":8},"count":0,"ignored":0},{"startLoc":{"line":894,"col":9},"endLoc":{"line":897,"col":8},"count":0,"ignored":0},{"startLoc":{"line":879,"col":17},"endLoc":{"line":881,"col":8},"count":6,"ignored":0},{"startLoc":{"line":893,"col":9},"endLoc":{"line":894,"col":8},"count":6,"ignored":0},{"startLoc":{"line":880,"col":13},"endLoc":{"line":880,"col":29},"count":6,"ignored":0},{"startLoc":{"line":880,"col":30},"endLoc":{"line":880,"col":39},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":877,"col":29},"endLoc":{"line":877,"col":73},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":895,"col":29},"endLoc":{"line":895,"col":73},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":35}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":7,"7":8,"8":9,"9":10,"10":11,"11":16,"12":17,"13":19,"14":20,"15":22,"16":23,"17":30,"18":31,"19":33,"20":34,"21":36,"22":38,"23":39,"24":40,"25":45,"26":46,"27":49,"28":50,"29":53,"30":54,"31":58,"32":59,"33":60,"34":62,"35":66,"36":67,"37":73,"38":74,"39":75,"40":79,"41":80,"42":83,"43":84,"44":87,"45":88,"46":89,"47":90,"48":91,"49":95,"50":96,"51":97,"52":98,"53":99,"54":102,"55":106,"56":107,"57":108,"58":109,"59":111,"60":112,"61":114,"62":116,"63":117,"64":119,"65":120,"66":122,"67":126,"68":127,"69":128,"70":129,"71":133,"72":135,"73":137,"74":140,"75":142,"76":145,"77":148,"78":150,"79":151,"80":152,"81":153,"82":154,"83":155,"84":159,"85":160,"86":163,"87":164,"88":167,"89":168,"90":169,"91":170,"92":171,"93":172,"94":173,"95":175,"96":176,"97":177,"98":178,"99":179,"100":180,"101":184,"102":185,"103":186,"104":187,"105":188,"106":192,"107":193,"108":194,"109":195,"110":196,"111":200,"112":201,"113":202,"114":203,"115":204,"116":209,"117":210,"118":214,"119":215,"120":219,"121":220,"122":224,"123":225,"124":229,"125":230,"126":234,"127":235,"128":241,"129":242,"130":243,"131":244,"132":252,"133":253,"134":259,"135":262,"136":264,"137":265,"138":273,"139":274,"140":275,"141":276,"142":277,"143":282,"144":283,"145":285,"146":286,"147":304,"148":308,"149":309,"150":339,"151":340,"152":369,"153":370,"154":385,"155":390,"156":391,"157":408,"158":409,"159":414,"160":415,"161":429,"162":430,"163":431,"164":432,"165":436,"166":437,"167":446,"168":450,"169":453,"170":454,"171":465,"172":466,"173":467,"174":469,"175":472,"176":473,"177":474,"178":475,"179":476,"180":483,"181":484,"182":485,"183":499,"184":500,"185":502,"186":503,"187":504,"188":505,"189":506,"190":507,"191":508,"192":510,"193":511,"194":512,"195":513,"196":514,"197":516,"198":517,"199":518,"200":519,"201":520,"202":522,"203":523,"204":524,"205":525,"206":527,"207":529,"208":531,"209":532,"210":534,"211":535,"212":537,"213":539,"214":540,"215":541,"216":543,"217":545,"218":547,"219":548,"220":550,"221":552,"222":553,"223":554,"224":556,"225":558,"226":561,"227":562,"228":563,"229":564,"230":565,"231":566,"232":567,"233":569,"234":570,"235":572,"236":574,"237":575,"238":576,"239":577,"240":578,"241":579,"242":581,"243":582,"244":583,"245":584,"246":587,"247":588,"248":590,"249":592,"250":593,"251":594,"252":596,"253":597,"254":598,"255":599,"256":609,"257":610,"258":611,"259":612,"260":613,"261":615,"262":616,"263":617,"264":619,"265":620,"266":621,"267":622,"268":623,"269":631,"270":632,"271":633,"272":634,"273":635,"274":636,"275":637,"276":638,"277":639,"278":648,"279":649,"280":650,"281":652,"282":653,"283":654,"284":655,"285":656,"286":657,"287":659,"288":660,"289":661,"290":662,"291":663,"292":668,"293":669,"294":670,"295":671,"296":673,"297":676,"298":677,"299":678,"300":680,"301":685,"302":686,"303":687,"304":688,"305":689,"306":690,"307":691,"308":692,"309":693,"310":694,"311":695,"312":696,"313":697,"314":698,"315":699,"316":700,"317":701,"318":702,"319":703,"320":705,"321":706,"322":707,"323":708,"324":714,"325":715,"326":716,"327":717,"328":719,"329":728,"330":729,"331":730,"332":731,"333":732,"334":733,"335":734,"336":736,"337":737,"338":738,"339":739,"340":744,"341":746,"342":747,"343":748,"344":749,"345":751,"346":760,"347":761,"348":762,"349":763,"350":764,"351":765,"352":776,"353":777,"354":778,"355":780,"356":781,"357":782,"358":784,"359":785,"360":786,"361":787,"362":789,"363":790,"364":791,"365":792,"366":793,"367":794,"368":795,"369":797,"370":798,"371":799,"372":800,"373":801,"374":802,"375":803,"376":804,"377":805,"378":806,"379":808,"380":810,"381":814,"382":815,"383":819,"384":820,"385":821,"386":822,"387":824,"388":825,"389":826,"390":827,"391":828,"392":829,"393":830,"394":832,"395":833,"396":834,"397":835,"398":836,"399":837,"400":838,"401":839,"402":840,"403":842,"404":844,"405":848,"406":849,"407":852,"408":853,"409":854,"410":855,"411":859,"412":860,"413":861,"414":864,"415":865,"416":866,"417":867,"418":868,"419":869,"420":870,"421":871,"422":872,"423":874,"424":876,"425":877,"426":878,"427":879,"428":880,"429":884,"430":885,"431":886,"432":887,"433":888,"434":889,"435":890,"436":893,"437":894,"438":895,"439":896},"summary":{"lines":{"total":418,"covered":186,"pct":44.5,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4,4,0,-1,-1,-1,-1,4,4,-1,-1,3,3,-1,-1,7,7,-1,-1,-1,5,5,0,-1,5,-1,-1,-1,1,1,-1,-1,-1,-1,-1,12,12,5,-1,-1,-1,7,4,-1,-1,3,0,-1,-1,12,3,3,3,3,-1,-1,-1,3,3,3,3,3,-1,-1,3,-1,-1,-1,3,3,3,0,-1,3,3,-1,3,-1,3,0,-1,0,0,-1,0,-1,-1,-1,3,3,3,3,-1,-1,-1,3,-1,3,-1,3,-1,-1,3,-1,3,-1,-1,3,-1,-1,3,-1,0,3,3,0,0,0,-1,-1,-1,0,0,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,-1,0,0,-1,-1,-1,0,0,-1,-1,-1,0,0,-1,-1,-1,0,0,-1,-1,-1,0,0,-1,-1,-1,0,0,-1,-1,-1,-1,-1,3,3,3,3,-1,-1,-1,-1,-1,-1,-1,3,3,-1,-1,-1,-1,-1,3,-1,-1,3,-1,3,3,-1,-1,-1,-1,-1,-1,-1,3,3,0,0,0,-1,-1,-1,-1,9,9,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,-1,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,-1,-1,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,9,-1,-1,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,9,9,9,-1,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,9,-1,-1,-1,9,-1,-1,9,9,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,9,9,9,-1,0,-1,-1,9,9,0,0,0,-1,-1,-1,-1,-1,-1,6,6,6,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,0,-1,0,-1,0,-1,0,0,-1,0,0,-1,0,-1,0,0,0,-1,0,-1,0,-1,0,0,-1,0,-1,0,0,0,-1,0,-1,0,-1,-1,0,0,0,0,0,0,0,-1,0,0,-1,0,-1,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,0,-1,0,-1,0,0,0,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,-1,-1,3,3,3,3,-1,0,-1,-1,3,3,3,-1,0,-1,-1,-1,-1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,-1,51,51,51,0,-1,-1,-1,-1,-1,3,3,3,3,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,3,3,3,3,3,3,3,-1,15,15,15,0,-1,-1,-1,-1,3,-1,3,3,3,3,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,3,3,3,3,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,3,3,0,-1,3,3,3,-1,3,3,3,3,-1,3,3,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,-1,0,-1,0,-1,-1,-1,3,3,-1,-1,-1,3,3,3,3,-1,3,3,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,-1,0,-1,0,-1,-1,-1,3,3,-1,-1,3,3,0,0,-1,-1,-1,3,3,6,-1,-1,6,6,6,6,6,0,0,0,0,-1,0,-1,0,0,0,6,6,-1,-1,-1,6,0,0,0,0,0,0,-1,-1,6,6,0,0,-1,-1,-1,-1,-1]},"functions":{"total":36,"covered":18,"pct":50},"branches":{"total":56,"covered":11,"pct":19.64}}},"title":"FileSourceDbCore.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

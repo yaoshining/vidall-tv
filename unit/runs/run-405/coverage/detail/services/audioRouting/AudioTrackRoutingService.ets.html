@@ -1,0 +1,1429 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/audioRouting/AudioTrackRoutingService.ets 
+// 
+// AudioTrackRoutingService - 音频 codec 探测 + 初始音轨恢复策略。 
+// 
+// 目标：把 `VideoPlayerController` 中以下职责迁移到本 service： 
+//   1. ffprobe 探测（probe 失败时降级到 preset 提示） 
+//   2. backend route / fallback / preferredChannels 决策 
+//   3. codec-aware 初始音轨选择（findInitialAudioTrackIndex） 
+//   4. 用户历史绑定恢复建议（与 AudioDispatcher 协作） 
+// 
+// 约束： 
+// - 不直接调用具体 adapter（routing service 只负责建议与决策）。 
+// - 不依赖 `VideoPlayerController` 任何状态（pure service）。 
+// - 不修改 `AudioDispatcher` / `FfprobeUtil` / `IPlayer` 的现有签名。 
+// 
+// 设计要点： 
+// - `resolveRoutingDecision(input)` 接收 probe 输入，返回 backend/fallback 决策。 
+// - `resolveInitialTrackIndex(input)` 接收轨道列表 + 用户绑定，返回建议 index。 
+// - 决策 pure function：service 内部计算，controller 消费结果并应用。 
+// 
+// 兼容性： 
+// - controller 内的 `resolveAudioRoutingDecision` / `findInitialAudioTrackIndex` 旧 
+//   方法保留为 thin wrapper 调用本 service，确保外部 import 兼容。 
+// - `AudioTrackItem` 类型由 `AudioRoutingTypes.ets` re-export，调用方无感。 
+ 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { CommonConstants } from &quot;../../common/constants/CommonConstants&quot;; 
+import { FfprobeUtil } from &quot;../../utils/FfprobeUtil&quot;; 
+import { VideoData } from &quot;../../components/core/player/VideoData&quot;; 
+import { PresetAudioTrack } from &quot;../../components/core/player/VideoData&quot;; 
+import { 
+  AudioRoutingDecision, 
+  AudioRoutingInput, 
+  DEFAULT_AUDIO_ROUTING_DECISION, 
+  InitialTrackIndexInput, 
+  InitialTrackIndexResult, 
+  AudioTrackItem, 
+  AudioTrackAnalysis 
+} from &quot;./AudioRoutingTypes&quot;; 
+import { AudioDispatcher, AudioBinding } from &quot;../../audio/AudioDispatcher&quot;; 
+ 
+const DOMAIN = 0x0002; 
+const TAG = &#39;[AudioTrackRoutingService]&#39;; 
+ 
+/** 经验规则：命中下列关键字时优先软解，避免先硬解再失败切换带来的卡顿。 */ 
+const SOFT_ONLY_KEYWORDS: string[] = [ 
+  &#39;ac3&#39;, &#39;eac3&#39;, &#39;dts&#39;, &#39;truehd&#39;, &#39;mlp&#39;, &#39;vivid&#39;, &#39;atmos&#39; 
+]; 
+ 
+/** 
+ * codec 兼容性等级（数字越小越优先，作为初轨选择与 route decision 的排序依据）。 
+ * 
+ * 关键点：AC-3 / EAC-3 虽属软解，但 MPV 可作为系统播放失败后的兼容后端； 
+ * TrueHD / MLP / Audio Vivid 解码链不成熟，默认应排在 AC-3 之后。 
+ * 
+ * 1 = 系统稳态可硬解（HARD_PREFERRED） 
+ * 2 = 软解但常见（AC-3 / EAC-3 / DTS）— 优先选择 
+ * 3 = 软解且罕见（TrueHD / MLP / Audio Vivid）— 仅在别无选择时使用 
+ * 4 = 未知 codec 
+ */ 
+function codecCompatibilityRank(codec: string): number { 
+  if (codec.length === 0) { 
+    return 4; 
+  } 
+  const c = codec.toLowerCase(); 
+  // 硬解友好 
+  if (c.includes(&#39;aac&#39;) || c.includes(&#39;mp3&#39;) || c.includes(&#39;opus&#39;) || 
+    c.includes(&#39;flac&#39;) || c.includes(&#39;pcm&#39;) || c.includes(&#39;vorbis&#39;)) { 
+    return 1; 
+  } 
+  // 软解常见：AC-3 / EAC-3 / DTS（注意 DTS 排后面，会被 AC-3 抢优先） 
+  if (c.includes(&#39;ac3&#39;) &amp;&amp; !c.includes(&#39;eac3&#39;)) { 
+    return 2; 
+  } 
+  if (c.includes(&#39;eac3&#39;)) { 
+    return 2; 
+  } 
+  if (c.includes(&#39;dts&#39;)) { 
+    return 3; 
+  } 
+  // 软解罕见：TrueHD / MLP / Audio Vivid 
+  if (c.includes(&#39;truehd&#39;) || c.includes(&#39;mlp&#39;) || c.includes(&#39;vivid&#39;) || c.includes(&#39;atmos&#39;)) { 
+    return 3; 
+  } 
+  return 4; 
+} 
+ 
+/** 
+ * 构造路由决策：基于整组音轨分析 + codec compatibility rank。 
+ * 
+ * 关键策略（按用户场景 TrueHD + AC-3 混合片源）： 
+ * 1. 整组音轨存在至少一条 rank≤1（硬解）或 rank≤2（AC-3/EAC-3 软解常见）轨道 → preferredBackend=avplayer 
+ *    （avplayer 启动后由 `loadAudioTracks` + `findInitialAudioTrackIndex` 切到该轨道，避免无声） 
+ * 2. 整组音轨全部 rank≥3（仅 TrueHD / MLP / DTS / Audio Vivid 等软解罕见或 DTS）→ preferredBackend=avplayer 
+ *    + fallback=mpv（让 AVPlayer 失败后自动切 MPV 软解） 
+ * 3. 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退 
+ * 4. detectedCodec / detectedChannels 取整组中 rank 最低的轨道（最兼容），不再是 probe[0] 
+ */ 
+export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDecision { 
+  const tracks = input.trackAnalyses; 
+  const trackCount = tracks.length; 
+ 
+  // 整组分析：累加硬解 / 软解统计 + 收集 rank 最低轨道 
+  let anyHardSupported = false; 
+  let anyPlayable = true; 
+  let allSoftDecodeOnly = true; 
+  let firstHardSupported: AudioTrackAnalysis | null = null; 
+  let unplayableCount = 0; 
+  let bestRankedTrack: AudioTrackAnalysis | null = null; 
+  let bestRankedIndex = -1; 
+  for (let i = 0; i &lt; trackCount; i++) { 
+    const t = tracks[i]; 
+    if (t.hardSupported) { 
+      anyHardSupported = true; 
+      allSoftDecodeOnly = false; 
+      if (firstHardSupported === null) { 
+        firstHardSupported = t; 
+      } 
+    } 
+    if (t.codec.length === 0) { 
+      unplayableCount++; 
+    } else { 
+      const rank = codecCompatibilityRank(t.codec); 
+      if (bestRankedTrack === null || rank &lt; codecCompatibilityRank(bestRankedTrack.codec)) { 
+        bestRankedTrack = t; 
+        bestRankedIndex = i; 
+      } 
+    } 
+  } 
+  if (unplayableCount === trackCount &amp;&amp; trackCount &gt; 0) { 
+    anyPlayable = false; 
+  } 
+  const anyUnplayable = unplayableCount &gt; 0; 
+ 
+  // 决定 detectedCodec / detectedChannels：取整组中 rank 最低的轨道（最兼容） 
+  const representative = bestRankedTrack !== null 
+    ? bestRankedTrack 
+    : (firstHardSupported !== null ? firstHardSupported : null); 
+  const detectedCodec = representative !== null ? representative.codec : &#39;unknown&#39;; 
+  const detectedChannels = representative !== null ? representative.channels : 2; 
+  const preferredChannels = normalizeTargetChannels(detectedChannels); 
+ 
+  const summary = `tracks=${trackCount}, ` + 
+    `firstHardSupported=${firstHardSupported !== null ? firstHardSupported.codec : &#39;none&#39;}, ` + 
+    `allSoftDecodeOnly=${allSoftDecodeOnly}, anyHardSupported=${anyHardSupported}, ` + 
+    `bestRankedIndex=${bestRankedIndex}, bestRankedCodec=${detectedCodec}, ` + 
+    `precheckProbeFailed=${input.precheckProbeFailed}`; 
+ 
+  // preferredBackend 决策（关键修复：TrueHD+AC-3 混合时不能默认 TrueHD） 
+  // 1. 探测完全失败且无任何音轨提示 → 仍先尝试 avplayer 
+  // 2. 整组音轨存在至少一条 rank≤2 轨道（硬解 / AC-3 / EAC-3）→ avplayer 
+  //    （avplayer 启动后由 loadAudioTracks 切到该轨道） 
+  // 3. 整组音轨全部 rank≥3（仅 TrueHD / MLP / Audio Vivid / DTS）→ avplayer + fallback=mpv 
+  //    （让 AVPlayer 失败后自动切 MPV 软解） 
+  const preferredBackend: &#39;avplayer&#39; | &#39;mpv&#39; = &#39;avplayer&#39;; 
+ 
+  const decision: AudioRoutingDecision = { 
+    preferredBackend, 
+    fallback: &#39;mpv&#39;, 
+    preferredChannels, 
+    summary, 
+    detectedCodec, 
+    detectedChannels, 
+    anyHardSupported, 
+    allSoftDecodeOnly, 
+    anyPlayable, 
+    anyUnplayable, 
+    precheckProbeFailed: input.precheckProbeFailed, 
+    precheckProbeError: input.precheckProbeError, 
+    videoCodecName: (input.probeVideoCodecName ?? &#39;&#39;).toLowerCase(), 
+    videoHdrType: input.probeVideoHdrType ?? &#39;&#39;, 
+    videoWidth: input.probeVideoWidth, 
+    videoHeight: input.probeVideoHeight, 
+    trackAnalyses: tracks 
+  }; 
+  return decision; 
+} 
+ 
+/** 将原始声道数归一化到实际解码计划所对应的层级。 */ 
+function normalizeTargetChannels(channels?: number): number { 
+  if (!channels || channels &lt;= 0) { 
+    return 2; 
+  } 
+  if (channels &lt;= 1) { 
+    return 1; 
+  } 
+  if (channels &gt;= 8) { 
+    return 8; 
+  } 
+  if (channels &gt;= 6) { 
+    return 6; 
+  } 
+  return 2; 
+} 
+ 
+/** 判断指定 codec 是否优先走硬解。 */ 
+function isLikelySystemHardDecodeSupported(codec: string): boolean { 
+  if (codec.length === 0) { 
+    return true; 
+  } 
+  for (let i = 0; i &lt; SOFT_ONLY_KEYWORDS.length; i++) { 
+    if (codec.includes(SOFT_ONLY_KEYWORDS[i])) { 
+      return false; 
+    } 
+  } 
+  return true; 
+} 
+ 
+/** Preset audio hint 容器（用于 readPresetAudioHint 显式类型）。 */ 
+export interface PresetAudioHint { 
+  codecName: string; 
+  channels: number; 
+} 
+ 
+/** 从 preset 列表中读取最匹配的首条 hint（多声道 &gt; 高码率 &gt; 原始顺序）。 */ 
+export function readPresetAudioHint(videoData: VideoData): PresetAudioHint { 
+  const tracks = videoData.presetAudioTracks; 
+  if (!tracks || tracks.length === 0) { 
+    const empty: PresetAudioHint = { codecName: &#39;&#39;, channels: 2 }; 
+    return empty; 
+  } 
+ 
+  const sorted = tracks.slice().sort((a: PresetAudioTrack, b: PresetAudioTrack) =&gt; { 
+    const chA = normalizeChannelsForSort(inferTrackChannels(a)); 
+    const chB = normalizeChannelsForSort(inferTrackChannels(b)); 
+    if (chB !== chA) { 
+      return chB - chA; 
+    } 
+    const brA = a.bitrate ?? 0; 
+    const brB = b.bitrate ?? 0; 
+    return brB - brA; 
+  }); 
+ 
+  const best = sorted[0]; 
+  const mime = (best.mimeType ?? &#39;&#39;).toLowerCase(); 
+  const channels = inferTrackChannels(best); 
+  const codecName = mime.length &gt; 0 ? mime : best.displayName.toLowerCase(); 
+  const hint: PresetAudioHint = { codecName, channels }; 
+  return hint; 
+} 
+ 
+/** 推断音轨的实际声道数。 */ 
+function inferTrackChannels(track: PresetAudioTrack): number { 
+  if (track.channels !== undefined &amp;&amp; track.channels &gt; 0) { 
+    return track.channels; 
+  } 
+  const display = track.displayName.toLowerCase(); 
+  if (display.includes(&#39;7.1&#39;)) { 
+    return 8; 
+  } 
+  if (display.includes(&#39;5.1&#39;)) { 
+    return 6; 
+  } 
+  if (display.includes(&#39;mono&#39;)) { 
+    return 1; 
+  } 
+  return 2; 
+} 
+ 
+/** 排序前对声道数做归一化处理。 */ 
+function normalizeChannelsForSort(ch: number): number { 
+  if (ch &lt;= 1) { 
+    return 1; 
+  } 
+  if (ch &lt;= 2) { 
+    return 2; 
+  } 
+  if (ch &lt;= 6) { 
+    return 6; 
+  } 
+  return 8; 
+} 
+ 
+/** 将 AVPlayer MIME 与 ffprobe codec 统一为路由使用的 codec 名。 */ 
+export function normalizeAudioCodec(rawCodec: string): string { 
+  const codec = rawCodec.toLowerCase().replace(&#39;audio/&#39;, &#39;&#39;).split(&#39;-&#39;).join(&#39;&#39;); 
+  if (codec === &#39;mp4alatm&#39; || codec === &#39;mp4a&#39; || codec === &#39;aaclatm&#39;) { 
+    return &#39;aac&#39;; 
+  } 
+  return codec; 
+} 
+ 
+/** 判断音轨是否&quot;系统级可用&quot;（与原 `isAudioTrackPlayable` 等价）。 
+ *  含义：AVPlayer 不进入 onUnsupportedFormat 路径；TrueHD / MLP / Audio Vivid 等&quot;软解罕见&quot; 
+ *  仍被视为&quot;可用&quot;，但兼容性更差，由 `codecCompatibilityRank` 进一步排序。 
+ */ 
+function isAudioTrackPlayable(track: AudioTrackItem): boolean { 
+  const raw = (track.codecName ?? track.mimeType) ?? &#39;&#39;; 
+  const codec = normalizeAudioCodec(raw); 
+  // 注意：不能把 TrueHD / AC-3 一律视为不可用，否则&quot;全部不可用&quot;会回退到 track 0。 
+  // 这里仅过滤&quot;完全无法识别的未知 codec&quot;，硬解 / 软解兼容性由 rank 决定。 
+  if (codec.length === 0) { 
+    return false; 
+  } 
+  // 若 codec 在 SOFT_ONLY_KEYWORDS 中，视为软解可用，AVPlayer 失败后由 MPV 接管 
+  if (SOFT_ONLY_KEYWORDS.indexOf(codec) &gt;= 0) { 
+    return true; 
+  } 
+  // 硬解友好 
+  if (isLikelySystemHardDecodeSupported(codec)) { 
+    return true; 
+  } 
+  // 未知 codec：保守视为不可用 
+  return false; 
+} 
+ 
+/** 提取音轨的归一化 codec 字符串（用于日志与排序）。 */ 
+function getNormalizedCodec(track: AudioTrackItem): string { 
+  const raw = (track.codecName ?? track.mimeType) ?? &#39;&#39;; 
+  return normalizeAudioCodec(raw); 
+} 
+ 
+/** 
+ * codec-aware 初始音轨选择（与原 `findInitialAudioTrackIndex` 等价，但按 compatibility rank 排序）。 
+ * 
+ * 关键修复： 
+ * - 旧实现把所有&quot;软解罕见&quot;（TrueHD/MLP/Audio Vivid）和&quot;软解常见&quot;（AC-3/EAC-3/DTS）一同视为&quot;软解&quot;， 
+ *   然后&quot;按可播放性&quot;返回首条，导致 TrueHD 排在 AC-3 前面被选中。 
+ * - 新实现按 `codecCompatibilityRank` 排序：硬解 &gt; AC-3/EAC-3 &gt; DTS &gt; TrueHD/MLP &gt; unknown。 
+ *   偏好轨不可用时，按&quot;同语言可播放轨中 rank 最低&quot;选择。 
+ * 
+ * 注意：导出为 free function 仅供 `AudioTrackRoutingService` 内部 `resolveInitialTrackIndex` 调用； 
+ * 外部调用方请改用 `audioTrackRoutingService.resolveInitialTrackIndex(...)`，避免直接 
+ * 绕过 service 入口。controller 旧 import 路径 `findInitialAudioTrackIndex` 已被替换为 
+ * `serviceFindInitialAudioTrackIndex` 包装，仅为兼容历史 import 路径（见 W2 修复说明）。 
+ */ 
+export function findInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): number { 
+  if (audioTracks.length === 0) { 
+    return 0; 
+  } 
+  const preferred = audioTracks[0]; 
+  const preferredCodec = getNormalizedCodec(preferred); 
+  const preferredRank = codecCompatibilityRank(preferredCodec); 
+ 
+  if (preferredRank === 1) { 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+      `[findInitialAudioTrackIndex] 偏好轨硬解可播(rank=1)，直接选中: index=0 lang=${preferred.language ?? &#39;unknown&#39;} codec=${preferredCodec || &#39;unknown&#39;}`); 
+    return 0; 
+  } 
+ 
+  if (preferredRank &lt;= 2) { 
+    // AC-3/EAC-3 在 AVPlayer 上下文中可通过软解播放，但若有硬解轨（rank=1）则优先用硬解轨 
+    for (let i = 1; i &lt; audioTracks.length; i++) { 
+      const t = audioTracks[i]; 
+      const tRank = codecCompatibilityRank(getNormalizedCodec(t)); 
+      if (tRank === 1) { 
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+          `[findInitialAudioTrackIndex] 偏好轨为软解常见(rank=2)，发现硬解轨(index=${i})，优先选中`); 
+        return i; 
+      } 
+    } 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+      `[findInitialAudioTrackIndex] 偏好轨软解常见(rank=2)，无硬解替代，选中: index=0 lang=${preferred.language ?? &#39;unknown&#39;} codec=${preferredCodec || &#39;unknown&#39;}`); 
+    return 0; 
+  } 
+ 
+  hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+    `[findInitialAudioTrackIndex] 偏好轨不优先(rank=${preferredRank}): index=0 lang=${preferred.language ?? &#39;unknown&#39;} codec=${preferredCodec || &#39;unknown&#39;}，按 rank 降级`); 
+ 
+  const preferredLang = preferred.language ?? &#39;&#39;; 
+ 
+  // 步骤 1：同语言 + 任意可播放轨中 rank 最低者 
+  let bestSameLangIdx = -1; 
+  let bestSameLangRank = Number.MAX_SAFE_INTEGER; 
+  for (let i = 1; i &lt; audioTracks.length; i++) { 
+    const t = audioTracks[i]; 
+    const tRank = codecCompatibilityRank(getNormalizedCodec(t)); 
+    if (tRank &gt; 4) { 
+      continue; 
+    } 
+    if (preferredLang.length &gt; 0 &amp;&amp; t.language === preferredLang &amp;&amp; tRank &lt; bestSameLangRank) { 
+      bestSameLangIdx = i; 
+      bestSameLangRank = tRank; 
+    } 
+  } 
+  if (bestSameLangIdx &gt;= 0) { 
+    const t = audioTracks[bestSameLangIdx]; 
+    const tCodec = getNormalizedCodec(t); 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+      `[findInitialAudioTrackIndex] 同语言降级: index=${bestSameLangIdx} lang=${preferredLang} rank=${bestSameLangRank} codec=${tCodec || &#39;unknown&#39;}`); 
+    return bestSameLangIdx; 
+  } 
+ 
+  // 步骤 2：任意可播放轨中 rank 最低者（跨语言） 
+  let bestAnyIdx = -1; 
+  let bestAnyRank = Number.MAX_SAFE_INTEGER; 
+  for (let i = 1; i &lt; audioTracks.length; i++) { 
+    const t = audioTracks[i]; 
+    const tRank = codecCompatibilityRank(getNormalizedCodec(t)); 
+    if (tRank &gt; 4) { 
+      continue; 
+    } 
+    if (tRank &lt; bestAnyRank) { 
+      bestAnyIdx = i; 
+      bestAnyRank = tRank; 
+    } 
+  } 
+  if (bestAnyIdx &gt;= 0) { 
+    const t = audioTracks[bestAnyIdx]; 
+    const tCodec = getNormalizedCodec(t); 
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+      `[findInitialAudioTrackIndex] 任意可播放降级: index=${bestAnyIdx} rank=${bestAnyRank} lang=${t.language ?? &#39;unknown&#39;} codec=${tCodec || &#39;unknown&#39;}`); 
+    return bestAnyIdx; 
+  } 
+ 
+  hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 
+    `[findInitialAudioTrackIndex] 全部音轨 rank&gt;4（不可解析），返回 0 沿用现有降级策略`); 
+  return 0; 
+} 
+ 
+/** 
+ * controller façade 调用入口：薄包装 `findInitialAudioTrackIndex` 让 controller 仍可走 
+ * service import 路径。完整推荐调用方式： 
+ *   `await this.audioRoutingService.resolveInitialTrackIndex(videoPath, audioTracks)` 
+ * 该方法会先查用户绑定，再调本函数做默认选轨。 
+ */ 
+export function serviceFindInitialAudioTrackIndex(audioTracks: AudioTrackItem[]): number { 
+  return findInitialAudioTrackIndex(audioTracks); 
+} 
+ 
+/** AudioTrackRoutingService façade。 */ 
+export class AudioTrackRoutingService { 
+  private readonly audioDispatcher: AudioDispatcher = new AudioDispatcher(); 
+ 
+  /** 
+   * 计算 backend route 决策。 
+   * 
+   * 关键变化（与历史实现对照）：**遍历整组音轨**（probe + preset 合并去重）， 
+   * 而非仅看 probe.audioTracks[0] 决定一切。 
+   * 
+   * 行为： 
+   * - 整组音轨存在至少一条系统稳态可硬解轨道 → preferredBackend=avplayer 
+   * - 整组音轨全部应软解（如全 TrueHD/DTS/AC3）→ preferredBackend=avplayer + fallback=mpv 
+   * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退 
+   * - 初始选轨由 controller 调用 `resolveInitialTrackIndex` 决定（与 backend route 决策解耦） 
+   */ 
+  async resolveRoutingDecision(videoData: VideoData): Promise&lt;AudioRoutingDecision&gt; { 
+    const presetHint = readPresetAudioHint(videoData); 
+    let probeCodec = &#39;&#39;; 
+    let probeChannels = presetHint.channels; 
+    let precheckProbeFailed = false; 
+    let precheckProbeError = &#39;&#39;; 
+    let videoCodecName = &#39;&#39;; 
+    let probeVideoHdrType = &#39;&#39;; 
+    let probeVideoWidth: number | undefined = undefined; 
+    let probeVideoHeight: number | undefined = undefined; 
+    let probeSuccess = false; 
+    interface ProbeAudio { 
+      codec: string; 
+      channels: number; 
+    } 
+    interface ProbeVideo { 
+      codec: string; 
+    } 
+    const probeAudioTracks: ProbeAudio[] = []; 
+    const probeVideoTracks: ProbeVideo[] = []; 
+ 
+    try { 
+      const probe = videoData.videoSrc.toLowerCase().startsWith(&#39;smb://&#39;) 
+        ? await FfprobeUtil.probeSmb(videoData.videoSrc, videoData.httpHeader, 9000) 
+        : await FfprobeUtil.probe(videoData.videoSrc, videoData.httpHeader, 9000); 
+      probeSuccess = probe.success; 
+      if (!probe.success) { 
+        precheckProbeFailed = true; 
+        precheckProbeError = probe.errorMessage ?? &#39;媒体探测失败&#39;; 
+      } 
+      if (probe.success &amp;&amp; probe.audioTracks.length &gt; 0) { 
+        const first = probe.audioTracks[0]; 
+        probeCodec = first.codecName; 
+        probeChannels = first.channels ?? probeChannels; 
+        // ── 关键：收集整组 audio tracks ── 
+        for (let i = 0; i &lt; probe.audioTracks.length; i++) { 
+          const t = probe.audioTracks[i]; 
+          const entry: ProbeAudio = { 
+            codec: t.codecName, 
+            channels: t.channels ?? 2 
+          }; 
+          probeAudioTracks.push(entry); 
+        } 
+      } 
+      if (probe.success &amp;&amp; probe.videoTracks.length &gt; 0) { 
+        videoCodecName = (probe.videoTracks[0].codecName ?? &#39;&#39;).toLowerCase(); 
+        // 未知/缺失统一用空串表示；已知类型为 &#39;SDR&#39; | &#39;HDR10&#39; | &#39;HLG&#39; | &#39;DOLBY_VISION&#39;。 
+        probeVideoHdrType = probe.videoTracks[0].hdrType ?? &#39;&#39;; 
+        probeVideoWidth = probe.videoTracks[0].width; 
+        probeVideoHeight = probe.videoTracks[0].height; 
+        for (let i = 0; i &lt; probe.videoTracks.length; i++) { 
+          const v: ProbeVideo = { codec: (probe.videoTracks[i].codecName ?? &#39;&#39;).toLowerCase() }; 
+          probeVideoTracks.push(v); 
+        } 
+      } 
+    } catch (e) { 
+      precheckProbeFailed = true; 
+      const err = e as Record&lt;string, string&gt;; 
+      precheckProbeError = err[&#39;message&#39;] ?? JSON.stringify(e); 
+    } 
+ 
+    // 合并 probe + preset 为整组音轨分析（probe 优先，preset 作为补充） 
+    const trackAnalyses: AudioTrackAnalysis[] = []; 
+    const seenCodecs = new Set&lt;string&gt;(); 
+    for (let i = 0; i &lt; probeAudioTracks.length; i++) { 
+      const t = probeAudioTracks[i]; 
+      const codec = normalizeAudioCodec(t.codec); 
+      if (seenCodecs.has(codec)) { 
+        continue; 
+      } 
+      seenCodecs.add(codec); 
+      const analysis: AudioTrackAnalysis = { 
+        index: i, 
+        codec, 
+        channels: t.channels, 
+        hardSupported: isLikelySystemHardDecodeSupported(codec), 
+        source: &#39;probe&#39; 
+      }; 
+      trackAnalyses.push(analysis); 
+    } 
+    // preset hint 补充：仅在 probe 为空时使用 
+    if (trackAnalyses.length === 0 &amp;&amp; presetHint.codecName.length &gt; 0) { 
+      const codec = normalizeAudioCodec(presetHint.codecName); 
+      trackAnalyses.push({ 
+        index: 0, 
+        codec, 
+        channels: presetHint.channels, 
+        hardSupported: isLikelySystemHardDecodeSupported(codec), 
+        source: &#39;preset&#39; 
+      }); 
+    } 
+ 
+    const input: AudioRoutingInput = { 
+      presetCodecName: presetHint.codecName, 
+      presetChannels: presetHint.channels, 
+      presetHasAudio: (videoData.presetAudioTracks?.length ?? 0) &gt; 0, 
+      probeCodecName: probeCodec, 
+      probeChannels, 
+      probeVideoCodecName: videoCodecName, 
+      probeVideoHdrType, 
+      probeVideoWidth, 
+      probeVideoHeight, 
+      probeSuccess, 
+      probeError: precheckProbeError, 
+      precheckProbeFailed, 
+      precheckProbeError, 
+      trackAnalyses 
+    }; 
+    return buildRoutingDecision(input); 
+  } 
+ 
+  /** 
+   * 计算初始音轨选择。 
+   * - 用户绑定命中且 displayName 匹配 → 命中 
+   * - 用户绑定命中但 displayName 不在列表中 → 清除绑定 + 默认选轨 
+   * - 无用户绑定 → codec-aware 默认选轨 
+   */ 
+  async resolveInitialTrackIndex( 
+    videoPath: string, 
+    audioTracks: AudioTrackItem[] 
+  ): Promise&lt;InitialTrackIndexResult&gt; { 
+    if (audioTracks.length === 0) { 
+      return { trackIndex: 0, source: &#39;all-unplayable&#39;, shouldClearUserBinding: false }; 
+    } 
+ 
+    // 步骤 1：用户绑定命中 
+    let userBinding: AudioBinding | null = null; 
+    try { 
+      userBinding = await this.audioDispatcher.getAudioBinding(videoPath); 
+    } catch (e) { 
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `读取用户绑定失败: ${String(e)}`); 
+    } 
+ 
+    if (userBinding !== null) { 
+      let foundIndex = -1; 
+      for (let i = 0; i &lt; audioTracks.length; i++) { 
+        if (audioTracks[i].displayName === userBinding.displayName) { 
+          foundIndex = i; 
+          break; 
+        } 
+      } 
+      if (foundIndex &gt;= 0) { 
+        hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+          `命中用户绑定: index=${foundIndex} displayName=${userBinding.displayName}`); 
+        return { trackIndex: foundIndex, source: &#39;user-binding&#39;, shouldClearUserBinding: false }; 
+      } 
+      // displayName 不在列表中：清除绑定并回退默认选轨 
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 
+        `绑定 displayName 不在轨道列表中，自动清除: ${userBinding.displayName}`); 
+      try { 
+        await this.audioDispatcher.clearAudioBinding(videoPath); 
+      } catch (e) { 
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG, `清除失效绑定失败: ${String(e)}`); 
+      } 
+      return { trackIndex: findInitialAudioTrackIndex(audioTracks), source: &#39;preferred-playable&#39;, shouldClearUserBinding: true }; 
+    } 
+ 
+    // 步骤 2：默认选轨（codec-aware） 
+    return { trackIndex: findInitialAudioTrackIndex(audioTracks), source: &#39;preferred-playable&#39;, shouldClearUserBinding: false }; 
+  } 
+} 
+ 
+/** 默认无依赖实例（pure service）。 */ 
+export const audioTrackRoutingService: AudioTrackRoutingService = new AudioTrackRoutingService(); 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 15:51:13 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/audioRouting/AudioTrackRoutingService.ets","hash":"8a15d022ccb6d39c8eb01c2a5ded771277e0b4af82846b7cd8f4ec27bdba2d4e","lineCnt":601,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"codecCompatibilityRank","count":25,"regions":[{"startLoc":{"line":61,"col":1},"endLoc":{"line":86,"col":2},"count":25,"ignored":0},{"startLoc":{"line":62,"col":27},"endLoc":{"line":64,"col":4},"count":0,"ignored":0},{"startLoc":{"line":68,"col":70},"endLoc":{"line":70,"col":4},"count":18,"ignored":0},{"startLoc":{"line":72,"col":49},"endLoc":{"line":74,"col":4},"count":2,"ignored":0},{"startLoc":{"line":75,"col":27},"endLoc":{"line":77,"col":4},"count":5,"ignored":0},{"startLoc":{"line":78,"col":26},"endLoc":{"line":80,"col":4},"count":0,"ignored":0},{"startLoc":{"line":82,"col":96},"endLoc":{"line":84,"col":4},"count":0,"ignored":0},{"startLoc":{"line":85,"col":3},"endLoc":{"line":86,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":62,"col":7},"endLoc":{"line":62,"col":25},"trueCount":0,"falseCount":25,"group":[],"ignored":0},{"startLoc":{"line":67,"col":7},"endLoc":{"line":68,"col":68},"trueCount":18,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":72,"col":7},"endLoc":{"line":72,"col":47},"trueCount":2,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":75,"col":7},"endLoc":{"line":75,"col":25},"trueCount":5,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":78,"col":7},"endLoc":{"line":78,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":82,"col":7},"endLoc":{"line":82,"col":94},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"buildRoutingDecision","count":7,"regions":[{"startLoc":{"line":99,"col":1},"endLoc":{"line":177,"col":2},"count":7,"ignored":0},{"startLoc":{"line":133,"col":3},"endLoc":{"line":177,"col":2},"count":7,"ignored":0},{"startLoc":{"line":111,"col":3},"endLoc":{"line":129,"col":4},"count":5,"ignored":0},{"startLoc":{"line":113,"col":26},"endLoc":{"line":119,"col":6},"count":5,"ignored":0},{"startLoc":{"line":122,"col":12},"endLoc":{"line":128,"col":6},"count":5,"ignored":0},{"startLoc":{"line":124,"col":93},"endLoc":{"line":127,"col":8},"count":5,"ignored":0},{"startLoc":{"line":116,"col":40},"endLoc":{"line":118,"col":8},"count":5,"ignored":0},{"startLoc":{"line":120,"col":31},"endLoc":{"line":122,"col":6},"count":0,"ignored":0},{"startLoc":{"line":130,"col":57},"endLoc":{"line":132,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":113,"col":9},"endLoc":{"line":113,"col":24},"trueCount":5,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":116,"col":11},"endLoc":{"line":116,"col":38},"trueCount":5,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":120,"col":9},"endLoc":{"line":120,"col":29},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":124,"col":11},"endLoc":{"line":124,"col":91},"trueCount":5,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":130,"col":7},"endLoc":{"line":130,"col":55},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":136,"col":26},"endLoc":{"line":138,"col":64},"trueCount":5,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":138,"col":8},"endLoc":{"line":138,"col":63},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":139,"col":25},"endLoc":{"line":139,"col":83},"trueCount":5,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":140,"col":28},"endLoc":{"line":140,"col":81},"trueCount":5,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":144,"col":27},"endLoc":{"line":144,"col":90},"trueCount":5,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"normalizeTargetChannels","count":7,"regions":[{"startLoc":{"line":180,"col":1},"endLoc":{"line":194,"col":2},"count":7,"ignored":0},{"startLoc":{"line":181,"col":35},"endLoc":{"line":183,"col":4},"count":0,"ignored":0},{"startLoc":{"line":184,"col":22},"endLoc":{"line":186,"col":4},"count":0,"ignored":0},{"startLoc":{"line":187,"col":22},"endLoc":{"line":189,"col":4},"count":0,"ignored":0},{"startLoc":{"line":190,"col":22},"endLoc":{"line":192,"col":4},"count":0,"ignored":0},{"startLoc":{"line":193,"col":3},"endLoc":{"line":194,"col":2},"count":7,"ignored":0}],"branches":[{"startLoc":{"line":181,"col":7},"endLoc":{"line":181,"col":33},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":184,"col":7},"endLoc":{"line":184,"col":20},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":187,"col":7},"endLoc":{"line":187,"col":20},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":190,"col":7},"endLoc":{"line":190,"col":20},"trueCount":0,"falseCount":7,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"isLikelySystemHardDecodeSupported","count":5,"regions":[{"startLoc":{"line":197,"col":1},"endLoc":{"line":207,"col":2},"count":5,"ignored":0},{"startLoc":{"line":201,"col":3},"endLoc":{"line":205,"col":4},"count":35,"ignored":0},{"startLoc":{"line":198,"col":27},"endLoc":{"line":200,"col":4},"count":0,"ignored":0},{"startLoc":{"line":202,"col":48},"endLoc":{"line":204,"col":6},"count":0,"ignored":0},{"startLoc":{"line":206,"col":3},"endLoc":{"line":207,"col":2},"count":5,"ignored":0}],"branches":[{"startLoc":{"line":198,"col":7},"endLoc":{"line":198,"col":25},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":202,"col":9},"endLoc":{"line":202,"col":46},"trueCount":0,"falseCount":35,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"readPresetAudioHint","count":7,"regions":[{"startLoc":{"line":216,"col":1},"endLoc":{"line":240,"col":2},"count":7,"ignored":0},{"startLoc":{"line":223,"col":3},"endLoc":{"line":240,"col":2},"count":5,"ignored":0},{"startLoc":{"line":218,"col":39},"endLoc":{"line":221,"col":4},"count":2,"ignored":0},{"startLoc":{"line":229,"col":5},"endLoc":{"line":232,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":218,"col":7},"endLoc":{"line":218,"col":37},"trueCount":2,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":237,"col":21},"endLoc":{"line":237,"col":76},"trueCount":5,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":223,"col":38},"endLoc":{"line":232,"col":4},"count":0,"ignored":0},{"startLoc":{"line":226,"col":22},"endLoc":{"line":228,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":226,"col":9},"endLoc":{"line":226,"col":20},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"inferTrackChannels","count":5,"regions":[{"startLoc":{"line":243,"col":1},"endLoc":{"line":258,"col":2},"count":5,"ignored":0},{"startLoc":{"line":244,"col":59},"endLoc":{"line":246,"col":4},"count":0,"ignored":0},{"startLoc":{"line":248,"col":32},"endLoc":{"line":250,"col":4},"count":0,"ignored":0},{"startLoc":{"line":251,"col":32},"endLoc":{"line":253,"col":4},"count":0,"ignored":0},{"startLoc":{"line":254,"col":33},"endLoc":{"line":256,"col":4},"count":0,"ignored":0},{"startLoc":{"line":257,"col":3},"endLoc":{"line":258,"col":2},"count":5,"ignored":0}],"branches":[{"startLoc":{"line":244,"col":7},"endLoc":{"line":244,"col":57},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":248,"col":7},"endLoc":{"line":248,"col":30},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":251,"col":7},"endLoc":{"line":251,"col":30},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":254,"col":7},"endLoc":{"line":254,"col":31},"trueCount":0,"falseCount":5,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"normalizeChannelsForSort","count":0,"regions":[{"startLoc":{"line":261,"col":1},"endLoc":{"line":272,"col":2},"count":0,"ignored":0},{"startLoc":{"line":262,"col":16},"endLoc":{"line":264,"col":4},"count":0,"ignored":0},{"startLoc":{"line":265,"col":16},"endLoc":{"line":267,"col":4},"count":0,"ignored":0},{"startLoc":{"line":268,"col":16},"endLoc":{"line":270,"col":4},"count":0,"ignored":0},{"startLoc":{"line":271,"col":3},"endLoc":{"line":272,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":262,"col":7},"endLoc":{"line":262,"col":14},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":265,"col":7},"endLoc":{"line":265,"col":14},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":268,"col":7},"endLoc":{"line":268,"col":14},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"normalizeAudioCodec","count":26,"regions":[{"startLoc":{"line":275,"col":1},"endLoc":{"line":281,"col":2},"count":26,"ignored":0},{"startLoc":{"line":277,"col":72},"endLoc":{"line":279,"col":4},"count":15,"ignored":0},{"startLoc":{"line":280,"col":3},"endLoc":{"line":281,"col":2},"count":11,"ignored":0}],"branches":[{"startLoc":{"line":277,"col":7},"endLoc":{"line":277,"col":70},"trueCount":15,"falseCount":11,"group":[],"ignored":0}],"ignored":0,"index":8},{"name":"isAudioTrackPlayable","count":0,"regions":[{"startLoc":{"line":287,"col":1},"endLoc":{"line":305,"col":2},"count":0,"ignored":0},{"startLoc":{"line":292,"col":27},"endLoc":{"line":294,"col":4},"count":0,"ignored":0},{"startLoc":{"line":296,"col":47},"endLoc":{"line":298,"col":4},"count":0,"ignored":0},{"startLoc":{"line":300,"col":49},"endLoc":{"line":302,"col":4},"count":0,"ignored":0},{"startLoc":{"line":304,"col":3},"endLoc":{"line":305,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":292,"col":7},"endLoc":{"line":292,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":296,"col":7},"endLoc":{"line":296,"col":45},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":300,"col":7},"endLoc":{"line":300,"col":47},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"getNormalizedCodec","count":20,"regions":[{"startLoc":{"line":308,"col":1},"endLoc":{"line":311,"col":2},"count":20,"ignored":0},{"startLoc":{"line":309,"col":3},"endLoc":{"line":311,"col":2},"count":20,"ignored":0}],"branches":[],"ignored":0,"index":10},{"name":"findInitialAudioTrackIndex","count":14,"regions":[{"startLoc":{"line":327,"col":1},"endLoc":{"line":409,"col":2},"count":14,"ignored":0},{"startLoc":{"line":341,"col":27},"endLoc":{"line":355,"col":4},"count":5,"ignored":0},{"startLoc":{"line":365,"col":3},"endLoc":{"line":375,"col":4},"count":0,"ignored":0},{"startLoc":{"line":387,"col":3},"endLoc":{"line":397,"col":4},"count":0,"ignored":0},{"startLoc":{"line":343,"col":5},"endLoc":{"line":351,"col":6},"count":6,"ignored":0},{"startLoc":{"line":376,"col":29},"endLoc":{"line":382,"col":4},"count":0,"ignored":0},{"startLoc":{"line":398,"col":24},"endLoc":{"line":404,"col":4},"count":0,"ignored":0},{"startLoc":{"line":335,"col":28},"endLoc":{"line":339,"col":4},"count":9,"ignored":0},{"startLoc":{"line":346,"col":24},"endLoc":{"line":350,"col":8},"count":4,"ignored":0},{"startLoc":{"line":371,"col":95},"endLoc":{"line":374,"col":6},"count":0,"ignored":0},{"startLoc":{"line":393,"col":30},"endLoc":{"line":396,"col":6},"count":0,"ignored":0},{"startLoc":{"line":406,"col":3},"endLoc":{"line":409,"col":2},"count":0,"ignored":0},{"startLoc":{"line":352,"col":5},"endLoc":{"line":355,"col":4},"count":1,"ignored":0},{"startLoc":{"line":328,"col":33},"endLoc":{"line":330,"col":4},"count":0,"ignored":0},{"startLoc":{"line":368,"col":20},"endLoc":{"line":370,"col":6},"count":0,"ignored":0},{"startLoc":{"line":390,"col":20},"endLoc":{"line":392,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":328,"col":7},"endLoc":{"line":328,"col":31},"trueCount":0,"falseCount":14,"group":[],"ignored":0},{"startLoc":{"line":335,"col":7},"endLoc":{"line":335,"col":26},"trueCount":9,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":341,"col":7},"endLoc":{"line":341,"col":25},"trueCount":5,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":346,"col":11},"endLoc":{"line":346,"col":22},"trueCount":4,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":368,"col":9},"endLoc":{"line":368,"col":18},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":371,"col":9},"endLoc":{"line":371,"col":93},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":376,"col":7},"endLoc":{"line":376,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":390,"col":9},"endLoc":{"line":390,"col":18},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":393,"col":9},"endLoc":{"line":393,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":398,"col":7},"endLoc":{"line":398,"col":22},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":11},{"name":"serviceFindInitialAudioTrackIndex","count":0,"regions":[{"startLoc":{"line":417,"col":1},"endLoc":{"line":419,"col":2},"count":0,"ignored":0},{"startLoc":{"line":418,"col":3},"endLoc":{"line":419,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"AudioTrackRoutingService.resolveRoutingDecision","count":7,"regions":[{"startLoc":{"line":437,"col":3},"endLoc":{"line":546,"col":4},"count":7,"ignored":0},{"startLoc":{"line":458,"col":9},"endLoc":{"line":492,"col":6},"count":7,"ignored":0},{"startLoc":{"line":529,"col":5},"endLoc":{"line":546,"col":4},"count":7,"ignored":0},{"startLoc":{"line":501,"col":5},"endLoc":{"line":516,"col":6},"count":0,"ignored":0},{"startLoc":{"line":467,"col":58},"endLoc":{"line":480,"col":8},"count":0,"ignored":0},{"startLoc":{"line":481,"col":58},"endLoc":{"line":491,"col":8},"count":0,"ignored":0},{"startLoc":{"line":518,"col":72},"endLoc":{"line":527,"col":6},"count":5,"ignored":0},{"startLoc":{"line":507,"col":7},"endLoc":{"line":516,"col":6},"count":0,"ignored":0},{"startLoc":{"line":472,"col":9},"endLoc":{"line":479,"col":10},"count":0,"ignored":0},{"startLoc":{"line":492,"col":7},"endLoc":{"line":496,"col":6},"count":0,"ignored":0},{"startLoc":{"line":463,"col":27},"endLoc":{"line":466,"col":8},"count":7,"ignored":0},{"startLoc":{"line":487,"col":9},"endLoc":{"line":490,"col":10},"count":0,"ignored":0},{"startLoc":{"line":504,"col":34},"endLoc":{"line":506,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":459,"col":21},"endLoc":{"line":461,"col":82},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":463,"col":11},"endLoc":{"line":463,"col":25},"trueCount":7,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":467,"col":11},"endLoc":{"line":467,"col":56},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":481,"col":11},"endLoc":{"line":481,"col":56},"trueCount":0,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":504,"col":11},"endLoc":{"line":504,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":518,"col":9},"endLoc":{"line":518,"col":70},"trueCount":5,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"AudioTrackRoutingService.resolveInitialTrackIndex","count":5,"regions":[{"startLoc":{"line":554,"col":3},"endLoc":{"line":596,"col":4},"count":5,"ignored":0},{"startLoc":{"line":570,"col":31},"endLoc":{"line":592,"col":6},"count":0,"ignored":0},{"startLoc":{"line":572,"col":7},"endLoc":{"line":577,"col":8},"count":0,"ignored":0},{"startLoc":{"line":578,"col":28},"endLoc":{"line":582,"col":8},"count":0,"ignored":0},{"startLoc":{"line":573,"col":69},"endLoc":{"line":576,"col":10},"count":0,"ignored":0},{"startLoc":{"line":558,"col":35},"endLoc":{"line":560,"col":6},"count":0,"ignored":0},{"startLoc":{"line":564,"col":9},"endLoc":{"line":566,"col":6},"count":5,"ignored":0},{"startLoc":{"line":566,"col":7},"endLoc":{"line":568,"col":6},"count":0,"ignored":0},{"startLoc":{"line":586,"col":11},"endLoc":{"line":588,"col":8},"count":0,"ignored":0},{"startLoc":{"line":588,"col":9},"endLoc":{"line":590,"col":8},"count":0,"ignored":0},{"startLoc":{"line":595,"col":5},"endLoc":{"line":596,"col":4},"count":5,"ignored":0},{"startLoc":{"line":591,"col":7},"endLoc":{"line":592,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":558,"col":9},"endLoc":{"line":558,"col":33},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":570,"col":9},"endLoc":{"line":570,"col":29},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":573,"col":13},"endLoc":{"line":573,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":578,"col":11},"endLoc":{"line":578,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":14}],"exeLine":{"0":26,"1":27,"2":28,"3":29,"4":30,"5":32,"6":33,"7":36,"8":37,"9":38,"10":39,"11":40,"12":42,"13":43,"14":46,"15":47,"16":61,"17":62,"18":63,"19":65,"20":67,"21":68,"22":69,"23":72,"24":73,"25":75,"26":76,"27":78,"28":79,"29":82,"30":83,"31":85,"32":99,"33":100,"34":101,"35":104,"36":105,"37":106,"38":107,"39":108,"40":109,"41":110,"42":111,"43":112,"44":113,"45":114,"46":115,"47":116,"48":117,"49":120,"50":121,"51":122,"52":123,"53":124,"54":125,"55":126,"56":130,"57":131,"58":133,"59":136,"60":137,"61":138,"62":139,"63":140,"64":141,"65":143,"66":144,"67":145,"68":146,"69":147,"70":155,"71":157,"72":158,"73":159,"74":160,"75":161,"76":162,"77":163,"78":164,"79":165,"80":166,"81":167,"82":168,"83":169,"84":170,"85":171,"86":172,"87":173,"88":174,"89":176,"90":180,"91":181,"92":182,"93":184,"94":185,"95":187,"96":188,"97":190,"98":191,"99":193,"100":197,"101":198,"102":199,"103":201,"104":202,"105":203,"106":206,"107":210,"108":211,"109":212,"110":216,"111":217,"112":218,"113":219,"114":220,"115":223,"116":224,"117":225,"118":226,"119":227,"120":229,"121":230,"122":231,"123":234,"124":235,"125":236,"126":237,"127":238,"128":239,"129":243,"130":244,"131":245,"132":247,"133":248,"134":249,"135":251,"136":252,"137":254,"138":255,"139":257,"140":261,"141":262,"142":263,"143":265,"144":266,"145":268,"146":269,"147":271,"148":275,"149":276,"150":277,"151":278,"152":280,"153":287,"154":288,"155":289,"156":292,"157":293,"158":296,"159":297,"160":300,"161":301,"162":304,"163":308,"164":309,"165":310,"166":327,"167":328,"168":329,"169":331,"170":332,"171":333,"172":335,"173":336,"174":337,"175":338,"176":341,"177":343,"178":344,"179":345,"180":346,"181":347,"182":348,"183":349,"184":352,"185":353,"186":354,"187":357,"188":358,"189":360,"190":363,"191":364,"192":365,"193":366,"194":367,"195":368,"196":369,"197":371,"198":372,"199":373,"200":376,"201":377,"202":378,"203":379,"204":380,"205":381,"206":385,"207":386,"208":387,"209":388,"210":389,"211":390,"212":391,"213":393,"214":394,"215":395,"216":398,"217":399,"218":400,"219":401,"220":402,"221":403,"222":406,"223":407,"224":408,"225":417,"226":418,"227":422,"228":423,"229":437,"230":438,"231":439,"232":440,"233":441,"234":442,"235":443,"236":444,"237":445,"238":446,"239":447,"240":448,"241":449,"242":450,"243":452,"244":453,"245":455,"246":456,"247":458,"248":459,"249":460,"250":461,"251":462,"252":463,"253":464,"254":465,"255":467,"256":468,"257":469,"258":470,"259":472,"260":473,"261":474,"262":475,"263":476,"264":478,"265":481,"266":482,"267":484,"268":485,"269":486,"270":487,"271":488,"272":489,"273":492,"274":493,"275":494,"276":495,"277":499,"278":500,"279":501,"280":502,"281":503,"282":504,"283":505,"284":507,"285":508,"286":509,"287":510,"288":511,"289":512,"290":513,"291":515,"292":518,"293":519,"294":520,"295":521,"296":522,"297":523,"298":524,"299":525,"300":529,"301":530,"302":531,"303":532,"304":533,"305":534,"306":535,"307":536,"308":537,"309":538,"310":539,"311":540,"312":541,"313":542,"314":543,"315":545,"316":554,"317":555,"318":556,"319":557,"320":558,"321":559,"322":563,"323":564,"324":565,"325":566,"326":567,"327":570,"328":571,"329":572,"330":573,"331":574,"332":575,"333":578,"334":579,"335":580,"336":581,"337":584,"338":585,"339":586,"340":587,"341":588,"342":589,"343":591,"344":595,"345":600},"summary":{"lines":{"total":324,"covered":193,"pct":59.57,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,25,25,0,-1,25,-1,25,25,18,-1,-1,7,2,-1,5,5,-1,0,0,-1,-1,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,7,7,7,-1,-1,7,7,7,7,7,7,7,5,5,5,5,5,5,5,-1,-1,5,0,0,5,5,5,5,-1,-1,-1,7,0,-1,7,-1,-1,7,7,2,7,7,7,-1,7,7,7,7,7,-1,-1,-1,-1,-1,-1,-1,7,-1,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,-1,7,-1,-1,-1,7,7,0,-1,7,0,-1,7,0,-1,7,0,-1,7,-1,-1,-1,5,5,0,-1,35,35,0,-1,-1,5,-1,-1,-1,-1,-1,-1,-1,-1,-1,7,7,7,2,2,-1,-1,0,0,0,0,0,-1,0,0,0,-1,-1,5,5,5,5,5,5,-1,-1,-1,5,5,0,-1,5,5,0,-1,5,0,-1,5,0,-1,5,-1,-1,-1,0,0,0,-1,0,0,-1,0,0,-1,0,-1,-1,-1,26,26,26,15,-1,11,-1,-1,-1,-1,-1,-1,0,0,0,-1,-1,0,0,-1,-1,0,0,-1,-1,0,0,-1,-1,0,-1,-1,-1,20,20,20,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,14,14,0,-1,14,14,14,-1,14,9,9,9,-1,-1,5,-1,6,6,6,6,4,4,4,-1,-1,1,1,1,-1,-1,14,14,-1,14,-1,-1,14,14,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,0,-1,-1,-1,14,14,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,0,-1,-1,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,7,7,7,7,7,7,7,7,7,7,7,7,7,7,-1,7,7,-1,7,7,-1,7,7,7,7,7,7,7,7,-1,7,0,0,0,-1,0,0,0,0,0,-1,0,-1,-1,7,0,-1,0,0,0,0,0,0,-1,-1,0,0,0,0,-1,-1,-1,7,7,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,-1,-1,7,5,5,5,5,5,5,5,-1,-1,-1,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,-1,7,-1,-1,-1,-1,-1,-1,-1,-1,5,5,5,5,5,0,-1,-1,-1,5,5,5,0,0,-1,-1,5,0,0,0,0,0,-1,-1,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,-1,-1,-1,5,-1,-1,-1,-1,-1,-1]},"functions":{"total":15,"covered":11,"pct":73.33},"branches":{"total":112,"covered":49,"pct":43.75}}},"title":"AudioTrackRoutingService.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
