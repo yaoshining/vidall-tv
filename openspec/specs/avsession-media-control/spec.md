@@ -3,7 +3,7 @@
 ## Purpose
 应用作为系统媒体播控（AVSession Kit）的 Provider 接入，使小艺语音、智慧屏遥控器播放键与系统媒体中心能够控制本应用的播放/暂停等操作，并把当前媒体信息同步到系统侧展示。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 播放器页面 SHALL 创建并激活媒体会话
 系统 SHALL 在播放器页面出现时创建一个类型为 video 的 AVSession 并激活，作为系统媒体播控的 Provider；一个 UIAbility 生命周期内仅维护一个会话。
