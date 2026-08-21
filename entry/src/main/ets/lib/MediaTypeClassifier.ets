@@ -126,14 +126,50 @@ const SEASON_DIRECTORY_PATTERNS: RegExp[] = [
  */
 const CHINESE_SEASON_SUFFIX_PATTERN = /第\s*([\d一二三四五六七八九十百]+)\s*[季部]$/;
 
-/** 中文数字到阿拉伯数字的映射 */
-const CHINESE_DIGIT_MAP: Record<string, number> = {
+/** 中文个位数字到阿拉伯数字的映射 */
+const CHINESE_UNIT_MAP: Record<string, number> = {
   '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
-  '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
-  '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15,
-  '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20
+  '六': 6, '七': 7, '八': 8, '九': 9
 };
 
+/**
+ * 解析百级中文数字的剩余部分（"百"之后的内容）
+ *
+ * - "" → 0
+ * - "零三" → 3
+ * - "十" → 10
+ * - "二十" → 20
+ * - "二十三" → 23
+ */
+function parseHundredRemainder(rest: string): number | undefined {
+  // 零Y → Y
+  const zeroMatch = rest.match(/^零([一二三四五六七八九])$/);
+  if (zeroMatch) {
+    return CHINESE_UNIT_MAP[zeroMatch[1]] ?? 0;
+  }
+  // [Y]十[Z] → Y*10 + Z
+  const tenMatch = rest.match(/^([一二三四五六七八九])?十([一二三四五六七八九])?$/);
+  if (tenMatch) {
+    const tens = tenMatch[1] ? (CHINESE_UNIT_MAP[tenMatch[1]] ?? 0) * 10 : 10;
+    const ones = tenMatch[2] ? (CHINESE_UNIT_MAP[tenMatch[2]] ?? 0) : 0;
+    return tens + ones;
+  }
+  // 空 → 纯百
+  if (rest.length === 0) {
+    return 0;
+  }
+  return undefined;
+}
+
+/**
+ * 解析中文数字为阿拉伯数字
+ *
+ * 支持范围：
+ * - 阿拉伯数字：如 "3" → 3
+ * - 个位中文：如 "三" → 3
+ * - "十"级别：如 "十" → 10, "十三" → 13, "二十一" → 21, "三十" → 30, "九十九" → 99
+ * - "百"级别：如 "一百" → 100, "一百零三" → 103, "一百二十" → 120
+ */
 function parseChineseSeasonNumber(text: string): number | undefined {
   const trimmed = text.trim();
   // 阿拉伯数字
@@ -141,17 +177,27 @@ function parseChineseSeasonNumber(text: string): number | undefined {
   if (arabicMatch) {
     return parseInt(arabicMatch[0]);
   }
-  // 中文数字
-  const mapped = CHINESE_DIGIT_MAP[trimmed];
-  if (mapped !== undefined) {
-    return mapped;
+  // 百级：[X]百[余]
+  const hundredMatch = trimmed.match(/^([一二三四五六七八九])?百(.*)$/);
+  if (hundredMatch) {
+    const hundreds = hundredMatch[1] ? (CHINESE_UNIT_MAP[hundredMatch[1]] ?? 1) : 1;
+    const remainder = parseHundredRemainder(hundredMatch[2]);
+    if (remainder !== undefined) {
+      return hundreds * 100 + remainder;
+    }
+    return undefined;
   }
-  // 复合中文数字如 "二十一" 等（10-99 范围）
-  const tenMatch = trimmed.match(/^(二)?十([一二三四五六七八九])?$/);
+  // 十级：[X]十[Y]（X=1-9, Y=0-9）
+  const tenMatch = trimmed.match(/^([一二三四五六七八九])?十([一二三四五六七八九])?$/);
   if (tenMatch) {
-    const tens = tenMatch[1] ? 20 : 10;
-    const ones = tenMatch[2] ? (CHINESE_DIGIT_MAP[tenMatch[2]] ?? 0) : 0;
+    const tens = tenMatch[1] ? (CHINESE_UNIT_MAP[tenMatch[1]] ?? 0) * 10 : 10;
+    const ones = tenMatch[2] ? (CHINESE_UNIT_MAP[tenMatch[2]] ?? 0) : 0;
     return tens + ones;
+  }
+  // 个位中文数字
+  const unitVal = CHINESE_UNIT_MAP[trimmed];
+  if (unitVal !== undefined) {
+    return unitVal;
   }
   return undefined;
 }

@@ -216,5 +216,25 @@ export default function mediaTypeClassifierContractTest() {
       const hint = extractSeriesHintFromFilePath('/电视剧/狂飙/Season 1/19 4K.mp4');
       expect(hint).assertEqual('狂飙');
     });
+
+    // ─── #254 中文大季号回归（CodeRabbit 评审） ───
+
+    it('should parse Chinese season numbers beyond 29', 0, () => {
+      expect(extractSeasonNumberFromDirectoryName('长剧第三十季')).assertEqual(30);
+      expect(extractSeasonNumberFromDirectoryName('长剧第三十一季')).assertEqual(31);
+      expect(extractSeasonNumberFromDirectoryName('长剧第五十季')).assertEqual(50);
+      expect(extractSeasonNumberFromDirectoryName('长剧第九十九季')).assertEqual(99);
+    });
+
+    it('should parse Chinese season numbers at hundred level', 0, () => {
+      expect(extractSeasonNumberFromDirectoryName('超级剧第一百季')).assertEqual(100);
+      expect(extractSeasonNumberFromDirectoryName('超级剧第一百零三季')).assertEqual(103);
+      expect(extractSeasonNumberFromDirectoryName('超级剧第一百二十季')).assertEqual(120);
+    });
+
+    it('should strip season suffix for large Chinese season numbers', 0, () => {
+      expect(stripSeasonSuffixFromDirectoryName('长剧第三十季')).assertEqual('长剧');
+      expect(stripSeasonSuffixFromDirectoryName('超级剧第一百季')).assertEqual('超级剧');
+    });
   });
 }
