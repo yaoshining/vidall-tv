@@ -1,1 +1,1 @@
-{"id":"bb305db0c31b7e6d127ee3c8028ae25d","fullName":"isChineseSubtitle_explicitNonChineseLanguage#rejects 西语 (Spanish) even when language=zh-CN","name":"rejects 西语 (Spanish) even when language=zh-CN","status":"passed","testResultsByEnv":{"default":"c53401fe2d5d7bc3521114fae11f6c08"}}
+{"id":"bb305db0c31b7e6d127ee3c8028ae25d","fullName":"isChineseSubtitle_explicitNonChineseLanguage#rejects 西语 (Spanish) even when language=zh-CN","name":"rejects 西语 (Spanish) even when language=zh-CN","status":"passed","testResultsByEnv":{"default":"b0b5cc0c46ae24826a0cc525bfb7a55a"}}

@@ -1,1 +1,1 @@
-{"id":"d2dfba2bee0c4b51193ea03c1f9e40ef","fullName":"sanitizeUrlForAudit#含 Basic Auth 凭据的 URL → 凭据替换为 ***","name":"含 Basic Auth 凭据的 URL → 凭据替换为 ***","status":"passed","testResultsByEnv":{"default":"ddd43bd9c755f77cd206863b97039e4b"}}
+{"id":"d2dfba2bee0c4b51193ea03c1f9e40ef","fullName":"sanitizeUrlForAudit#含 Basic Auth 凭据的 URL → 凭据替换为 ***","name":"含 Basic Auth 凭据的 URL → 凭据替换为 ***","status":"passed","testResultsByEnv":{"default":"10882b5ae27333950f7984ce129541a7"}}

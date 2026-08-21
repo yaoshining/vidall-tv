@@ -1,1 +1,1 @@
-{"id":"e94f85e5fb74471dae659562e3e6034d","fullName":"getFullUrl#合并根目录和资源路径时不保留重复斜杠","name":"合并根目录和资源路径时不保留重复斜杠","status":"passed","testResultsByEnv":{"default":"9446915ee4f9fa50284cb2fdb4c3d186"}}
+{"id":"e94f85e5fb74471dae659562e3e6034d","fullName":"getFullUrl#合并根目录和资源路径时不保留重复斜杠","name":"合并根目录和资源路径时不保留重复斜杠","status":"passed","testResultsByEnv":{"default":"31de8ace45deade10ecb16dc1cf8dfff"}}
