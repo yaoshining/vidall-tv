@@ -411,6 +411,7 @@ struct ServerWideCard {
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
   @Local isFocused: boolean = false
+  @Local isPlayHovered: boolean = false
 
   private isActive(): boolean {
     return this.isHovered || this.isFocused
@@ -446,21 +447,24 @@ struct ServerWideCard {
           .backgroundColor(this.isActive() ? 'rgba(0,0,0,0.48)' : '#00000000')
           .animation({ duration: 160, curve: Curve.EaseOut })
           .hitTestBehavior(HitTestMode.Transparent)
-        if (this.isActive()) {
-          Column() {
-            SymbolGlyph($r('sys.symbol.play_fill'))
-              .fontColor([Color.White])
-              .fontSize(30)
-          }
-          .width(60).height(60)
-          .backgroundColor('rgba(20,20,20,0.74)')
-          .borderRadius(30)
-          .border({ width: 1, color: 'rgba(255,255,255,0.24)' })
-          .shadow({ radius: 16, color: 'rgba(0,0,0,0.42)' })
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center)
-          .hitTestBehavior(HitTestMode.Transparent)
+        Column() {
+          SymbolGlyph($r('sys.symbol.play_fill'))
+            .fontColor([this.isPlayHovered ? '#2B9BDA' : Color.White])
+            .fontSize(30)
         }
+        .width(60).height(60)
+        .backgroundColor(this.isPlayHovered ? 'rgba(43,155,218,0.22)' : 'rgba(20,20,20,0.74)')
+        .borderRadius(30)
+        .border({ width: 1, color: this.isPlayHovered ? 'rgba(43,155,218,0.78)' : 'rgba(255,255,255,0.24)' })
+        .shadow({ radius: this.isPlayHovered ? 20 : 16, color: 'rgba(0,0,0,0.42)' })
+        .opacity(this.isActive() ? 1.0 : 0.0)
+        .scale({ x: this.isPlayHovered ? 1.14 : 1.0, y: this.isPlayHovered ? 1.14 : 1.0 })
+        .animation({ duration: 180, curve: Curve.EaseOut })
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .enabled(this.isActive())
+        .onHover((isHover: boolean) => { this.isPlayHovered = isHover })
+        .hitTestBehavior(HitTestMode.Transparent)
         if (this.showProgress && this.item.progress > 0) {
           Stack({ alignContent: Alignment.Start }) {
             Column().width(SERVER_WIDE_WIDTH).height(4).backgroundColor('rgba(0,0,0,0.6)')
@@ -499,6 +503,7 @@ struct ServerPosterCard {
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
   @Local isFocused: boolean = false
+  @Local isPlayHovered: boolean = false
 
   private isActive(): boolean {
     return this.isHovered || this.isFocused
@@ -527,21 +532,24 @@ struct ServerPosterCard {
           .backgroundColor(this.isActive() ? 'rgba(0,0,0,0.48)' : '#00000000')
           .animation({ duration: 160, curve: Curve.EaseOut })
           .hitTestBehavior(HitTestMode.Transparent)
-        if (this.isActive()) {
-          Column() {
-            SymbolGlyph($r('sys.symbol.play_fill'))
-              .fontColor([Color.White])
-              .fontSize(28)
-          }
-          .width(56).height(56)
-          .backgroundColor('rgba(20,20,20,0.74)')
-          .borderRadius(28)
-          .border({ width: 1, color: 'rgba(255,255,255,0.24)' })
-          .shadow({ radius: 16, color: 'rgba(0,0,0,0.42)' })
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center)
-          .hitTestBehavior(HitTestMode.Transparent)
+        Column() {
+          SymbolGlyph($r('sys.symbol.play_fill'))
+            .fontColor([this.isPlayHovered ? '#2B9BDA' : Color.White])
+            .fontSize(28)
         }
+        .width(56).height(56)
+        .backgroundColor(this.isPlayHovered ? 'rgba(43,155,218,0.22)' : 'rgba(20,20,20,0.74)')
+        .borderRadius(28)
+        .border({ width: 1, color: this.isPlayHovered ? 'rgba(43,155,218,0.78)' : 'rgba(255,255,255,0.24)' })
+        .shadow({ radius: this.isPlayHovered ? 20 : 16, color: 'rgba(0,0,0,0.42)' })
+        .opacity(this.isActive() ? 1.0 : 0.0)
+        .scale({ x: this.isPlayHovered ? 1.14 : 1.0, y: this.isPlayHovered ? 1.14 : 1.0 })
+        .animation({ duration: 180, curve: Curve.EaseOut })
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .enabled(this.isActive())
+        .onHover((isHover: boolean) => { this.isPlayHovered = isHover })
+        .hitTestBehavior(HitTestMode.Transparent)
       }
       .width(SERVER_POSTER_WIDTH).aspectRatio(SERVER_POSTER_ASPECT)
       .borderRadius(6).clip(true)
