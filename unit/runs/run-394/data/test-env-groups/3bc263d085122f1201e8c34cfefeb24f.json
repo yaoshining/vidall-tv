@@ -1,1 +1,0 @@
-{"id":"3bc263d085122f1201e8c34cfefeb24f","fullName":"OpenSubtitlesPrefs_api_key_readwrite#should return empty string when OPENSUBTITLES_API_KEY is not set","name":"should return empty string when OPENSUBTITLES_API_KEY is not set","status":"passed","testResultsByEnv":{"default":"183ae660660a1e7061a3ac6af3e3c1aa"}}

@@ -1,1 +1,0 @@
-{"id":"3ce93a69fc2a9102e0b52c67bdc780fd","fullName":"FileExplorerAdapter#getFileExplorerErrorMessage 会兼容 message 对象与字符串输入","name":"getFileExplorerErrorMessage 会兼容 message 对象与字符串输入","status":"passed","testResultsByEnv":{"default":"d22dd0f663326bd43f4c94ef07b2b975"}}

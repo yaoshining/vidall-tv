@@ -1,0 +1,1719 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import socket from &#39;@ohos.net.socket&#39;; 
+import buffer from &#39;@ohos.buffer&#39;; 
+import http from &#39;@ohos.net.http&#39;; 
+import * as VidAllCorePlayerNapiModule from &#39;libvidall_core_player_napi.so&#39;; 
+import { WebDavConnection } from &#39;./WebDavConnection&#39;; 
+import { classifyTlsError, isTlsError, sanitizeUrlForAudit } from &#39;./WebDavUtils&#39;; 
+ 
+interface WebDavRequestResult { 
+  statusCode: number; 
+  body: string; 
+  error: string; 
+} 
+ 
+interface WebDavDownloadResult { 
+  statusCode: number; 
+  downloadedBytes: number; 
+  error: string; 
+} 
+ 
+interface NativeCapabilities { 
+  ffmpegEnabled: boolean; 
+  libcurlEnabled: boolean; 
+  libcurlVersion: string; 
+} 
+ 
+interface WebDavNapiBridge { 
+  webdavRequest: ( 
+    method: string, 
+    url: string, 
+    headerLines: string, 
+    body: string, 
+    timeoutMs: number, 
+    tlsPolicy: string 
+  ) =&gt; WebDavRequestResult; 
+  downloadToFile: ( 
+    method: string, 
+    url: string, 
+    headerLines: string, 
+    body: string, 
+    timeoutMs: number, 
+    outputPath: string, 
+    tlsPolicy: string 
+  ) =&gt; WebDavDownloadResult; 
+  getNativeCapabilities: () =&gt; NativeCapabilities; 
+} 
+ 
+interface WebDavNapiBridgeModule { 
+  default?: WebDavNapiBridge; 
+} 
+ 
+function getVidAllCorePlayerNapi(): WebDavNapiBridge { 
+  const bridgeModule = VidAllCorePlayerNapiModule as WebDavNapiBridgeModule | WebDavNapiBridge | undefined; 
+  if (bridgeModule === undefined) { 
+    throw new Error(&#39;libvidall_core_player_napi.so 未加载&#39;); 
+  } 
+  const defaultBridge = (bridgeModule as WebDavNapiBridgeModule).default; 
+  if (defaultBridge !== undefined) { 
+    return defaultBridge as WebDavNapiBridge; 
+  } 
+  return bridgeModule as WebDavNapiBridge; 
+} 
+ 
+export class HttpResponse { 
+  statusCode: number = 0; 
+  statusText: string = &#39;&#39;; 
+  headers: Map&lt;string, string&gt; = new Map(); 
+  body: string = &#39;&#39;; 
+} 
+ 
+/** 
+ * WebDAV HTTP 传输层：承载 native libcurl / TCPSocket / TLSSocket 三条链路 
+ * 与多级降级策略，以及 HTTP 响应解析。 
+ * 拆分自 WebDAVClient.ets。 
+ */ 
+export class WebDavHttp { 
+  private connection: WebDavConnection; 
+  // 阶段3收口：默认不再自动回退到旧 socket 链路，仅在排障时手动放开。 
+  private readonly allowLegacyTransportFallback: boolean = false; 
+  // 阶段3收口：默认禁止 HTTPS 失败后降级到明文 HTTP。 
+  private readonly allowInsecureHttpDowngrade: boolean = false; 
+  // 缓存 native libcurl 可用性（null = 未检测） 
+  private _nativeCurlEnabled: boolean | null = null; 
+ 
+  constructor(connection: WebDavConnection) { 
+    this.connection = connection; 
+  } 
+ 
+  /** 
+   * 构建 HTTP 请求字符串 
+   */ 
+  private buildHttpRequestString( 
+    method: string, 
+    path: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string 
+  ): string { 
+    let request = `${method} ${path} HTTP/1.1\r\n`; 
+    // 标准端口（HTTP:80 / HTTPS:443）不加端口号，部分服务器对带端口的 Host 头不响应 
+    const isStandardPort = (this.connection.isHttps &amp;&amp; this.connection.port === 443) || (!this.connection.isHttps &amp;&amp; this.connection.port === 80); 
+    const hostHeader = isStandardPort ? this.connection.host : `${this.connection.host}:${this.connection.port}`; 
+    request += `Host: ${hostHeader}\r\n`; 
+ 
+    const headerKeys = Object.keys(headers); 
+    for (let i = 0; i &lt; headerKeys.length; i++) { 
+      const key = headerKeys[i]; 
+      request += `${key}: ${headers[key]}\r\n`; 
+    } 
+ 
+    if (body) { 
+      const bodyBytes = buffer.from(body, &#39;utf-8&#39;); 
+      request += `Content-Length: ${bodyBytes.length}\r\n`; 
+    } else { 
+      request += `Content-Length: 0\r\n`; 
+    } 
+ 
+    request += `Connection: close\r\n`; 
+    request += `\r\n`; 
+ 
+    if (body) { 
+      request += body; 
+    } 
+ 
+    return request; 
+  } 
+ 
+  /** 
+   * 日志输出前脱敏敏感请求头，避免凭据明文泄露。 
+   */ 
+  sanitizeRequestForLog(request: string): string { 
+    return request.replace(/(Authorization\s*:\s*)[^\r\n]*/ig, &#39;$1Basic ***&#39;); 
+  } 
+ 
+  /** 懒检测 native libcurl 是否可用 */ 
+  checkNativeCurlEnabled(): boolean { 
+    if (this._nativeCurlEnabled === null) { 
+      try { 
+        const caps = getVidAllCorePlayerNapi().getNativeCapabilities(); 
+        this._nativeCurlEnabled = caps.libcurlEnabled; 
+      } catch (e) { 
+        this._nativeCurlEnabled = false; 
+      } 
+    } 
+    return this._nativeCurlEnabled; 
+  } 
+ 
+  /** 
+   * 记录 TLS 审计日志（脱敏 URL，保留错误信息以供排障）。 
+   * TAG：VidAll_TLS_Audit，可通过 hilog | grep VidAll_TLS_Audit 提取。 
+   */ 
+  private logTlsAudit(op: string, rawUrl: string, errorMsg: string): void { 
+    const sanitizedUrl = sanitizeUrlForAudit(rawUrl); 
+    console.error(`[VidAll_TLS_Audit] op=${op} url=${sanitizedUrl} error=${errorMsg}`); 
+  } 
+ 
+  /** 
+   * 通过 native libcurl 发送 WebDAV 请求（仅在 libcurlEnabled 时调用）。 
+   * 失败时由上层 sendRawHttpRequest 捕获并回退到 socket 实现。 
+   * webdavRequest NAPI 为异步 Promise，必须 await，禁止同步调用。 
+   */ 
+  private async sendViaNative( 
+    method: string, 
+    encodedPath: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string 
+  ): Promise&lt;HttpResponse&gt; { 
+    const isStd = (this.connection.isHttps &amp;&amp; this.connection.port === 443) || (!this.connection.isHttps &amp;&amp; this.connection.port === 80); 
+    const portStr = isStd ? &#39;&#39; : `:${this.connection.port}`; 
+    const scheme = this.connection.isHttps ? &#39;https&#39; : &#39;http&#39;; 
+    const fullUrl = `${scheme}://${this.connection.host}${portStr}${encodedPath}`; 
+ 
+    const keys = Object.keys(headers); 
+    const parts: string[] = []; 
+    for (let i = 0; i &lt; keys.length; i++) { 
+      const item: string = `${keys[i]}: ${headers[keys[i]]}`; 
+      parts.push(item); 
+    } 
+    const headerLines = parts.join(&#39;\r\n&#39;); 
+ 
+    const result = await getVidAllCorePlayerNapi().webdavRequest( 
+      method, fullUrl, headerLines, body ?? &#39;&#39;, this.connection.timeout, this.connection.tlsCertPolicy 
+    ); 
+ 
+    if (result.error) { 
+      if (isTlsError(result.error)) { 
+        this.logTlsAudit(method, fullUrl, result.error); 
+        const userMsg = classifyTlsError(result.error); 
+        throw new Error(userMsg !== null ? userMsg + &#39; [&#39; + result.error + &#39;]&#39; : result.error); 
+      } 
+      throw new Error(&#39;native curl: &#39; + result.error); 
+    } 
+ 
+    const resp = new HttpResponse(); 
+    resp.statusCode = result.statusCode; 
+    resp.body = result.body; 
+    return resp; 
+  } 
+ 
+  private buildNativeUrl(encodedPath: string): string { 
+    const isStd = (this.connection.isHttps &amp;&amp; this.connection.port === 443) || (!this.connection.isHttps &amp;&amp; this.connection.port === 80); 
+    const portStr = isStd ? &#39;&#39; : `:${this.connection.port}`; 
+    const scheme = this.connection.isHttps ? &#39;https&#39; : &#39;http&#39;; 
+    return `${scheme}://${this.connection.host}${portStr}${encodedPath}`; 
+  } 
+ 
+  private buildHeaderLines(headers: Record&lt;string, string&gt;): string { 
+    const keys = Object.keys(headers); 
+    const parts: string[] = []; 
+    for (let i = 0; i &lt; keys.length; i++) { 
+      const item: string = `${keys[i]}: ${headers[keys[i]]}`; 
+      parts.push(item); 
+    } 
+    return parts.join(&#39;\r\n&#39;); 
+  } 
+ 
+  async downloadViaNative( 
+    encodedPath: string, 
+    localFilePath: string, 
+    headers: Record&lt;string, string&gt; 
+  ): Promise&lt;WebDavDownloadResult&gt; { 
+    const fullUrl = this.buildNativeUrl(encodedPath); 
+    const headerLines = this.buildHeaderLines(headers); 
+    const result = await getVidAllCorePlayerNapi().downloadToFile( 
+      &#39;GET&#39;, fullUrl, headerLines, &#39;&#39;, this.connection.timeout * 2, localFilePath, this.connection.tlsCertPolicy 
+    ); 
+    if (result.error &amp;&amp; isTlsError(result.error)) { 
+      this.logTlsAudit(&#39;GET_DOWNLOAD&#39;, fullUrl, result.error); 
+      const userMsg = classifyTlsError(result.error); 
+      const finalMsg = userMsg !== null ? userMsg + &#39; [&#39; + result.error + &#39;]&#39; : result.error; 
+      const enhanced: WebDavDownloadResult = { 
+        statusCode: result.statusCode, 
+        downloadedBytes: result.downloadedBytes, 
+        error: finalMsg 
+      }; 
+      return enhanced; 
+    } 
+    return result; 
+  } 
+ 
+  /** 
+   * 使用 Socket 发送请求 - 支持 HTTP（TCP）和 HTTPS（http 模块）。 
+   * 若 native libcurl 可用则优先走 native，失败自动回退到 socket/http 实现。 
+   */ 
+  async sendRawHttpRequest( 
+    method: string, 
+    path: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string 
+  ): Promise&lt;HttpResponse&gt; { 
+    // ── native libcurl 优先路径 ──────────────────────────────────────────── 
+    if (this.checkNativeCurlEnabled()) { 
+      try { 
+        return await this.sendViaNative(method, path, headers, body); 
+      } catch (e) { 
+        const nativeErr = (e as Error).message; 
+        if (!this.allowLegacyTransportFallback) { 
+          throw new Error(`native transport failed: ${nativeErr}`); 
+        } 
+        console.warn(`WebDAV native fallback enabled: ${nativeErr}`); 
+      } 
+    } 
+    if (!this.allowLegacyTransportFallback) { 
+      throw new Error(&#39;legacy transport fallback disabled&#39;); 
+    } 
+    // ── 回退：现有 socket / http 实现 ────────────────────────────────────── 
+    if (this.connection.isHttps) { 
+      return this.sendHttpsRequestViaHttpModule(method, path, headers, body); 
+    } 
+    return this.sendRawHttpPlainRequest(method, path, headers, body); 
+  } 
+ 
+  /** 
+   * HTTPS WebDAV 请求 — 三级降级策略： 
+   *  Level 1: POST + X-HTTP-Method-Override（Nextcloud/Apache/Synology 等支持） 
+   *  Level 2: TLSSocket 直接发 PROPFIND（对 TLSSocket message 事件正常的设备） 
+   *  Level 3: HTTP 明文降级（443→80，其他端口保持），兜底方案 
+   * @ohos.net.http 枚举白名单在 native 层校验无法绕过，不在此处使用自定义 method。 
+   */ 
+  private async sendHttpsRequestViaHttpModule( 
+    method: string, 
+    path: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string 
+  ): Promise&lt;HttpResponse&gt; { 
+    const isStdPort = this.connection.port === 443; 
+    const portStr = isStdPort ? &#39;&#39; : `:${this.connection.port}`; 
+    const url = `https://${this.connection.host}${portStr}${path}`; 
+    console.info(`WebDAV HTTPS: ${method} ${url}`); 
+ 
+    // ── Level 1: POST + X-HTTP-Method-Override ────────────────────────────── 
+    try { 
+      const result = await this.tryHttpsViaPostOverride(method, url, headers, body); 
+      // 410/405/400/501 表示服务器不支持 Override，需继续降级 
+      // 其余状态码（含 207/404/401 等）表示服务器正确处理了请求 
+      const s = result.statusCode; 
+      if (s !== 410 &amp;&amp; s !== 405 &amp;&amp; s !== 400 &amp;&amp; s !== 501) { 
+        console.info(`WebDAV HTTPS Level1 OK: ${s}`); 
+        return result; 
+      } 
+      console.warn(`WebDAV HTTPS Level1 fallback (status=${s}), trying TLSSocket...`); 
+    } catch (e) { 
+      console.warn(`WebDAV HTTPS Level1 error: ${(e as Error).message}, trying TLSSocket...`); 
+    } 
+ 
+    // ── Level 2: TLSSocket 直接发 PROPFIND ────────────────────────────────── 
+    try { 
+      const result = await this.sendRawHttpsRequest(method, path, headers, body); 
+      console.info(`WebDAV HTTPS Level2 (TLS) OK: ${result.statusCode}`); 
+      return result; 
+    } catch (e) { 
+      console.warn(`WebDAV HTTPS Level2 (TLS) error: ${(e as Error).message}, trying HTTP fallback...`); 
+    } 
+ 
+    if (!this.allowInsecureHttpDowngrade) { 
+      throw new Error(&#39;HTTPS fallback exhausted and insecure HTTP downgrade is disabled&#39;); 
+    } 
+ 
+    // ── Level 3: HTTP 明文降级（443→80，其他端口保持） ─────────────────────── 
+    const httpPort = this.connection.port === 443 ? 80 : this.connection.port; 
+    console.warn(`WebDAV HTTPS Level3: HTTP fallback to ${this.connection.host}:${httpPort}`); 
+    return this.sendRawHttpPlainRequest(method, path, headers, body, this.connection.host, httpPort); 
+  } 
+ 
+  /** Level 1 实现：POST + X-HTTP-Method-Override（返回 Promise，便于 try/catch） */ 
+  private tryHttpsViaPostOverride( 
+    method: string, 
+    url: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string 
+  ): Promise&lt;HttpResponse&gt; { 
+    return new Promise((resolve, reject) =&gt; { 
+      const overrideHeaders: Record&lt;string, string&gt; = {}; 
+      const hkeys = Object.keys(headers); 
+      for (let i = 0; i &lt; hkeys.length; i++) { 
+        overrideHeaders[hkeys[i]] = headers[hkeys[i]]; 
+      } 
+      overrideHeaders[&#39;X-HTTP-Method-Override&#39;] = method; 
+ 
+      const httpReq = http.createHttp(); 
+      const opts: http.HttpRequestOptions = { 
+        method: http.RequestMethod.POST, 
+        header: overrideHeaders, 
+        connectTimeout: this.connection.timeout, 
+        readTimeout: this.connection.timeout, 
+        expectDataType: http.HttpDataType.STRING 
+      }; 
+      if (body) { 
+        opts.extraData = body; 
+      } 
+      httpReq.request(url, opts, (err, data) =&gt; { 
+        httpReq.destroy(); 
+        if (err) { 
+          const bizErr = err as BusinessError; 
+          reject(new Error(bizErr.message || &#39;POST+Override request failed&#39;)); 
+          return; 
+        } 
+        const response = new HttpResponse(); 
+        response.statusCode = data.responseCode as number; 
+        response.statusText = &#39;&#39;; 
+        response.body = typeof data.result === &#39;string&#39; ? data.result : &#39;&#39;; 
+        const respHeaders = data.header as Record&lt;string, string&gt;; 
+        const rkeys = Object.keys(respHeaders); 
+        for (let i = 0; i &lt; rkeys.length; i++) { 
+          response.headers.set(rkeys[i].toLowerCase(), respHeaders[rkeys[i]]); 
+        } 
+        console.info(`WebDAV HTTPS POST+Override: ${response.statusCode}, body=${response.body.length}chars`); 
+        resolve(response); 
+      }); 
+    }); 
+  } 
+ 
+  /** 
+   * HTTP 明文请求（TCPSocket） 
+   * overrideHost/overridePort：供 HTTPS 降级时替换连接目标 
+   */ 
+  private async sendRawHttpPlainRequest( 
+    method: string, 
+    path: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string, 
+    overrideHost?: string, 
+    overridePort?: number 
+  ): Promise&lt;HttpResponse&gt; { 
+    return new Promise((resolve, reject) =&gt; { 
+      const tcp = socket.constructTCPSocketInstance(); 
+      let fullResponseData = &#39;&#39;; 
+      let isComplete = false; 
+      let hasReceivedData = false; 
+      let contentLength = 0; 
+ 
+      const connectHost = overrideHost ?? this.connection.host; 
+      const connectPort = overridePort ?? this.connection.port; 
+ 
+      const address: socket.NetAddress = { 
+        address: connectHost, 
+        port: connectPort, 
+        family: 1 
+      }; 
+ 
+      console.info(`WebDAV: Connecting to ${connectHost}:${connectPort}`); 
+ 
+      const timeoutId = setTimeout(() =&gt; { 
+        if (!isComplete) { 
+          console.error(&#39;Request timeout&#39;); 
+          isComplete = true; 
+          tcp.close(); 
+ 
+          if (fullResponseData.length &gt; 0) { 
+            try { 
+              const response = this.parseHttpResponse(fullResponseData); 
+              resolve(response); 
+            } catch (error) { 
+              reject(new Error(&#39;Timeout and parse failed&#39;)); 
+            } 
+          } else { 
+            reject(new Error(&#39;Timeout - no data received&#39;)); 
+          } 
+        } 
+      }, this.connection.timeout); 
+ 
+      tcp.on(&#39;message&#39;, (value: socket.SocketMessageInfo) =&gt; { 
+        if (isComplete) return; 
+ 
+        try { 
+          console.info(&#39;Message event triggered&#39;); 
+ 
+          if (!value.message) { 
+            console.warn(&#39;Received null message&#39;); 
+            return; 
+          } 
+ 
+          const messageData = value.message as ArrayBuffer; 
+ 
+          if (messageData.byteLength === 0) { 
+            console.warn(&#39;Received empty ArrayBuffer&#39;); 
+            return; 
+          } 
+ 
+          hasReceivedData = true; 
+ 
+          const receivedBuffer = buffer.from(messageData); 
+          const chunk = receivedBuffer.toString(&#39;utf-8&#39;); 
+          fullResponseData += chunk; 
+ 
+          console.info(`Received ${chunk.length} bytes, total: ${fullResponseData.length}`); 
+ 
+          if (this.isHttpResponseComplete(fullResponseData)) { 
+            console.info(&#39;Complete response detected&#39;); 
+            isComplete = true; 
+            clearTimeout(timeoutId); 
+ 
+            try { 
+              const response = this.parseHttpResponse(fullResponseData); 
+              tcp.close(); 
+              resolve(response); 
+            } catch (error) { 
+              tcp.close(); 
+              reject(error); 
+            } 
+          } 
+        } catch (error) { 
+          console.error(&#39;Message error:&#39;, JSON.stringify(error)); 
+        } 
+      }); 
+ 
+      tcp.on(&#39;close&#39;, () =&gt; { 
+        console.info(`Connection closed, received data: ${hasReceivedData}`); 
+ 
+        if (!isComplete) { 
+          isComplete = true; 
+          clearTimeout(timeoutId); 
+ 
+          if (fullResponseData.length &gt; 0) { 
+            try { 
+              const response = this.parseHttpResponse(fullResponseData); 
+              resolve(response); 
+            } catch (error) { 
+              reject(error); 
+            } 
+          } else { 
+            reject(new Error(&#39;Connection closed without receiving data&#39;)); 
+          } 
+        } 
+      }); 
+ 
+      tcp.on(&#39;error&#39;, (err: Error) =&gt; { 
+        console.error(&#39;Socket error:&#39;, JSON.stringify(err)); 
+ 
+        if (!isComplete) { 
+          isComplete = true; 
+          clearTimeout(timeoutId); 
+          tcp.close(); 
+          reject(err); 
+        } 
+      }); 
+ 
+      tcp.connect({ address: address, timeout: 10000 }) 
+        .then(() =&gt; { 
+          console.info(&#39;Connected, sending request...&#39;); 
+ 
+          // HTTPS 降级时，用实际连接的 host:port 覆盖 Host 头 
+          if (overrideHost !== undefined || overridePort !== undefined) { 
+            const h = overrideHost ?? this.connection.host; 
+            const p = overridePort ?? this.connection.port; 
+            headers[&#39;Host&#39;] = (p === 80) ? h : `${h}:${p}`; 
+          } 
+          const request = this.buildHttpRequestString(method, path, headers, body); 
+          const sanitizedRequestLog = this.sanitizeRequestForLog(request); 
+ 
+          console.info(&#39;=== REQUEST ===&#39;); 
+          console.info(sanitizedRequestLog); 
+          console.info(&#39;=== END ===&#39;); 
+ 
+          const sendBuffer = buffer.from(request, &#39;utf-8&#39;); 
+ 
+          return tcp.send({ data: sendBuffer.buffer }); 
+        }) 
+        .then(() =&gt; { 
+          console.info(&#39;Request sent, waiting for response...&#39;); 
+ 
+          setTimeout(() =&gt; { 
+            if (!hasReceivedData &amp;&amp; !isComplete) { 
+              console.info(&#39;No message event received, trying manual receive...&#39;); 
+ 
+              tcp.getState().then((state: socket.SocketStateBase) =&gt; { 
+                console.info(&#39;Socket state:&#39;, JSON.stringify(state)); 
+ 
+                if (state.isClose) { 
+                  console.info(&#39;Socket already closed&#39;); 
+ 
+                  if (!isComplete) { 
+                    isComplete = true; 
+                    clearTimeout(timeoutId); 
+                    reject(new Error(&#39;Socket closed before receiving data&#39;)); 
+                  } 
+                } 
+              }); 
+            } 
+          }, 2000); 
+        }) 
+        .catch((err: Error) =&gt; { 
+          console.error(&#39;Connect/Send error:&#39;, JSON.stringify(err)); 
+ 
+          if (!isComplete) { 
+            isComplete = true; 
+            clearTimeout(timeoutId); 
+            tcp.close(); 
+            reject(err); 
+          } 
+        }); 
+    }); 
+  } 
+ 
+  /** 
+   * HTTPS 加密请求（TLSSocket） 
+   * bind/connect/send 全部用 Promise 链，确保时序正确。 
+   * message 事件 + close 事件双重兜底接收响应数据。 
+   */ 
+  private async sendRawHttpsRequest( 
+    method: string, 
+    path: string, 
+    headers: Record&lt;string, string&gt;, 
+    body?: string 
+  ): Promise&lt;HttpResponse&gt; { 
+    return new Promise((resolve, reject) =&gt; { 
+      const tls = socket.constructTLSSocketInstance(); 
+      const receivedChunks: ArrayBuffer[] = []; 
+      let isComplete = false; 
+ 
+      const tlsConnectOptions: socket.TLSConnectOptions = { 
+        address: { address: this.connection.host, port: this.connection.port, family: 1 }, 
+        secureOptions: { 
+          useRemoteCipherPrefer: true, 
+          protocols: [socket.Protocol.TLSv12, socket.Protocol.TLSv13], 
+          signatureAlgorithms: &#39;rsa_pss_rsae_sha256:ECDSA+SHA256&#39; 
+        } 
+      }; 
+ 
+      console.info(`WebDAV TLS: start — ${this.connection.host}:${this.connection.port}`); 
+ 
+      const flushChunks = (): string =&gt; { 
+        let totalLen = 0; 
+        for (let i = 0; i &lt; receivedChunks.length; i++) { 
+          totalLen += receivedChunks[i].byteLength; 
+        } 
+        const merged = new Uint8Array(totalLen); 
+        let offset = 0; 
+        for (let i = 0; i &lt; receivedChunks.length; i++) { 
+          merged.set(new Uint8Array(receivedChunks[i]), offset); 
+          offset += receivedChunks[i].byteLength; 
+        } 
+        return buffer.from(merged.buffer as ArrayBuffer).toString(&#39;utf-8&#39;); 
+      }; 
+ 
+      const doResolve = (text: string): void =&gt; { 
+        if (isComplete) return; 
+        isComplete = true; 
+        clearTimeout(timeoutId); 
+        try { tls.close(); } catch (_) {} 
+        try { resolve(this.parseHttpResponse(text)); } catch (e) { 
+          reject(new Error(&#39;TLS: parse failed&#39;)); 
+        } 
+      }; 
+ 
+      const doReject = (msg: string): void =&gt; { 
+        if (isComplete) return; 
+        isComplete = true; 
+        clearTimeout(timeoutId); 
+        try { tls.close(); } catch (_) {} 
+        reject(new Error(msg)); 
+      }; 
+ 
+      const timeoutId = setTimeout(() =&gt; { 
+        console.error(`WebDAV TLS: timeout after ${this.connection.timeout}ms, chunks=${receivedChunks.length}`); 
+        const text = flushChunks(); 
+        if (text.length &gt; 0) { 
+          doResolve(text); 
+        } else { 
+          doReject(&#39;TLS Timeout - no data received&#39;); 
+        } 
+      }, this.connection.timeout); 
+ 
+      // message 事件（部分设备可触发） 
+      tls.on(&#39;message&#39;, (value: socket.SocketMessageInfo) =&gt; { 
+        if (isComplete) return; 
+        const chunk = value.message as ArrayBuffer; 
+        if (!chunk || chunk.byteLength === 0) return; 
+        receivedChunks.push(chunk); 
+        console.info(`WebDAV TLS: message ${chunk.byteLength} bytes, total=${receivedChunks.length}`); 
+        const text = flushChunks(); 
+        if (this.isHttpResponseComplete(text)) { 
+          console.info(&#39;WebDAV TLS: complete via message&#39;); 
+          doResolve(text); 
+        } 
+      }); 
+ 
+      // close 事件兜底：Connection:close 时服务器会主动断开 
+      tls.on(&#39;close&#39;, () =&gt; { 
+        console.info(`WebDAV TLS: closed, chunks=${receivedChunks.length}`); 
+        if (!isComplete) { 
+          const text = flushChunks(); 
+          if (text.length &gt; 0) { 
+            doResolve(text); 
+          } else { 
+            doReject(&#39;TLS closed without data&#39;); 
+          } 
+        } 
+      }); 
+ 
+      tls.on(&#39;error&#39;, (err: Error) =&gt; { 
+        console.error(`WebDAV TLS: socket error: ${JSON.stringify(err)}`); 
+        doReject(`TLS error: ${JSON.stringify(err)}`); 
+      }); 
+ 
+      const localAddr: socket.NetAddress = { address: &#39;0.0.0.0&#39;, port: 0, family: 1 }; 
+      tls.bind(localAddr) 
+        .then(() =&gt; { 
+          console.info(&#39;WebDAV TLS: bind ok, connecting...&#39;); 
+          return tls.connect(tlsConnectOptions); 
+        }) 
+        .then(() =&gt; { 
+          console.info(&#39;WebDAV TLS: connected, building request...&#39;); 
+          const request = this.buildHttpRequestString(method, path, headers, body); 
+          console.info(&#39;WebDAV TLS request:\n&#39; + this.sanitizeRequestForLog(request)); 
+          const buf = buffer.from(request, &#39;utf-8&#39;); 
+          // 强制用 string 发送（某些版本 ArrayBuffer 发送后服务器收不到完整数据） 
+          return tls.send(request); 
+        }) 
+        .then(() =&gt; { 
+          console.info(&#39;WebDAV TLS: send ok, waiting for response...&#39;); 
+        }) 
+        .catch((err: Error) =&gt; { 
+          console.error(`WebDAV TLS: connect/send error: ${JSON.stringify(err)}`); 
+          doReject(`TLS connect/send error: ${JSON.stringify(err)}`); 
+        }); 
+    }); 
+  } 
+ 
+  isHttpResponseComplete(data: string): boolean { 
+    const headerEndIndex = data.indexOf(&#39;\r\n\r\n&#39;); 
+    if (headerEndIndex === -1) { 
+      return false; 
+    } 
+ 
+    const contentLengthMatch = data.match(/Content-Length:\s*(\d+)/i); 
+    if (contentLengthMatch) { 
+      const expectedLength = parseInt(contentLengthMatch[1]); 
+      const bodyStart = headerEndIndex + 4; 
+      const actualBodyLength = data.length - bodyStart; 
+ 
+      console.info(`Content-Length: ${expectedLength}, Actual: ${actualBodyLength}`); 
+ 
+      return actualBodyLength &gt;= expectedLength; 
+    } 
+ 
+    if (data.match(/Transfer-Encoding:\s*chunked/i)) { 
+      return data.endsWith(&#39;0\r\n\r\n&#39;) || data.endsWith(&#39;0\r\n\r\n\r\n&#39;); 
+    } 
+ 
+    return false; 
+  } 
+ 
+  parseHttpResponse(responseText: string): HttpResponse { 
+    const response = new HttpResponse(); 
+ 
+    console.info(&#39;=== RESPONSE ===&#39;); 
+    console.info(responseText.substring(0, 1000)); 
+    console.info(&#39;=== END ===&#39;); 
+ 
+    const headerEndIndex = responseText.indexOf(&#39;\r\n\r\n&#39;); 
+    if (headerEndIndex === -1) { 
+      throw new Error(&#39;Invalid HTTP response&#39;); 
+    } 
+ 
+    const headerSection = responseText.substring(0, headerEndIndex); 
+    response.body = responseText.substring(headerEndIndex + 4); 
+ 
+    const lines = headerSection.split(&#39;\r\n&#39;); 
+ 
+    if (lines.length === 0) { 
+      throw new Error(&#39;No status line&#39;); 
+    } 
+ 
+    const statusLine = lines[0]; 
+    console.info(&#39;Status:&#39;, statusLine); 
+ 
+    const statusMatch = statusLine.match(/HTTP\/[\d.]+\s+(\d+)\s+(.+)/); 
+    if (statusMatch) { 
+      response.statusCode = parseInt(statusMatch[1]); 
+      response.statusText = statusMatch[2]; 
+    } 
+ 
+    for (let i = 1; i &lt; lines.length; i++) { 
+      const colonIndex = lines[i].indexOf(&#39;:&#39;); 
+      if (colonIndex &gt; 0) { 
+        const key = lines[i].substring(0, colonIndex).trim().toLowerCase(); 
+        const value = lines[i].substring(colonIndex + 1).trim(); 
+        response.headers.set(key, value); 
+      } 
+    } 
+ 
+    console.info(`Status: ${response.statusCode}, Body: ${response.body.length} bytes`); 
+ 
+    return response; 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 15:32:21 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/lib/WebDavHttp.ets","hash":"16069f9a15079d197ff943687d0e930c47ce9168f781a809dc864b09d7b84233","lineCnt":746,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":27,"col":18},"endLoc":{"line":34,"col":27},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":35,"col":19},"endLoc":{"line":43,"col":28},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":44,"col":26},"endLoc":{"line":44,"col":50},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"getVidAllCorePlayerNapi","count":0,"regions":[{"startLoc":{"line":51,"col":1},"endLoc":{"line":61,"col":2},"count":0,"ignored":0},{"startLoc":{"line":53,"col":35},"endLoc":{"line":55,"col":4},"count":0,"ignored":0},{"startLoc":{"line":57,"col":36},"endLoc":{"line":59,"col":4},"count":0,"ignored":0},{"startLoc":{"line":60,"col":3},"endLoc":{"line":61,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":53,"col":7},"endLoc":{"line":53,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":57,"col":7},"endLoc":{"line":57,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"WebDavHttp.constructor","count":10,"regions":[{"startLoc":{"line":84,"col":3},"endLoc":{"line":86,"col":4},"count":10,"ignored":0},{"startLoc":{"line":85,"col":5},"endLoc":{"line":86,"col":4},"count":10,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"WebDavHttp.buildHttpRequestString","count":0,"regions":[{"startLoc":{"line":91,"col":3},"endLoc":{"line":124,"col":4},"count":0,"ignored":0},{"startLoc":{"line":104,"col":5},"endLoc":{"line":107,"col":6},"count":0,"ignored":0},{"startLoc":{"line":109,"col":15},"endLoc":{"line":112,"col":6},"count":0,"ignored":0},{"startLoc":{"line":112,"col":12},"endLoc":{"line":114,"col":6},"count":0,"ignored":0},{"startLoc":{"line":119,"col":15},"endLoc":{"line":121,"col":6},"count":0,"ignored":0},{"startLoc":{"line":123,"col":5},"endLoc":{"line":124,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":100,"col":24},"endLoc":{"line":100,"col":113},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":109,"col":9},"endLoc":{"line":109,"col":13},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":119,"col":9},"endLoc":{"line":119,"col":13},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"WebDavHttp.sanitizeRequestForLog","count":0,"regions":[{"startLoc":{"line":129,"col":3},"endLoc":{"line":131,"col":4},"count":0,"ignored":0},{"startLoc":{"line":130,"col":5},"endLoc":{"line":131,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"WebDavHttp.checkNativeCurlEnabled","count":0,"regions":[{"startLoc":{"line":134,"col":3},"endLoc":{"line":144,"col":4},"count":0,"ignored":0},{"startLoc":{"line":135,"col":43},"endLoc":{"line":142,"col":6},"count":0,"ignored":0},{"startLoc":{"line":136,"col":11},"endLoc":{"line":139,"col":8},"count":0,"ignored":0},{"startLoc":{"line":139,"col":9},"endLoc":{"line":141,"col":8},"count":0,"ignored":0},{"startLoc":{"line":143,"col":5},"endLoc":{"line":144,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":135,"col":9},"endLoc":{"line":135,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"WebDavHttp.logTlsAudit","count":0,"regions":[{"startLoc":{"line":150,"col":3},"endLoc":{"line":153,"col":4},"count":0,"ignored":0},{"startLoc":{"line":151,"col":5},"endLoc":{"line":153,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"WebDavHttp.sendViaNative","count":0,"regions":[{"startLoc":{"line":160,"col":3},"endLoc":{"line":196,"col":4},"count":0,"ignored":0},{"startLoc":{"line":183,"col":23},"endLoc":{"line":190,"col":6},"count":0,"ignored":0},{"startLoc":{"line":184,"col":37},"endLoc":{"line":188,"col":8},"count":0,"ignored":0},{"startLoc":{"line":192,"col":5},"endLoc":{"line":196,"col":4},"count":0,"ignored":0},{"startLoc":{"line":173,"col":5},"endLoc":{"line":176,"col":6},"count":0,"ignored":0},{"startLoc":{"line":189,"col":7},"endLoc":{"line":190,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":167,"col":21},"endLoc":{"line":167,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":168,"col":20},"endLoc":{"line":168,"col":62},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":183,"col":9},"endLoc":{"line":183,"col":21},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":184,"col":11},"endLoc":{"line":184,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":187,"col":25},"endLoc":{"line":187,"col":94},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"WebDavHttp.buildNativeUrl","count":0,"regions":[{"startLoc":{"line":198,"col":3},"endLoc":{"line":203,"col":4},"count":0,"ignored":0},{"startLoc":{"line":199,"col":5},"endLoc":{"line":203,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":200,"col":21},"endLoc":{"line":200,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":201,"col":20},"endLoc":{"line":201,"col":62},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"WebDavHttp.buildHeaderLines","count":0,"regions":[{"startLoc":{"line":205,"col":3},"endLoc":{"line":213,"col":4},"count":0,"ignored":0},{"startLoc":{"line":208,"col":5},"endLoc":{"line":211,"col":6},"count":0,"ignored":0},{"startLoc":{"line":212,"col":5},"endLoc":{"line":213,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":11},{"name":"WebDavHttp.downloadViaNative","count":0,"regions":[{"startLoc":{"line":215,"col":3},"endLoc":{"line":237,"col":4},"count":0,"ignored":0},{"startLoc":{"line":225,"col":51},"endLoc":{"line":235,"col":6},"count":0,"ignored":0},{"startLoc":{"line":236,"col":5},"endLoc":{"line":237,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":225,"col":9},"endLoc":{"line":225,"col":49},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":228,"col":24},"endLoc":{"line":228,"col":93},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":12},{"name":"WebDavHttp.sendRawHttpRequest","count":0,"regions":[{"startLoc":{"line":243,"col":3},"endLoc":{"line":269,"col":4},"count":0,"ignored":0},{"startLoc":{"line":250,"col":40},"endLoc":{"line":260,"col":6},"count":0,"ignored":0},{"startLoc":{"line":253,"col":9},"endLoc":{"line":259,"col":8},"count":0,"ignored":0},{"startLoc":{"line":251,"col":11},"endLoc":{"line":253,"col":8},"count":0,"ignored":0},{"startLoc":{"line":255,"col":49},"endLoc":{"line":257,"col":10},"count":0,"ignored":0},{"startLoc":{"line":261,"col":45},"endLoc":{"line":263,"col":6},"count":0,"ignored":0},{"startLoc":{"line":265,"col":34},"endLoc":{"line":267,"col":6},"count":0,"ignored":0},{"startLoc":{"line":268,"col":5},"endLoc":{"line":269,"col":4},"count":0,"ignored":0},{"startLoc":{"line":258,"col":9},"endLoc":{"line":259,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":250,"col":9},"endLoc":{"line":250,"col":38},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":255,"col":13},"endLoc":{"line":255,"col":47},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":261,"col":9},"endLoc":{"line":261,"col":43},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":265,"col":9},"endLoc":{"line":265,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"WebDavHttp.sendHttpsRequestViaHttpModule","count":0,"regions":[{"startLoc":{"line":278,"col":3},"endLoc":{"line":321,"col":4},"count":0,"ignored":0},{"startLoc":{"line":290,"col":9},"endLoc":{"line":300,"col":6},"count":0,"ignored":0},{"startLoc":{"line":305,"col":9},"endLoc":{"line":309,"col":6},"count":0,"ignored":0},{"startLoc":{"line":295,"col":61},"endLoc":{"line":298,"col":8},"count":0,"ignored":0},{"startLoc":{"line":318,"col":5},"endLoc":{"line":321,"col":4},"count":0,"ignored":0},{"startLoc":{"line":300,"col":7},"endLoc":{"line":302,"col":6},"count":0,"ignored":0},{"startLoc":{"line":309,"col":7},"endLoc":{"line":311,"col":6},"count":0,"ignored":0},{"startLoc":{"line":313,"col":43},"endLoc":{"line":315,"col":6},"count":0,"ignored":0},{"startLoc":{"line":299,"col":7},"endLoc":{"line":300,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":285,"col":21},"endLoc":{"line":285,"col":64},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":295,"col":11},"endLoc":{"line":295,"col":59},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":313,"col":9},"endLoc":{"line":313,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":318,"col":22},"endLoc":{"line":318,"col":78},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"WebDavHttp.tryHttpsViaPostOverride","count":0,"regions":[{"startLoc":{"line":324,"col":3},"endLoc":{"line":369,"col":4},"count":0,"ignored":0},{"startLoc":{"line":330,"col":5},"endLoc":{"line":369,"col":4},"count":0,"ignored":0},{"startLoc":{"line":349,"col":7},"endLoc":{"line":368,"col":6},"count":0,"ignored":0},{"startLoc":{"line":365,"col":9},"endLoc":{"line":367,"col":8},"count":0,"ignored":0},{"startLoc":{"line":353,"col":11},"endLoc":{"line":355,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":330,"col":24},"endLoc":{"line":368,"col":6},"count":0,"ignored":0},{"startLoc":{"line":333,"col":7},"endLoc":{"line":335,"col":8},"count":0,"ignored":0},{"startLoc":{"line":346,"col":17},"endLoc":{"line":348,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":346,"col":11},"endLoc":{"line":346,"col":15},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":349,"col":34},"endLoc":{"line":367,"col":8},"count":0,"ignored":0},{"startLoc":{"line":351,"col":18},"endLoc":{"line":355,"col":10},"count":0,"ignored":0},{"startLoc":{"line":362,"col":9},"endLoc":{"line":364,"col":10},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":351,"col":13},"endLoc":{"line":351,"col":16},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":359,"col":25},"endLoc":{"line":359,"col":75},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":17},{"name":"WebDavHttp.sendRawHttpPlainRequest","count":0,"regions":[{"startLoc":{"line":375,"col":3},"endLoc":{"line":551,"col":4},"count":0,"ignored":0},{"startLoc":{"line":383,"col":5},"endLoc":{"line":551,"col":4},"count":0,"ignored":0},{"startLoc":{"line":385,"col":7},"endLoc":{"line":550,"col":6},"count":0,"ignored":0},{"startLoc":{"line":520,"col":11},"endLoc":{"line":539,"col":10},"count":0,"ignored":0},{"startLoc":{"line":524,"col":15},"endLoc":{"line":537,"col":14},"count":0,"ignored":0},{"startLoc":{"line":506,"col":11},"endLoc":{"line":516,"col":10},"count":0,"ignored":0},{"startLoc":{"line":490,"col":11},"endLoc":{"line":493,"col":10},"count":0,"ignored":0},{"startLoc":{"line":545,"col":13},"endLoc":{"line":548,"col":12},"count":0,"ignored":0},{"startLoc":{"line":453,"col":15},"endLoc":{"line":455,"col":14},"count":0,"ignored":0},{"startLoc":{"line":503,"col":13},"endLoc":{"line":505,"col":12},"count":0,"ignored":0},{"startLoc":{"line":532,"col":21},"endLoc":{"line":534,"col":20},"count":0,"ignored":0},{"startLoc":{"line":410,"col":15},"endLoc":{"line":411,"col":14},"count":0,"ignored":0},{"startLoc":{"line":428,"col":13},"endLoc":{"line":429,"col":12},"count":0,"ignored":0},{"startLoc":{"line":435,"col":13},"endLoc":{"line":436,"col":12},"count":0,"ignored":0},{"startLoc":{"line":457,"col":15},"endLoc":{"line":458,"col":14},"count":0,"ignored":0},{"startLoc":{"line":475,"col":15},"endLoc":{"line":476,"col":14},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":383,"col":24},"endLoc":{"line":550,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":19},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":401,"col":36},"endLoc":{"line":418,"col":8},"count":0,"ignored":0},{"startLoc":{"line":402,"col":26},"endLoc":{"line":417,"col":10},"count":0,"ignored":0},{"startLoc":{"line":407,"col":44},"endLoc":{"line":414,"col":12},"count":0,"ignored":0},{"startLoc":{"line":408,"col":17},"endLoc":{"line":411,"col":14},"count":0,"ignored":0},{"startLoc":{"line":414,"col":18},"endLoc":{"line":416,"col":12},"count":0,"ignored":0},{"startLoc":{"line":411,"col":15},"endLoc":{"line":413,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":402,"col":13},"endLoc":{"line":402,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":407,"col":15},"endLoc":{"line":407,"col":42},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":20},{"name":"anonymous_7","count":0,"regions":[{"startLoc":{"line":420,"col":25},"endLoc":{"line":463,"col":8},"count":0,"ignored":0},{"startLoc":{"line":423,"col":13},"endLoc":{"line":460,"col":10},"count":0,"ignored":0},{"startLoc":{"line":446,"col":62},"endLoc":{"line":459,"col":12},"count":0,"ignored":0},{"startLoc":{"line":451,"col":17},"endLoc":{"line":455,"col":14},"count":0,"ignored":0},{"startLoc":{"line":426,"col":31},"endLoc":{"line":429,"col":12},"count":0,"ignored":0},{"startLoc":{"line":433,"col":45},"endLoc":{"line":436,"col":12},"count":0,"ignored":0},{"startLoc":{"line":455,"col":15},"endLoc":{"line":458,"col":14},"count":0,"ignored":0},{"startLoc":{"line":460,"col":11},"endLoc":{"line":462,"col":10},"count":0,"ignored":0},{"startLoc":{"line":421,"col":25},"endLoc":{"line":421,"col":32},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":421,"col":13},"endLoc":{"line":421,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":426,"col":15},"endLoc":{"line":426,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":433,"col":15},"endLoc":{"line":433,"col":43},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":446,"col":15},"endLoc":{"line":446,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":21},{"name":"anonymous_8","count":0,"regions":[{"startLoc":{"line":465,"col":23},"endLoc":{"line":483,"col":8},"count":0,"ignored":0},{"startLoc":{"line":468,"col":26},"endLoc":{"line":482,"col":10},"count":0,"ignored":0},{"startLoc":{"line":472,"col":44},"endLoc":{"line":479,"col":12},"count":0,"ignored":0},{"startLoc":{"line":473,"col":17},"endLoc":{"line":476,"col":14},"count":0,"ignored":0},{"startLoc":{"line":479,"col":18},"endLoc":{"line":481,"col":12},"count":0,"ignored":0},{"startLoc":{"line":476,"col":15},"endLoc":{"line":478,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":468,"col":13},"endLoc":{"line":468,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":472,"col":15},"endLoc":{"line":472,"col":42},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":22},{"name":"anonymous_9","count":0,"regions":[{"startLoc":{"line":485,"col":23},"endLoc":{"line":494,"col":8},"count":0,"ignored":0},{"startLoc":{"line":488,"col":26},"endLoc":{"line":493,"col":10},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":488,"col":13},"endLoc":{"line":488,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":23},{"name":"anonymous_10","count":0,"regions":[{"startLoc":{"line":497,"col":15},"endLoc":{"line":516,"col":10},"count":0,"ignored":0},{"startLoc":{"line":501,"col":73},"endLoc":{"line":505,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":501,"col":15},"endLoc":{"line":501,"col":71},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":504,"col":31},"endLoc":{"line":504,"col":59},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":24},{"name":"anonymous_11","count":0,"regions":[{"startLoc":{"line":517,"col":15},"endLoc":{"line":539,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":25},{"name":"anonymous_12","count":0,"regions":[{"startLoc":{"line":520,"col":22},"endLoc":{"line":538,"col":12},"count":0,"ignored":0},{"startLoc":{"line":521,"col":50},"endLoc":{"line":537,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":521,"col":17},"endLoc":{"line":521,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":26},{"name":"anonymous_13","count":0,"regions":[{"startLoc":{"line":524,"col":35},"endLoc":{"line":536,"col":16},"count":0,"ignored":0},{"startLoc":{"line":527,"col":36},"endLoc":{"line":535,"col":18},"count":0,"ignored":0},{"startLoc":{"line":530,"col":36},"endLoc":{"line":534,"col":20},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":527,"col":21},"endLoc":{"line":527,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":530,"col":23},"endLoc":{"line":530,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":27},{"name":"anonymous_14","count":0,"regions":[{"startLoc":{"line":540,"col":16},"endLoc":{"line":549,"col":10},"count":0,"ignored":0},{"startLoc":{"line":543,"col":28},"endLoc":{"line":548,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":543,"col":15},"endLoc":{"line":543,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":28},{"name":"WebDavHttp.sendRawHttpsRequest","count":0,"regions":[{"startLoc":{"line":558,"col":3},"endLoc":{"line":676,"col":4},"count":0,"ignored":0},{"startLoc":{"line":564,"col":5},"endLoc":{"line":676,"col":4},"count":0,"ignored":0},{"startLoc":{"line":566,"col":7},"endLoc":{"line":675,"col":6},"count":0,"ignored":0},{"startLoc":{"line":662,"col":11},"endLoc":{"line":667,"col":10},"count":0,"ignored":0},{"startLoc":{"line":591,"col":9},"endLoc":{"line":592,"col":8},"count":0,"ignored":0},{"startLoc":{"line":589,"col":11},"endLoc":{"line":590,"col":10},"count":0,"ignored":0},{"startLoc":{"line":609,"col":9},"endLoc":{"line":610,"col":8},"count":0,"ignored":0},{"startLoc":{"line":632,"col":11},"endLoc":{"line":633,"col":10},"count":0,"ignored":0},{"startLoc":{"line":651,"col":9},"endLoc":{"line":652,"col":8},"count":0,"ignored":0},{"startLoc":{"line":658,"col":11},"endLoc":{"line":659,"col":10},"count":0,"ignored":0},{"startLoc":{"line":673,"col":11},"endLoc":{"line":674,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":29},{"name":"anonymous_15","count":0,"regions":[{"startLoc":{"line":564,"col":24},"endLoc":{"line":675,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":30},{"name":"anonymous_16","count":0,"regions":[{"startLoc":{"line":580,"col":27},"endLoc":{"line":592,"col":8},"count":0,"ignored":0},{"startLoc":{"line":587,"col":9},"endLoc":{"line":590,"col":10},"count":0,"ignored":0},{"startLoc":{"line":582,"col":9},"endLoc":{"line":584,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":31},{"name":"anonymous_17","count":0,"regions":[{"startLoc":{"line":594,"col":25},"endLoc":{"line":602,"col":8},"count":0,"ignored":0},{"startLoc":{"line":599,"col":56},"endLoc":{"line":601,"col":10},"count":0,"ignored":0},{"startLoc":{"line":595,"col":25},"endLoc":{"line":595,"col":32},"count":0,"ignored":0},{"startLoc":{"line":598,"col":13},"endLoc":{"line":598,"col":29},"count":0,"ignored":0},{"startLoc":{"line":598,"col":30},"endLoc":{"line":598,"col":42},"count":0,"ignored":0},{"startLoc":{"line":599,"col":13},"endLoc":{"line":599,"col":55},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":595,"col":13},"endLoc":{"line":595,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":32},{"name":"anonymous_18","count":0,"regions":[{"startLoc":{"line":604,"col":24},"endLoc":{"line":610,"col":8},"count":0,"ignored":0},{"startLoc":{"line":605,"col":25},"endLoc":{"line":605,"col":32},"count":0,"ignored":0},{"startLoc":{"line":608,"col":13},"endLoc":{"line":608,"col":29},"count":0,"ignored":0},{"startLoc":{"line":608,"col":30},"endLoc":{"line":608,"col":42},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":605,"col":13},"endLoc":{"line":605,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":33},{"name":"anonymous_19","count":0,"regions":[{"startLoc":{"line":612,"col":36},"endLoc":{"line":620,"col":8},"count":0,"ignored":0},{"startLoc":{"line":615,"col":30},"endLoc":{"line":617,"col":10},"count":0,"ignored":0},{"startLoc":{"line":617,"col":16},"endLoc":{"line":619,"col":10},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":615,"col":13},"endLoc":{"line":615,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":34},{"name":"anonymous_20","count":0,"regions":[{"startLoc":{"line":623,"col":25},"endLoc":{"line":634,"col":8},"count":0,"ignored":0},{"startLoc":{"line":630,"col":48},"endLoc":{"line":633,"col":10},"count":0,"ignored":0},{"startLoc":{"line":624,"col":25},"endLoc":{"line":624,"col":32},"count":0,"ignored":0},{"startLoc":{"line":626,"col":47},"endLoc":{"line":626,"col":54},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":624,"col":13},"endLoc":{"line":624,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":626,"col":13},"endLoc":{"line":626,"col":45},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":630,"col":13},"endLoc":{"line":630,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":35},{"name":"anonymous_21","count":0,"regions":[{"startLoc":{"line":637,"col":23},"endLoc":{"line":647,"col":8},"count":0,"ignored":0},{"startLoc":{"line":639,"col":26},"endLoc":{"line":646,"col":10},"count":0,"ignored":0},{"startLoc":{"line":641,"col":32},"endLoc":{"line":643,"col":12},"count":0,"ignored":0},{"startLoc":{"line":643,"col":18},"endLoc":{"line":645,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":639,"col":13},"endLoc":{"line":639,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":641,"col":15},"endLoc":{"line":641,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":36},{"name":"anonymous_22","count":0,"regions":[{"startLoc":{"line":649,"col":23},"endLoc":{"line":652,"col":8},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":37},{"name":"anonymous_23","count":0,"regions":[{"startLoc":{"line":656,"col":15},"endLoc":{"line":659,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":38},{"name":"anonymous_24","count":0,"regions":[{"startLoc":{"line":660,"col":15},"endLoc":{"line":667,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":39},{"name":"anonymous_25","count":0,"regions":[{"startLoc":{"line":668,"col":15},"endLoc":{"line":670,"col":10},"count":0,"ignored":0},{"startLoc":{"line":669,"col":11},"endLoc":{"line":670,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":40},{"name":"anonymous_26","count":0,"regions":[{"startLoc":{"line":671,"col":16},"endLoc":{"line":674,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":41},{"name":"WebDavHttp.isHttpResponseComplete","count":0,"regions":[{"startLoc":{"line":678,"col":3},"endLoc":{"line":700,"col":4},"count":0,"ignored":0},{"startLoc":{"line":685,"col":29},"endLoc":{"line":693,"col":6},"count":0,"ignored":0},{"startLoc":{"line":680,"col":32},"endLoc":{"line":682,"col":6},"count":0,"ignored":0},{"startLoc":{"line":695,"col":54},"endLoc":{"line":697,"col":6},"count":0,"ignored":0},{"startLoc":{"line":699,"col":5},"endLoc":{"line":700,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":680,"col":9},"endLoc":{"line":680,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":685,"col":9},"endLoc":{"line":685,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":695,"col":9},"endLoc":{"line":695,"col":52},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":42},{"name":"WebDavHttp.parseHttpResponse","count":0,"regions":[{"startLoc":{"line":702,"col":3},"endLoc":{"line":744,"col":4},"count":0,"ignored":0},{"startLoc":{"line":732,"col":5},"endLoc":{"line":739,"col":6},"count":0,"ignored":0},{"startLoc":{"line":734,"col":27},"endLoc":{"line":738,"col":8},"count":0,"ignored":0},{"startLoc":{"line":727,"col":22},"endLoc":{"line":730,"col":6},"count":0,"ignored":0},{"startLoc":{"line":741,"col":5},"endLoc":{"line":744,"col":4},"count":0,"ignored":0},{"startLoc":{"line":710,"col":32},"endLoc":{"line":712,"col":6},"count":0,"ignored":0},{"startLoc":{"line":719,"col":29},"endLoc":{"line":721,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":710,"col":9},"endLoc":{"line":710,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":719,"col":9},"endLoc":{"line":719,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":727,"col":9},"endLoc":{"line":727,"col":20},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":734,"col":11},"endLoc":{"line":734,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":43}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":8,"7":9,"8":10,"9":11,"10":14,"11":15,"12":16,"13":17,"14":20,"15":21,"16":22,"17":23,"18":26,"19":27,"20":28,"21":29,"22":30,"23":31,"24":32,"25":33,"26":34,"27":35,"28":36,"29":37,"30":38,"31":39,"32":40,"33":41,"34":42,"35":43,"36":44,"37":47,"38":48,"39":51,"40":52,"41":53,"42":54,"43":56,"44":57,"45":58,"46":60,"47":63,"48":64,"49":65,"50":66,"51":67,"52":75,"53":76,"54":78,"55":80,"56":82,"57":84,"58":85,"59":91,"60":92,"61":93,"62":94,"63":95,"64":96,"65":97,"66":99,"67":100,"68":101,"69":103,"70":104,"71":105,"72":106,"73":109,"74":110,"75":111,"76":112,"77":113,"78":116,"79":117,"80":119,"81":120,"82":123,"83":129,"84":130,"85":134,"86":135,"87":136,"88":137,"89":138,"90":139,"91":140,"92":143,"93":150,"94":151,"95":152,"96":160,"97":161,"98":162,"99":163,"100":164,"101":165,"102":166,"103":167,"104":168,"105":169,"106":171,"107":172,"108":173,"109":174,"110":175,"111":177,"112":179,"113":180,"114":183,"115":184,"116":185,"117":186,"118":187,"119":189,"120":192,"121":193,"122":194,"123":195,"124":198,"125":199,"126":200,"127":201,"128":202,"129":205,"130":206,"131":207,"132":208,"133":209,"134":210,"135":212,"136":215,"137":216,"138":217,"139":218,"140":219,"141":220,"142":221,"143":222,"144":223,"145":225,"146":226,"147":227,"148":228,"149":229,"150":230,"151":231,"152":232,"153":234,"154":236,"155":243,"156":244,"157":245,"158":246,"159":247,"160":248,"161":250,"162":251,"163":252,"164":253,"165":254,"166":255,"167":256,"168":258,"169":261,"170":262,"171":265,"172":266,"173":268,"174":278,"175":279,"176":280,"177":281,"178":282,"179":283,"180":284,"181":285,"182":286,"183":287,"184":290,"185":291,"186":294,"187":295,"188":296,"189":297,"190":299,"191":300,"192":301,"193":305,"194":306,"195":307,"196":308,"197":309,"198":310,"199":313,"200":314,"201":318,"202":319,"203":320,"204":324,"205":325,"206":326,"207":327,"208":328,"209":329,"210":330,"211":331,"212":332,"213":333,"214":334,"215":336,"216":338,"217":339,"218":340,"219":341,"220":342,"221":343,"222":344,"223":346,"224":347,"225":349,"226":350,"227":351,"228":352,"229":353,"230":354,"231":356,"232":357,"233":358,"234":359,"235":360,"236":361,"237":362,"238":363,"239":365,"240":366,"241":375,"242":376,"243":377,"244":378,"245":379,"246":380,"247":381,"248":382,"249":383,"250":384,"251":385,"252":386,"253":387,"254":388,"255":390,"256":391,"257":393,"258":394,"259":395,"260":396,"261":399,"262":401,"263":402,"264":403,"265":404,"266":405,"267":407,"268":408,"269":409,"270":410,"271":411,"272":412,"273":414,"274":415,"275":418,"276":420,"277":421,"278":423,"279":424,"280":426,"281":427,"282":428,"283":431,"284":433,"285":434,"286":435,"287":438,"288":440,"289":441,"290":442,"291":444,"292":446,"293":447,"294":448,"295":449,"296":451,"297":452,"298":453,"299":454,"300":455,"301":456,"302":457,"303":460,"304":461,"305":465,"306":466,"307":468,"308":469,"309":470,"310":472,"311":473,"312":474,"313":475,"314":476,"315":477,"316":479,"317":480,"318":485,"319":486,"320":488,"321":489,"322":490,"323":491,"324":492,"325":496,"326":497,"327":498,"328":501,"329":502,"330":503,"331":504,"332":506,"333":507,"334":509,"335":510,"336":511,"337":513,"338":515,"339":517,"340":518,"341":520,"342":521,"343":522,"344":524,"345":525,"346":527,"347":528,"348":530,"349":531,"350":532,"351":533,"352":538,"353":540,"354":541,"355":543,"356":544,"357":545,"358":546,"359":547,"360":558,"361":559,"362":560,"363":561,"364":562,"365":563,"366":564,"367":565,"368":566,"369":567,"370":569,"371":570,"372":571,"373":572,"374":573,"375":574,"376":578,"377":580,"378":581,"379":582,"380":583,"381":585,"382":586,"383":587,"384":588,"385":589,"386":591,"387":594,"388":595,"389":596,"390":597,"391":598,"392":599,"393":600,"394":604,"395":605,"396":606,"397":607,"398":608,"399":609,"400":612,"401":613,"402":614,"403":615,"404":616,"405":617,"406":618,"407":620,"408":623,"409":624,"410":625,"411":626,"412":627,"413":628,"414":629,"415":630,"416":631,"417":632,"418":637,"419":638,"420":639,"421":640,"422":641,"423":642,"424":643,"425":644,"426":649,"427":650,"428":651,"429":654,"430":655,"431":656,"432":657,"433":658,"434":660,"435":661,"436":662,"437":663,"438":664,"439":666,"440":668,"441":669,"442":671,"443":672,"444":673,"445":678,"446":679,"447":680,"448":681,"449":684,"450":685,"451":686,"452":687,"453":688,"454":690,"455":692,"456":695,"457":696,"458":699,"459":702,"460":703,"461":705,"462":706,"463":707,"464":709,"465":710,"466":711,"467":714,"468":715,"469":717,"470":719,"471":720,"472":723,"473":724,"474":726,"475":727,"476":728,"477":729,"478":732,"479":733,"480":734,"481":735,"482":736,"483":737,"484":741,"485":743},"summary":{"lines":{"total":455,"covered":2,"pct":0.4396,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,10,10,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,-1,0,0,-1,-1,0,-1,-1,-1,-1,-1,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,0,-1,-1,-1,-1,-1,-1,0,0,0,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,-1,0,0,-1,-1,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,-1,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,-1,-1,0,0,-1,-1,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,-1,-1,0,0,0,0,-1,0,0,0,-1,-1,-1,0,0,0,0,0,0,-1,-1,0,0,-1,-1,-1,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,-1,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,-1,-1,0,-1,0,0,0,0,0,-1,0,0,0,0,0,0,-1,0,0,-1,-1,0,-1,0,0,-1,0,0,-1,0,0,0,-1,-1,0,-1,0,0,0,-1,-1,0,-1,0,0,0,-1,0,-1,0,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,0,0,-1,-1,-1,0,0,-1,0,0,0,-1,0,0,0,0,0,0,-1,0,0,-1,-1,-1,-1,0,0,-1,0,0,0,0,0,-1,-1,-1,0,0,0,-1,-1,0,0,0,0,-1,0,0,-1,0,0,0,-1,0,-1,0,-1,0,0,-1,0,0,0,-1,0,0,-1,0,0,-1,0,0,0,0,-1,-1,-1,-1,0,-1,0,0,-1,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,0,-1,0,0,0,0,-1,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,-1,-1,0,0,0,0,0,-1,0,0,0,0,0,-1,0,-1,0,0,-1,0,0,0,-1,-1,-1,-1,0,0,0,0,-1,-1,0,0,0,0,0,-1,0,-1,0,-1,-1,0,0,-1,-1,0,-1,-1,0,0,-1,0,0,0,-1,0,0,0,-1,-1,0,0,-1,0,-1,0,0,-1,-1,0,0,-1,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,-1,-1,0,-1,0,-1,-1,-1]},"functions":{"total":44,"covered":1,"pct":2.273},"branches":{"total":112,"covered":0,"pct":0}}},"title":"WebDavHttp.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

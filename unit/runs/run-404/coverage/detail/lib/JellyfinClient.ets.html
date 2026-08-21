@@ -1,0 +1,2135 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { JsonHttpClient } from &#39;./JsonHttpClient&#39;; 
+import { BusinessError } from &#39;@kit.BasicServicesKit&#39;; 
+ 
+/** 
+ * 顶层媒体库 / 视图描述（供媒体库切换后展示） 
+ */ 
+export interface VideoServerLibrary { 
+  id: string; 
+  name: string; 
+  /** 内容类型，如 &#39;movies&#39; / &#39;tvshows&#39; / &#39;mixed&#39;，可能为空 */ 
+  type?: string; 
+  /** 媒体库封面 / 背景图 URL，可能为空 */ 
+  imageUrl: string; 
+} 
+ 
+/** 
+ * 媒体库视频列表的一页（分页加载）。 
+ */ 
+export interface VideoServerLibraryPage { 
+  items: VideoServerMediaItem[]; 
+  total: number; 
+} 
+ 
+/** 
+ * 影视服务器媒体条目（统一模型，供媒体库各分区渲染） 
+ */ 
+export interface VideoServerMediaItem { 
+  id: string; 
+  title: string; 
+  /** &#39;movie&#39; | &#39;series&#39; | &#39;episode&#39; | 其他 */ 
+  type: string; 
+  /** 16:9 背景图 URL */ 
+  backdropUrl: string; 
+  /** 2:3 海报 URL */ 
+  posterUrl: string; 
+  /** 播放进度 0~1 */ 
+  progress: number; 
+  /** 续播位置（毫秒） */ 
+  positionMs: number; 
+  /** 时长（毫秒），未知为 0 */ 
+  durationMs: number; 
+  /** 副标题（如「S01E02 · 分集名」或类型标签） */ 
+  subtitle: string; 
+  /** 剧集所属系列 ID（电视剧集时有效，其余为空） */ 
+  seriesId: string; 
+  /** 季号（电视剧集时有效，其余为 0） */ 
+  seasonNumber: number; 
+  /** 集号（电视剧集时有效，其余为 0） */ 
+  episodeNumber: number; 
+} 
+ 
+/** 
+ * 影视服务器演职人员（详情页「演职人员」列表用） 
+ */ 
+export interface VideoServerPerson { 
+  name: string; 
+  role: string; 
+  imageUrl: string; 
+  /** 服务器侧人员 ID（Jellyfin Person Id / Plex Role id），为空则不可点击 */ 
+  personId: string; 
+} 
+ 
+/** 
+ * 影视服务器条目详情（详情页展示用） 
+ */ 
+export interface VideoServerItemDetail { 
+  media: VideoServerMediaItem; 
+  overview: string; 
+  year: number; 
+  rating: number; 
+  genres: string[]; 
+  cast: VideoServerPerson[]; 
+} 
+ 
+/** 
+ * 影视服务器人员详情（人员详情页展示用） 
+ */ 
+export interface VideoServerPersonDetail { 
+  name: string; 
+  overview: string; 
+  birthDate: string; 
+  birthPlace: string; 
+  imageUrl: string; 
+  credits: VideoServerMediaItem[]; 
+} 
+ 
+/** 
+ * 影视服务器季（剧集详情页「季」列表用） 
+ */ 
+export interface VideoServerSeason { 
+  id: string; 
+  seasonNumber: number; 
+  name: string; 
+  posterUrl: string; 
+  overview: string; 
+} 
+ 
+/** 
+ * 影视服务器集（季详情页「集」列表用） 
+ */ 
+export interface VideoServerEpisode { 
+  id: string; 
+  episodeNumber: number; 
+  seasonNumber: number; 
+  title: string; 
+  overview: string; 
+  stillUrl: string; 
+  durationMs: number; 
+  rating: number; 
+  positionMs: number; 
+  /** 最近播放时间（毫秒时间戳），未知为 0；用于跨季「继续上次观看」选择最近播放的未完播集 */ 
+  lastPlayedDate: number; 
+} 
+ 
+/** 
+ * 「最近添加的 {库名}」分区：某个媒体库下的最新条目 
+ */ 
+export interface VideoServerLatestSection { 
+  libraryName: string; 
+  items: VideoServerMediaItem[]; 
+} 
+ 
+/** 
+ * 影视服务器首页数据（我的媒体库、继续观看、接下来、最近添加） 
+ */ 
+export interface VideoServerHome { 
+  continueWatching: VideoServerMediaItem[]; 
+  nextUp: VideoServerMediaItem[]; 
+  latest: VideoServerLatestSection[]; 
+} 
+ 
+/** fetchServerHome 返回的聚合结果，供调用方在序号守卫后统一写入 */ 
+export interface ServerHomeResult { 
+  libraries: VideoServerLibrary[]; 
+  home: VideoServerHome; 
+} 
+ 
+/** 
+ * Jellyfin / Emby 客户端配置（运行时解析，凭据已解密） 
+ */ 
+export interface JellyfinClientConfig { 
+  protocol: &#39;http&#39; | &#39;https&#39;; 
+  url: string; 
+  port: number; 
+  basePath?: string; 
+  authMethod: &#39;apikey&#39; | &#39;password&#39;; 
+  apiKey?: string; 
+  username?: string; 
+  password?: string; 
+} 
+ 
+export interface ConnectionTestResult { 
+  success: boolean; 
+  message: string; 
+} 
+ 
+/** 
+ * Jellyfin / Emby 服务器客户端。 
+ * Jellyfin 与 Emby 的 REST 接口同源，共用本客户端。 
+ */ 
+export class JellyfinClient { 
+  private config: JellyfinClientConfig; 
+  private cachedToken: string | undefined = undefined; 
+  private cachedUserId: string | undefined = undefined; 
+ 
+  constructor(config: JellyfinClientConfig) { 
+    this.config = config; 
+  } 
+ 
+  static fromConfigJson(configJson: string): JellyfinClient { 
+    const raw = JSON.parse(configJson) as Record&lt;string, Object&gt;; 
+    const protocolStr = typeof raw[&#39;protocol&#39;] === &#39;string&#39; ? raw[&#39;protocol&#39;] : &#39;http&#39;; 
+    const protocol = protocolStr === &#39;https&#39; ? &#39;https&#39; : &#39;http&#39;; 
+    const rawPort = raw[&#39;port&#39;]; 
+    let port = 8096; 
+    if (typeof rawPort === &#39;number&#39; &amp;&amp; !isNaN(rawPort)) { 
+      port = rawPort; 
+    } else if (typeof rawPort === &#39;string&#39; &amp;&amp; rawPort.trim().length &gt; 0) { 
+      const parsed = parseInt(rawPort.trim(), 10); 
+      if (!isNaN(parsed)) { 
+        port = parsed; 
+      } 
+    } 
+    const authStr = typeof raw[&#39;authMethod&#39;] === &#39;string&#39; ? raw[&#39;authMethod&#39;] : &#39;apikey&#39;; 
+    const urlVal = raw[&#39;url&#39;]; 
+    const basePathVal = raw[&#39;basePath&#39;]; 
+    const apiKeyVal = raw[&#39;apiKey&#39;]; 
+    const usernameVal = raw[&#39;username&#39;]; 
+    const passwordVal = raw[&#39;password&#39;]; 
+    return new JellyfinClient({ 
+      protocol, 
+      url: typeof urlVal === &#39;string&#39; ? urlVal : &#39;&#39;, 
+      port, 
+      basePath: typeof basePathVal === &#39;string&#39; ? basePathVal : undefined, 
+      authMethod: (authStr === &#39;password&#39; ? &#39;password&#39; : &#39;apikey&#39;), 
+      apiKey: typeof apiKeyVal === &#39;string&#39; ? apiKeyVal : undefined, 
+      username: typeof usernameVal === &#39;string&#39; ? usernameVal : undefined, 
+      password: typeof passwordVal === &#39;string&#39; ? passwordVal : undefined 
+    }); 
+  } 
+ 
+  private buildBaseUrl(): string { 
+    const scheme = this.config.protocol; 
+    const host = this.config.url.trim(); 
+    const port = this.config.port; 
+    const isStdPort = (scheme === &#39;https&#39; &amp;&amp; port === 443) || (scheme === &#39;http&#39; &amp;&amp; port === 80); 
+    const portStr = isStdPort ? &#39;&#39; : `:${port}`; 
+    let basePath = this.config.basePath ?? &#39;&#39;; 
+    if (basePath.length &gt; 0 &amp;&amp; !basePath.startsWith(&#39;/&#39;)) { 
+      basePath = &#39;/&#39; + basePath; 
+    } 
+    if (basePath.endsWith(&#39;/&#39;)) { 
+      basePath = basePath.slice(0, -1); 
+    } 
+    return `${scheme}://${host}${portStr}${basePath}`; 
+  } 
+ 
+  private authToken(): string { 
+    if (this.config.authMethod === &#39;apikey&#39;) { 
+      return this.config.apiKey ?? &#39;&#39;; 
+    } 
+    return this.cachedToken ?? &#39;&#39;; 
+  } 
+ 
+  private authHeaders(): Record&lt;string, string&gt; { 
+    const headers: Record&lt;string, string&gt; = {}; 
+    const token = this.authToken(); 
+    if (token.length &gt; 0) { 
+      headers[&#39;X-Emby-Token&#39;] = token; 
+    } 
+    return headers; 
+  } 
+ 
+  /** 
+   * 构建在浏览器中打开的条目详情页 URL（用于「继续观看」直接播放）。 
+   */ 
+  buildWebItemUrl(itemId: string): string { 
+    return `${this.buildBaseUrl()}/web/index.html#!/details?id=${itemId}`; 
+  } 
+ 
+  /** 
+   * 获取可在 App 播放器内直接播放的流地址（带 api_key，支持续播 seek）。 
+   */ 
+  async getStreamUrl(itemId: string): Promise&lt;string&gt; { 
+    await this.authenticate(); 
+    const token = this.authToken(); 
+    return `${this.buildBaseUrl()}/Videos/${itemId}/stream?static=true&amp;api_key=${token}`; 
+  } 
+ 
+  /** 
+   * 播放器请求所需的鉴权头。 
+   * 流地址已带 api_key 查询参数，无需再传 X-Emby-Token 头； 
+   * AVPlayer 媒体栈不允许自定义头，会报「Header &#39;X-Emby-Token&#39; is not allowed」。 
+   */ 
+  getStreamHeader(): Record&lt;string, string&gt; { 
+    return {}; 
+  } 
+ 
+  /** 
+   * 获取条目的 MediaSourceId（用于建立播放会话）。 
+   */ 
+  async getPlaybackInfo(itemId: string): Promise&lt;string&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const headers = this.authHeaders(); 
+    headers[&#39;Content-Type&#39;] = &#39;application/json&#39;; 
+    const body = JSON.stringify({ 
+      UserId: userId, 
+      ItemId: itemId, 
+      StartTimeTicks: 0, 
+      AutoOpenLiveStream: false, 
+      MaxStreamingBitrate: 100000000 
+    }); 
+    const resp = await JsonHttpClient.post(`${this.buildBaseUrl()}/Items/${itemId}/PlaybackInfo`, headers, body); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取播放信息失败&#39;)); 
+    } 
+    const parsed = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+    const mediaSources = parsed[&#39;MediaSources&#39;] as Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    if (mediaSources &amp;&amp; mediaSources.length &gt; 0) { 
+      const id = mediaSources[0][&#39;Id&#39;]; 
+      if (typeof id === &#39;string&#39; &amp;&amp; id.length &gt; 0) { 
+        return id; 
+      } 
+    } 
+    return &#39;&#39;; 
+  } 
+ 
+  /** 
+   * 上报播放开始（会话建立）。 
+   */ 
+  async reportPlaying(playSessionId: string, itemId: string, mediaSourceId: string, positionMs: number): Promise&lt;void&gt; { 
+    await this.authenticate(); 
+    const headers = this.authHeaders(); 
+    headers[&#39;Content-Type&#39;] = &#39;application/json&#39;; 
+    const body = JSON.stringify({ 
+      ItemId: itemId, 
+      PlaySessionId: playSessionId, 
+      MediaSourceId: mediaSourceId, 
+      PlayMethod: &#39;DirectPlay&#39;, 
+      CanSeek: true, 
+      PositionTicks: Math.round(positionMs * 10000) 
+    }); 
+    const resp = await JsonHttpClient.post(`${this.buildBaseUrl()}/Sessions/Playing`, headers, body); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      console.warn(`[JellyfinClient] reportPlaying 失败 status=${resp.statusCode} body=${resp.body}`); 
+    } 
+  } 
+ 
+  /** 
+   * 上报播放停止（退出播放器）时的进度，供服务器「继续观看」续播使用。 
+   */ 
+  async reportStopped(playSessionId: string, itemId: string, positionMs: number): Promise&lt;void&gt; { 
+    await this.authenticate(); 
+    const headers = this.authHeaders(); 
+    headers[&#39;Content-Type&#39;] = &#39;application/json&#39;; 
+    const body = JSON.stringify({ 
+      ItemId: itemId, 
+      PlaySessionId: playSessionId, 
+      PositionTicks: Math.round(positionMs * 10000) 
+    }); 
+    const resp = await JsonHttpClient.post(`${this.buildBaseUrl()}/Sessions/Playing/Stopped`, headers, body); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      console.warn(`[JellyfinClient] reportStopped 失败 status=${resp.statusCode} body=${resp.body}`); 
+    } 
+  } 
+ 
+  /** 
+   * 周期性上报播放进度（不结束会话）。 
+   */ 
+  async reportProgress(playSessionId: string, itemId: string, positionMs: number, isPaused: boolean): Promise&lt;void&gt; { 
+    await this.authenticate(); 
+    const headers = this.authHeaders(); 
+    headers[&#39;Content-Type&#39;] = &#39;application/json&#39;; 
+    const body = JSON.stringify({ 
+      ItemId: itemId, 
+      PlaySessionId: playSessionId, 
+      PositionTicks: Math.round(positionMs * 10000), 
+      IsPaused: isPaused 
+    }); 
+    const resp = await JsonHttpClient.post(`${this.buildBaseUrl()}/Sessions/Playing/Progress`, headers, body); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      console.warn(`[JellyfinClient] reportProgress 失败 status=${resp.statusCode}`); 
+    } 
+  } 
+ 
+  /** 
+   * 认证（用户名密码方式）：换取 AccessToken 与 UserId。 
+   */ 
+  async authenticate(): Promise&lt;void&gt; { 
+    if (this.cachedToken) { 
+      return; 
+    } 
+    if (this.config.authMethod === &#39;apikey&#39;) { 
+      this.cachedToken = this.config.apiKey; 
+      return; 
+    } 
+    const username = this.config.username ?? &#39;&#39;; 
+    const password = this.config.password ?? &#39;&#39;; 
+    if (username.length === 0 || password.length === 0) { 
+      throw new Error(&#39;缺少用户名或密码&#39;); 
+    } 
+ 
+    const headers: Record&lt;string, string&gt; = { 
+      &#39;Content-Type&#39;: &#39;application/json&#39;, 
+      &#39;X-Emby-Authorization&#39;: 
+        &#39;MediaBrowser Client=&quot;VidAll&quot;, Device=&quot;TV&quot;, DeviceId=&quot;vidall-tv&quot;, Version=&quot;1.0.0&quot;&#39; 
+    }; 
+    const body = JSON.stringify({ Username: username, Pw: password }); 
+    const resp = await JsonHttpClient.post(`${this.buildBaseUrl()}/Users/AuthenticateByName`, headers, body); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;认证失败&#39;)); 
+    } 
+    const parsed = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+    const accessToken = parsed[&#39;AccessToken&#39;] as string | undefined; 
+    const user = parsed[&#39;User&#39;] as Record&lt;string, Object&gt; | undefined; 
+    if (!accessToken) { 
+      throw new Error(&#39;认证响应缺少 AccessToken&#39;); 
+    } 
+    this.cachedToken = accessToken; 
+    if (user !== undefined) { 
+      this.cachedUserId = user[&#39;Id&#39;] as string | undefined; 
+    } 
+  } 
+ 
+  /** 获取一个 userId（用户名密码取登录用户，API Key 取用户列表首个） */ 
+  private async ensureUserId(): Promise&lt;string&gt; { 
+    if (this.cachedUserId) { 
+      return this.cachedUserId; 
+    } 
+    const resp = await JsonHttpClient.get(`${this.buildBaseUrl()}/Users`, this.authHeaders()); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取用户失败&#39;)); 
+    } 
+    const users = JSON.parse(resp.body) as Array&lt;Record&lt;string, Object&gt;&gt;; 
+    if (users.length &gt; 0) { 
+      this.cachedUserId = String(users[0][&#39;Id&#39;] ?? &#39;&#39;); 
+      return this.cachedUserId; 
+    } 
+    throw new Error(&#39;服务器上无可用用户&#39;); 
+  } 
+ 
+  /** 
+   * 获取服务器公开信息（无鉴权），用于测试连接与识别服务器。 
+   */ 
+  async getServerInfo(): Promise&lt;Record&lt;string, Object&gt;&gt; { 
+    const resp = await JsonHttpClient.get(`${this.buildBaseUrl()}/System/Info/Public`, {}); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;服务不可达&#39;)); 
+    } 
+    return JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+  } 
+ 
+  /** 
+   * 测试连接：校验服务可达 + 认证通过。 
+   */ 
+  async testConnection(): Promise&lt;ConnectionTestResult&gt; { 
+    try { 
+      await this.getServerInfo(); 
+      await this.authenticate(); 
+      return { success: true, message: &#39;连接成功&#39; }; 
+    } catch (e) { 
+      const message = (e as Error).message ?? &#39;未知错误&#39;; 
+      return { success: false, message }; 
+    } 
+  } 
+ 
+  /** 
+   * 获取顶层媒体库 / 视图列表。 
+   * 用户名密码方式：认证后按 userId 请求 Views；API Key 方式：请求 VirtualFolders。 
+   */ 
+  async getLibraries(): Promise&lt;VideoServerLibrary[]&gt; { 
+    await this.authenticate(); 
+ 
+    const baseUrl = this.buildBaseUrl(); 
+    const headers = this.authHeaders(); 
+ 
+    if (this.config.authMethod === &#39;password&#39; &amp;&amp; this.cachedUserId) { 
+      const resp = await JsonHttpClient.get(`${baseUrl}/Users/${this.cachedUserId}/Views`, headers); 
+      if (resp.statusCode &gt;= 200 &amp;&amp; resp.statusCode &lt; 300) { 
+        return this.parseViews(resp.body); 
+      } 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取媒体库失败&#39;)); 
+    } 
+ 
+    // API Key 方式：管理端 VirtualFolders 
+    const resp = await JsonHttpClient.get(`${baseUrl}/Library/VirtualFolders`, headers); 
+    if (resp.statusCode &gt;= 200 &amp;&amp; resp.statusCode &lt; 300) { 
+      return this.parseVirtualFolders(resp.body); 
+    } 
+    throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取媒体库失败&#39;)); 
+  } 
+ 
+  /** 
+   * 获取首页数据：继续观看、接下来、每个媒体库的最近添加。 
+   */ 
+  async getHome(): Promise&lt;VideoServerHome&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const baseUrl = this.buildBaseUrl(); 
+    const headers = this.authHeaders(); 
+ 
+    // 继续观看 
+    let continueWatching: VideoServerMediaItem[] = []; 
+    try { 
+      const resumeResp = await JsonHttpClient.get( 
+        `${baseUrl}/Users/${userId}/Items/Resume?Limit=20&amp;Recursive=true&amp;ImageTypeLimit=1&amp;MediaTypes=Video` + 
+          `&amp;EnableImageTypes=Primary,Backdrop,Thumb`, 
+        headers 
+      ); 
+      if (resumeResp.statusCode &gt;= 200 &amp;&amp; resumeResp.statusCode &lt; 300) { 
+        continueWatching = this.parseItems(resumeResp.body); 
+      } 
+    } catch (e) { 
+      console.warn(&#39;[JellyfinClient] 继续观看获取失败&#39;, (e as Error).message); 
+    } 
+ 
+    // 接下来 
+    let nextUp: VideoServerMediaItem[] = []; 
+    try { 
+      const nextResp = await JsonHttpClient.get( 
+        `${baseUrl}/Shows/NextUp?userId=${userId}&amp;Limit=20&amp;ImageTypeLimit=1&amp;EnableImageTypes=Primary,Backdrop,Thumb`, 
+        headers 
+      ); 
+      if (nextResp.statusCode &gt;= 200 &amp;&amp; nextResp.statusCode &lt; 300) { 
+        nextUp = this.parseItems(nextResp.body); 
+      } 
+    } catch (e) { 
+      console.warn(&#39;[JellyfinClient] 接下来获取失败&#39;, (e as Error).message); 
+    } 
+ 
+    // 最近添加（按媒体库，并发请求） 
+    const libraries = await this.getLibraries(); 
+    const latestTasks: Promise&lt;VideoServerLatestSection | null&gt;[] = libraries.map((lib: VideoServerLibrary) =&gt; 
+      this.fetchLatestForLibrary(baseUrl, userId, headers, lib.id, lib.name) 
+    ); 
+    const latestResults = await Promise.all(latestTasks); 
+    const latest: VideoServerLatestSection[] = []; 
+    for (const result of latestResults) { 
+      if (result !== null) { 
+        latest.push(result); 
+      } 
+    } 
+ 
+    return { continueWatching, nextUp, latest }; 
+  } 
+ 
+  /** 
+   * 获取单个媒体库的「最近添加」数据（供 Promise.all 并发调用）。 
+   */ 
+  private async fetchLatestForLibrary( 
+    baseUrl: string, userId: string, headers: Record&lt;string, string&gt;, 
+    libraryId: string, libraryName: string 
+  ): Promise&lt;VideoServerLatestSection | null&gt; { 
+    try { 
+      const latestResp = await JsonHttpClient.get( 
+        `${baseUrl}/Users/${userId}/Items/Latest?Limit=16&amp;Fields=PrimaryImageAspectRatio%2CPath` + 
+          `&amp;ImageTypeLimit=1&amp;EnableImageTypes=Primary%2CBackdrop%2CThumb&amp;ParentId=${encodeURIComponent(libraryId)}`, 
+        headers 
+      ); 
+      if (latestResp.statusCode &gt;= 200 &amp;&amp; latestResp.statusCode &lt; 300) { 
+        const items = this.parseItems(latestResp.body); 
+        if (items.length &gt; 0) { 
+          const section: VideoServerLatestSection = { libraryName, items }; 
+          return section; 
+        } 
+      } 
+    } catch (e) { 
+      console.warn(`[JellyfinClient] 媒体库 ${libraryName} 最近添加获取失败`, (e as BusinessError).message); 
+    } 
+    return null; 
+  } 
+ 
+  /** 
+   * 获取某个媒体库下的视频列表（分页，按 DateCreated 倒序）。 
+   */ 
+  async getLibraryItems(libraryId: string, libraryType: string, startIndex: number, limit: number): Promise&lt;VideoServerLibraryPage&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    let includeItemTypes = &#39;Movie,Series&#39;; 
+    if (libraryType === &#39;movies&#39;) { 
+      includeItemTypes = &#39;Movie&#39;; 
+    } else if (libraryType === &#39;tvshows&#39;) { 
+      includeItemTypes = &#39;Series&#39;; 
+    } 
+    const resp = await JsonHttpClient.get( 
+      `${this.buildBaseUrl()}/Users/${userId}/Items?SortBy=DateCreated,SortName,ProductionYear&amp;SortOrder=Descending` + 
+        `&amp;IncludeItemTypes=${includeItemTypes}&amp;Recursive=true&amp;Fields=PrimaryImageAspectRatio,MediaSourceCount` + 
+        `&amp;ImageTypeLimit=1&amp;EnableImageTypes=Primary,Backdrop,Banner,Thumb&amp;StartIndex=${startIndex}` + 
+        `&amp;ParentId=${encodeURIComponent(libraryId)}&amp;Limit=${limit}`, 
+      this.authHeaders() 
+    ); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取媒体库内容失败&#39;)); 
+    } 
+    const parsed = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+    const total = (parsed[&#39;TotalRecordCount&#39;] as number | undefined) ?? 0; 
+    const items = this.parseItems(resp.body); 
+    return { items, total }; 
+  } 
+ 
+  /** 
+   * 获取单条条目的详情（详情页展示用）。 
+   */ 
+  async getItemDetail(itemId: string): Promise&lt;VideoServerItemDetail&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const resp = await JsonHttpClient.get( 
+      `${this.buildBaseUrl()}/Users/${userId}/Items/${itemId}`, 
+      this.authHeaders() 
+    ); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取详情失败&#39;)); 
+    } 
+    const item = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+    const media = this.mapItem(item); 
+    const overview = String(item[&#39;Overview&#39;] ?? &#39;&#39;); 
+    let year = 0; 
+    const py = item[&#39;ProductionYear&#39;]; 
+    if (typeof py === &#39;number&#39;) { 
+      year = py; 
+    } 
+    let rating = 0; 
+    const cr = item[&#39;CommunityRating&#39;]; 
+    if (typeof cr === &#39;number&#39;) { 
+      rating = cr; 
+    } 
+    const genres: string[] = []; 
+    const g = item[&#39;Genres&#39;] as Array&lt;string&gt; | undefined; 
+    if (g) { 
+      for (const x of g) { 
+        genres.push(x); 
+      } 
+    } 
+    const cast: VideoServerPerson[] = []; 
+    const people = item[&#39;People&#39;] as Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    if (people) { 
+      for (const p of people) { 
+        const name = String(p[&#39;Name&#39;] ?? &#39;&#39;); 
+        if (name.length === 0) { 
+          continue; 
+        } 
+        const role = String(p[&#39;Role&#39;] ?? p[&#39;Type&#39;] ?? &#39;&#39;); 
+        const personId = String(p[&#39;Id&#39;] ?? &#39;&#39;); 
+        let tag = &#39;&#39;; 
+        const pt = p[&#39;PrimaryImageTag&#39;]; 
+        if (typeof pt === &#39;string&#39;) { 
+          tag = pt; 
+        } 
+        const imageUrl = personId.length &gt; 0 
+          ? `${this.buildBaseUrl()}/Items/${personId}/Images/Primary?maxWidth=200&amp;quality=90&amp;tag=${tag}&amp;api_key=${this.authToken()}` 
+          : &#39;&#39;; 
+        cast.push({ name, role, imageUrl, personId }); 
+      } 
+    } 
+    return { media, overview, year, rating, genres, cast }; 
+  } 
+ 
+  /** 
+   * 获取人员详情（照片、简介、出生信息、作品列表）。 
+   */ 
+  async getPersonDetail(personId: string): Promise&lt;VideoServerPersonDetail&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const result: VideoServerPersonDetail = { 
+      name: &#39;&#39;, overview: &#39;&#39;, birthDate: &#39;&#39;, birthPlace: &#39;&#39;, imageUrl: &#39;&#39;, credits: [] 
+    }; 
+    try { 
+      const resp = await JsonHttpClient.get( 
+        `${this.buildBaseUrl()}/Users/${userId}/Items/${personId}`, 
+        this.authHeaders() 
+      ); 
+      if (resp.statusCode &gt;= 200 &amp;&amp; resp.statusCode &lt; 300) { 
+        const item = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+        result.name = String(item[&#39;Name&#39;] ?? &#39;&#39;); 
+        result.overview = String(item[&#39;Overview&#39;] ?? &#39;&#39;); 
+        const pd = item[&#39;PremiereDate&#39;]; 
+        if (typeof pd === &#39;string&#39; &amp;&amp; pd.length &gt;= 10) { 
+          result.birthDate = pd.substring(0, 10); 
+        } 
+        const locations = item[&#39;ProductionLocations&#39;] as Array&lt;string&gt; | undefined; 
+        if (locations !== undefined &amp;&amp; locations.length &gt; 0) { 
+          result.birthPlace = locations[0]; 
+        } 
+        const imageTags = item[&#39;ImageTags&#39;] as Record&lt;string, Object&gt; | undefined; 
+        const primaryTag = imageTags !== undefined ? imageTags[&#39;Primary&#39;] : undefined; 
+        if (typeof primaryTag === &#39;string&#39; &amp;&amp; primaryTag.length &gt; 0) { 
+          result.imageUrl = `${this.buildBaseUrl()}/Items/${personId}/Images/Primary?maxWidth=400&amp;quality=90&amp;tag=${primaryTag}&amp;api_key=${this.authToken()}`; 
+        } 
+      } 
+    } catch (e) { 
+      console.warn(&#39;[JellyfinClient] 人员详情获取失败&#39;, (e as Error).message); 
+    } 
+    try { 
+      const resp = await JsonHttpClient.get( 
+        `${this.buildBaseUrl()}/Users/${userId}/Items?PersonIds=${encodeURIComponent(personId)}` + 
+          `&amp;Recursive=true&amp;IncludeItemTypes=Movie,Series&amp;SortBy=PremiereDate&amp;SortOrder=Descending&amp;Limit=50&amp;ImageTypeLimit=1`, 
+        this.authHeaders() 
+      ); 
+      if (resp.statusCode &gt;= 200 &amp;&amp; resp.statusCode &lt; 300) { 
+        result.credits = this.parseItems(resp.body); 
+      } 
+    } catch (e) { 
+      console.warn(&#39;[JellyfinClient] 人员作品获取失败&#39;, (e as Error).message); 
+    } 
+    return result; 
+  } 
+ 
+  /** 
+   * 获取剧集的「接下来」单集（续播集，或未开始观看时的第一集）。 
+   */ 
+  async getNextUp(seriesId: string): Promise&lt;VideoServerMediaItem | null&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const resp = await JsonHttpClient.get( 
+      `${this.buildBaseUrl()}/Shows/NextUp?SeriesId=${encodeURIComponent(seriesId)}&amp;UserId=${userId}&amp;Limit=1&amp;ImageTypeLimit=1`, 
+      this.authHeaders() 
+    ); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      return null; 
+    } 
+    const items = this.parseItems(resp.body); 
+    return items.length &gt; 0 ? items[0] : null; 
+  } 
+ 
+  /** 
+   * 获取剧集的所有季。 
+   */ 
+  async getSeasons(seriesId: string): Promise&lt;VideoServerSeason[]&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const resp = await JsonHttpClient.get( 
+      `${this.buildBaseUrl()}/Shows/${seriesId}/Seasons?userId=${userId}&amp;Fields=Overview`, 
+      this.authHeaders() 
+    ); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取季列表失败&#39;)); 
+    } 
+    const parsed = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+    const items = parsed[&#39;Items&#39;] as Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    const result: VideoServerSeason[] = []; 
+    if (!items) { 
+      return result; 
+    } 
+    for (const item of items) { 
+      const id = String(item[&#39;Id&#39;] ?? &#39;&#39;); 
+      const seasonNumber = (item[&#39;IndexNumber&#39;] as number | undefined) ?? 0; 
+      const name = String(item[&#39;Name&#39;] ?? &#39;&#39;); 
+      const overview = String(item[&#39;Overview&#39;] ?? &#39;&#39;); 
+      const imageTags = item[&#39;ImageTags&#39;] as Record&lt;string, Object&gt; | undefined; 
+      let tag = &#39;&#39;; 
+      if (imageTags !== undefined) { 
+        const p = imageTags[&#39;Primary&#39;]; 
+        if (typeof p === &#39;string&#39;) { 
+          tag = p; 
+        } 
+      } 
+      const posterUrl = this.primaryImageUrl(id, tag); 
+      result.push({ id, seasonNumber, name, posterUrl, overview }); 
+    } 
+    return result; 
+  } 
+ 
+  /** 
+   * 获取某季的所有集。 
+   */ 
+  async getEpisodes(seriesId: string, seasonId: string): Promise&lt;VideoServerEpisode[]&gt; { 
+    await this.authenticate(); 
+    const userId = await this.ensureUserId(); 
+    const resp = await JsonHttpClient.get( 
+      `${this.buildBaseUrl()}/Shows/${seriesId}/Episodes?userId=${userId}&amp;SeasonId=${seasonId}&amp;Fields=Overview&amp;enableUserData=true`, 
+      this.authHeaders() 
+    ); 
+    if (resp.statusCode &lt; 200 || resp.statusCode &gt;= 300) { 
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, &#39;获取集列表失败&#39;)); 
+    } 
+    const parsed = JSON.parse(resp.body) as Record&lt;string, Object&gt;; 
+    const items = parsed[&#39;Items&#39;] as Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    const result: VideoServerEpisode[] = []; 
+    if (!items) { 
+      return result; 
+    } 
+    for (const item of items) { 
+      const id = String(item[&#39;Id&#39;] ?? &#39;&#39;); 
+      const episodeNumber = (item[&#39;IndexNumber&#39;] as number | undefined) ?? 0; 
+      const seasonNumber = (item[&#39;ParentIndexNumber&#39;] as number | undefined) ?? 0; 
+      const title = String(item[&#39;Name&#39;] ?? &#39;&#39;); 
+      const overview = String(item[&#39;Overview&#39;] ?? &#39;&#39;); 
+      const imageTags = item[&#39;ImageTags&#39;] as Record&lt;string, Object&gt; | undefined; 
+      let tag = &#39;&#39;; 
+      if (imageTags !== undefined) { 
+        const p = imageTags[&#39;Primary&#39;]; 
+        if (typeof p === &#39;string&#39;) { 
+          tag = p; 
+        } 
+      } 
+      const stillUrl = this.primaryImageUrl(id, tag); 
+      let durationMs = 0; 
+      const ticks = item[&#39;RunTimeTicks&#39;]; 
+      if (typeof ticks === &#39;number&#39;) { 
+        durationMs = Math.round(ticks / 10000); 
+      } 
+      let rating = 0; 
+      const cr = item[&#39;CommunityRating&#39;]; 
+      if (typeof cr === &#39;number&#39;) { 
+        rating = cr; 
+      } 
+      let positionMs = 0; 
+      let lastPlayedDate = 0; 
+      const userData = item[&#39;UserData&#39;] as Record&lt;string, Object&gt; | undefined; 
+      if (userData !== undefined) { 
+        const pt = userData[&#39;PlaybackPositionTicks&#39;]; 
+        if (typeof pt === &#39;number&#39;) { 
+          positionMs = Math.round(pt / 10000); 
+        } 
+        const lp = userData[&#39;LastPlayedDate&#39;]; 
+        if (typeof lp === &#39;string&#39; &amp;&amp; lp.length &gt;= 19) { 
+          const t = Date.parse(lp.substring(0, 19)); 
+          if (!isNaN(t)) { 
+            lastPlayedDate = t; 
+          } 
+        } 
+      } 
+      result.push({ id, episodeNumber, seasonNumber, title, overview, stillUrl, durationMs, rating, positionMs, lastPlayedDate }); 
+    } 
+    return result; 
+  } 
+ 
+  private parseItems(body: string): VideoServerMediaItem[] { 
+    const parsed = JSON.parse(body) as Object; 
+    const result: VideoServerMediaItem[] = []; 
+    let items: Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    if (parsed instanceof Array) { 
+      // /Items/Latest 直接返回数组 
+      items = parsed as Array&lt;Record&lt;string, Object&gt;&gt;; 
+    } else { 
+      items = (parsed as Record&lt;string, Object&gt;)[&#39;Items&#39;] as Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    } 
+    if (!items) { 
+      return result; 
+    } 
+    for (const item of items) { 
+      result.push(this.mapItem(item)); 
+    } 
+    return result; 
+  } 
+ 
+  private mapItem(item: Record&lt;string, Object&gt;): VideoServerMediaItem { 
+    const id = String(item[&#39;Id&#39;] ?? &#39;&#39;); 
+    const name = String(item[&#39;Name&#39;] ?? &#39;&#39;); 
+    const type = String(item[&#39;Type&#39;] ?? &#39;&#39;).toLowerCase(); 
+    const seriesName = String(item[&#39;SeriesName&#39;] ?? &#39;&#39;); 
+    const parentIndex = item[&#39;ParentIndexNumber&#39;] as number | undefined; 
+    const index = item[&#39;IndexNumber&#39;] as number | undefined; 
+    const imageTags = item[&#39;ImageTags&#39;] as Record&lt;string, Object&gt; | undefined; 
+    const backdropTags = item[&#39;BackdropImageTags&#39;] as Array&lt;string&gt; | undefined; 
+    const userData = item[&#39;UserData&#39;] as Record&lt;string, Object&gt; | undefined; 
+ 
+    const token = this.authToken(); 
+    const isEpisode = type === &#39;episode&#39;; 
+    const seriesId = String(item[&#39;SeriesId&#39;] ?? &#39;&#39;); 
+    const seasonId = String(item[&#39;SeasonId&#39;] ?? item[&#39;ParentId&#39;] ?? &#39;&#39;); 
+ 
+    let posterUrl = &#39;&#39;; 
+    if (isEpisode) { 
+      // 剧集：优先季海报，其次剧集海报（继续观看/接下来缩略图用），最后回退到集截图 
+      const seasonTag = item[&#39;ParentPrimaryImageTag&#39;]; 
+      const seriesTag = item[&#39;SeriesPrimaryImageTag&#39;]; 
+      if (seasonId.length &gt; 0 &amp;&amp; typeof seasonTag === &#39;string&#39; &amp;&amp; seasonTag.length &gt; 0) { 
+        posterUrl = `${this.buildBaseUrl()}/Items/${seasonId}/Images/Primary?maxWidth=400&amp;quality=90&amp;tag=${seasonTag}&amp;api_key=${token}`; 
+      } else if (seriesId.length &gt; 0 &amp;&amp; typeof seriesTag === &#39;string&#39; &amp;&amp; seriesTag.length &gt; 0) { 
+        posterUrl = `${this.buildBaseUrl()}/Items/${seriesId}/Images/Primary?maxWidth=400&amp;quality=90&amp;tag=${seriesTag}&amp;api_key=${token}`; 
+      } 
+    } 
+    if (posterUrl.length === 0 &amp;&amp; imageTags !== undefined) { 
+      const primaryTag = imageTags[&#39;Primary&#39;]; 
+      if (typeof primaryTag === &#39;string&#39; &amp;&amp; primaryTag.length &gt; 0) { 
+        posterUrl = `${this.buildBaseUrl()}/Items/${id}/Images/Primary?maxWidth=400&amp;quality=90&amp;tag=${primaryTag}&amp;api_key=${token}`; 
+      } 
+    } 
+    let backdropUrl = &#39;&#39;; 
+    if (backdropTags !== undefined &amp;&amp; backdropTags.length &gt; 0) { 
+      backdropUrl = `${this.buildBaseUrl()}/Items/${id}/Images/Backdrop?maxWidth=1280&amp;quality=90&amp;tag=${backdropTags[0]}&amp;api_key=${token}`; 
+    } 
+    if (isEpisode &amp;&amp; backdropUrl.length === 0 &amp;&amp; seriesId.length &gt; 0) { 
+      // 16:9 缩略图：用剧集的 Thumb（与 Jellyfin Web 的继续观看/接下来一致） 
+      const seriesThumbTag = item[&#39;SeriesThumbImageTag&#39;]; 
+      if (typeof seriesThumbTag === &#39;string&#39; &amp;&amp; seriesThumbTag.length &gt; 0) { 
+        backdropUrl = `${this.buildBaseUrl()}/Items/${seriesId}/Images/Thumb?fillWidth=700&amp;fillHeight=394&amp;quality=96&amp;tag=${seriesThumbTag}&amp;api_key=${token}`; 
+      } else { 
+        backdropUrl = `${this.buildBaseUrl()}/Items/${seriesId}/Images/Thumb?fillWidth=700&amp;fillHeight=394&amp;quality=96&amp;api_key=${token}`; 
+      } 
+    } 
+ 
+    const title = isEpisode &amp;&amp; seriesName.length &gt; 0 ? seriesName : name; 
+    let subtitle = &#39;&#39;; 
+    if (isEpisode) { 
+      const season = parentIndex ?? 0; 
+      const episode = index ?? 0; 
+      subtitle = `S${season}E${episode}${name.length &gt; 0 ? &#39; · &#39; + name : &#39;&#39;}`; 
+    } else if (type === &#39;series&#39;) { 
+      subtitle = &#39;电视剧&#39;; 
+    } else if (type === &#39;movie&#39;) { 
+      subtitle = &#39;电影&#39;; 
+    } 
+ 
+    let progress = 0; 
+    let positionMs = 0; 
+    if (userData !== undefined) { 
+      const pct = userData[&#39;PlayedPercentage&#39;]; 
+      if (typeof pct === &#39;number&#39;) { 
+        progress = pct / 100; 
+      } 
+      const ticks = userData[&#39;PlaybackPositionTicks&#39;]; 
+      if (typeof ticks === &#39;number&#39;) { 
+        positionMs = Math.round(ticks / 10000); 
+      } 
+    } 
+    let durationMs = 0; 
+    const runTimeTicks = item[&#39;RunTimeTicks&#39;]; 
+    if (typeof runTimeTicks === &#39;number&#39;) { 
+      durationMs = Math.round(runTimeTicks / 10000); 
+    } 
+ 
+    return { 
+      id, title, type, backdropUrl, posterUrl, progress, positionMs, durationMs, subtitle, seriesId, 
+      seasonNumber: parentIndex ?? 0, 
+      episodeNumber: index ?? 0 
+    }; 
+  } 
+ 
+  private primaryImageUrl(itemId: string, tag: string): string { 
+    if (itemId.length === 0) { 
+      return &#39;&#39;; 
+    } 
+    const token = this.authToken(); 
+    let url = `${this.buildBaseUrl()}/Items/${itemId}/Images/Primary?maxWidth=720&amp;quality=90`; 
+    if (tag.length &gt; 0) { 
+      url += `&amp;tag=${tag}`; 
+    } 
+    if (token.length &gt; 0) { 
+      url += `&amp;api_key=${token}`; 
+    } 
+    return url; 
+  } 
+ 
+  private parseViews(body: string): VideoServerLibrary[] { 
+    const parsed = JSON.parse(body) as Record&lt;string, Object&gt;; 
+    const items = parsed[&#39;Items&#39;] as Array&lt;Record&lt;string, Object&gt;&gt; | undefined; 
+    const result: VideoServerLibrary[] = []; 
+    if (items) { 
+      for (const item of items) { 
+        const id = (item[&#39;Id&#39;] ?? item[&#39;ItemId&#39;] ?? &#39;&#39;) as string; 
+        const name = (item[&#39;Name&#39;] ?? &#39;&#39;) as string; 
+        if (name.length &gt; 0) { 
+          const imageTags = item[&#39;ImageTags&#39;] as Record&lt;string, Object&gt; | undefined; 
+          let tag = &#39;&#39;; 
+          if (imageTags !== undefined) { 
+            const primary = imageTags[&#39;Primary&#39;]; 
+            if (typeof primary === &#39;string&#39;) { 
+              tag = primary; 
+            } 
+          } 
+          result.push({ 
+            id: String(id), 
+            name, 
+            type: (item[&#39;CollectionType&#39;] as string | undefined) ?? undefined, 
+            imageUrl: this.primaryImageUrl(String(id), tag) 
+          }); 
+        } 
+      } 
+    } 
+    return result; 
+  } 
+ 
+  private parseVirtualFolders(body: string): VideoServerLibrary[] { 
+    const items = JSON.parse(body) as Array&lt;Record&lt;string, Object&gt;&gt;; 
+    const result: VideoServerLibrary[] = []; 
+    for (const item of items) { 
+      const name = (item[&#39;Name&#39;] ?? &#39;&#39;) as string; 
+      if (name.length &gt; 0) { 
+        const itemId = String(item[&#39;ItemId&#39;] ?? item[&#39;Id&#39;] ?? &#39;&#39;); 
+        result.push({ 
+          id: itemId, 
+          name, 
+          type: (item[&#39;CollectionType&#39;] as string | undefined) ?? undefined, 
+          imageUrl: this.primaryImageUrl(itemId, &#39;&#39;) 
+        }); 
+      } 
+    } 
+    return result; 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 15:32:21 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/lib/JellyfinClient.ets","hash":"7a342e68451cad127bc4e89a2a7eee6cb92b183068d4fa909d681e9066aee3dc","lineCnt":954,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"JellyfinClient.constructor","count":0,"regions":[{"startLoc":{"line":166,"col":3},"endLoc":{"line":168,"col":4},"count":0,"ignored":0},{"startLoc":{"line":167,"col":5},"endLoc":{"line":168,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"JellyfinClient.fromConfigJson","count":0,"regions":[{"startLoc":{"line":170,"col":3},"endLoc":{"line":200,"col":4},"count":0,"ignored":0},{"startLoc":{"line":184,"col":5},"endLoc":{"line":200,"col":4},"count":0,"ignored":0},{"startLoc":{"line":178,"col":12},"endLoc":{"line":183,"col":6},"count":0,"ignored":0},{"startLoc":{"line":178,"col":74},"endLoc":{"line":183,"col":6},"count":0,"ignored":0},{"startLoc":{"line":176,"col":57},"endLoc":{"line":178,"col":6},"count":0,"ignored":0},{"startLoc":{"line":180,"col":27},"endLoc":{"line":182,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":172,"col":25},"endLoc":{"line":172,"col":87},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":173,"col":22},"endLoc":{"line":173,"col":64},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":176,"col":9},"endLoc":{"line":176,"col":55},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":178,"col":16},"endLoc":{"line":178,"col":72},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":180,"col":11},"endLoc":{"line":180,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":184,"col":21},"endLoc":{"line":184,"col":89},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":192,"col":12},"endLoc":{"line":192,"col":52},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":194,"col":17},"endLoc":{"line":194,"col":74},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":195,"col":20},"endLoc":{"line":195,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":196,"col":15},"endLoc":{"line":196,"col":68},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":197,"col":17},"endLoc":{"line":197,"col":74},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":198,"col":17},"endLoc":{"line":198,"col":74},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"JellyfinClient.buildBaseUrl","count":0,"regions":[{"startLoc":{"line":202,"col":3},"endLoc":{"line":216,"col":4},"count":0,"ignored":0},{"startLoc":{"line":209,"col":59},"endLoc":{"line":211,"col":6},"count":0,"ignored":0},{"startLoc":{"line":212,"col":33},"endLoc":{"line":214,"col":6},"count":0,"ignored":0},{"startLoc":{"line":215,"col":5},"endLoc":{"line":216,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":207,"col":21},"endLoc":{"line":207,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":209,"col":9},"endLoc":{"line":209,"col":57},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":212,"col":9},"endLoc":{"line":212,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"JellyfinClient.authToken","count":0,"regions":[{"startLoc":{"line":218,"col":3},"endLoc":{"line":223,"col":4},"count":0,"ignored":0},{"startLoc":{"line":219,"col":46},"endLoc":{"line":221,"col":6},"count":0,"ignored":0},{"startLoc":{"line":222,"col":5},"endLoc":{"line":223,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":219,"col":9},"endLoc":{"line":219,"col":44},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"JellyfinClient.authHeaders","count":0,"regions":[{"startLoc":{"line":225,"col":3},"endLoc":{"line":232,"col":4},"count":0,"ignored":0},{"startLoc":{"line":228,"col":27},"endLoc":{"line":230,"col":6},"count":0,"ignored":0},{"startLoc":{"line":231,"col":5},"endLoc":{"line":232,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":228,"col":9},"endLoc":{"line":228,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"JellyfinClient.buildWebItemUrl","count":0,"regions":[{"startLoc":{"line":237,"col":3},"endLoc":{"line":239,"col":4},"count":0,"ignored":0},{"startLoc":{"line":238,"col":5},"endLoc":{"line":239,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"JellyfinClient.getStreamUrl","count":0,"regions":[{"startLoc":{"line":244,"col":3},"endLoc":{"line":248,"col":4},"count":0,"ignored":0},{"startLoc":{"line":245,"col":5},"endLoc":{"line":248,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"JellyfinClient.getStreamHeader","count":0,"regions":[{"startLoc":{"line":255,"col":3},"endLoc":{"line":257,"col":4},"count":0,"ignored":0},{"startLoc":{"line":256,"col":5},"endLoc":{"line":257,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"JellyfinClient.getPlaybackInfo","count":0,"regions":[{"startLoc":{"line":262,"col":3},"endLoc":{"line":287,"col":4},"count":0,"ignored":0},{"startLoc":{"line":280,"col":50},"endLoc":{"line":285,"col":6},"count":0,"ignored":0},{"startLoc":{"line":275,"col":58},"endLoc":{"line":277,"col":6},"count":0,"ignored":0},{"startLoc":{"line":282,"col":52},"endLoc":{"line":284,"col":8},"count":0,"ignored":0},{"startLoc":{"line":286,"col":5},"endLoc":{"line":287,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":275,"col":9},"endLoc":{"line":275,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":280,"col":9},"endLoc":{"line":280,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":282,"col":11},"endLoc":{"line":282,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":8},{"name":"JellyfinClient.reportPlaying","count":0,"regions":[{"startLoc":{"line":292,"col":3},"endLoc":{"line":308,"col":4},"count":0,"ignored":0},{"startLoc":{"line":305,"col":58},"endLoc":{"line":307,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":305,"col":9},"endLoc":{"line":305,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"JellyfinClient.reportStopped","count":0,"regions":[{"startLoc":{"line":313,"col":3},"endLoc":{"line":326,"col":4},"count":0,"ignored":0},{"startLoc":{"line":323,"col":58},"endLoc":{"line":325,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":323,"col":9},"endLoc":{"line":323,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"JellyfinClient.reportProgress","count":0,"regions":[{"startLoc":{"line":331,"col":3},"endLoc":{"line":345,"col":4},"count":0,"ignored":0},{"startLoc":{"line":342,"col":58},"endLoc":{"line":344,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":342,"col":9},"endLoc":{"line":342,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":11},{"name":"JellyfinClient.authenticate","count":0,"regions":[{"startLoc":{"line":350,"col":3},"endLoc":{"line":384,"col":4},"count":0,"ignored":0},{"startLoc":{"line":354,"col":46},"endLoc":{"line":357,"col":6},"count":0,"ignored":0},{"startLoc":{"line":351,"col":27},"endLoc":{"line":353,"col":6},"count":0,"ignored":0},{"startLoc":{"line":360,"col":57},"endLoc":{"line":362,"col":6},"count":0,"ignored":0},{"startLoc":{"line":371,"col":58},"endLoc":{"line":373,"col":6},"count":0,"ignored":0},{"startLoc":{"line":377,"col":23},"endLoc":{"line":379,"col":6},"count":0,"ignored":0},{"startLoc":{"line":381,"col":29},"endLoc":{"line":383,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":351,"col":9},"endLoc":{"line":351,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":354,"col":9},"endLoc":{"line":354,"col":44},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":360,"col":9},"endLoc":{"line":360,"col":55},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":371,"col":9},"endLoc":{"line":371,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":377,"col":9},"endLoc":{"line":377,"col":21},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":381,"col":9},"endLoc":{"line":381,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":12},{"name":"JellyfinClient.ensureUserId","count":0,"regions":[{"startLoc":{"line":387,"col":3},"endLoc":{"line":401,"col":4},"count":0,"ignored":0},{"startLoc":{"line":396,"col":27},"endLoc":{"line":399,"col":6},"count":0,"ignored":0},{"startLoc":{"line":388,"col":28},"endLoc":{"line":390,"col":6},"count":0,"ignored":0},{"startLoc":{"line":392,"col":58},"endLoc":{"line":394,"col":6},"count":0,"ignored":0},{"startLoc":{"line":400,"col":5},"endLoc":{"line":401,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":388,"col":9},"endLoc":{"line":388,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":392,"col":9},"endLoc":{"line":392,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":396,"col":9},"endLoc":{"line":396,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"JellyfinClient.getServerInfo","count":0,"regions":[{"startLoc":{"line":406,"col":3},"endLoc":{"line":412,"col":4},"count":0,"ignored":0},{"startLoc":{"line":408,"col":58},"endLoc":{"line":410,"col":6},"count":0,"ignored":0},{"startLoc":{"line":411,"col":5},"endLoc":{"line":412,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":408,"col":9},"endLoc":{"line":408,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"JellyfinClient.testConnection","count":0,"regions":[{"startLoc":{"line":417,"col":3},"endLoc":{"line":426,"col":4},"count":0,"ignored":0},{"startLoc":{"line":418,"col":9},"endLoc":{"line":422,"col":6},"count":0,"ignored":0},{"startLoc":{"line":422,"col":7},"endLoc":{"line":425,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"JellyfinClient.getLibraries","count":0,"regions":[{"startLoc":{"line":432,"col":3},"endLoc":{"line":452,"col":4},"count":0,"ignored":0},{"startLoc":{"line":438,"col":69},"endLoc":{"line":444,"col":6},"count":0,"ignored":0},{"startLoc":{"line":440,"col":60},"endLoc":{"line":442,"col":8},"count":0,"ignored":0},{"startLoc":{"line":448,"col":58},"endLoc":{"line":450,"col":6},"count":0,"ignored":0},{"startLoc":{"line":451,"col":5},"endLoc":{"line":452,"col":4},"count":0,"ignored":0},{"startLoc":{"line":443,"col":7},"endLoc":{"line":444,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":438,"col":9},"endLoc":{"line":438,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":440,"col":11},"endLoc":{"line":440,"col":58},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":448,"col":9},"endLoc":{"line":448,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"JellyfinClient.getHome","count":0,"regions":[{"startLoc":{"line":457,"col":3},"endLoc":{"line":506,"col":4},"count":0,"ignored":0},{"startLoc":{"line":465,"col":9},"endLoc":{"line":474,"col":6},"count":0,"ignored":0},{"startLoc":{"line":480,"col":9},"endLoc":{"line":488,"col":6},"count":0,"ignored":0},{"startLoc":{"line":499,"col":5},"endLoc":{"line":503,"col":6},"count":0,"ignored":0},{"startLoc":{"line":474,"col":7},"endLoc":{"line":476,"col":6},"count":0,"ignored":0},{"startLoc":{"line":471,"col":72},"endLoc":{"line":473,"col":8},"count":0,"ignored":0},{"startLoc":{"line":488,"col":7},"endLoc":{"line":490,"col":6},"count":0,"ignored":0},{"startLoc":{"line":485,"col":68},"endLoc":{"line":487,"col":8},"count":0,"ignored":0},{"startLoc":{"line":500,"col":28},"endLoc":{"line":502,"col":8},"count":0,"ignored":0},{"startLoc":{"line":505,"col":5},"endLoc":{"line":506,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":471,"col":11},"endLoc":{"line":471,"col":70},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":485,"col":11},"endLoc":{"line":485,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":500,"col":11},"endLoc":{"line":500,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":17},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":494,"col":83},"endLoc":{"line":495,"col":77},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"JellyfinClient.fetchLatestForLibrary","count":0,"regions":[{"startLoc":{"line":511,"col":3},"endLoc":{"line":532,"col":4},"count":0,"ignored":0},{"startLoc":{"line":515,"col":9},"endLoc":{"line":528,"col":6},"count":0,"ignored":0},{"startLoc":{"line":521,"col":72},"endLoc":{"line":527,"col":8},"count":0,"ignored":0},{"startLoc":{"line":523,"col":31},"endLoc":{"line":526,"col":10},"count":0,"ignored":0},{"startLoc":{"line":528,"col":7},"endLoc":{"line":530,"col":6},"count":0,"ignored":0},{"startLoc":{"line":531,"col":5},"endLoc":{"line":532,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":521,"col":11},"endLoc":{"line":521,"col":70},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":523,"col":13},"endLoc":{"line":523,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":19},{"name":"JellyfinClient.getLibraryItems","count":0,"regions":[{"startLoc":{"line":537,"col":3},"endLoc":{"line":560,"col":4},"count":0,"ignored":0},{"startLoc":{"line":556,"col":5},"endLoc":{"line":560,"col":4},"count":0,"ignored":0},{"startLoc":{"line":541,"col":35},"endLoc":{"line":543,"col":6},"count":0,"ignored":0},{"startLoc":{"line":543,"col":12},"endLoc":{"line":545,"col":6},"count":0,"ignored":0},{"startLoc":{"line":543,"col":43},"endLoc":{"line":545,"col":6},"count":0,"ignored":0},{"startLoc":{"line":553,"col":58},"endLoc":{"line":555,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":541,"col":9},"endLoc":{"line":541,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":543,"col":16},"endLoc":{"line":543,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":553,"col":9},"endLoc":{"line":553,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":20},{"name":"JellyfinClient.getItemDetail","count":0,"regions":[{"startLoc":{"line":565,"col":3},"endLoc":{"line":617,"col":4},"count":0,"ignored":0},{"startLoc":{"line":597,"col":17},"endLoc":{"line":615,"col":6},"count":0,"ignored":0},{"startLoc":{"line":598,"col":7},"endLoc":{"line":614,"col":8},"count":0,"ignored":0},{"startLoc":{"line":590,"col":12},"endLoc":{"line":594,"col":6},"count":0,"ignored":0},{"startLoc":{"line":610,"col":9},"endLoc":{"line":614,"col":8},"count":0,"ignored":0},{"startLoc":{"line":572,"col":58},"endLoc":{"line":574,"col":6},"count":0,"ignored":0},{"startLoc":{"line":580,"col":33},"endLoc":{"line":582,"col":6},"count":0,"ignored":0},{"startLoc":{"line":585,"col":33},"endLoc":{"line":587,"col":6},"count":0,"ignored":0},{"startLoc":{"line":591,"col":7},"endLoc":{"line":593,"col":8},"count":0,"ignored":0},{"startLoc":{"line":600,"col":32},"endLoc":{"line":602,"col":10},"count":0,"ignored":0},{"startLoc":{"line":607,"col":37},"endLoc":{"line":609,"col":10},"count":0,"ignored":0},{"startLoc":{"line":616,"col":5},"endLoc":{"line":617,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":572,"col":9},"endLoc":{"line":572,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":580,"col":9},"endLoc":{"line":580,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":585,"col":9},"endLoc":{"line":585,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":590,"col":9},"endLoc":{"line":590,"col":10},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":597,"col":9},"endLoc":{"line":597,"col":15},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":600,"col":13},"endLoc":{"line":600,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":607,"col":13},"endLoc":{"line":607,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":610,"col":26},"endLoc":{"line":612,"col":15},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":21},{"name":"JellyfinClient.getPersonDetail","count":0,"regions":[{"startLoc":{"line":622,"col":3},"endLoc":{"line":667,"col":4},"count":0,"ignored":0},{"startLoc":{"line":628,"col":9},"endLoc":{"line":651,"col":6},"count":0,"ignored":0},{"startLoc":{"line":633,"col":60},"endLoc":{"line":650,"col":8},"count":0,"ignored":0},{"startLoc":{"line":654,"col":9},"endLoc":{"line":663,"col":6},"count":0,"ignored":0},{"startLoc":{"line":651,"col":7},"endLoc":{"line":653,"col":6},"count":0,"ignored":0},{"startLoc":{"line":638,"col":56},"endLoc":{"line":640,"col":10},"count":0,"ignored":0},{"startLoc":{"line":642,"col":62},"endLoc":{"line":644,"col":10},"count":0,"ignored":0},{"startLoc":{"line":647,"col":70},"endLoc":{"line":649,"col":10},"count":0,"ignored":0},{"startLoc":{"line":663,"col":7},"endLoc":{"line":665,"col":6},"count":0,"ignored":0},{"startLoc":{"line":660,"col":60},"endLoc":{"line":662,"col":8},"count":0,"ignored":0},{"startLoc":{"line":666,"col":5},"endLoc":{"line":667,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":633,"col":11},"endLoc":{"line":633,"col":58},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":638,"col":13},"endLoc":{"line":638,"col":54},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":642,"col":13},"endLoc":{"line":642,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":646,"col":28},"endLoc":{"line":646,"col":86},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":647,"col":13},"endLoc":{"line":647,"col":68},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":660,"col":11},"endLoc":{"line":660,"col":58},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":22},{"name":"JellyfinClient.getNextUp","count":0,"regions":[{"startLoc":{"line":672,"col":3},"endLoc":{"line":684,"col":4},"count":0,"ignored":0},{"startLoc":{"line":679,"col":58},"endLoc":{"line":681,"col":6},"count":0,"ignored":0},{"startLoc":{"line":682,"col":5},"endLoc":{"line":684,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":679,"col":9},"endLoc":{"line":679,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":683,"col":12},"endLoc":{"line":683,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":23},{"name":"JellyfinClient.getSeasons","count":0,"regions":[{"startLoc":{"line":689,"col":3},"endLoc":{"line":722,"col":4},"count":0,"ignored":0},{"startLoc":{"line":705,"col":5},"endLoc":{"line":720,"col":6},"count":0,"ignored":0},{"startLoc":{"line":712,"col":36},"endLoc":{"line":717,"col":8},"count":0,"ignored":0},{"startLoc":{"line":696,"col":58},"endLoc":{"line":698,"col":6},"count":0,"ignored":0},{"startLoc":{"line":702,"col":17},"endLoc":{"line":704,"col":6},"count":0,"ignored":0},{"startLoc":{"line":714,"col":36},"endLoc":{"line":716,"col":10},"count":0,"ignored":0},{"startLoc":{"line":718,"col":7},"endLoc":{"line":720,"col":6},"count":0,"ignored":0},{"startLoc":{"line":721,"col":5},"endLoc":{"line":722,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":696,"col":9},"endLoc":{"line":696,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":702,"col":9},"endLoc":{"line":702,"col":15},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":712,"col":11},"endLoc":{"line":712,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":714,"col":13},"endLoc":{"line":714,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":24},{"name":"JellyfinClient.getEpisodes","count":0,"regions":[{"startLoc":{"line":727,"col":3},"endLoc":{"line":787,"col":4},"count":0,"ignored":0},{"startLoc":{"line":743,"col":5},"endLoc":{"line":785,"col":6},"count":0,"ignored":0},{"startLoc":{"line":771,"col":35},"endLoc":{"line":783,"col":8},"count":0,"ignored":0},{"startLoc":{"line":751,"col":36},"endLoc":{"line":756,"col":8},"count":0,"ignored":0},{"startLoc":{"line":777,"col":56},"endLoc":{"line":782,"col":10},"count":0,"ignored":0},{"startLoc":{"line":734,"col":58},"endLoc":{"line":736,"col":6},"count":0,"ignored":0},{"startLoc":{"line":740,"col":17},"endLoc":{"line":742,"col":6},"count":0,"ignored":0},{"startLoc":{"line":753,"col":36},"endLoc":{"line":755,"col":10},"count":0,"ignored":0},{"startLoc":{"line":760,"col":38},"endLoc":{"line":762,"col":8},"count":0,"ignored":0},{"startLoc":{"line":765,"col":35},"endLoc":{"line":767,"col":8},"count":0,"ignored":0},{"startLoc":{"line":773,"col":37},"endLoc":{"line":775,"col":10},"count":0,"ignored":0},{"startLoc":{"line":779,"col":26},"endLoc":{"line":781,"col":12},"count":0,"ignored":0},{"startLoc":{"line":786,"col":5},"endLoc":{"line":787,"col":4},"count":0,"ignored":0},{"startLoc":{"line":784,"col":7},"endLoc":{"line":785,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":734,"col":9},"endLoc":{"line":734,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":740,"col":9},"endLoc":{"line":740,"col":15},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":751,"col":11},"endLoc":{"line":751,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":753,"col":13},"endLoc":{"line":753,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":760,"col":11},"endLoc":{"line":760,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":765,"col":11},"endLoc":{"line":765,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":771,"col":11},"endLoc":{"line":771,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":773,"col":13},"endLoc":{"line":773,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":777,"col":13},"endLoc":{"line":777,"col":54},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":779,"col":15},"endLoc":{"line":779,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":25},{"name":"JellyfinClient.parseItems","count":0,"regions":[{"startLoc":{"line":789,"col":3},"endLoc":{"line":806,"col":4},"count":0,"ignored":0},{"startLoc":{"line":793,"col":34},"endLoc":{"line":796,"col":6},"count":0,"ignored":0},{"startLoc":{"line":796,"col":12},"endLoc":{"line":798,"col":6},"count":0,"ignored":0},{"startLoc":{"line":799,"col":17},"endLoc":{"line":801,"col":6},"count":0,"ignored":0},{"startLoc":{"line":802,"col":5},"endLoc":{"line":804,"col":6},"count":0,"ignored":0},{"startLoc":{"line":805,"col":5},"endLoc":{"line":806,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":793,"col":9},"endLoc":{"line":793,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":799,"col":9},"endLoc":{"line":799,"col":15},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":26},{"name":"JellyfinClient.mapItem","count":0,"regions":[{"startLoc":{"line":808,"col":3},"endLoc":{"line":890,"col":4},"count":0,"ignored":0},{"startLoc":{"line":825,"col":20},"endLoc":{"line":834,"col":6},"count":0,"ignored":0},{"startLoc":{"line":869,"col":33},"endLoc":{"line":878,"col":6},"count":0,"ignored":0},{"startLoc":{"line":845,"col":71},"endLoc":{"line":853,"col":6},"count":0,"ignored":0},{"startLoc":{"line":835,"col":60},"endLoc":{"line":840,"col":6},"count":0,"ignored":0},{"startLoc":{"line":885,"col":5},"endLoc":{"line":890,"col":4},"count":0,"ignored":0},{"startLoc":{"line":857,"col":20},"endLoc":{"line":861,"col":6},"count":0,"ignored":0},{"startLoc":{"line":861,"col":12},"endLoc":{"line":865,"col":6},"count":0,"ignored":0},{"startLoc":{"line":829,"col":89},"endLoc":{"line":831,"col":8},"count":0,"ignored":0},{"startLoc":{"line":831,"col":14},"endLoc":{"line":833,"col":8},"count":0,"ignored":0},{"startLoc":{"line":831,"col":96},"endLoc":{"line":833,"col":8},"count":0,"ignored":0},{"startLoc":{"line":837,"col":68},"endLoc":{"line":839,"col":8},"count":0,"ignored":0},{"startLoc":{"line":842,"col":64},"endLoc":{"line":844,"col":6},"count":0,"ignored":0},{"startLoc":{"line":848,"col":76},"endLoc":{"line":850,"col":8},"count":0,"ignored":0},{"startLoc":{"line":850,"col":14},"endLoc":{"line":852,"col":8},"count":0,"ignored":0},{"startLoc":{"line":861,"col":35},"endLoc":{"line":863,"col":6},"count":0,"ignored":0},{"startLoc":{"line":863,"col":12},"endLoc":{"line":865,"col":6},"count":0,"ignored":0},{"startLoc":{"line":863,"col":34},"endLoc":{"line":865,"col":6},"count":0,"ignored":0},{"startLoc":{"line":871,"col":36},"endLoc":{"line":873,"col":8},"count":0,"ignored":0},{"startLoc":{"line":875,"col":38},"endLoc":{"line":877,"col":8},"count":0,"ignored":0},{"startLoc":{"line":881,"col":43},"endLoc":{"line":883,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":825,"col":9},"endLoc":{"line":825,"col":18},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":829,"col":11},"endLoc":{"line":829,"col":87},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":831,"col":18},"endLoc":{"line":831,"col":94},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":835,"col":9},"endLoc":{"line":835,"col":58},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":837,"col":11},"endLoc":{"line":837,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":842,"col":9},"endLoc":{"line":842,"col":62},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":845,"col":9},"endLoc":{"line":845,"col":69},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":848,"col":11},"endLoc":{"line":848,"col":74},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":855,"col":19},"endLoc":{"line":855,"col":73},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":857,"col":9},"endLoc":{"line":857,"col":18},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":860,"col":42},"endLoc":{"line":860,"col":77},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":861,"col":16},"endLoc":{"line":861,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":863,"col":16},"endLoc":{"line":863,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":869,"col":9},"endLoc":{"line":869,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":871,"col":11},"endLoc":{"line":871,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":875,"col":11},"endLoc":{"line":875,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":881,"col":9},"endLoc":{"line":881,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":27},{"name":"JellyfinClient.primaryImageUrl","count":0,"regions":[{"startLoc":{"line":892,"col":3},"endLoc":{"line":905,"col":4},"count":0,"ignored":0},{"startLoc":{"line":893,"col":30},"endLoc":{"line":895,"col":6},"count":0,"ignored":0},{"startLoc":{"line":898,"col":25},"endLoc":{"line":900,"col":6},"count":0,"ignored":0},{"startLoc":{"line":901,"col":27},"endLoc":{"line":903,"col":6},"count":0,"ignored":0},{"startLoc":{"line":904,"col":5},"endLoc":{"line":905,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":893,"col":9},"endLoc":{"line":893,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":898,"col":9},"endLoc":{"line":898,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":901,"col":9},"endLoc":{"line":901,"col":25},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":28},{"name":"JellyfinClient.parseViews","count":0,"regions":[{"startLoc":{"line":907,"col":3},"endLoc":{"line":934,"col":4},"count":0,"ignored":0},{"startLoc":{"line":911,"col":16},"endLoc":{"line":932,"col":6},"count":0,"ignored":0},{"startLoc":{"line":912,"col":7},"endLoc":{"line":931,"col":8},"count":0,"ignored":0},{"startLoc":{"line":915,"col":30},"endLoc":{"line":930,"col":10},"count":0,"ignored":0},{"startLoc":{"line":924,"col":11},"endLoc":{"line":930,"col":10},"count":0,"ignored":0},{"startLoc":{"line":918,"col":40},"endLoc":{"line":923,"col":12},"count":0,"ignored":0},{"startLoc":{"line":920,"col":46},"endLoc":{"line":922,"col":14},"count":0,"ignored":0},{"startLoc":{"line":933,"col":5},"endLoc":{"line":934,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":911,"col":9},"endLoc":{"line":911,"col":14},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":915,"col":13},"endLoc":{"line":915,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":918,"col":15},"endLoc":{"line":918,"col":38},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":920,"col":17},"endLoc":{"line":920,"col":44},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":29},{"name":"JellyfinClient.parseVirtualFolders","count":0,"regions":[{"startLoc":{"line":936,"col":3},"endLoc":{"line":952,"col":4},"count":0,"ignored":0},{"startLoc":{"line":939,"col":5},"endLoc":{"line":950,"col":6},"count":0,"ignored":0},{"startLoc":{"line":941,"col":28},"endLoc":{"line":949,"col":8},"count":0,"ignored":0},{"startLoc":{"line":951,"col":5},"endLoc":{"line":952,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":941,"col":11},"endLoc":{"line":941,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":30}],"exeLine":{"0":1,"1":2,"2":7,"3":8,"4":9,"5":11,"6":13,"7":19,"8":20,"9":21,"10":27,"11":28,"12":29,"13":31,"14":33,"15":35,"16":37,"17":39,"18":41,"19":43,"20":45,"21":47,"22":49,"23":55,"24":56,"25":57,"26":58,"27":60,"28":66,"29":67,"30":68,"31":69,"32":70,"33":71,"34":72,"35":78,"36":79,"37":80,"38":81,"39":82,"40":83,"41":84,"42":90,"43":91,"44":92,"45":93,"46":94,"47":95,"48":101,"49":102,"50":103,"51":104,"52":105,"53":106,"54":107,"55":108,"56":109,"57":110,"58":112,"59":118,"60":119,"61":120,"62":126,"63":127,"64":128,"65":129,"66":133,"67":134,"68":135,"69":141,"70":142,"71":143,"72":144,"73":145,"74":146,"75":147,"76":148,"77":149,"78":152,"79":153,"80":154,"81":161,"82":162,"83":163,"84":164,"85":166,"86":167,"87":170,"88":171,"89":172,"90":173,"91":174,"92":175,"93":176,"94":177,"95":178,"96":179,"97":180,"98":181,"99":184,"100":185,"101":186,"102":187,"103":188,"104":189,"105":190,"106":191,"107":192,"108":193,"109":194,"110":195,"111":196,"112":197,"113":198,"114":202,"115":203,"116":204,"117":205,"118":206,"119":207,"120":208,"121":209,"122":210,"123":212,"124":213,"125":215,"126":218,"127":219,"128":220,"129":222,"130":225,"131":226,"132":227,"133":228,"134":229,"135":231,"136":237,"137":238,"138":244,"139":245,"140":246,"141":247,"142":255,"143":256,"144":262,"145":263,"146":264,"147":265,"148":266,"149":267,"150":268,"151":269,"152":270,"153":271,"154":272,"155":274,"156":275,"157":276,"158":278,"159":279,"160":280,"161":281,"162":282,"163":283,"164":286,"165":292,"166":293,"167":294,"168":295,"169":296,"170":297,"171":298,"172":299,"173":300,"174":301,"175":302,"176":304,"177":305,"178":306,"179":313,"180":314,"181":315,"182":316,"183":317,"184":318,"185":319,"186":320,"187":322,"188":323,"189":324,"190":331,"191":332,"192":333,"193":334,"194":335,"195":336,"196":337,"197":338,"198":339,"199":341,"200":342,"201":343,"202":350,"203":351,"204":352,"205":354,"206":355,"207":356,"208":358,"209":359,"210":360,"211":361,"212":364,"213":365,"214":366,"215":367,"216":369,"217":370,"218":371,"219":372,"220":374,"221":375,"222":376,"223":377,"224":378,"225":380,"226":381,"227":382,"228":387,"229":388,"230":389,"231":391,"232":392,"233":393,"234":395,"235":396,"236":397,"237":398,"238":400,"239":406,"240":407,"241":408,"242":409,"243":411,"244":417,"245":418,"246":419,"247":420,"248":421,"249":422,"250":423,"251":424,"252":432,"253":433,"254":435,"255":436,"256":438,"257":439,"258":440,"259":441,"260":443,"261":447,"262":448,"263":449,"264":451,"265":457,"266":458,"267":459,"268":460,"269":461,"270":464,"271":465,"272":466,"273":467,"274":468,"275":469,"276":471,"277":472,"278":474,"279":475,"280":479,"281":480,"282":481,"283":482,"284":483,"285":485,"286":486,"287":488,"288":489,"289":493,"290":494,"291":495,"292":497,"293":498,"294":499,"295":500,"296":501,"297":505,"298":511,"299":512,"300":513,"301":514,"302":515,"303":516,"304":517,"305":518,"306":519,"307":521,"308":522,"309":523,"310":524,"311":525,"312":528,"313":529,"314":531,"315":537,"316":538,"317":539,"318":540,"319":541,"320":542,"321":543,"322":544,"323":546,"324":547,"325":548,"326":549,"327":550,"328":551,"329":553,"330":554,"331":556,"332":557,"333":558,"334":559,"335":565,"336":566,"337":567,"338":568,"339":569,"340":570,"341":572,"342":573,"343":575,"344":576,"345":577,"346":578,"347":579,"348":580,"349":581,"350":583,"351":584,"352":585,"353":586,"354":588,"355":589,"356":590,"357":591,"358":592,"359":595,"360":596,"361":597,"362":598,"363":599,"364":600,"365":601,"366":603,"367":604,"368":605,"369":606,"370":607,"371":608,"372":610,"373":611,"374":612,"375":613,"376":616,"377":622,"378":623,"379":624,"380":625,"381":626,"382":628,"383":629,"384":630,"385":631,"386":633,"387":634,"388":635,"389":636,"390":637,"391":638,"392":639,"393":641,"394":642,"395":643,"396":645,"397":646,"398":647,"399":648,"400":651,"401":652,"402":654,"403":655,"404":656,"405":657,"406":658,"407":660,"408":661,"409":663,"410":664,"411":666,"412":672,"413":673,"414":674,"415":675,"416":676,"417":677,"418":679,"419":680,"420":682,"421":683,"422":689,"423":690,"424":691,"425":692,"426":693,"427":694,"428":696,"429":697,"430":699,"431":700,"432":701,"433":702,"434":703,"435":705,"436":706,"437":707,"438":708,"439":709,"440":710,"441":711,"442":712,"443":713,"444":714,"445":715,"446":718,"447":719,"448":721,"449":727,"450":728,"451":729,"452":730,"453":731,"454":732,"455":734,"456":735,"457":737,"458":738,"459":739,"460":740,"461":741,"462":743,"463":744,"464":745,"465":746,"466":747,"467":748,"468":749,"469":750,"470":751,"471":752,"472":753,"473":754,"474":757,"475":758,"476":759,"477":760,"478":761,"479":763,"480":764,"481":765,"482":766,"483":768,"484":769,"485":770,"486":771,"487":772,"488":773,"489":774,"490":776,"491":777,"492":778,"493":779,"494":780,"495":784,"496":786,"497":789,"498":790,"499":791,"500":792,"501":793,"502":795,"503":796,"504":797,"505":799,"506":800,"507":802,"508":803,"509":805,"510":808,"511":809,"512":810,"513":811,"514":812,"515":813,"516":814,"517":815,"518":816,"519":817,"520":819,"521":820,"522":821,"523":822,"524":824,"525":825,"526":827,"527":828,"528":829,"529":830,"530":831,"531":832,"532":835,"533":836,"534":837,"535":838,"536":841,"537":842,"538":843,"539":845,"540":847,"541":848,"542":849,"543":850,"544":851,"545":855,"546":856,"547":857,"548":858,"549":859,"550":860,"551":861,"552":862,"553":863,"554":864,"555":867,"556":868,"557":869,"558":870,"559":871,"560":872,"561":874,"562":875,"563":876,"564":879,"565":880,"566":881,"567":882,"568":885,"569":886,"570":887,"571":888,"572":892,"573":893,"574":894,"575":896,"576":897,"577":898,"578":899,"579":901,"580":902,"581":904,"582":907,"583":908,"584":909,"585":910,"586":911,"587":912,"588":913,"589":914,"590":915,"591":916,"592":917,"593":918,"594":919,"595":920,"596":921,"597":924,"598":925,"599":926,"600":927,"601":928,"602":933,"603":936,"604":937,"605":938,"606":939,"607":940,"608":941,"609":942,"610":943,"611":944,"612":945,"613":946,"614":947,"615":951},"summary":{"lines":{"total":531,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,-1,-1,0,0,0,-1,0,-1,-1,0,0,0,0,0,-1,0,-1,-1,-1,-1,-1,0,0,-1,-1,-1,-1,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,-1,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,0,0,0,-1,0,0,0,-1,0,0,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,-1,0,0,0,0,-1,0,-1,-1,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,-1,-1,-1,0,0,0,0,0,-1,0,0,-1,0,0,-1,-1,-1,0,0,0,-1,0,0,0,0,0,-1,-1,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,-1,-1,0,0,-1,0,0,0,0,0,-1,0,0,-1,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,-1,0,-1,0,-1,-1,0,0,0,0,0,-1,0,0,0,-1,0,0,-1,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,-1,-1,0,0,0,0,-1,-1,0,0,0,-1,0,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,-1,-1,0,0,0,0,-1,-1,-1,0,0,0,-1,0,0,0,0,-1,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,-1,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,-1,-1,-1]},"functions":{"total":31,"covered":0,"pct":0},"branches":{"total":202,"covered":0,"pct":0}}},"title":"JellyfinClient.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
