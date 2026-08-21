@@ -493,13 +493,9 @@ struct ServerWideCard {
       .borderRadius(6).clip(true)
       .border({ width: 2, color: this.isActive() ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
       .onHover((isHover: boolean) => { this.isHovered = isHover })
-      .focusable(!this.showPlayButton)
-      .onFocus(() => {
-        if (!this.showPlayButton) { this.isFocused = true }
-      })
-      .onBlur(() => {
-        if (!this.showPlayButton) { this.isFocused = false }
-      })
+      .focusable(true)
+      .onFocus(() => { this.isFocused = true })
+      .onBlur(() => { this.isFocused = false })
 
       Text(this.item.title)
         .fontSize(15).fontColor('#DDDDDD').maxLines(1)
@@ -591,9 +587,9 @@ struct ServerPosterCard {
       .borderRadius(6).clip(true)
       .border({ width: 2, color: this.isActive() ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
       .onHover((isHover: boolean) => { this.isHovered = isHover })
-      .focusable(false)
-      .onFocus(() => {})
-      .onBlur(() => {})
+      .focusable(true)
+      .onFocus(() => { this.isFocused = true })
+      .onBlur(() => { this.isFocused = false })
 
       Text(this.item.title)
         .fontSize(15).fontColor('#DDDDDD').maxLines(1)
@@ -957,68 +953,11 @@ export struct MediaLibraryTab {
   }
 
   /**
-   * 「继续观看」点击：用 App 内播放器播放该条目（与文件源继续观看一致）。
-   */
-  private async openContinueWatching(item: VideoServerMediaItem): Promise<void> {
-    const serverId = this.sourceSwitchModel.getActiveServerId()
-    if (serverId === undefined) {
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
-      } catch (_e) {}
-      return
-    }
-    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
-    if (!server) {
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
-      } catch (_e) {}
-      return
-    }
-    try {
-      let url = ''
-      let header: Record<string, string> = {}
-      if (server.type === VideoServerType.PLEX) {
-        const client = PlexClient.fromConfigJson(server.configJson)
-        url = await client.getStreamUrl(item.id)
-        header = client.getStreamHeader()
-      } else {
-        const client = JellyfinClient.fromConfigJson(server.configJson)
-        url = await client.getStreamUrl(item.id)
-        header = client.getStreamHeader()
-      }
-      const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
-      const param: PlayerPageParam = {
-        url: url,
-        httpHeader: header,
-        title: this.buildPlayerTitle(item),
-        startPositionMs: item.positionMs > 0 ? item.positionMs : undefined,
-        durationHintMs: item.durationMs > 0 ? item.durationMs : undefined,
-        seasonNumber: item.seasonNumber > 0 ? item.seasonNumber : undefined,
-        episodeNumber: item.episodeNumber > 0 ? item.episodeNumber : undefined,
-        serverType: server.type,
-        serverItemId: item.id,
-        serverId: server.id,
-        serverPlaySessionId: playSessionId
-      }
-      reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
-        .catch((e: Error) => {
-          console.warn('[MediaLibraryTab] 上报播放开始失败', e.message)
-        })
-      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
-    } catch (e) {
-      console.warn('[MediaLibraryTab] 打开播放器失败', (e as BusinessError).message ?? String(e))
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
-      } catch (_e) {}
-    }
-  }
-
-  /**
    * 点击「接下来」/「最近添加的」播放按钮：直接进入播放。
-   * movie / episode 直接播放；series 先解析下一集再播放，无下一集则 fallback 到详情页。
+   * movie / episode 直接播放；series / show 先解析下一集再播放，无下一集则提示用户。
    */
   private async openServerDirectPlay(item: VideoServerMediaItem): Promise<void> {
-    if (item.type === 'series') {
+    if (item.type === 'series' || item.type === 'show') {
       await this.openSeriesDirectPlay(item)
       return
     }
@@ -1026,7 +965,7 @@ export struct MediaLibraryTab {
   }
 
   /**
-   * series 类型直播放：通过 getNextUp 解析下一集并播放，无下一集则 fallback 到详情页。
+   * series / show 类型直播放：通过 getNextUp 解析下一集并播放，无下一集则提示用户。
    */
   private async openSeriesDirectPlay(item: VideoServerMediaItem): Promise<void> {
     const serverId = this.sourceSwitchModel.getActiveServerId()
@@ -1055,12 +994,15 @@ export struct MediaLibraryTab {
       if (nextUpItem) {
         await this.doServerDirectPlayWithServer(nextUpItem, server)
       } else {
-        // 无下一集，fallback 到详情页
-        this.openServerItemDetail(item)
+        try {
+          this.getUIContext().getPromptAction().showToast({ message: '未找到可播放的下一集', duration: 2000 })
+        } catch (_e) {}
       }
     } catch (e) {
       console.warn('[MediaLibraryTab] 解析系列下一集失败', (e as BusinessError).message ?? String(e))
-      this.openServerItemDetail(item)
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
+      } catch (_e2) {}
     }
   }
 
@@ -1805,7 +1747,7 @@ export struct MediaLibraryTab {
                 item: item,
                 showProgress: true,
                 showPlayButton: false,
-                onItemClick: () => { this.openContinueWatching(item).catch(() => {}) }
+                onItemClick: () => { this.openServerDirectPlay(item).catch(() => {}) }
               })
             }, (item: VideoServerMediaItem) => 'cw_' + item.id)
           }
