@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/subtitleSession/SubtitleSessionService.ets 
+// 
+// SubtitleSessionService - 字幕会话级状态管理。 
+// 
+// 目标：把 `VideoPlayerController` 中以下职责迁移到本 service： 
+//   1. 字幕轨列表（allSubtitleTracks / subtitleTracks / currentSubtitleTrack） 
+//   2. 激活状态（activeSubtitleIndex / currentSubtitleText / parsedSubtitle） 
+//   3. 字幕延迟（subtitleDelayMs） 
+//   4. 外置字幕追加（addExternalSubtitle） 
+//   5. 稳定 source key（currentVideoData 配合 smbOriginalSrc） 
+//   6. 字幕优先级裁决（步骤 1 用户绑定 / 步骤 4 本地缓存） 
+// 
+// 约束： 
+// - 不直接依赖具体 adapter；通过 `ISubtitleBridgeAdapter` 接口调用（service 持有 
+//   状态，bridge adapter 持有后端字幕桥接；controller 负责注入与生命周期）。 
+// - 不修改 `SubtitleDispatcher` / `ISubtitleBridgeAdapter` / `IPlayer` 现有签名。 
+// - 不修改 `VideoPlayerController.switchSubtitleTrack` / `loadSubtitleTracks` 等 
+//   公开方法签名；旧方法保留为 thin wrapper 调用本 service。 
+// 
+// 设计要点： 
+// - `initialize(input)` 触发 subtitle bridge init + 优先级裁决 + 状态投影。 
+// - `applyBridgeState()` 读取 bridge adapter 当前状态并同步到 session 字段。 
+// - `switchToTrack(allIndex)` 应用用户切换；触发持久化指令返回 controller。 
+// - `adjustDelay(deltaMs)` 调整延迟；通过 bridge adapter 透传。 
+// - `addLocalSubtitle(localPath)` 追加下载字幕；返回新轨道索引。 
+// 
+// 兼容性： 
+// - controller 内的 `loadSubtitleTracks` / `switchSubtitleTrack` / 
+//   `adjustSubtitleDelay` / `addExternalSubtitle` 旧方法保留为 thin wrapper， 
+//   确保外部 import 兼容。 
+// - 持久化（saveUserBinding / clearUserBinding）由 controller 持有 service 
+//   返回的 directive 后执行，避免 service 直接依赖 AppPreferences。 
+// 
+// 实例化策略（Module 4 fix #2）： 
+// - 本 service 不再导出全局单例。 
+// - 每个 `VideoPlayerController` 在自己生命周期内 `new SubtitleSessionService()`， 
+//   让 service 内部持有的 mutable state 与 controller 生命周期一一对应， 
+//   避免多 controller / 多播放会话状态串扰。 
+// - 旧版的全局单例 `subtitleSessionService` 已删除。 
+ 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { BusinessError } from &#39;@kit.BasicServicesKit&#39;; 
+import { CommonConstants } from &quot;../../common/constants/CommonConstants&quot;; 
+import { VideoData } from &quot;../../components/core/player/VideoData&quot;; 
+import { VideoDataType } from &quot;../../components/core/player/Constants&quot;; 
+import { IPlayer } from &quot;../../components/core/player/IPlayer&quot;; 
+import { 
+  ISubtitleBridgeAdapter, 
+  SubtitleBridgeState, 
+  SubtitleTrackItem 
+} from &quot;../../components/core/player/SubtitleBridgeAdapter&quot;; 
+import { ParsedSubtitle } from &quot;../../components/core/player/SubtitleRenderer&quot;; 
+import { 
+  SubtitleDispatcher, 
+  SubtitleCacheContext, 
+  SubtitleResolution 
+} from &quot;../../subtitle/SubtitleDispatcher&quot;; 
+import { 
+  SubtitleSessionState, 
+  SubtitleBindingDirective, 
+  SubtitlePriorityResolution 
+} from &quot;./SubtitleSessionTypes&quot;; 
+ 
+const TAG = &#39;[SubtitleSessionService]&#39;; 
+ 
+/** 默认空 session 状态。 */ 
+function buildEmptySessionState(): SubtitleSessionState { 
+  const state: SubtitleSessionState = { 
+    subtitleTracks: [], 
+    allSubtitleTracks: [], 
+    activeSubtitleIndex: -1, 
+    currentSubtitleTrack: -1, 
+    currentSubtitleText: &#39;&#39;, 
+    subtitleDelayMs: 0, 
+    hasExternalActive: false, 
+    updateCounter: 0 
+  }; 
+  return state; 
+} 
+ 
+/** 字幕会话 service。 */ 
+export class SubtitleSessionService { 
+  private state: SubtitleSessionState = buildEmptySessionState(); 
+  private readonly subtitleDispatcher: SubtitleDispatcher = new SubtitleDispatcher(); 
+ 
+  /** 读取当前 session 状态（深拷贝避免外部修改）。 */ 
+  getState(): SubtitleSessionState { 
+    const next: SubtitleSessionState = { 
+      subtitleTracks: this.state.subtitleTracks.slice(), 
+      allSubtitleTracks: this.state.allSubtitleTracks.slice(), 
+      activeSubtitleIndex: this.state.activeSubtitleIndex, 
+      currentSubtitleTrack: this.state.currentSubtitleTrack, 
+      currentSubtitleText: this.state.currentSubtitleText, 
+      subtitleDelayMs: this.state.subtitleDelayMs, 
+      hasExternalActive: this.state.hasExternalActive, 
+      updateCounter: this.state.updateCounter 
+    }; 
+    return next; 
+  } 
+ 
+  /** 重置 session（用于 initPlayer 切换源时清理上一次残留）。 */ 
+  reset(): void { 
+    this.state = buildEmptySessionState(); 
+  } 
+ 
+  /** 
+   * 初始化字幕 session。 
+   * 
+   * 行为与原 `VideoPlayerController.loadSubtitleTracks` 字节级一致： 
+   * - 触发 subtitleAdapter.init 
+   * - 同步 bridge state 到 session state 
+   * - 计算稳定视频路径（优先 smbOriginalSrc） 
+   * - 调用 SubtitleDispatcher.resolveSubtitle 
+   * - 根据 resolution.type 应用：switch-track / append-and-switch / no-op 
+   */ 
+  async initialize( 
+    subtitleAdapter: ISubtitleBridgeAdapter, 
+    player: IPlayer | undefined, 
+    videoData: VideoData | undefined, 
+    smbOriginalSrc: string, 
+    cacheContext: SubtitleCacheContext | undefined 
+  ): Promise&lt;SubtitlePriorityResolution&gt; { 
+    if (!player) { 
+      return { resolution: { type: &#39;none&#39; }, appliedVia: &#39;fallback-no-bridge&#39; }; 
+    } 
+    if (!videoData) { 
+      return { resolution: { type: &#39;none&#39; }, appliedVia: &#39;no-op&#39; }; 
+    } 
+ 
+    try { 
+      await subtitleAdapter.init(player, videoData); 
+      this.applyBridgeState(subtitleAdapter.getState()); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 
+        `字幕适配器初始化失败，回退无字幕模式: code=${err.code} msg=${err.message}`); 
+      subtitleAdapter.release(); 
+      const next: SubtitleSessionState = buildEmptySessionState(); 
+      this.state = next; 
+      return { resolution: { type: &#39;none&#39; }, appliedVia: &#39;fallback-no-bridge&#39; }; 
+    } 
+ 
+    // 计算稳定视频路径 
+    const rawVideoSrc = videoData.videoSrc ?? &#39;&#39;; 
+    const videoPath = smbOriginalSrc.length &gt; 0 ? smbOriginalSrc : rawVideoSrc; 
+    if (videoPath.length === 0) { 
+      return { resolution: { type: &#39;none&#39; }, appliedVia: &#39;no-op&#39; }; 
+    } 
+ 
+    let resolution: SubtitleResolution; 
+    try { 
+      resolution = await this.subtitleDispatcher.resolveSubtitle( 
+        videoPath, 
+        this.state.allSubtitleTracks, 
+        cacheContext 
+      ); 
+    } catch (e) { 
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 
+        `resolveSubtitle 失败，保留 adapter 自动选轨: ${String(e)}`); 
+      return { resolution: { type: &#39;none&#39; }, appliedVia: &#39;no-op&#39; }; 
+    } 
+ 
+    if (resolution.type === &#39;user-specified&#39; &amp;&amp; resolution.trackIndex !== undefined) { 
+      const targetIndex = resolution.trackIndex; 
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+        `[loadSubtitleTracks] 调度器覆盖选轨: trackIndex=${targetIndex}`); 
+      await subtitleAdapter.switchTrack(targetIndex); 
+      this.applyBridgeState(subtitleAdapter.getState()); 
+      return { resolution, appliedVia: &#39;switch-track&#39; }; 
+    } 
+ 
+    if (resolution.type === &#39;local-cache&#39; &amp;&amp; resolution.localPath !== undefined) { 
+      const localPath = resolution.localPath; 
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG, 
+        `[loadSubtitleTracks] 步骤4命中缓存字幕，追加到轨道列表并切换: ${localPath}`); 
+      try { 
+        const trackCountBeforeAppend = this.state.allSubtitleTracks.length; 
+        await subtitleAdapter.addLocalSubtitle(localPath); 
+        this.applyBridgeState(subtitleAdapter.getState()); 
+        if (this.state.allSubtitleTracks.length &lt;= trackCountBeforeAppend) { 
+          throw new Error(&#39;缓存字幕未能追加到轨道列表&#39;); 
+        } 
+        const newIndex = this.state.allSubtitleTracks.length - 1; 
+        await subtitleAdapter.switchTrack(newIndex); 
+        this.applyBridgeState(subtitleAdapter.getState()); 
+        return { resolution, appliedVia: &#39;append-and-switch&#39;, newTrackIndex: newIndex }; 
+      } catch (e) { 
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 
+          `追加缓存字幕失败: ${String(e)}`); 
+        return { resolution, appliedVia: &#39;no-op&#39; }; 
+      } 
+    } 
+ 
+    return { resolution, appliedVia: &#39;no-op&#39; }; 
+  } 
+ 
+  /** 
+   * 用户切换字幕轨。 
+   * 
+   * 返回 binding directive 由 controller 持久化（service 不直接操作 AppPreferences）。 
+   */ 
+  async switchToTrack( 
+    subtitleAdapter: ISubtitleBridgeAdapter, 
+    videoData: VideoData | undefined, 
+    smbOriginalSrc: string, 
+    allIndex: number 
+  ): Promise&lt;SubtitleBindingDirective&gt; { 
+    await subtitleAdapter.switchTrack(allIndex); 
+    this.applyBridgeState(subtitleAdapter.getState()); 
+ 
+    if (!videoData) { 
+      return { type: &#39;skip&#39; }; 
+    } 
+    const rawVideoSrc = videoData.videoSrc ?? &#39;&#39;; 
+    const videoPath = smbOriginalSrc.length &gt; 0 ? smbOriginalSrc : rawVideoSrc; 
+    if (videoPath.length === 0) { 
+      return { type: &#39;skip&#39; }; 
+    } 
+    if (allIndex === -1) { 
+      return { type: &#39;disabled&#39; }; 
+    } 
+    if (allIndex &lt; 0 || allIndex &gt;= this.state.allSubtitleTracks.length) { 
+      return { type: &#39;skip&#39; }; 
+    } 
+    const track = this.state.allSubtitleTracks[allIndex]; 
+    if (track.kind === &#39;external&#39; &amp;&amp; track.url !== undefined &amp;&amp; track.url.length &gt; 0) { 
+      return { type: &#39;external-local-file&#39;, url: track.url }; 
+    } 
+    if (track.kind === &#39;internal&#39;) { 
+      const bindingKey = track.internalIndex !== undefined 
+        ? `@idx:${track.internalIndex}` 
+        : track.displayName; 
+      return { type: &#39;internal&#39;, bindingKey }; 
+    } 
+    return { type: &#39;skip&#39; }; 
+  } 
+ 
+  /** 追加本地字幕文件到轨道列表，返回新轨道索引。 */ 
+  async addLocalSubtitle( 
+    subtitleAdapter: ISubtitleBridgeAdapter, 
+    localPath: string 
+  ): Promise&lt;number&gt; { 
+    await subtitleAdapter.addLocalSubtitle(localPath); 
+    this.applyBridgeState(subtitleAdapter.getState()); 
+    const newIndex = this.state.allSubtitleTracks.length - 1; 
+    return newIndex; 
+  } 
+ 
+  /** 调整字幕延迟。 */ 
+  adjustDelay(subtitleAdapter: ISubtitleBridgeAdapter, deltaMs: number): void { 
+    subtitleAdapter.adjustDelay(deltaMs); 
+    this.applyBridgeState(subtitleAdapter.getState()); 
+  } 
+ 
+  /** 同步 bridge adapter 当前状态到 session state（不重新初始化）。 */ 
+  applyBridgeState(bridgeState: SubtitleBridgeState): void { 
+    const prevText = this.state.currentSubtitleText; 
+    this.state.subtitleTracks = bridgeState.subtitleTracks.slice(); 
+    this.state.allSubtitleTracks = bridgeState.allSubtitleTracks.slice(); 
+    this.state.activeSubtitleIndex = bridgeState.activeSubtitleIndex; 
+    this.state.currentSubtitleTrack = bridgeState.currentSubtitleTrack; 
+    this.state.currentSubtitleText = bridgeState.currentSubtitleText; 
+    this.state.subtitleDelayMs = bridgeState.subtitleDelayMs; 
+    this.state.hasExternalActive = bridgeState.hasExternalActive; 
+    if (prevText !== this.state.currentSubtitleText) { 
+      this.state.updateCounter++; 
+    } 
+  } 
+ 
+  /** 是否当前正在使用外部 SRT 字幕（供 UI 判断）。 */ 
+  hasSrtSubtitle(): boolean { 
+    return this.state.hasExternalActive; 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 15:10:46 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/subtitleSession/SubtitleSessionService.ets","hash":"54d949d3c17d240b38e3510e52dd5154e7b121a474f74eb51b21f46cb3d33edd","lineCnt":275,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"buildEmptySessionState","count":59,"regions":[{"startLoc":{"line":67,"col":1},"endLoc":{"line":79,"col":2},"count":59,"ignored":0},{"startLoc":{"line":68,"col":3},"endLoc":{"line":79,"col":2},"count":59,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"SubtitleSessionService.getState","count":0,"regions":[{"startLoc":{"line":87,"col":3},"endLoc":{"line":99,"col":4},"count":0,"ignored":0},{"startLoc":{"line":88,"col":5},"endLoc":{"line":99,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"SubtitleSessionService.reset","count":0,"regions":[{"startLoc":{"line":102,"col":3},"endLoc":{"line":104,"col":4},"count":0,"ignored":0},{"startLoc":{"line":103,"col":5},"endLoc":{"line":104,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"SubtitleSessionService.initialize","count":8,"regions":[{"startLoc":{"line":116,"col":3},"endLoc":{"line":195,"col":4},"count":8,"ignored":0},{"startLoc":{"line":172,"col":82},"endLoc":{"line":192,"col":6},"count":0,"ignored":0},{"startLoc":{"line":176,"col":11},"endLoc":{"line":187,"col":8},"count":0,"ignored":0},{"startLoc":{"line":133,"col":7},"endLoc":{"line":141,"col":6},"count":0,"ignored":0},{"startLoc":{"line":163,"col":86},"endLoc":{"line":170,"col":6},"count":0,"ignored":0},{"startLoc":{"line":151,"col":9},"endLoc":{"line":157,"col":6},"count":5,"ignored":0},{"startLoc":{"line":157,"col":7},"endLoc":{"line":161,"col":6},"count":0,"ignored":0},{"startLoc":{"line":187,"col":9},"endLoc":{"line":191,"col":8},"count":0,"ignored":0},{"startLoc":{"line":183,"col":9},"endLoc":{"line":187,"col":8},"count":0,"ignored":0},{"startLoc":{"line":130,"col":9},"endLoc":{"line":133,"col":6},"count":5,"ignored":0},{"startLoc":{"line":123,"col":18},"endLoc":{"line":125,"col":6},"count":0,"ignored":0},{"startLoc":{"line":126,"col":21},"endLoc":{"line":128,"col":6},"count":3,"ignored":0},{"startLoc":{"line":146,"col":33},"endLoc":{"line":148,"col":6},"count":0,"ignored":0},{"startLoc":{"line":180,"col":76},"endLoc":{"line":182,"col":10},"count":0,"ignored":0},{"startLoc":{"line":194,"col":5},"endLoc":{"line":195,"col":4},"count":5,"ignored":0}],"branches":[{"startLoc":{"line":123,"col":9},"endLoc":{"line":123,"col":16},"trueCount":0,"falseCount":8,"group":[],"ignored":0},{"startLoc":{"line":126,"col":9},"endLoc":{"line":126,"col":19},"trueCount":3,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":145,"col":23},"endLoc":{"line":145,"col":79},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":146,"col":9},"endLoc":{"line":146,"col":31},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":163,"col":9},"endLoc":{"line":163,"col":84},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":172,"col":9},"endLoc":{"line":172,"col":80},"trueCount":0,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":180,"col":13},"endLoc":{"line":180,"col":74},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"SubtitleSessionService.switchToTrack","count":0,"regions":[{"startLoc":{"line":202,"col":3},"endLoc":{"line":236,"col":4},"count":0,"ignored":0},{"startLoc":{"line":229,"col":36},"endLoc":{"line":234,"col":6},"count":0,"ignored":0},{"startLoc":{"line":211,"col":21},"endLoc":{"line":213,"col":6},"count":0,"ignored":0},{"startLoc":{"line":216,"col":33},"endLoc":{"line":218,"col":6},"count":0,"ignored":0},{"startLoc":{"line":219,"col":26},"endLoc":{"line":221,"col":6},"count":0,"ignored":0},{"startLoc":{"line":222,"col":74},"endLoc":{"line":224,"col":6},"count":0,"ignored":0},{"startLoc":{"line":226,"col":87},"endLoc":{"line":228,"col":6},"count":0,"ignored":0},{"startLoc":{"line":235,"col":5},"endLoc":{"line":236,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":211,"col":9},"endLoc":{"line":211,"col":19},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":215,"col":23},"endLoc":{"line":215,"col":79},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":216,"col":9},"endLoc":{"line":216,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":219,"col":9},"endLoc":{"line":219,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":222,"col":9},"endLoc":{"line":222,"col":72},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":226,"col":9},"endLoc":{"line":226,"col":85},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":229,"col":9},"endLoc":{"line":229,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":230,"col":26},"endLoc":{"line":232,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"SubtitleSessionService.addLocalSubtitle","count":0,"regions":[{"startLoc":{"line":239,"col":3},"endLoc":{"line":247,"col":4},"count":0,"ignored":0},{"startLoc":{"line":243,"col":5},"endLoc":{"line":247,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"SubtitleSessionService.adjustDelay","count":0,"regions":[{"startLoc":{"line":250,"col":3},"endLoc":{"line":253,"col":4},"count":0,"ignored":0},{"startLoc":{"line":251,"col":5},"endLoc":{"line":253,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"SubtitleSessionService.applyBridgeState","count":5,"regions":[{"startLoc":{"line":256,"col":3},"endLoc":{"line":268,"col":4},"count":5,"ignored":0},{"startLoc":{"line":265,"col":54},"endLoc":{"line":267,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":265,"col":9},"endLoc":{"line":265,"col":52},"trueCount":0,"falseCount":5,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"SubtitleSessionService.hasSrtSubtitle","count":0,"regions":[{"startLoc":{"line":271,"col":3},"endLoc":{"line":273,"col":4},"count":0,"ignored":0},{"startLoc":{"line":272,"col":5},"endLoc":{"line":273,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8}],"exeLine":{"0":41,"1":42,"2":43,"3":44,"4":46,"5":48,"6":49,"7":51,"8":53,"9":54,"10":55,"11":56,"12":57,"13":59,"14":60,"15":61,"16":62,"17":64,"18":67,"19":68,"20":69,"21":70,"22":71,"23":72,"24":73,"25":74,"26":75,"27":76,"28":78,"29":82,"30":83,"31":84,"32":87,"33":88,"34":89,"35":90,"36":91,"37":92,"38":93,"39":94,"40":95,"41":96,"42":98,"43":102,"44":103,"45":116,"46":117,"47":118,"48":119,"49":120,"50":121,"51":122,"52":123,"53":124,"54":126,"55":127,"56":130,"57":131,"58":132,"59":133,"60":134,"61":135,"62":136,"63":137,"64":138,"65":139,"66":140,"67":144,"68":145,"69":146,"70":147,"71":150,"72":151,"73":152,"74":153,"75":154,"76":155,"77":157,"78":158,"79":159,"80":160,"81":163,"82":164,"83":165,"84":166,"85":167,"86":168,"87":169,"88":172,"89":173,"90":174,"91":175,"92":176,"93":177,"94":178,"95":179,"96":180,"97":181,"98":183,"99":184,"100":185,"101":186,"102":187,"103":188,"104":189,"105":190,"106":194,"107":202,"108":203,"109":204,"110":205,"111":206,"112":207,"113":208,"114":209,"115":211,"116":212,"117":214,"118":215,"119":216,"120":217,"121":219,"122":220,"123":222,"124":223,"125":225,"126":226,"127":227,"128":229,"129":230,"130":231,"131":232,"132":233,"133":235,"134":239,"135":240,"136":241,"137":242,"138":243,"139":244,"140":245,"141":246,"142":250,"143":251,"144":252,"145":256,"146":257,"147":258,"148":259,"149":260,"150":261,"151":262,"152":263,"153":264,"154":265,"155":266,"156":271,"157":272},"summary":{"lines":{"total":137,"covered":47,"pct":34.31,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,59,59,59,59,59,59,59,59,59,59,-1,59,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,-1,-1,-1,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,8,8,8,8,8,8,8,8,0,-1,8,3,-1,-1,5,5,5,5,0,0,0,0,0,0,0,-1,-1,-1,8,5,5,0,-1,-1,8,5,5,5,5,5,-1,0,0,0,0,-1,-1,5,0,0,0,0,0,0,-1,-1,5,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,-1,-1,-1,5,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,-1,0,0,-1,0,0,-1,0,0,0,-1,0,0,0,0,0,-1,0,-1,-1,-1,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,-1,-1,-1,5,5,5,5,5,5,5,5,5,5,0,-1,-1,-1,-1,0,0,-1,-1,-1]},"functions":{"total":9,"covered":3,"pct":33.33},"branches":{"total":32,"covered":8,"pct":25}}},"title":"SubtitleSessionService.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
