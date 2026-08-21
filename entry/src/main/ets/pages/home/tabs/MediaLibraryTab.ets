@@ -408,12 +408,21 @@ struct MixedCard {
 struct ServerWideCard {
   @Require @Param item: VideoServerMediaItem
   @Param showProgress: boolean = false
+  /** 是否显示悬浮遮罩与中央播放按钮；继续观看为 false，接下来为 true */
+  @Param showPlayButton: boolean = false
   @Event onItemClick: () => void = () => {}
+  /** 中央播放按钮点击回调；仅 showPlayButton=true 时有效 */
+  @Event onPlayClick: () => void = () => {}
   @Local isHovered: boolean = false
   @Local isFocused: boolean = false
   @Local isPlayHovered: boolean = false
+  /** 播放按钮是否获得遥控器焦点 */
+  @Local isPlayFocused: boolean = false
 
   private isActive(): boolean {
+    if (this.showPlayButton) {
+      return this.isHovered || this.isFocused || this.isPlayFocused
+    }
     return this.isHovered || this.isFocused
   }
 
@@ -441,30 +450,37 @@ struct ServerWideCard {
           .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
-        Column()
-          .width(SERVER_WIDE_WIDTH)
-          .height('100%')
-          .backgroundColor(this.isActive() ? 'rgba(0,0,0,0.48)' : '#00000000')
-          .animation({ duration: 160, curve: Curve.EaseOut })
-          .hitTestBehavior(HitTestMode.Transparent)
-        Column() {
-          SymbolGlyph($r('sys.symbol.play_fill'))
-            .fontColor([this.isPlayHovered ? '#2B9BDA' : Color.White])
-            .fontSize(30)
+        if (this.showPlayButton) {
+          Column()
+            .width(SERVER_WIDE_WIDTH)
+            .height('100%')
+            .backgroundColor(this.isActive() ? 'rgba(0,0,0,0.48)' : '#00000000')
+            .animation({ duration: 160, curve: Curve.EaseOut })
+            .hitTestBehavior(HitTestMode.Transparent)
         }
-        .width(60).height(60)
-        .backgroundColor(this.isPlayHovered ? 'rgba(43,155,218,0.22)' : 'rgba(20,20,20,0.74)')
-        .borderRadius(30)
-        .border({ width: 1, color: this.isPlayHovered ? 'rgba(43,155,218,0.78)' : 'rgba(255,255,255,0.24)' })
-        .shadow({ radius: this.isPlayHovered ? 20 : 16, color: 'rgba(0,0,0,0.42)' })
-        .opacity(this.isActive() ? 1.0 : 0.0)
-        .scale({ x: this.isPlayHovered ? 1.14 : 1.0, y: this.isPlayHovered ? 1.14 : 1.0 })
-        .animation({ duration: 180, curve: Curve.EaseOut })
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-        .enabled(this.isActive())
-        .onHover((isHover: boolean) => { this.isPlayHovered = isHover })
-        .hitTestBehavior(HitTestMode.Transparent)
+        if (this.showPlayButton) {
+          Column() {
+            SymbolGlyph($r('sys.symbol.play_fill'))
+              .fontColor([this.isPlayHovered || this.isPlayFocused ? '#2B9BDA' : Color.White])
+              .fontSize(30)
+          }
+          .width(60).height(60)
+          .backgroundColor(this.isPlayHovered || this.isPlayFocused ? 'rgba(43,155,218,0.22)' : 'rgba(20,20,20,0.74)')
+          .borderRadius(30)
+          .border({ width: 1, color: this.isPlayHovered || this.isPlayFocused ? 'rgba(43,155,218,0.78)' : 'rgba(255,255,255,0.24)' })
+          .shadow({ radius: this.isPlayHovered || this.isPlayFocused ? 20 : 16, color: 'rgba(0,0,0,0.42)' })
+          .opacity(this.isActive() ? 1.0 : 0.0)
+          .scale({ x: this.isPlayHovered || this.isPlayFocused ? 1.14 : 1.0, y: this.isPlayHovered || this.isPlayFocused ? 1.14 : 1.0 })
+          .animation({ duration: 180, curve: Curve.EaseOut })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .enabled(this.isActive())
+          .focusable(this.isActive())
+          .onHover((isHover: boolean) => { this.isPlayHovered = isHover })
+          .onFocus(() => { this.isPlayFocused = true })
+          .onBlur(() => { this.isPlayFocused = false })
+          .onClick(() => { this.onPlayClick() })
+        }
         if (this.showProgress && this.item.progress > 0) {
           Stack({ alignContent: Alignment.Start }) {
             Column().width(SERVER_WIDE_WIDTH).height(4).backgroundColor('rgba(0,0,0,0.6)')
@@ -477,9 +493,13 @@ struct ServerWideCard {
       .borderRadius(6).clip(true)
       .border({ width: 2, color: this.isActive() ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
       .onHover((isHover: boolean) => { this.isHovered = isHover })
-      .focusable(true)
-      .onFocus(() => { this.isFocused = true })
-      .onBlur(() => { this.isFocused = false })
+      .focusable(!this.showPlayButton)
+      .onFocus(() => {
+        if (!this.showPlayButton) { this.isFocused = true }
+      })
+      .onBlur(() => {
+        if (!this.showPlayButton) { this.isFocused = false }
+      })
 
       Text(this.item.title)
         .fontSize(15).fontColor('#DDDDDD').maxLines(1)
@@ -500,13 +520,19 @@ struct ServerWideCard {
 @ComponentV2
 struct ServerPosterCard {
   @Require @Param item: VideoServerMediaItem
+  /** 是否显示底部进度条（最近添加的电影类型，有播放进度时显示） */
+  @Param showProgress: boolean = false
   @Event onItemClick: () => void = () => {}
+  /** 中央播放按钮点击回调 */
+  @Event onPlayClick: () => void = () => {}
   @Local isHovered: boolean = false
   @Local isFocused: boolean = false
   @Local isPlayHovered: boolean = false
+  /** 播放按钮是否获得遥控器焦点 */
+  @Local isPlayFocused: boolean = false
 
   private isActive(): boolean {
-    return this.isHovered || this.isFocused
+    return this.isHovered || this.isFocused || this.isPlayFocused
   }
 
   build() {
@@ -534,30 +560,40 @@ struct ServerPosterCard {
           .hitTestBehavior(HitTestMode.Transparent)
         Column() {
           SymbolGlyph($r('sys.symbol.play_fill'))
-            .fontColor([this.isPlayHovered ? '#2B9BDA' : Color.White])
+            .fontColor([this.isPlayHovered || this.isPlayFocused ? '#2B9BDA' : Color.White])
             .fontSize(28)
         }
         .width(56).height(56)
-        .backgroundColor(this.isPlayHovered ? 'rgba(43,155,218,0.22)' : 'rgba(20,20,20,0.74)')
+        .backgroundColor(this.isPlayHovered || this.isPlayFocused ? 'rgba(43,155,218,0.22)' : 'rgba(20,20,20,0.74)')
         .borderRadius(28)
-        .border({ width: 1, color: this.isPlayHovered ? 'rgba(43,155,218,0.78)' : 'rgba(255,255,255,0.24)' })
-        .shadow({ radius: this.isPlayHovered ? 20 : 16, color: 'rgba(0,0,0,0.42)' })
+        .border({ width: 1, color: this.isPlayHovered || this.isPlayFocused ? 'rgba(43,155,218,0.78)' : 'rgba(255,255,255,0.24)' })
+        .shadow({ radius: this.isPlayHovered || this.isPlayFocused ? 20 : 16, color: 'rgba(0,0,0,0.42)' })
         .opacity(this.isActive() ? 1.0 : 0.0)
-        .scale({ x: this.isPlayHovered ? 1.14 : 1.0, y: this.isPlayHovered ? 1.14 : 1.0 })
+        .scale({ x: this.isPlayHovered || this.isPlayFocused ? 1.14 : 1.0, y: this.isPlayHovered || this.isPlayFocused ? 1.14 : 1.0 })
         .animation({ duration: 180, curve: Curve.EaseOut })
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
         .enabled(this.isActive())
+        .focusable(this.isActive())
         .onHover((isHover: boolean) => { this.isPlayHovered = isHover })
-        .hitTestBehavior(HitTestMode.Transparent)
+        .onFocus(() => { this.isPlayFocused = true })
+        .onBlur(() => { this.isPlayFocused = false })
+        .onClick(() => { this.onPlayClick() })
+        if (this.showProgress && this.item.progress > 0) {
+          Stack({ alignContent: Alignment.Start }) {
+            Column().width(SERVER_POSTER_WIDTH).height(4).backgroundColor('rgba(0,0,0,0.6)')
+            Column().width(SERVER_POSTER_WIDTH * this.item.progress).height(4).backgroundColor('#4A9FFF')
+          }
+          .width(SERVER_POSTER_WIDTH).height(4).position({ left: 0, bottom: 0 })
+        }
       }
       .width(SERVER_POSTER_WIDTH).aspectRatio(SERVER_POSTER_ASPECT)
       .borderRadius(6).clip(true)
       .border({ width: 2, color: this.isActive() ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
       .onHover((isHover: boolean) => { this.isHovered = isHover })
-      .focusable(true)
-      .onFocus(() => { this.isFocused = true })
-      .onBlur(() => { this.isFocused = false })
+      .focusable(false)
+      .onFocus(() => {})
+      .onBlur(() => {})
 
       Text(this.item.title)
         .fontSize(15).fontColor('#DDDDDD').maxLines(1)
@@ -907,6 +943,20 @@ export struct MediaLibraryTab {
   }
 
   /**
+   * 构建播放器标题：episode 用「系列名-S1:E1-分集名」格式，其余直接用 title。
+   */
+  private buildPlayerTitle(item: VideoServerMediaItem): string {
+    if (item.type === 'episode' && item.seasonNumber > 0 && item.episodeNumber > 0) {
+      // item.title 对于 episode 已是系列名（mapItem 中处理），subtitle 为 "S01E02 · 分集名"
+      // 从 subtitle 提取分集名
+      const epName = item.subtitle.replace(/^S\d+E\d+\s*·\s*/, '')
+      const code = `S${item.seasonNumber}:E${item.episodeNumber}`
+      return `${item.title}-${code}-${epName.length > 0 ? epName : code}`
+    }
+    return item.title
+  }
+
+  /**
    * 「继续观看」点击：用 App 内播放器播放该条目（与文件源继续观看一致）。
    */
   private async openContinueWatching(item: VideoServerMediaItem): Promise<void> {
@@ -940,15 +990,16 @@ export struct MediaLibraryTab {
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
-        title: item.title,
+        title: this.buildPlayerTitle(item),
         startPositionMs: item.positionMs > 0 ? item.positionMs : undefined,
         durationHintMs: item.durationMs > 0 ? item.durationMs : undefined,
+        seasonNumber: item.seasonNumber > 0 ? item.seasonNumber : undefined,
+        episodeNumber: item.episodeNumber > 0 ? item.episodeNumber : undefined,
         serverType: server.type,
         serverItemId: item.id,
         serverId: server.id,
         serverPlaySessionId: playSessionId
       }
-      // 上报播放开始（会话建立），与退出时的 stopped 共用同一 playSessionId
       reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch((e: Error) => {
           console.warn('[MediaLibraryTab] 上报播放开始失败', e.message)
@@ -956,6 +1007,121 @@ export struct MediaLibraryTab {
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
       console.warn('[MediaLibraryTab] 打开播放器失败', (e as BusinessError).message ?? String(e))
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
+      } catch (_e) {}
+    }
+  }
+
+  /**
+   * 点击「接下来」/「最近添加的」播放按钮：直接进入播放。
+   * movie / episode 直接播放；series 先解析下一集再播放，无下一集则 fallback 到详情页。
+   */
+  private async openServerDirectPlay(item: VideoServerMediaItem): Promise<void> {
+    if (item.type === 'series') {
+      await this.openSeriesDirectPlay(item)
+      return
+    }
+    await this.doServerDirectPlay(item)
+  }
+
+  /**
+   * series 类型直播放：通过 getNextUp 解析下一集并播放，无下一集则 fallback 到详情页。
+   */
+  private async openSeriesDirectPlay(item: VideoServerMediaItem): Promise<void> {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
+      return
+    }
+    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+    if (!server) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
+      return
+    }
+    try {
+      let nextUpItem: VideoServerMediaItem | null = null
+      if (server.type === VideoServerType.PLEX) {
+        const client = PlexClient.fromConfigJson(server.configJson)
+        nextUpItem = await client.getNextUp(item.id)
+      } else {
+        const client = JellyfinClient.fromConfigJson(server.configJson)
+        nextUpItem = await client.getNextUp(item.id)
+      }
+      if (nextUpItem) {
+        await this.doServerDirectPlayWithServer(nextUpItem, server)
+      } else {
+        // 无下一集，fallback 到详情页
+        this.openServerItemDetail(item)
+      }
+    } catch (e) {
+      console.warn('[MediaLibraryTab] 解析系列下一集失败', (e as BusinessError).message ?? String(e))
+      this.openServerItemDetail(item)
+    }
+  }
+
+  /**
+   * 通用服务器直播放：校验服务器后播放。
+   */
+  private async doServerDirectPlay(item: VideoServerMediaItem): Promise<void> {
+    const serverId = this.sourceSwitchModel.getActiveServerId()
+    if (serverId === undefined) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
+      return
+    }
+    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
+    if (!server) {
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
+      } catch (_e) {}
+      return
+    }
+    await this.doServerDirectPlayWithServer(item, server)
+  }
+
+  /**
+   * 已知服务器实例的直播放核心逻辑：解析流 URL、构造播放参数、上报并跳转。
+   */
+  private async doServerDirectPlayWithServer(item: VideoServerMediaItem, server: VideoServer): Promise<void> {
+    try {
+      let url = ''
+      let header: Record<string, string> = {}
+      if (server.type === VideoServerType.PLEX) {
+        const client = PlexClient.fromConfigJson(server.configJson)
+        url = await client.getStreamUrl(item.id)
+        header = client.getStreamHeader()
+      } else {
+        const client = JellyfinClient.fromConfigJson(server.configJson)
+        url = await client.getStreamUrl(item.id)
+        header = client.getStreamHeader()
+      }
+      const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+      const param: PlayerPageParam = {
+        url: url,
+        httpHeader: header,
+        title: this.buildPlayerTitle(item),
+        startPositionMs: item.positionMs > 0 ? item.positionMs : undefined,
+        durationHintMs: item.durationMs > 0 ? item.durationMs : undefined,
+        seasonNumber: item.seasonNumber > 0 ? item.seasonNumber : undefined,
+        episodeNumber: item.episodeNumber > 0 ? item.episodeNumber : undefined,
+        serverType: server.type,
+        serverItemId: item.id,
+        serverId: server.id,
+        serverPlaySessionId: playSessionId
+      }
+      reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
+        .catch((e: Error) => {
+          console.warn('[MediaLibraryTab] 上报播放开始失败', e.message)
+        })
+      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
+    } catch (e) {
+      console.warn('[MediaLibraryTab] 直播放失败', (e as BusinessError).message ?? String(e))
       try {
         this.getUIContext().getPromptAction().showToast({ message: '播放失败，请重试', duration: 2000 })
       } catch (_e) {}
@@ -1638,6 +1804,7 @@ export struct MediaLibraryTab {
               ServerWideCard({
                 item: item,
                 showProgress: true,
+                showPlayButton: false,
                 onItemClick: () => { this.openContinueWatching(item).catch(() => {}) }
               })
             }, (item: VideoServerMediaItem) => 'cw_' + item.id)
@@ -1650,7 +1817,9 @@ export struct MediaLibraryTab {
               ServerWideCard({
                 item: item,
                 showProgress: false,
-                onItemClick: () => { this.openServerItemDetail(item) }
+                showPlayButton: true,
+                onItemClick: () => { this.openServerItemDetail(item) },
+                onPlayClick: () => { this.openServerDirectPlay(item).catch(() => {}) }
               })
             }, (item: VideoServerMediaItem) => 'next_' + item.id)
           }
@@ -1661,7 +1830,9 @@ export struct MediaLibraryTab {
             ForEach(section.items, (item: VideoServerMediaItem) => {
               ServerPosterCard({
                 item: item,
-                onItemClick: () => { this.openServerItemDetail(item) }
+                showProgress: item.type === 'movie' && item.progress > 0,
+                onItemClick: () => { this.openServerItemDetail(item) },
+                onPlayClick: () => { this.openServerDirectPlay(item).catch(() => {}) }
               })
             }, (item: VideoServerMediaItem) => 'latest_' + section.libraryName + '_' + item.id)
           }
