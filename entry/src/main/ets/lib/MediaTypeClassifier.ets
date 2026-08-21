@@ -124,7 +124,7 @@ const SEASON_DIRECTORY_PATTERNS: RegExp[] = [
  * 支持：第二季、第二部、第2季、第2部
  * 不匹配纯数字季号（如 "2"），仅匹配中文"第...季/部"格式
  */
-const CHINESE_SEASON_SUFFIX_PATTERN = /第\s*([\d一二三四五六七八九十百]+)\s*[季部]$/;
+const CHINESE_SEASON_SUFFIX_PATTERN = /第\s*([\d一二三四五六七八九十百零〇]+)\s*[季部]$/;
 
 /** 中文个位数字到阿拉伯数字的映射 */
 const CHINESE_UNIT_MAP: Record<string, number> = {
@@ -303,7 +303,7 @@ function hasStrongMovieSignal(fileNameInfo?: FileNameSemanticInfo): boolean {
 export function isSeasonDirectorySegment(segment: string): boolean {
   const normalizedSegment = normalizeSemanticToken(segment);
   return SEASON_DIRECTORY_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedSegment)) ||
-    /^第\s*[\d一二三四五六七八九十百]+\s*季/.test(segment) ||
+    /^第\s*[\d一二三四五六七八九十百零〇]+\s*季/.test(segment) ||
     CHINESE_SEASON_SUFFIX_PATTERN.test(segment);
 }
 
@@ -329,7 +329,7 @@ export function extractSeasonNumberFromDirectoryName(directoryName: string): num
   }
 
   // 2. 纯中文季号前缀（如"第二季"）
-  const pureChineseMatch = directoryName.match(/^第\s*([\d一二三四五六七八九十百]+)\s*季/);
+  const pureChineseMatch = directoryName.match(/^第\s*([\d一二三四五六七八九十百零〇]+)\s*季/);
   if (pureChineseMatch) {
     return parseChineseSeasonNumber(pureChineseMatch[1]);
   }
