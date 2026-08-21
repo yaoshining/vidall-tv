@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">128x</span>
+<span class="cline-any cline-yes">128x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">128x</span>
+<span class="cline-any cline-yes">128x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { AppPreferences, PrefKey } from &#39;../utils/AppPreferences&#39;; 
+import { sha256Hex } from &#39;./SubtitleDownloader&#39;; 
+import { SubtitleTrackItem } from &#39;../components/core/player/SubtitleBridgeAdapter&#39;; 
+import { SubtitleCacheManager } from &#39;./SubtitleCacheManager&#39;; 
+ 
+// ───────────────────────────────────────────── 
+// 公共接口 / 类型 
+// ───────────────────────────────────────────── 
+ 
+/** 用户字幕绑定类型 */ 
+export type SubtitleBindingType = &#39;local-file&#39; | &#39;cached&#39; | &#39;downloaded&#39; | &#39;internal&#39; | &#39;disabled&#39;; 
+ 
+/** 用户字幕绑定记录（存储在 AppPreferences 中） */ 
+export interface SubtitleBinding { 
+  /** 视频完整 URL */ 
+  videoPath: string; 
+  /** 
+   * 字幕标识符，语义因 subtitleType 而异： 
+   * - `local-file`：外置字幕的完整 URL 
+   * - `downloaded` / `cached`：本地缓存文件路径 
+    * - `internal`：优先使用 `@idx:&lt;internalIndex&gt;` 稳定 token（兼容历史 displayName） 
+   */ 
+  subtitlePath: string; 
+  /** 绑定类型 */ 
+  subtitleType: SubtitleBindingType; 
+  /** 写入时的 Unix 时间戳（毫秒） */ 
+  savedAt: number; 
+} 
+ 
+/** 字幕调度结果 */ 
+export interface SubtitleResolution { 
+  /** 调度来源类型 */ 
+  type: &#39;user-specified&#39; | &#39;local-cache&#39; | &#39;none&#39;; 
+  /** 匹配到的轨道在 allSubtitleTracks 中的索引（type=user-specified 时有效） */ 
+  trackIndex?: number; 
+  /** 本地缓存文件完整路径（type=local-cache 时有效） */ 
+  localPath?: string; 
+} 
+ 
+// ───────────────────────────────────────────── 
+// SubtitleDispatcher 
+// ───────────────────────────────────────────── 
+ 
+/** 步骤 4 缓存查询所需的存储上下文（可选传入） */ 
+export interface SubtitleCacheContext { 
+  filesDir: string; 
+  sourceType: string; 
+  sourceId: string; 
+} 
+ 
+/** 
+ * 字幕优先级调度器。 
+ * 
+ * 在 `VideoPlayerController.loadSubtitleTracks()` 内、`subtitleAdapter.init()` 返回后调用， 
+ * 覆盖 adapter 的自动选轨结果。 
+ * 
+ * 5 步优先级链： 
+ *   1. 用户指定字幕（持久化绑定） 
+ *   2-3. adapter 已处理（内置 + 同目录外置）→ 调度器不介入 
+ *   4. 本地缓存（通过 SubtitleCacheManager.getLastUsedSubtitle() 查询） 
+ *   5. 无字幕 → 返回 { type: &#39;none&#39; } 
+ */ 
+export class SubtitleDispatcher { 
+  private static readonly INTERNAL_INDEX_TOKEN_PREFIX: string = &#39;@idx:&#39;; 
+  private readonly cacheManager: SubtitleCacheManager; 
+ 
+  constructor(cacheManager?: SubtitleCacheManager) { 
+    if (cacheManager !== undefined) { 
+      this.cacheManager = cacheManager; 
+    } else { 
+      this.cacheManager = new SubtitleCacheManager(); 
+    } 
+  } 
+ 
+  // ────────────────────────────────────────── 
+  // 绑定存储 key 计算 
+  // ────────────────────────────────────────── 
+ 
+  private async buildKey(videoPath: string): Promise&lt;string&gt; { 
+    const hash = await sha256Hex(videoPath); 
+    return `${PrefKey.SUBTITLE_BINDING_PREFIX}_${hash.slice(0, 12)}`; 
+  } 
+ 
+  private parseInternalBindingIndexToken(subtitlePath: string): number { 
+    if (!subtitlePath.startsWith(SubtitleDispatcher.INTERNAL_INDEX_TOKEN_PREFIX)) { 
+      return -1; 
+    } 
+    const rawIndex = subtitlePath.substring(SubtitleDispatcher.INTERNAL_INDEX_TOKEN_PREFIX.length); 
+    if (rawIndex.length === 0) { 
+      return -1; 
+    } 
+    const parsedIndex = Number.parseInt(rawIndex, 10); 
+    if (Number.isNaN(parsedIndex)) { 
+      return -1; 
+    } 
+    return parsedIndex; 
+  } 
+ 
+  // ────────────────────────────────────────── 
+  // 公开 API 
+  // ────────────────────────────────────────── 
+ 
+  /** 
+   * 读取用户字幕绑定。 
+   * - key 存在且合法 JSON → 返回 SubtitleBinding 
+   * - key 不存在或 JSON 损坏 → 返回 null（不抛异常） 
+   */ 
+  async getUserBinding(videoPath: string): Promise&lt;SubtitleBinding | null&gt; { 
+    try { 
+      const key = await this.buildKey(videoPath); 
+      const raw = await AppPreferences.get(key, &#39;&#39;); 
+      if (raw.length === 0) { 
+        return null; 
+      } 
+      const parsed = JSON.parse(raw) as Record&lt;string, string | number&gt;; 
+      // disabled 标记可能 subtitlePath 为空；其它类型必须有 4 字段。 
+      if (parsed[&#39;subtitleType&#39;] === &#39;disabled&#39;) { 
+        if (!parsed[&#39;videoPath&#39;] || !parsed[&#39;savedAt&#39;]) { 
+          return null; 
+        } 
+      } else if (!parsed[&#39;videoPath&#39;] || !parsed[&#39;subtitlePath&#39;] || !parsed[&#39;subtitleType&#39;] || !parsed[&#39;savedAt&#39;]) { 
+        return null; 
+      } 
+      const binding: SubtitleBinding = { 
+        videoPath: parsed[&#39;videoPath&#39;] as string, 
+        subtitlePath: parsed[&#39;subtitlePath&#39;] as string, 
+        subtitleType: parsed[&#39;subtitleType&#39;] as SubtitleBindingType, 
+        savedAt: parsed[&#39;savedAt&#39;] as number 
+      }; 
+      return binding; 
+    } catch { 
+      return null; 
+    } 
+  } 
+ 
+  /** 
+   * 保存用户字幕绑定。 
+   * 在用户手动选择外置字幕时调用。 
+   */ 
+  async saveUserBinding( 
+    videoPath: string, 
+    subtitlePath: string, 
+    type: SubtitleBindingType 
+  ): Promise&lt;void&gt; { 
+    try { 
+      const key = await this.buildKey(videoPath); 
+      const binding: SubtitleBinding = { 
+        videoPath, 
+        subtitlePath, 
+        subtitleType: type, 
+        savedAt: Date.now() 
+      }; 
+      await AppPreferences.set(key, JSON.stringify(binding)); 
+    } catch (e) { 
+      console.error(`[SubtitleDispatcher] saveUserBinding 失败: ${String(e)}`); 
+    } 
+  } 
+ 
+  /** 
+   * 清除用户字幕绑定（标记 disabled 状态）。 
+   * 
+   * 历史行为：把 AppPreferences 里的 binding key 清空。 
+   * 改造后：写入 `{ subtitleType: &#39;disabled&#39; }` 标记用户主动关闭过字幕。 
+   * 
+   * 之所以改成&quot;标记&quot;而不是&quot;清空&quot;： 
+   * - 步骤 1 看到 disabled 返回 `{ type: &#39;user-specified&#39;, trackIndex: -1 }` 
+   *   （**显式关闭字幕**，避免 adapter 自动选轨继续显示字幕，而非 return none 让 adapter 自行处理） 
+   * - 步骤 4（lastUsed 自动恢复）**仍然能命中** metadata.json.lastUsed 指向的缓存字幕 
+   * - 这样： 
+   *   1. 关闭字幕后重开视频不会自动应用 lastUsed（用户主动意图生效） 
+   *   2. 缓存字幕文件**不会被清除**，仍可通过后续扩展在菜单中列出供用户重新启用 
+   * 
+   * 注意事项：使用本方法必须确认调用方表达的是&quot;用户主动关闭字幕&quot;语义。 
+   * 如果是&quot;绑定失效/轨道列表变化&quot;等**非用户主动**的清理场景，应改用 
+   * `clearUserBindingForce`（直接清空 key），避免误写 disabled 标记导致 
+   * 下次进入同一视频时字幕被强制关闭。 
+   */ 
+  async clearUserBinding(videoPath: string): Promise&lt;void&gt; { 
+    try { 
+      const key = await this.buildKey(videoPath); 
+      const binding: SubtitleBinding = { 
+        videoPath, 
+        subtitlePath: &#39;&#39;, 
+        subtitleType: &#39;disabled&#39;, 
+        savedAt: Date.now() 
+      }; 
+      await AppPreferences.set(key, JSON.stringify(binding)); 
+    } catch (e) { 
+      console.error(`[SubtitleDispatcher] clearUserBinding 失败: ${String(e)}`); 
+    } 
+  } 
+ 
+  /** 
+   * 强制清空用户字幕绑定（不写 disabled 标记）。 
+   * 
+   * 调用场景：AVPlayer → MPV 格式回退时。fallback 不是用户主动行为， 
+   * 应当不继承 disabled 状态，让 `resolveSubtitle` 步骤 4 仍能命中 lastUsed 自动恢复缓存字幕。 
+   * 
+   * 与 `clearUserBinding` 的区别： 
+   * - `clearUserBinding` 写 `{ subtitleType: &#39;disabled&#39; }` 标记（v2 fix 引入，保留&quot;用户主动关闭&quot;语义） 
+   * - `clearUserBindingForce` 直接清空 key，让 resolveSubtitle 走原始步骤 4 命中逻辑 
+   * 
+   * 失败仅 warn，不抛。 
+   */ 
+  async clearUserBindingForce(videoPath: string): Promise&lt;void&gt; { 
+    try { 
+      const key = await this.buildKey(videoPath); 
+      await AppPreferences.set(key, &#39;&#39;); 
+    } catch (e) { 
+      console.error(`[SubtitleDispatcher] clearUserBindingForce 失败: ${String(e)}`); 
+    } 
+  } 
+ 
+  /** 
+   * 按 5 步优先级链裁决字幕来源。 
+   * 
+   * - 步骤 1：查用户绑定 
+   *   - local-file：在 allSubtitleTracks 中按 URL 精确匹配（外置字幕） 
+  *   - internal：优先按 @idx token 匹配 internalIndex，再兼容 displayName（内置字幕） 
+   * - 步骤 2-3：adapter 已处理，此处不介入（返回 none，让 adapter 的自动选轨生效） 
+   * - 步骤 4：查本地缓存（需要传入 cacheContext） 
+   * - 步骤 5：返回 { type: &#39;none&#39; } 
+   * 
+   * @param videoPath  视频完整 URL 
+   * @param allSubtitleTracks  adapter.init() 后的完整字幕轨道列表 
+   * @param cacheContext  可选，用于步骤 4 缓存查询（filesDir / sourceType / sourceId） 
+   */ 
+  async resolveSubtitle( 
+    videoPath: string, 
+    allSubtitleTracks: SubtitleTrackItem[], 
+    cacheContext?: SubtitleCacheContext 
+  ): Promise&lt;SubtitleResolution&gt; { 
+    // 步骤 1：用户指定字幕 
+    try { 
+      const binding = await this.getUserBinding(videoPath); 
+      if (binding !== null) { 
+        // 用户主动关闭过字幕 → 返回 user-specified trackIndex=-1，让控制器显式关闭字幕 
+        // 注意：返回 { type: &#39;none&#39; } 会让适配器的自动选轨保留，导致字幕仍显示。 
+        // metadata.json.lastUsed 不会被清除，缓存文件保留供未来 UI 重新加载。 
+        if (binding.subtitleType === &#39;disabled&#39;) { 
+          console.info(`[SubtitleDispatcher] 步骤1命中 disabled 用户标记，返回 trackIndex=-1 关闭字幕`); 
+          const disabled: SubtitleResolution = { type: &#39;user-specified&#39;, trackIndex: -1 }; 
+          return disabled; 
+        } 
+        if (binding.subtitleType === &#39;local-file&#39;) { 
+          // 外置字幕：按 URL 精确匹配 
+          let foundIndex = -1; 
+          for (let i = 0; i &lt; allSubtitleTracks.length; i++) { 
+            if (allSubtitleTracks[i].url === binding.subtitlePath) { 
+              foundIndex = i; 
+              break; 
+            } 
+          } 
+          if (foundIndex &gt;= 0) { 
+            console.info(`[SubtitleDispatcher] 步骤1命中用户绑定(external): index=${foundIndex} url=${binding.subtitlePath}`); 
+            const resolution: SubtitleResolution = { type: &#39;user-specified&#39;, trackIndex: foundIndex }; 
+            return resolution; 
+          } else { 
+            console.warn(`[SubtitleDispatcher] 绑定 URL 不在轨道列表中，自动清除: ${binding.subtitlePath}`); 
+            // 注：失效清理使用 clearUserBindingForce（清空 key）而不是 clearUserBinding（写 disabled 标记）。 
+            // clearUserBinding 会写入 { subtitleType: &#39;disabled&#39; }，等价于&quot;用户主动关闭字幕&quot;， 
+            // 会在后续 resolveSubtitle 步骤 1 短路返回 trackIndex=-1，错误地把&quot;轨道列表变化/绑定失效&quot; 
+            // 当作&quot;用户主动关闭&quot;处理，导致下次进入同一视频时字幕被强制关闭。 
+            // 失效清理应当让 adapter / 缓存字幕按正常流程接管，而非继承 disabled 状态。 
+            await this.clearUserBindingForce(videoPath); 
+          } 
+        } else if (binding.subtitleType === &#39;internal&#39;) { 
+          // 内置字幕：优先按 @idx token 精确匹配 internalIndex，兼容历史 displayName 匹配。 
+          let foundIndex = -1; 
+          const boundInternalIndex = this.parseInternalBindingIndexToken(binding.subtitlePath); 
+          if (boundInternalIndex &gt;= 0) { 
+            for (let i = 0; i &lt; allSubtitleTracks.length; i++) { 
+              const track = allSubtitleTracks[i]; 
+              const trackInternalIndex = track.internalIndex ?? -1; 
+              if (track.kind === &#39;internal&#39; &amp;&amp; trackInternalIndex === boundInternalIndex) { 
+                foundIndex = i; 
+                console.info(`[SubtitleDispatcher] 步骤1 internal token 匹配: token=${binding.subtitlePath} index=${i}`); 
+                break; 
+              } 
+            } 
+          } 
+ 
+          // 兼容历史 binding（displayName） 
+          for (let i = 0; i &lt; allSubtitleTracks.length; i++) { 
+            if (foundIndex &lt; 0) { 
+              if (allSubtitleTracks[i].kind === &#39;internal&#39; &amp;&amp; allSubtitleTracks[i].displayName === binding.subtitlePath) { 
+                foundIndex = i; 
+                break; 
+              } 
+            } 
+          } 
+          if (foundIndex &lt; 0) { 
+            // 模糊匹配：binding.subtitlePath 形如 &quot;英语 (SRT)&quot; 时，剥去 &quot; (xxx)&quot; 后缀再与轨道 displayName 比对 
+            const boundBase = binding.subtitlePath.replace(/\s*\([^)]*\)\s*$/, &#39;&#39;).trim(); 
+            if (boundBase.length &gt; 0 &amp;&amp; boundBase !== binding.subtitlePath) { 
+              for (let i = 0; i &lt; allSubtitleTracks.length; i++) { 
+                if (allSubtitleTracks[i].kind === &#39;internal&#39; &amp;&amp; allSubtitleTracks[i].displayName === boundBase) { 
+                  foundIndex = i; 
+                  console.info(`[SubtitleDispatcher] 步骤1 internal 模糊匹配: binding=&quot;${binding.subtitlePath}&quot; → displayName=&quot;${allSubtitleTracks[i].displayName}&quot; index=${i}`); 
+                  break; 
+                } 
+              } 
+            } 
+          } 
+          if (foundIndex &gt;= 0) { 
+            console.info(`[SubtitleDispatcher] 步骤1命中用户绑定(internal): index=${foundIndex} displayName=${binding.subtitlePath}`); 
+            const resolution: SubtitleResolution = { type: &#39;user-specified&#39;, trackIndex: foundIndex }; 
+            return resolution; 
+          } else { 
+            console.warn(`[SubtitleDispatcher] 绑定 displayName 不在轨道列表中，自动清除: ${binding.subtitlePath}`); 
+            // 同样：失效清理使用 clearUserBindingForce，避免误写 disabled 标记导致下次进入视频时字幕被强制关闭。 
+            await this.clearUserBindingForce(videoPath); 
+          } 
+        } 
+        // downloaded / cached → step 4 处理 
+      } 
+    } catch { 
+      // getUserBinding 失败时安全降级，继续步骤 2 
+    } 
+ 
+    // 步骤 4：查本地缓存 
+    if (cacheContext !== undefined) { 
+      try { 
+        const cachedPath = await this.getLastUsedSubtitle( 
+          cacheContext.filesDir, 
+          cacheContext.sourceType, 
+          cacheContext.sourceId, 
+          videoPath 
+        ); 
+        if (cachedPath !== null) { 
+          // 以文件名（url 后缀）匹配轨道列表 
+          const cachedFileName = cachedPath.split(&#39;/&#39;).pop() ?? &#39;&#39;; 
+          let foundIndex = -1; 
+          for (let i = 0; i &lt; allSubtitleTracks.length; i++) { 
+            const trackUrl = allSubtitleTracks[i].url ?? &#39;&#39;; 
+            if (trackUrl.endsWith(cachedFileName)) { 
+              foundIndex = i; 
+              break; 
+            } 
+          } 
+          if (foundIndex &gt;= 0) { 
+            console.info(`[SubtitleDispatcher] 步骤4命中缓存字幕: index=${foundIndex} path=${cachedPath}`); 
+            const resolution: SubtitleResolution = { type: &#39;user-specified&#39;, trackIndex: foundIndex }; 
+            return resolution; 
+          } else { 
+            // 缓存文件不在当前轨道列表（如下载缓存存于 filesDir/subtitles/），需追加加载 
+            // TODO: 补充单元测试覆盖此分支（需 mock SubtitleCacheManager），见 Issue #230 
+            console.info(`[SubtitleDispatcher] 步骤4缓存路径需追加到轨道列表: ${cachedPath}`); 
+            const localCache: SubtitleResolution = { type: &#39;local-cache&#39;, localPath: cachedPath }; 
+            return localCache; 
+          } 
+        } 
+      } catch { 
+        // 缓存查询失败，降级到步骤 5 
+      } 
+    } 
+ 
+    // 步骤 5：无字幕（adapter 自动选轨已生效，调度器不覆盖） 
+    const none: SubtitleResolution = { type: &#39;none&#39; }; 
+    return none; 
+  } 
+ 
+  /** 
+   * 步骤 4：查询本地缓存最后使用的字幕路径。 
+   */ 
+  private async getLastUsedSubtitle( 
+    filesDir: string, 
+    sourceType: string, 
+    sourceId: string, 
+    videoPath: string 
+  ): Promise&lt;string | null&gt; { 
+    return this.cacheManager.getLastUsedSubtitle(filesDir, sourceType, sourceId, videoPath); 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 14:47:13 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/subtitle/SubtitleDispatcher.ets","hash":"c3f8e68b527c6963a6baefb484ba5b1f2c8c6de4ed5e78fbfb05e52d8889a5f6","lineCnt":375,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"SubtitleDispatcher.constructor","count":128,"regions":[{"startLoc":{"line":67,"col":3},"endLoc":{"line":73,"col":4},"count":128,"ignored":0},{"startLoc":{"line":68,"col":37},"endLoc":{"line":70,"col":6},"count":0,"ignored":0},{"startLoc":{"line":70,"col":12},"endLoc":{"line":72,"col":6},"count":128,"ignored":0}],"branches":[{"startLoc":{"line":68,"col":9},"endLoc":{"line":68,"col":35},"trueCount":0,"falseCount":128,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"SubtitleDispatcher.buildKey","count":27,"regions":[{"startLoc":{"line":79,"col":3},"endLoc":{"line":82,"col":4},"count":27,"ignored":0},{"startLoc":{"line":80,"col":5},"endLoc":{"line":82,"col":4},"count":27,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"SubtitleDispatcher.parseInternalBindingIndexToken","count":2,"regions":[{"startLoc":{"line":84,"col":3},"endLoc":{"line":97,"col":4},"count":2,"ignored":0},{"startLoc":{"line":85,"col":83},"endLoc":{"line":87,"col":6},"count":2,"ignored":0},{"startLoc":{"line":89,"col":32},"endLoc":{"line":91,"col":6},"count":0,"ignored":0},{"startLoc":{"line":93,"col":36},"endLoc":{"line":95,"col":6},"count":0,"ignored":0},{"startLoc":{"line":96,"col":5},"endLoc":{"line":97,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":85,"col":9},"endLoc":{"line":85,"col":81},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":89,"col":9},"endLoc":{"line":89,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":93,"col":9},"endLoc":{"line":93,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"SubtitleDispatcher.getUserBinding","count":17,"regions":[{"startLoc":{"line":108,"col":3},"endLoc":{"line":134,"col":4},"count":17,"ignored":0},{"startLoc":{"line":109,"col":9},"endLoc":{"line":131,"col":6},"count":17,"ignored":0},{"startLoc":{"line":124,"col":7},"endLoc":{"line":131,"col":6},"count":6,"ignored":0},{"startLoc":{"line":117,"col":50},"endLoc":{"line":121,"col":8},"count":1,"ignored":0},{"startLoc":{"line":131,"col":7},"endLoc":{"line":133,"col":6},"count":1,"ignored":0},{"startLoc":{"line":112,"col":29},"endLoc":{"line":114,"col":8},"count":10,"ignored":0},{"startLoc":{"line":121,"col":14},"endLoc":{"line":123,"col":8},"count":5,"ignored":0},{"startLoc":{"line":118,"col":57},"endLoc":{"line":120,"col":10},"count":0,"ignored":0},{"startLoc":{"line":121,"col":116},"endLoc":{"line":123,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":112,"col":11},"endLoc":{"line":112,"col":27},"trueCount":10,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":117,"col":11},"endLoc":{"line":117,"col":48},"trueCount":1,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":118,"col":13},"endLoc":{"line":118,"col":55},"trueCount":0,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":121,"col":18},"endLoc":{"line":121,"col":114},"trueCount":0,"falseCount":5,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"SubtitleDispatcher.saveUserBinding","count":7,"regions":[{"startLoc":{"line":140,"col":3},"endLoc":{"line":157,"col":4},"count":7,"ignored":0},{"startLoc":{"line":145,"col":9},"endLoc":{"line":154,"col":6},"count":7,"ignored":0},{"startLoc":{"line":154,"col":7},"endLoc":{"line":156,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"SubtitleDispatcher.clearUserBinding","count":1,"regions":[{"startLoc":{"line":178,"col":3},"endLoc":{"line":191,"col":4},"count":1,"ignored":0},{"startLoc":{"line":179,"col":9},"endLoc":{"line":188,"col":6},"count":1,"ignored":0},{"startLoc":{"line":188,"col":7},"endLoc":{"line":190,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"SubtitleDispatcher.clearUserBindingForce","count":2,"regions":[{"startLoc":{"line":205,"col":3},"endLoc":{"line":212,"col":4},"count":2,"ignored":0},{"startLoc":{"line":206,"col":9},"endLoc":{"line":209,"col":6},"count":2,"ignored":0},{"startLoc":{"line":209,"col":7},"endLoc":{"line":211,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"SubtitleDispatcher.resolveSubtitle","count":11,"regions":[{"startLoc":{"line":228,"col":3},"endLoc":{"line":361,"col":4},"count":11,"ignored":0},{"startLoc":{"line":234,"col":9},"endLoc":{"line":317,"col":6},"count":11,"ignored":0},{"startLoc":{"line":236,"col":29},"endLoc":{"line":316,"col":8},"count":4,"ignored":0},{"startLoc":{"line":267,"col":16},"endLoc":{"line":314,"col":10},"count":2,"ignored":0},{"startLoc":{"line":267,"col":57},"endLoc":{"line":314,"col":10},"count":2,"ignored":0},{"startLoc":{"line":322,"col":37},"endLoc":{"line":356,"col":6},"count":0,"ignored":0},{"startLoc":{"line":323,"col":11},"endLoc":{"line":353,"col":8},"count":0,"ignored":0},{"startLoc":{"line":245,"col":52},"endLoc":{"line":267,"col":10},"count":2,"ignored":0},{"startLoc":{"line":330,"col":34},"endLoc":{"line":352,"col":10},"count":0,"ignored":0},{"startLoc":{"line":292,"col":31},"endLoc":{"line":304,"col":12},"count":1,"ignored":0},{"startLoc":{"line":271,"col":40},"endLoc":{"line":281,"col":12},"count":0,"ignored":0},{"startLoc":{"line":258,"col":18},"endLoc":{"line":266,"col":12},"count":1,"ignored":0},{"startLoc":{"line":272,"col":13},"endLoc":{"line":280,"col":14},"count":0,"ignored":0},{"startLoc":{"line":295,"col":77},"endLoc":{"line":303,"col":14},"count":0,"ignored":0},{"startLoc":{"line":284,"col":11},"endLoc":{"line":291,"col":12},"count":2,"ignored":0},{"startLoc":{"line":296,"col":15},"endLoc":{"line":302,"col":16},"count":0,"ignored":0},{"startLoc":{"line":334,"col":11},"endLoc":{"line":340,"col":12},"count":0,"ignored":0},{"startLoc":{"line":345,"col":18},"endLoc":{"line":351,"col":12},"count":0,"ignored":0},{"startLoc":{"line":248,"col":11},"endLoc":{"line":253,"col":12},"count":2,"ignored":0},{"startLoc":{"line":285,"col":33},"endLoc":{"line":290,"col":14},"count":2,"ignored":0},{"startLoc":{"line":240,"col":50},"endLoc":{"line":244,"col":10},"count":0,"ignored":0},{"startLoc":{"line":254,"col":32},"endLoc":{"line":258,"col":12},"count":1,"ignored":0},{"startLoc":{"line":275,"col":91},"endLoc":{"line":279,"col":16},"count":0,"ignored":0},{"startLoc":{"line":297,"col":113},"endLoc":{"line":301,"col":18},"count":0,"ignored":0},{"startLoc":{"line":305,"col":32},"endLoc":{"line":309,"col":12},"count":1,"ignored":0},{"startLoc":{"line":309,"col":18},"endLoc":{"line":313,"col":12},"count":1,"ignored":0},{"startLoc":{"line":341,"col":32},"endLoc":{"line":345,"col":12},"count":0,"ignored":0},{"startLoc":{"line":249,"col":68},"endLoc":{"line":252,"col":14},"count":1,"ignored":0},{"startLoc":{"line":286,"col":122},"endLoc":{"line":289,"col":16},"count":1,"ignored":0},{"startLoc":{"line":336,"col":52},"endLoc":{"line":339,"col":14},"count":0,"ignored":0},{"startLoc":{"line":317,"col":7},"endLoc":{"line":319,"col":6},"count":0,"ignored":0},{"startLoc":{"line":353,"col":9},"endLoc":{"line":355,"col":8},"count":0,"ignored":0},{"startLoc":{"line":359,"col":5},"endLoc":{"line":361,"col":4},"count":9,"ignored":0}],"branches":[{"startLoc":{"line":236,"col":11},"endLoc":{"line":236,"col":27},"trueCount":4,"falseCount":7,"group":[],"ignored":0},{"startLoc":{"line":240,"col":13},"endLoc":{"line":240,"col":48},"trueCount":0,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":245,"col":13},"endLoc":{"line":245,"col":50},"trueCount":2,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":249,"col":17},"endLoc":{"line":249,"col":66},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":254,"col":15},"endLoc":{"line":254,"col":30},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":267,"col":20},"endLoc":{"line":267,"col":55},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":271,"col":15},"endLoc":{"line":271,"col":38},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":275,"col":19},"endLoc":{"line":275,"col":89},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":285,"col":17},"endLoc":{"line":285,"col":31},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":286,"col":19},"endLoc":{"line":286,"col":120},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":292,"col":15},"endLoc":{"line":292,"col":29},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":295,"col":17},"endLoc":{"line":295,"col":75},"trueCount":0,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":297,"col":21},"endLoc":{"line":297,"col":111},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":305,"col":15},"endLoc":{"line":305,"col":30},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":322,"col":9},"endLoc":{"line":322,"col":35},"trueCount":0,"falseCount":9,"group":[],"ignored":0},{"startLoc":{"line":330,"col":13},"endLoc":{"line":330,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":336,"col":17},"endLoc":{"line":336,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":341,"col":15},"endLoc":{"line":341,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"SubtitleDispatcher.getLastUsedSubtitle","count":0,"regions":[{"startLoc":{"line":366,"col":3},"endLoc":{"line":373,"col":4},"count":0,"ignored":0},{"startLoc":{"line":372,"col":5},"endLoc":{"line":373,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":11,"5":14,"6":16,"7":23,"8":25,"9":27,"10":31,"11":33,"12":35,"13":37,"14":45,"15":46,"16":47,"17":48,"18":63,"19":64,"20":65,"21":67,"22":68,"23":69,"24":70,"25":71,"26":79,"27":80,"28":81,"29":84,"30":85,"31":86,"32":88,"33":89,"34":90,"35":92,"36":93,"37":94,"38":96,"39":108,"40":109,"41":110,"42":111,"43":112,"44":113,"45":115,"46":117,"47":118,"48":119,"49":121,"50":122,"51":124,"52":125,"53":126,"54":127,"55":128,"56":130,"57":131,"58":132,"59":140,"60":141,"61":142,"62":143,"63":144,"64":145,"65":146,"66":147,"67":148,"68":149,"69":150,"70":151,"71":153,"72":154,"73":155,"74":178,"75":179,"76":180,"77":181,"78":182,"79":183,"80":184,"81":185,"82":187,"83":188,"84":189,"85":205,"86":206,"87":207,"88":208,"89":209,"90":210,"91":228,"92":229,"93":230,"94":231,"95":232,"96":234,"97":235,"98":236,"99":240,"100":241,"101":242,"102":243,"103":245,"104":247,"105":248,"106":249,"107":250,"108":251,"109":254,"110":255,"111":256,"112":257,"113":258,"114":259,"115":265,"116":267,"117":269,"118":270,"119":271,"120":272,"121":273,"122":274,"123":275,"124":276,"125":277,"126":278,"127":284,"128":285,"129":286,"130":287,"131":288,"132":292,"133":294,"134":295,"135":296,"136":297,"137":298,"138":299,"139":300,"140":305,"141":306,"142":307,"143":308,"144":309,"145":310,"146":312,"147":317,"148":322,"149":323,"150":324,"151":325,"152":326,"153":327,"154":328,"155":330,"156":332,"157":333,"158":334,"159":335,"160":336,"161":337,"162":338,"163":341,"164":342,"165":343,"166":344,"167":345,"168":348,"169":349,"170":350,"171":353,"172":359,"173":360,"174":366,"175":367,"176":368,"177":369,"178":370,"179":371,"180":372},"summary":{"lines":{"total":160,"covered":100,"pct":62.5,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,128,128,0,128,128,-1,-1,-1,-1,-1,-1,-1,27,27,27,-1,-1,2,2,2,-1,2,0,0,-1,2,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,17,17,17,17,17,10,-1,17,-1,6,1,0,-1,5,0,-1,6,6,6,6,6,-1,6,1,1,-1,-1,-1,-1,-1,-1,-1,7,7,7,7,7,7,7,7,7,7,7,7,-1,7,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,1,1,1,1,1,1,1,1,-1,1,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,2,2,2,2,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,11,11,11,11,11,-1,11,11,11,-1,-1,-1,4,0,0,0,-1,4,-1,2,2,2,1,1,-1,-1,2,1,1,1,1,1,-1,-1,-1,-1,-1,1,-1,2,-1,2,2,2,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,2,2,2,1,1,-1,-1,-1,2,-1,1,1,0,0,0,0,0,-1,-1,-1,-1,2,1,1,1,1,1,-1,1,-1,-1,-1,-1,0,-1,-1,-1,-1,9,0,0,0,0,0,0,-1,0,-1,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,-1,-1,0,-1,-1,-1,-1,-1,9,9,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,-1]},"functions":{"total":9,"covered":8,"pct":88.89},"branches":{"total":52,"covered":28,"pct":53.85}}},"title":"SubtitleDispatcher.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
