@@ -1,1 +1,0 @@
-{"id":"256992773fa3f796ecfb2b0b79672f24","fullName":"ValidationUtil.validateNotEmpty#空字符串应返回无效并包含字段名","name":"空字符串应返回无效并包含字段名","status":"passed","testResultsByEnv":{"default":"97c7233e0cd9b8bb5fe5a82e6a1d7c2f"}}

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+/** 
+ * 源重载（reload）事务。 
+ * 
+ * 把 VideoPlayerController 中散落的 reload 状态（pendingReloadToken / activeReloadToken / 
+ * reloadTimeoutId / pendingReloadResolve / pendingReloadReject）收敛为单一对象。 
+ * 
+ * 语义保持与原实现一致： 
+ * - `begin` 生成新 token 并创建等待 Promise + 超时定时器； 
+ * - 只有「当前活跃 token」对应的超时才会触发 reject（旧 token 的超时被跳过）。 
+ */ 
+export class ReloadSession { 
+  private pendingToken: number = 0; 
+  private activeToken: number = 0; 
+  private timeoutId?: number; 
+  private pendingResolve?: () =&gt; void; 
+  private pendingReject?: (error: Error) =&gt; void; 
+ 
+  /** 
+   * 开始一次 reload：token +1，登记 resolve/reject，并启动超时兜底。 
+   * @param resolve 与 initPlayer 完成后的 resolvePendingReload 对应 
+   * @param reject  与错误/超时/被取代时的 rejectPendingReload 对应 
+   */ 
+  begin(resolve: () =&gt; void, reject: (error: Error) =&gt; void, timeoutMs: number = 15000): void { 
+    this.pendingToken += 1; 
+    const token = this.pendingToken; 
+    this.activeToken = token; 
+    this.pendingResolve = resolve; 
+    this.pendingReject = reject; 
+    this.timeoutId = setTimeout(() =&gt; { 
+      // 仅当本次 token 仍是活跃 token 时才触发超时，旧 token 的超时被跳过（与原语义一致）。 
+      if (token !== this.activeToken) { 
+        return; 
+      } 
+      this.rejectPending(new Error(&#39;reloadSource prepared timeout&#39;)); 
+    }, timeoutMs); 
+  } 
+ 
+  private clear(): void { 
+    if (this.timeoutId !== undefined) { 
+      clearTimeout(this.timeoutId); 
+      this.timeoutId = undefined; 
+    } 
+    this.pendingResolve = undefined; 
+    this.pendingReject = undefined; 
+  } 
+ 
+  resolvePending(): void { 
+    const resolve = this.pendingResolve; 
+    this.clear(); 
+    if (resolve !== undefined) { 
+      resolve(); 
+    } 
+  } 
+ 
+  rejectPending(error: Error): void { 
+    const reject = this.pendingReject; 
+    this.clear(); 
+    if (reject !== undefined) { 
+      reject(error); 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 21 2026 23:55:34 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/components/core/player/ReloadSession.ets","hash":"b2b3edb60167a62b46020950146fbbf9807a24484a91225fe31f4b5c3ab76ccf","lineCnt":63,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":15,"col":28},"endLoc":{"line":15,"col":38},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":16,"col":27},"endLoc":{"line":16,"col":49},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"ReloadSession.begin","count":5,"regions":[{"startLoc":{"line":23,"col":3},"endLoc":{"line":36,"col":4},"count":5,"ignored":0},{"startLoc":{"line":24,"col":5},"endLoc":{"line":36,"col":4},"count":5,"ignored":0},{"startLoc":{"line":34,"col":7},"endLoc":{"line":35,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":23,"col":18},"endLoc":{"line":23,"col":28},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":23,"col":38},"endLoc":{"line":23,"col":60},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":29,"col":33},"endLoc":{"line":35,"col":6},"count":0,"ignored":0},{"startLoc":{"line":31,"col":39},"endLoc":{"line":33,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":31,"col":11},"endLoc":{"line":31,"col":37},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"ReloadSession.clear","count":9,"regions":[{"startLoc":{"line":38,"col":3},"endLoc":{"line":45,"col":4},"count":9,"ignored":0},{"startLoc":{"line":39,"col":39},"endLoc":{"line":42,"col":6},"count":5,"ignored":0},{"startLoc":{"line":43,"col":5},"endLoc":{"line":45,"col":4},"count":9,"ignored":0}],"branches":[{"startLoc":{"line":39,"col":9},"endLoc":{"line":39,"col":37},"trueCount":5,"falseCount":4,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"ReloadSession.resolvePending","count":3,"regions":[{"startLoc":{"line":47,"col":3},"endLoc":{"line":53,"col":4},"count":3,"ignored":0},{"startLoc":{"line":50,"col":32},"endLoc":{"line":52,"col":6},"count":3,"ignored":0}],"branches":[{"startLoc":{"line":50,"col":9},"endLoc":{"line":50,"col":30},"trueCount":3,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"ReloadSession.rejectPending","count":6,"regions":[{"startLoc":{"line":55,"col":3},"endLoc":{"line":61,"col":4},"count":6,"ignored":0},{"startLoc":{"line":58,"col":31},"endLoc":{"line":60,"col":6},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":58,"col":9},"endLoc":{"line":58,"col":29},"trueCount":2,"falseCount":4,"group":[],"ignored":0}],"ignored":0,"index":8}],"exeLine":{"0":11,"1":12,"2":13,"3":14,"4":15,"5":16,"6":23,"7":24,"8":25,"9":26,"10":27,"11":28,"12":29,"13":31,"14":32,"15":34,"16":35,"17":38,"18":39,"19":40,"20":41,"21":43,"22":44,"23":47,"24":48,"25":49,"26":50,"27":51,"28":55,"29":56,"30":57,"31":58,"32":59},"summary":{"lines":{"total":29,"covered":21,"pct":72.41,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,-1,-1,-1,-1,0,5,5,5,5,5,0,-1,0,0,-1,0,0,-1,-1,9,9,5,5,-1,9,9,-1,-1,3,3,3,3,3,-1,-1,-1,6,6,6,6,2,-1,-1,-1,-1]},"functions":{"total":9,"covered":4,"pct":44.44},"branches":{"total":8,"covered":5,"pct":62.5}}},"title":"ReloadSession.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
