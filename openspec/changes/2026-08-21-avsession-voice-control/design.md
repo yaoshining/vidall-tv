@@ -51,6 +51,15 @@
 - 通过 `wantAgent` 配置 `setLaunchAbility`，bundleName 从 `context.applicationInfo.name` 动态获取，abilityName 为 `EntryAbility`
 - 失败不阻塞会话创建，仅记录日志
 
+### 6. 媒体封面同步（mediaImage）
+
+- `AVMetadata.mediaImage` 支持 `PixelMap` 或 URI 字符串，用于系统媒体中心展示海报
+- 封面来源经 `PlayerPageParam` 新增的 4 个可选字段透传（`posterLocalPath` / `posterUrl` / `backdropLocalPath` / `backdropUrl`），由各播放入口（继续观看、电影/剧集/季详情、影视服务器、媒体库、播放历史）填写
+- 解析优先级：本地 backdrop → 本地 poster → 网络 backdrop → 网络 poster
+- 本地路径以 `file://` URI 直接上传（系统端可解析，零解码开销）；网络 URL 用 `@ohos.net.http` 下载 ArrayBuffer → `image.createImageSource` 解码为 480×270 PixelMap 后上传
+- 元数据去重键扩展为 `title|duration|mediaImage`（PixelMap 用固定标记，宿主替换封面后调 `refreshMetadata()` 强制刷新）
+- 切集 param 透传现有封面字段，`loadMediaImageForAvSession` 重新解析
+
 ### 备选方案
 
 - **在 `VideoPlayerController` 内直接创建会话**：耦合控制器与系统服务，且 controller 被多处复用，生命周期边界模糊，否决

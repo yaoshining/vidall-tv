@@ -47,6 +47,25 @@
 - **WHEN** 播放器切换到新的媒体（标题或时长变化）
 - **THEN** 系统 SHALL 更新 AVSession 元数据中的标题与时长
 
+### Requirement: 媒体封面 SHALL 同步到系统播控
+系统 SHALL 在媒体存在封面或背景图时，将其以 PixelMap 或本地 URI 形式写入 AVSession 元数据的 mediaImage 字段，供系统媒体中心展示海报。封面来源解析顺序 SHALL 为：本地背景图 → 本地海报 → 网络背景图 → 网络海报；网络图片 SHALL 异步下载并解码为 PixelMap，下载或解码失败 SHALL 优雅降级为无封面，不影响播放。
+
+#### Scenario: 本地封面直接展示
+- **WHEN** 当前媒体存在本地海报或背景图路径
+- **THEN** 系统 SHALL 以 file:// URI 形式将该图片同步到 AVSession 元数据
+
+#### Scenario: 网络封面异步加载
+- **WHEN** 当前媒体仅有网络海报 URL
+- **THEN** 系统 SHALL 异步下载并解码为 PixelMap 后同步到 AVSession 元数据
+
+#### Scenario: 封面加载失败降级
+- **WHEN** 网络封面下载失败或当前媒体无任何封面
+- **THEN** 系统 SHALL 不设置封面，仅同步标题与时长，且播放不受影响
+
+#### Scenario: 切集后更新封面
+- **WHEN** 播放器切换到新的媒体（封面变化）
+- **THEN** 系统 SHALL 更新 AVSession 元数据中的封面
+
 ### Requirement: 播控卡片 SHALL 可拉起应用
 系统 SHALL 为 AVSession 配置启动能力，使用户点击系统播控中的媒体卡片时拉起本应用。
 

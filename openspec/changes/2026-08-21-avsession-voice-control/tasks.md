@@ -19,6 +19,16 @@
 
 - [x] 3.1 `hvigorw assembleHap` 编译通过（BUILD SUCCESSFUL，无新增 ArkTS 警告）
 - [x] 3.2 hdc 安装到华为智慧屏 MateTV Pro（EDIS-790A，API 24）并启动应用
-- [ ] 3.3 真机语音验证：播放视频后对小艺说「暂停」「播放/继续播放」，确认播放器响应
+- [x] 3.3 真机语音验证：播放视频后对小艺说「暂停」「播放/继续播放」，确认播放器响应
 - [ ] 3.4 真机验证遥控器播放/暂停键与系统媒体中心显示（标题、进度）与拖动
 - [ ] 3.5 抓取 hilog 确认 `AVSession command: play/pause` 命令链路日志
+
+## 4. 媒体封面同步
+
+- [x] 4.1 `AvSessionSyncState` 新增 `mediaImage`（PixelMap | file:// URI），`syncMetadataNow` 写入 `AVMetadata.mediaImage`
+- [x] 4.2 元数据去重键扩展为 `title|duration|mediaImage`（PixelMap 用固定标记 + 宿主强制刷新）
+- [x] 4.3 `PlayerPageParam` 新增 `posterLocalPath` / `posterUrl` / `backdropLocalPath` / `backdropUrl` 可选字段
+- [x] 4.4 `PlayerPage` 实现 `loadMediaImageForAvSession`：本地路径 → file:// URI；网络 URL → http 下载 + ImageSource 解码为 480×270 PixelMap；无封面优雅降级
+- [x] 4.5 切集 param（`buildMediaLibraryEpisodeSwitchParam` / `buildFileExplorerEpisodeSwitchParam`）透传封面字段
+- [x] 4.6 各播放入口透传封面：ContinueWatchCard / MovieDetailPage / SeriesDetailPage / SeasonDetailPage / ServerMediaDetailPage / ServerSeasonDetailPage / MediaLibraryTab / PlayHistoryPage
+- [ ] 4.7 真机验证：播放有海报的视频，确认系统媒体中心展示海报缩略图

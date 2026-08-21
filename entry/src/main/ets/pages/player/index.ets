@@ -7,6 +7,8 @@ import {
 } from "../../components/core/player/VideoPlayerController";
 import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
 import { common } from "@kit.AbilityKit";
+import { image } from '@kit.ImageKit';
+import { http } from '@kit.NetworkKit';
 import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
@@ -110,6 +112,17 @@ export interface PlayerPageParam {
    * 影视服务器播放会话 ID（可选）。Jellyfin/Emby 上报进度时关联同一会话。
    */
   serverPlaySessionId?: string;
+  /**
+   * 海报本地路径（可选，如沙箱文件路径）。用于系统媒体中心封面展示，
+   * 播放页会以 file:// URI 形式同步到 AVSession。
+   */
+  posterLocalPath?: string;
+  /** 海报网络 URL（可选，TMDB/影视服务器）。用于系统媒体中心封面展示。 */
+  posterUrl?: string;
+  /** 横版背景图本地路径（可选）。封面优先 backdrop 再降级 poster。 */
+  backdropLocalPath?: string;
+  /** 横版背景图网络 URL（可选）。封面优先 backdrop 再降级 poster。 */
+  backdropUrl?: string;
 }
 
 export interface ResolvedEpisodePlaybackSource {
@@ -234,7 +247,12 @@ export function buildMediaLibraryEpisodeSwitchParam(
     serverType: currentParam.serverType,
     serverItemId: currentParam.serverItemId,
     serverId: currentParam.serverId,
-    serverPlaySessionId: currentParam.serverPlaySessionId
+    serverPlaySessionId: currentParam.serverPlaySessionId,
+    // 透传封面字段，切集后系统媒体中心仍显示海报
+    posterLocalPath: currentParam.posterLocalPath,
+    posterUrl: currentParam.posterUrl,
+    backdropLocalPath: currentParam.backdropLocalPath,
+    backdropUrl: currentParam.backdropUrl
   };
   return nextParam;
 }
@@ -269,7 +287,12 @@ export function buildFileExplorerEpisodeSwitchParam(
     preferredBackend: currentParam.preferredBackend,
     fileSourceType: currentParam.fileSourceType,
     fileSourceId: currentParam.fileSourceId,
-    playbackContext: context
+    playbackContext: context,
+    // 透传封面字段（文件源通常无刮削海报，保持与来源一致）
+    posterLocalPath: currentParam.posterLocalPath,
+    posterUrl: currentParam.posterUrl,
+    backdropLocalPath: currentParam.backdropLocalPath,
+    backdropUrl: currentParam.backdropUrl
   };
   return nextParam;
 }
@@ -284,6 +307,11 @@ export struct PlayerPage {
   private episodeSwitching: boolean = false
   /** 小艺语音 / 智慧屏遥控器 / 系统媒体中心播控会话（生命周期跟随本页） */
   private avSessionService?: AvSessionService
+  /**
+   * 同步到系统媒体中心的封面（PixelMap 或 file:// URI）。
+   * 由当前播放参数解析：本地路径优先，网络 URL 异步下载解码为 PixelMap。
+   */
+  private avMediaImage: image.PixelMap | string | undefined = undefined
   private readonly episodePlaybackManager = new EpisodePlaybackManager()
   @Local isBackPressedOnce: boolean = false
   /** 续播提示弹窗 */
@@ -384,7 +412,8 @@ export struct PlayerPage {
             buffering: this.videoPlayerController.isLoading,
             positionMs: this.videoPlayerController.currentTime,
             durationMs: this.videoPlayerController.duration,
-            speed: this.videoPlayerController.playbackSpeed
+            speed: this.videoPlayerController.playbackSpeed,
+            mediaImage: this.avMediaImage
           };
         },
         syncIntervalMs: 1000
@@ -739,6 +768,74 @@ export struct PlayerPage {
     this.videoPlayerController.playbackContext = pageParam.playbackContext;
     // 新媒体的标题/时长变化后立即刷新系统播控元数据（定时器也会兜底检测）
     this.avSessionService?.refreshMetadata();
+    // 解析新媒体封面（本地 URI / 网络 PixelMap），完成后同步到系统媒体中心
+    this.loadMediaImageForAvSession(pageParam);
+  }
+
+  /**
+   * 解析当前媒体的封面并同步到 AVSession（系统媒体中心展示）。
+   * 优先级：backdrop 本地 → poster 本地 → backdrop 网络 → poster 网络。
+   * 本地路径直接以 file:// URI 上传；网络 URL 异步下载解码为 PixelMap 后再上传。
+   */
+  private loadMediaImageForAvSession(pageParam: PlayerPageParam): void {
+    const local = pageParam.backdropLocalPath ?? pageParam.posterLocalPath ?? '';
+    if (local.length > 0) {
+      const uri = local.startsWith('file://') ? local : 'file://' + local;
+      if (this.avMediaImage !== uri) {
+        this.avMediaImage = uri;
+        this.avSessionService?.refreshMetadata();
+      }
+      return;
+    }
+    const url = pageParam.backdropUrl ?? pageParam.posterUrl ?? '';
+    if (url.length === 0) {
+      if (this.avMediaImage !== undefined) {
+        this.avMediaImage = undefined;
+        this.avSessionService?.refreshMetadata();
+      }
+      return;
+    }
+    // 网络封面：异步下载解码，成功后刷新；失败保持无封面（优雅降级）
+    this.downloadPosterToPixelMap(url).then((pm: image.PixelMap | undefined) => {
+      if (pm !== undefined) {
+        this.avMediaImage = pm;
+        this.avSessionService?.refreshMetadata();
+      }
+    }).catch(() => {});
+  }
+
+  /** 网络图片下载并解码为小尺寸 PixelMap（供系统媒体中心展示） */
+  private async downloadPosterToPixelMap(url: string): Promise<image.PixelMap | undefined> {
+    let req: http.HttpRequest | undefined = undefined;
+    try {
+      req = http.createHttp();
+      const resp = await req.request(url, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
+        connectTimeout: 8000,
+        readTimeout: 8000
+      });
+      if (resp.responseCode !== 200) {
+        return undefined;
+      }
+      const buf = resp.result as ArrayBuffer;
+      if (buf === undefined || buf.byteLength === 0) {
+        return undefined;
+      }
+      const imgSrc = image.createImageSource(buf);
+      const pm = await imgSrc.createPixelMap({
+        desiredSize: { width: 480, height: 270 },
+        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
+      });
+      imgSrc.release();
+      return pm;
+    } catch (e) {
+      return undefined;
+    } finally {
+      if (req !== undefined) {
+        req.destroy();
+      }
+    }
   }
 
   private persistCurrentPlaybackState(): void {

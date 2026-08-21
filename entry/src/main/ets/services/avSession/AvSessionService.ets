@@ -1,6 +1,7 @@
 import { avSession as AVSessionManager } from '@kit.AVSessionKit';
 import { wantAgent, common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { image } from '@kit.ImageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const TAG = '[AvSessionService]';
@@ -22,6 +23,8 @@ export interface AvSessionSyncState {
   positionMs: number;
   durationMs: number;
   speed: number;
+  /** 媒体封面：PixelMap 或本地图片 URI（file://），用于系统媒体中心展示 */
+  mediaImage?: image.PixelMap | string;
 }
 
 export interface AvSessionServiceOptions {
@@ -220,15 +223,30 @@ export class AvSessionService {
     }
   }
 
-  /** 标题/时长变化时才写元数据（setAVMetadata 属于 IPC，需去重） */
+  /** 标题/时长/封面变化时才写元数据（setAVMetadata 属于 IPC，需去重） */
   private syncMetadataIfChanged(force: boolean): void {
     const s = this.options.getState();
-    const key = `${s.title}|${Math.round(s.durationMs)}`;
+    const key = `${s.title}|${Math.round(s.durationMs)}|${this.mediaImageKey(s.mediaImage)}`;
     if (!force && key === this.lastMetadataKey) {
       return;
     }
     this.lastMetadataKey = key;
     this.syncMetadataNow(s);
+  }
+
+  /**
+   * mediaImage 的去重标识：
+   * - string（本地 URI）：直接用字符串
+   * - PixelMap：无法字符串化，用固定标记；宿主在替换封面后调用 refreshMetadata() 强制刷新
+   */
+  private mediaImageKey(mediaImage: image.PixelMap | string | undefined): string {
+    if (mediaImage === undefined) {
+      return '';
+    }
+    if (typeof mediaImage === 'string') {
+      return mediaImage;
+    }
+    return 'pixelmap';
   }
 
   private syncMetadataNow(s: AvSessionSyncState): void {
@@ -241,6 +259,9 @@ export class AvSessionService {
       title: s.title.length > 0 ? s.title : this.options.tag,
       duration: Math.max(0, Math.round(s.durationMs))
     };
+    if (s.mediaImage !== undefined) {
+      metadata.mediaImage = s.mediaImage;
+    }
     session.setAVMetadata(metadata).catch((err: BusinessError) => {
       hilog.warn(DOMAIN, TAG, 'setAVMetadata failed: %{public}s', err.message ?? String(err));
     });

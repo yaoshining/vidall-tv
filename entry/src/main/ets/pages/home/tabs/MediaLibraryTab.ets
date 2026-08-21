@@ -880,7 +880,10 @@ export struct MediaLibraryTab {
         serverType: server.type,
         serverItemId: item.id,
         serverId: server.id,
-        serverPlaySessionId: playSessionId
+        serverPlaySessionId: playSessionId,
+        // 透传封面字段，供系统媒体中心（AVSession）展示海报
+        posterUrl: item.posterUrl.length > 0 ? item.posterUrl : undefined,
+        backdropUrl: item.backdropUrl.length > 0 ? item.backdropUrl : undefined
       }
       // 上报播放开始（会话建立），与退出时的 stopped 共用同一 playSessionId
       reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)

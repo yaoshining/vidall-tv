@@ -162,7 +162,10 @@ export struct ServerMediaDetailPage {
         serverType: server.type,
         serverItemId: target.id,
         serverId: server.id,
-        serverPlaySessionId: playSessionId
+        serverPlaySessionId: playSessionId,
+        // 透传封面字段，供系统媒体中心（AVSession）展示海报
+        posterUrl: target.posterUrl.length > 0 ? target.posterUrl : undefined,
+        backdropUrl: target.backdropUrl.length > 0 ? target.backdropUrl : undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, target.id, playSessionId, target.positionMs, target.durationMs)
         .catch(() => {})
