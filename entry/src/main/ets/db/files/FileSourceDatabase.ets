@@ -295,6 +295,17 @@ export class FileSourceDatabase {
     await this.scrapeInfoDao.clearScrapeInfoForVideo(videoId);
   }
 
+  async clearScrapeInfoByTvSeriesId(tvSeriesId: number): Promise<void> {
+    await this.scrapeInfoDao.clearScrapeInfoByTvSeriesId(tvSeriesId);
+  }
+
+  /** 删除指定电视剧的所有数据（刮削信息、进度、历史记录），用于重新刮削 */
+  async deleteSeriesAllData(tvSeriesId: number, seriesProviderId: string): Promise<void> {
+    await this.scrapeInfoDao.clearScrapeInfoByTvSeriesId(tvSeriesId);
+    await this.playProgressDao.clearPlayProgressBySeries(seriesProviderId);
+    await this.playProgressDao.clearAllMediaProgressBySeries(seriesProviderId);
+  }
+
   // ─────────────────────────────────────────────
   // play_progress / media_progress
   // ─────────────────────────────────────────────
