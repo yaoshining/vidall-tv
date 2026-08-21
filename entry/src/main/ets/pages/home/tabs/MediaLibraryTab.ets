@@ -410,6 +410,11 @@ struct ServerWideCard {
   @Param showProgress: boolean = false
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
+  @Local isFocused: boolean = false
+
+  private isActive(): boolean {
+    return this.isHovered || this.isFocused
+  }
 
   private imageUrl(): string {
     if (this.item.backdropUrl.length > 0) {
@@ -420,7 +425,7 @@ struct ServerWideCard {
 
   build() {
     Column({ space: 4 }) {
-      Stack({ alignContent: Alignment.BottomStart }) {
+      Stack({ alignContent: Alignment.Center }) {
         if (this.imageUrl().length > 0) {
           Image(this.imageUrl())
             .width(SERVER_WIDE_WIDTH)
@@ -435,6 +440,27 @@ struct ServerWideCard {
           .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
+        Column()
+          .width(SERVER_WIDE_WIDTH)
+          .height('100%')
+          .backgroundColor(this.isActive() ? 'rgba(0,0,0,0.48)' : '#00000000')
+          .animation({ duration: 160, curve: Curve.EaseOut })
+          .hitTestBehavior(HitTestMode.Transparent)
+        if (this.isActive()) {
+          Column() {
+            SymbolGlyph($r('sys.symbol.play_fill'))
+              .fontColor([Color.White])
+              .fontSize(30)
+          }
+          .width(60).height(60)
+          .backgroundColor('rgba(20,20,20,0.74)')
+          .borderRadius(30)
+          .border({ width: 1, color: 'rgba(255,255,255,0.24)' })
+          .shadow({ radius: 16, color: 'rgba(0,0,0,0.42)' })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .hitTestBehavior(HitTestMode.Transparent)
+        }
         if (this.showProgress && this.item.progress > 0) {
           Stack({ alignContent: Alignment.Start }) {
             Column().width(SERVER_WIDE_WIDTH).height(4).backgroundColor('rgba(0,0,0,0.6)')
@@ -445,8 +471,11 @@ struct ServerWideCard {
       }
       .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
       .borderRadius(6).clip(true)
-      .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+      .border({ width: 2, color: this.isActive() ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
       .onHover((isHover: boolean) => { this.isHovered = isHover })
+      .focusable(true)
+      .onFocus(() => { this.isFocused = true })
+      .onBlur(() => { this.isFocused = false })
 
       Text(this.item.title)
         .fontSize(15).fontColor('#DDDDDD').maxLines(1)
@@ -469,10 +498,15 @@ struct ServerPosterCard {
   @Require @Param item: VideoServerMediaItem
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
+  @Local isFocused: boolean = false
+
+  private isActive(): boolean {
+    return this.isHovered || this.isFocused
+  }
 
   build() {
     Column({ space: 4 }) {
-      Stack({ alignContent: Alignment.TopStart }) {
+      Stack({ alignContent: Alignment.Center }) {
         if (this.item.posterUrl.length > 0) {
           Image(this.item.posterUrl)
             .width(SERVER_POSTER_WIDTH)
@@ -487,11 +521,35 @@ struct ServerPosterCard {
           .width(SERVER_POSTER_WIDTH).aspectRatio(SERVER_POSTER_ASPECT)
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
+        Column()
+          .width(SERVER_POSTER_WIDTH)
+          .height('100%')
+          .backgroundColor(this.isActive() ? 'rgba(0,0,0,0.48)' : '#00000000')
+          .animation({ duration: 160, curve: Curve.EaseOut })
+          .hitTestBehavior(HitTestMode.Transparent)
+        if (this.isActive()) {
+          Column() {
+            SymbolGlyph($r('sys.symbol.play_fill'))
+              .fontColor([Color.White])
+              .fontSize(28)
+          }
+          .width(56).height(56)
+          .backgroundColor('rgba(20,20,20,0.74)')
+          .borderRadius(28)
+          .border({ width: 1, color: 'rgba(255,255,255,0.24)' })
+          .shadow({ radius: 16, color: 'rgba(0,0,0,0.42)' })
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .hitTestBehavior(HitTestMode.Transparent)
+        }
       }
       .width(SERVER_POSTER_WIDTH).aspectRatio(SERVER_POSTER_ASPECT)
       .borderRadius(6).clip(true)
-      .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+      .border({ width: 2, color: this.isActive() ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
       .onHover((isHover: boolean) => { this.isHovered = isHover })
+      .focusable(true)
+      .onFocus(() => { this.isFocused = true })
+      .onBlur(() => { this.isFocused = false })
 
       Text(this.item.title)
         .fontSize(15).fontColor('#DDDDDD').maxLines(1)
