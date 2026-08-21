@@ -119,6 +119,43 @@ const SEASON_DIRECTORY_PATTERNS: RegExp[] = [
   /^season\s+\d+/i
 ];
 
+/**
+ * 中文季号后缀模式：匹配目录名末尾的"第X季"/"第X部"等
+ * 支持：第二季、第二部、第2季、第2部
+ * 不匹配纯数字季号（如 "2"），仅匹配中文"第...季/部"格式
+ */
+const CHINESE_SEASON_SUFFIX_PATTERN = /第\s*([\d一二三四五六七八九十百]+)\s*[季部]$/;
+
+/** 中文数字到阿拉伯数字的映射 */
+const CHINESE_DIGIT_MAP: Record<string, number> = {
+  '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+  '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+  '十一': 11, '十二': 12, '十三': 13, '十四': 14, '十五': 15,
+  '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20
+};
+
+function parseChineseSeasonNumber(text: string): number | undefined {
+  const trimmed = text.trim();
+  // 阿拉伯数字
+  const arabicMatch = trimmed.match(/^\d+$/);
+  if (arabicMatch) {
+    return parseInt(arabicMatch[0]);
+  }
+  // 中文数字
+  const mapped = CHINESE_DIGIT_MAP[trimmed];
+  if (mapped !== undefined) {
+    return mapped;
+  }
+  // 复合中文数字如 "二十一" 等（10-99 范围）
+  const tenMatch = trimmed.match(/^(二)?十([一二三四五六七八九])?$/);
+  if (tenMatch) {
+    const tens = tenMatch[1] ? 20 : 10;
+    const ones = tenMatch[2] ? (CHINESE_DIGIT_MAP[tenMatch[2]] ?? 0) : 0;
+    return tens + ones;
+  }
+  return undefined;
+}
+
 function normalizePathSegments(filePath: string): string[] {
   const normalizedPath = filePath.replace(/\\/g, '/');
   return normalizedPath.split('/').filter((segment: string) => segment.length > 0);
@@ -220,7 +257,74 @@ function hasStrongMovieSignal(fileNameInfo?: FileNameSemanticInfo): boolean {
 export function isSeasonDirectorySegment(segment: string): boolean {
   const normalizedSegment = normalizeSemanticToken(segment);
   return SEASON_DIRECTORY_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedSegment)) ||
-    /^第\s*[\d一二三四五六七八九十百]+\s*季/.test(segment);
+    /^第\s*[\d一二三四五六七八九十百]+\s*季/.test(segment) ||
+    CHINESE_SEASON_SUFFIX_PATTERN.test(segment);
+}
+
+/**
+ * 从目录名中提取季号
+ *
+ * 支持格式：
+ * - "御赐小仵作第二季" → 2
+ * - "庆余年第二部" → 2
+ * - "Season 2" → 2
+ * - "第二季" → 2
+ * - "S02" → 2
+ * - "御赐小仵作" → undefined（无季号信息）
+ *
+ * @param directoryName 目录名
+ * @returns 季号，无法提取时返回 undefined
+ */
+export function extractSeasonNumberFromDirectoryName(directoryName: string): number | undefined {
+  // 1. 中文季号后缀（如"御赐小仵作第二季"）
+  const chineseMatch = directoryName.match(CHINESE_SEASON_SUFFIX_PATTERN);
+  if (chineseMatch) {
+    return parseChineseSeasonNumber(chineseMatch[1]);
+  }
+
+  // 2. 纯中文季号前缀（如"第二季"）
+  const pureChineseMatch = directoryName.match(/^第\s*([\d一二三四五六七八九十百]+)\s*季/);
+  if (pureChineseMatch) {
+    return parseChineseSeasonNumber(pureChineseMatch[1]);
+  }
+
+  // 3. Season N 格式
+  const seasonNorm = normalizeSemanticToken(directoryName);
+  const seasonMatch = seasonNorm.match(/season\s+(\d+)/i);
+  if (seasonMatch) {
+    return parseInt(seasonMatch[1]);
+  }
+
+  // 4. Sxx 格式（目录名整体匹配）
+  const sMatch = seasonNorm.match(/^s(\d{1,2})$/i);
+  if (sMatch) {
+    return parseInt(sMatch[1]);
+  }
+
+  return undefined;
+}
+
+/**
+ * 从"剧名+季号后缀"的目录名中去除季号后缀，提取纯剧名
+ *
+ * 支持：
+ * - "御赐小仵作第二季" → "御赐小仵作"
+ * - "庆余年第二部" → "庆余年"
+ * - "我的剧第3季" → "我的剧"
+ * - "Season 2" → undefined（纯季目录，无剧名部分）
+ * - "御赐小仵作" → undefined（无季号后缀）
+ *
+ * @param directoryName 目录名
+ * @returns 纯剧名，如果无法提取则返回 undefined
+ */
+export function stripSeasonSuffixFromDirectoryName(directoryName: string): string | undefined {
+  const match = directoryName.match(CHINESE_SEASON_SUFFIX_PATTERN);
+  if (!match) {
+    return undefined;
+  }
+  const suffixStart = match.index ?? 0;
+  const stripped = directoryName.substring(0, suffixStart).trim();
+  return stripped.length > 0 ? stripped : undefined;
 }
 
 function isGenericTvSemanticSegment(segment: string): boolean {
@@ -302,6 +406,12 @@ export function extractSeriesHintFromFilePath(filePath: string): string | undefi
       continue;
     }
     if (isSeasonDirectorySegment(segment)) {
+      // 纯季目录（如"Season 2"、"第二季"），跳过
+      // 但如果是"剧名+季号后缀"（如"御赐小仵作第二季"），提取剧名部分
+      const stripped = stripSeasonSuffixFromDirectoryName(segment);
+      if (stripped !== undefined) {
+        return stripped;
+      }
       continue;
     }
     if (isGenericTvSemanticSegment(segment)) {

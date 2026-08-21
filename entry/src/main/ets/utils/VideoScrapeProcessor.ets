@@ -1,9 +1,19 @@
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
 import { ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../db/models/MediaEntity';
-import { extractSeriesHintFromFilePath, formatMediaTypeClassificationSignals } from '../lib/MediaTypeClassifier';
+import { extractSeriesHintFromFilePath, formatMediaTypeClassificationSignals, extractSeasonNumberFromDirectoryName } from '../lib/MediaTypeClassifier';
 import { VideoFileInfo, VideoScrapeContext, ScanMode } from './VideoScannerTypes';
 import { classifyVideoScrapeTarget, hasCompleteScrapeAssociation, extractEpisodeNumberFromWeakSemanticFileName, clearStaleScrapeAssociationsForOverwrite } from './VideoScannerHelpers';
+
+function extractParentDirectoryName(filePath: string): string | undefined {
+  const normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+$/g, '');
+  const segments = normalizedPath.split('/').filter((segment: string) => segment.length > 0);
+  // segments[last] = 文件名, segments[last-1] = 父目录名
+  if (segments.length < 2) {
+    return undefined;
+  }
+  return segments[segments.length - 2];
+}
 
 /**
  * 对单个视频执行「分类 → 刮削 → 入库 → 写 scrape_info」。
@@ -176,12 +186,19 @@ export async function processVideoScrape(
     }
   } else {
     try {
-      // 只有无法解析标准季集标记时，才将弱语义集数按第一季兜底。
+      // 只有无法解析标准季集标记时，才将弱语义集数按季号兜底。
       const parsedFileName = parseFileName(fileName);
       const explicitEpisodeNum = parsedFileName.episodeNumber === undefined
         ? extractEpisodeNumberFromWeakSemanticFileName(fileName)
         : undefined;
-      const explicitSeasonNum = explicitEpisodeNum !== undefined ? 1 : undefined;
+      // 从文件路径的父目录名提取季号（如"御赐小仵作第二季"→2），无目录季号时回退到1
+      const parentDirName = extractParentDirectoryName(info.filePath);
+      const directorySeasonNum = parentDirName !== undefined
+        ? extractSeasonNumberFromDirectoryName(parentDirName)
+        : undefined;
+      const explicitSeasonNum = explicitEpisodeNum !== undefined
+        ? (directorySeasonNum ?? 1)
+        : undefined;
       const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
       if (!result.series) {
         await clearStaleScrapeAssociationsForOverwrite(
