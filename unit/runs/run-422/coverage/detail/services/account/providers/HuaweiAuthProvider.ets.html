@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { loginComponentManager } from &#39;@kit.AccountKit&#39;; 
+import { BusinessError } from &#39;@kit.BasicServicesKit&#39;; 
+import buffer from &#39;@ohos.buffer&#39;; 
+import { AuthProvider, PlatformIdentity } from &#39;../AuthProvider&#39;; 
+ 
+/** 
+ * idToken（JWT）payload 中关注的 claims 
+ */ 
+interface IdTokenClaims { 
+  name: string; 
+  picture: string; 
+} 
+ 
+/** 
+ * 华为账号认证 provider（首发实现） 
+ * 
+ * 使用系统组件 `LoginWithHuaweiIDButton` 拉起授权： 
+ * - UI 调用 `getController()` 取 controller 渲染按钮 
+ * - `login()` 在 controller 上注册 `onClickLoginWithHuaweiIDButton` 回调并封装为 Promise 
+ * - 用户点击按钮 → 华为授权页 → 回调拿到 `HuaweiIDCredential`（含 unionID） 
+ * - 从 unionID 作为 platformUserId；idToken 尝试解码取 name/picture，无则空字符串 
+ * 
+ * 华为侧无显式 signOut API，`signOut()` 为空实现；本地态清理由 AccountService 负责。 
+ */ 
+export class HuaweiAuthProvider implements AuthProvider { 
+  readonly providerId: string = &#39;huawei&#39;; 
+  readonly displayName: string = &#39;华为账号&#39;; 
+  private controller: loginComponentManager.LoginWithHuaweiIDButtonController = 
+    new loginComponentManager.LoginWithHuaweiIDButtonController(); 
+ 
+  login(): Promise&lt;PlatformIdentity&gt; { 
+    return new Promise&lt;PlatformIdentity&gt;((resolve, reject) =&gt; { 
+      this.controller.onClickLoginWithHuaweiIDButton( 
+        (err: BusinessError, data: loginComponentManager.HuaweiIDCredential) =&gt; { 
+          if (err &amp;&amp; err.code !== 0) { 
+            reject(err); 
+            return; 
+          } 
+          if (data) { 
+            resolve(this.buildIdentity(data)); 
+            return; 
+          } 
+          reject(new Error(&#39;华为登录返回空结果&#39;)); 
+        } 
+      ); 
+    }); 
+  } 
+ 
+  async signOut(): Promise&lt;void&gt; { 
+    // 华为侧无显式 signOut API；不调用 CancelAuthorizationRequest（保留给未来「解绑授权」功能） 
+  } 
+ 
+  /** 供 UI 渲染 `LoginWithHuaweiIDButton` 时传入的 controller */ 
+  getController(): loginComponentManager.LoginWithHuaweiIDButtonController { 
+    return this.controller; 
+  } 
+ 
+  private buildIdentity(cred: loginComponentManager.HuaweiIDCredential): PlatformIdentity { 
+    const raw: Map&lt;string, string&gt; = new Map&lt;string, string&gt;(); 
+    raw.set(&#39;authorizationCode&#39;, cred.authorizationCode); 
+    const idToken: string | undefined = cred.idToken; 
+    if (idToken !== undefined &amp;&amp; idToken.length &gt; 0) { 
+      raw.set(&#39;idToken&#39;, idToken); 
+    } 
+    const claims: IdTokenClaims = this.decodeIdTokenClaims(idToken); 
+    const identity: PlatformIdentity = { 
+      platformUserId: cred.unionID, 
+      openID: cred.openID, 
+      displayName: claims.name, 
+      avatarUri: claims.picture, 
+      raw 
+    }; 
+    return identity; 
+  } 
+ 
+  private decodeIdTokenClaims(idToken: string | undefined): IdTokenClaims { 
+    const empty: IdTokenClaims = { name: &#39;&#39;, picture: &#39;&#39; }; 
+    if (!idToken || idToken.length === 0) { 
+      return empty; 
+    } 
+    try { 
+      const parts: string[] = idToken.split(&#39;.&#39;); 
+      if (parts.length &lt; 2) { 
+        return empty; 
+      } 
+      const payloadB64: string = parts[1]; 
+      // base64url → base64 
+      const b64: string = payloadB64.replace(/-/g, &#39;+&#39;).replace(/_/g, &#39;/&#39;); 
+      const padLen: number = (4 - b64.length % 4) % 4; 
+      const padded: string = b64 + &#39;=&#39;.repeat(padLen); 
+      const json: string = buffer.from(padded, &#39;base64&#39;).toString(&#39;utf-8&#39;); 
+      const claims = JSON.parse(json) as Record&lt;string, string&gt;; 
+      const result: IdTokenClaims = { 
+        name: claims[&#39;name&#39;] || &#39;&#39;, 
+        picture: claims[&#39;picture&#39;] || &#39;&#39; 
+      }; 
+      return result; 
+    } catch { 
+      return empty; 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sat Aug 22 2026 17:49:30 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/account/providers/HuaweiAuthProvider.ets","hash":"2274f7f8c5c3c83d0990fb811a05043e12be344531c8d9fc1ae6073e38faddb5","lineCnt":103,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"HuaweiAuthProvider.login","count":0,"regions":[{"startLoc":{"line":31,"col":3},"endLoc":{"line":47,"col":4},"count":0,"ignored":0},{"startLoc":{"line":32,"col":5},"endLoc":{"line":47,"col":4},"count":0,"ignored":0},{"startLoc":{"line":43,"col":11},"endLoc":{"line":44,"col":10},"count":0,"ignored":0},{"startLoc":{"line":37,"col":13},"endLoc":{"line":38,"col":12},"count":0,"ignored":0},{"startLoc":{"line":41,"col":13},"endLoc":{"line":42,"col":12},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":32,"col":42},"endLoc":{"line":46,"col":6},"count":0,"ignored":0},{"startLoc":{"line":33,"col":7},"endLoc":{"line":46,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":34,"col":9},"endLoc":{"line":44,"col":10},"count":0,"ignored":0},{"startLoc":{"line":35,"col":38},"endLoc":{"line":38,"col":12},"count":0,"ignored":0},{"startLoc":{"line":39,"col":21},"endLoc":{"line":42,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":35,"col":15},"endLoc":{"line":35,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":39,"col":15},"endLoc":{"line":39,"col":19},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"HuaweiAuthProvider.signOut","count":0,"regions":[{"startLoc":{"line":49,"col":3},"endLoc":{"line":51,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"HuaweiAuthProvider.getController","count":0,"regions":[{"startLoc":{"line":54,"col":3},"endLoc":{"line":56,"col":4},"count":0,"ignored":0},{"startLoc":{"line":55,"col":5},"endLoc":{"line":56,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"HuaweiAuthProvider.buildIdentity","count":0,"regions":[{"startLoc":{"line":58,"col":3},"endLoc":{"line":74,"col":4},"count":0,"ignored":0},{"startLoc":{"line":65,"col":5},"endLoc":{"line":74,"col":4},"count":0,"ignored":0},{"startLoc":{"line":62,"col":54},"endLoc":{"line":64,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":62,"col":9},"endLoc":{"line":62,"col":52},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"HuaweiAuthProvider.decodeIdTokenClaims","count":0,"regions":[{"startLoc":{"line":76,"col":3},"endLoc":{"line":101,"col":4},"count":0,"ignored":0},{"startLoc":{"line":81,"col":9},"endLoc":{"line":98,"col":6},"count":0,"ignored":0},{"startLoc":{"line":86,"col":7},"endLoc":{"line":98,"col":6},"count":0,"ignored":0},{"startLoc":{"line":78,"col":43},"endLoc":{"line":80,"col":6},"count":0,"ignored":0},{"startLoc":{"line":98,"col":7},"endLoc":{"line":100,"col":6},"count":0,"ignored":0},{"startLoc":{"line":83,"col":29},"endLoc":{"line":85,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":78,"col":9},"endLoc":{"line":78,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":83,"col":11},"endLoc":{"line":83,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":6}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":9,"5":10,"6":11,"7":25,"8":26,"9":27,"10":28,"11":29,"12":31,"13":32,"14":33,"15":34,"16":35,"17":36,"18":37,"19":39,"20":40,"21":41,"22":43,"23":49,"24":54,"25":55,"26":58,"27":59,"28":60,"29":61,"30":62,"31":63,"32":65,"33":66,"34":67,"35":68,"36":69,"37":70,"38":71,"39":73,"40":76,"41":77,"42":78,"43":79,"44":81,"45":82,"46":83,"47":84,"48":86,"49":88,"50":89,"51":90,"52":91,"53":92,"54":93,"55":94,"56":95,"57":97,"58":98,"59":99},"summary":{"lines":{"total":48,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,0,0,0,-1,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1]},"functions":{"total":7,"covered":0,"pct":0},"branches":{"total":10,"covered":0,"pct":0}}},"title":"HuaweiAuthProvider.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
