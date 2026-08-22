@@ -45,6 +45,7 @@ import {
   findInitialAudioTrackIndex as serviceFindInitialAudioTrackIndex
 } from "../../../services/audioRouting/AudioTrackRoutingService";
 import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioRoutingTypes";
+import { audioDecoderCapabilityService } from "../../../services/audioCapability/AudioDecoderCapabilityService";
 import { PlaybackState } from "./PlaybackState";
 import { ReloadSession } from "./ReloadSession";
 import {
@@ -229,6 +230,8 @@ export interface AudioTrackItem {
   mimeType?: string;
   /** 编解码器名称，如 "aac"、"eac3"、"ac3"，供 codec-aware 选轨使用 */
   codecName?: string;
+  /** 声道数（预置/ffprobe 注入；运行时轨道可能缺失） */
+  channels?: number;
 }
 
 export type UnsupportedFormatFallback = 'mpv';
@@ -327,6 +330,8 @@ export class VideoPlayerController {
   private readonly subtitleSessionSvc: SubtitleSessionService = new SubtitleSessionService();
   /** 音轨路由 service（codec 探测 + 初始选轨 + 用户绑定恢复）。 */
   private readonly audioRoutingService: AudioTrackRoutingService = audioTrackRoutingService;
+  /** 最近一次路由决策（供初始选轨与纠偏记录使用）。 */
+  private lastRoutingDecision?: AudioRoutingDecision;
   /** 10s 防抖进度写入定时器 */
   private progressTimer?: number;
   /** 播放会话编号：每次 initPlayer 自增，用于忽略旧实例回调 */
@@ -671,6 +676,7 @@ export class VideoPlayerController {
     videoData.videoHdrType = decision.videoHdrType;
     videoData.videoWidth = decision.videoWidth;
     videoData.videoHeight = decision.videoHeight;
+    this.lastRoutingDecision = decision;
     if (this.forceMpvForNextInit) {
       this.backend = 'mpv';
       this.forceMpvForNextInit = false;
@@ -689,6 +695,7 @@ export class VideoPlayerController {
       `[initPlayer.route-decision] backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
       `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
       `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}, ` +
+      `recommendedTrack=${decision.recommendedInitialTrackIndex}(${decision.recommendedCodec || '无'}), ` +
       `videoHdrType=${decision.videoHdrType.length > 0 ? decision.videoHdrType : '未知'}, ` +
       `videoSize=${decision.videoWidth ?? '?'}x${decision.videoHeight ?? '?'}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
@@ -697,8 +704,11 @@ export class VideoPlayerController {
       const t = decision.trackAnalyses[i];
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         `[initPlayer.route-decision]   [${i}] codec=${t.codec} channels=${t.channels} ` +
+        `compatible=${t.compatible} capabilitySource=${t.capabilitySource} isHardware=${t.isHardware} ` +
         `hardSupported=${t.hardSupported} source=${t.source}`);
     }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+      `[initPlayer.route-decision] capabilitySummary=${decision.capabilitySummary}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `自动音频路由: backend=${this.backend}, fallback=${this.unsupportedFormatFallback}, ` +
       `ffmpegChannels=${videoData.ffmpegDecodeChannels}, summary=${decision.summary}`);
@@ -748,7 +758,8 @@ export class VideoPlayerController {
           displayName: p.displayName,
           language: p.language,
           mimeType: p.mimeType,
-          codecName: p.codecName
+          codecName: p.codecName,
+          channels: p.channels
         };
         tracks.push(item);
       }
@@ -970,6 +981,8 @@ export class VideoPlayerController {
           }
         }).catch(() => {});
       }
+      // 记录设备/固件纠偏：系统宣称支持但 AVPlayer 实际不支持。
+      this.recordCurrentCodecCorrection('avplayer_unsupported_format');
       this.fallbackAvPlayerToMpv('avplayer_unsupported_format');
     });
     p.onSeekDone(() => {
@@ -1483,7 +1496,9 @@ export class VideoPlayerController {
       `anyHardSupported=${decision.anyHardSupported}, allSoftDecodeOnly=${decision.allSoftDecodeOnly}, ` +
       `anyPlayable=${decision.anyPlayable}, anyUnplayable=${decision.anyUnplayable}, ` +
       `route=${decision.preferredBackend}, fallback=${decision.fallback}, ` +
+      `recommendedTrack=${decision.recommendedInitialTrackIndex}, ` +
       `decodePlan=${currentDecodePlan}; ` +
+      `capability=${decision.capabilitySummary}; ` +
       `systemHardPreferred=[${SYSTEM_HARD_PREFERRED_CODECS.join(', ')}]; ` +
       `systemSoftFallback=[${SYSTEM_SOFT_FALLBACK_CODECS.join(', ')}]; ` +
       `channelHints=[${SUPPORTED_CHANNEL_LAYOUT_HINTS.join(', ')}]`;
@@ -1724,6 +1739,24 @@ export class VideoPlayerController {
       await this.play();
     } else {
       this.recordPendingResumeAutoplayResult('paused', true);
+    }
+  }
+
+  /**
+   * 记录当前失败 codec 的设备/固件纠偏结果。
+   * 优先取当前激活音轨的 codec，其次取路由决策的 detectedCodec。
+   */
+  private recordCurrentCodecCorrection(reason: string): void {
+    let codec = '';
+    if (this.activeAudioIndex >= 0 && this.activeAudioIndex < this.audioTracks.length) {
+      const track = this.audioTracks[this.activeAudioIndex];
+      codec = (track.codecName ?? track.mimeType) ?? '';
+    }
+    if (codec.length === 0 && this.lastRoutingDecision !== undefined) {
+      codec = this.lastRoutingDecision.detectedCodec;
+    }
+    if (codec.length > 0 && codec !== 'unknown') {
+      audioDecoderCapabilityService.recordCorrection(codec, reason);
     }
   }
 

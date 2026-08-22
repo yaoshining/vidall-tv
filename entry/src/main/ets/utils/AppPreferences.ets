@@ -46,6 +46,8 @@ export class PrefKey {
   static readonly AUDIO_BINDING_PREFIX = 'audio_binding';
   /** 媒体库当前数据源（JSON 序列化的 ActiveMediaSource） */
   static readonly ACTIVE_MEDIA_SOURCE = 'active_media_source';
+  /** 音频解码能力设备/固件纠偏（JSON 序列化的 AudioCorrectionEntry[]） */
+  static readonly AUDIO_CAPABILITY_CORRECTIONS = 'audio_capability_corrections';
 }
 
 // ─────────────────────────────────────────────

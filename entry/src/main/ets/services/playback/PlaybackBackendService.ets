@@ -128,7 +128,10 @@ export class PlaybackBackendService {
         videoHdrType: decision.videoHdrType,
         videoWidth: decision.videoWidth,
         videoHeight: decision.videoHeight,
-        trackAnalyses: decision.trackAnalyses
+        trackAnalyses: decision.trackAnalyses,
+        recommendedInitialTrackIndex: decision.recommendedInitialTrackIndex,
+        recommendedCodec: decision.recommendedCodec,
+        capabilitySummary: decision.capabilitySummary
       };
     } catch (e) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,

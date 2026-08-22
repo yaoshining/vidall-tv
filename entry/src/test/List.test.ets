@@ -54,6 +54,9 @@ import subtitleRelevanceFilterTest from './ets/services/subtitleAcquisition/Subt
 import sourceSwitchModelTest from './SourceSwitchModel.test';
 import videoServerLabelsTest from './VideoServerLabels.test';
 import videoServerDaoTest from './VideoServerDao.test';
+import audioCodecUtilTest from './AudioCodecUtil.test';
+import audioDecoderCapabilityServiceTest from './AudioDecoderCapabilityService.test';
+import audioTrackRoutingTest from './AudioTrackRouting.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -110,4 +113,7 @@ export default function testsuite() {
   sourceSwitchModelTest();
   videoServerLabelsTest();
   videoServerDaoTest();
+  audioCodecUtilTest();
+  audioDecoderCapabilityServiceTest();
+  audioTrackRoutingTest();
 }
