@@ -1,10 +1,45 @@
 import { describe, it, expect } from '@ohos/hypium';
+import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
+import { Context } from '@ohos.abilityAccessCtrl';
 import { AudioDecoderCapabilityService } from '../main/ets/services/audioCapability/AudioDecoderCapabilityService';
 import {
   AudioDecoderCapability,
   CapabilityProvider,
   DeviceInfoProvider
 } from '../main/ets/services/audioCapability/AudioCapabilityTypes';
+import {
+  AppPreferences,
+  AppPreferencesLoader,
+  AppPreferencesStore,
+  AppPreferenceValue
+} from '../main/ets/utils/AppPreferences';
+
+/** 内存版 AppPreferences store（用于纠偏持久化跨实例复用测试）。 */
+class InMemoryAppPreferencesStore implements AppPreferencesStore {
+  private readonly values: Map<string, AppPreferenceValue> = new Map<string, AppPreferenceValue>();
+
+  async get(key: string, defaultValue: AppPreferenceValue): Promise<AppPreferenceValue> {
+    const value = this.values.get(key);
+    return value === undefined ? defaultValue : value;
+  }
+
+  async put(key: string, value: AppPreferenceValue): Promise<void> {
+    this.values.set(key, value);
+  }
+
+  async flush(): Promise<void> {
+  }
+}
+
+async function installMemoryPreferencesLoader(): Promise<AppPreferencesStore> {
+  AppPreferences.resetForTesting();
+  const store = new InMemoryAppPreferencesStore();
+  const loader: AppPreferencesLoader = async (_context, _storeName): Promise<AppPreferencesStore> => store;
+  AppPreferences.setStoreLoaderForTesting(loader);
+  const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
+  await AppPreferences.init(ctx);
+  return store;
+}
 
 function makeCapability(
   supported: boolean,
@@ -126,13 +161,13 @@ export default function audioDecoderCapabilityServiceTest() {
       expect(r.source).assertEqual('unknown');
     });
 
-    it('能力查询异常时硬解友好 codec 迁移兜底假定兼容', 0, () => {
+    it('能力查询异常时硬解友好 codec 也保守判不兼容（不做兼容假设）', 0, () => {
       const svc = new AudioDecoderCapabilityService();
       svc.setCapabilityProviderForTesting(makeThrowingProvider());
       svc.setDeviceInfoProviderForTesting(makeDeviceInfo('model-A', 'os-1'));
       const r = svc.resolveTrackCompatibility('aac', 2);
-      expect(r.compatible).assertTrue();
-      expect(r.source).assertEqual('migration-blacklist');
+      expect(r.compatible).assertFalse();
+      expect(r.source).assertEqual('unknown');
     });
 
     it('纠偏结果优先于系统声明能力', 0, () => {
@@ -145,6 +180,35 @@ export default function audioDecoderCapabilityServiceTest() {
       const r = svc.resolveTrackCompatibility('eac3', 2);
       expect(r.compatible).assertFalse();
       expect(r.source).assertEqual('correction');
+    });
+
+    it('纠偏结果持久化后可由新实例 ensureLoaded 复用', 0, async () => {
+      await installMemoryPreferencesLoader();
+      try {
+        const svc1 = new AudioDecoderCapabilityService();
+        svc1.setCapabilityProviderForTesting(makeCountingProvider({
+          'eac3': makeCapability(true, 6, false)
+        }).provider);
+        svc1.setDeviceInfoProviderForTesting(makeDeviceInfo('model-A', 'os-1'));
+        svc1.recordCorrection('eac3', 'avplayer_unsupported_format');
+        // 等待异步持久化（persistCorrections 为 fire-and-forget）完成
+        await new Promise<void>((resolve) => {
+          setTimeout(() => { resolve(); }, 100);
+        });
+        // 新实例：ensureLoaded 后应从持久化存储恢复纠偏
+        const svc2 = new AudioDecoderCapabilityService();
+        svc2.setCapabilityProviderForTesting(makeCountingProvider({
+          'eac3': makeCapability(true, 6, false)
+        }).provider);
+        svc2.setDeviceInfoProviderForTesting(makeDeviceInfo('model-A', 'os-1'));
+        await svc2.ensureLoaded();
+        const r = svc2.resolveTrackCompatibility('eac3', 2);
+        expect(r.compatible).assertFalse();
+        expect(r.source).assertEqual('correction');
+      } finally {
+        AppPreferences.setStoreLoaderForTesting(null);
+        AppPreferences.resetForTesting();
+      }
     });
   });
 }

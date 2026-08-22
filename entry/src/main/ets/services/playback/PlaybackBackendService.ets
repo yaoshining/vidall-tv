@@ -99,11 +99,11 @@ export class PlaybackBackendService {
    * 本方法内部委托 `AudioTrackRoutingService.resolveRoutingDecision` 计算整组音轨分析，
    * 并把结果包装为 `PlaybackBackendDecision` 暴露给 controller。
    *
-   * 行为：
+   * 行为（基于设备真实解码能力，Issue #243）：
    * - 探测 ffprobe 失败时降级 preset hint
-   * - 整组音轨存在至少一条稳态可硬解轨道 → preferredBackend=avplayer（让 avplayer 尝试，
-   *   由 `loadAudioTracks` 阶段的 `resolveInitialTrackIndex` 选中最优可硬解轨）
-   * - 整组音轨全部应软解 → preferredBackend=avplayer + fallback=mpv
+   * - 整组音轨存在至少一条设备能力兼容轨道 → preferredBackend=avplayer（由
+   *   `loadAudioTracks` 阶段的 `resolveInitialTrackIndex` 选中兼容性最优轨）
+   * - 存在音轨但没有任何兼容轨道（已知不支持或能力未知）→ preferredBackend=mpv（直接，不先 prepare AVPlayer）
    * - 探测完全失败且无任何音轨提示 → 仍先尝试 AVPlayer，再按不支持格式回退
    */
   async chooseBackend(videoData: VideoData): Promise<PlaybackBackendDecision> {

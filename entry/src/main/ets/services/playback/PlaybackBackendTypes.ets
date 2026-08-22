@@ -15,6 +15,7 @@
 import type { VideoData } from "../../components/core/player/VideoData";
 import type { IPlayer } from "../../components/core/player/IPlayer";
 import type { ISubtitleBridgeAdapter } from "../../components/core/player/SubtitleBridgeAdapter";
+import type { AudioCapabilitySource } from "../audioCapability/AudioCapabilityTypes";
 
 /** 播放内核类型（service 内部命名，controller 已有同名类型，alias 复用）。 */
 export type ServicePlayerBackend = 'avplayer' | 'mpv';
@@ -58,8 +59,8 @@ export interface BackendTrackAnalysis {
   maxChannels: number;
   /** 是否为硬件解码。 */
   isHardware: boolean;
-  /** 兼容性结论来源。 */
-  capabilitySource: string;
+  /** 兼容性结论来源（与 AudioRoutingTypes.AudioCapabilitySource 保持一致）。 */
+  capabilitySource: AudioCapabilitySource;
 }
 
 export interface PlaybackBackendDecision {
@@ -95,30 +96,6 @@ export interface PlaybackBackendDecision {
   /** 能力判定摘要（来源/缓存/纠偏，供日志与 UI）。 */
   capabilitySummary: string;
 }
-
-/** 默认后端决策（探测未启动时使用）。 */
-export const DEFAULT_BACKEND_DECISION: PlaybackBackendDecision = {
-  preferredBackend: 'avplayer',
-  fallback: 'mpv',
-  preferredChannels: 2,
-  summary: 'default: 未探测到音轨细节',
-  detectedCodec: 'unknown',
-  detectedChannels: 2,
-  anyHardSupported: true,
-  allSoftDecodeOnly: false,
-  anyPlayable: true,
-  anyUnplayable: false,
-  precheckProbeFailed: false,
-  precheckProbeError: '',
-  videoCodecName: '',
-  videoHdrType: '',
-  videoWidth: undefined,
-  videoHeight: undefined,
-  trackAnalyses: [],
-  recommendedInitialTrackIndex: -1,
-  recommendedCodec: '',
-  capabilitySummary: 'default: 未查询设备解码能力'
-};
 
 /** 字幕桥接 adapter 类型（service 内部命名以避免与 controller 现有类型冲突）。 */
 export type SubtitleBridgeKind = 'none' | 'av' | 'mpv' | 'smb-av';

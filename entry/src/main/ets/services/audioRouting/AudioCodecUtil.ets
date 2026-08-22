@@ -21,8 +21,8 @@ export const SOFT_ONLY_KEYWORDS: string[] = [
  * 有真实设备能力时，应由 `AudioDecoderCapabilityService` 提供兼容性判定。
  *
  * 1 = 系统稳态可硬解（HARD_PREFERRED）
- * 2 = 软解但常见（AC-3 / EAC-3 / DTS）
- * 3 = 软解且罕见（TrueHD / MLP / Audio Vivid）
+ * 2 = 软解但常见（AC-3 / EAC-3）
+ * 3 = 软解且罕见（DTS / TrueHD / MLP / Audio Vivid）
  * 4 = 未知 codec
  */
 export function codecCompatibilityRank(codec: string): number {
@@ -101,6 +101,12 @@ export function normalizeAudioCodec(rawCodec: string): string {
   const codec = rawCodec.toLowerCase().replace('audio/', '').split('-').join('');
   if (codec === 'mp4alatm' || codec === 'mp4a' || codec === 'aaclatm') {
     return 'aac';
+  }
+  if (codec === 'vnd.dts') {
+    return 'dts';
+  }
+  if (codec === 'vnd.dts.hd') {
+    return 'dtshd';
   }
   return codec;
 }

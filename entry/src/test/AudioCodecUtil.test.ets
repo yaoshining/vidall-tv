@@ -16,8 +16,8 @@ export default function audioCodecUtilTest() {
 
     it('normalizeAudioCodec 归一化 E-AC-3 / DTS-HD', 0, () => {
       expect(normalizeAudioCodec('audio/eac3')).assertEqual('eac3');
-      expect(normalizeAudioCodec('audio/vnd.dts.hd')).assertEqual('vnd.dts.hd');
-      expect(normalizeAudioCodec('audio/vnd.dts')).assertEqual('vnd.dts');
+      expect(normalizeAudioCodec('audio/vnd.dts.hd')).assertEqual('dtshd');
+      expect(normalizeAudioCodec('audio/vnd.dts')).assertEqual('dts');
     });
 
     it('normalizeAudioCodec 去除连字符', 0, () => {

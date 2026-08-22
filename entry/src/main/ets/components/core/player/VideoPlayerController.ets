@@ -42,7 +42,8 @@ import { SubtitleSessionService } from
 import {
   audioTrackRoutingService,
   AudioTrackRoutingService,
-  findInitialAudioTrackIndex as serviceFindInitialAudioTrackIndex
+  findInitialAudioTrackIndex as serviceFindInitialAudioTrackIndex,
+  normalizeAudioCodec
 } from "../../../services/audioRouting/AudioTrackRoutingService";
 import type { AudioRoutingDecision } from "../../../services/audioRouting/AudioRoutingTypes";
 import { audioDecoderCapabilityService } from "../../../services/audioCapability/AudioDecoderCapabilityService";
@@ -264,6 +265,8 @@ export class VideoPlayerController {
   @Trace surfaceId: string = ''
   private mpvSurfaceBound: boolean = false
   get isMpvSurfaceBound(): boolean { return this.mpvSurfaceBound }
+  /** 当前已绑定到 MPV 的 surfaceId（用于区分尺寸变化与新 surface 重建）。 */
+  private boundMpvSurfaceId: string = ''
   private pendingMpvSurfaceId: string = ''
   private pendingMpvSurfaceWidth: number = 0
   private pendingMpvSurfaceHeight: number = 0
@@ -618,7 +621,10 @@ export class VideoPlayerController {
     // 从 avplayer XComponent 切到 mpv XComponent，mpv 的 onLoad 会再次走到这里。
     // 此时 MPV adapter 已在上一次 initPlayer 创建完成，重复重建会导致新实例
     // 再也拿不到 surface（黑屏 + 无音轨）。源未变化时直接复用已就绪的 MPV。
-    if (this.backend === 'mpv' && this.player !== undefined) {
+    // 复用前校验播放源一致，避免复用不匹配的旧实例（CodeRabbit #5）。
+    const sameSource = this.currentOriginalVideoSrc.length === 0 ||
+      activeVideoData.videoSrc === this.currentOriginalVideoSrc;
+    if (this.backend === 'mpv' && this.player !== undefined && sameSource) {
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         '[initPlayerForSurface] MPV 已创建且源未变化，跳过冗余重建');
       return;
@@ -1113,6 +1119,7 @@ export class VideoPlayerController {
 
     if (this.backend === 'mpv') {
       this.mpvSurfaceBound = false;
+      this.boundMpvSurfaceId = '';
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         'MpvPlayerAdapter 已创建，等待 UI 层 setMpvSurface() 绑定 XComponent...');
       if (this.pendingMpvSurfaceId.length > 0 && this.pendingMpvSurfaceWidth > 0 &&
@@ -1383,7 +1390,8 @@ export class VideoPlayerController {
         `setMpvSurface() 等待 MPV player，缓存 surface 参数: id=${surfaceId.substring(0, 8)}... w=${width} h=${height}`);
       return;
     }
-    if (this.mpvSurfaceBound) {
+    if (this.mpvSurfaceBound && this.boundMpvSurfaceId === surfaceId) {
+      // 同一 surface，仅尺寸变化 → 通知 size 变更
       this.notifyMpvSurfaceResize(width, height);
       return;
     }
@@ -1400,6 +1408,7 @@ export class VideoPlayerController {
           height
         );
         this.mpvSurfaceBound = true;
+        this.boundMpvSurfaceId = surfaceId;
       } catch (e) {
         const err = e as Error;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -1753,20 +1762,41 @@ export class VideoPlayerController {
 
   /**
    * 记录当前失败 codec 的设备/固件纠偏结果。
-   * 优先取当前激活音轨的 codec，其次取路由决策的 detectedCodec。
+   * 归因收紧（CodeRabbit #4）：仅当路由决策判定该 codec 兼容（系统声称支持）
+   * 但 AVPlayer 实际失败时才记录纠偏；能力已判定不支持或未参与分析的 codec
+   * 不记录，避免把「已知不支持」误记为「系统宣称支持但失败」。
    */
   private recordCurrentCodecCorrection(reason: string): void {
-    let codec = '';
+    const decision = this.lastRoutingDecision;
+    if (decision === undefined) {
+      return;
+    }
+    let rawCodec = '';
     if (this.activeAudioIndex >= 0 && this.activeAudioIndex < this.audioTracks.length) {
       const track = this.audioTracks[this.activeAudioIndex];
-      codec = (track.codecName ?? track.mimeType) ?? '';
+      rawCodec = (track.codecName ?? track.mimeType) ?? '';
     }
-    if (codec.length === 0 && this.lastRoutingDecision !== undefined) {
-      codec = this.lastRoutingDecision.detectedCodec;
+    if (rawCodec.length === 0) {
+      rawCodec = decision.detectedCodec;
     }
-    if (codec.length > 0 && codec !== 'unknown') {
-      audioDecoderCapabilityService.recordCorrection(codec, reason);
+    const codec = normalizeAudioCodec(rawCodec);
+    if (codec.length === 0 || codec === 'unknown') {
+      return;
     }
+    let claimedCompatible = false;
+    for (let i = 0; i < decision.trackAnalyses.length; i++) {
+      const t = decision.trackAnalyses[i];
+      if (t.codec === codec && t.compatible) {
+        claimedCompatible = true;
+        break;
+      }
+    }
+    if (!claimedCompatible) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `[记录纠偏] 跳过：codec=${codec} 未被路由判定为兼容（归因不成立）`);
+      return;
+    }
+    audioDecoderCapabilityService.recordCorrection(codec, reason);
   }
 
   private fallbackAvPlayerToMpv(reason: string, detailMessage: string = ''): void {
@@ -2004,6 +2034,7 @@ export class VideoPlayerController {
     this.saveProgressNow();
     // 重置 MPV surface 绑定状态，避免后续绑定被误判为重复调用。
     this.mpvSurfaceBound = false;
+    this.boundMpvSurfaceId = '';
     if (this.subtitleClearTimer) {
       clearTimeout(this.subtitleClearTimer);
       this.subtitleClearTimer = undefined;

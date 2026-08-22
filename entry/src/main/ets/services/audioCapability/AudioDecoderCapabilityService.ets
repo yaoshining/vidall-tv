@@ -17,7 +17,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { CommonConstants } from '../../common/constants/CommonConstants';
 import * as VidAllNapiModule from 'libvidall_core_player_napi.so';
 import deviceInfo from '@ohos.deviceInfo';
-import { normalizeAudioCodec, codecCompatibilityRank } from '../audioRouting/AudioCodecUtil';
+import { normalizeAudioCodec } from '../audioRouting/AudioCodecUtil';
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences';
 import {
   AudioDecoderCapability,
@@ -92,6 +92,7 @@ export class AudioDecoderCapabilityService {
   private capabilityProvider?: CapabilityProvider;
   private deviceInfoProvider: DeviceInfoProvider = DEFAULT_DEVICE_INFO_PROVIDER;
   private correctionsLoaded: boolean = false;
+  private correctionsLoadPromise: Promise<void> | null = null;
 
   /** 测试注入钩子：替换 NAPI 能力提供者。 */
   setCapabilityProviderForTesting(provider: CapabilityProvider | undefined): void {
@@ -113,36 +114,46 @@ export class AudioDecoderCapabilityService {
     this.compatCache.clear();
     this.corrections.clear();
     this.correctionsLoaded = false;
+    this.correctionsLoadPromise = null;
   }
 
-  /** 确保纠偏结果已从 AppPreferences 加载（幂等）。 */
+  /** 确保纠偏结果已从 AppPreferences 加载（幂等，并发调用共享同一 in-flight Promise）。 */
   async ensureLoaded(): Promise<void> {
     if (this.correctionsLoaded) {
       return;
     }
-    this.correctionsLoaded = true;
+    if (this.correctionsLoadPromise === null) {
+      this.correctionsLoadPromise = this.loadCorrections().then(() => {
+        this.correctionsLoadPromise = null;
+      });
+    }
+    await this.correctionsLoadPromise;
+  }
+
+  /** 实际加载纠偏结果（内部吞掉所有异常，correctionsLoaded 在 finally 置位）。 */
+  private async loadCorrections(): Promise<void> {
     try {
       const raw = await AppPreferences.get(PrefKey.AUDIO_CAPABILITY_CORRECTIONS, '');
-      if (raw.length === 0) {
-        return;
-      }
-      const parsed = JSON.parse(raw) as AudioCorrectionEntry[];
-      if (!Array.isArray(parsed)) {
-        return;
-      }
-      const device = this.deviceInfoProvider.getDeviceModel();
-      const os = this.deviceInfoProvider.getOsVersion();
-      for (let i = 0; i < parsed.length; i++) {
-        const entry = parsed[i];
-        if (entry.deviceModel === device && entry.osVersion === os) {
-          this.corrections.set(this.correctionKey(entry.codec), entry);
+      if (raw.length > 0) {
+        const parsed = JSON.parse(raw) as AudioCorrectionEntry[];
+        if (Array.isArray(parsed)) {
+          const device = this.deviceInfoProvider.getDeviceModel();
+          const os = this.deviceInfoProvider.getOsVersion();
+          for (let i = 0; i < parsed.length; i++) {
+            const entry = parsed[i];
+            if (entry.deviceModel === device && entry.osVersion === os) {
+              this.corrections.set(this.correctionKey(entry.codec), entry);
+            }
+          }
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `纠偏加载完成: 匹配 ${this.corrections.size} 条（device=${device} os=${os}）`);
         }
       }
-      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
-        `纠偏加载完成: 匹配 ${this.corrections.size} 条（device=${device} os=${os}）`);
     } catch (e) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         `纠偏加载失败（忽略，按无纠偏处理）: ${(e as BusinessError).message ?? JSON.stringify(e)}`);
+    } finally {
+      this.correctionsLoaded = true;
     }
   }
 
@@ -274,21 +285,8 @@ export class AudioDecoderCapabilityService {
     capability: AudioDecoderCapability
   ): AudioTrackCompatibility {
     if (!capability.capabilityKnown) {
-      // 迁移期临时兜底：能力未知时，硬解友好 codec（rank=1）假定兼容，
-      // 其余（软解/未知）保守判不兼容，交给路由层保守选 MPV。
-      const rank = codecCompatibilityRank(codec);
-      if (rank === 1) {
-        const result: AudioTrackCompatibility = {
-          codec,
-          channels,
-          compatible: true,
-          isHardware: false,
-          maxChannels: 0,
-          source: 'migration-blacklist',
-          reason: capability.errorMessage
-        };
-        return result;
-      }
+      // 能力未知/查询异常：无论 codec 是否硬解友好，一律保守判不兼容，
+      // 由路由层选择 MPV 兜底（不基于任何 codec 启发式假设兼容性）。
       const result: AudioTrackCompatibility = {
         codec,
         channels,

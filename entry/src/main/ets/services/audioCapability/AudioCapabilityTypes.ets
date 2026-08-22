@@ -21,8 +21,7 @@ export type AudioCapabilitySource =
   | 'correction'
   | 'system'
   | 'cache'
-  | 'unknown'
-  | 'migration-blacklist';
+  | 'unknown';
 
 /** 单条音轨的兼容性结论。 */
 export interface AudioTrackCompatibility {

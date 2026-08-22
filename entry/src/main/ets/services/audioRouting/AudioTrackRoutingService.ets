@@ -446,16 +446,14 @@ export class AudioTrackRoutingService {
       precheckProbeError = err['message'] ?? JSON.stringify(e);
     }
 
-    // 合并 probe + preset 为整组音轨分析（probe 优先，preset 作为补充），按归一化 codec 去重
+    // 合并 probe + preset 为整组音轨分析（probe 优先，preset 作为补充）。
+    // 注意：不再按归一化 codec 去重——相同 codec 不同声道的音轨必须全部保留，
+    // 否则声道超上限的轨会遮蔽同 codec 的兼容轨（如 8ch eac3 不兼容、2ch eac3 兼容时误选 MPV）。
+    // 能力查询的按 codec 去重由 AudioDecoderCapabilityService.codecCapCache 内部保证。
     const trackAnalyses: AudioTrackAnalysis[] = [];
-    const seenCodecs = new Set<string>();
     for (let i = 0; i < probeAudioTracks.length; i++) {
       const t = probeAudioTracks[i];
       const codec = normalizeAudioCodec(t.codec);
-      if (seenCodecs.has(codec)) {
-        continue;
-      }
-      seenCodecs.add(codec);
       trackAnalyses.push(this.buildTrackAnalysis(i, codec, t.channels, 'probe'));
     }
     if (trackAnalyses.length === 0 && presetHint.codecName.length > 0) {

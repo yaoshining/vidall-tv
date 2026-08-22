@@ -11,7 +11,7 @@
 - 无兼容音轨时在创建/prepare AVPlayer 前直接选 MPV，避免二次初始化。
 - 按归一化 codec 去重查询，能力缓存按设备型号/系统版本/codec/声道数键控，系统升级自然失效。
 - 设备/固件纠偏优先于系统声明，AVPlayer 显式失败可记录并复用纠偏。
-- 能力查询异常不阻塞播放，保守降级并保留迁移期黑名单兜底。
+- 能力查询异常不阻塞播放，保守降级到 MPV（不基于任何 codec 启发式假设兼容性）。
 
 **Non-Goals:**
 - 不逐音轨试播、不新增批量 NAPI 接口、不改 MPV / FFmpeg 解码链。
@@ -33,6 +33,8 @@
 
 两级分开比单层 `codec|channels` 缓存更清晰：原始查询天然按 codec 去重，声道边界校验在派生层完成。
 
+> 评审修正：`resolveRoutingDecision` 的音轨分析**不做**按 codec 去重（相同 codec 不同声道的音轨必须全部保留，避免 8ch eac3 不兼容遮蔽 2ch eac3 兼容轨导致误选 MPV）；NAPI 查询去重完全由 `codecCapCache` 保证，"N 种唯一 codec 最多查 N 次"验收标准不变。
+
 ### 3. 纠偏持久化到 AppPreferences
 
 纠偏结果存 `PrefKey.AUDIO_CAPABILITY_CORRECTIONS`（JSON 数组 `{deviceModel, osVersion, codec, forceUnsupported, reason, updatedAt}`），加载时按当前 `deviceModel|osVersion` 过滤，旧系统条目自然不命中。内存 Map 作为热缓存，显式失败时先写内存再异步持久化。
@@ -45,7 +47,7 @@
 
 1. 设备/固件纠偏命中 → 以纠偏为准（`source='correction'`）。
 2. 系统 codec 能力 + 最大声道范围 → `compatible = supported && channels <= maxChannels`。
-3. 能力未知或查询异常 → `source='unknown'`，保守 `preferredBackend='mpv'`，迁移期黑名单仅此时兜底。
+3. 能力未知或查询异常 → `source='unknown'`，一律判不兼容，保守 `preferredBackend='mpv'`（不基于任何 codec 启发式假设兼容性，全局黑名单不参与判定）。
 
 ### 5. 预选最佳兼容轨
 
@@ -67,7 +69,7 @@
 
 - [NAPI 在 `.so` 未加载或 OH_AVCodec 异常时无结果] → bridge 捕获异常返回 `capabilityKnown=false`，路由保守选 MPV，不阻塞播放。
 - [声道数据缺失] → 预置/ffprobe 有声道时严格校验；运行时 `getTrackInfos()` 无声道时保守按可用处理，交给显式失败纠偏。
-- [归一化 codec 无法映射 MIME] → `source='unknown'`，黑名单兜底，日志记录未映射 codec。
+- [归一化 codec 无法映射 MIME] → `source='unknown'`，保守判不兼容，日志记录未映射 codec。
 - [缓存键含系统版本导致条目膨胀] → 缓存进程级、键空间有限（设备型号/系统版本/codec 归一化/声道 1/2/6/8），无需淘汰策略。
 - [纠偏误判（临时网络失败被记为不支持）] → 仅"明确格式不支持"错误码（5400106/5400103）触发纠偏，不把网络/IO 错误记为不支持。
 - [移除 PREPARED 黑名单后回归] → 后端已在创建前确定，无兼容轨不会走到 AVPlayer；保留显式失败动态降级作为安全网。

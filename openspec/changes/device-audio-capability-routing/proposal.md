@@ -2,7 +2,7 @@
 
 当前 `AVPlayerAdapter.ets` 在 `PREPARED` 阶段通过全局写死的 `UNSUPPORTED_AUDIO_CODECS` 黑名单判断音频兼容性：当全部音轨命中 AC-3、E-AC-3、TrueHD、DTS 等条目时，应用才从 AVPlayer 降级到 MPV。该策略能规避部分设备"AVPlayer 已 prepared 但音频静默无声"的问题，但不同设备与固件实际支持的格式不同：全局写死黑名单会把具备对应解码能力的设备也强制降级，而逐音轨创建播放器试播则会增加初始化时间。
 
-本变更改为使用当前设备的真实音频解码能力（工程现有 NAPI `queryAudioDecoderCapability()`，底层基于 `OH_AVCodec_GetCapability()` / `OH_AVCodec_GetCapabilityByCategory()`）进行路由：在不逐音轨试播的前提下，于启动前选择 AVPlayer 或 MPV，并保留对固件错误报告能力或静默无声问题的纠偏机制。
+本变更改为使用当前设备的真实音频解码能力（工程现有 NAPI `queryAudioDecoderCapability()`，底层基于 `OH_AVCodec_GetCapability()` / `OH_AVCodec_GetCapabilityByCategory()`）进行路由：在不逐音轨试播的前提下，于启动前选择 AVPlayer 或 MPV，并保留对固件错误报告能力问题的纠偏机制（包括静默无声的根因——AVPlayer 解码器静默放弃——通过 AVPlayer 明确失败路径记录并复用纠偏；不做"静默无声"的主动探测）。
 
 ## What Changes
 

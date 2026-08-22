@@ -111,7 +111,10 @@ export interface AudioRoutingDecision {
   videoHeight?: number;
   /** 整组音轨分析结果。 */
   trackAnalyses: AudioTrackAnalysis[];
-  /** 预选的初始音轨索引（在 trackAnalyses 中；-1 表示无兼容轨）。 */
+  /**
+   * 预选的初始音轨索引（原始媒体音轨列表中的 index，非 trackAnalyses 数组下标；
+   * -1 表示无兼容音轨）。消费方应结合 codec/语言匹配使用，勿当作数组下标直接取值。
+   */
   recommendedInitialTrackIndex: number;
   /** 预选音轨的归一化 codec（无兼容轨或未知时为空串）。 */
   recommendedCodec: string;
