@@ -1,4 +1,9 @@
-## ADDED Requirements
+# audio-decoder-capability-service Specification
+
+## Purpose
+Centralize device audio decoding capability queries — codec support, hardware flag, and max channel count — with caching, deduplication, and device/firmware corrections, as the single source of truth for audio routing decisions.
+
+## Requirements
 
 ### Requirement: Audio decoding capability SHALL be queried via device capability
 系统 SHALL 通过工程现有 NAPI `queryAudioDecoderCapability()`（底层基于 `OH_AVCodec_GetCapability()` / `OH_AVCodec_GetCapabilityByCategory()`）查询设备对归一化 codec 的解码支持与最大声道数，作为音频路由决策的能力真值来源。

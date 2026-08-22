@@ -13,6 +13,11 @@ Centralize playback backend orchestration — adapter selection, lifecycle manag
 - **THEN** playback backend service SHALL 产出最终选用的 backend、相关 adapter 实例以及后续 fallback 所需的运行时上下文
 - **AND** 活跃 backend 集合 SHALL 包含 `'avplayer'` 与 `'mpv'`
 
+#### Scenario: 无兼容音轨时主选 MPV
+- **WHEN** 设备能力判定当前媒体不存在任何兼容音轨
+- **THEN** playback backend service SHALL 将 `preferredBackend` 置为 `'mpv'`（作为主选，而非 AVPlayer 的 fallback）
+- **AND** 系统 SHALL NOT 先创建或 prepare AVPlayer
+
 #### Scenario: 后端决策忽略已弃用的用户回退偏好
 - **WHEN** AVPlayer 探测为无法播放当前视频
 - **THEN** playback backend service SHALL 忽略已弃用的用户回退偏好并选择 `'mpv'` 作为唯一回退后端
@@ -25,6 +30,7 @@ Centralize playback backend orchestration — adapter selection, lifecycle manag
 - **WHEN** AVPlayer 在当前播放会话中报告格式不支持
 - **THEN** playback backend service SHALL 触发 `'mpv'` fallback
 - **AND** 系统 SHALL 保留当前续播位置与自动恢复播放决策
+- **AND** 系统 SHALL 记录该 codec 的设备/固件纠偏结果
 
 #### Scenario: Legacy backend identifiers map to MPV
 - **WHEN** 兼容保留的 native 或 ffmpeg 后端标识进入播放流程
