@@ -14,6 +14,11 @@ import {
   navigateToSubtitleLanguagePreference
 } from "./HomeSettingBuilderModel";
 import { SubtitleCacheManager, formatCacheSize } from '../../../subtitle/SubtitleCacheManager';
+import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { AccountService } from '../../../services/account/AccountService';
+import { HuaweiAuthProvider } from '../../../services/account/providers/HuaweiAuthProvider';
+import { AppPreferences } from '../../../utils/AppPreferences';
 
 @Builder
 function vipTitleBuilder() {
@@ -38,10 +43,12 @@ struct HomeSettingBuilderComponent {
   @Local isSubtitleLanguageSummaryLoaded: boolean = false
   @Local private isClearingCache: boolean = false
   @Local private cacheSizeText: string = ''
+  @Local private isLogged: boolean = false
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
     this.loadCacheSize()
+    this.initAccount()
   }
 
   private async loadSubtitlePreference(): Promise<void> {
@@ -111,6 +118,72 @@ struct HomeSettingBuilderComponent {
     }
   }
 
+  private async initAccount(): Promise<void> {
+    try {
+      this.isLogged = await AppPreferences.isLogged()
+    } catch {
+      this.isLogged = false
+    }
+    if (!this.isLogged) {
+      this.armHuaweiLogin()
+    }
+  }
+
+  private armHuaweiLogin(): void {
+    AccountService.getInstance().loginWith('huawei')
+      .then(async () => {
+        this.isLogged = await AppPreferences.isLogged()
+      })
+      .catch((e: BusinessError) => {
+        if (e.code === 1001502012) {
+          this.armHuaweiLogin()
+        } else {
+          this.showToast('华为登录失败：' + (e.message ?? ''))
+        }
+      })
+  }
+
+  private doLogout(): void {
+    AccountService.getInstance().logout()
+      .then(async () => {
+        this.isLogged = await AppPreferences.isLogged()
+        this.showToast('已退出登录')
+        if (!this.isLogged) {
+          this.armHuaweiLogin()
+        }
+      })
+      .catch(() => {
+        this.showToast('退出登录失败')
+      })
+  }
+
+  private getHuaweiController(): loginComponentManager.LoginWithHuaweiIDButtonController {
+    const p = AccountService.getInstance().getProvider('huawei')
+    if (p instanceof HuaweiAuthProvider) {
+      return p.getController()
+    }
+    return new loginComponentManager.LoginWithHuaweiIDButtonController()
+  }
+
+  @Builder
+  private huaweiLoginButton() {
+    ListItem() {
+      LoginWithHuaweiIDButton({
+        params: {
+          style: loginComponentManager.Style.BUTTON_RED,
+          borderRadius: 24,
+          supportDarkMode: true
+        },
+        controller: this.getHuaweiController()
+      })
+    }
+    .width('100%')
+    .height(50)
+    .borderRadius(8)
+    .backgroundColor('#333333')
+    .padding({ left: 12, right: 12 })
+  }
+
   build() {
     SettingContainer({
       title: "配置"
@@ -118,14 +191,19 @@ struct HomeSettingBuilderComponent {
       SettingListItemGroup({
         title: "账号"
       }) {
-        SettingListItem({
-          value: "全平台可用",
-          titleBuilder: vipTitleBuilder
-        })
-        SettingListItem({
-          title: "退出登录",
-          isLink: true,
-        })
+        if (this.isLogged) {
+          SettingListItem({
+            value: "全平台可用",
+            titleBuilder: vipTitleBuilder
+          })
+          SettingListItem({
+            title: "退出登录",
+            isLink: true,
+            onItemClick: () => { this.doLogout() }
+          })
+        } else {
+          this.huaweiLoginButton()
+        }
       }
 
       SettingListItemGroup({

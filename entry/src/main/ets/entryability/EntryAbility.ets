@@ -8,6 +8,8 @@ import { emitter } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
 import { ServiceLocator } from '../services/ServiceLocator';
 import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
+import { AccountService } from '../services/account/AccountService';
+import { HuaweiAuthProvider } from '../services/account/providers/HuaweiAuthProvider';
 import { MetricsService } from '../services/metrics/MetricsService';
 import { CompositeMetricsReporter } from '../services/metrics/CompositeMetricsReporter';
 import { LocalFileReporter } from '../services/metrics/LocalFileReporter';
@@ -59,6 +61,11 @@ export default class EntryAbility extends UIAbility {
     const entitlementService = new LocalFreeEntitlementService();
     ServiceLocator.register('entitlement', entitlementService);
     hilog.info(DOMAIN, 'testTag', 'EntitlementService registered (LocalFree mode)');
+
+    // 初始化 AccountService 并注册华为账号 provider（须在 UI 构建前完成）
+    const accountService = AccountService.getInstance();
+    accountService.registerProvider(new HuaweiAuthProvider());
+    hilog.info(DOMAIN, 'testTag', 'AccountService initialized, HuaweiAuthProvider registered');
 
     // 并行初始化 AppPreferences 和数据库
     AppPreferences.init(this.context)
