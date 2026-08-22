@@ -614,6 +614,15 @@ export class VideoPlayerController {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
         '[initPlayerForSurface] 忽略 XComponent 过期播放源，沿用控制器当前播放源');
     }
+    // Issue #243 修复：当路由在首次 initPlayer 即选定 mpv 时，backend 变更会触发 UI
+    // 从 avplayer XComponent 切到 mpv XComponent，mpv 的 onLoad 会再次走到这里。
+    // 此时 MPV adapter 已在上一次 initPlayer 创建完成，重复重建会导致新实例
+    // 再也拿不到 surface（黑屏 + 无音轨）。源未变化时直接复用已就绪的 MPV。
+    if (this.backend === 'mpv' && this.player !== undefined) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        '[initPlayerForSurface] MPV 已创建且源未变化，跳过冗余重建');
+      return;
+    }
     await this.initPlayer(activeVideoData, surfaceId);
   }
 

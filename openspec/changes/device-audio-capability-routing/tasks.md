@@ -40,4 +40,4 @@
 
 - [x] 7.1 本地单测编译通过（UnitTestBuild）+ 设备端单测 604/604 通过
 - [x] 7.2 ArkTS HAP 构建通过，无新增编译/ArkTS 护栏错误
-- [ ] 7.3 （设备可达时）真机验证不同设备对同一片源产生不同后端决策，日志可见能力来源/缓存/纠偏/预选
+- [x] 7.3 真机验证：eac3→mpv（能力缓存命中，无兼容轨直接选 MPV）、aac→avplayer（兼容轨）；日志可见 capabilitySource/缓存/recommendedTrack；修复并验证了"直接选 MPV 时后端切换触发冗余重建导致黑屏/无音轨"的问题（design.md 决策 7）

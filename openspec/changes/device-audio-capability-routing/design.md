@@ -55,6 +55,14 @@
 
 `PREPARED` 阶段不再读取 `getTrackDescription` 判"全不支持"，直接 `_onReadyCb`（保留诊断日志）。error 事件 5400106/5400103 → `onUnsupportedFormat` 的降级路径保留，并由 controller 在 fallback 前调 `recordCorrection` 记录纠偏。
 
+### 7. 后端切换触发的冗余重初始化守卫（真机验证修复）
+
+真机验证发现：路由在首次 `initPlayer` 直接选定 `mpv` 后，UI 会因 `controller.backend` 从默认 `avplayer` 变为 `mpv` 而重建 XComponent；mpv XComponent 的 `onLoad` 会再次调用 `initPlayerForSurface → initPlayer`，把已拿到 surface、正在播放的 MPV 实例释放并重建，新实例因 `onAreaChange` 不再触发而永远等不到 surface（表现为黑屏 + 无音轨信息）。
+
+修复：`VideoPlayerController.initPlayerForSurface` 增加守卫——当 `backend === 'mpv'` 且 `player` 已存在（说明 MPV 已由上一轮 initPlayer 创建）时跳过冗余重建；surface 的绑定/重绑仍由 `onAreaChange → setMpvSurface` 独立处理。旧的"AVPlayer 先播再 fallback 到 MPV"路径不受影响（fallback 已把 `player` 置空，守卫不会跳过）。
+
+备选方案（不在首次 init 前预知后端、或让 UI 按最终后端先渲染）都需要改动页面级 XComponent 结构，回归风险更大，因此采用 controller 侧最小守卫。
+
 ## Risks / Trade-offs
 
 - [NAPI 在 `.so` 未加载或 OH_AVCodec 异常时无结果] → bridge 捕获异常返回 `capabilityKnown=false`，路由保守选 MPV，不阻塞播放。
