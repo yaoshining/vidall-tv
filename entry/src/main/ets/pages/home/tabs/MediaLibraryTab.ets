@@ -43,6 +43,7 @@ import { PlexClient } from "../../../lib/PlexClient"
 import { reportServerPlaybackStarted } from "../../../lib/ServerProgressReporter"
 import { ServerMediaDetailPage, ServerMediaDetailPageParam } from "../../detail/ServerMediaDetailPage"
 import { ServerLibraryListPage, ServerLibraryListPageParam } from "../../detail/ServerLibraryListPage"
+import { resolveCardBehavior, isDirectPlayContextValid, ServerCardKind } from "../../../services/sourceAdapter/ServerCardAction"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -969,30 +970,27 @@ export struct MediaLibraryTab {
    */
   private async openSeriesDirectPlay(item: VideoServerMediaItem): Promise<void> {
     const serverId = this.sourceSwitchModel.getActiveServerId()
-    if (serverId === undefined) {
+    const server: VideoServer | null = serverId !== undefined
+      ? this.videoServerModel.getVideoServerById(serverId)
+      : null
+    if (!isDirectPlayContextValid(serverId, server)) {
       try {
         this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
       } catch (_e) {}
       return
     }
-    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
-    if (!server) {
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
-      } catch (_e) {}
-      return
-    }
+    const validatedServer: VideoServer = server as VideoServer
     try {
       let nextUpItem: VideoServerMediaItem | null = null
-      if (server.type === VideoServerType.PLEX) {
-        const client = PlexClient.fromConfigJson(server.configJson)
+      if (validatedServer.type === VideoServerType.PLEX) {
+        const client = PlexClient.fromConfigJson(validatedServer.configJson)
         nextUpItem = await client.getNextUp(item.id)
       } else {
-        const client = JellyfinClient.fromConfigJson(server.configJson)
+        const client = JellyfinClient.fromConfigJson(validatedServer.configJson)
         nextUpItem = await client.getNextUp(item.id)
       }
       if (nextUpItem) {
-        await this.doServerDirectPlayWithServer(nextUpItem, server)
+        await this.doServerDirectPlayWithServer(nextUpItem, validatedServer)
       } else {
         try {
           this.getUIContext().getPromptAction().showToast({ message: '未找到可播放的下一集', duration: 2000 })
@@ -1011,20 +1009,16 @@ export struct MediaLibraryTab {
    */
   private async doServerDirectPlay(item: VideoServerMediaItem): Promise<void> {
     const serverId = this.sourceSwitchModel.getActiveServerId()
-    if (serverId === undefined) {
+    const server: VideoServer | null = serverId !== undefined
+      ? this.videoServerModel.getVideoServerById(serverId)
+      : null
+    if (!isDirectPlayContextValid(serverId, server)) {
       try {
         this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
       } catch (_e) {}
       return
     }
-    const server: VideoServer | null = this.videoServerModel.getVideoServerById(serverId)
-    if (!server) {
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: '服务器配置已失效，请重新选择数据源', duration: 2000 })
-      } catch (_e) {}
-      return
-    }
-    await this.doServerDirectPlayWithServer(item, server)
+    await this.doServerDirectPlayWithServer(item, server as VideoServer)
   }
 
   /**
@@ -1089,6 +1083,34 @@ export struct MediaLibraryTab {
       title: item.title
     }
     this.pageStack.pushPathByName(ServerMediaDetailPage.PAGE_NAME, param)
+  }
+
+  /**
+   * 卡片主体点击路由（基于 ServerCardAction 行为契约）。
+   * 继续观看 → 直播放；接下来/最近添加 → 现有详情页。
+   */
+  private onServerCardItemClick(item: VideoServerMediaItem, kind: ServerCardKind): void {
+    const behavior = resolveCardBehavior(kind)
+    if (behavior.itemClick === 'direct-play') {
+      this.openServerDirectPlay(item).catch(() => {})
+    } else {
+      this.openServerItemDetail(item)
+    }
+  }
+
+  /**
+   * 卡片中央播放按钮点击路由：仅直播放（不触发主体详情导航）。
+   */
+  private onServerCardPlayClick(item: VideoServerMediaItem, kind: ServerCardKind): void {
+    const behavior = resolveCardBehavior(kind)
+    if (behavior.playClick === 'direct-play') {
+      this.openServerDirectPlay(item).catch(() => {})
+    }
+  }
+
+  /** 卡片是否显示中央播放按钮（来自行为契约）。 */
+  private getCardShowPlayButton(kind: ServerCardKind): boolean {
+    return resolveCardBehavior(kind).showPlayButton
   }
 
   /**
@@ -1749,8 +1771,8 @@ export struct MediaLibraryTab {
               ServerWideCard({
                 item: item,
                 showProgress: true,
-                showPlayButton: false,
-                onItemClick: () => { this.openServerDirectPlay(item).catch(() => {}) }
+                showPlayButton: this.getCardShowPlayButton('continue-watching'),
+                onItemClick: () => { this.onServerCardItemClick(item, 'continue-watching') }
               })
             }, (item: VideoServerMediaItem) => 'cw_' + item.id)
           }
@@ -1762,9 +1784,9 @@ export struct MediaLibraryTab {
               ServerWideCard({
                 item: item,
                 showProgress: false,
-                showPlayButton: true,
-                onItemClick: () => { this.openServerItemDetail(item) },
-                onPlayClick: () => { this.openServerDirectPlay(item).catch(() => {}) }
+                showPlayButton: this.getCardShowPlayButton('next-up'),
+                onItemClick: () => { this.onServerCardItemClick(item, 'next-up') },
+                onPlayClick: () => { this.onServerCardPlayClick(item, 'next-up') }
               })
             }, (item: VideoServerMediaItem) => 'next_' + item.id)
           }
@@ -1776,8 +1798,8 @@ export struct MediaLibraryTab {
               ServerPosterCard({
                 item: item,
                 showProgress: item.type === 'movie' && item.progress > 0,
-                onItemClick: () => { this.openServerItemDetail(item) },
-                onPlayClick: () => { this.openServerDirectPlay(item).catch(() => {}) }
+                onItemClick: () => { this.onServerCardItemClick(item, 'recently-added') },
+                onPlayClick: () => { this.onServerCardPlayClick(item, 'recently-added') }
               })
             }, (item: VideoServerMediaItem) => 'latest_' + section.libraryName + '_' + item.id)
           }
