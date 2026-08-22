@@ -19,8 +19,10 @@
 // - `AudioTrackItem` 由本文件 re-export，controller 旧 import 路径继续可用。
 
 import type { AudioTrackItem } from "../../components/core/player/VideoPlayerController";
+import type { AudioCapabilitySource } from "../audioCapability/AudioCapabilityTypes";
 
 export type { AudioTrackItem };
+export type { AudioCapabilitySource };
 
 /** 单条音轨分析结果（service 内部使用，可被 controller 日志引用）。 */
 export interface AudioTrackAnalysis {
@@ -30,10 +32,18 @@ export interface AudioTrackAnalysis {
   codec: string;
   /** 归一化后的声道计划（1/2/6/8）。 */
   channels: number;
-  /** 是否系统稳态可硬解。 */
+  /** 是否系统稳态可硬解（设备能力信息缺失时的回退启发式）。 */
   hardSupported: boolean;
   /** 来源：probe（ffprobe） / preset（数据库预置）。 */
   source: 'probe' | 'preset';
+  /** 设备能力兼容性（codec 支持且声道数不超上限）。 */
+  compatible: boolean;
+  /** 设备该 codec 的最大声道能力（未知/不支持时为 0）。 */
+  maxChannels: number;
+  /** 是否为硬件解码。 */
+  isHardware: boolean;
+  /** 兼容性结论来源。 */
+  capabilitySource: AudioCapabilitySource;
 }
 
 /** 路由决策输入（controller 持有 videoData 与 ffprobe 状态）。 */
@@ -101,6 +111,15 @@ export interface AudioRoutingDecision {
   videoHeight?: number;
   /** 整组音轨分析结果。 */
   trackAnalyses: AudioTrackAnalysis[];
+  /**
+   * 预选的初始音轨索引（原始媒体音轨列表中的 index，非 trackAnalyses 数组下标；
+   * -1 表示无兼容音轨）。消费方应结合 codec/语言匹配使用，勿当作数组下标直接取值。
+   */
+  recommendedInitialTrackIndex: number;
+  /** 预选音轨的归一化 codec（无兼容轨或未知时为空串）。 */
+  recommendedCodec: string;
+  /** 能力判定摘要（来源/缓存/纠偏，供日志与 UI）。 */
+  capabilitySummary: string;
 }
 
 /** 默认路由决策（探测未启动时使用）。 */
@@ -121,7 +140,10 @@ export const DEFAULT_AUDIO_ROUTING_DECISION: AudioRoutingDecision = {
   videoHdrType: '',
   videoWidth: undefined,
   videoHeight: undefined,
-  trackAnalyses: []
+  trackAnalyses: [],
+  recommendedInitialTrackIndex: -1,
+  recommendedCodec: '',
+  capabilitySummary: 'default: 未查询设备解码能力'
 };
 
 /** 初始音轨选择输入。 */

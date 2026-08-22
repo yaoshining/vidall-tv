@@ -70,11 +70,38 @@ struct AudioCapResult {
 };
 
 static std::string BuildAudioMime(const std::string &codecOrMime) {
-  if (codecOrMime == "aac"  || codecOrMime == "audio/mp4a-latm") return "audio/mp4a-latm";
-  if (codecOrMime == "opus" || codecOrMime == "audio/opus") return "audio/opus";
-  if (codecOrMime == "flac" || codecOrMime == "audio/flac") return "audio/flac";
-  if (codecOrMime == "mp3"  || codecOrMime == "audio/mpeg") return "audio/mpeg";
-  return codecOrMime;
+  std::string c = codecOrMime;
+  for (size_t i = 0; i < c.size(); i++) {
+    c[i] = static_cast<char>(tolower(static_cast<unsigned char>(c[i])));
+  }
+  // 去掉 "audio/" 前缀与连字符，得到与 ArkTS normalizeAudioCodec 对齐的归一化 codec。
+  const std::string prefix = "audio/";
+  if (c.compare(0, prefix.size(), prefix) == 0) {
+    c = c.substr(prefix.size());
+  }
+  std::string normalized;
+  normalized.reserve(c.size());
+  for (size_t i = 0; i < c.size(); i++) {
+    if (c[i] != '-') {
+      normalized.push_back(c[i]);
+    }
+  }
+
+  if (normalized == "aac" || normalized == "mp4a" || normalized == "mp4alatm" || normalized == "aaclatm") return "audio/mp4a-latm";
+  if (normalized == "opus") return "audio/opus";
+  if (normalized == "flac") return "audio/flac";
+  if (normalized == "mp3" || normalized == "mpeg") return "audio/mpeg";
+  if (normalized == "vorbis") return "audio/vorbis";
+  if (normalized == "ac3" || normalized == "ac3dolbydigital") return "audio/ac3";
+  if (normalized == "eac3" || normalized == "ec3" || normalized == "eac3dolbydigitalplus") return "audio/eac3";
+  if (normalized == "truehd") return "audio/truehd";
+  if (normalized == "mlp") return "audio/mlp";
+  if (normalized == "dts" || normalized == "vnd.dts") return "audio/vnd.dts";
+  if (normalized == "dtshd" || normalized == "vnd.dts.hd") return "audio/vnd.dts.hd";
+  if (normalized == "vivid" || normalized == "audiovivid") return "audio/vivid";
+  if (normalized == "pcm" || normalized.rfind("pcm", 0) == 0) return "audio/raw";
+  // 未知 codec：返回空串，由调用方标记 capabilityKnown=false。
+  return std::string();
 }
 
 static napi_value MakeStringField(napi_env env, const std::string &s) {
@@ -86,6 +113,12 @@ static napi_value MakeStringField(napi_env env, const std::string &s) {
 static AudioCapResult QueryAudioCapInternal(const std::string &codecOrMime) {
   AudioCapResult r;
   r.mimeType = BuildAudioMime(codecOrMime);
+  if (r.mimeType.empty()) {
+    // 归一化 codec 无法映射到已知 MIME：能力未知，交由上层保守决策。
+    r.capabilityKnown = false;
+    r.errorMessage = "unknown codec";
+    return r;
+  }
   r.capabilityKnown = true;
 
   OH_AVCapability *cap = OH_AVCodec_GetCapabilityByCategory(r.mimeType.c_str(), false, HARDWARE);
@@ -95,6 +128,7 @@ static AudioCapResult QueryAudioCapInternal(const std::string &codecOrMime) {
     isHw = (cap != nullptr) && OH_AVCapability_IsHardware(cap);
   }
   if (cap == nullptr) {
+    // 解码器明确不存在：能力已知，但判定为不支持。
     r.errorMessage = "decoder not found";
     return r;
   }
