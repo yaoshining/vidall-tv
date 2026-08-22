@@ -1,0 +1,1 @@
+{"id":"19e18001fa6ff479086eb8cb86dd1535","fullName":"VideoControls.episode list continuous scroll anchors#onAppear 时调用 scrollToIndex(currentIndex, false, ScrollAlign.START)","name":"onAppear 时调用 scrollToIndex(currentIndex, false, ScrollAlign.START)","status":"passed","testResultsByEnv":{"default":"64238d3d33a4c30b7a92ecbfdcd5aa6a"}}
