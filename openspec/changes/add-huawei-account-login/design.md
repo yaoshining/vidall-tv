@@ -13,7 +13,8 @@
 - 设计可插拔 `AuthProvider` 抽象 + 一账号多绑定数据模型，为后续接入微信等平台铺路
 - 通过 Cloud DB 持久化 `UserAccount` + `AccountBinding`（首发仅华为 provider，抽象就位）
 - 接通退出登录，形成 未登录→登录→已登录→退出→未登录 完整闭环
-- 复用现有「已登录」占位 UI，不重新设计视觉
+- 设置页未登录入口与现有菜单统一；通过根级全局登录弹层承载官方华为按钮并预留多平台入口
+- 使用全局可观察账号状态同步登录、退出、弹层与启动恢复结果
 
 ### Non-Goals
 - 不自建后端做 `authorizationCode`→`accessToken` 换换（TV 端无后端）
@@ -251,16 +252,21 @@ account.loginTime        // 本次登录时间
 account.isLogged         // 是否已登录（bool）
 ```
 
-**登录态恢复**：`EntryAbility.onCreate` 初始化时读 `AppPreferences.isLogged`，若为 true 则直接进入已登录态（不强制重新授权）。UI 用 `@Local` 驱动切换。
+**登录态恢复**：`EntryAbility.onCreate` 在 `AppPreferences.init()` 完成后调用全局 `AccountModel.restore()`；若本地记录有效则直接恢复已登录资料，不强制重新授权。
 
-### 8. UI 集成：HomeSettingBuilder 按态切换
+### 8. 全局状态与唯一登录弹层
 
-`pages/settings/builders/HomeSettingBuilder.ets` 的「账号」分组（当前 lines 118-129）改为按 `isLogged` 条件渲染：
+`AccountModel` 使用 `AppStorageV2.connect()` 作为应用级唯一状态源，并通过 `@ObservedV2` + `@Trace` 维护账号资料、弹层可见性、登录进度和错误信息。各页面和服务统一连接固定 key `VidAllAccountModel`，确保设置页发起的弹层状态变化能驱动根 `Index` 立即刷新；不再依赖普通静态单例跨组件传播。`AccountService` 只在 AGC 会话、Cloud DB 和本地持久化全部完成后调用 `applyLoggedInState()`；退出流程在 `finally` 中调用 `clear()`。
 
-- **未登录态**：渲染已注册 provider 的登录按钮（当前仅华为，由 `HomeSettingBuilder` 的 `huaweiLoginButton` Builder 使用 provider controller 渲染 `LoginWithHuaweiIDButton`），不展示 VidAll Pro / 退出登录
-- **已登录态**：保留现有结构（VidAll Pro / 全平台可用 / 退出登录），退出登录项接通 `AccountService.logout()`
+`pages/Index.ets` 的根 `Stack` 挂载 `LoginDialog`，使任意业务页面都可通过 `AccountModel.showLoginDialog()` 打开统一入口；返回键优先关闭弹层。设置页未登录时只渲染普通 `SettingListItem` 风格的「登录」菜单项，点击仅打开弹层，不直接触发授权。
 
-**按钮渲染注意**：`LoginWithHuaweiIDButton` 是系统 struct，直接在 `build()` 内声明使用，不能放进 `SettingListItem` 的固定 Row 布局（系统按钮自带样式）。未登录态用一个独立的 `@Builder` 渲染登录按钮区域，不走 `SettingListItem`。
+`LoginDialog` 负责：
+
+- 以 TV 深色弹层承载已注册 provider 的入口，为未来微信等平台保留统一位置
+- 使用官方 `LoginWithHuaweiIDButton` 的 `BUTTON_CUSTOM`、华为红背景及 normal/focused/pressed/disabled 状态，保留官方标识与合规授权行为
+- 弹层显示时先调用 `AccountService.loginWith('huawei')` 注册 controller 回调；用户点击官方按钮后才真正拉起授权
+- 取消/返回只关闭弹层；已注册的单次等待保持复用，避免重复打开时累积多个 Promise/controller 回调
+- 授权取消或失败后保留弹层并重新布防，展示可重试提示；登录成功后全局状态自动关闭弹层
 
 ### 9. 目录结构
 
@@ -269,6 +275,10 @@ entry/src/main/ets/
 ├── db/models/
 │   ├── UserAccount.ets              # DatabaseObject 子类
 │   └── AccountBinding.ets           # DatabaseObject 子类
+├── components/account/
+│   └── LoginDialog.ets              # 根级统一登录弹层 + 官方平台按钮
+├── stores/account/
+│   └── AccountModel.ets             # 全局可观察账号与弹层状态
 ├── services/account/
 │   ├── AuthProvider.ets             # 接口 + PlatformIdentity
 │   ├── AccountService.ets           # 编排 + provider 注册表

@@ -4,10 +4,10 @@
 
 ## What Changes
 
-- 新增「未登录」状态 UI：在设置页「账号」分组中展示华为账号一键登录按钮（`LoginWithHuaweiIDButton`），替代当前的固定占位；未登录态按已注册的 provider 列表渲染按钮（当前仅华为，架构支持后续扩展）。
+- 新增全 App 唯一登录入口：设置页「账号」分组未登录时仅展示与菜单统一的「登录」项，点击打开根级全局登录弹层；弹层内使用官方 `LoginWithHuaweiIDButton` 完成华为授权，并为后续更多 provider 预留统一入口。
 - 新增 `AuthProvider` 可插拔抽象：平台登录能力以接口注册，新增平台只需实现 `AuthProvider` 并注册，不改账号服务核心；首发实现 `HuaweiAuthProvider`。
 - 新增一账号多绑定数据模型：Cloud DB 两张对象类型——`UserAccount`（账号主体）与 `AccountBinding`（平台绑定，一账号多条），同一 `(platform, platformUserId)` 全局唯一。
-- 新增登录流程：用户点击登录按钮 → 拉起华为账号授权 → 成功回调拿到 `unionID`（及 `openID`、昵称、头像）→ 查/建 `AccountBinding` 与 `UserAccount` → 写入 Cloud DB → 本地持久化登录态 → UI 切换到「已登录」。
+- 新增登录流程：用户点击设置菜单「登录」→ 打开全局登录弹层 → 点击弹层内华为账号按钮 → 拉起授权 → 成功回调拿到 `unionID`（及 `openID`、昵称、头像）→ 查/建 `AccountBinding` 与 `UserAccount` → 写入 Cloud DB → 本地持久化并同步全局账号状态 → 所有订阅 UI 切换到「已登录」。
 - 接通「退出登录」：点击后当前 provider 注销登录态、清空本地登录信息、UI 回到「未登录」状态（Cloud DB 的 `UserAccount` / `AccountBinding` 记录保留，作为历史数据与再登录命中）。
 - 复用现有「已登录」占位 UI：登录成功后直接展示当前的 VidAll Pro / 全平台可用 / 退出登录结构，无需重新设计。
 - 接入 AGC 云开发：新增 `@hw-agconnect/auth` 认证服务 SDK，在华为账号授权后建立 AGC 用户会话，将 `auth.getAuthProvider()` 传入 `cloudCommon.init()`，再使用 `@kit.CloudFoundationKit` 写入 Cloud DB；控制台需开启认证服务与 Cloud DB。
@@ -25,7 +25,8 @@
 ## Impact
 
 - **受影响代码**：
-  - `entry/src/main/ets/pages/settings/builders/HomeSettingBuilder.ets`：账号分组按登录态切换 UI，接通退出登录。
+  - `entry/src/main/ets/pages/settings/builders/HomeSettingBuilder.ets`：账号分组按全局登录态切换 UI，未登录时打开统一登录弹层，已登录时接通退出登录。
+  - `entry/src/main/ets/components/account/LoginDialog.ets` + `stores/account/AccountModel.ets`：根级全局登录弹层与可观察账号状态，供任意业务页面复用。
   - 新增 `services/account/`：账号服务层（`AuthProvider` 接口、`providers/HuaweiAuthProvider`、`AccountService` 编排 + provider 注册表、`repo/CloudAccountRepository` + `repo/CloudBindingRepository`）。
   - 新增 `db/models/UserAccount.ets` + `db/models/AccountBinding.ets`：Cloud DB 对象类型（`cloudDatabase.DatabaseObject` 子类）。
   - 扩展 `utils/AppPreferences` 的 `PrefKey`：本地登录态（accountId、当前 providerId、昵称、头像、登录时间、是否登录）。

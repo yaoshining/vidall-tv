@@ -4,7 +4,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 
 export type AppPreferenceValue = string | number;
 
-interface LoginStateRecord {
+export interface LoginStateRecord {
   accountId: string;
   providerId: string;
   displayName: string;
@@ -280,7 +280,7 @@ export class AppPreferences {
     await store.flush();
   }
 
-  private static async getLoginState(): Promise<LoginStateRecord | null> {
+  static async getLoginState(): Promise<LoginStateRecord | null> {
     const serialized = await AppPreferences.get(PrefKey.ACCOUNT_STATE_RECORD, '');
     if (serialized.length === 0) {
       return null;

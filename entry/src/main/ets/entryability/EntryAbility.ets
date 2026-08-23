@@ -11,6 +11,7 @@ import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEn
 import { AccountService } from '../services/account/AccountService';
 import { HuaweiAuthProvider } from '../services/account/providers/HuaweiAuthProvider';
 import { AgcCloudAuthService } from '../services/account/AgcCloudAuthService';
+import { AccountModel } from '../stores/account/AccountModel';
 import { MetricsService } from '../services/metrics/MetricsService';
 import { CompositeMetricsReporter } from '../services/metrics/CompositeMetricsReporter';
 import { LocalFileReporter } from '../services/metrics/LocalFileReporter';
@@ -78,6 +79,7 @@ export default class EntryAbility extends UIAbility {
     AppPreferences.init(this.context)
       .then(async () => {
         hilog.info(DOMAIN, 'testTag', 'AppPreferences initialized successfully');
+        await AccountModel.getInstance().restore();
         await AppPreferences.set(PrefKey.TMDB_API_KEY, '8a4f81133468d801df27c9cdcb5c33af');
         const lastBreadcrumb = await AppPreferences.get(PrefKey.PLAYER_LAST_BREADCRUMB, '');
         if (lastBreadcrumb.length > 0) {

@@ -27,7 +27,7 @@
 - [x] 4.1 新增 `entry/src/main/ets/services/account/providers/HuaweiAuthProvider.ets`：`export class HuaweiAuthProvider implements AuthProvider`，`providerId='huawei'`、`displayName='华为账号'`，持有 `loginComponentManager.LoginWithHuaweiIDButtonController`。验证：`import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit'` 正确，controller 可被 UI 获取
 - [x] 4.2 实现 `login()`：用 controller 注册 `onClickLoginWithHuaweiIDButton` 回调，封装为 Promise；回调成功时从 `HuaweiIDCredential` 取 `unionID`→`platformUserId`、`openID`、`authorizationCode`（存 raw）、`idToken`（解码 JWT payload 取 `name`/`picture` claims 填 displayName/avatarUri，无则空字符串），resolve `PlatformIdentity`；回调失败或 err 非空时 reject `BusinessError`。验证：方法签名匹配接口，`catch` 无类型注解，BusinessError 错误码 1001502012（用户取消）有处理分支
 - [x] 4.3 实现 `signOut()`：华为侧无显式 signOut API，不调 `CancelAuthorizationRequest`，方法体空（本地态清理由 AccountService 负责），直接 resolve。验证：方法返回 `Promise<void>`，不调用任何撤销授权 API
-- [x] 4.4 在 `HomeSettingBuilder` 新增 `huaweiLoginButton`（`@Builder`）：使用 `HuaweiAuthProvider.getController()` 渲染 `LoginWithHuaweiIDButton`，显式设置 `loginType: LoginType.ID` 使用个人开发者可用的普通华为账号登录；供 UI 未登录态调用。验证：Builder 内只用 UI 组件语法，无 `const`/`let` 声明，未使用企业开发者限定的 `QUICK_LOGIN`
+- [x] 4.4 在根级 `LoginDialog` 使用 `HuaweiAuthProvider.getController()` 渲染官方 `LoginWithHuaweiIDButton`，显式设置 `BUTTON_CUSTOM` 与 `loginType: LoginType.ID`，配置 TV 的 normal/focused/pressed/disabled 状态。验证：设置菜单不直接渲染平台按钮，未使用企业开发者限定的 `QUICK_LOGIN`
 - [x] 4.5 基础凭据缺少昵称或头像时，通过页面一次性注入的 `UIAbilityContext` 执行 `AuthorizationWithHuaweiIDRequest` 并申请 `profile` scope，合并 `nickName/avatarUri`；用户拒绝或失败不阻断基础登录，请求完成后释放 context。验证：资料请求异常只记录非敏感错误码，仍返回含 unionID 的身份
 
 ## 5. Cloud DB 仓库层
@@ -55,14 +55,16 @@
 
 ## 8. 启动初始化与登录态恢复
 
-- [x] 8.1 修改 `entry/src/main/ets/entryability/EntryAbility.ets`（或等价入口）：`onCreate` 中初始化 `AccountService`，`registerProvider(new HuaweiAuthProvider())`；读 `AppPreferences.isLogged()`，若为 true 则服务置已登录态供 UI 直接展示。验证：启动后 UI 直接显示已登录态（不重新授权），provider 注册在 UI 构建前完成
+- [x] 8.1 修改 `entry/src/main/ets/entryability/EntryAbility.ets`：UI 构建前注册 `HuaweiAuthProvider`，在 `AppPreferences.init()` 完成后调用全局 `AccountModel.restore()`。验证：启动后所有页面直接读取同一恢复状态，不重新授权
+- [x] 8.2 新增 `stores/account/AccountModel.ets`：使用 `AppStorageV2.connect()` + `@ObservedV2`/`@Trace` 维护应用级账号资料、登录弹层、登录进度与错误状态；登录、退出和恢复均连接固定 key 并更新同一模型。验证：任意页面修改后可驱动根组件即时刷新
 
-## 9. UI 集成：设置页账号分组
+## 9. UI 集成：全局登录弹层与设置页账号分组
 
-- [x] 9.1 修改 `entry/src/main/ets/pages/settings/builders/HomeSettingBuilder.ets` 账号分组（当前 lines 118-129）：读登录态 `isLogged`，未登录态渲染 `HuaweiAuthProvider.huaweiLoginButtonBuilder`（独立 `@Builder`，不走 `SettingListItem`），不展示 VidAll Pro/全平台可用/退出登录；已登录态保留现有结构。验证：未登录态只看到华为登录按钮，已登录态看到原有三行
-- [x] 9.2 已登录态「退出登录」项接通 `AccountService.logout()`：点击 → 调用 logout → 成功后 UI 自动回未登录态（由 `@Local`/store 驱动刷新）。验证：点击退出后账号分组切换为未登录态，不报错
-- [x] 9.3 登录成功后 UI 自动刷新为已登录态：`HuaweiAuthProvider.login()` → `AccountService.loginWith` 成功 → 通知 store/`@Local` → 账号分组重渲染。验证：授权成功后无需手动刷新，账号分组自动展示已登录
-- [x] 9.4 已登录态展示持久化昵称和头像；昵称为空显示“华为用户”，头像为空或加载失败显示默认圆形占位，资料行不承担点击交互，退出项继续参与 TV 焦点。验证：初始化、登录和退出后资料状态统一刷新
+- [x] 9.1 修改 `HomeSettingBuilder.ets`：未登录态仅展示与其他菜单一致的「登录」项，点击只调用 `AccountModel.showLoginDialog()`；不直接渲染华为按钮或自动授权。已登录态保留原结构。验证：进入设置不会拉起授权
+- [x] 9.2 已登录态「退出登录」接通 `AccountService.logout()`，由服务在 `finally` 清理本地与全局状态。验证：退出完成后所有页面即时切回未登录
+- [x] 9.3 新增根级 `LoginDialog.ets` 并挂载到 `Index.ets`：弹层集中承载官方华为按钮、未来平台提示、取消入口和错误提示；返回键优先关闭弹层。验证：任意业务可复用同一入口
+- [x] 9.4 登录成功后由 `AccountService` 在云端和本地持久化完成后调用 `AccountModel.applyLoggedInState()`，弹层关闭且设置页即时展示昵称头像；空资料使用降级 UI。验证：无需重新进入页面
+- [x] 9.5 弹层显示时预注册 provider controller 回调，授权取消/失败后展示提示并重新布防；关闭再打开时不重复注册等待流程。验证：只有点击官方按钮才授权，取消后可重试，无自动授权
 
 ## 10. 自检清单（验证阶段）
 
@@ -71,6 +73,6 @@
 - [ ] 10.3 Cloud DB 双表写入验证：登录成功后在 AGC 控制台「云数据库 → 数据查询」查 `UserAccount` 与 `AccountBinding` 两表，确认有对应记录（accountId/bindingId/platform='huawei'/platformUserId=unionID）。验证：两表各有 1 条记录，字段值正确
 - [ ] 10.4 退出登录回退：已登录态点退出登录 → 账号分组回未登录态 → Cloud DB 两表记录仍在（控制台查询确认）。验证：UI 回未登录，Cloud DB 记录未删
 - [ ] 10.5 重启登录态恢复：已登录态杀进程重启 App → 设置页账号分组直接显示已登录态（不重新拉起华为授权）。验证：重启后无需授权即已登录
-- [ ] 10.6 失败处理：未登录态点华为登录 → 在华为授权页取消 → UI 回未登录态，不写 Cloud DB，提示失败。验证：取消后 UI 状态正确，控制台无新增记录
+- [ ] 10.6 唯一入口与失败重试：进入设置不自动授权；点「登录」只打开弹层；点官方按钮后在授权页取消 → 弹层保留、全局状态未登录、不写 Cloud DB并显示可重试提示；关闭后再次打开不会出现重复回调。验证：各路径逐项通过
 - [x] 10.7 ArkTS 护栏 lint：全文核查 `services/account/` 与 `db/models/` 下文件无 `any`/`unknown`/`catch(e: X)`/`build()` 内变量声明等违规。验证：grep 无命中违规模式
 - [ ] 10.8 真机 profile 资料增强：同意资料授权后展示昵称头像；拒绝资料授权仍完成登录并显示降级 UI；重启后恢复资料，再登录空资料不覆盖 Cloud DB 历史值。验证：四条路径逐项通过

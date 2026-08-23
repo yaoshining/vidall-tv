@@ -5,6 +5,8 @@ import { UserAccount } from '../../db/models/UserAccount';
 import { AccountBinding } from '../../db/models/AccountBinding';
 import { AppPreferences } from '../../utils/AppPreferences';
 import { AgcCloudAuthService } from './AgcCloudAuthService';
+import { AccountModel } from '../../stores/account/AccountModel';
+import { LoginStateRecord } from '../../utils/AppPreferences';
 
 /**
  * 账号服务（单例）
@@ -114,13 +116,23 @@ export class AccountService {
     await this.bindingRepo.upsert(binding);
 
     // 4. 写本地登录态
+    const loginTime: number = Date.now();
     await AppPreferences.setLoginState(
       accountId,
       provider.providerId,
       account.displayName,
       account.avatarUri,
-      Date.now()
+      loginTime
     );
+    const loginState: LoginStateRecord = {
+      accountId: accountId,
+      providerId: provider.providerId,
+      displayName: account.displayName,
+      avatarUri: account.avatarUri,
+      loginTime: loginTime,
+      isLogged: true
+    };
+    AccountModel.getInstance().applyLoggedInState(loginState);
   }
 
   /**
@@ -139,6 +151,7 @@ export class AccountService {
       await AgcCloudAuthService.getInstance().signOut();
     } finally {
       await AppPreferences.clearLoginState();
+      AccountModel.getInstance().clear();
     }
   }
 }
