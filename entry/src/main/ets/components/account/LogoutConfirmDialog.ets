@@ -51,7 +51,7 @@ export struct LogoutConfirmDialog {
             .fontWeight(FontWeight.Bold)
             .fontColor(Color.White)
 
-          Text(`确定要退出当前账号（${this.getDisplayName()}）吗？退出后将无法同步观看进度与账号权益。`)
+          Text(`确定要退出当前账号（${this.getDisplayName()}）吗？退出后需要重新登录。`)
             .fontSize(15)
             .fontColor('#C8C8C8')
             .lineHeight(24)
