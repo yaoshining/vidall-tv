@@ -1,3 +1,4 @@
+import { BusinessError } from '@kit.BasicServicesKit';
 import { AuthProvider, PlatformIdentity } from './AuthProvider';
 import { CloudAccountRepository } from './repo/CloudAccountRepository';
 import { CloudBindingRepository } from './repo/CloudBindingRepository';
@@ -7,6 +8,16 @@ import { AppPreferences } from '../../utils/AppPreferences';
 import { AgcCloudAuthService } from './AgcCloudAuthService';
 import { AccountModel } from '../../stores/account/AccountModel';
 import { LoginStateRecord } from '../../utils/AppPreferences';
+
+/** 登录时指定的 provider 未注册。 */
+export class UnregisteredProviderError extends Error implements BusinessError {
+  code: number = 1002;
+
+  constructor(providerId: string) {
+    super(`未注册的 provider: ${providerId}`);
+    this.name = 'UnregisteredProviderError';
+  }
+}
 
 /**
  * 账号服务（单例）
@@ -53,7 +64,7 @@ export class AccountService {
   async loginWith(providerId: string): Promise<void> {
     const provider = this.providers.get(providerId);
     if (!provider) {
-      throw new Error(`未注册的 provider: ${providerId}`);
+      throw new UnregisteredProviderError(providerId);
     }
 
     const identity: PlatformIdentity = await provider.login();

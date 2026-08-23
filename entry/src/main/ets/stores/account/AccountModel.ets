@@ -1,5 +1,16 @@
 import { AppStorageV2 } from '@kit.ArkUI'
+import { BusinessError } from '@kit.BasicServicesKit'
 import { AppPreferences, LoginStateRecord } from '../../utils/AppPreferences'
+
+/** 全局账号状态初始化失败（AccountModel 依赖 AppStorageV2.connect 未取到实例）。 */
+export class AccountInitError extends Error implements BusinessError {
+  code: number = 1001;
+
+  constructor() {
+    super('无法初始化全局账号状态');
+    this.name = 'AccountInitError';
+  }
+}
 
 @ObservedV2
 export class AccountModel {
@@ -25,14 +36,18 @@ export class AccountModel {
       () => new AccountModel()
     )
     if (model === undefined) {
-      throw new Error('无法初始化全局账号状态')
+      throw new AccountInitError()
     }
     return model
   }
 
   async restore(): Promise<void> {
     const state: LoginStateRecord | null = await AppPreferences.getLoginState()
-    if (state === null) {
+    if (state === null || !state.isLogged) {
+      this.clear()
+      return
+    }
+    if (state.accountId.length === 0 || state.providerId.length === 0) {
       this.clear()
       return
     }

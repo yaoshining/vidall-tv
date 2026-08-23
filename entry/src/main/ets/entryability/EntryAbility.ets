@@ -4,7 +4,7 @@ import { window } from '@kit.ArkUI';
 import { IBestInit } from "@ibestservices/ibest-ui"
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
-import { emitter } from '@kit.BasicServicesKit';
+import { emitter, BusinessError } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
 import { ServiceLocator } from '../services/ServiceLocator';
 import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
@@ -69,7 +69,8 @@ export default class EntryAbility extends UIAbility {
       AgcCloudAuthService.getInstance().initialize(this.context);
       hilog.info(DOMAIN, 'testTag', 'AGC Authentication initialized');
     } catch (e) {
-      hilog.error(DOMAIN, 'testTag', 'Failed to init AGC Authentication: %{public}s', JSON.stringify(e));
+      const err = e as BusinessError;
+      hilog.error(DOMAIN, 'testTag', 'Failed to init AGC Authentication: %{public}s', err.message ?? String(e));
     }
     const accountService = AccountService.getInstance();
     accountService.registerProvider(new HuaweiAuthProvider());

@@ -37,7 +37,7 @@ export struct LogoutConfirmDialog {
   private showToast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 })
-    } catch {
+    } catch (e) {
       console.warn(`[LogoutConfirmDialog] toast failed: ${message}`)
     }
   }
