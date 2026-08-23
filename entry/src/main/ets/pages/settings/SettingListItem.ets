@@ -74,11 +74,9 @@ export struct SettingListItem {
       left: 16,
       right: 16
     })
-    .hoverEffect(HoverEffect.Highlight)
     .height(50)
     .borderRadius(8)
-    .backgroundColor("#333333")
-    .border({ width: 2, color: this.isRowFocused ? Color.White : Color.Transparent })
+    .backgroundColor(this.isRowFocused ? "#3F3F3F" : "#333333")
     .scale({ x: this.isRowFocused ? 1.02 : 1.0, y: this.isRowFocused ? 1.02 : 1.0 })
     .animation({ duration: 120, curve: Curve.EaseInOut })
     .focusable(this.interactive)

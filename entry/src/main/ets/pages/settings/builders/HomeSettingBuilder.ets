@@ -174,7 +174,6 @@ struct HomeSettingBuilderComponent {
           SettingListItem({
             title: "退出登录",
             isLink: true,
-            autoFocus: true,
             onItemClick: () => { this.showLogoutConfirm() }
           })
         } else {
@@ -182,7 +181,6 @@ struct HomeSettingBuilderComponent {
             title: '登录',
             value: '同步账号与跨设备体验',
             isLink: true,
-            autoFocus: true,
             onItemClick: () => {
               this.showLoginDialog()
             },
