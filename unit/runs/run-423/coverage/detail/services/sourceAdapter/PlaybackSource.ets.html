@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/sourceAdapter/PlaybackSource.ets 
+// 
+// 统一的播放源描述模型。 
+// 
+// 背景：原 `PlayerPage.resolveEpisodePlaybackSource()`、`MovieDetailPage.play()`、 
+// `SeasonDetailPage`、`PlayHistoryPage.buildPlayUrl()`、`FileExplorerPage.playVideo()` 
+// 各处都各自 `JSON.parse(fileSource.configJson)` 后拼装 SMB / WebDAV URL 与 
+// Authorization header。规则分散且边界不一致（端口兜底、rootPath 前导 `/`、 
+// httpHeader 是否设置空对象等）。 
+// 
+// 本文件定义的类型，是 `SourceAdapterService` 与调用方之间的稳定契约， 
+// 用于： 
+// 1. 调用方不再关心协议拼装细节，只描述&quot;我要播哪个文件源下的哪个文件&quot;。 
+// 2. service 统一输出 URL / headers / source identity，供字幕缓存、最近使用字幕、 
+//    后续 runtime service（PlaybackBackendService、AudioTrackRoutingService 等）消费。 
+// 
+// 与现有 `ResolvedEpisodePlaybackSource` 的差异： 
+// - 增加 `sourceType` / `sourceId` / `sourceIdentity` 字段，确保稳定缓存 key 不再依赖 
+//   调用方自行透传。 
+// - 字段名改用更通用的 `filePath`，与现有 `videoPath` 同义但更直观。 
+// - `httpHeader` 始终为 `Record&lt;string, string&gt;`（无 token 时为空对象，不再 undefined）。 
+// 
+// 兼容性： 
+// - `PlayerPageParam` 不变；现有字段照旧透传到 `VideoData`。 
+// - `ResolvedEpisodePlaybackSource` 由 `PlayerPage` 内逐步替换，本 service 输出优先。 
+ 
+import { PresetAudioTrack, PresetSubtitleTrack } from &quot;../../components/core/player/VideoData&quot;; 
+ 
+/** 协议类型，对齐 FileSourceEntity.FileSourceType 的字符串值。 */ 
+export type PlaybackSourceType = &#39;webdav&#39; | &#39;smb&#39; | &#39;local&#39; | string; 
+ 
+/** 
+ * 稳定的 source identity。 
+ * 
+ * 用途：作为字幕缓存与最近使用字幕记录的稳定 key， 
+ * 不应因 SMB 代理 URL 临时变化或 WebDAV host 重写而改变。 
+ * 
+ * 组成规则（service 内部强制）： 
+ * - `${sourceType}:${sourceId}`，例 `webdav:3`、`smb:7`、`local:42` 
+ * - 永久稳定，由 FileSource.id 在 DB 中保证不变。 
+ */ 
+export interface PlaybackSourceIdentity { 
+  /** 协议类型字符串 */ 
+  sourceType: PlaybackSourceType; 
+  /** 文件源 DB id 的字符串形式 */ 
+  sourceId: string; 
+} 
+ 
+/** 
+ * 统一的播放源解析请求。 
+ * 
+ * 调用方只需描述&quot;要播哪个文件源下的哪个文件&quot;， 
+ * service 负责装配 URL / headers / identity / 已落库的轨道与时长。 
+ */ 
+export interface ResolvePlaybackSourceRequest { 
+  /** DB 中的文件源 id；缺失时表示 local / 已构造好 URL 的直接透传场景 */ 
+  sourceId?: number; 
+  /** 
+   * 协议类型（可选）。当 service 内部从 DB 读到 sourceId 时会自动推断； 
+   * 直接透传场景（如 FileExplorerPage 已拿到 client）由调用方显式传入。 
+   */ 
+  sourceType?: PlaybackSourceType; 
+  /** 文件相对路径（含前导 /），用于 SMB / WebDAV URL 拼装 */ 
+  filePath: string; 
+  /** 视频 DB id（可选），用于回查 play_progress 与 ffprobe 落库轨道 */ 
+  videoId?: number; 
+} 
+ 
+/** 
+ * 统一的播放源解析结果。 
+ * 
+ * 调用方拿到后可直接映射到 `PlayerPageParam` 的 url / httpHeader / durationHintMs / 
+ * presetAudioTracks / presetSubtitleTracks / startPositionMs / fileSourceType / 
+ * fileSourceId 等字段。 
+ */ 
+export interface ResolvedPlaybackSource { 
+  /** 已编码的播放 URL（直接喂给 AVPlayer / MPV / native backend） */ 
+  url: string; 
+  /** 
+   * HTTP 请求头。空时返回空对象（而非 undefined），便于调用方直接赋值。 
+   * 当前仅 WebDAV 场景会附带 Authorization；SMB 走 player 内部 NAPI，不依赖此 header。 
+   */ 
+  httpHeader: Record&lt;string, string&gt;; 
+  /** 时长提示（毫秒），从 `videos` 表读取 */ 
+  durationHintMs?: number; 
+  /** ffprobe 落库后的预置音轨 */ 
+  presetAudioTracks?: PresetAudioTrack[]; 
+  /** ffprobe 落库后的预置字幕轨 */ 
+  presetSubtitleTracks?: PresetSubtitleTrack[]; 
+  /** 
+   * 集内起播位置（毫秒），由 service 从 `play_progress` 按 videoId 读取， 
+   * 已应用 watched 判定（&gt;=95% 不返回）。 
+   * 
+   * 调用方拿到后透传到 `PlayerPageParam.startPositionMs`。 
+   */ 
+  startPositionMs?: number; 
+  /** 
+   * 稳定的 source identity，供字幕缓存 / 最近使用字幕记录使用。 
+   * service 内部保证存在；调用方可直接赋值到 `PlayerPageParam.fileSourceType` 与 
+   * `fileSourceId`，二者在现有实现中已被用于字幕缓存分桶。 
+   */ 
+  sourceIdentity: PlaybackSourceIdentity; 
+} 
+ 
+/** 
+ * `toResolveRequest` 的输入项。 
+ * 显式 interface 避免 ArkTS `arkts-no-obj-literals-as-types` 报错。 
+ */ 
+export interface ToResolveRequestItem { 
+  sourceId?: number; 
+  videoPath: string; 
+  videoId?: number; 
+} 
+ 
+/** 
+ * `PlaybackContextItem` → `ResolvePlaybackSourceRequest` 的桥接函数。 
+ * 
+ * 调用方（媒体库剧集切源、文件浏览器上下集切换）在拿到 `PlaybackContextItem` 后 
+ * 只需把字段映射到 `ResolvePlaybackSourceRequest`，由 service 负责拼装。 
+ * 
+ * 本函数不读 DB、不依赖 service 实例，便于在测试或 mock 场景中复用。 
+ */ 
+export function toResolveRequest(item: ToResolveRequestItem): ResolvePlaybackSourceRequest { 
+  const req: ResolvePlaybackSourceRequest = { filePath: item.videoPath }; 
+  if (item.sourceId !== undefined) { 
+    req.sourceId = item.sourceId; 
+  } 
+  if (item.videoId !== undefined) { 
+    req.videoId = item.videoId; 
+  } 
+  return req; 
+} 
+ 
+/** 
+ * 从 `ResolvedPlaybackSource` 派生 `PlayerPageParam` 所需的 identity 字符串。 
+ * 
+ * 与现有 `PlayerPageParam.fileSourceType` / `fileSourceId` 字段语义保持一致， 
+ * 调用方只需 `nextParam.fileSourceType = identity.sourceType`。 
+ */ 
+export function fileSourceTypeFromIdentity(identity: PlaybackSourceIdentity): string { 
+  return identity.sourceType; 
+} 
+ 
+export function fileSourceIdFromIdentity(identity: PlaybackSourceIdentity): string { 
+  return identity.sourceId; 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sun Aug 23 2026 18:14:46 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/sourceAdapter/PlaybackSource.ets","hash":"03155d4f5c373b90bf4679068a1238b2208f7f1ceb0cc4e5e7d145dfa3b80aa0","lineCnt":147,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"toResolveRequest","count":0,"regions":[{"startLoc":{"line":123,"col":1},"endLoc":{"line":132,"col":2},"count":0,"ignored":0},{"startLoc":{"line":125,"col":36},"endLoc":{"line":127,"col":4},"count":0,"ignored":0},{"startLoc":{"line":128,"col":35},"endLoc":{"line":130,"col":4},"count":0,"ignored":0},{"startLoc":{"line":131,"col":3},"endLoc":{"line":132,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":125,"col":7},"endLoc":{"line":125,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":128,"col":7},"endLoc":{"line":128,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"fileSourceTypeFromIdentity","count":0,"regions":[{"startLoc":{"line":140,"col":1},"endLoc":{"line":142,"col":2},"count":0,"ignored":0},{"startLoc":{"line":141,"col":3},"endLoc":{"line":142,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"fileSourceIdFromIdentity","count":0,"regions":[{"startLoc":{"line":144,"col":1},"endLoc":{"line":146,"col":2},"count":0,"ignored":0},{"startLoc":{"line":145,"col":3},"endLoc":{"line":146,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2}],"exeLine":{"0":27,"1":30,"2":42,"3":44,"4":46,"5":55,"6":57,"7":62,"8":64,"9":66,"10":76,"11":78,"12":83,"13":85,"14":87,"15":89,"16":96,"17":102,"18":109,"19":110,"20":111,"21":112,"22":123,"23":124,"24":125,"25":126,"26":128,"27":129,"28":131,"29":140,"30":141,"31":144,"32":145},"summary":{"lines":{"total":11,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,-1,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,0,0,-1,-1]},"functions":{"total":3,"covered":0,"pct":0},"branches":{"total":4,"covered":0,"pct":0}}},"title":"PlaybackSource.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
