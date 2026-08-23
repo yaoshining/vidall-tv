@@ -74,6 +74,7 @@ export struct SettingListItem {
       left: 16,
       right: 16
     })
+    .hoverEffect(HoverEffect.Highlight)
     .height(50)
     .borderRadius(8)
     .backgroundColor(this.isRowFocused ? "#3F3F3F" : "#333333")
