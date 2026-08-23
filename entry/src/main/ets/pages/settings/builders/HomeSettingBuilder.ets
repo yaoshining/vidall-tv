@@ -14,6 +14,7 @@ import {
   navigateToSubtitleLanguagePreference
 } from "./HomeSettingBuilderModel";
 import { SubtitleCacheManager, formatCacheSize } from '../../../subtitle/SubtitleCacheManager';
+import { AccountModel } from '../../../stores/account/AccountModel';
 
 @Builder
 function vipTitleBuilder() {
@@ -38,6 +39,8 @@ struct HomeSettingBuilderComponent {
   @Local isSubtitleLanguageSummaryLoaded: boolean = false
   @Local private isClearingCache: boolean = false
   @Local private cacheSizeText: string = ''
+  @Local accountModel: AccountModel = AccountModel.getInstance()
+  @Local private avatarLoadFailed: boolean = false
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
@@ -111,6 +114,44 @@ struct HomeSettingBuilderComponent {
     }
   }
 
+  private showLoginDialog(): void {
+    console.info('[HomeSettingBuilder] 打开登录弹层')
+    this.accountModel.showLoginDialog()
+  }
+
+  private showLogoutConfirm(): void {
+    this.accountModel.showLogoutConfirm()
+  }
+
+  private getAccountDisplayName(): string {
+    return this.accountModel.displayName.length > 0 ? this.accountModel.displayName : '华为用户'
+  }
+
+  @Builder
+  private accountAvatarBuilder() {
+    if (this.accountModel.avatarUri.length > 0 && !this.avatarLoadFailed) {
+      Image(this.accountModel.avatarUri)
+        .width(34)
+        .height(34)
+        .borderRadius(17)
+        .objectFit(ImageFit.Cover)
+        .clip(true)
+        .onError(() => {
+          this.avatarLoadFailed = true
+        })
+    } else {
+      Text('华')
+        .width(34)
+        .height(34)
+        .textAlign(TextAlign.Center)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Color.White)
+        .backgroundColor('#C9272C')
+        .borderRadius(17)
+    }
+  }
+
   build() {
     SettingContainer({
       title: "配置"
@@ -118,14 +159,36 @@ struct HomeSettingBuilderComponent {
       SettingListItemGroup({
         title: "账号"
       }) {
-        SettingListItem({
-          value: "全平台可用",
-          titleBuilder: vipTitleBuilder
-        })
-        SettingListItem({
-          title: "退出登录",
-          isLink: true,
-        })
+        if (this.accountModel.isLogged) {
+          SettingListItem({
+            title: this.getAccountDisplayName(),
+            value: '华为账号',
+            interactive: false,
+            iconBuilder: () => { this.accountAvatarBuilder() }
+          })
+          SettingListItem({
+            value: "全平台可用",
+            interactive: false,
+            titleBuilder: vipTitleBuilder
+          })
+          SettingListItem({
+            title: "退出登录",
+            isLink: true,
+            onItemClick: () => { this.showLogoutConfirm() }
+          })
+        } else {
+          SettingListItem({
+            title: '登录',
+            value: '同步账号与跨设备体验',
+            isLink: true,
+            onItemClick: () => {
+              this.showLoginDialog()
+            },
+            onRightIconClick: () => {
+              this.showLoginDialog()
+            }
+          })
+        }
       }
 
       SettingListItemGroup({

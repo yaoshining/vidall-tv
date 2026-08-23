@@ -17,13 +17,25 @@ import { ServerLibraryListPage } from './detail/ServerLibraryListPage';
 import { PlayHistoryPage } from './history/PlayHistoryPage';
 import { SearchWorkspacePage } from './search';
 import { MediaResultPage } from './search';
+import { LoginDialog } from '../components/account/LoginDialog';
+import { LogoutConfirmDialog } from '../components/account/LogoutConfirmDialog';
+import { AccountModel } from '../stores/account/AccountModel';
 @Entry
 @ComponentV2
 struct Index {
   sidebarModel: SidebarModel = SidebarStore.getState()
+  @Local accountModel: AccountModel = AccountModel.getInstance()
   @Provider('pageStack') pageStack: NavPathStack = new NavPathStack();
 
   onBackPress(): boolean {
+    if (this.accountModel.logoutConfirmVisible) {
+      this.accountModel.hideLogoutConfirm();
+      return true;
+    }
+    if (this.accountModel.loginDialogVisible) {
+      this.accountModel.hideLoginDialog();
+      return true;
+    }
     // 数据源切换弹窗打开时，返回键仅关闭弹窗，不退出 App
     const model = SourceSwitchModel.getState();
     if (model.sourceSwitchDialogVisible) {
@@ -105,6 +117,14 @@ struct Index {
         .backgroundColor("#282828")
         .width(this.sidebarModel.sidebarOpened ? "35%" : 0)
         .height("100%")
+      }
+
+      if (this.accountModel.loginDialogVisible) {
+        LoginDialog()
+      }
+
+      if (this.accountModel.logoutConfirmVisible) {
+        LogoutConfirmDialog()
       }
     }
     .alignContent(Alignment.TopStart)

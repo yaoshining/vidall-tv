@@ -4,10 +4,14 @@ import { window } from '@kit.ArkUI';
 import { IBestInit } from "@ibestservices/ibest-ui"
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { AppPreferences, PrefKey } from '../utils/AppPreferences';
-import { emitter } from '@kit.BasicServicesKit';
+import { emitter, BusinessError } from '@kit.BasicServicesKit';
 import { PlayerEvents } from '../components/core/player/Constants';
 import { ServiceLocator } from '../services/ServiceLocator';
 import { LocalFreeEntitlementService } from '../services/entitlement/LocalFreeEntitlementService';
+import { AccountService } from '../services/account/AccountService';
+import { HuaweiAuthProvider } from '../services/account/providers/HuaweiAuthProvider';
+import { AgcCloudAuthService } from '../services/account/AgcCloudAuthService';
+import { AccountModel } from '../stores/account/AccountModel';
 import { MetricsService } from '../services/metrics/MetricsService';
 import { CompositeMetricsReporter } from '../services/metrics/CompositeMetricsReporter';
 import { LocalFileReporter } from '../services/metrics/LocalFileReporter';
@@ -60,10 +64,23 @@ export default class EntryAbility extends UIAbility {
     ServiceLocator.register('entitlement', entitlementService);
     hilog.info(DOMAIN, 'testTag', 'EntitlementService registered (LocalFree mode)');
 
+    // 初始化 AGC 认证与 AccountService（须在 UI 构建前完成）
+    try {
+      AgcCloudAuthService.getInstance().initialize(this.context);
+      hilog.info(DOMAIN, 'testTag', 'AGC Authentication initialized');
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(DOMAIN, 'testTag', 'Failed to init AGC Authentication: %{public}s', err.message ?? String(e));
+    }
+    const accountService = AccountService.getInstance();
+    accountService.registerProvider(new HuaweiAuthProvider());
+    hilog.info(DOMAIN, 'testTag', 'AccountService initialized, HuaweiAuthProvider registered');
+
     // 并行初始化 AppPreferences 和数据库
     AppPreferences.init(this.context)
       .then(async () => {
         hilog.info(DOMAIN, 'testTag', 'AppPreferences initialized successfully');
+        await AccountModel.getInstance().restore();
         await AppPreferences.set(PrefKey.TMDB_API_KEY, '8a4f81133468d801df27c9cdcb5c33af');
         const lastBreadcrumb = await AppPreferences.get(PrefKey.PLAYER_LAST_BREADCRUMB, '');
         if (lastBreadcrumb.length > 0) {
@@ -80,16 +97,16 @@ export default class EntryAbility extends UIAbility {
           await AppPreferences.set(PrefKey.PLAYER_LAST_BREADCRUMB, '');
         }
       })
-      .catch((err: Error) => {
-        hilog.error(DOMAIN, 'testTag', 'Failed to init AppPreferences: %{public}s', JSON.stringify(err));
+      .catch(() => {
+        hilog.error(DOMAIN, 'testTag', 'Failed to init AppPreferences');
       });
 
     FileSourceDatabase.getInstance(this.context).init()
       .then(() => {
         hilog.info(DOMAIN, 'testTag', 'Database initialized successfully');
       })
-      .catch((err: Error) => {
-        hilog.error(DOMAIN, 'testTag', 'Failed to init database: %{public}s', JSON.stringify(err));
+      .catch(() => {
+        hilog.error(DOMAIN, 'testTag', 'Failed to init database');
       });
   }
 
