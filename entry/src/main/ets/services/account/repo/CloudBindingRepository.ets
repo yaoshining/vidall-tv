@@ -6,7 +6,7 @@ import { CLOUD_ZONE_NAME } from '../CloudAccountConfig';
  * AccountBinding 表的 Cloud DB 读写。
  *
  * 依赖：AGC 控制台已创建存储区 CLOUD_ZONE_NAME 与对象类型 AccountBinding（见 tasks 1.2/1.3）。
- * (platform, platformUserId) 全局唯一由代码层先查后写保证（见 AccountService.loginWith）。
+ * (platform, platformUserId) 使用确定性 bindingId，确保并发首次登录写入同一记录。
  */
 export class CloudBindingRepository {
   async upsert(binding: AccountBinding): Promise<number> {

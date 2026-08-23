@@ -1,7 +1,17 @@
-import { loginComponentManager } from '@kit.AccountKit';
+import { authentication, loginComponentManager } from '@kit.AccountKit';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import buffer from '@ohos.buffer';
 import { AuthProvider, PlatformIdentity } from '../AuthProvider';
+
+export class HuaweiCredentialEmptyError extends Error {
+  readonly code: number = 1001502999;
+
+  constructor() {
+    super('华为登录未返回凭据');
+    this.name = 'HuaweiCredentialEmptyError';
+  }
+}
 
 /**
  * idToken（JWT）payload 中关注的 claims
@@ -27,20 +37,27 @@ export class HuaweiAuthProvider implements AuthProvider {
   readonly displayName: string = '华为账号';
   private controller: loginComponentManager.LoginWithHuaweiIDButtonController =
     new loginComponentManager.LoginWithHuaweiIDButtonController();
+  private authorizationContext: common.UIAbilityContext | undefined;
+
+  setAuthorizationContext(context: common.UIAbilityContext): void {
+    this.authorizationContext = context;
+  }
 
   login(): Promise<PlatformIdentity> {
     return new Promise<PlatformIdentity>((resolve, reject) => {
       this.controller.onClickLoginWithHuaweiIDButton(
         (err: BusinessError, data: loginComponentManager.HuaweiIDCredential) => {
           if (err && err.code !== 0) {
+            this.authorizationContext = undefined;
             reject(err);
             return;
           }
           if (data) {
-            resolve(this.buildIdentity(data));
+            void this.resolveIdentity(data, resolve);
             return;
           }
-          reject(new Error('华为登录返回空结果'));
+          this.authorizationContext = undefined;
+          reject(new HuaweiCredentialEmptyError());
         }
       );
     });
@@ -55,6 +72,48 @@ export class HuaweiAuthProvider implements AuthProvider {
     return this.controller;
   }
 
+  private async resolveIdentity(cred: loginComponentManager.HuaweiIDCredential,
+    resolve: (identity: PlatformIdentity) => void): Promise<void> {
+    const identity: PlatformIdentity = this.buildIdentity(cred);
+    try {
+      if (identity.displayName === undefined || identity.avatarUri === undefined) {
+        await this.enrichWithProfile(identity);
+      }
+    } catch (e) {
+      const error = e as BusinessError;
+      console.warn(`[HuaweiAuthProvider] 资料授权未完成 code=${error.code ?? -1}`);
+    } finally {
+      this.authorizationContext = undefined;
+      resolve(identity);
+    }
+  }
+
+  private async enrichWithProfile(identity: PlatformIdentity): Promise<void> {
+    const context: common.UIAbilityContext | undefined = this.authorizationContext;
+    if (context === undefined) {
+      return;
+    }
+    const huaweiIDProvider: authentication.HuaweiIDProvider = new authentication.HuaweiIDProvider();
+    const request: authentication.AuthorizationWithHuaweiIDRequest =
+      huaweiIDProvider.createAuthorizationWithHuaweiIDRequest();
+    request.scopes = ['profile'];
+    const controller: authentication.AuthenticationController =
+      new authentication.AuthenticationController(context);
+    const response: authentication.AuthenticationResponse = await controller.executeRequest(request);
+    const huaweiResponse: authentication.AuthorizationWithHuaweiIDResponse =
+      response as authentication.AuthorizationWithHuaweiIDResponse;
+    const credential: authentication.AuthorizationWithHuaweiIDCredential | undefined = huaweiResponse.data;
+    if (credential === undefined) {
+      return;
+    }
+    if (identity.displayName === undefined && credential.nickName !== undefined && credential.nickName.length > 0) {
+      identity.displayName = credential.nickName;
+    }
+    if (identity.avatarUri === undefined && credential.avatarUri !== undefined && credential.avatarUri.length > 0) {
+      identity.avatarUri = credential.avatarUri;
+    }
+  }
+
   private buildIdentity(cred: loginComponentManager.HuaweiIDCredential): PlatformIdentity {
     const raw: Map<string, string> = new Map<string, string>();
     raw.set('authorizationCode', cred.authorizationCode);
@@ -66,8 +125,8 @@ export class HuaweiAuthProvider implements AuthProvider {
     const identity: PlatformIdentity = {
       platformUserId: cred.unionID,
       openID: cred.openID,
-      displayName: claims.name,
-      avatarUri: claims.picture,
+      displayName: claims.name.length > 0 ? claims.name : undefined,
+      avatarUri: claims.picture.length > 0 ? claims.picture : undefined,
       raw
     };
     return identity;

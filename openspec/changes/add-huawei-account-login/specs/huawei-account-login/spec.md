@@ -29,12 +29,17 @@
 
 ### Requirement: 华为账号授权登录
 
-用户 SHALL 能通过华为账号一键登录按钮拉起华为账号授权：成功后系统获得 `unionID`（跨应用统一用户标识）、`openID`、昵称、头像等资料。采用客户端直取 `unionID` 流程，不自建后端做 `authorizationCode` 换 `accessToken`。
+用户 SHALL 能通过华为账号一键登录按钮拉起华为账号授权：成功后系统获得 `unionID`（跨应用统一用户标识）与 `openID`。系统 SHALL 在基础凭据不含昵称或头像时额外申请 `profile` scope，并在资料授权失败、用户拒绝或返回空资料时继续完成基础登录。采用客户端直取 `unionID` 流程，不自建后端做 `authorizationCode` 换 `accessToken`。
 
 #### Scenario: 首次登录华为账号
 
 - **WHEN** 用户点击华为账号一键登录按钮并在系统授权页同意授权
-- **THEN** 系统获得该用户的 `unionID`、`openID`、昵称、头像，进入登录持久化流程
+- **THEN** 系统获得该用户的 `unionID`、`openID`，并在需要时申请 profile 资料后进入登录持久化流程
+
+#### Scenario: 用户拒绝资料授权
+
+- **WHEN** 基础华为账号授权成功，但用户拒绝后续 profile 资料授权或资料请求失败
+- **THEN** 系统继续完成登录，昵称显示“华为用户”，头像显示默认占位，不因资料缺失阻断 Cloud DB 主链路
 
 #### Scenario: 用户取消授权
 
@@ -62,7 +67,17 @@
 
 ### Requirement: 登录成功云数据库持久化
 
-登录成功并取得平台身份后，系统 SHALL 在云数据库中 find-or-create 账号主体与平台绑定记录（按 `(platform, platformUserId)` 查找，命中则更新资料，未命中则新建），并同步将昵称、头像、登录时间等资料写入对应记录。
+登录成功并取得平台身份后，系统 SHALL 在云数据库中 find-or-create 账号主体与平台绑定记录（按 `(platform, platformUserId)` 查找，命中则更新资料，未命中则新建），并同步将昵称、头像、登录时间等资料写入对应记录。 Cloud DB 查询或写入前，系统 SHALL 通过 AGC Authentication 建立用户会话，并将 `auth.getAuthProvider()` 传入 `cloudCommon.init()`，确保请求以认证用户身份执行；不得通过放宽 `World` 写权限绕过认证。
+
+#### Scenario: Cloud Foundation 使用认证用户上下文
+
+- **WHEN** 华为账号授权成功并准备访问 Cloud DB
+- **THEN** 系统先建立 AGC Authentication 用户会话，再以其 `AuthProvider` 初始化 Cloud Foundation，随后才执行账号与绑定查询及写入
+
+#### Scenario: 认证上下文建立失败
+
+- **WHEN** AGC Authentication 登录或 Cloud Foundation 认证初始化失败
+- **THEN** 系统不执行 Cloud DB 写入、不放宽匿名写权限，并保持本地未登录态且提示失败
 
 #### Scenario: 登录后云数据库写入账号与绑定
 
@@ -71,8 +86,8 @@
 
 #### Scenario: 已有绑定再次登录更新资料
 
-- **WHEN** 已绑定该 `unionID` 的用户再次登录且本次返回的昵称/头像与上次不同
-- **THEN** 云数据库对应绑定记录与账号主体的昵称、头像、更新时间被刷新为最新值
+- **WHEN** 已绑定该 `unionID` 的用户再次登录且本次返回非空昵称或头像
+- **THEN** 云数据库对应绑定记录与账号主体仅用非空新资料刷新；本次空资料 SHALL NOT 覆盖历史昵称或头像
 
 ### Requirement: 登录失败与异常处理
 
@@ -99,12 +114,12 @@
 
 ### Requirement: 退出登录
 
-用户点击「退出登录」后，系统 SHALL 注销当前认证平台的登录态（华为 `signOut`），清空本地登录信息，账号分组回到未登录态；云数据库的账号主体与平台绑定记录 SHALL 保留，作为历史数据并支持再次登录时命中。
+用户点击「退出登录」后，系统 SHALL 调用 provider 的应用侧清理流程、退出 AGC 应用会话并清空本地登录信息，账号分组回到未登录态；该操作 SHALL NOT 撤销华为侧授权，也 SHALL NOT 删除云数据库的账号主体与平台绑定记录。
 
 #### Scenario: 退出登录回到未登录态
 
 - **WHEN** 已登录用户点击「退出登录」
-- **THEN** 当前认证平台被注销，本地登录态（accountId、providerId、昵称、头像、登录时间、是否登录）被清空，账号分组展示登录按钮
+- **THEN** AGC 应用会话与本地登录态（accountId、providerId、昵称、头像、登录时间、是否登录）被清空，账号分组展示登录按钮，华为侧授权保持不变
 
 #### Scenario: 退出后云端记录保留
 

@@ -8,10 +8,10 @@
 export interface PlatformIdentity {
   /** 平台侧用户 ID：华为=unionID；微信=unionid */
   platformUserId: string;
-  /** 显示昵称（可能为空字符串） */
-  displayName: string;
-  /** 头像 URI（可能为空字符串） */
-  avatarUri: string;
+  /** 显示昵称；provider 未返回资料时缺省 */
+  displayName?: string;
+  /** 头像 URI；provider 未返回资料时缺省 */
+  avatarUri?: string;
   /** 平台侧 openID（华为=openID） */
   openID: string;
   /** 原始字段（authorizationCode、idToken 等），provider 自填 */

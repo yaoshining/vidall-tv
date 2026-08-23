@@ -4,6 +4,15 @@ import { BusinessError } from '@kit.BasicServicesKit';
 
 export type AppPreferenceValue = string | number;
 
+interface LoginStateRecord {
+  accountId: string;
+  providerId: string;
+  displayName: string;
+  avatarUri: string;
+  loginTime: number;
+  isLogged: boolean;
+}
+
 export interface AppPreferencesStore {
   get(key: string, defaultValue: AppPreferenceValue): Promise<AppPreferenceValue>;
   put(key: string, value: AppPreferenceValue): Promise<void>;
@@ -48,7 +57,9 @@ export class PrefKey {
   static readonly ACTIVE_MEDIA_SOURCE = 'active_media_source';
   /** 音频解码能力设备/固件纠偏（JSON 序列化的 AudioCorrectionEntry[]） */
   static readonly AUDIO_CAPABILITY_CORRECTIONS = 'audio_capability_corrections';
-  /** 当前登录账号 ID（本 App 内 UUID） */
+  /** 完整登录态 JSON；单键写入提供一致性边界 */
+  static readonly ACCOUNT_STATE_RECORD = 'account.stateRecord';
+  /** 当前登录账号 ID（本 App 内 UUID，旧版本兼容键） */
   static readonly ACCOUNT_ACCOUNT_ID = 'account.accountId';
   /** 当前登录 provider 标识：'huawei' | 'wechat' ... */
   static readonly ACCOUNT_CURRENT_PROVIDER_ID = 'account.currentProviderId';
@@ -236,47 +247,82 @@ export class AppPreferences {
     avatarUri: string,
     loginTime: number
   ): Promise<void> {
-    await AppPreferences.set(PrefKey.ACCOUNT_ACCOUNT_ID, accountId);
-    await AppPreferences.set(PrefKey.ACCOUNT_CURRENT_PROVIDER_ID, providerId);
-    await AppPreferences.set(PrefKey.ACCOUNT_DISPLAY_NAME, displayName);
-    await AppPreferences.set(PrefKey.ACCOUNT_AVATAR_URI, avatarUri);
-    await AppPreferences.set(PrefKey.ACCOUNT_LOGIN_TIME, loginTime);
-    await AppPreferences.set(PrefKey.ACCOUNT_IS_LOGGED, 1);
+    const state: LoginStateRecord = {
+      accountId,
+      providerId,
+      displayName,
+      avatarUri,
+      loginTime,
+      isLogged: true
+    };
+    await AppPreferences.writeLoginState(state);
   }
 
   /** 清除登录态（退出登录后调用）；Cloud DB 记录保留。 */
   static async clearLoginState(): Promise<void> {
-    await AppPreferences.set(PrefKey.ACCOUNT_ACCOUNT_ID, '');
-    await AppPreferences.set(PrefKey.ACCOUNT_CURRENT_PROVIDER_ID, '');
-    await AppPreferences.set(PrefKey.ACCOUNT_DISPLAY_NAME, '');
-    await AppPreferences.set(PrefKey.ACCOUNT_AVATAR_URI, '');
-    await AppPreferences.set(PrefKey.ACCOUNT_LOGIN_TIME, 0);
-    await AppPreferences.set(PrefKey.ACCOUNT_IS_LOGGED, 0);
+    const state: LoginStateRecord = {
+      accountId: '',
+      providerId: '',
+      displayName: '',
+      avatarUri: '',
+      loginTime: 0,
+      isLogged: false
+    };
+    await AppPreferences.writeLoginState(state);
+  }
+
+  private static async writeLoginState(state: LoginStateRecord): Promise<void> {
+    const store = await AppPreferences.waitForStore();
+    if (store === null) {
+      throw new Error('AppPreferences 未初始化，无法持久化登录态');
+    }
+    await store.put(PrefKey.ACCOUNT_STATE_RECORD, JSON.stringify(state));
+    await store.flush();
+  }
+
+  private static async getLoginState(): Promise<LoginStateRecord | null> {
+    const serialized = await AppPreferences.get(PrefKey.ACCOUNT_STATE_RECORD, '');
+    if (serialized.length === 0) {
+      return null;
+    }
+    try {
+      return JSON.parse(serialized) as LoginStateRecord;
+    } catch {
+      return null;
+    }
   }
 
   /** 是否已登录 */
   static async isLogged(): Promise<boolean> {
-    const v = await AppPreferences.getNumber(PrefKey.ACCOUNT_IS_LOGGED, 0);
-    return v === 1;
+    const state = await AppPreferences.getLoginState();
+    if (state !== null) {
+      return state.isLogged;
+    }
+    const legacy = await AppPreferences.getNumber(PrefKey.ACCOUNT_IS_LOGGED, 0);
+    return legacy === 1;
   }
 
   /** 当前登录 provider 标识（未登录返回空字符串） */
   static async getCurrentProviderId(): Promise<string> {
-    return AppPreferences.get(PrefKey.ACCOUNT_CURRENT_PROVIDER_ID, '');
+    const state = await AppPreferences.getLoginState();
+    return state?.providerId ?? AppPreferences.get(PrefKey.ACCOUNT_CURRENT_PROVIDER_ID, '');
   }
 
   /** 当前登录账号 ID（未登录返回空字符串） */
   static async getAccountId(): Promise<string> {
-    return AppPreferences.get(PrefKey.ACCOUNT_ACCOUNT_ID, '');
+    const state = await AppPreferences.getLoginState();
+    return state?.accountId ?? AppPreferences.get(PrefKey.ACCOUNT_ACCOUNT_ID, '');
   }
 
   /** 当前登录显示昵称（未登录返回空字符串） */
   static async getDisplayName(): Promise<string> {
-    return AppPreferences.get(PrefKey.ACCOUNT_DISPLAY_NAME, '');
+    const state = await AppPreferences.getLoginState();
+    return state?.displayName ?? AppPreferences.get(PrefKey.ACCOUNT_DISPLAY_NAME, '');
   }
 
   /** 当前登录头像 URI（未登录返回空字符串） */
   static async getAvatarUri(): Promise<string> {
-    return AppPreferences.get(PrefKey.ACCOUNT_AVATAR_URI, '');
+    const state = await AppPreferences.getLoginState();
+    return state?.avatarUri ?? AppPreferences.get(PrefKey.ACCOUNT_AVATAR_URI, '');
   }
 }

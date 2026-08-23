@@ -15,6 +15,7 @@ import {
 } from "./HomeSettingBuilderModel";
 import { SubtitleCacheManager, formatCacheSize } from '../../../subtitle/SubtitleCacheManager';
 import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { AccountService } from '../../../services/account/AccountService';
 import { HuaweiAuthProvider } from '../../../services/account/providers/HuaweiAuthProvider';
@@ -44,6 +45,9 @@ struct HomeSettingBuilderComponent {
   @Local private isClearingCache: boolean = false
   @Local private cacheSizeText: string = ''
   @Local private isLogged: boolean = false
+  @Local private displayName: string = ''
+  @Local private avatarUri: string = ''
+  @Local private avatarLoadFailed: boolean = false
 
   aboutToAppear(): void {
     this.loadSubtitlePreference()
@@ -119,42 +123,64 @@ struct HomeSettingBuilderComponent {
   }
 
   private async initAccount(): Promise<void> {
-    try {
-      this.isLogged = await AppPreferences.isLogged()
-    } catch {
-      this.isLogged = false
-    }
+    await this.refreshAccountView()
     if (!this.isLogged) {
       this.armHuaweiLogin()
     }
   }
 
-  private armHuaweiLogin(): void {
-    AccountService.getInstance().loginWith('huawei')
-      .then(async () => {
-        this.isLogged = await AppPreferences.isLogged()
-      })
-      .catch((e: BusinessError) => {
-        if (e.code === 1001502012) {
-          this.armHuaweiLogin()
-        } else {
-          this.showToast('华为登录失败：' + (e.message ?? ''))
-        }
-      })
+  private async refreshAccountView(): Promise<void> {
+    try {
+      this.isLogged = await AppPreferences.isLogged()
+      this.displayName = await AppPreferences.getDisplayName()
+      this.avatarUri = await AppPreferences.getAvatarUri()
+      this.avatarLoadFailed = false
+    } catch {
+      this.isLogged = false
+      this.displayName = ''
+      this.avatarUri = ''
+      this.avatarLoadFailed = false
+    }
   }
 
-  private doLogout(): void {
-    AccountService.getInstance().logout()
-      .then(async () => {
-        this.isLogged = await AppPreferences.isLogged()
-        this.showToast('已退出登录')
-        if (!this.isLogged) {
-          this.armHuaweiLogin()
-        }
-      })
-      .catch(() => {
-        this.showToast('退出登录失败')
-      })
+  private armHuaweiLogin(): void {
+    const provider = AccountService.getInstance().getProvider('huawei')
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext
+    if (provider instanceof HuaweiAuthProvider && context) {
+      provider.setAuthorizationContext(context)
+    }
+    void this.performHuaweiLogin()
+  }
+
+  private async performHuaweiLogin(): Promise<void> {
+    try {
+      await AccountService.getInstance().loginWith('huawei')
+      await this.refreshAccountView()
+    } catch (e) {
+      const error = e as BusinessError
+      if (error.code === 1001502012) {
+        this.armHuaweiLogin()
+      } else {
+        this.showToast('华为登录失败：' + (error.message ?? ''))
+      }
+    }
+  }
+
+  private async doLogout(): Promise<void> {
+    try {
+      await AccountService.getInstance().logout()
+      await this.refreshAccountView()
+      this.showToast('已退出登录')
+      if (!this.isLogged) {
+        this.armHuaweiLogin()
+      }
+    } catch {
+      this.showToast('退出登录失败')
+    }
+  }
+
+  private getAccountDisplayName(): string {
+    return this.displayName.length > 0 ? this.displayName : '华为用户'
   }
 
   private getHuaweiController(): loginComponentManager.LoginWithHuaweiIDButtonController {
@@ -166,12 +192,38 @@ struct HomeSettingBuilderComponent {
   }
 
   @Builder
+  private accountAvatarBuilder() {
+    if (this.avatarUri.length > 0 && !this.avatarLoadFailed) {
+      Image(this.avatarUri)
+        .width(34)
+        .height(34)
+        .borderRadius(17)
+        .objectFit(ImageFit.Cover)
+        .clip(true)
+        .onError(() => {
+          this.avatarLoadFailed = true
+        })
+    } else {
+      Text('华')
+        .width(34)
+        .height(34)
+        .textAlign(TextAlign.Center)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Color.White)
+        .backgroundColor('#C9272C')
+        .borderRadius(17)
+    }
+  }
+
+  @Builder
   private huaweiLoginButton() {
     ListItem() {
       LoginWithHuaweiIDButton({
         params: {
           style: loginComponentManager.Style.BUTTON_RED,
           borderRadius: 24,
+          loginType: loginComponentManager.LoginType.ID,
           supportDarkMode: true
         },
         controller: this.getHuaweiController()
@@ -192,6 +244,11 @@ struct HomeSettingBuilderComponent {
         title: "账号"
       }) {
         if (this.isLogged) {
+          SettingListItem({
+            title: this.getAccountDisplayName(),
+            value: '华为账号',
+            iconBuilder: () => { this.accountAvatarBuilder() }
+          })
           SettingListItem({
             value: "全平台可用",
             titleBuilder: vipTitleBuilder

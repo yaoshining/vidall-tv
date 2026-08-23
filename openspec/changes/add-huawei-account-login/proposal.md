@@ -10,7 +10,7 @@
 - 新增登录流程：用户点击登录按钮 → 拉起华为账号授权 → 成功回调拿到 `unionID`（及 `openID`、昵称、头像）→ 查/建 `AccountBinding` 与 `UserAccount` → 写入 Cloud DB → 本地持久化登录态 → UI 切换到「已登录」。
 - 接通「退出登录」：点击后当前 provider 注销登录态、清空本地登录信息、UI 回到「未登录」状态（Cloud DB 的 `UserAccount` / `AccountBinding` 记录保留，作为历史数据与再登录命中）。
 - 复用现有「已登录」占位 UI：登录成功后直接展示当前的 VidAll Pro / 全平台可用 / 退出登录结构，无需重新设计。
-- 接入 AGC 云开发：依赖 `agconnect-services.json`（已存在）与 `@kit.CloudFoundationKit` 的 `cloudDatabase` 能力，需要在 AGC 控制台开启 Cloud DB 并定义 `UserAccount` + `AccountBinding` 两个对象类型。
+- 接入 AGC 云开发：新增 `@hw-agconnect/auth` 认证服务 SDK，在华为账号授权后建立 AGC 用户会话，将 `auth.getAuthProvider()` 传入 `cloudCommon.init()`，再使用 `@kit.CloudFoundationKit` 写入 Cloud DB；控制台需开启认证服务与 Cloud DB。
 
 ## Capabilities
 
@@ -29,7 +29,7 @@
   - 新增 `services/account/`：账号服务层（`AuthProvider` 接口、`providers/HuaweiAuthProvider`、`AccountService` 编排 + provider 注册表、`repo/CloudAccountRepository` + `repo/CloudBindingRepository`）。
   - 新增 `db/models/UserAccount.ets` + `db/models/AccountBinding.ets`：Cloud DB 对象类型（`cloudDatabase.DatabaseObject` 子类）。
   - 扩展 `utils/AppPreferences` 的 `PrefKey`：本地登录态（accountId、当前 providerId、昵称、头像、登录时间、是否登录）。
-- **依赖**：`@kit.AccountKit`（`LoginWithHuaweiIDButton` / `loginWithHuaweiID` / `signOut`）、`@kit.CloudFoundationKit`（`cloudDatabase`）均为 HarmonyOS 系统 Kit，无需新增 oh-package / npm 依赖。
+- **依赖**：继续使用系统 Kit `@kit.AccountKit` 与 `@kit.CloudFoundationKit`，并新增 oh-package `@hw-agconnect/auth@^1.0.5`，用于建立 Cloud Foundation 可识别的认证上下文；退出仅清理 provider/AGC 应用会话和本地状态，不撤销华为侧授权。
 - **AGC 控制台配置**：开启华为账号认证、开启 Cloud DB、创建 `UserAccount` + `AccountBinding` 两个对象类型与存储区、导出 schema 入 `entry/src/main/resources/rawfile/`。
 - **`agconnect-services.json`**：已存在且含 `client_id` / `app_id` / `oauth_client`，无需改动（Cloud DB 服务在控制台侧开启，不写入此文件）。
 - **签名与权限**：登录与 Cloud DB 调用依赖正确的 AGC 签名配置（`build-profile.json5` 已有 default / production 签名），无需新增系统权限。

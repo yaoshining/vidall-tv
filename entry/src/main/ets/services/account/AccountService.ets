@@ -1,10 +1,10 @@
-import util from '@ohos.util';
 import { AuthProvider, PlatformIdentity } from './AuthProvider';
 import { CloudAccountRepository } from './repo/CloudAccountRepository';
 import { CloudBindingRepository } from './repo/CloudBindingRepository';
 import { UserAccount } from '../../db/models/UserAccount';
 import { AccountBinding } from '../../db/models/AccountBinding';
 import { AppPreferences } from '../../utils/AppPreferences';
+import { AgcCloudAuthService } from './AgcCloudAuthService';
 
 /**
  * 账号服务（单例）
@@ -16,7 +16,7 @@ import { AppPreferences } from '../../utils/AppPreferences';
  * - logout()：provider.signOut() → 清本地登录态（Cloud DB 记录保留）
  *
  * 一账号多绑定：同一 UserAccount 可关联多条 AccountBinding（不同 platform）；
- * (platform, platformUserId) 全局唯一由 find-or-create（先查后写）保证。
+ * (platform, platformUserId) 使用确定性主键，保证并发首次登录收敛到同一账号。
  */
 export class AccountService {
   private static instance: AccountService | null = null;
@@ -55,6 +55,7 @@ export class AccountService {
     }
 
     const identity: PlatformIdentity = await provider.login();
+    await AgcCloudAuthService.getInstance().authenticateHuaweiAccount();
 
     // 1. 按 (platform, platformUserId) find-or-create 绑定
     const existingBinding = await this.bindingRepo.findByPlatformUser(
@@ -66,18 +67,23 @@ export class AccountService {
     if (existingBinding !== null) {
       binding = existingBinding;
       accountId = existingBinding.accountId;
-      binding.platformDisplayName = identity.displayName;
-      binding.platformAvatarUri = identity.avatarUri;
+      if (identity.displayName !== undefined && identity.displayName.length > 0) {
+        binding.platformDisplayName = identity.displayName;
+      }
+      if (identity.avatarUri !== undefined && identity.avatarUri.length > 0) {
+        binding.platformAvatarUri = identity.avatarUri;
+      }
       binding.updatedAt = new Date();
     } else {
-      accountId = util.generateRandomUUID();
+      // Cloud DB 无复合唯一索引；确定性主键使并发首次登录写入同一账号与绑定。
+      accountId = `${provider.providerId}:${identity.platformUserId}`;
       binding = new AccountBinding();
-      binding.bindingId = util.generateRandomUUID();
+      binding.bindingId = accountId;
       binding.accountId = accountId;
       binding.platform = provider.providerId;
       binding.platformUserId = identity.platformUserId;
-      binding.platformDisplayName = identity.displayName;
-      binding.platformAvatarUri = identity.avatarUri;
+      binding.platformDisplayName = identity.displayName ?? '';
+      binding.platformAvatarUri = identity.avatarUri ?? '';
       binding.boundAt = new Date();
       binding.updatedAt = binding.boundAt;
     }
@@ -87,14 +93,18 @@ export class AccountService {
     let account: UserAccount;
     if (existingAccount !== null) {
       account = existingAccount;
-      account.displayName = identity.displayName;
-      account.avatarUri = identity.avatarUri;
+      if (identity.displayName !== undefined && identity.displayName.length > 0) {
+        account.displayName = identity.displayName;
+      }
+      if (identity.avatarUri !== undefined && identity.avatarUri.length > 0) {
+        account.avatarUri = identity.avatarUri;
+      }
       account.updatedAt = new Date();
     } else {
       account = new UserAccount();
       account.accountId = accountId;
-      account.displayName = identity.displayName;
-      account.avatarUri = identity.avatarUri;
+      account.displayName = identity.displayName ?? '';
+      account.avatarUri = identity.avatarUri ?? '';
       account.createdAt = new Date();
       account.updatedAt = account.createdAt;
     }
@@ -107,24 +117,28 @@ export class AccountService {
     await AppPreferences.setLoginState(
       accountId,
       provider.providerId,
-      identity.displayName,
-      identity.avatarUri,
+      account.displayName,
+      account.avatarUri,
       Date.now()
     );
   }
 
   /**
-   * 退出登录：provider.signOut()（华为侧为空实现）→ 清本地态。
+   * 退出登录：清理 provider 与 AGC 会话，并始终清除本地登录态。
    * Cloud DB 的 UserAccount / AccountBinding 记录保留（便于再登录命中 + 历史）。
    */
   async logout(): Promise<void> {
-    const providerId = await AppPreferences.getCurrentProviderId();
-    if (providerId.length > 0) {
-      const provider = this.providers.get(providerId);
-      if (provider) {
-        await provider.signOut();
+    try {
+      const providerId = await AppPreferences.getCurrentProviderId();
+      if (providerId.length > 0) {
+        const provider = this.providers.get(providerId);
+        if (provider) {
+          await provider.signOut();
+        }
       }
+      await AgcCloudAuthService.getInstance().signOut();
+    } finally {
+      await AppPreferences.clearLoginState();
     }
-    await AppPreferences.clearLoginState();
   }
 }

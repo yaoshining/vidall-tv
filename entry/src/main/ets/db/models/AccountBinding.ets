@@ -3,7 +3,7 @@ import { cloudDatabase } from '@kit.CloudFoundationKit';
 /**
  * 平台绑定关系（Cloud DB 对象类型 AccountBinding）
  *
- * 一个 App 账号可绑定多个平台；同一 (platform, platformUserId) 全局唯一（代码层先查后写保证）。
+ * 一个 App 账号可绑定多个平台；同一 (platform, platformUserId) 使用确定性 bindingId，确保并发写入收敛。
  * AGC 控制台需创建同名对象类型，主键 bindingId，并给 accountId / platform / platformUserId 建索引。
  */
 export class AccountBinding extends cloudDatabase.DatabaseObject {

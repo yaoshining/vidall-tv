@@ -83,6 +83,12 @@
           "when": "always"
         }
       }
+    ],
+    "metadata": [
+      {
+        "name": "client_id",
+        "value": "6917596930175138219"
+      }
     ]
   }
 }

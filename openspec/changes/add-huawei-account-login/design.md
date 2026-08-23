@@ -34,7 +34,12 @@ import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit'
 
 // 组件使用
 LoginWithHuaweiIDButton({
-  params: { style: loginComponentManager.Style.BUTTON_RED, borderRadius: 24, supportDarkMode: true },
+  params: {
+    style: loginComponentManager.Style.BUTTON_RED,
+    borderRadius: 24,
+    loginType: loginComponentManager.LoginType.ID,
+    supportDarkMode: true
+  },
   controller: this.buttonController
 })
 
@@ -49,11 +54,9 @@ this.buttonController.onClickLoginWithHuaweiIDButton((err, credential) => {
 })
 ```
 
-**关键 API 事实**：`HuaweiIDCredential` 直接返回 `unionID`、`openID`、`authorizationCode`、`idToken?`，但**不直接返回 nickname/avatar**。昵称头像需要：
-- 方案 A（本次采用，轻量）：尝试解码 `idToken`（JWT）的 payload claims，若含 `name`/`picture` 则取用，否则 `displayName`/`avatarUri` 留空
-- 方案 B（未来增强，本次不做）：登录成功后额外调 `authentication.HuaweiIDProvider.createAuthorizationWithHuaweiIDRequest()` 申请 profile scope，返回 `AuthorizationWithHuaweiIDCredential`（含 `nickname`、`avatarUri`）——但会触发二次授权弹窗，损害首登体验
+**关键 API 事实**：`HuaweiIDCredential` 直接返回 `unionID`、`openID`、`authorizationCode`、`idToken?`，但**不直接返回昵称/头像**。本次先尝试解码 `idToken` 的 `name`/`picture`；资料仍缺失时，从 ArkUI 页面一次性注入 `UIAbilityContext`，再通过 `AuthorizationWithHuaweiIDRequest` 申请 `profile` scope，读取 `AuthorizationWithHuaweiIDCredential.nickName/avatarUri`。
 
-> 因此 `UserAccount.displayName` / `avatarUri` / `AccountBinding.platformDisplayName` / `platformAvatarUri` 均设计为**可选字段**，首登可能为空，后续增强时回填。
+资料授权是增强路径：用户拒绝、授权失败或资料为空时仍继续基础登录，UI 使用“华为用户”和默认头像降级。provider 完成请求后立即释放页面 context；Cloud DB 更新仅采用非空新资料，避免后续空响应覆盖历史昵称头像。
 
 ### 2. AuthProvider 可插拔抽象
 
@@ -105,7 +108,7 @@ export class HuaweiAuthProvider implements AuthProvider {
 
 ### 4. 数据模型：Cloud DB 两表（一账号多绑定）
 
-```
+```text
 ┌─────────────────────────────────┐     ┌──────────────────────────────────┐
 │ UserAccount                     │     │ AccountBinding                    │
 │ (账号主体，一个用户一条)         │ 1─┬─n│ (平台绑定，一个账号可多条)         │
@@ -121,7 +124,7 @@ export class HuaweiAuthProvider implements AuthProvider {
                                          └──────────────────────────────────┘
 ```
 
-**唯一约束**：`(platform, platformUserId)` 全局唯一——同一华为 unionID 在全 App 只能绑定到一个 `UserAccount`。Cloud DB 不支持复合唯一索引，由代码层保证：`AccountService.loginWith` 先 `query` 再 `upsert`（见时序图）。并发冲突时以先到为准，后到者命中已有 binding。
+**唯一约束**：`(platform, platformUserId)` 全局唯一——同一华为 unionID 在全 App 只能绑定到一个 `UserAccount`。Cloud DB 不支持复合唯一索引，因此使用 `providerId:platformUserId` 作为 `AccountBinding.bindingId` 与首次创建账号的确定性主键。并发首次登录会 upsert 同一记录并收敛到同一 `accountId`；已有随机主键绑定仍优先通过复合条件查询命中。
 
 **Cloud DB 对象类型定义（ArkTS）**：
 ```typescript
@@ -149,7 +152,7 @@ export class AccountBinding extends cloudDatabase.DatabaseObject {
 }
 ```
 
-**字段类型约束**：Cloud DB `FieldType = string | number | boolean | Uint8Array | Date`，所有字段须为此类。`displayName`/`avatarUri` 等可空字段用空字符串 `''` 而非 `null`/`undefined`（Cloud DB 对象序列化要求）。
+**字段类型约束**：Cloud DB `FieldType = string | number | boolean | Uint8Array | Date`，所有字段须为此类。`PlatformIdentity.displayName/avatarUri` 使用可选字段表达 provider 未返回资料；写入 Cloud DB 模型时再归一化为空字符串。已有账号仅用非空新资料更新，避免覆盖历史资料。
 
 ### 5. AccountService 编排
 
@@ -254,14 +257,14 @@ account.isLogged         // 是否已登录（bool）
 
 `pages/settings/builders/HomeSettingBuilder.ets` 的「账号」分组（当前 lines 118-129）改为按 `isLogged` 条件渲染：
 
-- **未登录态**：渲染已注册 provider 的登录按钮（当前仅华为 → `HuaweiAuthProvider.huaweiLoginButtonBuilder`），不展示 VidAll Pro / 退出登录
+- **未登录态**：渲染已注册 provider 的登录按钮（当前仅华为，由 `HomeSettingBuilder` 的 `huaweiLoginButton` Builder 使用 provider controller 渲染 `LoginWithHuaweiIDButton`），不展示 VidAll Pro / 退出登录
 - **已登录态**：保留现有结构（VidAll Pro / 全平台可用 / 退出登录），退出登录项接通 `AccountService.logout()`
 
 **按钮渲染注意**：`LoginWithHuaweiIDButton` 是系统 struct，直接在 `build()` 内声明使用，不能放进 `SettingListItem` 的固定 Row 布局（系统按钮自带样式）。未登录态用一个独立的 `@Builder` 渲染登录按钮区域，不走 `SettingListItem`。
 
 ### 9. 目录结构
 
-```
+```text
 entry/src/main/ets/
 ├── db/models/
 │   ├── UserAccount.ets              # DatabaseObject 子类
@@ -278,16 +281,24 @@ entry/src/main/ets/
     └── AppPreferences.ets           # 扩展 PrefKey（登录态项）
 ```
 
-### 10. AGC 控制台前置配置（手动，文档化到 tasks）
+### 10. AGC Authentication 与 Cloud Foundation 初始化
+
+Account Kit 授权成功只提供平台身份，不会自动建立 Cloud Foundation 认证上下文。`HuaweiAuthProvider` 在取得华为凭据后，使用 `@hw-agconnect/auth` 建立 AGC Authentication 用户会话；随后获取 `auth.getAuthProvider()` 并调用 `cloudCommon.init({ authProvider, databaseOptions: { schema: 'schema.json' } })`。`AccountService` 只有在该异步步骤完成后才可查询或写入 Cloud DB。
+
+安全边界：`idToken` 不能直接作为 Cloud Foundation access token；客户端不保存 OAuth client secret，也不自行执行 authorizationCode 换 token。`World` 维持只读，写入依赖 `Authenticated.Upsert`。退出登录时同时清理 AGC Authentication 会话与本地登录态。
+
+### 11. AGC 控制台前置配置（手动，文档化到 tasks）
 
 1. AGC 控制台开启「华为账号」认证（已默认开启，确认即可）
 2. AGC 控制台开启「云数据库」服务
 3. 创建存储区 `VidAllZone`（或沿用现有命名，tasks 确认）
 4. 创建对象类型 `UserAccount`（字段：accountId PK、displayName、avatarUri、createdAt、updatedAt）+ `AccountBinding`（字段：bindingId PK、accountId 索引、platform 索引、platformUserId 索引、platformDisplayName、platformAvatarUri、boundAt、updatedAt）
 5. 导出 schema JSON 到 `entry/src/main/resources/rawfile/`（Cloud DB 运行时需加载 schema 文件）
-6. `agconnect-services.json` 已存在（含 client_id/app_id/oauth_client），无需改动
+6. 在 `EntryAbility` 初始化 `@hw-agconnect/auth`，授权后通过 `auth.getAuthProvider()` 初始化 `cloudCommon`，并验证 `schema.json` 可被加载
+7. 在真机完成授权、AGC 会话、Cloud DB 查询/upsert 与退出后再次登录验证
+8. `agconnect-services.json` 仅保留本地配置并由 Git 忽略，禁止提交敏感配置
 
-### 11. ArkTS 约束遵守要点
+### 12. ArkTS 约束遵守要点
 
 - `build()` 内只写 UI 组件语法，不声明 `const`/`let`；需要中间变量提取为方法或 `@Builder`
 - `catch` 不写类型注解：`catch (e) { const err = e as BusinessError }`
@@ -300,20 +311,20 @@ entry/src/main/ets/
 
 | 风险/权衡 | 说明 | 缓解 |
 |----------|------|------|
-| **昵称头像首登可能为空** | `LoginWithHuaweiIDButton` 不直接返回 nickname/avatar，依赖 `idToken` 解码，可能无 profile claims | 数据模型字段设为可选空字符串；UI 已登录态不强制展示头像；未来用 `AuthorizationWithHuaweiIDRequest` 增强回填 |
+| **昵称头像资料授权可能被拒绝** | `LoginWithHuaweiIDButton` 不直接返回昵称头像，`profile` scope 可能被用户拒绝 | 资料授权失败不阻断基础登录；UI 显示“华为用户”和默认头像；空资料不覆盖云端历史值 |
 | **复合唯一约束靠代码保证** | Cloud DB 无 `(platform, platformUserId)` 复合唯一索引，并发首次登录可能产生重复 binding | 首次登录是低频操作；`loginWith` 内先 query 再 upsert，冲突时后到者命中已建 binding（query 返回非空则走已有账号分支） |
 | **退出不撤销华为授权** | 不调 `CancelAuthorizationRequest`，用户退出后华为侧仍授权 | 符合「退出登录」预期（快速再登录）；`CancelAuthorizationRequest` 预留给未来「解除授权」功能 |
-| **Cloud DB 依赖网络与 AGC 配置** | 未配置存储区/对象类型时 upsert/query 会失败 | tasks 明确 AGC 控制台前置步骤；登录失败时 UI 回退未登录态并提示 |
+| **Cloud DB 依赖网络与 AGC 配置** | 未配置认证服务、存储区或对象类型时认证/upsert/query 会失败 | tasks 明确 AGC Authentication 与 Cloud DB 前置步骤；登录失败时 UI 回退未登录态并提示 |
 | **provider 与 UI controller 耦合** | `HuaweiAuthProvider` 需持有 `LoginWithHuaweiIDButtonController`，按钮在 UI 层渲染 | provider 暴露 controller getter，UI 引用之；provider 负责 login() Promise 封装，解耦业务逻辑 |
 | **idToken JWT 解码** | 客户端解码 JWT payload（base64url）取 claims，不验证签名（签名验证需华为公钥，本次不做） | 仅取展示用 name/picture，非安全决策依据；安全相关以 unionID 为准（华为侧已验证） |
 
 ## Migration Plan
 
 - **新增文件**：`db/models/UserAccount.ets`、`db/models/AccountBinding.ets`、`services/account/` 下全部文件
-- **修改文件**：`AppPreferences.ets`（扩展 PrefKey）、`HomeSettingBuilder.ets`（账号分组按态切换）、`EntryAbility.ets`（启动恢复登录态 + 注册 provider）
+- **修改文件**：`AppPreferences.ets`（扩展 PrefKey）、`HomeSettingBuilder.ets`（账号分组按态切换）、`EntryAbility.ets`（启动恢复登录态 + 注册 provider）、`entry/oh-package.json5`（AGC Auth SDK）
 - **配置文件**：`agconnect-services.json` 不改；AGC 控制台手动配置（tasks 文档化）；schema JSON 导入 `rawfile/`
 - **无数据库迁移**：Cloud DB 是远端服务，对象类型在 AGC 控制台定义，本地仅声明对应类
-- **无依赖新增**：`@kit.AccountKit`、`@kit.CloudFoundationKit` 均为系统 Kit，无 oh-package 改动
+- **依赖新增**：增加 `@hw-agconnect/auth@^1.0.5`，由其向 Cloud Foundation 提供认证用户 `AuthProvider`
 
 ## Open Questions
 

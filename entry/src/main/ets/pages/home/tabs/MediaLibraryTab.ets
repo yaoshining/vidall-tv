@@ -43,6 +43,8 @@ import { PlexClient } from "../../../lib/PlexClient"
 import { reportServerPlaybackStarted } from "../../../lib/ServerProgressReporter"
 import { ServerMediaDetailPage, ServerMediaDetailPageParam } from "../../detail/ServerMediaDetailPage"
 import { ServerLibraryListPage, ServerLibraryListPageParam } from "../../detail/ServerLibraryListPage"
+import { SettingsPage, SettingsPageParam } from "../../settings/Index"
+import SettingType from "../../settings/SettingType"
 import { resolveCardBehavior, isDirectPlayContextValid, ServerCardKind } from "../../../services/sourceAdapter/ServerCardAction"
 
 // ─────────────────────────────────────────────
@@ -754,6 +756,8 @@ export struct MediaLibraryTab {
   @Require @Param tab: TabItem
   @Local isScanning: boolean = false
   @Local isViewAllFocused: boolean = false
+  @Local isAddFileSourceFocused: boolean = false
+  @Local isAddVideoServerFocused: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
   @Local sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
   videoServerModel: VideoServerModel = VideoServerStore.getState()
@@ -779,8 +783,8 @@ export struct MediaLibraryTab {
         // 诊断 build() 分支判断条件
         console.info(`[MediaLibraryTab][DIAG] build分支: isLoading=${this.model.isLoading}`
           + ` isLoaded=${this.model.isLoaded}`
-          + ` recentlyAdded.length=${this.model.recentlyAdded.length}`
-          + ` → 显示${this.model.isLoading ? 'Loading' : (!this.model.isLoaded || this.model.recentlyAdded.length === 0) ? 'Empty' : '内容'}`
+          + ` hasDisplayableMedia=${this.hasDisplayableMedia()}`
+          + ` → 显示${this.model.isLoading ? 'Loading' : (!this.model.isLoaded || !this.hasDisplayableMedia()) ? 'Empty' : '内容'}`
         );
         if (this.model.seriesGroups.length > 0) {
           const sg = this.model.seriesGroups[0];
@@ -1529,6 +1533,24 @@ export struct MediaLibraryTab {
     });
   }
 
+  private hasDisplayableMedia(): boolean {
+    return this.model.stats.total > 0 ||
+      this.model.recentlyAdded.length > 0 ||
+      this.model.movies.length > 0 ||
+      this.model.seriesGroups.length > 0 ||
+      this.model.recentlyAddedList.length > 0;
+  }
+
+  private openFileSourceSettings(): void {
+    const param: SettingsPageParam = { type: SettingType.FILE_SOURCE };
+    this.pageStack.pushPath({ name: SettingsPage.PAGE_NAME, param });
+  }
+
+  private openAddVideoServerSettings(): void {
+    const param: SettingsPageParam = { type: SettingType.ADD_VIDEO_SERVER };
+    this.pageStack.pushPath({ name: SettingsPage.PAGE_NAME, param });
+  }
+
   private getStatsText(): string {
     const s = this.model.stats;
     return `共 ${s.total} 个视频 · 电影 ${s.movies} 部 · 电视剧 ${s.tv} 部 · 其他 ${s.other} 个`;
@@ -1729,12 +1751,52 @@ export struct MediaLibraryTab {
 
   @Builder
   EmptyView() {
-    Column() {
-      Text('暂无媒体').fontSize(16).fontColor('#666666')
-      Text('请先配置文件源并点击"扫描新的和有修改的文件"')
-        .fontSize(12).fontColor('#444444').margin({ top: 8 })
+    Column({ space: 14 }) {
+      Text('还没有媒体内容')
+        .fontSize(24)
+        .fontColor('#FFFFFF')
+        .fontWeight(FontWeight.Bold)
+      Text('添加文件源或连接影视服务器，开始建立你的媒体库。')
+        .fontSize(14)
+        .fontColor('rgba(255,255,255,0.62)')
+        .textAlign(TextAlign.Center)
+      Row({ space: 16 }) {
+        Button('添加文件源', { type: ButtonType.Normal, stateEffect: true })
+          .width(190)
+          .height(52)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.isAddFileSourceFocused ? '#101820' : '#FFFFFF')
+          .backgroundColor(this.isAddFileSourceFocused ? '#FFFFFF' : '#242A31')
+          .borderRadius(10)
+          .border({ width: 2, color: this.isAddFileSourceFocused ? '#FFFFFF' : '#48515C' })
+          .focusable(true)
+          .onFocus(() => { this.isAddFileSourceFocused = true })
+          .onBlur(() => { this.isAddFileSourceFocused = false })
+          .onClick(() => { this.openFileSourceSettings() })
+          .animation({ duration: 140, curve: Curve.EaseInOut })
+
+        Button('添加影视服务器', { type: ButtonType.Normal, stateEffect: true })
+          .width(190)
+          .height(52)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.isAddVideoServerFocused ? '#101820' : '#FFFFFF')
+          .backgroundColor(this.isAddVideoServerFocused ? '#FFFFFF' : '#242A31')
+          .borderRadius(10)
+          .border({ width: 2, color: this.isAddVideoServerFocused ? '#FFFFFF' : '#48515C' })
+          .focusable(true)
+          .onFocus(() => { this.isAddVideoServerFocused = true })
+          .onBlur(() => { this.isAddVideoServerFocused = false })
+          .onClick(() => { this.openAddVideoServerSettings() })
+          .animation({ duration: 140, curve: Curve.EaseInOut })
+      }
+      .margin({ top: 8 })
     }
-    .width('100%').height(300).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+    .width('100%')
+    .height(360)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
   }
 
   @Builder
@@ -1827,13 +1889,13 @@ export struct MediaLibraryTab {
       .width('100%').alignItems(HorizontalAlign.Start)
     } else {
       Column() {
-        this.ContinueWatchingSection()
         if (this.model.isLoading) {
           this.LoadingView()
-        } else if (!this.model.isLoaded || this.model.recentlyAdded.length === 0) {
+        } else if (!this.model.isLoaded || !this.hasDisplayableMedia()) {
           this.EmptyView()
           this.StatsAndScan()
         } else {
+          this.ContinueWatchingSection()
           this.RecentlyAddedSection()
           this.MoviesSection()
           this.TvShowsSection()
