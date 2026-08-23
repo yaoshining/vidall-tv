@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { AppPreferences, PrefKey } from &#39;../../../utils/AppPreferences&#39; 
+import { UmamiAnalyticsService } from &#39;../../../services/analytics/UmamiAnalyticsService&#39; 
+import { UmamiEventData } from &#39;../../../services/analytics/UmamiReporter&#39; 
+ 
+export interface EpisodeAutoplaySettings { 
+  enabled: boolean; 
+  countdownSeconds: number; 
+} 
+ 
+export const DEFAULT_EPISODE_AUTOPLAY_ENABLED: boolean = true 
+export const DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS: number = 8 
+const MIN_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS: number = 3 
+const MAX_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS: number = 10 
+ 
+export function normalizeEpisodeAutoplayCountdownSeconds(value: number): number { 
+  if (!Number.isFinite(value) || value &lt;= 0) { 
+    return DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS 
+  } 
+  const roundedValue = Math.round(value) 
+  if (roundedValue &lt; MIN_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS) { 
+    return MIN_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS 
+  } 
+  if (roundedValue &gt; MAX_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS) { 
+    return MAX_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS 
+  } 
+  return roundedValue 
+} 
+ 
+export async function loadEpisodeAutoplaySettings(): Promise&lt;EpisodeAutoplaySettings&gt; { 
+  const enabledValue = await AppPreferences.getNumber( 
+    PrefKey.PLAYER_EPISODE_AUTOPLAY_ENABLED, 
+    DEFAULT_EPISODE_AUTOPLAY_ENABLED ? 1 : 0 
+  ) 
+  const countdownValue = await AppPreferences.getNumber( 
+    PrefKey.PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS, 
+    DEFAULT_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS 
+  ) 
+  const settings: EpisodeAutoplaySettings = { 
+    enabled: enabledValue !== 0, 
+    countdownSeconds: normalizeEpisodeAutoplayCountdownSeconds(countdownValue) 
+  } 
+  return settings 
+} 
+ 
+export async function saveEpisodeAutoplayEnabled(enabled: boolean): Promise&lt;void&gt; { 
+  await AppPreferences.set( 
+    PrefKey.PLAYER_EPISODE_AUTOPLAY_ENABLED, 
+    enabled ? 1 : 0 
+  ) 
+  if (UmamiAnalyticsService.isInitialized()) { 
+    const evtData: UmamiEventData = { setting_key: &#39;PLAYER_EPISODE_AUTOPLAY_ENABLED&#39;, new_value: String(enabled) }; 
+    UmamiAnalyticsService.getInstance().trackEvent(&#39;settings&#39;, &#39;settings_changed&#39;, evtData); 
+  } 
+} 
+ 
+export async function saveEpisodeAutoplayCountdownSeconds(countdownSeconds: number): Promise&lt;void&gt; { 
+  const normalized = normalizeEpisodeAutoplayCountdownSeconds(countdownSeconds) 
+  await AppPreferences.set( 
+    PrefKey.PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS, 
+    normalized 
+  ) 
+  if (UmamiAnalyticsService.isInitialized()) { 
+    const evtData: UmamiEventData = { setting_key: &#39;PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS&#39;, new_value: String(normalized) }; 
+    UmamiAnalyticsService.getInstance().trackEvent(&#39;settings&#39;, &#39;settings_changed&#39;, evtData); 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sun Aug 23 2026 21:04:44 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/components/core/player/EpisodeAutoplayPreferences.ets","hash":"b7dcc36477abffa34cbaefda3f28bbb4dcd62312b9edf87635f38612410545e9","lineCnt":67,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"normalizeEpisodeAutoplayCountdownSeconds","count":6,"regions":[{"startLoc":{"line":15,"col":1},"endLoc":{"line":27,"col":2},"count":6,"ignored":0},{"startLoc":{"line":16,"col":46},"endLoc":{"line":18,"col":4},"count":0,"ignored":0},{"startLoc":{"line":20,"col":62},"endLoc":{"line":22,"col":4},"count":0,"ignored":0},{"startLoc":{"line":23,"col":62},"endLoc":{"line":25,"col":4},"count":0,"ignored":0},{"startLoc":{"line":26,"col":3},"endLoc":{"line":27,"col":2},"count":6,"ignored":0}],"branches":[{"startLoc":{"line":16,"col":7},"endLoc":{"line":16,"col":44},"trueCount":0,"falseCount":6,"group":[],"ignored":0},{"startLoc":{"line":20,"col":7},"endLoc":{"line":20,"col":60},"trueCount":0,"falseCount":6,"group":[],"ignored":0},{"startLoc":{"line":23,"col":7},"endLoc":{"line":23,"col":60},"trueCount":0,"falseCount":6,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"loadEpisodeAutoplaySettings","count":0,"regions":[{"startLoc":{"line":29,"col":1},"endLoc":{"line":43,"col":2},"count":0,"ignored":0},{"startLoc":{"line":30,"col":3},"endLoc":{"line":43,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":32,"col":5},"endLoc":{"line":32,"col":45},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"saveEpisodeAutoplayEnabled","count":0,"regions":[{"startLoc":{"line":45,"col":1},"endLoc":{"line":54,"col":2},"count":0,"ignored":0},{"startLoc":{"line":50,"col":46},"endLoc":{"line":53,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":48,"col":5},"endLoc":{"line":48,"col":20},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":50,"col":7},"endLoc":{"line":50,"col":44},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"saveEpisodeAutoplayCountdownSeconds","count":0,"regions":[{"startLoc":{"line":56,"col":1},"endLoc":{"line":66,"col":2},"count":0,"ignored":0},{"startLoc":{"line":62,"col":46},"endLoc":{"line":65,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":62,"col":7},"endLoc":{"line":62,"col":44},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3}],"exeLine":{"0":1,"1":2,"2":3,"3":5,"4":6,"5":7,"6":10,"7":11,"8":12,"9":13,"10":15,"11":16,"12":17,"13":19,"14":20,"15":21,"16":23,"17":24,"18":26,"19":29,"20":30,"21":31,"22":32,"23":34,"24":35,"25":36,"26":38,"27":39,"28":40,"29":42,"30":45,"31":46,"32":47,"33":48,"34":50,"35":51,"36":52,"37":56,"38":57,"39":58,"40":59,"41":60,"42":62,"43":63,"44":64},"summary":{"lines":{"total":35,"covered":6,"pct":17.14,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6,6,0,-1,6,6,0,-1,6,0,-1,6,-1,-1,0,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,0,0,-1,-1,-1,0,0,0,0,0,-1,0,0,0,-1,-1,-1]},"functions":{"total":4,"covered":1,"pct":25},"branches":{"total":14,"covered":3,"pct":21.43}}},"title":"EpisodeAutoplayPreferences.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

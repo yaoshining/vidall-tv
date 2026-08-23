@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import relationalStore from &#39;@ohos.data.relationalStore&#39;; 
+import { VideoEntity } from &#39;../models/MediaEntity&#39;; 
+import { BusinessError } from &quot;@kit.BasicServicesKit&quot;; 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { TABLE_VIDEOS, TABLE_SCRAPE_INFO, TABLE_PLAY_PROGRESS } from &#39;./DbConstants&#39;; 
+import { FileSourceDbCore } from &#39;./FileSourceDbCore&#39;; 
+ 
+/** 
+ * videos 表的数据访问（含鬼记录清理与扫描时间查询）。 
+ * 拆分自 FileSourceDatabase，保持原方法签名与行为不变。 
+ */ 
+export class VideoDao { 
+  private core: FileSourceDbCore; 
+ 
+  constructor(core: FileSourceDbCore) { 
+    this.core = core; 
+  } 
+ 
+  /** 
+   * 插入或更新视频记录（以 file_path 为唯一键） 
+   * @returns 视频的 id 
+   */ 
+  async upsertVideo(entity: VideoEntity): Promise&lt;number&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+      // 先查是否已存在，有则 UPDATE（保留原始 id，避免外键级联删除 scrape_info） 
+      const existing = await this.getVideoByPath(entity.filePath); 
+      if (existing &amp;&amp; existing.id !== undefined) { 
+        const bucket: relationalStore.ValuesBucket = { 
+          source_id: entity.sourceId, 
+          directory_path: entity.directoryPath, 
+          file_name: entity.fileName, 
+          file_size: entity.fileSize !== undefined ? entity.fileSize : null, 
+          last_modified: entity.lastModified ?? null, 
+          content_type: entity.contentType ?? null, 
+          duration_ms: entity.durationMs !== undefined ? entity.durationMs : null, 
+          width: entity.width !== undefined ? entity.width : null, 
+          height: entity.height !== undefined ? entity.height : null, 
+          frame_rate: entity.frameRate !== undefined ? entity.frameRate : null, 
+          video_codec: entity.videoCodec ?? null, 
+          audio_tracks_json: entity.audioTracksJson ?? null, 
+          subtitle_tracks_json: entity.subtitleTracksJson ?? null, 
+          updated_in_last_scan: 1, 
+          scanned_at: entity.scannedAt 
+        }; 
+        const pred = new relationalStore.RdbPredicates(TABLE_VIDEOS); 
+        pred.equalTo(&#39;id&#39;, existing.id); 
+        await store.update(bucket, pred); 
+        console.info(`[FileSourceDatabase] upsertVideo UPDATE id=${existing.id} path=${entity.filePath}`); 
+        return existing.id; 
+      } 
+      // 新文件 INSERT 
+      const sql = ` 
+        INSERT OR IGNORE INTO ${TABLE_VIDEOS} 
+          (source_id, directory_path, file_path, file_name, file_size, last_modified, 
+           content_type, duration_ms, width, height, frame_rate, video_codec, 
+           audio_tracks_json, subtitle_tracks_json, updated_in_last_scan, scanned_at) 
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) 
+      `; 
+      const args: relationalStore.ValueType[] = [ 
+        entity.sourceId, entity.directoryPath, entity.filePath, entity.fileName, 
+        entity.fileSize !== undefined ? entity.fileSize : null, 
+        entity.lastModified ?? null, entity.contentType ?? null, 
+        entity.durationMs !== undefined ? entity.durationMs : null, 
+        entity.width !== undefined ? entity.width : null, 
+        entity.height !== undefined ? entity.height : null, 
+        entity.frameRate !== undefined ? entity.frameRate : null, 
+        entity.videoCodec ?? null, 
+        entity.audioTracksJson ?? null, 
+        entity.subtitleTracksJson ?? null, 
+        1, 
+        entity.scannedAt 
+      ]; 
+      await store.executeSql(sql, args); 
+      const inserted = await this.getVideoByPath(entity.filePath); 
+      const fallbackId = await this.core.querySingleIdValue( 
+        `SELECT id FROM ${TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`, 
+        [entity.filePath] 
+      ); 
+      const rowId = inserted?.id ?? (fallbackId &gt; 0 ? fallbackId : await this.core.lastInsertedRowId()); 
+      console.info(`[FileSourceDatabase] upsertVideo INSERT id=${rowId} path=${entity.filePath}`); 
+      return rowId; 
+    } catch (error) { 
+      console.error(`[FileSourceDatabase] upsertVideo 失败: ${JSON.stringify(error)}`); 
+      throw new Error(&#39;upsertVideo failed: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 按 filePath 查询视频记录 */ 
+  async getVideoByPath(filePath: string): Promise&lt;VideoEntity | null&gt; { 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql( 
+        `SELECT * FROM ${TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`, 
+        [filePath] 
+      ); 
+      if (rs.goToFirstRow()) { 
+        return this.parseVideoEntity(rs); 
+      } 
+      return null; 
+    } catch (error) { 
+      console.error(`[FileSourceDatabase] getVideoByPath 失败: ${JSON.stringify(error)}`); 
+      return null; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 按主键 id 查询单条视频记录 */ 
+  async getVideoById(videoId: number): Promise&lt;VideoEntity | null&gt; { 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql( 
+        `SELECT * FROM ${TABLE_VIDEOS} WHERE id = ? LIMIT 1`, 
+        [videoId] 
+      ); 
+      if (rs.goToFirstRow()) { 
+        return this.parseVideoEntity(rs); 
+      } 
+      return null; 
+    } catch (error) { 
+      console.error(`[FileSourceDatabase] getVideoById 失败: ${JSON.stringify(error)}`); 
+      return null; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 按 sourceId 查询该文件源下所有视频 */ 
+  async getVideosBySourceId(sourceId: number): Promise&lt;VideoEntity[]&gt; { 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      const pred = new relationalStore.RdbPredicates(TABLE_VIDEOS); 
+      pred.equalTo(&#39;source_id&#39;, sourceId); 
+      rs = await store.query(pred); 
+      const list: VideoEntity[] = []; 
+      while (rs.goToNextRow()) { 
+        list.push(this.parseVideoEntity(rs)); 
+      } 
+      return list; 
+    } catch (error) { 
+      console.error(`[FileSourceDatabase] getVideosBySourceId 失败: ${JSON.stringify(error)}`); 
+      return []; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 获取所有视频 */ 
+  async getAllVideos(): Promise&lt;VideoEntity[]&gt; { 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      const pred = new relationalStore.RdbPredicates(TABLE_VIDEOS); 
+      rs = await store.query(pred); 
+      const list: VideoEntity[] = []; 
+      while (rs.goToNextRow()) { 
+        list.push(this.parseVideoEntity(rs)); 
+      } 
+      return list; 
+    } catch (error) { 
+      console.error(`[FileSourceDatabase] getAllVideos 失败: ${JSON.stringify(error)}`); 
+      return []; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 扫描前重置更新标记，扫描中命中的视频会在 upsert 时置为 1 */ 
+  async resetVideoUpdatedFlags(): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+      await store.executeSql( 
+        `UPDATE ${TABLE_VIDEOS} SET updated_in_last_scan = 0` 
+      ); 
+      console.info(&#39;[FileSourceDatabase] resetVideoUpdatedFlags 完成&#39;); 
+    } catch (error) { 
+      console.warn(`[FileSourceDatabase] resetVideoUpdatedFlags 失败: ${JSON.stringify(error)}`); 
+    } 
+  } 
+ 
+  /** 将已存在的视频标记为本轮扫描命中，用于增量扫描跳过未变化文件时置位 */ 
+  async markVideoUpdatedByPath(filePath: string): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+      await store.executeSql( 
+        `UPDATE ${TABLE_VIDEOS} SET updated_in_last_scan = 1 WHERE file_path = ?`, 
+        [filePath] 
+      ); 
+    } catch (error) { 
+      console.warn(`[FileSourceDatabase] markVideoUpdatedByPath 失败 path=${filePath}: ${JSON.stringify(error)}`); 
+    } 
+  } 
+ 
+  private parseVideoEntity(rs: relationalStore.ResultSet): VideoEntity { 
+    try { 
+    const get = (col: string): number =&gt; rs.getLong(rs.getColumnIndex(col)); 
+    const str = (col: string): string | undefined =&gt; { 
+      const idx = rs.getColumnIndex(col); 
+      return rs.isColumnNull(idx) ? undefined : rs.getString(idx); 
+    }; 
+    const num = (col: string): number | undefined =&gt; { 
+      const idx = rs.getColumnIndex(col); 
+      return rs.isColumnNull(idx) ? undefined : rs.getLong(idx); 
+    }; 
+    const dbl = (col: string): number | undefined =&gt; { 
+      const idx = rs.getColumnIndex(col); 
+      return rs.isColumnNull(idx) ? undefined : rs.getDouble(idx); 
+    }; 
+    return { 
+      id: get(&#39;id&#39;), 
+      sourceId: get(&#39;source_id&#39;), 
+      directoryPath: rs.getString(rs.getColumnIndex(&#39;directory_path&#39;)), 
+      filePath: rs.getString(rs.getColumnIndex(&#39;file_path&#39;)), 
+      fileName: rs.getString(rs.getColumnIndex(&#39;file_name&#39;)), 
+      fileSize: num(&#39;file_size&#39;), 
+      lastModified: str(&#39;last_modified&#39;), 
+      contentType: str(&#39;content_type&#39;), 
+      durationMs: num(&#39;duration_ms&#39;), 
+      width: num(&#39;width&#39;), 
+      height: num(&#39;height&#39;), 
+      frameRate: dbl(&#39;frame_rate&#39;), 
+      videoCodec: str(&#39;video_codec&#39;), 
+      audioTracksJson: str(&#39;audio_tracks_json&#39;), 
+      subtitleTracksJson: str(&#39;subtitle_tracks_json&#39;), 
+      updatedInLastScan: num(&#39;updated_in_last_scan&#39;), 
+      scannedAt: get(&#39;scanned_at&#39;) 
+    }; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `parseVideoEntity 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 
+   * 全量覆盖扫描完成后，删除指定文件源中不再存在的鬼记录（旧扫描遗留、现已不在 NAS 上的视频）。 
+   * foundPaths：本轮扫描写入 DB 的 file_path 集合。 
+   * 注意：SQLite 外键未启用，需显式删除 scrape_info（overwrite 模式下已由 clearScrapeInfoForSources 预清空）。 
+   */ 
+  async deleteGhostVideosForSources(sourceIds: number[], foundPaths: string[]): Promise&lt;number&gt; { 
+    if (!this.core.isReady() || sourceIds.length === 0) { return 0; } 
+    const store = this.core.getStore(); 
+    try { 
+      const foundPathsSet = new Set&lt;string&gt;(foundPaths); 
+      const sidHolders = sourceIds.map(() =&gt; &#39;?&#39;).join(&#39;, &#39;); 
+      const sidArgs: relationalStore.ValueType[] = sourceIds.map(id =&gt; id as relationalStore.ValueType); 
+ 
+      // 1. 查询这些文件源的所有视频记录 
+      const rs = await store.querySql( 
+        `SELECT id, file_path FROM ${TABLE_VIDEOS} WHERE source_id IN (${sidHolders})`, 
+        sidArgs 
+      ); 
+      const ghostIds: number[] = []; 
+      while (rs.goToNextRow()) { 
+        const filePath = rs.getString(rs.getColumnIndex(&#39;file_path&#39;)); 
+        const id = rs.getLong(rs.getColumnIndex(&#39;id&#39;)); 
+        if (!foundPathsSet.has(filePath)) { 
+          ghostIds.push(id); 
+        } 
+      } 
+      rs.close(); 
+ 
+      if (ghostIds.length === 0) { 
+        console.info(`[DB][deleteGhostVideos] 无鬼记录，无需清理`); 
+        return 0; 
+      } 
+ 
+      // 2. 分批删除（SQLite IN 参数上限 999） 
+      const BATCH = 100; 
+      for (let i = 0; i &lt; ghostIds.length; i += BATCH) { 
+        const batch = ghostIds.slice(i, i + BATCH); 
+        const idHolders = batch.map(() =&gt; &#39;?&#39;).join(&#39;, &#39;); 
+        const idArgs: relationalStore.ValueType[] = batch.map(gid =&gt; gid as relationalStore.ValueType); 
+        // 先删 scrape_info（无外键 CASCADE） 
+        await store.executeSql( 
+          `DELETE FROM ${TABLE_SCRAPE_INFO} WHERE video_id IN (${idHolders})`, 
+          idArgs 
+        ); 
+        // 再删 videos 
+        await store.executeSql( 
+          `DELETE FROM ${TABLE_VIDEOS} WHERE id IN (${idHolders})`, 
+          idArgs 
+        ); 
+      } 
+ 
+      console.info(`[DB][deleteGhostVideos] 已清理 ${ghostIds.length} 条鬼记录，source_id IN (${sourceIds})`); 
+      return ghostIds.length; 
+    } catch (e) { 
+      console.warn(&#39;[DB][deleteGhostVideos] 清理鬼记录失败: &#39; + JSON.stringify(e)); 
+      return 0; 
+    } 
+  } 
+ 
+  /** 
+   * 删除单个视频的全部本地记录（scrape_info + play_progress + videos）。 
+   * 用于&quot;文件已删除/移动&quot;场景，用户确认后清理孤立元数据。 
+   */ 
+  async deleteVideoWithScrapeInfo(videoId: number): Promise&lt;void&gt; { 
+    if (!this.core.isReady()) { return; } 
+    const store = this.core.getStore(); 
+    try { 
+      const id: relationalStore.ValueType = videoId; 
+      await store.executeSql( 
+        `DELETE FROM ${TABLE_SCRAPE_INFO} WHERE video_id = ?`, [id]); 
+      await store.executeSql( 
+        `DELETE FROM ${TABLE_PLAY_PROGRESS} WHERE video_id = ?`, [id]); 
+      await store.executeSql( 
+        `DELETE FROM ${TABLE_VIDEOS} WHERE id = ?`, [id]); 
+      console.info(`[DB][deleteVideoWithScrapeInfo] videoId=${videoId} 已删除`); 
+    } catch (e) { 
+      console.warn(&#39;[DB][deleteVideoWithScrapeInfo] 失败: &#39; + JSON.stringify(e)); 
+    } 
+  } 
+ 
+  /** 
+   * 获取最近一次扫描时间（videos 表中最大 scanned_at） 
+   * 返回 0 表示未扫描 
+   */ 
+  async getLatestScanTime(): Promise&lt;number&gt; { 
+    if (!this.core.isReady()) { 
+      return 0; 
+    } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql( 
+        `SELECT MAX(scanned_at) AS latest FROM ${TABLE_VIDEOS}` 
+      ); 
+      if (rs.goToFirstRow()) { 
+        const idx = rs.getColumnIndex(&#39;latest&#39;); 
+        return rs.isColumnNull(idx) ? 0 : rs.getLong(idx); 
+      } 
+      return 0; 
+    } catch { 
+      return 0; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sun Aug 23 2026 21:04:44 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/db/files/VideoDao.ets","hash":"da2398c1ea1f0366a45142e70581cdbda752cf4e1bb557892feb50d1d665a0fc","lineCnt":345,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"VideoDao.constructor","count":4,"regions":[{"startLoc":{"line":15,"col":3},"endLoc":{"line":17,"col":4},"count":4,"ignored":0},{"startLoc":{"line":16,"col":5},"endLoc":{"line":17,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"VideoDao.upsertVideo","count":0,"regions":[{"startLoc":{"line":23,"col":3},"endLoc":{"line":87,"col":4},"count":0,"ignored":0},{"startLoc":{"line":25,"col":9},"endLoc":{"line":83,"col":6},"count":0,"ignored":0},{"startLoc":{"line":53,"col":7},"endLoc":{"line":83,"col":6},"count":0,"ignored":0},{"startLoc":{"line":28,"col":50},"endLoc":{"line":51,"col":8},"count":0,"ignored":0},{"startLoc":{"line":83,"col":7},"endLoc":{"line":86,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":28,"col":11},"endLoc":{"line":28,"col":48},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":33,"col":22},"endLoc":{"line":33,"col":76},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":36,"col":24},"endLoc":{"line":36,"col":82},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":37,"col":18},"endLoc":{"line":37,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":38,"col":19},"endLoc":{"line":38,"col":69},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":39,"col":23},"endLoc":{"line":39,"col":79},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":62,"col":9},"endLoc":{"line":62,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":64,"col":9},"endLoc":{"line":64,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":65,"col":9},"endLoc":{"line":65,"col":57},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":66,"col":9},"endLoc":{"line":66,"col":59},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":67,"col":9},"endLoc":{"line":67,"col":65},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":80,"col":38},"endLoc":{"line":80,"col":103},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"VideoDao.getVideoByPath","count":0,"regions":[{"startLoc":{"line":90,"col":3},"endLoc":{"line":108,"col":4},"count":0,"ignored":0},{"startLoc":{"line":93,"col":9},"endLoc":{"line":102,"col":6},"count":0,"ignored":0},{"startLoc":{"line":102,"col":7},"endLoc":{"line":105,"col":6},"count":0,"ignored":0},{"startLoc":{"line":105,"col":15},"endLoc":{"line":107,"col":6},"count":0,"ignored":0},{"startLoc":{"line":98,"col":30},"endLoc":{"line":100,"col":8},"count":0,"ignored":0},{"startLoc":{"line":101,"col":7},"endLoc":{"line":102,"col":6},"count":0,"ignored":0},{"startLoc":{"line":106,"col":11},"endLoc":{"line":106,"col":27},"count":0,"ignored":0},{"startLoc":{"line":106,"col":28},"endLoc":{"line":106,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":98,"col":11},"endLoc":{"line":98,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"VideoDao.getVideoById","count":0,"regions":[{"startLoc":{"line":111,"col":3},"endLoc":{"line":129,"col":4},"count":0,"ignored":0},{"startLoc":{"line":114,"col":9},"endLoc":{"line":123,"col":6},"count":0,"ignored":0},{"startLoc":{"line":123,"col":7},"endLoc":{"line":126,"col":6},"count":0,"ignored":0},{"startLoc":{"line":126,"col":15},"endLoc":{"line":128,"col":6},"count":0,"ignored":0},{"startLoc":{"line":119,"col":30},"endLoc":{"line":121,"col":8},"count":0,"ignored":0},{"startLoc":{"line":122,"col":7},"endLoc":{"line":123,"col":6},"count":0,"ignored":0},{"startLoc":{"line":127,"col":11},"endLoc":{"line":127,"col":27},"count":0,"ignored":0},{"startLoc":{"line":127,"col":28},"endLoc":{"line":127,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":119,"col":11},"endLoc":{"line":119,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"VideoDao.getVideosBySourceId","count":0,"regions":[{"startLoc":{"line":132,"col":3},"endLoc":{"line":150,"col":4},"count":0,"ignored":0},{"startLoc":{"line":135,"col":9},"endLoc":{"line":144,"col":6},"count":0,"ignored":0},{"startLoc":{"line":144,"col":7},"endLoc":{"line":147,"col":6},"count":0,"ignored":0},{"startLoc":{"line":147,"col":15},"endLoc":{"line":149,"col":6},"count":0,"ignored":0},{"startLoc":{"line":140,"col":7},"endLoc":{"line":142,"col":8},"count":0,"ignored":0},{"startLoc":{"line":143,"col":7},"endLoc":{"line":144,"col":6},"count":0,"ignored":0},{"startLoc":{"line":148,"col":11},"endLoc":{"line":148,"col":27},"count":0,"ignored":0},{"startLoc":{"line":148,"col":28},"endLoc":{"line":148,"col":37},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"VideoDao.getAllVideos","count":0,"regions":[{"startLoc":{"line":153,"col":3},"endLoc":{"line":170,"col":4},"count":0,"ignored":0},{"startLoc":{"line":156,"col":9},"endLoc":{"line":164,"col":6},"count":0,"ignored":0},{"startLoc":{"line":164,"col":7},"endLoc":{"line":167,"col":6},"count":0,"ignored":0},{"startLoc":{"line":167,"col":15},"endLoc":{"line":169,"col":6},"count":0,"ignored":0},{"startLoc":{"line":160,"col":7},"endLoc":{"line":162,"col":8},"count":0,"ignored":0},{"startLoc":{"line":163,"col":7},"endLoc":{"line":164,"col":6},"count":0,"ignored":0},{"startLoc":{"line":168,"col":11},"endLoc":{"line":168,"col":27},"count":0,"ignored":0},{"startLoc":{"line":168,"col":28},"endLoc":{"line":168,"col":37},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"VideoDao.resetVideoUpdatedFlags","count":0,"regions":[{"startLoc":{"line":173,"col":3},"endLoc":{"line":183,"col":4},"count":0,"ignored":0},{"startLoc":{"line":175,"col":9},"endLoc":{"line":180,"col":6},"count":0,"ignored":0},{"startLoc":{"line":180,"col":7},"endLoc":{"line":182,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"VideoDao.markVideoUpdatedByPath","count":0,"regions":[{"startLoc":{"line":186,"col":3},"endLoc":{"line":196,"col":4},"count":0,"ignored":0},{"startLoc":{"line":188,"col":9},"endLoc":{"line":193,"col":6},"count":0,"ignored":0},{"startLoc":{"line":193,"col":7},"endLoc":{"line":195,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"VideoDao.parseVideoEntity","count":0,"regions":[{"startLoc":{"line":198,"col":3},"endLoc":{"line":237,"col":4},"count":0,"ignored":0},{"startLoc":{"line":199,"col":9},"endLoc":{"line":232,"col":6},"count":0,"ignored":0},{"startLoc":{"line":232,"col":7},"endLoc":{"line":236,"col":6},"count":0,"ignored":0},{"startLoc":{"line":203,"col":7},"endLoc":{"line":204,"col":6},"count":0,"ignored":0},{"startLoc":{"line":207,"col":7},"endLoc":{"line":208,"col":6},"count":0,"ignored":0},{"startLoc":{"line":211,"col":7},"endLoc":{"line":212,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":200,"col":17},"endLoc":{"line":200,"col":76},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":201,"col":17},"endLoc":{"line":204,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":203,"col":14},"endLoc":{"line":203,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":205,"col":17},"endLoc":{"line":208,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":207,"col":14},"endLoc":{"line":207,"col":64},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":11},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":209,"col":17},"endLoc":{"line":212,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":211,"col":14},"endLoc":{"line":211,"col":66},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":12},{"name":"VideoDao.deleteGhostVideosForSources","count":0,"regions":[{"startLoc":{"line":244,"col":3},"endLoc":{"line":296,"col":4},"count":0,"ignored":0},{"startLoc":{"line":247,"col":9},"endLoc":{"line":292,"col":6},"count":0,"ignored":0},{"startLoc":{"line":274,"col":7},"endLoc":{"line":288,"col":8},"count":0,"ignored":0},{"startLoc":{"line":258,"col":7},"endLoc":{"line":264,"col":8},"count":0,"ignored":0},{"startLoc":{"line":292,"col":7},"endLoc":{"line":295,"col":6},"count":0,"ignored":0},{"startLoc":{"line":267,"col":34},"endLoc":{"line":270,"col":8},"count":0,"ignored":0},{"startLoc":{"line":261,"col":43},"endLoc":{"line":263,"col":10},"count":0,"ignored":0},{"startLoc":{"line":290,"col":7},"endLoc":{"line":292,"col":6},"count":0,"ignored":0},{"startLoc":{"line":245,"col":57},"endLoc":{"line":245,"col":70},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":245,"col":9},"endLoc":{"line":245,"col":55},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":261,"col":13},"endLoc":{"line":261,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":267,"col":11},"endLoc":{"line":267,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":249,"col":40},"endLoc":{"line":249,"col":49},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":14},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":250,"col":66},"endLoc":{"line":250,"col":103},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":276,"col":37},"endLoc":{"line":276,"col":46},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":16},{"name":"anonymous_7","count":0,"regions":[{"startLoc":{"line":277,"col":63},"endLoc":{"line":277,"col":102},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":17},{"name":"VideoDao.deleteVideoWithScrapeInfo","count":0,"regions":[{"startLoc":{"line":302,"col":3},"endLoc":{"line":317,"col":4},"count":0,"ignored":0},{"startLoc":{"line":305,"col":9},"endLoc":{"line":314,"col":6},"count":0,"ignored":0},{"startLoc":{"line":314,"col":7},"endLoc":{"line":316,"col":6},"count":0,"ignored":0},{"startLoc":{"line":303,"col":31},"endLoc":{"line":303,"col":42},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":303,"col":9},"endLoc":{"line":303,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":18},{"name":"VideoDao.getLatestScanTime","count":0,"regions":[{"startLoc":{"line":323,"col":3},"endLoc":{"line":343,"col":4},"count":0,"ignored":0},{"startLoc":{"line":329,"col":9},"endLoc":{"line":338,"col":6},"count":0,"ignored":0},{"startLoc":{"line":333,"col":30},"endLoc":{"line":336,"col":8},"count":0,"ignored":0},{"startLoc":{"line":324,"col":31},"endLoc":{"line":326,"col":6},"count":0,"ignored":0},{"startLoc":{"line":338,"col":7},"endLoc":{"line":340,"col":6},"count":0,"ignored":0},{"startLoc":{"line":340,"col":15},"endLoc":{"line":342,"col":6},"count":0,"ignored":0},{"startLoc":{"line":337,"col":7},"endLoc":{"line":338,"col":6},"count":0,"ignored":0},{"startLoc":{"line":341,"col":11},"endLoc":{"line":341,"col":27},"count":0,"ignored":0},{"startLoc":{"line":341,"col":28},"endLoc":{"line":341,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":324,"col":9},"endLoc":{"line":324,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":333,"col":11},"endLoc":{"line":333,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":335,"col":16},"endLoc":{"line":335,"col":58},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":19}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":12,"7":13,"8":15,"9":16,"10":23,"11":24,"12":25,"13":27,"14":28,"15":29,"16":30,"17":31,"18":32,"19":33,"20":34,"21":35,"22":36,"23":37,"24":38,"25":39,"26":40,"27":41,"28":42,"29":43,"30":44,"31":46,"32":47,"33":48,"34":49,"35":50,"36":53,"37":54,"38":60,"39":61,"40":62,"41":63,"42":64,"43":65,"44":66,"45":67,"46":68,"47":69,"48":70,"49":71,"50":72,"51":74,"52":75,"53":76,"54":77,"55":78,"56":80,"57":81,"58":82,"59":83,"60":84,"61":85,"62":90,"63":91,"64":92,"65":93,"66":94,"67":95,"68":96,"69":98,"70":99,"71":101,"72":102,"73":103,"74":104,"75":105,"76":106,"77":111,"78":112,"79":113,"80":114,"81":115,"82":116,"83":117,"84":119,"85":120,"86":122,"87":123,"88":124,"89":125,"90":126,"91":127,"92":132,"93":133,"94":134,"95":135,"96":136,"97":137,"98":138,"99":139,"100":140,"101":141,"102":143,"103":144,"104":145,"105":146,"106":147,"107":148,"108":153,"109":154,"110":155,"111":156,"112":157,"113":158,"114":159,"115":160,"116":161,"117":163,"118":164,"119":165,"120":166,"121":167,"122":168,"123":173,"124":174,"125":175,"126":176,"127":177,"128":179,"129":180,"130":181,"131":186,"132":187,"133":188,"134":189,"135":190,"136":191,"137":193,"138":194,"139":198,"140":199,"141":200,"142":201,"143":202,"144":203,"145":205,"146":206,"147":207,"148":209,"149":210,"150":211,"151":213,"152":214,"153":215,"154":216,"155":217,"156":218,"157":219,"158":220,"159":221,"160":222,"161":223,"162":224,"163":225,"164":226,"165":227,"166":228,"167":229,"168":230,"169":232,"170":233,"171":234,"172":235,"173":244,"174":245,"175":246,"176":247,"177":248,"178":249,"179":250,"180":253,"181":254,"182":255,"183":257,"184":258,"185":259,"186":260,"187":261,"188":262,"189":265,"190":267,"191":268,"192":269,"193":273,"194":274,"195":275,"196":276,"197":277,"198":279,"199":280,"200":281,"201":284,"202":285,"203":286,"204":290,"205":291,"206":292,"207":293,"208":294,"209":302,"210":303,"211":304,"212":305,"213":306,"214":307,"215":308,"216":309,"217":310,"218":311,"219":312,"220":313,"221":314,"222":315,"223":323,"224":324,"225":325,"226":327,"227":328,"228":329,"229":330,"230":331,"231":333,"232":334,"233":335,"234":337,"235":338,"236":339,"237":340,"238":341},"summary":{"lines":{"total":231,"covered":2,"pct":0.8658,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4,4,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,0,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,0,0,0,-1,0,0,0,0,0,0,-1,-1,0,-1,0,0,0,-1,-1,-1,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,-1,-1,-1,-1]},"functions":{"total":20,"covered":1,"pct":5},"branches":{"total":48,"covered":0,"pct":0}}},"title":"VideoDao.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
