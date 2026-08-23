@@ -11,9 +11,14 @@ export struct SettingListItem {
   @Param title: string = ''
   @Param value: string = ''
   @Param isLink: boolean = false
+  /** 是否可交互；纯展示行设为 false，不参与遥控器焦点导航 */
+  @Param interactive: boolean = true
+  /** 页面初始焦点锚点（每个页面仅一处应设为 true） */
+  @Param autoFocus: boolean = false
   @Param onItemClick: () => void = () => {}
   @Param onRightIconClick: () => void = () => {}
   @Param menuItems: Array<MenuItem> = []
+  @Local private isRowFocused: boolean = false
   @BuilderParam icon?: () => void
   @BuilderParam iconBuilder?: () => void
   @BuilderParam titleBuilder?: () => void
@@ -73,7 +78,17 @@ export struct SettingListItem {
     .height(50)
     .borderRadius(8)
     .backgroundColor("#333333")
+    .border({ width: 2, color: this.isRowFocused ? Color.White : Color.Transparent })
+    .scale({ x: this.isRowFocused ? 1.02 : 1.0, y: this.isRowFocused ? 1.02 : 1.0 })
+    .animation({ duration: 120, curve: Curve.EaseInOut })
+    .focusable(this.interactive)
+    .defaultFocus(this.autoFocus)
+    .onFocus(() => { this.isRowFocused = true })
+    .onBlur(() => { this.isRowFocused = false })
     .onClick(() => {
+      if (!this.interactive) {
+        return
+      }
       this.onItemClick()
     })
   }

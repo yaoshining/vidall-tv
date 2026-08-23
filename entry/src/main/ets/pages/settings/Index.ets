@@ -12,6 +12,7 @@ import { SubtitleLanguagePreferenceBuilder } from "./builders/SubtitleLanguagePr
 import { SettingsController } from "./SettingsController"
 import SettingType from "./SettingType"
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService"
+import { AccountModel } from "../../stores/account/AccountModel"
 
 export interface SettingsPageParam {
   type: SettingType
@@ -26,6 +27,7 @@ export struct SettingsPage {
   static PAGE_NAME = 'settings'
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Local menuVisible: boolean = false
+  @Local accountModel: AccountModel = AccountModel.getInstance()
   @Provider('settingsController') controller: SettingsController = new SettingsController()
 
   private settingsPagePath(): string {
@@ -156,6 +158,16 @@ export struct SettingsPage {
       }, 50)
     })
     .onBackPressed(() => {
+      // 退出确认弹层打开时，返回键只关闭弹层，不退出设置页
+      if (this.accountModel.logoutConfirmVisible) {
+        this.accountModel.hideLogoutConfirm()
+        return true
+      }
+      // 登录弹层打开时，返回键只关闭弹层，不退出设置页
+      if (this.accountModel.loginDialogVisible) {
+        this.accountModel.hideLoginDialog()
+        return true
+      }
       this.handleBack()
       return true // 阻止默认返回行为
     })
