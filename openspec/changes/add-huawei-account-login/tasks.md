@@ -10,7 +10,8 @@
 - [x] 1.3 AGC 控制台创建对象类型 `UserAccount`（字段：`accountId` String 主键、`displayName` String、`avatarUri` String、`createdAt` Date、`updatedAt` Date）与 `AccountBinding`（字段：`bindingId` String 主键、`accountId` String 索引、`platform` String 索引、`platformUserId` String 索引、`platformDisplayName` String、`platformAvatarUri` String、`boundAt` Date、`updatedAt` Date）。验证：控制台对象类型列表含两个类型且字段/索引配置正确
 - [x] 1.4 导出 Cloud DB schema JSON 到 `entry/src/main/resources/rawfile/`（固定文件名 `schema.json`）。验证：`entry/src/main/resources/rawfile/schema.json` 存在且含 `UserAccount`/`AccountBinding` 定义
 - [ ] 1.5 AGC 控制台确认 Authentication 服务已启用且华为账号登录方式可用。验证：认证服务配置页显示已启用，当前应用配置匹配签名与 Client ID
-- [x] 1.6 为 `UserAccount`、`AccountBinding` 保持 `World: Read`、`Authenticated: Read + Upsert`，禁止匿名写入。验证：最新 schema 权限与控制台一致
+- [x] 1.6 将本地 `schema.json` 中 `UserAccount`、`AccountBinding` 收紧为仅 `Creator: Read + Upsert + Delete` 与 `Administrator: Read + Upsert + Delete`，移除 `World` 和宽泛 `Authenticated` 权限。验证：本地 schema 不再允许匿名或其他认证用户读取 unionID 等账号数据
+- [ ] 1.7 在 AGC 控制台同步并重新发布最小权限 schema。验证：控制台已发布版本与本地 `schema.json` 权限一致，登录用户仅能读写自己创建的数据
 
 ## 2. Cloud DB 数据模型
 
@@ -44,7 +45,7 @@
 ## 6. AccountService 编排
 
 - [x] 6.1 新增 `entry/src/main/ets/services/account/AccountService.ets`：`export class AccountService`，内部 `providers: Map<string, AuthProvider>`、`accountRepo: CloudAccountRepository`、`bindingRepo: CloudBindingRepository`，方法 `registerProvider(p: AuthProvider)`。验证：依赖在构造或属性注入，类型明确
-- [x] 6.2 实现 `loginWith(providerId: string): Promise<void>`：`provider.login()` → `PlatformIdentity` → `bindingRepo.findByPlatformUser(platformId, identity.platformUserId)` → 命中则 `accountRepo.queryById(binding.accountId)` 载入账号，未命中则新建 `UserAccount`（UUID accountId）+ `AccountBinding`（UUID bindingId）→ 更新 binding 的 `platformDisplayName`/`platformAvatarUri`/`updatedAt` + account 的 `displayName`/`avatarUri`/`updatedAt` → `accountRepo.upsert` + `bindingRepo.upsert` → `AppPreferences.setLoginState(...)` → 通知 UI。验证：先 query 后 upsert 顺序正确，UUID 生成用 `util.generateRandomUUID`（`@ohos.util`），失败时不写 Cloud DB
+- [x] 6.2 实现 `loginWith(providerId: string): Promise<void>`：`provider.login()` → `PlatformIdentity` → `bindingRepo.findByPlatformUser(platformId, identity.platformUserId)` → 命中则按 `binding.accountId` 载入账号，未命中则以 `providerId:platformUserId` 作为账号和绑定的确定性主键新建记录 → 更新非空平台资料 → 依次 upsert 账号与绑定 → 写入本地登录态。验证：历史随机主键绑定仍可由复合条件查询命中；同一平台身份的并发首次登录写入相同主键；失败时不写本地登录态
 - [x] 6.3 实现 `logout(): Promise<void>`：读 `AppPreferences.getCurrentProviderId()` → `provider.signOut()` → `AppPreferences.clearLoginState()` → 通知 UI 回未登录。验证：不删 Cloud DB 记录，仅清本地态
 - [x] 6.4 再次登录时仅用非空授权资料更新 `UserAccount` 与 `AccountBinding`，空昵称/头像保留已有云端值；本地登录态写入最终合并值。验证：空资料不会覆盖历史值
 

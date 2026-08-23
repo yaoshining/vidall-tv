@@ -67,8 +67,8 @@ export default class EntryAbility extends UIAbility {
     try {
       AgcCloudAuthService.getInstance().initialize(this.context);
       hilog.info(DOMAIN, 'testTag', 'AGC Authentication initialized');
-    } catch (err) {
-      hilog.error(DOMAIN, 'testTag', 'Failed to init AGC Authentication: %{public}s', JSON.stringify(err));
+    } catch (e) {
+      hilog.error(DOMAIN, 'testTag', 'Failed to init AGC Authentication: %{public}s', JSON.stringify(e));
     }
     const accountService = AccountService.getInstance();
     accountService.registerProvider(new HuaweiAuthProvider());

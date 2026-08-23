@@ -9,6 +9,19 @@ const AGC_CONFIG_FILE: string = 'agconnect-services.json';
 const CLOUD_DB_SCHEMA_FILE: string = 'schema.json';
 const LOG_DOMAIN: number = 0x0000;
 const TAG: string = 'AgcCloudAuth';
+const ERROR_NOT_INITIALIZED: number = 10001;
+const ERROR_SESSION_MISSING: number = 10002;
+const ERROR_AUTHENTICATION_FAILED: number = 10003;
+
+export class AgcAuthenticationError extends Error implements BusinessError {
+  code: number;
+
+  constructor(code: number, message: string) {
+    super(message);
+    this.name = 'AgcAuthenticationError';
+    this.code = code;
+  }
+}
 
 export class AgcCloudAuthService {
   private static instance: AgcCloudAuthService = new AgcCloudAuthService();
@@ -27,7 +40,7 @@ export class AgcCloudAuthService {
 
   async authenticateHuaweiAccount(): Promise<void> {
     if (!this.initialized) {
-      throw new Error('AGC Authentication 尚未初始化');
+      throw new AgcAuthenticationError(ERROR_NOT_INITIALIZED, 'AGC Authentication 尚未初始化');
     }
 
     const credentialInfo: HwIdCredentialInfo = { kind: 'hwid' };
@@ -46,7 +59,7 @@ export class AgcCloudAuthService {
       }
       if (currentUser === null) {
         hilog.error(LOG_DOMAIN, TAG, 'AGC signIn 返回成功但当前用户为空');
-        throw new Error('AGC Authentication 未建立用户会话');
+        throw new AgcAuthenticationError(ERROR_SESSION_MISSING, 'AGC Authentication 未建立用户会话');
       }
 
       await currentUser.getToken(false);
@@ -63,9 +76,11 @@ export class AgcCloudAuthService {
       hilog.info(LOG_DOMAIN, TAG, 'Cloud Foundation 认证上下文初始化成功');
     } catch (e) {
       const error = e as BusinessError;
+      const errorCode: number = typeof error.code === 'number' ? error.code : ERROR_AUTHENTICATION_FAILED;
+      const errorMessage: string = error.message ?? 'AGC Authentication 失败';
       hilog.error(LOG_DOMAIN, TAG, 'AGC 华为账号认证失败 code=%{public}d message=%{public}s',
-        error.code, error.message);
-      throw new Error(`AGC Authentication 失败(${error.code}): ${error.message}`);
+        errorCode, errorMessage);
+      throw new AgcAuthenticationError(errorCode, errorMessage);
     }
   }
 

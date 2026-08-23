@@ -1534,8 +1534,7 @@ export struct MediaLibraryTab {
   }
 
   private hasDisplayableMedia(): boolean {
-    return this.model.stats.total > 0 ||
-      this.model.recentlyAdded.length > 0 ||
+    return this.model.recentlyAdded.length > 0 ||
       this.model.movies.length > 0 ||
       this.model.seriesGroups.length > 0 ||
       this.model.recentlyAddedList.length > 0;

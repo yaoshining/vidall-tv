@@ -287,7 +287,7 @@ export class AppPreferences {
     }
     try {
       return JSON.parse(serialized) as LoginStateRecord;
-    } catch {
+    } catch (e) {
       return null;
     }
   }

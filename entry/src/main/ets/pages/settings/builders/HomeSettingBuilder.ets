@@ -174,7 +174,7 @@ struct HomeSettingBuilderComponent {
       if (!this.isLogged) {
         this.armHuaweiLogin()
       }
-    } catch {
+    } catch (e) {
       this.showToast('退出登录失败')
     }
   }

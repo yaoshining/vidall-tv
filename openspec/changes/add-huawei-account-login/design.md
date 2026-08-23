@@ -170,7 +170,7 @@ export class AccountService {
     // 1. provider.login() → PlatformIdentity（unionID）
     // 2. 查 AccountBinding where platform=providerId AND platformUserId=identity.platformUserId
     //    命中 → 载入对应 UserAccount（按 binding.accountId）
-    //    未命中 → 新建 UserAccount（UUID accountId）+ 新建 AccountBinding（UUID bindingId）
+    //    未命中 → 以 providerId:platformUserId 为确定性主键新建 UserAccount + AccountBinding
     // 3. 更新 binding 的 platformDisplayName/platformAvatarUri + updatedAt
     //    命中时也更新（最新昵称头像同步）
     // 4. upsert UserAccount + upsert AccountBinding 到 Cloud DB
@@ -212,7 +212,7 @@ sequenceDiagram
     AS->>CAR: query(accountId=X)
     CAR-->>AS: UserAccount
   else 未命中（首次登录）
-    AS->>AS: 新建 UserAccount(UUID) + AccountBinding(UUID)
+    AS->>AS: 以 providerId:platformUserId 为确定性主键新建账号与绑定
   end
   AS->>CAR: upsert(userAccount)
   AS->>CBR: upsert(accountBinding)（含最新昵称头像）
@@ -285,7 +285,7 @@ entry/src/main/ets/
 
 Account Kit 授权成功只提供平台身份，不会自动建立 Cloud Foundation 认证上下文。`HuaweiAuthProvider` 在取得华为凭据后，使用 `@hw-agconnect/auth` 建立 AGC Authentication 用户会话；随后获取 `auth.getAuthProvider()` 并调用 `cloudCommon.init({ authProvider, databaseOptions: { schema: 'schema.json' } })`。`AccountService` 只有在该异步步骤完成后才可查询或写入 Cloud DB。
 
-安全边界：`idToken` 不能直接作为 Cloud Foundation access token；客户端不保存 OAuth client secret，也不自行执行 authorizationCode 换 token。`World` 维持只读，写入依赖 `Authenticated.Upsert`。退出登录时同时清理 AGC Authentication 会话与本地登录态。
+安全边界：`idToken` 不能直接作为 Cloud Foundation access token；客户端不保存 OAuth client secret，也不自行执行 authorizationCode 换 token。`UserAccount` 与 `AccountBinding` 不授予 `World` 或宽泛 `Authenticated` 权限，仅允许 `Creator` 读写删除自己的记录、`Administrator` 管理全部记录，避免 unionID 等绑定数据暴露给匿名用户或其他认证用户。退出登录时同时清理 AGC Authentication 会话与本地登录态；本地 schema 变更后还必须在 AGC 控制台重新发布才能作用于云端。
 
 ### 11. AGC 控制台前置配置（手动，文档化到 tasks）
 
@@ -312,7 +312,7 @@ Account Kit 授权成功只提供平台身份，不会自动建立 Cloud Foundat
 | 风险/权衡 | 说明 | 缓解 |
 |----------|------|------|
 | **昵称头像资料授权可能被拒绝** | `LoginWithHuaweiIDButton` 不直接返回昵称头像，`profile` scope 可能被用户拒绝 | 资料授权失败不阻断基础登录；UI 显示“华为用户”和默认头像；空资料不覆盖云端历史值 |
-| **复合唯一约束靠代码保证** | Cloud DB 无 `(platform, platformUserId)` 复合唯一索引，并发首次登录可能产生重复 binding | 首次登录是低频操作；`loginWith` 内先 query 再 upsert，冲突时后到者命中已建 binding（query 返回非空则走已有账号分支） |
+| **复合唯一约束靠确定性主键保证** | Cloud DB 无 `(platform, platformUserId)` 复合唯一索引，单纯先 query 再写存在并发竞态 | 未命中时以 `providerId:platformUserId` 同时作为账号和绑定主键，使并发 upsert 收敛到同一记录；查询仍兼容历史随机主键绑定 |
 | **退出不撤销华为授权** | 不调 `CancelAuthorizationRequest`，用户退出后华为侧仍授权 | 符合「退出登录」预期（快速再登录）；`CancelAuthorizationRequest` 预留给未来「解除授权」功能 |
 | **Cloud DB 依赖网络与 AGC 配置** | 未配置认证服务、存储区或对象类型时认证/upsert/query 会失败 | tasks 明确 AGC Authentication 与 Cloud DB 前置步骤；登录失败时 UI 回退未登录态并提示 |
 | **provider 与 UI controller 耦合** | `HuaweiAuthProvider` 需持有 `LoginWithHuaweiIDButtonController`，按钮在 UI 层渲染 | provider 暴露 controller getter，UI 引用之；provider 负责 login() Promise 封装，解耦业务逻辑 |
@@ -335,6 +335,6 @@ Account Kit 授权成功只提供平台身份，不会自动建立 Cloud Foundat
 ## 扩展路径（本次不实现，架构预留）
 
 - **新增微信 provider**：实现 `WechatAuthProvider`，`AccountService.registerProvider` 注册 → 未登录态自动多一个登录按钮
-- **绑定第二平台**：已登录态增加「绑定其他账号」入口 → 用当前 `accountId` 新建 `AccountBinding`（`platform`='wechat'）
+- **绑定第二平台**：已登录态增加独立的「绑定其他账号」入口，要求当前账号与待绑定平台均完成显式重新认证后，才用当前 `accountId` 新建 `AccountBinding`（`platform`='wechat'）。普通登录遇到未知平台身份时始终新建/恢复该身份自己的账号，禁止依据本地登录态自动合并，以避免误绑定或账号接管
 - **解绑/切换账号**：操作 `AccountBinding` 表即可
 - **撤销授权**：已登录态「解除华为授权」→ 调 `createCancelAuthorizationRequest` + 删 binding
