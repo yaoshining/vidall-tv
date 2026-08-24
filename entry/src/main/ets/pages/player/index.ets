@@ -26,7 +26,8 @@ import { normalizePlayerBackend } from "../../services/playback/PlaybackBackendT
 import {
   PlaybackProgressService,
   PlaybackProgressContext,
-  PersistOutcome
+  PersistOutcome,
+  NextEpisodeHint
 } from "../../services/playbackProgress/PlaybackProgressService";
 import { PlaybackResumeDecision } from "../../services/playbackProgress/PlaybackResumeDecision";
 import { reportServerPlaybackStopped, reportServerPlaybackProgress } from "../../lib/ServerProgressReporter";
@@ -361,10 +362,47 @@ export struct PlayerPage {
         onResumeDialog: (posMs: number): void => {
           this.pendingSeekMs = posMs;
           this.showResumeDialog = true;
+        },
+        getNextEpisodeHint: (): NextEpisodeHint | null => {
+          return this.getNextEpisodeHintForNearEnd();
         }
       });
     }
     return this.progressService;
+  }
+
+  /**
+   * 近完播时计算下一集提示，用于把「继续播放」指针推进到下一集。
+   *
+   * 仅在 media_library 上下文且存在下一集（hasNext）时生效；
+   * 电影 / 最后一集 / 文件浏览上下文均返回 null，此时仅标记当前集已看完。
+   */
+  private getNextEpisodeHintForNearEnd(): NextEpisodeHint | null {
+    const pc = this.videoPlayerController.playbackContext;
+    if (pc === undefined || pc.contextType !== 'media_library') {
+      return null;
+    }
+    const mlc = pc as MediaLibraryContext;
+    if (!mlc.hasNext) {
+      return null;
+    }
+    const nextIndex = mlc.currentIndex + 1;
+    if (nextIndex < 0 || nextIndex >= mlc.items.length) {
+      return null;
+    }
+    const nextItem = mlc.items[nextIndex];
+    const seriesProviderId = this.currentPageParam?.seriesProviderId ?? '';
+    const season = nextItem.seasonNumber ?? 0;
+    const episode = nextItem.episodeNumber ?? 0;
+    if (seriesProviderId.length === 0 || season <= 0 || episode <= 0) {
+      return null;
+    }
+    return {
+      mediaKey: MediaProgressStore.episodeKey(seriesProviderId, season, episode),
+      season,
+      episode,
+      durationMs: nextItem.durationMs ?? 0
+    };
   }
 
   aboutToAppear(): void {

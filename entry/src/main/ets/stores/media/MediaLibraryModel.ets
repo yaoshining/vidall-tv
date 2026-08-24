@@ -220,10 +220,14 @@ export class MediaLibraryModel {
       const top20: MediaProgressEntry[] = [];
       for (const entry of allEntries) {
         if (top20.length >= 20) { break; }
-        if (entry.positionMs <= 0 || entry.durationMs <= 0) { continue; }
-        if ((entry.positionMs / entry.durationMs) < 0.95) {
-          top20.push(entry);
-        }
+        if (entry.durationMs <= 0) { continue; }
+        const ratio = entry.positionMs / entry.durationMs;
+        // 剧集集级（episode key）允许「未开始」（positionMs == 0）进入列表，
+        // 用于把近完播后推进的下一集以 0% 状态展示；电影 / 旧整剧格式仍要求已播放。
+        const isEpisodeKey = entry.mediaKey.startsWith('media_progress_episode_tmdb_');
+        if (entry.positionMs === 0 && !isEpisodeKey) { continue; }
+        if (ratio >= 0.95) { continue; }
+        top20.push(entry);
       }
 
       // 从已加载的 recentlyAdded 构建两张查找 Map

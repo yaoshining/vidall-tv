@@ -65,6 +65,26 @@ export interface PlaybackProgressServiceOptions {
    * page 端在此设置 `showResumeDialog = true` 与 `pendingSeekMs`。
    */
   onResumeDialog?: (positionMs: number) => void;
+  /**
+   * near-end（完播）时获取下一集提示，用于把「继续播放」指针推进到下一集。
+   * 返回 null 表示无下一集（电影 / 最后一集 / 文件浏览上下文等），此时仅标记当前集已看完。
+   */
+  getNextEpisodeHint?: () => NextEpisodeHint | null;
+}
+
+/**
+ * 下一集的媒体级进度提示。
+ *
+ * 由 page 基于当前播放上下文（media_library）计算：
+ * - `mediaKey`：下一集的集级进度 key（`media_progress_episode_tmdb_{seriesTmdbId}_s{sn}_e{en}`）
+ * - `season` / `episode`：下一集的季号 / 集号
+ * - `durationMs`：下一集的时长（未知时写 0，卡片会暂不展示）
+ */
+export interface NextEpisodeHint {
+  mediaKey: string;
+  season: number;
+  episode: number;
+  durationMs: number;
 }
 
 /**
@@ -259,6 +279,18 @@ export class PlaybackProgressService {
     }
     if (MediaProgressStore.isNearEnd(posMs, durMs)) {
       await MediaProgressStore.clear(ctx.mediaKey).catch(() => {});
+      // 完播后把「继续播放」指针推进到下一集（position=0，未开始）。
+      // 幂等：重复触发（切后台 / 退出 / 定时）会用 position=0 覆盖写入，无副作用。
+      const nextHint = this.options.getNextEpisodeHint?.();
+      if (nextHint !== null && nextHint !== undefined) {
+        await MediaProgressStore.save(
+          nextHint.mediaKey,
+          0,
+          nextHint.durationMs,
+          nextHint.season,
+          nextHint.episode
+        ).catch(() => {});
+      }
       return 'cleared';
     }
     if (posMs > 0 && durMs > 0) {
