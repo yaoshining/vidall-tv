@@ -1,4 +1,3 @@
-import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { ScrapeCandidate, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
@@ -21,7 +20,7 @@ function modeLabel(mode: string): string {
 
 @ComponentV2
 export struct ScrapeTaskIndicator {
-  taskStore: ScrapeTaskStore = ScrapeTaskStore.getState();
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState();
   @Local expanded: boolean = false;
 
   private readonly indicatorFocusId: string = 'scrape_task_indicator';
@@ -34,6 +33,12 @@ export struct ScrapeTaskIndicator {
   }
   private progressText(task: ScrapeTaskSnapshot): string {
     return `${task.progress.completed}/${task.progress.total}`;
+  }
+  private progressValue(task: ScrapeTaskSnapshot): number {
+    return task.progress.completed;
+  }
+  private progressTotal(task: ScrapeTaskSnapshot): number {
+    return Math.max(1, task.progress.total);
   }
 
   @Builder
@@ -63,6 +68,23 @@ export struct ScrapeTaskIndicator {
   }
 
   @Builder
+  ProgressRing(task: ScrapeTaskSnapshot) {
+    Stack({ alignContent: Alignment.Center }) {
+      Progress({
+        value: this.progressValue(task),
+        total: this.progressTotal(task),
+        type: ProgressType.Ring
+      })
+        .width(40).height(40)
+        .color('#66A9D8')
+        .backgroundColor('#334B78A8')
+      Text(`${task.progress.completed}/${task.progress.total}`)
+        .fontSize(10).fontColor(Color.White).fontWeight(FontWeight.Medium)
+    }
+    .width(40).height(40)
+  }
+
+  @Builder
   TaskItem(task: ScrapeTaskSnapshot) {
     Column({ space: 8 }) {
       Row() {
@@ -70,7 +92,10 @@ export struct ScrapeTaskIndicator {
           Text(task.request.scope.displayName).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Medium)
           Text(`${modeLabel(task.request.mode)} · ${statusLabel(task.status)} · ${this.progressText(task)}`)
             .fontSize(13).fontColor('#AAB2BF')
-        }.alignItems(HorizontalAlign.Start)
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        this.ProgressRing(task)
+      }.width('100%').alignItems(VerticalAlign.Center)
+      Row() {
         Blank()
         if (task.status === 'waiting') {
           this.Action('取消', () => { ScrapeTaskQueue.getInstance().cancel(task.id); })
@@ -82,7 +107,7 @@ export struct ScrapeTaskIndicator {
         } else if (task.status === 'completed' || task.status === 'cancelled') {
           this.Action('清除', () => { ScrapeTaskQueue.getInstance().clear(task.id); })
         }
-      }.width('100%')
+      }.width('100%').alignItems(VerticalAlign.Top)
       if (task.status === 'waiting-confirmation' && task.pause !== undefined) {
         if (task.pause.reason === 'candidate-search-retry') {
           Text('匹配结果加载失败或为空').fontSize(13).fontColor('#F1C56A')
@@ -97,6 +122,31 @@ export struct ScrapeTaskIndicator {
       }
     }
     .width('100%').padding(12).backgroundColor('#F0181C24').borderRadius(10)
+  }
+
+  @Builder
+  DropdownBody() {
+    Column({ space: 10 }) {
+      Row() {
+        Text('刮削任务').fontSize(20).fontColor(Color.White).fontWeight(FontWeight.Bold)
+        Blank()
+        this.Action('关闭', () => { this.closeDropdown(); })
+      }.width('100%').alignItems(VerticalAlign.Center)
+      if (this.getTasks().length === 0) {
+        Text('暂无任务').fontSize(15).fontColor('#AAB2BF').padding(24)
+      } else {
+        Scroll() {
+          Column({ space: 8 }) {
+            ForEach(this.getTasks(), (task: ScrapeTaskSnapshot) => {
+              this.TaskItem(task)
+            }, (task: ScrapeTaskSnapshot) => `${task.id}-${task.progress.completed}-${task.progress.succeeded}-${task.status}`)
+          }.width('100%')
+        }.height(430).scrollBar(BarState.Auto)
+      }
+    }
+    .width(430).padding(16)
+    .backgroundColor('#FA10141B').borderRadius(14)
+    .border({ width: 1, color: '#44516070' }).shadow({ radius: 24, color: '#AA000000' })
   }
 
   build() {
@@ -114,39 +164,19 @@ export struct ScrapeTaskIndicator {
             .width(18).height(18).textAlign(TextAlign.Center)
             .backgroundColor('#E85D4A').borderRadius(9)
         }
-      }.width(48).height(42)
-
-      if (this.expanded) {
-        Column({ space: 10 }) {
-          Row() {
-            Text('刮削任务').fontSize(20).fontColor(Color.White).fontWeight(FontWeight.Bold)
-            Blank()
-            this.Action('关闭', () => { this.closeDropdown(); })
-          }.width('100%')
-          if (this.getTasks().length === 0) {
-            Text('暂无任务').fontSize(15).fontColor('#AAB2BF').padding(24)
-          } else {
-            Scroll() {
-              Column({ space: 8 }) {
-                ForEach(this.getTasks(), (task: ScrapeTaskSnapshot) => {
-                  this.TaskItem(task)
-                }, (task: ScrapeTaskSnapshot) => task.id)
-              }.width('100%')
-            }.height(430).scrollBar(BarState.Auto)
-          }
-        }
-        .width(430).padding(16).margin({ top: 48 })
-        .backgroundColor('#FA10141B').borderRadius(14)
-        .border({ width: 1, color: '#44516070' }).shadow({ radius: 24, color: '#AA000000' })
-        .focusable(true)
-        .onKeyEvent((event: KeyEvent) => {
-          if (event.keyCode === KeyCode.KEYCODE_BACK) {
-            this.closeDropdown();
-            event.stopPropagation();
-          }
-        })
-        .zIndex(20)
       }
+      .width(48).height(42)
+      // 浮层：锚定在触发图标，独立渲染，不影响右侧时钟/Logo 布局
+      .bindPopup(this.expanded, {
+        builder: () => { this.DropdownBody() },
+        placement: Placement.BottomRight,
+        enableArrow: false,
+        mask: true,
+        autoCancel: true,
+        onStateChange: (event: PopupStateChangeParam) => {
+          this.expanded = event.isVisible;
+        }
+      })
     }
   }
 }
