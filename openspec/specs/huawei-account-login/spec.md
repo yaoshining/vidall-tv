@@ -1,8 +1,10 @@
+# huawei-account-login Specification
+
 ## Purpose
 
 提供多平台可扩展的账号登录能力，支持用户通过华为账号等认证平台一键登录，将平台身份标识（如华为 unionID）与账号资料持久化到云数据库，并管理未登录/已登录/退出全流程。一个 App 账号可绑定多个平台身份，新增认证平台只需注册 provider 实现而不改动账号核心逻辑。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 全 App 唯一登录入口
 
