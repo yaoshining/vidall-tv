@@ -48,6 +48,30 @@ export default function scrapeClientTest() {
       expect(query.episodeNumber).assertEqual(7);
     });
 
+    it('should treat tilde/underscore separator for weak semantic filenames', 0, () => {
+      const tilde: ParsedFileName = parseFileName('01~4K.mp4');
+      expect(tilde.title).assertEqual('01');
+      expect(tilde.mediaType).assertEqual('movie');
+      expect(tilde.seasonNumber === undefined).assertTrue();
+      expect(tilde.episodeNumber === undefined).assertTrue();
+
+      const underscore: ParsedFileName = parseFileName('01_4K.mp4');
+      expect(underscore.title).assertEqual('01');
+      expect(underscore.mediaType).assertEqual('movie');
+
+      const dash: ParsedFileName = parseFileName('01-4K.mp4');
+      expect(dash.title).assertEqual('01');
+    });
+
+    it('should keep standard SxxExx filename parsing unaffected by separator changes', 0, () => {
+      const standard: ParsedFileName = parseFileName('Breaking.Bad.S01E01.1080p.mkv');
+
+      expect(standard.title).assertEqual('Breaking Bad');
+      expect(standard.mediaType).assertEqual('tv');
+      expect(standard.seasonNumber).assertEqual(1);
+      expect(standard.episodeNumber).assertEqual(1);
+    });
+
     /**
      * 测试用例 3：测试文件名解析 - 复杂文件名
      */
@@ -639,6 +663,49 @@ export default function scrapeClientTest() {
         expect(episodeCall.providerId).assertEqual('tv-100');
         expect(episodeCall.seasonNumber).assertEqual(1);
         expect(episodeCall.episodeNumber).assertEqual(19);
+      }
+    });
+
+    /**
+     * 测试用例 25：弱语义文件名"01~4K.mp4"（无季子目录、无 SxxExx）默认按第一季刮削。
+     *
+     * 场景：`重器/01~4K.mp4`。`extractEpisodeNumberFromWeakSemanticFileName` 现在能从
+     * `01~4K`（数字后跟 `~`）提取集数 1；入口层 `processVideoScrape` 在无季号时传季节号 1。
+     * 本用例验证 ScrapeClient 收到 explicitEpisodeNumber=1、explicitSeasonNumber=1 后，
+     * 正确按 S01E01 拉取 season 与 episode。
+     */
+    it('should scrape season 1 and episode 1 for tilde-separated weak semantic filename without season info', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('fake-tilde-season-default');
+      fake.enqueueSearchTvResults([createTvSeriesScrapeResult('fake-tilde-season-default', '重器', 'tv-200')]);
+      fake.enqueueFetchTvSeriesDetailResult(createTvSeriesScrapeResult('fake-tilde-season-default', '重器', 'tv-200'));
+      fake.enqueueFetchSeasonResult(createTvSeasonScrapeResult('fake-tilde-season-default', 1, 'tv-200_s1', 'Season 1'));
+      fake.enqueueFetchEpisodeResult(createTvEpisodeScrapeResult('fake-tilde-season-default', 1, 1, 'ep-200-1-1', 'Episode 1'));
+
+      const client = new ScrapeClient({});
+      client.registerProvider(fake);
+
+      // 模拟入口层：`01~4K.mp4` 已提取集数 1，无季信息默认季 1
+      const result = await client.autoScrapeTvEpisode('01~4K.mp4', '重器', 'tv', 1, 1);
+
+      expect(result.series !== null).assertTrue();
+      if (result.series !== null) {
+        expect(result.series.title).assertEqual('重器');
+      }
+      expect(result.season !== null).assertTrue();
+      if (result.season !== null) {
+        expect(result.season.seasonNumber).assertEqual(1);
+      }
+      expect(result.episode !== null).assertTrue();
+      if (result.episode !== null) {
+        expect(result.episode.seasonNumber).assertEqual(1);
+        expect(result.episode.episodeNumber).assertEqual(1);
+      }
+      expect(fake.getCallCount('fetchSeason')).assertEqual(1);
+      expect(fake.getCallCount('fetchEpisode')).assertEqual(1);
+      const seasonCall = fake.getLastCall('fetchSeason');
+      expect(seasonCall !== null).assertTrue();
+      if (seasonCall !== null) {
+        expect(seasonCall.seasonNumber).assertEqual(1);
       }
     });
   });

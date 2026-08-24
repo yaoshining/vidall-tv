@@ -191,12 +191,13 @@ export async function processVideoScrape(
       const explicitEpisodeNum = parsedFileName.episodeNumber === undefined
         ? extractEpisodeNumberFromWeakSemanticFileName(fileName)
         : undefined;
-      // 从文件路径的父目录名提取季号（如"御赐小仵作第二季"→2），无目录季号时回退到1
+      // 从文件路径的父目录名提取季号（如"御赐小仵作第二季"→2），无目录季号时回退到1。
+      // 只要文件名未解析出标准季号（SxxExx），就显式传目录季号或默认1，避免弱语义文件缺季信息。
       const parentDirName = extractParentDirectoryName(info.filePath);
       const directorySeasonNum = parentDirName !== undefined
         ? extractSeasonNumberFromDirectoryName(parentDirName)
         : undefined;
-      const explicitSeasonNum = explicitEpisodeNum !== undefined
+      const explicitSeasonNum = parsedFileName.seasonNumber === undefined
         ? (directorySeasonNum ?? 1)
         : undefined;
       const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);

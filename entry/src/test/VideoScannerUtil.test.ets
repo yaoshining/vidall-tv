@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   classifyVideoScrapeTarget,
   createVideoScrapeContext,
+  extractEpisodeNumberFromWeakSemanticFileName,
   hasSeasonSiblingDirectory
 } from '../main/ets/utils/VideoScannerHelpers';
 import { VideoScrapeContext } from '../main/ets/utils/VideoScannerTypes';
@@ -38,6 +39,29 @@ export default function videoScannerUtilTest() {
       const classification = classifyVideoScrapeTarget(
         'S01 4K EP 07.mkv',
         '/御赐小仵作/S01 4K EP 07.mkv',
+        context
+      );
+
+      expect(classification.mediaType).assertEqual('tv');
+    });
+
+    it('should extract episode number from weak semantic filenames with various separators', 0, () => {
+      expect(extractEpisodeNumberFromWeakSemanticFileName('01~4K.mp4')).assertEqual(1);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('01_4K.mp4')).assertEqual(1);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('01-4K.mp4')).assertEqual(1);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('19 4K.mp4')).assertEqual(19);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('19.mp4')).assertEqual(19);
+    });
+
+    it('should not treat a year-only weak semantic filename as an episode number', 0, () => {
+      expect(extractEpisodeNumberFromWeakSemanticFileName('2024.mp4')).assertEqual(undefined);
+    });
+
+    it('should classify tilde-separated weak semantic file in TV Series path as tv', 0, () => {
+      const context: VideoScrapeContext = createVideoScrapeContext('/Videos/TV Series/重器', 0, false);
+      const classification = classifyVideoScrapeTarget(
+        '01~4K.mp4',
+        '/Videos/TV Series/重器/01~4K.mp4',
         context
       );
 
