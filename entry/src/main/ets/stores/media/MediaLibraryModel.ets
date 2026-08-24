@@ -1,5 +1,6 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ContinueWatchingItem, TvSeriesEntity, TvEpisodeEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
+import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { millisecondsToTime } from '../../utils/TimeUtil';
 
 export interface YearGroup {
@@ -194,7 +195,8 @@ export class MediaLibraryModel {
       const allEntries: MediaProgressEntry[] = await db.getAllMediaProgress();
 
       // 构建电影播放进度映射（providerId → 进行中比例），供文件源卡片底部进度条使用。
-      // 仅记录「进行中」（0 < ratio < 0.95 且未标记完播），已完播/未在看不显示进度条。
+      // 仅记录「进行中」（0 < 比例 且未到完播阈值，与 MediaProgressStore.isNearEnd 保持一致，
+      // 即剩余时长 < 60 秒或已播比例 ≥ 95% 视为完播），已完播/未在看不显示进度条。
       const movieProgressMap = new Map<string, number>();
       for (const entry of allEntries) {
         if (!entry.mediaKey.startsWith('media_progress_movie_')) {
@@ -208,7 +210,7 @@ export class MediaLibraryModel {
           continue;
         }
         const ratio = entry.positionMs / entry.durationMs;
-        if (ratio > 0 && ratio < 0.95) {
+        if (ratio > 0 && !MediaProgressStore.isNearEnd(entry.positionMs, entry.durationMs)) {
           movieProgressMap.set(providerId, ratio);
         }
       }
