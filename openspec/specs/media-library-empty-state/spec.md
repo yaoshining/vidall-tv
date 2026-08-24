@@ -1,8 +1,10 @@
+# media-library-empty-state Specification
+
 ## Purpose
 
 定义文件源媒体库没有可展示内容时的首页空态行为，使首次使用者获得清晰、聚焦且可通过电视遥控器直接完成配置的启动引导。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 空媒体库仅展示启动引导
 当当前数据源为文件源且媒体库没有可展示内容时，系统 SHALL 展示媒体库启动引导空态及底部统计、扫描与刮削区域，并隐藏“继续播放”和媒体内容分区。
