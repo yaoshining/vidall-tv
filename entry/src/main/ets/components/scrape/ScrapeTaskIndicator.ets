@@ -1,3 +1,4 @@
+import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { ScrapeCandidate, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
@@ -69,27 +70,28 @@ export struct ScrapeTaskIndicator {
 
   @Builder
   ProgressRing(task: ScrapeTaskSnapshot) {
-    Progress({
-      value: this.progressValue(task),
-      total: this.progressTotal(task),
-      type: ProgressType.Ring
-    })
-      .width(40).height(40)
-      .color('#66A9D8')
-      .backgroundColor('#334B78A8')
+    Stack({ alignContent: Alignment.Center }) {
+      Progress({
+        value: this.progressValue(task),
+        total: this.progressTotal(task),
+        type: ProgressType.Linear
+      })
+        .width('100%').height(10)
+        .color('#66A9D8')
+        .backgroundColor('#334B78A8')
+    }
+    .width('100%').height(14)
   }
 
   @Builder
   TaskItem(task: ScrapeTaskSnapshot) {
     Column({ space: 8 }) {
-      Row() {
-        Column({ space: 4 }) {
-          Text(task.request.scope.displayName).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Medium)
-          Text(`${modeLabel(task.request.mode)} · ${statusLabel(task.status)} · ${this.progressText(task)}`)
-            .fontSize(13).fontColor('#AAB2BF')
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        this.ProgressRing(task)
-      }.width('100%').alignItems(VerticalAlign.Top)
+      Column({ space: 4 }) {
+        Text(task.request.scope.displayName).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Medium)
+        Text(`${modeLabel(task.request.mode)} · ${statusLabel(task.status)} · ${this.progressText(task)}`)
+          .fontSize(13).fontColor('#AAB2BF')
+      }.alignItems(HorizontalAlign.Start).width('100%')
+      this.ProgressRing(task)
       Row() {
         Blank()
         if (task.status === 'waiting') {
@@ -134,14 +136,20 @@ export struct ScrapeTaskIndicator {
           Column({ space: 8 }) {
             ForEach(this.getTasks(), (task: ScrapeTaskSnapshot) => {
               this.TaskItem(task)
-            }, (task: ScrapeTaskSnapshot) => `${task.id}-${task.progress.completed}-${task.progress.succeeded}-${task.status}`)
-          }.width('100%')
-        }.height(430).scrollBar(BarState.Auto)
+            }, (task: ScrapeTaskSnapshot) => task.id)
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }.height(430).scrollBar(BarState.Auto).align(Alignment.Top)
       }
     }
     .width(430).padding(16)
     .backgroundColor('#FA10141B').borderRadius(14)
     .border({ width: 1, color: '#44516070' }).shadow({ radius: 24, color: '#AA000000' })
+    .onKeyEvent((event: KeyEvent) => {
+      if (event.keyCode === KeyCode.KEYCODE_BACK) {
+        this.closeDropdown();
+        event.stopPropagation();
+      }
+    })
   }
 
   build() {

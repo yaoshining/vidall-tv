@@ -457,6 +457,9 @@ function findTask(store: ScrapeTaskStore, taskId: string): ScrapeTaskSnapshot | 
 }
 
 function createStoreSnapshot(id: string, status: ScrapeTaskStatus): ScrapeTaskSnapshot {
+  const snapshot = new ScrapeTaskSnapshot(id, createEpisodeRequest(40, [40, 41]), 10);
+  snapshot.status = status;
+  snapshot.updatedAt = 20;
   const progress: ScrapeProgress = {
     completed: 1,
     total: 4,
@@ -480,17 +483,10 @@ function createStoreSnapshot(id: string, status: ScrapeTaskStatus): ScrapeTaskSn
     progress,
     failedVideoIds: [41]
   };
-  const snapshot: ScrapeTaskSnapshot = {
-    id,
-    request: createEpisodeRequest(40, [40, 41]),
-    status,
-    progress,
-    pause,
-    resumeState,
-    result: createResult(1, [41]),
-    createdAt: 10,
-    updatedAt: 20
-  };
+  snapshot.progress = progress;
+  snapshot.pause = pause;
+  snapshot.resumeState = resumeState;
+  snapshot.result = createResult(1, [41]);
   return snapshot;
 }
 
@@ -670,57 +666,23 @@ export default function scopedScrapeTest() {
       await flushMicrotasks();
     });
 
-    it('deep-copies stored tasks and counts only waiting and running tasks as active', 0, () => {
+    it('holds observable task references and counts only waiting and running tasks as active', 0, () => {
       const store = new ScrapeTaskStore();
       const waiting = createStoreSnapshot('waiting', 'waiting');
       const running = createStoreSnapshot('running', 'running');
       const confirming = createStoreSnapshot('confirming', 'waiting-confirmation');
       store.update([waiting, running, confirming]);
 
-      waiting.request.scope.displayName = 'mutated-input-scope';
-      waiting.request.videoIds?.push(99);
-      waiting.progress.completed = 99;
-      waiting.pause?.candidates.splice(0, 1);
-      if (waiting.resumeState !== undefined) {
-        waiting.resumeState.selections[0].candidate.title = 'mutated-input-candidate';
-        waiting.resumeState.cancelledGroupKeys.push('mutated-input');
-      }
-      waiting.result?.failedVideoIds.push(99);
-      const firstRead = store.getTasks();
-      const storedWaiting = firstRead.find((task: ScrapeTaskSnapshot): boolean => task.id === 'waiting');
-      expect(storedWaiting?.request.scope.displayName).assertEqual('episode-40');
-      expect(storedWaiting?.request.videoIds?.length).assertEqual(2);
+      // 引用共享：getTasks 返回的元素与输入是同一实例，保证 @Trace 字段精准更新。
+      const tasks = store.getTasks();
+      const storedWaiting = tasks.find((task: ScrapeTaskSnapshot): boolean => task.id === 'waiting');
+      expect(storedWaiting === waiting).assertTrue();
       expect(storedWaiting?.progress.completed).assertEqual(1);
-      expect(storedWaiting?.pause?.candidates.length).assertEqual(1);
-      const firstResumeState = storedWaiting?.resumeState;
-      if (firstResumeState !== undefined) {
-        expect(firstResumeState.selections[0].candidate.title).assertEqual('candidate-selected-original');
-        expect(firstResumeState.cancelledGroupKeys.length).assertEqual(1);
-      }
-      expect(storedWaiting?.result?.failedVideoIds.length).assertEqual(1);
 
-      if (storedWaiting !== undefined) {
-        storedWaiting.request.scope.displayName = 'mutated-output-scope';
-        storedWaiting.request.videoIds?.push(100);
-        storedWaiting.progress.completed = 100;
-        storedWaiting.pause?.candidates.splice(0, 1);
-        if (storedWaiting.resumeState !== undefined) {
-          storedWaiting.resumeState.selections[0].candidate.title = 'mutated-output-candidate';
-          storedWaiting.resumeState.failedVideoIds.push(100);
-        }
-        storedWaiting.result?.failedVideoIds.push(100);
-      }
-      const secondReadWaiting = store.getTasks().find((task: ScrapeTaskSnapshot): boolean => task.id === 'waiting');
-      expect(secondReadWaiting?.request.scope.displayName).assertEqual('episode-40');
-      expect(secondReadWaiting?.request.videoIds?.length).assertEqual(2);
-      expect(secondReadWaiting?.progress.completed).assertEqual(1);
-      expect(secondReadWaiting?.pause?.candidates.length).assertEqual(1);
-      const secondResumeState = secondReadWaiting?.resumeState;
-      if (secondResumeState !== undefined) {
-        expect(secondResumeState.selections[0].candidate.title).assertEqual('candidate-selected-original');
-        expect(secondResumeState.failedVideoIds.length).assertEqual(1);
-      }
-      expect(secondReadWaiting?.result?.failedVideoIds.length).assertEqual(1);
+      // 状态排序：running/waiting-confirmation 优先于 waiting。
+      expect(tasks[tasks.length - 1].id).assertEqual('waiting');
+
+      // 活动计数仅统计 waiting + running。
       expect(store.getActiveCount()).assertEqual(2);
     });
 

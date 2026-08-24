@@ -55,14 +55,7 @@ export class ScrapeTaskQueue {
     }
     const now = Date.now();
     this.sequence++;
-    const task: ScrapeTaskSnapshot = {
-      id: `${now}-${this.sequence}`,
-      request: requestCopy,
-      status: 'waiting',
-      progress: this.emptyProgress(),
-      createdAt: now,
-      updatedAt: now
-    };
+    const task = new ScrapeTaskSnapshot(`${now}-${this.sequence}`, requestCopy, now);
     this.tasks.push(task);
     this.publish();
     this.schedule();
@@ -383,17 +376,6 @@ export class ScrapeTaskQueue {
       removeIds.add(candidates[index].id);
     }
     this.tasks = this.tasks.filter((task: ScrapeTaskSnapshot): boolean => !removeIds.has(task.id));
-  }
-
-  private emptyProgress(): ScrapeProgress {
-    const progress: ScrapeProgress = {
-      completed: 0,
-      total: 0,
-      succeeded: 0,
-      failed: 0,
-      cancelled: 0
-    };
-    return progress;
   }
 
   private publish(): void {

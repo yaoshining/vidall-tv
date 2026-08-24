@@ -120,14 +120,31 @@ export interface ScrapeExecutionPaused {
 
 export type ScrapeExecutionOutcome = ScrapeExecutionCompleted | ScrapeExecutionPaused;
 
-export interface ScrapeTaskSnapshot {
-  id: string;
-  request: ScopedScrapeRequest;
-  status: ScrapeTaskStatus;
-  progress: ScrapeProgress;
-  pause?: ScrapePause;
-  resumeState?: ScrapeResumeState;
-  result?: ScrapeResult;
-  createdAt: number;
-  updatedAt: number;
+/**
+ * 刮削任务的 UI 快照。作为 @ObservedV2 类持有可变字段的 @Trace 注解，
+ * 使进度/状态变化能被 ScrapeTaskIndicator 精准观测，避免整列重建闪烁。
+ */
+@ObservedV2
+export class ScrapeTaskSnapshot {
+  readonly id: string;
+  readonly request: ScopedScrapeRequest;
+  @Trace status: ScrapeTaskStatus;
+  @Trace progress: ScrapeProgress;
+  @Trace pause: ScrapePause | undefined;
+  @Trace resumeState: ScrapeResumeState | undefined;
+  @Trace result: ScrapeResult | undefined;
+  readonly createdAt: number;
+  @Trace updatedAt: number;
+
+  constructor(id: string, request: ScopedScrapeRequest, createdAt: number) {
+    this.id = id;
+    this.request = request;
+    this.status = 'waiting';
+    this.progress = { completed: 0, total: 0, succeeded: 0, failed: 0, cancelled: 0 };
+    this.pause = undefined;
+    this.resumeState = undefined;
+    this.result = undefined;
+    this.createdAt = createdAt;
+    this.updatedAt = createdAt;
+  }
 }
