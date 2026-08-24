@@ -1,8 +1,10 @@
+# tv-episode-season-defaulting Specification
+
 ## Purpose
 
 定义当 TV 剧集的目标文件无法从文件名或父目录解析出季号时，刮削流程默认按第一季补全并关联到剧集季信息，确保单层无季目录（如 `重器/01~4K.mp4`）的剧集不被当作裸 tv 处理。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 无季信息时默认按第一季补全
 当目标文件被分类为 `tv`，且文件名与父目录均无法解析出季号时，刮削流程 SHALL 默认按第一季（season 1）处理，并关联到剧集的季/集信息，而非仅作为裸 `tv` 入库。
