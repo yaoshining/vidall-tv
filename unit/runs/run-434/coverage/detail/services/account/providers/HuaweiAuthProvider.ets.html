@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { authentication, loginComponentManager } from &#39;@kit.AccountKit&#39;; 
+import { common } from &#39;@kit.AbilityKit&#39;; 
+import { BusinessError } from &#39;@kit.BasicServicesKit&#39;; 
+import buffer from &#39;@ohos.buffer&#39;; 
+import { AuthProvider, PlatformIdentity } from &#39;../AuthProvider&#39;; 
+ 
+export class HuaweiCredentialEmptyError extends Error { 
+  readonly code: number = 1001502999; 
+ 
+  constructor() { 
+    super(&#39;华为登录未返回凭据&#39;); 
+    this.name = &#39;HuaweiCredentialEmptyError&#39;; 
+  } 
+} 
+ 
+/** 
+ * idToken（JWT）payload 中关注的 claims 
+ */ 
+interface IdTokenClaims { 
+  name: string; 
+  picture: string; 
+} 
+ 
+/** 
+ * 华为账号认证 provider（首发实现） 
+ * 
+ * 使用系统组件 `LoginWithHuaweiIDButton` 拉起授权： 
+ * - UI 调用 `getController()` 取 controller 渲染按钮 
+ * - `login()` 在 controller 上注册 `onClickLoginWithHuaweiIDButton` 回调并封装为 Promise 
+ * - 用户点击按钮 → 华为授权页 → 回调拿到 `HuaweiIDCredential`（含 unionID） 
+ * - 从 unionID 作为 platformUserId；idToken 尝试解码取 name/picture，无则空字符串 
+ * 
+ * 华为侧无显式 signOut API，`signOut()` 为空实现；本地态清理由 AccountService 负责。 
+ */ 
+export class HuaweiAuthProvider implements AuthProvider { 
+  readonly providerId: string = &#39;huawei&#39;; 
+  readonly displayName: string = &#39;华为账号&#39;; 
+  private controller: loginComponentManager.LoginWithHuaweiIDButtonController = 
+    new loginComponentManager.LoginWithHuaweiIDButtonController(); 
+  private authorizationContext: common.UIAbilityContext | undefined; 
+ 
+  setAuthorizationContext(context: common.UIAbilityContext): void { 
+    this.authorizationContext = context; 
+  } 
+ 
+  login(): Promise&lt;PlatformIdentity&gt; { 
+    return new Promise&lt;PlatformIdentity&gt;((resolve, reject) =&gt; { 
+      this.controller.onClickLoginWithHuaweiIDButton( 
+        (err: BusinessError, data: loginComponentManager.HuaweiIDCredential) =&gt; { 
+          if (err &amp;&amp; err.code !== 0) { 
+            this.authorizationContext = undefined; 
+            reject(err); 
+            return; 
+          } 
+          if (data) { 
+            void this.resolveIdentity(data, resolve); 
+            return; 
+          } 
+          this.authorizationContext = undefined; 
+          reject(new HuaweiCredentialEmptyError()); 
+        } 
+      ); 
+    }); 
+  } 
+ 
+  async signOut(): Promise&lt;void&gt; { 
+    // 华为侧无显式 signOut API；不调用 CancelAuthorizationRequest（保留给未来「解绑授权」功能） 
+  } 
+ 
+  /** 供 UI 渲染 `LoginWithHuaweiIDButton` 时传入的 controller */ 
+  getController(): loginComponentManager.LoginWithHuaweiIDButtonController { 
+    return this.controller; 
+  } 
+ 
+  private async resolveIdentity(cred: loginComponentManager.HuaweiIDCredential, 
+    resolve: (identity: PlatformIdentity) =&gt; void): Promise&lt;void&gt; { 
+    const identity: PlatformIdentity = this.buildIdentity(cred); 
+    try { 
+      if (identity.displayName === undefined || identity.avatarUri === undefined) { 
+        await this.enrichWithProfile(identity); 
+      } 
+    } catch (e) { 
+      const error = e as BusinessError; 
+      console.warn(`[HuaweiAuthProvider] 资料授权未完成 code=${error.code ?? -1}`); 
+    } finally { 
+      this.authorizationContext = undefined; 
+      resolve(identity); 
+    } 
+  } 
+ 
+  private async enrichWithProfile(identity: PlatformIdentity): Promise&lt;void&gt; { 
+    const context: common.UIAbilityContext | undefined = this.authorizationContext; 
+    if (context === undefined) { 
+      return; 
+    } 
+    const huaweiIDProvider: authentication.HuaweiIDProvider = new authentication.HuaweiIDProvider(); 
+    const request: authentication.AuthorizationWithHuaweiIDRequest = 
+      huaweiIDProvider.createAuthorizationWithHuaweiIDRequest(); 
+    request.scopes = [&#39;profile&#39;]; 
+    const controller: authentication.AuthenticationController = 
+      new authentication.AuthenticationController(context); 
+    const response: authentication.AuthenticationResponse = await controller.executeRequest(request); 
+    const huaweiResponse: authentication.AuthorizationWithHuaweiIDResponse = 
+      response as authentication.AuthorizationWithHuaweiIDResponse; 
+    const credential: authentication.AuthorizationWithHuaweiIDCredential | undefined = huaweiResponse.data; 
+    if (credential === undefined) { 
+      return; 
+    } 
+    if (identity.displayName === undefined &amp;&amp; credential.nickName !== undefined &amp;&amp; credential.nickName.length &gt; 0) { 
+      identity.displayName = credential.nickName; 
+    } 
+    if (identity.avatarUri === undefined &amp;&amp; credential.avatarUri !== undefined &amp;&amp; credential.avatarUri.length &gt; 0) { 
+      identity.avatarUri = credential.avatarUri; 
+    } 
+  } 
+ 
+  private buildIdentity(cred: loginComponentManager.HuaweiIDCredential): PlatformIdentity { 
+    const raw: Map&lt;string, string&gt; = new Map&lt;string, string&gt;(); 
+    raw.set(&#39;authorizationCode&#39;, cred.authorizationCode); 
+    const idToken: string | undefined = cred.idToken; 
+    if (idToken !== undefined &amp;&amp; idToken.length &gt; 0) { 
+      raw.set(&#39;idToken&#39;, idToken); 
+    } 
+    const claims: IdTokenClaims = this.decodeIdTokenClaims(idToken); 
+    const identity: PlatformIdentity = { 
+      platformUserId: cred.unionID, 
+      openID: cred.openID, 
+      displayName: claims.name.length &gt; 0 ? claims.name : undefined, 
+      avatarUri: claims.picture.length &gt; 0 ? claims.picture : undefined, 
+      raw 
+    }; 
+    return identity; 
+  } 
+ 
+  private decodeIdTokenClaims(idToken: string | undefined): IdTokenClaims { 
+    const empty: IdTokenClaims = { name: &#39;&#39;, picture: &#39;&#39; }; 
+    if (!idToken || idToken.length === 0) { 
+      return empty; 
+    } 
+    try { 
+      const parts: string[] = idToken.split(&#39;.&#39;); 
+      if (parts.length &lt; 2) { 
+        return empty; 
+      } 
+      const payloadB64: string = parts[1]; 
+      // base64url → base64 
+      const b64: string = payloadB64.replace(/-/g, &#39;+&#39;).replace(/_/g, &#39;/&#39;); 
+      const padLen: number = (4 - b64.length % 4) % 4; 
+      const padded: string = b64 + &#39;=&#39;.repeat(padLen); 
+      const json: string = buffer.from(padded, &#39;base64&#39;).toString(&#39;utf-8&#39;); 
+      const claims = JSON.parse(json) as Record&lt;string, string&gt;; 
+      const result: IdTokenClaims = { 
+        name: claims[&#39;name&#39;] || &#39;&#39;, 
+        picture: claims[&#39;picture&#39;] || &#39;&#39; 
+      }; 
+      return result; 
+    } catch { 
+      return empty; 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Mon Aug 24 2026 15:17:13 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/account/providers/HuaweiAuthProvider.ets","hash":"7306e06e74cd6377a6c7311a1609365c848b4245292caf1d6e79ec054847b1ab","lineCnt":162,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"HuaweiCredentialEmptyError.constructor","count":0,"regions":[{"startLoc":{"line":10,"col":3},"endLoc":{"line":13,"col":4},"count":0,"ignored":0},{"startLoc":{"line":11,"col":5},"endLoc":{"line":13,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"HuaweiAuthProvider.setAuthorizationContext","count":0,"regions":[{"startLoc":{"line":42,"col":3},"endLoc":{"line":44,"col":4},"count":0,"ignored":0},{"startLoc":{"line":43,"col":5},"endLoc":{"line":44,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"HuaweiAuthProvider.login","count":0,"regions":[{"startLoc":{"line":46,"col":3},"endLoc":{"line":64,"col":4},"count":0,"ignored":0},{"startLoc":{"line":47,"col":5},"endLoc":{"line":64,"col":4},"count":0,"ignored":0},{"startLoc":{"line":59,"col":11},"endLoc":{"line":61,"col":10},"count":0,"ignored":0},{"startLoc":{"line":52,"col":13},"endLoc":{"line":54,"col":12},"count":0,"ignored":0},{"startLoc":{"line":57,"col":13},"endLoc":{"line":58,"col":12},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":47,"col":42},"endLoc":{"line":63,"col":6},"count":0,"ignored":0},{"startLoc":{"line":48,"col":7},"endLoc":{"line":63,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":49,"col":9},"endLoc":{"line":61,"col":10},"count":0,"ignored":0},{"startLoc":{"line":50,"col":38},"endLoc":{"line":54,"col":12},"count":0,"ignored":0},{"startLoc":{"line":55,"col":21},"endLoc":{"line":58,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":50,"col":15},"endLoc":{"line":50,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":55,"col":15},"endLoc":{"line":55,"col":19},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"HuaweiAuthProvider.signOut","count":0,"regions":[{"startLoc":{"line":66,"col":3},"endLoc":{"line":68,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"HuaweiAuthProvider.getController","count":0,"regions":[{"startLoc":{"line":71,"col":3},"endLoc":{"line":73,"col":4},"count":0,"ignored":0},{"startLoc":{"line":72,"col":5},"endLoc":{"line":73,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"HuaweiAuthProvider.resolveIdentity","count":0,"regions":[{"startLoc":{"line":75,"col":3},"endLoc":{"line":89,"col":4},"count":0,"ignored":0},{"startLoc":{"line":78,"col":9},"endLoc":{"line":82,"col":6},"count":0,"ignored":0},{"startLoc":{"line":82,"col":7},"endLoc":{"line":85,"col":6},"count":0,"ignored":0},{"startLoc":{"line":85,"col":15},"endLoc":{"line":88,"col":6},"count":0,"ignored":0},{"startLoc":{"line":79,"col":83},"endLoc":{"line":81,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":79,"col":11},"endLoc":{"line":79,"col":81},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":76,"col":14},"endLoc":{"line":76,"col":50},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"HuaweiAuthProvider.enrichWithProfile","count":0,"regions":[{"startLoc":{"line":91,"col":3},"endLoc":{"line":115,"col":4},"count":0,"ignored":0},{"startLoc":{"line":93,"col":32},"endLoc":{"line":95,"col":6},"count":0,"ignored":0},{"startLoc":{"line":106,"col":35},"endLoc":{"line":108,"col":6},"count":0,"ignored":0},{"startLoc":{"line":109,"col":116},"endLoc":{"line":111,"col":6},"count":0,"ignored":0},{"startLoc":{"line":112,"col":116},"endLoc":{"line":114,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":93,"col":9},"endLoc":{"line":93,"col":30},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":106,"col":9},"endLoc":{"line":106,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":109,"col":9},"endLoc":{"line":109,"col":114},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":112,"col":9},"endLoc":{"line":112,"col":114},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"HuaweiAuthProvider.buildIdentity","count":0,"regions":[{"startLoc":{"line":117,"col":3},"endLoc":{"line":133,"col":4},"count":0,"ignored":0},{"startLoc":{"line":124,"col":5},"endLoc":{"line":133,"col":4},"count":0,"ignored":0},{"startLoc":{"line":121,"col":54},"endLoc":{"line":123,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":121,"col":9},"endLoc":{"line":121,"col":52},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":128,"col":20},"endLoc":{"line":128,"col":68},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":129,"col":18},"endLoc":{"line":129,"col":72},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"HuaweiAuthProvider.decodeIdTokenClaims","count":0,"regions":[{"startLoc":{"line":135,"col":3},"endLoc":{"line":160,"col":4},"count":0,"ignored":0},{"startLoc":{"line":140,"col":9},"endLoc":{"line":157,"col":6},"count":0,"ignored":0},{"startLoc":{"line":145,"col":7},"endLoc":{"line":157,"col":6},"count":0,"ignored":0},{"startLoc":{"line":137,"col":43},"endLoc":{"line":139,"col":6},"count":0,"ignored":0},{"startLoc":{"line":157,"col":7},"endLoc":{"line":159,"col":6},"count":0,"ignored":0},{"startLoc":{"line":142,"col":29},"endLoc":{"line":144,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":137,"col":9},"endLoc":{"line":137,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":142,"col":11},"endLoc":{"line":142,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":11}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":7,"6":8,"7":10,"8":11,"9":12,"10":19,"11":20,"12":21,"13":35,"14":36,"15":37,"16":38,"17":39,"18":40,"19":42,"20":43,"21":46,"22":47,"23":48,"24":49,"25":50,"26":51,"27":52,"28":53,"29":55,"30":56,"31":57,"32":59,"33":60,"34":66,"35":71,"36":72,"37":75,"38":76,"39":77,"40":78,"41":79,"42":80,"43":82,"44":83,"45":84,"46":85,"47":86,"48":87,"49":91,"50":92,"51":93,"52":94,"53":96,"54":97,"55":98,"56":99,"57":100,"58":101,"59":102,"60":103,"61":104,"62":105,"63":106,"64":107,"65":109,"66":110,"67":112,"68":113,"69":117,"70":118,"71":119,"72":120,"73":121,"74":122,"75":124,"76":125,"77":126,"78":127,"79":128,"80":129,"81":130,"82":132,"83":135,"84":136,"85":137,"86":138,"87":140,"88":141,"89":142,"90":143,"91":145,"92":147,"93":148,"94":149,"95":150,"96":151,"97":152,"98":153,"99":154,"100":156,"101":157,"102":158},"summary":{"lines":{"total":87,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,0,0,0,-1,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,-1]},"functions":{"total":12,"covered":0,"pct":0},"branches":{"total":24,"covered":0,"pct":0}}},"title":"HuaweiAuthProvider.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
