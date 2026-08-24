@@ -48,6 +48,15 @@ export default function scrapeClientTest() {
       expect(query.episodeNumber).assertEqual(7);
     });
 
+    it('should treat tilde as a title separator for weak semantic filenames', 0, () => {
+      const query: ParsedFileName = parseFileName('01~4K.mp4');
+
+      expect(query.title).assertEqual('01');
+      expect(query.mediaType).assertEqual('movie');
+      expect(query.seasonNumber === undefined).assertTrue();
+      expect(query.episodeNumber === undefined).assertTrue();
+    });
+
     /**
      * 测试用例 3：测试文件名解析 - 复杂文件名
      */

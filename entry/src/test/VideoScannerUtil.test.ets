@@ -56,5 +56,16 @@ export default function videoScannerUtilTest() {
     it('should not treat a year-only weak semantic filename as an episode number', 0, () => {
       expect(extractEpisodeNumberFromWeakSemanticFileName('2024.mp4')).assertEqual(undefined);
     });
+
+    it('should classify tilde-separated weak semantic file in TV Series path as tv', 0, () => {
+      const context: VideoScrapeContext = createVideoScrapeContext('/Videos/TV Series/重器', 0, false);
+      const classification = classifyVideoScrapeTarget(
+        '01~4K.mp4',
+        '/Videos/TV Series/重器/01~4K.mp4',
+        context
+      );
+
+      expect(classification.mediaType).assertEqual('tv');
+    });
   });
 }

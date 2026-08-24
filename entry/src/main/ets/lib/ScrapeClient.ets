@@ -159,7 +159,7 @@ export function parseFileName(fileName: string): ParsedFileName {
 
   const title = workStr
     .replace(/[[\]()]/g, ' ')
-    .replace(/[._-]/g, ' ')
+    .replace(/[._~-]/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 
