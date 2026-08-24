@@ -69,19 +69,14 @@ export struct ScrapeTaskIndicator {
 
   @Builder
   ProgressRing(task: ScrapeTaskSnapshot) {
-    Stack({ alignContent: Alignment.Center }) {
-      Progress({
-        value: this.progressValue(task),
-        total: this.progressTotal(task),
-        type: ProgressType.Ring
-      })
-        .width(40).height(40)
-        .color('#66A9D8')
-        .backgroundColor('#334B78A8')
-      Text(`${task.progress.completed}/${task.progress.total}`)
-        .fontSize(10).fontColor(Color.White).fontWeight(FontWeight.Medium)
-    }
-    .width(40).height(40)
+    Progress({
+      value: this.progressValue(task),
+      total: this.progressTotal(task),
+      type: ProgressType.Ring
+    })
+      .width(40).height(40)
+      .color('#66A9D8')
+      .backgroundColor('#334B78A8')
   }
 
   @Builder
@@ -94,7 +89,7 @@ export struct ScrapeTaskIndicator {
             .fontSize(13).fontColor('#AAB2BF')
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         this.ProgressRing(task)
-      }.width('100%').alignItems(VerticalAlign.Center)
+      }.width('100%').alignItems(VerticalAlign.Top)
       Row() {
         Blank()
         if (task.status === 'waiting') {
