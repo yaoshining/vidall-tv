@@ -48,13 +48,28 @@ export default function scrapeClientTest() {
       expect(query.episodeNumber).assertEqual(7);
     });
 
-    it('should treat tilde as a title separator for weak semantic filenames', 0, () => {
-      const query: ParsedFileName = parseFileName('01~4K.mp4');
+    it('should treat tilde/underscore separator for weak semantic filenames', 0, () => {
+      const tilde: ParsedFileName = parseFileName('01~4K.mp4');
+      expect(tilde.title).assertEqual('01');
+      expect(tilde.mediaType).assertEqual('movie');
+      expect(tilde.seasonNumber === undefined).assertTrue();
+      expect(tilde.episodeNumber === undefined).assertTrue();
 
-      expect(query.title).assertEqual('01');
-      expect(query.mediaType).assertEqual('movie');
-      expect(query.seasonNumber === undefined).assertTrue();
-      expect(query.episodeNumber === undefined).assertTrue();
+      const underscore: ParsedFileName = parseFileName('01_4K.mp4');
+      expect(underscore.title).assertEqual('01');
+      expect(underscore.mediaType).assertEqual('movie');
+
+      const dash: ParsedFileName = parseFileName('01-4K.mp4');
+      expect(dash.title).assertEqual('01');
+    });
+
+    it('should keep standard SxxExx filename parsing unaffected by separator changes', 0, () => {
+      const standard: ParsedFileName = parseFileName('Breaking.Bad.S01E01.1080p.mkv');
+
+      expect(standard.title).assertEqual('Breaking Bad');
+      expect(standard.mediaType).assertEqual('tv');
+      expect(standard.seasonNumber).assertEqual(1);
+      expect(standard.episodeNumber).assertEqual(1);
     });
 
     /**

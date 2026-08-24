@@ -150,6 +150,9 @@ export function parseFileName(fileName: string): ParsedFileName {
   let workStr = withoutExt;
   workStr = workStr.replace(new RegExp(yearPattern.source, 'g'), ' ');
   workStr = workStr.replace(/[Ss]\d{1,2}[Ee]\d{1,3}.*/gi, '');
+  // 先归一化分隔符（. _ ~ - 均视为空格），使质量标签（如 4K）前成为单词边界，
+  // 避免 "01_4K.mp4" 因下划线导致 qualityPattern 无法匹配而残留 "4K" 在标题中。
+  workStr = workStr.replace(/[._~-]/g, ' ');
 
   const qualityPattern = /\b(1080p|720p|4k|2160p|480p|uhd|hdr|hdr10|hdr10plus|bluray|blu-ray|web-?dl|webrip|hdtv|dvdrip|bdrip|x264|x265|hevc|h\.?264|h\.?265|aac|aac\d\.\d|dts|dts-?x|ddp?\d\.\d|dd5\.?1|ac3|atmos|truehd|remux|proper|repack|imax|dv|\d{1,2}bit|\d\.\d)\b/i;
   const qualityMatch = workStr.match(qualityPattern);
