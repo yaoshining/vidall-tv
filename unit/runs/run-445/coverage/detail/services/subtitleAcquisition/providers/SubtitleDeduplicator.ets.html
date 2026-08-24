@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/subtitleAcquisition/providers/SubtitleDeduplicator.ets 
+// 
+// 客户端内容指纹去重：OpenSubtitles 与 SubHub 可能返回同一字幕的重复条目， 
+// 用「归一化文件名 + 语言码」作为指纹去重，碰撞时保留 OpenSubtitles 结果 
+// （其携带真实 downloadCount，信息更丰富）。 
+ 
+import { SubtitleSearchResult } from &#39;../SubtitleAcquisitionTypes&#39;; 
+ 
+/** 归一化发布名：小写、trim、去扩展名、去发布组标记、压缩非字母数字。 */ 
+export function normalizeReleaseName(name: string): string { 
+  let n = name.toLowerCase().trim(); 
+  // 去字幕文件扩展名 
+  n = n.replace(/\.(srt|ass|ssa|sub|vtt|txt)$/i, &#39;&#39;); 
+  // 去发布组标记，如 [YTS.MX] / {ABC} / (RARBG) 
+  n = n.replace(/[\[\(\{][^\]\)\}]*[\]\)\}]/g, &#39; &#39;); 
+  // 去 -RARBG 之类发布组后缀 
+  n = n.replace(/-rarbg\b/gi, &#39; &#39;); 
+  // 压缩连续非字母数字为单个空格（保留 CJK 汉字与韩文音节，避免纯中文/韩文标题被清成空指纹） 
+  n = n.replace(/[^a-z0-9\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]+/g, &#39; &#39;); 
+  return n.trim(); 
+} 
+ 
+export class SubtitleDeduplicator { 
+  /** 去重：碰撞时保留 OpenSubtitles 结果；保持输入顺序。 */ 
+  static dedupe(results: SubtitleSearchResult[]): SubtitleSearchResult[] { 
+    const byFingerprint = new Map&lt;string, SubtitleSearchResult&gt;(); 
+    const ordered: SubtitleSearchResult[] = []; 
+    for (let i = 0; i &lt; results.length; i++) { 
+      const item = results[i]; 
+      const key = SubtitleDeduplicator.fingerprint(item); 
+      const existing = byFingerprint.get(key); 
+      if (existing === undefined) { 
+        byFingerprint.set(key, item); 
+        ordered.push(item); 
+      } else if (existing.source !== &#39;opensubtitles&#39; &amp;&amp; item.source === &#39;opensubtitles&#39;) { 
+        // OpenSubtitles 优先：用 OS 结果替换已记录的 SubHub 结果 
+        byFingerprint.set(key, item); 
+        const index = ordered.indexOf(existing); 
+        if (index &gt;= 0) { 
+          ordered[index] = item; 
+        } 
+      } 
+    } 
+    return ordered; 
+  } 
+ 
+  static fingerprint(item: SubtitleSearchResult): string { 
+    const name = normalizeReleaseName(item.fileName); 
+    const lang = (item.languageCode ?? &#39;&#39;).toLowerCase().trim(); 
+    return `${name}:${lang}`; 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Mon Aug 24 2026 22:21:07 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/subtitleAcquisition/providers/SubtitleDeduplicator.ets","hash":"099e7a22efb06d00363f9870aa774ada38c5fcc6c6893a74b3adf0955aa47518","lineCnt":53,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"normalizeReleaseName","count":14,"regions":[{"startLoc":{"line":10,"col":1},"endLoc":{"line":21,"col":2},"count":14,"ignored":0},{"startLoc":{"line":11,"col":3},"endLoc":{"line":21,"col":2},"count":14,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"SubtitleDeduplicator.dedupe","count":5,"regions":[{"startLoc":{"line":25,"col":3},"endLoc":{"line":45,"col":4},"count":5,"ignored":0},{"startLoc":{"line":28,"col":5},"endLoc":{"line":43,"col":6},"count":9,"ignored":0},{"startLoc":{"line":35,"col":14},"endLoc":{"line":42,"col":8},"count":1,"ignored":0},{"startLoc":{"line":35,"col":90},"endLoc":{"line":42,"col":8},"count":0,"ignored":0},{"startLoc":{"line":32,"col":35},"endLoc":{"line":35,"col":8},"count":8,"ignored":0},{"startLoc":{"line":39,"col":25},"endLoc":{"line":41,"col":10},"count":0,"ignored":0},{"startLoc":{"line":44,"col":5},"endLoc":{"line":45,"col":4},"count":5,"ignored":0}],"branches":[{"startLoc":{"line":32,"col":11},"endLoc":{"line":32,"col":33},"trueCount":8,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":35,"col":18},"endLoc":{"line":35,"col":88},"trueCount":0,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":39,"col":13},"endLoc":{"line":39,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"SubtitleDeduplicator.fingerprint","count":9,"regions":[{"startLoc":{"line":47,"col":3},"endLoc":{"line":51,"col":4},"count":9,"ignored":0},{"startLoc":{"line":48,"col":5},"endLoc":{"line":51,"col":4},"count":9,"ignored":0}],"branches":[],"ignored":0,"index":2}],"exeLine":{"0":7,"1":10,"2":11,"3":13,"4":15,"5":17,"6":19,"7":20,"8":23,"9":25,"10":26,"11":27,"12":28,"13":29,"14":30,"15":31,"16":32,"17":33,"18":34,"19":35,"20":37,"21":38,"22":39,"23":40,"24":44,"25":47,"26":48,"27":49,"28":50},"summary":{"lines":{"total":27,"covered":23,"pct":85.19,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,14,14,-1,14,-1,14,-1,14,-1,14,14,-1,-1,-1,-1,5,5,5,9,9,9,9,9,8,8,1,-1,0,0,0,0,-1,-1,-1,5,-1,-1,9,9,9,9,-1,-1,-1]},"functions":{"total":3,"covered":3,"pct":100},"branches":{"total":6,"covered":3,"pct":50}}},"title":"SubtitleDeduplicator.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
