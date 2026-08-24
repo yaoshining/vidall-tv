@@ -1,1 +1,0 @@
-{"id":"27b87a404b11a441e91f88689941b953","fullName":"DebounceUtil#cancel 连续调用两次不抛出异常（幂等）","name":"cancel 连续调用两次不抛出异常（幂等）","status":"passed","testResultsByEnv":{"default":"f83c2d6f9727bc487f06cda38fc56bb1"}}
