@@ -363,7 +363,12 @@ struct VideoControls {
             .onBlur(() => { this.audioButtonFocused = false })
             .onClick(() => {
               this.showAudioMenu = !this.showAudioMenu
-              clearTimeout(this.closeTimer)
+              // 打开菜单时保持可见（取消自动隐藏）；关闭菜单时恢复倒计时
+              if (this.showAudioMenu) {
+                clearTimeout(this.closeTimer)
+              } else {
+                this.enableAutoHide()
+              }
             })
           }
 
@@ -388,8 +393,12 @@ struct VideoControls {
             // 打开字幕菜单时刷新"已下载"列表（dialog 打开后异步加载完成时也会触发重渲染）
             if (this.showSubtitleMenu) {
               this.visibleCachedSubtitles = this.filterVisibleCached(this.cachedSubtitles);
+              // 菜单打开：保持可见，取消自动隐藏
+              clearTimeout(this.closeTimer)
+            } else {
+              // 菜单关闭：恢复倒计时（播放中重置为完整 5 秒）
+              this.enableAutoHide()
             }
-            clearTimeout(this.closeTimer)
           })
 
           Row({ space: 8 }) {
@@ -480,15 +489,19 @@ struct VideoControls {
               .onChange((value, mode) => {
                 this.hoverTimeMs = value
                 if (mode === SliderChangeMode.Begin) {
+                  // 开始拖动：暂停并取消自动隐藏，避免拖动期间控件消失
                   clearTimeout(this.closeTimer)
                   this.videoController.pause()
                   this.videoController.currentTime = value
                   this.videoController.seek(value)
-                }
-                if (mode === SliderChangeMode.Moving) {
+                } else if (mode === SliderChangeMode.Moving) {
+                  // 拖动过程中持续重置倒计时：播放中重置为完整 5 秒，暂停中仅保持可见
                   this.videoController.currentTime = value
-                }
-                if (mode === SliderChangeMode.End) {
+                  this.enableAutoHide()
+                } else if (mode === SliderChangeMode.Click) {
+                  // 点按轨道同样重置倒计时，避免点按后控件中途隐藏
+                  this.enableAutoHide()
+                } else if (mode === SliderChangeMode.End) {
                   this.videoController.seek(value)
                   this.videoController.play().then(() => {
                     this.enableAutoHide(true)
