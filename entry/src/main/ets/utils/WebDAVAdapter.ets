@@ -123,7 +123,7 @@ export class WebDAVAdapter implements ISourceAdapter {
             sourceId: this.fileSource.id ?? 0,
             sourceName: this.fileSource.name,
             sourceType: this.fileSource.type,
-            directoryPath: rootPath,
+            directoryPath: this.extractParentPath(relativePath),
             filePath: relativePath,
             fileName: fileName,
             fileSize: resource.size,
@@ -363,5 +363,14 @@ export class WebDAVAdapter implements ISourceAdapter {
   private extractFileName(path: string): string {
     const parts = path.replace(/\/$/, '').split('/');
     return parts[parts.length - 1] ?? path;
+  }
+
+  private extractParentPath(path: string): string {
+    const normalized = path.replace(/\/$/, '');
+    const lastSlash = normalized.lastIndexOf('/');
+    if (lastSlash <= 0) {
+      return '/';
+    }
+    return normalized.substring(0, lastSlash);
   }
 }

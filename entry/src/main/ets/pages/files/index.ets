@@ -94,7 +94,7 @@ export struct FileExplorerPage {
 
   private openFolderScrape(): void {
     if (this.cachedSourceId <= 0) { return; }
-    const normalizedPath = normalizeScrapeDirectoryPath(this.fileExplorerController.currentPath)
+    const normalizedPath = this.resolveScrapeDirectoryPath()
     const query = normalizedPath === '/'
       ? FileSourceDatabase.getInstance().getVideosBySourceId(this.cachedSourceId)
       : FileSourceDatabase.getInstance().getVideosByDirectoryTree(this.cachedSourceId, normalizedPath)
@@ -122,6 +122,20 @@ export struct FileExplorerPage {
   private closeScrapePanel(): void {
     this.scrapePanelVisible = false
     this.scrapeScope = undefined
+  }
+
+  /**
+   * 将文件浏览器当前路径解析为「相对于文件源 rootPath 的目录路径」。
+   * WebDAV 的 currentPath 是相对于 baseUrl（= rootPath + directoryPath）的路径，
+   * 因此需要补上目录配置前缀（cachedDirectoryPath）才能与 videos.directory_path 对齐。
+   */
+  private resolveScrapeDirectoryPath(): string {
+    const currentPath = this.fileExplorerController.currentPath
+    if (this.cachedDirectoryPath.length === 0 || this.cachedDirectoryPath === '/') {
+      return normalizeScrapeDirectoryPath(currentPath)
+    }
+    const fullPath = currentPath === '/' ? this.cachedDirectoryPath : this.cachedDirectoryPath + currentPath
+    return normalizeScrapeDirectoryPath(fullPath)
   }
 
   build() {

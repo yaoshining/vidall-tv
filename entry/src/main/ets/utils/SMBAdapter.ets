@@ -115,7 +115,7 @@ export class SMBAdapter implements ISourceAdapter {
           sourceId: this.fileSource.id ?? 0,
           sourceName: this.fileSource.name,
           sourceType: this.fileSource.type,
-          directoryPath: rootPath,
+          directoryPath: this.extractParentPath(file.path),
           filePath: file.path,
           fileName: file.name,
           fileSize: file.size,
@@ -296,5 +296,14 @@ export class SMBAdapter implements ISourceAdapter {
     info: VideoFileInfo
   ): Promise<void> {
     await processVideoScrape(videoId, fileName, scrapeClient, mode, info, '[VideoScanner][SMB][SCRAPE]');
+  }
+
+  private extractParentPath(path: string): string {
+    const normalized = path.replace(/\/$/, '');
+    const lastSlash = normalized.lastIndexOf('/');
+    if (lastSlash <= 0) {
+      return '/';
+    }
+    return normalized.substring(0, lastSlash);
   }
 }

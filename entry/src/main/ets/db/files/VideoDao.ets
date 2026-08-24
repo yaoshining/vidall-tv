@@ -175,12 +175,18 @@ export class VideoDao {
     const store = this.core.getStore();
     let rs: relationalStore.ResultSet | null = null;
     try {
+      // 目录边界匹配：file_path 以 directoryPath + '/' 开头，或 directory_path 等于 directoryPath / 以其 + '/' 开头。
+      // 同时匹配 file_path 与 directory_path，以兼容历史数据（directory_path 曾存扫描根目录，file_path 才是文件完整路径）。
       rs = await store.querySql(
         `SELECT * FROM ${TABLE_VIDEOS}
          WHERE source_id = ?
-           AND (directory_path = ? OR substr(directory_path, 1, length(?) + 1) = ? || '/')
+           AND (
+             directory_path = ?
+             OR substr(directory_path, 1, length(?) + 1) = ? || '/'
+             OR substr(file_path, 1, length(?) + 1) = ? || '/'
+           )
          ORDER BY id ASC`,
-        [sourceId, directoryPath, directoryPath, directoryPath]
+        [sourceId, directoryPath, directoryPath, directoryPath, directoryPath, directoryPath]
       );
       return this.collectVideos(rs);
     } catch (error) {
