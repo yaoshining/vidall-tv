@@ -46,6 +46,7 @@ import { ServerLibraryListPage, ServerLibraryListPageParam } from "../../detail/
 import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
 import { resolveCardBehavior, isDirectPlayContextValid, ServerCardKind } from "../../../services/sourceAdapter/ServerCardAction"
+import { resolveSeriesCardDestination } from "../../../services/sourceAdapter/SeriesCardRoute"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -127,6 +128,8 @@ interface SourceRuntimeConfig {
 @ComponentV2
 struct PosterCard {
   @Require @Param item: MediaItem
+  /** 播放进度（0~1），>0 时在底部显示进度条，电影使用 */
+  @Param progress: number = 0
   @Local isHovered: boolean = false
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
   private getTitle(): string { return displayTitle(this.item); }
@@ -159,17 +162,15 @@ struct PosterCard {
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
 
-        // 底部黑色渐变（覆盖下方 20%）
-        if (this.getRating().length > 0) {
-          Column()
-            .width(POSTER_WIDTH)
-            .height("28%")
-            .linearGradient({
-              angle: 180,
-              colors: [['#00000000', 0.0], ['#CC000000', 1.0]]
-            })
-            .borderRadius({ bottomLeft: 6, bottomRight: 6 })
-            .position({ left: 0, bottom: 0 })
+        // 底部播放进度条（仅进行中的电影显示，无进度则不显示）
+        if (this.progress > 0 && this.progress < 1) {
+          Stack({ alignContent: Alignment.Start }) {
+            Column().width(POSTER_WIDTH).height(4).backgroundColor('#66000000')
+            Column().width(POSTER_WIDTH * this.progress).height(4).backgroundColor('#4A9FFF')
+          }
+          .width(POSTER_WIDTH)
+          .height(4)
+          .position({ left: 0, bottom: 0 })
         }
 
         // 右上角分辨率标签
@@ -184,12 +185,14 @@ struct PosterCard {
             .position({ top: 2, right: 2 })
         }
 
-        // 右下角评分（橘黄色，透明背景）
+        // 右下角评分（橘黄色，带深色小底衬保证可读性）
         if (this.getRating().length > 0) {
           Text(this.getRating())
             .fontSize(11).fontColor('#FFA500').fontWeight(FontWeight.Bold)
             .padding({ left: 4, right: 4, bottom: 4 })
-            .position({ right: 2, bottom: 2 })
+            .backgroundColor('#66000000')
+            .borderRadius(3)
+            .position({ right: 2, bottom: 6 })
         }
 
         // 亮色海报上增强 hover 可见性的遮罩层
@@ -199,12 +202,20 @@ struct PosterCard {
           .backgroundColor(this.getCardOverlayColor())
           .position({ left: 0, top: 0 })
           .hitTestBehavior(HitTestMode.Transparent)
+
+        // 边框覆盖层（置于最顶层）：避免 border 占用内容尺寸，导致图片/进度条与边框之间出现空隙
+        Column()
+          .width('100%')
+          .height('100%')
+          .borderRadius(6)
+          .border({ width: 2, color: this.getCardBorderColor() })
+          .hitTestBehavior(HitTestMode.Transparent)
+          .animation({ duration: 140, curve: Curve.EaseInOut })
       }
       .borderRadius(6)
       .clip(true)
       .width(POSTER_WIDTH)
       .aspectRatio(PORTRAIT_ASPECT_RATIO)
-      .border({ width: 2, color: this.getCardBorderColor() })
       .shadow({ radius: this.isHovered ? 14 : 8, color: this.getCardShadowColor(), offsetX: 0, offsetY: 2 })
       .onHover((isHover: boolean) => { this.isHovered = isHover; })
       .animation({ duration: 140, curve: Curve.EaseInOut })
@@ -295,19 +306,6 @@ struct SeriesCard {
           .backgroundColor('#2A2A2A').borderRadius(6).justifyContent(FlexAlign.Center)
         }
 
-        // 底部黑色渐变
-        if (this.getRating().length > 0 || this.getSeasonLabel().length > 0) {
-          Column()
-            .width(POSTER_WIDTH)
-            .height("28%")
-            .linearGradient({
-              angle: 180,
-              colors: [['#00000000', 0.0], ['#CC000000', 1.0]]
-            })
-            .borderRadius({ bottomLeft: 6, bottomRight: 6 })
-            .position({ left: 0, bottom: 0 })
-        }
-
         // 右上角分辨率标签
         if (this.getResolution().length > 0) {
           Text(this.getResolution())
@@ -320,19 +318,23 @@ struct SeriesCard {
             .position({ top: 2, right: 2 })
         }
 
-        // 左下角季标签（最近添加时显示）
+        // 左下角季标签（最近添加时显示，深色小底衬保证可读性）
         if (this.getSeasonLabel().length > 0) {
           Text(this.getSeasonLabel())
             .fontSize(10).fontColor(Color.White).fontWeight(FontWeight.Medium)
             .padding({ left: 4, right: 4, bottom: 4 })
+            .backgroundColor('#66000000')
+            .borderRadius(3)
             .position({ left: 2, bottom: 2 })
         }
 
-        // 右下角评分
+        // 右下角评分（深色小底衬保证可读性）
         if (this.getRating().length > 0) {
           Text(this.getRating())
             .fontSize(11).fontColor('#FFA500').fontWeight(FontWeight.Bold)
             .padding({ left: 4, right: 4, bottom: 4 })
+            .backgroundColor('#66000000')
+            .borderRadius(3)
             .position({ right: 2, bottom: 2 })
         }
 
@@ -343,12 +345,20 @@ struct SeriesCard {
           .backgroundColor(this.getCardOverlayColor())
           .position({ left: 0, top: 0 })
           .hitTestBehavior(HitTestMode.Transparent)
+
+        // 边框覆盖层（置于最顶层）：避免 border 占用内容尺寸，导致海报与边框之间出现空隙
+        Column()
+          .width('100%')
+          .height('100%')
+          .borderRadius(6)
+          .border({ width: 2, color: this.getCardBorderColor() })
+          .hitTestBehavior(HitTestMode.Transparent)
+          .animation({ duration: 140, curve: Curve.EaseInOut })
       }
       .borderRadius(6)
       .clip(true)
       .width(POSTER_WIDTH)
       .aspectRatio(PORTRAIT_ASPECT_RATIO)
-      .border({ width: 2, color: this.getCardBorderColor() })
       .shadow({ radius: this.isHovered ? 14 : 8, color: this.getCardShadowColor(), offsetX: 0, offsetY: 2 })
       .onHover((isHover: boolean) => { this.isHovered = isHover; })
       .animation({ duration: 140, curve: Curve.EaseInOut })
@@ -363,11 +373,10 @@ struct SeriesCard {
     .width(POSTER_WIDTH)
     .alignItems(HorizontalAlign.Start)
     .onClick(() => {
-      if (this.showSeasonPoster && this.group.seasonNumber !== undefined && this.group.tvSeriesId !== undefined) {
-        // 季卡片 → 跳转季详情页
+      const dest = resolveSeriesCardDestination(this.showSeasonPoster, this.group);
+      if (dest === 'seasonDetail') {
         this.pageStack.pushPathByName(SeasonDetailPage.PAGE_NAME, this.group);
-      } else if (!this.showSeasonPoster && this.group.tvSeriesId !== undefined) {
-        // 剧集卡片 → 跳转剧集详情页
+      } else if (dest === 'seriesDetail') {
         this.pageStack.pushPathByName(SeriesDetailPage.PAGE_NAME, this.group);
       }
     })
@@ -380,6 +389,8 @@ struct SeriesCard {
 @ComponentV2
 struct MixedCard {
   @Require @Param listItem: MediaListItem
+  /** 当 listItem 为视频（电影）时的播放进度，0 表示无进度 */
+  @Param itemProgress: number = 0
 
   private isSeries(): boolean {
     return this.listItem.kind === 'series';
@@ -398,7 +409,7 @@ struct MixedCard {
       if (this.isSeries()) {
         SeriesCard({ group: this.getSeries(), showSeasonPoster: true })
       } else {
-        PosterCard({ item: this.getVideo() })
+        PosterCard({ item: this.getVideo(), progress: this.itemProgress })
       }
     }
   }
@@ -1617,12 +1628,22 @@ export struct MediaLibraryTab {
     .width('100%').alignItems(HorizontalAlign.Start).margin({ bottom: 20 })
   }
 
+  /**
+   * 取混合列表项的播放进度：视频（电影）返回其 providerId 对应的进度，系列返回 0。
+   */
+  private movieProgress(listItem: MediaListItem): number {
+    if (listItem.kind !== 'video' || listItem.video === undefined) {
+      return 0;
+    }
+    return this.model.getMovieProgress(listItem.video.providerId);
+  }
+
   @Builder
   RecentlyAddedSection() {
     if (this.model.recentlyAddedList.length > 0) {
       SectionRow({ title: '最近添加' }) {
         ForEach(this.model.recentlyAddedList.slice(0, 20), (listItem: MediaListItem) => {
-          MixedCard({ listItem })
+          MixedCard({ listItem, itemProgress: this.movieProgress(listItem) })
         })
       }
     }
@@ -1641,7 +1662,7 @@ export struct MediaLibraryTab {
         }
       }) {
         ForEach(this.model.movies.slice(0, 30), (item: MediaItem) => {
-          PosterCard({ item })
+          PosterCard({ item, progress: this.model.getMovieProgress(item.providerId) })
         })
       }
     }
@@ -1671,7 +1692,7 @@ export struct MediaLibraryTab {
     if (this.model.unwatchedList.length > 0) {
       SectionRow({ title: '未观看' }) {
         ForEach(this.model.unwatchedList.slice(0, 20), (listItem: MediaListItem) => {
-          MixedCard({ listItem })
+          MixedCard({ listItem, itemProgress: this.movieProgress(listItem) })
         })
       }
     }
