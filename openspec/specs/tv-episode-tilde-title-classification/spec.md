@@ -1,8 +1,10 @@
+# tv-episode-tilde-title-classification Specification
+
 ## Purpose
 
 定义文件名解析器在标题清洗时把 `~` 视为分隔符处理，从而使 `01~4K.mp4` 这类波浪线分隔的弱语义文件名能被正确分类为 TV 剧集并进入刮削流程，修复删除剧集信息后重刮削时部分集数缺失的问题。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 文件名标题清洗将波浪线作为分隔符
 `parseFileName` 在解析文件标题时 SHALL 将 `~` 视为与 `.`、`_`、`-` 同等地位的清洗分隔符，使 `01~4K.mp4` 解析出的标题为 `01`（纯数字弱语义），而非 `01~`。
