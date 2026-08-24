@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   classifyVideoScrapeTarget,
   createVideoScrapeContext,
+  extractEpisodeNumberFromWeakSemanticFileName,
   hasSeasonSiblingDirectory
 } from '../main/ets/utils/VideoScannerHelpers';
 import { VideoScrapeContext } from '../main/ets/utils/VideoScannerTypes';
@@ -42,6 +43,18 @@ export default function videoScannerUtilTest() {
       );
 
       expect(classification.mediaType).assertEqual('tv');
+    });
+
+    it('should extract episode number from weak semantic filenames with various separators', 0, () => {
+      expect(extractEpisodeNumberFromWeakSemanticFileName('01~4K.mp4')).assertEqual(1);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('01_4K.mp4')).assertEqual(1);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('01-4K.mp4')).assertEqual(1);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('19 4K.mp4')).assertEqual(19);
+      expect(extractEpisodeNumberFromWeakSemanticFileName('19.mp4')).assertEqual(19);
+    });
+
+    it('should not treat a year-only weak semantic filename as an episode number', 0, () => {
+      expect(extractEpisodeNumberFromWeakSemanticFileName('2024.mp4')).assertEqual(undefined);
     });
   });
 }

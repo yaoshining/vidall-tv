@@ -159,8 +159,8 @@ export function extractEpisodeNumberFromWeakSemanticFileName(fileName: string): 
     return parseInt(episodeOnlyMatch[1]);
   }
 
-  // 3. 尝试纯数字开头（如 "19 4K" 或 "19"）
-  const pureNumberMatch = withoutExt.match(/^(\d{1,3})(?:\s|$)/);
+  // 3. 尝试纯数字开头（如 "19 4K"、"19~4K"、"19_4K"、"19-4K" 或 "19"）
+  const pureNumberMatch = withoutExt.match(/^(\d{1,3})(?:[\s~_\-]|$)/);
   if (pureNumberMatch) {
     const num = parseInt(pureNumberMatch[1]);
     // 过滤掉年份（1900-2099）
