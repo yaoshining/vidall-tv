@@ -318,7 +318,9 @@ export struct SeriesDetailPage {
     // 使用新集级 key 格式查询（兼容旧格式），不再使用废弃的 seriesKey
     const mp = await db.getLatestMediaProgressBySeries(seriesProviderId);
     this.mediaProgress = mp;
-    this.hasActiveProgress = mp !== null && mp.positionMs > 0 && mp.durationMs > 0;
+    // 完播推进后，下一集以 position=0 写入，仍应视为「可继续」入口；
+    // 仅当 is_watched=1（已看完）或时长未知时视为无有效进度。
+    this.hasActiveProgress = mp !== null && mp.durationMs > 0 && (mp.isWatched ?? 0) !== 1;
     this.lastEpisode = null;
     this.lastEpisodeEntity = null;
 
