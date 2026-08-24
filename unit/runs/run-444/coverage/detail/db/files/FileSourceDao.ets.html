@@ -1,0 +1,1043 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import relationalStore from &#39;@ohos.data.relationalStore&#39;; 
+import { FileSource, FileSourceDirectory, FileSourceType, DirStatus } from &#39;../models/FileSourceEntity&#39;; 
+import { CryptoUtil } from &#39;../../utils/CryptoUtil&#39;; 
+import { BusinessError } from &quot;@kit.BasicServicesKit&quot;; 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { 
+  TABLE_FILE_SOURCES, TABLE_DIRECTORIES, TABLE_VIDEOS, TABLE_SCRAPE_INFO, TABLE_PLAY_PROGRESS 
+} from &#39;./DbConstants&#39;; 
+import { FileSourceDbCore } from &#39;./FileSourceDbCore&#39;; 
+ 
+/** 
+ * file_sources 与 file_source_directories 表的数据访问。 
+ * 拆分自 FileSourceDatabase，保持原方法签名与行为不变。 
+ */ 
+export class FileSourceDao { 
+  private core: FileSourceDbCore; 
+ 
+  constructor(core: FileSourceDbCore) { 
+    this.core = core; 
+  } 
+ 
+  /** 
+   * 插入文件源 
+   */ 
+  async insertFileSource(fileSource: FileSource): Promise&lt;number&gt; { 
+    const store = this.core.getStore(); 
+ 
+    try { 
+      // 解析配置并加密密码 
+      const config = JSON.parse(fileSource.configJson) as Record&lt;string, Object&gt;; 
+      if (config.password) { 
+        config.password = await CryptoUtil.encrypt(config.password as string); 
+      } 
+ 
+      const valueBucket: relationalStore.ValuesBucket = { 
+        name: fileSource.name, 
+        type: fileSource.type, 
+        config_json: JSON.stringify(config), 
+        created_at: fileSource.createdAt 
+      }; 
+ 
+      const rowId = await store.insert(TABLE_FILE_SOURCES, valueBucket); 
+      console.info(`FileSourceDatabase: Inserted file source with id ${rowId}`); 
+      return rowId; 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to insert file source&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to insert file source: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 更新文件源 
+   */ 
+  async updateFileSource(fileSource: FileSource): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+ 
+    if (!fileSource.id) { 
+      throw new Error(&#39;File source id is required for update&#39;); 
+    } 
+ 
+    try { 
+      // 解析配置并加密密码 
+      const config = JSON.parse(fileSource.configJson) as Record&lt;string, Object&gt;; 
+      if (config.password) { 
+        config.password = await CryptoUtil.encrypt(config.password as string); 
+      } 
+ 
+      const valueBucket: relationalStore.ValuesBucket = { 
+        name: fileSource.name, 
+        type: fileSource.type, 
+        config_json: JSON.stringify(config), 
+        created_at: fileSource.createdAt 
+      }; 
+ 
+      const predicates = new relationalStore.RdbPredicates(TABLE_FILE_SOURCES); 
+      predicates.equalTo(&#39;id&#39;, fileSource.id); 
+ 
+      const rows = await store.update(valueBucket, predicates); 
+      console.info(`FileSourceDatabase: Updated ${rows} file source(s)`); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to update file source&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to update file source: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 删除文件源 
+   */ 
+  async deleteFileSource(id: number): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+ 
+    try { 
+      const predicates = new relationalStore.RdbPredicates(TABLE_FILE_SOURCES); 
+      predicates.equalTo(&#39;id&#39;, id); 
+ 
+      const rows = await store.delete(predicates); 
+      console.info(`FileSourceDatabase: Deleted ${rows} file source(s)`); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to delete file source&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to delete file source: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 根据 ID 获取文件源 
+   */ 
+  async getFileSourceById(id: number): Promise&lt;FileSource | null&gt; { 
+    const store = this.core.getStore(); 
+ 
+    let resultSet: relationalStore.ResultSet | null = null; 
+    try { 
+      const predicates = new relationalStore.RdbPredicates(TABLE_FILE_SOURCES); 
+      predicates.equalTo(&#39;id&#39;, id); 
+ 
+      resultSet = await store.query(predicates); 
+ 
+      if (resultSet.goToFirstRow()) { 
+        return await this.parseFileSource(resultSet); 
+      } 
+ 
+      return null; 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to get file source by id&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to get file source by id: &#39; + JSON.stringify(error)); 
+    } finally { 
+      try { resultSet?.close(); } catch { } 
+    } 
+  } 
+ 
+  async getAllFileSources(): Promise&lt;FileSource[]&gt; { 
+    const store = this.core.getStore(); 
+ 
+    let resultSet: relationalStore.ResultSet | null = null; 
+    try { 
+      const predicates = new relationalStore.RdbPredicates(TABLE_FILE_SOURCES); 
+      resultSet = await store.query(predicates); 
+ 
+      const fileSources: FileSource[] = []; 
+      while (resultSet.goToNextRow()) { 
+        const fileSource = await this.parseFileSource(resultSet); 
+        fileSources.push(fileSource); 
+      } 
+ 
+      console.info(`FileSourceDatabase: Retrieved ${fileSources.length} file source(s)`); 
+      return fileSources; 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to get all file sources&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to get all file sources: &#39; + JSON.stringify(error)); 
+    } finally { 
+      try { resultSet?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 
+   * 从 ResultSet 解析文件源对象 
+   */ 
+  private async parseFileSource(resultSet: relationalStore.ResultSet): Promise&lt;FileSource&gt; { 
+    try { 
+    const id = resultSet.getLong(resultSet.getColumnIndex(&#39;id&#39;)); 
+    const name = resultSet.getString(resultSet.getColumnIndex(&#39;name&#39;)); 
+    const typeString = resultSet.getString(resultSet.getColumnIndex(&#39;type&#39;)); 
+    const configJson = resultSet.getString(resultSet.getColumnIndex(&#39;config_json&#39;)); 
+    const createdAt = resultSet.getLong(resultSet.getColumnIndex(&#39;created_at&#39;)); 
+ 
+    // 解析配置并解密密码 
+    const config = JSON.parse(configJson) as Record&lt;string, Object&gt;; 
+    if (config.password) { 
+      try { 
+        config.password = await CryptoUtil.decrypt(config.password as string); 
+      } catch (error) { 
+        console.error(&#39;FileSourceDatabase: Failed to decrypt password&#39;, JSON.stringify(error)); 
+        // 解密失败时保持加密状态 
+      } 
+    } 
+ 
+    return { 
+      id: id, 
+      name: name, 
+      type: typeString as FileSourceType, 
+      configJson: JSON.stringify(config), 
+      createdAt: createdAt 
+    }; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `parseFileSource 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 
+   * 批量插入文件源目录关联 
+   */ 
+  async insertDirectories(sourceId: number, directories: FileSourceDirectory[]): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+ 
+    if (directories.length === 0) { 
+      console.info(&#39;FileSourceDatabase: No directories to insert&#39;); 
+      return; 
+    } 
+ 
+    try { 
+      for (const dir of directories) { 
+        const valueBucket: relationalStore.ValuesBucket = { 
+          source_id: sourceId, 
+          directory_path: dir.directoryPath, 
+          custom_name: dir.customName ?? null, 
+          dir_status: dir.dirStatus ?? &#39;active&#39; 
+        }; 
+        await store.insert(TABLE_DIRECTORIES, valueBucket); 
+      } 
+      console.info(`FileSourceDatabase: Inserted ${directories.length} directory(ies) for source ${sourceId}`); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to insert directories&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to insert directories: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 删除指定文件源的所有目录关联 
+   */ 
+  async deleteDirectoriesBySourceId(sourceId: number): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+ 
+    try { 
+      const predicates = new relationalStore.RdbPredicates(TABLE_DIRECTORIES); 
+      predicates.equalTo(&#39;source_id&#39;, sourceId); 
+ 
+      const rows = await store.delete(predicates); 
+      console.info(`FileSourceDatabase: Deleted ${rows} directory(ies) for source ${sourceId}`); 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to delete directories&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to delete directories: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 原子性替换指定文件源的目录关联（先删后插，在同一事务内完成，避免部分失败导致数据丢失） 
+   */ 
+  async saveDirectoriesForSource(sourceId: number, directories: FileSourceDirectory[]): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+    let tx: relationalStore.Transaction | null = null; 
+    try { 
+      tx = await store.createTransaction(); 
+      const predicates = new relationalStore.RdbPredicates(TABLE_DIRECTORIES); 
+      predicates.equalTo(&#39;source_id&#39;, sourceId); 
+      await tx.delete(predicates); 
+      for (const dir of directories) { 
+        const valueBucket: relationalStore.ValuesBucket = { 
+          source_id: sourceId, 
+          directory_path: dir.directoryPath, 
+          custom_name: dir.customName ?? null, 
+          dir_status: dir.dirStatus ?? &#39;active&#39; 
+        }; 
+        await tx.insert(TABLE_DIRECTORIES, valueBucket); 
+      } 
+      await tx.commit(); 
+      console.info(`FileSourceDatabase: Saved ${directories.length} directory(ies) for source ${sourceId}`); 
+    } catch (error) { 
+      if (tx !== null) { try { await tx.rollback(); } catch { } } 
+      console.error(&#39;FileSourceDatabase: saveDirectoriesForSource failed, rollback&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to save directories: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 查询指定文件源的所有目录关联 
+   */ 
+  async getDirectoriesBySourceId(sourceId: number): Promise&lt;FileSourceDirectory[]&gt; { 
+    const store = this.core.getStore(); 
+ 
+    let resultSet: relationalStore.ResultSet | null = null; 
+    try { 
+      const predicates = new relationalStore.RdbPredicates(TABLE_DIRECTORIES); 
+      predicates.equalTo(&#39;source_id&#39;, sourceId); 
+ 
+      resultSet = await store.query(predicates); 
+ 
+      const directories: FileSourceDirectory[] = []; 
+      while (resultSet.goToNextRow()) { 
+        const id = resultSet.getLong(resultSet.getColumnIndex(&#39;id&#39;)); 
+        const sourceIdVal = resultSet.getLong(resultSet.getColumnIndex(&#39;source_id&#39;)); 
+        const directoryPath = resultSet.getString(resultSet.getColumnIndex(&#39;directory_path&#39;)); 
+        const customNameIdx = resultSet.getColumnIndex(&#39;custom_name&#39;); 
+        const customName = resultSet.isColumnNull(customNameIdx) ? undefined : resultSet.getString(customNameIdx); 
+        // 兼容旧版本（dir_status 列可能不存在） 
+        let dirStatus: DirStatus = &#39;active&#39;; 
+        try { 
+          const statusIdx = resultSet.getColumnIndex(&#39;dir_status&#39;); 
+          if (statusIdx &gt;= 0 &amp;&amp; !resultSet.isColumnNull(statusIdx)) { 
+            dirStatus = resultSet.getString(statusIdx) as DirStatus; 
+          } 
+        } catch { 
+          // 旧 schema 无此列，保持 active 默认值 
+        } 
+ 
+        directories.push({ 
+          id: id, 
+          sourceId: sourceIdVal, 
+          directoryPath: directoryPath, 
+          customName: customName, 
+          dirStatus: dirStatus 
+        }); 
+      } 
+ 
+      console.info(`FileSourceDatabase: Retrieved ${directories.length} directory(ies) for source ${sourceId}`); 
+      return directories; 
+    } catch (error) { 
+      console.error(&#39;FileSourceDatabase: Failed to get directories&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to get directories: &#39; + JSON.stringify(error)); 
+    } finally { 
+      try { resultSet?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 
+   * 更新单条目录的可达性状态 
+   * @param dirId  file_source_directories 主键 
+   * @param status 新状态：&#39;active&#39; | &#39;missing&#39; | &#39;unreachable&#39; 
+   */ 
+  async updateDirStatus(dirId: number, status: DirStatus): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+      const valueBucket: relationalStore.ValuesBucket = { dir_status: status }; 
+      const predicates = new relationalStore.RdbPredicates(TABLE_DIRECTORIES); 
+      predicates.equalTo(&#39;id&#39;, dirId); 
+      await store.update(valueBucket, predicates); 
+      console.info(`[DB][updateDirStatus] dirId=${dirId} → ${status}`); 
+    } catch (error) { 
+      console.error(&#39;[DB][updateDirStatus] 失败&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to updateDirStatus: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+ 
+  /** 
+   * 清理指定目录及其下属视频文件、关联的 scrape_info、play_progress。 
+   * 注意：movies/tv_series 等元数据表可能跨目录/文件源共享，不在本次清理范围内。 
+   * 孤立的元数据记录由 cleanOrphanedScrapeData() 统一处理。 
+   * 所有删除操作在同一事务内完成，保证原子性。 
+   * @param dirId         file_source_directories 主键 
+   * @param sourceId      所属文件源 ID 
+   * @param directoryPath 目录路径（用于过滤 videos 表） 
+   */ 
+  async clearMediaAndDirectoryForDir(dirId: number, sourceId: number, directoryPath: string): Promise&lt;void&gt; { 
+    const store = this.core.getStore(); 
+    const BATCH_SIZE = 100; 
+ 
+    // 1. 查询该目录下的 video id 列表（事务外只读，不影响原子性） 
+    const videoQueryPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS); 
+    videoQueryPredicates.equalTo(&#39;source_id&#39;, sourceId); 
+    videoQueryPredicates.and(); 
+    videoQueryPredicates.equalTo(&#39;directory_path&#39;, directoryPath); 
+    let videoRs: relationalStore.ResultSet | null = null; 
+    const videoIds: number[] = []; 
+    try { 
+      videoRs = await store.query(videoQueryPredicates, [&#39;id&#39;]); 
+      while (videoRs.goToNextRow()) { 
+        videoIds.push(videoRs.getLong(videoRs.getColumnIndex(&#39;id&#39;))); 
+      } 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `clearMediaAndDirectoryForDir query 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } finally { 
+      try { videoRs?.close(); } catch { } 
+    } 
+ 
+    // 2. 在事务中执行所有删除操作，保证原子性 
+    let tx: relationalStore.Transaction | null = null; 
+    try { 
+      tx = await store.createTransaction(); 
+      // 2a. 分批删除 scrape_info（防止超过 SQLite 999 参数上限） 
+      for (let i = 0; i &lt; videoIds.length; i += BATCH_SIZE) { 
+        const batch = videoIds.slice(i, i + BATCH_SIZE); 
+        const scrapePredicates = new relationalStore.RdbPredicates(TABLE_SCRAPE_INFO); 
+        scrapePredicates.in(&#39;video_id&#39;, batch.map(v =&gt; v as relationalStore.ValueType)); 
+        await tx.delete(scrapePredicates); 
+      } 
+ 
+      // 2b. 分批删除 play_progress（外键未启用，无级联删除） 
+      for (let i = 0; i &lt; videoIds.length; i += BATCH_SIZE) { 
+        const batch = videoIds.slice(i, i + BATCH_SIZE); 
+        const progressPredicates = new relationalStore.RdbPredicates(TABLE_PLAY_PROGRESS); 
+        progressPredicates.in(&#39;video_id&#39;, batch.map(v =&gt; v as relationalStore.ValueType)); 
+        await tx.delete(progressPredicates); 
+      } 
+ 
+      // 2c. 删除视频记录 
+      const videoDelPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS); 
+      videoDelPredicates.equalTo(&#39;source_id&#39;, sourceId); 
+      videoDelPredicates.and(); 
+      videoDelPredicates.equalTo(&#39;directory_path&#39;, directoryPath); 
+      await tx.delete(videoDelPredicates); 
+ 
+      // 2d. 删除目录配置本身 
+      const dirPredicates = new relationalStore.RdbPredicates(TABLE_DIRECTORIES); 
+      dirPredicates.equalTo(&#39;id&#39;, dirId); 
+      await tx.delete(dirPredicates); 
+ 
+      await tx.commit(); 
+      console.info(`[DB][clearMediaAndDirectoryForDir] dirId=${dirId} sourceId=${sourceId} path=${directoryPath} 已清理`); 
+    } catch (error) { 
+      if (tx !== null) { try { await tx.rollback(); } catch { } } 
+      console.error(&#39;[DB][clearMediaAndDirectoryForDir] 失败，已回滚&#39;, JSON.stringify(error)); 
+      throw new Error(&#39;Failed to clearMediaAndDirectoryForDir: &#39; + JSON.stringify(error)); 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Mon Aug 24 2026 22:01:30 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/db/files/FileSourceDao.ets","hash":"dbdf884b8d0db7f60662b61ae355c6c7214d32526d2f2da2cc21d3001dee364e","lineCnt":408,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"FileSourceDao.constructor","count":4,"regions":[{"startLoc":{"line":18,"col":3},"endLoc":{"line":20,"col":4},"count":4,"ignored":0},{"startLoc":{"line":19,"col":5},"endLoc":{"line":20,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"FileSourceDao.insertFileSource","count":0,"regions":[{"startLoc":{"line":25,"col":3},"endLoc":{"line":49,"col":4},"count":0,"ignored":0},{"startLoc":{"line":28,"col":9},"endLoc":{"line":45,"col":6},"count":0,"ignored":0},{"startLoc":{"line":35,"col":7},"endLoc":{"line":45,"col":6},"count":0,"ignored":0},{"startLoc":{"line":45,"col":7},"endLoc":{"line":48,"col":6},"count":0,"ignored":0},{"startLoc":{"line":31,"col":28},"endLoc":{"line":33,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":31,"col":11},"endLoc":{"line":31,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"FileSourceDao.updateFileSource","count":0,"regions":[{"startLoc":{"line":54,"col":3},"endLoc":{"line":84,"col":4},"count":0,"ignored":0},{"startLoc":{"line":61,"col":9},"endLoc":{"line":80,"col":6},"count":0,"ignored":0},{"startLoc":{"line":68,"col":7},"endLoc":{"line":80,"col":6},"count":0,"ignored":0},{"startLoc":{"line":80,"col":7},"endLoc":{"line":83,"col":6},"count":0,"ignored":0},{"startLoc":{"line":57,"col":25},"endLoc":{"line":59,"col":6},"count":0,"ignored":0},{"startLoc":{"line":64,"col":28},"endLoc":{"line":66,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":57,"col":9},"endLoc":{"line":57,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":64,"col":11},"endLoc":{"line":64,"col":26},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"FileSourceDao.deleteFileSource","count":0,"regions":[{"startLoc":{"line":89,"col":3},"endLoc":{"line":102,"col":4},"count":0,"ignored":0},{"startLoc":{"line":92,"col":9},"endLoc":{"line":98,"col":6},"count":0,"ignored":0},{"startLoc":{"line":98,"col":7},"endLoc":{"line":101,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"FileSourceDao.getFileSourceById","count":0,"regions":[{"startLoc":{"line":107,"col":3},"endLoc":{"line":128,"col":4},"count":0,"ignored":0},{"startLoc":{"line":111,"col":9},"endLoc":{"line":122,"col":6},"count":0,"ignored":0},{"startLoc":{"line":122,"col":7},"endLoc":{"line":125,"col":6},"count":0,"ignored":0},{"startLoc":{"line":125,"col":15},"endLoc":{"line":127,"col":6},"count":0,"ignored":0},{"startLoc":{"line":117,"col":37},"endLoc":{"line":119,"col":8},"count":0,"ignored":0},{"startLoc":{"line":121,"col":7},"endLoc":{"line":122,"col":6},"count":0,"ignored":0},{"startLoc":{"line":126,"col":11},"endLoc":{"line":126,"col":34},"count":0,"ignored":0},{"startLoc":{"line":126,"col":35},"endLoc":{"line":126,"col":44},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":117,"col":11},"endLoc":{"line":117,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"FileSourceDao.getAllFileSources","count":3,"regions":[{"startLoc":{"line":130,"col":3},"endLoc":{"line":152,"col":4},"count":3,"ignored":0},{"startLoc":{"line":134,"col":9},"endLoc":{"line":146,"col":6},"count":3,"ignored":0},{"startLoc":{"line":146,"col":7},"endLoc":{"line":149,"col":6},"count":0,"ignored":0},{"startLoc":{"line":139,"col":7},"endLoc":{"line":142,"col":8},"count":0,"ignored":0},{"startLoc":{"line":149,"col":15},"endLoc":{"line":151,"col":6},"count":3,"ignored":0},{"startLoc":{"line":144,"col":7},"endLoc":{"line":146,"col":6},"count":3,"ignored":0},{"startLoc":{"line":150,"col":11},"endLoc":{"line":150,"col":34},"count":3,"ignored":0},{"startLoc":{"line":150,"col":35},"endLoc":{"line":150,"col":44},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"FileSourceDao.parseFileSource","count":0,"regions":[{"startLoc":{"line":157,"col":3},"endLoc":{"line":188,"col":4},"count":0,"ignored":0},{"startLoc":{"line":158,"col":9},"endLoc":{"line":183,"col":6},"count":0,"ignored":0},{"startLoc":{"line":167,"col":26},"endLoc":{"line":174,"col":6},"count":0,"ignored":0},{"startLoc":{"line":176,"col":5},"endLoc":{"line":183,"col":6},"count":0,"ignored":0},{"startLoc":{"line":183,"col":7},"endLoc":{"line":187,"col":6},"count":0,"ignored":0},{"startLoc":{"line":170,"col":9},"endLoc":{"line":173,"col":8},"count":0,"ignored":0},{"startLoc":{"line":168,"col":11},"endLoc":{"line":170,"col":8},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":167,"col":9},"endLoc":{"line":167,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"FileSourceDao.insertDirectories","count":0,"regions":[{"startLoc":{"line":193,"col":3},"endLoc":{"line":216,"col":4},"count":0,"ignored":0},{"startLoc":{"line":201,"col":9},"endLoc":{"line":212,"col":6},"count":0,"ignored":0},{"startLoc":{"line":202,"col":7},"endLoc":{"line":210,"col":8},"count":0,"ignored":0},{"startLoc":{"line":196,"col":35},"endLoc":{"line":199,"col":6},"count":0,"ignored":0},{"startLoc":{"line":212,"col":7},"endLoc":{"line":215,"col":6},"count":0,"ignored":0},{"startLoc":{"line":211,"col":7},"endLoc":{"line":212,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":196,"col":9},"endLoc":{"line":196,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"FileSourceDao.deleteDirectoriesBySourceId","count":0,"regions":[{"startLoc":{"line":221,"col":3},"endLoc":{"line":234,"col":4},"count":0,"ignored":0},{"startLoc":{"line":224,"col":9},"endLoc":{"line":230,"col":6},"count":0,"ignored":0},{"startLoc":{"line":230,"col":7},"endLoc":{"line":233,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"FileSourceDao.saveDirectoriesForSource","count":0,"regions":[{"startLoc":{"line":239,"col":3},"endLoc":{"line":263,"col":4},"count":0,"ignored":0},{"startLoc":{"line":242,"col":9},"endLoc":{"line":258,"col":6},"count":0,"ignored":0},{"startLoc":{"line":247,"col":7},"endLoc":{"line":255,"col":8},"count":0,"ignored":0},{"startLoc":{"line":258,"col":7},"endLoc":{"line":262,"col":6},"count":0,"ignored":0},{"startLoc":{"line":256,"col":7},"endLoc":{"line":258,"col":6},"count":0,"ignored":0},{"startLoc":{"line":260,"col":7},"endLoc":{"line":262,"col":6},"count":0,"ignored":0},{"startLoc":{"line":259,"col":24},"endLoc":{"line":259,"col":66},"count":0,"ignored":0},{"startLoc":{"line":259,"col":30},"endLoc":{"line":259,"col":54},"count":0,"ignored":0},{"startLoc":{"line":259,"col":55},"endLoc":{"line":259,"col":64},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":259,"col":11},"endLoc":{"line":259,"col":22},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"FileSourceDao.getDirectoriesBySourceId","count":0,"regions":[{"startLoc":{"line":268,"col":3},"endLoc":{"line":313,"col":4},"count":0,"ignored":0},{"startLoc":{"line":272,"col":9},"endLoc":{"line":307,"col":6},"count":0,"ignored":0},{"startLoc":{"line":279,"col":7},"endLoc":{"line":303,"col":8},"count":0,"ignored":0},{"startLoc":{"line":296,"col":9},"endLoc":{"line":303,"col":8},"count":0,"ignored":0},{"startLoc":{"line":287,"col":13},"endLoc":{"line":292,"col":10},"count":0,"ignored":0},{"startLoc":{"line":307,"col":7},"endLoc":{"line":310,"col":6},"count":0,"ignored":0},{"startLoc":{"line":310,"col":15},"endLoc":{"line":312,"col":6},"count":0,"ignored":0},{"startLoc":{"line":292,"col":11},"endLoc":{"line":294,"col":10},"count":0,"ignored":0},{"startLoc":{"line":289,"col":69},"endLoc":{"line":291,"col":12},"count":0,"ignored":0},{"startLoc":{"line":305,"col":7},"endLoc":{"line":307,"col":6},"count":0,"ignored":0},{"startLoc":{"line":311,"col":11},"endLoc":{"line":311,"col":34},"count":0,"ignored":0},{"startLoc":{"line":311,"col":35},"endLoc":{"line":311,"col":44},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":284,"col":28},"endLoc":{"line":284,"col":114},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":289,"col":15},"endLoc":{"line":289,"col":67},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"FileSourceDao.updateDirStatus","count":0,"regions":[{"startLoc":{"line":320,"col":3},"endLoc":{"line":332,"col":4},"count":0,"ignored":0},{"startLoc":{"line":322,"col":9},"endLoc":{"line":328,"col":6},"count":0,"ignored":0},{"startLoc":{"line":328,"col":7},"endLoc":{"line":331,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":11},{"name":"FileSourceDao.clearMediaAndDirectoryForDir","count":0,"regions":[{"startLoc":{"line":343,"col":3},"endLoc":{"line":406,"col":4},"count":0,"ignored":0},{"startLoc":{"line":369,"col":9},"endLoc":{"line":401,"col":6},"count":0,"ignored":0},{"startLoc":{"line":388,"col":7},"endLoc":{"line":401,"col":6},"count":0,"ignored":0},{"startLoc":{"line":354,"col":9},"endLoc":{"line":359,"col":6},"count":0,"ignored":0},{"startLoc":{"line":372,"col":7},"endLoc":{"line":377,"col":8},"count":0,"ignored":0},{"startLoc":{"line":380,"col":7},"endLoc":{"line":385,"col":8},"count":0,"ignored":0},{"startLoc":{"line":359,"col":7},"endLoc":{"line":363,"col":6},"count":0,"ignored":0},{"startLoc":{"line":401,"col":7},"endLoc":{"line":405,"col":6},"count":0,"ignored":0},{"startLoc":{"line":363,"col":15},"endLoc":{"line":365,"col":6},"count":0,"ignored":0},{"startLoc":{"line":356,"col":7},"endLoc":{"line":358,"col":8},"count":0,"ignored":0},{"startLoc":{"line":403,"col":7},"endLoc":{"line":405,"col":6},"count":0,"ignored":0},{"startLoc":{"line":364,"col":11},"endLoc":{"line":364,"col":32},"count":0,"ignored":0},{"startLoc":{"line":364,"col":33},"endLoc":{"line":364,"col":42},"count":0,"ignored":0},{"startLoc":{"line":402,"col":24},"endLoc":{"line":402,"col":66},"count":0,"ignored":0},{"startLoc":{"line":402,"col":30},"endLoc":{"line":402,"col":54},"count":0,"ignored":0},{"startLoc":{"line":402,"col":55},"endLoc":{"line":402,"col":64},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":402,"col":11},"endLoc":{"line":402,"col":22},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":12},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":375,"col":51},"endLoc":{"line":375,"col":86},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":13},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":383,"col":53},"endLoc":{"line":383,"col":88},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":14}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":7,"7":8,"8":9,"9":15,"10":16,"11":18,"12":19,"13":25,"14":26,"15":28,"16":30,"17":31,"18":32,"19":35,"20":36,"21":37,"22":38,"23":39,"24":42,"25":43,"26":44,"27":45,"28":46,"29":47,"30":54,"31":55,"32":57,"33":58,"34":61,"35":63,"36":64,"37":65,"38":68,"39":69,"40":70,"41":71,"42":72,"43":75,"44":76,"45":78,"46":79,"47":80,"48":81,"49":82,"50":89,"51":90,"52":92,"53":93,"54":94,"55":96,"56":97,"57":98,"58":99,"59":100,"60":107,"61":108,"62":110,"63":111,"64":112,"65":113,"66":115,"67":117,"68":118,"69":121,"70":122,"71":123,"72":124,"73":125,"74":126,"75":130,"76":131,"77":133,"78":134,"79":135,"80":136,"81":138,"82":139,"83":140,"84":141,"85":144,"86":145,"87":146,"88":147,"89":148,"90":149,"91":150,"92":157,"93":158,"94":159,"95":160,"96":161,"97":162,"98":163,"99":166,"100":167,"101":168,"102":169,"103":170,"104":171,"105":176,"106":177,"107":178,"108":179,"109":180,"110":181,"111":183,"112":184,"113":185,"114":186,"115":193,"116":194,"117":196,"118":197,"119":198,"120":201,"121":202,"122":203,"123":204,"124":205,"125":206,"126":207,"127":209,"128":211,"129":212,"130":213,"131":214,"132":221,"133":222,"134":224,"135":225,"136":226,"137":228,"138":229,"139":230,"140":231,"141":232,"142":239,"143":240,"144":241,"145":242,"146":243,"147":244,"148":245,"149":246,"150":247,"151":248,"152":249,"153":250,"154":251,"155":252,"156":254,"157":256,"158":257,"159":258,"160":259,"161":260,"162":261,"163":268,"164":269,"165":271,"166":272,"167":273,"168":274,"169":276,"170":278,"171":279,"172":280,"173":281,"174":282,"175":283,"176":284,"177":286,"178":287,"179":288,"180":289,"181":290,"182":292,"183":296,"184":297,"185":298,"186":299,"187":300,"188":301,"189":305,"190":306,"191":307,"192":308,"193":309,"194":310,"195":311,"196":320,"197":321,"198":322,"199":323,"200":324,"201":325,"202":326,"203":327,"204":328,"205":329,"206":330,"207":343,"208":344,"209":345,"210":348,"211":349,"212":350,"213":351,"214":352,"215":353,"216":354,"217":355,"218":356,"219":357,"220":359,"221":360,"222":361,"223":362,"224":363,"225":364,"226":368,"227":369,"228":370,"229":372,"230":373,"231":374,"232":375,"233":376,"234":380,"235":381,"236":382,"237":383,"238":384,"239":388,"240":389,"241":390,"242":391,"243":392,"244":395,"245":396,"246":397,"247":399,"248":400,"249":401,"250":402,"251":403,"252":404},"summary":{"lines":{"total":242,"covered":14,"pct":5.785,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4,4,-1,-1,-1,-1,-1,0,0,-1,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,-1,-1,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,-1,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,0,-1,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,0,0,-1,0,-1,0,0,-1,-1,0,0,0,0,0,0,-1,-1,-1,3,3,-1,3,3,3,3,-1,3,0,0,0,-1,-1,3,3,3,0,0,3,3,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,0,0,-1,0,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,0,-1,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,-1,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,-1,0,0,0,0,-1,0,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,-1,-1,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,-1,0,0,0,-1,0,0,0,0,0,0,-1,-1,-1,-1]},"functions":{"total":15,"covered":2,"pct":13.33},"branches":{"total":20,"covered":0,"pct":0}}},"title":"FileSourceDao.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
