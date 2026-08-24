@@ -124,6 +124,7 @@ export struct FileSourceTab {
         const smbConfig = JSON.parse(item.fileSource.configJson) as SMBSourceConfig
         const param: SmbFileExplorerPageParam = {
           config: smbConfig,
+          sourceId: item.fileSource.id,
           initialPath: item.directoryPath && item.directoryPath !== '/' ? item.directoryPath : '/'
         }
         this.pageStack.pushPath({

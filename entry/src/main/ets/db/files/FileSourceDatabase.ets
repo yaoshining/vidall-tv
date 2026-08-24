@@ -175,6 +175,22 @@ export class FileSourceDatabase {
     return this.videoDao.getVideosBySourceId(sourceId);
   }
 
+  async getVideosByMovieId(movieId: number): Promise<VideoEntity[]> {
+    return this.videoDao.getVideosByMovieId(movieId);
+  }
+
+  async getVideosByTvSeriesId(tvSeriesId: number): Promise<VideoEntity[]> {
+    return this.videoDao.getVideosByTvSeriesId(tvSeriesId);
+  }
+
+  async getVideosBySeason(tvSeriesId: number, seasonNumber: number): Promise<VideoEntity[]> {
+    return this.videoDao.getVideosBySeason(tvSeriesId, seasonNumber);
+  }
+
+  async getVideosByDirectoryTree(sourceId: number, directoryPath: string): Promise<VideoEntity[]> {
+    return this.videoDao.getVideosByDirectoryTree(sourceId, directoryPath);
+  }
+
   async getAllVideos(): Promise<VideoEntity[]> {
     return this.videoDao.getAllVideos();
   }
@@ -372,6 +388,10 @@ export class FileSourceDatabase {
   // ─────────────────────────────────────────────
   // 媒体库聚合查询 / 搜索 / 流派
   // ─────────────────────────────────────────────
+
+  async getMediaItemByVideoId(videoId: number): Promise<MediaItem | null> {
+    return this.mediaQueryDao.getMediaItemByVideoId(videoId);
+  }
 
   async getAllMediaItems(): Promise<MediaItem[]> {
     return this.mediaQueryDao.getAllMediaItems();

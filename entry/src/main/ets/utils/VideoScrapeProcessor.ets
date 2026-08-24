@@ -1,9 +1,133 @@
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
-import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from '../lib/ScrapeClient';
+import {
+  MovieScrapeResult,
+  ScrapeClient,
+  parseFileName,
+  TvEpisodeScrapeBundle
+} from '../lib/ScrapeClient';
 import { ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../db/models/MediaEntity';
 import { extractSeriesHintFromFilePath, formatMediaTypeClassificationSignals, extractSeasonNumberFromDirectoryName } from '../lib/MediaTypeClassifier';
 import { VideoFileInfo, VideoScrapeContext, ScanMode } from './VideoScannerTypes';
-import { classifyVideoScrapeTarget, hasCompleteScrapeAssociation, extractEpisodeNumberFromWeakSemanticFileName, clearStaleScrapeAssociationsForOverwrite } from './VideoScannerHelpers';
+import { classifyVideoScrapeTarget, hasCompleteScrapeAssociation, extractEpisodeNumberFromWeakSemanticFileName } from './VideoScannerHelpers';
+
+export async function applyMovieScrapeResult(
+  videoId: number,
+  movie: MovieScrapeResult,
+  logPrefix: string
+): Promise<boolean> {
+  const db = FileSourceDatabase.getInstance();
+  try {
+    const movieEntity: MovieEntity = {
+      provider: movie.provider, providerId: movie.providerId,
+      title: movie.title, originalTitle: movie.originalTitle,
+      overview: movie.overview, releaseDate: movie.releaseDate,
+      rating: movie.rating, voteCount: movie.voteCount,
+      posterPath: movie.posterPath, backdropPath: movie.backdropPath,
+      posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
+      genresJson: movie.genresJson, castJson: movie.castJson,
+      directorsJson: movie.directorsJson, runtime: movie.runtime,
+      originalLanguage: movie.originalLanguage,
+      originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
+      scrapedAt: Date.now()
+    };
+    const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
+    if (existingMovie?.id !== undefined) {
+      movieEntity.id = existingMovie.id;
+    }
+    const movieId = await db.upsertMovie(movieEntity);
+    const scrapeInfo: ScrapeInfoEntity = {
+      videoId, provider: movie.provider, providerId: movie.providerId,
+      mediaType: 'movie', title: movie.title, originalTitle: movie.originalTitle,
+      movieId, scrapedAt: Date.now()
+    };
+    await db.upsertScrapeInfo(scrapeInfo);
+    return true;
+  } catch (e) {
+    const err = e as Error;
+    console.warn(`${logPrefix} 电影结果落库失败: ${err.message}`);
+    return false;
+  }
+}
+
+export async function applyTvEpisodeScrapeResult(
+  videoId: number,
+  result: TvEpisodeScrapeBundle,
+  logPrefix: string
+): Promise<boolean> {
+  const db = FileSourceDatabase.getInstance();
+  const series = result.series;
+  if (series === null || result.episode === null) {
+    return false;
+  }
+  try {
+    const seriesEntity: TvSeriesEntity = {
+      provider: series.provider, providerId: series.providerId,
+      title: series.title, originalTitle: series.originalTitle,
+      overview: series.overview, firstAirDate: series.firstAirDate,
+      rating: series.rating, voteCount: series.voteCount,
+      posterPath: series.posterPath, backdropPath: series.backdropPath,
+      posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
+      genresJson: series.genresJson, castJson: series.castJson,
+      numberOfSeasons: series.numberOfSeasons,
+      originalLanguage: series.originalLanguage,
+      originCountryJson: series.originCountryJson, rawJson: series.rawJson,
+      scrapedAt: Date.now()
+    };
+    const existingSeries = await db.getTvSeriesByProviderId(series.provider, series.providerId);
+    if (existingSeries?.id !== undefined) {
+      seriesEntity.id = existingSeries.id;
+    }
+    const seriesId = await db.upsertTvSeries(seriesEntity);
+    let seasonId: number | undefined;
+    if (result.season !== null) {
+      const season = result.season;
+      const seasonEntity: TvSeasonEntity = {
+        seriesId, provider: season.provider, providerId: season.providerId,
+        seasonNumber: season.seasonNumber, title: season.title,
+        overview: season.overview, airDate: season.airDate,
+        episodeCount: season.episodeCount, posterPath: season.posterPath,
+        posterUrl: season.posterUrl, rawJson: season.rawJson, scrapedAt: Date.now()
+      };
+      const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
+      if (existingSeason?.id !== undefined) {
+        seasonEntity.id = existingSeason.id;
+      }
+      seasonId = await db.upsertTvSeason(seasonEntity);
+    }
+    let episodeId: number | undefined;
+    if (result.episode !== null) {
+      const episode = result.episode;
+      const episodeEntity: TvEpisodeEntity = {
+        seriesId, seasonId, provider: episode.provider, providerId: episode.providerId,
+        seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+        title: episode.title, overview: episode.overview, airDate: episode.airDate,
+        runtime: episode.runtime, rating: episode.rating,
+        stillPath: episode.stillPath, stillUrl: episode.stillUrl,
+        rawJson: episode.rawJson, scrapedAt: Date.now()
+      };
+      const existingEpisode = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
+      if (existingEpisode?.id !== undefined) {
+        episodeEntity.id = existingEpisode.id;
+      }
+      episodeId = await db.upsertTvEpisode(episodeEntity);
+    }
+    const scrapeInfo: ScrapeInfoEntity = {
+      videoId, provider: series.provider,
+      providerId: result.episode?.providerId ?? series.providerId,
+      mediaType: episodeId !== undefined ? 'episode' : 'tv',
+      title: result.episode?.title ?? series.title,
+      originalTitle: series.originalTitle, tvSeriesId: seriesId, episodeId,
+      seasonNumber: result.episode?.seasonNumber ?? result.season?.seasonNumber,
+      episodeNumber: result.episode?.episodeNumber, scrapedAt: Date.now()
+    };
+    await db.upsertScrapeInfo(scrapeInfo);
+    return true;
+  } catch (e) {
+    const err = e as Error;
+    console.warn(`${logPrefix} 剧集结果落库失败: ${err.message}`);
+    return false;
+  }
+}
 
 function extractParentDirectoryName(filePath: string): string | undefined {
   const normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+$/g, '');
@@ -28,43 +152,31 @@ export async function processVideoScrape(
   mode: ScanMode,
   info: VideoFileInfo,
   logPrefix: string
-): Promise<void> {
+): Promise<boolean> {
   const db = FileSourceDatabase.getInstance();
   try {
     const existing = await db.getScrapeInfoByVideoId(videoId);
     if (mode === 'incremental') {
       if (hasCompleteScrapeAssociation(existing)) {
         console.info(`${logPrefix} incremental 元数据完整，跳过 fileName=${fileName}`);
-        return;
+        return true;
       }
     } else if (mode === 'fix-missing') {
-      // fix-missing: scrape_info 存在且 ID 已关联，且海报不为空，才跳过
-      if (existing) {
-        const isComplete = existing.mediaType === 'movie'
-          ? existing.movieId !== undefined
-          : existing.tvSeriesId !== undefined;
-        if (isComplete) {
-          let hasPoster = false;
-          try {
-            if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
-              const movie = await db.getMovieById(existing.movieId);
-              hasPoster = !!(movie?.posterUrl);
-            } else if (existing.tvSeriesId !== undefined) {
-              const series = await db.getTvSeriesById(existing.tvSeriesId);
-              hasPoster = !!(series?.posterUrl);
-            }
-          } catch {
-            hasPoster = true;
-          }
-          if (hasPoster) {
-            console.info(`${logPrefix} fix-missing 元数据完整，跳过 fileName=${fileName}`);
-            info.scrapeSkipped = true;
-            return;
-          }
-          console.info(`${logPrefix} fix-missing 海报缺失，重新刮削 fileName=${fileName}`);
-        } else {
-          console.info(`${logPrefix} fix-missing 元数据不完整（ID未关联），重新刮削 fileName=${fileName}`);
+      if (existing && hasCompleteScrapeAssociation(existing)) {
+        let hasPoster = false;
+        if (existing.mediaType === 'movie' && existing.movieId !== undefined) {
+          const movie = await db.getMovieById(existing.movieId);
+          hasPoster = !!(movie?.posterUrl || movie?.posterLocalPath);
+        } else if (existing.tvSeriesId !== undefined) {
+          const series = await db.getTvSeriesById(existing.tvSeriesId);
+          hasPoster = !!(series?.posterUrl || series?.posterLocalPath);
         }
+        if (hasPoster) {
+          console.info(`${logPrefix} fix-missing 元数据完整，跳过 fileName=${fileName}`);
+          info.scrapeSkipped = true;
+          return true;
+        }
+        console.info(`${logPrefix} fix-missing 海报缺失，重新刮削 fileName=${fileName}`);
       }
     }
     // overwrite: 不跳过，强制重新刮削（upsertScrapeInfo 已是 upsert）
@@ -80,13 +192,6 @@ export async function processVideoScrape(
   const extractedSeriesHint = extractSeriesHintFromFilePath(info.filePath);
   const seriesHint = extractedSeriesHint ?? info.seriesHint;
   if (classification.mediaType === 'unknown') {
-    await clearStaleScrapeAssociationsForOverwrite(
-      videoId,
-      mode,
-      fileName,
-      logPrefix,
-      `unknown:${classification.reason ?? 'unknown'}`
-    );
     // #191 修复：为 unknown 文件创建 scrape_info 记录，以便增量扫描时能检测上下文变化
     const unknownScrapeInfo: ScrapeInfoEntity = {
       videoId,
@@ -106,83 +211,22 @@ export async function processVideoScrape(
       console.warn(`${logPrefix} 无法保存 unknown 标记 fileName=${fileName}`);
     }
     info.scrapeSkipped = true;
-    return;
+    return true;
   }
 
   if (classification.mediaType === 'movie') {
     try {
       const movie = await scrapeClient.autoScrapeMovie(fileName);
       if (!movie) {
-        await clearStaleScrapeAssociationsForOverwrite(
-          videoId,
-          mode,
-          fileName,
-          logPrefix,
-          'movie-scrape-empty'
-        );
         console.warn(`${logPrefix} 电影刮削无结果 ${fileName}`);
-        return;
+        return false;
       }
       console.info(`${logPrefix} 电影刮削结果 title="${movie.title}" posterUrl=${movie.posterUrl ? movie.posterUrl.substring(0, 40) : 'null'} rating=${movie.rating ?? 'null'}`);
-      let movieId: number;
-      const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
-      if (existingMovie && existingMovie.id !== undefined) {
-        movieId = existingMovie.id;
-        console.info(`${logPrefix} 电影复用已有记录 movieId=${movieId} title="${movie.title}"`);
-        const needsUpdate = (!existingMovie.posterUrl && movie.posterUrl) ||
-          (!existingMovie.originCountryJson && movie.originCountryJson);
-        if (needsUpdate) {
-          const updateEntity: MovieEntity = {
-            id: existingMovie.id,
-            provider: movie.provider, providerId: movie.providerId,
-            title: movie.title, originalTitle: movie.originalTitle,
-            overview: movie.overview, releaseDate: movie.releaseDate,
-            rating: movie.rating, voteCount: movie.voteCount,
-            posterPath: movie.posterPath, backdropPath: movie.backdropPath,
-            posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
-            genresJson: movie.genresJson, castJson: movie.castJson,
-            directorsJson: movie.directorsJson, runtime: movie.runtime,
-            originalLanguage: movie.originalLanguage,
-            originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
-            scrapedAt: Date.now()
-          };
-          await db.upsertMovie(updateEntity);
-          console.info(`${logPrefix} 电影复用更新 posterUrl/originCountryJson movieId=${movieId}`);
-        }
-      } else {
-        const movieEntity: MovieEntity = {
-          provider: movie.provider, providerId: movie.providerId,
-          title: movie.title, originalTitle: movie.originalTitle,
-          overview: movie.overview, releaseDate: movie.releaseDate,
-          rating: movie.rating, voteCount: movie.voteCount,
-          posterPath: movie.posterPath, backdropPath: movie.backdropPath,
-          posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
-          genresJson: movie.genresJson, castJson: movie.castJson,
-          directorsJson: movie.directorsJson, runtime: movie.runtime,
-          originalLanguage: movie.originalLanguage,
-          originCountryJson: movie.originCountryJson, rawJson: movie.rawJson,
-          scrapedAt: Date.now()
-        };
-        movieId = await db.upsertMovie(movieEntity);
-        console.info(`${logPrefix} 电影入库 movieId=${movieId} title="${movie.title}"`);
-      }
-      const movieScrapeInfo: ScrapeInfoEntity = {
-        videoId, provider: movie.provider, providerId: movie.providerId,
-        mediaType: 'movie', title: movie.title, originalTitle: movie.originalTitle,
-        movieId, scrapedAt: Date.now()
-      };
-      await db.upsertScrapeInfo(movieScrapeInfo);
-      console.info(`${logPrefix} movie scrape_info 落库 videoId=${videoId} movieId=${movieId}`);
+      return await applyMovieScrapeResult(videoId, movie, logPrefix);
     } catch (e) {
-      await clearStaleScrapeAssociationsForOverwrite(
-        videoId,
-        mode,
-        fileName,
-        logPrefix,
-        'movie-scrape-exception'
-      );
       const err = e as Error;
       console.warn(`${logPrefix} 电影刮削异常 ${fileName}: ${err.message}`);
+      return false;
     }
   } else {
     try {
@@ -200,108 +244,22 @@ export async function processVideoScrape(
       const explicitSeasonNum = parsedFileName.seasonNumber === undefined
         ? (directorySeasonNum ?? 1)
         : undefined;
+      const resolvedEpisodeNum = parsedFileName.episodeNumber ?? explicitEpisodeNum;
+      if (resolvedEpisodeNum === undefined) {
+        console.warn(`${logPrefix} 无法解析剧集集号 ${fileName}`);
+        return false;
+      }
       const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
       if (!result.series) {
-        await clearStaleScrapeAssociationsForOverwrite(
-          videoId,
-          mode,
-          fileName,
-          logPrefix,
-          'tv-scrape-empty'
-        );
         console.warn(`${logPrefix} 剧集刮削无结果 ${fileName}`);
-        return;
+        return false;
       }
-      const series: TvSeriesScrapeResult = result.series;
-      const season = result.season;
-      const episode = result.episode;
-
-      let seriesId: number;
-      const existingSeries = await db.getTvSeriesByProviderId(series.provider, series.providerId);
-      if (existingSeries && existingSeries.id !== undefined) {
-        seriesId = existingSeries.id;
-        console.info(`${logPrefix} 剧集复用已有记录 seriesId=${seriesId} title="${series.title}"`);
-      } else {
-        const seriesEntity: TvSeriesEntity = {
-          provider: series.provider, providerId: series.providerId,
-          title: series.title, originalTitle: series.originalTitle,
-          overview: series.overview, firstAirDate: series.firstAirDate,
-          rating: series.rating, voteCount: series.voteCount,
-          posterPath: series.posterPath, backdropPath: series.backdropPath,
-          posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
-          genresJson: series.genresJson, castJson: series.castJson,
-          numberOfSeasons: series.numberOfSeasons,
-          originalLanguage: series.originalLanguage,
-          originCountryJson: series.originCountryJson, rawJson: series.rawJson,
-          scrapedAt: Date.now()
-        };
-        seriesId = await db.upsertTvSeries(seriesEntity);
-        console.info(`${logPrefix} 剧集入库 seriesId=${seriesId} title="${series.title}"`);
-      }
-
-      let seasonId: number | undefined;
-      if (season) {
-        const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
-        if (existingSeason && existingSeason.id !== undefined) {
-          seasonId = existingSeason.id;
-        } else {
-          const seasonEntity: TvSeasonEntity = {
-            seriesId, provider: season.provider, providerId: season.providerId,
-            seasonNumber: season.seasonNumber, title: season.title,
-            overview: season.overview, airDate: season.airDate,
-            episodeCount: season.episodeCount, posterPath: season.posterPath,
-            posterUrl: season.posterUrl, rawJson: season.rawJson,
-            scrapedAt: Date.now()
-          };
-          seasonId = await db.upsertTvSeason(seasonEntity);
-        }
-      }
-
-      let episodeId: number | undefined;
-      if (episode) {
-        const existingEp = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
-        if (existingEp && existingEp.id !== undefined) {
-          episodeId = existingEp.id;
-        } else {
-          const epEntity: TvEpisodeEntity = {
-            seriesId, seasonId, provider: episode.provider, providerId: episode.providerId,
-            seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
-            title: episode.title, overview: episode.overview, airDate: episode.airDate,
-            runtime: episode.runtime, rating: episode.rating,
-            stillPath: episode.stillPath, stillUrl: episode.stillUrl,
-            rawJson: episode.rawJson, scrapedAt: Date.now()
-          };
-          episodeId = await db.upsertTvEpisode(epEntity);
-        }
-      }
-
-      const mediaType = episodeId !== undefined ? 'episode' : 'tv';
-      const scrapeSeasonNumber = episode?.seasonNumber ?? season?.seasonNumber;
-      const scrapeEpisodeNumber = episode?.episodeNumber;
-      const tvScrapeInfo: ScrapeInfoEntity = {
-        videoId, provider: series.provider,
-        providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
-        mediaType, title: episode?.title ?? series.title,
-        originalTitle: series.originalTitle,
-        tvSeriesId: seriesId, episodeId,
-        seasonNumber: scrapeSeasonNumber, episodeNumber: scrapeEpisodeNumber,
-        scrapedAt: Date.now()
-      };
-      await db.upsertScrapeInfo(tvScrapeInfo);
-      console.info(
-        `${logPrefix} tv scrape_info 落库 videoId=${videoId} ` +
-        `S${scrapeSeasonNumber ?? '?'}E${scrapeEpisodeNumber ?? '?'}`
-      );
+      return await applyTvEpisodeScrapeResult(videoId, result, logPrefix);
     } catch (e) {
-      await clearStaleScrapeAssociationsForOverwrite(
-        videoId,
-        mode,
-        fileName,
-        logPrefix,
-        'tv-scrape-exception'
-      );
       const err = e as Error;
       console.warn(`${logPrefix} 剧集刮削异常 ${fileName}: ${err.message}`);
+      return false;
     }
   }
+  return true;
 }

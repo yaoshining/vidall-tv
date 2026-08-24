@@ -59,6 +59,7 @@ import audioDecoderCapabilityServiceTest from './AudioDecoderCapabilityService.t
 import audioTrackRoutingTest from './AudioTrackRouting.test';
 import serverCardActionTest from './ServerCardAction.test';
 import seriesCardRouteTest from './SeriesCardRoute.test';
+import scopedScrapeTest from './ScopedScrape.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -120,4 +121,5 @@ export default function testsuite() {
   audioTrackRoutingTest();
   serverCardActionTest();
   seriesCardRouteTest();
+  scopedScrapeTest();
 }

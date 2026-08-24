@@ -799,6 +799,7 @@ export class ScrapeClient {
    * 外部可通过 clearTvSeriesCache() 在刮削会话开始前清除。
    */
   private tvSeriesCache: Map<string, string> = new Map();
+  private tvSeasonCache: Map<string, TvSeasonScrapeResult | null> = new Map();
 
   constructor(config: ScrapeClientConfig) {
     this.scrapeConcurrencyOverride = config.scrapeConcurrency;
@@ -818,6 +819,7 @@ export class ScrapeClient {
   /** 清除 TV 系列搜索缓存，在新的刮削会话开始时调用 */
   clearTvSeriesCache(): void {
     this.tvSeriesCache.clear();
+    this.tvSeasonCache.clear();
   }
 
   /** 获取缓存中已确认的 TV 系列 providerId，未命中返回 undefined */
@@ -828,6 +830,103 @@ export class ScrapeClient {
   /** 缓存已确认的 TV 系列 providerId */
   cacheTvSeriesId(searchTitle: string, providerId: string): void {
     this.tvSeriesCache.set(searchTitle.toLowerCase().trim(), providerId);
+  }
+
+  /** 搜索电影候选，按文件名解析出的标题优先级合并去重。 */
+  async searchMovieCandidates(fileName: string): Promise<MovieScrapeResult[]> {
+    const parsed = parseFileName(fileName);
+    const merged: MovieScrapeResult[] = [];
+    const seen = new Set<string>();
+    await this.acquire();
+    try {
+      for (const provider of this.getActiveProviders()) {
+        for (const title of buildSearchTitles(parsed.title)) {
+          try {
+            const results = await provider.searchMovie(title, parsed.year, 'zh-CN');
+            for (const result of results) {
+              const key = `${result.provider}:${result.providerId}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(result);
+              }
+            }
+          } catch (e) {
+            console.warn(`[ScrapeClient] searchMovieCandidates provider=${provider.id} 失败: ${JSON.stringify(e)}`);
+          }
+        }
+      }
+      return merged;
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  /** 搜索电视剧候选，同一路径提示只查询一次并按 providerId 去重。 */
+  async searchTvCandidates(fileName: string, seriesHint?: string): Promise<TvSeriesScrapeResult[]> {
+    const parsed = parseFileName(fileName);
+    const candidates = buildTvSearchCandidates(parsed.title, parsed.year, seriesHint);
+    const merged: TvSeriesScrapeResult[] = [];
+    const seen = new Set<string>();
+    await this.acquire();
+    try {
+      for (const provider of this.getActiveProviders()) {
+        for (const candidate of candidates) {
+          try {
+            let results = await provider.searchTv(candidate.title, candidate.year, 'zh-CN');
+            if (results.length === 0 && candidate.year !== undefined) {
+              results = await provider.searchTv(candidate.title, undefined, 'zh-CN');
+            }
+            for (const result of results) {
+              if (scoreTvSearchResult(result, candidate.title) <= 0) {
+                continue;
+              }
+              const key = `${result.provider}:${result.providerId}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(result);
+              }
+            }
+          } catch (e) {
+            console.warn(`[ScrapeClient] searchTvCandidates provider=${provider.id} 失败: ${JSON.stringify(e)}`);
+            if (candidate.year !== undefined) {
+              try {
+                const fallbackResults = await provider.searchTv(candidate.title, undefined, 'zh-CN');
+                for (const result of fallbackResults) {
+                  if (scoreTvSearchResult(result, candidate.title) <= 0) {
+                    continue;
+                  }
+                  const key = `${result.provider}:${result.providerId}`;
+                  if (!seen.has(key)) {
+                    seen.add(key);
+                    merged.push(result);
+                  }
+                }
+              } catch (fallbackError) {
+                console.warn(
+                  `[ScrapeClient] searchTvCandidates provider=${provider.id} 无年份降级失败: ` +
+                  `${JSON.stringify(fallbackError)}`
+                );
+              }
+            }
+          }
+        }
+      }
+      return merged;
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  /** 直接拉取电影详情（已知 providerId）。 */
+  async fetchMovieDetail(providerId: string, provider: string = 'tmdb'): Promise<MovieScrapeResult | null> {
+    const activeProvider = this.providers.get(provider);
+    if (!activeProvider) { return null; }
+    await this.acquire();
+    try {
+      return await activeProvider.fetchMovieDetail(providerId, 'zh-CN');
+    } finally {
+      this.releaseSlot();
+    }
   }
 
   /** 搜索电影，返回第一个命中的详情 */
@@ -985,11 +1084,17 @@ export class ScrapeClient {
           let episode: TvEpisodeScrapeResult | null = null;
 
           if (effectiveSeasonNumber !== undefined) {
-            try {
-              season = await provider.fetchSeason(series.providerId, effectiveSeasonNumber, 'zh-CN');
-            } catch (e) {
-              const err = e as BusinessError;
-              console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${effectiveSeasonNumber}) 失败: ${err.message}`);
+            const seasonCacheKey = `${provider.id}:${series.providerId}:${effectiveSeasonNumber}`;
+            if (this.tvSeasonCache.has(seasonCacheKey)) {
+              season = this.tvSeasonCache.get(seasonCacheKey) ?? null;
+            } else {
+              try {
+                season = await provider.fetchSeason(series.providerId, effectiveSeasonNumber, 'zh-CN');
+              } catch (e) {
+                const err = e as BusinessError;
+                console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${effectiveSeasonNumber}) 失败: ${err.message}`);
+              }
+              this.tvSeasonCache.set(seasonCacheKey, season);
             }
             console.info(`[ScrapeClient] fetchSeason S${effectiveSeasonNumber} → ${season ? 'OK posterUrl=' + (season.posterUrl ? 'Y' : 'N') : 'null'}`);
             if (effectiveEpisodeNumber !== undefined) {

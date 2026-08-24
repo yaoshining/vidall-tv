@@ -8,6 +8,7 @@ import { UmamiEventData } from "../../../services/analytics/UmamiReporter";
 @ComponentV2
 struct ResourceLibrarySettingBuilderComponent {
   @Local tmdbApiKey: string = '';
+  @Local confirmLocalScrapeCandidate: boolean = false;
   @Local isLoading: boolean = false;
 
   private showToastSafe(message: string, duration: number = 2000): void {
@@ -23,8 +24,29 @@ struct ResourceLibrarySettingBuilderComponent {
   private async loadSettings(): Promise<void> {
     try {
       this.tmdbApiKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+      this.confirmLocalScrapeCandidate =
+        (await AppPreferences.getNumber(PrefKey.LOCAL_SCRAPE_CONFIRM_CANDIDATE, 0)) === 1;
     } catch (error) {
       console.error('[ResourceLibrarySettingBuilder] 加载设置失败:', JSON.stringify(error));
+    }
+  }
+
+  private async saveConfirmLocalScrapeCandidate(enabled: boolean): Promise<void> {
+    const previousValue = this.confirmLocalScrapeCandidate;
+    this.confirmLocalScrapeCandidate = enabled;
+    try {
+      await AppPreferences.set(PrefKey.LOCAL_SCRAPE_CONFIRM_CANDIDATE, enabled ? 1 : 0);
+      if (UmamiAnalyticsService.isInitialized()) {
+        const evtData: UmamiEventData = {
+          setting_key: 'LOCAL_SCRAPE_CONFIRM_CANDIDATE',
+          new_value: enabled ? 'enabled' : 'disabled'
+        };
+        UmamiAnalyticsService.getInstance().trackEvent('settings', 'settings_changed', evtData);
+      }
+    } catch (error) {
+      this.confirmLocalScrapeCandidate = previousValue;
+      console.error('[ResourceLibrarySettingBuilder] 保存局部刮削确认设置失败:', JSON.stringify(error));
+      this.showToastSafe('保存失败，请重试');
     }
   }
 
@@ -127,6 +149,32 @@ struct ResourceLibrarySettingBuilderComponent {
           }
         }
         .backgroundColor('#1E1E1E')
+
+        ListItem() {
+          Row({ space: 12 }) {
+            Column({ space: 6 }) {
+              Text('局部刮削时选择匹配结果')
+                .fontSize(16)
+                .fontColor('#F5F5F5')
+              Text('开启后，电影、剧集、季、单集和文件夹刮削会先显示候选；全局刮削不受影响。')
+                .fontSize(12)
+                .fontColor('#A0A0A0')
+                .maxLines(3)
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Toggle({ type: ToggleType.Switch, isOn: this.confirmLocalScrapeCandidate })
+              .onChange((isOn: boolean) => {
+                this.saveConfirmLocalScrapeCandidate(isOn);
+              })
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: 16 })
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('#333333')
+          .borderRadius(8)
+        }
 
         SettingListItem({
           title: "刮削服务",

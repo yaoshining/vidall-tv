@@ -16,6 +16,9 @@ import {
   DetailOverviewDialog,
   DetailCastMember
 } from '../../components/detail/DetailSections';
+import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel';
+import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes';
+import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore';
 
 /**
  * 将电影时长格式化为 h:mm:ss 字符串。
@@ -95,6 +98,36 @@ export struct MovieDetailPage {
   /** 播放按钮焦点/Hover 状态 key */
   @Local focusedActionKey: string = '';
   @Local hoveredActionKey: string = '';
+  @Local showScrapeModes: boolean = false;
+  @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState();
+
+  @Monitor('mediaDataVersionStore.globalVersion')
+  onMediaDataVersionChange(): void {
+    this.reloadCurrentItem();
+  }
+
+  private reloadCurrentItem(): void {
+    const videoId = this.item?.id;
+    if (videoId === undefined) {
+      return;
+    }
+    FileSourceDatabase.getInstance().getMediaItemByVideoId(videoId).then((item: MediaItem | null) => {
+      if (item === null) {
+        return;
+      }
+      this.item = item;
+      this.loadAuxData(item);
+    }).catch(() => {});
+  }
+
+  private getScrapeScope(): ScrapeScope | undefined {
+    const movieId = this.movieEntity?.id ?? this.item?.movieId;
+    if (movieId === undefined) {
+      return undefined;
+    }
+    const scope: ScrapeScope = { kind: 'movie', movieId, displayName: this.getTitle() };
+    return scope;
+  }
 
   // ── 属性计算方法 ──────────────────────────────────
 
@@ -632,6 +665,18 @@ export struct MovieDetailPage {
                 .constraintSize({ maxWidth: 700 })
             }
           }
+
+          if (this.getScrapeScope() !== undefined) {
+            Button('更多操作')
+              .width(168).height(50)
+              .fontSize(17).fontColor(Color.White)
+              .backgroundColor(this.focusedActionKey === 'scrape' ? '#356FA8' : '#3A3D43')
+              .border({ width: this.focusedActionKey === 'scrape' ? 2 : 0, color: '#88C8FF' })
+              .focusable(true)
+              .onFocus(() => { this.focusedActionKey = 'scrape'; })
+              .onBlur(() => { if (this.focusedActionKey === 'scrape') { this.focusedActionKey = ''; } })
+              .onClick(() => { this.showScrapeModes = true; })
+          }
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
@@ -687,7 +732,11 @@ export struct MovieDetailPage {
           onClose: () => { this.showOverviewDialog = false }
         })
 
-
+        ScrapeModePanel({
+          visible: this.showScrapeModes,
+          scope: this.getScrapeScope(),
+          onClose: () => { this.showScrapeModes = false; }
+        })
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
@@ -703,6 +752,10 @@ export struct MovieDetailPage {
       this.refreshMovieProgress().catch(() => {});
     })
     .onBackPressed(() => {
+      if (this.showScrapeModes) {
+        this.showScrapeModes = false;
+        return true;
+      }
       if (this.showOverviewDialog) {
         this.showOverviewDialog = false;
         return true;

@@ -17,6 +17,9 @@ import { FileSourceStore } from "../../stores/files/FileSourceStore";
 import { FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { isVideoFile } from "../../utils/VideoFileUtil";
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
+import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel';
+import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes';
+import { normalizeScrapeDirectoryPath } from '../../services/scrape/ScrapeScopeResolver';
 
 /**
  * 文件浏览页路由参数
@@ -52,6 +55,8 @@ export struct FileExplorerPage {
   @Local errorMessage: string = ''
   @Local showMissingDirDialog: boolean = false
   @Local isCleaningUp: boolean = false
+  @Local scrapePanelVisible: boolean = false
+  @Local scrapeScope: ScrapeScope | undefined = undefined
   private cachedDirId: number = 0
   private cachedSourceId: number = 0
   private cachedDirectoryPath: string = ''
@@ -74,6 +79,51 @@ export struct FileExplorerPage {
     }
   }
 
+  @Builder
+  FolderScrapeToolbarAction() {
+    Button('刮削此文件夹')
+      .height(40)
+      .fontSize(16)
+      .fontColor('#D7E8FF')
+      .backgroundColor('#243F66')
+      .margin({ right: 10 })
+      .focusable(true)
+      .enabled(this.cachedSourceId > 0 && !this.isLoading)
+      .onClick(() => { this.openFolderScrape(); })
+  }
+
+  private openFolderScrape(): void {
+    if (this.cachedSourceId <= 0) { return; }
+    const normalizedPath = normalizeScrapeDirectoryPath(this.fileExplorerController.currentPath)
+    const query = normalizedPath === '/'
+      ? FileSourceDatabase.getInstance().getVideosBySourceId(this.cachedSourceId)
+      : FileSourceDatabase.getInstance().getVideosByDirectoryTree(this.cachedSourceId, normalizedPath)
+    query.then((videos): void => {
+      const scope: ScrapeScope = {
+        kind: 'folder',
+        sourceId: this.cachedSourceId,
+        directoryPath: normalizedPath,
+        displayName: `${normalizedPath} · 预计 ${videos.length} 个视频`
+      }
+      this.scrapeScope = scope
+      this.scrapePanelVisible = true
+    }).catch((): void => {
+      const scope: ScrapeScope = {
+        kind: 'folder',
+        sourceId: this.cachedSourceId,
+        directoryPath: normalizedPath,
+        displayName: normalizedPath
+      }
+      this.scrapeScope = scope
+      this.scrapePanelVisible = true
+    })
+  }
+
+  private closeScrapePanel(): void {
+    this.scrapePanelVisible = false
+    this.scrapeScope = undefined
+  }
+
   build() {
     NavDestination() {
       Stack() {
@@ -81,6 +131,7 @@ export struct FileExplorerPage {
           controller: this.fileExplorerController,
           isLoading: this.isLoading,
           errorMessage: this.errorMessage,
+          toolbarActionsBuilder: () => { this.FolderScrapeToolbarAction(); },
           onFileClick: event => {
             const displayName = event.resource.name
             if (isVideoFile(displayName)) {
@@ -90,6 +141,12 @@ export struct FileExplorerPage {
               this.previewImage(event.fullPath, displayName)
             }
           }
+        })
+
+        ScrapeModePanel({
+          visible: this.scrapePanelVisible,
+          scope: this.scrapeScope,
+          onClose: () => { this.closeScrapePanel(); }
         })
 
         // ── 已删除目录提示 Dialog ──────────────────────────────
@@ -170,6 +227,10 @@ export struct FileExplorerPage {
       this.changePath(this.fileExplorerController.currentPath)
     })
     .onBackPressed(() => {
+      if (this.scrapePanelVisible) {
+        this.closeScrapePanel()
+        return true
+      }
       // 如果正在预览图片，先关闭图片预览
       if (this.imagePath) {
         this.imagePath = ''

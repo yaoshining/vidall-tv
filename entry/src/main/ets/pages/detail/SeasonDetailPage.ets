@@ -23,6 +23,9 @@ import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from '../../components/core/player/Constants'
 import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
 import { tmdbImageUrl, formatYear, parseGenresArr, translateJob, toChineseSeasonLabel, buildEpisodeCode, isGenericSeasonTitle, toOpaqueColor } from '../../utils/MediaFormatUtil'
+import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel'
+import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
+import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -140,6 +143,19 @@ export struct SeasonDetailPage {
   @Local crossSeasonEntry: MediaProgressEntry | null = null
   /** 跨季目标集 MediaItem（用于跨季次级入口点击直接播放） */
   @Local crossSeasonEpisode: MediaItem | undefined = undefined
+  @Local scrapePanelVisible: boolean = false
+  @Local scrapeScope: ScrapeScope | undefined = undefined
+  @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
+
+  @Monitor('mediaDataVersionStore.globalVersion')
+  onMediaDataVersionChange(): void {
+    const seriesId = this.seriesEntity?.id ?? this.group?.tvSeriesId
+    if (seriesId !== undefined) {
+      this.loadData(seriesId, this.getSeasonNumber()).catch(() => {
+        console.warn('[SeasonDetailPage] 刮削完成后刷新失败')
+      })
+    }
+  }
 
   static PAGE_NAME = 'seasonDetail'
 
@@ -289,6 +305,36 @@ export struct SeasonDetailPage {
       })
     }
     return result
+  }
+
+  private openSeasonScrape(): void {
+    const tvSeriesId = this.group?.tvSeriesId ?? 0
+    if (tvSeriesId <= 0) { return; }
+    const scope: ScrapeScope = {
+      kind: 'season',
+      tvSeriesId,
+      seasonNumber: this.getSeasonNumber(),
+      displayName: `${this.getSeriesTitle()} ${this.getSeasonLabel()}`
+    }
+    this.scrapeScope = scope
+    this.scrapePanelVisible = true
+  }
+
+  private openEpisodeScrape(episode: DetailEpisode): void {
+    const videoId = Number(episode.id)
+    if (videoId <= 0) { return; }
+    const scope: ScrapeScope = {
+      kind: 'episode',
+      videoId,
+      displayName: `${this.getSeriesTitle()} ${episode.label}`
+    }
+    this.scrapeScope = scope
+    this.scrapePanelVisible = true
+  }
+
+  private closeScrapePanel(): void {
+    this.scrapePanelVisible = false
+    this.scrapeScope = undefined
   }
 
   /** Hero 区统一数据（映射到公用组件） */
@@ -823,6 +869,9 @@ export struct SeasonDetailPage {
             DetailHeroSection({ data: this.heroData() })
             DetailEpisodesSection({
               episodes: this.episodeList(),
+              showSeasonScrape: true,
+              onSeasonScrapeClick: () => { this.openSeasonScrape(); },
+              onEpisodeMoreClick: (e: DetailEpisode) => { this.openEpisodeScrape(e); },
               onEpisodeClick: (e: DetailEpisode) => {
                 const orig = this.seasonEpisodes.find(x => String(x.mediaItem.id ?? -1) === e.id)
                 if (orig !== undefined) {
@@ -861,7 +910,11 @@ export struct SeasonDetailPage {
           onClose: () => { this.showOverviewDialog = false }
         })
 
-
+        ScrapeModePanel({
+          visible: this.scrapePanelVisible,
+          scope: this.scrapeScope,
+          onClose: () => { this.closeScrapePanel(); }
+        })
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
@@ -881,6 +934,10 @@ export struct SeasonDetailPage {
       this.refreshProgressState().catch(() => {});
     })
     .onBackPressed(() => {
+      if (this.scrapePanelVisible) {
+        this.closeScrapePanel();
+        return true;
+      }
       if (this.showOverviewDialog) {
         this.showOverviewDialog = false;
         return true;

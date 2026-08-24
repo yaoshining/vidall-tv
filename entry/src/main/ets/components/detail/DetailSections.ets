@@ -178,6 +178,9 @@ export struct DetailSeasonsSection {
 export struct DetailEpisodesSection {
   @Require @Param episodes: DetailEpisode[]
   @Event onEpisodeClick: (episode: DetailEpisode) => void = () => {}
+  @Event onEpisodeMoreClick: (episode: DetailEpisode) => void = () => {}
+  @Event onSeasonScrapeClick: () => void = () => {}
+  @Param showSeasonScrape: boolean = false
   @Local focusedRowId: string = ''
   @Local hoveredRowId: string = ''
   @Local focusedActionKey: string = ''
@@ -220,13 +223,17 @@ export struct DetailEpisodesSection {
   }
 
   @Builder
-  ActionButton(ep: DetailEpisode, action: string, glyph: string) {
+  ActionButton(ep: DetailEpisode, action: string, glyph: string, onClick: () => void) {
     Text(glyph)
       .fontSize(18).fontColor('#B5BBC4')
       .width(44).height(44)
       .textAlign(TextAlign.Center)
       .backgroundColor(this.actionCircleBg(ep, action)).borderRadius(22)
       .border({ width: this.isActionFocused(ep, action) ? 2 : 1, color: this.actionCircleBorder(ep, action) })
+      .focusable(true)
+      .monopolizeEvents(true)
+      .onFocus(() => { this.focusedActionKey = this.buildActionKey(ep, action); })
+      .onBlur(() => { this.clearActionFocusIfMatches(ep, action); })
       .onHover((isHover: boolean) => {
         if (isHover) {
           this.hoveredActionKey = this.buildActionKey(ep, action);
@@ -234,6 +241,7 @@ export struct DetailEpisodesSection {
           this.clearActionHoverIfMatches(ep, action);
         }
       })
+      .onClick(() => { onClick(); })
   }
 
   build() {
@@ -244,6 +252,16 @@ export struct DetailEpisodesSection {
             .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
           Blank()
           Row({ space: 8 }) {
+            if (this.showSeasonScrape) {
+              Button('整季刮削')
+                .height(38)
+                .fontSize(16)
+                .fontColor('#D7E8FF')
+                .backgroundColor('#243F66')
+                .borderRadius(19)
+                .focusable(true)
+                .onClick(() => { this.onSeasonScrapeClick(); })
+            }
             Text('‹')
               .fontSize(22).fontColor('#CCCCCC')
               .width(36).height(36)
@@ -352,12 +370,13 @@ export struct DetailEpisodesSection {
               .onClick(() => { this.onEpisodeClick(ep) })
 
               Row({ space: 8 }) {
-                this.ActionButton(ep, 'info', 'ⓘ')
-                this.ActionButton(ep, 'check', '✓')
-                this.ActionButton(ep, 'heart', '♥')
-                this.ActionButton(ep, 'more', '⋮')
+                this.ActionButton(ep, 'info', 'ⓘ', () => {})
+                this.ActionButton(ep, 'check', '✓', () => {})
+                this.ActionButton(ep, 'heart', '♥', () => {})
+                this.ActionButton(ep, 'more', '⋮', () => { this.onEpisodeMoreClick(ep); })
               }
               .alignSelf(ItemAlign.Center)
+              .hitTestBehavior(HitTestMode.Block)
             }
             .width('100%')
             .padding({ left: 80, right: 80, top: 20, bottom: 20 })

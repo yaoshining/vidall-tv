@@ -30,6 +30,8 @@ export class PrefKey {
   static readonly TMDB_API_KEY = 'tmdb_api_key';
   /** 刮削并发数，默认 2 */
   static readonly SCRAPE_CONCURRENCY = 'scrape_concurrency';
+  /** 局部刮削是否选择候选，0=自动，1=确认 */
+  static readonly LOCAL_SCRAPE_CONFIRM_CANDIDATE = 'local_scrape_confirm_candidate';
   /**
    * 刮削 Provider 优先级列表，JSON 序列化的 string[]
    * 例：'["tmdb","douban"]'

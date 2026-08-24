@@ -78,22 +78,13 @@ export class VideoScannerUtil {
     const fileSources = await db.getAllFileSources();
     console.info(`[VideoScanner] 共找到 ${fileSources.length} 个文件源`);
 
-    // 全量覆盖模式：先清空所有源的 scrape_info，确保重刮前无历史垃圾数据
-    // 同时记录哪些文件源参与了本次全量扫描（仅记录 sourceId，实际是否成功扫到由 seenPaths 决定）
+    // 覆盖模式也保留旧元数据，只有单个目标成功写入后才替换其关联。
     const overwriteSourceIds: number[] = [];
     if (scanOptions.mode === 'overwrite') {
-      const sourceIds: number[] = [];
-      for (const s of fileSources) {
-        const sid = s.id;
-        if (sid !== undefined && sid > 0) {
-          sourceIds.push(sid);
-        }
-      }
-      if (sourceIds.length > 0) {
-        await db.clearScrapeInfoForSources(sourceIds);
-        console.info(`[VideoScanner] 全量覆盖预清空完成，已清除 ${sourceIds.length} 个文件源的 scrape_info`);
-        for (const sid of sourceIds) {
-          overwriteSourceIds.push(sid);
+      for (const source of fileSources) {
+        const sourceId = source.id;
+        if (sourceId !== undefined && sourceId > 0) {
+          overwriteSourceIds.push(sourceId);
         }
       }
     }
