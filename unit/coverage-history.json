@@ -1,12 +1,5 @@
 [
   {
-    "run_number": 407,
-    "timestamp": "2026-08-21T14:15:40Z",
-    "lines_pct": 28.22,
-    "functions_pct": 25.03,
-    "branches_pct": 22.76
-  },
-  {
     "run_number": 409,
     "timestamp": "2026-08-21T15:14:59Z",
     "lines_pct": 28.22,
@@ -208,5 +201,12 @@
     "lines_pct": 28.37,
     "functions_pct": 25.01,
     "branches_pct": 23.51
+  },
+  {
+    "run_number": 439,
+    "timestamp": "2026-08-24T08:53:46Z",
+    "lines_pct": 28.39,
+    "functions_pct": 25.04,
+    "branches_pct": 23.59
   }
 ]
