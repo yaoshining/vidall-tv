@@ -58,6 +58,7 @@ import audioCodecUtilTest from './AudioCodecUtil.test';
 import audioDecoderCapabilityServiceTest from './AudioDecoderCapabilityService.test';
 import audioTrackRoutingTest from './AudioTrackRouting.test';
 import serverCardActionTest from './ServerCardAction.test';
+import seriesCardRouteTest from './SeriesCardRoute.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -118,4 +119,5 @@ export default function testsuite() {
   audioDecoderCapabilityServiceTest();
   audioTrackRoutingTest();
   serverCardActionTest();
+  seriesCardRouteTest();
 }

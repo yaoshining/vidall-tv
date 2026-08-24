@@ -1,5 +1,6 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaItem, MediaStats, SeriesGroup, DecadeGroup, MediaListItem, ContinueWatchingItem, TvSeriesEntity, TvEpisodeEntity, MediaProgressEntry } from '../../db/models/MediaEntity';
+import { MediaProgressStore } from '../../db/MediaProgressStore';
 import { millisecondsToTime } from '../../utils/TimeUtil';
 
 export interface YearGroup {
@@ -52,6 +53,8 @@ export class MediaLibraryModel {
   @Trace latestScanTime: number = 0;
   /** 「继续播放」栏数据，按最近播放时间倒序，最多 20 条 */
   @Trace continueWatchingList: ContinueWatchingItem[] = [];
+  /** 电影播放进度（providerId → 0~1 进行中比例），用于文件源卡片底部进度条 */
+  @Trace movieProgressMap: Map<string, number> = new Map();
 
   async load(): Promise<void> {
     if (this.isLoading) {
@@ -171,6 +174,17 @@ export class MediaLibraryModel {
   }
 
   /**
+   * 读取某部电影的播放进度比例（0~1）。
+   * 无进度数据、未在看或已完播均返回 0（不显示进度条）。
+   */
+  getMovieProgress(providerId?: string): number {
+    if (providerId === undefined || providerId.length === 0) {
+      return 0;
+    }
+    return this.movieProgressMap.get(providerId) ?? 0;
+  }
+
+  /**
    * 加载「继续播放」栏数据。
    * 从 media_progress 表读取进度，过滤完播项，匹配 recentlyAdded 元数据，
    * 构建 ContinueWatchingItem 列表写入 continueWatchingList。
@@ -179,6 +193,28 @@ export class MediaLibraryModel {
     try {
       const db = FileSourceDatabase.getInstance();
       const allEntries: MediaProgressEntry[] = await db.getAllMediaProgress();
+
+      // 构建电影播放进度映射（providerId → 进行中比例），供文件源卡片底部进度条使用。
+      // 仅记录「进行中」（0 < 比例 且未到完播阈值，与 MediaProgressStore.isNearEnd 保持一致，
+      // 即剩余时长 < 60 秒或已播比例 ≥ 95% 视为完播），已完播/未在看不显示进度条。
+      const movieProgressMap = new Map<string, number>();
+      for (const entry of allEntries) {
+        if (!entry.mediaKey.startsWith('media_progress_movie_')) {
+          continue;
+        }
+        if (entry.isWatched === 1) {
+          continue;
+        }
+        const providerId = entry.mediaKey.slice('media_progress_movie_'.length);
+        if (providerId.length === 0 || entry.durationMs <= 0) {
+          continue;
+        }
+        const ratio = entry.positionMs / entry.durationMs;
+        if (ratio > 0 && !MediaProgressStore.isNearEnd(entry.positionMs, entry.durationMs)) {
+          movieProgressMap.set(providerId, ratio);
+        }
+      }
+      this.movieProgressMap = movieProgressMap;
 
       // getAllMediaProgress() 已按最近播放倒序返回，直接过滤取前 20 条
       const top20: MediaProgressEntry[] = [];
