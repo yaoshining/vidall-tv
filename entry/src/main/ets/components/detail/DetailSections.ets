@@ -32,12 +32,6 @@ export interface DetailEpisode {
   placeholderText: string;
 }
 
-/** 集「更多」操作菜单项（bindMenu 兼容结构） */
-interface EpisodeMenuAction {
-  value: string;
-  action: () => void;
-}
-
 export function formatDetailDurationMs(durationMs: number): string {
   if (durationMs <= 0) {
     return '';
@@ -184,24 +178,13 @@ export struct DetailSeasonsSection {
 export struct DetailEpisodesSection {
   @Require @Param episodes: DetailEpisode[]
   @Event onEpisodeClick: (episode: DetailEpisode) => void = () => {}
-  @Event onEpisodeScrapeClick: (episode: DetailEpisode) => void = () => {}
+  @Event onEpisodeMenuClick: (episode: DetailEpisode) => void = () => {}
   @Event onSeasonScrapeClick: () => void = () => {}
   @Param showSeasonScrape: boolean = false
   @Local focusedRowId: string = ''
   @Local hoveredRowId: string = ''
   @Local focusedActionKey: string = ''
   @Local hoveredActionKey: string = ''
-
-  /** 集「更多」菜单项：刮削本集 */
-  private episodeMenuItems(ep: DetailEpisode): Array<EpisodeMenuAction> {
-    const items: Array<EpisodeMenuAction> = [];
-    const scrapeItem: EpisodeMenuAction = {
-      value: '刮削本集',
-      action: () => { this.onEpisodeScrapeClick(ep); }
-    };
-    items.push(scrapeItem);
-    return items;
-  }
 
   private buildActionKey(ep: DetailEpisode, action: string): string { return `${ep.id}-${action}`; }
   private isRowFocused(ep: DetailEpisode): boolean { return this.focusedRowId === ep.id; }
@@ -281,7 +264,7 @@ export struct DetailEpisodesSection {
           this.clearActionHoverIfMatches(ep, 'more');
         }
       })
-      .bindMenu(this.episodeMenuItems(ep))
+      .onClick(() => { this.onEpisodeMenuClick(ep); })
   }
 
   build() {

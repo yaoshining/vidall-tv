@@ -145,6 +145,10 @@ export struct SeasonDetailPage {
   @Local crossSeasonEpisode: MediaItem | undefined = undefined
   @Local scrapePanelVisible: boolean = false
   @Local scrapeScope: ScrapeScope | undefined = undefined
+  /** 集「更多」动作菜单 */
+  @Local episodeMenuVisible: boolean = false
+  @Local episodeMenuTarget: DetailEpisode | undefined = undefined
+  @Local focusedMenuAction: string = ''
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
 
   @Monitor('mediaDataVersionStore.globalVersion')
@@ -320,8 +324,25 @@ export struct SeasonDetailPage {
     this.scrapePanelVisible = true
   }
 
-  private openEpisodeScrape(episode: DetailEpisode): void {
+  /** 打开集「更多」动作菜单 */
+  private openEpisodeMenu(episode: DetailEpisode): void {
+    this.episodeMenuTarget = episode
+    this.focusedMenuAction = ''
+    this.episodeMenuVisible = true
+  }
+
+  private closeEpisodeMenu(): void {
+    this.episodeMenuVisible = false
+    this.episodeMenuTarget = undefined
+    this.focusedMenuAction = ''
+  }
+
+  /** 从「更多」菜单开启刮削本集 */
+  private scrapeMenuEpisode(): void {
+    const episode = this.episodeMenuTarget
+    if (episode === undefined) { return; }
     const videoId = Number(episode.id)
+    this.closeEpisodeMenu()
     if (videoId <= 0) { return; }
     const scope: ScrapeScope = {
       kind: 'episode',
@@ -335,6 +356,47 @@ export struct SeasonDetailPage {
   private closeScrapePanel(): void {
     this.scrapePanelVisible = false
     this.scrapeScope = undefined
+  }
+
+  /** 集「更多」动作菜单浮层：点击 ⋮ 弹出，选中「刮削本集」进入刮削流程 */
+  @Builder
+  EpisodeActionMenu() {
+    if (this.episodeMenuVisible && this.episodeMenuTarget !== undefined) {
+      Stack({ alignContent: Alignment.Center }) {
+        Column()
+          .width('100%').height('100%')
+          .backgroundColor('#99000000')
+          .onClick(() => { this.closeEpisodeMenu(); })
+
+        Column({ space: 8 }) {
+          Text(this.episodeMenuTarget.label.length > 0 ? this.episodeMenuTarget.label : '更多操作')
+            .fontSize(26).fontWeight(FontWeight.Bold).fontColor(Color.White)
+            .margin({ bottom: 8 })
+
+          Column() {
+            Text('刮削本集')
+              .fontSize(19).fontWeight(FontWeight.Medium).fontColor(Color.White)
+              .width('100%').height(64)
+              .textAlign(TextAlign.Center)
+              .backgroundColor(this.focusedMenuAction === 'scrape' ? '#243F66' : '#25282D')
+              .borderRadius(8)
+              .border({ width: this.focusedMenuAction === 'scrape' ? 2 : 0, color: '#66A9D8FF' })
+              .focusable(true)
+              .onFocus(() => { this.focusedMenuAction = 'scrape'; })
+              .onBlur(() => { if (this.focusedMenuAction === 'scrape') { this.focusedMenuAction = ''; } })
+              .onClick(() => { this.scrapeMenuEpisode(); })
+          }
+          .width('100%')
+        }
+        .width(440)
+        .padding(28)
+        .borderRadius(14)
+        .backgroundColor('#181B20')
+        .border({ width: 1, color: '#3A4049' })
+      }
+      .width('100%').height('100%')
+      .zIndex(100)
+    }
   }
 
   /** Hero 区统一数据（映射到公用组件） */
@@ -871,7 +933,7 @@ export struct SeasonDetailPage {
               episodes: this.episodeList(),
               showSeasonScrape: true,
               onSeasonScrapeClick: () => { this.openSeasonScrape(); },
-              onEpisodeScrapeClick: (e: DetailEpisode) => { this.openEpisodeScrape(e); },
+              onEpisodeMenuClick: (e: DetailEpisode) => { this.openEpisodeMenu(e); },
               onEpisodeClick: (e: DetailEpisode) => {
                 const orig = this.seasonEpisodes.find(x => String(x.mediaItem.id ?? -1) === e.id)
                 if (orig !== undefined) {
@@ -910,6 +972,9 @@ export struct SeasonDetailPage {
           onClose: () => { this.showOverviewDialog = false }
         })
 
+        // 集「更多」动作菜单浮层
+        this.EpisodeActionMenu()
+
         ScrapeModePanel({
           visible: this.scrapePanelVisible,
           scope: this.scrapeScope,
@@ -934,6 +999,10 @@ export struct SeasonDetailPage {
       this.refreshProgressState().catch(() => {});
     })
     .onBackPressed(() => {
+      if (this.episodeMenuVisible) {
+        this.closeEpisodeMenu();
+        return true;
+      }
       if (this.scrapePanelVisible) {
         this.closeScrapePanel();
         return true;
