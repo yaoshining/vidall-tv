@@ -32,6 +32,12 @@ export interface DetailEpisode {
   placeholderText: string;
 }
 
+/** 集「更多」操作菜单项（bindMenu 兼容结构） */
+interface EpisodeMenuAction {
+  value: string;
+  action: () => void;
+}
+
 export function formatDetailDurationMs(durationMs: number): string {
   if (durationMs <= 0) {
     return '';
@@ -186,6 +192,17 @@ export struct DetailEpisodesSection {
   @Local focusedActionKey: string = ''
   @Local hoveredActionKey: string = ''
 
+  /** 集「更多」菜单项：刮削本集 */
+  private episodeMenuItems(ep: DetailEpisode): Array<EpisodeMenuAction> {
+    const items: Array<EpisodeMenuAction> = [];
+    const scrapeItem: EpisodeMenuAction = {
+      value: '刮削本集',
+      action: () => { this.onEpisodeScrapeClick(ep); }
+    };
+    items.push(scrapeItem);
+    return items;
+  }
+
   private buildActionKey(ep: DetailEpisode, action: string): string { return `${ep.id}-${action}`; }
   private isRowFocused(ep: DetailEpisode): boolean { return this.focusedRowId === ep.id; }
   private isRowHovered(ep: DetailEpisode): boolean { return this.hoveredRowId === ep.id; }
@@ -242,6 +259,29 @@ export struct DetailEpisodesSection {
         }
       })
       .onClick(() => { onClick(); })
+  }
+
+  /** 集「更多」按钮：点击弹出操作菜单（刮削本集等） */
+  @Builder
+  MoreActionButton(ep: DetailEpisode) {
+    Text('⋮')
+      .fontSize(18).fontColor('#B5BBC4')
+      .width(44).height(44)
+      .textAlign(TextAlign.Center)
+      .backgroundColor(this.actionCircleBg(ep, 'more')).borderRadius(22)
+      .border({ width: this.isActionFocused(ep, 'more') ? 2 : 1, color: this.actionCircleBorder(ep, 'more') })
+      .focusable(true)
+      .monopolizeEvents(true)
+      .onFocus(() => { this.focusedActionKey = this.buildActionKey(ep, 'more'); })
+      .onBlur(() => { this.clearActionFocusIfMatches(ep, 'more'); })
+      .onHover((isHover: boolean) => {
+        if (isHover) {
+          this.hoveredActionKey = this.buildActionKey(ep, 'more');
+        } else {
+          this.clearActionHoverIfMatches(ep, 'more');
+        }
+      })
+      .bindMenu(this.episodeMenuItems(ep))
   }
 
   build() {
@@ -373,14 +413,7 @@ export struct DetailEpisodesSection {
                 this.ActionButton(ep, 'info', 'ⓘ', () => {})
                 this.ActionButton(ep, 'check', '✓', () => {})
                 this.ActionButton(ep, 'heart', '♥', () => {})
-                Button('刮削本集')
-                  .height(36)
-                  .fontSize(15)
-                  .fontColor('#D7E8FF')
-                  .backgroundColor('#243F66')
-                  .borderRadius(18)
-                  .focusable(true)
-                  .onClick(() => { this.onEpisodeScrapeClick(ep); })
+                this.MoreActionButton(ep)
               }
               .alignSelf(ItemAlign.Center)
               .hitTestBehavior(HitTestMode.Block)
