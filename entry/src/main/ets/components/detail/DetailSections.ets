@@ -178,7 +178,7 @@ export struct DetailSeasonsSection {
 export struct DetailEpisodesSection {
   @Require @Param episodes: DetailEpisode[]
   @Event onEpisodeClick: (episode: DetailEpisode) => void = () => {}
-  @Event onEpisodeMoreClick: (episode: DetailEpisode) => void = () => {}
+  @Event onEpisodeScrapeClick: (episode: DetailEpisode) => void = () => {}
   @Event onSeasonScrapeClick: () => void = () => {}
   @Param showSeasonScrape: boolean = false
   @Local focusedRowId: string = ''
@@ -373,7 +373,14 @@ export struct DetailEpisodesSection {
                 this.ActionButton(ep, 'info', 'ⓘ', () => {})
                 this.ActionButton(ep, 'check', '✓', () => {})
                 this.ActionButton(ep, 'heart', '♥', () => {})
-                this.ActionButton(ep, 'more', '⋮', () => { this.onEpisodeMoreClick(ep); })
+                Button('刮削本集')
+                  .height(36)
+                  .fontSize(15)
+                  .fontColor('#D7E8FF')
+                  .backgroundColor('#243F66')
+                  .borderRadius(18)
+                  .focusable(true)
+                  .onClick(() => { this.onEpisodeScrapeClick(ep); })
               }
               .alignSelf(ItemAlign.Center)
               .hitTestBehavior(HitTestMode.Block)

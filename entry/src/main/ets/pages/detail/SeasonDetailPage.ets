@@ -871,7 +871,7 @@ export struct SeasonDetailPage {
               episodes: this.episodeList(),
               showSeasonScrape: true,
               onSeasonScrapeClick: () => { this.openSeasonScrape(); },
-              onEpisodeMoreClick: (e: DetailEpisode) => { this.openEpisodeScrape(e); },
+              onEpisodeScrapeClick: (e: DetailEpisode) => { this.openEpisodeScrape(e); },
               onEpisodeClick: (e: DetailEpisode) => {
                 const orig = this.seasonEpisodes.find(x => String(x.mediaItem.id ?? -1) === e.id)
                 if (orig !== undefined) {
