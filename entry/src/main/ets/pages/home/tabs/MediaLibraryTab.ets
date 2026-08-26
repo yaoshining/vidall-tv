@@ -775,6 +775,7 @@ export struct MediaLibraryTab {
   @Local isViewAllFocused: boolean = false
   @Local isAddFileSourceFocused: boolean = false
   @Local isAddVideoServerFocused: boolean = false
+  @Local isDiscoveringScan: boolean = false
   model: MediaLibraryModel = MediaLibraryModel.getState()
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
   @Local sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
@@ -1188,6 +1189,12 @@ export struct MediaLibraryTab {
   }
 
   private async runScan(mode: ScanMode): Promise<void> {
+    // 文件扫描阶段（任务入队前）缺乏保护：重复点击会并发执行多次全量扫描与重复 upsert。
+    // 用本地的执行中标记覆盖「校验到入队」全程，避免并发扫描。
+    if (this.isDiscoveringScan) {
+      this.getUIContext().getPromptAction().showToast({ message: '正在扫描，请稍候' });
+      return;
+    }
     const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
     if (tmdbKey.length === 0) {
       this.getUIContext().getPromptAction().showToast({ message: '请先配置 TMDB API Key' });
@@ -1204,6 +1211,7 @@ export struct MediaLibraryTab {
       mode,
       candidateStrategy: 'automatic'
     };
+    this.isDiscoveringScan = true;
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
       // 先发现并更新文件记录，再由统一队列执行元数据刮削。
@@ -1213,6 +1221,8 @@ export struct MediaLibraryTab {
     } catch (e) {
       const error = e as BusinessError;
       this.getUIContext().getPromptAction().showToast({ message: `扫描失败: ${error.message}` });
+    } finally {
+      this.isDiscoveringScan = false;
     }
   }
 

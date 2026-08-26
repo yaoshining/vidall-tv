@@ -225,15 +225,15 @@ export struct DetailEpisodesSection {
   }
 
   @Builder
-  ActionButton(ep: DetailEpisode, action: string, glyph: string, onClick: () => void) {
+  ActionButton(ep: DetailEpisode, action: string, glyph: string, onClick: () => void, enabled: boolean = true) {
     Text(glyph)
       .fontSize(18).fontColor('#B5BBC4')
       .width(44).height(44)
       .textAlign(TextAlign.Center)
       .backgroundColor(this.actionCircleBg(ep, action)).borderRadius(22)
       .border({ width: this.isActionFocused(ep, action) ? 2 : 1, color: this.actionCircleBorder(ep, action) })
-      .focusable(true)
-      .monopolizeEvents(true)
+      .focusable(enabled)
+      .monopolizeEvents(enabled)
       .onFocus(() => { this.focusedActionKey = this.buildActionKey(ep, action); })
       .onBlur(() => { this.clearActionFocusIfMatches(ep, action); })
       .onHover((isHover: boolean) => {
@@ -403,9 +403,9 @@ export struct DetailEpisodesSection {
               .onClick(() => { this.onEpisodeClick(ep) })
 
               Row({ space: 8 }) {
-                this.ActionButton(ep, 'info', 'ⓘ', () => {})
-                this.ActionButton(ep, 'check', '✓', () => {})
-                this.ActionButton(ep, 'heart', '♥', () => {})
+                this.ActionButton(ep, 'info', 'ⓘ', () => {}, false)
+                this.ActionButton(ep, 'check', '✓', () => {}, false)
+                this.ActionButton(ep, 'heart', '♥', () => {}, false)
                 this.MoreActionButton(ep)
               }
               .alignSelf(ItemAlign.Center)

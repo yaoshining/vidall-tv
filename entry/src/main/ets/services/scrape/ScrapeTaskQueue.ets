@@ -381,16 +381,16 @@ export class ScrapeTaskQueue {
     if (terminal.length <= this.maxTerminalHistory) {
       return;
     }
+    // 仅对 completed/cancelled 做上限裁剪；失败/部分失败任务承载重试入口与失败详情，
+    // 即使超出上限也保留，避免用户无法再查看失败原因。
     const removable = terminal.filter((task: ScrapeTaskSnapshot): boolean =>
       task.status === 'completed' || task.status === 'cancelled'
     );
     removable.sort((left: ScrapeTaskSnapshot, right: ScrapeTaskSnapshot): number => left.updatedAt - right.updatedAt);
-    const fallback = terminal.filter((task: ScrapeTaskSnapshot): boolean =>
-      task.status !== 'completed' && task.status !== 'cancelled'
-    );
-    fallback.sort((left: ScrapeTaskSnapshot, right: ScrapeTaskSnapshot): number => left.updatedAt - right.updatedAt);
-    const candidates = removable.concat(fallback);
-    const removeCount = terminal.length - this.maxTerminalHistory;
+    if (removable.length <= this.maxTerminalHistory) {
+      return;
+    }
+    const removeCount = removable.length - this.maxTerminalHistory;
     const removeIds = new Set<string>();
     for (let index = 0; index < removeCount; index++) {
       removeIds.add(candidates[index].id);
