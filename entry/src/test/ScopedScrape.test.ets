@@ -39,6 +39,7 @@ import {
   ScrapeProgress,
   ScrapeResult,
   ScrapeResumeState,
+  ScrapeVideoOutcome,
   ScrapeTaskSnapshot,
   ScrapeTaskStatus
 } from '../main/ets/services/scrape/ScopedScrapeTypes';
@@ -232,7 +233,8 @@ class FakeScopedScrapeDependencies implements ScopedScrapeDependencies {
     _info: VideoFileInfo,
     _logPrefix: string
   ): Promise<ScrapeVideoOutcome> {
-    return Promise.resolve({ success: false });
+    const outcome: ScrapeVideoOutcome = { success: false };
+    return Promise.resolve(outcome);
   }
 
   applyMovie(_videoId: number, _movie: MovieScrapeResult, _logPrefix: string): Promise<boolean> {
@@ -371,7 +373,9 @@ function createResult(succeeded: number, failedVideoIds: number[]): ScrapeResult
     succeeded,
     failed: failedVideoIds.length,
     cancelled: 0,
-    failedVideoIds: failedVideoIds.slice()
+    succeededVideoIds: [],
+    failedVideoIds: failedVideoIds.slice(),
+    failedItems: []
   };
   return result;
 }
