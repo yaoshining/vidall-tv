@@ -776,6 +776,7 @@ export struct MediaLibraryTab {
   @Local isAddFileSourceFocused: boolean = false
   @Local isAddVideoServerFocused: boolean = false
   @Local isDiscoveringScan: boolean = false
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
   model: MediaLibraryModel = MediaLibraryModel.getState()
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
   @Local sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
@@ -1202,7 +1203,7 @@ export struct MediaLibraryTab {
     }
     const scope: ScrapeScope = { kind: 'global', displayName: '全部媒体库' };
     // 严格排除：全局媒体库只要在刮削中就禁止再次触发。
-    if (ScrapeTaskStore.getState().getActiveForScope(scope) !== undefined) {
+    if (this.taskStore.getActiveForScope(scope) !== undefined) {
       this.getUIContext().getPromptAction().showToast({ message: '全部媒体库正在刮削中' });
       return;
     }
@@ -1234,17 +1235,17 @@ export struct MediaLibraryTab {
 
   /** 全局刮削是否有活跃任务（waiting/running/waiting-confirmation）。 */
   private isGlobalScraping(): boolean {
-    return ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope()) !== undefined;
+    return this.taskStore.getActiveForScope(this.getGlobalScope()) !== undefined;
   }
 
   /** 全局刮削进度文案，如 "18/28"；无活跃任务返回空串。 */
   private globalProgressText(): string {
-    return ScrapeTaskStore.getState().getProgressText(this.getGlobalScope());
+    return this.taskStore.getProgressText(this.getGlobalScope());
   }
 
   /** 全局刮削状态文案（含标题前缀）。 */
   private globalStatusText(): string {
-    const task = ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope());
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
     if (task === undefined) {
       return '';
     }
@@ -1259,13 +1260,13 @@ export struct MediaLibraryTab {
 
   /** 全局刮削已完成数量。 */
   private globalCompletedCount(): number {
-    const task = ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope());
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
     return task === undefined ? 0 : task.progress.completed;
   }
 
   /** 全局刮削总数量。 */
   private globalTotalCount(): number {
-    const task = ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope());
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
     return task === undefined ? 0 : task.progress.total;
   }
 
