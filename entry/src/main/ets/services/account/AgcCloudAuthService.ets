@@ -5,7 +5,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import buffer from '@ohos.buffer';
 import auth, { AuthUser, HwIdCredentialInfo, SignInParam } from '@hw-agconnect/auth';
 
-const AGC_CONFIG_FILE: string = 'agconnect-services.json';
+const AGC_CONFIG_FILE: string = 'agc_config.json';
 const CLOUD_DB_SCHEMA_FILE: string = 'schema.json';
 const LOG_DOMAIN: number = 0x0000;
 const TAG: string = 'AgcCloudAuth';

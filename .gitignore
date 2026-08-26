@@ -26,3 +26,4 @@ proxy/opensubtitles-worker/.dev.vars
 
 # AGC 服务配置（含 client_id/app_id，不同环境/签名指纹各异，本地维护，勿入 git）
 **/agconnect-services.json
+**/agc_config.json
