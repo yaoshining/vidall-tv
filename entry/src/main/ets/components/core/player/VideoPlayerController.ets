@@ -905,6 +905,10 @@ export class VideoPlayerController {
       if (currentSessionId !== this.playbackSessionId) {
         return;
       }
+      // seek 完成前底层仍可能上报旧播放位置，不能覆盖界面上的乐观目标进度。
+      if (this.isSeeking) {
+        return;
+      }
       const backwardDelta = this.lastTimeUpdateMs - currentTime;
       const shouldWarnRollback = this.lastTimeUpdateMs >= 0 &&
         !this.isSeeking &&
@@ -1034,7 +1038,7 @@ export class VideoPlayerController {
         }
         this.player?.seek(this.timeToSeek);
         this.timeToSeek = -1;
-        this.isSeeking = false;
+        // 队列中的最新目标仍在 seek，等待下一次 onSeekDone 后再恢复播放。
         return;
       }
       const shouldContinuePendingReadyAfterSeek = this.resumeSession.trackInitAfterSeek;
@@ -2112,11 +2116,13 @@ export class VideoPlayerController {
   }
 
   async forward(milliseconds: number): Promise<void> {
-    this.seek(this.currentTime + milliseconds);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[remote-seek] 快进: step=${milliseconds} current=${this.currentTime}`)
+    this.seek(this.currentTime + milliseconds)
   }
 
   async backward(milliseconds: number): Promise<void> {
-    this.seek(this.currentTime - milliseconds);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[remote-seek] 快退: step=${milliseconds} current=${this.currentTime}`)
+    this.seek(this.currentTime - milliseconds)
   }
 
   // ─── 字幕定时器 ───

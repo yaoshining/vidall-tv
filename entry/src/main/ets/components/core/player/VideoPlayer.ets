@@ -9,6 +9,7 @@ import { SubtitleParserFactory, ParsedSubtitle, SubtitleSegment } from "./Subtit
 import { millisecondsToTime } from "../../../utils/TimeUtil"
 import { PlaybackContextItem } from "./PlaybackContext"
 import { resolveRenderFitForAspectRatioMode } from "./VideoPlayerLayoutUtil"
+import { KeyCode } from '@kit.InputKit'
 
 @ComponentV2
 export struct VideoPlayer {
@@ -30,6 +31,16 @@ export struct VideoPlayer {
    * onWillDismiss 拦截返回键时调用：若处于搜索结果视图则退回轨道列表（返回 true），否则返回 false。
    */
   private subtitleTryHideSearch: (() => boolean) | undefined = undefined
+
+  private lastKeyDirection: 'forward' | 'backward' | '' = ''
+  private lastKeyAt: number = 0
+  private keyAccelerationLevel: number = 0
+  private static readonly KEY_ACCELERATION_WINDOW_MS: number = 1000
+  private static readonly KEY_STEP_MS: number = 10000
+  private static readonly KEY_MAX_STEP_MS: number = 60000
+  private static readonly AXIS_REPEAT_INTERVAL_MS: number = 250
+  private static readonly AXIS_DIRECTION_THRESHOLD: number = 0.01
+  private lastAxisSeekAt: number = 0
 
   // ASS 解析结果缓存：相同 raw 文本不重复解析（#17 AC）
   private _lastRawText: string = ''
@@ -70,6 +81,72 @@ export struct VideoPlayer {
 
   private resetInitMode(): void {
     this.initMode = ''
+  }
+
+  private showControls(): void {
+    if (this.controlsOpened) {
+      return
+    }
+    // 先置位，避免 Dialog 完成出现动画前的连续轴事件重复 open 并叠加遮罩。
+    this.controlsOpened = true
+    this.controlsDialogController.open()
+  }
+
+  private handleKeySeek(direction: 'forward' | 'backward'): void {
+    const now = Date.now()
+    if (direction === this.lastKeyDirection && now - this.lastKeyAt <= VideoPlayer.KEY_ACCELERATION_WINDOW_MS) {
+      this.keyAccelerationLevel = Math.min(this.keyAccelerationLevel + 1, 5)
+    } else {
+      this.keyAccelerationLevel = 0
+    }
+    this.lastKeyDirection = direction
+    this.lastKeyAt = now
+    const stepMs = Math.min(
+      VideoPlayer.KEY_STEP_MS * (this.keyAccelerationLevel + 1),
+      VideoPlayer.KEY_MAX_STEP_MS
+    )
+    console.info(`[VideoPlayer] 执行${direction === 'forward' ? '快进' : '快退'}: step=${stepMs} current=${this.controller.currentTime}`)
+    if (direction === 'forward') {
+      this.controller.forward(stepMs)
+    } else {
+      this.controller.backward(stepMs)
+    }
+    this.showControls()
+  }
+
+  private handleRemoteKey(event: KeyEvent): void {
+    if (event.type !== KeyType.Down) {
+      return
+    }
+    if (event.keyCode === KeyCode.KEYCODE_DPAD_LEFT) {
+      this.handleKeySeek('backward')
+      event.stopPropagation()
+    } else if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT) {
+      this.handleKeySeek('forward')
+      event.stopPropagation()
+    } else if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN && !this.controlsOpened) {
+      // 播放中画面持有焦点时，向下键用于唤起播放控件。
+      this.showControls()
+      event.stopPropagation()
+    }
+  }
+
+  private handleRemoteAxis(event: AxisEvent): void {
+    if (event.action !== AxisAction.BEGIN && event.action !== AxisAction.UPDATE) {
+      return
+    }
+    const horizontal = event.getHorizontalAxisValue()
+    if (Math.abs(horizontal) <= VideoPlayer.AXIS_DIRECTION_THRESHOLD) {
+      return
+    }
+    const now = Date.now()
+    if (event.action === AxisAction.UPDATE &&
+      now - this.lastAxisSeekAt < VideoPlayer.AXIS_REPEAT_INTERVAL_MS) {
+      return
+    }
+    this.lastAxisSeekAt = now
+    // MateTV 的水平轴正值对应遥控器左键，负值对应右键。
+    this.handleKeySeek(horizontal > 0 ? 'backward' : 'forward')
   }
 
   private isPlaybackCompletedState(): boolean {
@@ -114,6 +191,12 @@ export struct VideoPlayer {
       onOpenSubtitleSelector: () => {
         this.controlsDialogController.close()
         this.subtitleSelectorDialogController.open()
+      },
+      onRemoteKey: (event: KeyEvent) => {
+        this.handleRemoteKey(event)
+      },
+      onRemoteAxis: (event: AxisEvent) => {
+        this.handleRemoteAxis(event)
       }
     }),
     customStyle: true,
@@ -488,16 +571,13 @@ export struct VideoPlayer {
             await this.controller.pause()
             this.controlsDialogController.open()
           })
-          .gesture(
-            SwipeGesture()
-              .onAction((event: SwipeGestureEvent) => {
-                if (!this.controlsOpened) {
-                  this.controlsDialogController.open()
-                } else {
-                  console.log('swipe direction: ' + JSON.stringify(event))
-                }
-              })
-          )
+          .focusable(false)
+          .onKeyEvent((event: KeyEvent) => {
+            this.handleRemoteKey(event)
+          })
+          .onAxisEvent((event: AxisEvent) => {
+            this.handleRemoteAxis(event)
+          })
           .width("100%")
           .height("100%")
           .renderFit(this.toRenderFit(this.aspectRatioMode))
@@ -553,16 +633,13 @@ export struct VideoPlayer {
             await this.controller.pause()
             this.controlsDialogController.open()
           })
-          .gesture(
-            SwipeGesture()
-              .onAction((event: SwipeGestureEvent) => {
-                if (!this.controlsOpened) {
-                  this.controlsDialogController.open()
-                } else {
-                  console.log('swipe direction: ' + JSON.stringify(event))
-                }
-              })
-          )
+          .focusable(false)
+          .onKeyEvent((event: KeyEvent) => {
+            this.handleRemoteKey(event)
+          })
+          .onAxisEvent((event: AxisEvent) => {
+            this.handleRemoteAxis(event)
+          })
           .width("100%")
           .height("100%")
           .renderFit(this.toRenderFit(this.aspectRatioMode))
@@ -575,12 +652,23 @@ export struct VideoPlayer {
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)
+    .focusable(true)
+    .id('videoPlayerRoot')
+    .onKeyEvent((event: KeyEvent) => {
+      this.handleRemoteKey(event)
+    })
+    .onAxisEvent((event: AxisEvent) => {
+      this.handleRemoteAxis(event)
+    })
   }
 
   aboutToAppear(): void {
     this.backendMode = this.controller.backend
     this.aspectRatioMode = this.controller.aspectRatioMode
     this.initMode = ''
+    setTimeout(() => {
+      focusControl.requestFocus('videoPlayerRoot')
+    }, 100)
     emitter.on(PlayerEvents.COMPLETED, () => {
         this.controlsDialogController.open()
     })
@@ -588,6 +676,10 @@ export struct VideoPlayer {
 
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.COMPLETED.eventId)
+    this.lastKeyDirection = ''
+    this.lastKeyAt = 0
+    this.keyAccelerationLevel = 0
+    this.lastAxisSeekAt = 0
   }
 
 }

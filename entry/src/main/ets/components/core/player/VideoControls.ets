@@ -14,6 +14,8 @@ struct VideoControls {
   @Require @Param dialogController: CustomDialogController
   @Require @Param openSettings: () => void
   @Param onOpenSubtitleSelector: () => void = () => {}
+  @Param onRemoteKey: (event: KeyEvent) => void = (_event: KeyEvent) => {}
+  @Param onRemoteAxis: (event: AxisEvent) => void = (_event: AxisEvent) => {}
   closeTimer?: number
   seekTimer?: number
   private AUTO_CLOSE_TIMEOUT = 5000
@@ -592,6 +594,14 @@ struct VideoControls {
       }
     }
     .hitTestBehavior(HitTestMode.Transparent)
+    .onKeyEvent((event: KeyEvent) => {
+      this.enableAutoHide()
+      this.onRemoteKey(event)
+    })
+    .onAxisEvent((event: AxisEvent) => {
+      this.enableAutoHide()
+      this.onRemoteAxis(event)
+    })
     .onClick(async () => {
       await this.videoController.toggle()
       this.enableAutoHide()
@@ -755,6 +765,8 @@ export struct VideoControlsDialog {
   @Require videoController: VideoPlayerController
   @Require onOpenSettings: () => void
   onOpenSubtitleSelector: () => void = () => {}
+  onRemoteKey: (event: KeyEvent) => void = (_event: KeyEvent) => {}
+  onRemoteAxis: (event: AxisEvent) => void = (_event: AxisEvent) => {}
   @State opacityValue: number = 0;
 
   aboutToAppear(): void {
@@ -772,7 +784,9 @@ export struct VideoControlsDialog {
       videoController: this.videoController,
       dialogController: this.controller,
       openSettings: this.onOpenSettings,
-      onOpenSubtitleSelector: this.onOpenSubtitleSelector
+      onOpenSubtitleSelector: this.onOpenSubtitleSelector,
+      onRemoteKey: this.onRemoteKey,
+      onRemoteAxis: this.onRemoteAxis
     })
       .opacity(this.opacityValue)
   }
