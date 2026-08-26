@@ -1216,6 +1216,49 @@ export struct MediaLibraryTab {
     }
   }
 
+  /** 全局媒体库刮削 scope。 */
+  private getGlobalScope(): ScrapeScope {
+    const scope: ScrapeScope = { kind: 'global', displayName: '全部媒体库' };
+    return scope;
+  }
+
+  /** 全局刮削是否有活跃任务（waiting/running/waiting-confirmation）。 */
+  private isGlobalScraping(): boolean {
+    return ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope()) !== undefined;
+  }
+
+  /** 全局刮削进度文案，如 "18/28"；无活跃任务返回空串。 */
+  private globalProgressText(): string {
+    return ScrapeTaskStore.getState().getProgressText(this.getGlobalScope());
+  }
+
+  /** 全局刮削状态文案（含标题前缀）。 */
+  private globalStatusText(): string {
+    const task = ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope());
+    if (task === undefined) {
+      return '';
+    }
+    if (task.status === 'waiting') {
+      return '全部媒体库 · 等待刮削';
+    }
+    if (task.status === 'waiting-confirmation') {
+      return '全部媒体库 · 等待确认';
+    }
+    return '全部媒体库 · 正在刮削';
+  }
+
+  /** 全局刮削已完成数量。 */
+  private globalCompletedCount(): number {
+    const task = ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope());
+    return task === undefined ? 0 : task.progress.completed;
+  }
+
+  /** 全局刮削总数量。 */
+  private globalTotalCount(): number {
+    const task = ScrapeTaskStore.getState().getActiveForScope(this.getGlobalScope());
+    return task === undefined ? 0 : task.progress.total;
+  }
+
   /**
    * 仅刷新视频音轨/字幕轨元数据（ffprobe），用于补齐字幕 title/语言信息。
    *
@@ -1522,52 +1565,88 @@ export struct MediaLibraryTab {
       Text(this.getLastScanText())
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
-      Column({ space: 10 }) {
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Column({ space: 5 }) {
-            Text('扫描新增和已修改的文件')
-              .fontSize(15).fontColor('#4A9FFF')
-              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
-            Text('仅处理新增或已改动的文件，已有元数据不受影响')
-              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
-        .onClick(() => { this.startIncrementalScan(); })
-
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Column({ space: 5 }) {
-            Text('补全缺少的元数据')
-              .fontSize(15).fontColor('#52C41A')
-              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
-            Text('为缺少海报或信息的视频重新补全，已完整的跳过')
-              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
-        .onClick(() => { this.startFixMissingScan(); })
-
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Column({ space: 5 }) {
-            Text('覆盖所有元数据')
-              .fontSize(15).fontColor('#FF8C4A')
-              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
-            Text('重新刮削全部视频，覆盖现有海报、评分和分类')
-              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
-        .onClick(() => { this.startOverwriteScan(); })
+      if (this.isGlobalScraping()) {
+        this.GlobalScrapeStatus()
+      } else {
+        this.ScanActionButtons()
       }
-      .width('100%').margin({ bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
+  }
+
+  @Builder
+  GlobalScrapeStatus() {
+    Column({ space: 10 }) {
+      Row() {
+        Text(this.globalStatusText())
+          .fontSize(15).fontColor('#4A9FFF').fontWeight(FontWeight.Medium)
+        Blank()
+        Text(this.globalProgressText())
+          .fontSize(13).fontColor('#4A9FFF').fontWeight(FontWeight.Medium)
+      }
+      .width('100%')
+
+      if (this.globalTotalCount() > 0) {
+        Progress({ value: this.globalCompletedCount(), total: this.globalTotalCount(), type: ProgressType.Linear })
+          .width('100%').height(4)
+          .color('#4A9FFF')
+          .backgroundColor('#333333')
+      }
+
+      Text('刮削完成后将自动恢复下方操作入口')
+        .fontSize(12).fontColor('#888888').width('100%').textAlign(TextAlign.Start)
+    }
+    .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .backgroundColor('#1C1C1C').borderRadius(10)
+    .margin({ bottom: 40 })
+  }
+
+  @Builder
+  ScanActionButtons() {
+    Column({ space: 10 }) {
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Column({ space: 5 }) {
+          Text('扫描新增和已修改的文件')
+            .fontSize(15).fontColor('#4A9FFF')
+            .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+          Text('仅处理新增或已改动的文件，已有元数据不受影响')
+            .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+      .onClick(() => { this.startIncrementalScan(); })
+
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Column({ space: 5 }) {
+          Text('补全缺少的元数据')
+            .fontSize(15).fontColor('#52C41A')
+            .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+          Text('为缺少海报或信息的视频重新补全，已完整的跳过')
+            .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+      .onClick(() => { this.startFixMissingScan(); })
+
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Column({ space: 5 }) {
+          Text('覆盖所有元数据')
+            .fontSize(15).fontColor('#FF8C4A')
+            .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+          Text('重新刮削全部视频，覆盖现有海报、评分和分类')
+            .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+      .onClick(() => { this.startOverwriteScan(); })
+    }
+    .width('100%').margin({ bottom: 40 })
   }
 
   @Builder
