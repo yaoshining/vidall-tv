@@ -530,11 +530,6 @@ struct VideoControls {
                   }
                 }
               })
-              .onAxisEvent((event: AxisEvent) => {
-                // 控件打开后 Slider 通常位于输入命中层，继续转发并延长显示时间。
-                this.enableAutoHide()
-                this.onRemoteAxis(event)
-              })
               .onFocus(() => {
                 this.sliderFocused = true
                 this.sliderHovered = true
@@ -600,6 +595,7 @@ struct VideoControls {
     }
     .hitTestBehavior(HitTestMode.Transparent)
     .onKeyEvent((event: KeyEvent) => {
+      this.enableAutoHide()
       this.onRemoteKey(event)
     })
     .onAxisEvent((event: AxisEvent) => {
