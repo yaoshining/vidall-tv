@@ -19,6 +19,8 @@ export const FAILURE_CATEGORY_NO_TMDB_KEY = '缺少 TMDB API Key';
 export interface ScrapeFailureItem {
   videoId: number;
   fileName: string;
+  /** 视频完整路径（含目录），用于失败详情页展示定位。 */
+  path: string;
   category: string;
   /** 指向临时日志文件条目；无原始错误信息时可省略。 */
   logKey?: string;

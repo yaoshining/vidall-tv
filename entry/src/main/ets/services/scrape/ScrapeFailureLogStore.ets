@@ -37,20 +37,26 @@ export class ScrapeFailureLogStore {
     }
   }
 
-  /** 追加写入一条失败原始日志，返回可读回的 logKey。 */
+  /** 追加写入一条失败原始日志，返回可读回的 logKey；写入失败返回空串（不抛异常，避免中断主流程）。 */
   static async writeLog(detail: string): Promise<string> {
     ScrapeFailureLogStore.ensureDir();
     const timestamp = Date.now();
     ScrapeFailureLogStore.sequence++;
     const logKey = `scrape-failure-${timestamp}-${ScrapeFailureLogStore.sequence}.txt`;
     const path = `${ScrapeFailureLogStore.getDir()}/${logKey}`;
-    const file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
     try {
-      fs.writeSync(file.fd, detail);
-    } finally {
-      fs.closeSync(file);
+      const file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      try {
+        fs.writeSync(file.fd, detail);
+      } finally {
+        fs.closeSync(file);
+      }
+      return logKey;
+    } catch (e) {
+      const be = e as BusinessError;
+      console.warn(`[ScrapeFailureLogStore] writeLog 失败: ${be.message}`);
+      return '';
     }
-    return logKey;
   }
 
   /** 按 logKey 读回日志内容；读取失败返回空串。 */

@@ -176,7 +176,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
 
     const tmdbApiKey = await this.dependencies.getTmdbApiKey();
     if (tmdbApiKey.length === 0 && targets.length > progress.completed) {
-      this.failRemainingGroups(groups, startIndex, progress, failedVideoIds, failedItems);
+      await this.failRemainingGroups(groups, startIndex, progress, failedVideoIds, failedItems);
       onProgress(this.copyProgress(progress));
       return this.completed(progress, succeededVideoIds, failedVideoIds, failedItems);
     }
@@ -262,7 +262,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
 
     const tmdbApiKey = await this.dependencies.getTmdbApiKey();
     if (tmdbApiKey.length === 0 && targets.length > 0) {
-      return this.allFailed(targets, onProgress);
+      return await this.allFailed(targets, onProgress);
     }
     const scrapeClient = this.dependencies.createClient(tmdbApiKey);
     const succeededVideoIds: number[] = [];
@@ -278,7 +278,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
           const source = await this.dependencies.getFileSourceById(video.sourceId);
           if (source === null) {
             failedVideoIds.push(videoId);
-            failedItems.push(await this.buildFailureItem(videoId, video.fileName, FAILURE_CATEGORY_SOURCE_MISSING));
+            failedItems.push(await this.buildFailureItem(videoId, video.filePath, video.fileName, FAILURE_CATEGORY_SOURCE_MISSING));
             progress.failed++;
           } else {
             const outcome = await this.dependencies.processVideo(
@@ -296,6 +296,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
               failedVideoIds.push(videoId);
               failedItems.push(await this.buildFailureItem(
                 videoId,
+                video.filePath,
                 video.fileName,
                 outcome.category ?? FAILURE_CATEGORY_SCRAPER_ERROR,
                 outcome.detail
@@ -305,7 +306,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
           }
         } catch (e) {
           failedVideoIds.push(videoId);
-          failedItems.push(await this.buildFailureItem(videoId, video.fileName, FAILURE_CATEGORY_SCRAPER_ERROR, (e as Error).message));
+          failedItems.push(await this.buildFailureItem(videoId, video.filePath, video.fileName, FAILURE_CATEGORY_SCRAPER_ERROR, (e as Error).message));
           progress.failed++;
         }
       }
@@ -424,7 +425,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
         }
         if (!succeeded) {
           failedVideoIds.push(videoId);
-          failedItems.push(await this.buildFailureItem(videoId, video.fileName, category, detail));
+          failedItems.push(await this.buildFailureItem(videoId, video.filePath, video.fileName, category, detail));
         }
       }
       if (succeeded) {
@@ -519,20 +520,21 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     progress.completed += group.targets.length;
   }
 
-  private failGroup(
+  private async failGroup(
     group: ScrapeMediaGroup,
     progress: ScrapeProgress,
     failedVideoIds: number[],
     failedItems: ScrapeFailureItem[]
-  ): void {
+  ): Promise<void> {
     for (const target of group.targets) {
       if (target.video.id !== undefined) {
         failedVideoIds.push(target.video.id);
-        const item: ScrapeFailureItem = {
-          videoId: target.video.id,
-          fileName: target.video.fileName,
-          category: FAILURE_CATEGORY_NO_TMDB_KEY
-        };
+        const item = await this.buildFailureItem(
+          target.video.id,
+          target.video.filePath,
+          target.video.fileName,
+          FAILURE_CATEGORY_NO_TMDB_KEY
+        );
         failedItems.push(item);
       }
       progress.failed++;
@@ -540,15 +542,15 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     }
   }
 
-  private failRemainingGroups(
+  private async failRemainingGroups(
     groups: ScrapeMediaGroup[],
     startIndex: number,
     progress: ScrapeProgress,
     failedVideoIds: number[],
     failedItems: ScrapeFailureItem[]
-  ): void {
+  ): Promise<void> {
     for (let index = startIndex; index < groups.length; index++) {
-      this.failGroup(groups[index], progress, failedVideoIds, failedItems);
+      await this.failGroup(groups[index], progress, failedVideoIds, failedItems);
     }
   }
 
@@ -626,17 +628,18 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     return videos.filter((video: VideoEntity): boolean => video.id !== undefined && allowedIds.has(video.id));
   }
 
-  private allFailed(targets: ScopedScrapeVideo[], onProgress: ScrapeProgressCallback): ScrapeResult {
+  private async allFailed(targets: ScopedScrapeVideo[], onProgress: ScrapeProgressCallback): Promise<ScrapeResult> {
     const failedVideoIds: number[] = [];
     const failedItems: ScrapeFailureItem[] = [];
     for (const target of targets) {
       if (target.video.id !== undefined) {
         failedVideoIds.push(target.video.id);
-        const item: ScrapeFailureItem = {
-          videoId: target.video.id,
-          fileName: target.video.fileName,
-          category: FAILURE_CATEGORY_NO_TMDB_KEY
-        };
+        const item = await this.buildFailureItem(
+          target.video.id,
+          target.video.filePath,
+          target.video.fileName,
+          FAILURE_CATEGORY_NO_TMDB_KEY
+        );
         failedItems.push(item);
       }
     }
@@ -673,17 +676,24 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
 
   private async buildFailureItem(
     videoId: number,
+    filePath: string,
     fileName: string,
     category: string,
     detail?: string
   ): Promise<ScrapeFailureItem> {
-    let logKey: string | undefined = undefined;
-    if (detail !== undefined && detail.length > 0) {
-      logKey = await ScrapeFailureLogStore.writeLog(detail);
-    }
+    // 始终写日志，保证失败详情页「查看日志」入口一致可用；
+    // 无原始错误信息时也记录文件名、完整路径与失败分类，便于定位。
+    const logBody = [
+      `文件名: ${fileName}`,
+      `完整路径: ${filePath}`,
+      `失败分类: ${category}`,
+      detail !== undefined && detail.length > 0 ? `详细信息: ${detail}` : '详细信息: (无)'
+    ].join('\n');
+    const logKey = await ScrapeFailureLogStore.writeLog(logBody);
     const item: ScrapeFailureItem = {
       videoId,
       fileName,
+      path: filePath,
       category,
       logKey
     };

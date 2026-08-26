@@ -28,6 +28,10 @@ export struct ScrapeFailureDetailPage {
         .fontSize(15).fontColor(Color.White).maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
+      Text(item.path)
+        .fontSize(12).fontColor('#8A93A0').maxLines(3)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
       Row({ space: 12 }) {
         Text(item.category)
           .fontSize(12).fontColor('#F1C56A')

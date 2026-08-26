@@ -3,6 +3,7 @@ import { ScrapeProgressCallback, ScopedScrapeExecutor, ScopedScrapeService } fro
 import { normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
 import { ScrapeTaskStore } from './ScrapeTaskStore';
 import { MediaDataVersionStore } from './MediaDataVersionStore';
+import { ScrapeFailureLogStore } from './ScrapeFailureLogStore';
 import {
   FAILURE_CATEGORY_SCRAPER_ERROR,
   ScopedScrapeRequest,
@@ -214,7 +215,9 @@ export class ScrapeTaskQueue {
     };
     this.executor.execute(task.request, onProgress, task.resumeState)
       .then((outcome: ScrapeExecutionOutcome): void => this.handleOutcome(task, outcome))
-      .catch((error: Error): void => this.fail(task, error));
+      .catch((error: Error): void => {
+        this.fail(task, error);
+      });
   }
 
   private handleOutcome(task: ScrapeTaskSnapshot, outcome: ScrapeExecutionOutcome): void {
@@ -245,7 +248,7 @@ export class ScrapeTaskQueue {
     this.schedule();
   }
 
-  private fail(task: ScrapeTaskSnapshot, error?: Error): void {
+  private async fail(task: ScrapeTaskSnapshot, error?: Error): Promise<void> {
     if (error !== undefined) {
       console.warn(`[ScrapeTaskQueue] 任务执行异常 id=${task.id}: ${error.message}`);
     }
@@ -253,11 +256,21 @@ export class ScrapeTaskQueue {
     const failedCount = Math.max(task.progress.total, failedVideoIds.length);
     const failedItems: ScrapeFailureItem[] = [];
     const fallbackName = task.request.scope.displayName ?? '';
+    const errorDetail = error !== undefined ? error.message : '(任务执行异常，无具体错误信息)';
     for (const videoId of failedVideoIds) {
+      const logBody = [
+        `文件名: ${fallbackName}`,
+        `完整路径: (任务级异常，未定位到具体文件)`,
+        `失败分类: ${FAILURE_CATEGORY_SCRAPER_ERROR}`,
+        `详细信息: ${errorDetail}`
+      ].join('\n');
+      const logKey = await ScrapeFailureLogStore.writeLog(logBody);
       const item: ScrapeFailureItem = {
         videoId,
         fileName: fallbackName,
-        category: FAILURE_CATEGORY_SCRAPER_ERROR
+        path: fallbackName,
+        category: FAILURE_CATEGORY_SCRAPER_ERROR,
+        logKey
       };
       failedItems.push(item);
     }
