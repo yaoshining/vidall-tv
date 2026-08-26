@@ -1,6 +1,6 @@
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences';
 import { ScrapeProgressCallback, ScopedScrapeExecutor, ScopedScrapeService } from './ScopedScrapeService';
-import { normalizeScrapeDirectoryPath } from './ScrapeScopeResolver';
+import { normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
 import { ScrapeTaskStore } from './ScrapeTaskStore';
 import { MediaDataVersionStore } from './MediaDataVersionStore';
 import {
@@ -11,7 +11,8 @@ import {
   ScrapeProgress,
   ScrapeResumeState,
   ScrapeScope,
-  ScrapeTaskSnapshot
+  ScrapeTaskSnapshot,
+  scrapeScopeId
 } from './ScopedScrapeTypes';
 
 export class ScrapeTaskQueue {
@@ -275,26 +276,7 @@ export class ScrapeTaskQueue {
     const videoKey = request.videoIds === undefined ? '' : request.videoIds.slice()
       .sort((a: number, b: number): number => a - b)
       .join(',');
-    return `${this.scopeKey(request.scope)}|${request.mode}|${request.candidateStrategy}|${videoKey}`;
-  }
-
-  private scopeKey(scope: ScrapeScope): string {
-    if (scope.kind === 'movie') {
-      return `movie:${scope.movieId}`;
-    }
-    if (scope.kind === 'series') {
-      return `series:${scope.tvSeriesId}`;
-    }
-    if (scope.kind === 'season') {
-      return `season:${scope.tvSeriesId}:${scope.seasonNumber}`;
-    }
-    if (scope.kind === 'episode') {
-      return `episode:${scope.videoId}`;
-    }
-    if (scope.kind === 'folder') {
-      return `folder:${scope.sourceId}:${normalizeScrapeDirectoryPath(scope.directoryPath)}`;
-    }
-    return 'global';
+    return `${scrapeScopeId(request.scope)}|${request.mode}|${request.candidateStrategy}|${videoKey}`;
   }
 
   private copyRequest(request: ScopedScrapeRequest): ScopedScrapeRequest {

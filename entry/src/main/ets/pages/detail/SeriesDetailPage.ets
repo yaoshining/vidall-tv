@@ -25,6 +25,7 @@ import { PlayerEvents } from '../../components/core/player/Constants'
 import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
 import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel'
 import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
+import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore'
 import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore'
 import { tmdbImageUrl, formatYear, parseGenresArr, translateJob, toChineseSeasonLabel, buildEpisodeCode, isGenericSeasonTitle, toOpaqueColor } from '../../utils/MediaFormatUtil'
 
@@ -127,6 +128,7 @@ export struct SeriesDetailPage {
   @Local showScrapeModes: boolean = false
   @Local focusedScrapeAction: boolean = false
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
 
   @Monitor('mediaDataVersionStore.globalVersion')
   onMediaDataVersionChange(): void {
@@ -145,6 +147,26 @@ export struct SeriesDetailPage {
     }
     const scope: ScrapeScope = { kind: 'series', tvSeriesId: seriesId, displayName: this.getTitle() };
     return scope;
+  }
+
+  /** 当前剧集是否正在刮削（任意 active 状态）。 */
+  private isScraping(): boolean {
+    const scope = this.getScrapeScope();
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private scrapeProgressText(): string {
+    const scope = this.getScrapeScope();
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
+  private openScrapeModes(): void {
+    const scope = this.getScrapeScope();
+    if (scope === undefined) { return; }
+    // 严格排除：刮削中禁止再次打开模式面板。
+    if (this.taskStore.getActiveForScope(scope) !== undefined) { return; }
+    this.showScrapeModes = true;
   }
 
   private progressRefreshCallback: () => void = () => {};
@@ -1184,15 +1206,17 @@ export struct SeriesDetailPage {
           }
 
           if (this.getScrapeScope() !== undefined) {
-            Button('更多操作')
+            Button(this.isScraping() ? `刮削中 ${this.scrapeProgressText()}` : '更多操作')
               .width(168).height(50)
-              .fontSize(17).fontColor(Color.White)
+              .fontSize(17).fontColor(this.isScraping() ? '#9AA0A8' : Color.White)
               .backgroundColor(this.focusedScrapeAction ? '#356FA8' : '#3A3D43')
               .border({ width: this.focusedScrapeAction ? 2 : 0, color: '#88C8FF' })
               .focusable(true)
-              .onFocus(() => { this.focusedScrapeAction = true; })
+              .enabled(!this.isScraping())
+              .opacity(this.isScraping() ? 0.6 : 1)
+              .onFocus(() => { if (!this.isScraping()) { this.focusedScrapeAction = true; } })
               .onBlur(() => { this.focusedScrapeAction = false; })
-              .onClick(() => { this.showScrapeModes = true; })
+              .onClick(() => { this.openScrapeModes(); })
           }
         }
         .layoutWeight(1)

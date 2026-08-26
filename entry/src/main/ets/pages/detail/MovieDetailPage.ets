@@ -18,6 +18,7 @@ import {
 } from '../../components/detail/DetailSections';
 import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel';
 import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes';
+import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore';
 
 /**
@@ -100,6 +101,7 @@ export struct MovieDetailPage {
   @Local hoveredActionKey: string = '';
   @Local showScrapeModes: boolean = false;
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState();
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState();
 
   @Monitor('mediaDataVersionStore.globalVersion')
   onMediaDataVersionChange(): void {
@@ -127,6 +129,26 @@ export struct MovieDetailPage {
     }
     const scope: ScrapeScope = { kind: 'movie', movieId, displayName: this.getTitle() };
     return scope;
+  }
+
+  /** 当前电影是否正在刮削（任意 active 状态）。 */
+  private isScraping(): boolean {
+    const scope = this.getScrapeScope();
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private scrapeProgressText(): string {
+    const scope = this.getScrapeScope();
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
+  private openScrapeModes(): void {
+    const scope = this.getScrapeScope();
+    if (scope === undefined) { return; }
+    // 严格排除：刮削中禁止再次打开模式面板。
+    if (this.taskStore.getActiveForScope(scope) !== undefined) { return; }
+    this.showScrapeModes = true;
   }
 
   // ── 属性计算方法 ──────────────────────────────────
@@ -667,15 +689,17 @@ export struct MovieDetailPage {
           }
 
           if (this.getScrapeScope() !== undefined) {
-            Button('更多操作')
+            Button(this.isScraping() ? `刮削中 ${this.scrapeProgressText()}` : '更多操作')
               .width(168).height(50)
-              .fontSize(17).fontColor(Color.White)
+              .fontSize(17).fontColor(this.isScraping() ? '#9AA0A8' : Color.White)
               .backgroundColor(this.focusedActionKey === 'scrape' ? '#356FA8' : '#3A3D43')
               .border({ width: this.focusedActionKey === 'scrape' ? 2 : 0, color: '#88C8FF' })
               .focusable(true)
-              .onFocus(() => { this.focusedActionKey = 'scrape'; })
+              .enabled(!this.isScraping())
+              .opacity(this.isScraping() ? 0.6 : 1)
+              .onFocus(() => { if (!this.isScraping()) { this.focusedActionKey = 'scrape'; } })
               .onBlur(() => { if (this.focusedActionKey === 'scrape') { this.focusedActionKey = ''; } })
-              .onClick(() => { this.showScrapeModes = true; })
+              .onClick(() => { this.openScrapeModes(); })
           }
         }
         .layoutWeight(1)

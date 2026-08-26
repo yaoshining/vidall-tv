@@ -181,6 +181,8 @@ export struct DetailEpisodesSection {
   @Event onEpisodeMenuClick: (episode: DetailEpisode) => void = () => {}
   @Event onSeasonScrapeClick: () => void = () => {}
   @Param showSeasonScrape: boolean = false
+  @Param seasonScraping: boolean = false
+  @Param seasonProgressText: string = ''
   @Local focusedRowId: string = ''
   @Local hoveredRowId: string = ''
   @Local focusedActionKey: string = ''
@@ -255,7 +257,10 @@ export struct DetailEpisodesSection {
       .border({ width: this.isActionFocused(ep, 'more') ? 2 : 1, color: this.actionCircleBorder(ep, 'more') })
       .focusable(true)
       .monopolizeEvents(true)
-      .onFocus(() => { this.focusedActionKey = this.buildActionKey(ep, 'more'); })
+      .onFocus(() => {
+        console.info('[SeasonDetail] EP_MORE_FOCUS', ep.id);
+        this.focusedActionKey = this.buildActionKey(ep, 'more');
+      })
       .onBlur(() => { this.clearActionFocusIfMatches(ep, 'more'); })
       .onHover((isHover: boolean) => {
         if (isHover) {
@@ -264,7 +269,10 @@ export struct DetailEpisodesSection {
           this.clearActionHoverIfMatches(ep, 'more');
         }
       })
-      .onClick(() => { this.onEpisodeMenuClick(ep); })
+      .onClick(() => {
+        console.info('[SeasonDetail] EP_MORE_CLICK', ep.id);
+        this.onEpisodeMenuClick(ep);
+      })
   }
 
   build() {
@@ -276,13 +284,15 @@ export struct DetailEpisodesSection {
           Blank()
           Row({ space: 8 }) {
             if (this.showSeasonScrape) {
-              Button('整季刮削')
+              Button(this.seasonScraping ? `刮削中 ${this.seasonProgressText}` : '整季刮削')
                 .height(38)
                 .fontSize(16)
-                .fontColor('#D7E8FF')
+                .fontColor(this.seasonScraping ? '#7A8089' : '#D7E8FF')
                 .backgroundColor('#243F66')
                 .borderRadius(19)
                 .focusable(true)
+                .enabled(!this.seasonScraping)
+                .opacity(this.seasonScraping ? 0.6 : 1)
                 .onClick(() => { this.onSeasonScrapeClick(); })
             }
             Text('‹')
@@ -399,7 +409,6 @@ export struct DetailEpisodesSection {
                 this.MoreActionButton(ep)
               }
               .alignSelf(ItemAlign.Center)
-              .hitTestBehavior(HitTestMode.Block)
             }
             .width('100%')
             .padding({ left: 80, right: 80, top: 20, bottom: 20 })

@@ -16,6 +16,7 @@ import buffer from '@ohos.buffer'
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
 import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel'
 import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
+import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore'
 import { normalizeScrapeDirectoryPath } from '../../services/scrape/ScrapeScopeResolver'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ export struct SmbFileExplorerPage {
   @Local private errorMessage: string = ''
   @Local private scrapePanelVisible: boolean = false
   @Local private scrapeScope: ScrapeScope | undefined = undefined
+  @Local private taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
   @Local private sortField: string = 'name'
   @Local private sortAscending: boolean = true
   @Local private showHiddenFiles: boolean = false
@@ -401,21 +403,51 @@ export struct SmbFileExplorerPage {
     }
   }
 
+  /** 当前文件夹的刮削范围（不含视频计数，仅用于身份判断与入队前兜底）。 */
+  private getFolderScope(): ScrapeScope | undefined {
+    if (this.sourceId <= 0) { return undefined; }
+    const normalizedPath = normalizeScrapeDirectoryPath(this.fileExplorerController.currentPath)
+    const scope: ScrapeScope = {
+      kind: 'folder',
+      sourceId: this.sourceId,
+      directoryPath: normalizedPath,
+      displayName: normalizedPath
+    };
+    return scope;
+  }
+
+  /** 当前文件夹是否正在刮削（任意 active 状态）。 */
+  private isFolderScraping(): boolean {
+    const scope = this.getFolderScope();
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private folderProgressText(): string {
+    const scope = this.getFolderScope();
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
   @Builder
   FolderScrapeToolbarAction() {
-    Button('刮削此文件夹')
+    Button(this.isFolderScraping() ? `刮削中 ${this.folderProgressText()}` : '刮削此文件夹')
       .height(40)
       .fontSize(16)
-      .fontColor('#D7E8FF')
+      .fontColor(this.isFolderScraping() ? '#9AA0A8' : '#D7E8FF')
       .backgroundColor('#243F66')
       .margin({ right: 10 })
       .focusable(true)
-      .enabled(this.sourceId > 0 && !this.isLoading)
+      .enabled(this.sourceId > 0 && !this.isLoading && !this.isFolderScraping())
+      .opacity(this.isFolderScraping() ? 0.6 : 1)
       .onClick(() => { this.openFolderScrape(); })
   }
 
   private openFolderScrape(): void {
     if (this.sourceId <= 0) { return; }
+    const baseScope = this.getFolderScope();
+    if (baseScope === undefined) { return; }
+    // 严格排除：该文件夹只要在刮削中就禁止再次触发。
+    if (this.taskStore.getActiveForScope(baseScope) !== undefined) { return; }
     const normalizedPath = normalizeScrapeDirectoryPath(this.fileExplorerController.currentPath)
     const query = normalizedPath === '/'
       ? FileSourceDatabase.getInstance().getVideosBySourceId(this.sourceId)

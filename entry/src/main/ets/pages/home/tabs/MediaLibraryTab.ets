@@ -5,6 +5,7 @@ import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeTaskQueue } from "../../../services/scrape/ScrapeTaskQueue"
 import { common } from "@kit.AbilityKit"
 import { ScopedScrapeRequest, ScrapeScope } from "../../../services/scrape/ScopedScrapeTypes"
+import { ScrapeTaskStore } from "../../../services/scrape/ScrapeTaskStore"
 import { MediaDataVersionStore } from "../../../services/scrape/MediaDataVersionStore"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import {
@@ -1193,6 +1194,11 @@ export struct MediaLibraryTab {
       return;
     }
     const scope: ScrapeScope = { kind: 'global', displayName: '全部媒体库' };
+    // 严格排除：全局媒体库只要在刮削中就禁止再次触发。
+    if (ScrapeTaskStore.getState().getActiveForScope(scope) !== undefined) {
+      this.getUIContext().getPromptAction().showToast({ message: '全部媒体库正在刮削中' });
+      return;
+    }
     const request: ScopedScrapeRequest = {
       scope,
       mode,

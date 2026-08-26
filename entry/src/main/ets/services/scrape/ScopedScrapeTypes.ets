@@ -47,6 +47,42 @@ export interface GlobalScrapeScope {
 export type ScrapeScope = MovieScrapeScope | SeriesScrapeScope | SeasonScrapeScope |
   EpisodeScrapeScope | FolderScrapeScope | GlobalScrapeScope;
 
+/**
+ * 规范化刮削目录路径：统一斜杠、去除重复斜杠、保证以 / 开头、去除末尾 /。
+ * 根目录返回 '/'。
+ */
+export function normalizeScrapeDirectoryPath(path: string): string {
+  const slashPath = path.trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+  if (slashPath.length === 0 || slashPath === '/') {
+    return '/';
+  }
+  const withLeadingSlash = slashPath.startsWith('/') ? slashPath : `/${slashPath}`;
+  return withLeadingSlash.replace(/\/+$/g, '');
+}
+
+/**
+ * 计算刮削范围的稳定身份标识，用于判断两个 scope 是否指向同一刮削目标。
+ * 与 ScrapeTaskQueue 内部构建 active key 时的范围部分保持一致。
+ */
+export function scrapeScopeId(scope: ScrapeScope): string {
+  if (scope.kind === 'movie') {
+    return `movie:${scope.movieId}`;
+  }
+  if (scope.kind === 'series') {
+    return `series:${scope.tvSeriesId}`;
+  }
+  if (scope.kind === 'season') {
+    return `season:${scope.tvSeriesId}:${scope.seasonNumber}`;
+  }
+  if (scope.kind === 'episode') {
+    return `episode:${scope.videoId}`;
+  }
+  if (scope.kind === 'folder') {
+    return `folder:${scope.sourceId}:${normalizeScrapeDirectoryPath(scope.directoryPath)}`;
+  }
+  return 'global';
+}
+
 export interface ScopedScrapeRequest {
   scope: ScrapeScope;
   mode: ScanMode;

@@ -1,6 +1,8 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { VideoEntity } from '../../db/models/MediaEntity';
-import { ScrapeScope } from './ScopedScrapeTypes';
+import { ScrapeScope, normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
+
+export { normalizeScrapeDirectoryPath };
 
 export interface ScrapeScopeVideoSource {
   getVideoById(videoId: number): Promise<VideoEntity | null>;
@@ -10,15 +12,6 @@ export interface ScrapeScopeVideoSource {
   getVideosByDirectoryTree(sourceId: number, directoryPath: string): Promise<VideoEntity[]>;
   getVideosBySourceId(sourceId: number): Promise<VideoEntity[]>;
   getAllVideos(): Promise<VideoEntity[]>;
-}
-
-export function normalizeScrapeDirectoryPath(path: string): string {
-  const slashPath = path.trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
-  if (slashPath.length === 0 || slashPath === '/') {
-    return '/';
-  }
-  const withLeadingSlash = slashPath.startsWith('/') ? slashPath : `/${slashPath}`;
-  return withLeadingSlash.replace(/\/+$/g, '');
 }
 
 export class ScrapeScopeResolver {

@@ -26,6 +26,7 @@ import { tmdbImageUrl, formatYear, parseGenresArr, translateJob, toChineseSeason
 import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel'
 import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
 import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore'
+import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore'
 
 // ─────────────────────────────────────────────
 // 工具函数
@@ -150,6 +151,7 @@ export struct SeasonDetailPage {
   @Local episodeMenuTarget: DetailEpisode | undefined = undefined
   @Local focusedMenuAction: string = ''
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
 
   @Monitor('mediaDataVersionStore.globalVersion')
   onMediaDataVersionChange(): void {
@@ -311,15 +313,36 @@ export struct SeasonDetailPage {
     return result
   }
 
-  private openSeasonScrape(): void {
+  /** 构建当前季的刮削范围；无法确定季时返回 undefined。 */
+  private getSeasonScope(): ScrapeScope | undefined {
     const tvSeriesId = this.group?.tvSeriesId ?? 0
-    if (tvSeriesId <= 0) { return; }
+    if (tvSeriesId <= 0) { return undefined; }
     const scope: ScrapeScope = {
       kind: 'season',
       tvSeriesId,
       seasonNumber: this.getSeasonNumber(),
       displayName: `${this.getSeriesTitle()} ${this.getSeasonLabel()}`
-    }
+    };
+    return scope;
+  }
+
+  /** 当前季是否正在刮削（任意 active 状态）。 */
+  private isSeasonScraping(): boolean {
+    const scope = this.getSeasonScope();
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private seasonProgressText(): string {
+    const scope = this.getSeasonScope();
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
+  private openSeasonScrape(): void {
+    const scope = this.getSeasonScope()
+    if (scope === undefined) { return; }
+    // 严格排除：该季只要在刮削中就禁止再次触发。
+    if (this.taskStore.getActiveForScope(scope) !== undefined) { return; }
     this.scrapeScope = scope
     this.scrapePanelVisible = true
   }
@@ -337,18 +360,51 @@ export struct SeasonDetailPage {
     this.focusedMenuAction = ''
   }
 
-  /** 从「更多」菜单开启刮削本集 */
-  private scrapeMenuEpisode(): void {
-    const episode = this.episodeMenuTarget
-    if (episode === undefined) { return; }
+  /** 构建指定集的刮削范围。 */
+  private getEpisodeScope(episode: DetailEpisode): ScrapeScope | undefined {
     const videoId = Number(episode.id)
-    this.closeEpisodeMenu()
-    if (videoId <= 0) { return; }
+    if (videoId <= 0) { return undefined; }
     const scope: ScrapeScope = {
       kind: 'episode',
       videoId,
       displayName: `${this.getSeriesTitle()} ${episode.label}`
-    }
+    };
+    return scope;
+  }
+
+  /** 指定集是否正在刮削（任意 active 状态）。 */
+  private isEpisodeScraping(episode: DetailEpisode): boolean {
+    const scope = this.getEpisodeScope(episode);
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private episodeProgressText(episode: DetailEpisode): string {
+    const scope = this.getEpisodeScope(episode);
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
+  /** 当前菜单目标集是否正在刮削（浮层内安全访问）。 */
+  private isMenuEpisodeScraping(): boolean {
+    const ep = this.episodeMenuTarget;
+    return ep !== undefined && this.isEpisodeScraping(ep);
+  }
+
+  private menuEpisodeProgressText(): string {
+    const ep = this.episodeMenuTarget;
+    if (ep === undefined) { return ''; }
+    return this.episodeProgressText(ep);
+  }
+
+  /** 从「更多」菜单开启刮削本集 */
+  private scrapeMenuEpisode(): void {
+    const episode = this.episodeMenuTarget
+    if (episode === undefined) { return; }
+    const scope = this.getEpisodeScope(episode)
+    this.closeEpisodeMenu()
+    if (scope === undefined) { return; }
+    // 严格排除：该集只要在刮削中就禁止再次触发。
+    if (this.taskStore.getActiveForScope(scope) !== undefined) { return; }
     this.scrapeScope = scope
     this.scrapePanelVisible = true
   }
@@ -374,15 +430,17 @@ export struct SeasonDetailPage {
             .margin({ bottom: 8 })
 
           Column() {
-            Text('刮削本集')
-              .fontSize(19).fontWeight(FontWeight.Medium).fontColor(Color.White)
+            Text(this.isMenuEpisodeScraping() ?
+              `刮削中 ${this.menuEpisodeProgressText()}` : '刮削本集')
+              .fontSize(19).fontWeight(FontWeight.Medium)
+              .fontColor(this.isMenuEpisodeScraping() ? '#7A8089' : Color.White)
               .width('100%').height(64)
               .textAlign(TextAlign.Center)
               .backgroundColor(this.focusedMenuAction === 'scrape' ? '#243F66' : '#25282D')
               .borderRadius(8)
               .border({ width: this.focusedMenuAction === 'scrape' ? 2 : 0, color: '#66A9D8FF' })
               .focusable(true)
-              .onFocus(() => { this.focusedMenuAction = 'scrape'; })
+              .onFocus(() => { if (!this.isMenuEpisodeScraping()) { this.focusedMenuAction = 'scrape'; } })
               .onBlur(() => { if (this.focusedMenuAction === 'scrape') { this.focusedMenuAction = ''; } })
               .onClick(() => { this.scrapeMenuEpisode(); })
           }
@@ -932,6 +990,8 @@ export struct SeasonDetailPage {
             DetailEpisodesSection({
               episodes: this.episodeList(),
               showSeasonScrape: true,
+              seasonScraping: this.isSeasonScraping(),
+              seasonProgressText: this.seasonProgressText(),
               onSeasonScrapeClick: () => { this.openSeasonScrape(); },
               onEpisodeMenuClick: (e: DetailEpisode) => { this.openEpisodeMenu(e); },
               onEpisodeClick: (e: DetailEpisode) => {

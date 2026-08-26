@@ -1,4 +1,4 @@
-import { ScrapeTaskSnapshot, ScrapeTaskStatus } from './ScopedScrapeTypes';
+import { ScrapeScope, ScrapeTaskSnapshot, ScrapeTaskStatus, scrapeScopeId } from './ScopedScrapeTypes';
 
 function taskPriority(status: ScrapeTaskStatus): number {
   if (status === 'running' || status === 'waiting-confirmation') {
@@ -38,6 +38,31 @@ export class ScrapeTaskStore {
     return this.snapshots.filter((task: ScrapeTaskSnapshot): boolean =>
       task.status === 'waiting' || task.status === 'running'
     ).length;
+  }
+
+  /**
+   * 返回与指定 scope 指向同一刮削目标、且仍处于活跃状态
+   * （waiting / running / waiting-confirmation）的任务快照。
+   * 若不存在则返回 undefined。元素为 @ObservedV2 实例，@Trace 字段变化可精准观测。
+   */
+  getActiveForScope(scope: ScrapeScope): ScrapeTaskSnapshot | undefined {
+    const id = scrapeScopeId(scope);
+    return this.snapshots.find((task: ScrapeTaskSnapshot): boolean => {
+      if (task.status !== 'waiting' && task.status !== 'running' &&
+        task.status !== 'waiting-confirmation') {
+        return false;
+      }
+      return scrapeScopeId(task.request.scope) === id;
+    });
+  }
+
+  /** 返回该 scope 当前活跃任务的进度文案 "18/28"；无活跃任务返回空串。 */
+  getProgressText(scope: ScrapeScope): string {
+    const task = this.getActiveForScope(scope);
+    if (task === undefined) {
+      return '';
+    }
+    return `${task.progress.completed}/${task.progress.total}`;
   }
 
   update(tasks: ScrapeTaskSnapshot[]): void {
