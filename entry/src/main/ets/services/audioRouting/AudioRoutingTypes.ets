@@ -58,6 +58,10 @@ export interface AudioRoutingInput {
   probeVideoCodecName: string;
   /** ffprobe 首条视频轨的 HDR 类型（'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'），探测失败传 ''。 */
   probeVideoHdrType: string;
+  /** ffprobe 首条视频轨的 Dolby Vision profile（如 5/8/9），无 DV 或探测失败传 undefined。 */
+  probeVideoDvProfile?: number;
+  /** ffprobe 首条视频轨的 DV base-layer signal compatibility id（0 无兼容基层，1=HDR10，2=SDR），无 DV 传 undefined。 */
+  probeVideoDvBlCompatibilityId?: number;
   /** ffprobe 首条视频轨的宽度（像素），探测失败/缺失为 undefined。 */
   probeVideoWidth?: number;
   /** ffprobe 首条视频轨的高度（像素），探测失败/缺失为 undefined。 */
@@ -105,6 +109,10 @@ export interface AudioRoutingDecision {
   videoCodecName: string;
   /** 视频 HDR 类型（来自 ffprobe 首条 video track）：'HDR10'|'HLG'|'DOLBY_VISION'|'SDR'，'' 表示未知（探测失败/无视频轨）。 */
   videoHdrType: string;
+  /** Dolby Vision profile（来自 ffprobe 首条 video track，如 5/8/9），无 DV 传 undefined。 */
+  videoDvProfile?: number;
+  /** DV base-layer signal compatibility id（0 无兼容基层，1=HDR10，2=SDR），无 DV 传 undefined。 */
+  videoDvBlCompatibilityId?: number;
   /** 视频宽度（像素，来自 ffprobe 首条 video track），探测失败/缺失为 undefined。 */
   videoWidth?: number;
   /** 视频高度（像素，来自 ffprobe 首条 video track），探测失败/缺失为 undefined。 */
@@ -138,6 +146,8 @@ export const DEFAULT_AUDIO_ROUTING_DECISION: AudioRoutingDecision = {
   precheckProbeError: '',
   videoCodecName: '',
   videoHdrType: '',
+  videoDvProfile: undefined,
+  videoDvBlCompatibilityId: undefined,
   videoWidth: undefined,
   videoHeight: undefined,
   trackAnalyses: [],

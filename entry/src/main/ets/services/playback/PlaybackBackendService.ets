@@ -126,6 +126,8 @@ export class PlaybackBackendService {
         precheckProbeError: decision.precheckProbeError,
         videoCodecName: decision.videoCodecName,
         videoHdrType: decision.videoHdrType,
+        videoDvProfile: decision.videoDvProfile,
+        videoDvBlCompatibilityId: decision.videoDvBlCompatibilityId,
         videoWidth: decision.videoWidth,
         videoHeight: decision.videoHeight,
         trackAnalyses: decision.trackAnalyses,
