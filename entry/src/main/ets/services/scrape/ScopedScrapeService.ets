@@ -330,9 +330,13 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     const groupMap = new Map<string, ScrapeMediaGroup>();
     for (const target of targets) {
       const video = target.video;
-      const classification = classifyVideoScrapeTarget(video.fileName, video.filePath);
       const seriesHint = extractSeriesHintFromFilePath(video.filePath);
       const parsed = parseFileName(video.fileName);
+      const seasonNumber = parsed.seasonNumber;
+      const classification = classifyVideoScrapeTarget(video.fileName, video.filePath, {
+        seriesHint,
+        seasonSiblingDetected: seasonNumber !== undefined
+      });
       const titleKey = (seriesHint ?? parsed.title).trim().toLowerCase();
       const key = classification.mediaType === 'tv'
         ? `tv:${titleKey}`

@@ -29,7 +29,9 @@ export struct ScrapeTaskIndicator {
   private readonly indicatorFocusId: string = 'scrape_task_indicator';
 
   private getTasks(): ScrapeTaskSnapshot[] { return this.taskStore.getActiveTasks(); }
-  private getActiveCount(): number { return this.taskStore.getActiveCount(); }
+  // 角标与下拉列表保持同一口径：waiting/running/waiting-confirmation 都属于活动任务，
+  // 避免只剩 waiting-confirmation（等待用户选候选）任务时角标不显示导致任务挂起不可见。
+  private getActiveCount(): number { return this.taskStore.getActiveTasks().length; }
   private closeDropdown(): void {
     this.expanded = false;
     setTimeout(() => { focusControl.requestFocus(this.indicatorFocusId); }, 0);

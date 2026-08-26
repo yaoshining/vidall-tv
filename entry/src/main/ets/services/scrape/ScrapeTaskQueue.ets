@@ -214,7 +214,16 @@ export class ScrapeTaskQueue {
       this.publish();
     };
     this.executor.execute(task.request, onProgress, task.resumeState)
-      .then((outcome: ScrapeExecutionOutcome): void => this.handleOutcome(task, outcome))
+      .then((outcome: ScrapeExecutionOutcome): void => {
+        try {
+          this.handleOutcome(task, outcome);
+        } catch (e) {
+          // handleOutcome 若在运行中减计数后抛同步异常（如 outcome.result 字段不完整），
+          // 先恢复计数再交给 .catch(fail) 统一递减，避免 runningCount 重复递减导致调度超出并发上限。
+          this.runningCount++;
+          return Promise.reject(e);
+        }
+      })
       .catch((error: Error): void => {
         this.fail(task, error);
       });

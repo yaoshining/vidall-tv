@@ -1090,11 +1090,13 @@ export class ScrapeClient {
             } else {
               try {
                 season = await provider.fetchSeason(series.providerId, effectiveSeasonNumber, 'zh-CN');
+                // 仅缓存成功结果（含 provider 明确返回 null）；异常路径不写缓存，避免整季后续集
+                // 命中 null 缓存不再重试（一次网络抖动/429 导致整季季信息缺失）。
+                this.tvSeasonCache.set(seasonCacheKey, season);
               } catch (e) {
                 const err = e as BusinessError;
                 console.warn(`[ScrapeClient] fetchSeason(${series.providerId}, ${effectiveSeasonNumber}) 失败: ${err.message}`);
               }
-              this.tvSeasonCache.set(seasonCacheKey, season);
             }
             console.info(`[ScrapeClient] fetchSeason S${effectiveSeasonNumber} → ${season ? 'OK posterUrl=' + (season.posterUrl ? 'Y' : 'N') : 'null'}`);
             if (effectiveEpisodeNumber !== undefined) {
