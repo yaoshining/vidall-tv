@@ -231,8 +231,8 @@ class FakeScopedScrapeDependencies implements ScopedScrapeDependencies {
     _mode: 'incremental' | 'fix-missing' | 'overwrite',
     _info: VideoFileInfo,
     _logPrefix: string
-  ): Promise<boolean> {
-    return Promise.resolve(false);
+  ): Promise<ScrapeVideoOutcome> {
+    return Promise.resolve({ success: false });
   }
 
   applyMovie(_videoId: number, _movie: MovieScrapeResult, _logPrefix: string): Promise<boolean> {
@@ -291,7 +291,9 @@ function createConfirmationResume(groupKey: string, candidate: ScrapeCandidate):
     selections: [selection],
     cancelledGroupKeys: [],
     progress: { completed: 0, total: 2, succeeded: 0, failed: 0, cancelled: 0 },
-    failedVideoIds: []
+    succeededVideoIds: [],
+    failedVideoIds: [],
+    failedItems: []
   };
   return state;
 }
@@ -412,7 +414,9 @@ function createPaused(groupKey: string): ScrapeExecutionPaused {
     selections: [],
     cancelledGroupKeys: [],
     progress,
-    failedVideoIds: []
+    succeededVideoIds: [],
+    failedVideoIds: [],
+    failedItems: []
   };
   const paused: ScrapeExecutionPaused = {
     kind: 'paused',
@@ -440,7 +444,9 @@ function createCandidateSearchPaused(groupKey: string): ScrapeExecutionPaused {
     selections: [],
     cancelledGroupKeys: [],
     progress,
-    failedVideoIds: []
+    succeededVideoIds: [],
+    failedVideoIds: [],
+    failedItems: []
   };
   const paused: ScrapeExecutionPaused = { kind: 'paused', pause, resumeState };
   return paused;
@@ -481,7 +487,9 @@ function createStoreSnapshot(id: string, status: ScrapeTaskStatus): ScrapeTaskSn
     selections: [selection],
     cancelledGroupKeys: ['cancelled-a'],
     progress,
-    failedVideoIds: [41]
+    succeededVideoIds: [],
+    failedVideoIds: [41],
+    failedItems: []
   };
   snapshot.progress = progress;
   snapshot.pause = pause;
