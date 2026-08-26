@@ -214,14 +214,14 @@ export class ScrapeTaskQueue {
       this.publish();
     };
     this.executor.execute(task.request, onProgress, task.resumeState)
-      .then((outcome: ScrapeExecutionOutcome): void => {
+      .then(async (outcome: ScrapeExecutionOutcome): Promise<void> => {
         try {
           this.handleOutcome(task, outcome);
         } catch (e) {
           // handleOutcome 若在运行中减计数后抛同步异常（如 outcome.result 字段不完整），
           // 先恢复计数再交给 .catch(fail) 统一递减，避免 runningCount 重复递减导致调度超出并发上限。
           this.runningCount++;
-          return Promise.reject(e);
+          throw e as Error;
         }
       })
       .catch((error: Error): void => {
@@ -393,7 +393,7 @@ export class ScrapeTaskQueue {
     const removeCount = removable.length - this.maxTerminalHistory;
     const removeIds = new Set<string>();
     for (let index = 0; index < removeCount; index++) {
-      removeIds.add(candidates[index].id);
+      removeIds.add(removable[index].id);
     }
     this.tasks = this.tasks.filter((task: ScrapeTaskSnapshot): boolean => !removeIds.has(task.id));
   }
