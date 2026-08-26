@@ -536,6 +536,13 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
     }
   });
 
+  // 剧集目录结构（含季目录）下、文件名带弱电影信号（如 trailer/预告）的文件，
+  // 语义上属于该剧集的集内文件。优先按 tv 处理，避免因 tv/movie 信号冲突
+  // 被误判 unknown，导致确认模式下与 resume 的剧集组 key 失配而落入候选确认暂停。
+  if (tvScore > 0 && input.pathSegments.some((segment: string): boolean => isSeasonDirectorySegment(segment))) {
+    return createMediaTypeClassificationResult('tv', signals, 'season-directory-context');
+  }
+
   if (tvScore > 0 && movieScore > 0 && Math.abs(tvScore - movieScore) < 25) {
     return createMediaTypeClassificationResult('unknown', signals, 'conflicting-signals');
   }
