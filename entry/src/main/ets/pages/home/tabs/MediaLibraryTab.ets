@@ -1,6 +1,12 @@
 import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
-import { VideoScannerUtil, ScanMode } from "../../../utils/VideoScannerUtil"
+import { ScanMode } from "../../../utils/VideoScannerTypes"
+import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
+import { ScrapeTaskQueue } from "../../../services/scrape/ScrapeTaskQueue"
+import { common } from "@kit.AbilityKit"
+import { ScopedScrapeRequest, ScrapeScope } from "../../../services/scrape/ScopedScrapeTypes"
+import { ScrapeTaskStore } from "../../../services/scrape/ScrapeTaskStore"
+import { MediaDataVersionStore } from "../../../services/scrape/MediaDataVersionStore"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
 import {
   MediaTypeClassificationResult,
@@ -765,11 +771,14 @@ export struct MediaLibraryTab {
   tabBarModel: TabBarModel = TabBarStore.getState()
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Require @Param tab: TabItem
-  @Local isScanning: boolean = false
+  @Local isRefreshingSubtitleTracks: boolean = false
   @Local isViewAllFocused: boolean = false
   @Local isAddFileSourceFocused: boolean = false
   @Local isAddVideoServerFocused: boolean = false
+  @Local isDiscoveringScan: boolean = false
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
   model: MediaLibraryModel = MediaLibraryModel.getState()
+  @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
   @Local sourceSwitchModel: SourceSwitchModel = SourceSwitchModel.getState()
   videoServerModel: VideoServerModel = VideoServerStore.getState()
   @Local serverLibraries: VideoServerLibrary[] = []
@@ -833,6 +842,15 @@ export struct MediaLibraryTab {
   aboutToDisappear(): void {
     console.info('[MediaLibraryTab][REFRESH] aboutToDisappear 调用，取消订阅 eventId=15');
     emitter.off(PlayerEvents.MEDIA_PROGRESS_SAVED.eventId);
+  }
+
+  @Monitor('mediaDataVersionStore.globalVersion')
+  onMediaDataVersionChange(): void {
+    if (this.sourceSwitchModel.isFileSource()) {
+      this.model.reload().catch(() => {
+        console.warn('[MediaLibraryTab] 刮削完成后刷新媒体库失败')
+      })
+    }
   }
 
   @Monitor('sourceSwitchModel.activeSource')
@@ -1154,7 +1172,6 @@ export struct MediaLibraryTab {
   }
 
   private startOverwriteScan(): void {
-    if (this.isScanning) { return; }
     this.getUIContext().showAlertDialog({
       title: '覆盖所有元数据',
       message: '「覆盖所有元数据」将重新刮削所有视频的信息，覆盖现有海报、评分、分类等数据。确定继续吗？',
@@ -1173,234 +1190,84 @@ export struct MediaLibraryTab {
   }
 
   private async runScan(mode: ScanMode): Promise<void> {
-    if (this.isScanning) { return; }
-    this.isScanning = true;
+    // 文件扫描阶段（任务入队前）缺乏保护：重复点击会并发执行多次全量扫描与重复 upsert。
+    // 用本地的执行中标记覆盖「校验到入队」全程，避免并发扫描。
+    if (this.isDiscoveringScan) {
+      this.getUIContext().getPromptAction().showToast({ message: '正在扫描，请稍候' });
+      return;
+    }
+    const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+    if (tmdbKey.length === 0) {
+      this.getUIContext().getPromptAction().showToast({ message: '请先配置 TMDB API Key' });
+      return;
+    }
+    const scope: ScrapeScope = { kind: 'global', displayName: '全部媒体库' };
+    // 严格排除：全局媒体库只要在刮削中就禁止再次触发。
+    if (this.taskStore.getActiveForScope(scope) !== undefined) {
+      this.getUIContext().getPromptAction().showToast({ message: '全部媒体库正在刮削中' });
+      return;
+    }
+    const request: ScopedScrapeRequest = {
+      scope,
+      mode,
+      candidateStrategy: 'automatic'
+    };
+    this.isDiscoveringScan = true;
     try {
-      const context = this.getUIContext().getHostContext()!;
-      const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
-      const scrapeClient = tmdbKey.length > 0 ? new ScrapeClient({ tmdbApiKey: tmdbKey }) : undefined;
-
-      if (!scrapeClient) {
-        this.getUIContext().getPromptAction().showToast({
-          message: '未配置 TMDB API Key，将跳过刮削'
-        });
-      }
-
-      const result = await VideoScannerUtil.scan(context, scrapeClient, { mode });
-      const scrapeStats = result.scrapeSkippedVideos > 0
-        ? `，已跳过 ${result.scrapeSkippedVideos} 个元数据完整的视频`
-        : '';
-      console.info(
-        `[MediaLibraryTab] 扫描(${mode})完成，共 ${result.totalVideos} 个视频，` +
-        `处理 ${result.processedVideos} 个，跳过 ${result.skippedVideos} 个，刮削跳过 ${result.scrapeSkippedVideos} 个，耗时 ${result.elapsedMs}ms`
-      );
-      await this.model.reload();
-      this.getUIContext().getPromptAction().showToast({
-        message: `扫描完成：共 ${result.totalVideos} 个视频${scrapeStats}`
-      });
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      // 先发现并更新文件记录，再由统一队列执行元数据刮削。
+      await VideoScannerUtil.scan(context, undefined, { mode: mode });
+      await ScrapeTaskQueue.getInstance().enqueue(request);
+      this.getUIContext().getPromptAction().showToast({ message: '刮削任务已加入后台队列' });
     } catch (e) {
-      const err = e as Error;
-      console.error(`[MediaLibraryTab] 扫描(${mode})异常: ${err.message}`);
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: `扫描失败: ` + err.message });
-      } catch (_e) {}
+      const error = e as BusinessError;
+      this.getUIContext().getPromptAction().showToast({ message: `扫描失败: ${error.message}` });
     } finally {
-      this.isScanning = false;
+      this.isDiscoveringScan = false;
     }
   }
 
-  /**
-   * 手动刷新元数据（重新刮削所有视频）
-   */
-  private async refreshMetadata(): Promise<void> {
-    if (this.isScanning) { return; }
-    this.isScanning = true;
-    try {
-      const context = this.getUIContext().getHostContext()!;
-      const tmdbKey = await AppPreferences.get(PrefKey.TMDB_API_KEY, '');
+  /** 全局媒体库刮削 scope。 */
+  private getGlobalScope(): ScrapeScope {
+    const scope: ScrapeScope = { kind: 'global', displayName: '全部媒体库' };
+    return scope;
+  }
 
-      if (!tmdbKey || tmdbKey.length === 0) {
-        this.getUIContext().getPromptAction().showToast({
-          message: '请先配置 TMDB API Key'
-        });
-        return;
-      }
+  /** 全局刮削是否有活跃任务（waiting/running/waiting-confirmation）。 */
+  private isGlobalScraping(): boolean {
+    return this.taskStore.getActiveForScope(this.getGlobalScope()) !== undefined;
+  }
 
-      const scrapeClient = new ScrapeClient({ tmdbApiKey: tmdbKey });
-      const db = FileSourceDatabase.getInstance(context);
+  /** 全局刮削进度文案，如 "18/28"；无活跃任务返回空串。 */
+  private globalProgressText(): string {
+    return this.taskStore.getProgressText(this.getGlobalScope());
+  }
 
-      const allVideos = await db.getAllVideos();
-      console.info(`[MediaLibraryTab] 开始刷新元数据，共 ${allVideos.length} 个视频`);
-
-      let successCount = 0;
-      let failedCount = 0;
-      let skippedCount = 0;
-
-      for (const video of allVideos) {
-        try {
-          // 刷新元数据：无论是否已有 scrape_info，都重新刮削并更新
-          const classification = classifyVideoMediaType(video.fileName, video.filePath);
-          const seriesHint = extractSeriesHintFromFilePath(video.filePath);
-          if (classification.mediaType === 'unknown') {
-            await clearVideoScrapeAssociations(
-              db,
-              video.id!,
-              video.fileName,
-              `unknown:${classification.reason ?? 'unknown'}`
-            );
-            skippedCount++;
-            console.info(
-              `[MediaLibraryTab] 跳过弱语义文件 fileName=${video.fileName} reason=${classification.reason ?? 'unknown'} ` +
-              `signals=${formatMediaTypeClassificationSignals(classification)}`
-            );
-            continue;
-          }
-
-          if (classification.mediaType === 'movie') {
-            const movie = await scrapeClient.autoScrapeMovie(video.fileName);
-            if (!movie) {
-              await clearVideoScrapeAssociations(db, video.id!, video.fileName, 'movie-scrape-empty');
-              failedCount++;
-              continue;
-            }
-
-            let movieId: number;
-            const existingMovie = await db.getMovieByProviderId(movie.provider, movie.providerId);
-            if (existingMovie && existingMovie.id !== undefined) {
-              movieId = existingMovie.id;
-              // 刷新：始终用最新刮削结果覆盖
-              const updateEntity: MovieEntity = {
-                id: existingMovie.id,
-                provider: movie.provider, providerId: movie.providerId, title: movie.title,
-                originalTitle: movie.originalTitle, overview: movie.overview,
-                releaseDate: movie.releaseDate, rating: movie.rating, voteCount: movie.voteCount,
-                posterPath: movie.posterPath, backdropPath: movie.backdropPath,
-                posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
-                genresJson: movie.genresJson, castJson: movie.castJson,
-                directorsJson: movie.directorsJson, runtime: movie.runtime,
-                originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
-                scrapedAt: Date.now()
-              };
-              await db.upsertMovie(updateEntity);
-            } else {
-              const movieEntity: MovieEntity = {
-                provider: movie.provider, providerId: movie.providerId, title: movie.title,
-                originalTitle: movie.originalTitle, overview: movie.overview,
-                releaseDate: movie.releaseDate, rating: movie.rating, voteCount: movie.voteCount,
-                posterPath: movie.posterPath, backdropPath: movie.backdropPath,
-                posterUrl: movie.posterUrl, backdropUrl: movie.backdropUrl,
-                genresJson: movie.genresJson, castJson: movie.castJson,
-                directorsJson: movie.directorsJson, runtime: movie.runtime,
-                originalLanguage: movie.originalLanguage, rawJson: movie.rawJson,
-                scrapedAt: Date.now()
-              };
-              movieId = await db.upsertMovie(movieEntity);
-            }
-            const scrapeInfo: ScrapeInfoEntity = {
-              videoId: video.id!, provider: movie.provider, providerId: movie.providerId,
-              mediaType: 'movie', title: movie.title, originalTitle: movie.originalTitle,
-              movieId, scrapedAt: Date.now()
-            };
-            await db.upsertScrapeInfo(scrapeInfo);
-            successCount++;
-          } else {
-            const result = await scrapeClient.autoScrapeTvEpisode(video.fileName, seriesHint, classification.mediaType);
-            if (!result.series) {
-              await clearVideoScrapeAssociations(db, video.id!, video.fileName, 'tv-scrape-empty');
-              failedCount++;
-              continue;
-            }
-            const series: TvSeriesScrapeResult = result.series!;
-            const season = result.season;
-            const episode = result.episode;
-
-            let seriesId: number;
-            const seriesEntity: TvSeriesEntity = {
-              provider: series.provider, providerId: series.providerId, title: series.title,
-              originalTitle: series.originalTitle, overview: series.overview,
-              firstAirDate: series.firstAirDate, rating: series.rating, voteCount: series.voteCount,
-              posterPath: series.posterPath, backdropPath: series.backdropPath,
-              posterUrl: series.posterUrl, backdropUrl: series.backdropUrl,
-              genresJson: series.genresJson, castJson: series.castJson,
-              numberOfSeasons: series.numberOfSeasons,
-              originalLanguage: series.originalLanguage, rawJson: series.rawJson,
-              scrapedAt: Date.now()
-            };
-            seriesId = await db.upsertTvSeries(seriesEntity);
-
-            let seasonId: number | undefined;
-            if (season) {
-              const existingSeason = await db.getTvSeason(seriesId, season.seasonNumber);
-              if (existingSeason && existingSeason.id !== undefined) {
-                seasonId = existingSeason.id;
-              } else {
-                const seasonEntity: TvSeasonEntity = {
-                  seriesId, provider: season.provider, providerId: season.providerId,
-                  seasonNumber: season.seasonNumber, title: season.title,
-                  overview: season.overview, airDate: season.airDate,
-                  episodeCount: season.episodeCount, posterPath: season.posterPath,
-                  posterUrl: season.posterUrl, rawJson: season.rawJson, scrapedAt: Date.now()
-                };
-                seasonId = await db.upsertTvSeason(seasonEntity);
-              }
-            }
-
-            let episodeId: number | undefined;
-            if (episode) {
-              const existingEp = await db.getTvEpisode(seriesId, episode.seasonNumber, episode.episodeNumber);
-              if (existingEp && existingEp.id !== undefined) {
-                episodeId = existingEp.id;
-              } else {
-                const epEntity: TvEpisodeEntity = {
-                  seriesId, seasonId, provider: episode.provider, providerId: episode.providerId,
-                  seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
-                  title: episode.title, overview: episode.overview, airDate: episode.airDate,
-                  runtime: episode.runtime, rating: episode.rating,
-                  stillPath: episode.stillPath, stillUrl: episode.stillUrl,
-                  rawJson: episode.rawJson, scrapedAt: Date.now()
-                };
-                episodeId = await db.upsertTvEpisode(epEntity);
-              }
-            }
-
-            const mediaType = episodeId !== undefined ? 'episode' : 'tv';
-            const scrapeSeasonNumber = episode?.seasonNumber ?? season?.seasonNumber;
-            const scrapeEpisodeNumber = episode?.episodeNumber;
-            const scrapeInfo: ScrapeInfoEntity = {
-              videoId: video.id!, provider: series.provider,
-              providerId: episodeId !== undefined ? (episode?.providerId ?? series.providerId) : series.providerId,
-              mediaType, title: episode?.title ?? series.title, originalTitle: series.originalTitle,
-              tvSeriesId: seriesId, episodeId,
-              seasonNumber: scrapeSeasonNumber, episodeNumber: scrapeEpisodeNumber,
-              scrapedAt: Date.now()
-            };
-            await db.upsertScrapeInfo(scrapeInfo);
-            successCount++;
-          }
-          console.info(`[MediaLibraryTab] 刮削成功: ${video.fileName}`);
-        } catch (e) {
-          failedCount++;
-          if (video.id !== undefined) {
-            try {
-              await clearVideoScrapeAssociations(db, video.id, video.fileName, 'scrape-exception');
-            } catch (_cleanupError) {}
-          }
-          const err = e as Error;
-          console.error(`[MediaLibraryTab] 刮削异常: ${video.fileName}, ${err.message}`);
-        }
-      }
-
-      await this.model.reload();
-      this.getUIContext().getPromptAction().showToast({
-        message: `刷新完成：成功 ${successCount} 个，失败 ${failedCount} 个，跳过 ${skippedCount} 个`
-      });
-    } catch (e) {
-      const err = e as Error;
-      console.error(`[MediaLibraryTab] 刷新元数据异常: ${err.message}`);
-      try { this.getUIContext().getPromptAction().showToast({ message: '刷新失败: ' + err.message }); } catch (_e) {}
-    } finally {
-      this.isScanning = false;
+  /** 全局刮削状态文案（含标题前缀）。 */
+  private globalStatusText(): string {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    if (task === undefined) {
+      return '';
     }
+    if (task.status === 'waiting') {
+      return '全部媒体库 · 等待刮削';
+    }
+    if (task.status === 'waiting-confirmation') {
+      return '全部媒体库 · 等待确认';
+    }
+    return '全部媒体库 · 正在刮削';
+  }
+
+  /** 全局刮削已完成数量。 */
+  private globalCompletedCount(): number {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    return task === undefined ? 0 : task.progress.completed;
+  }
+
+  /** 全局刮削总数量。 */
+  private globalTotalCount(): number {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    return task === undefined ? 0 : task.progress.total;
   }
 
   /**
@@ -1411,8 +1278,8 @@ export struct MediaLibraryTab {
    * - 不改 scrape_info/movie/tv_* 数据。
    */
   private async refreshSubtitleTrackMetadata(): Promise<void> {
-    if (this.isScanning) { return; }
-    this.isScanning = true;
+    if (this.isRefreshingSubtitleTracks) { return; }
+    this.isRefreshingSubtitleTracks = true;
     try {
       const db = FileSourceDatabase.getInstance();
       const videos = await db.getAllVideos();
@@ -1521,12 +1388,12 @@ export struct MediaLibraryTab {
       console.error(`[MediaLibraryTab] 刷新字幕轨元数据异常: ${err.message}`);
       try { this.getUIContext().getPromptAction().showToast({ message: '刷新字幕轨失败: ' + err.message }); } catch (_e) {}
     } finally {
-      this.isScanning = false;
+      this.isRefreshingSubtitleTracks = false;
     }
   }
 
   private showRefreshSubtitleTrackDialog(): void {
-    if (this.isScanning) { return; }
+    if (this.isRefreshingSubtitleTracks) { return; }
     this.getUIContext().showAlertDialog({
       title: '刷新字幕轨信息',
       message: '将重新探测媒体库视频的音轨/字幕轨信息（仅 WebDAV），可能耗时较长。是否继续？',
@@ -1709,55 +1576,88 @@ export struct MediaLibraryTab {
       Text(this.getLastScanText())
         .fontSize(11).fontColor('#555555').textAlign(TextAlign.Center).width('100%').margin({ bottom: 16 })
 
-      Column({ space: 10 }) {
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Column({ space: 5 }) {
-            Text(this.isScanning ? '扫描中...' : '扫描新增和已修改的文件')
-              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#4A9FFF')
-              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
-            Text('仅处理新增或已改动的文件，已有元数据不受影响')
-              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
-        .enabled(!this.isScanning)
-        .onClick(() => { this.startIncrementalScan(); })
-
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Column({ space: 5 }) {
-            Text(this.isScanning ? '扫描中...' : '补全缺少的元数据')
-              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#52C41A')
-              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
-            Text('为缺少海报或信息的视频重新补全，已完整的跳过')
-              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
-        .enabled(!this.isScanning)
-        .onClick(() => { this.startFixMissingScan(); })
-
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Column({ space: 5 }) {
-            Text(this.isScanning ? '扫描中...' : '覆盖所有元数据')
-              .fontSize(15).fontColor(this.isScanning ? '#555555' : '#FF8C4A')
-              .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
-            Text('重新刮削全部视频，覆盖现有海报、评分和分类')
-              .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
-        .enabled(!this.isScanning)
-        .onClick(() => { this.startOverwriteScan(); })
+      if (this.isGlobalScraping()) {
+        this.GlobalScrapeStatus()
+      } else {
+        this.ScanActionButtons()
       }
-      .width('100%').margin({ bottom: 40 })
     }
     .width('100%').alignItems(HorizontalAlign.Center).padding({ left: 16, right: 16 })
+  }
+
+  @Builder
+  GlobalScrapeStatus() {
+    Column({ space: 10 }) {
+      Row() {
+        Text(this.globalStatusText())
+          .fontSize(15).fontColor('#4A9FFF').fontWeight(FontWeight.Medium)
+        Blank()
+        Text(this.globalProgressText())
+          .fontSize(13).fontColor('#4A9FFF').fontWeight(FontWeight.Medium)
+      }
+      .width('100%')
+
+      if (this.globalTotalCount() > 0) {
+        Progress({ value: this.globalCompletedCount(), total: this.globalTotalCount(), type: ProgressType.Linear })
+          .width('100%').height(4)
+          .color('#4A9FFF')
+          .backgroundColor('#333333')
+      }
+
+      Text('刮削完成后将自动恢复下方操作入口')
+        .fontSize(12).fontColor('#888888').width('100%').textAlign(TextAlign.Start)
+    }
+    .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .backgroundColor('#1C1C1C').borderRadius(10)
+    .margin({ bottom: 40 })
+  }
+
+  @Builder
+  ScanActionButtons() {
+    Column({ space: 10 }) {
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Column({ space: 5 }) {
+          Text('扫描新增和已修改的文件')
+            .fontSize(15).fontColor('#4A9FFF')
+            .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+          Text('仅处理新增或已改动的文件，已有元数据不受影响')
+            .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+      .onClick(() => { this.startIncrementalScan(); })
+
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Column({ space: 5 }) {
+          Text('补全缺少的元数据')
+            .fontSize(15).fontColor('#52C41A')
+            .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+          Text('为缺少海报或信息的视频重新补全，已完整的跳过')
+            .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+      .onClick(() => { this.startFixMissingScan(); })
+
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Column({ space: 5 }) {
+          Text('覆盖所有元数据')
+            .fontSize(15).fontColor('#FF8C4A')
+            .fontWeight(FontWeight.Medium).width('100%').textAlign(TextAlign.Start)
+          Text('重新刮削全部视频，覆盖现有海报、评分和分类')
+            .fontSize(12).fontColor('#AAAAAA').width('100%').textAlign(TextAlign.Start)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').backgroundColor('#1C1C1C').borderRadius(10)
+      .onClick(() => { this.startOverwriteScan(); })
+    }
+    .width('100%').margin({ bottom: 40 })
   }
 
   @Builder

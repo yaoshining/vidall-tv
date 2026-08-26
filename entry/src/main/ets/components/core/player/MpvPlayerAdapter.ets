@@ -687,7 +687,11 @@ export class MpvPlayerAdapter implements IPlayer {
     }
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `state 事件: ${state}`);
-    switch (state) {
+    // DV Profile 5 走 vo_gpu_next 自渲染，恢复播放时 native 发 "resumed"（非 PlayerState 枚举）。
+    // 这里归一化为 "playing"，让 _isPlaying/onPlay 正确更新（否则 toggle 误判导致无法暂停）。
+    const stateStr: string = state as string;
+    const normalized: string = stateStr === 'resumed' ? 'playing' : stateStr;
+    switch (normalized) {
       case 'preparing':
         // mpv 正在准备，还未 prepared
         // 立即禁止自动选字幕轨 + 关闭内嵌渲染，避免 mpv 默认 sid=auto 选中首个字幕轨
@@ -695,6 +699,8 @@ export class MpvPlayerAdapter implements IPlayer {
         this.disableSubtitleVisibility();
         break;
       case 'playing':
+        // 进入播放态：_isPlaying=true + 清 _pendingPlay + 触发 onPlay。
+        // （resumed 已在 handleStateEvent 开头归一化为 playing）
         this._isPlaying = true;
         if (this._pendingPlay) {
           // play() 之前被拒绝，但 libmpv 已自动进入 playing，清除标志

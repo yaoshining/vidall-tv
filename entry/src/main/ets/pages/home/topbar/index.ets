@@ -6,6 +6,7 @@ import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
 import { SearchWorkspacePage } from "../../search"
 import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel"
+import { ScrapeTaskIndicator } from "../../../components/scrape/ScrapeTaskIndicator"
 
 @ComponentV2
 export struct HomeTopBar {
@@ -127,6 +128,8 @@ export struct HomeTopBar {
         justifyContent: FlexAlign.End,
         alignItems: ItemAlign.Center,
       }) {
+        ScrapeTaskIndicator()
+          .margin({ right: 10 })
         BasicClock()
           .margin({ right: 12 })
         Image($r('app.media.logo'))

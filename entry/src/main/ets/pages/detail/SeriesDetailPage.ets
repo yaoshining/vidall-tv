@@ -23,6 +23,10 @@ import {
 import { emitter } from "@kit.BasicServicesKit"
 import { PlayerEvents } from '../../components/core/player/Constants'
 import { MediaLibraryContext } from '../../components/core/player/PlaybackContext'
+import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel'
+import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
+import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore'
+import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore'
 import { tmdbImageUrl, formatYear, parseGenresArr, translateJob, toChineseSeasonLabel, buildEpisodeCode, isGenericSeasonTitle, toOpaqueColor } from '../../utils/MediaFormatUtil'
 
 // ─────────────────────────────────────────────
@@ -121,6 +125,49 @@ export struct SeriesDetailPage {
   @Local hoveredContinueActionKey: string = ''
   /** 删除系列确认弹窗 */
   @Local showDeleteDialog: boolean = false
+  @Local showScrapeModes: boolean = false
+  @Local focusedScrapeAction: boolean = false
+  @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
+  @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
+
+  @Monitor('mediaDataVersionStore.globalVersion')
+  onMediaDataVersionChange(): void {
+    const seriesId = this.seriesEntity?.id ?? this.group?.tvSeriesId
+    if (seriesId !== undefined) {
+      this.loadData(seriesId).catch(() => {
+        console.warn('[SeriesDetailPage] 刮削完成后刷新失败')
+      })
+    }
+  }
+
+  private getScrapeScope(): ScrapeScope | undefined {
+    const seriesId = this.seriesEntity?.id ?? this.group?.tvSeriesId;
+    if (seriesId === undefined) {
+      return undefined;
+    }
+    const scope: ScrapeScope = { kind: 'series', tvSeriesId: seriesId, displayName: this.getTitle() };
+    return scope;
+  }
+
+  /** 当前剧集是否正在刮削（任意 active 状态）。 */
+  private isScraping(): boolean {
+    const scope = this.getScrapeScope();
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private scrapeProgressText(): string {
+    const scope = this.getScrapeScope();
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
+  private openScrapeModes(): void {
+    const scope = this.getScrapeScope();
+    if (scope === undefined) { return; }
+    // 严格排除：刮削中禁止再次打开模式面板。
+    if (this.taskStore.getActiveForScope(scope) !== undefined) { return; }
+    this.showScrapeModes = true;
+  }
 
   private progressRefreshCallback: () => void = () => {};
 
@@ -1157,6 +1204,20 @@ export struct SeriesDetailPage {
                 .constraintSize({ maxWidth: 700 })
             }
           }
+
+          if (this.getScrapeScope() !== undefined) {
+            Button(this.isScraping() ? `刮削中 ${this.scrapeProgressText()}` : '更多操作')
+              .width(168).height(50)
+              .fontSize(17).fontColor(this.isScraping() ? '#9AA0A8' : Color.White)
+              .backgroundColor(this.focusedScrapeAction ? '#356FA8' : '#3A3D43')
+              .border({ width: this.focusedScrapeAction ? 2 : 0, color: '#88C8FF' })
+              .focusable(true)
+              .enabled(!this.isScraping())
+              .opacity(this.isScraping() ? 0.6 : 1)
+              .onFocus(() => { if (!this.isScraping()) { this.focusedScrapeAction = true; } })
+              .onBlur(() => { this.focusedScrapeAction = false; })
+              .onClick(() => { this.openScrapeModes(); })
+          }
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
@@ -1282,19 +1343,6 @@ export struct SeriesDetailPage {
               }
             })
             this.SimilarSection()
-            // 删除系列按钮（临时，用于测试重新刮削）
-            Row() {
-              Button('删除系列数据')
-                .fontSize(14)
-                .fontColor('#FF5252')
-                .backgroundColor(Color.Transparent)
-                .border({ width: 1, color: '#FF5252', radius: 8 })
-                .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-                .onClick(() => { this.confirmDeleteSeries(); })
-            }
-            .width('100%')
-            .justifyContent(FlexAlign.Center)
-            .margin({ top: 24, bottom: 16 })
             Column().height(80)
           }
           .width('100%')
@@ -1316,7 +1364,11 @@ export struct SeriesDetailPage {
           onClose: () => { this.showOverviewDialog = false }
         })
 
-
+        ScrapeModePanel({
+          visible: this.showScrapeModes,
+          scope: this.getScrapeScope(),
+          onClose: () => { this.showScrapeModes = false; }
+        })
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
@@ -1334,6 +1386,10 @@ export struct SeriesDetailPage {
       this.refreshPlaybackState().catch(() => {});
     })
     .onBackPressed(() => {
+      if (this.showScrapeModes) {
+        this.showScrapeModes = false;
+        return true;
+      }
       if (this.showOverviewDialog) {
         this.showOverviewDialog = false;
         return true;

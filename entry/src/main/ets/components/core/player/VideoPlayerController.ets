@@ -689,6 +689,8 @@ export class VideoPlayerController {
     videoData.audioProbeSummary = decision.summary;
     videoData.videoCodec = decision.videoCodecName;
     videoData.videoHdrType = decision.videoHdrType;
+    videoData.videoDvProfile = decision.videoDvProfile;
+    videoData.videoDvBlCompatibilityId = decision.videoDvBlCompatibilityId;
     videoData.videoWidth = decision.videoWidth;
     videoData.videoHeight = decision.videoHeight;
     this.lastRoutingDecision = decision;
@@ -712,6 +714,7 @@ export class VideoPlayerController {
       `detectedCodec=${decision.detectedCodec}, detectedChannels=${decision.detectedChannels}, ` +
       `recommendedTrack=${decision.recommendedInitialTrackIndex}(${decision.recommendedCodec || '无'}), ` +
       `videoHdrType=${decision.videoHdrType.length > 0 ? decision.videoHdrType : '未知'}, ` +
+      `dvProfile=${decision.videoDvProfile ?? '?'}, dvBlSig=${decision.videoDvBlCompatibilityId ?? '?'}, ` +
       `videoSize=${decision.videoWidth ?? '?'}x${decision.videoHeight ?? '?'}`);
     hilog.info(CommonConstants.LOG_DOMAIN, TAG,
       `[initPlayer.route-decision] trackAnalyses=${decision.trackAnalyses.length} 条:`);

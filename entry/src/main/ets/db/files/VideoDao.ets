@@ -149,6 +149,54 @@ export class VideoDao {
     }
   }
 
+  /** 按电影关联查询视频，结果按视频主键稳定排序 */
+  async getVideosByMovieId(movieId: number): Promise<VideoEntity[]> {
+    return this.queryVideosByScrapeRelation('si.movie_id = ?', [movieId]);
+  }
+
+  /** 按系列关联查询视频，结果按视频主键稳定排序 */
+  async getVideosByTvSeriesId(tvSeriesId: number): Promise<VideoEntity[]> {
+    return this.queryVideosByScrapeRelation('si.tv_series_id = ?', [tvSeriesId]);
+  }
+
+  /** 按系列和季号查询视频，结果按视频主键稳定排序 */
+  async getVideosBySeason(tvSeriesId: number, seasonNumber: number): Promise<VideoEntity[]> {
+    return this.queryVideosByScrapeRelation(
+      'si.tv_series_id = ? AND si.season_number = ?',
+      [tvSeriesId, seasonNumber]
+    );
+  }
+
+  /**
+   * 查询文件夹本身及所有子目录中的视频。
+   * 使用分隔符边界匹配，避免 /movie 误包含 /movie-old。
+   */
+  async getVideosByDirectoryTree(sourceId: number, directoryPath: string): Promise<VideoEntity[]> {
+    const store = this.core.getStore();
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      // 目录边界匹配：file_path 以 directoryPath + '/' 开头，或 directory_path 等于 directoryPath / 以其 + '/' 开头。
+      // 同时匹配 file_path 与 directory_path，以兼容历史数据（directory_path 曾存扫描根目录，file_path 才是文件完整路径）。
+      rs = await store.querySql(
+        `SELECT * FROM ${TABLE_VIDEOS}
+         WHERE source_id = ?
+           AND (
+             directory_path = ?
+             OR substr(directory_path, 1, length(?) + 1) = ? || '/'
+             OR substr(file_path, 1, length(?) + 1) = ? || '/'
+           )
+         ORDER BY id ASC`,
+        [sourceId, directoryPath, directoryPath, directoryPath, directoryPath, directoryPath]
+      );
+      return this.collectVideos(rs);
+    } catch (error) {
+      console.error(`[FileSourceDatabase] getVideosByDirectoryTree 失败: ${JSON.stringify(error)}`);
+      return [];
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
   /** 获取所有视频 */
   async getAllVideos(): Promise<VideoEntity[]> {
     const store = this.core.getStore();
@@ -193,6 +241,37 @@ export class VideoDao {
     } catch (error) {
       console.warn(`[FileSourceDatabase] markVideoUpdatedByPath 失败 path=${filePath}: ${JSON.stringify(error)}`);
     }
+  }
+
+  private async queryVideosByScrapeRelation(
+    relationWhere: string,
+    args: relationalStore.ValueType[]
+  ): Promise<VideoEntity[]> {
+    const store = this.core.getStore();
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await store.querySql(
+        `SELECT v.* FROM ${TABLE_VIDEOS} AS v
+         INNER JOIN ${TABLE_SCRAPE_INFO} AS si ON si.video_id = v.id
+         WHERE ${relationWhere}
+         ORDER BY v.id ASC`,
+        args
+      );
+      return this.collectVideos(rs);
+    } catch (error) {
+      console.error(`[FileSourceDatabase] queryVideosByScrapeRelation 失败: ${JSON.stringify(error)}`);
+      return [];
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
+  private collectVideos(rs: relationalStore.ResultSet): VideoEntity[] {
+    const videos: VideoEntity[] = [];
+    while (rs.goToNextRow()) {
+      videos.push(this.parseVideoEntity(rs));
+    }
+    return videos;
   }
 
   private parseVideoEntity(rs: relationalStore.ResultSet): VideoEntity {

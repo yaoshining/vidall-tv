@@ -49,6 +49,21 @@ export class MediaQueryDao {
     `;
   }
 
+  async getMediaItemByVideoId(videoId: number): Promise<MediaItem | null> {
+    if (!this.core.isReady()) { return null; }
+    const store = this.core.getStore();
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await store.querySql(this.mediaItemSql + ' WHERE v.id = ? LIMIT 1', [videoId]);
+      return rs.goToNextRow() ? this.parseMediaItem(rs) : null;
+    } catch (e) {
+      console.error('[FileSourceDatabase] getMediaItemByVideoId', JSON.stringify(e));
+      return null;
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
   async getAllMediaItems(): Promise<MediaItem[]> {
     if (!this.core.isReady()) { return []; }
     const store = this.core.getStore();

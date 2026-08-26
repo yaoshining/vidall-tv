@@ -15,6 +15,9 @@ import { ServerSeasonDetailPage } from './detail/ServerSeasonDetailPage';
 import { ServerPersonDetailPage } from './detail/ServerPersonDetailPage';
 import { ServerLibraryListPage } from './detail/ServerLibraryListPage';
 import { PlayHistoryPage } from './history/PlayHistoryPage';
+import { ScrapeManagementPage } from './scrape/ScrapeManagementPage';
+import { ScrapeFailureDetailPage } from './scrape/ScrapeFailureDetailPage';
+import { LogTextViewerPage } from './scrape/LogTextViewerPage';
 import { SearchWorkspacePage } from './search';
 import { MediaResultPage } from './search';
 import { LoginDialog } from '../components/account/LoginDialog';
@@ -73,6 +76,12 @@ struct Index {
       ServerLibraryListPage();
     } else if (name === PlayHistoryPage.PAGE_NAME) {
       PlayHistoryPage();
+    } else if (name === ScrapeManagementPage.PAGE_NAME) {
+      ScrapeManagementPage();
+    } else if (name === ScrapeFailureDetailPage.PAGE_NAME) {
+      ScrapeFailureDetailPage();
+    } else if (name === LogTextViewerPage.PAGE_NAME) {
+      LogTextViewerPage();
     } else if (name === SearchWorkspacePage.PAGE_NAME) {
       SearchWorkspacePage();
     } else if (name === MediaResultPage.PAGE_NAME) {

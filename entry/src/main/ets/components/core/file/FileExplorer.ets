@@ -34,6 +34,7 @@ export struct FileExplorer {
   @Param isResourceSelected: (resource: FileExplorerResource) => boolean = () => false
   @Param onResourceSelectionToggle: (resource: FileExplorerResource) => void = () => {}
   @Event onFileClick: (event: FileClickEvent) => void = () => {};
+  @BuilderParam toolbarActionsBuilder?: () => void
   @BuilderParam extraTopBuilder?: () => void
   @BuilderParam extraBottomBuilder?: () => void
   @BuilderParam overlayBuilder?: () => void
@@ -188,6 +189,10 @@ export struct FileExplorer {
             .fontSize(14)
             .fontColor(this.COLORS.tertiaryText)
             .layoutWeight(1)
+
+          if (this.toolbarActionsBuilder) {
+            this.toolbarActionsBuilder()
+          }
 
           if (this.isLoading) {
             LoadingProgress()

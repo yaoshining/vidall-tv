@@ -112,6 +112,11 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
     // 无任何兼容音轨（已知不支持或能力未知）→ 直接 MPV
     preferredBackend = 'mpv';
   }
+  // Dolby Vision Profile 5（IPTPQc2，dvBlSig=0 无 HDR10/SDR 兼容基层）无法由系统原生解码器正确还原色彩，
+  // 强制走 mpv 软解（libmpv/ffmpeg 支持 ICtCp→RGB 色调映射），避免画面发灰/掉饱和。
+  if (input.probeVideoDvProfile === 5 && preferredBackend === 'avplayer') {
+    preferredBackend = 'mpv';
+  }
 
   const allSoftDecodeOnly = trackCount > 0 && !anyHardware;
   const anyPlayable = anyCompatible || trackCount === 0;
@@ -139,6 +144,8 @@ export function buildRoutingDecision(input: AudioRoutingInput): AudioRoutingDeci
     precheckProbeError: input.precheckProbeError,
     videoCodecName: (input.probeVideoCodecName ?? '').toLowerCase(),
     videoHdrType: input.probeVideoHdrType ?? '',
+    videoDvProfile: input.probeVideoDvProfile,
+    videoDvBlCompatibilityId: input.probeVideoDvBlCompatibilityId,
     videoWidth: input.probeVideoWidth,
     videoHeight: input.probeVideoHeight,
     trackAnalyses: tracks,
@@ -395,6 +402,8 @@ export class AudioTrackRoutingService {
     let precheckProbeError = '';
     let videoCodecName = '';
     let probeVideoHdrType = '';
+    let probeVideoDvProfile: number | undefined = undefined;
+    let probeVideoDvBlCompatibilityId: number | undefined = undefined;
     let probeVideoWidth: number | undefined = undefined;
     let probeVideoHeight: number | undefined = undefined;
     let probeSuccess = false;
@@ -404,6 +413,8 @@ export class AudioTrackRoutingService {
     }
     interface ProbeVideo {
       codec: string;
+      dvProfile?: number;
+      dvBlCompatibilityId?: number;
     }
     const probeAudioTracks: ProbeAudio[] = [];
     const probeVideoTracks: ProbeVideo[] = [];
@@ -433,10 +444,16 @@ export class AudioTrackRoutingService {
       if (probe.success && probe.videoTracks.length > 0) {
         videoCodecName = (probe.videoTracks[0].codecName ?? '').toLowerCase();
         probeVideoHdrType = probe.videoTracks[0].hdrType ?? '';
+        probeVideoDvProfile = probe.videoTracks[0].dvProfile;
+        probeVideoDvBlCompatibilityId = probe.videoTracks[0].dvBlSignalCompatibilityId;
         probeVideoWidth = probe.videoTracks[0].width;
         probeVideoHeight = probe.videoTracks[0].height;
         for (let i = 0; i < probe.videoTracks.length; i++) {
-          const v: ProbeVideo = { codec: (probe.videoTracks[i].codecName ?? '').toLowerCase() };
+          const v: ProbeVideo = {
+            codec: (probe.videoTracks[i].codecName ?? '').toLowerCase(),
+            dvProfile: probe.videoTracks[i].dvProfile,
+            dvBlCompatibilityId: probe.videoTracks[i].dvBlSignalCompatibilityId
+          };
           probeVideoTracks.push(v);
         }
       }
@@ -469,6 +486,8 @@ export class AudioTrackRoutingService {
       probeChannels,
       probeVideoCodecName: videoCodecName,
       probeVideoHdrType,
+      probeVideoDvProfile,
+      probeVideoDvBlCompatibilityId,
       probeVideoWidth,
       probeVideoHeight,
       probeSuccess,

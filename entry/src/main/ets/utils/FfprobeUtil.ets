@@ -473,6 +473,16 @@ export class FfprobeUtil {
           ` title=${t.title ?? '(无)'}`
         );
       });
+      // HDR 调色诊断：记录视频轨色域/传递函数/位深/DV profile，用于甄别 DoVi Profile5(IPTPQc2) 与 Profile8
+      videoTracks.forEach((t, i) => {
+        console.info(
+          `[FfprobeUtil]   视频轨[${i}] codec=${t.codecName} ${t.width ?? '?'}x${t.height ?? '?'} ` +
+          `bitDepth=${t.bitDepth ?? '?'} pixFmt=${t.pixelFormat ?? '?'} ` +
+          `primaries=${t.colorPrimaries ?? '?'} transfer=${t.colorTransfer ?? '?'} ` +
+          `colorspace=${t.colorSpace ?? '?'} range=${t.colorRange ?? '?'} ` +
+          `dvProfile=${t.dvProfile ?? '?'} dvBlSig=${t.dvBlSignalCompatibilityId ?? '?'} hdr=${t.hdrType ?? '?'}`
+        );
+      });
 
       const result: FfprobeResult = {
         success: true,

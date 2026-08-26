@@ -126,6 +126,13 @@ const SEASON_DIRECTORY_PATTERNS: RegExp[] = [
  */
 const CHINESE_SEASON_SUFFIX_PATTERN = /第\s*([\d一二三四五六七八九十百零〇]+)\s*[季部]$/;
 
+/**
+ * 括号包裹的中文季号后缀模式：如 "艾米丽在巴黎(第五季)"、"艾米丽在巴黎（第5季）"。
+ * 与 CHINESE_SEASON_SUFFIX_PATTERN 的区别是季号用圆括号/全角括号包裹，且允许括号前有空格。
+ */
+const BRACKETED_CHINESE_SEASON_SUFFIX_PATTERN =
+  /[\s（(]*第\s*([\d一二三四五六七八九十百零〇]+)\s*[季部]\s*[)）]\s*$/;
+
 /** 中文个位数字到阿拉伯数字的映射 */
 const CHINESE_UNIT_MAP: Record<string, number> = {
   '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
@@ -304,7 +311,8 @@ export function isSeasonDirectorySegment(segment: string): boolean {
   const normalizedSegment = normalizeSemanticToken(segment);
   return SEASON_DIRECTORY_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedSegment)) ||
     /^第\s*[\d一二三四五六七八九十百零〇]+\s*季/.test(segment) ||
-    CHINESE_SEASON_SUFFIX_PATTERN.test(segment);
+    CHINESE_SEASON_SUFFIX_PATTERN.test(segment) ||
+    BRACKETED_CHINESE_SEASON_SUFFIX_PATTERN.test(segment);
 }
 
 /**
@@ -322,6 +330,12 @@ export function isSeasonDirectorySegment(segment: string): boolean {
  * @returns 季号，无法提取时返回 undefined
  */
 export function extractSeasonNumberFromDirectoryName(directoryName: string): number | undefined {
+  // 0. 括号包裹的中文季号（如"艾米丽在巴黎(第五季)"）
+  const bracketedMatch = directoryName.match(BRACKETED_CHINESE_SEASON_SUFFIX_PATTERN);
+  if (bracketedMatch) {
+    return parseChineseSeasonNumber(bracketedMatch[1]);
+  }
+
   // 1. 中文季号后缀（如"御赐小仵作第二季"）
   const chineseMatch = directoryName.match(CHINESE_SEASON_SUFFIX_PATTERN);
   if (chineseMatch) {
@@ -364,6 +378,12 @@ export function extractSeasonNumberFromDirectoryName(directoryName: string): num
  * @returns 纯剧名，如果无法提取则返回 undefined
  */
 export function stripSeasonSuffixFromDirectoryName(directoryName: string): string | undefined {
+  // 优先处理括号包裹的中文季号（如"艾米丽在巴黎(第五季)"→"艾米丽在巴黎"）
+  const bracketedMatch = directoryName.match(BRACKETED_CHINESE_SEASON_SUFFIX_PATTERN);
+  if (bracketedMatch && bracketedMatch.index !== undefined) {
+    const stripped = directoryName.substring(0, bracketedMatch.index).trim();
+    return stripped.length > 0 ? stripped : undefined;
+  }
   const match = directoryName.match(CHINESE_SEASON_SUFFIX_PATTERN);
   if (!match) {
     return undefined;
@@ -515,6 +535,13 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
       movieScore += match.signal.weight ?? 0;
     }
   });
+
+  // 剧集目录结构（含季目录）下、文件名带弱电影信号（如 trailer/预告）的文件，
+  // 语义上属于该剧集的集内文件。优先按 tv 处理，避免因 tv/movie 信号冲突
+  // 被误判 unknown，导致确认模式下与 resume 的剧集组 key 失配而落入候选确认暂停。
+  if (tvScore > 0 && input.pathSegments.some((segment: string): boolean => isSeasonDirectorySegment(segment))) {
+    return createMediaTypeClassificationResult('tv', signals, 'season-directory-context');
+  }
 
   if (tvScore > 0 && movieScore > 0 && Math.abs(tvScore - movieScore) < 25) {
     return createMediaTypeClassificationResult('unknown', signals, 'conflicting-signals');

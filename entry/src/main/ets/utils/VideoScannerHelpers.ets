@@ -91,6 +91,9 @@ export function hasCompleteScrapeAssociation(scrapeInfo: ScrapeInfoEntity | null
   if (scrapeInfo.mediaType === 'movie') {
     return scrapeInfo.movieId !== undefined;
   }
+  if (scrapeInfo.mediaType === 'episode') {
+    return scrapeInfo.tvSeriesId !== undefined && scrapeInfo.episodeId !== undefined;
+  }
   return scrapeInfo.tvSeriesId !== undefined;
 }
 

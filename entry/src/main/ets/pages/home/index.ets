@@ -13,6 +13,7 @@ import { VideoServerStore } from "../../stores/servers/VideoServerStore"
 import { VideoServerModel } from "../../stores/servers/VideoServerModel"
 import { SourceSwitchModel } from "../../stores/media/SourceSwitchModel"
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService"
+import { ScrapeFailureLogStore } from "../../services/scrape/ScrapeFailureLogStore"
 
 @ComponentV2
 @Preview({
@@ -57,6 +58,16 @@ export struct HomePage {
 
   aboutToAppear(): void {
     this.loadSourceState()
+    // 注入失败日志存储的 context，并清空上次运行的临时失败日志（关 app 可清理）
+    try {
+      const hostContext = this.getUIContext().getHostContext();
+      if (hostContext !== undefined && hostContext !== null) {
+        ScrapeFailureLogStore.setContext(hostContext);
+        ScrapeFailureLogStore.clearAll().catch((): void => {});
+      }
+    } catch (e) {
+      // 忽略注入失败，store 内部有 /tmp 兜底目录
+    }
     if (UmamiAnalyticsService.isInitialized()) {
       // 按实际当前 tab 上报，而非固定 /home（Swiper.onChange 首次不触发）
       const path = this.tabIndexToPath(this.tabBarModel.currentTabIndex);

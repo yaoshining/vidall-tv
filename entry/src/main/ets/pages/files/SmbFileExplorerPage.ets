@@ -13,6 +13,11 @@ import { PresetAudioTrack, PresetSubtitleTrack } from '../../components/core/pla
 import { FileExplorerContext } from '../../components/core/player/PlaybackContext'
 import { UmamiAnalyticsService } from '../../services/analytics/UmamiAnalyticsService'
 import buffer from '@ohos.buffer'
+import { FileSourceDatabase } from '../../db/files/FileSourceDatabase'
+import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel'
+import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
+import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore'
+import { normalizeScrapeDirectoryPath } from '../../services/scrape/ScrapeScopeResolver'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 对外导出的路由参数接口
@@ -20,6 +25,8 @@ import buffer from '@ohos.buffer'
 
 export interface SmbFileExplorerPageParam {
   config: SMBSourceConfig
+  /** 数据库文件源 ID，用于构造文件夹刮削范围 */
+  sourceId?: number
   /** 初始目录路径，默认 "/" 列举所有共享 */
   initialPath?: string
 }
@@ -68,12 +75,16 @@ export struct SmbFileExplorerPage {
   // 导航历史栈：记录已访问路径（含当前）；初始值在 onReady 中按 initialPath 覆盖
   private pathHistory: string[] = ['/']
   @Local private errorMessage: string = ''
+  @Local private scrapePanelVisible: boolean = false
+  @Local private scrapeScope: ScrapeScope | undefined = undefined
+  @Local private taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
   @Local private sortField: string = 'name'
   @Local private sortAscending: boolean = true
   @Local private showHiddenFiles: boolean = false
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
 
   private config: SMBSourceConfig = DEFAULT_SMB_CONFIG
+  private sourceId: number = 0
   private client: SMBClient = SMBClient.fromSourceConfig(DEFAULT_SMB_CONFIG)
   private imagePreviewSessionController: ImagePreviewSessionController = new ImagePreviewSessionController()
   private fileExplorerAdapter: SmbFileExplorerAdapter = new SmbFileExplorerAdapter(
@@ -392,31 +403,116 @@ export struct SmbFileExplorerPage {
     }
   }
 
+  /** 当前文件夹的刮削范围（不含视频计数，仅用于身份判断与入队前兜底）。 */
+  private getFolderScope(): ScrapeScope | undefined {
+    if (this.sourceId <= 0) { return undefined; }
+    const normalizedPath = normalizeScrapeDirectoryPath(this.fileExplorerController.currentPath)
+    const scope: ScrapeScope = {
+      kind: 'folder',
+      sourceId: this.sourceId,
+      directoryPath: normalizedPath,
+      displayName: normalizedPath
+    };
+    return scope;
+  }
+
+  /** 当前文件夹是否正在刮削（任意 active 状态）。 */
+  private isFolderScraping(): boolean {
+    const scope = this.getFolderScope();
+    return scope !== undefined && this.taskStore.getActiveForScope(scope) !== undefined;
+  }
+
+  private folderProgressText(): string {
+    const scope = this.getFolderScope();
+    if (scope === undefined) { return ''; }
+    return this.taskStore.getProgressText(scope);
+  }
+
+  @Builder
+  FolderScrapeToolbarAction() {
+    Button(this.isFolderScraping() ? `刮削中 ${this.folderProgressText()}` : '刮削此文件夹')
+      .height(40)
+      .fontSize(16)
+      .fontColor(this.isFolderScraping() ? '#9AA0A8' : '#D7E8FF')
+      .backgroundColor('#243F66')
+      .margin({ right: 10 })
+      .focusable(true)
+      .enabled(this.sourceId > 0 && !this.isLoading && !this.isFolderScraping())
+      .opacity(this.isFolderScraping() ? 0.6 : 1)
+      .onClick(() => { this.openFolderScrape(); })
+  }
+
+  private openFolderScrape(): void {
+    if (this.sourceId <= 0) { return; }
+    const baseScope = this.getFolderScope();
+    if (baseScope === undefined) { return; }
+    // 严格排除：该文件夹只要在刮削中就禁止再次触发。
+    if (this.taskStore.getActiveForScope(baseScope) !== undefined) { return; }
+    const normalizedPath = normalizeScrapeDirectoryPath(this.fileExplorerController.currentPath)
+    const query = normalizedPath === '/'
+      ? FileSourceDatabase.getInstance().getVideosBySourceId(this.sourceId)
+      : FileSourceDatabase.getInstance().getVideosByDirectoryTree(this.sourceId, normalizedPath)
+    query.then((videos): void => {
+      const scope: ScrapeScope = {
+        kind: 'folder',
+        sourceId: this.sourceId,
+        directoryPath: normalizedPath,
+        displayName: `${normalizedPath} · 预计 ${videos.length} 个视频`
+      }
+      this.scrapeScope = scope
+      this.scrapePanelVisible = true
+    }).catch((): void => {
+      const scope: ScrapeScope = {
+        kind: 'folder',
+        sourceId: this.sourceId,
+        directoryPath: normalizedPath,
+        displayName: normalizedPath
+      }
+      this.scrapeScope = scope
+      this.scrapePanelVisible = true
+    })
+  }
+
+  private closeScrapePanel(): void {
+    this.scrapePanelVisible = false
+    this.scrapeScope = undefined
+  }
+
   build() {
     NavDestination() {
-      FileExplorer({
-        controller: this.fileExplorerController,
-        isLoading: this.isLoading,
-        errorMessage: this.errorMessage,
-        onFileClick: (event) => {
-          if (isVideoFile(event.resource.name)) {
-            const fileInfo: SmbFileInfo = {
-              name: event.resource.name,
-              path: event.resource.path,
-              isDirectory: false,
-              size: event.resource.size ?? 0,
-              lastModifiedMs: event.resource.lastModifiedMs ?? 0
+      Stack() {
+        FileExplorer({
+          controller: this.fileExplorerController,
+          isLoading: this.isLoading,
+          errorMessage: this.errorMessage,
+          toolbarActionsBuilder: () => { this.FolderScrapeToolbarAction(); },
+          onFileClick: (event) => {
+            if (isVideoFile(event.resource.name)) {
+              const fileInfo: SmbFileInfo = {
+                name: event.resource.name,
+                path: event.resource.path,
+                isDirectory: false,
+                size: event.resource.size ?? 0,
+                lastModifiedMs: event.resource.lastModifiedMs ?? 0
+              }
+              this.playVideo(fileInfo)
+            } else if (this.isImageFile(event.resource.name)) {
+              this.previewImage(event.resource.path, event.resource.name)
             }
-            this.playVideo(fileInfo)
-          } else if (this.isImageFile(event.resource.name)) {
-            this.previewImage(event.resource.path, event.resource.name)
           }
-        }
-      })
+        })
+
+        ScrapeModePanel({
+          visible: this.scrapePanelVisible,
+          scope: this.scrapeScope,
+          onClose: () => { this.closeScrapePanel(); }
+        })
+      }
     }
     .onReady((context) => {
       const param = context.pathInfo.param as SmbFileExplorerPageParam
       this.config = param.config
+      this.sourceId = param.sourceId ?? 0
       this.client = SMBClient.fromSourceConfig(param.config)
       this.fileExplorerAdapter = new SmbFileExplorerAdapter(
         (path: string): Promise<SmbListDirectoryResult> => this.client.listDirectory(path)
@@ -427,6 +523,10 @@ export struct SmbFileExplorerPage {
       this.loadDirectory(startPath)
     })
     .onBackPressed(() => {
+      if (this.scrapePanelVisible) {
+        this.closeScrapePanel()
+        return true
+      }
       if (this.imagePreviewSessionController.handleBack()) {
         this.imagePath = ''
         return true

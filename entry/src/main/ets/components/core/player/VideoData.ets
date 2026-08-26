@@ -105,6 +105,18 @@ export interface VideoData {
   videoHdrType?: string;
 
   /**
+   * Dolby Vision profile（可选，由 ffprobe 探测填充，如 5/8/9）。
+   * Profile 5 为 IPTPQc2 色彩空间，系统原生解码无法正确还原，需走 mpv 软解色调映射。
+   */
+  videoDvProfile?: number;
+
+  /**
+   * Dolby Vision base-layer signal compatibility id（可选）：
+   * 0=无兼容基层，1=HDR10 兼容，2=SDR 兼容。
+   */
+  videoDvBlCompatibilityId?: number;
+
+  /**
    * 源视频宽度（像素，可选），由 ffprobe 探测填充。
    * 用于 VPE 画质增强按缩放比例自动选档；undefined 表示探测失败/未知。
    */

@@ -178,6 +178,11 @@ export struct DetailSeasonsSection {
 export struct DetailEpisodesSection {
   @Require @Param episodes: DetailEpisode[]
   @Event onEpisodeClick: (episode: DetailEpisode) => void = () => {}
+  @Event onEpisodeMenuClick: (episode: DetailEpisode) => void = () => {}
+  @Event onSeasonScrapeClick: () => void = () => {}
+  @Param showSeasonScrape: boolean = false
+  @Param seasonScraping: boolean = false
+  @Param seasonProgressText: string = ''
   @Local focusedRowId: string = ''
   @Local hoveredRowId: string = ''
   @Local focusedActionKey: string = ''
@@ -220,19 +225,53 @@ export struct DetailEpisodesSection {
   }
 
   @Builder
-  ActionButton(ep: DetailEpisode, action: string, glyph: string) {
+  ActionButton(ep: DetailEpisode, action: string, glyph: string, onClick: () => void, enabled: boolean = true) {
     Text(glyph)
       .fontSize(18).fontColor('#B5BBC4')
       .width(44).height(44)
       .textAlign(TextAlign.Center)
       .backgroundColor(this.actionCircleBg(ep, action)).borderRadius(22)
       .border({ width: this.isActionFocused(ep, action) ? 2 : 1, color: this.actionCircleBorder(ep, action) })
+      .focusable(enabled)
+      .monopolizeEvents(enabled)
+      .onFocus(() => { this.focusedActionKey = this.buildActionKey(ep, action); })
+      .onBlur(() => { this.clearActionFocusIfMatches(ep, action); })
       .onHover((isHover: boolean) => {
         if (isHover) {
           this.hoveredActionKey = this.buildActionKey(ep, action);
         } else {
           this.clearActionHoverIfMatches(ep, action);
         }
+      })
+      .onClick(() => { onClick(); })
+  }
+
+  /** 集「更多」按钮：点击弹出操作菜单（刮削本集等） */
+  @Builder
+  MoreActionButton(ep: DetailEpisode) {
+    Text('⋮')
+      .fontSize(18).fontColor('#B5BBC4')
+      .width(44).height(44)
+      .textAlign(TextAlign.Center)
+      .backgroundColor(this.actionCircleBg(ep, 'more')).borderRadius(22)
+      .border({ width: this.isActionFocused(ep, 'more') ? 2 : 1, color: this.actionCircleBorder(ep, 'more') })
+      .focusable(true)
+      .monopolizeEvents(true)
+      .onFocus(() => {
+        console.info('[SeasonDetail] EP_MORE_FOCUS', ep.id);
+        this.focusedActionKey = this.buildActionKey(ep, 'more');
+      })
+      .onBlur(() => { this.clearActionFocusIfMatches(ep, 'more'); })
+      .onHover((isHover: boolean) => {
+        if (isHover) {
+          this.hoveredActionKey = this.buildActionKey(ep, 'more');
+        } else {
+          this.clearActionHoverIfMatches(ep, 'more');
+        }
+      })
+      .onClick(() => {
+        console.info('[SeasonDetail] EP_MORE_CLICK', ep.id);
+        this.onEpisodeMenuClick(ep);
       })
   }
 
@@ -244,6 +283,18 @@ export struct DetailEpisodesSection {
             .fontSize(26).fontColor(Color.White).fontWeight(FontWeight.Bold)
           Blank()
           Row({ space: 8 }) {
+            if (this.showSeasonScrape) {
+              Button(this.seasonScraping ? `刮削中 ${this.seasonProgressText}` : '整季刮削')
+                .height(38)
+                .fontSize(16)
+                .fontColor(this.seasonScraping ? '#7A8089' : '#D7E8FF')
+                .backgroundColor('#243F66')
+                .borderRadius(19)
+                .focusable(true)
+                .enabled(!this.seasonScraping)
+                .opacity(this.seasonScraping ? 0.6 : 1)
+                .onClick(() => { this.onSeasonScrapeClick(); })
+            }
             Text('‹')
               .fontSize(22).fontColor('#CCCCCC')
               .width(36).height(36)
@@ -352,10 +403,10 @@ export struct DetailEpisodesSection {
               .onClick(() => { this.onEpisodeClick(ep) })
 
               Row({ space: 8 }) {
-                this.ActionButton(ep, 'info', 'ⓘ')
-                this.ActionButton(ep, 'check', '✓')
-                this.ActionButton(ep, 'heart', '♥')
-                this.ActionButton(ep, 'more', '⋮')
+                this.ActionButton(ep, 'info', 'ⓘ', () => {}, false)
+                this.ActionButton(ep, 'check', '✓', () => {}, false)
+                this.ActionButton(ep, 'heart', '♥', () => {}, false)
+                this.MoreActionButton(ep)
               }
               .alignSelf(ItemAlign.Center)
             }
