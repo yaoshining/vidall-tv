@@ -217,6 +217,31 @@ export default function mediaTypeClassifierContractTest() {
       expect(hint).assertEqual('狂飙');
     });
 
+    // ─── 括号包裹中文季号后缀目录名（如"艾米丽在巴黎(第五季)"） ───
+
+    it('should recognize bracketed Chinese season suffix directory as season directory', 0, () => {
+      expect(isSeasonDirectorySegment('艾米丽在巴黎(第五季)')).assertTrue();
+      expect(isSeasonDirectorySegment('艾米丽在巴黎（第5季）')).assertTrue();
+      expect(isSeasonDirectorySegment('艾米丽在巴黎')).assertFalse();
+    });
+
+    it('should extract season number from bracketed Chinese season suffix directory names', 0, () => {
+      expect(extractSeasonNumberFromDirectoryName('艾米丽在巴黎(第五季)')).assertEqual(5);
+      expect(extractSeasonNumberFromDirectoryName('艾米丽在巴黎（第5季）')).assertEqual(5);
+      expect(extractSeasonNumberFromDirectoryName('艾米丽在巴黎(第三季)')).assertEqual(3);
+    });
+
+    it('should strip bracketed Chinese season suffix to extract series title', 0, () => {
+      expect(stripSeasonSuffixFromDirectoryName('艾米丽在巴黎(第五季)')).assertEqual('艾米丽在巴黎');
+      expect(stripSeasonSuffixFromDirectoryName('艾米丽在巴黎（第5季）')).assertEqual('艾米丽在巴黎');
+      expect(stripSeasonSuffixFromDirectoryName('艾米丽在巴黎')).assertEqual(undefined);
+    });
+
+    it('should extract series hint from bracketed Chinese season suffix directory path', 0, () => {
+      const hint = extractSeriesHintFromFilePath('/Videos/TV Series/艾米丽在巴黎(第五季)/S05E01.mp4');
+      expect(hint).assertEqual('艾米丽在巴黎');
+    });
+
     // ─── #254 中文大季号回归（CodeRabbit 评审） ───
 
     it('should parse Chinese season numbers beyond 29', 0, () => {
