@@ -24,17 +24,26 @@ import { VideoFileInfo } from '../../utils/VideoScannerTypes';
 import { filterScrapeTargets } from './ScrapeModeFilter';
 import { ScrapeScopeResolver } from './ScrapeScopeResolver';
 import {
+  FAILURE_CATEGORY_DB_WRITE,
+  FAILURE_CATEGORY_NO_MATCH,
+  FAILURE_CATEGORY_NO_TMDB_KEY,
+  FAILURE_CATEGORY_PARSE_EPISODE,
+  FAILURE_CATEGORY_SCRAPER_ERROR,
+  FAILURE_CATEGORY_SOURCE_MISSING,
   ScopedScrapeRequest,
   ScopedScrapeVideo,
   ScrapeCandidate,
   ScrapeExecutionCompleted,
   ScrapeExecutionOutcome,
   ScrapeExecutionPaused,
+  ScrapeFailureItem,
   ScrapeGroupSelection,
   ScrapeProgress,
   ScrapeResult,
-  ScrapeResumeState
+  ScrapeResumeState,
+  ScrapeVideoOutcome
 } from './ScopedScrapeTypes';
+import { ScrapeFailureLogStore } from './ScrapeFailureLogStore';
 
 export type ScrapeProgressCallback = (progress: ScrapeProgress) => void;
 
@@ -66,7 +75,7 @@ export interface ScopedScrapeDependencies {
     mode: 'incremental' | 'fix-missing' | 'overwrite',
     info: VideoFileInfo,
     logPrefix: string
-  ): Promise<boolean>;
+  ): Promise<ScrapeVideoOutcome>;
   applyMovie(videoId: number, movie: MovieScrapeResult, logPrefix: string): Promise<boolean>;
   applyTv(videoId: number, result: TvEpisodeScrapeBundle, logPrefix: string): Promise<boolean>;
 }
@@ -106,7 +115,7 @@ class DefaultScopedScrapeDependencies implements ScopedScrapeDependencies {
     mode: 'incremental' | 'fix-missing' | 'overwrite',
     info: VideoFileInfo,
     logPrefix: string
-  ): Promise<boolean> {
+  ): Promise<ScrapeVideoOutcome> {
     return processVideoScrape(videoId, fileName, client, mode, info, logPrefix);
   }
 
@@ -159,6 +168,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       : this.copyProgress(resumeState.progress);
     const succeededVideoIds = resumeState?.succeededVideoIds.slice() ?? [];
     const failedVideoIds = resumeState?.failedVideoIds.slice() ?? [];
+    const failedItems = resumeState?.failedItems.slice() ?? [];
     const selections = resumeState?.selections.slice() ?? [];
     const cancelledGroupKeys = resumeState?.cancelledGroupKeys.slice() ?? [];
     const startIndex = resumeState?.nextIndex ?? 0;
@@ -166,9 +176,9 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
 
     const tmdbApiKey = await this.dependencies.getTmdbApiKey();
     if (tmdbApiKey.length === 0 && targets.length > progress.completed) {
-      this.failRemainingGroups(groups, startIndex, progress, failedVideoIds);
+      this.failRemainingGroups(groups, startIndex, progress, failedVideoIds, failedItems);
       onProgress(this.copyProgress(progress));
-      return this.completed(progress, succeededVideoIds, failedVideoIds);
+      return this.completed(progress, succeededVideoIds, failedVideoIds, failedItems);
     }
     const client = this.dependencies.createClient(tmdbApiKey);
     const seasonCache = new Map<string, TvSeasonScrapeResult | null>();
@@ -195,7 +205,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
             cancelledGroupKeys,
             progress,
             succeededVideoIds,
-            failedVideoIds
+            failedVideoIds,
+            failedItems
           );
         }
         const paused: ScrapeExecutionPaused = {
@@ -207,7 +218,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
             cancelledGroupKeys,
             progress: this.copyProgress(progress),
             succeededVideoIds: succeededVideoIds.slice(),
-            failedVideoIds: failedVideoIds.slice()
+            failedVideoIds: failedVideoIds.slice(),
+            failedItems: failedItems.slice()
           }
         };
         return paused;
@@ -220,10 +232,11 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
         progress,
         succeededVideoIds,
         failedVideoIds,
+        failedItems,
         onProgress
       );
     }
-    return this.completed(progress, succeededVideoIds, failedVideoIds);
+    return this.completed(progress, succeededVideoIds, failedVideoIds, failedItems);
   }
 
   private async executeAutomatic(
@@ -254,6 +267,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     const scrapeClient = this.dependencies.createClient(tmdbApiKey);
     const succeededVideoIds: number[] = [];
     const failedVideoIds: number[] = [];
+    const failedItems: ScrapeFailureItem[] = [];
     for (const target of targets) {
       const video = target.video;
       const videoId = video.id;
@@ -264,9 +278,10 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
           const source = await this.dependencies.getFileSourceById(video.sourceId);
           if (source === null) {
             failedVideoIds.push(videoId);
+            failedItems.push(await this.buildFailureItem(videoId, video.fileName, FAILURE_CATEGORY_SOURCE_MISSING));
             progress.failed++;
           } else {
-            const succeeded = await this.dependencies.processVideo(
+            const outcome = await this.dependencies.processVideo(
               videoId,
               video.fileName,
               scrapeClient,
@@ -274,16 +289,23 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
               this.toVideoFileInfo(video, source),
               '[ScopedScrape]'
             );
-            if (succeeded) {
+            if (outcome.success) {
               succeededVideoIds.push(videoId);
               progress.succeeded++;
             } else {
               failedVideoIds.push(videoId);
+              failedItems.push(await this.buildFailureItem(
+                videoId,
+                video.fileName,
+                outcome.category ?? FAILURE_CATEGORY_SCRAPER_ERROR,
+                outcome.detail
+              ));
               progress.failed++;
             }
           }
-        } catch {
+        } catch (e) {
           failedVideoIds.push(videoId);
+          failedItems.push(await this.buildFailureItem(videoId, video.fileName, FAILURE_CATEGORY_SCRAPER_ERROR, (e as Error).message));
           progress.failed++;
         }
       }
@@ -296,7 +318,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       failed: progress.failed,
       cancelled: 0,
       succeededVideoIds,
-      failedVideoIds
+      failedVideoIds,
+      failedItems
     };
     return result;
   }
@@ -351,6 +374,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     progress: ScrapeProgress,
     succeededVideoIds: number[],
     failedVideoIds: number[],
+    failedItems: ScrapeFailureItem[],
     onProgress: ScrapeProgressCallback
   ): Promise<void> {
     let movie: MovieScrapeResult | null = null;
@@ -369,12 +393,17 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       const video = target.video;
       const videoId = video.id;
       let succeeded = false;
+      let category = FAILURE_CATEGORY_SCRAPER_ERROR;
+      let detail: string | undefined = undefined;
       if (videoId !== undefined) {
         try {
           if (movie !== null) {
             succeeded = await this.dependencies.applyMovie(videoId, movie, '[ScopedScrape]');
+            if (!succeeded) {
+              category = FAILURE_CATEGORY_DB_WRITE;
+            }
           } else if (series !== null) {
-            succeeded = await this.applySelectedSeries(
+            const outcome = await this.applySelectedSeries(
               videoId,
               video,
               series,
@@ -382,12 +411,20 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
               client,
               seasonCache
             );
+            succeeded = outcome.success;
+            if (!outcome.success) {
+              category = outcome.category ?? FAILURE_CATEGORY_SCRAPER_ERROR;
+              detail = outcome.detail;
+            }
           }
-        } catch {
+        } catch (e) {
           succeeded = false;
+          category = FAILURE_CATEGORY_SCRAPER_ERROR;
+          detail = (e as Error).message;
         }
         if (!succeeded) {
           failedVideoIds.push(videoId);
+          failedItems.push(await this.buildFailureItem(videoId, video.fileName, category, detail));
         }
       }
       if (succeeded) {
@@ -410,12 +447,12 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     selection: ScrapeCandidate,
     client: ScrapeClient,
     seasonCache: Map<string, TvSeasonScrapeResult | null>
-  ): Promise<boolean> {
+  ): Promise<ScrapeVideoOutcome> {
     const parsed = parseFileName(video.fileName);
     const seasonNumber = parsed.seasonNumber ?? this.extractDirectorySeason(video.filePath) ?? 1;
     const episodeNumber = parsed.episodeNumber ?? extractEpisodeNumberFromWeakSemanticFileName(video.fileName);
     if (episodeNumber === undefined) {
-      return false;
+      return { success: false, category: FAILURE_CATEGORY_PARSE_EPISODE };
     }
     const seasonCacheKey = `${selection.provider}:${series.providerId}:${seasonNumber}`;
     let season = seasonCache.get(seasonCacheKey);
@@ -430,10 +467,14 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       selection.provider
     );
     if (episode === null) {
-      return false;
+      return { success: false, category: FAILURE_CATEGORY_NO_MATCH };
     }
     const bundle: TvEpisodeScrapeBundle = { series, season: season ?? null, episode };
-    return await this.dependencies.applyTv(videoId, bundle, '[ScopedScrape]');
+    const applied = await this.dependencies.applyTv(videoId, bundle, '[ScopedScrape]');
+    if (!applied) {
+      return { success: false, category: FAILURE_CATEGORY_DB_WRITE };
+    }
+    return { success: true };
   }
 
   private movieCandidate(result: MovieScrapeResult): ScrapeCandidate {
@@ -478,10 +519,21 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     progress.completed += group.targets.length;
   }
 
-  private failGroup(group: ScrapeMediaGroup, progress: ScrapeProgress, failedVideoIds: number[]): void {
+  private failGroup(
+    group: ScrapeMediaGroup,
+    progress: ScrapeProgress,
+    failedVideoIds: number[],
+    failedItems: ScrapeFailureItem[]
+  ): void {
     for (const target of group.targets) {
       if (target.video.id !== undefined) {
         failedVideoIds.push(target.video.id);
+        const item: ScrapeFailureItem = {
+          videoId: target.video.id,
+          fileName: target.video.fileName,
+          category: FAILURE_CATEGORY_NO_TMDB_KEY
+        };
+        failedItems.push(item);
       }
       progress.failed++;
       progress.completed++;
@@ -492,10 +544,11 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     groups: ScrapeMediaGroup[],
     startIndex: number,
     progress: ScrapeProgress,
-    failedVideoIds: number[]
+    failedVideoIds: number[],
+    failedItems: ScrapeFailureItem[]
   ): void {
     for (let index = startIndex; index < groups.length; index++) {
-      this.failGroup(groups[index], progress, failedVideoIds);
+      this.failGroup(groups[index], progress, failedVideoIds, failedItems);
     }
   }
 
@@ -506,7 +559,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     cancelledGroupKeys: string[],
     progress: ScrapeProgress,
     succeededVideoIds: number[],
-    failedVideoIds: number[]
+    failedVideoIds: number[],
+    failedItems: ScrapeFailureItem[]
   ): ScrapeExecutionPaused {
     const paused: ScrapeExecutionPaused = {
       kind: 'paused',
@@ -517,7 +571,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
         cancelledGroupKeys: cancelledGroupKeys.slice(),
         progress: this.copyProgress(progress),
         succeededVideoIds: succeededVideoIds.slice(),
-        failedVideoIds: failedVideoIds.slice()
+        failedVideoIds: failedVideoIds.slice(),
+        failedItems: failedItems.slice()
       }
     };
     return paused;
@@ -531,7 +586,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
   private completed(
     progress: ScrapeProgress,
     succeededVideoIds: number[],
-    failedVideoIds: number[]
+    failedVideoIds: number[],
+    failedItems: ScrapeFailureItem[]
   ): ScrapeExecutionCompleted {
     const result: ScrapeResult = {
       total: progress.total,
@@ -539,7 +595,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       failed: progress.failed,
       cancelled: progress.cancelled,
       succeededVideoIds,
-      failedVideoIds
+      failedVideoIds,
+      failedItems
     };
     const completed: ScrapeExecutionCompleted = { kind: 'completed', result };
     return completed;
@@ -571,9 +628,16 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
 
   private allFailed(targets: ScopedScrapeVideo[], onProgress: ScrapeProgressCallback): ScrapeResult {
     const failedVideoIds: number[] = [];
+    const failedItems: ScrapeFailureItem[] = [];
     for (const target of targets) {
       if (target.video.id !== undefined) {
         failedVideoIds.push(target.video.id);
+        const item: ScrapeFailureItem = {
+          videoId: target.video.id,
+          fileName: target.video.fileName,
+          category: FAILURE_CATEGORY_NO_TMDB_KEY
+        };
+        failedItems.push(item);
       }
     }
     const progress: ScrapeProgress = {
@@ -590,7 +654,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       failed: targets.length,
       cancelled: 0,
       succeededVideoIds: [],
-      failedVideoIds
+      failedVideoIds,
+      failedItems
     };
     return result;
   }
@@ -604,5 +669,24 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       cancelled: progress.cancelled
     };
     return copy;
+  }
+
+  private async buildFailureItem(
+    videoId: number,
+    fileName: string,
+    category: string,
+    detail?: string
+  ): Promise<ScrapeFailureItem> {
+    let logKey: string | undefined = undefined;
+    if (detail !== undefined && detail.length > 0) {
+      logKey = await ScrapeFailureLogStore.writeLog(detail);
+    }
+    const item: ScrapeFailureItem = {
+      videoId,
+      fileName,
+      category,
+      logKey
+    };
+    return item;
   }
 }

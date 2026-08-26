@@ -2,6 +2,7 @@ import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { ScrapeCandidate, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
+import { ScrapeManagementPage } from '../../pages/scrape/ScrapeManagementPage';
 
 function statusLabel(status: string): string {
   if (status === 'waiting') { return '等待中'; }
@@ -23,10 +24,11 @@ function modeLabel(mode: string): string {
 export struct ScrapeTaskIndicator {
   @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState();
   @Local expanded: boolean = false;
+  @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
 
   private readonly indicatorFocusId: string = 'scrape_task_indicator';
 
-  private getTasks(): ScrapeTaskSnapshot[] { return this.taskStore.getTasks(); }
+  private getTasks(): ScrapeTaskSnapshot[] { return this.taskStore.getActiveTasks(); }
   private getActiveCount(): number { return this.taskStore.getActiveCount(); }
   private closeDropdown(): void {
     this.expanded = false;
@@ -130,7 +132,7 @@ export struct ScrapeTaskIndicator {
         this.Action('关闭', () => { this.closeDropdown(); })
       }.width('100%').alignItems(VerticalAlign.Center)
       if (this.getTasks().length === 0) {
-        Text('暂无任务').fontSize(15).fontColor('#AAB2BF').padding(24)
+        Text('暂无正在刮削的任务').fontSize(15).fontColor('#AAB2BF').padding(24)
       } else {
         Scroll() {
           Column({ space: 8 }) {
@@ -140,6 +142,18 @@ export struct ScrapeTaskIndicator {
           }.width('100%').alignItems(HorizontalAlign.Start)
         }.height(430).scrollBar(BarState.Auto).align(Alignment.Top)
       }
+      Row() {
+        Blank()
+        Button('刮削管理')
+          .fontSize(13).fontColor('#66A9D8')
+          .backgroundColor('rgba(102,169,216,0.14)')
+          .borderRadius(8)
+          .focusable(true).hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.closeDropdown();
+            this.pageStack.pushPathByName(ScrapeManagementPage.PAGE_NAME, null);
+          })
+      }.width('100%').alignItems(VerticalAlign.Center)
     }
     .width(430).padding(16)
     .backgroundColor('#FA10141B').borderRadius(14)

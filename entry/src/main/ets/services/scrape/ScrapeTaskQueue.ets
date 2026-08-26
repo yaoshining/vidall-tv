@@ -4,9 +4,11 @@ import { normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
 import { ScrapeTaskStore } from './ScrapeTaskStore';
 import { MediaDataVersionStore } from './MediaDataVersionStore';
 import {
+  FAILURE_CATEGORY_SCRAPER_ERROR,
   ScopedScrapeRequest,
   ScrapeCandidate,
   ScrapeExecutionOutcome,
+  ScrapeFailureItem,
   ScrapeGroupSelection,
   ScrapeProgress,
   ScrapeResumeState,
@@ -212,7 +214,7 @@ export class ScrapeTaskQueue {
     };
     this.executor.execute(task.request, onProgress, task.resumeState)
       .then((outcome: ScrapeExecutionOutcome): void => this.handleOutcome(task, outcome))
-      .catch((): void => this.fail(task));
+      .catch((error: Error): void => this.fail(task, error));
   }
 
   private handleOutcome(task: ScrapeTaskSnapshot, outcome: ScrapeExecutionOutcome): void {
@@ -243,16 +245,30 @@ export class ScrapeTaskQueue {
     this.schedule();
   }
 
-  private fail(task: ScrapeTaskSnapshot): void {
+  private fail(task: ScrapeTaskSnapshot, error?: Error): void {
+    if (error !== undefined) {
+      console.warn(`[ScrapeTaskQueue] 任务执行异常 id=${task.id}: ${error.message}`);
+    }
     const failedVideoIds = this.retryVideoIds(task.request);
     const failedCount = Math.max(task.progress.total, failedVideoIds.length);
+    const failedItems: ScrapeFailureItem[] = [];
+    const fallbackName = task.request.scope.displayName ?? '';
+    for (const videoId of failedVideoIds) {
+      const item: ScrapeFailureItem = {
+        videoId,
+        fileName: fallbackName,
+        category: FAILURE_CATEGORY_SCRAPER_ERROR
+      };
+      failedItems.push(item);
+    }
     task.result = {
       total: failedCount,
       succeeded: 0,
       failed: failedCount,
       cancelled: 0,
       succeededVideoIds: [],
-      failedVideoIds
+      failedVideoIds,
+      failedItems
     };
     task.status = 'failed';
     task.updatedAt = Date.now();

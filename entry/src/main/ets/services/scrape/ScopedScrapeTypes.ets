@@ -7,6 +7,30 @@ export type ScrapeTaskStatus = 'waiting' | 'running' | 'waiting-confirmation' | 
   'partial-failure' | 'failed' | 'cancelled';
 export type ScrapePauseReason = 'candidate-confirmation' | 'candidate-search-retry';
 
+/** 刮削失败分类（界面展示的简单分类，避免与底层错误文案漂移）。 */
+export const FAILURE_CATEGORY_NO_MATCH = '未匹配到结果';
+export const FAILURE_CATEGORY_DB_WRITE = '数据库写入失败';
+export const FAILURE_CATEGORY_PARSE_EPISODE = '无法解析集号';
+export const FAILURE_CATEGORY_SCRAPER_ERROR = '刮削器异常';
+export const FAILURE_CATEGORY_SOURCE_MISSING = '文件源不存在';
+export const FAILURE_CATEGORY_NO_TMDB_KEY = '缺少 TMDB API Key';
+
+/** 单个视频的刮削失败项，用于失败详情页展示。 */
+export interface ScrapeFailureItem {
+  videoId: number;
+  fileName: string;
+  category: string;
+  /** 指向临时日志文件条目；无原始错误信息时可省略。 */
+  logKey?: string;
+}
+
+/** 单个视频的刮削处理结果。 */
+export interface ScrapeVideoOutcome {
+  success: boolean;
+  category?: string;
+  detail?: string;
+}
+
 export interface MovieScrapeScope {
   kind: 'movie';
   movieId: number;
@@ -103,6 +127,7 @@ export interface ScrapeResumeState {
   progress: ScrapeProgress;
   succeededVideoIds: number[];
   failedVideoIds: number[];
+  failedItems: ScrapeFailureItem[];
 }
 
 export interface ScopedScrapeVideo {
@@ -141,6 +166,7 @@ export interface ScrapeResult {
   cancelled: number;
   succeededVideoIds: number[];
   failedVideoIds: number[];
+  failedItems: ScrapeFailureItem[];
 }
 
 export interface ScrapeExecutionCompleted {

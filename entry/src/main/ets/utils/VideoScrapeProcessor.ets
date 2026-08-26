@@ -9,6 +9,13 @@ import { ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisod
 import { extractSeriesHintFromFilePath, formatMediaTypeClassificationSignals, extractSeasonNumberFromDirectoryName } from '../lib/MediaTypeClassifier';
 import { VideoFileInfo, VideoScrapeContext, ScanMode } from './VideoScannerTypes';
 import { classifyVideoScrapeTarget, hasCompleteScrapeAssociation, extractEpisodeNumberFromWeakSemanticFileName } from './VideoScannerHelpers';
+import {
+  FAILURE_CATEGORY_DB_WRITE,
+  FAILURE_CATEGORY_NO_MATCH,
+  FAILURE_CATEGORY_PARSE_EPISODE,
+  FAILURE_CATEGORY_SCRAPER_ERROR,
+  ScrapeVideoOutcome
+} from '../services/scrape/ScopedScrapeTypes';
 
 export async function applyMovieScrapeResult(
   videoId: number,
@@ -152,14 +159,14 @@ export async function processVideoScrape(
   mode: ScanMode,
   info: VideoFileInfo,
   logPrefix: string
-): Promise<boolean> {
+): Promise<ScrapeVideoOutcome> {
   const db = FileSourceDatabase.getInstance();
   try {
     const existing = await db.getScrapeInfoByVideoId(videoId);
     if (mode === 'incremental') {
       if (hasCompleteScrapeAssociation(existing)) {
         console.info(`${logPrefix} incremental 元数据完整，跳过 fileName=${fileName}`);
-        return true;
+        return { success: true };
       }
     } else if (mode === 'fix-missing') {
       if (existing && hasCompleteScrapeAssociation(existing)) {
@@ -174,7 +181,7 @@ export async function processVideoScrape(
         if (hasPoster) {
           console.info(`${logPrefix} fix-missing 元数据完整，跳过 fileName=${fileName}`);
           info.scrapeSkipped = true;
-          return true;
+          return { success: true };
         }
         console.info(`${logPrefix} fix-missing 海报缺失，重新刮削 fileName=${fileName}`);
       }
@@ -211,7 +218,7 @@ export async function processVideoScrape(
       console.warn(`${logPrefix} 无法保存 unknown 标记 fileName=${fileName}`);
     }
     info.scrapeSkipped = true;
-    return true;
+    return { success: true };
   }
 
   if (classification.mediaType === 'movie') {
@@ -219,14 +226,18 @@ export async function processVideoScrape(
       const movie = await scrapeClient.autoScrapeMovie(fileName);
       if (!movie) {
         console.warn(`${logPrefix} 电影刮削无结果 ${fileName}`);
-        return false;
+        return { success: false, category: FAILURE_CATEGORY_NO_MATCH };
       }
       console.info(`${logPrefix} 电影刮削结果 title="${movie.title}" posterUrl=${movie.posterUrl ? movie.posterUrl.substring(0, 40) : 'null'} rating=${movie.rating ?? 'null'}`);
-      return await applyMovieScrapeResult(videoId, movie, logPrefix);
+      const movieApplied = await applyMovieScrapeResult(videoId, movie, logPrefix);
+      if (!movieApplied) {
+        return { success: false, category: FAILURE_CATEGORY_DB_WRITE };
+      }
+      return { success: true };
     } catch (e) {
       const err = e as Error;
       console.warn(`${logPrefix} 电影刮削异常 ${fileName}: ${err.message}`);
-      return false;
+      return { success: false, category: FAILURE_CATEGORY_SCRAPER_ERROR, detail: err.message };
     }
   } else {
     try {
@@ -247,19 +258,26 @@ export async function processVideoScrape(
       const resolvedEpisodeNum = parsedFileName.episodeNumber ?? explicitEpisodeNum;
       if (resolvedEpisodeNum === undefined) {
         console.warn(`${logPrefix} 无法解析剧集集号 ${fileName}`);
-        return false;
+        return { success: false, category: FAILURE_CATEGORY_PARSE_EPISODE };
       }
       const result = await scrapeClient.autoScrapeTvEpisode(fileName, seriesHint, classification.mediaType, explicitEpisodeNum, explicitSeasonNum);
       if (!result.series) {
         console.warn(`${logPrefix} 剧集刮削无结果 ${fileName}`);
-        return false;
+        return { success: false, category: FAILURE_CATEGORY_NO_MATCH };
       }
-      return await applyTvEpisodeScrapeResult(videoId, result, logPrefix);
+      const tvApplied = await applyTvEpisodeScrapeResult(videoId, result, logPrefix);
+      if (!tvApplied) {
+        if (result.episode === null) {
+          return { success: false, category: FAILURE_CATEGORY_NO_MATCH };
+        }
+        return { success: false, category: FAILURE_CATEGORY_DB_WRITE };
+      }
+      return { success: true };
     } catch (e) {
       const err = e as Error;
       console.warn(`${logPrefix} 剧集刮削异常 ${fileName}: ${err.message}`);
-      return false;
+      return { success: false, category: FAILURE_CATEGORY_SCRAPER_ERROR, detail: err.message };
     }
   }
-  return true;
+  return { success: true };
 }

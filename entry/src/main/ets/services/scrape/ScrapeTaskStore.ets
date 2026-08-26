@@ -41,6 +41,17 @@ export class ScrapeTaskStore {
   }
 
   /**
+   * 返回所有处于活跃状态（waiting / running / waiting-confirmation）的任务快照。
+   * 用于下拉菜单「正在刮削」列表，排除已完成 / 成功 / 失败 / 取消等终态任务。
+   * 元素为 @ObservedV2 实例，@Trace 字段变化可精准观测。
+   */
+  getActiveTasks(): ScrapeTaskSnapshot[] {
+    return this.snapshots.filter((task: ScrapeTaskSnapshot): boolean =>
+      task.status === 'waiting' || task.status === 'running' || task.status === 'waiting-confirmation'
+    );
+  }
+
+  /**
    * 返回与指定 scope 指向同一刮削目标、且仍处于活跃状态
    * （waiting / running / waiting-confirmation）的任务快照。
    * 若不存在则返回 undefined。元素为 @ObservedV2 实例，@Trace 字段变化可精准观测。
