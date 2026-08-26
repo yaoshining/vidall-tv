@@ -2112,11 +2112,13 @@ export class VideoPlayerController {
   }
 
   async forward(milliseconds: number): Promise<void> {
-    this.seek(this.currentTime + milliseconds);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[remote-seek] 快进: step=${milliseconds} current=${this.currentTime}`)
+    this.seek(this.currentTime + milliseconds)
   }
 
   async backward(milliseconds: number): Promise<void> {
-    this.seek(this.currentTime - milliseconds);
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, `[remote-seek] 快退: step=${milliseconds} current=${this.currentTime}`)
+    this.seek(this.currentTime - milliseconds)
   }
 
   // ─── 字幕定时器 ───
