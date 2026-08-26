@@ -111,6 +111,10 @@ export struct VideoPlayer {
     } else if (event.keyCode === KeyCode.KEYCODE_DPAD_RIGHT) {
       this.handleKeySeek('forward')
       event.stopPropagation()
+    } else if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN && !this.controlsOpened) {
+      // 播放中画面持有焦点时，向下键用于唤起播放控件。
+      this.controlsDialogController.open()
+      event.stopPropagation()
     }
   }
 
@@ -156,6 +160,9 @@ export struct VideoPlayer {
       onOpenSubtitleSelector: () => {
         this.controlsDialogController.close()
         this.subtitleSelectorDialogController.open()
+      },
+      onRemoteKey: (event: KeyEvent) => {
+        this.handleRemoteKey(event)
       }
     }),
     customStyle: true,
@@ -605,12 +612,20 @@ export struct VideoPlayer {
     .width('100%')
     .height('100%')
     .backgroundColor(Color.Black)
+    .focusable(true)
+    .id('videoPlayerRoot')
+    .onKeyEvent((event: KeyEvent) => {
+      this.handleRemoteKey(event)
+    })
   }
 
   aboutToAppear(): void {
     this.backendMode = this.controller.backend
     this.aspectRatioMode = this.controller.aspectRatioMode
     this.initMode = ''
+    setTimeout(() => {
+      focusControl.requestFocus('videoPlayerRoot')
+    }, 0)
     emitter.on(PlayerEvents.COMPLETED, () => {
         this.controlsDialogController.open()
     })
