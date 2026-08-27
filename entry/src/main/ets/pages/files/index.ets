@@ -55,6 +55,8 @@ export struct FileExplorerPage {
   @Local errorMessage: string = ''
   @Local showMissingDirDialog: boolean = false
   @Local isCleaningUp: boolean = false
+  @Local showMissingSourceDialog: boolean = false
+  @Local isDeletingSource: boolean = false
   @Local scrapePanelVisible: boolean = false
   @Local scrapeScope: ScrapeScope | undefined = undefined
   private cachedDirId: number = 0
@@ -198,6 +200,60 @@ export struct FileExplorerPage {
                   .enabled(!this.isCleaningUp)
                   .onClick(() => {
                     this.confirmCleanup()
+                  })
+              }
+              .margin({ top: 24 })
+            }
+            .padding(32)
+            .borderRadius(12)
+            .backgroundColor('#2C2C2C')
+            .width(460)
+          }
+          .width('100%')
+          .height('100%')
+          .backgroundColor('#80000000')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .onClick(() => {
+            // 拦截蒙层点击穿透
+          })
+        }
+
+        // ── 文件源不存在提示 Dialog ────────────────────────────
+        if (this.showMissingSourceDialog) {
+          Column() {
+            Column() {
+              Text('文件源不存在')
+                .fontSize(24)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#FFFFFF')
+              Text('此文件源在服务器上已不存在，是否立即删除该文件源及其全部数据？')
+                .fontSize(18)
+                .fontColor('#CCCCCC')
+                .margin({ top: 16 })
+                .textAlign(TextAlign.Center)
+              Row({ space: 24 }) {
+                Button('取消')
+                  .fontSize(18)
+                  .fontColor('#FFFFFF')
+                  .backgroundColor('#555555')
+                  .borderRadius(8)
+                  .width(120)
+                  .height(48)
+                  .enabled(!this.isDeletingSource)
+                  .onClick(() => {
+                    this.showMissingSourceDialog = false
+                  })
+                Button(this.isDeletingSource ? '删除中...' : '删除')
+                  .fontSize(18)
+                  .fontColor('#FFFFFF')
+                  .backgroundColor('#E53935')
+                  .borderRadius(8)
+                  .width(120)
+                  .height(48)
+                  .enabled(!this.isDeletingSource)
+                  .onClick(() => {
+                    this.confirmDeleteSource()
                   })
               }
               .margin({ top: 24 })
@@ -479,13 +535,73 @@ export struct FileExplorerPage {
     this.fileExplorerAdapter.list(newPath).then((result) => {
       this.fileExplorerController.currentPath = newPath
       this.fileExplorerController.resources = result.resources
-      this.errorMessage = result.errorMessage ?? ''
+      const errMsg = result.errorMessage ?? ''
+      this.errorMessage = errMsg
       this.isLoading = false
+      this.handleNotFound(errMsg, newPath)
     }).catch(() => {
       this.fileExplorerController.resources = []
       this.isLoading = false
       this.errorMessage = '加载目录失败'
     })
+  }
+
+  /**
+   * 判断错误信息是否为「资源不存在」（HTTP 404）。
+   */
+  private isNotFoundMessage(message: string): boolean {
+    if (message.length === 0) { return false; }
+    return message.includes('404') || message.toLowerCase().includes('not found')
+  }
+
+  /**
+   * 处理目录/文件源 404：仅在根路径（对应 DB 配置的目录或文件源根）时触发清理提示。
+   * 子目录 404 仅显示错误信息，不触发清理。
+   */
+  private handleNotFound(errMsg: string, newPath: string): void {
+    if (!this.isNotFoundMessage(errMsg)) { return; }
+    if (newPath !== '/') { return; }
+    if (this.isSourceRoot()) {
+      // 文件源根目录 404：仅在有有效 sourceId 时才能删除整个文件源
+      if (this.cachedSourceId > 0) {
+        this.showMissingSourceDialog = true
+      } else {
+        // 旧调用方仅传 config 时 cachedSourceId 为 0，无法删除文件源，降级为目录清理提示
+        this.showMissingDirDialog = true
+      }
+    } else {
+      this.showMissingDirDialog = true
+    }
+  }
+
+  /**
+   * 判断当前打开的是否为文件源根目录（无目录配置前缀）。
+   */
+  private isSourceRoot(): boolean {
+    return this.cachedDirectoryPath.length === 0 || this.cachedDirectoryPath === '/'
+  }
+
+  /**
+   * 确认删除已失效的文件源：删除文件源及其全部关联数据，返回上一页。
+   */
+  private confirmDeleteSource(): void {
+    if (this.cachedSourceId <= 0) {
+      console.error('[FileExplorerPage][confirmDeleteSource] 参数不完整，中止删除')
+      IBestToast.show('文件源信息不完整，无法删除')
+      return
+    }
+    this.isDeletingSource = true
+    const sourceId = this.cachedSourceId
+    FileSourceStore.getState().deleteFileSourceWithData(sourceId)
+      .then((): void => {
+        this.pageStack.pop(true)
+      })
+      .catch((): void => {
+        console.error('[FileExplorerPage][confirmDeleteSource] 删除失败')
+        IBestToast.show('删除失败，请重试')
+        // 保持 Dialog 打开，允许用户重试
+        this.isDeletingSource = false
+      })
   }
 
   private isImageFile(fileName: string): boolean {

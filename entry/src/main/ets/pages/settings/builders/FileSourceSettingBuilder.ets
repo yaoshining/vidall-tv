@@ -151,8 +151,8 @@ struct FileSourceSettingBuilderComponent {
     }
     try {
       this.isDeletingSource = true;
-      await this.fileSourceModel.deleteFileSource(target.id);
-      await this.fileSourceModel.loadFileSources(true);
+      // 一键删除文件源及其媒体数据（videos/刮削/播放进度）与孤儿元数据
+      await this.fileSourceModel.deleteFileSourceWithData(target.id);
       this.showToastSafe('文件源已删除');
     } catch (error) {
       console.error('FileSourceSettingBuilder: 删除文件源失败', JSON.stringify(error));
@@ -360,7 +360,7 @@ struct FileSourceSettingBuilderComponent {
               .fontSize(18)
               .fontWeight(FontWeight.Bold)
               .margin({ bottom: 12 })
-            Text('确认删除文件源？此操作将同时删除：文件源配置记录、所有目录配置、所有扫描媒体记录。')
+            Text('确认删除文件源？此操作将同时删除：文件源配置记录、所有目录配置、所有扫描媒体记录及播放进度。')
               .fontSize(14)
               .fontColor($r('sys.color.font_secondary'))
               .textAlign(TextAlign.Start)

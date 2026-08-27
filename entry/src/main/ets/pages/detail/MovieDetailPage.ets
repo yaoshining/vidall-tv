@@ -20,6 +20,9 @@ import { ScrapeModePanel } from '../../components/scrape/ScrapeModePanel';
 import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore';
+import { MissingMediaSyncOverlay } from '../../components/detail/MissingMediaSyncOverlay';
+import { defaultMissingMediaSyncService as mediaSync } from '../../services/mediaSync/MissingMediaSyncService';
+import { MissingMediaSyncResult, MissingMediaSyncTarget } from '../../services/mediaSync/MissingMediaSyncTypes';
 
 /**
  * 将电影时长格式化为 h:mm:ss 字符串。
@@ -102,6 +105,10 @@ export struct MovieDetailPage {
   @Local showScrapeModes: boolean = false;
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState();
   @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState();
+  /** 失效媒体同步：蒙层可见性与进度 */
+  @Local syncVisible: boolean = false;
+  @Local syncChecked: number = 0;
+  @Local syncTotal: number = 0;
 
   @Monitor('mediaDataVersionStore.globalVersion')
   onMediaDataVersionChange(): void {
@@ -113,8 +120,34 @@ export struct MovieDetailPage {
     if (videoId === undefined) {
       return;
     }
-    FileSourceDatabase.getInstance().getMediaItemByVideoId(videoId).then((item: MediaItem | null) => {
+    const movieId = this.movieEntity?.id ?? this.item?.movieId;
+    const db = FileSourceDatabase.getInstance();
+    db.getMediaItemByVideoId(videoId).then((item: MediaItem | null) => {
       if (item === null) {
+        // 当前视频已被同步清理：若电影仍有其他视频则切换到有效视频，否则退出详情页
+        if (movieId === undefined) {
+          this.pageStack.pop();
+          return;
+        }
+        db.getVideosByMovieId(movieId).then((videos) => {
+          if (videos.length === 0) {
+            this.pageStack.pop();
+            return;
+          }
+          const replacementId = videos[0].id;
+          if (replacementId === undefined) {
+            this.pageStack.pop();
+            return;
+          }
+          db.getMediaItemByVideoId(replacementId).then((replacement: MediaItem | null) => {
+            if (replacement === null) {
+              this.pageStack.pop();
+              return;
+            }
+            this.item = replacement;
+            this.loadAuxData(replacement);
+          }).catch(() => {});
+        }).catch(() => {});
         return;
       }
       this.item = item;
@@ -453,11 +486,85 @@ export struct MovieDetailPage {
         backdropLocalPath: this.movieEntity?.backdropLocalPath ?? this.item?.backdropLocalPath ?? undefined,
         backdropUrl: this.movieEntity?.backdropUrl ?? this.item?.backdropUrl ?? undefined
       };
-      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
+      this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param, (popInfo: PopInfo) => {
+        if (popInfo.result !== null && popInfo.result !== undefined) {
+          const r = popInfo.result as Record<string, Object>;
+          if (r['fileNotFound'] === true) {
+            this.promptMissingMediaSync();
+          }
+        }
+      });
     } catch (e) {
       const err = e as BusinessError;
       console.error('MovieDetailPage', `play() 构建播放 URL 失败: ${err.message}`);
     }
+  }
+
+  /** 弹窗询问用户是否立即同步该电影的失效信息 */
+  private promptMissingMediaSync(): void {
+    if (this.syncVisible) { return; }
+    this.getUIContext().showAlertDialog({
+      title: '文件无法播放',
+      message: '该电影可能已不存在，是否立即同步信息？',
+      autoCancel: true,
+      primaryButton: {
+        value: '立即同步',
+        action: () => { this.runMissingMediaSync(); }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
+  }
+
+  /** 执行失效媒体同步：仅核验电影已关联的视频记录 */
+  private runMissingMediaSync(): void {
+    const movieId = this.movieEntity?.id;
+    if (movieId === undefined) {
+      this.showSyncToast('同步失败，请稍后重试');
+      return;
+    }
+    if (this.syncVisible) { return; }
+    this.syncVisible = true;
+    this.syncChecked = 0;
+    this.syncTotal = 0;
+    const target: MissingMediaSyncTarget = { type: 'movie', mediaId: movieId };
+    mediaSync.sync(target, (progress) => {
+      this.syncChecked = progress.checked;
+      this.syncTotal = progress.total;
+    }).then((result: MissingMediaSyncResult) => {
+      this.syncVisible = false;
+      this.handleSyncResult(result);
+    }).catch(() => {
+      this.syncVisible = false;
+      this.showSyncToast('同步失败，已保留原有数据');
+    });
+  }
+
+  /** 汇总同步结果并刷新/退出页面 */
+  private handleSyncResult(result: MissingMediaSyncResult): void {
+    if (result.checkedCount === 0) {
+      this.showSyncToast('同步失败，已保留原有数据');
+      return;
+    }
+    if (result.targetRemoved) {
+      this.showSyncToast('该电影已不存在，已清除全部记录');
+      this.pageStack.pop();
+      return;
+    }
+    let message = `已清理 ${result.removedCount} 个失效视频`;
+    if (result.unconfirmedCount > 0) {
+      message += `，${result.unconfirmedCount} 个视频暂时无法确认，已保留`;
+    }
+    this.showSyncToast(message);
+    this.reloadCurrentItem();
+  }
+
+  private showSyncToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch (e) {}
   }
 
   // ── Builders ──────────────────────────────────
@@ -761,6 +868,12 @@ export struct MovieDetailPage {
           scope: this.getScrapeScope(),
           onClose: () => { this.showScrapeModes = false; }
         })
+
+        MissingMediaSyncOverlay({
+          visible: this.syncVisible,
+          checked: this.syncChecked,
+          total: this.syncTotal
+        })
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
@@ -776,6 +889,9 @@ export struct MovieDetailPage {
       this.refreshMovieProgress().catch(() => {});
     })
     .onBackPressed(() => {
+      if (this.syncVisible) {
+        return true;
+      }
       if (this.showScrapeModes) {
         this.showScrapeModes = false;
         return true;

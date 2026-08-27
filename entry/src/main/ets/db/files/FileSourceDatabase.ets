@@ -99,6 +99,15 @@ export class FileSourceDatabase {
     await this.fileSourceDao.deleteFileSource(id);
   }
 
+  /**
+   * 删除整个文件源及其全部关联数据（目录、视频、刮削信息、播放进度），
+   * 并清理由此产生的孤儿刮削媒体（空季、空剧、空电影）。
+   */
+  async deleteFileSourceWithData(sourceId: number): Promise<void> {
+    await this.fileSourceDao.deleteFileSourceWithData(sourceId);
+    await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
+  }
+
   async getFileSourceById(id: number): Promise<FileSource | null> {
     return this.fileSourceDao.getFileSourceById(id);
   }
@@ -129,6 +138,31 @@ export class FileSourceDatabase {
 
   async clearMediaAndDirectoryForDir(dirId: number, sourceId: number, directoryPath: string): Promise<void> {
     await this.fileSourceDao.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath);
+  }
+
+  /**
+   * 清理指定目录下的媒体数据（videos、scrape_info、play_progress），
+   * 但不删除目录配置本身。用于目录选择器取消勾选目录时同步清理媒体库。
+   */
+  async clearMediaForDirectory(sourceId: number, directoryPath: string): Promise<void> {
+    await this.fileSourceDao.clearMediaForDirectory(sourceId, directoryPath);
+  }
+
+  /**
+   * 在单个事务内完成：清理被移除目录的媒体数据 + 原子替换目录配置。
+   * 用于目录选择器取消勾选目录时，保证媒体数据与目录配置同生共死。
+   */
+  async saveDirectoriesWithMediaCleanup(
+    sourceId: number,
+    removedDirectories: string[],
+    newDirectories: FileSourceDirectory[]
+  ): Promise<void> {
+    await this.fileSourceDao.saveDirectoriesWithMediaCleanup(sourceId, removedDirectories, newDirectories);
+  }
+
+  /** 清理孤儿刮削媒体元数据（空季、空剧、空电影），供目录/文件源清理后调用 */
+  async cleanupOrphanScrapeMedia(): Promise<void> {
+    await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
   }
 
   // ─────────────────────────────────────────────
@@ -209,6 +243,11 @@ export class FileSourceDatabase {
 
   async deleteVideoWithScrapeInfo(videoId: number): Promise<void> {
     await this.videoDao.deleteVideoWithScrapeInfo(videoId);
+  }
+
+  async deleteVideosWithScrapeInfo(videoIds: number[]): Promise<void> {
+    await this.videoDao.deleteVideosWithScrapeInfo(videoIds);
+    await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
   }
 
   async getLatestScanTime(): Promise<number> {

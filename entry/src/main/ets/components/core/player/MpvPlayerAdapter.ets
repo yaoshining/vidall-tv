@@ -9,6 +9,7 @@ import {
   XComponentSurfaceAdapter,
   VidAllPlayerSurfaceTarget,
   PlayerEvent,
+  PlayerError,
   PlayerTrack,
   PlayerTrackKind,
   MediaSource,
@@ -831,8 +832,64 @@ export class MpvPlayerAdapter implements IPlayer {
       }
     }
     if (this._onErrorCb) {
-      this._onErrorCb(new Error(playerError.message));
+      this._onErrorCb(new Error(this.resolveErrorMessage(playerError)));
     }
+  }
+
+  /**
+   * 将 mpv 的通用错误消息富化为可识别的"文件不存在"信号。
+   *
+   * mpv 在远端文件缺失时仅上报 domain='native'、message="libmpv playback failed"，
+   * 原始 HTTP 404 详情可能落在 PlayerError.context（httpStatus/status/statusCode）
+   * 或 context.error/context.message 中。命中 404 / not found 时返回
+   * "io resource not found ..."，供 VideoPlayerController 的文件不存在匹配命中。
+   */
+  private resolveErrorMessage(playerError: PlayerError): string {
+    const ctx = playerError.context;
+    if (ctx !== undefined) {
+      const httpStatus = ctx['httpStatus'];
+      if (httpStatus !== undefined && this.isNotFoundValue(httpStatus)) {
+        return `io resource not found (HTTP ${httpStatus})`;
+      }
+      const status = ctx['status'];
+      if (status !== undefined && this.isNotFoundValue(status)) {
+        return `io resource not found (HTTP ${status})`;
+      }
+      const statusCode = ctx['statusCode'];
+      if (statusCode !== undefined && this.isNotFoundValue(statusCode)) {
+        return `io resource not found (HTTP ${statusCode})`;
+      }
+      const httpStatusSnake = ctx['http_status'];
+      if (httpStatusSnake !== undefined && this.isNotFoundValue(httpStatusSnake)) {
+        return `io resource not found (HTTP ${httpStatusSnake})`;
+      }
+      const errVal = ctx['error'];
+      if (errVal !== undefined && this.looksFileNotFound(String(errVal))) {
+        return `io resource not found: ${String(errVal)}`;
+      }
+      const msgVal = ctx['message'];
+      if (msgVal !== undefined && this.looksFileNotFound(String(msgVal))) {
+        return `io resource not found: ${String(msgVal)}`;
+      }
+    }
+    // message 本身也可能携带 404 / not found（如部分 http 直连场景）
+    if (this.looksFileNotFound(playerError.message)) {
+      return `io resource not found: ${playerError.message}`;
+    }
+    return playerError.message;
+  }
+
+  private isNotFoundValue(v: string | number | boolean): boolean {
+    const s = String(v).toLowerCase();
+    return s === '404' || s.includes('not found');
+  }
+
+  private looksFileNotFound(text: string): boolean {
+    if (text.length === 0) {
+      return false;
+    }
+    const t = text.toLowerCase();
+    return t.includes('404') || t.includes('not found') || t.includes('no such file');
   }
 
   /** 判断错误码是否指向格式不支持/解码失败 */

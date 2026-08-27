@@ -351,6 +351,8 @@ export struct PlayHistoryPage {
       posterLocalPath: item.posterLocalPath.length > 0 ? item.posterLocalPath : undefined,
       posterUrl: item.posterUrl.length > 0 ? item.posterUrl : undefined,
     };
+    // 播放历史入口无详情页承载，失效媒体提示与同步在播放页内就地处理
+    param.missingMediaSyncLocally = true;
     this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
   }
 

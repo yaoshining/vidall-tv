@@ -173,7 +173,7 @@ export class ScrapeInfoDao {
     }
   }
 
-  private async cleanupOrphanScrapeMedia(): Promise<void> {
+  async cleanupOrphanScrapeMedia(): Promise<void> {
     if (!this.core.isReady()) { return; }
     const store = this.core.getStore();
     try {
@@ -209,7 +209,9 @@ export class ScrapeInfoDao {
       `)`
     );
     } catch (e) {
-      hilog.warn(0x0000, 'FileSourceDatabase', `cleanupOrphanScrapeMedia: ${e instanceof Error ? e.message : String(e)}`);
+      const error = e as BusinessError;
+      hilog.warn(0x0000, 'FileSourceDatabase', `cleanupOrphanScrapeMedia: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
