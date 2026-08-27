@@ -28,6 +28,9 @@ import { ScrapeScope } from '../../services/scrape/ScopedScrapeTypes'
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore'
 import { MediaDataVersionStore } from '../../services/scrape/MediaDataVersionStore'
 import { tmdbImageUrl, formatYear, parseGenresArr, translateJob, toChineseSeasonLabel, buildEpisodeCode, isGenericSeasonTitle, toOpaqueColor } from '../../utils/MediaFormatUtil'
+import { MissingMediaSyncOverlay } from '../../components/detail/MissingMediaSyncOverlay'
+import { defaultMissingMediaSyncService as mediaSync } from '../../services/mediaSync/MissingMediaSyncService'
+import { MissingMediaSyncResult, MissingMediaSyncTarget } from '../../services/mediaSync/MissingMediaSyncTypes'
 
 // ─────────────────────────────────────────────
 // 内部类型定义
@@ -129,6 +132,10 @@ export struct SeriesDetailPage {
   @Local focusedScrapeAction: boolean = false
   @Local mediaDataVersionStore: MediaDataVersionStore = MediaDataVersionStore.getState()
   @Local taskStore: ScrapeTaskStore = ScrapeTaskStore.getState()
+  /** 失效媒体同步：蒙层可见性与进度 */
+  @Local syncVisible: boolean = false
+  @Local syncChecked: number = 0
+  @Local syncTotal: number = 0
 
   @Monitor('mediaDataVersionStore.globalVersion')
   onMediaDataVersionChange(): void {
@@ -792,8 +799,7 @@ export struct SeriesDetailPage {
         if (popInfo.result !== null && popInfo.result !== undefined) {
           const r = popInfo.result as Record<string, Object>;
           if (r['fileNotFound'] === true) {
-            const vid = r['videoId'] as number;
-            if (vid > 0) { this.confirmDeleteEpisodeRecord(vid); }
+            this.promptMissingMediaSync();
           }
         }
       });
@@ -802,26 +808,71 @@ export struct SeriesDetailPage {
     }
   }
 
-  /** 弹窗询问用户是否删除文件不存在的集记录 */
-  private confirmDeleteEpisodeRecord(videoId: number): void {
+  /** 弹窗询问用户是否立即同步整剧的失效信息 */
+  private promptMissingMediaSync(): void {
+    if (this.syncVisible) { return; }
     this.getUIContext().showAlertDialog({
       title: '文件无法播放',
-      message: '视频文件可能已被删除或移动，无法打开。是否删除该集的本地记录和元数据？',
+      message: '该视频/季/剧可能已不存在，是否立即同步信息？',
       autoCancel: true,
       primaryButton: {
-        value: '删除记录',
-        fontColor: '#FF5252',
-        action: () => {
-          FileSourceDatabase.getInstance().deleteVideoWithScrapeInfo(videoId)
-            .then(() => { this.reloadEpisodes(); })
-            .catch(() => {});
-        }
+        value: '立即同步',
+        action: () => { this.runMissingMediaSync(); }
       },
       secondaryButton: {
         value: '取消',
         action: () => {}
       }
     });
+  }
+
+  /** 执行失效媒体同步：核验整剧关联的视频记录 */
+  private runMissingMediaSync(): void {
+    const seriesId = this.seriesEntity?.id;
+    if (seriesId === undefined) {
+      this.showSyncToast('同步失败，请稍后重试');
+      return;
+    }
+    if (this.syncVisible) { return; }
+    this.syncVisible = true;
+    this.syncChecked = 0;
+    this.syncTotal = 0;
+    const target: MissingMediaSyncTarget = { type: 'series', mediaId: seriesId };
+    mediaSync.sync(target, (progress) => {
+      this.syncChecked = progress.checked;
+      this.syncTotal = progress.total;
+    }).then((result: MissingMediaSyncResult) => {
+      this.syncVisible = false;
+      this.handleSyncResult(result);
+    }).catch(() => {
+      this.syncVisible = false;
+      this.showSyncToast('同步失败，已保留原有数据');
+    });
+  }
+
+  /** 汇总同步结果并刷新/退出页面 */
+  private handleSyncResult(result: MissingMediaSyncResult): void {
+    if (result.checkedCount === 0) {
+      this.showSyncToast('同步失败，已保留原有数据');
+      return;
+    }
+    if (result.targetRemoved) {
+      this.showSyncToast('该剧已不存在，已清除全部记录');
+      this.pageStack.pop();
+      return;
+    }
+    let message = `已清理 ${result.removedCount} 个失效视频`;
+    if (result.unconfirmedCount > 0) {
+      message += `，${result.unconfirmedCount} 个视频暂时无法确认，已保留`;
+    }
+    this.showSyncToast(message);
+    this.reloadEpisodes();
+  }
+
+  private showSyncToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch (_e) {}
   }
 
   /** 弹窗确认删除整个系列的所有数据（刮削信息、播放进度、历史记录） */
@@ -1369,6 +1420,12 @@ export struct SeriesDetailPage {
           scope: this.getScrapeScope(),
           onClose: () => { this.showScrapeModes = false; }
         })
+
+        MissingMediaSyncOverlay({
+          visible: this.syncVisible,
+          checked: this.syncChecked,
+          total: this.syncTotal
+        })
       }
       .width('100%').height('100%')
       .backgroundColor(this.dominantBgColor)
@@ -1386,6 +1443,9 @@ export struct SeriesDetailPage {
       this.refreshPlaybackState().catch(() => {});
     })
     .onBackPressed(() => {
+      if (this.syncVisible) {
+        return true;
+      }
       if (this.showScrapeModes) {
         this.showScrapeModes = false;
         return true;

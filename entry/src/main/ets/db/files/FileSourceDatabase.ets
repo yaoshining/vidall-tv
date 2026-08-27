@@ -211,6 +211,11 @@ export class FileSourceDatabase {
     await this.videoDao.deleteVideoWithScrapeInfo(videoId);
   }
 
+  async deleteVideosWithScrapeInfo(videoIds: number[]): Promise<void> {
+    await this.videoDao.deleteVideosWithScrapeInfo(videoIds);
+    await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
+  }
+
   async getLatestScanTime(): Promise<number> {
     return this.videoDao.getLatestScanTime();
   }

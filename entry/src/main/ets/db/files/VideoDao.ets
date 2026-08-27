@@ -396,6 +396,37 @@ export class VideoDao {
   }
 
   /**
+   * 原子删除指定视频的刮削、播放进度和视频记录。
+   */
+  async deleteVideosWithScrapeInfo(videoIds: number[]): Promise<void> {
+    if (!this.core.isReady() || videoIds.length === 0) { return; }
+    const store = this.core.getStore();
+    const batchSize = 100;
+    let tx: relationalStore.Transaction | null = null;
+    try {
+      tx = await store.createTransaction();
+      for (let i = 0; i < videoIds.length; i += batchSize) {
+        const batch = videoIds.slice(i, i + batchSize);
+        const values: relationalStore.ValueType[] = batch.map(id => id as relationalStore.ValueType);
+        const scrapePredicates = new relationalStore.RdbPredicates(TABLE_SCRAPE_INFO);
+        scrapePredicates.in('video_id', values);
+        await tx.delete(scrapePredicates);
+        const progressPredicates = new relationalStore.RdbPredicates(TABLE_PLAY_PROGRESS);
+        progressPredicates.in('video_id', values);
+        await tx.delete(progressPredicates);
+        const videoPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS);
+        videoPredicates.in('id', values);
+        await tx.delete(videoPredicates);
+      }
+      await tx.commit();
+    } catch (e) {
+      if (tx !== null) { try { await tx.rollback(); } catch { } }
+      const error = e as BusinessError;
+      throw new Error(error.message);
+    }
+  }
+
+  /**
    * 获取最近一次扫描时间（videos 表中最大 scanned_at）
    * 返回 0 表示未扫描
    */
