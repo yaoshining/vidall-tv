@@ -1,0 +1,1 @@
+{"id":"ed3735930a2488dd69ef65a0f2d92fcb","fullName":"ScopedScrape#cancels only waiting tasks and refuses to cancel running tasks","name":"cancels only waiting tasks and refuses to cancel running tasks","status":"passed","testResultsByEnv":{"default":"cf8829b915b6470b22cc50554d36626b"}}
