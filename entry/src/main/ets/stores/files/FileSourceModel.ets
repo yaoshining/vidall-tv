@@ -2,6 +2,7 @@ import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { FileSource, FileSourceDirectory, DirStatus } from "../../db/models/FileSourceEntity";
 import { MediaDataVersionStore } from "../../services/scrape/MediaDataVersionStore";
 import { GlobalScrapeScope } from "../../services/scrape/ScopedScrapeTypes";
+import { BusinessError } from '@kit.BasicServicesKit';
 
 /**
  * 文件夹项接口，包含文件夹信息和所属文件源信息
@@ -197,9 +198,10 @@ export class FileSourceModel {
       this.publishGlobalMediaChange();
 
       console.info(`FileSourceStore: Deleted file source with data, id ${id}`);
-    } catch (error) {
-      console.error('FileSourceStore: Failed to delete file source with data', JSON.stringify(error));
-      throw new Error('Failed to delete file source with data: ' + JSON.stringify(error));
+    } catch (e) {
+      const error = e as BusinessError;
+      console.error('FileSourceStore: Failed to delete file source with data', error.message);
+      throw new Error('Failed to delete file source with data: ' + error.message);
     }
   }
 
@@ -240,9 +242,10 @@ export class FileSourceModel {
       }
       this.lastUpdateTime = Date.now();
       console.info(`FileSourceModel: 目录 ${directoryPath} 已清理`);
-    } catch (error) {
-      console.error('FileSourceModel: clearMissingDirectory 失败', JSON.stringify(error));
-      throw new Error('Failed to clearMissingDirectory: ' + JSON.stringify(error));
+    } catch (e) {
+      const error = e as BusinessError;
+      console.error('FileSourceModel: clearMissingDirectory 失败', error.message);
+      throw new Error('Failed to clearMissingDirectory: ' + error.message);
     }
   }
 
@@ -262,21 +265,20 @@ export class FileSourceModel {
       const newPathSet = new Set<string>();
       directories.forEach((d: FileSourceDirectory) => newPathSet.add(d.directoryPath));
       const removedDirs = oldDirs.filter((d: FileSourceDirectory) => !newPathSet.has(d.directoryPath));
-      // 2. 清理被移除目录的媒体数据（不删目录配置，目录配置由下一步统一替换）
-      for (const dir of removedDirs) {
-        await database.clearMediaForDirectory(sourceId, dir.directoryPath);
-      }
-      // 3. 原子替换目录配置
-      await database.saveDirectoriesForSource(sourceId, directories);
-      // 4. 清理孤儿刮削元数据（空季/空剧/空电影）
+      // 2. 在单个事务内完成「媒体清理 + 目录配置替换」，保证同生共死
+      const removedPaths: string[] = removedDirs.map((d: FileSourceDirectory) => d.directoryPath);
+      await database.saveDirectoriesWithMediaCleanup(sourceId, removedPaths, directories);
+      // 3. 清理孤儿刮削元数据（空季/空剧/空电影）。
+      //    依赖原生 SQL，Transaction 不提供 executeSql，故放在事务提交后幂等调用。
       await database.cleanupOrphanScrapeMedia();
-      // 5. 刷新缓存并广播媒体数据变化
+      // 4. 刷新缓存并广播媒体数据变化
       await this.loadFileSources(true);
       this.publishGlobalMediaChange();
       console.info(`FileSourceModel: 目录已保存，清理了 ${removedDirs.length} 个被移除目录`);
-    } catch (error) {
-      console.error('FileSourceModel: saveDirectoriesWithCleanup 失败', JSON.stringify(error));
-      throw new Error('Failed to saveDirectoriesWithCleanup: ' + JSON.stringify(error));
+    } catch (e) {
+      const error = e as BusinessError;
+      console.error('FileSourceModel: saveDirectoriesWithCleanup 失败', error.message);
+      throw new Error('Failed to saveDirectoriesWithCleanup: ' + error.message);
     }
   }
 

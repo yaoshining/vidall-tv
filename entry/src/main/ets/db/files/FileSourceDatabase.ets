@@ -148,6 +148,18 @@ export class FileSourceDatabase {
     await this.fileSourceDao.clearMediaForDirectory(sourceId, directoryPath);
   }
 
+  /**
+   * 在单个事务内完成：清理被移除目录的媒体数据 + 原子替换目录配置。
+   * 用于目录选择器取消勾选目录时，保证媒体数据与目录配置同生共死。
+   */
+  async saveDirectoriesWithMediaCleanup(
+    sourceId: number,
+    removedDirectories: string[],
+    newDirectories: FileSourceDirectory[]
+  ): Promise<void> {
+    await this.fileSourceDao.saveDirectoriesWithMediaCleanup(sourceId, removedDirectories, newDirectories);
+  }
+
   /** 清理孤儿刮削媒体元数据（空季、空剧、空电影），供目录/文件源清理后调用 */
   async cleanupOrphanScrapeMedia(): Promise<void> {
     await this.scrapeInfoDao.cleanupOrphanScrapeMedia();

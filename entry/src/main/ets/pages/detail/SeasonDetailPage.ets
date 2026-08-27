@@ -957,7 +957,7 @@ export struct SeasonDetailPage {
 
   /** 执行失效媒体同步：核验整剧关联的视频记录 */
   private runMissingMediaSync(): void {
-    const seriesId = this.seriesEntity?.id;
+    const seriesId = this.seriesEntity?.id ?? this.group?.tvSeriesId;
     if (seriesId === undefined) {
       this.showSyncToast('同步失败，请稍后重试');
       return;
@@ -1001,7 +1001,7 @@ export struct SeasonDetailPage {
   private showSyncToast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   /** 删除后重新从 DB 加载本季集列表 */

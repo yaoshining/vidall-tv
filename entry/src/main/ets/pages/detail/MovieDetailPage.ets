@@ -120,8 +120,34 @@ export struct MovieDetailPage {
     if (videoId === undefined) {
       return;
     }
-    FileSourceDatabase.getInstance().getMediaItemByVideoId(videoId).then((item: MediaItem | null) => {
+    const movieId = this.movieEntity?.id ?? this.item?.movieId;
+    const db = FileSourceDatabase.getInstance();
+    db.getMediaItemByVideoId(videoId).then((item: MediaItem | null) => {
       if (item === null) {
+        // 当前视频已被同步清理：若电影仍有其他视频则切换到有效视频，否则退出详情页
+        if (movieId === undefined) {
+          this.pageStack.pop();
+          return;
+        }
+        db.getVideosByMovieId(movieId).then((videos) => {
+          if (videos.length === 0) {
+            this.pageStack.pop();
+            return;
+          }
+          const replacementId = videos[0].id;
+          if (replacementId === undefined) {
+            this.pageStack.pop();
+            return;
+          }
+          db.getMediaItemByVideoId(replacementId).then((replacement: MediaItem | null) => {
+            if (replacement === null) {
+              this.pageStack.pop();
+              return;
+            }
+            this.item = replacement;
+            this.loadAuxData(replacement);
+          }).catch(() => {});
+        }).catch(() => {});
         return;
       }
       this.item = item;
@@ -538,7 +564,7 @@ export struct MovieDetailPage {
   private showSyncToast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   // ── Builders ──────────────────────────────────

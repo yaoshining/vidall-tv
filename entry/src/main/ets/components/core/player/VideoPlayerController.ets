@@ -691,11 +691,22 @@ export class VideoPlayerController {
     // 无法被 onError 的文件不存在匹配命中）。
     if (decision.precheckProbeFailed && this.isFileNotFoundMessage(decision.precheckProbeError)) {
       const missingVideoId = this.progressContext?.videoId ?? -1;
+      // 释放可能残留的旧播放器并重置播放状态，避免提前返回导致旧 player 与状态泄漏
+      if (this.player) {
+        await this.player.release().catch(() => {});
+        this.player = undefined;
+      }
+      this.isReady = false;
+      this.isPlaying = false;
+      this.isSeeking = false;
+      this.isLoading = false;
+      this.duration = 0;
+      this.currentTime = 0;
+      this.progress = 0;
+      this.transitionTo(PlaybackState.IDLE);
       if (missingVideoId > 0) {
         hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
           `[initPlayer] 预检判定文件不存在，通知上层同步: ${decision.precheckProbeError}`);
-        this.isLoading = false;
-        this.transitionTo(PlaybackState.IDLE);
         emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: missingVideoId } });
       }
       return;

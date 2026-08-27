@@ -262,7 +262,8 @@ export function buildMediaLibraryEpisodeSwitchParam(
     posterLocalPath: currentParam.posterLocalPath,
     posterUrl: currentParam.posterUrl,
     backdropLocalPath: currentParam.backdropLocalPath,
-    backdropUrl: currentParam.backdropUrl
+    backdropUrl: currentParam.backdropUrl,
+    missingMediaSyncLocally: currentParam.missingMediaSyncLocally
   };
   return nextParam;
 }
@@ -923,7 +924,7 @@ export struct PlayerPage {
   private showSyncToast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   /**

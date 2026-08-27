@@ -872,7 +872,7 @@ export struct SeriesDetailPage {
   private showSyncToast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   /** 弹窗确认删除整个系列的所有数据（刮削信息、播放进度、历史记录） */

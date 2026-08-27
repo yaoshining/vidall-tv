@@ -562,7 +562,13 @@ export struct FileExplorerPage {
     if (!this.isNotFoundMessage(errMsg)) { return; }
     if (newPath !== '/') { return; }
     if (this.isSourceRoot()) {
-      this.showMissingSourceDialog = true
+      // 文件源根目录 404：仅在有有效 sourceId 时才能删除整个文件源
+      if (this.cachedSourceId > 0) {
+        this.showMissingSourceDialog = true
+      } else {
+        // 旧调用方仅传 config 时 cachedSourceId 为 0，无法删除文件源，降级为目录清理提示
+        this.showMissingDirDialog = true
+      }
     } else {
       this.showMissingDirDialog = true
     }
