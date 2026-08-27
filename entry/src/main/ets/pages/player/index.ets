@@ -32,6 +32,9 @@ import {
 import { PlaybackResumeDecision } from "../../services/playbackProgress/PlaybackResumeDecision";
 import { reportServerPlaybackStopped, reportServerPlaybackProgress } from "../../lib/ServerProgressReporter";
 import { AvSessionService, AvSessionCommand, AvSessionSyncState } from "../../services/avSession/AvSessionService";
+import { MissingMediaSyncOverlay } from "../../components/detail/MissingMediaSyncOverlay";
+import { defaultMissingMediaSyncService as mediaSync } from "../../services/mediaSync/MissingMediaSyncService";
+import { MissingMediaSyncResult, MissingMediaSyncTarget } from "../../services/mediaSync/MissingMediaSyncTypes";
 
 export interface PlayerPageParam {
   fileUrl?: string;
@@ -124,6 +127,12 @@ export interface PlayerPageParam {
   backdropLocalPath?: string;
   /** 横版背景图网络 URL（可选）。封面优先 backdrop 再降级 poster。 */
   backdropUrl?: string;
+  /**
+   * 失效媒体提示是否在播放页内就地处理（true），而不是 pop 回详情页处理（false/缺省）。
+   * 继续播放、播放历史等无详情页承载的直接播放入口需置为 true，
+   * 使 FILE_INACCESSIBLE 弹出「是否立即同步信息」弹窗并在播放页内完成同步。
+   */
+  missingMediaSyncLocally?: boolean;
 }
 
 export interface ResolvedEpisodePlaybackSource {
@@ -332,6 +341,10 @@ export struct PlayerPage {
   private episodeAutoplayTimerId: number = -1;
   /** 文件不存在时待 pop 的 videoId（-1 表示无） */
   private fileNotFoundVideoId: number = -1;
+  /** 失效媒体同步蒙层是否可见（继续播放/播放历史等直连入口就地同步用） */
+  @Local syncVisible: boolean = false
+  @Local syncChecked: number = 0
+  @Local syncTotal: number = 0
   /**
    * Module 2 收口后的续播 + 持久化 façade。
    * 延迟初始化：第一次访问 `this.progressService` 时创建，确保 `this.videoPlayerController` /
@@ -811,6 +824,109 @@ export struct PlayerPage {
   }
 
   /**
+   * 继续播放/播放历史等直连入口：文件不存在时在播放页内弹窗询问是否同步。
+   * 有详情页承载的入口不走到这里（走 pop + PopInfo 回调）。
+   */
+  private promptLocalMissingMediaSync(): void {
+    if (this.syncVisible) { return; }
+    this.getUIContext().showAlertDialog({
+      title: '文件无法播放',
+      message: '该视频/季/剧可能已不存在，是否立即同步信息？',
+      autoCancel: true,
+      primaryButton: {
+        value: '立即同步',
+        action: () => { this.runLocalMissingMediaSync(); }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => { this.popPlayerWithFileNotFound(); }
+      }
+    });
+  }
+
+  /** 取消同步或同步完成后的统一退出动作：pop 回上一页并携带 fileNotFound 标志 */
+  private popPlayerWithFileNotFound(): void {
+    const popResult: Record<string, Object> = {
+      'fileNotFound': true as Object,
+      'videoId': (this.fileNotFoundVideoId as Object)
+    };
+    this.pageStack.pop(popResult);
+  }
+
+  /** 从失效 videoId 反查刮削关联，确定 movie / series 同步目标 */
+  private async resolveLocalSyncTarget(): Promise<MissingMediaSyncTarget | null> {
+    const videoId = this.fileNotFoundVideoId;
+    if (videoId <= 0) { return null; }
+    const db = FileSourceDatabase.getInstance();
+    const scrape = await db.getScrapeInfoByVideoId(videoId);
+    if (scrape === null) { return null; }
+    if (scrape.movieId !== undefined && scrape.movieId > 0) {
+      const target: MissingMediaSyncTarget = { type: 'movie', mediaId: scrape.movieId };
+      return target;
+    }
+    if (scrape.tvSeriesId !== undefined && scrape.tvSeriesId > 0) {
+      const target: MissingMediaSyncTarget = { type: 'series', mediaId: scrape.tvSeriesId };
+      return target;
+    }
+    return null;
+  }
+
+  /** 执行失效媒体同步：显示蒙层 → 核验关联视频 → 汇总后退出播放页 */
+  private runLocalMissingMediaSync(): void {
+    if (this.syncVisible) { return; }
+    this.resolveLocalSyncTarget().then((target: MissingMediaSyncTarget | null) => {
+      if (target === null) {
+        this.showSyncToast('同步失败，请稍后重试');
+        this.popPlayerWithFileNotFound();
+        return;
+      }
+      this.syncVisible = true;
+      this.syncChecked = 0;
+      this.syncTotal = 0;
+      mediaSync.sync(target, (progress) => {
+        this.syncChecked = progress.checked;
+        this.syncTotal = progress.total;
+      }).then((result: MissingMediaSyncResult) => {
+        this.syncVisible = false;
+        this.handleLocalSyncResult(result);
+      }).catch(() => {
+        this.syncVisible = false;
+        this.showSyncToast('同步失败，已保留原有数据');
+        this.popPlayerWithFileNotFound();
+      });
+    }).catch(() => {
+      this.showSyncToast('同步失败，已保留原有数据');
+      this.popPlayerWithFileNotFound();
+    });
+  }
+
+  /** 汇总同步结果：提示清理情况后退出播放页 */
+  private handleLocalSyncResult(result: MissingMediaSyncResult): void {
+    if (result.checkedCount === 0) {
+      this.showSyncToast('同步失败，已保留原有数据');
+      this.popPlayerWithFileNotFound();
+      return;
+    }
+    if (result.targetRemoved) {
+      this.showSyncToast('该视频/剧已不存在，已清除全部记录');
+      this.popPlayerWithFileNotFound();
+      return;
+    }
+    let message = `已清理 ${result.removedCount} 个失效视频`;
+    if (result.unconfirmedCount > 0) {
+      message += `，${result.unconfirmedCount} 个视频暂时无法确认，已保留`;
+    }
+    this.showSyncToast(message);
+    this.popPlayerWithFileNotFound();
+  }
+
+  private showSyncToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch (_e) {}
+  }
+
+  /**
    * 解析当前媒体的封面并同步到 AVSession（系统媒体中心展示）。
    * 优先级：backdrop 本地 → poster 本地 → backdrop 网络 → poster 网络。
    * 本地路径直接以 file:// URI 上传；网络 URL 异步下载解码为 PixelMap 后再上传。
@@ -1256,6 +1372,15 @@ export struct PlayerPage {
 
         this.ResumeDialog()
         this.EpisodeAutoplayOverlay()
+        MissingMediaSyncOverlay({
+          visible: this.syncVisible,
+          checked: this.syncChecked,
+          total: this.syncTotal
+        })
+          .alignRules({
+            center: { anchor: '__container__', align: VerticalAlign.Center },
+            middle: { anchor: '__container__', align: HorizontalAlign.Center }
+          })
 
         Text(this.getBackendDebugText())
           .fontSize(12)
@@ -1278,10 +1403,16 @@ export struct PlayerPage {
         this.getProgressService().persistNow().catch(() => {});
         this.reportServerPeriodicProgress();
       });
-      // 订阅文件不存在事件：记录 videoId 并自动退出播放页
+      // 订阅文件不存在事件：记录 videoId 并自动退出播放页。
+      // 继续播放/播放历史等无详情页承载的直连入口在播放页内就地提示并同步；
+      // 详情页入口则 pop 回详情页由其对 PopInfo 结果做统一处理。
       emitter.on(PlayerEvents.FILE_INACCESSIBLE, (event: emitter.EventData) => {
         const data = event.data as Record<string, number>;
         this.fileNotFoundVideoId = data?.['videoId'] ?? -1;
+        if (this.currentPageParam?.missingMediaSyncLocally === true) {
+          this.promptLocalMissingMediaSync();
+          return;
+        }
         const popResult: Record<string, Object> = {
           'fileNotFound': true as Object,
           'videoId': (this.fileNotFoundVideoId as Object)
@@ -1305,6 +1436,9 @@ export struct PlayerPage {
       this.loadEpisodeAutoplayPreferences();
     })
     .onBackPressed(() => {
+      if (this.syncVisible) {
+        return true
+      }
       if (this.cancelEpisodeAutoplayCountdown()) {
         return true
       }

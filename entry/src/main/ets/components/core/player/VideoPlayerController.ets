@@ -685,6 +685,21 @@ export class VideoPlayerController {
         `[initPlayer] sessionId 过期（${currentSessionId} ≠ ${this.playbackSessionId}），放弃本次初始化`);
       return;
     }
+    // 失效媒体检测：ffprobe 预检返回 404 / not found / no such file 时，
+    // 说明远端文件已删除。直接向上层发出 FILE_INACCESSIBLE 并终止初始化，
+    // 避免继续走 mpv/avplayer 兜底（其错误消息为通用 "libmpv playback failed"，
+    // 无法被 onError 的文件不存在匹配命中）。
+    if (decision.precheckProbeFailed && this.isFileNotFoundMessage(decision.precheckProbeError)) {
+      const missingVideoId = this.progressContext?.videoId ?? -1;
+      if (missingVideoId > 0) {
+        hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+          `[initPlayer] 预检判定文件不存在，通知上层同步: ${decision.precheckProbeError}`);
+        this.isLoading = false;
+        this.transitionTo(PlaybackState.IDLE);
+        emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: missingVideoId } });
+      }
+      return;
+    }
     videoData.ffmpegDecodeChannels = decision.preferredChannels;
     videoData.audioProbeSummary = decision.summary;
     videoData.videoCodec = decision.videoCodecName;
@@ -954,18 +969,11 @@ export class VideoPlayerController {
       }
       
       // prepare 前的 IO 文件不存在错误：无论使用什么播放器，都应通知上层页面提示用户删除元数据
-      // AVPlayer 在文件缺失时返回 code=20400007 / message="No such file or directory"，
-            if (!this.hasPrepared) {
-        const msg = error.message.toLowerCase();
-        const isFileNotFound = msg.includes('io resource not found')
-          || msg.includes('no such file')
-          || msg.includes('not found')
-          || msg.includes('404');
-        if (isFileNotFound) {
-          const videoId = this.progressContext?.videoId ?? -1;
-          if (videoId > 0) {
-            emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: videoId } });
-          }
+      // AVPlayer 在文件缺失时返回 code=20400007 / message="No such file or directory"。
+      if (!this.hasPrepared && this.isFileNotFoundMessage(error.message)) {
+        const videoId = this.progressContext?.videoId ?? -1;
+        if (videoId > 0) {
+          emitter.emit(PlayerEvents.FILE_INACCESSIBLE, { data: { videoId: videoId } });
         }
       }
 
@@ -1831,6 +1839,25 @@ export class VideoPlayerController {
     this.transitionTo(PlaybackState.ERROR);
     this.lastErrorMessage = this.normalizePlayerError(message);
     this.rejectPendingReload(new Error(message));
+  }
+
+  /**
+   * 判断错误消息是否指向"远端文件不存在"。
+   *
+   * 覆盖三类信号：
+   * 1. AVPlayer 文件缺失：code=20400007，message="No such file or directory"
+   * 2. WebDAV/HTTP 远端缺失：message 含 "404" / "Not Found"
+   * 3. mpv 经 MpvPlayerAdapter 富化后的消息：以 "io resource not found" 开头
+   */
+  private isFileNotFoundMessage(message: string): boolean {
+    if (message.length === 0) {
+      return false;
+    }
+    const msg = message.toLowerCase();
+    return msg.includes('io resource not found')
+      || msg.includes('no such file')
+      || msg.includes('not found')
+      || msg.includes('404');
   }
 
   private capturePendingResumeForFallback(source: string): void {

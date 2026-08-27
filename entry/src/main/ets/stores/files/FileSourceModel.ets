@@ -1,5 +1,7 @@
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { FileSource, FileSourceDirectory, DirStatus } from "../../db/models/FileSourceEntity";
+import { MediaDataVersionStore } from "../../services/scrape/MediaDataVersionStore";
+import { GlobalScrapeScope } from "../../services/scrape/ScopedScrapeTypes";
 
 /**
  * 文件夹项接口，包含文件夹信息和所属文件源信息
@@ -172,6 +174,36 @@ export class FileSourceModel {
   }
 
   /**
+   * 删除整个文件源及其全部关联数据（目录、视频、刮削信息、播放进度），
+   * 并同步更新缓存。用于文件源在服务器上已不存在时的一键删除。
+   */
+  async deleteFileSourceWithData(id: number): Promise<void> {
+    try {
+      console.info(`FileSourceStore: Deleting file source with data, id ${id}`);
+      const database = FileSourceDatabase.getInstance();
+      await database.deleteFileSourceWithData(id);
+
+      // 更新缓存：移除文件源与其目录
+      const sourceIndex = this.fileSources.findIndex(item => item.id === id);
+      if (sourceIndex !== -1) {
+        this.fileSources.splice(sourceIndex, 1);
+      }
+      const remainingDirs = this.directories.filter(item => item.fileSource.id !== id);
+      this.directories = remainingDirs;
+      this.lastUpdateTime = Date.now();
+
+      // 广播媒体数据版本变化，触发首页「继续观看」与媒体库列表刷新，
+      // 避免删除文件源后媒体库残留已清理条目（需重启才消失）。
+      this.publishGlobalMediaChange();
+
+      console.info(`FileSourceStore: Deleted file source with data, id ${id}`);
+    } catch (error) {
+      console.error('FileSourceStore: Failed to delete file source with data', JSON.stringify(error));
+      throw new Error('Failed to delete file source with data: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
    * 根据 ID 获取文件源
    * @param id 文件源 ID
    */
@@ -212,6 +244,50 @@ export class FileSourceModel {
       console.error('FileSourceModel: clearMissingDirectory 失败', JSON.stringify(error));
       throw new Error('Failed to clearMissingDirectory: ' + JSON.stringify(error));
     }
+  }
+
+  /**
+   * 保存文件源目录并清理被移除目录的媒体数据。
+   * 目录选择器取消勾选文件夹后，被移除目录下的 videos/scrape_info/play_progress
+   * 一并清理，并清理由此产生的孤儿刮削元数据（空季/空剧/空电影），
+   * 最后刷新缓存并广播媒体数据版本变化。
+   * @param sourceId    所属文件源 ID
+   * @param directories 保存后的完整目录列表（替换旧的目录配置）
+   */
+  async saveDirectoriesWithCleanup(sourceId: number, directories: FileSourceDirectory[]): Promise<void> {
+    try {
+      const database = FileSourceDatabase.getInstance();
+      // 1. 读取旧目录，diff 出被移除（取消勾选）的目录
+      const oldDirs = await database.getDirectoriesBySourceId(sourceId);
+      const newPathSet = new Set<string>();
+      directories.forEach((d: FileSourceDirectory) => newPathSet.add(d.directoryPath));
+      const removedDirs = oldDirs.filter((d: FileSourceDirectory) => !newPathSet.has(d.directoryPath));
+      // 2. 清理被移除目录的媒体数据（不删目录配置，目录配置由下一步统一替换）
+      for (const dir of removedDirs) {
+        await database.clearMediaForDirectory(sourceId, dir.directoryPath);
+      }
+      // 3. 原子替换目录配置
+      await database.saveDirectoriesForSource(sourceId, directories);
+      // 4. 清理孤儿刮削元数据（空季/空剧/空电影）
+      await database.cleanupOrphanScrapeMedia();
+      // 5. 刷新缓存并广播媒体数据变化
+      await this.loadFileSources(true);
+      this.publishGlobalMediaChange();
+      console.info(`FileSourceModel: 目录已保存，清理了 ${removedDirs.length} 个被移除目录`);
+    } catch (error) {
+      console.error('FileSourceModel: saveDirectoriesWithCleanup 失败', JSON.stringify(error));
+      throw new Error('Failed to saveDirectoriesWithCleanup: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 广播全局媒体数据版本变化，触发首页「继续观看」与媒体库列表刷新。
+   * 删除文件源/目录后必须广播，否则首页 MediaLibraryTab 持有的
+   * recentlyAdded 内存数据陈旧，会残留已清理条目。
+   */
+  private publishGlobalMediaChange(): void {
+    const scope: GlobalScrapeScope = { kind: 'global', displayName: '' };
+    MediaDataVersionStore.getState().publish(scope);
   }
 }
 

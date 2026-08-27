@@ -1,6 +1,8 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { FileSource } from '../../db/models/FileSourceEntity';
 import { VideoEntity } from '../../db/models/MediaEntity';
+import { MediaDataVersionStore } from '../scrape/MediaDataVersionStore';
+import { MovieScrapeScope, SeriesScrapeScope } from '../scrape/ScopedScrapeTypes';
 import { groupMissingMediaVideos } from './MissingMediaPathUtils';
 import { defaultMissingMediaVerifier, MissingMediaVerifier } from './MissingMediaVerifier';
 import {
@@ -66,6 +68,9 @@ export class MissingMediaSyncService {
     }
     if (missingIds.length > 0) {
       await this.database.deleteVideosWithScrapeInfo(missingIds);
+      // 删除后广播媒体数据版本变化，让首页/详情页通过 @Monitor 重新加载
+      // 元数据与「继续观看」列表，避免同步后残留已清理条目（需重启才消失）。
+      this.publishMediaChange(target);
     }
     const targetRemoved = target.type === 'movie'
       ? await this.database.getMovieById(target.mediaId) === null
@@ -79,6 +84,22 @@ export class MissingMediaSyncService {
       targetRemoved
     };
     return result;
+  }
+
+  /**
+   * 广播媒体数据版本变化，触发首页「继续观看」与媒体库列表刷新。
+   * 详情页与播放页就地同步共用同一服务；删除后必须 publish，
+   * 否则首页 MediaLibraryTab 持有的 recentlyAdded 内存数据陈旧，
+   * loadContinueWatching 会重建出已删除的条目。
+   */
+  private publishMediaChange(target: MissingMediaSyncTarget): void {
+    if (target.type === 'movie') {
+      const scope: MovieScrapeScope = { kind: 'movie', movieId: target.mediaId, displayName: '' };
+      MediaDataVersionStore.getState().publish(scope);
+    } else {
+      const scope: SeriesScrapeScope = { kind: 'series', tvSeriesId: target.mediaId, displayName: '' };
+      MediaDataVersionStore.getState().publish(scope);
+    }
   }
 }
 

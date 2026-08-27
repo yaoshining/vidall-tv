@@ -230,6 +230,8 @@ export struct ContinueWatchCard {
           console.warn('[ContinueWatchCard] 构建 playbackContext 失败');
         }
       }
+      // 继续播放入口无详情页承载，失效媒体提示与同步在播放页内就地处理
+      param.missingMediaSyncLocally = true;
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param);
     } catch (e) {
       console.error('[ContinueWatchCard] buildAndPlay 失败', JSON.stringify(e));

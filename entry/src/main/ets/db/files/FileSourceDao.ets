@@ -404,4 +404,145 @@ export class FileSourceDao {
       throw new Error('Failed to clearMediaAndDirectoryForDir: ' + JSON.stringify(error));
     }
   }
+
+  /**
+   * 清理指定目录下的媒体数据（videos、scrape_info、play_progress），
+   * 但不删除目录配置本身（目录配置由 saveDirectoriesForSource 统一替换）。
+   * 用于目录选择器取消勾选目录时同步清理媒体库数据。
+   * 注意：movies/tv_series 等元数据表可能跨目录/文件源共享，不在本次清理范围内，
+   * 孤立的元数据记录由上层调用 cleanupOrphanScrapeMedia() 统一处理。
+   * 所有删除操作在同一事务内完成，保证原子性。
+   * @param sourceId      所属文件源 ID
+   * @param directoryPath 目录路径（用于过滤 videos 表）
+   */
+  async clearMediaForDirectory(sourceId: number, directoryPath: string): Promise<void> {
+    const store = this.core.getStore();
+    const BATCH_SIZE = 100;
+
+    // 1. 查询该目录下的 video id 列表（事务外只读，不影响原子性）
+    const videoQueryPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS);
+    videoQueryPredicates.equalTo('source_id', sourceId);
+    videoQueryPredicates.and();
+    videoQueryPredicates.equalTo('directory_path', directoryPath);
+    let videoRs: relationalStore.ResultSet | null = null;
+    const videoIds: number[] = [];
+    try {
+      videoRs = await store.query(videoQueryPredicates, ['id']);
+      while (videoRs.goToNextRow()) {
+        videoIds.push(videoRs.getLong(videoRs.getColumnIndex('id')));
+      }
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `clearMediaForDirectory query 失败: ${err.message}`);
+      throw new Error(err.message);
+    } finally {
+      try { videoRs?.close(); } catch { }
+    }
+
+    // 2. 在事务中执行所有删除操作，保证原子性
+    let tx: relationalStore.Transaction | null = null;
+    try {
+      tx = await store.createTransaction();
+      // 2a. 分批删除 scrape_info（防止超过 SQLite 999 参数上限）
+      for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        const batch = videoIds.slice(i, i + BATCH_SIZE);
+        const scrapePredicates = new relationalStore.RdbPredicates(TABLE_SCRAPE_INFO);
+        scrapePredicates.in('video_id', batch.map(v => v as relationalStore.ValueType));
+        await tx.delete(scrapePredicates);
+      }
+
+      // 2b. 分批删除 play_progress（外键未启用，无级联删除）
+      for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        const batch = videoIds.slice(i, i + BATCH_SIZE);
+        const progressPredicates = new relationalStore.RdbPredicates(TABLE_PLAY_PROGRESS);
+        progressPredicates.in('video_id', batch.map(v => v as relationalStore.ValueType));
+        await tx.delete(progressPredicates);
+      }
+
+      // 2c. 删除视频记录
+      const videoDelPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS);
+      videoDelPredicates.equalTo('source_id', sourceId);
+      videoDelPredicates.and();
+      videoDelPredicates.equalTo('directory_path', directoryPath);
+      await tx.delete(videoDelPredicates);
+
+      await tx.commit();
+      console.info(`[DB][clearMediaForDirectory] sourceId=${sourceId} path=${directoryPath} 已清理`);
+    } catch (error) {
+      if (tx !== null) { try { await tx.rollback(); } catch { } }
+      console.error('[DB][clearMediaForDirectory] 失败，已回滚', JSON.stringify(error));
+      throw new Error('Failed to clearMediaForDirectory: ' + JSON.stringify(error));
+    }
+  }
+
+  /**
+   * 删除整个文件源及其全部关联数据（目录、视频、刮削信息、播放进度）。
+   * 用于文件源在服务器上已不存在时的一键清理。
+   */
+  async deleteFileSourceWithData(sourceId: number): Promise<void> {
+    const store = this.core.getStore();
+    const BATCH_SIZE = 100;
+
+    // 1. 查询该文件源下的所有 video id（事务外只读，不影响原子性）
+    const videoQueryPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS);
+    videoQueryPredicates.equalTo('source_id', sourceId);
+    let videoRs: relationalStore.ResultSet | null = null;
+    const videoIds: number[] = [];
+    try {
+      videoRs = await store.query(videoQueryPredicates, ['id']);
+      while (videoRs.goToNextRow()) {
+        videoIds.push(videoRs.getLong(videoRs.getColumnIndex('id')));
+      }
+    } catch (e) {
+      const err = e as BusinessError;
+      hilog.error(0x0000, 'FileSourceDatabase', `deleteFileSourceWithData query 失败: ${err.message}`);
+      throw new Error(err.message);
+    } finally {
+      try { videoRs?.close(); } catch { }
+    }
+
+    // 2. 事务内删除，保证原子性
+    let tx: relationalStore.Transaction | null = null;
+    try {
+      tx = await store.createTransaction();
+
+      // 2a. 分批删除 scrape_info（防止超过 SQLite 999 参数上限）
+      for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        const batch = videoIds.slice(i, i + BATCH_SIZE);
+        const scrapePredicates = new relationalStore.RdbPredicates(TABLE_SCRAPE_INFO);
+        scrapePredicates.in('video_id', batch.map(v => v as relationalStore.ValueType));
+        await tx.delete(scrapePredicates);
+      }
+
+      // 2b. 分批删除 play_progress（外键未启用，无级联删除）
+      for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
+        const batch = videoIds.slice(i, i + BATCH_SIZE);
+        const progressPredicates = new relationalStore.RdbPredicates(TABLE_PLAY_PROGRESS);
+        progressPredicates.in('video_id', batch.map(v => v as relationalStore.ValueType));
+        await tx.delete(progressPredicates);
+      }
+
+      // 2c. 删除视频记录
+      const videoDelPredicates = new relationalStore.RdbPredicates(TABLE_VIDEOS);
+      videoDelPredicates.equalTo('source_id', sourceId);
+      await tx.delete(videoDelPredicates);
+
+      // 2d. 删除目录配置
+      const dirPredicates = new relationalStore.RdbPredicates(TABLE_DIRECTORIES);
+      dirPredicates.equalTo('source_id', sourceId);
+      await tx.delete(dirPredicates);
+
+      // 2e. 删除文件源本身
+      const sourcePredicates = new relationalStore.RdbPredicates(TABLE_FILE_SOURCES);
+      sourcePredicates.equalTo('id', sourceId);
+      await tx.delete(sourcePredicates);
+
+      await tx.commit();
+      console.info(`[DB][deleteFileSourceWithData] sourceId=${sourceId} 已清理`);
+    } catch (error) {
+      if (tx !== null) { try { await tx.rollback(); } catch { } }
+      console.error('[DB][deleteFileSourceWithData] 失败，已回滚', JSON.stringify(error));
+      throw new Error('Failed to deleteFileSourceWithData: ' + JSON.stringify(error));
+    }
+  }
 }

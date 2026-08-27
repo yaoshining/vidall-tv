@@ -82,10 +82,9 @@ struct DirectorySelectorBuilderComponent {
   private async handleComplete(): Promise<void> {
     this.isSaving = true
     try {
-      const database = FileSourceDatabase.getInstance()
       const entries = this.selectorState.buildSaveEntries()
-      await database.saveDirectoriesForSource(this.selectorState.sourceId, entries)
-      await this.fileSourceModel.loadFileSources(true)
+      // 保存目录并同步清理被移除目录的媒体数据（videos/刮削/播放进度）
+      await this.fileSourceModel.saveDirectoriesWithCleanup(this.selectorState.sourceId, entries)
       this.getUIContext().getPromptAction().showToast({
         message: '保存成功'
       } as promptAction.ShowToastOptions)
