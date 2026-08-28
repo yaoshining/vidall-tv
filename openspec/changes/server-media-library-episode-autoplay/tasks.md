@@ -1,5 +1,3 @@
-# Tasks: server-media-library-episode-autoplay
-
 ## 1. 服务器播放上下文
 
 - [x] 1.1 在 `PlaybackContext.ets` 新增 `ServerMediaLibraryContext`（contextType `server_media_library`，静态 `buildItems(episodes, currentKey)` 纯函数 + `build()` 工厂，按集号升序，索引回退 0）；验证：类型检查通过、结构对照 `MediaLibraryContext`

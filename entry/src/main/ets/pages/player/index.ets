@@ -1172,6 +1172,8 @@ export struct PlayerPage {
         if (resolvedServerSource === null) {
           return false;
         }
+        // 切集前先暂停当前播放：避免 await stopped 上报期间继续播放，保证上报位置与用户所见一致
+        await this.videoPlayerController.pause();
         // 切集前先以当前会话上报旧集播放结束（推进服务端「接下来」），await 保证先于新集 started
         await this.reportServerProgress(this.videoPlayerController.currentTime, this.videoPlayerController.duration);
         nextParam = buildServerMediaLibraryEpisodeSwitchParam(currentParam, playbackContext, item, resolvedServerSource);

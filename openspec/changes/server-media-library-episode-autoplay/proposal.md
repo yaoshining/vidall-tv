@@ -1,5 +1,3 @@
-# Proposal: server-media-library-episode-autoplay
-
 ## Why
 
 影视服务器（Jellyfin / Plex）媒体库中播放剧集时，播完不会自动播放下一集；而文件源 / 本地媒体库已有完整的「自动下一集」能力（倒计时浮层 + 取消 + 全局开关）。两条播放链路体验不一致，用户观看服务器剧集时需要手动手动切集，体验割裂。

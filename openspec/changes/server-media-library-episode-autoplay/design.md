@@ -1,5 +1,3 @@
-# Design: server-media-library-episode-autoplay
-
 ## Context
 
 文件源 / 本地媒体库的自动连播由三层构成（见 `file-explorer-playback-context` 等既有能力）：
