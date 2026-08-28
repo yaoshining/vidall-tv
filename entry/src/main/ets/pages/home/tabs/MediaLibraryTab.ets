@@ -37,6 +37,7 @@ import { SourceSwitchModel } from "../../../stores/media/SourceSwitchModel"
 import { VideoServerStore } from "../../../stores/servers/VideoServerStore"
 import { VideoServerModel } from "../../../stores/servers/VideoServerModel"
 import { VideoServer, VideoServerType } from "../../../db/models/VideoServerEntity"
+import { buildServerEpisodePlaybackContext } from "../../../utils/ServerEpisodePlaybackContextUtil"
 import {
   JellyfinClient,
   VideoServerLibrary,
@@ -1086,6 +1087,17 @@ export struct MediaLibraryTab {
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: item.posterUrl.length > 0 ? item.posterUrl : undefined,
         backdropUrl: item.backdropUrl.length > 0 ? item.backdropUrl : undefined
+      }
+      if (item.type === 'episode' && item.seriesId.length > 0) {
+        // 剧集直播放：构建整剧连续上下文供播放器内自动连播/选集；构建失败退化为单集播放
+        try {
+          const context = await buildServerEpisodePlaybackContext(server, item.seriesId, item.id);
+          if (context !== null) {
+            param.playbackContext = context;
+          }
+        } catch (e) {
+          console.warn('[MediaLibraryTab] 构建服务器剧集上下文失败，退化为单集播放', (e as BusinessError).message ?? String(e))
+        }
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch((e: Error) => {

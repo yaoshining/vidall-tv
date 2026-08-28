@@ -10,6 +10,8 @@ import { PlayerPage, PlayerPageParam } from "../player/index"
 import { reportServerPlaybackStarted } from "../../lib/ServerProgressReporter"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
 import { BusinessError } from "@kit.BasicServicesKit"
+import { buildServerEpisodePlaybackContext } from "../../utils/ServerEpisodePlaybackContextUtil"
+import { PlaybackContext } from "../../components/core/player/PlaybackContext"
 import {
   DetailCastSection,
   DetailEpisodesSection,
@@ -204,6 +206,12 @@ export struct ServerSeasonDetailPage {
       const episodeTitle = ep.title.length > 0
         ? `${this.seriesTitle} ${this.seasonName} 第${ep.episodeNumber}集 ${ep.title}`
         : `${this.seriesTitle} ${this.seasonName} 第${ep.episodeNumber}集`
+      let playbackContext: PlaybackContext | undefined = undefined
+      try {
+        playbackContext = (await buildServerEpisodePlaybackContext(server, this.seriesId, ep.id)) ?? undefined
+      } catch (e) {
+        console.warn('[ServerSeasonDetailPage] 构建连续播放上下文失败', (e as BusinessError).message)
+      }
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
@@ -214,6 +222,9 @@ export struct ServerSeasonDetailPage {
         serverItemId: ep.id,
         serverId: server.id,
         serverPlaySessionId: playSessionId,
+        playbackContext: playbackContext,
+        seasonNumber: ep.seasonNumber,
+        episodeNumber: ep.episodeNumber,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: this.seasonPosterUrl.length > 0 ? this.seasonPosterUrl : undefined,
         backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined
@@ -337,6 +348,14 @@ export struct ServerSeasonDetailPage {
         header = client.getStreamHeader()
       }
       const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
+      let playbackContext: PlaybackContext | undefined = undefined
+      if (item.seriesId.length > 0) {
+        try {
+          playbackContext = (await buildServerEpisodePlaybackContext(server, item.seriesId, item.id)) ?? undefined
+        } catch (e) {
+          console.warn('[ServerSeasonDetailPage] 构建跨季连续播放上下文失败', (e as BusinessError).message)
+        }
+      }
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
@@ -347,6 +366,9 @@ export struct ServerSeasonDetailPage {
         serverItemId: item.id,
         serverId: server.id,
         serverPlaySessionId: playSessionId,
+        playbackContext: playbackContext,
+        seasonNumber: item.seasonNumber,
+        episodeNumber: item.episodeNumber,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: this.seasonPosterUrl.length > 0 ? this.seasonPosterUrl : undefined,
         backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined

@@ -61,10 +61,12 @@ import serverCardActionTest from './ServerCardAction.test';
 import seriesCardRouteTest from './SeriesCardRoute.test';
 import scopedScrapeTest from './ScopedScrape.test';
 import missingMediaSyncTest from './MissingMediaSync.test';
+import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackContextUtilTest';
 
 export default function testsuite() {
   timeUtilTest();
   playbackContextTest();
+  serverEpisodePlaybackContextUtilTest();
   settingsControllerTest();
   validationUtilTest();
   scrapeClientTest();

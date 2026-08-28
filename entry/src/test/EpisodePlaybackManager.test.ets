@@ -3,7 +3,9 @@ import {
   EpisodePlaybackManager,
   EpisodePlaybackManagerState
 } from '../main/ets/components/core/player/EpisodePlaybackManager'
-import { FileExplorerContext, MediaLibraryContext, PlaybackContextItem } from '../main/ets/components/core/player/PlaybackContext'
+import { FileExplorerContext, MediaLibraryContext, PlaybackContextItem, ServerMediaLibraryContext, buildServerPlaybackItems } from '../main/ets/components/core/player/PlaybackContext'
+import { VideoServerEpisode } from '../main/ets/lib/JellyfinClient'
+import { VideoServerType } from '../main/ets/db/models/VideoServerEntity'
 
 function buildEpisodeItem(index: number): PlaybackContextItem {
   return {
@@ -16,6 +18,22 @@ function buildEpisodeItem(index: number): PlaybackContextItem {
     episodeNumber: index + 1,
     durationMs: 1800000
   }
+}
+
+function buildServerEpisodeItem(id: string, episodeNumber: number): VideoServerEpisode {
+  const episode: VideoServerEpisode = {
+    id: id,
+    episodeNumber: episodeNumber,
+    seasonNumber: 1,
+    title: `第${episodeNumber}集`,
+    overview: '',
+    stillUrl: '',
+    durationMs: 1800000,
+    rating: 0,
+    positionMs: 0,
+    lastPlayedDate: 0
+  };
+  return episode;
 }
 
 function buildMediaLibraryContext(currentIndex: number = 0): MediaLibraryContext {
@@ -104,6 +122,26 @@ export default function episodePlaybackManagerTest() {
       expect(lastEpisodeState.visible).assertFalse()
       expect(lastEpisodeState.shouldPlayNext).assertFalse()
     })
+
+    it('server_media_library 上下文有下一集时显示自动播放倒计时，末集不显示', 0, () => {
+      const manager: EpisodePlaybackManager = new EpisodePlaybackManager()
+      const episodes: VideoServerEpisode[] = [
+        buildServerEpisodeItem('server-ep-1', 1),
+        buildServerEpisodeItem('server-ep-2', 2)
+      ]
+      const buildResult = buildServerPlaybackItems(VideoServerType.JELLYFIN, 3, 'series-1', episodes, 'server-ep-1')
+      const context = new ServerMediaLibraryContext(buildResult.items, buildResult.currentIndex)
+
+      manager.updateSettings(true, 8)
+      const countdownState: EpisodePlaybackManagerState = manager.sync(context, 1795000, 1800000)
+      expect(countdownState.visible).assertTrue()
+      expect(countdownState.nextItem?.videoPath ?? '').assertEqual('server-ep-2')
+
+      context.jumpTo(1)
+      const lastEpisodeState: EpisodePlaybackManagerState = manager.sync(context, 1795000, 1800000)
+      expect(lastEpisodeState.visible).assertFalse()
+      expect(lastEpisodeState.shouldPlayNext).assertFalse()
+    });
 
     it('自动切换失败后当前集保持降级停用，不会重复重试', 0, () => {
       const manager: EpisodePlaybackManager = new EpisodePlaybackManager()
