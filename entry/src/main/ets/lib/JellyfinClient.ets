@@ -842,13 +842,17 @@ export class JellyfinClient {
     if (backdropTags !== undefined && backdropTags.length > 0) {
       backdropUrl = `${this.buildBaseUrl()}/Items/${id}/Images/Backdrop?maxWidth=1280&quality=90&tag=${backdropTags[0]}&api_key=${token}`;
     }
+    if (isEpisode && backdropUrl.length === 0) {
+      const parentBackdropId = String(item['ParentBackdropItemId'] ?? '');
+      const parentBackdropTags = item['ParentBackdropImageTags'] as Array<string> | undefined;
+      if (parentBackdropId.length > 0 && parentBackdropTags !== undefined && parentBackdropTags.length > 0) {
+        backdropUrl = `${this.buildBaseUrl()}/Items/${parentBackdropId}/Images/Backdrop?fillWidth=700&fillHeight=394&quality=96&tag=${parentBackdropTags[0]}&api_key=${token}`;
+      }
+    }
     if (isEpisode && backdropUrl.length === 0 && seriesId.length > 0) {
-      // 16:9 缩略图：用剧集的 Thumb（与 Jellyfin Web 的继续观看/接下来一致）
       const seriesThumbTag = item['SeriesThumbImageTag'];
       if (typeof seriesThumbTag === 'string' && seriesThumbTag.length > 0) {
         backdropUrl = `${this.buildBaseUrl()}/Items/${seriesId}/Images/Thumb?fillWidth=700&fillHeight=394&quality=96&tag=${seriesThumbTag}&api_key=${token}`;
-      } else {
-        backdropUrl = `${this.buildBaseUrl()}/Items/${seriesId}/Images/Thumb?fillWidth=700&fillHeight=394&quality=96&api_key=${token}`;
       }
     }
 
