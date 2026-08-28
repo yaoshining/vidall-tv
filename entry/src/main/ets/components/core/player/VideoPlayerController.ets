@@ -237,6 +237,12 @@ export interface AudioTrackItem {
 
 export type UnsupportedFormatFallback = 'mpv';
 
+/** MPV surface 绑定等待者：backend 切换到 MPV 时 reloadSource 等待 UI 层新 XComponent 完成绑定。 */
+interface MpvSurfaceBindWaiter {
+  resolve: () => void;
+  reject: (error: Error) => void;
+}
+
 @ObservedV2
 export class VideoPlayerController {
   /** 运行时播放后端：AVPlayer 主路径，MPV 唯一回退路径。 */
@@ -272,6 +278,8 @@ export class VideoPlayerController {
   private pendingMpvSurfaceHeight: number = 0
   private mpvSurfaceWidth: number = 0
   private mpvSurfaceHeight: number = 0
+  /** 等待 MPV surface 完成绑定的挂起者（backend 切换到 mpv 时由 reloadSource 注册）。 */
+  private mpvSurfaceBindWaiters: MpvSurfaceBindWaiter[] = []
   @Trace duration = 0
   @Trace isPlaying = false
   @Trace isReady = false
@@ -625,6 +633,9 @@ export class VideoPlayerController {
     const sameSource = this.currentOriginalVideoSrc.length === 0 ||
       activeVideoData.videoSrc === this.currentOriginalVideoSrc;
     if (this.backend === 'mpv' && this.player !== undefined && sameSource) {
+      // 重建后的 mpv XComponent 拥有全新 surfaceId，必须同步到控制器，
+      // 否则后续 reloadSource 仍持有已销毁旧组件的过期 id（真实机切集失败案例）。
+      this.surfaceId = surfaceId;
       hilog.info(CommonConstants.LOG_DOMAIN, TAG,
         '[initPlayerForSurface] MPV 已创建且源未变化，跳过冗余重建');
       return;
@@ -728,6 +739,13 @@ export class VideoPlayerController {
       }
     } else {
       this.backend = decision.preferredBackend;
+    }
+    if (this.backend === 'mpv' && backendBeforeAutoRouting !== 'mpv') {
+      // backend 切换到 mpv 时 UI 将销毁旧 XComponent 并重建 mpv XComponent，
+      // 旧组件缓存的 surfaceId 即将失效，清除以免 initPlayer 用过期 id 抢绑。
+      this.pendingMpvSurfaceId = '';
+      this.pendingMpvSurfaceWidth = 0;
+      this.pendingMpvSurfaceHeight = 0;
     }
     if (decision.precheckProbeFailed && backendBeforeAutoRouting !== this.backend) {
       this.logFallbackEvent('precheck_probe_failed', backendBeforeAutoRouting, this.backend,
@@ -1435,6 +1453,7 @@ export class VideoPlayerController {
         );
         this.mpvSurfaceBound = true;
         this.boundMpvSurfaceId = surfaceId;
+        this.notifyMpvSurfaceBound();
       } catch (e) {
         const err = e as Error;
         hilog.error(CommonConstants.LOG_DOMAIN, TAG,
@@ -1464,6 +1483,42 @@ export class VideoPlayerController {
     }
   }
 
+  /**
+   * 等待 MPV surface 完成绑定（由 UI 层新 XComponent 的 onLoad/onAreaChange → setMpvSurface 驱动）。
+   * backend 从非 mpv 切换到 mpv 时 XComponent 会被销毁重建，旧 surfaceId 已失效，
+   * reloadSource 不能再用旧 id 抢绑，必须等待新 XComponent 挂载后完成绑定。
+   */
+  private waitForMpvSurfaceBinding(timeoutMs: number): Promise<void> {
+    if (this.mpvSurfaceBound && this.boundMpvSurfaceId.length > 0) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const waiter: MpvSurfaceBindWaiter = { resolve: resolve, reject: reject };
+      this.mpvSurfaceBindWaiters.push(waiter);
+      setTimeout(() => {
+        const index = this.mpvSurfaceBindWaiters.indexOf(waiter);
+        if (index >= 0) {
+          this.mpvSurfaceBindWaiters.splice(index, 1);
+          hilog.error(CommonConstants.LOG_DOMAIN, TAG,
+            `等待 MPV surface 绑定超时（${timeoutMs}ms），XComponent 未完成挂载`);
+          reject(new Error(`等待 MPV surface 绑定超时（${timeoutMs}ms）`));
+        }
+      }, timeoutMs);
+    });
+  }
+
+  /** MPV surface 绑定成功后唤醒所有等待者。 */
+  private notifyMpvSurfaceBound(): void {
+    if (this.mpvSurfaceBindWaiters.length === 0) {
+      return;
+    }
+    const waiters = this.mpvSurfaceBindWaiters;
+    this.mpvSurfaceBindWaiters = [];
+    for (const waiter of waiters) {
+      waiter.resolve();
+    }
+  }
+
   async reloadSource(videoData: VideoData, autoPlay: boolean = true): Promise<void> {
     if (autoPlay) {
       this.clearPreparedResumeAutoplayDecision();
@@ -1482,10 +1537,21 @@ export class VideoPlayerController {
       this.reloadSession.begin(resolve, reject);
     });
     try {
+      const backendBeforeReload = this.backend;
       await this.initPlayer(videoData, this.surfaceId);
       if (this.backend === 'mpv') {
-        this.mpvSurfaceBound = false;
-        await this.setMpvSurface(this.surfaceId, this.mpvSurfaceWidth, this.mpvSurfaceHeight);
+        if (backendBeforeReload === 'mpv') {
+          // mpv→mpv：XComponent 未重建，旧 surfaceId 仍有效 → 立即重绑。
+          this.mpvSurfaceBound = false;
+          await this.setMpvSurface(this.surfaceId, this.mpvSurfaceWidth, this.mpvSurfaceHeight);
+        } else {
+          // 非 mpv→mpv：@Monitor 将触发 UI 销毁旧 XComponent 并挂载 mpv XComponent，
+          // 旧 surfaceId 已失效，立即重绑会报「没有可用的XComponent画面」。
+          // 绑定交给 UI 层链路：新 XComponent onLoad → initPlayerForSurface → onAreaChange → setMpvSurface。
+          hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+            `reloadSource: backend ${backendBeforeReload}→mpv，等待新 XComponent 挂载后绑定 surface`);
+          await this.waitForMpvSurfaceBinding(5000);
+        }
       }
       await reloadPromise;
       if (autoPlay) {
