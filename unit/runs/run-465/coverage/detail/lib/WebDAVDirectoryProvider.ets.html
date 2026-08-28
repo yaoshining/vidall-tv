@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+/** 
+ * WebDAVDirectoryProvider 
+ *  
+ * WebDAV 协议的 DirectoryProvider 实现 
+ * 基于 WebDAVClient 提供目录浏览能力 
+ */ 
+ 
+import { WebDAVClient, WebDAVConfig, WebDAVResource } from &#39;../lib/WebDAVClient&#39; 
+import { WebDAVSourceConfig } from &#39;../db/models/FileSourceEntity&#39; 
+import { getFileExplorerErrorMessage } from &#39;../components/core/file/FileExplorerAdapter&#39; 
+import { 
+  DirectoryProvider, 
+  DirectoryProviderConfig, 
+  DirectoryEntry, 
+  DirectoryLoadResult 
+} from &#39;../lib/DirectoryProvider&#39; 
+ 
+/** 
+ * WebDAV Directory Provider 实现 
+ */ 
+export class WebDAVDirectoryProvider implements DirectoryProvider { 
+  private webdavClient?: WebDAVClient 
+  private endpointSummary: string = &#39;&#39; 
+  private config?: DirectoryProviderConfig 
+  private currentPath: string = &#39;/&#39; 
+ 
+  /** 
+   * 初始化 WebDAV 提供者 
+   */ 
+  async initWithConfig(config: DirectoryProviderConfig): Promise&lt;void&gt; { 
+    this.config = config 
+     
+    // 从 protocolSpecific 中提取 WebDAV 配置 
+    const webdavConfig = this.extractWebDAVConfig(config) 
+     
+    // 创建 WebDAV 客户端 
+    this.webdavClient = new WebDAVClient(webdavConfig) 
+     
+    // 构建端点摘要（用正则解析避免 automock 环境中 URLSearchParams 缺失） 
+    const urlMatch = webdavConfig.baseUrl.match(/^(https?):\/\/([^/:]+)(?::(\d+))?/) 
+    const protocol = urlMatch?.[1] ?? &#39;http&#39; 
+    const hostname = urlMatch?.[2] ?? webdavConfig.baseUrl 
+    const port = urlMatch?.[3] ?? (protocol === &#39;https&#39; ? &#39;443&#39; : &#39;80&#39;) 
+    this.endpointSummary = `${hostname}:${port}` 
+  } 
+ 
+  /** 
+   * 清理资源 
+   */ 
+  async cleanup(): Promise&lt;void&gt; { 
+    this.webdavClient = undefined 
+    this.config = undefined 
+  } 
+ 
+  /** 
+   * 列出目录 
+   */ 
+  async listDirectory(path: string): Promise&lt;DirectoryLoadResult&gt; { 
+    if (this.webdavClient === undefined) { 
+      const errorResult: DirectoryLoadResult = { 
+        entries: [], 
+        errorMessage: &#39;WebDAV 客户端未初始化&#39; 
+      } 
+      return errorResult 
+    } 
+ 
+    try { 
+      this.currentPath = path 
+      const resources: WebDAVResource[] = await this.webdavClient.listDirectory(path) 
+       
+      // 只保留目录（isCollection） 
+      const collections = resources 
+        .filter((resource: WebDAVResource) =&gt; resource.isCollection) 
+        // 跳过第一个（当前目录本身） 
+        .slice(1) 
+       
+      // 转换为 DirectoryEntry 
+      const entries: DirectoryEntry[] = collections.map((resource: WebDAVResource) =&gt; { 
+        const childPath = this.joinPath(path, resource.displayName) 
+        const entry: DirectoryEntry = { 
+          key: childPath, 
+          name: resource.displayName, 
+          path: childPath, 
+          isDirectory: true 
+        } 
+        return entry 
+      }) 
+ 
+      const loadResult: DirectoryLoadResult = { 
+        entries: entries 
+      } 
+      return loadResult 
+    } catch (error) { 
+      const errorResult: DirectoryLoadResult = { 
+        entries: [], 
+        errorMessage: getFileExplorerErrorMessage(error) 
+      } 
+      return errorResult 
+    } 
+  } 
+ 
+  /** 
+   * 获取显示名称 
+   */ 
+  async getDisplayName(path: string): Promise&lt;string&gt; { 
+    if (path === &#39;&#39; || path === &#39;/&#39;) { 
+      return this.getRootLabel() 
+    } 
+    const parts = path.split(&#39;/&#39;).filter((part: string) =&gt; part.length &gt; 0) 
+    return parts.length &gt; 0 ? parts[parts.length - 1] : this.getRootLabel() 
+  } 
+ 
+  /** 
+   * 格式化路径用于导航 
+   * WebDAV 路径使用 encodeURIComponent 编码 
+   */ 
+  formatPathForNavigation(path: string): string { 
+    return encodeURIComponent(path) 
+  } 
+ 
+  /** 
+   * 解析导航路径 
+   */ 
+  parseNavigationPath(navPath: string): string { 
+    return decodeURIComponent(navPath) 
+  } 
+ 
+  /** 
+   * 判断错误是否可重试 
+   * WebDAV 特定错误映射 
+   */ 
+  isRetryable(error: Error): boolean { 
+    const errorMessage = error.message.toLowerCase() 
+     
+    // 网络相关错误可重试 
+    const retryableKeywords = [ 
+      &#39;timeout&#39;, 
+      &#39;network&#39;, 
+      &#39;connection&#39;, 
+      &#39;ETIMEDOUT&#39;, 
+      &#39;ECONNREFUSED&#39;, 
+      &#39;ECONNRESET&#39;, 
+      &#39;502&#39;, 
+      &#39;503&#39;, 
+      &#39;504&#39;, 
+      &#39;temporarily unavailable&#39;, 
+      &#39;service unavailable&#39; 
+    ] 
+     
+    const isRetryable = retryableKeywords.some((keyword: string) =&gt;  
+      errorMessage.includes(keyword.toLowerCase()) 
+    ) 
+     
+    return isRetryable 
+  } 
+ 
+  /** 
+   * 获取协议标识 
+   */ 
+  getProtocolKey(): string { 
+    return &#39;webdav&#39; 
+  } 
+ 
+  /** 
+   * 获取根路径标签 
+   */ 
+  getRootLabel(): string { 
+    return &#39;根目录&#39; 
+  } 
+ 
+  /** 
+   * 获取端点摘要 
+   */ 
+  getEndpointSummary(): string { 
+    return this.endpointSummary 
+  } 
+ 
+  /** 
+   * 从通用配置中提取 WebDAV 特定配置 
+   */ 
+  private extractWebDAVConfig(config: DirectoryProviderConfig): WebDAVConfig { 
+    const protocolSpecific = config.protocolSpecific ?? {} 
+     
+    const baseUrl = this.readStringFromRecord(protocolSpecific, &#39;baseUrl&#39;, &#39;&#39;) 
+    const tlsCertPolicy = this.readStringFromRecord(protocolSpecific, &#39;tlsCertPolicy&#39;, &#39;allow_self_signed&#39;) 
+     
+    const webdavConfig: WebDAVConfig = { 
+      baseUrl: baseUrl, 
+      username: config.username, 
+      password: config.password, 
+      tlsCertPolicy: tlsCertPolicy === &#39;strict&#39; ? &#39;strict&#39; : &#39;allow_self_signed&#39; 
+    } 
+    return webdavConfig 
+  } 
+ 
+  /** 
+   * 从 Record 中读取字符串值 
+   */ 
+  private readStringFromRecord(record: Record&lt;string, Object&gt;, key: string, defaultValue: string): string { 
+    const value = record[key] 
+    return typeof value === &#39;string&#39; ? value : defaultValue 
+  } 
+ 
+  /** 
+   * 拼接路径 
+   */ 
+  private joinPath(parentPath: string, childName: string): string { 
+    if (parentPath === &#39;/&#39;) { 
+      return &#39;/&#39; + childName 
+    } 
+    return parentPath.endsWith(&#39;/&#39;) ? parentPath + childName : parentPath + &#39;/&#39; + childName 
+  } 
+} 
+ 
+/** 
+ * 从 WebDAVSourceConfig 创建 DirectoryProviderConfig 
+ */ 
+export function createWebDAVProviderConfig(sourceId: number, webdavConfig: WebDAVSourceConfig): DirectoryProviderConfig { 
+  // 构建 baseUrl 
+  let serverAddress = webdavConfig.url 
+  let port = webdavConfig.port 
+  if (serverAddress.includes(&#39;:&#39;)) { 
+    const parts = serverAddress.split(&#39;:&#39;) 
+    serverAddress = parts[0] 
+    const portInUrl = parseInt(parts[1], 10) 
+    if (!Number.isNaN(portInUrl)) { 
+      port = portInUrl 
+    } 
+  } 
+  let baseUrl = `${webdavConfig.protocol}://${serverAddress}:${port}` 
+  const normalizedPath = webdavConfig.rootPath.trim().length &gt; 0 ? webdavConfig.rootPath.trim() : &#39;/&#39; 
+  // rootPath 非 &#39;/&#39; 时加入 baseUrl；为 &#39;/&#39; 时 WebDAVClient 内部默认basePath为 &#39;/&#39; 
+  if (normalizedPath !== &#39;/&#39;) { 
+    baseUrl += normalizedPath.startsWith(&#39;/&#39;) ? normalizedPath : &#39;/&#39; + normalizedPath 
+  } 
+ 
+  const protocolSpecific: Record&lt;string, Object&gt; = {} 
+  protocolSpecific[&#39;baseUrl&#39;] = baseUrl 
+  protocolSpecific[&#39;tlsCertPolicy&#39;] = webdavConfig.tlsCertPolicy ?? &#39;allow_self_signed&#39; 
+ 
+  const config: DirectoryProviderConfig = { 
+    protocol: &#39;webdav&#39;, 
+    sourceId: sourceId, 
+    username: webdavConfig.username, 
+    password: webdavConfig.password, 
+    protocolSpecific: protocolSpecific 
+  } 
+  return config 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Aug 28 2026 17:41:14 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/lib/WebDAVDirectoryProvider.ets","hash":"49c8ebde0ccdcaa018ecff955125254de9af24f5768d84e6b12dbaecdef792e6","lineCnt":250,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"WebDAVDirectoryProvider.initWithConfig","count":7,"regions":[{"startLoc":{"line":30,"col":3},"endLoc":{"line":45,"col":4},"count":7,"ignored":0},{"startLoc":{"line":31,"col":5},"endLoc":{"line":45,"col":4},"count":7,"ignored":0}],"branches":[{"startLoc":{"line":43,"col":36},"endLoc":{"line":43,"col":71},"trueCount":1,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"WebDAVDirectoryProvider.cleanup","count":0,"regions":[{"startLoc":{"line":50,"col":3},"endLoc":{"line":53,"col":4},"count":0,"ignored":0},{"startLoc":{"line":51,"col":5},"endLoc":{"line":53,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"WebDAVDirectoryProvider.listDirectory","count":0,"regions":[{"startLoc":{"line":58,"col":3},"endLoc":{"line":100,"col":4},"count":0,"ignored":0},{"startLoc":{"line":67,"col":9},"endLoc":{"line":93,"col":6},"count":0,"ignored":0},{"startLoc":{"line":80,"col":9},"endLoc":{"line":87,"col":8},"count":0,"ignored":0},{"startLoc":{"line":59,"col":42},"endLoc":{"line":65,"col":6},"count":0,"ignored":0},{"startLoc":{"line":93,"col":7},"endLoc":{"line":99,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":59,"col":9},"endLoc":{"line":59,"col":40},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":2},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":73,"col":17},"endLoc":{"line":73,"col":68},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":78,"col":57},"endLoc":{"line":87,"col":8},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"WebDAVDirectoryProvider.getDisplayName","count":2,"regions":[{"startLoc":{"line":105,"col":3},"endLoc":{"line":111,"col":4},"count":2,"ignored":0},{"startLoc":{"line":106,"col":38},"endLoc":{"line":108,"col":6},"count":1,"ignored":0},{"startLoc":{"line":109,"col":5},"endLoc":{"line":111,"col":4},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":106,"col":9},"endLoc":{"line":106,"col":36},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":110,"col":12},"endLoc":{"line":110,"col":76},"trueCount":1,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"anonymous_2","count":3,"regions":[{"startLoc":{"line":109,"col":42},"endLoc":{"line":109,"col":75},"count":3,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"WebDAVDirectoryProvider.formatPathForNavigation","count":1,"regions":[{"startLoc":{"line":117,"col":3},"endLoc":{"line":119,"col":4},"count":1,"ignored":0},{"startLoc":{"line":118,"col":5},"endLoc":{"line":119,"col":4},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"WebDAVDirectoryProvider.parseNavigationPath","count":1,"regions":[{"startLoc":{"line":124,"col":3},"endLoc":{"line":126,"col":4},"count":1,"ignored":0},{"startLoc":{"line":125,"col":5},"endLoc":{"line":126,"col":4},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"WebDAVDirectoryProvider.isRetryable","count":4,"regions":[{"startLoc":{"line":132,"col":3},"endLoc":{"line":155,"col":4},"count":4,"ignored":0},{"startLoc":{"line":133,"col":5},"endLoc":{"line":155,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"anonymous_3","count":31,"regions":[{"startLoc":{"line":150,"col":48},"endLoc":{"line":151,"col":51},"count":31,"ignored":0}],"branches":[],"ignored":0,"index":10},{"name":"WebDAVDirectoryProvider.getProtocolKey","count":6,"regions":[{"startLoc":{"line":160,"col":3},"endLoc":{"line":162,"col":4},"count":6,"ignored":0},{"startLoc":{"line":161,"col":5},"endLoc":{"line":162,"col":4},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":11},{"name":"WebDAVDirectoryProvider.getRootLabel","count":4,"regions":[{"startLoc":{"line":167,"col":3},"endLoc":{"line":169,"col":4},"count":4,"ignored":0},{"startLoc":{"line":168,"col":5},"endLoc":{"line":169,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"WebDAVDirectoryProvider.getEndpointSummary","count":3,"regions":[{"startLoc":{"line":174,"col":3},"endLoc":{"line":176,"col":4},"count":3,"ignored":0},{"startLoc":{"line":175,"col":5},"endLoc":{"line":176,"col":4},"count":3,"ignored":0}],"branches":[],"ignored":0,"index":13},{"name":"WebDAVDirectoryProvider.extractWebDAVConfig","count":7,"regions":[{"startLoc":{"line":181,"col":3},"endLoc":{"line":194,"col":4},"count":7,"ignored":0},{"startLoc":{"line":182,"col":5},"endLoc":{"line":194,"col":4},"count":7,"ignored":0}],"branches":[{"startLoc":{"line":191,"col":22},"endLoc":{"line":191,"col":81},"trueCount":0,"falseCount":7,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"WebDAVDirectoryProvider.readStringFromRecord","count":14,"regions":[{"startLoc":{"line":199,"col":3},"endLoc":{"line":202,"col":4},"count":14,"ignored":0},{"startLoc":{"line":200,"col":5},"endLoc":{"line":202,"col":4},"count":14,"ignored":0}],"branches":[{"startLoc":{"line":201,"col":12},"endLoc":{"line":201,"col":60},"trueCount":14,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":15},{"name":"WebDAVDirectoryProvider.joinPath","count":0,"regions":[{"startLoc":{"line":207,"col":3},"endLoc":{"line":212,"col":4},"count":0,"ignored":0},{"startLoc":{"line":208,"col":29},"endLoc":{"line":210,"col":6},"count":0,"ignored":0},{"startLoc":{"line":211,"col":5},"endLoc":{"line":212,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":208,"col":9},"endLoc":{"line":208,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":211,"col":12},"endLoc":{"line":211,"col":92},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"createWebDAVProviderConfig","count":0,"regions":[{"startLoc":{"line":218,"col":1},"endLoc":{"line":249,"col":2},"count":0,"ignored":0},{"startLoc":{"line":237,"col":3},"endLoc":{"line":249,"col":2},"count":0,"ignored":0},{"startLoc":{"line":222,"col":36},"endLoc":{"line":229,"col":4},"count":0,"ignored":0},{"startLoc":{"line":226,"col":35},"endLoc":{"line":228,"col":6},"count":0,"ignored":0},{"startLoc":{"line":233,"col":31},"endLoc":{"line":235,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":222,"col":7},"endLoc":{"line":222,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":226,"col":9},"endLoc":{"line":226,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":231,"col":26},"endLoc":{"line":231,"col":102},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":233,"col":7},"endLoc":{"line":233,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":234,"col":16},"endLoc":{"line":234,"col":86},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":17}],"exeLine":{"0":8,"1":9,"2":10,"3":12,"4":13,"5":14,"6":15,"7":16,"8":21,"9":22,"10":23,"11":24,"12":25,"13":30,"14":31,"15":34,"16":37,"17":40,"18":41,"19":42,"20":43,"21":44,"22":50,"23":51,"24":52,"25":58,"26":59,"27":60,"28":61,"29":62,"30":64,"31":67,"32":68,"33":69,"34":72,"35":73,"36":75,"37":78,"38":79,"39":80,"40":81,"41":82,"42":83,"43":84,"44":86,"45":89,"46":90,"47":92,"48":93,"49":94,"50":95,"51":96,"52":98,"53":105,"54":106,"55":107,"56":109,"57":110,"58":117,"59":118,"60":124,"61":125,"62":132,"63":133,"64":136,"65":137,"66":138,"67":139,"68":140,"69":141,"70":142,"71":143,"72":144,"73":145,"74":146,"75":147,"76":150,"77":151,"78":154,"79":160,"80":161,"81":167,"82":168,"83":174,"84":175,"85":181,"86":182,"87":184,"88":185,"89":187,"90":188,"91":189,"92":190,"93":191,"94":193,"95":199,"96":200,"97":201,"98":207,"99":208,"100":209,"101":211,"102":218,"103":220,"104":221,"105":222,"106":223,"107":224,"108":225,"109":226,"110":227,"111":230,"112":231,"113":233,"114":234,"115":237,"116":238,"117":239,"118":241,"119":242,"120":243,"121":244,"122":245,"123":246,"124":248},"summary":{"lines":{"total":112,"covered":54,"pct":48.21,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,7,7,-1,-1,7,-1,-1,7,-1,-1,7,7,7,1,7,-1,-1,-1,-1,-1,0,0,0,-1,-1,-1,-1,-1,0,0,0,0,0,-1,0,-1,-1,0,0,0,-1,-1,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,-1,0,-1,-1,0,0,-1,0,0,0,0,0,-1,0,-1,-1,-1,-1,-1,-1,2,2,1,-1,3,1,-1,-1,-1,-1,-1,-1,1,1,-1,-1,-1,-1,-1,1,1,-1,-1,-1,-1,-1,-1,4,4,-1,-1,4,4,4,4,4,4,4,4,4,4,4,4,-1,-1,31,31,-1,-1,4,-1,-1,-1,-1,-1,6,6,-1,-1,-1,-1,-1,4,4,-1,-1,-1,-1,-1,3,3,-1,-1,-1,-1,-1,7,7,-1,7,7,-1,7,7,7,7,7,-1,7,-1,-1,-1,-1,-1,14,14,14,-1,-1,-1,-1,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,-1,0,-1,0,0,0,0,0,0,0,0,-1,-1,0,0,-1,0,0,-1,-1,0,0,0,-1,0,0,0,0,0,0,-1,0,-1,-1]},"functions":{"total":18,"covered":12,"pct":66.67},"branches":{"total":26,"covered":6,"pct":23.08}}},"title":"WebDAVDirectoryProvider.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
