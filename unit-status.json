@@ -1,10 +1,10 @@
 {
-  "status": "failed",
-  "passed": 0,
+  "status": "passed",
+  "passed": 671,
   "failed": 0,
-  "total": 0,
+  "total": 671,
   "compiled_count": 0,
-  "run_number": "468",
-  "timestamp": "2026-08-28T10:27:58Z",
-  "run_url": "https://github.com/yaoshining/vidall-tv/actions/runs/33163438962"
+  "run_number": "469",
+  "timestamp": "2026-08-28T10:30:23Z",
+  "run_url": "https://github.com/yaoshining/vidall-tv/actions/runs/33163454293"
 }
