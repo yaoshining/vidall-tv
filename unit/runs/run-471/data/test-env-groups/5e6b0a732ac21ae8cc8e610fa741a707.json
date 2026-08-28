@@ -1,0 +1,1 @@
+{"id":"5e6b0a732ac21ae8cc8e610fa741a707","fullName":"FileExplorerController unified resources#配置了 rootPath 时回退到文件源根目录就交给外层关闭","name":"配置了 rootPath 时回退到文件源根目录就交给外层关闭","status":"passed","testResultsByEnv":{"default":"05ce31d4ece2cd8207469a79d47d076a"}}
