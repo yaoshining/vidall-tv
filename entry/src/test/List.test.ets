@@ -61,6 +61,7 @@ import serverCardActionTest from './ServerCardAction.test';
 import seriesCardRouteTest from './SeriesCardRoute.test';
 import scopedScrapeTest from './ScopedScrape.test';
 import missingMediaSyncTest from './MissingMediaSync.test';
+import serverMediaLibraryContextTest from './ServerMediaLibraryContext.test';
 
 export default function testsuite() {
   timeUtilTest();
@@ -124,4 +125,5 @@ export default function testsuite() {
   seriesCardRouteTest();
   scopedScrapeTest();
   missingMediaSyncTest();
+  serverMediaLibraryContextTest();
 }

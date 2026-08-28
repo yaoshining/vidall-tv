@@ -8,6 +8,7 @@ import { JellyfinClient, VideoServerEpisode, VideoServerPerson, VideoServerMedia
 import { PlexClient } from "../../lib/PlexClient"
 import { PlayerPage, PlayerPageParam } from "../player/index"
 import { reportServerPlaybackStarted } from "../../lib/ServerProgressReporter"
+import { buildServerSeasonContext, buildServerSeasonContextFromEpisodes } from "../../lib/ServerEpisodeContextBuilder"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
 import { BusinessError } from "@kit.BasicServicesKit"
 import {
@@ -204,6 +205,11 @@ export struct ServerSeasonDetailPage {
       const episodeTitle = ep.title.length > 0
         ? `${this.seriesTitle} ${this.seasonName} 第${ep.episodeNumber}集 ${ep.title}`
         : `${this.seriesTitle} ${this.seasonName} 第${ep.episodeNumber}集`
+      // 用已加载的当季集列表直接构建服务器播放上下文（自动连播下一集）
+      const playbackContext = buildServerSeasonContextFromEpisodes(
+        server, this.episodes, ep.id, this.seriesId, this.seriesTitle,
+        this.seasonNumber, this.seasonName, this.seasonPosterUrl, this.seriesBackdropUrl
+      )
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
@@ -216,7 +222,8 @@ export struct ServerSeasonDetailPage {
         serverPlaySessionId: playSessionId,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: this.seasonPosterUrl.length > 0 ? this.seasonPosterUrl : undefined,
-        backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined
+        backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined,
+        playbackContext: playbackContext ?? undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, ep.id, playSessionId, ep.positionMs, ep.durationMs)
         .catch(() => {})
@@ -337,6 +344,11 @@ export struct ServerSeasonDetailPage {
         header = client.getStreamHeader()
       }
       const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
+      // 剧集条目构建服务器播放上下文（自动连播下一集）；失败时静默降级为普通播放
+      const playbackContext = item.seasonNumber > 0
+        ? await buildServerSeasonContext(server, this.seriesId, item.seasonNumber, item.id,
+            this.seriesTitle, '', this.seasonPosterUrl, this.seriesBackdropUrl)
+        : null
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
@@ -349,7 +361,8 @@ export struct ServerSeasonDetailPage {
         serverPlaySessionId: playSessionId,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: this.seasonPosterUrl.length > 0 ? this.seasonPosterUrl : undefined,
-        backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined
+        backdropUrl: this.seriesBackdropUrl.length > 0 ? this.seriesBackdropUrl : undefined,
+        playbackContext: playbackContext ?? undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch(() => {})

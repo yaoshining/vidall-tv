@@ -5,6 +5,7 @@ import { JellyfinClient, VideoServerItemDetail, VideoServerSeason, VideoServerPe
 import { PlexClient } from "../../lib/PlexClient"
 import { PlayerPage, PlayerPageParam } from "../player/index"
 import { reportServerPlaybackStarted } from "../../lib/ServerProgressReporter"
+import { buildServerSeasonContext } from "../../lib/ServerEpisodeContextBuilder"
 import { toOpaqueColor } from "../../utils/MediaFormatUtil"
 import { ServerSeasonDetailPage, ServerSeasonDetailPageParam } from "./ServerSeasonDetailPage"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
@@ -153,6 +154,11 @@ export struct ServerMediaDetailPage {
       }
       const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
       const playerTitle = this.isSeries() ? `${this.getTitle()} ${target.subtitle}` : target.title
+      // 剧集播放构建服务器播放上下文（自动连播下一集）；复用已加载的季列表避免重复请求
+      const playbackContext = this.isSeries() && target.seasonNumber > 0
+        ? await buildServerSeasonContext(server, this.itemId, target.seasonNumber, target.id,
+            this.getTitle(), '', this.getPosterUrl(), this.getBackdropUrl(), this.seasons)
+        : null
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
@@ -165,7 +171,8 @@ export struct ServerMediaDetailPage {
         serverPlaySessionId: playSessionId,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: target.posterUrl.length > 0 ? target.posterUrl : undefined,
-        backdropUrl: target.backdropUrl.length > 0 ? target.backdropUrl : undefined
+        backdropUrl: target.backdropUrl.length > 0 ? target.backdropUrl : undefined,
+        playbackContext: playbackContext ?? undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, target.id, playSessionId, target.positionMs, target.durationMs)
         .catch(() => {})

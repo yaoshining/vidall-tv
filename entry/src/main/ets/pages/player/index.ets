@@ -9,7 +9,7 @@ import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
 import { common } from "@kit.AbilityKit";
 import { image } from '@kit.ImageKit';
 import { http } from '@kit.NetworkKit';
-import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext } from "../../components/core/player/PlaybackContext";
+import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext, ServerMediaLibraryContext } from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
@@ -30,7 +30,10 @@ import {
   NextEpisodeHint
 } from "../../services/playbackProgress/PlaybackProgressService";
 import { PlaybackResumeDecision } from "../../services/playbackProgress/PlaybackResumeDecision";
-import { reportServerPlaybackStopped, reportServerPlaybackProgress } from "../../lib/ServerProgressReporter";
+import { reportServerPlaybackStopped, reportServerPlaybackProgress, reportServerPlaybackStarted } from "../../lib/ServerProgressReporter";
+import { JellyfinClient } from "../../lib/JellyfinClient";
+import { PlexClient } from "../../lib/PlexClient";
+import { VideoServerType } from "../../db/models/VideoServerEntity";
 import { AvSessionService, AvSessionCommand, AvSessionSyncState } from "../../services/avSession/AvSessionService";
 import { MissingMediaSyncOverlay } from "../../components/detail/MissingMediaSyncOverlay";
 import { defaultMissingMediaSyncService as mediaSync } from "../../services/mediaSync/MissingMediaSyncService";
@@ -306,6 +309,95 @@ export function buildFileExplorerEpisodeSwitchParam(
     backdropUrl: currentParam.backdropUrl
   };
   return nextParam;
+}
+
+/** 服务器切集解析出的播放源 */
+export interface ResolvedServerEpisodeSource {
+  url: string;
+  httpHeader?: Record<string, string>;
+}
+
+/**
+ * 解析服务器剧集流地址：按 serverId 从数据库读取服务器配置并构建客户端。
+ * 服务器不存在或解析失败返回 null。
+ */
+export async function resolveServerEpisodeStream(
+  serverId: number,
+  serverType: string,
+  itemId: string
+): Promise<ResolvedServerEpisodeSource | null> {
+  const server = await FileSourceDatabase.getInstance().getVideoServerById(serverId);
+  if (server === null) {
+    return null;
+  }
+  if (serverType === VideoServerType.PLEX) {
+    const plexClient = PlexClient.fromConfigJson(server.configJson);
+    const plexUrl = await plexClient.getStreamUrl(itemId);
+    const plexSource: ResolvedServerEpisodeSource = { url: plexUrl };
+    const plexHeader = plexClient.getStreamHeader();
+    if (Object.keys(plexHeader).length > 0) {
+      plexSource.httpHeader = plexHeader;
+    }
+    return plexSource;
+  }
+  const client = JellyfinClient.fromConfigJson(server.configJson);
+  const url = await client.getStreamUrl(itemId);
+  const source: ResolvedServerEpisodeSource = { url: url };
+  const header = client.getStreamHeader();
+  if (Object.keys(header).length > 0) {
+    source.httpHeader = header;
+  }
+  return source;
+}
+
+/**
+ * 构建服务器媒体库切集参数：流地址、标题、时长、续播位与服务器标识全部来自下一集与上下文。
+ * 上下文不是 server_media_library 或索引非法时返回 null。
+ */
+export function buildServerMediaLibraryEpisodeSwitchParam(
+  currentParam: PlayerPageParam,
+  playbackContext: PlaybackContext | undefined,
+  selectedItem: PlaybackContextItem,
+  resolvedSource: ResolvedServerEpisodeSource
+): PlayerPageParam | null {
+  if (playbackContext === undefined || playbackContext.contextType !== 'server_media_library') {
+    return null;
+  }
+  const serverContext = playbackContext as ServerMediaLibraryContext;
+  if (selectedItem.index < 0 || selectedItem.index >= serverContext.items.length) {
+    return null;
+  }
+  const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+  const nextParam: PlayerPageParam = {
+    url: resolvedSource.url,
+    httpHeader: resolvedSource.httpHeader,
+    title: serverContext.buildEpisodeSwitchTitle(selectedItem, currentParam.title),
+    durationHintMs: selectedItem.durationMs,
+    seasonNumber: selectedItem.seasonNumber ?? currentParam.seasonNumber ?? 0,
+    episodeNumber: selectedItem.episodeNumber ?? currentParam.episodeNumber ?? 0,
+    startPositionMs: selectedItem.positionMs,
+    playbackContext: serverContext,
+    serverType: serverContext.serverType,
+    serverItemId: selectedItem.videoPath,
+    serverId: serverContext.serverId,
+    serverPlaySessionId: playSessionId,
+    // 透传封面字段，供系统媒体中心（AVSession）展示海报
+    posterUrl: serverContext.posterUrl.length > 0 ? serverContext.posterUrl : currentParam.posterUrl,
+    backdropUrl: serverContext.backdropUrl.length > 0 ? serverContext.backdropUrl : currentParam.backdropUrl
+  };
+  return nextParam;
+}
+
+/** 提交服务器媒体库切集（推进 currentIndex）；上下文不符时返回 null */
+export function commitServerMediaLibraryEpisodeSwitch(
+  playbackContext: PlaybackContext | undefined,
+  selectedItem: PlaybackContextItem
+): PlaybackContextItem | null {
+  if (playbackContext === undefined || playbackContext.contextType !== 'server_media_library') {
+    return null;
+  }
+  const serverContext = playbackContext as ServerMediaLibraryContext;
+  return serverContext.jumpTo(selectedItem.index);
 }
 
 @ComponentV2
@@ -1052,6 +1144,11 @@ export struct PlayerPage {
         return true;
       }
     }
+    if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library') {
+      if (item.index === playbackContext.currentIndex) {
+        return true;
+      }
+    }
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;
     const previousPageParamToken = this.pageParamToken;
@@ -1067,6 +1164,17 @@ export struct PlayerPage {
       if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
         const fileExplorerContext = playbackContext as FileExplorerContext;
         nextParam = buildFileExplorerEpisodeSwitchParam(currentParam, fileExplorerContext, item);
+      } else if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library') {
+        const serverContext = playbackContext as ServerMediaLibraryContext;
+        const resolvedServerSource = await resolveServerEpisodeStream(
+          serverContext.serverId, serverContext.serverType, item.videoPath
+        );
+        if (resolvedServerSource === null) {
+          return false;
+        }
+        // 切集前先以当前会话上报旧集播放结束（推进服务端「接下来」），await 保证先于新集 started
+        await this.reportServerProgress(this.videoPlayerController.currentTime, this.videoPlayerController.duration);
+        nextParam = buildServerMediaLibraryEpisodeSwitchParam(currentParam, playbackContext, item, resolvedServerSource);
       } else {
         const resolvedSource = await this.resolveEpisodePlaybackSource(item);
         if (resolvedSource === null) {
@@ -1086,6 +1194,20 @@ export struct PlayerPage {
       if (nextVideoData === undefined) {
         return false;
       }
+      // 服务器切集：以新会话上报新集播放开始（带上续播位），失败不阻塞切集
+      if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library'
+        && nextParam.serverType !== undefined && nextParam.serverId !== undefined && nextParam.serverItemId !== undefined) {
+        reportServerPlaybackStarted(
+          nextParam.serverType,
+          nextParam.serverId,
+          nextParam.serverItemId,
+          nextParam.serverPlaySessionId ?? '',
+          nextParam.startPositionMs ?? 0,
+          nextParam.durationHintMs ?? 0
+        ).catch((e: BusinessError) => {
+          console.warn('[PlayerPage] 切集上报新集播放开始失败', e.message ?? String(e));
+        });
+      }
       this.videoPlayerController.prepareResumeAutoplayDecision(true, 'episode_switch_prepared_resume');
       this.persistCurrentPlaybackState();
       this.videoPlayerController.progressContext = nextParam.videoId !== undefined && nextParam.videoId > 0
@@ -1101,6 +1223,11 @@ export struct PlayerPage {
       if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
         const fileExplorerContext = playbackContext as FileExplorerContext;
         fileExplorerContext.jumpTo(item.index);
+      } else if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library') {
+        if (commitServerMediaLibraryEpisodeSwitch(playbackContext, item) === null) {
+          this.videoPlayerController.progressContext = previousProgressContext;
+          return false;
+        }
       } else {
         if (commitMediaLibraryEpisodeSwitch(playbackContext, item) === null) {
           this.videoPlayerController.progressContext = previousProgressContext;

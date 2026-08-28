@@ -123,7 +123,7 @@ export class EpisodePlaybackManager {
     if (playbackContext === undefined) {
       return undefined
     }
-    if (playbackContext.contextType === 'media_library' || playbackContext.contextType === 'file_explorer') {
+    if (playbackContext.contextType === 'media_library' || playbackContext.contextType === 'file_explorer' || playbackContext.contextType === 'server_media_library') {
       return playbackContext
     }
     return undefined

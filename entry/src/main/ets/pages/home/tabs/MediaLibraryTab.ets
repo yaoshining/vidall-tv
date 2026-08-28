@@ -47,6 +47,7 @@ import {
 } from "../../../lib/JellyfinClient"
 import { PlexClient } from "../../../lib/PlexClient"
 import { reportServerPlaybackStarted } from "../../../lib/ServerProgressReporter"
+import { buildServerSeasonContext } from "../../../lib/ServerEpisodeContextBuilder"
 import { ServerMediaDetailPage, ServerMediaDetailPageParam } from "../../detail/ServerMediaDetailPage"
 import { ServerLibraryListPage, ServerLibraryListPageParam } from "../../detail/ServerLibraryListPage"
 import { SettingsPage, SettingsPageParam } from "../../settings/Index"
@@ -1059,6 +1060,11 @@ export struct MediaLibraryTab {
    */
   private async doServerDirectPlayWithServer(item: VideoServerMediaItem, server: VideoServer): Promise<void> {
     try {
+      // 剧集条目构建服务器播放上下文（自动连播下一集）；失败时静默降级为普通播放
+      const playbackContext = item.type === 'episode' && item.seasonNumber > 0 && item.seriesId.length > 0
+        ? await buildServerSeasonContext(server, item.seriesId, item.seasonNumber, item.id,
+            item.title, '', item.posterUrl, item.backdropUrl)
+        : null
       let url = ''
       let header: Record<string, string> = {}
       if (server.type === VideoServerType.PLEX) {
@@ -1085,7 +1091,8 @@ export struct MediaLibraryTab {
         serverPlaySessionId: playSessionId,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: item.posterUrl.length > 0 ? item.posterUrl : undefined,
-        backdropUrl: item.backdropUrl.length > 0 ? item.backdropUrl : undefined
+        backdropUrl: item.backdropUrl.length > 0 ? item.backdropUrl : undefined,
+        playbackContext: playbackContext ?? undefined
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, item.id, playSessionId, item.positionMs, item.durationMs)
         .catch((e: Error) => {

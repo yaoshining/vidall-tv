@@ -4,6 +4,7 @@ import { EpisodeGroupMatcher, EpisodeGroupMatchResult, EpisodeGroupMatchItem } f
 import { FileExplorerResource } from '../file/FileExplorerController';
 import { isVideoFile } from '../../../utils/VideoFileUtil';
 import { tmdbImageUrl } from '../../../utils/MediaFormatUtil';
+import { VideoServerEpisode } from '../../../lib/JellyfinClient';
 
 // 播放上下文条目接口
 export interface PlaybackContextItem {
@@ -16,6 +17,7 @@ export interface PlaybackContextItem {
   sourceId?: number;        // 文件源 ID（用于重建真实播放 URL）
   videoId?: number;         // videos 表主键（用于切换后续播进度上下文）
   durationMs?: number;      // 已探测时长（用于切换时透传 durationHint）
+  positionMs?: number;      // 续播位置（服务器剧集用，切集时作为新集起始位置）
 }
 
 // 播放上下文抽象基类
@@ -231,6 +233,140 @@ export class MediaLibraryContext extends PlaybackContext {
       return tmdbImageUrl(entity.stillPath, 'w342');
     }
     return undefined;
+  }
+
+  jumpTo(index: number): PlaybackContextItem | null {
+    if (index < 0 || index >= this.items.length) {
+      return null;
+    }
+    this.currentIndex = index;
+    return this.items[index];
+  }
+
+  jumpToNext(): PlaybackContextItem | null {
+    if (!this.hasNext) {
+      return null;
+    }
+    return this.jumpTo(this.currentIndex + 1);
+  }
+
+  jumpToPrev(): PlaybackContextItem | null {
+    if (!this.hasPrev) {
+      return null;
+    }
+    return this.jumpTo(this.currentIndex - 1);
+  }
+}
+
+// 服务器媒体库上下文构建元信息（切集解析流地址与进度上报所需）
+export interface ServerMediaLibraryMeta {
+  serverType: string;      // 'jellyfin' | 'plex' 等（VideoServerType 值）
+  serverId: number;        // 影视服务器配置主键
+  seriesId: string;        // 剧集在服务器侧的条目 ID
+  seriesTitle: string;     // 系列名（用于切集标题）
+  seasonNumber: number;    // 季号
+  seasonName: string;      // 季名（如「第 1 季」，可为空）
+  posterUrl: string;       // 海报（切集后系统媒体中心展示，可为空）
+  backdropUrl: string;     // 背景图（可为空）
+}
+
+// 服务器媒体库播放上下文：由影视服务器（Jellyfin/Plex）季集列表构建，支持自动连播下一集
+@ObservedV2
+export class ServerMediaLibraryContext extends PlaybackContext {
+  readonly contextType: string = 'server_media_library';
+
+  @Trace serverType: string = '';
+  @Trace serverId: number = 0;
+  @Trace seriesId: string = '';
+  @Trace seriesTitle: string = '';
+  @Trace seasonNumber: number = 0;
+  @Trace seasonName: string = '';
+  @Trace posterUrl: string = '';
+  @Trace backdropUrl: string = '';
+
+  /** 集展示标题：与季详情页播放标题的「第N集 分集名」段一致 */
+  private static getEpisodeDisplayTitle(ep: VideoServerEpisode): string {
+    const epTitle = ep.title.trim();
+    if (epTitle.length > 0) {
+      return `第${ep.episodeNumber}集 ${epTitle}`;
+    }
+    return `第${ep.episodeNumber}集`;
+  }
+
+  /**
+   * 纯函数：把服务器季集列表映射为播放条目并定位当前集。
+   * 按 episodeNumber 升序排列；当前条目不在列表时索引回退 0（与既有上下文一致）。
+   */
+  static buildItems(episodes: VideoServerEpisode[], currentItemKey: string): BuildItemsResult {
+    const sorted = episodes.slice();
+    sorted.sort((a: VideoServerEpisode, b: VideoServerEpisode): number => a.episodeNumber - b.episodeNumber);
+
+    const items: PlaybackContextItem[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const ep = sorted[i];
+      const item: PlaybackContextItem = {
+        videoPath: ep.id,
+        title: ServerMediaLibraryContext.getEpisodeDisplayTitle(ep),
+        index: i,
+        thumbnailUrl: ep.stillUrl.length > 0 ? ep.stillUrl : undefined,
+        episodeNumber: ep.episodeNumber,
+        seasonNumber: ep.seasonNumber,
+        durationMs: ep.durationMs > 0 ? ep.durationMs : undefined,
+        positionMs: ep.positionMs > 0 ? ep.positionMs : undefined
+      };
+      items.push(item);
+    }
+
+    let foundIndex = 0;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].videoPath === currentItemKey) {
+        foundIndex = i;
+        break;
+      }
+    }
+
+    const result: BuildItemsResult = { items: items, currentIndex: foundIndex };
+    return result;
+  }
+
+  /** 工厂方法：构建携带服务器标识的上下文实例 */
+  static build(
+    episodes: VideoServerEpisode[],
+    currentItemKey: string,
+    meta: ServerMediaLibraryMeta
+  ): ServerMediaLibraryContext {
+    const buildResult = ServerMediaLibraryContext.buildItems(episodes, currentItemKey);
+    const ctx = new ServerMediaLibraryContext();
+    ctx.serverType = meta.serverType;
+    ctx.serverId = meta.serverId;
+    ctx.seriesId = meta.seriesId;
+    ctx.seriesTitle = meta.seriesTitle;
+    ctx.seasonNumber = meta.seasonNumber;
+    ctx.seasonName = meta.seasonName;
+    ctx.posterUrl = meta.posterUrl;
+    ctx.backdropUrl = meta.backdropUrl;
+    ctx.items = buildResult.items;
+    ctx.currentIndex = buildResult.currentIndex;
+    return ctx;
+  }
+
+  /** 切集播放标题：与季详情页格式一致「系列名 季名 第N集 分集名」，缺省段自动省略 */
+  buildEpisodeSwitchTitle(selectedItem: PlaybackContextItem, fallbackTitle?: string): string {
+    const itemTitle = selectedItem.title.trim();
+    const title = itemTitle.length > 0 ? itemTitle : (fallbackTitle ?? '');
+    const prefixParts: string[] = [];
+    const seriesTitle = this.seriesTitle.trim();
+    if (seriesTitle.length > 0) {
+      prefixParts.push(seriesTitle);
+    }
+    const seasonName = this.seasonName.trim();
+    if (seasonName.length > 0) {
+      prefixParts.push(seasonName);
+    }
+    if (prefixParts.length === 0 || title.length === 0) {
+      return title;
+    }
+    return `${prefixParts.join(' ')} ${title}`;
   }
 
   jumpTo(index: number): PlaybackContextItem | null {
