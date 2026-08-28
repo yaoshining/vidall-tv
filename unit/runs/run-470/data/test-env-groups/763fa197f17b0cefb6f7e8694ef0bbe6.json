@@ -1,0 +1,1 @@
+{"id":"763fa197f17b0cefb6f7e8694ef0bbe6","fullName":"OpenSubtitlesClient_error_mapping#should throw ProxyQuotaExceededError when proxy returns HTTP 429","name":"should throw ProxyQuotaExceededError when proxy returns HTTP 429","status":"passed","testResultsByEnv":{"default":"f7bf8720b54c84bd202a672a4b2db184"}}
