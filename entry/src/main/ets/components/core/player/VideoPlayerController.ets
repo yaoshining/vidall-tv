@@ -767,8 +767,15 @@ export class VideoPlayerController {
       `{"event":"play_start","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"file":"${this.extractFileName(videoData.videoSrc ?? '')}","ts":${this.metricsLoadStartMs}}`);
 
     // 释放旧 player
+    // MPV 后端切集时使用 softRelease()：只释放 mpv 播放器实例，
+    // 不销毁 XComponent 的 NativeWindow（surfaceAdapter.onDestroy），
+    // 避免新 adapter 的 CreateNativeWindowFromSurfaceId 失败。
     if (this.player) {
-      await this.player.release().catch(() => {});
+      if (this.backend === 'mpv' && this.player instanceof MpvPlayerAdapter) {
+        await (this.player as MpvPlayerAdapter).softRelease().catch(() => {});
+      } else {
+        await this.player.release().catch(() => {});
+      }
       this.player = undefined;
     }
 

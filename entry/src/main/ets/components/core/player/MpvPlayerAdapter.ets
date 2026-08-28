@@ -224,6 +224,39 @@ export class MpvPlayerAdapter implements IPlayer {
     }
   }
 
+  /**
+   * 软释放：切集时使用，只释放 mpv 播放器实例，不销毁 XComponent 的 NativeWindow。
+   * release() 中的 surfaceAdapter.onDestroy() 会断开 XComponent surface 与 mpv 的绑定，
+   * 导致新 adapter 尝试 attach 同一个 surfaceId 时 CreateNativeWindowFromSurfaceId 失败
+   * （报 "Cannot find nativeWindow"）。切集时 XComponent 仍在 UI 树上，只需释放 mpv
+   * 播放器资源即可，NativeWindow 由 XComponent 自己管理生命周期。
+   */
+  async softRelease(): Promise<void> {
+    if (this._isReleased) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'softRelease() 重复调用，忽略');
+      return;
+    }
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'softRelease() 开始（切集模式，保留 NativeWindow）');
+    if (this.unsubscribe !== undefined) {
+      this.unsubscribe();
+      this.unsubscribe = undefined;
+    }
+    // 切集时不调用 surfaceAdapter.onDestroy()，保留 XComponent NativeWindow
+    try {
+      await this.player.release();
+    } catch (e) {
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `softRelease: player.release() 异常: ${String(e)}`);
+    }
+    this._isReleased = true;
+    this._isPrepared = false;
+    this._isPlaying = false;
+    this._pendingPlay = false;
+    this._waitingForSeekCompletion = false;
+    this._seekTargetMs = -1;
+    hilog.info(CommonConstants.LOG_DOMAIN, TAG, 'softRelease() 完成');
+  }
+
   async release(): Promise<void> {
     if (this._isReleased) {
       hilog.warn(CommonConstants.LOG_DOMAIN, TAG, 'release() 重复调用，忽略');
