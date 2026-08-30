@@ -83,6 +83,22 @@ export class FileSourceDatabase {
     }
   }
 
+  /**
+   * 等待数据库初始化完成（含 schema 迁移与回填）。
+   * 已完全就绪时立即返回；否则等待 DATABASE_READY 事件，
+   * 避免调用方在冷启动阶段读取未就绪库，导致列表为空或抛「Database not initialized」。
+   */
+  static whenDatabaseReady(): Promise<void> {
+    if (FileSourceDatabase.instance && FileSourceDatabase.instance.core.isFullyReady()) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      emitter.once(DATABASE_READY, () => {
+        resolve();
+      });
+    });
+  }
+
   // ─────────────────────────────────────────────
   // file_sources / file_source_directories
   // ─────────────────────────────────────────────

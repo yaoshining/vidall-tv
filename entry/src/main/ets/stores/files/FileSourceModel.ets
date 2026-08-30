@@ -58,6 +58,8 @@ export class FileSourceModel {
     try {
       console.info('FileSourceStore: Loading file sources from database');
       const database = FileSourceDatabase.getInstance();
+      // 等待数据库就绪，避免冷启动时 getStore 抛「Database not initialized」导致列表为空
+      await FileSourceDatabase.whenDatabaseReady();
       this.fileSources = await database.getAllFileSources();
       await this.loadFileSourceDirectories(this.fileSources)
       this.isLoaded = true;

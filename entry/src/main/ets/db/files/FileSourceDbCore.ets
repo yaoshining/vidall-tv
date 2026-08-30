@@ -34,6 +34,8 @@ export class FileSourceDbCore {
   private context: Context | null = null;
   // 防止并发初始化：保存正在进行的 init Promise，供后续调用方直接等待
   private initPromise: Promise<void> | null = null;
+  // 是否已完成全部初始化（含 schema 迁移与回填）。区别于 isReady() 的过早 true。
+  private fullyReady: boolean = false;
 
   constructor(context?: Context) {
     if (context) {
@@ -62,9 +64,14 @@ export class FileSourceDbCore {
     return this.rdbStore;
   }
 
-  /** 数据库是否已就绪（供门面 onReady 判断） */
+  /** 数据库是否已就绪（供门面 onReady 判断）。rdbStore 建立即视为就绪。 */
   isReady(): boolean {
     return this.rdbStore !== null;
+  }
+
+  /** 数据库是否已完成全部初始化（含 schema 迁移与回填）。 */
+  isFullyReady(): boolean {
+    return this.fullyReady;
   }
 
   /**
@@ -148,6 +155,7 @@ export class FileSourceDbCore {
       await this.backfillOriginCountryFromRawJson();
       // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件）
       this.backfillPinyinFields(this.rdbStore!).catch(() => {});
+      this.fullyReady = true;
       emitter.emit(DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
     } catch (error) {
