@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../../index.css" />
+  <link rel="stylesheet" href="../../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../../index.full.min.js"></script>
+  <script src="../../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { MediaItem, TvEpisodeEntity } from &#39;../../../db/models/MediaEntity&#39; 
+ 
+function tmdbStillImageUrl(path: string | undefined, width: string): string { 
+  if (path === undefined || path.length === 0) { 
+    return &#39;&#39; 
+  } 
+  return `https://image.tmdb.org/t/p/${width}${path}` 
+} 
+ 
+export interface EpisodeGroupMatchItem { 
+  videoPath: string 
+  title: string 
+  index: number 
+  thumbnailUrl?: string 
+  episodeNumber?: number 
+  seasonNumber?: number 
+  sourceId?: number 
+  videoId?: number 
+  durationMs?: number 
+} 
+ 
+export interface EpisodeGroupMatchResult { 
+  mediaItems: MediaItem[] 
+  items: EpisodeGroupMatchItem[] 
+} 
+ 
+export class EpisodeGroupMatcher { 
+  private readonly seasonCache: Map&lt;string, EpisodeGroupMatchResult&gt; = new Map&lt;string, EpisodeGroupMatchResult&gt;() 
+ 
+  async matchSeasonEpisodes( 
+    seriesId: number, 
+    seasonNumber: number, 
+    loadMediaItems: () =&gt; Promise&lt;MediaItem[]&gt;, 
+    loadEpisodeEntities: () =&gt; Promise&lt;TvEpisodeEntity[]&gt; 
+  ): Promise&lt;EpisodeGroupMatchResult&gt; { 
+    const cacheKey = this.buildCacheKey(seriesId, seasonNumber) 
+    const cached = this.seasonCache.get(cacheKey) 
+    if (cached !== undefined) { 
+      return cached 
+    } 
+ 
+    const allItems = await loadMediaItems() 
+    const seasonItems = this.filterSeasonItems(allItems, seasonNumber) 
+    const episodeEntities = await loadEpisodeEntities() 
+    const episodeEntityByNumber = this.buildEpisodeEntityByNumber(episodeEntities) 
+ 
+    const playbackItems: EpisodeGroupMatchItem[] = [] 
+    for (let i = 0; i &lt; seasonItems.length; i++) { 
+      const mediaItem = seasonItems[i] 
+      const episodeEntity = this.findEpisodeEntity(mediaItem, i, episodeEntities, episodeEntityByNumber) 
+      const playbackItem: EpisodeGroupMatchItem = { 
+        videoPath: mediaItem.filePath, 
+        title: this.getEpisodeDisplayTitle(mediaItem, episodeEntity), 
+        index: i, 
+        thumbnailUrl: this.getEpisodeThumbnailUrl(episodeEntity), 
+        episodeNumber: mediaItem.episodeNumber ?? undefined, 
+        seasonNumber: mediaItem.seasonNumber ?? undefined, 
+        sourceId: mediaItem.sourceId, 
+        videoId: mediaItem.id, 
+        durationMs: mediaItem.durationMs ?? undefined 
+      } 
+      playbackItems.push(playbackItem) 
+    } 
+ 
+    const result: EpisodeGroupMatchResult = { 
+      mediaItems: seasonItems, 
+      items: playbackItems 
+    } 
+    this.seasonCache.set(cacheKey, result) 
+    return result 
+  } 
+ 
+  clearCache(): void { 
+    this.seasonCache.clear() 
+  } 
+ 
+  private buildCacheKey(seriesId: number, seasonNumber: number): string { 
+    return `${seriesId}:${seasonNumber}` 
+  } 
+ 
+  private filterSeasonItems(allItems: MediaItem[], seasonNumber: number): MediaItem[] { 
+    const seasonItems: MediaItem[] = [] 
+    for (let i = 0; i &lt; allItems.length; i++) { 
+      const item = allItems[i] 
+      if (item.seasonNumber === seasonNumber) { 
+        seasonItems.push(item) 
+      } 
+    } 
+    seasonItems.sort((a: MediaItem, b: MediaItem): number =&gt; { 
+      const aEpisode = a.episodeNumber ?? Number.MAX_SAFE_INTEGER 
+      const bEpisode = b.episodeNumber ?? Number.MAX_SAFE_INTEGER 
+      if (aEpisode !== bEpisode) { 
+        return aEpisode - bEpisode 
+      } 
+      return a.filePath.localeCompare(b.filePath) 
+    }) 
+    return seasonItems 
+  } 
+ 
+  private buildEpisodeEntityByNumber(episodeEntities: TvEpisodeEntity[]): Map&lt;number, TvEpisodeEntity&gt; { 
+    const result = new Map&lt;number, TvEpisodeEntity&gt;() 
+    for (let i = 0; i &lt; episodeEntities.length; i++) { 
+      const entity = episodeEntities[i] 
+      result.set(entity.episodeNumber, entity) 
+    } 
+    return result 
+  } 
+ 
+  private findEpisodeEntity( 
+    mediaItem: MediaItem, 
+    index: number, 
+    episodeEntities: TvEpisodeEntity[], 
+    episodeEntityByNumber: Map&lt;number, TvEpisodeEntity&gt; 
+  ): TvEpisodeEntity | undefined { 
+    if (mediaItem.episodeNumber !== undefined) { 
+      const matchedEntity = episodeEntityByNumber.get(mediaItem.episodeNumber) 
+      if (matchedEntity !== undefined) { 
+        return matchedEntity 
+      } 
+      return undefined 
+    } 
+    if (index &gt;= 0 &amp;&amp; index &lt; episodeEntities.length) { 
+      return episodeEntities[index] 
+    } 
+    return undefined 
+  } 
+ 
+  private getEpisodeDisplayTitle(mediaItem: MediaItem, episodeEntity: TvEpisodeEntity | undefined): string { 
+    const entityTitle = (episodeEntity?.title ?? &#39;&#39;).trim() 
+    if (entityTitle.length &gt; 0) { 
+      return entityTitle 
+    } 
+    const episodeNumber = mediaItem.episodeNumber ?? 0 
+    if (episodeNumber &gt; 0) { 
+      return `第${episodeNumber}集` 
+    } 
+    const title = (mediaItem.title ?? &#39;&#39;).trim() 
+    if (title.length &gt; 0) { 
+      return title 
+    } 
+    const fileName = (mediaItem.fileName ?? &#39;&#39;).trim() 
+    if (fileName.length &gt; 0) { 
+      return fileName 
+    } 
+    return &#39;未知集名&#39; 
+  } 
+ 
+  private getEpisodeThumbnailUrl(episodeEntity: TvEpisodeEntity | undefined): string | undefined { 
+    if (episodeEntity === undefined) { 
+      return undefined 
+    } 
+    if (episodeEntity.stillUrl !== undefined &amp;&amp; episodeEntity.stillUrl.length &gt; 0) { 
+      return episodeEntity.stillUrl 
+    } 
+    if (episodeEntity.stillPath !== undefined &amp;&amp; episodeEntity.stillPath.length &gt; 0) { 
+      return tmdbStillImageUrl(episodeEntity.stillPath, &#39;w342&#39;) 
+    } 
+    return undefined 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sun Aug 30 2026 21:01:01 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/components/core/player/EpisodeGroupMatcher.ets","hash":"3bfe2abfc5c60e681b0d595c8583d4b01d3a83a21fde50d6193310ddc9c981ba","lineCnt":161,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"tmdbStillImageUrl","count":0,"regions":[{"startLoc":{"line":3,"col":1},"endLoc":{"line":8,"col":2},"count":0,"ignored":0},{"startLoc":{"line":4,"col":48},"endLoc":{"line":6,"col":4},"count":0,"ignored":0},{"startLoc":{"line":7,"col":3},"endLoc":{"line":8,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":4,"col":7},"endLoc":{"line":4,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"EpisodeGroupMatcher.matchSeasonEpisodes","count":6,"regions":[{"startLoc":{"line":30,"col":3},"endLoc":{"line":71,"col":4},"count":6,"ignored":0},{"startLoc":{"line":48,"col":5},"endLoc":{"line":63,"col":6},"count":9,"ignored":0},{"startLoc":{"line":65,"col":5},"endLoc":{"line":71,"col":4},"count":5,"ignored":0},{"startLoc":{"line":38,"col":31},"endLoc":{"line":40,"col":6},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":38,"col":9},"endLoc":{"line":38,"col":29},"trueCount":1,"falseCount":5,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":33,"col":21},"endLoc":{"line":33,"col":47},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":34,"col":26},"endLoc":{"line":34,"col":58},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"EpisodeGroupMatcher.clearCache","count":0,"regions":[{"startLoc":{"line":73,"col":3},"endLoc":{"line":75,"col":4},"count":0,"ignored":0},{"startLoc":{"line":74,"col":5},"endLoc":{"line":75,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"EpisodeGroupMatcher.buildCacheKey","count":6,"regions":[{"startLoc":{"line":77,"col":3},"endLoc":{"line":79,"col":4},"count":6,"ignored":0},{"startLoc":{"line":78,"col":5},"endLoc":{"line":79,"col":4},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"EpisodeGroupMatcher.filterSeasonItems","count":5,"regions":[{"startLoc":{"line":81,"col":3},"endLoc":{"line":98,"col":4},"count":5,"ignored":0},{"startLoc":{"line":89,"col":5},"endLoc":{"line":98,"col":4},"count":5,"ignored":0},{"startLoc":{"line":83,"col":5},"endLoc":{"line":88,"col":6},"count":10,"ignored":0},{"startLoc":{"line":85,"col":47},"endLoc":{"line":87,"col":8},"count":9,"ignored":0},{"startLoc":{"line":95,"col":7},"endLoc":{"line":96,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":85,"col":11},"endLoc":{"line":85,"col":45},"trueCount":9,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"anonymous_2","count":4,"regions":[{"startLoc":{"line":89,"col":22},"endLoc":{"line":96,"col":6},"count":4,"ignored":0},{"startLoc":{"line":92,"col":34},"endLoc":{"line":94,"col":8},"count":4,"ignored":0}],"branches":[{"startLoc":{"line":92,"col":11},"endLoc":{"line":92,"col":32},"trueCount":4,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"EpisodeGroupMatcher.buildEpisodeEntityByNumber","count":5,"regions":[{"startLoc":{"line":100,"col":3},"endLoc":{"line":107,"col":4},"count":5,"ignored":0},{"startLoc":{"line":102,"col":5},"endLoc":{"line":105,"col":6},"count":9,"ignored":0},{"startLoc":{"line":106,"col":5},"endLoc":{"line":107,"col":4},"count":5,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"EpisodeGroupMatcher.findEpisodeEntity","count":9,"regions":[{"startLoc":{"line":109,"col":3},"endLoc":{"line":126,"col":4},"count":9,"ignored":0},{"startLoc":{"line":115,"col":48},"endLoc":{"line":121,"col":6},"count":8,"ignored":0},{"startLoc":{"line":117,"col":40},"endLoc":{"line":119,"col":8},"count":6,"ignored":0},{"startLoc":{"line":122,"col":55},"endLoc":{"line":124,"col":6},"count":0,"ignored":0},{"startLoc":{"line":125,"col":5},"endLoc":{"line":126,"col":4},"count":1,"ignored":0},{"startLoc":{"line":120,"col":7},"endLoc":{"line":121,"col":6},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":115,"col":9},"endLoc":{"line":115,"col":46},"trueCount":8,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":117,"col":11},"endLoc":{"line":117,"col":38},"trueCount":6,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":122,"col":9},"endLoc":{"line":122,"col":53},"trueCount":0,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"EpisodeGroupMatcher.getEpisodeDisplayTitle","count":9,"regions":[{"startLoc":{"line":128,"col":3},"endLoc":{"line":146,"col":4},"count":9,"ignored":0},{"startLoc":{"line":130,"col":33},"endLoc":{"line":132,"col":6},"count":6,"ignored":0},{"startLoc":{"line":134,"col":28},"endLoc":{"line":136,"col":6},"count":2,"ignored":0},{"startLoc":{"line":138,"col":27},"endLoc":{"line":140,"col":6},"count":0,"ignored":0},{"startLoc":{"line":142,"col":30},"endLoc":{"line":144,"col":6},"count":1,"ignored":0},{"startLoc":{"line":145,"col":5},"endLoc":{"line":146,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":130,"col":9},"endLoc":{"line":130,"col":31},"trueCount":6,"falseCount":3,"group":[],"ignored":0},{"startLoc":{"line":134,"col":9},"endLoc":{"line":134,"col":26},"trueCount":2,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":138,"col":9},"endLoc":{"line":138,"col":25},"trueCount":0,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":142,"col":9},"endLoc":{"line":142,"col":28},"trueCount":1,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"EpisodeGroupMatcher.getEpisodeThumbnailUrl","count":9,"regions":[{"startLoc":{"line":148,"col":3},"endLoc":{"line":159,"col":4},"count":9,"ignored":0},{"startLoc":{"line":149,"col":38},"endLoc":{"line":151,"col":6},"count":3,"ignored":0},{"startLoc":{"line":152,"col":84},"endLoc":{"line":154,"col":6},"count":1,"ignored":0},{"startLoc":{"line":155,"col":86},"endLoc":{"line":157,"col":6},"count":0,"ignored":0},{"startLoc":{"line":158,"col":5},"endLoc":{"line":159,"col":4},"count":5,"ignored":0}],"branches":[{"startLoc":{"line":149,"col":9},"endLoc":{"line":149,"col":36},"trueCount":3,"falseCount":6,"group":[],"ignored":0},{"startLoc":{"line":152,"col":9},"endLoc":{"line":152,"col":82},"trueCount":1,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":155,"col":9},"endLoc":{"line":155,"col":84},"trueCount":0,"falseCount":5,"group":[],"ignored":0}],"ignored":0,"index":11}],"exeLine":{"0":1,"1":3,"2":4,"3":5,"4":7,"5":10,"6":11,"7":12,"8":13,"9":14,"10":15,"11":16,"12":17,"13":18,"14":19,"15":22,"16":23,"17":24,"18":27,"19":28,"20":30,"21":31,"22":32,"23":33,"24":34,"25":35,"26":36,"27":37,"28":38,"29":39,"30":42,"31":43,"32":44,"33":45,"34":47,"35":48,"36":49,"37":50,"38":51,"39":52,"40":53,"41":54,"42":55,"43":56,"44":57,"45":58,"46":59,"47":60,"48":62,"49":65,"50":66,"51":67,"52":69,"53":70,"54":73,"55":74,"56":77,"57":78,"58":81,"59":82,"60":83,"61":84,"62":85,"63":86,"64":89,"65":90,"66":91,"67":92,"68":93,"69":95,"70":97,"71":100,"72":101,"73":102,"74":103,"75":104,"76":106,"77":109,"78":110,"79":111,"80":112,"81":113,"82":114,"83":115,"84":116,"85":117,"86":118,"87":120,"88":122,"89":123,"90":125,"91":128,"92":129,"93":130,"94":131,"95":133,"96":134,"97":135,"98":137,"99":138,"100":139,"101":141,"102":142,"103":143,"104":145,"105":148,"106":149,"107":150,"108":152,"109":153,"110":155,"111":156,"112":158},"summary":{"lines":{"total":97,"covered":85,"pct":87.63,"executedLineCount":[-1,-1,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6,6,6,0,0,6,6,6,6,1,-1,-1,6,6,6,6,-1,6,9,9,9,9,9,9,9,9,9,9,9,9,9,-1,9,-1,-1,5,5,5,-1,5,5,-1,-1,0,0,-1,-1,6,6,-1,-1,5,5,10,10,10,9,-1,-1,4,4,4,4,4,-1,4,-1,5,-1,-1,5,5,9,9,9,-1,5,-1,-1,9,9,9,9,9,9,9,8,8,6,-1,2,-1,1,0,-1,1,-1,-1,9,9,9,6,-1,9,3,2,-1,9,1,0,-1,9,1,1,-1,0,-1,-1,9,9,3,-1,6,1,-1,5,0,-1,5,-1,-1,-1]},"functions":{"total":12,"covered":8,"pct":66.67},"branches":{"total":28,"covered":21,"pct":75}}},"title":"EpisodeGroupMatcher.ets.html","relativeHome":"../../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
