@@ -108,4 +108,9 @@ export class PlayerEvents {
     eventId: 16,
     priority: emitter.EventPriority.HIGH
   };
+  /** DV 内容 + 渲染后端不支持 DV reshape（非 Vulkan/vo_gpu_next），供页面做能力提示 */
+  static readonly DV_RENDERING_WARNING: emitter.InnerEvent = {
+    eventId: 17,
+    priority: emitter.EventPriority.HIGH
+  };
 }

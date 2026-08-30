@@ -90,4 +90,9 @@ export interface IPlayer {
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void;
   /** 缓冲状态变化回调：true=开始缓冲/加载，false=缓冲结束可播。不支持的后端可留空桩。 */
   onBuffering(callback: (isBuffering: boolean) => void): void;
+  /**
+   * DV 内容 + 渲染后端不支持 DV reshape（非 Vulkan/vo_gpu_next）时触发，
+   * 供上层做“画面色彩可能不准”的能力提示。仅 mpv 后端实现，其余可省略。
+   */
+  onDvRenderingWarning?(callback: () => void): void;
 }

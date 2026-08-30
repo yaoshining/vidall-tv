@@ -1014,6 +1014,15 @@ export class VideoPlayerController {
         this.lastErrorMessage = '';
       }
     });
+    // DV 内容 + 非 Vulkan 渲染后端（无法 DV reshape）：通知上层做能力提示（每进程仅一次由页面去重）
+    p.onDvRenderingWarning?.(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[session=${currentSessionId}] 检测到 DV 内容但渲染后端不支持 DV reshape，触发能力提示`);
+      emitter.emit(PlayerEvents.DV_RENDERING_WARNING);
+    });
     p.onUnsupportedFormat(() => {
       if (currentSessionId !== this.playbackSessionId || this.player !== p) {
         return;

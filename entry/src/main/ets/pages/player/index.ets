@@ -411,6 +411,9 @@ export struct PlayerPage {
   private pendingSeekMs: number = -1
   /** 媒体级进度 key（来自 PlayerPageParam.mediaKey） */
   private currentMediaKey: string = '';
+
+  /** 当前这次播放是否已提示过 DV 渲染能力告警；每次新播放/换集时重置为 false */
+  private dvWarnShown: boolean = false;
   /** 媒体级进度：当前集季号 */
   private currentMediaSeason: number = 0;
   /** 媒体级进度：当前集号 */
@@ -880,6 +883,8 @@ export struct PlayerPage {
     this.currentMediaKey = pageParam.mediaKey ?? '';
     this.currentMediaSeason = pageParam.seasonNumber ?? 0;
     this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
+    // 新播放开始：重置 DV 渲染能力提示标志
+    this.dvWarnShown = false;
     if (this.currentMediaKey.length > 0) {
       this.videoPlayerController.prepareResumeAutoplayDecision(true, 'page_param_prepared_resume');
     }
@@ -1233,6 +1238,8 @@ export struct PlayerPage {
       this.currentMediaKey = nextParam.mediaKey ?? '';
       this.currentMediaSeason = nextParam.seasonNumber ?? 0;
       this.currentMediaEpisode = nextParam.episodeNumber ?? 0;
+      // 换集新播放：重置 DV 渲染能力提示标志
+      this.dvWarnShown = false;
       await this.videoPlayerController.reloadSource(nextVideoData, false);
       if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
         const fileExplorerContext = playbackContext as FileExplorerContext;
@@ -1327,6 +1334,15 @@ export struct PlayerPage {
   private showEpisodeAutoplayFailureToast(): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: '自动播放下一集失败' })
+    } catch (_) {}
+  }
+
+  private showDvRenderingWarningToast(): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: '当前设备不支持原生 Dolby Vision 渲染，画面色彩可能不准',
+        duration: 3000
+      })
     } catch (_) {}
   }
 
@@ -1583,6 +1599,15 @@ export struct PlayerPage {
         };
         this.pageStack.pop(popResult);
       });
+      // 订阅 DV 渲染能力提示：DV 内容 + 非 Vulkan 渲染后端（无法 DV reshape）时提示色彩可能不准。
+      // 每次播放一部新 DV 片源提示一次（dvWarnShown 在每次新播放/换集时重置），避免同次播放内刷屏。
+      emitter.on(PlayerEvents.DV_RENDERING_WARNING, () => {
+        if (this.dvWarnShown) {
+          return;
+        }
+        this.dvWarnShown = true;
+        this.showDvRenderingWarningToast();
+      });
 
       // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
       this.mediaProgressTimerId = setInterval(() => {
@@ -1671,6 +1696,7 @@ export struct PlayerPage {
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
     emitter.off(PlayerEvents.FILE_INACCESSIBLE.eventId)
+    emitter.off(PlayerEvents.DV_RENDERING_WARNING.eventId)
     if (this.mediaProgressTimerId >= 0) {
       clearInterval(this.mediaProgressTimerId);
       this.mediaProgressTimerId = -1;

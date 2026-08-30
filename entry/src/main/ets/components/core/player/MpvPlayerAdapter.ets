@@ -18,6 +18,13 @@ import {
 
 const TAG = '[MpvPlayerAdapter]';
 
+/** DV 渲染能力提示所需的最小视频参数子集（SDK 公开 VideoParams 已暴露 renderBackend，issue #77）。 */
+interface DvAwareVideoParams {
+  colorMatrix?: string;
+  pixelFormat?: string;
+  renderBackend?: string;
+}
+
 /** PGS / VobSub 编解码器名称 — 图形字幕需 mpv 内嵌合成。 */
 const MPV_GRAPHIC_SUBTITLE_CODECS: string[] = [
   'hdmv_pgs_subtitle',
@@ -82,6 +89,8 @@ export class MpvPlayerAdapter implements IPlayer {
   private _onSeekDoneCb?: () => void;
   private _onSubtitleUpdateCb?: (info: SubtitleInfo) => void;
   private _onBufferingCb?: (isBuffering: boolean) => void;
+  /** DV 内容 + 渲染后端不支持 DV reshape（非 Vulkan/vo_gpu_next）时触发，供上层做能力提示 */
+  private _onDvRenderingWarningCb?: () => void;
 
   // ─── 内嵌字幕回调（由 VideoPlayerController 注入）───
   private _onEmbeddedSubtitleCb: ((text: string) => void) | null = null;
@@ -614,6 +623,7 @@ export class MpvPlayerAdapter implements IPlayer {
   onSeekDone(callback: () => void): void { this._onSeekDoneCb = callback; }
   onSubtitleUpdate(callback: (info: SubtitleInfo) => void): void { this._onSubtitleUpdateCb = callback; }
   onBuffering(callback: (isBuffering: boolean) => void): void { this._onBufferingCb = callback; }
+  onDvRenderingWarning(callback: () => void): void { this._onDvRenderingWarningCb = callback; }
 
   // ─── 内部实现 ───
 
@@ -707,10 +717,43 @@ export class MpvPlayerAdapter implements IPlayer {
         this.handleErrorEvent(event);
         break;
       case 'videoParams':
-        // 可用于后续 DAR / 硬解状态上报
+        // 可用于后续 DAR / 硬解状态上报。
+        // issue #77：videoParams 原始消息末尾追加 renderBackend 字段，供 DV 渲染能力提示。
+        // 字段顺序：width|hwdec|pixfmt|bitDepth|primaries|transfer|matrix|videoRange|fps|rotation|aspectRatio|interlaced|colorLevels|bitrate|renderBackend
+        this.handleVideoParams(event);
         break;
       default:
         break;
+    }
+  }
+
+  /**
+   * 处理 videoParams 事件：解析 DV 内容与渲染后端，识别「DV + 非 Vulkan（vo_gpu_next）渲染后端」，
+   * 触发上层 DV 渲染能力提示回调（每进程仅提示一次由上层去重）。
+   * issue #77：SDK 公开 PlayerEvent 不透传原始 message，仅填 params（VideoParams）。
+   * 故 DV 用 colorMatrix==dolbyvision / pixelFormat 含 dolbyvision 识别，
+   * 渲染后端从 params.renderBackend 读取（SDK 按索引 14 解析，取值 vulkan/opengles/software/unavailable）。
+   */
+  private handleVideoParams(event: PlayerEvent): void {
+    const raw = event.params as DvAwareVideoParams | undefined;
+    if (raw === undefined) {
+      return;
+    }
+    const colorMatrix: string = raw.colorMatrix ?? '';
+    const pixelFormat: string = raw.pixelFormat ?? '';
+    const renderBackend: string = raw.renderBackend ?? '';
+    // DV Profile 5/8：matrix=dolbyvision，或 pixfmt 带 dolbyvision 标记
+    const isDvContent: boolean =
+      colorMatrix === 'dolbyvision' || pixelFormat.toLowerCase().includes('dolbyvision');
+    // DV reshape 需 vo_gpu_next（Vulkan 路径）；opengles/software 为 render API，无法 reshape。
+    // 仅当渲染后端明确为 opengles/software（可播放但不支持 DV reshape）时才提示，
+    // 避免真机 Vulkan 或 renderBackend 未知时空报。
+    const dvNotSupported: boolean = isDvContent &&
+      (renderBackend === 'opengles' || renderBackend === 'software');
+    if (dvNotSupported && this._onDvRenderingWarningCb) {
+      hilog.info(CommonConstants.LOG_DOMAIN, TAG,
+        `触发 DV 渲染能力提示: renderBackend=${renderBackend} colorMatrix=${colorMatrix}`);
+      this._onDvRenderingWarningCb();
     }
   }
 
