@@ -52,6 +52,8 @@ export interface ServerPlaybackContextItem extends PlaybackContextItem {
   serverId: number;
   serverItemId: string;
   seriesId: string;
+  /** 该集服务器保存的续播位置（ms），用于播放器内切集时按进度续播 */
+  positionMs?: number;
 }
 
 export interface ServerBuildItemsResult {
@@ -96,6 +98,7 @@ export function buildServerPlaybackItems(serverType: VideoServerType, serverId: 
       episodeNumber: episode.episodeNumber,
       seasonNumber: episode.seasonNumber,
       durationMs: episode.durationMs,
+      positionMs: episode.positionMs,
       serverType: serverType,
       serverId: serverId,
       serverItemId: episode.id,

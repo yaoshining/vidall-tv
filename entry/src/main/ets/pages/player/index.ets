@@ -220,7 +220,9 @@ function buildEpisodeSwitchPlayerTitle(
   const currentCodeMarker = `-${buildPlayerEpisodeCode(currentSeasonNumber, currentEpisodeNumber)}-`;
   const currentCodeIndex = currentTitle.indexOf(currentCodeMarker);
   if (currentCodeIndex < 0) {
-    return currentTitle;
+    // 当前标题不含 -Sx:Ex- 标记（如影视服务器初始标题），切集后回退到新集标题，
+    // 避免播放器与系统媒体中心继续显示旧集标题。
+    return nextEpisodeTitle;
   }
   const titlePrefix = currentTitle.substring(0, currentCodeIndex);
   const nextCode = buildPlayerEpisodeCode(seasonNumber, episodeNumber);
@@ -331,6 +333,10 @@ export function buildServerEpisodeSwitchParam(
       : currentParam.durationHintMs,
     seasonNumber,
     episodeNumber,
+    // 播放器内切集时沿用服务器保存的续播位置（正数才传递，避免从 0 起播）
+    startPositionMs: serverItem.positionMs !== undefined && serverItem.positionMs > 0
+      ? serverItem.positionMs
+      : undefined,
     serverType: serverItem.serverType,
     serverItemId: serverItem.serverItemId,
     serverId: serverItem.serverId,

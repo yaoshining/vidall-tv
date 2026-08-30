@@ -2634,12 +2634,14 @@ export class VideoPlayerController {
 
     // 初始化选轨期间（finalizePlayerReadyTrackInitialization）跳过 flush 流程，
     // 避免 MPV 后端自动播放后被 pause→seek→play 导致二次播放/跳帧。
-    // 用户主动切轨时正常走 flush 保证音视频对齐。
+    // 仅对自动初始选轨抑制 flush；用户主动切轨（userInitiated）即使处于初始化窗口
+    // 也保留 pause→seek→play 以保证切轨后音视频对齐。
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
     // prepared 续播可能已在同一事件周期内发起。此时切轨仍可生效，但不能再 pause/seek，
     // 否则会用初始 position 覆盖续播目标。
-    const shouldFlushAfterSwitch = wasPlaying && !this.isSeeking && !this._isInitialTrackSelection;
+    const shouldFlushAfterSwitch = wasPlaying && !this.isSeeking &&
+      (!this._isInitialTrackSelection || userInitiated);
 
     try {
       // 1. 暂停视频（避免音轨切换期间画面继续走而音轨还在旧轨）
