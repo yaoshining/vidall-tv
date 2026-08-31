@@ -2,21 +2,61 @@ import { describe, it, expect } from '@ohos/hypium'
 import {
   buildMediaLibraryEpisodeSwitchParam,
   commitMediaLibraryEpisodeSwitch,
+  buildServerEpisodeSwitchParam,
+  commitServerEpisodeSwitch,
   MediaProgressResumeAction,
   PlayerPage,
   PlayerPageParam,
   ResolvedEpisodePlaybackSource,
+  ResolvedServerEpisodeSource,
   resolveMediaProgressResumeAction
 } from '../main/ets/pages/player/index'
 import {
   MediaLibraryContext,
   FileExplorerContext,
   PlaybackContext,
-  PlaybackContextItem
+  PlaybackContextItem,
+  ServerMediaLibraryContext,
+  buildServerPlaybackItems
 } from '../main/ets/components/core/player/PlaybackContext'
 import { MediaItem, TvEpisodeEntity, MediaProgressEntry } from '../main/ets/db/models/MediaEntity'
+import { VideoServerEpisode } from '../main/ets/lib/JellyfinClient'
+import { VideoServerType } from '../main/ets/db/models/VideoServerEntity'
 import { PlayerEvents } from '../main/ets/components/core/player/Constants'
 import { emitter } from '@kit.BasicServicesKit'
+
+function buildServerSwitchEpisode(id: string, episodeNumber: number): VideoServerEpisode {
+  const episode: VideoServerEpisode = {
+    id: id,
+    episodeNumber: episodeNumber,
+    seasonNumber: 1,
+    title: `第${episodeNumber}集`,
+    overview: '',
+    stillUrl: '',
+    durationMs: 1800000,
+    rating: 0,
+    positionMs: 0,
+    lastPlayedDate: 0
+  };
+  return episode;
+}
+
+function buildServerSwitchContext(): ServerMediaLibraryContext {
+  const episodes: VideoServerEpisode[] = [
+    buildServerSwitchEpisode('server-ep-1', 1),
+    buildServerSwitchEpisode('server-ep-2', 2)
+  ]
+  const buildResult = buildServerPlaybackItems(VideoServerType.JELLYFIN, 5, 'series-9', episodes, 'server-ep-1')
+  return new ServerMediaLibraryContext(buildResult.items, buildResult.currentIndex)
+}
+
+function buildResolvedServerSwitchSource(url: string, playSessionId: string): ResolvedServerEpisodeSource {
+  const source: ResolvedServerEpisodeSource = {
+    url: url,
+    playSessionId: playSessionId
+  };
+  return source;
+}
 
 interface PlayerPageAccessor {
   applyPlayerPageParam(pageParam: PlayerPageParam): void
@@ -1310,6 +1350,106 @@ export default function playerPageTest() {
       const page = buildPlayerPageAccessor() as Object as PlayerPageCurrentEpisodeHelperAccessor
 
       expect(page.isCurrentMediaLibraryEpisodeSelection === undefined).assertTrue()
+    })
+
+    it('服务器切集生成携带服务器元数据与播放会话的新参数', 0, () => {
+      const context = buildServerSwitchContext()
+      const currentParam: PlayerPageParam = {
+        url: 'https://jellyfin.local/stream/server-ep-1',
+        title: '测试剧集 第一季-S1:E1-第1集',
+        serverType: 'jellyfin',
+        serverItemId: 'server-ep-1',
+        serverId: 5,
+        serverPlaySessionId: 'session-old',
+        seasonNumber: 1,
+        episodeNumber: 1,
+        playbackContext: context
+      }
+
+      const nextParam = buildServerEpisodeSwitchParam(
+        currentParam,
+        context,
+        context.items[1],
+        buildResolvedServerSwitchSource('https://jellyfin.local/stream/server-ep-2', 'session-new')
+      )
+
+      expect(nextParam !== null).assertTrue()
+      if (nextParam !== null) {
+        expect(nextParam.url).assertEqual('https://jellyfin.local/stream/server-ep-2')
+        expect(nextParam.serverType ?? '').assertEqual('jellyfin')
+        expect(nextParam.serverItemId ?? '').assertEqual('server-ep-2')
+        expect(nextParam.serverId ?? 0).assertEqual(5)
+        expect(nextParam.serverPlaySessionId ?? '').assertEqual('session-new')
+        expect(nextParam.title).assertEqual('测试剧集 第一季-S1:E2-第2集')
+        expect(nextParam.seasonNumber ?? 0).assertEqual(1)
+        expect(nextParam.episodeNumber ?? 0).assertEqual(2)
+        expect(nextParam.durationHintMs ?? 0).assertEqual(1800000)
+        expect(nextParam.playbackContext === context).assertTrue()
+      }
+    })
+
+    it('非 server_media_library 上下文构建服务器切集参数返回 null', 0, () => {
+      const mediaContext = new MediaLibraryContext()
+      const currentParam: PlayerPageParam = {
+        url: 'https://example.com/current.mkv',
+        title: '本地剧集',
+        playbackContext: mediaContext
+      }
+      const item: PlaybackContextItem = {
+        index: 0,
+        title: '第1集',
+        videoPath: '/series/s01e01.mkv',
+        videoId: 101,
+        sourceId: 201,
+        seasonNumber: 1,
+        episodeNumber: 1,
+        durationMs: 1800000
+      }
+
+      const nextParam = buildServerEpisodeSwitchParam(
+        currentParam,
+        mediaContext,
+        item,
+        buildResolvedServerSwitchSource('https://example.com/s01e01.mkv', 'session-x')
+      )
+
+      expect(nextParam).assertNull()
+    })
+
+    it('服务器切集索引越界返回 null，commit 正常更新上下文索引', 0, () => {
+      const context = buildServerSwitchContext()
+      const currentParam: PlayerPageParam = {
+        url: 'https://jellyfin.local/stream/server-ep-1',
+        title: '测试剧集 第一季-S1:E1-第1集',
+        serverType: 'jellyfin',
+        serverItemId: 'server-ep-1',
+        serverId: 5,
+        playbackContext: context
+      }
+      const outOfRangeItem: PlaybackContextItem = {
+        index: 9,
+        title: '越界集',
+        videoPath: 'server-ep-9',
+        videoId: 0,
+        sourceId: 0,
+        seasonNumber: 1,
+        episodeNumber: 9,
+        durationMs: 0
+      }
+
+      const outOfRangeParam = buildServerEpisodeSwitchParam(
+        currentParam,
+        context,
+        outOfRangeItem,
+        buildResolvedServerSwitchSource('https://jellyfin.local/stream/server-ep-9', 'session-x')
+      )
+      expect(outOfRangeParam).assertNull()
+      expect(commitServerEpisodeSwitch(context, outOfRangeItem)).assertNull()
+      expect(context.currentIndex).assertEqual(0)
+
+      const committed = commitServerEpisodeSwitch(context, context.items[1])
+      expect(committed !== null).assertTrue()
+      expect(context.currentIndex).assertEqual(1)
     })
   })
 }

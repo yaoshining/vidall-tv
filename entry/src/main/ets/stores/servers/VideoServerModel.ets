@@ -52,6 +52,8 @@ export class VideoServerModel {
     try {
       console.info('VideoServerModel: Loading video servers from database');
       const database = FileSourceDatabase.getInstance();
+      // 等待数据库就绪，避免冷启动时 getStore 抛「Database not initialized」导致列表为空
+      await FileSourceDatabase.whenDatabaseReady();
       this.videoServers = await database.getAllVideoServers();
       this.isLoaded = true;
       this.lastUpdateTime = now;

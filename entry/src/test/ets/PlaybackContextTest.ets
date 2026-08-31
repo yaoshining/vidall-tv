@@ -2,9 +2,14 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   PlaybackContext, PlaybackContextItem,
   MediaLibraryContext, FileExplorerContext, BuildItemsResult,
-  createMediaLibraryEpisodeGroupMatcher
+  createMediaLibraryEpisodeGroupMatcher,
+  buildServerPlaybackItems,
+  ServerMediaLibraryContext,
+  ServerPlaybackContextItem
 } from '../../main/ets/components/core/player/PlaybackContext';
 import { MediaItem, TvEpisodeEntity } from '../../main/ets/db/models/MediaEntity';
+import { VideoServerEpisode } from '../../main/ets/lib/JellyfinClient';
+import { VideoServerType } from '../../main/ets/db/models/VideoServerEntity';
 
 // 用于测试的具体实现类（不测试具体播放逻辑，只验证基类导航方法）
 class TestPlaybackContext extends PlaybackContext {
@@ -46,6 +51,22 @@ function makeItems(count: number): PlaybackContextItem[] {
 
 interface PlaybackContextItemWithThumbnail extends PlaybackContextItem {
   thumbnailUrl?: string;
+}
+
+function makeServerEpisode(id: string, seasonNumber: number, episodeNumber: number, title: string): VideoServerEpisode {
+  const episode: VideoServerEpisode = {
+    id: id,
+    episodeNumber: episodeNumber,
+    seasonNumber: seasonNumber,
+    title: title,
+    overview: '',
+    stillUrl: '',
+    durationMs: 0,
+    rating: 0,
+    positionMs: 0,
+    lastPlayedDate: 0
+  };
+  return episode;
 }
 
 export default function PlaybackContextTest() {
@@ -418,6 +439,106 @@ export default function PlaybackContextTest() {
     it('contextType 为 file_explorer', 0, () => {
       const ctx = new FileExplorerContext();
       expect(ctx.contextType).assertEqual('file_explorer');
+    });
+
+  });
+
+  // ─────────────────────────────────────────────
+  // ServerMediaLibraryContext 测试套件
+  // ─────────────────────────────────────────────
+  describe('ServerMediaLibraryContextTest', () => {
+
+    it('contextType 为 server_media_library', 0, () => {
+      const ctx = new ServerMediaLibraryContext([], 0);
+      expect(ctx.contextType).assertEqual('server_media_library');
+    });
+
+    it('同季乱序集列表按季号集号稳定排序并定位当前集', 0, () => {
+      const episodes: VideoServerEpisode[] = [
+        makeServerEpisode('ep-3', 1, 3, '第三集'),
+        makeServerEpisode('ep-1', 1, 1, '第一集'),
+        makeServerEpisode('ep-2', 1, 2, '第二集')
+      ];
+      const result = buildServerPlaybackItems(VideoServerType.JELLYFIN, 5, 'series-9', episodes, 'ep-2');
+
+      expect(result.items.length).assertEqual(3);
+      expect(result.currentIndex).assertEqual(1);
+      expect(result.items[0].serverItemId).assertEqual('ep-1');
+      expect(result.items[1].serverItemId).assertEqual('ep-2');
+      expect(result.items[2].serverItemId).assertEqual('ep-3');
+    });
+
+    it('季末集的下一项是下一季第一集（跨季连播）', 0, () => {
+      const episodes: VideoServerEpisode[] = [
+        makeServerEpisode('s1e2', 1, 2, 'S1E2'),
+        makeServerEpisode('s2e1', 2, 1, 'S2E1'),
+        makeServerEpisode('s1e1', 1, 1, 'S1E1')
+      ];
+      const result = buildServerPlaybackItems(VideoServerType.EMBY, 7, 'series-1', episodes, 's1e2');
+
+      expect(result.items.length).assertEqual(3);
+      expect(result.currentIndex).assertEqual(1);
+      const ctx = new ServerMediaLibraryContext(result.items, result.currentIndex);
+      expect(ctx.hasNext).assertTrue();
+      const nextItem = ctx.jumpToNext() as ServerPlaybackContextItem;
+      expect(nextItem.serverItemId).assertEqual('s2e1');
+      expect(nextItem.seasonNumber).assertEqual(2);
+      expect(nextItem.episodeNumber).assertEqual(1);
+    });
+
+    it('过滤无效集：空 id、集号小于等于 0、季号小于 0 均不进入上下文', 0, () => {
+      const episodes: VideoServerEpisode[] = [
+        makeServerEpisode('', 1, 1, '空 id'),
+        makeServerEpisode('ep-0', 1, 0, '集号 0'),
+        makeServerEpisode('ep-neg', -1, 2, '季号 -1'),
+        makeServerEpisode('ep-ok', 1, 2, '有效集')
+      ];
+      const result = buildServerPlaybackItems(VideoServerType.PLEX, 2, 'series-2', episodes, 'ep-ok');
+
+      expect(result.items.length).assertEqual(1);
+      expect(result.currentIndex).assertEqual(0);
+      expect(result.items[0].serverItemId).assertEqual('ep-ok');
+    });
+
+    it('当前项不在集列表中时 currentIndex 为 -1', 0, () => {
+      const episodes: VideoServerEpisode[] = [
+        makeServerEpisode('ep-1', 1, 1, '第一集')
+      ];
+      const result = buildServerPlaybackItems(VideoServerType.JELLYFIN, 5, 'series-9', episodes, 'ep-missing');
+
+      expect(result.items.length).assertEqual(1);
+      expect(result.currentIndex).assertEqual(-1);
+    });
+
+    it('上下文条目携带服务器元数据（serverType/serverId/serverItemId/seriesId）', 0, () => {
+      const episodes: VideoServerEpisode[] = [
+        makeServerEpisode('ep-1', 1, 1, '第一集')
+      ];
+      const result = buildServerPlaybackItems(VideoServerType.JELLYFIN, 5, 'series-9', episodes, 'ep-1');
+      const item = result.items[0];
+
+      expect(item.serverType).assertEqual(VideoServerType.JELLYFIN);
+      expect(item.serverId).assertEqual(5);
+      expect(item.serverItemId).assertEqual('ep-1');
+      expect(item.seriesId).assertEqual('series-9');
+      expect(item.videoPath).assertEqual('ep-1');
+    });
+
+    it('末集 jumpToNext 返回 null，首集 jumpToPrev 返回 null，jumpTo 越界返回 null', 0, () => {
+      const episodes: VideoServerEpisode[] = [
+        makeServerEpisode('ep-1', 1, 1, '第一集'),
+        makeServerEpisode('ep-2', 1, 2, '第二集')
+      ];
+      const result = buildServerPlaybackItems(VideoServerType.JELLYFIN, 5, 'series-9', episodes, 'ep-2');
+      const ctx = new ServerMediaLibraryContext(result.items, result.currentIndex);
+
+      expect(ctx.jumpToNext()).assertNull();
+      const jumped = ctx.jumpTo(0);
+      expect(jumped !== null).assertTrue();
+      expect(ctx.currentIndex).assertEqual(0);
+      expect(ctx.jumpToPrev()).assertNull();
+      expect(ctx.jumpTo(9)).assertNull();
+      expect(ctx.jumpTo(-1)).assertNull();
     });
 
   });

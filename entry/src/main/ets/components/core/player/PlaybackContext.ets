@@ -4,6 +4,8 @@ import { EpisodeGroupMatcher, EpisodeGroupMatchResult, EpisodeGroupMatchItem } f
 import { FileExplorerResource } from '../file/FileExplorerController';
 import { isVideoFile } from '../../../utils/VideoFileUtil';
 import { tmdbImageUrl } from '../../../utils/MediaFormatUtil';
+import { VideoServerType } from '../../../db/models/VideoServerEntity';
+import { VideoServerEpisode } from '../../../lib/JellyfinClient';
 
 // 播放上下文条目接口
 export interface PlaybackContextItem {
@@ -43,6 +45,107 @@ export abstract class PlaybackContext {
 export interface BuildItemsResult {
   items: PlaybackContextItem[];
   currentIndex: number;
+}
+
+export interface ServerPlaybackContextItem extends PlaybackContextItem {
+  serverType: VideoServerType;
+  serverId: number;
+  serverItemId: string;
+  seriesId: string;
+  /** 该集服务器保存的续播位置（ms），用于播放器内切集时按进度续播 */
+  positionMs?: number;
+}
+
+export interface ServerBuildItemsResult {
+  items: ServerPlaybackContextItem[];
+  currentIndex: number;
+}
+
+interface OrderedServerEpisode {
+  episode: VideoServerEpisode;
+  originalIndex: number;
+}
+
+export function buildServerPlaybackItems(serverType: VideoServerType, serverId: number,
+  seriesId: string, episodes: VideoServerEpisode[], currentItemId: string): ServerBuildItemsResult {
+  const ordered: OrderedServerEpisode[] = [];
+  episodes.forEach((episode: VideoServerEpisode, originalIndex: number) => {
+    if (episode.id.length === 0 || episode.seasonNumber < 0 || episode.episodeNumber <= 0) {
+      return;
+    }
+    const entry: OrderedServerEpisode = { episode: episode, originalIndex: originalIndex };
+    ordered.push(entry);
+  });
+  ordered.sort((left: OrderedServerEpisode, right: OrderedServerEpisode): number => {
+    if (left.episode.seasonNumber !== right.episode.seasonNumber) {
+      return left.episode.seasonNumber - right.episode.seasonNumber;
+    }
+    if (left.episode.episodeNumber !== right.episode.episodeNumber) {
+      return left.episode.episodeNumber - right.episode.episodeNumber;
+    }
+    return left.originalIndex - right.originalIndex;
+  });
+
+  const items: ServerPlaybackContextItem[] = [];
+  let currentIndex: number = -1;
+  ordered.forEach((entry: OrderedServerEpisode, index: number) => {
+    const episode = entry.episode;
+    const item: ServerPlaybackContextItem = {
+      videoPath: episode.id,
+      title: episode.title,
+      index: index,
+      thumbnailUrl: episode.stillUrl,
+      episodeNumber: episode.episodeNumber,
+      seasonNumber: episode.seasonNumber,
+      durationMs: episode.durationMs,
+      positionMs: episode.positionMs,
+      serverType: serverType,
+      serverId: serverId,
+      serverItemId: episode.id,
+      seriesId: seriesId
+    };
+    items.push(item);
+    if (episode.id === currentItemId) {
+      currentIndex = index;
+    }
+  });
+  const result: ServerBuildItemsResult = { items: items, currentIndex: currentIndex };
+  return result;
+}
+
+@ObservedV2
+export class ServerMediaLibraryContext extends PlaybackContext {
+  readonly contextType: string = 'server_media_library';
+
+  constructor(items: ServerPlaybackContextItem[], currentIndex: number) {
+    super();
+    this.items = items;
+    this.currentIndex = currentIndex;
+  }
+
+  jumpToNext(): PlaybackContextItem | null {
+    if (!this.hasNext) {
+      return null;
+    }
+    this.currentIndex += 1;
+    return this.items[this.currentIndex];
+  }
+
+  jumpToPrev(): PlaybackContextItem | null {
+    if (!this.hasPrev) {
+      return null;
+    }
+    this.currentIndex -= 1;
+    return this.items[this.currentIndex];
+  }
+
+  jumpTo(index: number): PlaybackContextItem | null {
+    if (index < 0 || index >= this.items.length) {
+      return null;
+    }
+    this.currentIndex = index;
+    return this.items[this.currentIndex];
+  }
 }
 
 export function createMediaLibraryEpisodeGroupMatcher(): EpisodeGroupMatcher {

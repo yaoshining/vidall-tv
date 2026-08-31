@@ -351,6 +351,9 @@ export class VideoPlayerController {
   private lastSeekDurationUnknownLogMs: number = 0;
   /** prepare 成功标志：首次 onPlayerReady 后置 true，每次 initPlayer 重置 */
   private hasPrepared: boolean = false;
+  /** 初始选轨中标志：finalizePlayerReadyTrackInitialization 期间为 true，
+   * 阻止 switchAudioTrack 执行 flush 流程（pause→seek→play），避免 MPV 自动播放后二次播放 */
+  private _isInitialTrackSelection: boolean = false;
   /** 已完成 ready 恢复消费的会话+后端标识，避免同一后端重复 ready 再次消费 pending resume */
   private consumedReadyResumeToken: string = '';
   /** 续播会话（收敛原三层续播字段：pending/decision/seek/result） */
@@ -655,6 +658,7 @@ export class VideoPlayerController {
       this.metricsMedia = await this.buildMediaIdentity(metricsVideoId);
     }
     this.hasPrepared = false;
+    this._isInitialTrackSelection = false;
     this.name = videoData.name || ''
     this.currentVideoData = videoData;
     if (!this.forceMpvForNextInit) {
@@ -763,8 +767,15 @@ export class VideoPlayerController {
       `{"event":"play_start","backend":"${this.backend}","video_id":${this.progressContext?.videoId ?? -1},"file":"${this.extractFileName(videoData.videoSrc ?? '')}","ts":${this.metricsLoadStartMs}}`);
 
     // 释放旧 player
+    // MPV 后端切集时使用 softRelease()：只释放 mpv 播放器实例，
+    // 不销毁 XComponent 的 NativeWindow（surfaceAdapter.onDestroy），
+    // 避免新 adapter 的 CreateNativeWindowFromSurfaceId 失败。
     if (this.player) {
-      await this.player.release().catch(() => {});
+      if (this.backend === 'mpv' && this.player instanceof MpvPlayerAdapter) {
+        await (this.player as MpvPlayerAdapter).softRelease().catch(() => {});
+      } else {
+        await this.player.release().catch(() => {});
+      }
       this.player = undefined;
     }
 
@@ -1002,6 +1013,15 @@ export class VideoPlayerController {
       if (!isBuffering && this.lastErrorMessage.length > 0) {
         this.lastErrorMessage = '';
       }
+    });
+    // DV 内容 + 非 Vulkan 渲染后端（无法 DV reshape）：通知上层做能力提示（每进程仅一次由页面去重）
+    p.onDvRenderingWarning?.(() => {
+      if (currentSessionId !== this.playbackSessionId) {
+        return;
+      }
+      hilog.warn(CommonConstants.LOG_DOMAIN, TAG,
+        `[session=${currentSessionId}] 检测到 DV 内容但渲染后端不支持 DV reshape，触发能力提示`);
+      emitter.emit(PlayerEvents.DV_RENDERING_WARNING);
     });
     p.onUnsupportedFormat(() => {
       if (currentSessionId !== this.playbackSessionId || this.player !== p) {
@@ -1708,15 +1728,21 @@ export class VideoPlayerController {
     if (sessionId !== this.playbackSessionId) {
       return;
     }
-    await this.loadSubtitleTracks();
-    if (sessionId !== this.playbackSessionId) {
-      return;
+    // 标记初始选轨阶段，阻止 switchAudioTrack 执行 flush（pause→seek→play）
+    this._isInitialTrackSelection = true;
+    try {
+      await this.loadSubtitleTracks();
+      if (sessionId !== this.playbackSessionId) {
+        return;
+      }
+      await this.loadAudioTracks();
+      if (sessionId !== this.playbackSessionId) {
+        return;
+      }
+      this.recordSubtitleUsageAtPlaybackStart();
+    } finally {
+      this._isInitialTrackSelection = false;
     }
-    await this.loadAudioTracks();
-    if (sessionId !== this.playbackSessionId) {
-      return;
-    }
-    this.recordSubtitleUsageAtPlaybackStart();
   }
 
   private primePendingResumeAutoplayResult(
@@ -2606,12 +2632,16 @@ export class VideoPlayerController {
     }
 
 
-    // 初始化加载时（isReady 刚触发，尚未真正播放）直接切换，不需要暂停/恢复
+    // 初始化选轨期间（finalizePlayerReadyTrackInitialization）跳过 flush 流程，
+    // 避免 MPV 后端自动播放后被 pause→seek→play 导致二次播放/跳帧。
+    // 仅对自动初始选轨抑制 flush；用户主动切轨（userInitiated）即使处于初始化窗口
+    // 也保留 pause→seek→play 以保证切轨后音视频对齐。
     const wasPlaying = this.isPlaying;
     const seekBack = this.currentTime;
     // prepared 续播可能已在同一事件周期内发起。此时切轨仍可生效，但不能再 pause/seek，
     // 否则会用初始 position 覆盖续播目标。
-    const shouldFlushAfterSwitch = wasPlaying && !this.isSeeking;
+    const shouldFlushAfterSwitch = wasPlaying && !this.isSeeking &&
+      (!this._isInitialTrackSelection || userInitiated);
 
     try {
       // 1. 暂停视频（避免音轨切换期间画面继续走而音轨还在旧轨）

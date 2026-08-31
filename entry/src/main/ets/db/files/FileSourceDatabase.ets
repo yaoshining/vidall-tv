@@ -83,6 +83,15 @@ export class FileSourceDatabase {
     }
   }
 
+  /**
+   * 等待数据库初始化完成（含 schema 迁移与记录级回填）。
+   * 复用初始化 Promise：已就绪时立即返回，初始化失败时会 reject（而非在 DATABASE_READY 上永久等待），
+   * 避免调用方在冷启动阶段读取未就绪库，导致列表为空或抛「Database not initialized」；失败可重试。
+   */
+  static whenDatabaseReady(): Promise<void> {
+    return FileSourceDatabase.getInstance().init();
+  }
+
   // ─────────────────────────────────────────────
   // file_sources / file_source_directories
   // ─────────────────────────────────────────────

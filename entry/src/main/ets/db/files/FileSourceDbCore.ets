@@ -34,6 +34,8 @@ export class FileSourceDbCore {
   private context: Context | null = null;
   // 防止并发初始化：保存正在进行的 init Promise，供后续调用方直接等待
   private initPromise: Promise<void> | null = null;
+  // 是否已完成全部初始化（含 schema 迁移与回填）。区别于 isReady() 的过早 true。
+  private fullyReady: boolean = false;
 
   constructor(context?: Context) {
     if (context) {
@@ -62,22 +64,30 @@ export class FileSourceDbCore {
     return this.rdbStore;
   }
 
-  /** 数据库是否已就绪（供门面 onReady 判断） */
+  /** 数据库是否已就绪（供门面 onReady 判断）。rdbStore 建立即视为就绪。 */
   isReady(): boolean {
     return this.rdbStore !== null;
+  }
+
+  /** 数据库是否已完成 schema 迁移与记录级回填（origin_country）。不含异步拼音回填。 */
+  isFullyReady(): boolean {
+    return this.fullyReady;
   }
 
   /**
    * 初始化数据库
    */
   async init(): Promise<void> {
-    if (this.rdbStore !== null) {
-      return; // 已经初始化
-    }
-
-    // 防止并发调用：若已有正在进行的 init，直接等待其完成
+    // 防止并发调用：若已有正在进行的 init，直接等待其完成（成功或失败都会 settle，
+    // 供 whenDatabaseReady 复用，避免数据库迁移失败时调用方被永久阻塞）。
     if (this.initPromise !== null) {
       return this.initPromise;
+    }
+
+    // rdbStore 在 doInit 早期即被赋值，但迁移/回填仍在进行；此处仅在"已完成"时直接返回，
+    // 避免调用方在迁移尚未完成时误认为已就绪。
+    if (this.rdbStore !== null) {
+      return; // 已经初始化完成
     }
 
     if (this.context === null) {
@@ -146,12 +156,18 @@ export class FileSourceDbCore {
 
       // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用）
       await this.backfillOriginCountryFromRawJson();
-      // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件）
+      // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件）。
+      // 注意：fullyReady 仅表示 schema 迁移/回填(origin_country)完成，不包含此异步拼音回填。
       this.backfillPinyinFields(this.rdbStore!).catch(() => {});
+      this.fullyReady = true;
       emitter.emit(DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
     } catch (error) {
       console.error('FileSourceDatabase: Failed to initialize database', JSON.stringify(error));
+      // 初始化失败：清空状态允许后续重试，且 whenDatabaseReady/await init() 会收到 reject，
+      // 避免调用方在 DATABASE_READY 上被永久阻塞。
+      this.rdbStore = null;
+      this.fullyReady = false;
       throw new Error('Failed to initialize database: ' + JSON.stringify(error));
     }
   }

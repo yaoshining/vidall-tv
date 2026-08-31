@@ -6,6 +6,8 @@ import { PlexClient } from "../../lib/PlexClient"
 import { PlayerPage, PlayerPageParam } from "../player/index"
 import { reportServerPlaybackStarted } from "../../lib/ServerProgressReporter"
 import { toOpaqueColor } from "../../utils/MediaFormatUtil"
+import { buildServerEpisodePlaybackContext } from "../../utils/ServerEpisodePlaybackContextUtil"
+import { PlaybackContext } from "../../components/core/player/PlaybackContext"
 import { ServerSeasonDetailPage, ServerSeasonDetailPageParam } from "./ServerSeasonDetailPage"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
 import { BusinessError } from "@kit.BasicServicesKit"
@@ -153,6 +155,14 @@ export struct ServerMediaDetailPage {
       }
       const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
       const playerTitle = this.isSeries() ? `${this.getTitle()} ${target.subtitle}` : target.title
+      let playbackContext: PlaybackContext | undefined = undefined
+      if (this.isSeries()) {
+        try {
+          playbackContext = (await buildServerEpisodePlaybackContext(server, this.itemId, target.id)) ?? undefined
+        } catch (e) {
+          console.warn('[ServerMediaDetailPage] 构建连续播放上下文失败', (e as BusinessError).message)
+        }
+      }
       const param: PlayerPageParam = {
         url: url,
         httpHeader: header,
@@ -163,6 +173,9 @@ export struct ServerMediaDetailPage {
         serverItemId: target.id,
         serverId: server.id,
         serverPlaySessionId: playSessionId,
+        playbackContext: playbackContext,
+        seasonNumber: target.seasonNumber,
+        episodeNumber: target.episodeNumber,
         // 透传封面字段，供系统媒体中心（AVSession）展示海报
         posterUrl: target.posterUrl.length > 0 ? target.posterUrl : undefined,
         backdropUrl: target.backdropUrl.length > 0 ? target.backdropUrl : undefined

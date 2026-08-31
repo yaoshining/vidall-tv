@@ -9,7 +9,14 @@ import { SubtitleCacheContext } from "../../subtitle/SubtitleDispatcher";
 import { common } from "@kit.AbilityKit";
 import { image } from '@kit.ImageKit';
 import { http } from '@kit.NetworkKit';
-import { PlaybackContext, PlaybackContextItem, MediaLibraryContext, FileExplorerContext } from "../../components/core/player/PlaybackContext";
+import {
+  PlaybackContext,
+  PlaybackContextItem,
+  MediaLibraryContext,
+  FileExplorerContext,
+  ServerMediaLibraryContext,
+  ServerPlaybackContextItem
+} from "../../components/core/player/PlaybackContext";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { PlayProgressEntity } from "../../db/models/MediaEntity";
 import { MediaProgressStore } from "../../db/MediaProgressStore";
@@ -30,7 +37,14 @@ import {
   NextEpisodeHint
 } from "../../services/playbackProgress/PlaybackProgressService";
 import { PlaybackResumeDecision } from "../../services/playbackProgress/PlaybackResumeDecision";
-import { reportServerPlaybackStopped, reportServerPlaybackProgress } from "../../lib/ServerProgressReporter";
+import {
+  reportServerPlaybackStopped,
+  reportServerPlaybackProgress,
+  reportServerPlaybackStarted
+} from "../../lib/ServerProgressReporter";
+import { VideoServer, VideoServerType } from "../../db/models/VideoServerEntity";
+import { JellyfinClient } from "../../lib/JellyfinClient";
+import { PlexClient } from "../../lib/PlexClient";
 import { AvSessionService, AvSessionCommand, AvSessionSyncState } from "../../services/avSession/AvSessionService";
 import { MissingMediaSyncOverlay } from "../../components/detail/MissingMediaSyncOverlay";
 import { defaultMissingMediaSyncService as mediaSync } from "../../services/mediaSync/MissingMediaSyncService";
@@ -206,7 +220,9 @@ function buildEpisodeSwitchPlayerTitle(
   const currentCodeMarker = `-${buildPlayerEpisodeCode(currentSeasonNumber, currentEpisodeNumber)}-`;
   const currentCodeIndex = currentTitle.indexOf(currentCodeMarker);
   if (currentCodeIndex < 0) {
-    return currentTitle;
+    // 当前标题不含 -Sx:Ex- 标记（如影视服务器初始标题），切集后回退到新集标题，
+    // 避免播放器与系统媒体中心继续显示旧集标题。
+    return nextEpisodeTitle;
   }
   const titlePrefix = currentTitle.substring(0, currentCodeIndex);
   const nextCode = buildPlayerEpisodeCode(seasonNumber, episodeNumber);
@@ -279,6 +295,75 @@ export function commitMediaLibraryEpisodeSwitch(
   return mediaLibraryContext.jumpTo(selectedItem.index);
 }
 
+export interface ResolvedServerEpisodeSource {
+  url: string;
+  httpHeader?: Record<string, string>;
+  playSessionId: string;
+}
+
+/**
+ * 构建影视服务器集切换参数：流地址/认证头/播放会话来自重新解析的 resolvedSource，
+ * 服务器条目元数据（serverType/serverItemId/serverId）来自上下文条目，
+ * 封面等展示字段沿用当前播放参数。
+ */
+export function buildServerEpisodeSwitchParam(
+  currentParam: PlayerPageParam,
+  playbackContext: PlaybackContext | undefined,
+  selectedItem: PlaybackContextItem,
+  resolvedSource: ResolvedServerEpisodeSource
+): PlayerPageParam | null {
+  if (playbackContext === undefined || playbackContext.contextType !== 'server_media_library') {
+    return null;
+  }
+  const serverContext = playbackContext as ServerMediaLibraryContext;
+  if (selectedItem.index < 0 || selectedItem.index >= serverContext.items.length) {
+    return null;
+  }
+  const serverItem = selectedItem as ServerPlaybackContextItem;
+  const seasonNumber = serverItem.seasonNumber ?? currentParam.seasonNumber ?? 0;
+  const episodeNumber = serverItem.episodeNumber ?? currentParam.episodeNumber ?? 0;
+  const itemTitle = serverItem.title.trim();
+  const playerTitle = buildEpisodeSwitchPlayerTitle(currentParam, itemTitle, seasonNumber, episodeNumber);
+  const nextParam: PlayerPageParam = {
+    url: resolvedSource.url,
+    httpHeader: resolvedSource.httpHeader,
+    title: playerTitle,
+    durationHintMs: serverItem.durationMs !== undefined && serverItem.durationMs > 0
+      ? serverItem.durationMs
+      : currentParam.durationHintMs,
+    seasonNumber,
+    episodeNumber,
+    // 播放器内切集时沿用服务器保存的续播位置（正数才传递，避免从 0 起播）
+    startPositionMs: serverItem.positionMs !== undefined && serverItem.positionMs > 0
+      ? serverItem.positionMs
+      : undefined,
+    serverType: serverItem.serverType,
+    serverItemId: serverItem.serverItemId,
+    serverId: serverItem.serverId,
+    serverPlaySessionId: resolvedSource.playSessionId,
+    playbackContext: serverContext,
+    preferredBackend: currentParam.preferredBackend,
+    // 透传封面字段，切集后系统媒体中心仍显示海报
+    posterLocalPath: currentParam.posterLocalPath,
+    posterUrl: currentParam.posterUrl,
+    backdropLocalPath: currentParam.backdropLocalPath,
+    backdropUrl: currentParam.backdropUrl,
+    missingMediaSyncLocally: currentParam.missingMediaSyncLocally
+  };
+  return nextParam;
+}
+
+export function commitServerEpisodeSwitch(
+  playbackContext: PlaybackContext | undefined,
+  selectedItem: PlaybackContextItem
+): PlaybackContextItem | null {
+  if (playbackContext === undefined || playbackContext.contextType !== 'server_media_library') {
+    return null;
+  }
+  const serverContext = playbackContext as ServerMediaLibraryContext;
+  return serverContext.jumpTo(selectedItem.index);
+}
+
 /**
  * 构建文件浏览器集切换参数，复用当前播放参数中的 httpHeader/preferredBackend 等字段。
  * videoPath 已是完整播放 URL（由 FileExplorerContext.build() 的 urlMapper 处理）。
@@ -332,6 +417,9 @@ export struct PlayerPage {
   private pendingSeekMs: number = -1
   /** 媒体级进度 key（来自 PlayerPageParam.mediaKey） */
   private currentMediaKey: string = '';
+
+  /** 当前这次播放是否已提示过 DV 渲染能力告警；每次新播放/换集时重置为 false */
+  private dvWarnShown: boolean = false;
   /** 媒体级进度：当前集季号 */
   private currentMediaSeason: number = 0;
   /** 媒体级进度：当前集号 */
@@ -801,6 +889,8 @@ export struct PlayerPage {
     this.currentMediaKey = pageParam.mediaKey ?? '';
     this.currentMediaSeason = pageParam.seasonNumber ?? 0;
     this.currentMediaEpisode = pageParam.episodeNumber ?? 0;
+    // 新播放开始：重置 DV 渲染能力提示标志
+    this.dvWarnShown = false;
     if (this.currentMediaKey.length > 0) {
       this.videoPlayerController.prepareResumeAutoplayDecision(true, 'page_param_prepared_resume');
     }
@@ -1031,6 +1121,47 @@ export struct PlayerPage {
     return resolvedSource;
   }
 
+  /**
+   * 解析影视服务器单集播放源：按 serverId 从数据库按需读取配置，
+   * 重新获取流 URL 与认证头，并为新会话生成独立 playSessionId。
+   * 旧会话的 stopped 上报由切集成功路径单独处理。
+   */
+  private async resolveServerEpisodePlaybackSource(item: PlaybackContextItem): Promise<ResolvedServerEpisodeSource | null> {
+    const serverItem = item as ServerPlaybackContextItem;
+    if (serverItem.serverItemId.length === 0 || serverItem.serverId <= 0) {
+      return null;
+    }
+    let server: VideoServer | null = null;
+    try {
+      server = await FileSourceDatabase.getInstance().getVideoServerById(serverItem.serverId);
+    } catch {
+      return null;
+    }
+    if (server === null) {
+      return null;
+    }
+    let url = '';
+    let header: Record<string, string> = {};
+    if (server.type === VideoServerType.PLEX) {
+      const client = PlexClient.fromConfigJson(server.configJson);
+      url = await client.getStreamUrl(serverItem.serverItemId);
+      header = client.getStreamHeader();
+    } else {
+      const client = JellyfinClient.fromConfigJson(server.configJson);
+      url = await client.getStreamUrl(serverItem.serverItemId);
+      header = client.getStreamHeader();
+    }
+    if (url.length === 0) {
+      return null;
+    }
+    const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+    const resolved: ResolvedServerEpisodeSource = { url: url, playSessionId: playSessionId };
+    if (Object.keys(header).length > 0) {
+      resolved.httpHeader = header;
+    }
+    return resolved;
+  }
+
   private async handleEpisodeSelect(item: PlaybackContextItem): Promise<boolean> {
     const currentParam = this.currentPageParam;
     if (currentParam === undefined || this.episodeSwitching) {
@@ -1052,6 +1183,11 @@ export struct PlayerPage {
         return true;
       }
     }
+    if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library') {
+      if (item.index === playbackContext.currentIndex) {
+        return true;
+      }
+    }
     this.episodeSwitching = true;
     const previousProgressContext = this.videoPlayerController.progressContext;
     const previousPageParamToken = this.pageParamToken;
@@ -1064,9 +1200,20 @@ export struct PlayerPage {
     let keepNextPageParamToken = false;
     try {
       let nextParam: PlayerPageParam | null = null;
+      // 服务器切集：先捕获旧集位置（reloadSource 后会被清零），切集成功后用于结束旧会话
+      let serverSwitchPreviousPosMs = 0;
+      let serverSwitchPreviousDurMs = 0;
       if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
         const fileExplorerContext = playbackContext as FileExplorerContext;
         nextParam = buildFileExplorerEpisodeSwitchParam(currentParam, fileExplorerContext, item);
+      } else if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library') {
+        serverSwitchPreviousPosMs = this.videoPlayerController.currentTime;
+        serverSwitchPreviousDurMs = this.videoPlayerController.duration;
+        const resolvedServerSource = await this.resolveServerEpisodePlaybackSource(item);
+        if (resolvedServerSource === null) {
+          return false;
+        }
+        nextParam = buildServerEpisodeSwitchParam(currentParam, playbackContext, item, resolvedServerSource);
       } else {
         const resolvedSource = await this.resolveEpisodePlaybackSource(item);
         if (resolvedSource === null) {
@@ -1097,10 +1244,39 @@ export struct PlayerPage {
       this.currentMediaKey = nextParam.mediaKey ?? '';
       this.currentMediaSeason = nextParam.seasonNumber ?? 0;
       this.currentMediaEpisode = nextParam.episodeNumber ?? 0;
+      // 换集新播放：重置 DV 渲染能力提示标志
+      this.dvWarnShown = false;
       await this.videoPlayerController.reloadSource(nextVideoData, false);
       if (playbackContext !== undefined && playbackContext.contextType === 'file_explorer') {
         const fileExplorerContext = playbackContext as FileExplorerContext;
         fileExplorerContext.jumpTo(item.index);
+      } else if (playbackContext !== undefined && playbackContext.contextType === 'server_media_library') {
+        if (commitServerEpisodeSwitch(playbackContext, item) === null) {
+          this.videoPlayerController.progressContext = previousProgressContext;
+          return false;
+        }
+        // 旧会话 stopped + 新会话 started；此后周期上报读取 currentPageParam，自动切换到新集目标
+        reportServerPlaybackStopped(
+          currentParam.serverType ?? '',
+          currentParam.serverId ?? 0,
+          currentParam.serverItemId ?? '',
+          currentParam.serverPlaySessionId ?? '',
+          serverSwitchPreviousPosMs,
+          serverSwitchPreviousDurMs
+        ).catch((e: BusinessError) => {
+          console.warn('[PlayerPage] 切集上报旧服务器会话结束失败', e.message ?? String(e))
+        })
+        const switchedServerItem = item as ServerPlaybackContextItem;
+        reportServerPlaybackStarted(
+          switchedServerItem.serverType,
+          switchedServerItem.serverId,
+          switchedServerItem.serverItemId,
+          nextParam.serverPlaySessionId ?? '',
+          0,
+          nextParam.durationHintMs ?? 0
+        ).catch((e: BusinessError) => {
+          console.warn('[PlayerPage] 切集上报新服务器会话开始失败', e.message ?? String(e))
+        })
       } else {
         if (commitMediaLibraryEpisodeSwitch(playbackContext, item) === null) {
           this.videoPlayerController.progressContext = previousProgressContext;
@@ -1164,6 +1340,15 @@ export struct PlayerPage {
   private showEpisodeAutoplayFailureToast(): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: '自动播放下一集失败' })
+    } catch (_) {}
+  }
+
+  private showDvRenderingWarningToast(): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: '当前设备不支持原生 Dolby Vision 渲染，画面色彩可能不准',
+        duration: 3000
+      })
     } catch (_) {}
   }
 
@@ -1420,6 +1605,15 @@ export struct PlayerPage {
         };
         this.pageStack.pop(popResult);
       });
+      // 订阅 DV 渲染能力提示：DV 内容 + 非 Vulkan 渲染后端（无法 DV reshape）时提示色彩可能不准。
+      // 每次播放一部新 DV 片源提示一次（dvWarnShown 在每次新播放/换集时重置），避免同次播放内刷屏。
+      emitter.on(PlayerEvents.DV_RENDERING_WARNING, () => {
+        if (this.dvWarnShown) {
+          return;
+        }
+        this.dvWarnShown = true;
+        this.showDvRenderingWarningToast();
+      });
 
       // 每 10 秒写入一次 media_progress，避免退出时异步写与 onShown 读产生竞态
       this.mediaProgressTimerId = setInterval(() => {
@@ -1508,6 +1702,7 @@ export struct PlayerPage {
   aboutToDisappear(): void {
     emitter.off(PlayerEvents.APP_BACKGROUND.eventId)
     emitter.off(PlayerEvents.FILE_INACCESSIBLE.eventId)
+    emitter.off(PlayerEvents.DV_RENDERING_WARNING.eventId)
     if (this.mediaProgressTimerId >= 0) {
       clearInterval(this.mediaProgressTimerId);
       this.mediaProgressTimerId = -1;
