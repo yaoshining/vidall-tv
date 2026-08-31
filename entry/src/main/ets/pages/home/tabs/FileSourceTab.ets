@@ -107,7 +107,7 @@ export struct FileSourceTab {
   private showToastSafe(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 })
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   private handleDelete(item: DirectoryItem): void {
@@ -127,6 +127,8 @@ export struct FileSourceTab {
     try {
       this.isDeletingSource = true
       await this.fileSourceModel.clearMissingDirectory(target.dirId, target.fileSource.id, target.directoryPath)
+      this.showDeleteDialog = false
+      this.deleteTarget = null
       this.showToastSafe('文件夹已删除')
     } catch (error) {
       const err = error as BusinessError
@@ -134,8 +136,6 @@ export struct FileSourceTab {
       this.showToastSafe('删除失败，请重试')
     } finally {
       this.isDeletingSource = false
-      this.showDeleteDialog = false
-      this.deleteTarget = null
     }
   }
 
@@ -187,7 +187,7 @@ export struct FileSourceTab {
   @Builder
   buildMoreMenu(item: DirectoryItem) {
     Text("⋮")
-      .id('fileSourceTabMore_' + (item.dirId?.toString() ?? 'new'))
+      .id('fileSourceTabMore')
       .fontSize(22)
       .fontColor($r('sys.color.font_secondary'))
       .width(36)
@@ -255,6 +255,7 @@ export struct FileSourceTab {
                 this.buildMoreMenu(item)
               }
             }
+            .id('fileSourceTabCard')
             .onClick(() => {
               this.handleDirectoryClick(item)
             })

@@ -266,7 +266,7 @@ export default function fileSourceUiTest() {
         await driver.delayMs(300)
         expect(await driver.waitForComponent(ON.text("编辑"), WAIT_SHORT) !== null).assertTrue()
         expect(await driver.waitForComponent(ON.text("删除"), WAIT_SHORT) !== null).assertTrue()
-        console.info("[FileSourceUI] 文件源更多菜单可打开 PASSED")
+        console.info("[FileSourceUI] 文件源更多菜单可打开 通过")
       } catch (e) {
         const err = e as Error
         console.error("[FileSourceUI] 文件源更多菜单可打开 FAILED: " + err.message)
@@ -301,10 +301,11 @@ export default function fileSourceUiTest() {
           console.warn("[FileSourceUI] 未找到首页文件源标签，继续直接查找卡片")
         }
 
-        // 断言文件源卡片上存在 ⋮ 更多按钮
-        const moreButton = await driver.waitForComponent(ON.text("⋮"), WAIT_SHORT)
+        // 先确认首页文件源卡片已显示，再通过首页专属 ID 查找更多按钮
+        expect(await driver.waitForComponent(ON.id("fileSourceTabCard"), WAIT_SHORT) !== null).assertTrue()
+        const moreButton = await driver.waitForComponent(ON.id("fileSourceTabMore"), WAIT_SHORT)
         expect(moreButton !== null).assertTrue()
-        console.info("[FileSourceUI] 首页文件源卡片提供删除入口 PASSED")
+        console.info("[FileSourceUI] 首页文件源卡片提供删除入口 通过")
       } catch (e) {
         const err = e as Error
         console.error("[FileSourceUI] 首页文件源卡片提供删除入口 FAILED: " + err.message)
