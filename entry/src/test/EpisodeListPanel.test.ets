@@ -47,6 +47,29 @@ export default function EpisodeListPanelTest() {
       expect(listItems[14].episodeNumber).assertEqual(15)
     })
 
+    it('服务器剧集仅展示当前播放项所在季且保留原始条目引用', 0, () => {
+      const items: PlaybackContextItem[] = [
+        { videoPath: 's1e1', title: 'S1E1', index: 0, seasonNumber: 1, episodeNumber: 1 },
+        { videoPath: 's1e2', title: 'S1E2', index: 1, seasonNumber: 1, episodeNumber: 2 },
+        { videoPath: 's2e1', title: 'S2E1', index: 2, seasonNumber: 2, episodeNumber: 1 }
+      ]
+
+      const listItems: PlaybackContextItem[] = buildEpisodeContinuousListItems(items, 2)
+
+      expect(listItems.length).assertEqual(1)
+      expect(listItems[0] === items[2]).assertTrue()
+      expect(listItems[0].episodeNumber).assertEqual(1)
+    })
+
+    it('文件列表条目没有季号时仍展示完整上下文', 0, () => {
+      const items: PlaybackContextItem[] = makeItems(8)
+
+      const listItems: PlaybackContextItem[] = buildEpisodeContinuousListItems(items, 3)
+
+      expect(listItems.length).assertEqual(8)
+      expect(listItems[3] === items[3]).assertTrue()
+    })
+
     it('连续列表渲染 key 使用全局唯一值，滚动后不复用局部索引', 0, () => {
       const items: PlaybackContextItem[] = makeItems(15)
 

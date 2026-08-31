@@ -127,8 +127,15 @@ export function buildEpisodeAnchorRanges(totalCount: number): EpisodeAnchorRange
   return result
 }
 
-export function buildEpisodeContinuousListItems(items: PlaybackContextItem[]): PlaybackContextItem[] {
-  return items
+export function buildEpisodeContinuousListItems(items: PlaybackContextItem[], currentIndex: number = -1): PlaybackContextItem[] {
+  if (currentIndex < 0 || currentIndex >= items.length) {
+    return items
+  }
+  const currentSeasonNumber = items[currentIndex].seasonNumber
+  if (currentSeasonNumber === undefined) {
+    return items
+  }
+  return items.filter((item: PlaybackContextItem): boolean => item.seasonNumber === currentSeasonNumber)
 }
 
 export function getEpisodeItemRenderKey(item: PlaybackContextItem): string {
@@ -261,9 +268,9 @@ export struct EpisodeListPanel {
   private waveTimerId: number | undefined = undefined
 
   aboutToAppear(): void {
-    const currentIdx = this.context.currentIndex
-    this.focusedCardIndex = Math.max(0, Math.min(currentIdx, this.context.items.length - 1))
-    this.pageBarFocusedIndex = getEpisodeAnchorIndexForItem(currentIdx, this.context.items.length)
+    const currentIdx = this.getCurrentListIndex()
+    this.focusedCardIndex = Math.max(0, Math.min(currentIdx, this.getListItems().length - 1))
+    this.pageBarFocusedIndex = getEpisodeAnchorIndexForItem(currentIdx, this.getListItems().length)
     this.startWaveAnimation()
   }
 
@@ -274,7 +281,7 @@ export struct EpisodeListPanel {
   // ── 数据辅助方法 ───────────────────────────────────────────────────────────
 
   private getAnchorRanges(): EpisodeAnchorRange[] {
-    return buildEpisodeAnchorRanges(this.context.items.length)
+    return buildEpisodeAnchorRanges(this.getListItems().length)
   }
 
   private getTotalAnchors(): number {
@@ -282,28 +289,37 @@ export struct EpisodeListPanel {
   }
 
   private getListItems(): PlaybackContextItem[] {
-    return buildEpisodeContinuousListItems(this.context.items)
+    return buildEpisodeContinuousListItems(this.context.items, this.context.currentIndex)
+  }
+
+  private getCurrentListIndex(): number {
+    const items = this.getListItems()
+    if (this.context.currentIndex < 0 || this.context.currentIndex >= this.context.items.length) {
+      return -1
+    }
+    const currentItem = this.context.items[this.context.currentIndex]
+    return items.indexOf(currentItem)
   }
 
   private scrollToAnchor(groupIndex: number): void {
-    if (this.context.items.length === 0) {
+    if (this.getListItems().length === 0) {
       return
     }
     const total = this.getTotalAnchors()
     if (groupIndex < 0 || groupIndex >= total) {
       return
     }
-    const request = buildEpisodeAnchorScrollRequest(groupIndex, this.context.items.length)
+    const request = buildEpisodeAnchorScrollRequest(groupIndex, this.getListItems().length)
     this.scroller.scrollToIndex(request.index, request.smooth, request.align)
     this.focusedCardIndex = request.index
     this.pageBarFocusedIndex = groupIndex
   }
 
   private scrollToCurrentItem(): void {
-    if (this.context.items.length === 0) {
+    if (this.getListItems().length === 0) {
       return
     }
-    const request = buildEpisodeInitialScrollRequest(this.context.currentIndex, this.context.items.length)
+    const request = buildEpisodeInitialScrollRequest(this.getCurrentListIndex(), this.getListItems().length)
     this.scroller.scrollToIndex(request.index, request.smooth, request.align)
   }
 
@@ -316,7 +332,10 @@ export struct EpisodeListPanel {
   }
 
   private isCurrentItem(item: PlaybackContextItem): boolean {
-    return item.index === this.context.currentIndex
+    if (this.context.currentIndex < 0 || this.context.currentIndex >= this.context.items.length) {
+      return false
+    }
+    return item === this.context.items[this.context.currentIndex]
   }
 
   private buildAnchorIndexRange(): number[] {
@@ -339,7 +358,7 @@ export struct EpisodeListPanel {
   private getPageTabStyleState(pageIdx: number): EpisodePageTabStyleState {
     return getEpisodePageTabStyleState(
       this.isPageBarFocused && this.pageBarFocusedIndex === pageIdx,
-      getEpisodeAnchorIndexForItem(this.context.currentIndex, this.context.items.length) === pageIdx,
+      getEpisodeAnchorIndexForItem(this.getCurrentListIndex(), this.getListItems().length) === pageIdx,
       this.hoveredPageBarIndex === pageIdx
     )
   }
