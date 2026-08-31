@@ -101,6 +101,26 @@ export default function serverEpisodePlaybackContextUtilTest() {
       }
     });
 
+    it('跨季返回相同 episode id 时保序去重且当前项定位正确', 0, async () => {
+      const client = buildTwoSeasonCatalog();
+      client.episodesBySeasonId.set('season-2', [
+        makeEpisode('jf-s1e1', 0, 1),
+        makeEpisode('jf-s2e1', 2, 1)
+      ]);
+
+      const context = await buildServerEpisodeContextFromCatalog(
+        VideoServerType.JELLYFIN, 11, 'series-1', 'jf-s2e1', client);
+
+      expect(context !== null).assertTrue();
+      if (context !== null) {
+        expect(context.items.length).assertEqual(3);
+        expect(context.currentIndex).assertEqual(2);
+        expect((context.items[0] as ServerPlaybackContextItem).serverItemId).assertEqual('jf-s1e1');
+        expect((context.items[1] as ServerPlaybackContextItem).serverItemId).assertEqual('jf-s1e2');
+        expect((context.items[2] as ServerPlaybackContextItem).serverItemId).assertEqual('jf-s2e1');
+      }
+    });
+
     it('当前项不在目录返回的集列表中时返回 null（安全退化单集播放）', 0, async () => {
       const context = await buildServerEpisodeContextFromCatalog(
         VideoServerType.EMBY, 3, 'series-1', 'missing-item', buildTwoSeasonCatalog());

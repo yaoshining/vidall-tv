@@ -32,9 +32,15 @@ export async function buildServerEpisodeContextFromCatalog(serverType: VideoServ
   }
   const seasons = await client.getSeasons(seriesId);
   const episodes: VideoServerEpisode[] = [];
+  const episodeIds: Set<string> = new Set();
   for (let index: number = 0; index < seasons.length; index += 1) {
     const seasonEpisodes = await client.getEpisodes(seriesId, seasons[index].id);
-    seasonEpisodes.forEach((episode: VideoServerEpisode) => episodes.push(episode));
+    seasonEpisodes.forEach((episode: VideoServerEpisode) => {
+      if (episode.id.length > 0 && !episodeIds.has(episode.id)) {
+        episodeIds.add(episode.id);
+        episodes.push(episode);
+      }
+    });
   }
   const result: ServerBuildItemsResult = buildServerPlaybackItems(
     serverType, serverId, seriesId, episodes, currentItemId);
