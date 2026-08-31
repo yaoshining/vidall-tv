@@ -959,7 +959,7 @@ export default function playerPageTest() {
       }
     })
 
-    it('媒体库切集后当前标题缺少季集编码时优先保留当前标题', 0, () => {
+    it('媒体库切集后当前标题缺少季集编码时使用新集标题', 0, () => {
       const fakeItems: MediaItem[] = [
         {
           id: 101, sourceId: 201, directoryPath: '/tv', scannedAt: 0,
@@ -1008,8 +1008,8 @@ export default function playerPageTest() {
       expect(context.items[1].title).assertEqual('突围')
       expect(nextParam !== null).assertTrue()
       if (nextParam !== null) {
-        expect(nextParam.title).assertEqual('长夜余火 第一季')
-        expect(nextParam.title === '突围').assertFalse()
+        expect(nextParam.title).assertEqual('突围')
+        expect(nextParam.title === '长夜余火 第一季').assertFalse()
         expect(nextParam.url).assertEqual('https://example.com/s01e02.mkv')
       }
     })
