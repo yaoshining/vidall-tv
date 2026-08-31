@@ -244,6 +244,7 @@ export class FileSourceModel implements DirectoryDeletionModel {
         this.directories.splice(idx, 1);
       }
       this.lastUpdateTime = Date.now();
+      this.publishGlobalMediaChange();
       console.info(`FileSourceModel: 目录 ${directoryPath} 已清理`);
     } catch (e) {
       const error = e as BusinessError;
