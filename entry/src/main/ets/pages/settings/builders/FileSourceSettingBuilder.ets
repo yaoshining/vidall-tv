@@ -99,16 +99,6 @@ struct FileSourceSettingBuilderComponent {
   }
 
   /**
-   * 构建右侧更多按钮
-   */
-  @Builder
-  buildMoreButton() {
-    Text("⋮")
-      .fontSize(24)
-      .fontColor($r('sys.color.font_secondary'))
-  }
-
-  /**
    * 编辑文件源
    */
   handleEdit(fileSource: FileSource): void {
@@ -277,9 +267,8 @@ struct FileSourceSettingBuilderComponent {
               },
               title: fileSource.name,
               value: this.getFileSourceTypeName(fileSource.type),
-              rightIcon: () => {
-                this.buildMoreButton()
-              },
+              showMenuButton: true,
+              menuButtonId: 'fileSourceMore_' + (fileSource.id?.toString() ?? 'new'),
               menuItems: [
                 {
                   value: '编辑',

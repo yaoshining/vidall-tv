@@ -147,6 +147,7 @@ export class FileSourceDatabase {
 
   async clearMediaAndDirectoryForDir(dirId: number, sourceId: number, directoryPath: string): Promise<void> {
     await this.fileSourceDao.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath);
+    await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
   }
 
   /**

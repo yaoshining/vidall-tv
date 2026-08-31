@@ -8,12 +8,16 @@ import { FileSource, FileSourceType, WebDAVSourceConfig, SMBSourceConfig } from 
 import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
+import { DeleteFileSourceDialog } from "../../../components/dialogs/DeleteFileSourceDialog"
 
 @ComponentV2
 export struct FileSourceTab {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
   @Local fileSourceModel: FileSourceModel = FileSourceStore.getState()
   @Local isLoading: boolean = false
+  @Local showDeleteDialog: boolean = false
+  @Local deleteTarget: DirectoryItem | null = null
+  @Local isDeletingSource: boolean = false
   private refreshTimer: number = -1
 
   aboutToAppear(): void {
@@ -100,6 +104,41 @@ export struct FileSourceTab {
     }
   }
 
+  private showToastSafe(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 })
+    } catch (_e) {}
+  }
+
+  private handleDelete(item: DirectoryItem): void {
+    if (item.dirId === undefined) {
+      this.showToastSafe('目录标识不存在')
+      return
+    }
+    this.deleteTarget = item
+    this.showDeleteDialog = true
+  }
+
+  private async confirmDeleteDirectory(): Promise<void> {
+    const target = this.deleteTarget
+    if (target === null || target.dirId === undefined || target.fileSource.id === undefined) {
+      return
+    }
+    try {
+      this.isDeletingSource = true
+      await this.fileSourceModel.clearMissingDirectory(target.dirId, target.fileSource.id, target.directoryPath)
+      this.showToastSafe('文件夹已删除')
+    } catch (error) {
+      const err = error as BusinessError
+      console.error('FileSourceTab', `删除文件夹失败: code=${err.code} msg=${err.message}`)
+      this.showToastSafe('删除失败，请重试')
+    } finally {
+      this.isDeletingSource = false
+      this.showDeleteDialog = false
+      this.deleteTarget = null
+    }
+  }
+
   /**
    * 处理文件夹点击
    */
@@ -146,6 +185,24 @@ export struct FileSourceTab {
   }
 
   @Builder
+  buildMoreMenu(item: DirectoryItem) {
+    Text("⋮")
+      .id('fileSourceTabMore_' + (item.dirId?.toString() ?? 'new'))
+      .fontSize(22)
+      .fontColor($r('sys.color.font_secondary'))
+      .width(36)
+      .height(36)
+      .textAlign(TextAlign.Center)
+      .borderRadius(6)
+      .focusable(true)
+      .monopolizeEvents(true)
+      .hoverEffect(HoverEffect.Highlight)
+      .bindMenu([
+        { value: '删除文件夹', action: () => { this.handleDelete(item) } }
+      ])
+  }
+
+  @Builder
   buildTabIcon(type: FileSourceType) {
     if (type === FileSourceType.WEBDAV) {
       Image($r('app.media.webdav_folder'))
@@ -160,50 +217,73 @@ export struct FileSourceTab {
   }
 
   build() {
-    GridRow({
-      gutter: 10,
-      columns: 2
-    }) {
-      // 从数据库加载的文件夹列表
-      ForEach(this.fileSourceModel.directories, (item: DirectoryItem) => {
-        GridCol() {
-          Flex({
-            alignItems: ItemAlign.Center,
-            justifyContent: FlexAlign.Start,
-            space: {
-              main: LengthMetrics.vp(20)
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column() {
+        GridRow({
+          gutter: 10,
+          columns: 2
+        }) {
+          // 从数据库加载的文件夹列表
+          ForEach(this.fileSourceModel.directories, (item: DirectoryItem) => {
+            GridCol() {
+              Flex({
+                alignItems: ItemAlign.Center,
+                justifyContent: FlexAlign.Start,
+                space: {
+                  main: LengthMetrics.vp(20)
+                }
+              }) {
+                Column() {
+                  this.buildTabIcon(item.fileSource.type)
+                }
+                .width(60)
+                .height(60)
+                .justifyContent(FlexAlign.Center)
+                .alignItems(HorizontalAlign.Center)
+                Flex({
+                  direction: FlexDirection.Column,
+                  justifyContent: FlexAlign.SpaceAround,
+                }) {
+                  Text(item.customName)
+                    .fontSize($r('app.float.font_subtitle_1'))
+                    .fontWeight(FontWeight.Bold)
+                  Text(item.fileSourceName)
+                    .opacity(0.6)
+                }
+                .height("100%")
+                .layoutWeight(1)
+                this.buildMoreMenu(item)
+              }
             }
-          }) {
-            Column() {
-              this.buildTabIcon(item.fileSource.type)
-            }
-            .width(60)
-            .height(60)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(HorizontalAlign.Center)
-            Flex({
-              direction: FlexDirection.Column,
-              justifyContent: FlexAlign.SpaceAround,
-            }) {
-              Text(item.customName)
-                .fontSize($r('app.float.font_subtitle_1'))
-                .fontWeight(FontWeight.Bold)
-              Text(item.fileSourceName)
-                .opacity(0.6)
-            }
-            .height("100%")
-          }
-        }
-        .onClick(() => {
-          this.handleDirectoryClick(item)
-        })
-        .height(80)
-        .padding({ left: 20, right: 20, top: 10, bottom: 10 })
-        .borderRadius(6)
-        .backgroundColor("#373737")
-        .hoverEffect(HoverEffect.Highlight)
-      }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}_${item.customName}`)
+            .onClick(() => {
+              this.handleDirectoryClick(item)
+            })
+            .height(80)
+            .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+            .borderRadius(6)
+            .backgroundColor("#373737")
+            .hoverEffect(HoverEffect.Highlight)
+          }, (item: DirectoryItem) => `${item.fileSource.id}_${item.directoryPath}_${item.customName}`)
 
+        }
+        .width('100%')
+      }
+      .width('100%')
+
+      // ── 删除文件夹确认弹窗 ──
+      DeleteFileSourceDialog({
+        visible: this.showDeleteDialog,
+        isDeleting: this.isDeletingSource,
+        onCancel: () => {
+          this.showDeleteDialog = false
+          this.deleteTarget = null
+        },
+        onConfirm: () => {
+          this.confirmDeleteDirectory()
+        }
+      })
     }
+    .width('100%')
+    .height('100%')
   }
 }

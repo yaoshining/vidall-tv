@@ -78,13 +78,6 @@ struct VideoServerSettingBuilderComponent {
     }
   }
 
-  @Builder
-  buildMoreButton() {
-    Text("⋮")
-      .fontSize(24)
-      .fontColor($r('sys.color.font_secondary'))
-  }
-
   build() {
     Stack() {
       SettingContainer({
@@ -111,9 +104,8 @@ struct VideoServerSettingBuilderComponent {
               },
               title: server.name,
               value: videoServerTypeLabel(server.type),
-              rightIcon: () => {
-                this.buildMoreButton()
-              },
+              showMenuButton: true,
+              menuButtonId: 'videoServerMore_' + (server.id?.toString() ?? 'new'),
               menuItems: [
                 {
                   value: '编辑',

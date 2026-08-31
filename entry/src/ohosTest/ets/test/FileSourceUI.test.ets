@@ -250,6 +250,69 @@ export default function fileSourceUiTest() {
     })
 
     /**
+     * 文件源行提供独立的更多入口，并可打开编辑/删除菜单。
+     */
+    it("文件源更多菜单可打开", 0, async () => {
+      if (!enableUiTests) { expect(true).assertTrue(); return }
+      await driver.delayMs(500)
+      try {
+        const moreButton = await driver.waitForComponent(ON.text("⋮"), WAIT_SHORT)
+        if (moreButton === null) {
+          console.warn("[FileSourceUI] 当前没有可测试的文件源，跳过更多菜单验证")
+          expect(true).assertTrue()
+          return
+        }
+        await moreButton.click()
+        await driver.delayMs(300)
+        expect(await driver.waitForComponent(ON.text("编辑"), WAIT_SHORT) !== null).assertTrue()
+        expect(await driver.waitForComponent(ON.text("删除"), WAIT_SHORT) !== null).assertTrue()
+        console.info("[FileSourceUI] 文件源更多菜单可打开 PASSED")
+      } catch (e) {
+        const err = e as Error
+        console.error("[FileSourceUI] 文件源更多菜单可打开 FAILED: " + err.message)
+        expect(false).assertTrue()
+      }
+    })
+
+    /**
+     * 首页「文件源」标签的目录卡片提供独立删除入口。
+     * 仅断言入口存在，不实际删除，避免污染用户数据。
+     */
+    it("首页文件源卡片提供删除入口", 0, async () => {
+      if (!enableUiTests) { expect(true).assertTrue(); return }
+      await driver.delayMs(500)
+      try {
+        // 回到首页
+        const delegator = abilityDelegatorRegistry.getAbilityDelegator()
+        try {
+          const want: Want = { bundleName: 'com.yao.vidalltv', abilityName: 'EntryAbility' }
+          await delegator.startAbility(want)
+        } catch (_e) {}
+        await driver.delayMs(2000)
+
+        // 首页「文件源」标签：切到文件源卡片列表
+        try {
+          const fileSourceTabBtn = await driver.waitForComponent(ON.text("文件源"), WAIT_SHORT)
+          if (fileSourceTabBtn !== null) {
+            await fileSourceTabBtn.click()
+            await driver.delayMs(1000)
+          }
+        } catch (_e) {
+          console.warn("[FileSourceUI] 未找到首页文件源标签，继续直接查找卡片")
+        }
+
+        // 断言文件源卡片上存在 ⋮ 更多按钮
+        const moreButton = await driver.waitForComponent(ON.text("⋮"), WAIT_SHORT)
+        expect(moreButton !== null).assertTrue()
+        console.info("[FileSourceUI] 首页文件源卡片提供删除入口 PASSED")
+      } catch (e) {
+        const err = e as Error
+        console.error("[FileSourceUI] 首页文件源卡片提供删除入口 FAILED: " + err.message)
+        expect(false).assertTrue()
+      }
+    })
+
+    /**
      * SMB 选项可见（SKIP_SMB_TESTS=false 时运行）
      */
     it("SMB添加弹层可打开", 0, async () => {
