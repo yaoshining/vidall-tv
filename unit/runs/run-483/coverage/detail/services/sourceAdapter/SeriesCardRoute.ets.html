@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/sourceAdapter/SeriesCardRoute.ets 
+// 
+// SeriesCardRoute - 媒体库「系列卡片」点击行为契约（纯函数）。 
+// 
+// 目标：把 `MediaLibraryTab` 中 `SeriesCard` 的点击分流抽成可单测的纯函数， 
+// 避免行为契约散落在 UI build() 里。 
+// 
+// 约束： 
+// - 仅包含无副作用纯函数，不依赖 UI / 网络 / 具体详情页。 
+// - 行为与 `MediaLibraryTab` 中 `SeriesCard` wiring 保持一致（wiring 通过本模块解析）。 
+ 
+import type { SeriesGroup } from &quot;../../db/models/MediaEntity&quot;; 
+ 
+/** 系列卡片可跳转的目标详情页；null 表示不跳转。 */ 
+export type SeriesCardDestination = &#39;seriesDetail&#39; | &#39;seasonDetail&#39; | null; 
+ 
+/** 
+ * 解析系列卡片点击应跳转的详情页： 
+ * - showSeasonPoster=true（最近添加/混合列表，显示季海报+季号）： 
+ *   有季号 → 季详情页（展示该季）； 
+ *   无季号 → 剧集详情页（展示整部剧，修复「点击后无法打开」的问题）。 
+ * - showSeasonPoster=false（电视剧栏）：→ 剧集详情页。 
+ * - tvSeriesId 缺失时返回 null（不跳转，防止误进详情页）。 
+ */ 
+export function resolveSeriesCardDestination(showSeasonPoster: boolean, group: SeriesGroup): SeriesCardDestination { 
+  if (group.tvSeriesId === undefined) { 
+    return null; 
+  } 
+  if (showSeasonPoster) { 
+    return group.seasonNumber !== undefined ? &#39;seasonDetail&#39; : &#39;seriesDetail&#39;; 
+  } 
+  return &#39;seriesDetail&#39;; 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Mon Aug 31 2026 22:53:35 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/sourceAdapter/SeriesCardRoute.ets","hash":"3069b2698562acb45cc0737593e203f45b3aa75943d3b89e361a578bc1140fc0","lineCnt":34,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"resolveSeriesCardDestination","count":5,"regions":[{"startLoc":{"line":25,"col":1},"endLoc":{"line":33,"col":2},"count":5,"ignored":0},{"startLoc":{"line":26,"col":39},"endLoc":{"line":28,"col":4},"count":1,"ignored":0},{"startLoc":{"line":29,"col":25},"endLoc":{"line":31,"col":4},"count":2,"ignored":0},{"startLoc":{"line":32,"col":3},"endLoc":{"line":33,"col":2},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":26,"col":7},"endLoc":{"line":26,"col":37},"trueCount":1,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":29,"col":7},"endLoc":{"line":29,"col":23},"trueCount":2,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":30,"col":12},"endLoc":{"line":30,"col":78},"trueCount":1,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":0}],"exeLine":{"0":12,"1":15,"2":25,"3":26,"4":27,"5":29,"6":30,"7":32},"summary":{"lines":{"total":6,"covered":6,"pct":100,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,5,5,1,-1,4,2,-1,2,-1,-1]},"functions":{"total":1,"covered":1,"pct":100},"branches":{"total":6,"covered":6,"pct":100}}},"title":"SeriesCardRoute.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
