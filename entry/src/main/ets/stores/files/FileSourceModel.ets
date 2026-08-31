@@ -3,6 +3,7 @@ import { FileSource, FileSourceDirectory, DirStatus } from "../../db/models/File
 import { MediaDataVersionStore } from "../../services/scrape/MediaDataVersionStore";
 import { GlobalScrapeScope } from "../../services/scrape/ScopedScrapeTypes";
 import { BusinessError } from '@kit.BasicServicesKit';
+import { DirectoryDeletionModel } from './DirectoryDeletionAction';
 
 /**
  * 文件夹项接口，包含文件夹信息和所属文件源信息
@@ -24,7 +25,7 @@ export interface DirectoryItem {
  * 使用单例模式管理文件源数据缓存
  */
 @ObservedV2
-export class FileSourceModel {
+export class FileSourceModel implements DirectoryDeletionModel {
   // 缓存有效期：5 分钟
   private static readonly CACHE_DURATION = 5 * 60 * 1000;
 
@@ -243,6 +244,7 @@ export class FileSourceModel {
         this.directories.splice(idx, 1);
       }
       this.lastUpdateTime = Date.now();
+      this.publishGlobalMediaChange();
       console.info(`FileSourceModel: 目录 ${directoryPath} 已清理`);
     } catch (e) {
       const error = e as BusinessError;

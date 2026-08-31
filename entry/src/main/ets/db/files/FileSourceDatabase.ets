@@ -147,6 +147,12 @@ export class FileSourceDatabase {
 
   async clearMediaAndDirectoryForDir(dirId: number, sourceId: number, directoryPath: string): Promise<void> {
     await this.fileSourceDao.clearMediaAndDirectoryForDir(dirId, sourceId, directoryPath);
+    try {
+      await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
+    } catch (e) {
+      const error = e as Error;
+      console.warn(`FileSourceDatabase: 目录已删除，孤儿刮削数据清理失败，稍后重试: ${error.message}`);
+    }
   }
 
   /**

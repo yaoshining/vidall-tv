@@ -18,7 +18,10 @@ export struct SettingListItem {
   @Param onItemClick: () => void = () => {}
   @Param onRightIconClick: () => void = () => {}
   @Param menuItems: Array<MenuItem> = []
+  @Param showMenuButton: boolean = false
+  @Param menuButtonId: string = ''
   @Local private isRowFocused: boolean = false
+  @Local private isMenuFocused: boolean = false
   @BuilderParam icon?: () => void
   @BuilderParam iconBuilder?: () => void
   @BuilderParam titleBuilder?: () => void
@@ -49,7 +52,22 @@ export struct SettingListItem {
               .fontSize($r("app.float.font_subtitle_1"))
               .fontColor($r('sys.color.font_secondary'))
           }
-          if (this.rightIcon) {
+          if (this.showMenuButton && this.menuItems.length > 0) {
+            Text("⋮")
+              .id(this.menuButtonId)
+              .fontSize(24)
+              .fontColor(this.isMenuFocused ? '#F4F4F4' : $r('sys.color.font_secondary'))
+              .width(44)
+              .height(44)
+              .textAlign(TextAlign.Center)
+              .borderRadius(8)
+              .backgroundColor(this.isMenuFocused ? '#555555' : Color.Transparent)
+              .focusable(true)
+              .monopolizeEvents(true)
+              .bindMenu(this.menuItems)
+              .onFocus(() => { this.isMenuFocused = true })
+              .onBlur(() => { this.isMenuFocused = false })
+          } else if (this.rightIcon) {
             this.rightIcon()
           } else if (this.isLink) {
             Text("›")
@@ -58,7 +76,6 @@ export struct SettingListItem {
           }
         }
         .justifyContent(FlexAlign.End)
-        .bindMenu(this.menuItems.length > 0 ? this.menuItems : [])
         .onClick(() => {
           if (this.menuItems.length === 0) {
             this.onRightIconClick()
