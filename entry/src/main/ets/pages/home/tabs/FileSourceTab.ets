@@ -9,6 +9,7 @@ import { FileSourceStore } from "../../../stores/files/FileSourceStore"
 import { DirectoryItem, FileSourceModel } from "../../../stores/files/FileSourceModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
 import { DeleteFileSourceDialog } from "../../../components/dialogs/DeleteFileSourceDialog"
+import { deleteDirectoryOnly, DirectoryDeletionTarget } from "../../../stores/files/DirectoryDeletionAction"
 
 @ComponentV2
 export struct FileSourceTab {
@@ -126,7 +127,12 @@ export struct FileSourceTab {
     }
     try {
       this.isDeletingSource = true
-      await this.fileSourceModel.clearMissingDirectory(target.dirId, target.fileSource.id, target.directoryPath)
+      const deletionTarget: DirectoryDeletionTarget = {
+        dirId: target.dirId,
+        sourceId: target.fileSource.id,
+        directoryPath: target.directoryPath
+      }
+      await deleteDirectoryOnly(this.fileSourceModel, deletionTarget)
       this.showDeleteDialog = false
       this.deleteTarget = null
       this.showToastSafe('文件夹已删除')

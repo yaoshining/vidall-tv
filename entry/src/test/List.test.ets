@@ -37,6 +37,7 @@ import smbDirectoryProviderTest from './SmbDirectoryProvider.test';
 import webDAVDirectoryProviderTest from './WebDAVDirectoryProvider.test';
 import directorySelectorContainerTest from './DirectorySelectorContainer.test';
 import fileSourceRoutingTest from './FileSourceRouting.test';
+import directoryDeletionActionTest from './DirectoryDeletionAction.test';
 import fileExplorerContextTest from './FileExplorerContext.test';
 import umamiReporterTest from './ets/services/analytics/UmamiReporter.test';
 import compositeMetricsReporterTest from './ets/services/metrics/CompositeMetricsReporter.test';
@@ -102,6 +103,7 @@ export default function testsuite() {
   webDAVDirectoryProviderTest();
   directorySelectorContainerTest();
   fileSourceRoutingTest();
+  directoryDeletionActionTest();
   fileExplorerContextTest();
   umamiReporterTest();
   compositeMetricsReporterTest();

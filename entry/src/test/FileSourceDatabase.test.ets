@@ -2,7 +2,6 @@ import { describe, beforeAll, afterAll, it, expect } from '@ohos/hypium';
 import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSourceDatabase } from '../main/ets/db/files/FileSourceDatabase';
-import { FileSource, FileSourceDirectory, FileSourceType } from '../main/ets/db/models/FileSourceEntity';
 import { countSeriesEpisodeRows, SeriesEpisodeCountSource } from '../main/ets/db/files/SeriesGroupCountUtil';
 
 /**
@@ -69,62 +68,6 @@ export default function fileSourceDatabaseTest() {
       console.info(`[FileSourceDatabase.test] 环境中共有 ${sources.length} 个文件源`);
     });
       });
-
-    describe('FileSourceDatabase_delete_source', () => {
-      it('should_delete_source_and_renamed_remote_directory_by_local_id', 0, async () => {
-        const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-        const db = FileSourceDatabase.getInstance(ctx);
-        await db.init();
-        const source: FileSource = {
-          name: 'renamed-remote-source',
-          type: FileSourceType.WEBDAV,
-          configJson: '{"url":"unreachable.invalid","rootPath":"/renamed"}',
-          createdAt: Date.now()
-        };
-        const sourceId = await db.insertFileSource(source);
-        const directory: FileSourceDirectory = {
-          sourceId,
-          directoryPath: '/old-server-name'
-        };
-        await db.insertDirectories(sourceId, [directory]);
-
-        await db.deleteFileSourceWithData(sourceId);
-
-        expect(await db.getFileSourceById(sourceId) === null).assertTrue();
-        expect((await db.getDirectoriesBySourceId(sourceId)).length).assertEqual(0);
-      });
-
-      it('should_delete_directory_but_keep_file_source', 0, async () => {
-        const ctx = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
-        const db = FileSourceDatabase.getInstance(ctx);
-        await db.init();
-        const source: FileSource = {
-          name: 'keep-source-after-dir-delete',
-          type: FileSourceType.WEBDAV,
-          configJson: '{"url":"unreachable.invalid","rootPath":"/renamed"}',
-          createdAt: Date.now()
-        };
-        const sourceId = await db.insertFileSource(source);
-        const directory: FileSourceDirectory = {
-          sourceId,
-          directoryPath: '/one-folder'
-        };
-        await db.insertDirectories(sourceId, [directory]);
-
-        // 取出目录主键（dirId）
-        const dirs = await db.getDirectoriesBySourceId(sourceId);
-        expect(dirs.length).assertEqual(1);
-        const dirId = dirs[0].id;
-        expect(dirId !== undefined).assertTrue();
-
-        // 仅删除该目录，文件源应保留
-        await db.clearMediaAndDirectoryForDir(dirId as number, sourceId, directory.directoryPath);
-
-        // 目录已删，但文件源仍在
-        expect((await db.getDirectoriesBySourceId(sourceId)).length).assertEqual(0);
-        expect((await db.getFileSourceById(sourceId)) !== null).assertTrue();
-      });
-    });
 
     describe('FileSourceDatabase_distinct_tv_series_group_logic', () => {
       it('should_count_episode_rows_without_duplicate_tv_rows', 0, () => {
