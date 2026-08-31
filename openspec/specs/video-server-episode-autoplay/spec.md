@@ -1,8 +1,10 @@
+# video-server-episode-autoplay Specification
+
 ## Purpose
 
 定义 Jellyfin、Emby 与 Plex 服务器剧集的连续播放顺序及自动下一集行为，使其与文件源播放器共享一致的倒计时、取消、失败处理和跨季连播体验。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 服务器剧集播放上下文按季集顺序构建
 系统 SHALL 为服务器剧集播放构建包含同一系列可用剧集的连续播放上下文，并按季号升序、集号升序排列；当前播放集 SHALL 被准确定位。
