@@ -1,0 +1,1 @@
+{"id":"8d7921ace1b4fe962d1b3b255f32ed44","fullName":"LocalFreeEntitlementService#getUserTier 应返回 Promise","name":"getUserTier 应返回 Promise","status":"passed","testResultsByEnv":{"default":"38f0edaf1ea7340d0df31d43f127f8eb"}}
