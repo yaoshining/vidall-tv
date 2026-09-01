@@ -53,6 +53,8 @@ interface ScrapeMediaGroup {
   targets: ScopedScrapeVideo[];
   searchFileName: string;
   seriesHint?: string;
+  /** 弱语义文件名场景下由分类器提供的父目录片名兜底标题 */
+  fallbackTitle?: string;
 }
 
 export interface ScopedScrapeExecutor {
@@ -350,7 +352,8 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
           mediaType: classification.mediaType,
           targets: [target],
           searchFileName: video.fileName,
-          seriesHint
+          seriesHint,
+          fallbackTitle: classification.fallbackTitle
         };
         groups.push(group);
         groupMap.set(key, group);
@@ -361,7 +364,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
 
   private async searchCandidates(client: ScrapeClient, group: ScrapeMediaGroup): Promise<ScrapeCandidate[]> {
     if (group.mediaType === 'movie') {
-      const results = await client.searchMovieCandidates(group.searchFileName);
+      const results = await client.searchMovieCandidates(group.searchFileName, group.fallbackTitle);
       return results.map((result: MovieScrapeResult): ScrapeCandidate => this.movieCandidate(result));
     }
     if (group.mediaType === 'tv') {

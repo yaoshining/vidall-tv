@@ -41,6 +41,8 @@ export interface MediaTypeClassificationResult {
   mediaType: MediaTypeClassification;
   signals: MediaTypeClassificationSignal[];
   reason?: string;
+  /** 弱语义文件名场景下由父目录名兜底出的片名标题，供刮削层作为搜索词 */
+  fallbackTitle?: string;
 }
 
 interface PathSemanticKeywordRule {
@@ -409,6 +411,39 @@ function appendSignal(
   signals.push(signal);
 }
 
+/** 影片附属目录等不宜当作片名搜索的通用目录名（已归一化） */
+const GENERIC_DIRECTORY_TITLE_TOKENS: Set<string> = new Set([
+  'extras', 'extra', 'trailers', 'trailer', 'featurettes', 'featurette',
+  'samples', 'sample', 'behind the scenes', 'bonus', 'specials'
+]);
+
+/**
+ * 弱语义文件名场景下，从父目录名解析可用的兜底片名标题。
+ * 父目录若本身提供了路径语义信号（如"电影合集"）、自身弱语义、或属于影片附属通用目录，则不可用。
+ */
+function resolveParentDirectoryFallbackTitle(
+  input: MediaTypeClassificationInput,
+  pathSignalValues: Set<string>
+): string | undefined {
+  if (input.parentDirectoryName === undefined) {
+    return undefined;
+  }
+  const trimmed = input.parentDirectoryName.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (pathSignalValues.has(input.parentDirectoryName)) {
+    return undefined;
+  }
+  if (isWeakSemanticTitleText(trimmed)) {
+    return undefined;
+  }
+  if (GENERIC_DIRECTORY_TITLE_TOKENS.has(normalizeSemanticToken(trimmed))) {
+    return undefined;
+  }
+  return trimmed;
+}
+
 export function buildMediaTypeClassificationInput(
   fileName: string,
   filePath: string,
@@ -572,6 +607,22 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
       60
     );
     return createMediaTypeClassificationResult('tv', signals, 'season-sibling-detected');
+  }
+
+  // 弱语义文件名（如"4K.mp4"）自身无标题证据：若路径存在纯 movie 证据且父目录名是可读片名
+  // （如"穿普拉达的女王2/4K.mp4"），以父目录名兜底判为 movie，刮削层用它替代文件名发起搜索。
+  if (hasWeakSemanticTitle && movieScore > 0 && tvScore === 0) {
+    const pathSignalValues = new Set<string>();
+    pathMatches.forEach((match: PathSemanticSignalMatch) => {
+      pathSignalValues.add(match.signal.value);
+    });
+    const fallbackTitle = resolveParentDirectoryFallbackTitle(input, pathSignalValues);
+    if (fallbackTitle !== undefined) {
+      appendSignal(signals, 'parent-directory', fallbackTitle, 'weak-filename-parent-title-fallback', 60);
+      const result = createMediaTypeClassificationResult('movie', signals, 'weak-filename-parent-directory-fallback');
+      result.fallbackTitle = fallbackTitle;
+      return result;
+    }
   }
 
   return createMediaTypeClassificationResult('unknown', signals, 'insufficient-evidence');

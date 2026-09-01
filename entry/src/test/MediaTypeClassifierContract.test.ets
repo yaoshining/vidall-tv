@@ -38,6 +38,13 @@ const weakSemanticRegressionSamples: WeakSemanticRegressionSample[] = [
     expectedMediaType: 'movie'
   },
   {
+    name: '弱语义电影样本：父目录片名可兜底为 movie',
+    fileName: '4K.mp4',
+    filePath: '/Videos/Movies/穿普拉达的女王2/4K.mp4',
+    expectedMediaType: 'movie',
+    expectedReason: 'weak-filename-parent-directory-fallback'
+  },
+  {
     name: '弱语义 unknown 样本：无足够路径线索时保持保守',
     fileName: '22 4K.mp4',
     filePath: '/下载/未整理/22 4K.mp4',
@@ -176,6 +183,25 @@ export default function mediaTypeClassifierContractTest() {
       expect(explicitFalseClassification.reason).assertEqual('insufficient-evidence');
       expect(omittedClassification.mediaType).assertEqual('unknown');
       expect(omittedClassification.reason).assertEqual('insufficient-evidence');
+    });
+
+    it('should fall back to parent directory title for weak filename under movie path', 0, () => {
+      const classification = classifyVideoScrapeTarget(
+        '4K.mp4',
+        '/Videos/Movies/穿普拉达的女王2/4K.mp4'
+      );
+
+      expect(classification.mediaType).assertEqual('movie');
+      expect(classification.reason).assertEqual('weak-filename-parent-directory-fallback');
+      expect(classification.fallbackTitle).assertEqual('穿普拉达的女王2');
+    });
+
+    it('should keep weak filename unknown when parent directory is a generic movie keyword segment', 0, () => {
+      const classification = classifyVideoScrapeTarget('4K.mp4', '/电影合集/4K.mp4');
+
+      expect(classification.mediaType).assertEqual('unknown');
+      expect(classification.reason).assertEqual('insufficient-evidence');
+      expect(classification.fallbackTitle).assertUndefined();
     });
 
     // ─── #254 中文季号后缀目录名 ───
