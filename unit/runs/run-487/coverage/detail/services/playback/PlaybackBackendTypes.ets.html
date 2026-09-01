@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+// filepath: entry/src/main/ets/services/playback/PlaybackBackendTypes.ets 
+// 
+// PlaybackBackendService 的类型契约。 
+// 
+// `VideoPlayerController` 通过本契约编排 AVPlayer 主路径与 MPV 唯一回退路径。 
+// 
+// Module 4 目标：以上职责由 `PlaybackBackendService` 统一编排， 
+// `VideoPlayerController` 退化为 façade 并把状态投影到现有 `@Trace` 字段。 
+// 
+// 兼容性： 
+// - 公开方法与 controller 现有 API 行为等价，外部 import 不破坏。 
+// - `PlayerBackend` / `UnsupportedFormatFallback` 类型由本文件 re-export， 
+//   controller 旧 import 路径继续可用。 
+ 
+import type { VideoData } from &quot;../../components/core/player/VideoData&quot;; 
+import type { IPlayer } from &quot;../../components/core/player/IPlayer&quot;; 
+import type { ISubtitleBridgeAdapter } from &quot;../../components/core/player/SubtitleBridgeAdapter&quot;; 
+import type { AudioCapabilitySource } from &quot;../audioCapability/AudioCapabilityTypes&quot;; 
+ 
+/** 播放内核类型（service 内部命名，controller 已有同名类型，alias 复用）。 */ 
+export type ServicePlayerBackend = &#39;avplayer&#39; | &#39;mpv&#39;; 
+ 
+/** AVPlayer 遇到不支持格式或初始化失败时的唯一回退目标。 */ 
+export type ServiceUnsupportedFormatFallback = &#39;mpv&#39;; 
+ 
+/** 历史入口值仅在边界归一化，绝不进入运行时后端状态。 */ 
+export type LegacyPlayerBackend = &#39;native&#39; | &#39;ffmpeg&#39;; 
+ 
+export function normalizePlayerBackend(backend: ServicePlayerBackend | LegacyPlayerBackend): ServicePlayerBackend { 
+  return backend === &#39;avplayer&#39; ? &#39;avplayer&#39; : &#39;mpv&#39;; 
+} 
+ 
+/** 后端选择决策输入（ffprobe + preset 提示）。 */ 
+export interface PlaybackBackendProbeInput { 
+  codecName: string; 
+  channels: number; 
+  precheckProbeFailed: boolean; 
+  precheckProbeError: string; 
+  videoCodecName: string; 
+  /** 原始 ffprobe 是否成功（用于日志上下文）。 */ 
+  probeSuccess: boolean; 
+} 
+ 
+/** 
+ * 后端选择决策输出（已与 `AudioRoutingDecision` 字段对齐）。 
+ * 字段语义升级为基于整组音轨分析（anyHardSupported / allSoftDecodeOnly）。 
+ */ 
+/** 整组音轨分析条目（用于 backend decision / routing decision 共享类型）。 */ 
+export interface BackendTrackAnalysis { 
+  index: number; 
+  codec: string; 
+  channels: number; 
+  hardSupported: boolean; 
+  /** &#39;probe&#39; | &#39;preset&#39; */ 
+  source: string; 
+  /** 设备能力兼容性（codec 支持且声道数不超上限）。 */ 
+  compatible: boolean; 
+  /** 设备该 codec 的最大声道能力（未知/不支持时为 0）。 */ 
+  maxChannels: number; 
+  /** 是否为硬件解码。 */ 
+  isHardware: boolean; 
+  /** 兼容性结论来源（与 AudioRoutingTypes.AudioCapabilitySource 保持一致）。 */ 
+  capabilitySource: AudioCapabilitySource; 
+} 
+ 
+export interface PlaybackBackendDecision { 
+  preferredBackend: ServicePlayerBackend; 
+  fallback: ServiceUnsupportedFormatFallback; 
+  preferredChannels: number; 
+  summary: string; 
+  detectedCodec: string; 
+  detectedChannels: number; 
+  /** 整组音轨中是否存在至少一条系统稳态可硬解轨道。 */ 
+  anyHardSupported: boolean; 
+  /** 整组音轨是否全部应软解。 */ 
+  allSoftDecodeOnly: boolean; 
+  /** 整组音轨是否存在至少一条系统可播放轨道。 */ 
+  anyPlayable: boolean; 
+  /** 整组音轨是否存在至少一条不可播放轨道。 */ 
+  anyUnplayable: boolean; 
+  precheckProbeFailed: boolean; 
+  precheckProbeError: string; 
+  videoCodecName: string; 
+  /** 视频 HDR 类型（&#39;HDR10&#39;|&#39;HLG&#39;|&#39;DOLBY_VISION&#39;|&#39;SDR&#39;|&#39;&#39;），&#39;&#39; 表示未知/SDR。 */ 
+  videoHdrType: string; 
+  /** Dolby Vision profile（来自 ffprobe 首条 video track，如 5/8/9），无 DV 传 undefined。 */ 
+  videoDvProfile?: number; 
+  /** DV base-layer signal compatibility id（0 无兼容基层，1=HDR10，2=SDR），无 DV 传 undefined。 */ 
+  videoDvBlCompatibilityId?: number; 
+  /** 视频宽度（像素，来自 ffprobe 首条 video track），探测失败/缺失为 undefined。 */ 
+  videoWidth?: number; 
+  /** 视频高度（像素，来自 ffprobe 首条 video track），探测失败/缺失为 undefined。 */ 
+  videoHeight?: number; 
+  /** 整组音轨分析详情（调试用）。 */ 
+  trackAnalyses: BackendTrackAnalysis[]; 
+  /** 预选的初始音轨索引（-1 表示无兼容轨）。 */ 
+  recommendedInitialTrackIndex: number; 
+  /** 预选音轨的归一化 codec（无兼容轨或未知时为空串）。 */ 
+  recommendedCodec: string; 
+  /** 能力判定摘要（来源/缓存/纠偏，供日志与 UI）。 */ 
+  capabilitySummary: string; 
+} 
+ 
+/** 字幕桥接 adapter 类型（service 内部命名以避免与 controller 现有类型冲突）。 */ 
+export type SubtitleBridgeKind = &#39;none&#39; | &#39;av&#39; | &#39;mpv&#39; | &#39;smb-av&#39;; 
+ 
+/** Adapter 创建产物。 */ 
+export interface PlaybackAdapterHandle { 
+  /** 选定后端。 */ 
+  backend: ServicePlayerBackend; 
+  /** 适配器实例（未绑定 XComponent 上下文前可能为 undefined）。 */ 
+  player?: IPlayer; 
+  /** 字幕桥接 adapter（service 内部创建并注入回调，controller 持有此引用以调用 switch/delay）。 */ 
+  subtitleBridge?: ISubtitleBridgeAdapter; 
+  /** 字幕桥接类型标签（冗余字段，便于 controller 调试与 fallback 决策）。 */ 
+  subtitleBridgeKind: SubtitleBridgeKind; 
+  /** 启动 SMB 代理后写回 videoData.videoSrc（用于 controller 持有原始 URL 记录）。 */ 
+  effectiveVideoSrc: string; 
+  /** 错误回调：仅在 adapter 创建阶段失败时填充。 */ 
+  errorMessage?: string; 
+} 
+ 
+/** Adapter 绑定上下文。 */ 
+export interface PlaybackAdapterContext { 
+  surfaceId: string; 
+  videoData: VideoData; 
+} 
+ 
+/** 后端 fallback 触发原因。 */ 
+export type PlaybackFallbackReason = 
+  | &#39;avplayer_unsupported_format&#39; 
+  | &#39;avplayer_init_failure&#39; 
+  | &#39;precheck_probe_failed&#39; 
+  | &#39;mpv_error_callback&#39;; 
+ 
+/** 后端 fallback 上下文。 */ 
+export interface PlaybackFallbackContext { 
+  reason: PlaybackFallbackReason; 
+  fallbackFrom: ServicePlayerBackend; 
+  fallbackTo: ServicePlayerBackend; 
+  positionMs: number; 
+  shouldResumePlay: boolean; 
+  autoplayDecisionSource: string; 
+  autoplayDecisionOrigin: string; 
+  detailMessage: string; 
+} 
+ 
+/** 续播自动播放决策纯函数输入。 */ 
+export interface ResumeAutoplayInput { 
+  isPlaying: boolean; 
+  isSeeking: boolean; 
+} 
+ 
+/** 续播自动播放决策纯函数输出。 */ 
+export interface ResumeAutoplayDecision { 
+  shouldResumePlay: boolean; 
+  source: string; 
+  origin: string; 
+} 
+ 
+/** 工厂函数：构造 `PlaybackBackendDecision`（用于 backend service 内部默认值）。 */ 
+export function buildDefaultBackendDecision(): PlaybackBackendDecision { 
+  const decision: PlaybackBackendDecision = { 
+    preferredBackend: &#39;avplayer&#39;, 
+    fallback: &#39;mpv&#39;, 
+    preferredChannels: 2, 
+    summary: &#39;default: 未探测到音轨细节&#39;, 
+    detectedCodec: &#39;unknown&#39;, 
+    detectedChannels: 2, 
+    anyHardSupported: true, 
+    allSoftDecodeOnly: false, 
+    anyPlayable: true, 
+    anyUnplayable: false, 
+    precheckProbeFailed: false, 
+    precheckProbeError: &#39;&#39;, 
+    videoCodecName: &#39;&#39;, 
+    videoHdrType: &#39;&#39;, 
+    videoDvProfile: undefined, 
+    videoDvBlCompatibilityId: undefined, 
+    videoWidth: undefined, 
+    videoHeight: undefined, 
+    trackAnalyses: [], 
+    recommendedInitialTrackIndex: -1, 
+    recommendedCodec: &#39;&#39;, 
+    capabilitySummary: &#39;default: 未查询设备解码能力&#39; 
+  }; 
+  return decision; 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Tue Sep 01 2026 16:34:38 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/services/playback/PlaybackBackendTypes.ets","hash":"eb75beb938473025f53bc513b7ff53b5b39dbe09831c24920a25f8c4b9bb4987","lineCnt":189,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"normalizePlayerBackend","count":0,"regions":[{"startLoc":{"line":29,"col":1},"endLoc":{"line":31,"col":2},"count":0,"ignored":0},{"startLoc":{"line":30,"col":3},"endLoc":{"line":31,"col":2},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":30,"col":10},"endLoc":{"line":30,"col":53},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"buildDefaultBackendDecision","count":0,"regions":[{"startLoc":{"line":162,"col":1},"endLoc":{"line":188,"col":2},"count":0,"ignored":0},{"startLoc":{"line":163,"col":3},"endLoc":{"line":188,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1}],"exeLine":{"0":15,"1":16,"2":17,"3":18,"4":21,"5":24,"6":27,"7":29,"8":30,"9":34,"10":35,"11":36,"12":37,"13":38,"14":39,"15":41,"16":49,"17":50,"18":51,"19":52,"20":53,"21":55,"22":57,"23":59,"24":61,"25":63,"26":66,"27":67,"28":68,"29":69,"30":70,"31":71,"32":72,"33":74,"34":76,"35":78,"36":80,"37":81,"38":82,"39":83,"40":85,"41":87,"42":89,"43":91,"44":93,"45":95,"46":97,"47":99,"48":101,"49":105,"50":108,"51":110,"52":112,"53":114,"54":116,"55":118,"56":120,"57":124,"58":125,"59":126,"60":130,"61":131,"62":132,"63":133,"64":134,"65":137,"66":138,"67":139,"68":140,"69":141,"70":142,"71":143,"72":144,"73":145,"74":149,"75":150,"76":151,"77":155,"78":156,"79":157,"80":158,"81":162,"82":163,"83":164,"84":165,"85":166,"86":167,"87":168,"88":169,"89":170,"90":171,"91":172,"92":173,"93":174,"94":175,"95":176,"96":177,"97":178,"98":179,"99":180,"100":181,"101":182,"102":183,"103":184,"104":185,"105":187},"summary":{"lines":{"total":27,"covered":0,"pct":0,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,-1,-1]},"functions":{"total":2,"covered":0,"pct":0},"branches":{"total":2,"covered":0,"pct":0}}},"title":"PlaybackBackendTypes.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>

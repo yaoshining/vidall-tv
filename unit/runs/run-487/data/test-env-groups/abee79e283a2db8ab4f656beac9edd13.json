@@ -1,0 +1,1 @@
+{"id":"abee79e283a2db8ab4f656beac9edd13","fullName":"EntitlementService Interface Contract#getUserTier 应返回 Promise<UserTier> 类型","name":"getUserTier 应返回 Promise<UserTier> 类型","status":"passed","testResultsByEnv":{"default":"edab55f0f0fd3261c3fe8dd9dec52e57"}}
