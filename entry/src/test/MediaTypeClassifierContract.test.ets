@@ -12,7 +12,7 @@ import {
   stripSeasonSuffixFromDirectoryName,
   isSeasonDirectorySegment
 } from '../main/ets/lib/MediaTypeClassifier';
-import { parseFileName } from '../main/ets/lib/ScrapeClient';
+import { parseFileName, resolveMovieSearchTerms } from '../main/ets/lib/ScrapeClient';
 import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerHelpers';
 
 interface WeakSemanticRegressionSample {
@@ -36,6 +36,13 @@ const weakSemanticRegressionSamples: WeakSemanticRegressionSample[] = [
     fileName: 'Dune.2021.2160p.mkv',
     filePath: '/电影/科幻/Dune.2021.2160p.mkv',
     expectedMediaType: 'movie'
+  },
+  {
+    name: '弱语义电影样本：父目录片名可兜底为 movie',
+    fileName: '4K.mp4',
+    filePath: '/Videos/Movies/穿普拉达的女王2/4K.mp4',
+    expectedMediaType: 'movie',
+    expectedReason: 'weak-filename-parent-directory-fallback'
   },
   {
     name: '弱语义 unknown 样本：无足够路径线索时保持保守',
@@ -176,6 +183,44 @@ export default function mediaTypeClassifierContractTest() {
       expect(explicitFalseClassification.reason).assertEqual('insufficient-evidence');
       expect(omittedClassification.mediaType).assertEqual('unknown');
       expect(omittedClassification.reason).assertEqual('insufficient-evidence');
+    });
+
+    it('电影路径下弱语义文件名用父目录片名兜底为 movie', 0, () => {
+      const classification = classifyVideoScrapeTarget(
+        '4K.mp4',
+        '/Videos/Movies/穿普拉达的女王2/4K.mp4'
+      );
+
+      expect(classification.mediaType).assertEqual('movie');
+      expect(classification.reason).assertEqual('weak-filename-parent-directory-fallback');
+      expect(classification.fallbackTitle).assertEqual('穿普拉达的女王2');
+    });
+
+    it('父目录为通用电影关键词段时弱语义文件名保持 unknown', 0, () => {
+      const classification = classifyVideoScrapeTarget('4K.mp4', '/电影合集/4K.mp4');
+
+      expect(classification.mediaType).assertEqual('unknown');
+      expect(classification.reason).assertEqual('insufficient-evidence');
+      expect(classification.fallbackTitle).assertUndefined();
+    });
+
+    it('父目录为季目录段时弱语义文件名不兜底为 movie', 0, () => {
+      const classification = classifyVideoScrapeTarget(
+        '4K.mp4',
+        '/电影/长剧第二季/4K.mp4'
+      );
+
+      expect(classification.mediaType).assertEqual('unknown');
+      expect(classification.reason).assertEqual('insufficient-evidence');
+      expect(classification.fallbackTitle).assertUndefined();
+    });
+
+    it('兜底标题末尾形如 .2021 的年份不被当扩展名丢失', 0, () => {
+      const parsed = parseFileName('4K.mp4');
+      const terms = resolveMovieSearchTerms(parsed, 'Dune.2021');
+
+      expect(terms.title).assertEqual('Dune');
+      expect(terms.year).assertEqual(2021);
     });
 
     // ─── #254 中文季号后缀目录名 ───

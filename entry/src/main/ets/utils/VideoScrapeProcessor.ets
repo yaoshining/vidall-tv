@@ -223,7 +223,10 @@ export async function processVideoScrape(
 
   if (classification.mediaType === 'movie') {
     try {
-      const movie = await scrapeClient.autoScrapeMovie(fileName);
+      if (classification.fallbackTitle !== undefined) {
+        console.info(`${logPrefix} 文件名弱语义，使用父目录片名兜底搜索 fallbackTitle="${classification.fallbackTitle}"`);
+      }
+      const movie = await scrapeClient.autoScrapeMovie(fileName, classification.fallbackTitle);
       if (!movie) {
         console.warn(`${logPrefix} 电影刮削无结果 ${fileName}`);
         return { success: false, category: FAILURE_CATEGORY_NO_MATCH };

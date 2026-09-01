@@ -227,6 +227,33 @@ export function buildSearchTitles(title: string): string[] {
 }
 
 /**
+ * 解析电影搜索词：默认取文件名解析结果；传入兜底标题（如父目录片名，可含年份）时以其替代，
+ * 并复用 parseFileName 从兜底标题中提取干净标题与年份（如"穿普拉达的女王2 (2011)"）。
+ */
+interface MovieSearchTerms {
+  title: string;
+  year?: number;
+}
+
+export function resolveMovieSearchTerms(parsed: ParsedFileName, overrideTitle?: string): MovieSearchTerms {
+  let title = parsed.title;
+  let year = parsed.year;
+  if (overrideTitle !== undefined && overrideTitle.trim().length > 0) {
+    const normalizedOverrideTitle = overrideTitle.trim();
+    const overridden = parseFileName(normalizedOverrideTitle);
+    title = overridden.title.length > 0 ? overridden.title : normalizedOverrideTitle;
+    // parseFileName 会把无扩展名标题末尾的 ".2021" 当扩展名截断导致年份丢失，
+    // 此时改用 extractSearchYear 从原始兜底标题直接提取年份（如 "Dune.2021" → 2021）。
+    const overrideYear = overridden.year ?? extractSearchYear(normalizedOverrideTitle);
+    if (overrideYear !== undefined) {
+      year = overrideYear;
+    }
+  }
+  const terms: MovieSearchTerms = { title, year };
+  return terms;
+}
+
+/**
  * 从刮削结果 rawJson 中提取 IMDb ID（格式 tt + 数字）。
  * 电影详情 rawJson 直接含 `imdb_id`；剧集详情含 `external_ids.imdb_id`。
  * 解析失败或缺失返回空字符串。
@@ -833,16 +860,17 @@ export class ScrapeClient {
   }
 
   /** 搜索电影候选，按文件名解析出的标题优先级合并去重。 */
-  async searchMovieCandidates(fileName: string): Promise<MovieScrapeResult[]> {
+  async searchMovieCandidates(fileName: string, overrideTitle?: string): Promise<MovieScrapeResult[]> {
     const parsed = parseFileName(fileName);
+    const searchTerms = resolveMovieSearchTerms(parsed, overrideTitle);
     const merged: MovieScrapeResult[] = [];
     const seen = new Set<string>();
     await this.acquire();
     try {
       for (const provider of this.getActiveProviders()) {
-        for (const title of buildSearchTitles(parsed.title)) {
+        for (const title of buildSearchTitles(searchTerms.title)) {
           try {
-            const results = await provider.searchMovie(title, parsed.year, 'zh-CN');
+            const results = await provider.searchMovie(title, searchTerms.year, 'zh-CN');
             for (const result of results) {
               const key = `${result.provider}:${result.providerId}`;
               if (!seen.has(key)) {
@@ -929,16 +957,20 @@ export class ScrapeClient {
     }
   }
 
-  /** 搜索电影，返回第一个命中的详情 */
-  async autoScrapeMovie(fileName: string): Promise<MovieScrapeResult | null> {
+  /** 搜索电影，返回第一个命中的详情
+   * @param overrideTitle 可选，兜底搜索标题。弱语义文件名（如"4K.mp4"）场景下由分类器提供的父目录片名，
+   * 传入后以该标题（可含年份）替代文件名解析结果发起 TMDB 搜索。
+   */
+  async autoScrapeMovie(fileName: string, overrideTitle?: string): Promise<MovieScrapeResult | null> {
     const parsed = parseFileName(fileName);
+    const searchTerms = resolveMovieSearchTerms(parsed, overrideTitle);
     await this.acquire();
     try {
       for (const provider of this.getActiveProviders()) {
         try {
-          const searchTitles = buildSearchTitles(parsed.title);
+          const searchTitles = buildSearchTitles(searchTerms.title);
           for (const candidate of searchTitles) {
-            const results = await provider.searchMovie(candidate, parsed.year, 'zh-CN');
+            const results = await provider.searchMovie(candidate, searchTerms.year, 'zh-CN');
             if (results.length > 0) {
               console.info(`[ScrapeClient] autoScrapeMovie 命中候选标题="${candidate}" providerId=${results[0].providerId}`);
               return await provider.fetchMovieDetail(results[0].providerId, 'zh-CN');
