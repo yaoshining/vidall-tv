@@ -419,7 +419,8 @@ const GENERIC_DIRECTORY_TITLE_TOKENS: Set<string> = new Set([
 
 /**
  * 弱语义文件名场景下，从父目录名解析可用的兜底片名标题。
- * 父目录若本身提供了路径语义信号（如"电影合集"）、自身弱语义、或属于影片附属通用目录，则不可用。
+ * 父目录若本身提供了路径语义信号（如"电影合集"）、自身弱语义、属于影片附属通用目录、
+ * 或本身是季目录段（如"长剧第二季"，实为剧集集数文件），则不可用。
  */
 function resolveParentDirectoryFallbackTitle(
   input: MediaTypeClassificationInput,
@@ -436,6 +437,10 @@ function resolveParentDirectoryFallbackTitle(
     return undefined;
   }
   if (isWeakSemanticTitleText(trimmed)) {
+    return undefined;
+  }
+  if (isSeasonDirectorySegment(trimmed)) {
+    // "长剧第二季"这类季目录段下放的多是剧集集数文件，父目录名不能当电影片名搜索。
     return undefined;
   }
   if (GENERIC_DIRECTORY_TITLE_TOKENS.has(normalizeSemanticToken(trimmed))) {

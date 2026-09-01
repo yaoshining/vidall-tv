@@ -239,10 +239,14 @@ export function resolveMovieSearchTerms(parsed: ParsedFileName, overrideTitle?: 
   let title = parsed.title;
   let year = parsed.year;
   if (overrideTitle !== undefined && overrideTitle.trim().length > 0) {
-    const overridden = parseFileName(overrideTitle);
-    title = overridden.title.length > 0 ? overridden.title : overrideTitle.trim();
-    if (overridden.year !== undefined) {
-      year = overridden.year;
+    const normalizedOverrideTitle = overrideTitle.trim();
+    const overridden = parseFileName(normalizedOverrideTitle);
+    title = overridden.title.length > 0 ? overridden.title : normalizedOverrideTitle;
+    // parseFileName 会把无扩展名标题末尾的 ".2021" 当扩展名截断导致年份丢失，
+    // 此时改用 extractSearchYear 从原始兜底标题直接提取年份（如 "Dune.2021" → 2021）。
+    const overrideYear = overridden.year ?? extractSearchYear(normalizedOverrideTitle);
+    if (overrideYear !== undefined) {
+      year = overrideYear;
     }
   }
   const terms: MovieSearchTerms = { title, year };

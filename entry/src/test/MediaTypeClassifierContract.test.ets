@@ -12,7 +12,7 @@ import {
   stripSeasonSuffixFromDirectoryName,
   isSeasonDirectorySegment
 } from '../main/ets/lib/MediaTypeClassifier';
-import { parseFileName } from '../main/ets/lib/ScrapeClient';
+import { parseFileName, resolveMovieSearchTerms } from '../main/ets/lib/ScrapeClient';
 import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerHelpers';
 
 interface WeakSemanticRegressionSample {
@@ -185,7 +185,7 @@ export default function mediaTypeClassifierContractTest() {
       expect(omittedClassification.reason).assertEqual('insufficient-evidence');
     });
 
-    it('should fall back to parent directory title for weak filename under movie path', 0, () => {
+    it('电影路径下弱语义文件名用父目录片名兜底为 movie', 0, () => {
       const classification = classifyVideoScrapeTarget(
         '4K.mp4',
         '/Videos/Movies/穿普拉达的女王2/4K.mp4'
@@ -196,12 +196,31 @@ export default function mediaTypeClassifierContractTest() {
       expect(classification.fallbackTitle).assertEqual('穿普拉达的女王2');
     });
 
-    it('should keep weak filename unknown when parent directory is a generic movie keyword segment', 0, () => {
+    it('父目录为通用电影关键词段时弱语义文件名保持 unknown', 0, () => {
       const classification = classifyVideoScrapeTarget('4K.mp4', '/电影合集/4K.mp4');
 
       expect(classification.mediaType).assertEqual('unknown');
       expect(classification.reason).assertEqual('insufficient-evidence');
       expect(classification.fallbackTitle).assertUndefined();
+    });
+
+    it('父目录为季目录段时弱语义文件名不兜底为 movie', 0, () => {
+      const classification = classifyVideoScrapeTarget(
+        '4K.mp4',
+        '/电影/长剧第二季/4K.mp4'
+      );
+
+      expect(classification.mediaType).assertEqual('unknown');
+      expect(classification.reason).assertEqual('insufficient-evidence');
+      expect(classification.fallbackTitle).assertUndefined();
+    });
+
+    it('兜底标题末尾形如 .2021 的年份不被当扩展名丢失', 0, () => {
+      const parsed = parseFileName('4K.mp4');
+      const terms = resolveMovieSearchTerms(parsed, 'Dune.2021');
+
+      expect(terms.title).assertEqual('Dune');
+      expect(terms.year).assertEqual(2021);
     });
 
     // ─── #254 中文季号后缀目录名 ───
