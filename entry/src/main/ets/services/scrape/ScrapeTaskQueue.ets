@@ -191,6 +191,11 @@ export class ScrapeTaskQueue {
     if (task === undefined || (task.status !== 'failed' && task.status !== 'partial-failure')) {
       return null;
     }
+    // 扫描阶段失败的任务不能走普通重试：扫描由 UI 层 VideoScannerUtil.scan 驱动，
+    // 队列重试只会以 preparing 重新入队并跳过扫描；重新扫描需从全局刮削入口发起
+    if (task.phase === 'scanning') {
+      return null;
+    }
     const failedVideoIds = task.result?.failedVideoIds;
     if (failedVideoIds === undefined) {
       return null;

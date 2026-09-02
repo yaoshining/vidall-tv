@@ -132,7 +132,10 @@ export struct ScrapeTaskIndicator {
           this.Action('取消', () => { ScrapeTaskQueue.getInstance().cancel(task.id); })
         } else if (task.status === 'failed' || task.status === 'partial-failure') {
           Row({ space: 8 }) {
-            this.Action('重试', () => { ScrapeTaskQueue.getInstance().retry(task.id); })
+            // 扫描阶段失败的任务无法由队列重试恢复（扫描由 UI 层驱动），只提供清除入口
+            if (task.phase !== 'scanning') {
+              this.Action('重试', () => { ScrapeTaskQueue.getInstance().retry(task.id); })
+            }
             this.Action('清除', () => { ScrapeTaskQueue.getInstance().clear(task.id); })
           }
         } else if (task.status === 'completed' || task.status === 'cancelled') {

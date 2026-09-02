@@ -636,6 +636,19 @@ export default function scopedScrapeTest() {
       await flushMicrotasks();
     });
 
+    it('扫描阶段失败的任务拒绝普通重试', 0, () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanEnqueueOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const scanId = queue.enqueue(createEpisodeRequest(601), scanEnqueueOptions);
+
+      queue.markTaskFailed(scanId);
+      expect(findTask(ScrapeTaskStore.getState(), scanId)?.status).assertEqual('failed');
+      const retryId = queue.retry(scanId);
+      expect(retryId === null).assertTrue();
+      expect(executor.calls.length).assertEqual(0);
+    });
+
     it('keeps all requested video ids retryable when the executor rejects', 0, async () => {
       const executor = new ControlledScopedScrapeExecutor();
       const queue = new ScrapeTaskQueue(executor, 1);

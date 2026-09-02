@@ -1334,7 +1334,7 @@ export struct MediaLibraryTab {
 
   private hasScanContext(): boolean {
     const task = this.taskStore.getActiveForScope(this.getGlobalScope());
-    return task !== undefined && task.scanContext !== undefined;
+    return task !== undefined && task.phase === 'scanning' && task.scanContext !== undefined;
   }
 
   private scanContextText(): string {
