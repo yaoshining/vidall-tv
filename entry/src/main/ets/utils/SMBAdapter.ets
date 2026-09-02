@@ -116,6 +116,9 @@ export class SMBAdapter implements ISourceAdapter {
       if (file.isDirectory) {
         await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks, onCurrentPath);
       } else if (isVideoFile(file.name)) {
+        if (onCurrentPath !== undefined) {
+          onCurrentPath(file.path);
+        }
         const info: VideoFileInfo = {
           sourceId: this.fileSource.id ?? 0,
           sourceName: this.fileSource.name,
@@ -235,10 +238,16 @@ export class SMBAdapter implements ISourceAdapter {
         const capturedInfo = info;
         const capturedScrapeClient = this.scrapeClient;
         const capturedMode = mode;
+        const capturedFilePath = file.path;
         const smbUrl = this.buildSmbUrl(file.path);
         const maskedUrl = this.maskUrl(smbUrl);
+        const onProbeStart = (): void => {
+          if (onCurrentPath !== undefined) {
+            onCurrentPath(capturedFilePath);
+          }
+        };
 
-        const task: Promise<void> = FfprobeUtil.probe(smbUrl).then(async (videoInfo) => {
+        const task: Promise<void> = FfprobeUtil.probe(smbUrl, undefined, 20000, onProbeStart).then(async (videoInfo) => {
           if (videoInfo.success) {
             const mainVideo = videoInfo.videoTracks.length > 0 ? videoInfo.videoTracks[0] : undefined;
             console.info(

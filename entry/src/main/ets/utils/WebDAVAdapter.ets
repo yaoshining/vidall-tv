@@ -123,6 +123,9 @@ export class WebDAVAdapter implements ISourceAdapter {
       } else {
         const fileName = resource.displayName || this.extractFileName(decodedHref);
         if (isVideoFile(fileName, resource.contentType)) {
+          if (onCurrentPath !== undefined) {
+            onCurrentPath(relativePath);
+          }
           const info: VideoFileInfo = {
             sourceId: this.fileSource.id ?? 0,
             sourceName: this.fileSource.name,
@@ -253,8 +256,14 @@ export class WebDAVAdapter implements ISourceAdapter {
           const capturedInfo = info;
           const capturedScrapeClient = this.scrapeClient;
           const capturedMode = mode;
+          const capturedRelativePath = relativePath;
+          const onProbeStart = (): void => {
+            if (onCurrentPath !== undefined) {
+              onCurrentPath(capturedRelativePath);
+            }
+          };
 
-          const processingTask: Promise<void> = FfprobeUtil.probe(fullUrl, httpHeader).then(async (videoInfo) => {
+          const processingTask: Promise<void> = FfprobeUtil.probe(fullUrl, httpHeader, 20000, onProbeStart).then(async (videoInfo) => {
             if (videoInfo.success) {
               const mainVideo = videoInfo.videoTracks.length > 0 ? videoInfo.videoTracks[0] : undefined;
               console.info(
