@@ -5,11 +5,11 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import buffer from '@ohos.buffer';
 import auth, { AuthUser, HwIdCredentialInfo, SignInParam } from '@hw-agconnect/auth';
 
-const AGC_CONFIG_FILE: string = 'agc_config.json';
+const AGC_CONFIG_FILE: string = 'agconnect-services.json';
 const CLOUD_DB_SCHEMA_FILE: string = 'schema.json';
 const LOG_DOMAIN: number = 0x0000;
 const TAG: string = 'AgcCloudAuth';
-const ERROR_NOT_INITIALIZED: number = 10001;
+export const ERROR_AGC_NOT_INITIALIZED: number = 10001;
 const ERROR_SESSION_MISSING: number = 10002;
 const ERROR_AUTHENTICATION_FAILED: number = 10003;
 
@@ -40,7 +40,7 @@ export class AgcCloudAuthService {
 
   async authenticateHuaweiAccount(): Promise<void> {
     if (!this.initialized) {
-      throw new AgcAuthenticationError(ERROR_NOT_INITIALIZED, 'AGC Authentication 尚未初始化');
+      throw new AgcAuthenticationError(ERROR_AGC_NOT_INITIALIZED, 'AGC Authentication 尚未初始化');
     }
 
     const credentialInfo: HwIdCredentialInfo = { kind: 'hwid' };
