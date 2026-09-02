@@ -14,6 +14,7 @@ import {
   ScrapeProgress,
   ScrapeResult,
   ScrapeResumeState,
+  ScrapeScanContext,
   ScrapeScope,
   ScrapeTaskPhase,
   ScrapeTaskSnapshot,
@@ -85,12 +86,15 @@ export class ScrapeTaskQueue {
     return true;
   }
 
-  updateScanProgress(taskId: string, progress: ScrapeProgress): void {
+  updateScanProgress(taskId: string, progress: ScrapeProgress, context?: ScrapeScanContext): void {
     const task = this.findTask(taskId);
     if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
       return;
     }
     task.progress = progress;
+    if (context !== undefined) {
+      task.scanContext = context;
+    }
     task.updatedAt = Date.now();
     this.publish();
   }

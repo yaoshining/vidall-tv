@@ -39,6 +39,7 @@ import {
   ScrapeProgress,
   ScrapeResult,
   ScrapeResumeState,
+  ScrapeScanContext,
   ScrapeVideoOutcome,
   ScrapeTaskSnapshot,
   ScrapeTaskStatus,
@@ -1019,6 +1020,73 @@ export default function scopedScrapeTest() {
       expect(phases.length >= 2).assertTrue();
       expect(phases[0]).assertEqual('preparing');
       expect(phases[phases.length - 1]).assertEqual('scraping');
+    });
+
+    it('updateScanProgress with context updates scanContext on snapshot', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(900), scanningOptions);
+
+      const scanProgress: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      const ctx: ScrapeScanContext = {
+        sourceTypeLabel: 'WebDAV',
+        sourceName: 'MyNAS',
+        directoryPath: '/Videos',
+        currentPath: '/Videos/Movies'
+      };
+      queue.updateScanProgress(taskId, scanProgress, ctx);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.scanContext !== undefined).assertTrue();
+      if (task?.scanContext !== undefined) {
+        expect(task.scanContext.sourceTypeLabel).assertEqual('WebDAV');
+        expect(task.scanContext.sourceName).assertEqual('MyNAS');
+        expect(task.scanContext.currentPath).assertEqual('/Videos/Movies');
+      }
+    });
+
+    it('updateScanProgress without context preserves previous scanContext', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(901), scanningOptions);
+
+      const scanProgress1: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      const ctx: ScrapeScanContext = {
+        sourceTypeLabel: 'WebDAV',
+        sourceName: 'MyNAS',
+        directoryPath: '/Videos',
+        currentPath: '/Videos/Movies'
+      };
+      queue.updateScanProgress(taskId, scanProgress1, ctx);
+
+      const scanProgress2: ScrapeProgress = { completed: 2, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      queue.updateScanProgress(taskId, scanProgress2);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.scanContext !== undefined).assertTrue();
+      if (task?.scanContext !== undefined) {
+        expect(task.scanContext.sourceTypeLabel).assertEqual('WebDAV');
+      }
+    });
+
+    it('updateScanProgress with context does not update non-scanning task', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const taskId = queue.enqueue(createEpisodeRequest(902));
+
+      const scanProgress: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      const ctx: ScrapeScanContext = {
+        sourceTypeLabel: 'SMB',
+        sourceName: 'WinShare',
+        directoryPath: '/Shares',
+        currentPath: '/Shares/TV'
+      };
+      queue.updateScanProgress(taskId, scanProgress, ctx);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.scanContext === undefined).assertTrue();
+
+      executor.calls[0].deferred.resolve(createCompleted());
+      await flushMicrotasks();
     });
   });
 }

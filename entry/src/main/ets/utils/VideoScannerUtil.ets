@@ -5,7 +5,7 @@ import { ScrapeClient } from '../lib/ScrapeClient';
 import { MetricsService } from '../services/metrics/MetricsService';
 import { UmamiAnalyticsService } from '../services/analytics/UmamiAnalyticsService';
 import { UmamiEventData } from '../services/analytics/UmamiReporter';
-import { ISourceAdapter, VideoFileInfo, SourceScanStat, ScanResult, ScanOptions, ScanProgressCallback, DEFAULT_SCAN_OPTIONS } from './VideoScannerTypes';
+import { ISourceAdapter, VideoFileInfo, SourceScanStat, ScanResult, ScanOptions, ScanProgressCallback, ScanContextInfo, DEFAULT_SCAN_OPTIONS } from './VideoScannerTypes';
 import { WebDAVAdapter } from './WebDAVAdapter';
 import { SMBAdapter } from './SMBAdapter';
 
@@ -136,9 +136,35 @@ export class VideoScannerUtil {
         stat.directoriesScanned++;
         console.info(`[VideoScanner] 准备扫描目录(${stat.directoriesScanned}/${entry.directories.length}): ${dir.directoryPath}`);
 
+        const dirContext: ScanContextInfo = {
+          sourceType: fileSource.type,
+          sourceName: fileSource.name,
+          directoryPath: dir.directoryPath,
+          currentPath: dir.directoryPath
+        };
+        if (onScanProgress !== undefined) {
+          onScanProgress(completedDirectories, totalDirectories, dirContext);
+        }
+
+        const dirScanOptions: ScanOptions = {
+          maxDepth: scanOptions.maxDepth,
+          mode: scanOptions.mode,
+          onCurrentPath: onScanProgress !== undefined
+            ? (currentPath: string): void => {
+                const newContext: ScanContextInfo = {
+                  sourceType: fileSource.type,
+                  sourceName: fileSource.name,
+                  directoryPath: dir.directoryPath,
+                  currentPath: currentPath
+                };
+                onScanProgress(completedDirectories, totalDirectories, newContext);
+              }
+            : undefined
+        };
+
         let found: VideoFileInfo[] = [];
         try {
-          found = await entry.adapter.scan(dir.directoryPath, scanOptions);
+          found = await entry.adapter.scan(dir.directoryPath, dirScanOptions);
           console.info(`[VideoScanner] 目录 "${dir.directoryPath}" 扫描完毕，找到 ${found.length} 个视频`);
           if (dir.id !== undefined) {
             db.updateDirStatus(dir.id, 'active').catch(() => {});

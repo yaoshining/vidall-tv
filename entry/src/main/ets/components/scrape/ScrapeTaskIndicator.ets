@@ -1,8 +1,9 @@
 import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
-import { ScrapeCandidate, ScrapeTaskPhase, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
+import { ScrapeCandidate, ScrapeTaskPhase, ScrapeTaskSnapshot, ScrapeScanContext } from '../../services/scrape/ScopedScrapeTypes';
 import { ScrapeManagementPage } from '../../pages/scrape/ScrapeManagementPage';
+import { truncateMiddlePath } from '../../utils/PathDisplayUtil';
 
 function statusLabel(status: string): string {
   if (status === 'waiting') { return '等待中'; }
@@ -47,6 +48,15 @@ export struct ScrapeTaskIndicator {
       return phaseLabel(task.phase);
     }
     return statusLabel(task.status);
+  }
+  private scanContextLine1(task: ScrapeTaskSnapshot): string {
+    if (task.scanContext === undefined) { return ''; }
+    const ctx: ScrapeScanContext = task.scanContext;
+    return `${ctx.sourceTypeLabel} · ${ctx.sourceName} · ${ctx.directoryPath}`;
+  }
+  private scanContextLine2(task: ScrapeTaskSnapshot): string {
+    if (task.scanContext === undefined) { return ''; }
+    return `正在扫描: ${truncateMiddlePath(task.scanContext.currentPath, 40)}`;
   }
   private progressText(task: ScrapeTaskSnapshot): string {
     return `${task.progress.completed}/${task.progress.total}`;
@@ -107,6 +117,14 @@ export struct ScrapeTaskIndicator {
         Text(`${modeLabel(task.request.mode)} · ${this.taskStatusLabel(task)} · ${this.progressText(task)}`)
           .fontSize(13).fontColor('#AAB2BF')
       }.alignItems(HorizontalAlign.Start).width('100%')
+      if (task.phase === 'scanning' && task.scanContext !== undefined) {
+        Text(this.scanContextLine1(task))
+          .fontSize(12).fontColor('#8A9BB5').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(this.scanContextLine2(task))
+          .fontSize(12).fontColor('#8A9BB5').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+      }
       this.ProgressRing(task)
       Row() {
         Blank()

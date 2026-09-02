@@ -5,7 +5,8 @@ import {
   extractEpisodeNumberFromWeakSemanticFileName,
   hasSeasonSiblingDirectory
 } from '../main/ets/utils/VideoScannerHelpers';
-import { VideoScrapeContext, ScanProgressCallback, ScanOptions } from '../main/ets/utils/VideoScannerTypes';
+import { VideoScrapeContext, ScanProgressCallback, ScanContextInfo, ScanOptions } from '../main/ets/utils/VideoScannerTypes';
+import { truncateMiddlePath } from '../main/ets/utils/PathDisplayUtil';
 
 export default function videoScannerUtilTest() {
   describe('VideoScannerUtil mixed directory scan helpers', () => {
@@ -87,7 +88,7 @@ export default function videoScannerUtilTest() {
     });
 
     it('ScanOptions accepts optional onScanProgress', 0, () => {
-      const callback: ScanProgressCallback = (_completed: number, _total: number): void => {};
+      const callback: ScanProgressCallback = (_completed: number, _total: number, _context?: ScanContextInfo): void => {};
       const options: ScanOptions = {
         maxDepth: 5,
         mode: 'incremental',
@@ -99,6 +100,34 @@ export default function videoScannerUtilTest() {
         mode: 'incremental'
       };
       expect(plainOptions.onScanProgress === undefined).assertTrue();
+    });
+
+    it('truncateMiddlePath returns short path unchanged', 0, () => {
+      expect(truncateMiddlePath('/short/path', 50)).assertEqual('/short/path');
+    });
+
+    it('truncateMiddlePath truncates long path with head two segments and tail', 0, () => {
+      const longPath = '/根文件夹/爷文件夹/子目录A/子目录B/abc.mp4';
+      const result = truncateMiddlePath(longPath, 25);
+      expect(result.startsWith('/根文件夹/爷文件夹/…/')).assertTrue();
+      expect(result.endsWith('abc.mp4')).assertTrue();
+    });
+
+    it('truncateMiddlePath shrinks head to one segment when still too long', 0, () => {
+      const longPath = '/很长的文件夹名称AAAA/中间目录/子目录B/abc.mp4';
+      const result = truncateMiddlePath(longPath, 24);
+      expect(result.startsWith('/很长的文件夹名称AAAA/…/')).assertTrue();
+      expect(result.endsWith('abc.mp4')).assertTrue();
+    });
+
+    it('truncateMiddlePath truncates tail when extremely long', 0, () => {
+      const longPath = '/a/b/c/d/e/非常非常长的文件名称超过限制.mp4';
+      const result = truncateMiddlePath(longPath, 15);
+      expect(result.startsWith('…')).assertTrue();
+    });
+
+    it('truncateMiddlePath returns empty string for empty input', 0, () => {
+      expect(truncateMiddlePath('', 10)).assertEqual('');
     });
   });
 }

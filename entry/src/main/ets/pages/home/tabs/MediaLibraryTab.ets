@@ -1,10 +1,10 @@
 import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
-import { ScanMode } from "../../../utils/VideoScannerTypes"
+import { ScanMode, ScanContextInfo } from "../../../utils/VideoScannerTypes"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
 import { ScrapeTaskQueue, ScrapeEnqueueOptions } from "../../../services/scrape/ScrapeTaskQueue"
 import { common } from "@kit.AbilityKit"
-import { ScopedScrapeRequest, ScrapeScope, ScrapeProgress } from "../../../services/scrape/ScopedScrapeTypes"
+import { ScopedScrapeRequest, ScrapeScope, ScrapeProgress, ScrapeScanContext } from "../../../services/scrape/ScopedScrapeTypes"
 import { ScrapeTaskStore } from "../../../services/scrape/ScrapeTaskStore"
 import { MediaDataVersionStore } from "../../../services/scrape/MediaDataVersionStore"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
@@ -20,7 +20,7 @@ import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
-import { FileSourceType } from "../../../db/models/FileSourceEntity"
+import { FileSourceType, FileSourceTypeLabels } from "../../../db/models/FileSourceEntity"
 import { ContinueWatchCard } from "../../../components/media/ContinueWatchCard"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
@@ -54,6 +54,7 @@ import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
 import { resolveCardBehavior, isDirectPlayContextValid, ServerCardKind } from "../../../services/sourceAdapter/ServerCardAction"
 import { resolveSeriesCardDestination } from "../../../services/sourceAdapter/SeriesCardRoute"
+import { truncateMiddlePath } from "../../../utils/PathDisplayUtil"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -1229,7 +1230,7 @@ export struct MediaLibraryTab {
       const queue = ScrapeTaskQueue.getInstance();
       await VideoScannerUtil.scan(context, undefined, {
         mode: mode,
-        onScanProgress: (completed: number, total: number): void => {
+        onScanProgress: (completed: number, total: number, scanContext?: ScanContextInfo): void => {
           const scanProgress: ScrapeProgress = {
             completed,
             total,
@@ -1237,7 +1238,18 @@ export struct MediaLibraryTab {
             failed: 0,
             cancelled: 0
           };
-          queue.updateScanProgress(taskId, scanProgress);
+          let mappedContext: ScrapeScanContext | undefined = undefined;
+          if (scanContext !== undefined) {
+            const label: string = this.sourceTypeLabel(scanContext.sourceType);
+            const ctx: ScrapeScanContext = {
+              sourceTypeLabel: label,
+              sourceName: scanContext.sourceName,
+              directoryPath: scanContext.directoryPath,
+              currentPath: scanContext.currentPath
+            };
+            mappedContext = ctx;
+          }
+          queue.updateScanProgress(taskId, scanProgress, mappedContext);
         }
       });
       queue.markTaskReady(taskId);
@@ -1284,6 +1296,9 @@ export struct MediaLibraryTab {
       return '';
     }
     if (task.status === 'waiting' && task.phase === 'scanning') {
+      if (task.scanContext !== undefined) {
+        return `全部媒体库 · 扫描中 · ${task.scanContext.sourceTypeLabel}·${task.scanContext.sourceName}`;
+      }
       return '全部媒体库 · 扫描中';
     }
     if (task.status === 'waiting' && task.phase === 'preparing') {
@@ -1311,6 +1326,24 @@ export struct MediaLibraryTab {
   private globalTotalCount(): number {
     const task = this.taskStore.getActiveForScope(this.getGlobalScope());
     return task === undefined ? 0 : task.progress.total;
+  }
+
+  private sourceTypeLabel(type: FileSourceType): string {
+    return FileSourceTypeLabels.getLabel(type);
+  }
+
+  private hasScanContext(): boolean {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    return task !== undefined && task.scanContext !== undefined;
+  }
+
+  private scanContextText(): string {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    if (task === undefined || task.scanContext === undefined) {
+      return '';
+    }
+    const ctx = task.scanContext;
+    return `${ctx.sourceTypeLabel} · ${ctx.sourceName} · ${ctx.directoryPath} · 正在扫描: ${truncateMiddlePath(ctx.currentPath, 48)}`;
   }
 
   /**
@@ -1645,6 +1678,12 @@ export struct MediaLibraryTab {
           .width('100%').height(4)
           .color('#4A9FFF')
           .backgroundColor('#333333')
+      }
+
+      if (this.hasScanContext()) {
+        Text(this.scanContextText())
+          .fontSize(12).fontColor('#8A9BB5').maxLines(1)
+          .textAlign(TextAlign.Center).width('100%')
       }
 
       Text('刮削完成后将自动恢复下方操作入口')

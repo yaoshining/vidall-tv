@@ -51,7 +51,7 @@ export class WebDAVAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.mode, results, processingTasks);
+    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath);
     // 等待所有 ffprobe + 视频入库任务完成，确保 scan() 返回时 DB 已有数据
     if (processingTasks.length > 0) {
       console.info(`[VideoScanner][WebDAV] 等待 ${processingTasks.length} 个视频处理任务完成...`);
@@ -68,9 +68,13 @@ export class WebDAVAdapter implements ISourceAdapter {
     maxDepth: number,
     mode: ScanMode,
     results: VideoFileInfo[],
-    processingTasks: Promise<void>[]
+    processingTasks: Promise<void>[],
+    onCurrentPath?: (currentPath: string) => void
   ): Promise<void> {
     console.info(`[VideoScanner][WebDAV] 进入目录: ${currentPath}（相对配置目录深度 ${depth}/${maxDepth}）`);
+    if (onCurrentPath !== undefined) {
+      onCurrentPath(currentPath);
+    }
 
     let resources: WebDAVResource[] = [];
     try {
@@ -115,7 +119,7 @@ export class WebDAVAdapter implements ISourceAdapter {
           console.info(`[VideoScanner][MAX_DEPTH] 已达最大深度 ${maxDepth}，跳过子目录: ${relativePath}`);
           continue;
         }
-        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, mode, results, processingTasks);
+        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, mode, results, processingTasks, onCurrentPath);
       } else {
         const fileName = resource.displayName || this.extractFileName(decodedHref);
         if (isVideoFile(fileName, resource.contentType)) {

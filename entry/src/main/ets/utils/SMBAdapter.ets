@@ -70,7 +70,7 @@ export class SMBAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.mode, results, processingTasks);
+    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath);
     await Promise.allSettled(processingTasks);
     return results;
   }
@@ -82,10 +82,15 @@ export class SMBAdapter implements ISourceAdapter {
     maxDepth: number,
     mode: ScanMode,
     results: VideoFileInfo[],
-    processingTasks: Promise<void>[]
+    processingTasks: Promise<void>[],
+    onCurrentPath?: (currentPath: string) => void
   ): Promise<void> {
     if (currentDepth > maxDepth) {
       return;
+    }
+
+    if (onCurrentPath !== undefined) {
+      onCurrentPath(dirPath);
     }
 
     const listResult = await this.client.listDirectory(dirPath);
@@ -109,7 +114,7 @@ export class SMBAdapter implements ISourceAdapter {
 
     for (const file of listResult.files) {
       if (file.isDirectory) {
-        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks);
+        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks, onCurrentPath);
       } else if (isVideoFile(file.name)) {
         const info: VideoFileInfo = {
           sourceId: this.fileSource.id ?? 0,
