@@ -40,3 +40,15 @@
 
 - [x] 7.1 `ScopedScrape.test.ets`：scanning 任务挂起不被调度；`markTaskReady` 后开始执行；`updateScanProgress` 仅在 scanning 阶段生效；取消后 ready/progress 被忽略；onProgress phase 传播到快照；服务在目标写入前上报 preparing 与 scraping
 - [x] 7.2 `VideoScannerUtil.test.ets`：传入回调时收到 (completed, total) 且 total 等于目录总数；未传回调时扫描结果与既有行为一致
+
+## 8. 扫描上下文展示
+
+- [ ] 8.1 `VideoScannerTypes.ets`：新增 `ScanContextInfo { sourceType: FileSourceType; sourceName: string; directoryPath: string; currentPath: string }`；`ScanProgressCallback` 扩展第三参 `context?: ScanContextInfo`；`ScanOptions` 增加可选 `onCurrentPath?: (currentPath: string) => void`
+- [ ] 8.2 `WebDAVAdapter.ets` / `SMBAdapter.ets`：`scanDir` 每次进入目录（调用 `listDirectory` 前）上报当前路径（`onCurrentPath`），未提供回调时行为不变；`scan` 把回调透传给 `scanDir`
+- [ ] 8.3 `VideoScannerUtil.scan`：扫描每个目录前以该目录构造 `ScanContextInfo` 调用 `onScanProgress(completed, total, context)`；把 `options.onCurrentPath` 包装为"以最新枚举路径更新 context.currentPath 再回调"；目录完成后 `completed++` 时的回调不携带 context（UI 保留上次上下文）
+- [ ] 8.4 `ScopedScrapeTypes.ets`：新增 `ScrapeScanContext { sourceTypeLabel: string; sourceName: string; directoryPath: string; currentPath: string }`；`ScrapeTaskSnapshot` 新增 `@Trace scanContext: ScrapeScanContext | undefined`，构造默认 `undefined`
+- [ ] 8.5 `ScrapeTaskQueue.updateScanProgress` 增加第三参 `context?: ScrapeScanContext`：仅当 context 非 undefined 时赋值 `task.scanContext`，更新守卫不变
+- [ ] 8.6 新建 `entry/src/main/ets/utils/PathDisplayUtil.ets`：导出 `truncateMiddlePath(path: string, maxLen: number): string`——不超长原样返回；超长时保留前两段路径段 + `/…/` + 末段（如 `/根文件夹/爷文件夹/…/abc.mp4`）；仍超长则头缩为第一段；最终仍超长则对尾部做前缀 `…` 截断到 maxLen
+- [ ] 8.7 `MediaLibraryTab.runScan`：扫描回调把 `ScanContextInfo` 映射为 `ScrapeScanContext`（`FileSourceType` → 显示标签：webdav→'WebDAV'、smb→'SMB'、其余原样返回枚举值）传给 `updateScanProgress`；新增私有方法 `scanContextText()` 拼接 `标签 · 源名 · 配置目录 · 正在扫描: 截断路径`
+- [ ] 8.8 `MediaLibraryTab.GlobalScrapeStatus`：scanning 且存在 `scanContext` 时在进度条下增加一行上下文展示（`globalStatusText` 的 scanning 文案追加 ` · 源标签·源名`）；`ScrapeTaskIndicator.TaskItem`：scanning 且存在 `scanContext` 时在状态行下追加 `源标签 · 源名 · 配置目录` 与 `正在扫描: 截断路径` 两行
+- [ ] 8.9 测试：`VideoScannerUtil.test.ets` 增加 `truncateMiddlePath` 用例（不超长原样；超长保留前两段+…+末段且与示例一致；极端超长收缩与尾截断）；`ScopedScrape.test.ets` 增加 `updateScanProgress` 携带 context 时快照 `scanContext` 被更新、不携带时保留旧值的用例

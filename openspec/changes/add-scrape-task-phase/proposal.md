@@ -12,6 +12,7 @@
 - `VideoScannerUtil.scan` 新增可选 `onScanProgress(completed, total)` 回调，扫描前先收集全部文件源目录以获得总目录数
 - `MediaLibraryTab.runScan` 改为：先入队（phase=scanning）→ 扫描进度回传任务 → `markTaskReady`；扫描失败时 `markTaskFailed` 并 toast
 - `ScrapeTaskIndicator` 与媒体库全局状态文案按 phase 显示“扫描中 / 准备中 / 刮削中”
+- 扫描阶段展示上下文：适配器上报当前枚举目录，`ScanContextInfo`（源类型/源名/配置目录/当前路径）经扫描回调传入任务快照 `@Trace scanContext`；UI 展示“源类型 · 源名 · 配置目录 · 正在扫描: 路径”，超长路径按段中部截断（保留前两段 + `…` + 末段，如 `/根文件夹/爷文件夹/…/abc.mp4`）
 
 ## Impact
 
@@ -20,7 +21,7 @@
   - `entry/src/main/ets/services/scrape/ScopedScrapeTypes.ets`
   - `entry/src/main/ets/services/scrape/ScrapeTaskQueue.ets`
   - `entry/src/main/ets/services/scrape/ScopedScrapeService.ets`
-  - `entry/src/main/ets/utils/VideoScannerTypes.ets`、`entry/src/main/ets/utils/VideoScannerUtil.ets`
+  - `entry/src/main/ets/utils/VideoScannerTypes.ets`、`entry/src/main/ets/utils/VideoScannerUtil.ets`、`entry/src/main/ets/utils/WebDAVAdapter.ets`、`entry/src/main/ets/utils/SMBAdapter.ets`、`entry/src/main/ets/utils/PathDisplayUtil.ets`
   - `entry/src/main/ets/components/scrape/ScrapeTaskIndicator.ets`
   - `entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets`
   - `entry/src/test/ScopedScrape.test.ets`、`entry/src/test/VideoScannerUtil.test.ets`
