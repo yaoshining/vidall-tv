@@ -1,7 +1,7 @@
 import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
-import { ScrapeCandidate, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
+import { ScrapeCandidate, ScrapeTaskPhase, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
 import { ScrapeManagementPage } from '../../pages/scrape/ScrapeManagementPage';
 
 function statusLabel(status: string): string {
@@ -12,6 +12,12 @@ function statusLabel(status: string): string {
   if (status === 'partial-failure') { return '部分失败'; }
   if (status === 'failed') { return '失败'; }
   return '已取消';
+}
+
+function phaseLabel(phase: ScrapeTaskPhase): string {
+  if (phase === 'scanning') { return '扫描中'; }
+  if (phase === 'preparing') { return '准备中'; }
+  return '刮削中';
 }
 
 function modeLabel(mode: string): string {
@@ -35,6 +41,12 @@ export struct ScrapeTaskIndicator {
   private closeDropdown(): void {
     this.expanded = false;
     setTimeout(() => { focusControl.requestFocus(this.indicatorFocusId); }, 0);
+  }
+  private taskStatusLabel(task: ScrapeTaskSnapshot): string {
+    if (task.status === 'waiting' || task.status === 'running') {
+      return phaseLabel(task.phase);
+    }
+    return statusLabel(task.status);
   }
   private progressText(task: ScrapeTaskSnapshot): string {
     return `${task.progress.completed}/${task.progress.total}`;
@@ -92,7 +104,7 @@ export struct ScrapeTaskIndicator {
     Column({ space: 8 }) {
       Column({ space: 4 }) {
         Text(task.request.scope.displayName).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Medium)
-        Text(`${modeLabel(task.request.mode)} · ${statusLabel(task.status)} · ${this.progressText(task)}`)
+        Text(`${modeLabel(task.request.mode)} · ${this.taskStatusLabel(task)} · ${this.progressText(task)}`)
           .fontSize(13).fontColor('#AAB2BF')
       }.alignItems(HorizontalAlign.Start).width('100%')
       this.ProgressRing(task)

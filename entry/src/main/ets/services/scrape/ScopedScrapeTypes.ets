@@ -6,6 +6,7 @@ export type ScrapeCandidateStrategy = 'automatic' | 'confirm';
 export type ScrapeTaskStatus = 'waiting' | 'running' | 'waiting-confirmation' | 'completed' |
   'partial-failure' | 'failed' | 'cancelled';
 export type ScrapePauseReason = 'candidate-confirmation' | 'candidate-search-retry';
+export type ScrapeTaskPhase = 'scanning' | 'preparing' | 'scraping';
 
 /** 刮削失败分类（界面展示的简单分类，避免与底层错误文案漂移）。 */
 export const FAILURE_CATEGORY_NO_MATCH = '未匹配到结果';
@@ -197,6 +198,7 @@ export class ScrapeTaskSnapshot {
   @Trace pause: ScrapePause | undefined;
   @Trace resumeState: ScrapeResumeState | undefined;
   @Trace result: ScrapeResult | undefined;
+  @Trace phase: ScrapeTaskPhase;
   readonly createdAt: number;
   @Trace updatedAt: number;
 
@@ -208,6 +210,7 @@ export class ScrapeTaskSnapshot {
     this.pause = undefined;
     this.resumeState = undefined;
     this.result = undefined;
+    this.phase = 'preparing';
     this.createdAt = createdAt;
     this.updatedAt = createdAt;
   }

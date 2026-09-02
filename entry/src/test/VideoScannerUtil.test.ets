@@ -5,7 +5,7 @@ import {
   extractEpisodeNumberFromWeakSemanticFileName,
   hasSeasonSiblingDirectory
 } from '../main/ets/utils/VideoScannerHelpers';
-import { VideoScrapeContext } from '../main/ets/utils/VideoScannerTypes';
+import { VideoScrapeContext, ScanProgressCallback, ScanOptions } from '../main/ets/utils/VideoScannerTypes';
 
 export default function videoScannerUtilTest() {
   describe('VideoScannerUtil mixed directory scan helpers', () => {
@@ -66,6 +66,39 @@ export default function videoScannerUtilTest() {
       );
 
       expect(classification.mediaType).assertEqual('tv');
+    });
+
+    it('ScanProgressCallback receives completed and total counts', 0, () => {
+      const received: number[] = [];
+      const callback: ScanProgressCallback = (completed: number, total: number): void => {
+        received.push(completed);
+        received.push(total);
+      };
+      callback(0, 5);
+      callback(3, 5);
+      callback(5, 5);
+      expect(received.length).assertEqual(6);
+      expect(received[0]).assertEqual(0);
+      expect(received[1]).assertEqual(5);
+      expect(received[2]).assertEqual(3);
+      expect(received[3]).assertEqual(5);
+      expect(received[4]).assertEqual(5);
+      expect(received[5]).assertEqual(5);
+    });
+
+    it('ScanOptions accepts optional onScanProgress', 0, () => {
+      const callback: ScanProgressCallback = (_completed: number, _total: number): void => {};
+      const options: ScanOptions = {
+        maxDepth: 5,
+        mode: 'incremental',
+        onScanProgress: callback
+      };
+      expect(options.onScanProgress !== undefined).assertTrue();
+      const plainOptions: ScanOptions = {
+        maxDepth: 5,
+        mode: 'incremental'
+      };
+      expect(plainOptions.onScanProgress === undefined).assertTrue();
     });
   });
 }

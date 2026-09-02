@@ -49,9 +49,12 @@ export interface ScanResult {
 
 export type ScanMode = 'incremental' | 'fix-missing' | 'overwrite';
 
+export type ScanProgressCallback = (completed: number, total: number) => void;
+
 export interface ScanOptions {
   maxDepth: number;
   mode: ScanMode;
+  onScanProgress?: ScanProgressCallback;
 }
 
 export const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, mode: 'incremental' };

@@ -12,11 +12,17 @@ import {
   ScrapeFailureItem,
   ScrapeGroupSelection,
   ScrapeProgress,
+  ScrapeResult,
   ScrapeResumeState,
   ScrapeScope,
+  ScrapeTaskPhase,
   ScrapeTaskSnapshot,
   scrapeScopeId
 } from './ScopedScrapeTypes';
+
+export interface ScrapeEnqueueOptions {
+  phase?: ScrapeTaskPhase;
+}
 
 export class ScrapeTaskQueue {
   private static instance: ScrapeTaskQueue | null = null;
@@ -48,7 +54,7 @@ export class ScrapeTaskQueue {
     return Math.max(1, Math.min(4, Math.floor(value)));
   }
 
-  enqueue(request: ScopedScrapeRequest): string {
+  enqueue(request: ScopedScrapeRequest, options?: ScrapeEnqueueOptions): string {
     const requestCopy = this.copyRequest(request);
     const activeKey = this.buildActiveKey(requestCopy);
     const existing = this.tasks.find((task: ScrapeTaskSnapshot): boolean =>
@@ -60,6 +66,7 @@ export class ScrapeTaskQueue {
     const now = Date.now();
     this.sequence++;
     const task = new ScrapeTaskSnapshot(`${now}-${this.sequence}`, requestCopy, now);
+    task.phase = options?.phase ?? 'preparing';
     this.tasks.push(task);
     this.publish();
     this.schedule();
@@ -76,6 +83,48 @@ export class ScrapeTaskQueue {
     this.trimHistory();
     this.publish();
     return true;
+  }
+
+  updateScanProgress(taskId: string, progress: ScrapeProgress): void {
+    const task = this.findTask(taskId);
+    if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
+      return;
+    }
+    task.progress = progress;
+    task.updatedAt = Date.now();
+    this.publish();
+  }
+
+  markTaskReady(taskId: string): void {
+    const task = this.findTask(taskId);
+    if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
+      return;
+    }
+    task.phase = 'preparing';
+    task.updatedAt = Date.now();
+    this.publish();
+    this.schedule();
+  }
+
+  markTaskFailed(taskId: string): void {
+    const task = this.findTask(taskId);
+    if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
+      return;
+    }
+    task.status = 'failed';
+    const failedResult: ScrapeResult = {
+      total: 0,
+      succeeded: 0,
+      failed: 0,
+      cancelled: 0,
+      succeededVideoIds: [],
+      failedVideoIds: [],
+      failedItems: []
+    };
+    task.result = failedResult;
+    task.updatedAt = Date.now();
+    this.trimHistory();
+    this.publish();
   }
 
   confirmCandidate(taskId: string, candidate: ScrapeCandidate): boolean {
@@ -175,7 +224,9 @@ export class ScrapeTaskQueue {
       return;
     }
     while (this.runningCount < this.maxConcurrent) {
-      const next = this.tasks.find((task: ScrapeTaskSnapshot): boolean => task.status === 'waiting');
+      const next = this.tasks.find((task: ScrapeTaskSnapshot): boolean =>
+        task.status === 'waiting' && task.phase !== 'scanning'
+      );
       if (next === undefined) {
         return;
       }
@@ -208,8 +259,11 @@ export class ScrapeTaskQueue {
     task.updatedAt = Date.now();
     this.runningCount++;
     this.publish();
-    const onProgress: ScrapeProgressCallback = (progress: ScrapeProgress): void => {
+    const onProgress: ScrapeProgressCallback = (progress: ScrapeProgress, phase?: ScrapeTaskPhase): void => {
       task.progress = progress;
+      if (phase !== undefined) {
+        task.phase = phase;
+      }
       task.updatedAt = Date.now();
       this.publish();
     };

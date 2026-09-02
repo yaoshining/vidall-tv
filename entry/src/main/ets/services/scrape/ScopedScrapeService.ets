@@ -41,11 +41,12 @@ import {
   ScrapeProgress,
   ScrapeResult,
   ScrapeResumeState,
+  ScrapeTaskPhase,
   ScrapeVideoOutcome
 } from './ScopedScrapeTypes';
 import { ScrapeFailureLogStore } from './ScrapeFailureLogStore';
 
-export type ScrapeProgressCallback = (progress: ScrapeProgress) => void;
+export type ScrapeProgressCallback = (progress: ScrapeProgress, phase?: ScrapeTaskPhase) => void;
 
 interface ScrapeMediaGroup {
   key: string;
@@ -157,11 +158,40 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     onProgress: ScrapeProgressCallback,
     resumeState?: ScrapeResumeState
   ): Promise<ScrapeExecutionOutcome> {
+    const isFreshExecution = resumeState === undefined;
     const resolvedVideos = await this.resolver.resolve(request.scope);
     const videos = this.limitToVideoIds(resolvedVideos, request.videoIds);
+    if (isFreshExecution) {
+      const videoCount = videos.length;
+      const preparingProgress: ScrapeProgress = {
+        completed: 0,
+        total: videoCount,
+        succeeded: 0,
+        failed: 0,
+        cancelled: 0
+      };
+      onProgress(this.copyProgress(preparingProgress), 'preparing');
+    }
     const enriched: ScopedScrapeVideo[] = [];
-    for (const video of videos) {
-      enriched.push(await this.dependencies.loadTarget(video));
+    if (isFreshExecution) {
+      let analyzedCount = 0;
+      const videoCount = videos.length;
+      for (const video of videos) {
+        enriched.push(await this.dependencies.loadTarget(video));
+        analyzedCount++;
+        const preparingUpdate: ScrapeProgress = {
+          completed: analyzedCount,
+          total: videoCount,
+          succeeded: 0,
+          failed: 0,
+          cancelled: 0
+        };
+        onProgress(this.copyProgress(preparingUpdate), 'preparing');
+      }
+    } else {
+      for (const video of videos) {
+        enriched.push(await this.dependencies.loadTarget(video));
+      }
     }
     const targets = filterScrapeTargets(enriched, request.mode);
     const groups = this.buildGroups(targets);
@@ -174,7 +204,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     const selections = resumeState?.selections.slice() ?? [];
     const cancelledGroupKeys = resumeState?.cancelledGroupKeys.slice() ?? [];
     const startIndex = resumeState?.nextIndex ?? 0;
-    onProgress(this.copyProgress(progress));
+    onProgress(this.copyProgress(progress), 'scraping');
 
     const tmdbApiKey = await this.dependencies.getTmdbApiKey();
     if (tmdbApiKey.length === 0 && targets.length > progress.completed) {
@@ -247,10 +277,29 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
   ): Promise<ScrapeResult> {
     const resolvedVideos = await this.resolver.resolve(request.scope);
     const videos = this.limitToVideoIds(resolvedVideos, request.videoIds);
+    const videoCount = videos.length;
+    const preparingProgress: ScrapeProgress = {
+      completed: 0,
+      total: videoCount,
+      succeeded: 0,
+      failed: 0,
+      cancelled: 0
+    };
+    onProgress(this.copyProgress(preparingProgress), 'preparing');
     const enriched: ScopedScrapeVideo[] = [];
+    let analyzedCount = 0;
     for (const video of videos) {
       const target = await this.dependencies.loadTarget(video);
       enriched.push(target);
+      analyzedCount++;
+      const preparingUpdate: ScrapeProgress = {
+        completed: analyzedCount,
+        total: videoCount,
+        succeeded: 0,
+        failed: 0,
+        cancelled: 0
+      };
+      onProgress(this.copyProgress(preparingUpdate), 'preparing');
     }
     const targets = filterScrapeTargets(enriched, request.mode);
     const progress: ScrapeProgress = {
@@ -260,7 +309,7 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       failed: 0,
       cancelled: 0
     };
-    onProgress(progress);
+    onProgress(progress, 'scraping');
 
     const tmdbApiKey = await this.dependencies.getTmdbApiKey();
     if (tmdbApiKey.length === 0 && targets.length > 0) {
