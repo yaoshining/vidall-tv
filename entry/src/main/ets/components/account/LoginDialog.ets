@@ -2,6 +2,7 @@ import { LoginWithHuaweiIDButton, loginComponentManager } from '@kit.AccountKit'
 import { common } from '@kit.AbilityKit'
 import { BusinessError } from '@kit.BasicServicesKit'
 import { AccountService } from '../../services/account/AccountService'
+import { ERROR_AGC_NOT_INITIALIZED } from '../../services/account/AgcCloudAuthService'
 import { HuaweiAuthProvider } from '../../services/account/providers/HuaweiAuthProvider'
 import { AccountModel } from '../../stores/account/AccountModel'
 
@@ -44,12 +45,16 @@ export struct LoginDialog {
 
   private handleLoginError(error: Error): void {
     const businessError = error as BusinessError
+    console.warn(`[LoginDialog] 华为登录失败 code=${businessError.code ?? -1}`)
     if (businessError.code === 1001502012) {
       this.accountModel.setLoginError('已取消登录，你可以重新选择华为账号登录')
       return
     }
+    if (businessError.code === ERROR_AGC_NOT_INITIALIZED) {
+      this.accountModel.setLoginError('登录服务初始化失败，请重启应用后重试')
+      return
+    }
     this.accountModel.setLoginError('登录失败，请检查网络后重试')
-    console.warn(`[LoginDialog] 华为登录失败 code=${businessError.code ?? -1}`)
   }
 
   private getHuaweiController(): loginComponentManager.LoginWithHuaweiIDButtonController {

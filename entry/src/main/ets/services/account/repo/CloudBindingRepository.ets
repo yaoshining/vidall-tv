@@ -1,6 +1,21 @@
+import { BusinessError } from '@kit.BasicServicesKit';
 import { cloudDatabase } from '@kit.CloudFoundationKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AccountBinding } from '../../../db/models/AccountBinding';
 import { CLOUD_ZONE_NAME } from '../CloudAccountConfig';
+
+const LOG_DOMAIN: number = 0x0000;
+const TAG: string = 'CloudBindingRepo';
+
+class CloudBindingRepositoryError extends Error implements BusinessError {
+  code: number;
+
+  constructor(code: number, message: string) {
+    super(message);
+    this.name = 'CloudBindingRepositoryError';
+    this.code = code;
+  }
+}
 
 /**
  * AccountBinding 表的 Cloud DB 读写。
@@ -19,10 +34,17 @@ export class CloudBindingRepository {
     const queryCondition = new cloudDatabase.DatabaseQuery(AccountBinding);
     queryCondition.equalTo('platform', platform);
     queryCondition.equalTo('platformUserId', platformUserId);
-    const results: AccountBinding[] = await zone.query(queryCondition);
-    if (results.length === 0) {
-      return null;
+    try {
+      const results: AccountBinding[] = await zone.query(queryCondition);
+      if (results.length === 0) {
+        return null;
+      }
+      return results[0];
+    } catch (e) {
+      const error = e as BusinessError;
+      hilog.error(LOG_DOMAIN, TAG, '查询 AccountBinding 失败 code=%{public}d message=%{public}s',
+        error.code ?? -1, error.message ?? 'Cloud DB 查询失败');
+      throw new CloudBindingRepositoryError(error.code ?? -1, error.message ?? 'Cloud DB 查询失败');
     }
-    return results[0];
   }
 }
