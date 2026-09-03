@@ -1,10 +1,10 @@
 import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
-import { ScanMode } from "../../../utils/VideoScannerTypes"
+import { ScanMode, ScanContextInfo } from "../../../utils/VideoScannerTypes"
 import { VideoScannerUtil } from "../../../utils/VideoScannerUtil"
-import { ScrapeTaskQueue } from "../../../services/scrape/ScrapeTaskQueue"
+import { ScrapeTaskQueue, ScrapeEnqueueOptions } from "../../../services/scrape/ScrapeTaskQueue"
 import { common } from "@kit.AbilityKit"
-import { ScopedScrapeRequest, ScrapeScope } from "../../../services/scrape/ScopedScrapeTypes"
+import { ScopedScrapeRequest, ScrapeScope, ScrapeProgress, ScrapeScanContext } from "../../../services/scrape/ScopedScrapeTypes"
 import { ScrapeTaskStore } from "../../../services/scrape/ScrapeTaskStore"
 import { MediaDataVersionStore } from "../../../services/scrape/MediaDataVersionStore"
 import { ScrapeClient, parseFileName, TvSeriesScrapeResult } from "../../../lib/ScrapeClient"
@@ -20,7 +20,7 @@ import { AppPreferences, PrefKey } from "../../../utils/AppPreferences"
 import { MediaItem, MediaStats, SeriesGroup, MediaListItem, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity, ContinueWatchingItem } from "../../../db/models/MediaEntity"
 import { MediaLibraryModel } from "../../../stores/media/MediaLibraryModel"
 import { FileSourceDatabase } from "../../../db/files/FileSourceDatabase"
-import { FileSourceType } from "../../../db/models/FileSourceEntity"
+import { FileSourceType, FileSourceTypeLabels } from "../../../db/models/FileSourceEntity"
 import { ContinueWatchCard } from "../../../components/media/ContinueWatchCard"
 import promptAction from '@ohos.promptAction';
 import { SeriesDetailPage } from "../../detail/SeriesDetailPage"
@@ -54,6 +54,7 @@ import { SettingsPage, SettingsPageParam } from "../../settings/Index"
 import SettingType from "../../settings/SettingType"
 import { resolveCardBehavior, isDirectPlayContextValid, ServerCardKind } from "../../../services/sourceAdapter/ServerCardAction"
 import { resolveSeriesCardDestination } from "../../../services/sourceAdapter/SeriesCardRoute"
+import { truncateMiddlePath } from "../../../utils/PathDisplayUtil"
 
 // ─────────────────────────────────────────────
 // 常量
@@ -1202,8 +1203,6 @@ export struct MediaLibraryTab {
   }
 
   private async runScan(mode: ScanMode): Promise<void> {
-    // 文件扫描阶段（任务入队前）缺乏保护：重复点击会并发执行多次全量扫描与重复 upsert。
-    // 用本地的执行中标记覆盖「校验到入队」全程，避免并发扫描。
     if (this.isDiscoveringScan) {
       this.getUIContext().getPromptAction().showToast({ message: '正在扫描，请稍候' });
       return;
@@ -1214,7 +1213,6 @@ export struct MediaLibraryTab {
       return;
     }
     const scope: ScrapeScope = { kind: 'global', displayName: '全部媒体库' };
-    // 严格排除：全局媒体库只要在刮削中就禁止再次触发。
     if (this.taskStore.getActiveForScope(scope) !== undefined) {
       this.getUIContext().getPromptAction().showToast({ message: '全部媒体库正在刮削中' });
       return;
@@ -1224,15 +1222,41 @@ export struct MediaLibraryTab {
       mode,
       candidateStrategy: 'automatic'
     };
+    const enqueueOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+    const taskId = ScrapeTaskQueue.getInstance().enqueue(request, enqueueOptions);
     this.isDiscoveringScan = true;
     try {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      // 先发现并更新文件记录，再由统一队列执行元数据刮削。
-      await VideoScannerUtil.scan(context, undefined, { mode: mode });
-      await ScrapeTaskQueue.getInstance().enqueue(request);
+      const queue = ScrapeTaskQueue.getInstance();
+      await VideoScannerUtil.scan(context, undefined, {
+        mode: mode,
+        onScanProgress: (completed: number, total: number, scanContext?: ScanContextInfo): void => {
+          const scanProgress: ScrapeProgress = {
+            completed,
+            total,
+            succeeded: 0,
+            failed: 0,
+            cancelled: 0
+          };
+          let mappedContext: ScrapeScanContext | undefined = undefined;
+          if (scanContext !== undefined) {
+            const label: string = this.sourceTypeLabel(scanContext.sourceType);
+            const ctx: ScrapeScanContext = {
+              sourceTypeLabel: label,
+              sourceName: scanContext.sourceName,
+              directoryPath: scanContext.directoryPath,
+              currentPath: scanContext.currentPath
+            };
+            mappedContext = ctx;
+          }
+          queue.updateScanProgress(taskId, scanProgress, mappedContext);
+        }
+      });
+      queue.markTaskReady(taskId);
       this.getUIContext().getPromptAction().showToast({ message: '刮削任务已加入后台队列' });
     } catch (e) {
       const error = e as BusinessError;
+      ScrapeTaskQueue.getInstance().markTaskFailed(taskId);
       this.getUIContext().getPromptAction().showToast({ message: `扫描失败: ${error.message}` });
     } finally {
       this.isDiscoveringScan = false;
@@ -1252,6 +1276,16 @@ export struct MediaLibraryTab {
 
   /** 全局刮削进度文案，如 "18/28"；无活跃任务返回空串。 */
   private globalProgressText(): string {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    if (task === undefined) {
+      return '';
+    }
+    if (task.phase === 'scanning') {
+      return `${task.progress.completed}/${task.progress.total} 目录`;
+    }
+    if (task.phase === 'preparing' && task.status === 'waiting') {
+      return `${task.progress.completed}/${task.progress.total} 视频`;
+    }
     return this.taskStore.getProgressText(this.getGlobalScope());
   }
 
@@ -1261,11 +1295,23 @@ export struct MediaLibraryTab {
     if (task === undefined) {
       return '';
     }
+    if (task.status === 'waiting' && task.phase === 'scanning') {
+      if (task.scanContext !== undefined) {
+        return `全部媒体库 · 扫描中 · ${task.scanContext.sourceTypeLabel}·${task.scanContext.sourceName}`;
+      }
+      return '全部媒体库 · 扫描中';
+    }
+    if (task.status === 'waiting' && task.phase === 'preparing') {
+      return '全部媒体库 · 准备中';
+    }
     if (task.status === 'waiting') {
       return '全部媒体库 · 等待刮削';
     }
     if (task.status === 'waiting-confirmation') {
       return '全部媒体库 · 等待确认';
+    }
+    if (task.status === 'running' && task.phase === 'preparing') {
+      return '全部媒体库 · 准备中';
     }
     return '全部媒体库 · 正在刮削';
   }
@@ -1280,6 +1326,24 @@ export struct MediaLibraryTab {
   private globalTotalCount(): number {
     const task = this.taskStore.getActiveForScope(this.getGlobalScope());
     return task === undefined ? 0 : task.progress.total;
+  }
+
+  private sourceTypeLabel(type: FileSourceType): string {
+    return FileSourceTypeLabels.getLabel(type);
+  }
+
+  private hasScanContext(): boolean {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    return task !== undefined && task.phase === 'scanning' && task.scanContext !== undefined;
+  }
+
+  private scanContextText(): string {
+    const task = this.taskStore.getActiveForScope(this.getGlobalScope());
+    if (task === undefined || task.scanContext === undefined) {
+      return '';
+    }
+    const ctx = task.scanContext;
+    return `${ctx.sourceTypeLabel} · ${ctx.sourceName} · ${ctx.directoryPath} · 正在扫描: ${truncateMiddlePath(ctx.currentPath, 48)}`;
   }
 
   /**
@@ -1614,6 +1678,12 @@ export struct MediaLibraryTab {
           .width('100%').height(4)
           .color('#4A9FFF')
           .backgroundColor('#333333')
+      }
+
+      if (this.hasScanContext()) {
+        Text(this.scanContextText())
+          .fontSize(12).fontColor('#8A9BB5').maxLines(1)
+          .textAlign(TextAlign.Center).width('100%')
       }
 
       Text('刮削完成后将自动恢复下方操作入口')

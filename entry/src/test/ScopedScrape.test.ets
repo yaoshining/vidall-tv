@@ -17,7 +17,7 @@ import {
   ScrapeScopeVideoSource
 } from '../main/ets/services/scrape/ScrapeScopeResolver';
 import { shouldScrapeVideo } from '../main/ets/services/scrape/ScrapeModeFilter';
-import { ScrapeTaskQueue } from '../main/ets/services/scrape/ScrapeTaskQueue';
+import { ScrapeTaskQueue, ScrapeEnqueueOptions } from '../main/ets/services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../main/ets/services/scrape/ScrapeTaskStore';
 import { MediaDataVersionStore } from '../main/ets/services/scrape/MediaDataVersionStore';
 import {
@@ -39,9 +39,11 @@ import {
   ScrapeProgress,
   ScrapeResult,
   ScrapeResumeState,
+  ScrapeScanContext,
   ScrapeVideoOutcome,
   ScrapeTaskSnapshot,
-  ScrapeTaskStatus
+  ScrapeTaskStatus,
+  ScrapeTaskPhase
 } from '../main/ets/services/scrape/ScopedScrapeTypes';
 
 function createVideo(id: number, sourceId: number, path: string, updated: number = 0): VideoEntity {
@@ -634,6 +636,19 @@ export default function scopedScrapeTest() {
       await flushMicrotasks();
     });
 
+    it('扫描阶段失败的任务拒绝普通重试', 0, () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanEnqueueOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const scanId = queue.enqueue(createEpisodeRequest(601), scanEnqueueOptions);
+
+      queue.markTaskFailed(scanId);
+      expect(findTask(ScrapeTaskStore.getState(), scanId)?.status).assertEqual('failed');
+      const retryId = queue.retry(scanId);
+      expect(retryId === null).assertTrue();
+      expect(executor.calls.length).assertEqual(0);
+    });
+
     it('keeps all requested video ids retryable when the executor rejects', 0, async () => {
       const executor = new ControlledScopedScrapeExecutor();
       const queue = new ScrapeTaskQueue(executor, 1);
@@ -895,6 +910,196 @@ export default function scopedScrapeTest() {
       expect(shouldScrapeVideo(missing, 'fix-missing')).assertTrue();
       expect(shouldScrapeVideo(complete, 'fix-missing')).assertFalse();
       expect(shouldScrapeVideo(complete, 'overwrite')).assertTrue();
+    });
+
+    it('holds scanning tasks from being scheduled until markTaskReady', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(801), scanningOptions);
+
+      expect(executor.calls.length).assertEqual(0);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.status).assertEqual('waiting');
+      expect(task?.phase).assertEqual('scanning');
+
+      queue.markTaskReady(taskId);
+      expect(executor.calls.length).assertEqual(1);
+      expect(findTask(ScrapeTaskStore.getState(), taskId)?.status).assertEqual('running');
+      expect(findTask(ScrapeTaskStore.getState(), taskId)?.phase).assertEqual('preparing');
+
+      executor.calls[0].deferred.resolve(createCompleted());
+      await flushMicrotasks();
+    });
+
+    it('updateScanProgress only works for scanning phase tasks', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(802), scanningOptions);
+
+      const scanProgress: ScrapeProgress = { completed: 3, total: 10, succeeded: 0, failed: 0, cancelled: 0 };
+      queue.updateScanProgress(taskId, scanProgress);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.progress.completed).assertEqual(3);
+      expect(task?.progress.total).assertEqual(10);
+
+      const normalId = queue.enqueue(createEpisodeRequest(803));
+      const normalProgress: ScrapeProgress = { completed: 5, total: 8, succeeded: 0, failed: 0, cancelled: 0 };
+      queue.updateScanProgress(normalId, normalProgress);
+      const normalTask = findTask(ScrapeTaskStore.getState(), normalId);
+      expect(normalTask?.progress.completed).assertEqual(0);
+
+      executor.calls[0].deferred.resolve(createCompleted());
+      await flushMicrotasks();
+    });
+
+    it('ignores ready and progress calls after cancel', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(804), scanningOptions);
+
+      queue.cancel(taskId);
+      const scanProgress: ScrapeProgress = { completed: 5, total: 10, succeeded: 0, failed: 0, cancelled: 0 };
+      queue.updateScanProgress(taskId, scanProgress);
+      queue.markTaskReady(taskId);
+
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.status).assertEqual('cancelled');
+      expect(task?.progress.completed).assertEqual(0);
+      expect(executor.calls.length).assertEqual(0);
+    });
+
+    it('markTaskFailed sets failed status with zero result', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(805), scanningOptions);
+
+      queue.markTaskFailed(taskId);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.status).assertEqual('failed');
+      expect(task?.result?.total).assertEqual(0);
+      expect(task?.result?.succeeded).assertEqual(0);
+      expect(task?.result?.failed).assertEqual(0);
+      expect(task?.result?.failedVideoIds.length).assertEqual(0);
+      expect(task?.result?.failedItems.length).assertEqual(0);
+    });
+
+    it('propagates phase from onProgress callback to snapshot', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const taskId = queue.enqueue(createEpisodeRequest(806));
+
+      const onProgress = executor.calls[0].onProgress;
+      const progress1: ScrapeProgress = { completed: 0, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      onProgress(progress1, 'preparing');
+      let task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.phase).assertEqual('preparing');
+
+      const progress2: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      onProgress(progress2, 'scraping');
+      task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.phase).assertEqual('scraping');
+
+      executor.calls[0].deferred.resolve(createCompleted());
+      await flushMicrotasks();
+    });
+
+    it('service reports preparing and scraping phases in automatic execution', 0, async () => {
+      const provider = new FakeScrapeProvider();
+      const client = new ScrapeClient({ scrapeConcurrency: 1 });
+      client.registerProvider(provider);
+      const videos: VideoEntity[] = [
+        createVideo(810, 1, '/movie/a.mkv'),
+        createVideo(811, 1, '/movie/b.mkv')
+      ];
+      const resolver = new ScrapeScopeResolver(new StaticScrapeScopeVideoSource(videos));
+      const service = new ScopedScrapeService(resolver, new FakeScopedScrapeDependencies(client));
+
+      const phases: ScrapeTaskPhase[] = [];
+      const onProgress = (_progress: ScrapeProgress, phase?: ScrapeTaskPhase): void => {
+        if (phase !== undefined) {
+          phases.push(phase);
+        }
+      };
+      const request: ScopedScrapeRequest = {
+        scope: { kind: 'folder', sourceId: 1, directoryPath: '/', displayName: 'test' },
+        mode: 'incremental',
+        candidateStrategy: 'automatic'
+      };
+      await service.execute(request, onProgress);
+      expect(phases.length >= 2).assertTrue();
+      expect(phases[0]).assertEqual('preparing');
+      expect(phases[phases.length - 1]).assertEqual('scraping');
+    });
+
+    it('updateScanProgress with context updates scanContext on snapshot', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(900), scanningOptions);
+
+      const scanProgress: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      const ctx: ScrapeScanContext = {
+        sourceTypeLabel: 'WebDAV',
+        sourceName: 'MyNAS',
+        directoryPath: '/Videos',
+        currentPath: '/Videos/Movies'
+      };
+      queue.updateScanProgress(taskId, scanProgress, ctx);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.scanContext !== undefined).assertTrue();
+      if (task?.scanContext !== undefined) {
+        expect(task.scanContext.sourceTypeLabel).assertEqual('WebDAV');
+        expect(task.scanContext.sourceName).assertEqual('MyNAS');
+        expect(task.scanContext.currentPath).assertEqual('/Videos/Movies');
+      }
+    });
+
+    it('updateScanProgress without context preserves previous scanContext', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const scanningOptions: ScrapeEnqueueOptions = { phase: 'scanning' };
+      const taskId = queue.enqueue(createEpisodeRequest(901), scanningOptions);
+
+      const scanProgress1: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      const ctx: ScrapeScanContext = {
+        sourceTypeLabel: 'WebDAV',
+        sourceName: 'MyNAS',
+        directoryPath: '/Videos',
+        currentPath: '/Videos/Movies'
+      };
+      queue.updateScanProgress(taskId, scanProgress1, ctx);
+
+      const scanProgress2: ScrapeProgress = { completed: 2, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      queue.updateScanProgress(taskId, scanProgress2);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.scanContext !== undefined).assertTrue();
+      if (task?.scanContext !== undefined) {
+        expect(task.scanContext.sourceTypeLabel).assertEqual('WebDAV');
+      }
+    });
+
+    it('updateScanProgress with context does not update non-scanning task', 0, async () => {
+      const executor = new ControlledScopedScrapeExecutor();
+      const queue = new ScrapeTaskQueue(executor, 1);
+      const taskId = queue.enqueue(createEpisodeRequest(902));
+
+      const scanProgress: ScrapeProgress = { completed: 1, total: 5, succeeded: 0, failed: 0, cancelled: 0 };
+      const ctx: ScrapeScanContext = {
+        sourceTypeLabel: 'SMB',
+        sourceName: 'WinShare',
+        directoryPath: '/Shares',
+        currentPath: '/Shares/TV'
+      };
+      queue.updateScanProgress(taskId, scanProgress, ctx);
+      const task = findTask(ScrapeTaskStore.getState(), taskId);
+      expect(task?.scanContext === undefined).assertTrue();
+
+      executor.calls[0].deferred.resolve(createCompleted());
+      await flushMicrotasks();
     });
   });
 }

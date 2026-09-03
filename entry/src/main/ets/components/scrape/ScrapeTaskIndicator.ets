@@ -1,8 +1,9 @@
 import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
-import { ScrapeCandidate, ScrapeTaskSnapshot } from '../../services/scrape/ScopedScrapeTypes';
+import { ScrapeCandidate, ScrapeTaskPhase, ScrapeTaskSnapshot, ScrapeScanContext } from '../../services/scrape/ScopedScrapeTypes';
 import { ScrapeManagementPage } from '../../pages/scrape/ScrapeManagementPage';
+import { truncateMiddlePath } from '../../utils/PathDisplayUtil';
 
 function statusLabel(status: string): string {
   if (status === 'waiting') { return '等待中'; }
@@ -12,6 +13,12 @@ function statusLabel(status: string): string {
   if (status === 'partial-failure') { return '部分失败'; }
   if (status === 'failed') { return '失败'; }
   return '已取消';
+}
+
+function phaseLabel(phase: ScrapeTaskPhase): string {
+  if (phase === 'scanning') { return '扫描中'; }
+  if (phase === 'preparing') { return '准备中'; }
+  return '刮削中';
 }
 
 function modeLabel(mode: string): string {
@@ -35,6 +42,21 @@ export struct ScrapeTaskIndicator {
   private closeDropdown(): void {
     this.expanded = false;
     setTimeout(() => { focusControl.requestFocus(this.indicatorFocusId); }, 0);
+  }
+  private taskStatusLabel(task: ScrapeTaskSnapshot): string {
+    if (task.status === 'waiting' || task.status === 'running') {
+      return phaseLabel(task.phase);
+    }
+    return statusLabel(task.status);
+  }
+  private scanContextLine1(task: ScrapeTaskSnapshot): string {
+    if (task.scanContext === undefined) { return ''; }
+    const ctx: ScrapeScanContext = task.scanContext;
+    return `${ctx.sourceTypeLabel} · ${ctx.sourceName} · ${ctx.directoryPath}`;
+  }
+  private scanContextLine2(task: ScrapeTaskSnapshot): string {
+    if (task.scanContext === undefined) { return ''; }
+    return `正在扫描: ${truncateMiddlePath(task.scanContext.currentPath, 40)}`;
   }
   private progressText(task: ScrapeTaskSnapshot): string {
     return `${task.progress.completed}/${task.progress.total}`;
@@ -92,9 +114,17 @@ export struct ScrapeTaskIndicator {
     Column({ space: 8 }) {
       Column({ space: 4 }) {
         Text(task.request.scope.displayName).fontSize(16).fontColor(Color.White).fontWeight(FontWeight.Medium)
-        Text(`${modeLabel(task.request.mode)} · ${statusLabel(task.status)} · ${this.progressText(task)}`)
+        Text(`${modeLabel(task.request.mode)} · ${this.taskStatusLabel(task)} · ${this.progressText(task)}`)
           .fontSize(13).fontColor('#AAB2BF')
       }.alignItems(HorizontalAlign.Start).width('100%')
+      if (task.phase === 'scanning' && task.scanContext !== undefined) {
+        Text(this.scanContextLine1(task))
+          .fontSize(12).fontColor('#8A9BB5').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(this.scanContextLine2(task))
+          .fontSize(12).fontColor('#8A9BB5').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+      }
       this.ProgressRing(task)
       Row() {
         Blank()
@@ -102,7 +132,10 @@ export struct ScrapeTaskIndicator {
           this.Action('取消', () => { ScrapeTaskQueue.getInstance().cancel(task.id); })
         } else if (task.status === 'failed' || task.status === 'partial-failure') {
           Row({ space: 8 }) {
-            this.Action('重试', () => { ScrapeTaskQueue.getInstance().retry(task.id); })
+            // 扫描阶段失败的任务无法由队列重试恢复（扫描由 UI 层驱动），只提供清除入口
+            if (task.phase !== 'scanning') {
+              this.Action('重试', () => { ScrapeTaskQueue.getInstance().retry(task.id); })
+            }
             this.Action('清除', () => { ScrapeTaskQueue.getInstance().clear(task.id); })
           }
         } else if (task.status === 'completed' || task.status === 'cancelled') {

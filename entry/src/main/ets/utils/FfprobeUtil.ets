@@ -377,11 +377,13 @@ export class FfprobeUtil {
    * @param url       视频 URL（支持 http/https/本地路径）
    * @param headers   HTTP 请求头（可选），如 { Authorization: 'Basic xxx' }
    * @param timeoutMs 超时时间，默认 20000ms
+   * @param onProbeStart 排队获得执行权、真正开始探测时回调（可选），用于扫描进度按文件级上报
    */
   static async probe(
     url: string,
     headers?: Record<string, string>,
-    timeoutMs: number = 20000
+    timeoutMs: number = 20000,
+    onProbeStart?: () => void
   ): Promise<FfprobeResult> {
     let headersStr = '';
     if (headers) {
@@ -417,6 +419,10 @@ export class FfprobeUtil {
     // 并发限制：最多 MAX_CONCURRENT_PROBES 个并行探测（native 层已处理线程安全）
     await FfprobeUtil.acquireProbeSlot();
     try {
+      // 回调放入 try 内，确保异常时 finally 仍能释放槽位，避免后续探测永久等待
+      if (onProbeStart !== undefined) {
+        onProbeStart();
+      }
       const outputJson = await getVidAllCorePlayerNapi().ffprobe(url, headersStr, timeoutMs);
       console.info(`[FfprobeUtil] 探测完成，输出长度=${outputJson.length}`);
       return FfprobeUtil.parseOutput(url, outputJson);
@@ -583,7 +589,8 @@ export class FfprobeUtil {
   static async probeSmb(
     smbUrl: string,
     headers?: Record<string, string>,
-    timeoutMs: number = 15000
+    timeoutMs: number = 15000,
+    onProbeStart?: () => void
   ): Promise<FfprobeResult> {
     console.info(`[FfprobeUtil] SMB probe via HTTP proxy: ${maskUrlForLog(smbUrl)}`);
     const proxySmbUrl = FfprobeUtil.buildSmbProxySource(smbUrl, headers);
@@ -593,6 +600,10 @@ export class FfprobeUtil {
 
     let playerHandle: number = 0;
     try {
+      // 回调放入 try 内，确保异常时 finally 仍能释放槽位并释放 player
+      if (onProbeStart !== undefined) {
+        onProbeStart();
+      }
       // ── 阶段 1：启动 SMB HTTP 代理（native player prepare 异步回调）──────────
       const napi = getSmbProbeNapi();
       playerHandle = napi.createPlayer();

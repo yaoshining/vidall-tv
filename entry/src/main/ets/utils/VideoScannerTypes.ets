@@ -49,12 +49,23 @@ export interface ScanResult {
 
 export type ScanMode = 'incremental' | 'fix-missing' | 'overwrite';
 
+export interface ScanContextInfo {
+  sourceType: FileSourceType;
+  sourceName: string;
+  directoryPath: string;
+  currentPath: string;
+}
+
+export type ScanProgressCallback = (completed: number, total: number, context?: ScanContextInfo) => void;
+
 export interface ScanOptions {
   maxDepth: number;
   mode: ScanMode;
+  onScanProgress?: ScanProgressCallback;
+  onCurrentPath?: (currentPath: string) => void;
 }
 
-export const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, mode: 'incremental' };
+export const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, mode: 'incremental', onCurrentPath: undefined };
 
 // ─────────────────────────────────────────────
 // 适配器接口
