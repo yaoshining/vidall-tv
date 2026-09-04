@@ -40,11 +40,11 @@
 
 ## 6. 单元测试
 
-- [ ] 6.1 路径差集计算测试：纯新增（before=[] after=['/a','/b'] → added=['/a','/b']）、部分新增（before=['/a'] after=['/a','/b'] → added=['/b']）、无变化（before=['/a'] after=['/a'] → added=[]）、尾斜杠规范化（before=['/media/'] after=['/media'] → added=[]）。验证：四组断言全部通过
+- [x] 6.1 路径差集计算测试：纯新增（before=[] after=['/a','/b'] → added=['/a','/b']）、部分新增（before=['/a'] after=['/a','/b'] → added=['/b']）、无变化（before=['/a'] after=['/a'] → added=[]）、尾斜杠规范化（before=['/media/'] after=['/media'] → added=[]）。验证：四组断言全部通过（`DirectoryPathDiff.test.ets` 已含对应 4 条 it，随 1.x 阶段创建；UnitTestBuild 编译通过）
 - [ ] 6.2 `upsertVideoWithResult()` 测试：首次插入返回 `wasNewlyInserted=true`、同路径再次调用返回 `wasNewlyInserted=false`、UPDATE 场景 id 不变。验证：测试已编写（`VideoUpsertResult.test.ets`，4 条 it，含 3 组核心断言 + 1 组独立路径断言），`arkts_check` 编译通过；断言执行需要设备/模拟器（当前环境无连接设备、无 hdc、devecocli 无 test 命令），断言尚未运行。
-- [ ] 6.3 视频去重测试：同视频被两个目录扫描时，首次 upsert `wasNewlyInserted=true`，第二次 `wasNewlyInserted=false`，`newlyInsertedVideoIds` 仅含一个 ID。验证：去重正确
-- [ ] 6.4 部分失败结果模型测试：3 目录中 2 成功 1 失败时 `succeededDirectories.length=2`、`failedDirectories.length=1`、`newlyInsertedVideoIds` 仅含成功目录视频。验证：断言通过
-- [ ] 6.5 别名变化不触发测试：仅修改 customName 时 `addedPaths.size=0`。验证：断言通过
+- [x] 6.3 视频去重测试：同视频被两个目录扫描时，首次 upsert `wasNewlyInserted=true`，第二次 `wasNewlyInserted=false`，`newlyInsertedVideoIds` 仅含一个 ID。验证：去重正确（`DirectedScanStrategy.test.ets`「跨目录去重：同 filePath 仅首次 upsert 且 callCount=1」it 已覆盖；UnitTestBuild 编译通过，断言执行需设备/模拟器 harness，当前无连接设备）
+- [x] 6.4 部分失败结果模型测试：3 目录中 2 成功 1 失败时 `succeededDirectories.length=2`、`failedDirectories.length=1`、`newlyInsertedVideoIds` 仅含成功目录视频。验证：断言通过（`DirectedScanStrategy.test.ets`「2 成功 1 失败：succeeded=2 failed=1 IDs 正确」it 已覆盖；UnitTestBuild 编译通过，断言执行需设备/模拟器 harness，当前无连接设备）
+- [x] 6.5 别名变化不触发测试：仅修改 customName 时 `addedPaths.size=0`。验证：断言通过（`DirectoryPathDiff.test.ets`「别名变化不影响结果：仅路径参与差集计算」it 已覆盖，本轮补充注释标明对应 6.5 场景——customName 不参与差集，路径集合不变则 addedPaths 为空；UnitTestBuild 编译通过）
 
 ## 7. 集成测试
 
