@@ -4,7 +4,7 @@ import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient'
 import { FfprobeUtil, FfprobeTrack } from './FfprobeUtil';
 import { ScrapeClient } from '../lib/ScrapeClient';
 import { VideoEntity } from '../db/models/MediaEntity';
-import { ISourceAdapter, VideoFileInfo, ScanOptions, ScanMode } from './VideoScannerTypes';
+import { ISourceAdapter, VideoFileInfo, ScanOptions, ScanMode, VideoUpsertStrategy } from './VideoScannerTypes';
 import { createVideoScrapeContext, hasSeasonSiblingDirectory, isVideoFile, hasCompleteScrapeAssociation, shouldRepairIncompleteTvEpisode } from './VideoScannerHelpers';
 import { processVideoScrape } from './VideoScrapeProcessor';
 
@@ -13,10 +13,12 @@ export class WebDAVAdapter implements ISourceAdapter {
   private fileSource: FileSource;
   private basePath: string;
   private scrapeClient?: ScrapeClient;
+  private upsertStrategy?: VideoUpsertStrategy;
 
-  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient) {
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy) {
     this.fileSource = fileSource;
     this.scrapeClient = scrapeClient;
+    this.upsertStrategy = upsertStrategy;
 
     const config = JSON.parse(fileSource.configJson) as Record<string, string>;
     const protocol = config['protocol'] ?? 'http';
@@ -308,7 +310,11 @@ export class WebDAVAdapter implements ISourceAdapter {
 
             let videoId: number = -1;
             try {
-              videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity);
+              if (this.upsertStrategy !== undefined) {
+                videoId = await this.upsertStrategy.upsert(videoEntity);
+              } else {
+                videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity);
+              }
               console.info(`[VideoScanner][DB] 落库成功 videoId=${videoId} fileName=${fileName}`);
             } catch (dbErr) {
               console.warn(`[VideoScanner][DB] 落库失败 fileName=${fileName}: ${JSON.stringify(dbErr)}`);

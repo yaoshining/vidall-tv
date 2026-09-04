@@ -34,6 +34,12 @@ export interface VideoEntity {
   scannedAt: number;
 }
 
+/** upsertVideo 返回结果，区分本次操作是新增还是更新已有记录 */
+export interface VideoUpsertResult {
+  id: number;
+  wasNewlyInserted: boolean;
+}
+
 // ─────────────────────────────────────────────
 // 刮削关联桥表
 // ─────────────────────────────────────────────

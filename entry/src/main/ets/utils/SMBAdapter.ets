@@ -4,7 +4,7 @@ import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { FfprobeUtil } from './FfprobeUtil';
 import { ScrapeClient } from '../lib/ScrapeClient';
 import { VideoEntity } from '../db/models/MediaEntity';
-import { ISourceAdapter, VideoFileInfo, ScanOptions, ScanMode } from './VideoScannerTypes';
+import { ISourceAdapter, VideoFileInfo, ScanOptions, ScanMode, VideoUpsertStrategy } from './VideoScannerTypes';
 import { createVideoScrapeContext, hasSeasonSiblingDirectory, isVideoFile, hasCompleteScrapeAssociation, shouldRepairIncompleteTvEpisode } from './VideoScannerHelpers';
 import { processVideoScrape } from './VideoScrapeProcessor';
 
@@ -13,12 +13,14 @@ export class SMBAdapter implements ISourceAdapter {
   private fileSource: FileSource;
   private config: SMBSourceConfig;
   private scrapeClient?: ScrapeClient;
+  private upsertStrategy?: VideoUpsertStrategy;
 
-  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient) {
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy) {
     this.fileSource = fileSource;
     this.config = JSON.parse(fileSource.configJson) as SMBSourceConfig;
     this.client = SMBClient.fromSourceConfig(this.config);
     this.scrapeClient = scrapeClient;
+    this.upsertStrategy = upsertStrategy;
   }
 
   /** 构建完整 smb:// 播放 URL（凭据内嵌，路径段编码，用于 FFmpeg 播放与刮削） */
@@ -283,7 +285,11 @@ export class SMBAdapter implements ISourceAdapter {
 
           let videoId: number = -1;
           try {
-            videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity);
+            if (this.upsertStrategy !== undefined) {
+              videoId = await this.upsertStrategy.upsert(videoEntity);
+            } else {
+              videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity);
+            }
             console.info(`[VideoScanner][SMB][DB] 落库成功 videoId=${videoId} fileName=${capturedInfo.fileName} url=${maskedUrl}`);
           } catch (dbErr) {
             console.warn(`[VideoScanner][SMB][DB] 落库失败 fileName=${capturedInfo.fileName}: ${JSON.stringify(dbErr)}`);

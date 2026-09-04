@@ -1,4 +1,5 @@
 import { FileSourceType } from '../db/models/FileSourceEntity';
+import { VideoEntity, VideoUpsertResult } from '../db/models/MediaEntity';
 
 // ─────────────────────────────────────────────
 // 数据结构
@@ -65,6 +66,26 @@ export interface ScanOptions {
   onCurrentPath?: (currentPath: string) => void;
 }
 
+/** 扫描失败时的错误摘要信息，与 design D5 一致 */
+export interface ErrorInfo {
+  message: string;
+  code?: string;
+}
+
+/** 扫描失败的单个目录及其失败上下文 */
+export interface FailedDirectory {
+  directoryPath: string;
+  error: ErrorInfo;
+}
+
+/** 定向扫描结果：仅包含成功/失败的目录以及新增视频 id */
+export interface DirectedScanResult {
+  succeededDirectories: string[];
+  failedDirectories: FailedDirectory[];
+  newlyInsertedVideoIds: number[];
+  totalFilesScanned: number;
+}
+
 export const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, mode: 'incremental', onCurrentPath: undefined };
 
 // ─────────────────────────────────────────────
@@ -73,4 +94,12 @@ export const DEFAULT_SCAN_OPTIONS: ScanOptions = { maxDepth: 5, mode: 'increment
 
 export interface ISourceAdapter {
   scan(directoryPath: string, options: ScanOptions): Promise<VideoFileInfo[]>;
+}
+
+export interface VideoUpsertStrategy {
+  upsert(entity: VideoEntity): Promise<number>;
+}
+
+export interface VideoUpsertWithResultProvider {
+  upsertVideoWithResult(entity: VideoEntity): Promise<VideoUpsertResult>;
 }

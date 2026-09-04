@@ -5,7 +5,7 @@ import { VideoServer } from '../models/VideoServerEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
   MediaItem, MediaStats, SeriesGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry,
-  SearchHistoryEntry, SearchMediaOptions
+  SearchHistoryEntry, SearchMediaOptions, VideoUpsertResult
 } from '../models/MediaEntity';
 import { DATABASE_READY } from './DbConstants';
 import { FileSourceDbCore } from './FileSourceDbCore';
@@ -210,6 +210,10 @@ export class FileSourceDatabase {
 
   async upsertVideo(entity: VideoEntity): Promise<number> {
     return this.videoDao.upsertVideo(entity);
+  }
+
+  async upsertVideoWithResult(entity: VideoEntity): Promise<VideoUpsertResult> {
+    return this.videoDao.upsertVideoWithResult(entity);
   }
 
   async getVideoByPath(filePath: string): Promise<VideoEntity | null> {

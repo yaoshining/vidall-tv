@@ -1,19 +1,113 @@
 import relationalStore from '@ohos.data.relationalStore';
-import { VideoEntity } from '../models/MediaEntity';
+import { VideoEntity, VideoUpsertResult } from '../models/MediaEntity';
 import { BusinessError } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TABLE_VIDEOS, TABLE_SCRAPE_INFO, TABLE_PLAY_PROGRESS } from './DbConstants';
 import { FileSourceDbCore } from './FileSourceDbCore';
 
-/**
- * videos 表的数据访问（含鬼记录清理与扫描时间查询）。
- * 拆分自 FileSourceDatabase，保持原方法签名与行为不变。
- */
+export interface VideoPersistencePort {
+  findByPath(filePath: string): Promise<VideoEntity | null>;
+  insertVideo(entity: VideoEntity): Promise<number>;
+  updateVideo(existingId: number, entity: VideoEntity): Promise<void>;
+  findIdByPath(filePath: string): Promise<number>;
+}
+
+class RdbVideoPersistencePort implements VideoPersistencePort {
+  private core: FileSourceDbCore;
+  private parseVideoEntityFn: (rs: relationalStore.ResultSet) => VideoEntity;
+
+  constructor(core: FileSourceDbCore, parseFn: (rs: relationalStore.ResultSet) => VideoEntity) {
+    this.core = core;
+    this.parseVideoEntityFn = parseFn;
+  }
+
+  async findByPath(filePath: string): Promise<VideoEntity | null> {
+    const store = this.core.getStore();
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await store.querySql(
+        `SELECT * FROM ${TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`,
+        [filePath]
+      );
+      if (rs.goToFirstRow()) {
+        return this.parseVideoEntityFn(rs);
+      }
+      return null;
+    } catch (error) {
+      console.error(`[VideoPersistencePort] findByPath 失败: ${JSON.stringify(error)}`);
+      return null;
+    } finally {
+      try { rs?.close(); } catch { }
+    }
+  }
+
+  async insertVideo(entity: VideoEntity): Promise<number> {
+    const store = this.core.getStore();
+    const bucket: relationalStore.ValuesBucket = {
+      source_id: entity.sourceId,
+      directory_path: entity.directoryPath,
+      file_path: entity.filePath,
+      file_name: entity.fileName,
+      file_size: entity.fileSize !== undefined ? entity.fileSize : null,
+      last_modified: entity.lastModified ?? null,
+      content_type: entity.contentType ?? null,
+      duration_ms: entity.durationMs !== undefined ? entity.durationMs : null,
+      width: entity.width !== undefined ? entity.width : null,
+      height: entity.height !== undefined ? entity.height : null,
+      frame_rate: entity.frameRate !== undefined ? entity.frameRate : null,
+      video_codec: entity.videoCodec ?? null,
+      audio_tracks_json: entity.audioTracksJson ?? null,
+      subtitle_tracks_json: entity.subtitleTracksJson ?? null,
+      updated_in_last_scan: 1,
+      scanned_at: entity.scannedAt
+    };
+    const rowId = await store.insert(
+      TABLE_VIDEOS,
+      bucket,
+      relationalStore.ConflictResolution.ON_CONFLICT_IGNORE
+    );
+    return rowId;
+  }
+
+  async updateVideo(existingId: number, entity: VideoEntity): Promise<void> {
+    const store = this.core.getStore();
+    const bucket: relationalStore.ValuesBucket = {
+      source_id: entity.sourceId,
+      directory_path: entity.directoryPath,
+      file_name: entity.fileName,
+      file_size: entity.fileSize !== undefined ? entity.fileSize : null,
+      last_modified: entity.lastModified ?? null,
+      content_type: entity.contentType ?? null,
+      duration_ms: entity.durationMs !== undefined ? entity.durationMs : null,
+      width: entity.width !== undefined ? entity.width : null,
+      height: entity.height !== undefined ? entity.height : null,
+      frame_rate: entity.frameRate !== undefined ? entity.frameRate : null,
+      video_codec: entity.videoCodec ?? null,
+      audio_tracks_json: entity.audioTracksJson ?? null,
+      subtitle_tracks_json: entity.subtitleTracksJson ?? null,
+      updated_in_last_scan: 1,
+      scanned_at: entity.scannedAt
+    };
+    const pred = new relationalStore.RdbPredicates(TABLE_VIDEOS);
+    pred.equalTo('id', existingId);
+    await store.update(bucket, pred);
+  }
+
+  async findIdByPath(filePath: string): Promise<number> {
+    return this.core.querySingleIdValue(
+      `SELECT id FROM ${TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`,
+      [filePath]
+    );
+  }
+}
+
 export class VideoDao {
   private core: FileSourceDbCore;
+  private port: VideoPersistencePort;
 
-  constructor(core: FileSourceDbCore) {
+  constructor(core: FileSourceDbCore, port?: VideoPersistencePort) {
     this.core = core;
+    this.port = port ?? new RdbVideoPersistencePort(core, (rs) => this.parseVideoEntity(rs));
   }
 
   /**
@@ -21,67 +115,50 @@ export class VideoDao {
    * @returns 视频的 id
    */
   async upsertVideo(entity: VideoEntity): Promise<number> {
-    const store = this.core.getStore();
+    const result: VideoUpsertResult = await this.upsertVideoWithResult(entity);
+    return result.id;
+  }
+
+  /**
+   * 插入或更新视频记录（以 file_path 为唯一键），返回含 wasNewlyInserted 的完整结果。
+   * wasNewlyInserted 仅以 upsert 前数据库中是否存在该 filePath 记录为准，
+   * 不依赖刮削关联、wasProcessed 或元数据完整度。
+   *
+   * 通过 VideoPersistencePort 抽象持久化操作，支持注入 test double。
+   * INSERT 使用 store.insert(table, bucket, ON_CONFLICT_IGNORE) 代替
+   * INSERT OR IGNORE + lastInsertedRowId 比较——前者直接返回 rowId（成功）
+   * 或 -1（冲突忽略），避免连接级 last_insert_rowid 误判。
+   */
+  async upsertVideoWithResult(entity: VideoEntity): Promise<VideoUpsertResult> {
     try {
-      // 先查是否已存在，有则 UPDATE（保留原始 id，避免外键级联删除 scrape_info）
-      const existing = await this.getVideoByPath(entity.filePath);
+      const existing = await this.port.findByPath(entity.filePath);
       if (existing && existing.id !== undefined) {
-        const bucket: relationalStore.ValuesBucket = {
-          source_id: entity.sourceId,
-          directory_path: entity.directoryPath,
-          file_name: entity.fileName,
-          file_size: entity.fileSize !== undefined ? entity.fileSize : null,
-          last_modified: entity.lastModified ?? null,
-          content_type: entity.contentType ?? null,
-          duration_ms: entity.durationMs !== undefined ? entity.durationMs : null,
-          width: entity.width !== undefined ? entity.width : null,
-          height: entity.height !== undefined ? entity.height : null,
-          frame_rate: entity.frameRate !== undefined ? entity.frameRate : null,
-          video_codec: entity.videoCodec ?? null,
-          audio_tracks_json: entity.audioTracksJson ?? null,
-          subtitle_tracks_json: entity.subtitleTracksJson ?? null,
-          updated_in_last_scan: 1,
-          scanned_at: entity.scannedAt
-        };
-        const pred = new relationalStore.RdbPredicates(TABLE_VIDEOS);
-        pred.equalTo('id', existing.id);
-        await store.update(bucket, pred);
-        console.info(`[FileSourceDatabase] upsertVideo UPDATE id=${existing.id} path=${entity.filePath}`);
-        return existing.id;
+        await this.port.updateVideo(existing.id, entity);
+        console.info(`[VideoDao] upsertVideo UPDATE id=${existing.id} path=${entity.filePath}`);
+        const updateResult: VideoUpsertResult = { id: existing.id, wasNewlyInserted: false };
+        return updateResult;
       }
-      // 新文件 INSERT
-      const sql = `
-        INSERT OR IGNORE INTO ${TABLE_VIDEOS}
-          (source_id, directory_path, file_path, file_name, file_size, last_modified,
-           content_type, duration_ms, width, height, frame_rate, video_codec,
-           audio_tracks_json, subtitle_tracks_json, updated_in_last_scan, scanned_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-      `;
-      const args: relationalStore.ValueType[] = [
-        entity.sourceId, entity.directoryPath, entity.filePath, entity.fileName,
-        entity.fileSize !== undefined ? entity.fileSize : null,
-        entity.lastModified ?? null, entity.contentType ?? null,
-        entity.durationMs !== undefined ? entity.durationMs : null,
-        entity.width !== undefined ? entity.width : null,
-        entity.height !== undefined ? entity.height : null,
-        entity.frameRate !== undefined ? entity.frameRate : null,
-        entity.videoCodec ?? null,
-        entity.audioTracksJson ?? null,
-        entity.subtitleTracksJson ?? null,
-        1,
-        entity.scannedAt
-      ];
-      await store.executeSql(sql, args);
-      const inserted = await this.getVideoByPath(entity.filePath);
-      const fallbackId = await this.core.querySingleIdValue(
-        `SELECT id FROM ${TABLE_VIDEOS} WHERE file_path = ? LIMIT 1`,
-        [entity.filePath]
-      );
-      const rowId = inserted?.id ?? (fallbackId > 0 ? fallbackId : await this.core.lastInsertedRowId());
-      console.info(`[FileSourceDatabase] upsertVideo INSERT id=${rowId} path=${entity.filePath}`);
-      return rowId;
+      const rowId = await this.port.insertVideo(entity);
+      if (rowId >= 0) {
+        console.info(`[VideoDao] upsertVideo INSERT id=${rowId} path=${entity.filePath}`);
+        const insertResult: VideoUpsertResult = { id: rowId, wasNewlyInserted: true };
+        return insertResult;
+      }
+      console.info(`[VideoDao] upsertVideo INSERT IGNORED (concurrent duplicate) path=${entity.filePath}`);
+      const afterIgnore = await this.port.findByPath(entity.filePath);
+      if (afterIgnore && afterIgnore.id !== undefined) {
+        const ignoredResult: VideoUpsertResult = { id: afterIgnore.id, wasNewlyInserted: false };
+        return ignoredResult;
+      }
+      const fallbackId = await this.port.findIdByPath(entity.filePath);
+      if (fallbackId > 0) {
+        console.info(`[VideoDao] upsertVideo INSERT IGNORED (fallback) id=${fallbackId} path=${entity.filePath}`);
+        const fallbackResult: VideoUpsertResult = { id: fallbackId, wasNewlyInserted: false };
+        return fallbackResult;
+      }
+      throw new Error('upsertVideo failed: could not resolve id after INSERT for path=' + entity.filePath);
     } catch (error) {
-      console.error(`[FileSourceDatabase] upsertVideo 失败: ${JSON.stringify(error)}`);
+      console.error(`[VideoDao] upsertVideo 失败: ${JSON.stringify(error)}`);
       throw new Error('upsertVideo failed: ' + JSON.stringify(error));
     }
   }

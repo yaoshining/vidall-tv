@@ -1,4 +1,5 @@
 import { ScrapeInfoEntity, VideoEntity } from '../../db/models/MediaEntity';
+import { FileSourceType } from '../../db/models/FileSourceEntity';
 import { ScanMode } from '../../utils/VideoScannerTypes';
 
 export type ScrapeScopeKind = 'movie' | 'series' | 'season' | 'episode' | 'folder' | 'global';
@@ -191,6 +192,33 @@ export interface ScrapeExecutionPaused {
 }
 
 export type ScrapeExecutionOutcome = ScrapeExecutionCompleted | ScrapeExecutionPaused;
+
+export interface DirectoriesSavedEvent {
+  sourceId: number;
+  fileSourceType: FileSourceType;
+  addedDirectoryPaths: string[];
+}
+
+/**
+ * 计算保存前后的规范化目录路径差集，返回新增路径集合。
+ * 仅基于路径判等，customName 变更不影响结果。
+ */
+export function computeDirectoryPathDiff(
+  beforePaths: string[],
+  afterPaths: string[]
+): string[] {
+  const beforeNormalized: Set<string> = new Set<string>();
+  beforePaths.forEach((p: string) => beforeNormalized.add(normalizeScrapeDirectoryPath(p)));
+  const afterNormalized: Set<string> = new Set<string>();
+  afterPaths.forEach((p: string) => afterNormalized.add(normalizeScrapeDirectoryPath(p)));
+  const added: string[] = [];
+  afterNormalized.forEach((p: string) => {
+    if (!beforeNormalized.has(p)) {
+      added.push(p);
+    }
+  });
+  return added;
+}
 
 /**
  * 刮削任务的 UI 快照。作为 @ObservedV2 类持有可变字段的 @Trace 注解，

@@ -5,11 +5,22 @@ import { ScrapeClient } from '../lib/ScrapeClient';
 import { MetricsService } from '../services/metrics/MetricsService';
 import { UmamiAnalyticsService } from '../services/analytics/UmamiAnalyticsService';
 import { UmamiEventData } from '../services/analytics/UmamiReporter';
-import { ISourceAdapter, VideoFileInfo, SourceScanStat, ScanResult, ScanOptions, ScanProgressCallback, ScanContextInfo, DEFAULT_SCAN_OPTIONS } from './VideoScannerTypes';
+import { VideoEntity, VideoUpsertResult } from '../db/models/MediaEntity';
+import { ISourceAdapter, VideoFileInfo, SourceScanStat, ScanResult, ScanOptions, ScanProgressCallback, ScanContextInfo, DEFAULT_SCAN_OPTIONS, DirectedScanResult, FailedDirectory, ErrorInfo, VideoUpsertStrategy, VideoUpsertWithResultProvider } from './VideoScannerTypes';
+import { normalizeScrapeDirectoryPath } from '../services/scrape/ScopedScrapeTypes';
 import { WebDAVAdapter } from './WebDAVAdapter';
 import { SMBAdapter } from './SMBAdapter';
 
 export type { ScanMode } from './VideoScannerTypes';
+export type { VideoUpsertStrategy } from './VideoScannerTypes';
+export type { VideoUpsertWithResultProvider } from './VideoScannerTypes';
+
+function extractErrorMessage(e: Object): string {
+  if (e instanceof Error) {
+    return e.message;
+  }
+  return JSON.stringify(e);
+}
 
 export class UnsupportedAdapter implements ISourceAdapter {
   private sourceType: FileSourceType;
@@ -29,12 +40,12 @@ export class UnsupportedAdapter implements ISourceAdapter {
   }
 }
 
-function createAdapter(fileSource: FileSource, scrapeClient?: ScrapeClient): ISourceAdapter {
+function createAdapter(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy): ISourceAdapter {
   switch (fileSource.type) {
     case FileSourceType.WEBDAV:
-      return new WebDAVAdapter(fileSource, scrapeClient);
+      return new WebDAVAdapter(fileSource, scrapeClient, upsertStrategy);
     case FileSourceType.SMB:
-      return new SMBAdapter(fileSource, scrapeClient);
+      return new SMBAdapter(fileSource, scrapeClient, upsertStrategy);
     default:
       return new UnsupportedAdapter(fileSource.name, fileSource.type);
   }
@@ -44,6 +55,122 @@ interface SourceScanEntry {
   source: FileSource;
   directories: FileSourceDirectory[];
   adapter: ISourceAdapter;
+}
+
+class DatabaseUpsertProvider implements VideoUpsertWithResultProvider {
+  private db: FileSourceDatabase;
+
+  constructor(db: FileSourceDatabase) {
+    this.db = db;
+  }
+
+  async upsertVideoWithResult(entity: VideoEntity): Promise<VideoUpsertResult> {
+    return this.db.upsertVideoWithResult(entity);
+  }
+}
+
+export class DirectedUpsertStrategy implements VideoUpsertStrategy {
+  private provider: VideoUpsertWithResultProvider;
+  private processedFiles: Map<string, number> = new Map<string, number>();
+  private _newlyInsertedVideoIds: number[] = [];
+  private _currentDirHasError: boolean = false;
+  private _currentDirFirstError: ErrorInfo | null = null;
+
+  constructor(provider: VideoUpsertWithResultProvider) {
+    this.provider = provider;
+  }
+
+  beginDirectory(): void {
+    this._currentDirHasError = false;
+    this._currentDirFirstError = null;
+  }
+
+  async upsert(entity: VideoEntity): Promise<number> {
+    const existingId: number | undefined = this.processedFiles.get(entity.filePath);
+    if (existingId !== undefined) {
+      return existingId;
+    }
+    try {
+      const result: VideoUpsertResult = await this.provider.upsertVideoWithResult(entity);
+      this.processedFiles.set(entity.filePath, result.id);
+      if (result.wasNewlyInserted) {
+        this._newlyInsertedVideoIds.push(result.id);
+      }
+      return result.id;
+    } catch (e) {
+      if (!this._currentDirHasError) {
+        this._currentDirFirstError = { message: extractErrorMessage(e) };
+      }
+      this._currentDirHasError = true;
+      throw new Error(extractErrorMessage(e));
+    }
+  }
+
+  hasDirectoryUpsertError(): boolean {
+    return this._currentDirHasError;
+  }
+
+  getDirectoryFirstError(): ErrorInfo {
+    return this._currentDirFirstError ?? { message: 'DB upsert failed' };
+  }
+
+  getNewlyInsertedVideoIds(): number[] {
+    return this._newlyInsertedVideoIds;
+  }
+}
+
+export interface DirectedAdapterBundle {
+  readonly adapter: ISourceAdapter;
+  readonly strategy: DirectedUpsertStrategy;
+}
+
+export interface ScanDirectoriesDeps {
+  init(): Promise<void>;
+  getFileSourceById(sourceId: number): Promise<FileSource | null>;
+  createDirectedAdapter(fileSource: FileSource): DirectedAdapterBundle | null;
+}
+
+class ProductionScanDirectoriesDeps implements ScanDirectoriesDeps {
+  private db: FileSourceDatabase;
+
+  constructor(context: Context) {
+    this.db = FileSourceDatabase.getInstance(context);
+  }
+
+  async init(): Promise<void> {
+    await this.db.init();
+  }
+
+  async getFileSourceById(sourceId: number): Promise<FileSource | null> {
+    return this.db.getFileSourceById(sourceId);
+  }
+
+  createDirectedAdapter(fileSource: FileSource): DirectedAdapterBundle | null {
+    if (fileSource.type !== FileSourceType.WEBDAV && fileSource.type !== FileSourceType.SMB) {
+      return null;
+    }
+    const provider: DatabaseUpsertProvider = new DatabaseUpsertProvider(this.db);
+    const strategy: DirectedUpsertStrategy = new DirectedUpsertStrategy(provider);
+    const adapter: ISourceAdapter = createAdapter(fileSource, undefined, strategy);
+    const bundle: DirectedAdapterBundle = { adapter: adapter, strategy: strategy };
+    return bundle;
+  }
+}
+
+function makeAllFailedResult(directoryPaths: string[], errorMessage: string): DirectedScanResult {
+  const failedDirectories: FailedDirectory[] = [];
+  for (const dirPath of directoryPaths) {
+    const normalizedPath = normalizeScrapeDirectoryPath(dirPath);
+    const failed: FailedDirectory = { directoryPath: normalizedPath, error: { message: errorMessage } };
+    failedDirectories.push(failed);
+  }
+  const result: DirectedScanResult = {
+    succeededDirectories: [],
+    failedDirectories: failedDirectories,
+    newlyInsertedVideoIds: [],
+    totalFilesScanned: 0
+  };
+  return result;
 }
 
 export class VideoScannerUtil {
@@ -260,5 +387,146 @@ export class VideoScannerUtil {
       elapsedMs,
       videos: allVideos
     };
+  }
+
+  static async scanDirectories(
+    context: Context,
+    sourceId: number,
+    directoryPaths: string[],
+    options?: Partial<ScanOptions>
+  ): Promise<DirectedScanResult> {
+    const deps: ScanDirectoriesDeps = new ProductionScanDirectoriesDeps(context);
+    return VideoScannerUtil.scanDirectoriesWithDeps(deps, sourceId, directoryPaths, options);
+  }
+
+  static async scanDirectoriesWithDeps(
+    deps: ScanDirectoriesDeps,
+    sourceId: number,
+    directoryPaths: string[],
+    options?: Partial<ScanOptions>
+  ): Promise<DirectedScanResult> {
+    const onScanProgress: ScanProgressCallback | undefined = options?.onScanProgress;
+    const scanOptions: ScanOptions = {
+      maxDepth: (options?.maxDepth !== undefined) ? options.maxDepth : DEFAULT_SCAN_OPTIONS.maxDepth,
+      mode: (options?.mode !== undefined) ? options.mode : DEFAULT_SCAN_OPTIONS.mode,
+      onScanProgress: onScanProgress,
+      onCurrentPath: options?.onCurrentPath
+    };
+
+    const succeededDirectories: string[] = [];
+    const failedDirectories: FailedDirectory[] = [];
+    let totalFilesScanned: number = 0;
+
+    try {
+      await deps.init();
+    } catch (e) {
+      return makeAllFailedResult(directoryPaths, `DB init failed: ${extractErrorMessage(e)}`);
+    }
+
+    let fileSource: FileSource | null = null;
+    try {
+      fileSource = await deps.getFileSourceById(sourceId);
+    } catch (e) {
+      return makeAllFailedResult(directoryPaths, `Failed to load file source id=${sourceId}: ${extractErrorMessage(e)}`);
+    }
+
+    if (fileSource === null) {
+      return makeAllFailedResult(directoryPaths, `File source not found: id=${sourceId}`);
+    }
+
+    let bundle: DirectedAdapterBundle | null = null;
+    try {
+      bundle = deps.createDirectedAdapter(fileSource);
+    } catch (e) {
+      return makeAllFailedResult(directoryPaths, `Failed to create adapter for source id=${sourceId}: ${extractErrorMessage(e)}`);
+    }
+
+    if (bundle === null) {
+      return makeAllFailedResult(directoryPaths, `Source type "${fileSource.type}" is not supported for directed scan`);
+    }
+
+    const adapter: ISourceAdapter = bundle.adapter;
+    const strategy: DirectedUpsertStrategy = bundle.strategy;
+
+    const sourceType: FileSourceType = fileSource.type;
+    const sourceName: string = fileSource.name;
+
+    const totalDirs: number = directoryPaths.length;
+    let completedDirs: number = 0;
+
+    if (onScanProgress !== undefined) {
+      onScanProgress(0, totalDirs);
+    }
+
+    for (const dirPath of directoryPaths) {
+      const normalizedPath = normalizeScrapeDirectoryPath(dirPath);
+
+      const dirContext: ScanContextInfo = {
+        sourceType: sourceType,
+        sourceName: sourceName,
+        directoryPath: dirPath,
+        currentPath: dirPath
+      };
+      if (onScanProgress !== undefined) {
+        onScanProgress(completedDirs, totalDirs, dirContext);
+      }
+
+      const dirScanOptions: ScanOptions = {
+        maxDepth: scanOptions.maxDepth,
+        mode: scanOptions.mode,
+        onCurrentPath: onScanProgress !== undefined
+          ? (currentPath: string): void => {
+              const newContext: ScanContextInfo = {
+                sourceType: sourceType,
+                sourceName: sourceName,
+                directoryPath: dirPath,
+                currentPath: currentPath
+              };
+              onScanProgress(completedDirs, totalDirs, newContext);
+            }
+          : undefined
+      };
+
+      strategy.beginDirectory();
+      try {
+        const found: VideoFileInfo[] = await adapter.scan(dirPath, dirScanOptions);
+        totalFilesScanned += found.length;
+
+        if (strategy.hasDirectoryUpsertError()) {
+          const error: ErrorInfo = strategy.getDirectoryFirstError();
+          const failed: FailedDirectory = { directoryPath: normalizedPath, error: error };
+          failedDirectories.push(failed);
+          console.error(`[VideoScanner][scanDirectories] Directory "${normalizedPath}" had upsert errors, marking as failed`);
+        } else {
+          succeededDirectories.push(normalizedPath);
+        }
+      } catch (e) {
+        const errInfo: ErrorInfo = { message: extractErrorMessage(e) };
+        const failed: FailedDirectory = { directoryPath: normalizedPath, error: errInfo };
+        failedDirectories.push(failed);
+        console.error(`[VideoScanner][scanDirectories] Directory scan failed: "${normalizedPath}" - ${errInfo.message}`);
+      }
+
+      completedDirs++;
+      if (onScanProgress !== undefined) {
+        onScanProgress(completedDirs, totalDirs);
+      }
+    }
+
+    const newlyInsertedVideoIds: number[] = strategy.getNewlyInsertedVideoIds();
+
+    console.info(
+      `[VideoScanner][scanDirectories] Completed: succeeded=${succeededDirectories.length}, ` +
+      `failed=${failedDirectories.length}, newlyInserted=${newlyInsertedVideoIds.length}, ` +
+      `totalFilesScanned=${totalFilesScanned}`
+    );
+
+    const result: DirectedScanResult = {
+      succeededDirectories,
+      failedDirectories,
+      newlyInsertedVideoIds,
+      totalFilesScanned
+    };
+    return result;
   }
 }
