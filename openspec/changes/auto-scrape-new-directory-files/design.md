@@ -28,16 +28,16 @@ See proposal.md — Why / What Changes. 当前目录保存流程（`FileSourceMo
 
 ### D1: 保存前后规范化路径差集的契约
 
-**选择**：在 `DirectorySelectorState.buildSaveEntries()` 构建结果时，同步计算 `addedPaths: Set<string>` 和 `removedPaths: Set<string>`，作为 `DirectoriesSavedEvent` 的字段随保存调用传入。
+**选择**：差集计算放在 `FileSourceModel.saveDirectoriesWithCleanup()` 内完成，事件仅携带新增目录。`DirectoriesSavedEvent` 只含 `addedDirectoryPaths`；被移除目录用于媒体清理，不进入自动刮削事件。
 
 **计算方式**：
 1. 保存前：从 `FileSourceDao.getDirectoriesForSource(sourceId)` 读取已有目录路径集合 `beforePaths`
-2. 保存后：从 `buildSaveEntries()` 返回的 `FileSourceDirectory[]` 提取路径集合 `afterPaths`
-3. 对两个集合所有路径调用 `normalizeScrapeDirectoryPath()` 规范化
-4. `addedPaths = afterNormalized - beforeNormalized`；`removedPaths = beforeNormalized - afterNormalized`
-5. 仅当 `addedPaths.size > 0` 时发出事件
+2. 保存调用入参：`saveDirectoriesWithCleanup()` 收到的 `FileSourceDirectory[]` 提取路径集合 `afterPaths`
+3. 新增判定：`addedPaths = normalize(afterPaths) - normalize(beforePaths)`（复用 `computeDirectoryPathDiff()`）
+4. 移除判定：`removedPaths = normalize(beforePaths) 中不存在于 normalize(afterPaths) 的原始路径`（复用 `computeRemovedDirectoryPaths()`，返回原始存储值供 DAO 按 `directory_path` 精确匹配删除，`/media/` 与 `/media` 等价写法不会误判为移除）
+5. 事务提交成功后，仅当 `addedPaths.length > 0` 时发出事件
 
-**理由**：差集计算在保存调用点最可靠——此时 before/after 数据均可用，且与保存事务在同一调用链，避免异步竞态。规范化复用现有 `normalizeScrapeDirectoryPath()` 保证与 queue 的 scopeId 一致。
+**理由**：差集计算在保存方法内最可靠——此时 before/after 数据均可用，且与保存事务在同一调用链，避免异步竞态。新增与移除使用同一规范化规则（`normalizeScrapeDirectoryPath`），保证判定口径一致：仅尾斜杠/斜杠风格差异的等价路径既不算新增也不算移除。
 
 **替代方案**：在 `FileSourceDao.saveDirectoriesForSource()` 内部计算差集——需改动 DAO 层职责，且 DAO 无文件源类型信息；放弃。
 
@@ -46,7 +46,7 @@ See proposal.md — Why / What Changes. 当前目录保存流程（`FileSourceMo
 **选择**：新增 `VideoScannerUtil.scanDirectories(context, sourceId, directoryPaths, options)` 方法，严格限定为单个 sourceId + 指定目录列表。
 
 **设计**：
-```
+```text
 scanDirectories(context, sourceId, directoryPaths, options):
   1. 加载 sourceId 对应的 FileSource 及其 adapter（WebDAV/SMB）
   2. 对 directoryPaths 中每个路径调用 adapter.scan(path, scanOptions)
@@ -68,23 +68,27 @@ scanDirectories(context, sourceId, directoryPaths, options):
 
 ### D3: upsert 前可靠判定 DB 不存在并汇总 newlyInsertedVideoIds
 
-**选择**：修改 `VideoDao.upsertVideo()` 返回 `VideoUpsertResult { id: number, wasNewlyInserted: boolean }`，在 `getVideoByPath()` 查询阶段即确定 insert-vs-update。
+**选择**：修改 `VideoDao.upsertVideo()` 返回 `VideoUpsertResult { id: number, wasNewlyInserted: boolean }`。判存快路径用 `findByPath()`，插入用 `ON_CONFLICT_IGNORE`（返回 rowId 或 -1），避免 get-then-insert 在并发下重复插入的竞态。
 
 **实现**：
-```
+```text
 upsertVideo(entity):
-  existing = getVideoByPath(entity.filePath)
+  existing = findByPath(entity.filePath)
   if existing:
     store.update(...)
     return { id: existing.id, wasNewlyInserted: false }
-  else:
-    INSERT OR IGNORE
-    newId = query back
-    return { id: newId, wasNewlyInserted: true }
+  rowId = insertVideo(entity)             // ON_CONFLICT_IGNORE：成功返回 rowId，冲突忽略返回 -1
+  if rowId >= 0:
+    return { id: rowId, wasNewlyInserted: true }
+  // 并发重复插入：本次未插入成功，回查既有记录按已存在处理
+  afterIgnore = findByPath(entity.filePath)
+  if afterIgnore:
+    return { id: afterIgnore.id, wasNewlyInserted: false }
+  throw Error  // 冲突后仍无法定位记录，属异常数据状态
 ```
 
 定向扫描流程在扫描回调中收集 `newlyInsertedVideoIds: number[]`：
-```
+```text
 for each directory in directoryPaths:
   try:
     result = adapter.scan(path, scanOptions)
@@ -97,7 +101,7 @@ for each directory in directoryPaths:
     failedDirectories.push({ path, error })
 ```
 
-**理由**：upsert 内部已有 `getVideoByPath()` 判存否，仅在返回值中暴露 insert/update 区分，零额外查询开销。这是首次入库判据的唯一可信来源——不依赖刮削关联、wasProcessed、元数据完整度。
+**理由**：`findByPath` 快路径覆盖绝大多数场景（零额外开销）；`ON_CONFLICT_IGNORE` 直接返回 rowId 保证并发下"插入成功者"是唯一判新来源——不会出现两条路径同时判定自己插入成功。这是首次入库判据的唯一可信来源——不依赖刮削关联、wasProcessed、元数据完整度。
 
 **替代方案**：
 - 在扫描前批量预查所有路径——无法覆盖扫描过程中并发变更的场景，且增加查询量；放弃
@@ -117,7 +121,7 @@ for each directory in directoryPaths:
 
 **选择**：扩展 `ScrapeScanResult` 为包含成功/失败目录明细的结构：
 
-```
+```text
 interface DirectedScanResult {
   succeededDirectories: string[]          // 扫描成功的目录路径
   failedDirectories: FailedDirectory[]    // 扫描失败的目录
@@ -142,12 +146,14 @@ interface FailedDirectory {
 
 **选择**：在 `ScrapeTaskSnapshot` 的 `request.scope` 中使用扩展的 `FolderScrapeScope`，并在 `result` 中新增 `directedScanContext` 字段存储重试所需信息。
 
-```
-// 扩展 FolderScrapeScope，增加触发来源标记
+```text
+// 自动任务 scope：directoryPaths 为权威多目录列表（已规范化），
+// directoryPath 保留为展示/日志用逗号拼接串，不参与范围解析与身份判定
 interface AutoScrapeFolderScope extends FolderScrapeScope {
   kind: 'folder'
   sourceId: number
-  directoryPath: string        // 逗号拼接的多目录路径（规范化后）
+  directoryPath: string        // 展示用拼接串（手动入口单路径时与 directoryPaths[0] 一致）
+  directoryPaths?: string[]    // 权威目录路径列表（已规范化）；多目录自动任务必填
   displayName: string
   autoTriggered: true          // 标识自动触发
 }
@@ -169,11 +175,11 @@ interface DirectedScanRetryContext {
 **选择**：新增 `AutoScrapeRetryExecutor`，独立于 `ScrapeTaskQueue.retry()` 的通用重试路径。
 
 **设计**：
-```
+```text
 AutoScrapeRetryExecutor.retry(taskId):
   1. 从原 task.result 中提取 DirectedScanRetryContext
   2. 构建新的 ScopedScrapeRequest:
-     - scope: AutoScrapeFolderScope { sourceId, directoryPath: retryPaths.join(','), autoTriggered: true }
+     - scope: AutoScrapeFolderScope { sourceId, directoryPaths: [...retryPaths], directoryPath: retryPaths.join(','), autoTriggered: true }
      - mode: 'incremental'
      - candidateStrategy: 'automatic'
      - videoIds: undefined (重新扫描获取)
@@ -225,7 +231,7 @@ AutoScrapeRetryExecutor.retry(taskId):
 
 **选择**：在 `FileSourceModel.saveDirectoriesWithCleanup()` 完成后，直接调用 `AutoScrapeTrigger.onDirectoriesSaved(event)`，不走 `emitter` 跨进程事件。
 
-```
+```text
 DirectoriesSavedEvent {
   sourceId: number
   fileSourceType: FileSourceType
@@ -234,12 +240,13 @@ DirectoriesSavedEvent {
 ```
 
 **调用点**：
-```
+```text
 FileSourceModel.saveDirectoriesWithCleanup():
-  // ... existing save logic ...
-  // 差集计算 (D1)
-  if addedPaths.size > 0:
-    AutoScrapeTrigger.onDirectoriesSaved({ sourceId, fileSourceType, addedDirectoryPaths: [...addedPaths] })
+  beforePaths/afterPaths 差集计算（D1，computeDirectoryPathDiff / computeRemovedDirectoryPaths）
+  await saveDirectoriesWithMediaCleanup(...)      // 事务提交点
+  if addedPaths.length > 0:
+    AutoScrapeTrigger.onDirectoriesSaved({ sourceId, fileSourceType, addedDirectoryPaths })  // 事务提交后立即异步触发
+  后置清理（cleanupOrphanScrapeMedia / loadFileSources / publishGlobalMediaChange）包独立 try/catch，失败不吞掉已触发事件
 ```
 
 **理由**：保存与触发在同一进程同一线程，无需跨进程通信。`AutoScrapeTrigger` 异步执行不阻塞保存 UI。使用直接调用而非 `emitter` 避免 event ID 管理和反序列化开销。
@@ -248,13 +255,13 @@ FileSourceModel.saveDirectoriesWithCleanup():
 
 ### D12: 自动刮削任务编排流程（端到端）
 
-```
-1. 用户保存目录 → buildSaveEntries() 计算 addedPaths
-2. saveDirectoriesWithCleanup() 完成
-3. if addedPaths.size > 0:
-   AutoScrapeTrigger.onDirectoriesSaved(event)
+```text
+1. 用户保存目录 → saveDirectoriesWithCleanup() 计算规范化差集得到 addedPaths（D1）
+2. saveDirectoriesWithCleanup() 保存事务提交成功
+3. if addedPaths.length > 0:
+   AutoScrapeTrigger.onDirectoriesSaved(event)   // 事务提交后立即触发，后置清理失败不影响
 4. AutoScrapeTrigger (异步):
-   a. 构建 AutoScrapeFolderScope { sourceId, directoryPath: paths.join(','), autoTriggered: true }
+   a. 构建 AutoScrapeFolderScope { sourceId, directoryPaths: paths, directoryPath: paths.join(','), autoTriggered: true }
    b. 构建 ScopedScrapeRequest { scope, mode: 'incremental', candidateStrategy: 'automatic' }
    c. queue.enqueue(request, { phase: 'scanning' }) → 得到 taskId
    d. 调用 scanDirectories(context, sourceId, paths, {

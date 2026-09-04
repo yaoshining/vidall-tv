@@ -62,3 +62,11 @@
 - [x] 8.2 运行 `build_project` 确保 HarmonyOS 项目编译成功。验证：构建 SUCCESS（assembleHap BUILD SUCCESSFUL exit 0，多次确认含最终回归）
 - [x] 8.3 运行 `openspec validate --changes auto-scrape-new-directory-files` 确认变更验证通过。验证：输出 ✓（Totals: 1 passed, 0 failed）
 - [x] 8.4 运行 `openspec verify-change auto-scrape-new-directory-files` 确认实现与 spec 一致。验证：输出通过（openspec CLI 1.10.0 无 `verify-change` 子命令；按仓库内 `openspec-verify-change` skill 三维度人工核对：Completeness——spec 13 条 Requirement 全部映射至实现任务且 40/41 任务勾选（6.2 因断言需设备诚实保留）；Correctness——11 条业务场景由 6.1-6.4 单测覆盖、7 条集成场景由 7.1-7.7 覆盖；Coherence——实现遵循 design 关键决策（路径差集触发、增量+automatic 策略、专用重试上下文、fire-and-forget 解耦））
+
+## 9. 审查意见修复
+
+- [x] 9.1 scope 权威目录列表：`FolderScrapeScope` 新增 `directoryPaths`（已规范化），`directoryPath` 改为展示用拼接串；`scrapeScopeId` 用 directoryPaths 计算身份；`ScrapeScopeResolver.resolveFolderScope` 逐路径查询合并、不再按逗号拆分（修复目录名含逗号的解析歧义）
+- [x] 9.2 保存清理规范化判定：新增 `computeRemovedDirectoryPaths()`，`FileSourceModel.saveDirectoriesWithCleanup` 用规范化差集判定移除目录（`/media/` 与 `/media` 等价，不误删媒体）；事件构造移至事务提交后立即触发，后置清理独立 try/catch 不吞事件
+- [x] 9.3 重试无反馈修复：`ScrapeTaskIndicator` 失败目录重试增加结果提示（未发起/执行失败 toast），复用仓库 `@ohos.promptAction` 风格
+- [x] 9.4 测试夹具修正：`AutoScrapeFlow.test.ets` 7.2/7.3/7.5 改用真实可控目录夹具 + `waitForNewAutoTask` 任务 ID 区分首轮/新任务；`ScopedScrape.test.ets` 新增目录范围解析用例（逗号目录名/多目录/身份区分）；`DirectoryPathDiff.test.ets` 新增 computeRemovedDirectoryPaths 5 用例
+- [x] 9.5 文档同步：design.md D1/D3/D6/D7/D11/D12 重写与实现对齐（upsert ON_CONFLICT_IGNORE 语义、事件字段与调用点、scope 权威列表），裸代码围栏补 `text` 语言标注；proposal.md 中英混排修正；spec 补规范化重叠不误删、扫描失败优先于零目标、部分失败端到端场景、事件不依赖后置清理

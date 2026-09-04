@@ -461,6 +461,7 @@ export class ScrapeTaskQueue {
         kind: 'folder',
         sourceId: scope.sourceId,
         directoryPath: normalizeScrapeDirectoryPath(scope.directoryPath),
+        directoryPaths: scope.directoryPaths === undefined ? undefined : scope.directoryPaths.slice(),
         displayName: scope.displayName,
         autoTriggered: scope.autoTriggered
       };

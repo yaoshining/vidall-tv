@@ -41,32 +41,28 @@ export class ScrapeScopeResolver {
   }
 
   /**
-   * 解析目录范围：directoryPath 支持逗号拼接的多目录路径（自动刮削新增目录任务使用），
+   * 解析目录范围：自动任务携带 directoryPaths 权威多目录列表（目录名可含逗号，不做字符串拆分），
    * 多目录时合并各目录树结果（重叠父子目录由 stableUnique 去重）；
-   * 单目录保持原有目录树查询语义。
+   * 手动任务 directoryPath 为单一路径语义，不按逗号拆分。
    */
   private async resolveFolderScope(scope: FolderScrapeScope): Promise<VideoEntity[]> {
-    const rawPath = scope.directoryPath.trim();
-    const paths: string[] = rawPath.split(',')
-      .map((part: string): string => part.trim())
-      .filter((part: string): boolean => part.length > 0);
-    if (paths.length <= 1) {
-      const normalizedPath = normalizeScrapeDirectoryPath(rawPath);
-      return normalizedPath === '/'
-        ? await this.source.getVideosBySourceId(scope.sourceId)
-        : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
-    }
-    const merged: VideoEntity[] = [];
-    for (const path of paths) {
-      const normalizedPath = normalizeScrapeDirectoryPath(path);
-      const branchVideos = normalizedPath === '/'
-        ? await this.source.getVideosBySourceId(scope.sourceId)
-        : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
-      for (const video of branchVideos) {
-        merged.push(video);
+    if (scope.directoryPaths !== undefined) {
+      const merged: VideoEntity[] = [];
+      for (const path of scope.directoryPaths) {
+        const normalizedPath = normalizeScrapeDirectoryPath(path);
+        const branchVideos = normalizedPath === '/'
+          ? await this.source.getVideosBySourceId(scope.sourceId)
+          : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
+        for (const video of branchVideos) {
+          merged.push(video);
+        }
       }
+      return merged;
     }
-    return merged;
+    const normalizedPath = normalizeScrapeDirectoryPath(scope.directoryPath);
+    return normalizedPath === '/'
+      ? await this.source.getVideosBySourceId(scope.sourceId)
+      : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
   }
 
   private stableUnique(videos: VideoEntity[]): VideoEntity[] {

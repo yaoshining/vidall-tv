@@ -167,7 +167,7 @@ class TestSourceAdapter implements ISourceAdapter {
         try {
           await this.strategy.upsert(entity);
         } catch (e) {
-          // upsert failure captured by strategy
+          // upsert 失败由策略内部捕获并统计，不中断整目录扫描
         }
       }
     }

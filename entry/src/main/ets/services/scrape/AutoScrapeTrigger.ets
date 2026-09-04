@@ -76,7 +76,7 @@ export class AutoScrapeTrigger {
   async startScanTask(sourceId: number, directoryPaths: string[], displayName: string): Promise<void> {
     const context = this.context;
     if (context === null) {
-      console.warn('[AutoScrapeTrigger] context 未注入，跳过自动刮削任务');
+      console.warn('[AutoScrapeTrigger] 上下文未注入，跳过自动刮削任务');
       return;
     }
     if (directoryPaths.length === 0) {
@@ -91,6 +91,7 @@ export class AutoScrapeTrigger {
       kind: 'folder',
       sourceId: sourceId,
       directoryPath: paths.join(','),
+      directoryPaths: paths.slice(),
       displayName: displayName,
       autoTriggered: true
     };

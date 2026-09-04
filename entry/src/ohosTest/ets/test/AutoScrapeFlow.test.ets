@@ -8,12 +8,19 @@
  * 运行方式：
  *   aa test -b com.yao.vidalltv -m entry_test -s unittest OpenHarmonyTestRunner \
  *     -s SKIP_SCAN_TESTS false \
- *     -s TEST_AUTO_SCRAPE_SOURCE_ID <真实文件源 id>
+ *     -s TEST_AUTO_SCRAPE_SOURCE_ID <真实文件源 id> \
+ *     -s TEST_AUTO_SCRAPE_SOURCE_DIR <真实文件源上存在、可达且尚未配置为目录的路径> \
+ *     -s TEST_AUTO_SCRAPE_CONFIGURED_DIR <真实文件源上已配置且已扫描入库的目录路径> \
+ *     -s TEST_AUTO_SCRAPE_CONFIGURED_SUB_DIR <CONFIGURED_DIR 下已存在但尚未配置的子目录路径>
  *
  * 说明：
  *   - 7.1/7.4/7.6/7.7 使用隔离数据库与不存在的 sourceId，离线即可执行；
- *   - 7.2/7.3/7.5 需要真实可达的 WebDAV 文件源，通过 TEST_AUTO_SCRAPE_SOURCE_ID
- *     参数提供，未提供时以软通过处理（与 ScanFlow 先例一致）。
+ *   - 7.2/7.5 需要 TEST_AUTO_SCRAPE_SOURCE_ID + TEST_AUTO_SCRAPE_SOURCE_DIR
+ *     提供受控可达目录（7.5 的不可达目录由该目录派生），未提供时以软通过处理（与 ScanFlow 先例一致）；
+ *   - 7.3 需要 TEST_AUTO_SCRAPE_CONFIGURED_DIR（已配置且已扫描入库，含子目录内容）
+ *     与 TEST_AUTO_SCRAPE_CONFIGURED_SUB_DIR（其下已存在但尚未配置的子目录），
+ *     真实验证零首次入库；运行一次后 SUB_DIR 将被写入目录配置，再次运行会软通过，
+ *     如需重跑请先在文件源中取消勾选该子目录。
  */
 
 import { describe, it, expect, beforeAll } from '@ohos/hypium';
@@ -76,10 +83,56 @@ async function waitForAutoTask(segment: string, timeoutMs: number,
   return undefined;
 }
 
+/** 记录当前所有任务 ID，供 waitForNewAutoTask 排除本轮保存前已存在的旧任务。 */
+function captureTaskIds(): string[] {
+  return ScrapeTaskStore.getState().getTasks().map((task: ScrapeTaskSnapshot): string => task.id);
+}
+
+/** 按目录路径集合定位自动任务（folder scope 覆盖全部给定路径即匹配）。 */
+function findAutoTasksByPathKey(paths: string[]): ScrapeTaskSnapshot[] {
+  return ScrapeTaskStore.getState().getTasks().filter((task: ScrapeTaskSnapshot): boolean => {
+    const scope = task.request.scope;
+    if (scope.kind !== 'folder') {
+      return false;
+    }
+    if (scope.directoryPaths !== undefined) {
+      const dirPaths = scope.directoryPaths;
+      return paths.every((p: string): boolean => dirPaths.includes(p));
+    }
+    return paths.some((p: string): boolean => scope.directoryPath.includes(p));
+  });
+}
+
+/**
+ * 等待出现一个新的自动任务：用 beforeIds 排除本轮保存前已存在的任务。
+ * 同一路径多轮保存的任务 scope 路径稳定，无法仅靠路径区分新旧，必须按 ID 排除。
+ */
+async function waitForNewAutoTask(paths: string[], beforeIds: string[], timeoutMs: number,
+  predicate?: (task: ScrapeTaskSnapshot) => boolean): Promise<ScrapeTaskSnapshot | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const tasks = findAutoTasksByPathKey(paths)
+      .filter((task: ScrapeTaskSnapshot): boolean => !beforeIds.includes(task.id));
+    const found = predicate === undefined
+      ? tasks[0]
+      : tasks.find((task: ScrapeTaskSnapshot): boolean => predicate(task));
+    if (found !== undefined) {
+      return found;
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+  return undefined;
+}
+
 export default function autoScrapeFlowTest() {
   const skipScanTests = getTestParam('SKIP_SCAN_TESTS', 'false') === 'true';
   const realSourceId = parseInt(getTestParam('TEST_AUTO_SCRAPE_SOURCE_ID', '0'), 10);
   const hasRealSource = !isNaN(realSourceId) && realSourceId > 0;
+  const sourceDir = getTestParam('TEST_AUTO_SCRAPE_SOURCE_DIR', '');
+  const configuredDir = getTestParam('TEST_AUTO_SCRAPE_CONFIGURED_DIR', '');
+  const configuredSubDir = getTestParam('TEST_AUTO_SCRAPE_CONFIGURED_SUB_DIR', '');
+  const hasRealSourceDir = hasRealSource && sourceDir.length > 0;
+  const hasConfiguredDirs = hasRealSource && configuredDir.length > 0 && configuredSubDir.length > 0;
 
   let model!: FileSourceModel;
   const noSourceId = 999999001;
@@ -184,77 +237,91 @@ export default function autoScrapeFlowTest() {
     });
 
     /**
-     * 7.2 定向扫描完成且任务进入刮削阶段（需真实文件源，软通过）：
+     * 7.2 定向扫描完成且任务进入刮削阶段（需真实文件源 + 受控可达目录，软通过）：
      * 扫描完成 → markTaskReady → preparing → execute → scraping → completed。
+     * 使用 TEST_AUTO_SCRAPE_SOURCE_DIR 提供真实存在且未配置的目录，
+     * 目录已被配置（event 为 null）时软通过，不虚构验证结果。
      */
     it('定向扫描完成后任务进入刮削阶段直至完成', 0, async () => {
-      if (skipScanTests || !hasRealSource) {
-        console.info('[AutoScrapeFlow] 7.2 软通过：SKIP_SCAN_TESTS 或未提供 TEST_AUTO_SCRAPE_SOURCE_ID');
+      if (skipScanTests || !hasRealSourceDir) {
+        console.info('[AutoScrapeFlow] 7.2 软通过：SKIP_SCAN_TESTS 或未提供 TEST_AUTO_SCRAPE_SOURCE_ID/TEST_AUTO_SCRAPE_SOURCE_DIR');
         expect(true).assertTrue();
         return;
       }
-      const seg = `scan-done-it-${Date.now()}`;
-      const dir: FileSourceDirectory = {
-        sourceId: realSourceId,
-        directoryPath: `/auto-scrape-it/${seg}`,
-        customName: ''
-      };
-      const event = await model.saveDirectoriesWithCleanup(realSourceId, [dir]);
-      expect(event).not().assertNull();
+      const beforeIds = captureTaskIds();
+      const dirs: FileSourceDirectory[] = [
+        { sourceId: realSourceId, directoryPath: sourceDir, customName: '' }
+      ];
+      const event = await model.saveDirectoriesWithCleanup(realSourceId, dirs);
+      if (event === null) {
+        console.info('[AutoScrapeFlow] 7.2 软通过：TEST_AUTO_SCRAPE_SOURCE_DIR 已被配置，未产生新增目录');
+        expect(true).assertTrue();
+        return;
+      }
+      expect(event!.addedDirectoryPaths.length).assertEqual(1);
       // 等待任务走完 scanning → preparing/scraping → 终态
-      const task = await waitForAutoTask(seg, 60000,
+      const task = await waitForNewAutoTask([sourceDir], beforeIds, 120000,
         (t: ScrapeTaskSnapshot): boolean => t.status === 'completed' || t.status === 'partial-failure');
       expect(task).not().assertNull();
       expect(task!.status !== 'failed').assertTrue();
     });
 
     /**
-     * 7.3 零首次入库视频时任务正常 completed（需真实文件源，软通过）：
-     * 已扫描过的目录再次触发 → newlyInsertedVideoIds=[] → completed 而非 failed。
+     * 7.3 零首次入库视频时任务正常 completed（需真实文件源 + 已扫描入库夹具，软通过）：
+     * 使用 TEST_AUTO_SCRAPE_CONFIGURED_DIR（已配置且已扫描入库）与其下未配置子目录
+     * TEST_AUTO_SCRAPE_CONFIGURED_SUB_DIR：仅子目录为新增目录，其内容已随父目录入库，
+     * 扫描后无首次入库视频 → completed 而非 failed。
+     * 不做 save([])+重加：移除目录会触发媒体清理，重加后并非可靠的"零新增"前提。
      */
     it('零首次入库视频时任务正常完成', 0, async () => {
-      if (skipScanTests || !hasRealSource) {
-        console.info('[AutoScrapeFlow] 7.3 软通过：SKIP_SCAN_TESTS 或未提供 TEST_AUTO_SCRAPE_SOURCE_ID');
+      if (skipScanTests || !hasConfiguredDirs) {
+        console.info('[AutoScrapeFlow] 7.3 软通过：SKIP_SCAN_TESTS 或未提供 TEST_AUTO_SCRAPE_CONFIGURED_DIR/TEST_AUTO_SCRAPE_CONFIGURED_SUB_DIR');
         expect(true).assertTrue();
         return;
       }
-      const seg = `zero-new-it-${Date.now()}`;
-      const dir: FileSourceDirectory = {
-        sourceId: realSourceId,
-        directoryPath: `/auto-scrape-it/${seg}`,
-        customName: ''
-      };
-      // 第一次保存触发扫描（把目录视频入库）
-      await model.saveDirectoriesWithCleanup(realSourceId, [dir]);
-      await waitForAutoTask(seg, 60000,
-        (t: ScrapeTaskSnapshot): boolean => t.status !== 'waiting');
-      // 第二次保存移除后重加同一路径：内容已入库，无首次入库视频 → completed
-      await model.saveDirectoriesWithCleanup(realSourceId, []);
-      const event = await model.saveDirectoriesWithCleanup(realSourceId, [dir]);
-      expect(event).not().assertNull();
-      const task = await waitForAutoTask(seg, 60000,
+      const beforeIds = captureTaskIds();
+      const dirs: FileSourceDirectory[] = [
+        { sourceId: realSourceId, directoryPath: configuredDir, customName: '' },
+        { sourceId: realSourceId, directoryPath: configuredSubDir, customName: '' }
+      ];
+      const event = await model.saveDirectoriesWithCleanup(realSourceId, dirs);
+      if (event === null) {
+        console.info('[AutoScrapeFlow] 7.3 软通过：TEST_AUTO_SCRAPE_CONFIGURED_SUB_DIR 已被配置，未产生新增目录');
+        expect(true).assertTrue();
+        return;
+      }
+      expect(event!.addedDirectoryPaths.length).assertEqual(1);
+      expect(event!.addedDirectoryPaths[0]).assertEqual(configuredSubDir);
+      const task = await waitForNewAutoTask([configuredDir, configuredSubDir], beforeIds, 120000,
         (t: ScrapeTaskSnapshot): boolean => t.status === 'completed');
       expect(task).not().assertNull();
     });
 
     /**
-     * 7.5 部分目录扫描失败 → partial-failure → 重试仅扫失败目录（需真实文件源，软通过）：
-     * 一个可达目录 + 一个不可达目录 → 部分失败 → retry 后 scope 仅含失败目录。
+     * 7.5 部分目录扫描失败 → partial-failure → 重试仅扫失败目录（需真实文件源 + 受控可达目录，软通过）：
+     * 可达目录用 TEST_AUTO_SCRAPE_SOURCE_DIR（真实存在的受控夹具），
+     * 不可达目录由其派生（不存在子路径，避免虚构目录名）。
      */
     it('部分扫描失败后重试仅扫失败目录', 0, async () => {
-      if (skipScanTests || !hasRealSource) {
-        console.info('[AutoScrapeFlow] 7.5 软通过：SKIP_SCAN_TESTS 或未提供 TEST_AUTO_SCRAPE_SOURCE_ID');
+      if (skipScanTests || !hasRealSourceDir) {
+        console.info('[AutoScrapeFlow] 7.5 软通过：SKIP_SCAN_TESTS 或未提供 TEST_AUTO_SCRAPE_SOURCE_ID/TEST_AUTO_SCRAPE_SOURCE_DIR');
         expect(true).assertTrue();
         return;
       }
-      const seg = `partial-it-${Date.now()}`;
+      const base = sourceDir.endsWith('/') ? sourceDir.substring(0, sourceDir.length - 1) : sourceDir;
+      const missingDir = `${base}/missing-${Date.now()}`;
+      const beforeIds = captureTaskIds();
       const dirs: FileSourceDirectory[] = [
-        { sourceId: realSourceId, directoryPath: `/auto-scrape-it/${seg}/real`, customName: '' },
-        { sourceId: realSourceId, directoryPath: `/auto-scrape-it/${seg}/missing-sub`, customName: '' }
+        { sourceId: realSourceId, directoryPath: sourceDir, customName: '' },
+        { sourceId: realSourceId, directoryPath: missingDir, customName: '' }
       ];
       const event = await model.saveDirectoriesWithCleanup(realSourceId, dirs);
-      expect(event).not().assertNull();
-      const task = await waitForAutoTask(seg, 60000,
+      if (event === null) {
+        console.info('[AutoScrapeFlow] 7.5 软通过：TEST_AUTO_SCRAPE_SOURCE_DIR 已被配置，未产生新增目录');
+        expect(true).assertTrue();
+        return;
+      }
+      const task = await waitForNewAutoTask([sourceDir, missingDir], beforeIds, 120000,
         (t: ScrapeTaskSnapshot): boolean => t.status === 'partial-failure' || t.status === 'failed');
       expect(task).not().assertNull();
       if (task!.status !== 'partial-failure') {
@@ -265,16 +332,22 @@ export default function autoScrapeFlowTest() {
       const ctx = task!.result?.directedScanContext;
       expect(ctx).not().assertNull();
       expect(ctx!.failedDirectoryPaths.length).assertLess(2);
+      expect(ctx!.failedDirectoryPaths.includes(missingDir)).assertTrue();
       const retried = await AutoScrapeRetryExecutor.getInstance().retry(task!.id);
       expect(retried).assertTrue();
-      const retryTask = await waitForAutoTask(seg, WAIT_TASK_MS,
+      const retryTask = await waitForNewAutoTask([missingDir], beforeIds, WAIT_TASK_MS,
         (t: ScrapeTaskSnapshot): boolean => t.id !== task!.id);
       expect(retryTask).not().assertNull();
-      // 重试 scope 仅含失败目录
-      const retryPath = folderScopePath(retryTask!.request.scope);
-      expect(retryPath).not().assertNull();
-      expect(retryPath!.includes('missing-sub')).assertTrue();
-      expect(retryPath!.includes('/real')).assertFalse();
+      // 重试 scope 仅含失败目录（按 directoryPaths 权威列表断言，不依赖拼接串）
+      const retryScope = retryTask!.request.scope;
+      expect(retryScope.kind).assertEqual('folder');
+      let retryPaths: string[] = [];
+      if (retryScope.kind === 'folder' && retryScope.directoryPaths !== undefined) {
+        retryPaths = retryScope.directoryPaths;
+      }
+      expect(retryPaths.length).assertEqual(1);
+      expect(retryPaths[0]).assertEqual(missingDir);
+      expect(retryPaths.includes(sourceDir)).assertFalse();
     });
 
     /**
