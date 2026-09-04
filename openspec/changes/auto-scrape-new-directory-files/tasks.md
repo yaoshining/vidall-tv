@@ -32,11 +32,11 @@
 
 ## 5. 目录保存异步触发
 
-- [ ] 5.1 新增 `AutoScrapeTrigger` 单例类（`services/scrape/AutoScrapeTrigger.ets`），暴露 `onDirectoriesSaved(event: DirectoriesSavedEvent)` 异步方法：构建 `AutoScrapeFolderScope { sourceId, directoryPath: paths.join(','), autoTriggered: true, displayName }` → 构建 `ScopedScrapeRequest { scope, mode: 'incremental', candidateStrategy: 'automatic' }` → `queue.enqueue(request, { phase: 'scanning' })` → 启动 `scanDirectories()` → 扫描完成调用 `handleScanComplete(taskId, result)`。验证：`arkts_check` 通过
-- [ ] 5.2 `AutoScrapeTrigger.handleScanComplete(taskId, result)` 实现三路判定：无失败 → `markTaskReady(taskId)` 且 `request.videoIds = newlyInsertedVideoIds`；部分失败 → 存 `DirectedScanRetryContext` 到 task.result → `markTaskReady(taskId)` 且 `request.videoIds = newlyInsertedVideoIds`；全部失败 → 存 `DirectedScanRetryContext` → `markTaskFailed(taskId)`。验证：三种终态路径正确
-- [ ] 5.3 `handleScanComplete` 中 `newlyInsertedVideoIds.length === 0` 且无失败时，仍调用 `markTaskReady(taskId)`，`ScopedScrapeService.execute()` 解析零目标后自然 completed（D8）。验证：零目标任务正常 completed 而非 failed
-- [ ] 5.4 在 `FileSourceModel.saveDirectoriesWithCleanup()` 完成后（差集计算后），若 `addedPaths.size > 0` 则调用 `AutoScrapeTrigger.getInstance().onDirectoriesSaved({ sourceId, fileSourceType, addedDirectoryPaths: [...addedPaths] })`。验证：保存含新增目录后 `AutoScrapeTrigger` 被调用；无新增目录时不调用；保存 UI 不被阻塞
-- [ ] 5.5 后台刮削失败不回滚保存——`AutoScrapeTrigger.onDirectoriesSaved()` 为异步调用，异常不向上传播至保存流程。验证：`onDirectoriesSaved` 内部异常被 catch 且不影响保存结果
+- [x] 5.1 新增 `AutoScrapeTrigger` 单例类（`services/scrape/AutoScrapeTrigger.ets`），暴露 `onDirectoriesSaved(event: DirectoriesSavedEvent)` 异步方法：构建 `AutoScrapeFolderScope { sourceId, directoryPath: paths.join(','), autoTriggered: true, displayName }` → 构建 `ScopedScrapeRequest { scope, mode: 'incremental', candidateStrategy: 'automatic' }` → `queue.enqueue(request, { phase: 'scanning' })` → 启动 `scanDirectories()` → 扫描完成调用 `handleScanComplete(taskId, result)`。验证：`arkts_check` 通过（displayName：单目录取末段目录名，多目录显示数量；路径入队前统一规范化）
+- [x] 5.2 `AutoScrapeTrigger.handleScanComplete(taskId, result)` 实现三路判定：无失败 → `markTaskReady(taskId)` 且 `request.videoIds = newlyInsertedVideoIds`；部分失败 → 存 `DirectedScanRetryContext` 到 task.result → `markTaskReady(taskId)` 且 `request.videoIds = newlyInsertedVideoIds`；全部失败 → 存 `DirectedScanRetryContext` → `markTaskFailed(taskId)`。验证：三种终态路径正确（与 4.6 编排同步实现：`setScanVideoIds` 写入 request.videoIds 后按上下文调用 markTaskReady/markTaskFailed；videoIds 经 `limitToVideoIds` 快速路径生效）
+- [x] 5.3 `handleScanComplete` 中 `newlyInsertedVideoIds.length === 0` 且无失败时，仍调用 `markTaskReady(taskId)`，`ScopedScrapeService.execute()` 解析零目标后自然 completed（D8）。验证：零目标任务正常 completed 而非 failed（实现：无失败分支恒写入 videoIds，含空数组——executeAutomatic 对 autoTriggered 任务跳过 ScrapeModeFilter，空数组经 limitToVideoIds 解析为零目标并 completed）
+- [x] 5.4 在 `FileSourceModel.saveDirectoriesWithCleanup()` 完成后（差集计算后），若 `addedPaths.size > 0` 则调用 `AutoScrapeTrigger.getInstance().onDirectoriesSaved({ sourceId, fileSourceType, addedDirectoryPaths: [...addedPaths] })`。验证：保存含新增目录后 `AutoScrapeTrigger` 被调用；无新增目录时不调用；保存 UI 不被阻塞（实现：`addedPaths.length > 0` 分支内 fire-and-forget 调用，不 await，不影响返回 event 与保存 toast/pop）
+- [x] 5.5 后台刮削失败不回滚保存——`AutoScrapeTrigger.onDirectoriesSaved()` 为异步调用，异常不向上传播至保存流程。验证：`onDirectoriesSaved` 内部异常被 catch 且不影响保存结果（实现：onDirectoriesSaved 与 startScanTask 双层 try/catch，编排异常仅日志记录）
 
 ## 6. 单元测试
 

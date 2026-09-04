@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { ScrapeTaskQueue } from './ScrapeTaskQueue';
 import { ScrapeTaskStore } from './ScrapeTaskStore';
 import {
+  DirectoriesSavedEvent,
   DirectedScanRetryContext,
   FolderScrapeScope,
   ScrapeProgress,
@@ -36,6 +37,36 @@ export class AutoScrapeTrigger {
 
   setContext(context: common.Context): void {
     this.context = context;
+  }
+
+  /**
+   * 目录保存成功后触发自动刮削（D11/D12）：仅扫描本次新增目录，只刮削首次入库视频。
+   * 异步执行且不向上传播异常，保存流程与页面退出不受影响（5.5）。
+   */
+  async onDirectoriesSaved(event: DirectoriesSavedEvent): Promise<void> {
+    try {
+      if (event.addedDirectoryPaths.length === 0) {
+        return;
+      }
+      const displayName = this.buildAutoTaskDisplayName(event.addedDirectoryPaths);
+      await this.startScanTask(event.sourceId, event.addedDirectoryPaths, displayName);
+    } catch (e) {
+      const error = e as BusinessError;
+      console.error(`[AutoScrapeTrigger] 自动刮削触发失败 sourceId=${event.sourceId}: ${error.message}`);
+    }
+  }
+
+  /** 自动任务显示名：单目录取末段目录名，多目录显示数量（design D14 允许 displayName 优化）。 */
+  private buildAutoTaskDisplayName(directoryPaths: string[]): string {
+    if (directoryPaths.length === 1) {
+      const normalized = normalizeScrapeDirectoryPath(directoryPaths[0]);
+      const segments = normalized.split('/').filter((segment: string): boolean => segment.length > 0);
+      if (segments.length > 0) {
+        return segments[segments.length - 1];
+      }
+      return '根目录';
+    }
+    return `新增目录 × ${directoryPaths.length}`;
   }
 
   /**

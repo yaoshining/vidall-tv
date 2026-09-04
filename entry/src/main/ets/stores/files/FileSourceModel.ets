@@ -2,6 +2,7 @@ import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { FileSource, FileSourceDirectory, DirStatus, FileSourceType } from "../../db/models/FileSourceEntity";
 import { MediaDataVersionStore } from "../../services/scrape/MediaDataVersionStore";
 import { GlobalScrapeScope, computeDirectoryPathDiff, DirectoriesSavedEvent } from "../../services/scrape/ScopedScrapeTypes";
+import { AutoScrapeTrigger } from "../../services/scrape/AutoScrapeTrigger";
 import { BusinessError } from '@kit.BasicServicesKit';
 import { DirectoryDeletionModel } from './DirectoryDeletionAction';
 
@@ -284,6 +285,8 @@ export class FileSourceModel implements DirectoryDeletionModel {
           addedDirectoryPaths: addedPaths
         };
         console.info(`FileSourceModel: 目录已保存，新增 ${addedPaths.length} 个目录，清理了 ${removedDirs.length} 个被移除目录`);
+        // 保存成功后异步触发自动刮削（仅扫描新增目录），不等待、不阻塞保存结果
+        AutoScrapeTrigger.getInstance().onDirectoriesSaved(event);
         return event;
       }
       console.info(`FileSourceModel: 目录已保存，清理了 ${removedDirs.length} 个被移除目录`);
