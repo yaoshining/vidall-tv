@@ -154,6 +154,20 @@ export class ScrapeTaskQueue {
     this.publish();
   }
 
+  /**
+   * 扫描完成后写入本次定向扫描收集的首次入库 videoIds（自动目录任务专用）。
+   * 必须在 markTaskReady 之前调用：executor 对 autoTriggered 且 videoIds 存在
+   * （含空数组）的任务跳过 ScrapeModeFilter，videoIds=[] 时解析为零目标并自然 completed（D8）。
+   */
+  setScanVideoIds(taskId: string, videoIds: number[]): void {
+    const task = this.findTask(taskId);
+    if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
+      return;
+    }
+    task.request.videoIds = videoIds.slice();
+    task.updatedAt = Date.now();
+  }
+
   confirmCandidate(taskId: string, candidate: ScrapeCandidate): boolean {
     const task = this.findTask(taskId);
     if (task === undefined || task.status !== 'waiting-confirmation' || task.pause === undefined ||

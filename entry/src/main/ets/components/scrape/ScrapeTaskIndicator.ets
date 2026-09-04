@@ -1,5 +1,6 @@
 import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
+import { AutoScrapeRetryExecutor } from '../../services/scrape/AutoScrapeRetryExecutor';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { ScrapeCandidate, ScrapeTaskPhase, ScrapeTaskSnapshot, ScrapeScanContext } from '../../services/scrape/ScopedScrapeTypes';
 import { ScrapeManagementPage } from '../../pages/scrape/ScrapeManagementPage';
@@ -132,8 +133,11 @@ export struct ScrapeTaskIndicator {
           this.Action('取消', () => { ScrapeTaskQueue.getInstance().cancel(task.id); })
         } else if (task.status === 'failed' || task.status === 'partial-failure') {
           Row({ space: 8 }) {
-            // 扫描阶段失败的任务无法由队列重试恢复（扫描由 UI 层驱动），只提供清除入口
-            if (task.phase !== 'scanning') {
+            // 自动目录扫描任务携带定向扫描重试上下文，由专用执行器重扫失败目录；
+            // 其余扫描阶段失败任务仍无重试入口（扫描由 UI 层驱动），只提供清除入口
+            if (task.result?.directedScanContext !== undefined) {
+              this.Action('重试', () => { AutoScrapeRetryExecutor.getInstance().retry(task.id); })
+            } else if (task.phase !== 'scanning') {
               this.Action('重试', () => { ScrapeTaskQueue.getInstance().retry(task.id); })
             }
             this.Action('清除', () => { ScrapeTaskQueue.getInstance().clear(task.id); })
