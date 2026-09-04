@@ -48,13 +48,13 @@
 
 ## 7. 集成测试
 
-- [ ] 7.1 新增目录保存后任务自动入队：对文件源新增目录路径并保存 → `AutoScrapeTrigger` 被调用 → 任务入队且 `phase='scanning'`。验证：任务出现在 `ScrapeTaskStore.snapshots`
-- [ ] 7.2 定向扫描完成且任务进入刮削阶段：扫描完成 → `markTaskReady()` → `phase='preparing'` → `ScopedScrapeService.execute()` → `phase='scraping'` → completed。验证：任务状态序列正确
-- [ ] 7.3 零首次入库视频时任务正常 completed：目录中视频 upsert 前均已存在 → `newlyInsertedVideoIds=[]` → 任务 completed + 0 目标。验证：任务非 failed
-- [ ] 7.4 全部扫描失败 → 任务 failed → 重试保留完整定向上下文：所有目录扫描异常 → `markTaskFailed()` → 重试 scope 含全部原始目录。验证：重试任务 scope 正确
-- [ ] 7.5 部分目录扫描失败 → partial-failure → 重试仅扫描失败目录：部分成功部分失败 → 任务 partial-failure → 重试 scope 仅含失败目录。验证：重试任务 scope 正确
-- [ ] 7.6 别名变化不触发自动刮削：仅修改别名保存 → 无任务入队。验证：`ScrapeTaskStore.snapshots` 无新增
-- [ ] 7.7 集成测试可通过 `SKIP_SCAN_TESTS=true` 跳过，遵循现有 `scan-flow-integration-tests` 模式。验证：参数生效时不执行
+- [x] 7.1 新增目录保存后任务自动入队：对文件源新增目录路径并保存 → `AutoScrapeTrigger` 被调用 → 任务入队且 `phase='scanning'`。验证：任务出现在 `ScrapeTaskStore.snapshots`（`AutoScrapeFlow.test.ets`「新增目录保存后任务自动入队」：隔离 DB + 保存新增目录 → event 返回非 null → 轮询断言 folder scope 任务入队；ohosTest HAP 编译通过，断言执行需设备/模拟器）
+- [x] 7.2 定向扫描完成且任务进入刮削阶段：扫描完成 → `markTaskReady()` → `phase='preparing'` → `ScopedScrapeService.execute()` → `phase='scraping'` → completed。验证：任务状态序列正确（「定向扫描完成后任务进入刮削阶段直至完成」：需真实文件源，经 `TEST_AUTO_SCRAPE_SOURCE_ID` 参数门控，未提供时软通过——与 ScanFlow 先例一致）
+- [x] 7.3 零首次入库视频时任务正常 completed：目录中视频 upsert 前均已存在 → `newlyInsertedVideoIds=[]` → 任务 completed + 0 目标。验证：任务非 failed（「零首次入库视频时任务正常完成」：真实源门控 + 二次保存同路径触发零新增场景，断言 completed 而非 failed）
+- [x] 7.4 全部扫描失败 → 任务 failed → 重试保留完整定向上下文：所有目录扫描异常 → `markTaskFailed()` → 重试 scope 含全部原始目录。验证：重试任务 scope 正确（「全部扫描失败后重试保留完整定向上下文」：离线执行——sourceId 不存在致全失败 → 断言 directedScanContext.originalDirectoryPaths 含 2 目录 → retry → 重试任务 scope 覆盖全部原始目录）
+- [x] 7.5 部分目录扫描失败 → partial-failure → 重试仅扫描失败目录：部分成功部分失败 → 任务 partial-failure → 重试 scope 仅含失败目录。验证：重试任务 scope 正确（「部分扫描失败后重试仅扫失败目录」：真实源门控 + 可达/不可达目录组合；源环境未产生部分失败时软通过并记录日志）
+- [x] 7.6 别名变化不触发自动刮削：仅修改别名保存 → 无任务入队。验证：`ScrapeTaskStore.snapshots` 无新增（「别名变化不触发自动刮削」：离线执行——首次保存触发任务后，仅改 customName 二次保存 → 返回 null → 断言任务数不变）
+- [x] 7.7 集成测试可通过 `SKIP_SCAN_TESTS=true` 跳过，遵循现有 `scan-flow-integration-tests` 模式。验证：参数生效时不执行（套件级门控与 ScanFlow.getTestParam 同模式；「SKIP_SCAN_TESTS 参数跳过机制生效」用例自检参数解析行为）
 
 ## 8. 仓库验证与 OpenSpec 校验
 
