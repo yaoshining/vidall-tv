@@ -27,6 +27,7 @@ export default function directoryPathDiffTest() {
     })
 
     it('别名变化不影响结果：仅路径参与差集计算', 0, () => {
+      // 对应 6.5：用户仅修改 customName（别名）时，目录路径集合不变，addedPaths 为空，不触发自动刮削
       const result: string[] = computeDirectoryPathDiff(['/movie'], ['/movie'])
       expect(result.length).assertEqual(0)
     })
