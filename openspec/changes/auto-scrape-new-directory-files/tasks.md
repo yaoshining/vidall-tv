@@ -20,11 +20,11 @@
 
 ## 4. 队列 Runner/Context/专用 Retry
 
-- [ ] 4.1 扩展 `FolderScrapeScope` 增加 `autoTriggered?: true` 可选字段（`ScopedScrapeTypes.ets`），使 `scrapeScopeId()` 对 `autoTriggered=true` 的 scope 生成含 `auto:` 前缀的 key 以区分手动/自动任务。验证：`arkts_check` 通过且自动/手动 folder scope 产生不同 scopeId
-- [ ] 4.2 定义 `DirectedScanRetryContext` 接口（`ScopedScrapeTypes.ets`），包含 `sourceId: number`、`originalDirectoryPaths: string[]`、`failedDirectoryPaths: string[]`。验证：`arkts_check` 通过且字段与 design D6 一致
-- [ ] 4.3 在 `ScrapeTaskSnapshot.result` 或新增字段中存储 `directedScanContext?: DirectedScanRetryContext`，部分失败/全部失败时写入。验证：`arkts_check` 通过
-- [ ] 4.4 修改 `ScrapeTaskQueue.enqueue()` 使 `ScrapeEnqueueOptions.phase` 支持 folder scope 的 `'scanning'` 值（当前仅 global scope 使用 scanning 阶段）。验证：folder scope + `{ phase: 'scanning' }` 入队后任务 `phase='scanning'` 且 `status='waiting'`
-- [ ] 4.5 `ScopedScrapeService.execute()` 处理 `autoTriggered=true` 的 folder scope 时，若 `request.videoIds` 存在则跳过 `ScrapeModeFilter` 筛选，直接使用 `videoIds`（复用已有 retry 快速路径）。验证：自动任务仅刮削 `videoIds` 中的视频，不额外筛选
+- [x] 4.1 扩展 `FolderScrapeScope` 增加 `autoTriggered?: true` 可选字段（`ScopedScrapeTypes.ets`），使 `scrapeScopeId()` 对 `autoTriggered=true` 的 scope 生成含 `auto:` 前缀的 key 以区分手动/自动任务。验证：`arkts_check` 通过且自动/手动 folder scope 产生不同 scopeId
+- [x] 4.2 定义 `DirectedScanRetryContext` 接口（`ScopedScrapeTypes.ets`），包含 `sourceId: number`、`originalDirectoryPaths: string[]`、`failedDirectoryPaths: string[]`。验证：`arkts_check` 通过且字段与 design D6 一致
+- [x] 4.3 在 `ScrapeTaskSnapshot.result` 或新增字段中存储 `directedScanContext?: DirectedScanRetryContext`，部分失败/全部失败时写入。验证：`arkts_check` 通过（实现：`ScrapeResult` 新增可选字段 `directedScanContext`，按 D6 存入 result；`markTaskReady`/`markTaskFailed` 接受可选上下文参数写入；`handleOutcome`/`fail` 继承旧 result 上下文避免被刮削结果覆盖；扫描存在失败目录且刮削全部成功时终态为 `partial-failure` 以保留重试入口）
+- [x] 4.4 修改 `ScrapeTaskQueue.enqueue()` 使 `ScrapeEnqueueOptions.phase` 支持 folder scope 的 `'scanning'` 值（当前仅 global scope 使用 scanning 阶段）。验证：folder scope + `{ phase: 'scanning' }` 入队后任务 `phase='scanning'` 且 `status='waiting'`（验证结论：`enqueue` 已透传 `options.phase`，folder scope + scanning 行为成立；schedule 跳过 scanning、`updateScanProgress`/`markTaskReady`/`markTaskFailed`/`cancel` 均按 waiting+scanning 正确工作；已补充 `ScrapeEnqueueOptions.phase` 契约注释）
+- [x] 4.5 `ScopedScrapeService.execute()` 处理 `autoTriggered=true` 的 folder scope 时，若 `request.videoIds` 存在则跳过 `ScrapeModeFilter` 筛选，直接使用 `videoIds`（复用已有 retry 快速路径）。验证：自动任务仅刮削 `videoIds` 中的视频，不额外筛选（补充：`ScrapeScopeResolver.resolveFolderScope()` 支持逗号拼接多目录路径解析——自动任务 scope 的 directoryPath 为 `paths.join(',')`，单路径语义不变，多路径合并后由 `stableUnique` 去重；无此扩展 resolver 对自动 scope 恒解析为空，端到端流程不成立）
 - [ ] 4.6 新增 `AutoScrapeRetryExecutor` 单例类（`services/scrape/AutoScrapeRetryExecutor.ets`）：从失败/部分失败任务的 `result.directedScanRetryContext` 提取上下文，构建新 `ScopedScrapeRequest { scope: AutoScrapeFolderScope, mode: 'incremental', candidateStrategy: 'automatic' }`，入队 `{ phase: 'scanning' }`，启动 `scanDirectories()`，全流程与 `AutoScrapeTrigger` 一致。验证：`arkts_check` 通过
 - [ ] 4.7 `AutoScrapeRetryExecutor.retry(taskId)` 全部失败时 `failedDirectoryPaths === originalDirectoryPaths`，重试扫描全部原始目录；部分失败时 `failedDirectoryPaths` 仅为失败目录。验证：重试任务 scope 的 directoryPath 仅包含需重试的路径
 - [ ] 4.8 修改 `ScrapeTaskIndicator` 重试按钮逻辑：当任务 `result.directedScanContext` 存在时调用 `AutoScrapeRetryExecutor.retry(taskId)` 而非 `Queue.retry(taskId)`。验证：自动刮削失败任务的重试走专用 executor

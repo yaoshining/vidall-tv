@@ -1,6 +1,6 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { VideoEntity } from '../../db/models/MediaEntity';
-import { ScrapeScope, normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
+import { FolderScrapeScope, ScrapeScope, normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
 
 export { normalizeScrapeDirectoryPath };
 
@@ -33,14 +33,40 @@ export class ScrapeScopeResolver {
       const video = await this.source.getVideoById(scope.videoId);
       videos = video === null ? [] : [video];
     } else if (scope.kind === 'folder') {
-      const normalizedPath = normalizeScrapeDirectoryPath(scope.directoryPath);
-      videos = normalizedPath === '/'
-        ? await this.source.getVideosBySourceId(scope.sourceId)
-        : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
+      videos = await this.resolveFolderScope(scope);
     } else {
       videos = await this.source.getAllVideos();
     }
     return this.stableUnique(videos);
+  }
+
+  /**
+   * 解析目录范围：directoryPath 支持逗号拼接的多目录路径（自动刮削新增目录任务使用），
+   * 多目录时合并各目录树结果（重叠父子目录由 stableUnique 去重）；
+   * 单目录保持原有目录树查询语义。
+   */
+  private async resolveFolderScope(scope: FolderScrapeScope): Promise<VideoEntity[]> {
+    const rawPath = scope.directoryPath.trim();
+    const paths: string[] = rawPath.split(',')
+      .map((part: string): string => part.trim())
+      .filter((part: string): boolean => part.length > 0);
+    if (paths.length <= 1) {
+      const normalizedPath = normalizeScrapeDirectoryPath(rawPath);
+      return normalizedPath === '/'
+        ? await this.source.getVideosBySourceId(scope.sourceId)
+        : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
+    }
+    const merged: VideoEntity[] = [];
+    for (const path of paths) {
+      const normalizedPath = normalizeScrapeDirectoryPath(path);
+      const branchVideos = normalizedPath === '/'
+        ? await this.source.getVideosBySourceId(scope.sourceId)
+        : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
+      for (const video of branchVideos) {
+        merged.push(video);
+      }
+    }
+    return merged;
   }
 
   private stableUnique(videos: VideoEntity[]): VideoEntity[] {

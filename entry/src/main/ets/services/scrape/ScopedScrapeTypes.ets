@@ -70,8 +70,11 @@ export interface EpisodeScrapeScope {
 export interface FolderScrapeScope {
   kind: 'folder';
   sourceId: number;
+  /** 目录保存自动触发场景为逗号拼接的多目录路径（规范化后）。 */
   directoryPath: string;
   displayName: string;
+  /** 自动刮削触发标记：目录保存后自动创建的任务携带，用于与手动文件夹任务区分身份。 */
+  autoTriggered?: true;
 }
 
 export interface GlobalScrapeScope {
@@ -113,7 +116,8 @@ export function scrapeScopeId(scope: ScrapeScope): string {
     return `episode:${scope.videoId}`;
   }
   if (scope.kind === 'folder') {
-    return `folder:${scope.sourceId}:${normalizeScrapeDirectoryPath(scope.directoryPath)}`;
+    const prefix = scope.autoTriggered === true ? 'auto:' : '';
+    return `${prefix}folder:${scope.sourceId}:${normalizeScrapeDirectoryPath(scope.directoryPath)}`;
   }
   return 'global';
 }
@@ -178,6 +182,8 @@ export interface ScrapeResult {
   succeededVideoIds: number[];
   failedVideoIds: number[];
   failedItems: ScrapeFailureItem[];
+  /** 定向扫描重试上下文：仅自动触发的目录扫描任务在部分/全部扫描失败时写入。 */
+  directedScanContext?: DirectedScanRetryContext;
 }
 
 export interface ScrapeExecutionCompleted {
@@ -197,6 +203,15 @@ export interface DirectoriesSavedEvent {
   sourceId: number;
   fileSourceType: FileSourceType;
   addedDirectoryPaths: string[];
+}
+
+/** 定向扫描重试上下文：记录原始新增目录与失败目录，供失败/部分失败任务专用重试使用。 */
+export interface DirectedScanRetryContext {
+  sourceId: number;
+  /** 原始全部新增目录路径（规范化后）。 */
+  originalDirectoryPaths: string[];
+  /** 重试时仅需重新扫描的失败目录路径（规范化后）。 */
+  failedDirectoryPaths: string[];
 }
 
 /**

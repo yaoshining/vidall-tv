@@ -6,6 +6,7 @@ import { MediaDataVersionStore } from './MediaDataVersionStore';
 import { ScrapeFailureLogStore } from './ScrapeFailureLogStore';
 import {
   FAILURE_CATEGORY_SCRAPER_ERROR,
+  DirectedScanRetryContext,
   ScopedScrapeRequest,
   ScrapeCandidate,
   ScrapeExecutionOutcome,
@@ -22,6 +23,10 @@ import {
 } from './ScopedScrapeTypes';
 
 export interface ScrapeEnqueueOptions {
+  /**
+   * 入队初始阶段。folder scope 传入 'scanning' 时任务以扫描阶段等待，
+   * 由外部定向扫描驱动进度并在完成后调用 markTaskReady/markTaskFailed（自动刮削新增目录任务使用）。
+   */
   phase?: ScrapeTaskPhase;
 }
 
@@ -99,10 +104,25 @@ export class ScrapeTaskQueue {
     this.publish();
   }
 
-  markTaskReady(taskId: string): void {
+  markTaskReady(taskId: string, directedScanContext?: DirectedScanRetryContext): void {
     const task = this.findTask(taskId);
     if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
       return;
+    }
+    if (directedScanContext !== undefined) {
+      // 部分目录扫描失败时以携带重试上下文的占位结果过渡，
+      // 刮削完成后由 handleOutcome 合并保留，保证重试入口不丢失。
+      const carryingResult: ScrapeResult = {
+        total: 0,
+        succeeded: 0,
+        failed: 0,
+        cancelled: 0,
+        succeededVideoIds: [],
+        failedVideoIds: [],
+        failedItems: [],
+        directedScanContext
+      };
+      task.result = carryingResult;
     }
     task.phase = 'preparing';
     task.updatedAt = Date.now();
@@ -110,7 +130,7 @@ export class ScrapeTaskQueue {
     this.schedule();
   }
 
-  markTaskFailed(taskId: string): void {
+  markTaskFailed(taskId: string, directedScanContext?: DirectedScanRetryContext): void {
     const task = this.findTask(taskId);
     if (task === undefined || task.status !== 'waiting' || task.phase !== 'scanning') {
       return;
@@ -125,6 +145,9 @@ export class ScrapeTaskQueue {
       failedVideoIds: [],
       failedItems: []
     };
+    if (directedScanContext !== undefined) {
+      failedResult.directedScanContext = directedScanContext;
+    }
     task.result = failedResult;
     task.updatedAt = Date.now();
     this.trimHistory();
@@ -304,10 +327,17 @@ export class ScrapeTaskQueue {
       this.schedule();
       return;
     }
+    const previousScanContext = task.result?.directedScanContext;
     task.result = outcome.result;
+    if (previousScanContext !== undefined && task.result.directedScanContext === undefined) {
+      task.result.directedScanContext = previousScanContext;
+    }
     task.resumeState = undefined;
+    const scanFailedDirectories = task.result.directedScanContext?.failedDirectoryPaths;
+    const hasScanFailures = scanFailedDirectories !== undefined && scanFailedDirectories.length > 0;
+    // 扫描阶段存在失败目录时，即使刮削全部成功也保持部分失败，保留专用重试入口
     task.status = outcome.result.failed === 0
-      ? 'completed'
+      ? (hasScanFailures ? 'partial-failure' : 'completed')
       : (outcome.result.succeeded > 0 ? 'partial-failure' : 'failed');
     if (outcome.result.succeeded > 0) {
       MediaDataVersionStore.getState().publishSuccessful(
@@ -346,6 +376,7 @@ export class ScrapeTaskQueue {
       };
       failedItems.push(item);
     }
+    const previousScanContext = task.result?.directedScanContext;
     task.result = {
       total: failedCount,
       succeeded: 0,
@@ -355,6 +386,9 @@ export class ScrapeTaskQueue {
       failedVideoIds,
       failedItems
     };
+    if (previousScanContext !== undefined) {
+      task.result.directedScanContext = previousScanContext;
+    }
     task.status = 'failed';
     task.updatedAt = Date.now();
     this.runningCount--;
@@ -413,7 +447,8 @@ export class ScrapeTaskQueue {
         kind: 'folder',
         sourceId: scope.sourceId,
         directoryPath: normalizeScrapeDirectoryPath(scope.directoryPath),
-        displayName: scope.displayName
+        displayName: scope.displayName,
+        autoTriggered: scope.autoTriggered
       };
     }
     return { kind: 'global', displayName: scope.displayName };
