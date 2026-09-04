@@ -1,7 +1,8 @@
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
-import { FileSource, FileSourceDirectory, DirStatus } from "../../db/models/FileSourceEntity";
+import { FileSource, FileSourceDirectory, DirStatus, FileSourceType } from "../../db/models/FileSourceEntity";
 import { MediaDataVersionStore } from "../../services/scrape/MediaDataVersionStore";
-import { GlobalScrapeScope } from "../../services/scrape/ScopedScrapeTypes";
+import { GlobalScrapeScope, computeDirectoryPathDiff, computeRemovedDirectoryPaths, DirectoriesSavedEvent } from "../../services/scrape/ScopedScrapeTypes";
+import { AutoScrapeTrigger } from "../../services/scrape/AutoScrapeTrigger";
 import { BusinessError } from '@kit.BasicServicesKit';
 import { DirectoryDeletionModel } from './DirectoryDeletionAction';
 
@@ -261,24 +262,44 @@ export class FileSourceModel implements DirectoryDeletionModel {
    * @param sourceId    所属文件源 ID
    * @param directories 保存后的完整目录列表（替换旧的目录配置）
    */
-  async saveDirectoriesWithCleanup(sourceId: number, directories: FileSourceDirectory[]): Promise<void> {
+  async saveDirectoriesWithCleanup(sourceId: number, directories: FileSourceDirectory[]): Promise<DirectoriesSavedEvent | null> {
     try {
       const database = FileSourceDatabase.getInstance();
-      // 1. 读取旧目录，diff 出被移除（取消勾选）的目录
       const oldDirs = await database.getDirectoriesBySourceId(sourceId);
-      const newPathSet = new Set<string>();
-      directories.forEach((d: FileSourceDirectory) => newPathSet.add(d.directoryPath));
-      const removedDirs = oldDirs.filter((d: FileSourceDirectory) => !newPathSet.has(d.directoryPath));
-      // 2. 在单个事务内完成「媒体清理 + 目录配置替换」，保证同生共死
-      const removedPaths: string[] = removedDirs.map((d: FileSourceDirectory) => d.directoryPath);
+      const beforePaths: string[] = oldDirs.map((d: FileSourceDirectory) => d.directoryPath);
+      const afterPaths: string[] = directories.map((d: FileSourceDirectory) => d.directoryPath);
+      // 新增/移除判定使用同一规范化规则，避免 `/media/` 与 `/media` 等价路径被误判为移除导致媒体误清
+      const removedPaths: string[] = computeRemovedDirectoryPaths(beforePaths, afterPaths);
+      const addedPaths: string[] = computeDirectoryPathDiff(beforePaths, afterPaths);
       await database.saveDirectoriesWithMediaCleanup(sourceId, removedPaths, directories);
-      // 3. 清理孤儿刮削元数据（空季/空剧/空电影）。
-      //    依赖原生 SQL，Transaction 不提供 executeSql，故放在事务提交后幂等调用。
-      await database.cleanupOrphanScrapeMedia();
-      // 4. 刷新缓存并广播媒体数据变化
-      await this.loadFileSources(true);
-      this.publishGlobalMediaChange();
-      console.info(`FileSourceModel: 目录已保存，清理了 ${removedDirs.length} 个被移除目录`);
+      let event: DirectoriesSavedEvent | null = null;
+      if (addedPaths.length > 0) {
+        const source: FileSource | null = this.getFileSourceById(sourceId);
+        event = {
+          sourceId: sourceId,
+          fileSourceType: source?.type ?? FileSourceType.OTHER,
+          addedDirectoryPaths: addedPaths
+        };
+      }
+      // 保存事务已提交：立即安排自动刮削（仅扫描新增目录），不等待、不阻塞保存结果，
+      // 且不依赖后续孤儿清理与缓存刷新——后置步骤失败不得吞掉已触发的保存结果
+      if (event !== null) {
+        AutoScrapeTrigger.getInstance().onDirectoriesSaved(event);
+      }
+      try {
+        await database.cleanupOrphanScrapeMedia();
+        await this.loadFileSources(true);
+        this.publishGlobalMediaChange();
+      } catch (postError) {
+        const postErr = postError as BusinessError;
+        console.error('FileSourceModel: 保存后清理/刷新失败（不影响已保存目录与自动刮削触发）', postErr.message);
+      }
+      if (event !== null) {
+        console.info(`FileSourceModel: 目录已保存，新增 ${addedPaths.length} 个目录，清理了 ${removedPaths.length} 个被移除目录`);
+      } else {
+        console.info(`FileSourceModel: 目录已保存，清理了 ${removedPaths.length} 个被移除目录`);
+      }
+      return event;
     } catch (e) {
       const error = e as BusinessError;
       console.error('FileSourceModel: saveDirectoriesWithCleanup 失败', error.message);

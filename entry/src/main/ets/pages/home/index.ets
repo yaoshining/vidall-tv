@@ -14,6 +14,7 @@ import { VideoServerModel } from "../../stores/servers/VideoServerModel"
 import { SourceSwitchModel } from "../../stores/media/SourceSwitchModel"
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService"
 import { ScrapeFailureLogStore } from "../../services/scrape/ScrapeFailureLogStore"
+import { AutoScrapeTrigger } from "../../services/scrape/AutoScrapeTrigger"
 
 @ComponentV2
 @Preview({
@@ -64,6 +65,8 @@ export struct HomePage {
       if (hostContext !== undefined && hostContext !== null) {
         ScrapeFailureLogStore.setContext(hostContext);
         ScrapeFailureLogStore.clearAll().catch((): void => {});
+        // 注入自动刮削触发器的 context（定向扫描需要 UIAbilityContext），与日志存储同一注入时机
+        AutoScrapeTrigger.getInstance().setContext(hostContext);
       }
     } catch (e) {
       // 忽略注入失败，store 内部有 /tmp 兜底目录

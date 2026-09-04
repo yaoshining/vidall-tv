@@ -301,7 +301,9 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
       };
       onProgress(this.copyProgress(preparingUpdate), 'preparing');
     }
-    const targets = filterScrapeTargets(enriched, request.mode);
+    const targets = this.isAutoTriggeredFolderRequest(request)
+      ? enriched
+      : filterScrapeTargets(enriched, request.mode);
     const progress: ScrapeProgress = {
       completed: 0,
       total: targets.length,
@@ -682,6 +684,18 @@ export class ScopedScrapeService implements ScopedScrapeExecutor {
     }
     const allowedIds = new Set<number>(videoIds);
     return videos.filter((video: VideoEntity): boolean => video.id !== undefined && allowedIds.has(video.id));
+  }
+
+  /**
+   * 自动触发的目录扫描任务：目标严格限定为扫描阶段收集的首次入库 videoIds，
+   * 不经过 ScrapeModeFilter 的增量筛选——首次入库视频可能缺少刮削关联，
+   * 必须绕过筛选直接刮削（与失败重试共用 videoIds 快速路径）。
+   */
+  private isAutoTriggeredFolderRequest(request: ScopedScrapeRequest): boolean {
+    if (request.scope.kind !== 'folder' || request.scope.autoTriggered !== true) {
+      return false;
+    }
+    return request.videoIds !== undefined;
   }
 
   private async allFailed(targets: ScopedScrapeVideo[], onProgress: ScrapeProgressCallback): Promise<ScrapeResult> {

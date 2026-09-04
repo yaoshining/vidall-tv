@@ -28,6 +28,7 @@ import {
 } from '../main/ets/services/scrape/ScopedScrapeService';
 import {
   EpisodeScrapeScope,
+  FolderScrapeScope,
   ScopedScrapeRequest,
   ScopedScrapeVideo,
   ScrapeCandidate,
@@ -43,7 +44,8 @@ import {
   ScrapeVideoOutcome,
   ScrapeTaskSnapshot,
   ScrapeTaskStatus,
-  ScrapeTaskPhase
+  ScrapeTaskPhase,
+  scrapeScopeId
 } from '../main/ets/services/scrape/ScopedScrapeTypes';
 
 function createVideo(id: number, sourceId: number, path: string, updated: number = 0): VideoEntity {
@@ -502,6 +504,47 @@ function createStoreSnapshot(id: string, status: ScrapeTaskStatus): ScrapeTaskSn
   snapshot.resumeState = resumeState;
   snapshot.result = createResult(1, [41]);
   return snapshot;
+}
+
+/** 记录目录树查询调用的视频源测试替身，用于验证 resolver 的目录范围解析行为。 */
+class RecordingDirectorySource implements ScrapeScopeVideoSource {
+  readonly directoryTreeCalls: string[] = [];
+  private videos: VideoEntity[] = [];
+
+  addVideo(video: VideoEntity): void {
+    this.videos.push(video);
+  }
+
+  getVideoById(_videoId: number): Promise<VideoEntity | null> {
+    return Promise.resolve(null);
+  }
+
+  getVideosByMovieId(_movieId: number): Promise<VideoEntity[]> {
+    return Promise.resolve([]);
+  }
+
+  getVideosByTvSeriesId(_tvSeriesId: number): Promise<VideoEntity[]> {
+    return Promise.resolve([]);
+  }
+
+  getVideosBySeason(_tvSeriesId: number, _seasonNumber: number): Promise<VideoEntity[]> {
+    return Promise.resolve([]);
+  }
+
+  getVideosByDirectoryTree(_sourceId: number, directoryPath: string): Promise<VideoEntity[]> {
+    this.directoryTreeCalls.push(directoryPath);
+    return Promise.resolve(
+      this.videos.filter((video: VideoEntity): boolean => video.directoryPath === directoryPath)
+    );
+  }
+
+  getVideosBySourceId(_sourceId: number): Promise<VideoEntity[]> {
+    return Promise.resolve(this.videos);
+  }
+
+  getAllVideos(): Promise<VideoEntity[]> {
+    return Promise.resolve(this.videos);
+  }
 }
 
 export default function scopedScrapeTest() {
@@ -1100,6 +1143,73 @@ export default function scopedScrapeTest() {
 
       executor.calls[0].deferred.resolve(createCompleted());
       await flushMicrotasks();
+    });
+  });
+
+  describe('ScrapeScopeResolver 目录范围解析', () => {
+    it('目录名含逗号时不拆分：单目录按原路径查询目录树', 0, async () => {
+      // 对应审查意见：directoryPath 逗号拼接编码在目录名本身含逗号时有歧义，
+      // resolver 必须优先使用 directoryPaths 权威列表，且不做字符串拆分
+      const source = new RecordingDirectorySource();
+      source.addVideo(createVideo(9101, 1, '/media/comedy,action/a.mp4'));
+      const resolver = new ScrapeScopeResolver(source);
+      const scope: FolderScrapeScope = {
+        kind: 'folder',
+        sourceId: 1,
+        directoryPath: '/media/comedy,action',
+        directoryPaths: ['/media/comedy,action'],
+        displayName: 'comedy,action'
+      };
+      const videos = await resolver.resolve(scope);
+      expect(videos.length).assertEqual(1);
+      expect(videos[0].id).assertEqual(9101);
+      expect(source.directoryTreeCalls.length).assertEqual(1);
+      expect(source.directoryTreeCalls[0]).assertEqual('/media/comedy,action');
+    });
+
+    it('多目录 round-trip：按 directoryPaths 逐目录查询并合并结果', 0, async () => {
+      const source = new RecordingDirectorySource();
+      source.addVideo(createVideo(9102, 1, '/x/a.mp4'));
+      source.addVideo(createVideo(9103, 1, '/y,z/b.mp4'));
+      const resolver = new ScrapeScopeResolver(source);
+      const scope: FolderScrapeScope = {
+        kind: 'folder',
+        sourceId: 1,
+        directoryPath: '/x,/y,z',
+        directoryPaths: ['/x', '/y,z'],
+        displayName: 'multi'
+      };
+      const videos = await resolver.resolve(scope);
+      expect(videos.length).assertEqual(2);
+      expect(source.directoryTreeCalls.length).assertEqual(2);
+      expect(source.directoryTreeCalls[0]).assertEqual('/x');
+      expect(source.directoryTreeCalls[1]).assertEqual('/y,z');
+    });
+
+    it('scrapeScopeId 身份：逗号目录名与两个独立目录生成不同任务身份', 0, () => {
+      const single: FolderScrapeScope = {
+        kind: 'folder',
+        sourceId: 1,
+        directoryPath: '/a,b',
+        directoryPaths: ['/a,b'],
+        displayName: 'single'
+      };
+      const split: FolderScrapeScope = {
+        kind: 'folder',
+        sourceId: 1,
+        directoryPath: '/a,/b',
+        directoryPaths: ['/a', '/b'],
+        displayName: 'split'
+      };
+      const sameIdentity: FolderScrapeScope = {
+        kind: 'folder',
+        sourceId: 1,
+        directoryPath: '/a,b',
+        directoryPaths: ['/a,b'],
+        displayName: '其他展示名不影响身份'
+      };
+      expect(scrapeScopeId(single) === scrapeScopeId(split)).assertFalse();
+      expect(scrapeScopeId(single) === scrapeScopeId(sameIdentity)).assertTrue();
     });
   });
 }

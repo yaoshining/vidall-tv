@@ -1,4 +1,5 @@
 import { ScrapeInfoEntity, VideoEntity } from '../../db/models/MediaEntity';
+import { FileSourceType } from '../../db/models/FileSourceEntity';
 import { ScanMode } from '../../utils/VideoScannerTypes';
 
 export type ScrapeScopeKind = 'movie' | 'series' | 'season' | 'episode' | 'folder' | 'global';
@@ -69,8 +70,14 @@ export interface EpisodeScrapeScope {
 export interface FolderScrapeScope {
   kind: 'folder';
   sourceId: number;
+  /** 展示用目录路径：手动任务为单一路径；自动多目录任务为逗号拼接串（仅展示/日志，不参与解析与身份判定）。 */
   directoryPath: string;
+  /** 自动任务的权威目录路径列表（已规范化）：存在时优先于 directoryPath 参与范围解析与身份判定，
+   *  避免逗号拼接编码在目录名本身含逗号时产生歧义。 */
+  directoryPaths?: string[];
   displayName: string;
+  /** 自动刮削触发标记：目录保存后自动创建的任务携带，用于与手动文件夹任务区分身份。 */
+  autoTriggered?: true;
 }
 
 export interface GlobalScrapeScope {
@@ -112,7 +119,12 @@ export function scrapeScopeId(scope: ScrapeScope): string {
     return `episode:${scope.videoId}`;
   }
   if (scope.kind === 'folder') {
-    return `folder:${scope.sourceId}:${normalizeScrapeDirectoryPath(scope.directoryPath)}`;
+    const prefix = scope.autoTriggered === true ? 'auto:' : '';
+    if (scope.directoryPaths !== undefined) {
+      // 多目录身份使用规范化路径数组的 JSON 序列化，天然无歧义（目录名可含逗号/竖线等分隔符）
+      return `${prefix}folder:${scope.sourceId}:${JSON.stringify(scope.directoryPaths.map((p: string): string => normalizeScrapeDirectoryPath(p)))}`;
+    }
+    return `${prefix}folder:${scope.sourceId}:${normalizeScrapeDirectoryPath(scope.directoryPath)}`;
   }
   return 'global';
 }
@@ -177,6 +189,8 @@ export interface ScrapeResult {
   succeededVideoIds: number[];
   failedVideoIds: number[];
   failedItems: ScrapeFailureItem[];
+  /** 定向扫描重试上下文：仅自动触发的目录扫描任务在部分/全部扫描失败时写入。 */
+  directedScanContext?: DirectedScanRetryContext;
 }
 
 export interface ScrapeExecutionCompleted {
@@ -191,6 +205,63 @@ export interface ScrapeExecutionPaused {
 }
 
 export type ScrapeExecutionOutcome = ScrapeExecutionCompleted | ScrapeExecutionPaused;
+
+export interface DirectoriesSavedEvent {
+  sourceId: number;
+  fileSourceType: FileSourceType;
+  addedDirectoryPaths: string[];
+}
+
+/** 定向扫描重试上下文：记录原始新增目录与失败目录，供失败/部分失败任务专用重试使用。 */
+export interface DirectedScanRetryContext {
+  sourceId: number;
+  /** 原始全部新增目录路径（规范化后）。 */
+  originalDirectoryPaths: string[];
+  /** 重试时仅需重新扫描的失败目录路径（规范化后）。 */
+  failedDirectoryPaths: string[];
+}
+
+/**
+ * 计算保存前后的规范化目录路径差集，返回新增路径集合。
+ * 仅基于路径判等，customName 变更不影响结果。
+ */
+export function computeDirectoryPathDiff(
+  beforePaths: string[],
+  afterPaths: string[]
+): string[] {
+  const beforeNormalized: Set<string> = new Set<string>();
+  beforePaths.forEach((p: string) => beforeNormalized.add(normalizeScrapeDirectoryPath(p)));
+  const afterNormalized: Set<string> = new Set<string>();
+  afterPaths.forEach((p: string) => afterNormalized.add(normalizeScrapeDirectoryPath(p)));
+  const added: string[] = [];
+  afterNormalized.forEach((p: string) => {
+    if (!beforeNormalized.has(p)) {
+      added.push(p);
+    }
+  });
+  return added;
+}
+
+/**
+ * 计算保存前后被移除的目录路径集合。
+ * 与 computeDirectoryPathDiff 使用同一 normalizeScrapeDirectoryPath 规范化规则，
+ * 保证"新增"与"移除"判定一致：仅尾斜杠/斜杠风格差异的等价路径不视为移除。
+ * 返回原始路径字符串（与数据库 directory_path 存储值一致），供媒体清理按原值匹配。
+ */
+export function computeRemovedDirectoryPaths(
+  beforePaths: string[],
+  afterPaths: string[]
+): string[] {
+  const afterNormalized: Set<string> = new Set<string>();
+  afterPaths.forEach((p: string) => afterNormalized.add(normalizeScrapeDirectoryPath(p)));
+  const removed: string[] = [];
+  beforePaths.forEach((p: string) => {
+    if (!afterNormalized.has(normalizeScrapeDirectoryPath(p))) {
+      removed.push(p);
+    }
+  });
+  return removed;
+}
 
 /**
  * 刮削任务的 UI 快照。作为 @ObservedV2 类持有可变字段的 @Trace 注解，

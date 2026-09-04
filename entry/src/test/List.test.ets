@@ -62,6 +62,9 @@ import serverCardActionTest from './ServerCardAction.test';
 import seriesCardRouteTest from './SeriesCardRoute.test';
 import scopedScrapeTest from './ScopedScrape.test';
 import missingMediaSyncTest from './MissingMediaSync.test';
+import directoryPathDiffTest from './DirectoryPathDiff.test';
+import videoUpsertResultTest from './VideoUpsertResult.test';
+import directedScanStrategyTest from './DirectedScanStrategy.test';
 import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackContextUtilTest';
 
 export default function testsuite() {
@@ -128,4 +131,7 @@ export default function testsuite() {
   seriesCardRouteTest();
   scopedScrapeTest();
   missingMediaSyncTest();
+  directoryPathDiffTest();
+  videoUpsertResultTest();
+  directedScanStrategyTest();
 }

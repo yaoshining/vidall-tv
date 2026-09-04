@@ -5,6 +5,7 @@ import mediaNavigationTest from './MediaNavigation.test';
 import playerSettingsTest from './PlayerSettings.test';
 import scanFlowTest from './ScanFlow.test';
 import incrementalScanContextChangeTest from './IncrementalScanContextChange.test';
+import autoScrapeFlowTest from './AutoScrapeFlow.test';
 
 export default function testsuite() {
   abilityTest();
@@ -14,4 +15,5 @@ export default function testsuite() {
   playerSettingsTest();
   scanFlowTest();
   incrementalScanContextChangeTest();
+  autoScrapeFlowTest();
 }

@@ -1,6 +1,6 @@
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { VideoEntity } from '../../db/models/MediaEntity';
-import { ScrapeScope, normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
+import { FolderScrapeScope, ScrapeScope, normalizeScrapeDirectoryPath } from './ScopedScrapeTypes';
 
 export { normalizeScrapeDirectoryPath };
 
@@ -33,14 +33,36 @@ export class ScrapeScopeResolver {
       const video = await this.source.getVideoById(scope.videoId);
       videos = video === null ? [] : [video];
     } else if (scope.kind === 'folder') {
-      const normalizedPath = normalizeScrapeDirectoryPath(scope.directoryPath);
-      videos = normalizedPath === '/'
-        ? await this.source.getVideosBySourceId(scope.sourceId)
-        : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
+      videos = await this.resolveFolderScope(scope);
     } else {
       videos = await this.source.getAllVideos();
     }
     return this.stableUnique(videos);
+  }
+
+  /**
+   * 解析目录范围：自动任务携带 directoryPaths 权威多目录列表（目录名可含逗号，不做字符串拆分），
+   * 多目录时合并各目录树结果（重叠父子目录由 stableUnique 去重）；
+   * 手动任务 directoryPath 为单一路径语义，不按逗号拆分。
+   */
+  private async resolveFolderScope(scope: FolderScrapeScope): Promise<VideoEntity[]> {
+    if (scope.directoryPaths !== undefined) {
+      const merged: VideoEntity[] = [];
+      for (const path of scope.directoryPaths) {
+        const normalizedPath = normalizeScrapeDirectoryPath(path);
+        const branchVideos = normalizedPath === '/'
+          ? await this.source.getVideosBySourceId(scope.sourceId)
+          : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
+        for (const video of branchVideos) {
+          merged.push(video);
+        }
+      }
+      return merged;
+    }
+    const normalizedPath = normalizeScrapeDirectoryPath(scope.directoryPath);
+    return normalizedPath === '/'
+      ? await this.source.getVideosBySourceId(scope.sourceId)
+      : await this.source.getVideosByDirectoryTree(scope.sourceId, normalizedPath);
   }
 
   private stableUnique(videos: VideoEntity[]): VideoEntity[] {

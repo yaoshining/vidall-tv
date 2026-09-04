@@ -1,9 +1,11 @@
 import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
+import { AutoScrapeRetryExecutor } from '../../services/scrape/AutoScrapeRetryExecutor';
 import { ScrapeTaskStore } from '../../services/scrape/ScrapeTaskStore';
 import { ScrapeCandidate, ScrapeTaskPhase, ScrapeTaskSnapshot, ScrapeScanContext } from '../../services/scrape/ScopedScrapeTypes';
 import { ScrapeManagementPage } from '../../pages/scrape/ScrapeManagementPage';
 import { truncateMiddlePath } from '../../utils/PathDisplayUtil';
+import promptAction from '@ohos.promptAction';
 
 function statusLabel(status: string): string {
   if (status === 'waiting') { return '等待中'; }
@@ -48,6 +50,18 @@ export struct ScrapeTaskIndicator {
       return phaseLabel(task.phase);
     }
     return statusLabel(task.status);
+  }
+  /** 定向扫描重试：明确向用户反馈重试未发起的情况（无失败目录/上下文缺失等），避免点击后无任何响应。 */
+  private retryDirectedScan(task: ScrapeTaskSnapshot): void {
+    AutoScrapeRetryExecutor.getInstance().retry(task.id)
+      .then((started: boolean): void => {
+        if (!started) {
+          promptAction.showToast({ message: '重试未发起：没有可重试的失败目录' });
+        }
+      })
+      .catch((): void => {
+        promptAction.showToast({ message: '重试执行失败，请稍后再试' });
+      });
   }
   private scanContextLine1(task: ScrapeTaskSnapshot): string {
     if (task.scanContext === undefined) { return ''; }
@@ -132,8 +146,11 @@ export struct ScrapeTaskIndicator {
           this.Action('取消', () => { ScrapeTaskQueue.getInstance().cancel(task.id); })
         } else if (task.status === 'failed' || task.status === 'partial-failure') {
           Row({ space: 8 }) {
-            // 扫描阶段失败的任务无法由队列重试恢复（扫描由 UI 层驱动），只提供清除入口
-            if (task.phase !== 'scanning') {
+            // 自动目录扫描任务携带定向扫描重试上下文，由专用执行器重扫失败目录；
+            // 其余扫描阶段失败任务仍无重试入口（扫描由 UI 层驱动），只提供清除入口
+            if (task.result?.directedScanContext !== undefined) {
+              this.Action('重试', () => { this.retryDirectedScan(task); })
+            } else if (task.phase !== 'scanning') {
               this.Action('重试', () => { ScrapeTaskQueue.getInstance().retry(task.id); })
             }
             this.Action('清除', () => { ScrapeTaskQueue.getInstance().clear(task.id); })
