@@ -58,7 +58,7 @@
 
 ## 8. 仓库验证与 OpenSpec 校验
 
-- [ ] 8.1 对所有修改的 `.ets` 文件运行 `arkts_check`，确认无 ArkTS 严格模式违规。验证：检查结果全部通过
-- [ ] 8.2 运行 `build_project` 确保 HarmonyOS 项目编译成功。验证：构建 SUCCESS
-- [ ] 8.3 运行 `openspec validate --changes auto-scrape-new-directory-files` 确认变更验证通过。验证：输出 ✓
-- [ ] 8.4 运行 `openspec verify-change auto-scrape-new-directory-files` 确认实现与 spec 一致。验证：输出通过
+- [x] 8.1 对所有修改的 `.ets` 文件运行 `arkts_check`，确认无 ArkTS 严格模式违规。验证：检查结果全部通过（本环境无独立 `arkts_check` 工具，以 hvigor assembleHap 的 ArkTS 严格编译等价验证：本 change 全部新增/修改文件 0 ERROR 0 新增 WARN）
+- [x] 8.2 运行 `build_project` 确保 HarmonyOS 项目编译成功。验证：构建 SUCCESS（assembleHap BUILD SUCCESSFUL exit 0，多次确认含最终回归）
+- [x] 8.3 运行 `openspec validate --changes auto-scrape-new-directory-files` 确认变更验证通过。验证：输出 ✓（Totals: 1 passed, 0 failed）
+- [x] 8.4 运行 `openspec verify-change auto-scrape-new-directory-files` 确认实现与 spec 一致。验证：输出通过（openspec CLI 1.10.0 无 `verify-change` 子命令；按仓库内 `openspec-verify-change` skill 三维度人工核对：Completeness——spec 13 条 Requirement 全部映射至实现任务且 40/41 任务勾选（6.2 因断言需设备诚实保留）；Correctness——11 条业务场景由 6.1-6.4 单测覆盖、7 条集成场景由 7.1-7.7 覆盖；Coherence——实现遵循 design 关键决策（路径差集触发、增量+automatic 策略、专用重试上下文、fire-and-forget 解耦））
