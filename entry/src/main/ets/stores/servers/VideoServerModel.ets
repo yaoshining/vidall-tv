@@ -2,7 +2,6 @@ import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { VideoServer, VideoServerType } from "../../db/models/VideoServerEntity";
 import { BusinessError } from "@kit.BasicServicesKit";
 import SettingType from "../../pages/settings/SettingType";
-import { SourceSwitchModel } from "../media/SourceSwitchModel";
 
 /**
  * 影视服务器缓存管理类。
@@ -129,21 +128,12 @@ export class VideoServerModel {
   }
 
   /**
-   * 删除影视服务器并处理当前源回退（统一删除流程）。
-   * 若被删除的服务器恰好是当前激活源，自动回退到文件源。
-   * 源回退的持久化失败不中断删除流程（服务器已删除不可恢复，
-   * 残余的无效源引用会在下次 load() 时自动回退）。
+   * 统一删除入口，保留原方法名以兼容调用方。
+   * 保留当前源及持久化身份：已删除服务器由范围解析判为不可用，
+   * 只有用户主动选择文件源才允许本地搜索；删除非当前源不改变选择。
    */
   async deleteVideoServerWithFallback(id: number): Promise<void> {
     await this.deleteVideoServer(id);
-    const sourceSwitch = SourceSwitchModel.getState();
-    if (sourceSwitch.getActiveServerId() === id) {
-      try {
-        await sourceSwitch.setFileSource();
-      } catch (e) {
-        console.warn('VideoServerModel: 源回退持久化失败，将在下次加载时自动恢复', (e as BusinessError).message ?? String(e));
-      }
-    }
   }
 
   /**

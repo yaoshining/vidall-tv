@@ -27,6 +27,11 @@ Module._load = function (request, parent, main) {
     return { default: { getAbilityDelegator: () => ({ getAppContext: () => ({}) }) } };
   }
   if (request === '@ohos.data.preferences') return {};
+  // Host-only database boundary; execute the real VideoServerModel deletion/cache logic.
+  if (request === '../../db/files/FileSourceDatabase' && parent &&
+    parent.filename.endsWith('/stores/servers/VideoServerModel.ets')) {
+    return { FileSourceDatabase: { getInstance: () => ({ deleteVideoServer: async () => {} }) } };
+  }
   return load.call(this, request, parent, main);
 };
 if (process.argv.includes('--integration')) {
@@ -61,6 +66,7 @@ core.init();
 require(path.join(root, 'entry/src/test/SearchScope.test.ets')).default();
 if (process.argv.includes('--integration')) {
   require(path.join(root, 'entry/src/test/SourceSwitchModel.test.ets')).default();
+  require('./search_scope_deletion_test.cjs')();
 }
 core.registerEvent('task', {
   id: 'host-result', taskStart() {},
