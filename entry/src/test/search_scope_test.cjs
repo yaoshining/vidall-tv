@@ -27,6 +27,7 @@ Module._load = function (request, parent, main) {
     return { default: { getAbilityDelegator: () => ({ getAppContext: () => ({}) }) } };
   }
   if (request === '@ohos.data.preferences') return {};
+  if (request === '@ohos.net.http') return {}; // Search tests stub only the native transport boundary.
   // Host-only database boundary; execute the real VideoServerModel deletion/cache logic.
   if (request === '../../db/files/FileSourceDatabase' && parent &&
     parent.filename.endsWith('/stores/servers/VideoServerModel.ets')) {
@@ -64,6 +65,9 @@ const Core = require(path.join(hypium, 'core.js')).default;
 const core = Core.getInstance();
 core.init();
 require(path.join(root, 'entry/src/test/SearchScope.test.ets')).default();
+if (process.argv.includes('--server-search')) {
+  require(path.join(root, 'entry/src/test/VideoServerSearch.test.ets')).default();
+}
 if (process.argv.includes('--integration')) {
   require(path.join(root, 'entry/src/test/SourceSwitchModel.test.ets')).default();
   require('./search_scope_deletion_test.cjs')();

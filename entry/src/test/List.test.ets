@@ -1,3 +1,4 @@
+import videoServerSearchTest from './VideoServerSearch.test';
 import searchScopeTest from './SearchScope.test';
 import timeUtilTest from './TimeUtil.test';
 import playbackContextTest from './ets/PlaybackContextTest';
@@ -123,6 +124,7 @@ export default function testsuite() {
   subtitleLanguageFilterTest();
   subtitleRelevanceFilterTest();
   sourceSwitchModelTest();
+  videoServerSearchTest();
   searchScopeTest();
   videoServerLabelsTest();
   videoServerDaoTest();
