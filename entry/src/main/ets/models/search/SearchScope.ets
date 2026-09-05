@@ -68,6 +68,14 @@ export function resolveSearchScope(identity: SearchScopeIdentity, servers: Video
   return scope;
 }
 
+/** Copy identity explicitly: ArkTS does not allow structural assignment between these interfaces. */
+export function toSearchScopeIdentity(scope: SearchScope): SearchScopeIdentity {
+  const identity: SearchScopeIdentity = {
+    kind: scope.kind, serverId: scope.serverId, serverType: scope.serverType
+  };
+  return identity;
+}
+
 /** Missing scope on legacy routes means current source, never global/local fallback. */
 export function resolveSearchRoute(param: SearchRouteParam | string | null | undefined,
   currentScope: SearchScope, servers: VideoServer[]): ResolvedSearchRoute {
@@ -79,7 +87,7 @@ export function resolveSearchRoute(param: SearchRouteParam | string | null | und
     if (param.scope !== undefined) { scope = resolveSearchScope(param.scope, servers); }
     keyword = typeof param.keyword === 'string' ? param.keyword : '';
   }
-  const route: ResolvedSearchRoute = { scope: resolveSearchScope(scope, servers), keyword };
+  const route: ResolvedSearchRoute = { scope: resolveSearchScope(toSearchScopeIdentity(scope), servers), keyword };
   return route;
 }
 

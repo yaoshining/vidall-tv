@@ -1,3 +1,5 @@
+import { VideoServerStore } from '../../../stores/servers/VideoServerStore'
+import { SearchRouteParam, toSearchScopeIdentity } from '../../../models/search/SearchScope'
 import { IBestButton, IBestDivider, IBestIcon, IBestToast } from "@ibestservices/ibest-ui"
 import { LengthMetrics } from "@kit.ArkUI"
 import { LucideCloudDownload, LucideServer } from "lucide"
@@ -83,7 +85,11 @@ export struct HomeTopBar {
           btnBorderColor: Color.Transparent,
           iconBuilder: (): void => this.settingIBestIconBuilder('search'),
           onBtnClick: () => {
-            this.pageStack.pushPathByName(SearchWorkspacePage.PAGE_NAME, null)
+            const param: SearchRouteParam = {
+              scope: toSearchScopeIdentity(
+                this.sourceSwitchModel.getSearchScope(VideoServerStore.getState().videoServers))
+            }
+            this.pageStack.pushPathByName(SearchWorkspacePage.PAGE_NAME, param)
           }
         }).bindTips('搜索')
 
