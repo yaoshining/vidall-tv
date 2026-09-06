@@ -1,0 +1,1 @@
+{"id":"60cd1489c4a89c104875dcf0687426e6","fullName":"VideoControls.episode list continuous scroll anchors#点击 7-12 锚点触发 scrollToIndex(6, true, ScrollAlign.START)","name":"点击 7-12 锚点触发 scrollToIndex(6, true, ScrollAlign.START)","status":"passed","testResultsByEnv":{"default":"b09a326fa67c3dce7bd224d2e3d1f779"}}
