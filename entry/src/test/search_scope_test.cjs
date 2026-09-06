@@ -1784,7 +1784,8 @@ async function runSearchChainChecks() {
           localCalls.push(`search:${keyword}`);
           return [{ id: 317, title: '本地片名', movieId: 317 }];
         },
-        getSearchHistory: async () => { localCalls.push('history'); return []; }
+        getSearchHistory: async () => { localCalls.push('history'); return []; },
+        upsertSearchHistory: async keyword => { localCalls.push(`write:${keyword}`); }
       };
       const dependencies = {
         ...scopes, SourceSwitchModel,
@@ -1799,14 +1800,23 @@ async function runSearchChainChecks() {
         serverSession: new SearchWorkspaceSession(), pageActive: false, db: null,
         searchDebounceTimer: -1, searchGeneration: 0, historyLoadGeneration: 0,
         historySourceGeneration: 0, unsubscribeSource: () => {}, unsubscribeConfiguration: () => {},
-        pageStack: { pushPathByName: (route, param) => pushes.push({ route, param }) },
+        popCount: 0,
+        pageStack: { pushPathByName: (route, param) => pushes.push({ route, param }),
+          pop: () => { page.popCount++; } },
         getUIContext: () => ({ getPromptAction: () => ({ showToast: value => toasts.push(value.message) }) })
       };
       for (const method of ['currentContext', 'resumeSearch', 'refreshSource', 'invalidateSearch',
         'leaveSearch', 'invalidateHistoryRequests', 'invalidateHistorySource', 'loadHistory',
-        'scheduleSearch', 'executeServerSearch', 'serverErrorText']) {
+        'scheduleSearch', 'executeServerSearch', 'serverErrorText', 'clearSearch',
+        'executeSearchWithHistory']) {
         page[method] = loadMethod(sourceText, `private ${method}(`, [], dependencies);
       }
+      page.submitInput = loadMethod(sourceText, '.onSubmit(() =>', [], dependencies);
+      page.backButton = loadMethod(sourceText.slice(sourceText.indexOf('  buildBackRow()')),
+        '.onClick(() =>', [], dependencies);
+      page.backPressed = loadMethod(sourceText, '.onBackPressed(() =>', [], dependencies);
+      page.shown = loadMethod(sourceText, '.onShown(() =>', [], dependencies);
+      page.willHide = loadMethod(sourceText, '.onWillHide(() =>', [], dependencies);
       page.initializeRoute = loadMethod(sourceText, 'private initializeRoute(', ['param'], dependencies);
       page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', [], dependencies, true);
       page.showToastSafe = loadMethod(sourceText, 'private showToastSafe(', ['message'], dependencies);
@@ -1909,6 +1919,69 @@ async function runSearchChainChecks() {
     h.check('unavailable does not schedule fallback', h.timers.pendingCount(), 0);
     h.check('unavailable never opens local index path', h.localCalls, before);
   }, true);
+
+  for (const local of [true, false]) {
+    await runCase(`${local ? '本地' : '服务器'}提交清空退出重入连续链`, async h => {
+      if (local) await h.source.setFileSource();
+      h.page.searchText = '连续片名';
+      h.page.resumeSearch();
+      const searchCount = () => local
+        ? h.localCalls.filter(call => call.startsWith('search:')).length : h.searches.length;
+      const writeCount = () => h.localCalls.filter(call => call.startsWith('write:')).length;
+      h.check('before submit timer/search/history writes',
+        [h.timers.pendingCount(), searchCount(), writeCount()], [1, 0, 0]);
+      if (!local) h.enqueue('提交结果');
+      h.page.submitInput();
+      await flushMicrotasks();
+      const afterSubmit = [h.timers.pendingCount(), searchCount(), writeCount()];
+      // Drain any leftover debounce to reproduce duplicate work, rather than infer it from code.
+      if (h.timers.pendingCount() > 0) {
+        if (!local) h.enqueue('重复结果');
+        h.timers.runNext();
+        await flushMicrotasks();
+      }
+      console.log(`[search-chain] submit observations: ${JSON.stringify({ local, afterSubmit,
+        afterDrain: [h.timers.pendingCount(), searchCount(), writeCount()] })}`);
+      h.check('submit consumes debounce and searches/writes once',
+        [afterSubmit, searchCount(), writeCount()], [[0, 1, local ? 1 : 0], 1, local ? 1 : 0]);
+      h.check('submit releases loading', h.page.isSearching, false);
+      h.page.clearSearch();
+      h.check('clear resets input and both result modes',
+        [h.page.searchText, h.page.searchResults, h.page.serverResult, h.page.isSearching,
+          h.timers.pendingCount()], ['', [], null, false, 0]);
+      h.page.searchText = '纯防抖';
+      h.page.scheduleSearch();
+      if (!local) h.enqueue('防抖结果');
+      await h.tick();
+      h.check('debounce searches once without history submission',
+        [searchCount(), writeCount()], [2, local ? 1 : 0]);
+      h.page.searchText = '取消等待';
+      h.page.scheduleSearch();
+      h.page.backButton();
+      h.page.willHide();
+      h.check('back button pops exactly once despite hide callback', h.page.popCount, 1);
+      h.check('leaving cancels pending work',
+        [h.page.pageActive, h.page.isSearching, h.timers.pendingCount(), searchCount()],
+        [false, false, 0, 2]);
+      h.page.shown();
+      h.page.shown();
+      if (!local) h.enqueue('重入结果');
+      await h.tick();
+      h.check('reentry preserves text and searches exactly once',
+        [h.page.searchText, searchCount(), writeCount()], ['取消等待', 3, local ? 1 : 0]);
+      h.page.searchText = '返回取消';
+      h.page.scheduleSearch();
+      h.check('hardware back consumes event', h.page.backPressed(), true);
+      h.page.willHide();
+      h.check('hardware back cancels pending work and pops once',
+        [h.page.popCount, h.timers.pendingCount(), searchCount()], [2, 0, 3]);
+      h.page.clearSearch();
+      h.page.shown();
+      h.check('empty reentry stays idle',
+        [h.page.searchText, h.page.searchResults, h.page.serverResult, h.page.isSearching,
+          h.timers.pendingCount(), searchCount()], ['', [], null, false, 0, 3]);
+    }, local);
+  }
 
   await runCase('旧显式路由不得覆盖顶部实时来源', async h => {
     await h.source.setVideoServer(h.servers[1]);

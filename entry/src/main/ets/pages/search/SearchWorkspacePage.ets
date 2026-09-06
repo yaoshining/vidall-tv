@@ -574,6 +574,7 @@ struct SearchWorkspacePage {
     if (!getSearchCapabilities(this.scope).localHistory) { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
+    this.invalidateSearch();
     if (this.db !== null) {
       this.invalidateHistoryRequests();
       const sourceGeneration = this.historySourceGeneration;
