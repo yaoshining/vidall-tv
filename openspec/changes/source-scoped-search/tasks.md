@@ -41,6 +41,6 @@
 
 ## 7. 集成验收与流程门禁
 
-- [ ] 7.1 各阶段冻结后独立QA亲自执行现有runner和devecocli，保留包含新增文件的前后hash、完整命令及原始日志，记录lint/format真实结果而非仅退出码。
+- [ ] 7.1 各阶段冻结后独立QA亲自执行现有runner和devecocli，保留包含新增文件的前后hash、完整命令及原始日志，记录lint/format真实结果而非仅退出码。2026-09-06工具诊断更新：当前安装SDK元数据为6.1.1/API24，与此前6.0.2/API22参数不匹配；匹配诊断参数后SDK定位成功，两份ETS目标的eslint扫描零defect，但arkPerfCheck存在TrapBuilder及Invalid ruleSet/name错误，综合lint仍未通过，也不替代API22基线验证；CJS被现有规则排除。formatter的-d支持无修改检查，但实际仍被共享IDE单实例门禁阻止，未扫描。诊断前后HEAD638bd8d60、904文件hash及clean状态一致；仅完成环境诊断，不关闭本门禁。原始证据保存在#316会话files/issue316-tooling-diagnostic，未修改SDK、项目配置或业务文件。
 - [ ] 7.2 用户授权集成后安全合并所需分支；核验最终提交上的全链路回归、生产编译图、三协议及TV证据，不以子分支测试替代集成测试。
 - [ ] 7.3 更新六项验收和Project状态，未解决环境/功能缺口逐项披露；Issue关闭交产品经理，Epic未验收不标完成。
