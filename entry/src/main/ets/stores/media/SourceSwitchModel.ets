@@ -29,7 +29,7 @@ export class SourceSwitchModel {
     return SourceSwitchModel.instance;
   }
 
-  private sourceLoaded: boolean = false;
+  @Trace private sourceLoaded: boolean = false;
 
   @Trace activeSource: ActiveMediaSource = { kind: 'fileSource' };
 
@@ -97,13 +97,13 @@ export class SourceSwitchModel {
             serverType: server.type, name: server.name };
           return;
         }
-        // Preserve the invalid identity: search must not silently query local data.
+        // 保留无效身份，禁止搜索静默回退本地数据。
         this.activeSource = { kind: 'videoServer', serverId, serverType: parsed.serverType, name: '来源不可用' };
         return;
       }
       this.activeSource = parsed.kind === 'fileSource' ? { kind: 'fileSource' } :
         { kind: 'videoServer', name: '来源不可用' };
-    } catch {
+    } catch (e) {
       this.activeSource = { kind: 'videoServer', name: '来源不可用' };
     } finally {
       this.sourceLoaded = true;
