@@ -634,6 +634,34 @@ struct ServerLibraryCard {
   @Require @Param library: VideoServerLibrary
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
+  @Local imageFailed: boolean = false
+
+  @Monitor('library')
+  private resetImageFailure(): void {
+    this.imageFailed = false
+  }
+
+  private onImageError(): void {
+    this.imageFailed = true
+  }
+
+  private shouldLoadThumbnail(): boolean {
+    return this.library.imageUrl.length > 0 && !this.imageFailed
+  }
+
+  @Builder
+  private LibraryImage() {
+    if (this.shouldLoadThumbnail()) {
+      Image(this.library.imageUrl)
+        .width('100%').height('100%').objectFit(ImageFit.Cover)
+        .alt(this.getPlaceholder())
+        .onError(() => { this.onImageError() })
+        .onComplete(() => { this.resetImageFailure() })
+    } else {
+      Image(this.getPlaceholder())
+        .width('100%').height('100%').objectFit(ImageFit.Cover)
+    }
+  }
 
   private getPlaceholder(): Resource {
     return this.library.type === 'tvshows'
@@ -643,11 +671,11 @@ struct ServerLibraryCard {
 
   build() {
     Column({ space: 8 }) {
-      Image(this.library.imageUrl.length > 0 ? this.library.imageUrl : this.getPlaceholder())
-        .alt(this.getPlaceholder())
+      Stack() {
+        this.LibraryImage()
+      }
         .width(SERVER_WIDE_WIDTH)
         .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-        .objectFit(ImageFit.Cover)
         .borderRadius(6).clip(true)
         .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
 

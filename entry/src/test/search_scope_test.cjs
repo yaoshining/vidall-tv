@@ -2019,7 +2019,43 @@ function registerAndExecuteCore() {
   core.execute();
 }
 
-if (process.argv.includes('--search-chains')) {
+function runLibraryImageChecks() {
+  const assert = require('node:assert/strict');
+  const page = fs.readFileSync(path.join(root,
+    'entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets'), 'utf8');
+  const source = page.slice(page.indexOf('struct ServerLibraryCard {'),
+    page.indexOf('struct SectionRow {'));
+  const card = { library: { imageUrl: '', type: 'movies' }, imageFailed: false };
+  for (const name of ['resetImageFailure', 'onImageError', 'shouldLoadThumbnail', 'getPlaceholder']) {
+    card[name] = loadMethod(source, `private ${name}(`, [], { $r: (value) => value });
+  }
+  assert.equal(card.shouldLoadThumbnail(), false);
+  assert.equal(card.getPlaceholder(), 'app.media.library_placeholder_movie');
+  card.library.imageUrl = 'https://invalid.example/missing.jpg';
+  assert.equal(card.shouldLoadThumbnail(), true);
+  card.onImageError();
+  assert.equal(card.shouldLoadThumbnail(), false);
+  assert.equal(card.getPlaceholder(), 'app.media.library_placeholder_movie');
+  card.library = { imageUrl: 'https://example.test/new.jpg', type: 'tvshows' };
+  card.resetImageFailure();
+  assert.equal(card.shouldLoadThumbnail(), true);
+  card.onImageError();
+  assert.equal(card.getPlaceholder(), 'app.media.library_placeholder_tv');
+  assert.equal(card.shouldLoadThumbnail(), false);
+  card.resetImageFailure();
+  assert.equal(card.imageFailed, false);
+  assert.match(source, /@Monitor\('library'\)/);
+  assert.match(source, /\.onError\(\(\) => \{ this.onImageError\(\) \}\)/);
+  assert.match(source, /\.onComplete\(\(\) => \{ this.resetImageFailure\(\) \}\)/);
+  const fallback = source.slice(source.indexOf('} else {'), source.indexOf('private getPlaceholder'));
+  assert.match(fallback, /Image\(this.getPlaceholder\(\)\)/);
+  assert.doesNotMatch(fallback, /onComplete|onError/);
+  console.log('媒体库图片回退: 空地址、非空失效地址错误回调、分类占位、复用恢复及占位图无重试循环检查通过');
+}
+
+if (process.argv.includes('--library-images')) {
+  runLibraryImageChecks();
+} else if (process.argv.includes('--search-chains')) {
   runSearchChainChecks().catch((error) => {
     console.error(error);
     process.exitCode = 1;
