@@ -1,0 +1,1 @@
+{"id":"ec1f49db03a03ea821b4836b619dd825","fullName":"ValidationUtil.validateUrl#包含 http:// 前缀应返回无效","name":"包含 http:// 前缀应返回无效","status":"passed","testResultsByEnv":{"default":"cc5db0fa1e36937c8a29282938a26279"}}
