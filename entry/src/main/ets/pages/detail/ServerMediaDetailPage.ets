@@ -42,6 +42,7 @@ interface ServerMediaDetailServerIdentity {
   serverId: number
   serverType: VideoServerType
   configuration: string
+  revision: number
 }
 
 @ComponentV2
@@ -68,13 +69,17 @@ export struct ServerMediaDetailPage {
   @Local initialLoadDone: boolean = false
   private expectedServerType: string = ''
   private detailLoadGeneration: number = 0
+  private detailRequestRevision: number = 0
   private detailRequestActive: boolean = false
   private playOperationGeneration: number = 0
   private playOperationActive: boolean = false
+  private detailTargetIdentity: ServerMediaDetailServerIdentity | null = null
   private pendingDetailIdentity: ServerMediaDetailServerIdentity | null = null
   private loadedDetailIdentity: ServerMediaDetailServerIdentity | null = null
+  private unsubscribeRequestConfiguration: () => void = () => {}
   private unsubscribeSource: () => void = () => {}
   private unsubscribeConfiguration: () => void = () => {}
+  private unsubscribeLifecycleRevision: () => void = () => {}
 
   private showToastSafe(message: string): void {
     try {
@@ -92,7 +97,8 @@ export struct ServerMediaDetailPage {
     return {
       serverId: server.id as number,
       serverType: server.type,
-      configuration: server.configJson
+      configuration: server.configJson,
+      revision: this.videoServerModel.searchConfigurationRevision
     }
   }
 
@@ -136,7 +142,9 @@ export struct ServerMediaDetailPage {
   }
 
   private beginDetailRequest(silent: boolean): number {
+    this.unsubscribeRequestConfiguration()
     const generation = ++this.detailLoadGeneration
+    this.detailRequestRevision = this.videoServerModel.searchConfigurationRevision
     this.detailRequestActive = true
     this.pendingDetailIdentity = null
     if (!silent) {
@@ -149,6 +157,7 @@ export struct ServerMediaDetailPage {
   private isActiveDetailRequest(generation: number, identity: ServerMediaDetailServerIdentity | null = null): boolean {
     return this.detailRequestActive &&
       generation === this.detailLoadGeneration &&
+      this.detailRequestRevision === this.videoServerModel.searchConfigurationRevision &&
       (identity === null || this.detailInvalidationMessage(identity).length === 0)
   }
 
@@ -193,6 +202,8 @@ export struct ServerMediaDetailPage {
   }
 
   private invalidateDetailState(message: string, clearState: boolean = true): void {
+    this.unsubscribeRequestConfiguration()
+    this.unsubscribeRequestConfiguration = () => {}
     this.detailLoadGeneration++
     this.detailRequestActive = false
     this.playOperationGeneration++
@@ -219,7 +230,8 @@ export struct ServerMediaDetailPage {
     if (identity === null) {
       return
     }
-    const message = this.detailInvalidationMessage(identity)
+    const message = identity.revision !== this.videoServerModel.searchConfigurationRevision ?
+      '服务器配置已变更，请返回重试' : this.detailInvalidationMessage(identity)
     if (message.length > 0) {
       this.invalidateDetailState(message)
     }
@@ -227,6 +239,9 @@ export struct ServerMediaDetailPage {
 
   private subscribeDetailGuards(): void {
     this.unsubscribeDetailGuards()
+    // This subscription outlives loadDetail.finally and observes pre-DB write intent.
+    this.unsubscribeLifecycleRevision = this.videoServerModel
+      .subscribeSearchConfigurationRevision(() => this.handleDetailConfigurationChange())
     this.unsubscribeConfiguration = this.videoServerModel
       .subscribeSearchConfiguration(() => this.handleDetailConfigurationChange())
     if (this.shouldTrackSearchSource()) {
@@ -237,8 +252,10 @@ export struct ServerMediaDetailPage {
 
   private unsubscribeDetailGuards(): void {
     this.unsubscribeConfiguration()
+    this.unsubscribeLifecycleRevision()
     this.unsubscribeSource()
     this.unsubscribeConfiguration = () => {}
+    this.unsubscribeLifecycleRevision = () => {}
     this.unsubscribeSource = () => {}
   }
 
@@ -249,7 +266,8 @@ export struct ServerMediaDetailPage {
 
   private resolvePlayableServer(): VideoServer | null {
     const identity = this.loadedDetailIdentity
-    const message = this.detailInvalidationMessage(identity)
+    const message = identity !== null && identity.revision !== this.videoServerModel.searchConfigurationRevision ?
+      '服务器配置已变更，请返回重试' : this.detailInvalidationMessage(identity)
     if (message.length > 0) {
       this.invalidateDetailState(message)
       this.showToastSafe(message)
@@ -271,6 +289,7 @@ export struct ServerMediaDetailPage {
   private isActivePlayOperation(generation: number, identity: ServerMediaDetailServerIdentity): boolean {
     return this.playOperationActive &&
       generation === this.playOperationGeneration &&
+      identity.revision === this.videoServerModel.searchConfigurationRevision &&
       this.detailInvalidationMessage(identity).length === 0
   }
 
@@ -291,20 +310,79 @@ export struct ServerMediaDetailPage {
 
   private async loadDetail(silent: boolean = false): Promise<void> {
     const generation = this.beginDetailRequest(silent)
+    const configurationRevision = this.videoServerModel.searchConfigurationRevision
     let identity: ServerMediaDetailServerIdentity | null = null
+    let unsubscribeColdConfiguration: () => void = () => {}
+    const unsubscribeRevision = this.videoServerModel.subscribeSearchConfigurationRevision(() => {
+      if (this.detailRequestActive && generation === this.detailLoadGeneration &&
+        configurationRevision !== this.videoServerModel.searchConfigurationRevision) {
+        this.invalidateDetailState('服务器配置已变更，请返回重试')
+      }
+    })
+    this.unsubscribeRequestConfiguration = () => {
+      unsubscribeColdConfiguration()
+      unsubscribeRevision()
+    }
     try {
-      await this.videoServerModel.loadVideoServers(true)
-      const server = this.videoServerModel.getVideoServerById(this.serverId)
+      // Pin the target before registry refresh; retries must not adopt a replacement configuration.
+      let server = this.videoServerModel.getVideoServerById(this.serverId)
+      const message = this.detailInvalidationMessage(this.detailTargetIdentity)
       if (!server) {
-        this.applyDetailFailure(generation, '服务器不存在')
+        if (this.detailTargetIdentity !== null || !this.matchesCurrentSearchSource()) {
+          this.applyDetailFailure(generation, message)
+          return
+        }
+        // The registry publishes synchronously before load resolves. Pin its first
+        // target publication, never the potentially replaced value after the await.
+        unsubscribeColdConfiguration = this.videoServerModel.subscribeSearchConfiguration(() => {
+          if (!this.isActiveDetailRequest(generation)) {
+            return
+          }
+          if (identity !== null) {
+            const changedMessage = this.detailInvalidationMessage(identity)
+            if (changedMessage.length > 0) {
+              this.invalidateDetailState(changedMessage)
+            }
+            return
+          }
+          const publishedServer = this.videoServerModel.getVideoServerById(this.serverId)
+          if (publishedServer) {
+            const publishedMessage = this.detailInvalidationMessage()
+            if (publishedMessage.length > 0) {
+              this.invalidateDetailState(publishedMessage)
+              return
+            }
+            identity = this.bindPendingDetailIdentity(generation, publishedServer)
+            this.detailTargetIdentity = identity
+          }
+        })
+      } else {
+        if (message.length > 0) {
+          this.applyDetailFailure(generation, message)
+          return
+        }
+        identity = this.bindPendingDetailIdentity(generation, server)
+        if (identity === null) {
+          return
+        }
+        this.detailTargetIdentity = identity
+      }
+      await this.videoServerModel.loadVideoServers(true)
+      if (!this.isActiveDetailRequest(generation)) {
         return
       }
-      if (this.expectedServerType.length > 0 && server.type !== this.expectedServerType) {
+      if (configurationRevision !== this.videoServerModel.searchConfigurationRevision) {
+        this.invalidateDetailState('服务器配置已变更，请返回重试')
+        return
+      }
+      const refreshedMessage = this.detailInvalidationMessage(identity)
+      if (refreshedMessage.length > 0) {
+        this.invalidateDetailState(refreshedMessage)
+        return
+      }
+      server = this.videoServerModel.getVideoServerById(this.serverId)
+      if (identity === null || server === null) {
         this.applyDetailFailure(generation, '服务器配置已变更，请返回重试')
-        return
-      }
-      identity = this.bindPendingDetailIdentity(generation, server)
-      if (identity === null) {
         return
       }
       let detail: VideoServerItemDetail
@@ -335,6 +413,8 @@ export struct ServerMediaDetailPage {
     } catch (e) {
       this.applyDetailFailure(generation, (e as BusinessError).message ?? '加载详情失败', identity)
     } finally {
+      unsubscribeColdConfiguration()
+      unsubscribeRevision()
       this.finishDetailRequest(generation, identity)
     }
   }
@@ -537,8 +617,24 @@ export struct ServerMediaDetailPage {
   }
 
   aboutToDisappear(): void {
+    this.handleDetailHidden()
+  }
+
+  private handleDetailHidden(): void {
+    this.initialLoadDone = true
     this.unsubscribeDetailGuards()
     this.invalidateDetailState('', false)
+  }
+
+  private handleDetailShown(): void {
+    this.subscribeDetailGuards()
+    if (!this.initialLoadDone) {
+      this.initialLoadDone = true
+      return
+    }
+    if (this.itemId.length > 0) {
+      this.loadDetail(true)
+    }
   }
 
   private openSeason(s: VideoServerSeason): void {
@@ -551,6 +647,7 @@ export struct ServerMediaDetailPage {
       seriesTitle: this.getTitle(),
       seasonPosterUrl: s.posterUrl
     }
+    this.handleDetailHidden()
     this.pageStack.pushPathByName(ServerSeasonDetailPage.PAGE_NAME, param)
   }
 
@@ -573,6 +670,7 @@ export struct ServerMediaDetailPage {
       role: c.role,
       imageUrl: c.imageUrl
     }
+    this.handleDetailHidden()
     this.pageStack.pushPathByName(ServerPersonDetailPage.PAGE_NAME, param)
   }
 
@@ -834,16 +932,8 @@ export struct ServerMediaDetailPage {
         this.loadDetail()
       }
     })
-    .onShown(() => {
-      // 首次显示由 onReady 发起加载，跳过静默刷新；之后（如从播放器返回）才刷新续播位置 / 进度
-      if (!this.initialLoadDone) {
-        this.initialLoadDone = true
-        return
-      }
-      if (this.itemId.length > 0) {
-        this.loadDetail(true)
-      }
-    })
+    .onHidden(() => { this.handleDetailHidden() })
+    .onShown(() => { this.handleDetailShown() })
     .onBackPressed(() => {
       if (this.showOverviewDialog) {
         this.showOverviewDialog = false

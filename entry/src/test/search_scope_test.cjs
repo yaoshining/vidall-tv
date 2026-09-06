@@ -24,6 +24,12 @@ require.extensions['.js'] = (module, filename) => {
 };
 global.ObservedV2 = (target) => target;
 global.Trace = () => {};
+const detailRegistryDatabase = {
+  whenReady: async () => {},
+  update: async () => {},
+  delete: async () => {},
+  getAll: async () => []
+};
 const load = Module._load;
 Module._load = function (request, parent, main) {
   if (request === '@ohos/hypium') return require(path.join(hypium, 'interface.js'));
@@ -35,7 +41,14 @@ Module._load = function (request, parent, main) {
   // 仅替换网络与主机数据库边界，执行真实 VideoServerModel 删除、通知与缓存逻辑。
   if (request === '../../db/files/FileSourceDatabase' && parent &&
     parent.filename.endsWith('/stores/servers/VideoServerModel.ets')) {
-    return { FileSourceDatabase: { getInstance: () => ({ deleteVideoServer: async () => {}, updateVideoServer: async () => {} }) } };
+    return { FileSourceDatabase: {
+      whenDatabaseReady: () => detailRegistryDatabase.whenReady(),
+      getInstance: () => ({
+        deleteVideoServer: () => detailRegistryDatabase.delete(),
+        updateVideoServer: () => detailRegistryDatabase.update(),
+        getAllVideoServers: () => detailRegistryDatabase.getAll()
+      })
+    } };
   }
   return load.call(this, request, parent, main);
 };
@@ -191,6 +204,8 @@ async function runHostIntegrationChecks() {
   assert.ok(detailPageSource.includes('aboutToAppear(): void'));
   assert.ok(detailPageSource.includes('aboutToDisappear(): void'));
   assert.ok(detailPageSource.includes("this.invalidateDetailState('', false)"));
+  assert.ok(detailPageSource.includes('.onHidden(() => { this.handleDetailHidden() })'));
+  assert.ok(detailPageSource.includes('.onShown(() => { this.handleDetailShown() })'));
   const playBody = extractMethodBody(detailPageSource, 'private async play(): Promise<void>');
   assert.ok(playBody.indexOf('const server = this.resolvePlayableServer()') <
     playBody.indexOf('const target = this.playTarget()'));
@@ -242,6 +257,7 @@ async function runHostIntegrationChecks() {
     refreshSource: loadMethod(workspaceSource, 'private refreshSource(): void', [], methodDeps)
   };
   const detailClientState = {
+    buildContext: async () => null,
     jellyfinClient: null,
     plexClient: null
   };
@@ -313,6 +329,15 @@ async function runHostIntegrationChecks() {
     playTarget: loadMethod(detailPageSource, 'private playTarget(): VideoServerMediaItem | null', [], {}),
     getTitle: loadMethod(detailPageSource, 'private getTitle(): string', [], {}),
     aboutToAppear: loadMethod(detailPageSource, 'aboutToAppear(): void', [], {}),
+    handleDetailHidden: loadMethod(detailPageSource, 'private handleDetailHidden(): void', [], {}),
+    handleDetailShown: loadMethod(detailPageSource, 'private handleDetailShown(): void', [], {}),
+    getSeasonLabel: loadMethod(detailPageSource, 'private getSeasonLabel(s: VideoServerSeason): string', ['s'], {}),
+    openSeason: loadMethod(detailPageSource, 'private openSeason(s: VideoServerSeason): void', ['s'], {
+      ServerSeasonDetailPage: { PAGE_NAME: 'season' }
+    }),
+    openPerson: loadMethod(detailPageSource, 'private openPerson(c: DetailCastMember): void', ['c'], {
+      ServerPersonDetailPage: { PAGE_NAME: 'person' }
+    }),
     aboutToDisappear: loadMethod(detailPageSource, 'aboutToDisappear(): void', [], {}),
     loadDetail: loadMethod(detailPageSource, 'private async loadDetail(silent: boolean = false): Promise<void>',
       ['silent'], {
@@ -324,7 +349,7 @@ async function runHostIntegrationChecks() {
       VideoServerType,
       PlayerPage: { PAGE_NAME: 'player' },
       reportServerPlaybackStarted: () => Promise.resolve(),
-      buildServerEpisodePlaybackContext: async () => null,
+      buildServerEpisodePlaybackContext: (...args) => detailClientState.buildContext(...args),
       JellyfinClient: { fromConfigJson: () => detailClientState.jellyfinClient },
       PlexClient: { fromConfigJson: () => detailClientState.plexClient }
     }, true)
@@ -400,6 +425,8 @@ async function runHostIntegrationChecks() {
         listeners: new Set(),
         loadCalls: 0,
         async loadVideoServers() { this.loadCalls++; },
+        searchConfigurationRevision: 0,
+        subscribeSearchConfigurationRevision() { return () => {}; },
         subscribeSearchConfiguration(listener) {
           this.listeners.add(listener);
           return () => { this.listeners.delete(listener); };
@@ -419,10 +446,15 @@ async function runHostIntegrationChecks() {
       nextUp: createDetailMedia('episode'),
       error: 'stale error',
       isLoading: false,
+      unsubscribeRequestConfiguration: () => {},
+      unsubscribeLifecycleRevision: () => {},
+      detailRequestRevision: 0,
       detailLoadGeneration: 0,
       detailRequestActive: false,
       playOperationGeneration: 0,
       playOperationActive: false,
+      initialLoadDone: false,
+      detailTargetIdentity: null,
       pendingDetailIdentity: null,
       loadedDetailIdentity: null,
       unsubscribeSource() {},
@@ -465,6 +497,11 @@ async function runHostIntegrationChecks() {
     page.getTitle = detailMethods.getTitle;
     page.aboutToAppear = detailMethods.aboutToAppear;
     page.aboutToDisappear = detailMethods.aboutToDisappear;
+    page.handleDetailHidden = detailMethods.handleDetailHidden;
+    page.handleDetailShown = detailMethods.handleDetailShown;
+    page.openSeason = detailMethods.openSeason;
+    page.openPerson = detailMethods.openPerson;
+    page.getSeasonLabel = detailMethods.getSeasonLabel;
     page.loadDetail = detailMethods.loadDetail;
     page.play = detailMethods.play;
     return page;
@@ -1256,6 +1293,421 @@ async function runHostIntegrationChecks() {
     page.aboutToAppear();
     detailSourceModel.emitChange();
     assert.equal(page.error, '当前来源已变化，请返回重新选择来源');
+  }
+
+  {
+    const server = { id: 59, type: 'jellyfin', name: 'Server', configJson: 'original', createdAt: 1 };
+    const page = createDetailPageHarness(server);
+    const pending = createDeferred();
+    let calls = 0;
+    installDetailClient('jellyfin', { getItemDetail: async () => {
+      calls++;
+      return createDetailPayload('movie');
+    } });
+    page.videoServerModel.loadVideoServers = () => pending.promise;
+    const initial = page.loadDetail(false);
+    // Hide before the first onShown: returning must restart the cancelled initial load.
+    page.handleDetailHidden();
+    pending.resolve();
+    await initial;
+    assert.equal(calls, 0);
+    page.handleDetailShown();
+    await flushMicrotasks();
+    assert.equal(calls, 1);
+    assert.equal(page.isLoading, false);
+    page.handleDetailHidden();
+    page.videoServerModel.server = { ...server, configJson: 'replacement' };
+    page.videoServerModel.emitChange();
+    page.handleDetailShown();
+    await flushMicrotasks();
+    assert.equal(calls, 1, 'show must not reclaim a hidden replacement configuration');
+    assert.equal(page.error, '服务器配置已变更，请返回重试');
+    page.aboutToDisappear();
+  }
+
+  // Exercise the production methods at the registry-refresh and retained-page boundaries.
+  for (const retry of [false, true]) {
+    for (const reject of [false, true]) {
+      const server = { id: 60, type: 'jellyfin', name: 'Server', configJson: 'original', createdAt: 1 };
+      const page = createDetailPageHarness(server);
+      page.clearLoadedDetail();
+      page.subscribeDetailGuards();
+      let mediaCalls = 0;
+      installDetailClient('jellyfin', {
+        getItemDetail: async () => { mediaCalls++; throw new Error('initial failure'); }
+      });
+      if (retry) {
+        await page.loadDetail(false);
+        assert.equal(page.error, 'initial failure');
+        assert.equal(page.loadedDetailIdentity, null);
+      }
+      const pending = createDeferred();
+      page.videoServerModel.loadVideoServers = () => pending.promise;
+      const request = retry ? (page.retryDetail(), null) : page.loadDetail(false);
+      assert.equal(page.pendingDetailIdentity.configuration, 'original');
+      page.videoServerModel.server = { ...server, configJson: 'replacement' };
+      page.videoServerModel.emitChange();
+      assert.equal(page.isLoading, false);
+      if (reject) pending.reject(new Error('late registry error'));
+      else pending.resolve();
+      if (request) await request;
+      await flushMicrotasks();
+      assert.equal(mediaCalls, retry ? 1 : 0);
+      assert.equal(page.error, '服务器配置已变更，请返回重试');
+      page.retryDetail();
+      await flushMicrotasks();
+      assert.equal(mediaCalls, retry ? 1 : 0, 'retry must not reclaim replacement config');
+      page.aboutToDisappear();
+    }
+  }
+
+  {
+    const page = createDetailPageHarness(null);
+    const pending = createDeferred();
+    page.videoServerModel.loadVideoServers = () => pending.promise;
+    let calls = 0;
+    installDetailClient('jellyfin', { getItemDetail: async () => {
+      calls++; return createDetailPayload('movie');
+    } });
+    const request = page.loadDetail(false);
+    page.videoServerModel.server = { id: 0, type: 'jellyfin', name: 'warm', configJson: 'warm', createdAt: 1 };
+    pending.resolve();
+    await request;
+    assert.equal(calls, 0);
+    assert.equal(page.error, '服务器配置已变更，请返回重试');
+    assert.equal(page.detailTargetIdentity, null, 'unpublished registry values cannot establish identity');
+    assert.equal(page.isLoading, false);
+  }
+
+  // Real registry loading/setter/notifications; only database and transport are stubbed.
+  const { VideoServerModel } = require(path.join(root,
+    'entry/src/main/ets/stores/servers/VideoServerModel.ets'));
+  for (const type of ['jellyfin', 'emby', 'plex']) {
+    for (const replacement of ['none', 'notified', 'unnotified', 'aba']) {
+      const server = { id: 81, type, name: 'cold', configJson: 'cold-original', createdAt: 1 };
+      const page = createDetailPageHarness(null, type);
+      page.serverId = server.id;
+      page.clearLoadedDetail();
+      const model = new VideoServerModel();
+      page.videoServerModel = model;
+      detailRegistryDatabase.getAll = async () => [server];
+      let calls = 0;
+      installDetailClient(type, { getItemDetail: async () => {
+        calls++; return createDetailPayload('movie');
+      } });
+      page.subscribeDetailGuards();
+      const request = page.loadDetail(false);
+      page.handleDetailShown();
+      // Register after the cold observer: mutate in the first publication before load resolves.
+      let published = false;
+      const unsubscribe = model.subscribeSearchConfiguration(() => {
+        if (published) return;
+        published = true;
+        assert.equal(page.detailTargetIdentity.configuration, 'cold-original');
+        if (replacement === 'unnotified') server.configJson = 'replacement';
+        else if (replacement !== 'none') {
+          model.videoServers = [{ ...server, configJson: 'replacement' }];
+          if (replacement === 'aba') model.videoServers = [server];
+        }
+      });
+      await request;
+      unsubscribe();
+      assert.equal(calls, replacement === 'none' ? 1 : 0);
+      assert.equal(page.isLoading, false);
+      if (replacement === 'none') {
+        assert.ok(page.detail);
+        assert.equal(page.error, '');
+        page.handleDetailHidden();
+        page.handleDetailShown();
+        await flushMicrotasks();
+        assert.equal(calls, 2, 'normal retained-page return reloads automatically');
+        assert.equal(page.error, '');
+      } else {
+        assert.equal(page.detail, null);
+        assert.equal(page.error, '服务器配置已变更，请返回重试');
+        if (replacement !== 'aba') {
+          page.retryDetail();
+          await flushMicrotasks();
+          assert.equal(calls, 0, 'retry cannot adopt the replacement');
+        }
+        const fresh = createDetailPageHarness(model.getVideoServerById(server.id), type);
+        fresh.videoServerModel = model;
+        detailRegistryDatabase.getAll = async () => model.videoServers;
+        await fresh.loadDetail(false);
+        assert.equal(calls, 1, 'a fresh legitimate entry can bind the current configuration');
+        assert.equal(fresh.error, '');
+        fresh.aboutToDisappear();
+      }
+      page.aboutToDisappear();
+      assert.equal(model.revisionListeners.size, 0);
+      assert.equal(model.searchListeners.size, 0, 'cold observer must also be released');
+      console.log(`冷入口真实模型/页面方法 ${type}/${replacement}：通过`);
+    }
+  }
+  for (const boundary of ['hidden', 'source']) {
+    const server = { id: 90, type: 'jellyfin', name: 'fixture', configJson: 'original', createdAt: 1 };
+    const page = createDetailPageHarness(server);
+    const model = new VideoServerModel(); page.videoServerModel = model;
+    page.sourceMediaId = 'movie'; page.clearLoadedDetail();
+    const read = createDeferred(); detailRegistryDatabase.getAll = () => read.promise;
+    let calls = 0;
+    installDetailClient('jellyfin', { getItemDetail: async () => {
+      calls++; return createDetailPayload('movie');
+    } });
+    page.subscribeDetailGuards();
+    const request = page.loadDetail(false);
+    await flushMicrotasks();
+    if (boundary === 'hidden') page.handleDetailHidden();
+    else {
+      detailSourceModel.activeSource = { kind: 'fileSource' };
+      detailSourceModel.emitChange();
+    }
+    read.resolve([server]); await request;
+    assert.equal(calls, 0); assert.equal(page.detail, null);
+    if (boundary === 'hidden') {
+      page.handleDetailShown(); await flushMicrotasks();
+      assert.equal(calls, 1); assert.equal(page.error, '');
+    }
+    page.aboutToDisappear();
+    assert.equal(model.searchListeners.size, 0);
+    assert.equal(model.revisionListeners.size, 0);
+    console.log(`真实冷加载 ${boundary} 与清理：通过`);
+  }
+  for (const settlement of ['read-first', 'write-first']) {
+  for (const operation of ['update', 'delete']) {
+    for (const fail of [false, true]) {
+      const server = { id: 91, type: 'jellyfin', name: 'fixture', configJson: 'original', createdAt: 1 };
+      const page = createDetailPageHarness(null, 'jellyfin');
+      page.serverId = 91; page.clearLoadedDetail();
+      const model = new VideoServerModel(); page.videoServerModel = model;
+      const read = createDeferred(), write = createDeferred();
+      detailRegistryDatabase.getAll = () => read.promise;
+      detailRegistryDatabase[operation] = () => write.promise;
+      let calls = 0;
+      installDetailClient('jellyfin', { getItemDetail: async () => {
+        calls++; return createDetailPayload('movie');
+      } });
+      page.subscribeDetailGuards();
+      const request = page.loadDetail(false);
+      await flushMicrotasks();
+      const before = model.searchConfigurationRevision;
+      const mutation = operation === 'update' ?
+        model.updateVideoServer({ ...server, configJson: 'replacement' }) : model.deleteVideoServer(91);
+      const settled = mutation.catch(() => {});
+      assert.ok(model.searchConfigurationRevision > before, 'write intent is visible before DB settlement');
+      assert.equal(page.isLoading, false);
+      if (settlement === 'write-first') {
+        if (fail) write.reject(new Error('fixture write failure')); else write.resolve();
+        await settled;
+      }
+      read.resolve([server]); await request;
+      assert.equal(calls, 0);
+      assert.equal(model.videoServers.length, 0, 'late initial snapshot cannot resurrect a target');
+      if (settlement === 'read-first') {
+        if (fail) write.reject(new Error('fixture write failure')); else write.resolve();
+        await settled;
+      }
+      assert.equal(model.isLoaded, false);
+      detailRegistryDatabase[operation] = async () => {};
+      detailRegistryDatabase.getAll = async () => fail ? [server] :
+        operation === 'update' ? [{ ...server, configJson: 'replacement' }] : [];
+      page.retryDetail(); await flushMicrotasks();
+      assert.equal(calls, fail || operation === 'update' ? 1 : 0);
+      if (fail) assert.equal(page.error, '', 'failed write permits explicit fresh retry');
+      page.aboutToDisappear();
+      assert.equal(model.revisionListeners.size, 0);
+      assert.equal(model.searchListeners.size, 0);
+      console.log(`真实 pending ${operation}/failure=${fail}/${settlement} 与恢复：通过`);
+    }
+  }
+  }
+  // Loaded-page writes use real model methods; DB and transport settlement are controlled.
+  for (const operation of ['update', 'delete']) {
+    for (const fail of [false, true]) {
+      for (const rejectOld of [false, true]) {
+        const server = { id: 992, type: 'jellyfin', name: 'fixture', configJson: 'original', createdAt: 1 };
+        const model = new VideoServerModel();
+        const page = createDetailPageHarness(server);
+        page.videoServerModel = model;
+        detailRegistryDatabase.getAll = async () => [server];
+        const oldStream = createDeferred(), write = createDeferred(), freshStream = createDeferred();
+        detailRegistryDatabase[operation] = () => write.promise;
+        let streamCalls = 0;
+        installDetailClient('jellyfin', {
+          getItemDetail: async () => createDetailPayload('movie'),
+          getStreamUrl: () => { streamCalls++; return oldStream.promise; }
+        });
+        page.subscribeDetailGuards();
+        await page.loadDetail(false);
+        assert.equal(model.revisionListeners.size, 1, 'visible guard survives load finally');
+        const oldPlay = page.play();
+        await flushMicrotasks();
+        await page.play();
+        assert.equal(streamCalls, 1, 'duplicate click cannot start a second pending stream');
+        const mutation = operation === 'update' ?
+          model.updateVideoServer({ ...server, configJson: 'replacement' }) : model.deleteVideoServer(server.id);
+        const settled = mutation.catch(() => {});
+        assert.equal(page.detail, null, 'write intent clears loaded media before DB settlement');
+        assert.equal(page.isPlaying, false);
+        assert.equal(page.error, '服务器配置已变更，请返回重试');
+        page.retryDetail(); await flushMicrotasks();
+        assert.equal(page.detail, null, 'retry cannot load while write is pending');
+        assert.equal(page.isLoading, false);
+        if (fail) write.reject(new Error('fixture write failure')); else write.resolve();
+        await settled;
+        const current = fail ? server : operation === 'update' ? { ...server, configJson: 'replacement' } : null;
+        detailRegistryDatabase.getAll = async () => current ? [current] : [];
+        // Failed writes permit the existing page to retry. Successful replacements require a fresh entry.
+        const recovery = fail ? page : createDetailPageHarness(current, 'jellyfin');
+        recovery.serverId = server.id;
+        recovery.videoServerModel = model;
+        recovery.subscribeDetailGuards();
+        installDetailClient('jellyfin', {
+          getItemDetail: async () => { throw new Error('new revision detail failure'); }
+        });
+        await recovery.loadDetail(false);
+        assert.equal(recovery.isLoading, false);
+        assert.equal(recovery.error, current ? 'new revision detail failure' : '服务器不存在');
+        if (!fail) {
+          await page.loadDetail(false);
+          assert.equal(page.detail, null, 'old entry cannot adopt replacement media');
+        }
+        const newDetail = createDeferred();
+        installDetailClient('jellyfin', {
+          getItemDetail: () => newDetail.promise,
+          getStreamUrl: () => { streamCalls++; return freshStream.promise; }
+        });
+        recovery.retryDetail(); await flushMicrotasks();
+        let newPlay = null;
+        if (current && rejectOld) {
+          newDetail.resolve(createDetailPayload('movie')); await flushMicrotasks();
+          newPlay = recovery.play(); await flushMicrotasks();
+          assert.equal(recovery.isPlaying, true);
+        }
+        if (rejectOld) oldStream.reject(new Error('old revision stream failure'));
+        else oldStream.resolve('https://fixture.invalid/old-stream');
+        await oldPlay;
+        assert.equal(page.pageStack.pushed.length, 0, 'old result never pushes player');
+        assert.deepEqual(page.toastMessages, [], 'old catch cannot report an error in the new revision');
+        if (current) {
+          if (rejectOld) {
+            assert.equal(recovery.isPlaying, true, 'old catch/finally cannot unlock new play');
+          } else {
+            assert.equal(recovery.isLoading, true, 'old completion cannot unlock new load');
+            newDetail.resolve(createDetailPayload('movie')); await flushMicrotasks();
+            newPlay = recovery.play(); await flushMicrotasks();
+          }
+          assert.equal(recovery.error, '');
+          assert.equal(recovery.isPlaying, true);
+          await recovery.play();
+          assert.equal(streamCalls, 2, 'recovered pending playback also rejects duplicate clicks');
+          freshStream.resolve('https://fixture.invalid/new-stream'); await newPlay;
+          assert.equal(recovery.pageStack.pushed.length, 1);
+          recovery.handleDetailHidden();
+          if (recovery !== page) page.handleDetailHidden();
+          assert.equal(model.revisionListeners.size, 0);
+          assert.equal(model.searchListeners.size, 0);
+          recovery.handleDetailShown(); await flushMicrotasks();
+          assert.equal(recovery.error, '', 'normal player return reloads');
+          assert.equal(model.revisionListeners.size, 1);
+        }
+        page.aboutToDisappear(); recovery.aboutToDisappear();
+        assert.equal(model.revisionListeners.size, 0);
+        assert.equal(model.searchListeners.size, 0);
+        console.log(`Loaded revision real ${operation}/failure=${fail}/oldReject=${rejectOld}: PASS`);
+      }
+    }
+  }
+  detailRegistryDatabase.getAll = async () => [];
+  detailRegistryDatabase.update = async () => {};
+  detailRegistryDatabase.delete = async () => {};
+
+  for (const boundary of ['stream', 'directory']) {
+    for (const navigation of ['hidden', 'season', 'person']) {
+      for (const reject of [false, true]) {
+        const server = { id: 61, type: 'jellyfin', name: 'Server', configJson: 'original', createdAt: 1 };
+        const page = createDetailPageHarness(server);
+        const series = boundary === 'directory';
+        const stale = createDeferred();
+        const fresh = createDeferred();
+        let calls = 0;
+        page.detail = createDetailPayload(series ? 'series' : 'movie');
+        page.loadedDetailIdentity = page.captureServerIdentity(server);
+        page.initialLoadDone = true;
+        page.subscribeDetailGuards();
+        detailClientState.buildContext = series ? () => (++calls === 1 ? stale.promise : fresh.promise) : async () => null;
+        installDetailClient('jellyfin', {
+          getItemDetail: async () => createDetailPayload(series ? 'series' : 'movie'),
+          getSeasons: async () => [],
+          getNextUp: async () => createDetailMedia('episode'),
+          getStreamUrl: async () => series ? 'https://stream/episode' : (++calls === 1 ? stale.promise : fresh.promise)
+        });
+        const oldPlay = page.play();
+        await flushMicrotasks();
+        assert.equal(calls, 1);
+        if (navigation === 'season') page.openSeason({ id: 's1', seasonNumber: 1, name: 'Season', posterUrl: '' });
+        else if (navigation === 'person') page.openPerson({ personId: 'p1', name: 'Person', role: '', imageUrl: '' });
+        else page.handleDetailHidden();
+        const pushed = page.pageStack.pushed.length;
+        assert.equal(pushed, navigation === 'hidden' ? 0 : 1);
+        assert.equal(page.isPlaying, false);
+        assert.equal(page.videoServerModel.listeners.size, 0);
+        // The actual onHidden may follow a push; repeated hiding is safe.
+        page.handleDetailHidden();
+        page.handleDetailShown();
+        await flushMicrotasks();
+        assert.equal(page.videoServerModel.listeners.size, 1);
+        assert.equal(page.error, '');
+        const newPlay = page.play();
+        await flushMicrotasks();
+        assert.equal(page.isPlaying, true);
+        if (reject) stale.reject(new Error('late playback failure'));
+        else stale.resolve(series ? null : 'https://stream/stale');
+        await oldPlay;
+        assert.equal(page.pageStack.pushed.length, pushed);
+        assert.equal(page.isPlaying, true, 'old finally must not release new play lock');
+        assert.deepEqual(page.toastMessages, []);
+        fresh.resolve(series ? null : 'https://stream/fresh');
+        await newPlay;
+        assert.equal(page.pageStack.pushed.length, pushed + 1);
+        assert.equal(page.pageStack.pushed[pushed].name, 'player');
+        assert.equal(page.isPlaying, false);
+        page.handleDetailHidden();
+        page.handleDetailShown();
+        await flushMicrotasks();
+        assert.equal(page.error, '');
+        assert.ok(page.loadedDetailIdentity);
+        page.aboutToDisappear();
+      }
+    }
+  }
+  detailClientState.buildContext = async () => null;
+
+  for (const reject of [false, true]) {
+    const server = { id: 62, type: 'jellyfin', name: 'Server', configJson: 'original', createdAt: 1 };
+    const page = createDetailPageHarness(server);
+    const stale = createDeferred();
+    const fresh = createDeferred();
+    let calls = 0;
+    installDetailClient('jellyfin', { getItemDetail: () => ++calls === 1 ? stale.promise : fresh.promise });
+    page.initialLoadDone = true;
+    const oldLoad = page.loadDetail(false);
+    await flushMicrotasks();
+    page.handleDetailHidden();
+    page.handleDetailShown();
+    page.retryDetail();
+    await flushMicrotasks();
+    assert.equal(page.isLoading, true);
+    if (reject) stale.reject(new Error('late detail failure'));
+    else stale.resolve(createDetailPayload('series'));
+    await oldLoad;
+    assert.equal(page.isLoading, true, 'old detail finally must not release new load lock');
+    assert.equal(page.error, '');
+    fresh.resolve(createDetailPayload('movie'));
+    await flushMicrotasks();
+    assert.equal(page.isLoading, false);
+    assert.equal(page.detail.media.type, 'movie');
+    page.aboutToDisappear();
   }
 
   console.log('静态路由/副作用/输入/生命周期守卫、真实页面方法与详情页身份/错误态回归、reject/resetAll 回归：通过');
