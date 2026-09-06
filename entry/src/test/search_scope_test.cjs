@@ -3,8 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const root = path.resolve(__dirname, '../../..');
-const ts = require(process.env.TYPESCRIPT_PATH ||
-  '/Applications/DevEco-Studio.app/Contents/tools/hvigor/hvigor/node_modules/typescript');
+// 默认解析项目 TypeScript；允许通过绝对路径使用已有 SDK 中的模块。
+const typescriptPath = process.env.TYPESCRIPT_PATH;
+if (typescriptPath !== undefined && !path.isAbsolute(typescriptPath)) {
+  throw new Error('TYPESCRIPT_PATH 必须为已安装的 TypeScript 模块绝对路径');
+}
+const ts = require(typescriptPath === undefined ? 'typescript' : typescriptPath);
 const hypium = fs.realpathSync(path.join(root, 'oh_modules/@ohos/hypium/src/main'));
 const originalJs = require.extensions['.js'];
 function compile(module, filename) {

@@ -1,5 +1,5 @@
-// Host-only regression: native database IO is stubbed by search_scope_test.cjs.
-// Both deletion methods, source state, persistence and scope resolution are real.
+// 主机回归：原生数据库 IO 由 search_scope_test.cjs 替换。
+// 执行真实删除方法、来源状态、偏好持久化逻辑和范围解析。
 const { describe, it, expect, beforeEach, afterEach } = require('@ohos/hypium');
 const { VideoServerModel } = require('../main/ets/stores/servers/VideoServerModel.ets');
 const { SourceSwitchModel } = require('../main/ets/stores/media/SourceSwitchModel.ets');
@@ -7,7 +7,7 @@ const { AppPreferences, PrefKey } = require('../main/ets/utils/AppPreferences.et
 const { getSearchCapabilities, resolveSearchRoute } = require('../main/ets/models/search/SearchScope.ets');
 
 module.exports = function deletionTests() {
-  describe('Search scope actual server deletion', () => {
+  describe('搜索范围真实服务器删除', () => {
     let source, model, values;
     beforeEach(async () => {
       values = new Map();
@@ -30,7 +30,7 @@ module.exports = function deletionTests() {
       AppPreferences.setStoreLoaderForTesting(null);
       AppPreferences.resetForTesting();
     });
-    it('deleting active server preserves unavailable identity and persisted selection', 0, async () => {
+    it('删除当前服务器保留不可用身份与持久化选择', 0, async () => {
       const persisted = values.get(PrefKey.ACTIVE_MEDIA_SOURCE);
       await model.deleteVideoServerWithFallback(1);
       expect(model.getVideoServerById(1)).assertEqual(null);
@@ -46,7 +46,7 @@ module.exports = function deletionTests() {
       await restored.load(model.videoServers);
       expect(restored.getSearchScope(model.videoServers).kind).assertEqual('unavailable');
     });
-    it('deleting another server leaves active identity and persistence unchanged', 0, async () => {
+    it('删除其他服务器不改变当前身份与持久化选择', 0, async () => {
       const persisted = values.get(PrefKey.ACTIVE_MEDIA_SOURCE);
       await model.deleteVideoServerWithFallback(2);
       expect(model.getVideoServerById(2)).assertEqual(null);
@@ -54,7 +54,7 @@ module.exports = function deletionTests() {
       expect(source.getSearchScope(model.videoServers).key).assertEqual('video-server:jellyfin:1');
       expect(values.get(PrefKey.ACTIVE_MEDIA_SOURCE)).assertEqual(persisted);
     });
-    it('only explicit local selection enables local search after deletion', 0, async () => {
+    it('删除后仅主动选择本地才启用本地搜索', 0, async () => {
       await model.deleteVideoServerWithFallback(1);
       expect(getSearchCapabilities(source.getSearchScope(model.videoServers)).localSearch).assertEqual(false);
       await source.setFileSource();
