@@ -786,6 +786,25 @@ export class JellyfinClient {
     return result;
   }
 
+  /** Search only this authenticated server; no local or cross-server fallback. */
+  async searchItems(keyword: string): Promise<VideoServerMediaItem[]> {
+    await this.authenticate();
+    const userId = await this.ensureUserId();
+    const resp = await JsonHttpClient.get(
+      `${this.buildBaseUrl()}/Users/${encodeURIComponent(userId)}/Items` +
+        `?SearchTerm=${encodeURIComponent(keyword)}&Recursive=true&IncludeItemTypes=Movie,Series,Episode&Limit=100`,
+      this.authHeaders()
+    );
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, '搜索失败'));
+    }
+    const parsed = JSON.parse(resp.body) as Record<string, Object>;
+    if (parsed === null || !Array.isArray(parsed['Items'])) {
+      throw new Error('Invalid search response');
+    }
+    return this.parseItems(resp.body);
+  }
+
   private parseItems(body: string): VideoServerMediaItem[] {
     const parsed = JSON.parse(body) as Object;
     const result: VideoServerMediaItem[] = [];

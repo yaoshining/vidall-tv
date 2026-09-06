@@ -31,7 +31,19 @@ export class SourceSwitchModel {
 
   @Trace private sourceLoaded: boolean = false;
 
-  @Trace activeSource: ActiveMediaSource = { kind: 'fileSource' };
+  @Trace private selectedSource: ActiveMediaSource = { kind: 'fileSource' };
+  private searchListeners: Set<() => void> = new Set<() => void>();
+
+  get activeSource(): ActiveMediaSource { return this.selectedSource; }
+  set activeSource(value: ActiveMediaSource) {
+    this.selectedSource = value;
+    this.searchListeners.forEach((listener: () => void) => listener());
+  }
+
+  subscribeSearchSource(listener: () => void): () => void {
+    this.searchListeners.add(listener);
+    return () => { this.searchListeners.delete(listener); };
+  }
 
   /** 数据源切换弹窗是否可见（供返回键拦截） */
   @Trace sourceSwitchDialogVisible: boolean = false;
@@ -107,6 +119,7 @@ export class SourceSwitchModel {
       this.activeSource = { kind: 'videoServer', name: '来源不可用' };
     } finally {
       this.sourceLoaded = true;
+      this.searchListeners.forEach((listener: () => void) => listener());
     }
   }
 

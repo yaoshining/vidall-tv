@@ -9,6 +9,16 @@ export interface JsonHttpResponse {
   body: string;
 }
 
+/** 保留原生错误码，调用方无需解析本地化消息即可识别超时。 */
+export class JsonHttpTransportError extends Error {
+  code: number;
+
+  constructor(error: BusinessError) {
+    super(error.message || 'HTTP request failed');
+    this.code = error.code;
+  }
+}
+
 /**
  * 影视服务器客户端共用的 JSON HTTP 传输层。
  * 基于 @ohos.net.http，承载 GET/POST JSON 请求（Jellyfin / Emby / Plex 均为标准 REST）。
@@ -38,7 +48,7 @@ export class JsonHttpClient {
           if (err) {
             const bizErr = err as BusinessError;
             req.destroy();
-            reject(new Error(bizErr.message || 'HTTP request failed'));
+            reject(new JsonHttpTransportError(bizErr));
             return;
           }
           const response: JsonHttpResponse = {
@@ -53,7 +63,7 @@ export class JsonHttpClient {
         // req.request 同步抛出（如 URL 非法）时释放请求对象，避免 Promise 悬挂与资源泄漏。
         const bizErr = e as BusinessError;
         req.destroy();
-        reject(new Error(bizErr.message || 'HTTP request failed'));
+        reject(new JsonHttpTransportError(bizErr));
       }
     });
   }

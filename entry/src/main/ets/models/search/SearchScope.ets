@@ -91,15 +91,15 @@ export function resolveSearchRoute(param: SearchRouteParam | string | null | und
   return route;
 }
 
-/** 只暴露已实现的能力，暂不开放服务器搜索。 */
+/** 只暴露已实现的能力，服务器搜索仅支持字面文本。 */
 export function getSearchCapabilities(scope: SearchScope): SearchCapabilities {
   const local = scope.kind === 'localFiles';
   const capabilities: SearchCapabilities = {
-    localSearch: local, serverSearch: false, localHistory: local,
+    localSearch: local, serverSearch: scope.kind === 'videoServer', localHistory: local,
     localSuggestions: local, localDetail: local,
-    inputModes: local ? ['initials', 'pinyin', 'chinese'] : [],
+    inputModes: local ? ['initials', 'pinyin', 'chinese'] : scope.kind === 'videoServer' ? ['text'] : [],
     hint: local ? '支持首字母、全拼、中文片名搜索' :
-      scope.kind === 'videoServer' ? '当前影视服务器暂不支持搜索' : '来源不可用，请返回重新选择来源'
+      scope.kind === 'videoServer' ? '搜索当前服务器片名（首批最多 100 项，可能更少）' : '来源不可用，请返回重新选择来源'
   };
   return capabilities;
 }

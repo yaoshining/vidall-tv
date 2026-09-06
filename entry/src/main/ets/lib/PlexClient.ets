@@ -298,6 +298,40 @@ export class PlexClient {
     return null;
   }
 
+  /** Local PMS hubs only: never use plex.tv discovery or remote providers. */
+  async searchItems(keyword: string): Promise<VideoServerMediaItem[]> {
+    this.ensureToken();
+    const resp = await JsonHttpClient.get(
+      `${this.buildBaseUrl()}/hubs/search?query=${encodeURIComponent(keyword)}&limit=100&includeExternalMedia=0`,
+      this.headers()
+    );
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw new Error(JsonHttpClient.classifyError(resp.statusCode, '搜索失败'));
+    }
+    const parsed = JSON.parse(resp.body) as Record<string, Object>;
+    const container = parsed?.['MediaContainer'] as Record<string, Object> | undefined;
+    if (container === undefined || container === null) {
+      throw new Error('Invalid search response');
+    }
+    const hubs = container['Hub'] as Array<Record<string, Object>> | undefined;
+    if (hubs === undefined && container['size'] === 0) { return []; }
+    if (!Array.isArray(hubs)) { throw new Error('Invalid search response'); }
+    const result: VideoServerMediaItem[] = [];
+    for (const hub of hubs) {
+      const type = String(hub['type'] ?? '');
+      if (type !== 'movie' && type !== 'show' && type !== 'episode') { continue; }
+      const items = hub['Metadata'] as Array<Record<string, Object>> | undefined;
+      if (items === undefined && hub['size'] === 0) { continue; }
+      if (!Array.isArray(items)) { throw new Error('Invalid search response'); }
+      for (const item of items) {
+        const media = this.mapMetadataItem(item);
+        if (media.type === 'show') { media.type = 'series'; }
+        result.push(media);
+      }
+    }
+    return result;
+  }
+
   private parseMetadata(body: string): VideoServerMediaItem[] {
     const parsed = JSON.parse(body) as Record<string, Object>;
     const mediaContainer = parsed['MediaContainer'] as Record<string, Object> | undefined;
