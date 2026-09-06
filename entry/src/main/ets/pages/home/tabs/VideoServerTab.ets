@@ -30,7 +30,7 @@ export struct VideoServerTab {
       this.isLoading = true
       await this.videoServerModel.loadVideoServers(true)
       // 校验当前源仍有效（服务器被删则回退文件源）
-      await this.sourceSwitchModel.load(this.videoServerModel.videoServers.map(s => s.id ?? -1))
+      await this.sourceSwitchModel.load(this.videoServerModel.videoServers)
     } catch (error) {
       console.error('VideoServerTab: 加载服务器失败', (error as BusinessError).message ?? String(error))
     } finally {

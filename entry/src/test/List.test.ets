@@ -1,3 +1,6 @@
+import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
+import videoServerSearchTest from './VideoServerSearch.test';
+import searchScopeTest from './SearchScope.test';
 import timeUtilTest from './TimeUtil.test';
 import playbackContextTest from './ets/PlaybackContextTest';
 import settingsControllerTest from './SettingsController.test';
@@ -122,6 +125,9 @@ export default function testsuite() {
   subtitleLanguageFilterTest();
   subtitleRelevanceFilterTest();
   sourceSwitchModelTest();
+  videoServerSearchTest();
+  searchWorkspaceSessionTest();
+  searchScopeTest();
   videoServerLabelsTest();
   videoServerDaoTest();
   audioCodecUtilTest();

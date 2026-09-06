@@ -1,3 +1,4 @@
+import { SearchScope } from '../../models/search/SearchScope';
 /**
  * 媒体实体定义 — DB v3
  *
@@ -270,6 +271,7 @@ export interface ContinueWatchingItem {
 // ─────────────────────────────────────────────
 
 export interface MediaItem {
+  searchScope?: SearchScope;
   // videos
   id: number;
   sourceId: number;
@@ -320,6 +322,7 @@ export interface MediaListItem {
 }
 
 export interface SeriesGroup {
+  searchScope?: SearchScope;
   title: string;
   /** tv_series 表主键，用于详情页加载剧集数据 */
   tvSeriesId?: number;
