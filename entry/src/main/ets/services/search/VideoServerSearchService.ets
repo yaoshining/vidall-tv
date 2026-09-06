@@ -7,12 +7,48 @@ import { SearchScope, resolveSearchScope, toSearchScopeIdentity } from '../../mo
 export type VideoServerSearchErrorCode =
   'none' | 'unavailable' | 'invalidQuery' | 'auth' | 'timeout' | 'network' | 'invalidResponse';
 
+export type NormalizedVideoServerMediaType = 'movie' | 'series' | 'episode';
+
+export interface VideoServerSearchSelection {
+  serverId: number;
+  serverType: VideoServerType;
+  mediaId: string;
+  mediaType: NormalizedVideoServerMediaType;
+  detailItemId: string;
+}
+
+const videoServerSearchSourceConfigurations = new WeakMap<VideoServerSearchSourceSnapshot, string>();
+
+/** 配置快照只保留在内存对象中用于失效校验，不进 key / 日志 / 持久化。 */
+export class VideoServerSearchSourceSnapshot {
+  readonly scopeKey: string;
+  readonly serverId: number;
+  readonly serverType: VideoServerType;
+
+  constructor(scopeKey: string, server: VideoServer) {
+    this.scopeKey = scopeKey;
+    this.serverId = server.id as number;
+    this.serverType = server.type;
+    videoServerSearchSourceConfigurations.set(this, server.configJson);
+  }
+
+  matches(scope: SearchScope, server: VideoServer | undefined): boolean {
+    const configuration = videoServerSearchSourceConfigurations.get(this) ?? '';
+    return scope.kind === 'videoServer' && scope.key === this.scopeKey &&
+      scope.serverId === this.serverId && scope.serverType === this.serverType &&
+      server !== undefined && server.id === this.serverId && server.type === this.serverType &&
+      server.configJson === configuration;
+  }
+}
+
 export interface VideoServerSearchItem {
   key: string;
   scopeKey: string;
   serverId: number;
   serverType: VideoServerType;
   media: VideoServerMediaItem;
+  selection: VideoServerSearchSelection;
+  sourceSnapshot: VideoServerSearchSourceSnapshot;
 }
 
 /** Terminal results contain no raw errors/configuration. Image URLs inherit client authentication: do not log them. */
@@ -49,6 +85,7 @@ export class VideoServerSearchService {
     // Snapshot identity before awaiting; callers may mutate their selected server while IO is pending.
     const serverId = server.id as number;
     const serverType = server.type;
+    const sourceSnapshot = new VideoServerSearchSourceSnapshot(result.scopeKey, server);
     try {
       let mediaItems: VideoServerMediaItem[];
       if (serverType === VideoServerType.PLEX) {
@@ -58,12 +95,15 @@ export class VideoServerSearchService {
       }
       const seen = new Set<string>();
       for (const media of mediaItems) {
-        if (media.id.length === 0 ||
-          (media.type !== 'movie' && media.type !== 'series' && media.type !== 'episode')) { continue; }
+        const mediaType = this.normalizeMediaType(media.type);
+        if (media.id.length === 0 || mediaType === null) { continue; }
         const key = `${result.scopeKey}:${encodeURIComponent(media.id)}`;
         if (seen.has(key)) { continue; }
         seen.add(key);
-        const item: VideoServerSearchItem = { key, scopeKey: result.scopeKey, serverId, serverType, media };
+        const selection = this.createSelection(serverId, serverType, media, mediaType);
+        const item: VideoServerSearchItem = {
+          key, scopeKey: result.scopeKey, serverId, serverType, media, selection, sourceSnapshot
+        };
         result.items.push(item);
         if (result.items.length === 100) { break; }
       }
@@ -89,5 +129,21 @@ export class VideoServerSearchService {
     result.items = [];
     result.errorCode = code;
     return result;
+  }
+
+  private normalizeMediaType(type: string): NormalizedVideoServerMediaType | null {
+    if (type === 'movie' || type === 'series' || type === 'episode') {
+      return type;
+    }
+    return null;
+  }
+
+  private createSelection(serverId: number, serverType: VideoServerType, media: VideoServerMediaItem,
+    mediaType: NormalizedVideoServerMediaType): VideoServerSearchSelection {
+    const detailItemId = mediaType === 'episode' && media.seriesId.length > 0 ? media.seriesId : media.id;
+    const selection: VideoServerSearchSelection = {
+      serverId, serverType, mediaId: media.id, mediaType, detailItemId
+    };
+    return selection;
   }
 }

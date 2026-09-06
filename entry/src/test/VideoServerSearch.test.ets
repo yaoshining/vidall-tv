@@ -73,6 +73,12 @@ export default function videoServerSearchTest() {
         expect(result.items[0].serverId).assertEqual(2);
         expect(result.items[0].serverType).assertEqual(type);
         expect(result.items[0].media.type).assertEqual(type === VideoServerType.PLEX ? 'series' : 'movie');
+        expect(result.items[0].selection.serverId).assertEqual(2);
+        expect(result.items[0].selection.serverType).assertEqual(type);
+        expect(result.items[0].selection.mediaId).assertEqual('same');
+        expect(result.items[0].selection.mediaType).assertEqual(type === VideoServerType.PLEX ? 'series' : 'movie');
+        expect(result.items[0].selection.detailItemId).assertEqual('same');
+        expect(result.items[0].sourceSnapshot.matches(scope, target)).assertTrue();
         expect(urls.every((url: string) => url.startsWith('https://server-2.test:8096/'))).assertTrue();
         expect(urls[urls.length - 1].includes(encodeURIComponent('中文 &/?'))).assertTrue();
         expect(tokens.every((token: string) => token === 'fake-2')).assertTrue();
@@ -163,6 +169,8 @@ export default function videoServerSearchTest() {
       expect(result.items.length).assertEqual(2);
       expect(result.items[0].key).assertEqual('video-server:jellyfin:1:a%3Ab%2Fc');
       expect(result.items[1].key).assertEqual('video-server:jellyfin:1:a%253Ab%252Fc');
+      expect(result.items[0].selection.mediaId).assertEqual('a:b/c');
+      expect(result.items[1].selection.mediaId).assertEqual('a%3Ab%2Fc');
     });
     it('Plex handles empty hubs, filters non-video and deduplicates local metadata', 0, async () => {
       const a = server(1, VideoServerType.PLEX);
@@ -180,6 +188,17 @@ export default function videoServerSearchTest() {
         body = invalid;
         expect((await service.search(scope, a, 'film')).errorCode).assertEqual('invalidResponse');
       }
+    });
+    it('source snapshot serialization never exposes raw config', 0, async () => {
+      const a = server(1);
+      const identity: SearchScopeIdentity = { kind: 'videoServer', serverId: 1 };
+      const result = await service.search(resolveSearchScope(identity, [a]), a, 'film');
+      expect(result.items.length).assertEqual(1);
+      const serialized = JSON.stringify(result.items[0].sourceSnapshot);
+      expect(serialized).assertEqual('{"scopeKey":"video-server:jellyfin:1","serverId":1,"serverType":"jellyfin"}');
+      expect(serialized.includes('fake-1')).assertEqual(false);
+      expect(serialized.includes('server-1.test')).assertEqual(false);
+      expect(serialized.includes('config')).assertEqual(false);
     });
     it('late request completion keeps captured identity and cannot mutate newer result', 0, async () => {
       const a = server(1, VideoServerType.PLEX);
@@ -209,6 +228,23 @@ export default function videoServerSearchTest() {
       expect(current.status).assertEqual('empty');
       expect(current.items.length).assertEqual(0);
     });
+    for (const type of [VideoServerType.JELLYFIN, VideoServerType.EMBY, VideoServerType.PLEX]) {
+      it(`episodes retain original media identity and route ${type} detail to series entry`, 0, async () => {
+        const a = server(1, type);
+        const identity: SearchScopeIdentity = { kind: 'videoServer', serverId: 1, serverType: type };
+        if (type === VideoServerType.PLEX) {
+          body = '{"MediaContainer":{"Hub":[{"type":"episode","Metadata":[{"ratingKey":"episode-1",' +
+            '"grandparentRatingKey":"series-1","title":"Episode","type":"episode"}]}]}}';
+        } else {
+          body = '{"Items":[{"Id":"episode-1","SeriesId":"series-1","Name":"Episode","Type":"Episode"}]}';
+        }
+        const result = await service.search(resolveSearchScope(identity, [a]), a, 'film');
+        expect(result.items.length).assertEqual(1);
+        expect(result.items[0].selection.mediaId).assertEqual('episode-1');
+        expect(result.items[0].selection.mediaType).assertEqual('episode');
+        expect(result.items[0].selection.detailItemId).assertEqual('series-1');
+      });
+    }
     it('reuses password authentication and its returned user', 0, async () => {
       const a = server(1);
       a.configJson = '{"url":"server-1.test","authMethod":"password","username":"test","password":"fake"}';

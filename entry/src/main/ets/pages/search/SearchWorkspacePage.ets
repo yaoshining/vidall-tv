@@ -5,6 +5,7 @@ import { SourceSwitchModel } from '../../stores/media/SourceSwitchModel';
 import { VideoServerStore } from '../../stores/servers/VideoServerStore';
 import { MediaItem, SearchHistoryEntry, SeriesGroup } from '../../db/models/MediaEntity';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
+import { ServerMediaDetailPage, ServerMediaDetailPageParam } from '../detail/ServerMediaDetailPage';
 
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
@@ -319,6 +320,56 @@ struct WorkspacePosterCard {
   }
 }
 
+@ComponentV2
+struct ServerSearchResultCard {
+  @Require @Param item: VideoServerSearchItem;
+  @Event onPress: () => void = () => {};
+  @Local isFocused: boolean = false;
+
+  private getMediaTypeLabel(): string {
+    switch (this.item.selection.mediaType) {
+      case 'movie': return '电影';
+      case 'series': return '剧集';
+      default: return '单集';
+    }
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      if (this.item.media.posterUrl.length > 0) {
+        Image(this.item.media.posterUrl)
+          .width(180)
+          .height(270)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(8)
+      } else {
+        Text('暂无海报')
+          .width(180)
+          .height(270)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(C_COMPONENT_BG)
+          .fontColor(C_SECONDARY)
+      }
+      Text(this.item.media.title)
+        .fontSize(22)
+        .fontColor(C_TEXT_BODY)
+        .maxLines(2)
+      Text(this.getMediaTypeLabel())
+        .fontSize(18)
+        .fontColor(C_SECONDARY)
+    }
+    .width(180)
+    .padding(8)
+    .borderRadius(12)
+    .border({ width: this.isFocused ? 2 : 1, color: this.isFocused ? '#4A9FFF' : TRANSPARENT })
+    .backgroundColor(this.isFocused ? '#1AFFFFFF' : TRANSPARENT)
+    .focusable(true)
+    .onFocus(() => { this.isFocused = true; })
+    .onBlur(() => { this.isFocused = false; })
+    .onClick(() => { this.onPress(); })
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SearchWorkspacePage — main search entry page (TV vertical layout)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,6 +398,12 @@ struct SearchWorkspacePage {
   private searchGeneration: number = 0;
   private historyLoadGeneration: number = 0;
   private historySourceGeneration: number = 0;
+
+  private showToastSafe(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch (_e) {}
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -602,6 +659,29 @@ struct SearchWorkspacePage {
     } else {
       this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, item);
     }
+  }
+
+  private openServerResultDetail(item: VideoServerSearchItem): void {
+    const context = this.currentContext();
+    if (!item.sourceSnapshot.matches(context.scope, context.server)) {
+      if (context.scope.kind !== 'videoServer' || context.server === undefined ||
+        context.scope.serverId !== item.selection.serverId || context.scope.serverType !== item.selection.serverType) {
+        this.showToastSafe('当前来源已变化，请返回重新选择来源');
+      } else {
+        this.showToastSafe('当前服务器配置已变更，请重新搜索');
+      }
+      this.refreshSource();
+      return;
+    }
+    const param: ServerMediaDetailPageParam = {
+      serverId: item.selection.serverId,
+      serverType: item.selection.serverType,
+      mediaId: item.selection.mediaId,
+      mediaType: item.selection.mediaType,
+      itemId: item.selection.detailItemId,
+      title: item.media.title
+    };
+    this.pageStack.pushPathByName(ServerMediaDetailPage.PAGE_NAME, param);
   }
 
   // ── @Builder sections ─────────────────────────────────────────────────────
@@ -865,21 +945,14 @@ struct SearchWorkspacePage {
     } else if (this.serverResult?.status === 'empty') {
       Text('当前服务器未找到匹配内容').fontSize(22).fontColor(C_TEXT_BODY)
     } else if (this.serverResult?.status === 'success') {
-      Text('首批结果（最多 100 项，可能更少）；仅展示，暂不支持打开详情')
+      Text('首批结果（最多 100 项，可能更少）')
         .fontSize(18).fontColor(C_SECONDARY)
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(this.serverResult.items, (item: VideoServerSearchItem) => {
-          Column({ space: 8 }) {
-            if (item.media.posterUrl.length > 0) {
-              Image(item.media.posterUrl).width(180).height(270).objectFit(ImageFit.Cover).borderRadius(8)
-            } else {
-              Text('暂无海报').width(180).height(270).textAlign(TextAlign.Center)
-                .backgroundColor(C_COMPONENT_BG).fontColor(C_SECONDARY)
-            }
-            Text(item.media.title).fontSize(22).fontColor(C_TEXT_BODY).maxLines(2)
-            Text(item.media.type === 'movie' ? '电影' : item.media.type === 'series' ? '剧集' : '单集')
-              .fontSize(18).fontColor(C_SECONDARY)
-          }.width(180).margin({ right: 20, bottom: 20 }).focusable(false)
+          ServerSearchResultCard({
+            item: item,
+            onPress: () => { this.openServerResultDetail(item); }
+          }).margin({ right: 20, bottom: 20 })
         }, (item: VideoServerSearchItem) => item.key)
       }.width('100%')
     } else {
@@ -932,4 +1005,3 @@ struct SearchWorkspacePage {
 }
 
 export { SearchWorkspacePage };
-

@@ -10,6 +10,7 @@ import { buildServerEpisodePlaybackContext } from "../../utils/ServerEpisodePlay
 import { PlaybackContext } from "../../components/core/player/PlaybackContext"
 import { ServerSeasonDetailPage, ServerSeasonDetailPageParam } from "./ServerSeasonDetailPage"
 import { ServerPersonDetailPage, ServerPersonDetailPageParam } from "./ServerPersonDetailPage"
+import { SourceSwitchModel } from "../../stores/media/SourceSwitchModel"
 import { BusinessError } from "@kit.BasicServicesKit"
 import {
   DetailCastSection,
@@ -20,10 +21,27 @@ import {
   formatDetailDurationMs
 } from "../../components/detail/DetailSections"
 
+export type ServerMediaRouteMediaType = 'movie' | 'series' | 'episode'
+
 export interface ServerMediaDetailPageParam {
   serverId: number
   itemId: string
   title: string
+  serverType?: VideoServerType
+  mediaId?: string
+  mediaType?: ServerMediaRouteMediaType
+}
+
+interface ServerMediaDetailLoadPayload {
+  detail: VideoServerItemDetail
+  seasons: VideoServerSeason[]
+  nextUp: VideoServerMediaItem | null
+}
+
+interface ServerMediaDetailServerIdentity {
+  serverId: number
+  serverType: VideoServerType
+  configuration: string
 }
 
 @ComponentV2
@@ -34,6 +52,8 @@ export struct ServerMediaDetailPage {
   @Local serverId: number = 0
   @Local itemId: string = ''
   @Local fallbackTitle: string = ''
+  @Local sourceMediaId: string = ''
+  @Local sourceMediaType: string = ''
   @Local detail: VideoServerItemDetail | null = null
   @Local seasons: VideoServerSeason[] = []
   @Local isLoading: boolean = true
@@ -46,6 +66,15 @@ export struct ServerMediaDetailPage {
   @Local nextUp: VideoServerMediaItem | null = null
   /** 首次 onShown 跳过静默刷新（onReady 已发起首次加载），避免首帧重复请求 */
   @Local initialLoadDone: boolean = false
+  private expectedServerType: string = ''
+  private detailLoadGeneration: number = 0
+  private detailRequestActive: boolean = false
+  private playOperationGeneration: number = 0
+  private playOperationActive: boolean = false
+  private pendingDetailIdentity: ServerMediaDetailServerIdentity | null = null
+  private loadedDetailIdentity: ServerMediaDetailServerIdentity | null = null
+  private unsubscribeSource: () => void = () => {}
+  private unsubscribeConfiguration: () => void = () => {}
 
   private showToastSafe(message: string): void {
     try {
@@ -53,50 +82,260 @@ export struct ServerMediaDetailPage {
     } catch (_e) {}
   }
 
-  private async loadDetail(silent: boolean = false): Promise<void> {
+  private clearLoadedDetail(): void {
+    this.detail = null
+    this.seasons = []
+    this.nextUp = null
+  }
+
+  private captureServerIdentity(server: VideoServer): ServerMediaDetailServerIdentity {
+    return {
+      serverId: server.id as number,
+      serverType: server.type,
+      configuration: server.configJson
+    }
+  }
+
+  private matchesServerIdentity(identity: ServerMediaDetailServerIdentity): boolean {
+    const server = this.videoServerModel.getVideoServerById(identity.serverId)
+    return server !== null && server !== undefined &&
+      server.id === identity.serverId &&
+      server.type === identity.serverType &&
+      server.configJson === identity.configuration
+  }
+
+  private shouldTrackSearchSource(): boolean {
+    return this.sourceMediaId.length > 0 || this.sourceMediaType.length > 0
+  }
+
+  private matchesCurrentSearchSource(): boolean {
+    if (!this.shouldTrackSearchSource()) {
+      return true
+    }
+    const source = SourceSwitchModel.getState().activeSource
+    return source.kind === 'videoServer' &&
+      source.serverId === this.serverId &&
+      source.serverType === this.expectedServerType
+  }
+
+  private detailInvalidationMessage(identity: ServerMediaDetailServerIdentity | null = null): string {
+    if (!this.matchesCurrentSearchSource()) {
+      return '当前来源已变化，请返回重新选择来源'
+    }
+    const server = this.videoServerModel.getVideoServerById(this.serverId)
+    if (!server) {
+      return '服务器不存在'
+    }
+    if (this.expectedServerType.length > 0 && server.type !== this.expectedServerType) {
+      return '服务器配置已变更，请返回重试'
+    }
+    if (identity !== null && !this.matchesServerIdentity(identity)) {
+      return '服务器配置已变更，请返回重试'
+    }
+    return ''
+  }
+
+  private beginDetailRequest(silent: boolean): number {
+    const generation = ++this.detailLoadGeneration
+    this.detailRequestActive = true
+    this.pendingDetailIdentity = null
     if (!silent) {
       this.isLoading = true
     }
     this.error = ''
+    return generation
+  }
+
+  private isActiveDetailRequest(generation: number, identity: ServerMediaDetailServerIdentity | null = null): boolean {
+    return this.detailRequestActive &&
+      generation === this.detailLoadGeneration &&
+      (identity === null || this.detailInvalidationMessage(identity).length === 0)
+  }
+
+  private bindPendingDetailIdentity(generation: number, server: VideoServer): ServerMediaDetailServerIdentity | null {
+    const identity = this.captureServerIdentity(server)
+    if (!this.isActiveDetailRequest(generation, identity)) {
+      return null
+    }
+    this.pendingDetailIdentity = identity
+    return identity
+  }
+
+  private applyLoadedDetail(generation: number, identity: ServerMediaDetailServerIdentity,
+    payload: ServerMediaDetailLoadPayload): void {
+    if (!this.isActiveDetailRequest(generation, identity)) {
+      return
+    }
+    this.detail = payload.detail
+    this.seasons = payload.seasons
+    this.nextUp = payload.nextUp
+    this.loadedDetailIdentity = identity
+    this.error = ''
+  }
+
+  private applyDetailFailure(generation: number, message: string,
+    identity: ServerMediaDetailServerIdentity | null = null): void {
+    if (!this.isActiveDetailRequest(generation, identity)) {
+      return
+    }
+    this.clearLoadedDetail()
+    this.loadedDetailIdentity = null
+    this.error = message
+  }
+
+  private finishDetailRequest(generation: number, identity: ServerMediaDetailServerIdentity | null = null): void {
+    if (!this.isActiveDetailRequest(generation, identity)) {
+      return
+    }
+    this.detailRequestActive = false
+    this.pendingDetailIdentity = null
+    this.isLoading = false
+  }
+
+  private invalidateDetailState(message: string, clearState: boolean = true): void {
+    this.detailLoadGeneration++
+    this.detailRequestActive = false
+    this.playOperationGeneration++
+    this.playOperationActive = false
+    this.isPlaying = false
+    this.pendingDetailIdentity = null
+    this.loadedDetailIdentity = null
+    this.isLoading = false
+    if (clearState) {
+      this.clearLoadedDetail()
+    }
+    this.error = message
+  }
+
+  private handleDetailSourceChange(): void {
+    const message = this.detailInvalidationMessage()
+    if (message.length > 0) {
+      this.invalidateDetailState(message)
+    }
+  }
+
+  private handleDetailConfigurationChange(): void {
+    const identity = this.pendingDetailIdentity ?? this.loadedDetailIdentity
+    if (identity === null) {
+      return
+    }
+    const message = this.detailInvalidationMessage(identity)
+    if (message.length > 0) {
+      this.invalidateDetailState(message)
+    }
+  }
+
+  private subscribeDetailGuards(): void {
+    this.unsubscribeDetailGuards()
+    this.unsubscribeConfiguration = this.videoServerModel
+      .subscribeSearchConfiguration(() => this.handleDetailConfigurationChange())
+    if (this.shouldTrackSearchSource()) {
+      this.unsubscribeSource = SourceSwitchModel.getState()
+        .subscribeSearchSource(() => this.handleDetailSourceChange())
+    }
+  }
+
+  private unsubscribeDetailGuards(): void {
+    this.unsubscribeConfiguration()
+    this.unsubscribeSource()
+    this.unsubscribeConfiguration = () => {}
+    this.unsubscribeSource = () => {}
+  }
+
+  private leaveDetailPage(): void {
+    this.unsubscribeDetailGuards()
+    this.invalidateDetailState('', true)
+  }
+
+  private resolvePlayableServer(): VideoServer | null {
+    const identity = this.loadedDetailIdentity
+    const message = this.detailInvalidationMessage(identity)
+    if (message.length > 0) {
+      this.invalidateDetailState(message)
+      this.showToastSafe(message)
+      return null
+    }
+    if (identity === null) {
+      return null
+    }
+    return this.videoServerModel.getVideoServerById(identity.serverId)
+  }
+
+  private beginPlayOperation(): number {
+    const generation = ++this.playOperationGeneration
+    this.playOperationActive = true
+    this.isPlaying = true
+    return generation
+  }
+
+  private isActivePlayOperation(generation: number, identity: ServerMediaDetailServerIdentity): boolean {
+    return this.playOperationActive &&
+      generation === this.playOperationGeneration &&
+      this.detailInvalidationMessage(identity).length === 0
+  }
+
+  private finishPlayOperation(generation: number, identity: ServerMediaDetailServerIdentity): void {
+    if (!this.isActivePlayOperation(generation, identity)) {
+      return
+    }
+    this.playOperationActive = false
+    this.isPlaying = false
+  }
+
+  private retryDetail(): void {
+    if (this.isLoading) {
+      return
+    }
+    this.loadDetail()
+  }
+
+  private async loadDetail(silent: boolean = false): Promise<void> {
+    const generation = this.beginDetailRequest(silent)
+    let identity: ServerMediaDetailServerIdentity | null = null
     try {
       await this.videoServerModel.loadVideoServers(true)
       const server = this.videoServerModel.getVideoServerById(this.serverId)
       if (!server) {
-        if (!silent) {
-          this.error = '服务器不存在'
-        }
+        this.applyDetailFailure(generation, '服务器不存在')
         return
       }
-      if (server.type === VideoServerType.PLEX) {
-        this.detail = await PlexClient.fromConfigJson(server.configJson).getItemDetail(this.itemId)
-      } else {
-        this.detail = await JellyfinClient.fromConfigJson(server.configJson).getItemDetail(this.itemId)
+      if (this.expectedServerType.length > 0 && server.type !== this.expectedServerType) {
+        this.applyDetailFailure(generation, '服务器配置已变更，请返回重试')
+        return
       }
-      if (this.detail.media.type === 'series') {
+      identity = this.bindPendingDetailIdentity(generation, server)
+      if (identity === null) {
+        return
+      }
+      let detail: VideoServerItemDetail
+      if (server.type === VideoServerType.PLEX) {
+        detail = await PlexClient.fromConfigJson(server.configJson).getItemDetail(this.itemId)
+      } else {
+        detail = await JellyfinClient.fromConfigJson(server.configJson).getItemDetail(this.itemId)
+      }
+      let seasons: VideoServerSeason[] = []
+      let nextUp: VideoServerMediaItem | null = null
+      if (detail.media.type === 'series') {
         try {
           if (server.type === VideoServerType.PLEX) {
             const client = PlexClient.fromConfigJson(server.configJson)
-            this.seasons = await client.getSeasons(this.itemId)
-            this.nextUp = await client.getNextUp(this.itemId)
+            seasons = await client.getSeasons(this.itemId)
+            nextUp = await client.getNextUp(this.itemId)
           } else {
             const client = JellyfinClient.fromConfigJson(server.configJson)
-            this.seasons = await client.getSeasons(this.itemId)
-            this.nextUp = await client.getNextUp(this.itemId)
+            seasons = await client.getSeasons(this.itemId)
+            nextUp = await client.getNextUp(this.itemId)
           }
         } catch (e) {
           console.warn('[ServerMediaDetailPage] 获取季列表/下一集失败', (e as BusinessError).message)
         }
-      } else {
-        this.nextUp = null
       }
+      const payload: ServerMediaDetailLoadPayload = { detail, seasons, nextUp }
+      this.applyLoadedDetail(generation, identity, payload)
     } catch (e) {
-      if (!silent) {
-        this.error = (e as BusinessError).message ?? '加载详情失败'
-      }
+      this.applyDetailFailure(generation, (e as BusinessError).message ?? '加载详情失败', identity)
     } finally {
-      if (!silent) {
-        this.isLoading = false
-      }
+      this.finishDetailRequest(generation, identity)
     }
   }
 
@@ -128,6 +367,14 @@ export struct ServerMediaDetailPage {
     if (this.isPlaying) {
       return
     }
+    const server = this.resolvePlayableServer()
+    if (!server) {
+      return
+    }
+    const identity = this.loadedDetailIdentity
+    if (identity === null) {
+      return
+    }
     const target = this.playTarget()
     if (!target) {
       if (this.isSeries() && this.nextUp === null) {
@@ -135,12 +382,7 @@ export struct ServerMediaDetailPage {
       }
       return
     }
-    const server: VideoServer | null = this.videoServerModel.getVideoServerById(this.serverId)
-    if (!server) {
-      this.showToastSafe('服务器不存在')
-      return
-    }
-    this.isPlaying = true
+    const playGeneration = this.beginPlayOperation()
     try {
       let url = ''
       let header: Record<string, string> = {}
@@ -153,6 +395,9 @@ export struct ServerMediaDetailPage {
         url = await client.getStreamUrl(target.id)
         header = client.getStreamHeader()
       }
+      if (!this.isActivePlayOperation(playGeneration, identity)) {
+        return
+      }
       const playSessionId = 'vidall-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
       const playerTitle = this.isSeries() ? `${this.getTitle()} ${target.subtitle}` : target.title
       let playbackContext: PlaybackContext | undefined = undefined
@@ -160,7 +405,12 @@ export struct ServerMediaDetailPage {
         try {
           playbackContext = (await buildServerEpisodePlaybackContext(server, this.itemId, target.id)) ?? undefined
         } catch (e) {
-          console.warn('[ServerMediaDetailPage] 构建连续播放上下文失败', (e as BusinessError).message)
+          if (this.isActivePlayOperation(playGeneration, identity)) {
+            console.warn('[ServerMediaDetailPage] 构建连续播放上下文失败', (e as BusinessError).message)
+          }
+        }
+        if (!this.isActivePlayOperation(playGeneration, identity)) {
+          return
         }
       }
       const param: PlayerPageParam = {
@@ -182,12 +432,17 @@ export struct ServerMediaDetailPage {
       }
       reportServerPlaybackStarted(server.type, server.id ?? 0, target.id, playSessionId, target.positionMs, target.durationMs)
         .catch(() => {})
+      if (!this.isActivePlayOperation(playGeneration, identity)) {
+        return
+      }
       this.pageStack.pushPathByName(PlayerPage.PAGE_NAME, param)
     } catch (e) {
-      console.warn('[ServerMediaDetailPage] 播放失败', (e as BusinessError).message)
-      this.showToastSafe('播放失败，请重试')
+      if (this.isActivePlayOperation(playGeneration, identity)) {
+        console.warn('[ServerMediaDetailPage] 播放失败', (e as BusinessError).message)
+        this.showToastSafe('播放失败，请重试')
+      }
     } finally {
-      this.isPlaying = false
+      this.finishPlayOperation(playGeneration, identity)
     }
   }
 
@@ -273,6 +528,17 @@ export struct ServerMediaDetailPage {
       return `第${s.seasonNumber}季`
     }
     return s.name.length > 0 ? s.name : '特别篇'
+  }
+
+  aboutToAppear(): void {
+    if (this.itemId.length > 0) {
+      this.subscribeDetailGuards()
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.unsubscribeDetailGuards()
+    this.invalidateDetailState('', false)
   }
 
   private openSeason(s: VideoServerSeason): void {
@@ -504,8 +770,16 @@ export struct ServerMediaDetailPage {
               }
               .width('100%').height(400).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
             } else if (this.error.length > 0) {
-              Column() {
+              Column({ space: 16 }) {
                 Text(this.error).fontSize(16).fontColor('#FF6B6B')
+                Text('重试')
+                  .fontSize(15).fontColor('#1B78F2')
+                  .defaultFocus(true)
+                  .focusable(true)
+                  .padding({ left: 20, right: 20, top: 8, bottom: 8 })
+                  .border({ width: 1, color: '#1B78F2' })
+                  .borderRadius(6)
+                  .onClick(() => { this.retryDetail() })
               }
               .width('100%').height(400).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
             } else {
@@ -553,6 +827,10 @@ export struct ServerMediaDetailPage {
         this.serverId = param.serverId
         this.itemId = param.itemId
         this.fallbackTitle = param.title
+        this.expectedServerType = param.serverType ?? ''
+        this.sourceMediaId = param.mediaId ?? ''
+        this.sourceMediaType = param.mediaType ?? ''
+        this.subscribeDetailGuards()
         this.loadDetail()
       }
     })
@@ -571,6 +849,7 @@ export struct ServerMediaDetailPage {
         this.showOverviewDialog = false
         return true
       }
+      this.leaveDetailPage()
       this.pageStack.pop()
       return true
     })
