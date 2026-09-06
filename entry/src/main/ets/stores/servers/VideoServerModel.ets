@@ -13,7 +13,23 @@ export class VideoServerModel {
   private static readonly CACHE_DURATION = 5 * 60 * 1000;
 
   // 影视服务器列表
-  @Trace videoServers: VideoServer[] = [];
+  @Trace private servers: VideoServer[] = [];
+  private searchListeners: Set<() => void> = new Set<() => void>();
+
+  get videoServers(): VideoServer[] { return this.servers; }
+  set videoServers(value: VideoServer[]) {
+    this.servers = value;
+    this.notifySearchConfiguration();
+  }
+
+  subscribeSearchConfiguration(listener: () => void): () => void {
+    this.searchListeners.add(listener);
+    return () => { this.searchListeners.delete(listener); };
+  }
+
+  private notifySearchConfiguration(): void {
+    this.searchListeners.forEach((listener: () => void) => listener());
+  }
 
   // 是否已加载
   @Trace isLoaded: boolean = false;
@@ -73,7 +89,7 @@ export class VideoServerModel {
       const rowId = await database.insertVideoServer(server);
 
       server.id = rowId;
-      this.videoServers.push(server);
+      this.videoServers = this.videoServers.concat([server]);
       this.lastUpdateTime = Date.now();
 
       console.info(`VideoServerModel: Added video server with id ${rowId}`);
@@ -117,7 +133,7 @@ export class VideoServerModel {
 
       const index = this.videoServers.findIndex(item => item.id === id);
       if (index !== -1) {
-        this.videoServers.splice(index, 1);
+        this.videoServers = this.videoServers.filter((server: VideoServer) => server.id !== id);
       }
       this.lastUpdateTime = Date.now();
     } catch (error) {

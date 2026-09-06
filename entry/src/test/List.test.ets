@@ -1,3 +1,4 @@
+import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
 import videoServerSearchTest from './VideoServerSearch.test';
 import searchScopeTest from './SearchScope.test';
 import timeUtilTest from './TimeUtil.test';
@@ -125,6 +126,7 @@ export default function testsuite() {
   subtitleRelevanceFilterTest();
   sourceSwitchModelTest();
   videoServerSearchTest();
+  searchWorkspaceSessionTest();
   searchScopeTest();
   videoServerLabelsTest();
   videoServerDaoTest();

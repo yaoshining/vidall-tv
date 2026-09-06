@@ -1,3 +1,5 @@
+import { SearchWorkspaceSession, SearchWorkspaceContext } from '../../services/search/SearchWorkspaceSession';
+import { VideoServerSearchResult, VideoServerSearchItem } from '../../services/search/VideoServerSearchService';
 import { SearchScope, SearchRouteParam, createUnavailableSearchScope, resolveSearchRoute, getSearchCapabilities } from '../../models/search/SearchScope';
 import { SourceSwitchModel } from '../../stores/media/SourceSwitchModel';
 import { VideoServerStore } from '../../stores/servers/VideoServerStore';
@@ -334,6 +336,11 @@ struct SearchWorkspacePage {
   @Local isSearching: boolean = false;
   @Local isSearchBarFocused: boolean = false;
 
+  @Local serverResult: VideoServerSearchResult | null = null;
+  private serverSession: SearchWorkspaceSession = new SearchWorkspaceSession();
+  private unsubscribeSource: () => void = () => {};
+  private unsubscribeConfiguration: () => void = () => {};
+  private pageActive: boolean = false;
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
@@ -344,52 +351,112 @@ struct SearchWorkspacePage {
   private initializeRoute(param: SearchRouteParam | string | null | undefined): void {
     const servers = VideoServerStore.getState().videoServers;
     const route = resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers);
-    this.scope = route.scope;
+    // Route text is reusable, but the top-bar instance is the only source authority.
     this.searchText = route.keyword;
-    this.searchGeneration++;
-    this.searchResults = [];
-    this.historyList = [];
-    if (!getSearchCapabilities(this.scope).localSearch) { return; }
-    this.db = FileSourceDatabase.getInstance();
-    this.loadHistory();
-    this.scheduleSearch();
+    this.resumeSearch();
   }
 
-  aboutToDisappear(): void {
+  private currentContext(): SearchWorkspaceContext {
+    const servers = VideoServerStore.getState().videoServers;
+    const scope = SourceSwitchModel.getState().getSearchScope(servers);
+    const context: SearchWorkspaceContext = {
+      scope, server: servers.find((server) => server.id === scope.serverId)
+    };
+    return context;
+  }
+
+  private resumeSearch(): void {
+    if (this.pageActive) { return; }
+    this.pageActive = true;
+    this.serverSession.activate();
+    this.unsubscribeSource = SourceSwitchModel.getState().subscribeSearchSource(() => this.refreshSource());
+    this.unsubscribeConfiguration = VideoServerStore.getState()
+      .subscribeSearchConfiguration(() => this.refreshSource());
+    this.refreshSource();
+  }
+
+  private refreshSource(): void {
+    this.invalidateSearch();
+    this.scope = this.currentContext().scope;
+    this.searchResults = [];
+    this.historyList = [];
+    this.db = null;
+    if (getSearchCapabilities(this.scope).localSearch) {
+      this.db = FileSourceDatabase.getInstance();
+    }
+    this.scheduleSearch();
+    this.loadHistory();
+  }
+
+  private invalidateSearch(): void {
     this.searchGeneration++;
+    this.serverSession.invalidate();
+    this.serverResult = null;
+    this.isSearching = false;
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = -1;
     }
   }
+
+  private leaveSearch(): void {
+    this.pageActive = false;
+    this.invalidateSearch();
+    this.serverSession.dispose();
+    this.unsubscribeSource();
+    this.unsubscribeConfiguration();
+  }
+
+  aboutToDisappear(): void { this.leaveSearch(); }
 
   // ── Data helpers ──────────────────────────────────────────────────────────
 
   private loadHistory(): void {
     if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
+    const generation = this.searchGeneration;
     this.db.getSearchHistory(20)
       .then((list: SearchHistoryEntry[]) => {
-        this.historyList = list;
+        if (this.pageActive && generation === this.searchGeneration &&
+          getSearchCapabilities(this.scope).localHistory) { this.historyList = list; }
       })
       .catch(() => {});
   }
 
 
   private scheduleSearch(): void {
-    this.searchGeneration++;
-    this.isSearching = false;
-    if (!getSearchCapabilities(this.scope).localSearch) { return; }
-    if (this.searchDebounceTimer !== -1) {
-      clearTimeout(this.searchDebounceTimer);
-      this.searchDebounceTimer = -1;
-    }
-    if (this.searchText.trim().length === 0) {
-      this.searchResults = [];
-      return;
-    }
+    this.invalidateSearch();
+    this.searchResults = [];
+    if (!this.pageActive || this.searchText.trim().length === 0) { return; }
+    const capabilities = getSearchCapabilities(this.scope);
+    if (!capabilities.localSearch && !capabilities.serverSearch) { return; }
+    this.isSearching = true;
     this.searchDebounceTimer = setTimeout(() => {
       this.searchDebounceTimer = -1;
-      this.executeSearch();
+      if (getSearchCapabilities(this.scope).serverSearch) {
+        this.executeServerSearch();
+      } else {
+        this.executeSearch();
+      }
     }, 800);
+  }
+
+  private executeServerSearch(): void {
+    this.invalidateSearch();
+    this.serverSession.search(this.searchText, () => this.currentContext(),
+      (result: VideoServerSearchResult) => {
+        this.serverResult = result;
+        this.isSearching = result.status === 'loading';
+      });
+  }
+
+  private serverErrorText(): string {
+    switch (this.serverResult?.errorCode) {
+      case 'auth': return '服务器认证失败，请检查来源配置后重试';
+      case 'timeout': return '搜索超时，请重试';
+      case 'invalidResponse': return '服务器响应无效，请重试';
+      case 'unavailable': return '来源不可用，请返回重新选择来源';
+      default: return '无法连接服务器，请检查网络后重试';
+    }
   }
 
   /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
@@ -515,7 +582,7 @@ struct SearchWorkspacePage {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .focusable(true)
-      .onClick(() => { this.pageStack.pop(); })
+      .onClick(() => { this.leaveSearch(); this.pageStack.pop(); })
     }
     .width('100%')
     .height(48)
@@ -546,21 +613,24 @@ struct SearchWorkspacePage {
         .fontColor(C_ICON)
         .width(22)
         .height(22)
-      if (this.searchText.length > 0) {
-        Text(this.searchText)
-          .fontSize(22)
-          .fontWeight(500)
-          .fontColor(C_TEXT_TITLE)
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      } else {
-        Text('\u652f\u6301\u9996\u5b57\u6bcd\u3001\u5168\u62fc\u3001\u4e2d\u6587\u7247\u540d\u641c\u7d22')
-          .fontSize(22)
-          .fontWeight(500)
-          .fontColor(C_PLACEHOLDER)
-          .layoutWeight(1)
-      }
+      TextInput({ text: this.searchText, placeholder: '输入片名' })
+        .fontSize(22)
+        .fontColor(C_TEXT_TITLE)
+        .placeholderColor(C_PLACEHOLDER)
+        .backgroundColor(Color.Transparent)
+        .layoutWeight(1)
+        .defaultFocus(true)
+        .onChange((value: string) => {
+          this.searchText = value;
+          this.scheduleSearch();
+        })
+        .onSubmit(() => {
+          if (getSearchCapabilities(this.scope).serverSearch) {
+            this.executeServerSearch();
+          } else {
+            this.executeSearchWithHistory();
+          }
+        })
     }
     .width('70%')
     .height(56)
@@ -574,8 +644,6 @@ struct SearchWorkspacePage {
     })
     .animation({ duration: 150, curve: Curve.EaseOut })
     .alignItems(VerticalAlign.Center)
-    .defaultFocus(true)
-    .focusable(true)
     .onFocus(() => { this.isSearchBarFocused = true; })
     .onBlur(() => { this.isSearchBarFocused = false; })
   }
@@ -745,6 +813,40 @@ struct SearchWorkspacePage {
     }
   }
 
+  @Builder
+  buildServerResults() {
+    if (this.isSearching) {
+      Text('正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
+    } else if (this.serverResult?.status === 'error') {
+      Text(this.serverErrorText()).fontSize(22).fontColor(C_TEXT_BODY)
+      Row() {
+        ActionKey({ label: '重试', keyAspect: 3, onPress: () => this.executeServerSearch() })
+      }.width(180)
+    } else if (this.serverResult?.status === 'empty') {
+      Text('当前服务器未找到匹配内容').fontSize(22).fontColor(C_TEXT_BODY)
+    } else if (this.serverResult?.status === 'success') {
+      Text('首批结果（最多 100 项，可能更少）；仅展示，暂不支持打开详情')
+        .fontSize(18).fontColor(C_SECONDARY)
+      Flex({ wrap: FlexWrap.Wrap }) {
+        ForEach(this.serverResult.items, (item: VideoServerSearchItem) => {
+          Column({ space: 8 }) {
+            if (item.media.posterUrl.length > 0) {
+              Image(item.media.posterUrl).width(180).height(270).objectFit(ImageFit.Cover).borderRadius(8)
+            } else {
+              Text('暂无海报').width(180).height(270).textAlign(TextAlign.Center)
+                .backgroundColor(C_COMPONENT_BG).fontColor(C_SECONDARY)
+            }
+            Text(item.media.title).fontSize(22).fontColor(C_TEXT_BODY).maxLines(2)
+            Text(item.media.type === 'movie' ? '电影' : item.media.type === 'series' ? '剧集' : '单集')
+              .fontSize(18).fontColor(C_SECONDARY)
+          }.width(180).margin({ right: 20, bottom: 20 }).focusable(false)
+        }, (item: VideoServerSearchItem) => item.key)
+      }.width('100%')
+    } else {
+      Text('输入片名搜索当前服务器').fontSize(22).fontColor(C_SECONDARY)
+    }
+  }
+
   build() {
     NavDestination() {
       Scroll() {
@@ -752,11 +854,15 @@ struct SearchWorkspacePage {
           this.buildBackRow()
           Text(this.scope.label).fontSize(24).fontColor(C_TEXT_TITLE)
           Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
-          if (getSearchCapabilities(this.scope).localSearch) {
+          if (getSearchCapabilities(this.scope).localSearch || getSearchCapabilities(this.scope).serverSearch) {
             this.buildSearchBar()
             this.buildKeyboard()
-            this.buildHistory()
-            this.buildResultsPreview()
+            if (getSearchCapabilities(this.scope).localSearch) {
+              this.buildHistory()
+              this.buildResultsPreview()
+            } else {
+              this.buildServerResults()
+            }
           }
         }
         .width('100%')
@@ -774,8 +880,11 @@ struct SearchWorkspacePage {
     .onReady((context: NavDestinationContext) => {
       this.initializeRoute(context.pathInfo.param as SearchRouteParam | string | null | undefined);
     })
+    .onShown(() => { this.resumeSearch(); })
+    .onWillHide(() => { this.leaveSearch(); })
     .hideTitleBar(true)
     .onBackPressed(() => {
+      this.leaveSearch();
       this.pageStack.pop();
       return true;
     })

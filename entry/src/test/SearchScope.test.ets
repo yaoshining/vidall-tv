@@ -18,8 +18,8 @@ export default function searchScopeTest() {
       expect(scope.key).assertEqual('video-server:jellyfin:1');
       expect(scope.label).assertEqual('A');
       expect(getSearchCapabilities(scope).localHistory).assertEqual(false);
-      expect(getSearchCapabilities(scope).serverSearch).assertEqual(false);
-      expect(getSearchCapabilities(scope).inputModes.length).assertEqual(0);
+      expect(getSearchCapabilities(scope).serverSearch).assertEqual(true);
+      expect(getSearchCapabilities(scope).inputModes.join(',')).assertEqual('text');
     });
     it('separates server instances and types', 0, () => {
       expect(resolveSearchScope({ kind: 'videoServer', serverId: 2 } as SearchScopeIdentity, servers).key)

@@ -31,7 +31,7 @@ Module._load = function (request, parent, main) {
   // Host-only database boundary; execute the real VideoServerModel deletion/cache logic.
   if (request === '../../db/files/FileSourceDatabase' && parent &&
     parent.filename.endsWith('/stores/servers/VideoServerModel.ets')) {
-    return { FileSourceDatabase: { getInstance: () => ({ deleteVideoServer: async () => {} }) } };
+    return { FileSourceDatabase: { getInstance: () => ({ deleteVideoServer: async () => {}, updateVideoServer: async () => {} }) } };
   }
   return load.call(this, request, parent, main);
 };
@@ -59,7 +59,15 @@ if (process.argv.includes('--integration')) {
     assert.ok(source.includes('resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers)'));
     assert.ok(source.includes('searchScope: this.scope'));
   }
-  console.log('Static routing/side-effect guards: passed');
+  const page = fs.readFileSync(path.join(root, workspace), 'utf8');
+  assert.ok(page.includes('TextInput({ text: this.searchText'));
+  assert.ok(page.includes('subscribeSearchSource(() => this.refreshSource())'));
+  assert.ok(page.includes('subscribeSearchConfiguration(() => this.refreshSource())'));
+  assert.ok(page.includes('.onWillHide(() => { this.leaveSearch(); })'));
+  const preview = page.slice(page.indexOf('  buildServerResults()'), page.indexOf('  build() {\n    NavDestination()'));
+  assert.ok(!preview.includes('onClick') && !preview.includes('navigateToDetail'));
+  assert.ok(preview.includes('.focusable(false)'));
+  console.log('Static routing/side-effect/input/lifecycle guards: passed');
 }
 const Core = require(path.join(hypium, 'core.js')).default;
 const core = Core.getInstance();
@@ -67,6 +75,7 @@ core.init();
 require(path.join(root, 'entry/src/test/SearchScope.test.ets')).default();
 if (process.argv.includes('--server-search')) {
   require(path.join(root, 'entry/src/test/VideoServerSearch.test.ets')).default();
+  require(path.join(root, 'entry/src/test/SearchWorkspaceSession.test.ets')).default();
 }
 if (process.argv.includes('--integration')) {
   require(path.join(root, 'entry/src/test/SourceSwitchModel.test.ets')).default();
