@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { SearchScopeIdentity, SearchScope, resolveSearchScope, createUnavailableSearchScope } from &#39;../../models/search/SearchScope&#39;; 
+import { AppPreferences, PrefKey } from &#39;../../utils/AppPreferences&#39;; 
+import { VideoServer, VideoServerType } from &#39;../../db/models/VideoServerEntity&#39;; 
+ 
+/** 
+ * 媒体库当前数据源描述。 
+ * - kind = &#39;fileSource&#39;：本地 / 文件源扫描的媒体库 
+ * - kind = &#39;videoServer&#39;：某台影视服务器（Jellyfin / Emby / Plex） 
+ */ 
+export interface ActiveMediaSource { 
+  kind: &#39;fileSource&#39; | &#39;videoServer&#39;; 
+  serverId?: number; 
+  serverType?: VideoServerType; 
+  name?: string; 
+} 
+ 
+/** 
+ * 媒体库数据源切换状态（单例可观察）。 
+ * 顶部栏「Home」按钮与媒体库均消费本模型。 
+ */ 
+@ObservedV2 
+export class SourceSwitchModel { 
+  private static instance: SourceSwitchModel | null = null; 
+ 
+  static getState(): SourceSwitchModel { 
+    if (!SourceSwitchModel.instance) { 
+      SourceSwitchModel.instance = new SourceSwitchModel(); 
+    } 
+    return SourceSwitchModel.instance; 
+  } 
+ 
+  @Trace private sourceLoaded: boolean = false; 
+ 
+  @Trace private selectedSource: ActiveMediaSource = { kind: &#39;fileSource&#39; }; 
+  private searchListeners: Set&lt;() =&gt; void&gt; = new Set&lt;() =&gt; void&gt;(); 
+ 
+  get activeSource(): ActiveMediaSource { return this.selectedSource; } 
+  set activeSource(value: ActiveMediaSource) { 
+    this.selectedSource = value; 
+    this.searchListeners.forEach((listener: () =&gt; void) =&gt; listener()); 
+  } 
+ 
+  subscribeSearchSource(listener: () =&gt; void): () =&gt; void { 
+    this.searchListeners.add(listener); 
+    return () =&gt; { this.searchListeners.delete(listener); }; 
+  } 
+ 
+  /** 数据源切换弹窗是否可见（供返回键拦截） */ 
+  @Trace sourceSwitchDialogVisible: boolean = false; 
+ 
+  /** 当前源展示名：文件源 / 服务器名 */ 
+  getDisplayName(): string { 
+    if (this.activeSource.kind === &#39;videoServer&#39;) { 
+      return this.activeSource.name ?? &#39;&#39;; 
+    } 
+    return &#39;文件源&#39;; 
+  } 
+ 
+  isFileSource(): boolean { 
+    return this.activeSource.kind === &#39;fileSource&#39;; 
+  } 
+ 
+  getActiveServerId(): number | undefined { 
+    return this.activeSource.kind === &#39;videoServer&#39; ? this.activeSource.serverId : undefined; 
+  } 
+ 
+  async setFileSource(): Promise&lt;void&gt; { 
+    this.sourceLoaded = true; 
+    this.activeSource = { kind: &#39;fileSource&#39; }; 
+    await this.persist(); 
+  } 
+ 
+  async setVideoServer(server: VideoServer): Promise&lt;void&gt; { 
+    if (server.id === undefined) { 
+      return; 
+    } 
+    this.sourceLoaded = true; 
+    this.activeSource = { kind: &#39;videoServer&#39;, serverId: server.id, serverType: server.type, name: server.name }; 
+    await this.persist(); 
+  } 
+ 
+  /** 
+   * 服务器改名 / 配置更新后同步当前源的名称（供 Home 按钮与切换弹窗实时刷新）。 
+   */ 
+  async syncServerName(server: VideoServer): Promise&lt;void&gt; { 
+    if (this.activeSource.kind === &#39;videoServer&#39; &amp;&amp; this.activeSource.serverId === server.id) { 
+      this.activeSource = { kind: &#39;videoServer&#39;, serverId: server.id, serverType: server.type, name: server.name }; 
+      await this.persist(); 
+    } 
+  } 
+ 
+  /** 
+   * 从偏好加载当前源。从已加载配置恢复类型；删除的服务器保留为不可用身份。 
+   * @param servers 当前已加载的服务器配置 
+   */ 
+  async load(servers: VideoServer[]): Promise&lt;void&gt; { 
+    try { 
+      const raw = await AppPreferences.get(PrefKey.ACTIVE_MEDIA_SOURCE, &#39;&#39;); 
+      if (raw.length === 0) { 
+        this.activeSource = { kind: &#39;fileSource&#39; }; 
+        return; 
+      } 
+      const parsed = JSON.parse(raw) as ActiveMediaSource; 
+      if (parsed.kind === &#39;videoServer&#39;) { 
+        const serverId = parsed.serverId; 
+        const server = servers.find((item: VideoServer) =&gt; item.id === serverId); 
+        if (server !== undefined &amp;&amp; (parsed.serverType === undefined || parsed.serverType === server.type)) { 
+          this.activeSource = { kind: &#39;videoServer&#39;, serverId: server.id, 
+            serverType: server.type, name: server.name }; 
+          return; 
+        } 
+        // 保留无效身份，禁止搜索静默回退本地数据。 
+        this.activeSource = { kind: &#39;videoServer&#39;, serverId, serverType: parsed.serverType, name: &#39;来源不可用&#39; }; 
+        return; 
+      } 
+      this.activeSource = parsed.kind === &#39;fileSource&#39; ? { kind: &#39;fileSource&#39; } : 
+        { kind: &#39;videoServer&#39;, name: &#39;来源不可用&#39; }; 
+    } catch (e) { 
+      this.activeSource = { kind: &#39;videoServer&#39;, name: &#39;来源不可用&#39; }; 
+    } finally { 
+      this.sourceLoaded = true; 
+      this.searchListeners.forEach((listener: () =&gt; void) =&gt; listener()); 
+    } 
+  } 
+ 
+  getSearchScope(servers: VideoServer[]): SearchScope { 
+    if (!this.sourceLoaded) { return createUnavailableSearchScope(); } 
+    const identity: SearchScopeIdentity = { 
+      kind: this.activeSource.kind, 
+      serverId: this.activeSource.serverId, 
+      serverType: this.activeSource.serverType 
+    }; 
+    return resolveSearchScope(identity, servers); 
+  } 
+ 
+  private async persist(): Promise&lt;void&gt; { 
+    try { 
+      await AppPreferences.set(PrefKey.ACTIVE_MEDIA_SOURCE, JSON.stringify(this.activeSource)); 
+    } catch (e) { 
+      console.warn(&#39;[SourceSwitchModel] 持久化失败&#39;, (e as Error).message ?? String(e)); 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sun Sep 06 2026 23:42:35 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/stores/media/SourceSwitchModel.ets","hash":"c4e56e7ded040070f323b80ed152b0629fadc87ff38402443d147fe562551106","lineCnt":144,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"SourceSwitchModel.getState","count":0,"regions":[{"startLoc":{"line":25,"col":3},"endLoc":{"line":30,"col":4},"count":0,"ignored":0},{"startLoc":{"line":26,"col":38},"endLoc":{"line":28,"col":6},"count":0,"ignored":0},{"startLoc":{"line":29,"col":5},"endLoc":{"line":30,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":26,"col":9},"endLoc":{"line":26,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":0},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":35,"col":32},"endLoc":{"line":35,"col":42},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":35,"col":54},"endLoc":{"line":35,"col":64},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"SourceSwitchModel.activeSource","count":36,"regions":[{"startLoc":{"line":37,"col":3},"endLoc":{"line":37,"col":72},"count":36,"ignored":0},{"startLoc":{"line":37,"col":43},"endLoc":{"line":37,"col":72},"count":36,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"SourceSwitchModel.activeSource","count":11,"regions":[{"startLoc":{"line":38,"col":3},"endLoc":{"line":41,"col":4},"count":11,"ignored":0},{"startLoc":{"line":39,"col":5},"endLoc":{"line":41,"col":4},"count":11,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":40,"col":34},"endLoc":{"line":40,"col":70},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":40,"col":45},"endLoc":{"line":40,"col":55},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"SourceSwitchModel.subscribeSearchSource","count":0,"regions":[{"startLoc":{"line":43,"col":3},"endLoc":{"line":46,"col":4},"count":0,"ignored":0},{"startLoc":{"line":44,"col":5},"endLoc":{"line":46,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":43,"col":35},"endLoc":{"line":43,"col":45},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":43,"col":48},"endLoc":{"line":43,"col":58},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":45,"col":12},"endLoc":{"line":45,"col":60},"count":0,"ignored":0},{"startLoc":{"line":45,"col":20},"endLoc":{"line":45,"col":60},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":10},{"name":"SourceSwitchModel.getDisplayName","count":5,"regions":[{"startLoc":{"line":52,"col":3},"endLoc":{"line":57,"col":4},"count":5,"ignored":0},{"startLoc":{"line":53,"col":51},"endLoc":{"line":55,"col":6},"count":3,"ignored":0},{"startLoc":{"line":56,"col":5},"endLoc":{"line":57,"col":4},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":53,"col":9},"endLoc":{"line":53,"col":49},"trueCount":3,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":11},{"name":"SourceSwitchModel.isFileSource","count":5,"regions":[{"startLoc":{"line":59,"col":3},"endLoc":{"line":61,"col":4},"count":5,"ignored":0},{"startLoc":{"line":60,"col":5},"endLoc":{"line":61,"col":4},"count":5,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"SourceSwitchModel.getActiveServerId","count":3,"regions":[{"startLoc":{"line":63,"col":3},"endLoc":{"line":65,"col":4},"count":3,"ignored":0},{"startLoc":{"line":64,"col":5},"endLoc":{"line":65,"col":4},"count":3,"ignored":0}],"branches":[{"startLoc":{"line":64,"col":12},"endLoc":{"line":64,"col":93},"trueCount":2,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"SourceSwitchModel.setFileSource","count":1,"regions":[{"startLoc":{"line":67,"col":3},"endLoc":{"line":71,"col":4},"count":1,"ignored":0},{"startLoc":{"line":68,"col":5},"endLoc":{"line":71,"col":4},"count":1,"ignored":0}],"branches":[],"ignored":0,"index":14},{"name":"SourceSwitchModel.setVideoServer","count":4,"regions":[{"startLoc":{"line":73,"col":3},"endLoc":{"line":80,"col":4},"count":4,"ignored":0},{"startLoc":{"line":77,"col":5},"endLoc":{"line":80,"col":4},"count":4,"ignored":0},{"startLoc":{"line":74,"col":34},"endLoc":{"line":76,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":74,"col":9},"endLoc":{"line":74,"col":32},"trueCount":0,"falseCount":4,"group":[],"ignored":0}],"ignored":0,"index":15},{"name":"SourceSwitchModel.syncServerName","count":0,"regions":[{"startLoc":{"line":85,"col":3},"endLoc":{"line":90,"col":4},"count":0,"ignored":0},{"startLoc":{"line":86,"col":95},"endLoc":{"line":89,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":86,"col":9},"endLoc":{"line":86,"col":93},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"SourceSwitchModel.load","count":6,"regions":[{"startLoc":{"line":96,"col":3},"endLoc":{"line":124,"col":4},"count":6,"ignored":0},{"startLoc":{"line":97,"col":9},"endLoc":{"line":118,"col":6},"count":6,"ignored":0},{"startLoc":{"line":104,"col":42},"endLoc":{"line":115,"col":8},"count":4,"ignored":0},{"startLoc":{"line":107,"col":109},"endLoc":{"line":111,"col":10},"count":2,"ignored":0},{"startLoc":{"line":120,"col":15},"endLoc":{"line":123,"col":6},"count":6,"ignored":0},{"startLoc":{"line":99,"col":29},"endLoc":{"line":102,"col":8},"count":1,"ignored":0},{"startLoc":{"line":118,"col":7},"endLoc":{"line":120,"col":6},"count":1,"ignored":0},{"startLoc":{"line":116,"col":7},"endLoc":{"line":118,"col":6},"count":0,"ignored":0},{"startLoc":{"line":113,"col":9},"endLoc":{"line":115,"col":8},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":99,"col":11},"endLoc":{"line":99,"col":27},"trueCount":1,"falseCount":5,"group":[],"ignored":0},{"startLoc":{"line":104,"col":11},"endLoc":{"line":104,"col":40},"trueCount":4,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":107,"col":13},"endLoc":{"line":107,"col":107},"trueCount":2,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":116,"col":27},"endLoc":{"line":117,"col":47},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":17},{"name":"anonymous_7","count":5,"regions":[{"startLoc":{"line":106,"col":37},"endLoc":{"line":106,"col":80},"count":5,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"anonymous_8","count":0,"regions":[{"startLoc":{"line":122,"col":36},"endLoc":{"line":122,"col":72},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":19},{"name":"anonymous_9","count":0,"regions":[{"startLoc":{"line":122,"col":47},"endLoc":{"line":122,"col":57},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":20},{"name":"SourceSwitchModel.getSearchScope","count":5,"regions":[{"startLoc":{"line":126,"col":3},"endLoc":{"line":134,"col":4},"count":5,"ignored":0},{"startLoc":{"line":128,"col":5},"endLoc":{"line":134,"col":4},"count":4,"ignored":0},{"startLoc":{"line":127,"col":29},"endLoc":{"line":127,"col":71},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":127,"col":9},"endLoc":{"line":127,"col":27},"trueCount":1,"falseCount":4,"group":[],"ignored":0}],"ignored":0,"index":21},{"name":"SourceSwitchModel.persist","count":5,"regions":[{"startLoc":{"line":136,"col":3},"endLoc":{"line":142,"col":4},"count":5,"ignored":0},{"startLoc":{"line":137,"col":9},"endLoc":{"line":139,"col":6},"count":5,"ignored":0},{"startLoc":{"line":139,"col":7},"endLoc":{"line":141,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":22}],"exeLine":{"0":1,"1":2,"2":3,"3":10,"4":11,"5":12,"6":13,"7":14,"8":21,"9":22,"10":23,"11":25,"12":26,"13":27,"14":29,"15":32,"16":34,"17":35,"18":37,"19":38,"20":39,"21":40,"22":43,"23":44,"24":45,"25":49,"26":52,"27":53,"28":54,"29":56,"30":59,"31":60,"32":63,"33":64,"34":67,"35":68,"36":69,"37":70,"38":73,"39":74,"40":75,"41":77,"42":78,"43":79,"44":85,"45":86,"46":87,"47":88,"48":96,"49":97,"50":98,"51":99,"52":100,"53":101,"54":103,"55":104,"56":105,"57":106,"58":107,"59":108,"60":109,"61":110,"62":113,"63":114,"64":116,"65":117,"66":118,"67":119,"68":120,"69":121,"70":122,"71":126,"72":127,"73":128,"74":129,"75":130,"76":131,"77":133,"78":136,"79":137,"80":138,"81":139,"82":140},"summary":{"lines":{"total":69,"covered":49,"pct":71.01,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,-1,-1,-1,-1,-1,0,-1,36,11,11,0,-1,-1,0,0,0,-1,-1,-1,-1,-1,-1,5,5,3,-1,2,-1,-1,5,5,-1,-1,3,3,-1,-1,1,1,1,1,-1,-1,4,4,0,-1,4,4,4,-1,-1,-1,-1,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,6,6,6,6,1,1,-1,6,4,4,5,4,2,2,2,-1,-1,2,2,-1,0,0,0,1,1,6,0,-1,-1,-1,5,5,4,4,4,4,-1,4,-1,-1,5,5,5,0,0,-1,-1,-1,-1]},"functions":{"total":23,"covered":11,"pct":47.83},"branches":{"total":20,"covered":12,"pct":60}}},"title":"SourceSwitchModel.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
