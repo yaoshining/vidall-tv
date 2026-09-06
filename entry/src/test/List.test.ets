@@ -1,3 +1,4 @@
+import searchScopeTest from './SearchScope.test';
 import timeUtilTest from './TimeUtil.test';
 import playbackContextTest from './ets/PlaybackContextTest';
 import settingsControllerTest from './SettingsController.test';
@@ -122,6 +123,7 @@ export default function testsuite() {
   subtitleLanguageFilterTest();
   subtitleRelevanceFilterTest();
   sourceSwitchModelTest();
+  searchScopeTest();
   videoServerLabelsTest();
   videoServerDaoTest();
   audioCodecUtilTest();

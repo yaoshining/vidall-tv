@@ -1,3 +1,6 @@
+import { SearchScope, SearchRouteParam, createUnavailableSearchScope, resolveSearchRoute, getSearchCapabilities } from '../../models/search/SearchScope';
+import { SourceSwitchModel } from '../../stores/media/SourceSwitchModel';
+import { VideoServerStore } from '../../stores/servers/VideoServerStore';
 import { MediaItem, SearchHistoryEntry, SeriesGroup } from '../../db/models/MediaEntity';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 
@@ -324,6 +327,7 @@ struct SearchWorkspacePage {
 
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
 
+  @Local scope: SearchScope = createUnavailableSearchScope();
   @Local searchText: string = '';
   @Local searchResults: MediaItem[] = [];
   @Local historyList: SearchHistoryEntry[] = [];
@@ -337,16 +341,22 @@ struct SearchWorkspacePage {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  aboutToAppear(): void {
-    try {
-      this.db = FileSourceDatabase.getInstance();
-      this.loadHistory();
-    } catch (e) {
-      // Preview 沙箱：native DB 不可用，静默降级
-    }
+  private initializeRoute(param: SearchRouteParam | string | null | undefined): void {
+    const servers = VideoServerStore.getState().videoServers;
+    const route = resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers);
+    this.scope = route.scope;
+    this.searchText = route.keyword;
+    this.searchGeneration++;
+    this.searchResults = [];
+    this.historyList = [];
+    if (!getSearchCapabilities(this.scope).localSearch) { return; }
+    this.db = FileSourceDatabase.getInstance();
+    this.loadHistory();
+    this.scheduleSearch();
   }
 
   aboutToDisappear(): void {
+    this.searchGeneration++;
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
     }
@@ -355,7 +365,7 @@ struct SearchWorkspacePage {
   // ── Data helpers ──────────────────────────────────────────────────────────
 
   private loadHistory(): void {
-    if (this.db === null) { return; }
+    if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
     this.db.getSearchHistory(20)
       .then((list: SearchHistoryEntry[]) => {
         this.historyList = list;
@@ -365,6 +375,9 @@ struct SearchWorkspacePage {
 
 
   private scheduleSearch(): void {
+    this.searchGeneration++;
+    this.isSearching = false;
+    if (!getSearchCapabilities(this.scope).localSearch) { return; }
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
       this.searchDebounceTimer = -1;
@@ -381,6 +394,7 @@ struct SearchWorkspacePage {
 
   /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
   private async executeSearch(): Promise<void> {
+    if (!getSearchCapabilities(this.scope).localSearch || this.db === null) { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) {
       this.searchResults = [];
@@ -418,6 +432,7 @@ struct SearchWorkspacePage {
 
   /** 执行搜索并保存历史 */
   private executeSearchWithHistory(): void {
+    if (!getSearchCapabilities(this.scope).localHistory) { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
     if (this.db !== null) {
@@ -447,22 +462,25 @@ struct SearchWorkspacePage {
   }
 
   private deleteHistory(keyword: string): void {
-    if (this.db === null) { return; }
+    if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
     this.db.deleteSearchHistory(keyword)
       .then(() => { this.loadHistory(); })
       .catch(() => {});
   }
 
   private clearAllHistory(): void {
-    if (this.db === null) { return; }
+    if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
     this.db.clearSearchHistory()
       .then(() => { this.historyList = []; })
       .catch(() => {});
   }
 
   private navigateToDetail(item: MediaItem): void {
+    if (!getSearchCapabilities(this.scope).localDetail) { return; }
+    item.searchScope = this.scope;
     if (item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
+        searchScope: this.scope,
         title: item.title ?? '',
         tvSeriesId: item.tvSeriesId,
         posterUrl: item.posterUrl,
@@ -732,10 +750,14 @@ struct SearchWorkspacePage {
       Scroll() {
         Column({ space: 20 }) {
           this.buildBackRow()
-          this.buildSearchBar()
-          this.buildKeyboard()
-          this.buildHistory()
-          this.buildResultsPreview()
+          Text(this.scope.label).fontSize(24).fontColor(C_TEXT_TITLE)
+          Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
+          if (getSearchCapabilities(this.scope).localSearch) {
+            this.buildSearchBar()
+            this.buildKeyboard()
+            this.buildHistory()
+            this.buildResultsPreview()
+          }
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
@@ -749,6 +771,9 @@ struct SearchWorkspacePage {
       .align(Alignment.TopStart)
       .backgroundColor(C_PAGE_BG)
     }
+    .onReady((context: NavDestinationContext) => {
+      this.initializeRoute(context.pathInfo.param as SearchRouteParam | string | null | undefined);
+    })
     .hideTitleBar(true)
     .onBackPressed(() => {
       this.pageStack.pop();
