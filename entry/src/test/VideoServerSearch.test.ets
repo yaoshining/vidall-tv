@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from '@ohos/hypium';
+import { describe, it, expect, beforeEach, afterEach, MockKit, when, ArgumentMatchers } from '@ohos/hypium';
 import { VideoServer, VideoServerType } from '../main/ets/db/models/VideoServerEntity';
 import { SearchScopeIdentity, resolveSearchScope, createLocalSearchScope } from '../main/ets/models/search/SearchScope';
 import { JsonHttpClient, JsonHttpResponse, JsonHttpTransportError } from '../main/ets/lib/JsonHttpClient';
@@ -28,20 +28,22 @@ class DeferredSearchResponse {
 export default function videoServerSearchTest() {
   describe('VideoServerSearch', () => {
     const service = new VideoServerSearchService();
-    const originalGet = JsonHttpClient.get;
-    const originalPost = JsonHttpClient.post;
+    let mocker = new MockKit();
     let urls: string[] = [];
     let tokens: string[] = [];
     let status = 200;
     let body = '';
     let failure = '';
     beforeEach(() => {
+      mocker = new MockKit();
       urls = [];
       tokens = [];
       status = 200;
       failure = '';
       body = '{"Items":[{"Id":"same","Name":"Film","Type":"Movie"}]}';
-      JsonHttpClient.get = async (url: string, headers: Record<string, string>): Promise<JsonHttpResponse> => {
+      // 仅替换 HTTP 边界，协议解析、鉴权与搜索归一化仍执行真实客户端。
+      const mockGet: Function = mocker.mockFunc(JsonHttpClient, JsonHttpClient.get);
+      when(mockGet)(ArgumentMatchers.anyString, ArgumentMatchers.anyObj).afterAction(async (url: string, headers: Record<string, string>): Promise<JsonHttpResponse> => {
         urls.push(url);
         tokens.push(headers['X-Emby-Token'] ?? headers['X-Plex-Token'] ?? '');
         if (failure === 'native') {
@@ -54,11 +56,14 @@ export default function videoServerSearchTest() {
           statusCode: status, body: url.endsWith('/Users') ? '[{"Id":"user"}]' : body
         };
         return response;
-      };
+      });
+      const mockPost: Function = mocker.mockFunc(JsonHttpClient, JsonHttpClient.post);
+      when(mockPost)(ArgumentMatchers.anyString, ArgumentMatchers.anyObj, ArgumentMatchers.anyString).afterAction((): Promise<JsonHttpResponse> => {
+        return Promise.reject(new Error('非预期的 HTTP POST 请求'));
+      });
     });
     afterEach(() => {
-      JsonHttpClient.get = originalGet;
-      JsonHttpClient.post = originalPost;
+      mocker.clear(JsonHttpClient);
     });
     for (const type of [VideoServerType.JELLYFIN, VideoServerType.EMBY, VideoServerType.PLEX]) {
       it(`routes ${type} only to selected instance and normalizes media`, 0, async () => {
@@ -207,11 +212,13 @@ export default function videoServerSearchTest() {
       const identityB: SearchScopeIdentity = { kind: 'videoServer', serverId: 2 };
       const scopeA = resolveSearchScope(identityA, [a]);
       const pending = new DeferredSearchResponse();
-      JsonHttpClient.get = (url: string): Promise<JsonHttpResponse> => {
+      const deferredMocker = new MockKit();
+      const mockGet: Function = deferredMocker.mockFunc(JsonHttpClient, JsonHttpClient.get);
+      when(mockGet)(ArgumentMatchers.anyString, ArgumentMatchers.anyObj).afterAction((url: string): Promise<JsonHttpResponse> => {
         if (url.includes('server-1.test')) { return pending.promise; }
         const response: JsonHttpResponse = { statusCode: 200, body: '{"MediaContainer":{"size":0}}' };
         return Promise.resolve(response);
-      };
+      });
       const oldRequest = service.search(scopeA, a, 'old');
       a.id = 99;
       scopeA.serverId = 99;
@@ -248,10 +255,12 @@ export default function videoServerSearchTest() {
     it('reuses password authentication and its returned user', 0, async () => {
       const a = server(1);
       a.configJson = '{"url":"server-1.test","authMethod":"password","username":"test","password":"fake"}';
-      JsonHttpClient.post = async (): Promise<JsonHttpResponse> => {
+      const authenticationMocker = new MockKit();
+      const mockPost: Function = authenticationMocker.mockFunc(JsonHttpClient, JsonHttpClient.post);
+      when(mockPost)(ArgumentMatchers.anyString, ArgumentMatchers.anyObj, ArgumentMatchers.anyString).afterAction(async (): Promise<JsonHttpResponse> => {
         const response: JsonHttpResponse = { statusCode: 200, body: '{"AccessToken":"fake-1","User":{"Id":"signed-in"}}' };
         return response;
-      };
+      });
       const identity: SearchScopeIdentity = { kind: 'videoServer', serverId: 1 };
       expect((await service.search(resolveSearchScope(identity, [a]), a, 'film')).status).assertEqual('success');
       expect(urls.length).assertEqual(1);

@@ -32,7 +32,12 @@ const detailRegistryDatabase = {
 };
 const load = Module._load;
 Module._load = function (request, parent, main) {
-  if (request === '@ohos/hypium') return require(path.join(hypium, 'interface.js'));
+  if (request === '@ohos/hypium') {
+    // 补齐真实 Hypium 的边界替身导出，避免加载依赖设备运行时的包入口。
+    return { ...require(path.join(hypium, 'interface.js')),
+      ...require(path.join(hypium, 'module/mock/MockKit.js')),
+      ArgumentMatchers: require(path.join(hypium, 'module/mock/ArgumentMatchers.js')).default };
+  }
   if (request === '@ohos.app.ability.abilityDelegatorRegistry') {
     return { default: { getAbilityDelegator: () => ({ getAppContext: () => ({}) }) } };
   }
@@ -1325,7 +1330,7 @@ async function runHostIntegrationChecks() {
     page.aboutToDisappear();
   }
 
-  // Exercise the production methods at the registry-refresh and retained-page boundaries.
+  // 在注册表刷新与保留页面边界执行真实生产方法。
   for (const retry of [false, true]) {
     for (const reject of [false, true]) {
       const server = { id: 60, type: 'jellyfin', name: 'Server', configJson: 'original', createdAt: 1 };
@@ -1356,7 +1361,7 @@ async function runHostIntegrationChecks() {
       assert.equal(page.error, '服务器配置已变更，请返回重试');
       page.retryDetail();
       await flushMicrotasks();
-      assert.equal(mediaCalls, retry ? 1 : 0, 'retry must not reclaim replacement config');
+      assert.equal(mediaCalls, retry ? 1 : 0, '重试不得重新绑定替换后的配置');
       page.aboutToDisappear();
     }
   }
@@ -1375,11 +1380,11 @@ async function runHostIntegrationChecks() {
     await request;
     assert.equal(calls, 0);
     assert.equal(page.error, '服务器配置已变更，请返回重试');
-    assert.equal(page.detailTargetIdentity, null, 'unpublished registry values cannot establish identity');
+    assert.equal(page.detailTargetIdentity, null, '未发布的注册表值不得建立身份');
     assert.equal(page.isLoading, false);
   }
 
-  // Real registry loading/setter/notifications; only database and transport are stubbed.
+  // 执行真实注册表加载、赋值与通知，仅替换数据库和传输边界。
   const { VideoServerModel } = require(path.join(root,
     'entry/src/main/ets/stores/servers/VideoServerModel.ets'));
   for (const type of ['jellyfin', 'emby', 'plex']) {
@@ -1398,7 +1403,7 @@ async function runHostIntegrationChecks() {
       page.subscribeDetailGuards();
       const request = page.loadDetail(false);
       page.handleDetailShown();
-      // Register after the cold observer: mutate in the first publication before load resolves.
+      // 在冷启动观察者之后注册，在加载完成前的首次发布中修改配置。
       let published = false;
       const unsubscribe = model.subscribeSearchConfiguration(() => {
         if (published) return;
@@ -1420,7 +1425,7 @@ async function runHostIntegrationChecks() {
         page.handleDetailHidden();
         page.handleDetailShown();
         await flushMicrotasks();
-        assert.equal(calls, 2, 'normal retained-page return reloads automatically');
+        assert.equal(calls, 2, '正常返回保留页面时自动重新加载');
         assert.equal(page.error, '');
       } else {
         assert.equal(page.detail, null);
@@ -1428,19 +1433,19 @@ async function runHostIntegrationChecks() {
         if (replacement !== 'aba') {
           page.retryDetail();
           await flushMicrotasks();
-          assert.equal(calls, 0, 'retry cannot adopt the replacement');
+          assert.equal(calls, 0, '重试不得采用替换后的配置');
         }
         const fresh = createDetailPageHarness(model.getVideoServerById(server.id), type);
         fresh.videoServerModel = model;
         detailRegistryDatabase.getAll = async () => model.videoServers;
         await fresh.loadDetail(false);
-        assert.equal(calls, 1, 'a fresh legitimate entry can bind the current configuration');
+        assert.equal(calls, 1, '新的合法入口可绑定当前配置');
         assert.equal(fresh.error, '');
         fresh.aboutToDisappear();
       }
       page.aboutToDisappear();
       assert.equal(model.revisionListeners.size, 0);
-      assert.equal(model.searchListeners.size, 0, 'cold observer must also be released');
+      assert.equal(model.searchListeners.size, 0, '冷启动观察者也必须释放');
       console.log(`冷入口真实模型/页面方法 ${type}/${replacement}：通过`);
     }
   }
@@ -1494,7 +1499,7 @@ async function runHostIntegrationChecks() {
       const mutation = operation === 'update' ?
         model.updateVideoServer({ ...server, configJson: 'replacement' }) : model.deleteVideoServer(91);
       const settled = mutation.catch(() => {});
-      assert.ok(model.searchConfigurationRevision > before, 'write intent is visible before DB settlement');
+      assert.ok(model.searchConfigurationRevision > before, '数据库完成前写入意图已可见');
       assert.equal(page.isLoading, false);
       if (settlement === 'write-first') {
         if (fail) write.reject(new Error('fixture write failure')); else write.resolve();
@@ -1502,7 +1507,7 @@ async function runHostIntegrationChecks() {
       }
       read.resolve([server]); await request;
       assert.equal(calls, 0);
-      assert.equal(model.videoServers.length, 0, 'late initial snapshot cannot resurrect a target');
+      assert.equal(model.videoServers.length, 0, '迟到的初始快照不得恢复目标');
       if (settlement === 'read-first') {
         if (fail) write.reject(new Error('fixture write failure')); else write.resolve();
         await settled;
@@ -1513,7 +1518,7 @@ async function runHostIntegrationChecks() {
         operation === 'update' ? [{ ...server, configJson: 'replacement' }] : [];
       page.retryDetail(); await flushMicrotasks();
       assert.equal(calls, fail || operation === 'update' ? 1 : 0);
-      if (fail) assert.equal(page.error, '', 'failed write permits explicit fresh retry');
+      if (fail) assert.equal(page.error, '', '写入失败允许显式重新重试');
       page.aboutToDisappear();
       assert.equal(model.revisionListeners.size, 0);
       assert.equal(model.searchListeners.size, 0);
@@ -1521,7 +1526,7 @@ async function runHostIntegrationChecks() {
     }
   }
   }
-  // Loaded-page writes use real model methods; DB and transport settlement are controlled.
+  // 已加载页面的写操作使用真实模型方法，数据库和传输的完成时机由测试控制。
   for (const operation of ['update', 'delete']) {
     for (const fail of [false, true]) {
       for (const rejectOld of [false, true]) {
@@ -1539,25 +1544,25 @@ async function runHostIntegrationChecks() {
         });
         page.subscribeDetailGuards();
         await page.loadDetail(false);
-        assert.equal(model.revisionListeners.size, 1, 'visible guard survives load finally');
+        assert.equal(model.revisionListeners.size, 1, '加载完成清理后可见性守卫仍有效');
         const oldPlay = page.play();
         await flushMicrotasks();
         await page.play();
-        assert.equal(streamCalls, 1, 'duplicate click cannot start a second pending stream');
+        assert.equal(streamCalls, 1, '重复点击不得启动第二个待完成流请求');
         const mutation = operation === 'update' ?
           model.updateVideoServer({ ...server, configJson: 'replacement' }) : model.deleteVideoServer(server.id);
         const settled = mutation.catch(() => {});
-        assert.equal(page.detail, null, 'write intent clears loaded media before DB settlement');
+        assert.equal(page.detail, null, '写入意图在数据库完成前清除已加载媒体');
         assert.equal(page.isPlaying, false);
         assert.equal(page.error, '服务器配置已变更，请返回重试');
         page.retryDetail(); await flushMicrotasks();
-        assert.equal(page.detail, null, 'retry cannot load while write is pending');
+        assert.equal(page.detail, null, '写入未完成时重试不得加载');
         assert.equal(page.isLoading, false);
         if (fail) write.reject(new Error('fixture write failure')); else write.resolve();
         await settled;
         const current = fail ? server : operation === 'update' ? { ...server, configJson: 'replacement' } : null;
         detailRegistryDatabase.getAll = async () => current ? [current] : [];
-        // Failed writes permit the existing page to retry. Successful replacements require a fresh entry.
+        // 写入失败允许当前页面重试；成功替换配置则要求重新进入页面。
         const recovery = fail ? page : createDetailPageHarness(current, 'jellyfin');
         recovery.serverId = server.id;
         recovery.videoServerModel = model;
@@ -1570,7 +1575,7 @@ async function runHostIntegrationChecks() {
         assert.equal(recovery.error, current ? 'new revision detail failure' : '服务器不存在');
         if (!fail) {
           await page.loadDetail(false);
-          assert.equal(page.detail, null, 'old entry cannot adopt replacement media');
+          assert.equal(page.detail, null, '旧入口不得采用替换后的媒体');
         }
         const newDetail = createDeferred();
         installDetailClient('jellyfin', {
@@ -1587,20 +1592,20 @@ async function runHostIntegrationChecks() {
         if (rejectOld) oldStream.reject(new Error('old revision stream failure'));
         else oldStream.resolve('https://fixture.invalid/old-stream');
         await oldPlay;
-        assert.equal(page.pageStack.pushed.length, 0, 'old result never pushes player');
-        assert.deepEqual(page.toastMessages, [], 'old catch cannot report an error in the new revision');
+        assert.equal(page.pageStack.pushed.length, 0, '旧结果不得打开播放器');
+        assert.deepEqual(page.toastMessages, [], '旧异常处理不得向新版本报告错误');
         if (current) {
           if (rejectOld) {
-            assert.equal(recovery.isPlaying, true, 'old catch/finally cannot unlock new play');
+            assert.equal(recovery.isPlaying, true, '旧异常处理与清理不得解除新播放锁');
           } else {
-            assert.equal(recovery.isLoading, true, 'old completion cannot unlock new load');
+            assert.equal(recovery.isLoading, true, '旧完成回调不得解除新加载锁');
             newDetail.resolve(createDetailPayload('movie')); await flushMicrotasks();
             newPlay = recovery.play(); await flushMicrotasks();
           }
           assert.equal(recovery.error, '');
           assert.equal(recovery.isPlaying, true);
           await recovery.play();
-          assert.equal(streamCalls, 2, 'recovered pending playback also rejects duplicate clicks');
+          assert.equal(streamCalls, 2, '恢复后的待完成播放仍拒绝重复点击');
           freshStream.resolve('https://fixture.invalid/new-stream'); await newPlay;
           assert.equal(recovery.pageStack.pushed.length, 1);
           recovery.handleDetailHidden();
@@ -1608,13 +1613,13 @@ async function runHostIntegrationChecks() {
           assert.equal(model.revisionListeners.size, 0);
           assert.equal(model.searchListeners.size, 0);
           recovery.handleDetailShown(); await flushMicrotasks();
-          assert.equal(recovery.error, '', 'normal player return reloads');
+          assert.equal(recovery.error, '', '正常从播放器返回时重新加载');
           assert.equal(model.revisionListeners.size, 1);
         }
         page.aboutToDisappear(); recovery.aboutToDisappear();
         assert.equal(model.revisionListeners.size, 0);
         assert.equal(model.searchListeners.size, 0);
-        console.log(`Loaded revision real ${operation}/failure=${fail}/oldReject=${rejectOld}: PASS`);
+        console.log(`已加载版本真实操作 ${operation}/失败=${fail}/旧请求拒绝=${rejectOld}：通过`);
       }
     }
   }
@@ -1652,7 +1657,7 @@ async function runHostIntegrationChecks() {
         assert.equal(pushed, navigation === 'hidden' ? 0 : 1);
         assert.equal(page.isPlaying, false);
         assert.equal(page.videoServerModel.listeners.size, 0);
-        // The actual onHidden may follow a push; repeated hiding is safe.
+        // 实际 onHidden 可能在路由跳转后触发，重复隐藏仍应安全。
         page.handleDetailHidden();
         page.handleDetailShown();
         await flushMicrotasks();
@@ -1665,7 +1670,7 @@ async function runHostIntegrationChecks() {
         else stale.resolve(series ? null : 'https://stream/stale');
         await oldPlay;
         assert.equal(page.pageStack.pushed.length, pushed);
-        assert.equal(page.isPlaying, true, 'old finally must not release new play lock');
+        assert.equal(page.isPlaying, true, '旧清理回调不得释放新播放锁');
         assert.deepEqual(page.toastMessages, []);
         fresh.resolve(series ? null : 'https://stream/fresh');
         await newPlay;
@@ -1701,7 +1706,7 @@ async function runHostIntegrationChecks() {
     if (reject) stale.reject(new Error('late detail failure'));
     else stale.resolve(createDetailPayload('series'));
     await oldLoad;
-    assert.equal(page.isLoading, true, 'old detail finally must not release new load lock');
+    assert.equal(page.isLoading, true, '旧详情清理回调不得释放新加载锁');
     assert.equal(page.error, '');
     fresh.resolve(createDetailPayload('movie'));
     await flushMicrotasks();
@@ -1799,6 +1804,7 @@ async function runSearchChainChecks() {
         'scheduleSearch', 'executeServerSearch', 'serverErrorText']) {
         page[method] = loadMethod(sourceText, `private ${method}(`, [], dependencies);
       }
+      page.initializeRoute = loadMethod(sourceText, 'private initializeRoute(', ['param'], dependencies);
       page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', [], dependencies, true);
       page.showToastSafe = loadMethod(sourceText, 'private showToastSafe(', ['message'], dependencies);
       page.openServerResultDetail = loadMethod(sourceText, 'private openServerResultDetail(', ['item'], dependencies);
@@ -1843,6 +1849,30 @@ async function runSearchChainChecks() {
       timers.restore();
     }
   }
+
+  await runCase('旧显式路由不得覆盖顶部实时来源', async h => {
+    await h.source.setVideoServer(h.servers[1]);
+    h.enqueue('当前来源 B');
+    h.page.initializeRoute({ scope: { kind: 'videoServer', serverId: 1, serverType: 'jellyfin' }, keyword: '路由词' });
+    h.check('初始化保留路由关键词', h.page.searchText, '路由词');
+    h.check('初始化采用当前 B 而非路由 A', h.page.scope.serverId, 2);
+    await h.tick();
+    const oldCard = h.success('当前来源 B', 2);
+    h.check('仅向当前来源发送路由关键词', h.searches, [{ host: 'chain-2.invalid', keyword: '路由词' }]);
+    h.page.leaveSearch();
+    await h.source.setVideoServer(h.servers[0]);
+    h.enqueue('返回后的来源 A');
+    h.page.resumeSearch();
+    h.check('返回后跟随实时 A', h.page.scope.serverId, 1);
+    h.page.openServerResultDetail(oldCard);
+    h.check('旧 B 卡片不得打开详情', h.pushes, []);
+    h.check('旧卡片触发身份变化提示', h.toasts.length, 1);
+    await h.tick();
+    h.success('返回后的来源 A');
+    h.check('返回后只新增 A 请求且保留关键词', h.searches, [
+      { host: 'chain-2.invalid', keyword: '路由词' }, { host: 'chain-1.invalid', keyword: '路由词' }
+    ]);
+  });
 
   await runCase('delete-success-return-same-word', async h => {
     h.enqueue('before deletion');

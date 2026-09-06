@@ -9,7 +9,7 @@ export interface JsonHttpResponse {
   body: string;
 }
 
-/** Keep the native code so callers can classify timeouts without parsing localized messages. */
+/** 保留原生错误码，调用方无需解析本地化消息即可识别超时。 */
 export class JsonHttpTransportError extends Error {
   code: number;
 

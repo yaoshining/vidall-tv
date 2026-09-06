@@ -410,7 +410,7 @@ struct SearchWorkspacePage {
   private initializeRoute(param: SearchRouteParam | string | null | undefined): void {
     const servers = VideoServerStore.getState().videoServers;
     const route = resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers);
-    // Route text is reusable, but the top-bar instance is the only source authority.
+    // 路由关键词可复用，但来源以顶部实时选择为准，旧路由快照不得覆盖当前实例。
     this.searchText = route.keyword;
     this.resumeSearch();
   }

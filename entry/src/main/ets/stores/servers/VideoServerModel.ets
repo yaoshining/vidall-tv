@@ -16,7 +16,7 @@ export class VideoServerModel {
   @Trace private servers: VideoServer[] = [];
   private searchListeners: Set<() => void> = new Set<() => void>();
 
-  // Separate intent notifications preserve the existing publication-only listener contract.
+  // 独立的变更意图通知保留现有监听器仅在数据发布时触发的契约。
   private revisionListeners: Set<() => void> = new Set<() => void>();
   private configurationRevision: number = 0;
   private pendingConfigurationWrites: number = 0;

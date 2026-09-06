@@ -51,7 +51,7 @@ export interface VideoServerSearchItem {
   sourceSnapshot: VideoServerSearchSourceSnapshot;
 }
 
-/** Terminal results contain no raw errors/configuration. Image URLs inherit client authentication: do not log them. */
+/** 终态结果不包含原始错误或配置；图片 URL 沿用客户端鉴权，禁止写入日志。 */
 export interface VideoServerSearchResult {
   status: 'loading' | 'success' | 'empty' | 'error';
   scopeKey: string;
@@ -60,9 +60,9 @@ export interface VideoServerSearchResult {
   errorCode: VideoServerSearchErrorCode;
 }
 
-/** Stateless, bounded first-page search (100 items); not a total count or pagination contract.
- * Each invocation captures its identity before IO and never publishes shared state.
- * Consumers must guard completion with their request generation, invalidating on source/config changes or disposal.
+/** 无状态搜索仅返回首屏最多 100 条，不代表总数或分页契约。
+ * 每次调用在 IO 前捕获身份，不发布共享状态。
+ * 调用方须用请求代次校验完成回调，并在来源、配置变化或销毁时使请求失效。
  */
 export class VideoServerSearchService {
   createLoadingState(scope: SearchScope, server: VideoServer, keyword: string): VideoServerSearchResult {
@@ -82,7 +82,7 @@ export class VideoServerSearchService {
   async search(scope: SearchScope, server: VideoServer, keyword: string): Promise<VideoServerSearchResult> {
     const result = this.createLoadingState(scope, server, keyword);
     if (result.status === 'error') { return result; }
-    // Snapshot identity before awaiting; callers may mutate their selected server while IO is pending.
+    // 在等待前捕获身份快照，避免 IO 期间调用方修改所选服务器。
     const serverId = server.id as number;
     const serverType = server.type;
     const sourceSnapshot = new VideoServerSearchSourceSnapshot(result.scopeKey, server);

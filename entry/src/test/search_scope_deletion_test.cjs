@@ -30,7 +30,7 @@ module.exports = function deletionTests() {
       AppPreferences.setStoreLoaderForTesting(null);
       AppPreferences.resetForTesting();
     });
-    it('source notifications invalidate A B A synchronously before persistence', 0, async () => {
+    it('来源通知在持久化前同步使 A B A 旧请求失效', 0, async () => {
       const { SearchWorkspaceSession } = require('../main/ets/services/search/SearchWorkspaceSession.ets');
       const { VideoServerSearchService } = require('../main/ets/services/search/VideoServerSearchService.ets');
       const session = new SearchWorkspaceSession();
@@ -56,7 +56,7 @@ module.exports = function deletionTests() {
       await source.setVideoServer(model.videoServers[0]);
       expect(notifications).assertEqual(2);
     });
-    it('real same-id configuration update invalidates even after config returns to original', 0, async () => {
+    it('真实同身份配置更新即使恢复原值也使旧请求失效', 0, async () => {
       const { SearchWorkspaceSession } = require('../main/ets/services/search/SearchWorkspaceSession.ets');
       const { VideoServerSearchService } = require('../main/ets/services/search/VideoServerSearchService.ets');
       const session = new SearchWorkspaceSession();
@@ -82,7 +82,7 @@ module.exports = function deletionTests() {
       await model.updateVideoServer(original);
       expect(notifications).assertEqual(2);
     });
-    it('deletion notifies configuration consumers with unavailable active source', 0, async () => {
+    it('删除后向配置订阅方通知活动来源不可用', 0, async () => {
       let observed = '';
       const unsubscribe = model.subscribeSearchConfiguration(() => {
         observed = source.getSearchScope(model.videoServers).kind;
@@ -91,7 +91,7 @@ module.exports = function deletionTests() {
       expect(observed).assertEqual('unavailable');
       unsubscribe();
     });
-    it('deleting active server preserves unavailable identity and persisted selection', 0, async () => {
+    it('删除活动服务器保留不可用身份与持久化选择', 0, async () => {
       const persisted = values.get(PrefKey.ACTIVE_MEDIA_SOURCE);
       await model.deleteVideoServerWithFallback(1);
       expect(model.getVideoServerById(1)).assertEqual(null);

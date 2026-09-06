@@ -40,7 +40,7 @@ function context(id: number): SearchWorkspaceContext {
 export default function searchWorkspaceSessionTest() {
   describe('SearchWorkspaceSession', () => {
     for (const terminal of ['success', 'empty', 'error']) {
-      it(`publishes loading then ${terminal}`, 0, async () => {
+      it(`先发布加载态，再发布 ${terminal} 终态`, 0, async () => {
         const session = new SearchWorkspaceSession();
         const service = new ControlledSearch();
         const current = context(1);
@@ -53,7 +53,7 @@ export default function searchWorkspaceSessionTest() {
       });
     }
     for (const action of ['input', 'clear', 'leave', 'source', 'configuration']) {
-      it(`immediately rejects old completion after ${action}`, 0, async () => {
+      it(`在 ${action} 后立即拒绝旧请求完成回调`, 0, async () => {
         const session = new SearchWorkspaceSession();
         const service = new ControlledSearch();
         const current = context(1);
@@ -65,7 +65,7 @@ export default function searchWorkspaceSessionTest() {
         expect(states.join(',')).assertEqual('loading');
       });
     }
-    it('same-protocol A B A rejects both earlier requests and old errors', 0, async () => {
+    it('同协议 A B A 切换拒绝此前请求与旧错误', 0, async () => {
       const session = new SearchWorkspaceSession();
       const service = new ControlledSearch();
       let current = context(1);
@@ -82,7 +82,7 @@ export default function searchWorkspaceSessionTest() {
       expect(states.length).assertEqual(4);
       expect(states[3]).assertEqual('video-server:jellyfin:1:success');
     });
-    it('same keyword retry rejects an older error', 0, async () => {
+    it('相同关键词重试拒绝更早请求的错误', 0, async () => {
       const session = new SearchWorkspaceSession();
       const service = new ControlledSearch();
       const current = context(1);
@@ -94,7 +94,7 @@ export default function searchWorkspaceSessionTest() {
       service.pending[0].complete(current.scope, 'error'); await first;
       expect(states.join(',')).assertEqual('loading,loading,empty');
     });
-    it('captures config by value and rejects same-id in-place edits without notification', 0, async () => {
+    it('按值捕获配置并拒绝未通知的同身份原地修改', 0, async () => {
       const session = new SearchWorkspaceSession();
       const service = new ControlledSearch();
       const current = context(1);
@@ -105,7 +105,7 @@ export default function searchWorkspaceSessionTest() {
       service.pending[0].complete(current.scope, 'success'); await task;
       expect(states.join(',')).assertEqual('loading');
     });
-    it('captured source identity rejects unannounced same-protocol switch', 0, async () => {
+    it('捕获的来源身份拒绝未通知的同协议切源', 0, async () => {
       const session = new SearchWorkspaceSession();
       const service = new ControlledSearch();
       let current = context(1);
@@ -115,7 +115,7 @@ export default function searchWorkspaceSessionTest() {
       service.pending[0].complete(context(1).scope, 'success'); await task;
       expect(states.join(',')).assertEqual('loading');
     });
-    it('blank local missing and disposed contexts never start transport', 0, async () => {
+    it('空关键词、本地、缺失及已销毁上下文不发起传输', 0, async () => {
       const session = new SearchWorkspaceSession();
       const service = new ControlledSearch();
       let current = context(1);
@@ -129,7 +129,7 @@ export default function searchWorkspaceSessionTest() {
       await session.search('film', () => current, publish, service);
       expect(service.pending.length).assertEqual(0);
     });
-    it('reactivation does not revive request from previous page lifetime', 0, async () => {
+    it('重新激活不恢复上一页面生命周期的请求', 0, async () => {
       const session = new SearchWorkspaceSession();
       const service = new ControlledSearch();
       const current = context(1);
