@@ -634,31 +634,57 @@ struct ServerLibraryCard {
   @Require @Param library: VideoServerLibrary
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
+  @Local imageFailed: boolean = false
+
+  @Monitor('library')
+  private resetImageFailure(): void {
+    this.imageFailed = false
+  }
+
+  private onImageError(): void {
+    this.imageFailed = true
+  }
+
+  private shouldLoadThumbnail(): boolean {
+    return this.library.imageUrl.length > 0 && !this.imageFailed
+  }
+
+  @Builder
+  private LibraryImage() {
+    if (this.shouldLoadThumbnail()) {
+      Image(this.library.imageUrl)
+        .width('100%').height('100%').objectFit(ImageFit.Cover)
+        .alt(this.getPlaceholder())
+        .onError(() => { this.onImageError() })
+        .onComplete(() => { this.resetImageFailure() })
+    } else {
+      Image(this.getPlaceholder())
+        .width('100%').height('100%').objectFit(ImageFit.Cover)
+    }
+  }
+
+  private getPlaceholder(): Resource {
+    return this.library.type === 'tvshows'
+      ? $r('app.media.library_placeholder_tv')
+      : $r('app.media.library_placeholder_movie')
+  }
 
   build() {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.library.imageUrl.length > 0) {
-        Image(this.library.imageUrl)
-          .width(SERVER_WIDE_WIDTH)
-          .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-          .objectFit(ImageFit.Cover)
-      } else {
-        Column() {
-          Text(this.library.name)
-            .fontSize(18).fontWeight(FontWeight.Bold)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width(SERVER_WIDE_WIDTH - 40)
-        }
+    Column({ space: 8 }) {
+      Stack() {
+        this.LibraryImage()
+      }
         .width(SERVER_WIDE_WIDTH)
         .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-        .backgroundColor('#1C1C1C')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-      }
+        .borderRadius(6).clip(true)
+        .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+
+      Text(this.library.name)
+        .fontSize(18).fontColor('#CCCCCC')
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(SERVER_WIDE_WIDTH).textAlign(TextAlign.Center)
     }
-    .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
-    .borderRadius(6).clip(true)
-    .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+    .width(SERVER_WIDE_WIDTH)
     .onHover((isHover: boolean) => { this.isHovered = isHover })
     .focusable(true)
     .onClick(() => { this.onItemClick() })
