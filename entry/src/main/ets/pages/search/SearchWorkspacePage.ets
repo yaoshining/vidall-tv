@@ -345,6 +345,8 @@ struct SearchWorkspacePage {
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
   private searchGeneration: number = 0;
+  private historyLoadGeneration: number = 0;
+  private historySourceGeneration: number = 0;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -377,9 +379,9 @@ struct SearchWorkspacePage {
 
   private refreshSource(): void {
     this.invalidateSearch();
+    this.invalidateHistorySource();
     this.scope = this.currentContext().scope;
     this.searchResults = [];
-    this.historyList = [];
     this.db = null;
     if (getSearchCapabilities(this.scope).localSearch) {
       this.db = FileSourceDatabase.getInstance();
@@ -402,6 +404,7 @@ struct SearchWorkspacePage {
   private leaveSearch(): void {
     this.pageActive = false;
     this.invalidateSearch();
+    this.invalidateHistorySource();
     this.serverSession.dispose();
     this.unsubscribeSource();
     this.unsubscribeConfiguration();
@@ -411,12 +414,24 @@ struct SearchWorkspacePage {
 
   // ── Data helpers ──────────────────────────────────────────────────────────
 
+  private invalidateHistoryRequests(): void {
+    this.historyLoadGeneration++;
+  }
+
+  private invalidateHistorySource(): void {
+    this.historySourceGeneration++;
+    this.invalidateHistoryRequests();
+    this.historyList = [];
+  }
+
   private loadHistory(): void {
     if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
-    const generation = this.searchGeneration;
+    const sourceGeneration = this.historySourceGeneration;
+    const loadGeneration = ++this.historyLoadGeneration;
     this.db.getSearchHistory(20)
       .then((list: SearchHistoryEntry[]) => {
-        if (this.pageActive && generation === this.searchGeneration &&
+        if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+          loadGeneration === this.historyLoadGeneration &&
           getSearchCapabilities(this.scope).localHistory) { this.historyList = list; }
       })
       .catch(() => {});
@@ -503,8 +518,16 @@ struct SearchWorkspacePage {
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
     if (this.db !== null) {
+      this.invalidateHistoryRequests();
+      const sourceGeneration = this.historySourceGeneration;
+      const updateGeneration = this.historyLoadGeneration;
       this.db.upsertSearchHistory(kw)
-        .then(() => { this.loadHistory(); })
+        .then(() => {
+          if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+            updateGeneration === this.historyLoadGeneration) {
+            this.loadHistory();
+          }
+        })
         .catch(() => {});
     }
     this.executeSearch();
@@ -530,15 +553,32 @@ struct SearchWorkspacePage {
 
   private deleteHistory(keyword: string): void {
     if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
+    this.invalidateHistoryRequests();
+    const sourceGeneration = this.historySourceGeneration;
+    const deleteGeneration = this.historyLoadGeneration;
     this.db.deleteSearchHistory(keyword)
-      .then(() => { this.loadHistory(); })
+      .then(() => {
+        if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+          deleteGeneration === this.historyLoadGeneration) {
+          this.loadHistory();
+        }
+      })
       .catch(() => {});
   }
 
   private clearAllHistory(): void {
     if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
+    this.invalidateHistoryRequests();
+    const sourceGeneration = this.historySourceGeneration;
+    const clearGeneration = this.historyLoadGeneration;
     this.db.clearSearchHistory()
-      .then(() => { this.historyList = []; })
+      .then(() => {
+        if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+          clearGeneration === this.historyLoadGeneration &&
+          getSearchCapabilities(this.scope).localHistory) {
+          this.historyList = [];
+        }
+      })
       .catch(() => {});
   }
 
