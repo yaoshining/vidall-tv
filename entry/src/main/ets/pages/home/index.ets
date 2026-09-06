@@ -50,8 +50,8 @@ export struct HomePage {
   private async loadSourceState(): Promise<void> {
     try {
       await this.videoServerModel.loadVideoServers(true)
-      // 仅在服务器列表成功加载后再恢复数据源，避免临时数据库错误时用不完整列表误判服务器已删除而回退文件源
-      await this.sourceSwitchModel.load(this.videoServerModel.videoServers.map(s => s.id ?? -1))
+      // 仅在服务器列表成功加载后再恢复数据源，避免临时数据库错误时用不完整列表误判服务器已删除
+      await this.sourceSwitchModel.load(this.videoServerModel.videoServers)
     } catch (error) {
       console.warn('[HomePage] 加载数据源状态失败', (error as BusinessError).message ?? String(error))
     }

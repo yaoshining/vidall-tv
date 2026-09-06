@@ -10,6 +10,23 @@ import {
 } from './DbConstants';
 import { FileSourceDbCore } from './FileSourceDbCore';
 import { countSeriesEpisodeRows } from './SeriesGroupCountUtil';
+import { buildLocalSearchQuery } from '../../services/search/LocalSearchQuery';
+
+/** 搜索模块自定义兜底码，不属于 HarmonyOS 平台错误码。 */
+export enum MediaSearchErrorCode {
+  DatabaseNotReady = -1,
+  QueryFailed = -2
+}
+
+export class MediaSearchError extends Error implements BusinessError {
+  code: number;
+
+  constructor(code: number, message: string) {
+    super(message);
+    this.name = 'MediaSearchError';
+    this.code = code;
+  }
+}
 
 /**
  * 媒体库聚合查询、搜索与流派查询。
@@ -916,8 +933,11 @@ export class MediaQueryDao {
    * @param keyword  搜索关键词（标题 / 原始标题模糊匹配）
    * @param options  可选筛选与排序参数，缺省值见各字段注释
    */
-  async searchMediaItems(keyword: string, options?: SearchMediaOptions): Promise<MediaItem[]> {
+  async searchMediaItems(keyword: string, options?: SearchMediaOptions, propagateErrors: boolean = false): Promise<MediaItem[]> {
     if (!this.core.isReady()) {
+      if (propagateErrors) {
+        throw new MediaSearchError(MediaSearchErrorCode.DatabaseNotReady, '搜索数据库尚未就绪');
+      }
       return [];
     }
     const store = this.core.getStore();
@@ -929,20 +949,10 @@ export class MediaQueryDao {
       // ── 统一 trim keyword，避免含前后空格时无法正确匹配 ──
       const kw: string = keyword.trim();
 
-      // ── keyword 非空时：title / original_title + 拼音字段模糊匹配 ──
-      if (kw.length > 0) {
-        const kwLike: string = `%${kw}%`;
-        const kwLower: string = kw.toLowerCase();
-        // 拼音前缀匹配：转义 LIKE 通配符，避免 %/_ 被误当通配符；使用 ESCAPE '\'
-        const kwLowerEscape: string = kwLower.replace(/%/g, '\\%').replace(/_/g, '\\_');
-        const kwLowerEscapePrefix: string = `${kwLowerEscape}%`;
-        conditions.push(
-          '(m.title LIKE ? OR m.original_title LIKE ? OR ts.title LIKE ? OR ts.original_title LIKE ?' +
-          " OR m.title_pinyin LIKE ? ESCAPE '\\' OR m.title_initials LIKE ? ESCAPE '\\'" +
-          " OR ts.title_pinyin LIKE ? ESCAPE '\\' OR ts.title_initials LIKE ? ESCAPE '\\')"
-        );
-        params.push(kwLike, kwLike, kwLike, kwLike);
-        params.push(kwLowerEscapePrefix, kwLowerEscapePrefix, kwLowerEscapePrefix, kwLowerEscapePrefix);
+      const searchQuery = buildLocalSearchQuery(kw);
+      if (searchQuery.whereClause.length > 0) {
+        conditions.push(searchQuery.whereClause);
+        params.push(...searchQuery.whereParams);
       }
 
       // ── mediaType 过滤（'all' 时不加条件） ──
@@ -1041,24 +1051,16 @@ export class MediaQueryDao {
       } else if (sortBy === 'title') {
         orderClause = ' ORDER BY COALESCE(m.title, ts.title) ASC';
       } else if (kw.length > 0) {
-        // keyword 搜索时：相关度分层排序，次级按评分降序
-        // SQLite ORDER BY CASE WHEN 不支持 ? 参数化绑定（relationalStore API 限制）；
-        // 已通过三重转义保证安全：单引号转义（''）+ LIKE 通配符转义（\%/\_）+ ESCAPE '\\'
-        const kwEscape: string = kw.replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
-        const kwLowerEscape: string = kw.toLowerCase().replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
-        orderClause =
-          ` ORDER BY CASE` +
-          ` WHEN COALESCE(m.title, ts.title) = '${kwEscape}' THEN 0` +
-          ` WHEN COALESCE(m.title, ts.title) LIKE '${kwEscape}%' ESCAPE '\\' THEN 1` +
-          ` WHEN COALESCE(m.title, ts.title) LIKE '%${kwEscape}%' ESCAPE '\\' THEN 2` +
-          ` WHEN COALESCE(m.title_pinyin, ts.title_pinyin) LIKE '${kwLowerEscape}%' ESCAPE '\\' THEN 3` +
-          ` WHEN COALESCE(m.title_initials, ts.title_initials) LIKE '${kwLowerEscape}%' ESCAPE '\\' THEN 4` +
-          ` ELSE 5 END ASC,` +
-          ` COALESCE(m.rating, ts.rating) DESC`;
+        orderClause = ` ORDER BY ${searchQuery.rankExpression} ASC, COALESCE(m.rating, ts.rating) DESC`;
+        params.push(...searchQuery.rankParams);
       } else {
         // 无 keyword：默认按评分
         orderClause = ' ORDER BY COALESCE(m.rating, ts.rating) DESC';
       }
+
+      // 追加稳定的排序兜底，避免同分结果在多次请求之间顺序变化。
+      orderClause += ', COALESCE(m.title, ts.title, s.title) COLLATE NOCASE ASC, ' +
+        'COALESCE(m.id, ts.id) ASC, v.id ASC';
 
       // ── LIMIT 范围校验，防止 NaN/负数/超大值 ──
       const rawLimit: number = options?.limit ?? 50;
@@ -1120,6 +1122,9 @@ export class MediaQueryDao {
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
+      if (propagateErrors) {
+        throw new MediaSearchError(err.code ?? MediaSearchErrorCode.QueryFailed, '搜索数据库查询失败');
+      }
       return [];
     } finally {
       try { rs?.close(); } catch { }

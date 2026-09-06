@@ -158,3 +158,27 @@
 - `/entry/src/main/ets/lib/models/FileSourceModel.ets` - 数据模型定义
 - `/entry/src/main/ets/lib/stores/FileSourceStore.ets` - 缓存管理类
 
+
+## 本地拼音搜索回归（Issue #319）
+
+使用 Node.js 22.13+ 的内置 SQLite 执行实际 ArkTS 查询、写入和迁移代码：
+
+```sh
+TYPESCRIPT_PATH=/Applications/DevEco-Studio.app/Contents/tools/hvigor/hvigor/node_modules/typescript \
+  node entry/src/test/local_pinyin_search_test.cjs
+```
+
+可将 `TYPESCRIPT_PATH` 改为已安装的 TypeScript 模块绝对路径；依赖由 `devecocli build` 安装。
+加 `--benchmark` 可在 10,000 条合成电影记录上输出主机查询耗时，不代表 TV 设备性能。
+
+匹配规则：
+
+- 原文（标题、原始标题、刮削标题）按精确、前缀、包含优先；之后为全拼精确、前缀、音节中段，再到首字母精确、前缀。同层按评分、标题和视频 ID 稳定排序；显式年份/标题排序仍可覆盖相关度。
+- 拼音使用词组上下文，例如重庆 `chongqing`、长安 `changan`、音乐 `yinyue`；首字母每个汉字只取一个字母，重庆森林为 `cqsl`，不再误用声母 `chqsl`。
+- 支持大小写、全角、声调、空格和常见分隔符规范化；`ü`、`u:` 和 `v` 等价。纯中文不扩展为同音字；混合输入要求原片名保留输入的中文片段。
+- 中段全拼从音节或英文词起点匹配，例如 `senlin` 命中重庆森林；不允许从 `chong` 内部的 `ong` 起点召回。单字母拼音和首字母只做精确匹配；两字母及以上首字母只匹配片名开头，不做任意中段、跳字或编辑距离模糊匹配。
+- v13 增加 `title_pinyin_segments`，电影/电视剧插入和改名同步更新。旧库按 100 行一批，在数据库完全就绪前回填缺失字段；中断后下次启动续做，正常启动不重写已有字段。
+- 辅助后缀字段最多保留 64 个音节/词起点，每个后缀最多 256 字符；超长片名仍支持完整标题及全拼前缀，但不保证超出上限的中段召回。该字段用于匹配，未建立无效的前导通配符 B-tree 索引。
+- 仅本地文件库使用这些规则。服务器搜索、外部建议词与多音字所有读音的组合扩展不在范围内；未收录词组的读音仍受 `pinyin-pro` 词典限制。
+
+回归覆盖中文、全拼、首字母、混合输入、多音词、原始英文标题、通配符/引号/反斜杠、排序、过滤、写入与改名、v12 升级及重启。测试只替换鸿蒙数据库桥接，不替换拼音库或查询算法；设备焦点和实际设备性能仍需设备验收。

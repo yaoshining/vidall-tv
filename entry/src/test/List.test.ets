@@ -1,3 +1,7 @@
+import searchSessionTest from './SearchSession.test';
+import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
+import videoServerSearchTest from './VideoServerSearch.test';
+import searchScopeTest from './SearchScope.test';
 import timeUtilTest from './TimeUtil.test';
 import playbackContextTest from './ets/PlaybackContextTest';
 import settingsControllerTest from './SettingsController.test';
@@ -68,6 +72,7 @@ import directedScanStrategyTest from './DirectedScanStrategy.test';
 import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackContextUtilTest';
 
 export default function testsuite() {
+  searchSessionTest();
   timeUtilTest();
   playbackContextTest();
   serverEpisodePlaybackContextUtilTest();
@@ -122,6 +127,9 @@ export default function testsuite() {
   subtitleLanguageFilterTest();
   subtitleRelevanceFilterTest();
   sourceSwitchModelTest();
+  videoServerSearchTest();
+  searchWorkspaceSessionTest();
+  searchScopeTest();
   videoServerLabelsTest();
   videoServerDaoTest();
   audioCodecUtilTest();

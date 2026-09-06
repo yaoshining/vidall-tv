@@ -1,6 +1,7 @@
+import { TABLE_SCOPED_SEARCH_HISTORY } from './DbConstants';
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
-import { toPinyinFull, toPinyinInitials } from '../../utils/PinyinUtil';
+import { normalizeSearchText, toPinyinFull, toPinyinInitials, toPinyinSegments } from '../../utils/PinyinUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
@@ -69,7 +70,7 @@ export class FileSourceDbCore {
     return this.rdbStore !== null;
   }
 
-  /** 数据库是否已完成 schema 迁移与记录级回填（origin_country）。不含异步拼音回填。 */
+  /** 数据库是否已完成 schema 迁移与记录级回填（origin_country、拼音）。 */
   isFullyReady(): boolean {
     return this.fullyReady;
   }
@@ -132,6 +133,8 @@ export class FileSourceDbCore {
         await this.ensureScrapeInfoSchema(this.rdbStore);
       }
 
+      await this.ensureScopedSearchHistory(this.rdbStore);
+
       // 版本不一致时（含旧版和全新安装）也做一次 schema 补全
       if (currentVersion !== DB_VERSION) {
         await this.ensureScrapeInfoSchema(this.rdbStore);
@@ -156,9 +159,8 @@ export class FileSourceDbCore {
 
       // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用）
       await this.backfillOriginCountryFromRawJson();
-      // 回填拼音字段（数据库就绪后异步执行，不阻塞 DATABASE_READY 事件）。
-      // 注意：fullyReady 仅表示 schema 迁移/回填(origin_country)完成，不包含此异步拼音回填。
-      this.backfillPinyinFields(this.rdbStore!).catch(() => {});
+      // 在搜索可用前回填 v13 拼音及 v14 规范化标题；后续启动跳过已完成记录。
+      await this.backfillPinyinFields(this.rdbStore);
       this.fullyReady = true;
       emitter.emit(DATABASE_READY);
       console.info('FileSourceDatabase: Database initialized successfully');
@@ -346,7 +348,9 @@ export class FileSourceDbCore {
         origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
+        title_normalized TEXT,
         title_pinyin TEXT,
+        title_pinyin_segments TEXT,
         title_initials TEXT,
         UNIQUE(provider, provider_id)
       )
@@ -376,7 +380,9 @@ export class FileSourceDbCore {
         origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
+        title_normalized TEXT,
         title_pinyin TEXT,
+        title_pinyin_segments TEXT,
         title_initials TEXT,
         UNIQUE(provider, provider_id)
       )
@@ -512,6 +518,17 @@ export class FileSourceDbCore {
    * 版本升级入口：按 currentVersion 逐步执行各版本迁移步骤，
    * 确保从任意旧版本升级都能经过所有中间版本的 DDL 变更。
    */
+  /** v15：旧全局历史保留但不推测归属，所有新历史必须显式携带来源键。 */
+  private async ensureScopedSearchHistory(store: relationalStore.RdbStore): Promise<void> {
+    await store.executeSql(`CREATE TABLE IF NOT EXISTS ${TABLE_SCOPED_SEARCH_HISTORY} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scope_key TEXT NOT NULL,
+      keyword TEXT NOT NULL,
+      searched_at INTEGER NOT NULL,
+      UNIQUE(scope_key, keyword)
+    )`);
+  }
+
   private async onUpgrade(rdbStore: relationalStore.RdbStore, oldVersion: number, newVersion: number): Promise<void> {
     console.info(`FileSourceDatabase: Upgrading ${oldVersion} → ${newVersion}`);
     // 用 currentVersion 追踪迁移进度，避免 oldVersion 固定导致跳步
@@ -608,6 +625,39 @@ export class FileSourceDbCore {
         await this.createVideoServersTable(rdbStore);
         currentVersion = 12;
         console.info('[DB] 已迁移到 v12：新增 video_servers 表');
+      }
+      if (currentVersion < 13) {
+        for (const table of [TABLE_MOVIES, TABLE_TV_SERIES]) {
+          const columns = await rdbStore.querySql(`PRAGMA table_info(${table})`);
+          let exists = false;
+          let tableExists = false;
+          try {
+            while (columns.goToNextRow()) {
+              tableExists = true;
+              if (columns.getString(columns.getColumnIndex('name')) === 'title_pinyin_segments') { exists = true; }
+            }
+          } finally { columns.close(); }
+          if (!tableExists) {
+            await this.createMediaTablesV3(rdbStore);
+          } else if (!exists) { await rdbStore.executeSql(`ALTER TABLE ${table} ADD COLUMN title_pinyin_segments TEXT`); }
+        }
+      }
+      // v14 独立迁移，确保已完成 v13 拼音回填的用户也能补齐规范化标题。
+      if (currentVersion < 14) {
+        for (const table of [TABLE_MOVIES, TABLE_TV_SERIES]) {
+          const columns = await rdbStore.querySql(`PRAGMA table_info(${table})`);
+          let exists = false;
+          let tableExists = false;
+          try {
+            while (columns.goToNextRow()) {
+              tableExists = true;
+              if (columns.getString(columns.getColumnIndex('name')) === 'title_normalized') { exists = true; }
+            }
+          } finally { columns.close(); }
+          if (!tableExists) {
+            await this.createMediaTablesV3(rdbStore);
+          } else if (!exists) { await rdbStore.executeSql(`ALTER TABLE ${table} ADD COLUMN title_normalized TEXT`); }
+        }
       }
       console.info('FileSourceDatabase: Upgrade complete');
     } catch (error) {
@@ -873,43 +923,29 @@ export class FileSourceDbCore {
   }
 
   private async backfillPinyinFields(rdbStore: relationalStore.RdbStore): Promise<void> {
-    const tables: string[] = ['movies', 'tv_series'];
-    for (const tbl of tables) {
-      // ── 第一步：先将全量行读入内存，关闭 ResultSet ──
-      // 避免在游标未关闭时对同一表执行 UPDATE，防止游标失效/锁冲突
-      interface PinyinRow { id: number; title: string }
-      const rows: PinyinRow[] = [];
-      let rs: relationalStore.ResultSet | null = null;
-      try {
-        rs = await rdbStore.querySql(`SELECT id, title FROM ${tbl} WHERE title IS NOT NULL`);
-        while (rs.goToNextRow()) {
-          const row: PinyinRow = {
-            id: rs.getLong(rs.getColumnIndex('id')),
-            title: rs.getString(rs.getColumnIndex('title'))
-          };
-          rows.push(row);
-        }
-      } catch (e) {
-        const msg: string = (e instanceof Error) ? e.message : String(e);
-        console.warn(`[DB] v11 读取 ${tbl} 拼音回填数据失败: ${msg}`);
-      } finally {
-        try { rs?.close(); } catch { }
-      }
-
-      // ── 第二步：ResultSet 已关闭，再批量 UPDATE ──
-      try {
+    interface PinyinRow { id: number; title: string }
+    for (const table of [TABLE_MOVIES, TABLE_TV_SERIES]) {
+      let lastId = -1;
+      while (true) {
+        const rows: PinyinRow[] = [];
+        const rs = await rdbStore.querySql(
+          `SELECT id, title FROM ${table} WHERE id > ? AND title IS NOT NULL ` +
+          `AND (title_pinyin_segments IS NULL OR title_normalized IS NULL) ORDER BY id LIMIT 100`, [lastId]);
+        try {
+          while (rs.goToNextRow()) {
+            const row: PinyinRow = { id: rs.getLong(rs.getColumnIndex('id')), title: rs.getString(rs.getColumnIndex('title')) };
+            rows.push(row);
+          }
+        } finally { rs.close(); }
+        if (rows.length === 0) { break; }
+        // Close the cursor before writes; a failed/interrupted batch remains resumable via NULL.
         for (const row of rows) {
-          const full = toPinyinFull(row.title);
-          const initials = toPinyinInitials(row.title);
           await rdbStore.executeSql(
-            `UPDATE ${tbl} SET title_pinyin = ?, title_initials = ? WHERE id = ?`,
-            [full, initials, row.id]
-          );
+            `UPDATE ${table} SET title_pinyin = ?, title_initials = ?, title_pinyin_segments = ?, title_normalized = ? ` +
+            `WHERE id = ? AND title = ?`,
+            [toPinyinFull(row.title), toPinyinInitials(row.title), toPinyinSegments(row.title), normalizeSearchText(row.title), row.id, row.title]);
+          lastId = row.id;
         }
-        console.info(`[DB] v11 回填 ${tbl} 拼音字段完成，共 ${rows.length} 条`);
-      } catch (e) {
-        const msg: string = (e instanceof Error) ? e.message : String(e);
-        console.warn(`[DB] v11 回填 ${tbl} 失败: ${msg}`);
       }
     }
   }

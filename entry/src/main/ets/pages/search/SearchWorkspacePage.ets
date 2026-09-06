@@ -1,5 +1,14 @@
+import { titleSuggestions, searchInputExample } from '../../services/search/SearchSuggestions';
+import { SearchSession } from '../../services/search/SearchSession';
+import { SearchResultSource } from './SearchResultSource';
+import { SearchWorkspaceSession, SearchWorkspaceContext } from '../../services/search/SearchWorkspaceSession';
+import { VideoServerSearchResult, VideoServerSearchItem } from '../../services/search/VideoServerSearchService';
+import { SearchScope, SearchRouteParam, createUnavailableSearchScope, resolveSearchRoute, getSearchCapabilities } from '../../models/search/SearchScope';
+import { SourceSwitchModel } from '../../stores/media/SourceSwitchModel';
+import { VideoServerStore } from '../../stores/servers/VideoServerStore';
 import { MediaItem, SearchHistoryEntry, SeriesGroup } from '../../db/models/MediaEntity';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
+import { ServerMediaDetailPage, ServerMediaDetailPageParam } from '../detail/ServerMediaDetailPage';
 
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
@@ -247,20 +256,33 @@ struct ActionKey {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WorkspacePosterCard — card used in workspace hot-search / results preview
+// WorkspacePosterCard — shared local / server result card
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface WorkspaceSearchItem {
+  key: string;
+  scopeKey: string;
+  title: string;
+  poster: string;
+  label: string;
+  rating?: number;
+  localItem?: MediaItem;
+  serverItem?: VideoServerSearchItem;
+}
 
 @ComponentV2
 struct WorkspacePosterCard {
-  @Require @Param item: MediaItem;
+  @Require @Param item: WorkspaceSearchItem;
+  @Param focusId: string = '';
+  @Event onFocused: () => void = () => {};
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
 
   build() {
     Column({ space: 8 }) {
       Stack() {
-        if (posterSrc(this.item).length > 0) {
-          Image(posterSrc(this.item))
+        if (this.item.poster.length > 0) {
+          Image(this.item.poster)
             .width(180)
             .height(270)
             .objectFit(ImageFit.Cover)
@@ -298,6 +320,7 @@ struct WorkspacePosterCard {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width(180)
 
+      Text(this.item.label).fontSize(18).fontColor(C_SECONDARY)
       if (this.item.rating !== undefined && this.item.rating > 0) {
         Text(this.item.rating.toFixed(1))
           .fontSize(20)
@@ -307,8 +330,9 @@ struct WorkspacePosterCard {
     }
     .width(180)
     .alignItems(HorizontalAlign.Start)
+    .id(this.focusId)
     .focusable(true)
-    .onFocus(() => { this.isFocused = true; })
+    .onFocus(() => { this.isFocused = true; this.onFocused(); })
     .onBlur(() => { this.isFocused = false; })
     .onClick(() => { this.onPress(); })
   }
@@ -324,108 +348,276 @@ struct SearchWorkspacePage {
 
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
 
+  @Local scope: SearchScope = createUnavailableSearchScope();
   @Local searchText: string = '';
-  @Local searchResults: MediaItem[] = [];
+  @Local session: SearchSession<MediaItem> = new SearchSession<MediaItem>();
+  private resultSource: SearchResultSource<WorkspaceSearchItem> = new SearchResultSource<WorkspaceSearchItem>();
+  private resultScroller: Scroller = new Scroller();
+  private focusedResult: number = 0;
+  private restoreResult: boolean = false;
   @Local historyList: SearchHistoryEntry[] = [];
   @Local isSearching: boolean = false;
   @Local isSearchBarFocused: boolean = false;
 
+  @Local serverResult: VideoServerSearchResult | null = null;
+  private serverSession: SearchWorkspaceSession = new SearchWorkspaceSession();
+  private unsubscribeSource: () => void = () => {};
+  private unsubscribeConfiguration: () => void = () => {};
+  private pageActive: boolean = false;
+  private sourceBound: boolean = false;
+  private inputController: TextInputController = new TextInputController();
+  // 返回层级只记录用户主动编辑；程序获焦也可能异步上报 onEditChange(true)。
+  private isEditing: boolean = false;
+  private resultsFocused: boolean = false;
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
-  private searchGeneration: number = 0;
+  private historyLoadGeneration: number = 0;
+  private historySourceGeneration: number = 0;
+
+  private showToastSafe(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch (e) {}
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  aboutToAppear(): void {
-    try {
+  private initializeRoute(param: SearchRouteParam | string | null | undefined): void {
+    const servers = VideoServerStore.getState().videoServers;
+    const route = resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers);
+    // 仅复用当前来源的路由关键词，旧来源的输入不得自动发往当前实例。
+    this.searchText = route.scope.key === this.currentContext().scope.key ? route.keyword : '';
+    this.resumeSearch();
+  }
+
+  private currentContext(): SearchWorkspaceContext {
+    const servers = VideoServerStore.getState().videoServers;
+    const scope = SourceSwitchModel.getState().getSearchScope(servers);
+    const context: SearchWorkspaceContext = {
+      scope, server: servers.find((server) => server.id === scope.serverId)
+    };
+    return context;
+  }
+
+  private resumeSearch(): void {
+    if (this.pageActive) { return; }
+    this.pageActive = true;
+    this.serverSession.activate();
+    this.unsubscribeSource = SourceSwitchModel.getState().subscribeSearchSource(() => this.refreshSource());
+    this.unsubscribeConfiguration = VideoServerStore.getState()
+      .subscribeSearchConfiguration(() => this.refreshSource());
+    this.refreshSource();
+  }
+
+  private refreshSource(): void {
+    this.invalidateSearch(true);
+    this.invalidateHistorySource();
+    const nextScope = this.currentContext().scope;
+    if (this.sourceBound && this.scope.key !== nextScope.key) {
+      this.searchText = '';
+      this.restoreResult = false;
+      this.focusedResult = 0;
+      this.focusInput();
+    }
+    this.scope = nextScope;
+    this.sourceBound = true;
+    this.session.invalidate(true);
+    this.resultSource.replace([]);
+    this.db = null;
+    if (this.scope.kind !== 'unavailable') {
       this.db = FileSourceDatabase.getInstance();
-      this.loadHistory();
-    } catch (e) {
-      // Preview 沙箱：native DB 不可用，静默降级
+    }
+    this.scheduleSearch();
+    this.loadHistory();
+  }
+
+  private invalidateSearch(clear: boolean = false): void {
+    this.session.invalidate(clear);
+    this.serverSession.invalidate();
+    this.serverResult = null;
+    if (clear) { this.resultSource.replace([]); }
+    this.isSearching = false;
+    if (this.searchDebounceTimer !== -1) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = -1;
     }
   }
 
-  aboutToDisappear(): void {
-    if (this.searchDebounceTimer !== -1) {
-      clearTimeout(this.searchDebounceTimer);
-    }
+  private focusInput(): void {
+    this.isEditing = false;
+    this.inputController.stopEditing();
+    this.resultsFocused = false;
+    this.getUIContext().getFocusController().requestFocus('search-workspace-input');
   }
+
+  private handleBack(): boolean {
+    if (this.resultsFocused) {
+      console.info('[SearchWorkspace] back: results -> input');
+      this.focusInput();
+      return true;
+    }
+    if (this.isEditing) {
+      console.info('[SearchWorkspace] back: editing -> input');
+      this.isEditing = false;
+      this.inputController.stopEditing();
+      return true;
+    }
+    console.info('[SearchWorkspace] back: leave');
+    this.leaveSearch();
+    this.pageStack.pop();
+    return true;
+  }
+
+  private leaveSearch(): void {
+    this.isEditing = false;
+    this.inputController.stopEditing();
+    this.resultsFocused = false;
+    this.pageActive = false;
+    this.invalidateSearch(true);
+    this.invalidateHistorySource();
+    this.serverSession.dispose();
+    this.unsubscribeSource();
+    this.unsubscribeConfiguration();
+  }
+
+  aboutToDisappear(): void { this.leaveSearch(); }
 
   // ── Data helpers ──────────────────────────────────────────────────────────
 
+  private invalidateHistoryRequests(): void {
+    this.historyLoadGeneration++;
+  }
+
+  private invalidateHistorySource(): void {
+    this.historySourceGeneration++;
+    this.invalidateHistoryRequests();
+    this.historyList = [];
+  }
+
   private loadHistory(): void {
-    if (this.db === null) { return; }
-    this.db.getSearchHistory(20)
+    if (this.scope.kind === 'unavailable' || this.db === null) { return; }
+    const sourceGeneration = this.historySourceGeneration;
+    const loadGeneration = ++this.historyLoadGeneration;
+    this.db.getSearchHistory(this.scope.key, 20)
       .then((list: SearchHistoryEntry[]) => {
-        this.historyList = list;
+        if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+          loadGeneration === this.historyLoadGeneration &&
+          this.scope.kind !== 'unavailable') { this.historyList = list; }
       })
       .catch(() => {});
   }
 
 
   private scheduleSearch(): void {
-    if (this.searchDebounceTimer !== -1) {
-      clearTimeout(this.searchDebounceTimer);
-      this.searchDebounceTimer = -1;
-    }
-    if (this.searchText.trim().length === 0) {
-      this.searchResults = [];
-      return;
-    }
+    this.invalidateSearch(this.searchText.trim().length === 0);
+    if (!this.pageActive || this.searchText.trim().length === 0) { return; }
+    const capabilities = getSearchCapabilities(this.scope);
+    if (!capabilities.localSearch && !capabilities.serverSearch) { return; }
+    if (capabilities.localSearch) { this.session.prepare(); }
+    this.isSearching = true;
     this.searchDebounceTimer = setTimeout(() => {
       this.searchDebounceTimer = -1;
-      this.executeSearch();
+      if (getSearchCapabilities(this.scope).serverSearch) {
+        this.executeServerSearch();
+      } else {
+        this.executeSearch();
+      }
     }, 800);
+  }
+
+  private executeServerSearch(): void {
+    this.invalidateSearch();
+    this.serverSession.search(this.searchText, () => this.currentContext(),
+      (result: VideoServerSearchResult) => {
+        this.serverResult = result;
+        this.isSearching = result.status === 'loading';
+        if (result.status === 'success' || result.status === 'empty') { this.updateResultSource(); }
+      });
+  }
+
+  private serverErrorText(): string {
+    switch (this.serverResult?.errorCode) {
+      case 'auth': return '服务器认证失败，请检查来源配置后重试';
+      case 'timeout': return '搜索超时，请重试';
+      case 'invalidResponse': return '服务器响应无效，请重试';
+      case 'unavailable': return '来源不可用，请返回重新选择来源';
+      default: return '无法连接服务器，请检查网络后重试';
+    }
+  }
+
+  private resultStatus(): string {
+    if (!this.pageActive || this.searchText.trim().length === 0) { return 'idle'; }
+    if (getSearchCapabilities(this.scope).localSearch) {
+      return this.session.status === 'results' ? 'success' : this.session.status;
+    }
+    if (this.isSearching) { return 'loading'; }
+    return this.serverResult?.status ?? 'idle';
+  }
+
+  private resultErrorText(): string {
+    return getSearchCapabilities(this.scope).localSearch
+      ? '本地搜索失败，请重试' : this.serverErrorText();
+  }
+
+  private retrySearch(): void {
+    if (!this.pageActive || this.resultStatus() !== 'error') { return; }
+    this.invalidateSearch();
+    if (getSearchCapabilities(this.scope).localSearch) {
+      this.executeSearch();
+    } else if (getSearchCapabilities(this.scope).serverSearch) {
+      this.executeServerSearch();
+    }
   }
 
   /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
   private async executeSearch(): Promise<void> {
+    if (!getSearchCapabilities(this.scope).localSearch || this.db === null || !this.pageActive) { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) {
-      this.searchResults = [];
+      this.invalidateSearch();
       return;
     }
-    const generation = ++this.searchGeneration;
-    this.isSearching = true;
-    try {
-      const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 200 });
-      if (generation !== this.searchGeneration) { return; }
-      // 按 (tvSeriesId, movieId) 去重：同一部剧/电影只保留第一条
+    this.invalidateSearch();
+    const accepted = await this.session.run(async (): Promise<MediaItem[]> => {
+      if (this.db === null) { throw new Error('搜索数据库尚未就绪'); }
+      const items = await this.db.searchMediaItems(kw, { limit: 200 }, true);
       const seen: Set<string> = new Set<string>();
-      const deduped: MediaItem[] = [];
-      for (const item of items) {
-        const key: string = item.tvSeriesId !== undefined
-          ? `tv-${item.tvSeriesId}`
-          : item.movieId !== undefined
-            ? `mv-${item.movieId}`
-            : `v-${item.id}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduped.push(item);
-        }
-      }
-      this.searchResults = deduped;
-    } catch {
-      if (generation !== this.searchGeneration) { return; }
-      this.searchResults = [];
-    } finally {
-      if (generation === this.searchGeneration) {
-        this.isSearching = false;
-      }
-    }
+      return items.filter((item: MediaItem) => {
+        const key = item.tvSeriesId !== undefined ? `tv-${item.tvSeriesId}` :
+          item.movieId !== undefined ? `mv-${item.movieId}` : `v-${item.id}`;
+        if (seen.has(key)) { return false; }
+        seen.add(key);
+        return true;
+      });
+    });
+    if (accepted) { this.updateResultSource(); }
   }
 
   /** 执行搜索并保存历史 */
   private executeSearchWithHistory(): void {
+    if (this.scope.kind === 'unavailable') { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
+    this.invalidateSearch();
     if (this.db !== null) {
-      this.db.upsertSearchHistory(kw)
-        .then(() => { this.loadHistory(); })
+      this.invalidateHistoryRequests();
+      const sourceGeneration = this.historySourceGeneration;
+      const updateGeneration = this.historyLoadGeneration;
+      this.db.upsertSearchHistory(this.scope.key, kw)
+        .then(() => {
+          if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+            updateGeneration === this.historyLoadGeneration) {
+            this.loadHistory();
+          }
+        })
         .catch(() => {});
     }
-    this.executeSearch();
+    if (getSearchCapabilities(this.scope).serverSearch) {
+      this.executeServerSearch();
+    } else {
+      this.executeSearch();
+    }
   }
 
   private appendChar(c: string): void {
@@ -442,27 +634,50 @@ struct SearchWorkspacePage {
 
   private clearSearch(): void {
     this.searchText = '';
-    this.searchResults = [];
+    this.focusInput();
+    this.session.invalidate(true);
+    this.resultSource.replace([]);
     this.scheduleSearch();
   }
 
   private deleteHistory(keyword: string): void {
-    if (this.db === null) { return; }
-    this.db.deleteSearchHistory(keyword)
-      .then(() => { this.loadHistory(); })
+    if (this.scope.kind === 'unavailable' || this.db === null) { return; }
+    this.invalidateHistoryRequests();
+    const sourceGeneration = this.historySourceGeneration;
+    const deleteGeneration = this.historyLoadGeneration;
+    this.db.deleteSearchHistory(this.scope.key, keyword)
+      .then(() => {
+        if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+          deleteGeneration === this.historyLoadGeneration) {
+          this.loadHistory();
+        }
+      })
       .catch(() => {});
   }
 
   private clearAllHistory(): void {
-    if (this.db === null) { return; }
-    this.db.clearSearchHistory()
-      .then(() => { this.historyList = []; })
+    if (this.scope.kind === 'unavailable' || this.db === null) { return; }
+    this.invalidateHistoryRequests();
+    const sourceGeneration = this.historySourceGeneration;
+    const clearGeneration = this.historyLoadGeneration;
+    this.db.clearSearchHistory(this.scope.key)
+      .then(() => {
+        if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
+          clearGeneration === this.historyLoadGeneration &&
+          this.scope.kind !== 'unavailable') {
+          this.historyList = [];
+        }
+      })
       .catch(() => {});
   }
 
   private navigateToDetail(item: MediaItem): void {
+    if (!getSearchCapabilities(this.scope).localDetail) { return; }
+    this.restoreResult = true;
+    item.searchScope = this.scope;
     if (item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
+        searchScope: this.scope,
         title: item.title ?? '',
         tvSeriesId: item.tvSeriesId,
         posterUrl: item.posterUrl,
@@ -477,6 +692,30 @@ struct SearchWorkspacePage {
     } else {
       this.pageStack.pushPathByName(MovieDetailPage.PAGE_NAME, item);
     }
+  }
+
+  private openServerResultDetail(item: VideoServerSearchItem): void {
+    const context = this.currentContext();
+    if (!item.sourceSnapshot.matches(context.scope, context.server)) {
+      if (context.scope.kind !== 'videoServer' || context.server === undefined ||
+        context.scope.serverId !== item.selection.serverId || context.scope.serverType !== item.selection.serverType) {
+        this.showToastSafe('当前来源已变化，请返回重新选择来源');
+      } else {
+        this.showToastSafe('当前服务器配置已变更，请重新搜索');
+      }
+      this.refreshSource();
+      return;
+    }
+    const param: ServerMediaDetailPageParam = {
+      serverId: item.selection.serverId,
+      serverType: item.selection.serverType,
+      mediaId: item.selection.mediaId,
+      mediaType: item.selection.mediaType,
+      itemId: item.selection.detailItemId,
+      title: item.media.title
+    };
+    this.restoreResult = true;
+    this.pageStack.pushPathByName(ServerMediaDetailPage.PAGE_NAME, param);
   }
 
   // ── @Builder sections ─────────────────────────────────────────────────────
@@ -497,7 +736,7 @@ struct SearchWorkspacePage {
       .justifyContent(FlexAlign.Center)
       .alignItems(VerticalAlign.Center)
       .focusable(true)
-      .onClick(() => { this.pageStack.pop(); })
+      .onClick(() => { this.leaveSearch(); this.pageStack.pop(); })
     }
     .width('100%')
     .height(48)
@@ -528,20 +767,60 @@ struct SearchWorkspacePage {
         .fontColor(C_ICON)
         .width(22)
         .height(22)
-      if (this.searchText.length > 0) {
-        Text(this.searchText)
-          .fontSize(22)
-          .fontWeight(500)
-          .fontColor(C_TEXT_TITLE)
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      } else {
-        Text('\u652f\u6301\u9996\u5b57\u6bcd\u3001\u5168\u62fc\u3001\u4e2d\u6587\u7247\u540d\u641c\u7d22')
-          .fontSize(22)
-          .fontWeight(500)
-          .fontColor(C_PLACEHOLDER)
-          .layoutWeight(1)
+      TextInput({ text: this.searchText, placeholder: '输入片名', controller: this.inputController })
+        .id('search-workspace-input')
+        .enableKeyboardOnFocus(false)
+        .enterKeyType(EnterKeyType.Search)
+        .fontSize(22)
+        .fontColor(C_TEXT_TITLE)
+        .placeholderColor(C_PLACEHOLDER)
+        .backgroundColor(Color.Transparent)
+        .layoutWeight(1)
+        .defaultFocus(true)
+        .onEditChange((editing: boolean) => {
+          console.info(`[SearchWorkspace] edit callback=${editing}, userEditing=${this.isEditing}`);
+          // true 也可能来自 requestFocus / IME 延迟绑定，不能据此新增返回层级。
+          if (!editing) { this.isEditing = false; }
+        })
+        .onClick(() => { this.isEditing = true; })
+        .onKeyEvent((event: KeyEvent) => {
+          if (event.type === KeyType.Down &&
+            (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER)) {
+            this.isEditing = true;
+          }
+        })
+        .onBlur(() => { this.isEditing = false; })
+        .onFocus(() => { this.resultsFocused = false; })
+        .onChange((value: string) => {
+          this.isEditing = true;
+          this.searchText = value;
+          this.scheduleSearch();
+        })
+        .onSubmit(() => {
+          this.inputController.stopEditing();
+          this.isEditing = false;
+          this.executeSearchWithHistory();
+        })
+      if (this.scope.kind !== 'unavailable') {
+        ActionKey({
+          label: '搜索',
+          onPress: () => {
+            this.inputController.stopEditing();
+            this.isEditing = false;
+            this.executeSearchWithHistory();
+          }
+        })
+          .id('search-workspace-submit')
+          .width(100)
+        ActionKey({
+          label: '清空',
+          bgColor: C_CLEAR_BG,
+          keyBorderColor: C_CLEAR_BORDER,
+          labelColor: C_CLEAR_ICON,
+          onPress: () => { this.clearSearch(); }
+        })
+          .id('search-workspace-clear')
+          .width(100)
       }
     }
     .width('70%')
@@ -556,8 +835,6 @@ struct SearchWorkspacePage {
     })
     .animation({ duration: 150, curve: Curve.EaseOut })
     .alignItems(VerticalAlign.Center)
-    .defaultFocus(true)
-    .focusable(true)
     .onFocus(() => { this.isSearchBarFocused = true; })
     .onBlur(() => { this.isSearchBarFocused = false; })
   }
@@ -663,6 +940,30 @@ struct SearchWorkspacePage {
   }
 
   @Builder
+  buildSuggestions() {
+    Column({ space: 10 }) {
+      Text(searchInputExample(this.scope))
+        .fontSize(16).fontColor(C_SECONDARY)
+      if (this.scope.kind === 'localFiles' && this.session.status === 'results') {
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(titleSuggestions(this.scope, this.session.results), (title: string) => {
+            Button(title)
+              .fontSize(16).fontColor(C_HIST_TEXT)
+              .backgroundColor(C_HIST_CHIP_BG)
+              .margin({ right: 10, bottom: 10 })
+              .onFocus(() => { this.resultsFocused = true; })
+              .onClick(() => {
+                this.searchText = title;
+                this.focusInput();
+                this.executeSearchWithHistory();
+              })
+          }, (title: string) => title)
+        }
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   buildHistory() {
     if (this.historyList.length > 0) {
       Flex({ wrap: FlexWrap.Wrap }) {
@@ -670,7 +971,9 @@ struct SearchWorkspacePage {
           // M2：拆成两个独立可聚焦节点，遥控器 D-pad 可分别聚焦到关键词和删除按钮
           Row({ space: 0 }) {
             // 左侧：关键词文字 — 聚焦后 OK 键触发搜索并跳转
-            Text(entry.keyword)
+            Button(entry.keyword)
+              .backgroundColor(C_HIST_CHIP_BG)
+              .onFocus(() => { this.resultsFocused = true; })
               .fontSize(16)
               .fontWeight(500)
               .fontColor(C_HIST_TEXT)
@@ -678,10 +981,13 @@ struct SearchWorkspacePage {
               .focusable(true)
               .onClick(() => {
                 this.searchText = entry.keyword;
+                this.focusInput();
                 this.executeSearchWithHistory();
               })
             // 右侧：× 删除按钮 — 聚焦后 OK 键触发删除
-            Text('\u00D7')
+            Button('\u00D7')
+              .backgroundColor(C_HIST_CHIP_BG)
+              .onFocus(() => { this.resultsFocused = true; })
               .fontSize(14)
               .fontColor(C_SECONDARY)
               .padding({ left: 6, right: 14, top: 8, bottom: 8 })
@@ -695,7 +1001,7 @@ struct SearchWorkspacePage {
         }, (entry: SearchHistoryEntry) => entry.keyword)
 
         // Clear-all button styled same as chip
-        Text('\u5220\u9664\u5386\u53f2')
+        Button('清空当前来源历史')
           .fontSize(16)
           .fontWeight(600)
           .fontColor('#D7DEE7')
@@ -711,20 +1017,104 @@ struct SearchWorkspacePage {
     }
   }
 
+  private resultItems(): WorkspaceSearchItem[] {
+    if (getSearchCapabilities(this.scope).localSearch) {
+      return this.session.results.map((item: MediaItem): WorkspaceSearchItem => {
+        const result: WorkspaceSearchItem = {
+          key: `${this.scope.key}:${item.id}`, scopeKey: this.scope.key,
+          title: item.title ?? '', poster: posterSrc(item), rating: item.rating,
+          label: item.tvSeriesId !== undefined ? '剧集' : '电影', localItem: item
+        };
+        return result;
+      });
+    }
+    return (this.serverResult?.items ?? []).map((item: VideoServerSearchItem): WorkspaceSearchItem => {
+      const result: WorkspaceSearchItem = {
+        key: item.key, scopeKey: item.scopeKey, title: item.media.title, poster: item.media.posterUrl,
+        label: item.selection.mediaType === 'movie' ? '电影' : item.selection.mediaType === 'series' ? '剧集' : '单集',
+        serverItem: item
+      };
+      return result;
+    });
+  }
+
+  private openResult(item: WorkspaceSearchItem): void {
+    if (!this.pageActive || item.scopeKey !== this.currentContext().scope.key) { return; }
+    if (item.serverItem !== undefined) {
+      this.openServerResultDetail(item.serverItem);
+    } else if (item.localItem !== undefined) {
+      this.navigateToDetail(item.localItem);
+    }
+  }
+
+  private updateResultSource(): void {
+    this.resultSource.replace(this.resultItems());
+    if (this.restoreResult && this.resultSource.totalCount() > 0) {
+      this.restoreResult = false;
+      this.focusResults();
+    }
+  }
+
+  private focusResults(): void {
+    if (this.resultSource.totalCount() === 0) { return; }
+    this.isEditing = false;
+    this.inputController.stopEditing();
+    this.resultsFocused = true;
+    this.focusedResult = Math.min(this.focusedResult, this.resultSource.totalCount() - 1);
+    this.resultScroller.scrollToIndex(this.focusedResult);
+    this.getUIContext().getFocusController().requestFocus(`search-workspace-result-${this.focusedResult}`);
+  }
+
   @Builder
-  buildResultsPreview() {
-    if (this.searchResults.length > 0) {
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-        ForEach(this.searchResults, (item: MediaItem) => {
+  buildResultList() {
+    Text(getSearchCapabilities(this.scope).serverSearch ? '首批结果（最多 100 项，可能更少）' : '最多显示 200 项')
+      .fontSize(18).fontColor(C_SECONDARY)
+    Grid(this.resultScroller) {
+      LazyForEach(this.resultSource, (item: WorkspaceSearchItem, index: number) => {
+        GridItem() {
           WorkspacePosterCard({
             item: item,
-            onPress: () => { this.navigateToDetail(item); }
+            focusId: `search-workspace-result-${index}`,
+            onFocused: () => { this.focusedResult = index; this.resultsFocused = true; },
+            onPress: () => { this.openResult(item); }
           })
-          .margin({ right: 20, bottom: 20 })
-        }, (item: MediaItem) => String(item.id))
-      }
-      .width('100%')
+        }
+        .onKeyEvent((event: KeyEvent) => {
+          if (event.type === KeyType.Down && event.keyCode === KeyCode.KEYCODE_DPAD_UP && index < 6) {
+            this.focusInput();
+            event.stopPropagation();
+          }
+        })
+      }, (item: WorkspaceSearchItem) => item.key)
     }
+    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsGap(20).rowsGap(20).cachedCount(2)
+    .width('100%').height(380)
+  }
+
+  @Builder
+  buildSearchResults() {
+    Column({ space: 20 }) {
+      if (this.resultStatus() === 'loading' || this.resultStatus() === 'refreshing') {
+        Text(this.resultSource.totalCount() > 0 ? '正在更新，以下为上次结果…' : '正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
+      } else if (this.resultStatus() === 'error') {
+        Text(this.resultErrorText()).fontSize(22).fontColor(C_TEXT_BODY)
+        Row() {
+          ActionKey({ label: '重试', keyAspect: 3, onPress: () => this.retrySearch() })
+        }.width(180)
+      } else if (this.resultStatus() === 'empty') {
+        Text(getSearchCapabilities(this.scope).localSearch
+          ? '本地媒体库未找到匹配内容' : '当前服务器未找到匹配内容')
+          .fontSize(22).fontColor(C_TEXT_BODY)
+      } else if (this.resultStatus() === 'idle') {
+        Text(getSearchCapabilities(this.scope).localSearch
+          ? '输入片名搜索本地媒体库' : '输入片名搜索当前服务器')
+          .fontSize(22).fontColor(C_SECONDARY)
+      }
+      if (this.resultSource.totalCount() > 0) { this.buildResultList() }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
   }
 
   build() {
@@ -732,10 +1122,17 @@ struct SearchWorkspacePage {
       Scroll() {
         Column({ space: 20 }) {
           this.buildBackRow()
-          this.buildSearchBar()
-          this.buildKeyboard()
-          this.buildHistory()
-          this.buildResultsPreview()
+          Text(this.scope.label).fontSize(24).fontColor(C_TEXT_TITLE)
+          Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
+          if (getSearchCapabilities(this.scope).inputModes.length > 0) {
+            this.buildSearchBar()
+            if (getSearchCapabilities(this.scope).inputModes.includes('pinyin')) {
+              this.buildKeyboard()
+            }
+            this.buildHistory()
+            this.buildSuggestions()
+            this.buildSearchResults()
+          }
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
@@ -749,13 +1146,16 @@ struct SearchWorkspacePage {
       .align(Alignment.TopStart)
       .backgroundColor(C_PAGE_BG)
     }
+    .onReady((context: NavDestinationContext) => {
+      this.initializeRoute(context.pathInfo.param as SearchRouteParam | string | null | undefined);
+    })
+    .onShown(() => { this.resumeSearch(); this.focusInput(); })
+    .onWillHide(() => { this.leaveSearch(); })
     .hideTitleBar(true)
     .onBackPressed(() => {
-      this.pageStack.pop();
-      return true;
+      return this.handleBack();
     })
   }
 }
 
 export { SearchWorkspacePage };
-
