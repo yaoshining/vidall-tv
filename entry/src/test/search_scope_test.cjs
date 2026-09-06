@@ -1713,6 +1713,258 @@ async function runHostIntegrationChecks() {
   console.log('静态路由/副作用/输入/生命周期守卫、真实页面方法与详情页身份/错误态回归、reject/resetAll 回归：通过');
 }
 
+async function runSearchChainChecks() {
+  const assert = require('node:assert/strict');
+  const { VideoServerModel } = require('../main/ets/stores/servers/VideoServerModel.ets');
+  const { SourceSwitchModel } = require('../main/ets/stores/media/SourceSwitchModel.ets');
+  const { AppPreferences } = require('../main/ets/utils/AppPreferences.ets');
+  const { SearchWorkspaceSession } = require('../main/ets/services/search/SearchWorkspaceSession.ets');
+  const { JsonHttpClient } = require('../main/ets/lib/JsonHttpClient.ets');
+  const scopes = require('../main/ets/models/search/SearchScope.ets');
+  const sourceText = fs.readFileSync(path.join(root,
+    'entry/src/main/ets/pages/search/SearchWorkspacePage.ets'), 'utf8');
+  const failures = [];
+
+  async function runCase(name, scenario) {
+    console.log(`[search-chain] ${name}: START`);
+    let assertions = 0;
+    const check = (label, actual, expected) => {
+      assert.deepEqual(actual, expected, `${name}: ${label}`);
+      assertions++;
+      console.log(`[search-chain] ${name}: PASS ${label}`);
+    };
+    const timers = installFakeTimers();
+    const originalGet = JsonHttpClient.get;
+    const originalPost = JsonHttpClient.post;
+    const originalDelete = detailRegistryDatabase.delete;
+    const source = SourceSwitchModel.getState();
+    const model = new VideoServerModel();
+    const requests = [], searches = [], responses = [], pushes = [], toasts = [], localCalls = [];
+    let deletes = 0;
+    let page;
+    try {
+      const preferences = new Map();
+      AppPreferences.resetForTesting();
+      AppPreferences.setStoreLoaderForTesting(async () => ({
+        get: async (key, fallback) => preferences.has(key) ? preferences.get(key) : fallback,
+        put: async (key, value) => { preferences.set(key, value); },
+        flush: async () => {}
+      }));
+      await AppPreferences.init({});
+      const servers = [1, 2].map(id => ({
+        id, name: `Chain ${id}`, type: 'jellyfin', createdAt: 1,
+        configJson: JSON.stringify({ protocol: 'https', url: `chain-${id}.invalid`, port: 443,
+          authMethod: 'apikey', apiKey: 'host-test-only' })
+      }));
+      model.videoServers = servers;
+      await source.setVideoServer(servers[0]);
+      detailRegistryDatabase.delete = async () => { deletes++; };
+      // Keep real client protocol adaptation; replace only JSON HTTP IO.
+      JsonHttpClient.get = async (url) => {
+        const parsed = new URL(url);
+        requests.push({ host: parsed.hostname, path: parsed.pathname });
+        assert.ok(['chain-1.invalid', 'chain-2.invalid'].includes(parsed.hostname), 'unexpected host');
+        if (parsed.pathname === '/Users') {
+          return { statusCode: 200, body: JSON.stringify([{ Id: 'host-user' }]) };
+        }
+        assert.equal(parsed.pathname, '/Users/host-user/Items', 'unexpected HTTP path');
+        assert.equal(parsed.searchParams.get('Limit'), '100');
+        searches.push({ host: parsed.hostname, keyword: parsed.searchParams.get('SearchTerm') });
+        assert.ok(responses.length > 0, 'unexpected extra search request');
+        return await responses.shift()();
+      };
+      JsonHttpClient.post = async () => { throw new Error('unexpected HTTP POST'); };
+      const localDb = {
+        searchMediaItems: async () => { localCalls.push('search'); return []; },
+        getSearchHistory: async () => { localCalls.push('history'); return []; }
+      };
+      const dependencies = {
+        ...scopes, SourceSwitchModel,
+        // Host accessor exposes the real model without the ArkUI StateStore runtime.
+        VideoServerStore: { getState: () => model },
+        FileSourceDatabase: { getInstance: () => { localCalls.push('database'); return localDb; } },
+        ServerMediaDetailPage: { PAGE_NAME: 'serverMediaDetail' }
+      };
+      page = {
+        scope: scopes.createUnavailableSearchScope(), searchText: 'film', searchResults: [],
+        historyList: [], isSearching: false, serverResult: null,
+        serverSession: new SearchWorkspaceSession(), pageActive: false, db: null,
+        searchDebounceTimer: -1, searchGeneration: 0, historyLoadGeneration: 0,
+        historySourceGeneration: 0, unsubscribeSource: () => {}, unsubscribeConfiguration: () => {},
+        pageStack: { pushPathByName: (route, param) => pushes.push({ route, param }) },
+        getUIContext: () => ({ getPromptAction: () => ({ showToast: value => toasts.push(value.message) }) })
+      };
+      for (const method of ['currentContext', 'resumeSearch', 'refreshSource', 'invalidateSearch',
+        'leaveSearch', 'invalidateHistoryRequests', 'invalidateHistorySource', 'loadHistory',
+        'scheduleSearch', 'executeServerSearch', 'serverErrorText']) {
+        page[method] = loadMethod(sourceText, `private ${method}(`, [], dependencies);
+      }
+      page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', [], dependencies, true);
+      page.showToastSafe = loadMethod(sourceText, 'private showToastSafe(', ['message'], dependencies);
+      page.openServerResultDetail = loadMethod(sourceText, 'private openServerResultDetail(', ['item'], dependencies);
+      const response = title => ({ statusCode: 200, body: JSON.stringify({
+        Items: [{ Id: 'shared-media', Name: title, Type: 'Movie' }]
+      }) });
+      const enqueue = title => responses.push(async () => response(title));
+      const tick = async () => {
+        check('exactly one scheduled search', timers.pendingCount(), 1);
+        timers.runNext();
+        await flushMicrotasks();
+        check('timer callback executed and drained', timers.pendingCount(), 0);
+      };
+      const success = (title, id = 1) => {
+        check('page publishes nonempty success', page.serverResult?.status, 'success');
+        check('one result from expected instance', page.serverResult.items.map(item => ({
+          id: item.serverId, title: item.media.title, mediaId: item.selection.mediaId
+        })), [{ id, title, mediaId: 'shared-media' }]);
+        check('page loading released', page.isSearching, false);
+        return page.serverResult.items[0];
+      };
+      await scenario({ check, timers, source, model, servers, requests, searches, responses,
+        pushes, toasts, page, response, enqueue, tick, success, deleteCount: () => deletes });
+      check('no local DB, search or history access', localCalls, []);
+      check('all queued transport responses consumed', responses.length, 0);
+      page.leaveSearch();
+      await source.setVideoServer(servers[1]);
+      model.videoServers = [];
+      check('leave unsubscribes source/configuration listeners', timers.pendingCount(), 0);
+      console.log(`[search-chain] ${name}: PASS (${assertions} assertions)`);
+    } catch (error) {
+      failures.push(error);
+      console.error(`[search-chain] ${name}: FAIL after ${assertions} assertions`, error);
+    } finally {
+      if (page) page.leaveSearch();
+      JsonHttpClient.get = originalGet;
+      JsonHttpClient.post = originalPost;
+      detailRegistryDatabase.delete = originalDelete;
+      await source.setFileSource();
+      AppPreferences.setStoreLoaderForTesting(null);
+      AppPreferences.resetForTesting();
+      timers.restore();
+    }
+  }
+
+  await runCase('delete-success-return-same-word', async h => {
+    h.enqueue('before deletion');
+    h.page.resumeSearch();
+    await h.tick();
+    const oldCard = h.success('before deletion');
+    await h.model.deleteVideoServerWithFallback(1);
+    h.check('real deletion reaches DB once', h.deleteCount(), 1);
+    h.check('deleted instance absent; other retained', h.model.videoServers.map(s => s.id), [2]);
+    h.check('active deleted identity preserved', h.source.getActiveServerId(), 1);
+    h.check('real configuration notification refreshes to unavailable', h.page.scope.kind, 'unavailable');
+    h.check('deletion clears cards', h.page.serverResult, null);
+    h.page.openServerResultDetail(oldCard);
+    h.check('old card cannot push after deletion', h.pushes, []);
+    h.check('identity gate reports changed source', h.toasts.length, 1);
+    const before = h.requests.length;
+    h.page.leaveSearch();
+    h.page.resumeSearch();
+    h.page.resumeSearch();
+    h.page.scheduleSearch();
+    await flushMicrotasks();
+    h.check('return preserves keyword', h.page.searchText, 'film');
+    h.check('unavailable return schedules no timer', h.timers.pendingCount(), 0);
+    h.check('no deleted or alternative instance HTTP after return', h.requests.length, before);
+    h.check('only original instance searched', h.searches, [{ host: 'chain-1.invalid', keyword: 'film' }]);
+    h.check('return has no cards or local results', [h.page.serverResult, h.page.searchResults], [null, []]);
+  });
+
+  await runCase('same-instance-reject-recover-stale-response', async h => {
+    h.enqueue('initial');
+    h.page.resumeSearch();
+    await h.tick();
+    h.success('initial');
+    const stale = createDeferred();
+    h.responses.push(() => stale.promise);
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('pending request removes initial cards', [h.page.serverResult.status, h.page.serverResult.items], ['loading', []]);
+    h.responses.push(async () => { throw new Error('host transport disconnected'); });
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('transport reject becomes page network error', [h.page.serverResult.status, h.page.serverResult.errorCode], ['error', 'network']);
+    h.check('error has no old cards', [h.page.serverResult.items, h.page.searchResults], [[], []]);
+    h.check('error releases loading', h.page.isSearching, false);
+    h.check('page exposes connection error text', h.page.serverErrorText(), '无法连接服务器，请检查网络后重试');
+    const recovery = createDeferred();
+    h.responses.push(() => recovery.promise);
+    h.page.scheduleSearch();
+    await h.tick();
+    stale.resolve(h.response('must not return'));
+    await flushMicrotasks();
+    h.check('deferred old response cannot refill recovering page',
+      [h.page.serverResult.status, h.page.serverResult.items, h.page.isSearching], ['loading', [], true]);
+    recovery.resolve(h.response('recovered'));
+    await flushMicrotasks();
+    h.success('recovered');
+    h.check('same-word recovery searches only original instance', h.searches,
+      Array.from({ length: 4 }, () => ({ host: 'chain-1.invalid', keyword: 'film' })));
+    h.check('all HTTP remains on original instance', h.requests.every(r => r.host === 'chain-1.invalid'), true);
+    h.check('error/recovery does not navigate', h.pushes, []);
+  });
+
+  await runCase('detail-return-once-same-protocol-media-isolation', async h => {
+    h.enqueue('A initial');
+    h.page.resumeSearch();
+    await h.tick();
+    const cardA = h.success('A initial');
+    h.page.openServerResultDetail(cardA);
+    h.check('successful card pushes exact detail identity', h.pushes, [{ route: 'serverMediaDetail', param: {
+      serverId: 1, serverType: 'jellyfin', mediaId: 'shared-media', mediaType: 'movie',
+      itemId: 'shared-media', title: 'A initial'
+    } }]);
+    h.page.leaveSearch();
+    h.check('leave clears cards and timer', [h.page.serverResult, h.timers.pendingCount()], [null, 0]);
+    h.enqueue('A returned');
+    h.page.resumeSearch();
+    h.page.resumeSearch();
+    await h.tick();
+    h.success('A returned');
+    h.check('detail return triggers exactly one same-word re-search', h.searches,
+      Array.from({ length: 2 }, () => ({ host: 'chain-1.invalid', keyword: 'film' })));
+    const staleA = createDeferred();
+    h.responses.push(() => staleA.promise);
+    h.page.scheduleSearch();
+    await h.tick();
+    await h.source.setVideoServer(h.servers[1]);
+    h.check('real source notification switches page to B', h.page.scope.serverId, 2);
+    h.page.openServerResultDetail(cardA);
+    h.check('A card cannot push while B active', h.pushes.length, 1);
+    h.enqueue('B same media');
+    await h.tick();
+    const cardB = h.success('B same media', 2);
+    h.check('same protocol and mediaId fixture', [cardA.serverType, cardA.selection.mediaId],
+      [cardB.serverType, cardB.selection.mediaId]);
+    h.check('A/B result keys isolated', cardA.key === cardB.key, false);
+    const publishedB = h.page.serverResult;
+    staleA.resolve(h.response('late A same media'));
+    await flushMicrotasks();
+    h.check('deferred A cannot replace B result object', h.page.serverResult === publishedB, true);
+    h.success('B same media', 2);
+    h.page.openServerResultDetail(cardB);
+    h.check('B card pushes B identity despite same mediaId', h.pushes[1], { route: 'serverMediaDetail', param: {
+      serverId: 2, serverType: 'jellyfin', mediaId: 'shared-media', mediaType: 'movie',
+      itemId: 'shared-media', title: 'B same media'
+    } });
+    h.page.leaveSearch();
+    h.enqueue('B returned');
+    h.page.resumeSearch();
+    h.page.resumeSearch();
+    await h.tick();
+    h.success('B returned', 2);
+    h.check('A/B requests preserve keyword and exact counts', h.searches, [
+      ...Array.from({ length: 3 }, () => ({ host: 'chain-1.invalid', keyword: 'film' })),
+      ...Array.from({ length: 2 }, () => ({ host: 'chain-2.invalid', keyword: 'film' }))
+    ]);
+    h.page.openServerResultDetail(cardA);
+    h.check('old A remains blocked after B detail return', h.pushes.length, 2);
+    h.page.leaveSearch();
+  });
+  if (failures.length > 0) throw new AggregateError(failures, 'Search chain regressions');
+}
+
 function registerAndExecuteCore() {
   const Core = require(path.join(hypium, 'core.js')).default;
   const core = Core.getInstance();
@@ -1737,8 +1989,14 @@ function registerAndExecuteCore() {
   core.execute();
 }
 
-if (process.argv.includes('--integration')) {
+if (process.argv.includes('--search-chains')) {
+  runSearchChainChecks().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+} else if (process.argv.includes('--integration')) {
   runHostIntegrationChecks()
+    .then(() => runSearchChainChecks())
     .then(() => { registerAndExecuteCore(); })
     .catch((error) => {
       console.error(error);
