@@ -7,13 +7,13 @@ export default function searchScopeTest() {
     { id: 1, type: VideoServerType.JELLYFIN, name: 'A', configJson: '{}', createdAt: 1 },
     { id: 2, type: VideoServerType.PLEX, name: 'B', configJson: '{}', createdAt: 1 }
   ];
-  describe('SearchScope', () => {
-    it('aggregates local configurations', 0, () => {
+  describe('搜索来源范围', () => {
+    it('聚合本地文件源配置', 0, () => {
       expect(createLocalSearchScope().key).assertEqual('local-files');
       expect(createLocalSearchScope().label).assertEqual('本地文件源');
       expect(getSearchCapabilities(createLocalSearchScope()).localSearch).assertTrue();
     });
-    it('restores legacy server identity from configuration', 0, () => {
+    it('从配置恢复旧服务器身份', 0, () => {
       const scope = resolveSearchScope({ kind: 'videoServer', serverId: 1 } as SearchScopeIdentity, servers);
       expect(scope.key).assertEqual('video-server:jellyfin:1');
       expect(scope.label).assertEqual('A');
@@ -21,16 +21,16 @@ export default function searchScopeTest() {
       expect(getSearchCapabilities(scope).serverSearch).assertEqual(true);
       expect(getSearchCapabilities(scope).inputModes.join(',')).assertEqual('text');
     });
-    it('separates server instances and types', 0, () => {
+    it('隔离服务器实例与类型', 0, () => {
       expect(resolveSearchScope({ kind: 'videoServer', serverId: 2 } as SearchScopeIdentity, servers).key)
         .assertEqual('video-server:plex:2');
     });
-    it('rebuilds untrusted keys', 0, () => {
+    it('重新生成不可信来源键', 0, () => {
       const scope = resolveSearchScope({ kind: 'videoServer', serverId: 1,
         serverType: VideoServerType.JELLYFIN, key: 'local-files' } as SearchScopeIdentity, servers);
       expect(scope.key).assertEqual('video-server:jellyfin:1');
     });
-    it('rejects deleted and mismatched servers without local fallback', 0, () => {
+    it('删除或类型不匹配时禁止回退本地', 0, () => {
       const deleted = resolveSearchScope({ kind: 'videoServer', serverId: 99 } as SearchScopeIdentity, servers);
       const mismatch = resolveSearchScope({ kind: 'videoServer', serverId: 1,
         serverType: VideoServerType.PLEX } as SearchScopeIdentity, servers);
@@ -39,20 +39,20 @@ export default function searchScopeTest() {
       expect(getSearchCapabilities(deleted).localSearch).assertEqual(false);
       expect(getSearchCapabilities(deleted).localHistory).assertEqual(false);
     });
-    it('legacy null and keyword routes follow current server', 0, () => {
+    it('旧空值与关键词路由跟随当前服务器', 0, () => {
       const current = resolveSearchScope({ kind: 'videoServer', serverId: 1 } as SearchScopeIdentity, servers);
       expect(resolveSearchRoute(null, current, servers).scope.key).assertEqual(current.key);
       const route = resolveSearchRoute('hello', current, servers);
       expect(route.scope.key).assertEqual(current.key);
       expect(route.keyword).assertEqual('hello');
     });
-    it('explicit scope survives active source changes and round trip', 0, () => {
+    it('显式范围在切源与序列化后保持身份', 0, () => {
       const route = resolveSearchRoute({ scope: { kind: 'videoServer', serverId: 2 } } as SearchRouteParam,
         createLocalSearchScope(), servers);
       expect(resolveSearchRoute(JSON.parse(JSON.stringify(route)) as SearchRouteParam, createLocalSearchScope(), servers)
         .scope.key).assertEqual('video-server:plex:2');
     });
-    it('invalid explicit scope never falls back to local', 0, () => {
+    it('无效显式范围禁止回退本地', 0, () => {
       expect(resolveSearchRoute({ scope: { kind: 'bad' } } as SearchRouteParam, createLocalSearchScope(), servers)
         .scope.kind).assertEqual('unavailable');
     });

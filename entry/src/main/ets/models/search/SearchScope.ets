@@ -1,6 +1,6 @@
 import { VideoServer, VideoServerType } from '../../db/models/VideoServerEntity';
 
-/** Local WebDAV/SMB configurations share one scope. Cloud drives are not included. */
+/** 本地 WebDAV/SMB 配置共享同一范围，不包含网盘。 */
 export interface SearchScope {
   kind: 'localFiles' | 'videoServer' | 'unavailable';
   key: string;
@@ -9,7 +9,7 @@ export interface SearchScope {
   serverType?: VideoServerType;
 }
 
-/** Route/persisted input is untrusted; keys and labels are always rebuilt. */
+/** 路由及持久化输入不可信，必须重新生成来源键与显示名称。 */
 export interface SearchScopeIdentity {
   kind: string;
   key?: string;
@@ -68,7 +68,7 @@ export function resolveSearchScope(identity: SearchScopeIdentity, servers: Video
   return scope;
 }
 
-/** Copy identity explicitly: ArkTS does not allow structural assignment between these interfaces. */
+/** 显式复制身份，避免 ArkTS 不允许的跨接口结构赋值。 */
 export function toSearchScopeIdentity(scope: SearchScope): SearchScopeIdentity {
   const identity: SearchScopeIdentity = {
     kind: scope.kind, serverId: scope.serverId, serverType: scope.serverType
@@ -76,7 +76,7 @@ export function toSearchScopeIdentity(scope: SearchScope): SearchScopeIdentity {
   return identity;
 }
 
-/** Missing scope on legacy routes means current source, never global/local fallback. */
+/** 旧路由缺少范围时使用当前来源，禁止回退全局或本地。 */
 export function resolveSearchRoute(param: SearchRouteParam | string | null | undefined,
   currentScope: SearchScope, servers: VideoServer[]): ResolvedSearchRoute {
   let scope = currentScope;
@@ -91,7 +91,7 @@ export function resolveSearchRoute(param: SearchRouteParam | string | null | und
   return route;
 }
 
-/** Only implemented capabilities are exposed. Server search accepts literal text only. */
+/** 只暴露已实现的能力，服务器搜索仅支持字面文本。 */
 export function getSearchCapabilities(scope: SearchScope): SearchCapabilities {
   const local = scope.kind === 'localFiles';
   const capabilities: SearchCapabilities = {

@@ -311,6 +311,8 @@ export struct MediaResultPage {
   // 路由初始参数，用于 resetAll() 恢复入口语义
   private initialMediaType: string = '';
   private initialGenre: string = '';
+  private initialRating: number = 0;
+  private initialYearLabel: string = '';
   private initialPageTitle: string = '搜索结果';
 
   aboutToDisappear(): void {
@@ -415,8 +417,8 @@ export struct MediaResultPage {
   private resetAll(): void {
     this.filterMediaType = this.initialMediaType;
     this.filterGenre = this.initialGenre;
-    this.filterYearLabel = '';
-    this.filterRating = 0;
+    this.filterYearLabel = this.initialYearLabel;
+    this.filterRating = this.initialRating;
     this.filterProgress = '';
     this.filterRegion = '';
     this.filterSort = 'composite';
@@ -821,6 +823,8 @@ export struct MediaResultPage {
         // 保存入口初始值，resetAll() 时恢复入口语义而非全部清空
         this.initialMediaType = this.filterMediaType;
         this.initialGenre = this.filterGenre;
+        this.initialRating = this.filterRating;
+        this.initialYearLabel = this.filterYearLabel;
         this.initialPageTitle = this.pageTitle;
       }
       this.loadGenreOptions().catch((): void => {});
