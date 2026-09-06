@@ -1730,7 +1730,7 @@ async function runSearchChainChecks() {
     'entry/src/main/ets/pages/search/SearchWorkspacePage.ets'), 'utf8');
   const failures = [];
 
-  async function runCase(name, scenario) {
+  async function runCase(name, scenario, allowLocal = false) {
     console.log(`[search-chain] ${name}: START`);
     let assertions = 0;
     const check = (label, actual, expected) => {
@@ -1780,7 +1780,10 @@ async function runSearchChainChecks() {
       };
       JsonHttpClient.post = async () => { throw new Error('unexpected HTTP POST'); };
       const localDb = {
-        searchMediaItems: async () => { localCalls.push('search'); return []; },
+        searchMediaItems: async (keyword) => {
+          localCalls.push(`search:${keyword}`);
+          return [{ id: 317, title: '本地片名', movieId: 317 }];
+        },
         getSearchHistory: async () => { localCalls.push('history'); return []; }
       };
       const dependencies = {
@@ -1827,8 +1830,9 @@ async function runSearchChainChecks() {
         return page.serverResult.items[0];
       };
       await scenario({ check, timers, source, model, servers, requests, searches, responses,
-        pushes, toasts, page, response, enqueue, tick, success, deleteCount: () => deletes });
-      check('no local DB, search or history access', localCalls, []);
+        pushes, toasts, page, response, enqueue, tick, success, localCalls, scopes,
+        deleteCount: () => deletes });
+      if (!allowLocal) check('no local DB, search or history access', localCalls, []);
       check('all queued transport responses consumed', responses.length, 0);
       page.leaveSearch();
       await source.setVideoServer(servers[1]);
@@ -1849,6 +1853,62 @@ async function runSearchChainChecks() {
       timers.restore();
     }
   }
+
+  await runCase('本地服务器往返按真实能力分流且失效不回退', async h => {
+    await h.source.setFileSource();
+    h.page.searchText = 'bdpm';
+    h.page.resumeSearch();
+    h.check('local input capabilities', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+      ['initials', 'pinyin', 'chinese']);
+    await h.tick();
+    h.check('local query reaches database with pinyin text', h.localCalls,
+      ['database', 'history', 'search:bdpm']);
+    h.check('local results published', h.page.searchResults.map(item => item.title), ['本地片名']);
+    h.check('local mode makes no HTTP requests', h.requests, []);
+
+    for (const server of h.servers) {
+      await h.source.setVideoServer(server);
+      h.check('server input is literal text only', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+        ['text']);
+      h.check('switch clears local results and database', [h.page.searchResults, h.page.db], [[], null]);
+      const before = h.localCalls.slice();
+      // Even an accidental direct invocation must respect the real capability guard.
+      await h.page.executeSearch();
+      h.page.searchText = '真实片名';
+      h.page.scheduleSearch();
+      h.enqueue(`服务器 ${server.id}`);
+      await h.tick();
+      h.success(`服务器 ${server.id}`, server.id);
+      h.check('server has no local database/index entry', h.localCalls, before);
+      h.check('literal query reaches selected instance', h.searches.at(-1), {
+        host: `chain-${server.id}.invalid`, keyword: '真实片名'
+      });
+    }
+
+    await h.source.setFileSource();
+    h.check('return restores local capabilities', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+      ['initials', 'pinyin', 'chinese']);
+    h.check('return clears server result immediately', h.page.serverResult, null);
+    h.page.searchText = 'bdpm';
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('return publishes only local results', h.page.searchResults.map(item => item.title), ['本地片名']);
+    h.check('local return does not issue HTTP search', h.searches.length, 2);
+
+    await h.source.setVideoServer(h.servers[0]);
+    h.enqueue('删除前结果');
+    await h.tick();
+    h.success('删除前结果');
+    const before = h.localCalls.slice();
+    await h.model.deleteVideoServerWithFallback(h.servers[0].id);
+    h.check('deleted source remains unavailable', h.page.scope.kind, 'unavailable');
+    h.check('unavailable has no input capability', h.scopes.getSearchCapabilities(h.page.scope).inputModes, []);
+    h.check('unavailable clears both result modes', [h.page.searchResults, h.page.serverResult], [[], null]);
+    h.page.scheduleSearch();
+    await h.page.executeSearch();
+    h.check('unavailable does not schedule fallback', h.timers.pendingCount(), 0);
+    h.check('unavailable never opens local index path', h.localCalls, before);
+  }, true);
 
   await runCase('旧显式路由不得覆盖顶部实时来源', async h => {
     await h.source.setVideoServer(h.servers[1]);
