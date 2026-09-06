@@ -635,30 +635,28 @@ struct ServerLibraryCard {
   @Event onItemClick: () => void = () => {}
   @Local isHovered: boolean = false
 
+  private getPlaceholder(): Resource {
+    return this.library.type === 'tvshows'
+      ? $r('app.media.library_placeholder_tv')
+      : $r('app.media.library_placeholder_movie')
+  }
+
   build() {
-    Stack({ alignContent: Alignment.Center }) {
-      if (this.library.imageUrl.length > 0) {
-        Image(this.library.imageUrl)
-          .width(SERVER_WIDE_WIDTH)
-          .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-          .objectFit(ImageFit.Cover)
-      } else {
-        Column() {
-          Text(this.library.name)
-            .fontSize(18).fontWeight(FontWeight.Bold)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            .width(SERVER_WIDE_WIDTH - 40)
-        }
+    Column({ space: 8 }) {
+      Image(this.library.imageUrl.length > 0 ? this.library.imageUrl : this.getPlaceholder())
+        .alt(this.getPlaceholder())
         .width(SERVER_WIDE_WIDTH)
         .aspectRatio(LANDSCAPE_ASPECT_RATIO)
-        .backgroundColor('#1C1C1C')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-      }
+        .objectFit(ImageFit.Cover)
+        .borderRadius(6).clip(true)
+        .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+
+      Text(this.library.name)
+        .fontSize(18).fontColor('#CCCCCC')
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width(SERVER_WIDE_WIDTH).textAlign(TextAlign.Center)
     }
-    .width(SERVER_WIDE_WIDTH).aspectRatio(LANDSCAPE_ASPECT_RATIO)
-    .borderRadius(6).clip(true)
-    .border({ width: 2, color: this.isHovered ? 'rgba(255,255,255,0.38)' : '#00FFFFFF' })
+    .width(SERVER_WIDE_WIDTH)
     .onHover((isHover: boolean) => { this.isHovered = isHover })
     .focusable(true)
     .onClick(() => { this.onItemClick() })
