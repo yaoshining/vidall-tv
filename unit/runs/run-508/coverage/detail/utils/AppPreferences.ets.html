@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">48x</span>
+<span class="cline-any cline-yes">48x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">89x</span>
+<span class="cline-any cline-yes">89x</span>
+<span class="cline-any cline-yes">89x</span>
+<span class="cline-any cline-yes">89x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">49x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">116x</span>
+<span class="cline-any cline-yes">116x</span>
+<span class="cline-any cline-yes">87x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">79x</span>
+<span class="cline-any cline-yes">79x</span>
+<span class="cline-any cline-yes">79x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">65x</span>
+<span class="cline-any cline-yes">65x</span>
+<span class="cline-any cline-yes">65x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import dataPreferences from &#39;@ohos.data.preferences&#39;; 
+import { Context } from &#39;@ohos.abilityAccessCtrl&#39;; 
+import { BusinessError } from &#39;@kit.BasicServicesKit&#39;; 
+ 
+export type AppPreferenceValue = string | number; 
+ 
+export interface LoginStateRecord { 
+  accountId: string; 
+  providerId: string; 
+  displayName: string; 
+  avatarUri: string; 
+  loginTime: number; 
+  isLogged: boolean; 
+} 
+ 
+export interface AppPreferencesStore { 
+  get(key: string, defaultValue: AppPreferenceValue): Promise&lt;AppPreferenceValue&gt;; 
+  put(key: string, value: AppPreferenceValue): Promise&lt;void&gt;; 
+  flush(): Promise&lt;void&gt;; 
+} 
+ 
+export type AppPreferencesLoader = (context: Context, storeName: string) =&gt; Promise&lt;AppPreferencesStore&gt;; 
+ 
+// ───────────────────────────────────────────── 
+// Key 常量 
+// ───────────────────────────────────────────── 
+ 
+export class PrefKey { 
+  /** TMDB API Key */ 
+  static readonly TMDB_API_KEY = &#39;tmdb_api_key&#39;; 
+  /** 刮削并发数，默认 2 */ 
+  static readonly SCRAPE_CONCURRENCY = &#39;scrape_concurrency&#39;; 
+  /** 局部刮削是否选择候选，0=自动，1=确认 */ 
+  static readonly LOCAL_SCRAPE_CONFIRM_CANDIDATE = &#39;local_scrape_confirm_candidate&#39;; 
+  /** 
+   * 刮削 Provider 优先级列表，JSON 序列化的 string[] 
+   * 例：&#39;[&quot;tmdb&quot;,&quot;douban&quot;]&#39; 
+   */ 
+  static readonly SCRAPE_PROVIDER_ORDER = &#39;scrape_provider_order&#39;; 
+  /** 播放器诊断面包屑（用于无 faultlog 场景定位最后阶段） */ 
+  static readonly PLAYER_LAST_BREADCRUMB = &#39;player_last_breadcrumb&#39;; 
+  /** 剧集播放结束前是否自动切到下一集（1=开启，0=关闭） */ 
+  static readonly PLAYER_EPISODE_AUTOPLAY_ENABLED = &#39;player_episode_autoplay_enabled&#39;; 
+  /** 自动切到下一集前的倒计时秒数 */ 
+  static readonly PLAYER_EPISODE_AUTOPLAY_COUNTDOWN_SECONDS = &#39;player_episode_autoplay_countdown_seconds&#39;; 
+  /** 字幕语言偏好（JSON 序列化字符串） */ 
+  static readonly SUBTITLE_LANGUAGE_PREFERENCE = &#39;subtitle_language_preference&#39;; 
+  /** 指标上报使用的持久化设备 UUID */ 
+  static readonly METRICS_DEVICE_UUID = &#39;metrics_device_uuid&#39;; 
+  /** OpenSubtitles API Key（直连通道，留空则走代理） */ 
+  static readonly OPENSUBTITLES_API_KEY = &#39;opensubtitles_api_key&#39;; 
+  /** OpenSubtitles 设备 ID（代理通道身份标识，首次启动自动生成） */ 
+  static readonly OPENSUBTITLES_DEVICE_ID = &#39;opensubtitles_device_id&#39;; 
+  /** 用户字幕绑定前缀，完整 key = subtitle_binding_&lt;sha256前12位&gt; */ 
+  static readonly SUBTITLE_BINDING_PREFIX = &#39;subtitle_binding&#39;; 
+  /** 用户音轨绑定前缀，完整 key = audio_binding_&lt;sha256前12位&gt; */ 
+  static readonly AUDIO_BINDING_PREFIX = &#39;audio_binding&#39;; 
+  /** 媒体库当前数据源（JSON 序列化的 ActiveMediaSource） */ 
+  static readonly ACTIVE_MEDIA_SOURCE = &#39;active_media_source&#39;; 
+  /** 音频解码能力设备/固件纠偏（JSON 序列化的 AudioCorrectionEntry[]） */ 
+  static readonly AUDIO_CAPABILITY_CORRECTIONS = &#39;audio_capability_corrections&#39;; 
+  /** 完整登录态 JSON；单键写入提供一致性边界 */ 
+  static readonly ACCOUNT_STATE_RECORD = &#39;account.stateRecord&#39;; 
+  /** 当前登录账号 ID（本 App 内 UUID，旧版本兼容键） */ 
+  static readonly ACCOUNT_ACCOUNT_ID = &#39;account.accountId&#39;; 
+  /** 当前登录 provider 标识：&#39;huawei&#39; | &#39;wechat&#39; ... */ 
+  static readonly ACCOUNT_CURRENT_PROVIDER_ID = &#39;account.currentProviderId&#39;; 
+  /** 当前登录账号显示昵称（可能为空字符串） */ 
+  static readonly ACCOUNT_DISPLAY_NAME = &#39;account.displayName&#39;; 
+  /** 当前登录账号头像 URI（可能为空字符串） */ 
+  static readonly ACCOUNT_AVATAR_URI = &#39;account.avatarUri&#39;; 
+  /** 最近一次登录时间（毫秒时间戳，number） */ 
+  static readonly ACCOUNT_LOGIN_TIME = &#39;account.loginTime&#39;; 
+  /** 是否已登录（1=已登录，0=未登录，number） */ 
+  static readonly ACCOUNT_IS_LOGGED = &#39;account.isLogged&#39;; 
+} 
+ 
+// ───────────────────────────────────────────── 
+// AppPreferences 单例 
+// ───────────────────────────────────────────── 
+ 
+const STORE_NAME = &#39;app_preferences&#39;; 
+ 
+const DEFAULT_APP_PREFERENCES_LOADER: AppPreferencesLoader = async ( 
+  context: Context, 
+  storeName: string 
+): Promise&lt;AppPreferencesStore&gt; =&gt; { 
+  const store = await dataPreferences.getPreferences(context, storeName); 
+  return store as AppPreferencesStore; 
+}; 
+ 
+/** 
+ * 应用偏好设置工具（EL1） 
+ * 
+ * 使用前须在 EntryAbility.onCreate 中调用 AppPreferences.init(context) 
+ * 
+ * ```typescript 
+ * await AppPreferences.init(context); 
+ * await AppPreferences.set(PrefKey.TMDB_API_KEY, &#39;your_key&#39;); 
+ * const key = await AppPreferences.get(PrefKey.TMDB_API_KEY, &#39;&#39;); 
+ * ``` 
+ */ 
+export class AppPreferences { 
+  private static store: AppPreferencesStore | null = null; 
+  private static initPromise: Promise&lt;void&gt; | null = null; 
+  private static storeLoader: AppPreferencesLoader = DEFAULT_APP_PREFERENCES_LOADER; 
+ 
+  private static generateDeviceUuid(): string { 
+    const segment = (): string =&gt; { 
+      return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1); 
+    }; 
+    return `${segment()}${segment()}-${segment()}-${segment()}-${segment()}-${segment()}${segment()}${segment()}`; 
+  } 
+ 
+  static setStoreLoaderForTesting(loader: AppPreferencesLoader | null): void { 
+    AppPreferences.storeLoader = loader ?? DEFAULT_APP_PREFERENCES_LOADER; 
+    AppPreferences.store = null; 
+    AppPreferences.initPromise = null; 
+  } 
+ 
+  static resetForTesting(): void { 
+    AppPreferences.store = null; 
+    AppPreferences.initPromise = null; 
+  } 
+ 
+  /** 在 EntryAbility.onCreate 里调用一次 */ 
+  static async init(context: Context): Promise&lt;void&gt; { 
+    if (AppPreferences.store !== null) { 
+      return; 
+    } 
+    if (AppPreferences.initPromise !== null) { 
+      return AppPreferences.initPromise; 
+    } 
+    AppPreferences.initPromise = (async () =&gt; { 
+      try { 
+        AppPreferences.store = await AppPreferences.storeLoader(context, STORE_NAME); 
+        console.info(&#39;[AppPreferences] 初始化成功&#39;); 
+      } catch (e) { 
+        const err = e as BusinessError; 
+        console.error(`[AppPreferences] 初始化失败: ${err.message ?? JSON.stringify(e)}`); 
+        throw new Error(`AppPreferences init failed: ${err.message}`); 
+      } finally { 
+        AppPreferences.initPromise = null; 
+      } 
+    })(); 
+    return AppPreferences.initPromise; 
+  } 
+ 
+  private static async waitForStore(): Promise&lt;AppPreferencesStore | null&gt; { 
+    if (AppPreferences.store !== null) { 
+      return AppPreferences.store; 
+    } 
+    if (AppPreferences.initPromise !== null) { 
+      try { 
+        await AppPreferences.initPromise; 
+      } catch { 
+        return null; 
+      } 
+      return AppPreferences.store; 
+    } 
+    return null; 
+  } 
+ 
+  /** 读取字符串值 */ 
+  static async get(key: string, defaultValue: string): Promise&lt;string&gt; { 
+    const store = await AppPreferences.waitForStore(); 
+    if (!store) { 
+      console.warn(`[AppPreferences] 未初始化，key=${key} 返回默认值`); 
+      return defaultValue; 
+    } 
+    try { 
+      const val = await store.get(key, defaultValue); 
+      return val as string; 
+    } catch { 
+      return defaultValue; 
+    } 
+  } 
+ 
+  /** 读取数字值 */ 
+  static async getNumber(key: string, defaultValue: number): Promise&lt;number&gt; { 
+    const store = await AppPreferences.waitForStore(); 
+    if (!store) { 
+      console.warn(`[AppPreferences] 未初始化，key=${key} 返回默认值`); 
+      return defaultValue; 
+    } 
+    try { 
+      const val = await store.get(key, defaultValue); 
+      return val as number; 
+    } catch { 
+      return defaultValue; 
+    } 
+  } 
+ 
+  /** 写入值（string 或 number） */ 
+  static async set(key: string, value: string | number): Promise&lt;void&gt; { 
+    const store = await AppPreferences.waitForStore(); 
+    if (!store) { 
+      console.warn(`[AppPreferences] 未初始化，key=${key} 写入失败`); 
+      return; 
+    } 
+    try { 
+      await store.put(key, value); 
+      await store.flush(); 
+      console.info(`[AppPreferences] 写入 key=${key}`); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      console.error(`[AppPreferences] 写入失败 key=${key}: ${err.message ?? JSON.stringify(e)}`); 
+    } 
+  } 
+ 
+  /** 
+   * 获取或创建 OpenSubtitles 代理通道设备 ID。 
+   * 首次调用时自动生成 UUID 并持久化；后续调用直接返回已存值。 
+   */ 
+  static async getOrCreateDeviceId(): Promise&lt;string&gt; { 
+    const existing = await AppPreferences.get(PrefKey.OPENSUBTITLES_DEVICE_ID, &#39;&#39;); 
+    if (existing.length &gt; 0) { 
+      return existing; 
+    } 
+    const newId = AppPreferences.generateDeviceUuid(); 
+    await AppPreferences.set(PrefKey.OPENSUBTITLES_DEVICE_ID, newId); 
+    const verified = await AppPreferences.get(PrefKey.OPENSUBTITLES_DEVICE_ID, &#39;&#39;); 
+    return verified.length &gt; 0 ? verified : newId; 
+  } 
+ 
+  static async getOrCreateDeviceUuid(): Promise&lt;string&gt; { 
+    const existingUuid = await AppPreferences.get(PrefKey.METRICS_DEVICE_UUID, &#39;&#39;); 
+    if (existingUuid.length &gt; 0) { 
+      return existingUuid; 
+    } 
+    const nextUuid = AppPreferences.generateDeviceUuid(); 
+    await AppPreferences.set(PrefKey.METRICS_DEVICE_UUID, nextUuid); 
+    const verified = await AppPreferences.get(PrefKey.METRICS_DEVICE_UUID, &#39;&#39;); 
+    return verified.length &gt; 0 ? verified : &#39;&#39;; 
+  } 
+ 
+  /** 
+   * 写入完整登录态（登录成功后调用）。 
+   * @param accountId 本 App 内账号 ID 
+   * @param providerId provider 标识（&#39;huawei&#39; | &#39;wechat&#39; ...） 
+   * @param displayName 显示昵称（可能为空字符串） 
+   * @param avatarUri 头像 URI（可能为空字符串） 
+   * @param loginTime 登录时间（毫秒时间戳） 
+   */ 
+  static async setLoginState( 
+    accountId: string, 
+    providerId: string, 
+    displayName: string, 
+    avatarUri: string, 
+    loginTime: number 
+  ): Promise&lt;void&gt; { 
+    const state: LoginStateRecord = { 
+      accountId, 
+      providerId, 
+      displayName, 
+      avatarUri, 
+      loginTime, 
+      isLogged: true 
+    }; 
+    await AppPreferences.writeLoginState(state); 
+  } 
+ 
+  /** 清除登录态（退出登录后调用）；Cloud DB 记录保留。 */ 
+  static async clearLoginState(): Promise&lt;void&gt; { 
+    const state: LoginStateRecord = { 
+      accountId: &#39;&#39;, 
+      providerId: &#39;&#39;, 
+      displayName: &#39;&#39;, 
+      avatarUri: &#39;&#39;, 
+      loginTime: 0, 
+      isLogged: false 
+    }; 
+    await AppPreferences.writeLoginState(state); 
+  } 
+ 
+  private static async writeLoginState(state: LoginStateRecord): Promise&lt;void&gt; { 
+    const store = await AppPreferences.waitForStore(); 
+    if (store === null) { 
+      throw new Error(&#39;AppPreferences 未初始化，无法持久化登录态&#39;); 
+    } 
+    await store.put(PrefKey.ACCOUNT_STATE_RECORD, JSON.stringify(state)); 
+    await store.flush(); 
+  } 
+ 
+  static async getLoginState(): Promise&lt;LoginStateRecord | null&gt; { 
+    const serialized = await AppPreferences.get(PrefKey.ACCOUNT_STATE_RECORD, &#39;&#39;); 
+    if (serialized.length === 0) { 
+      return null; 
+    } 
+    try { 
+      return JSON.parse(serialized) as LoginStateRecord; 
+    } catch (e) { 
+      return null; 
+    } 
+  } 
+ 
+  /** 是否已登录 */ 
+  static async isLogged(): Promise&lt;boolean&gt; { 
+    const state = await AppPreferences.getLoginState(); 
+    if (state !== null) { 
+      return state.isLogged; 
+    } 
+    const legacy = await AppPreferences.getNumber(PrefKey.ACCOUNT_IS_LOGGED, 0); 
+    return legacy === 1; 
+  } 
+ 
+  /** 当前登录 provider 标识（未登录返回空字符串） */ 
+  static async getCurrentProviderId(): Promise&lt;string&gt; { 
+    const state = await AppPreferences.getLoginState(); 
+    return state?.providerId ?? AppPreferences.get(PrefKey.ACCOUNT_CURRENT_PROVIDER_ID, &#39;&#39;); 
+  } 
+ 
+  /** 当前登录账号 ID（未登录返回空字符串） */ 
+  static async getAccountId(): Promise&lt;string&gt; { 
+    const state = await AppPreferences.getLoginState(); 
+    return state?.accountId ?? AppPreferences.get(PrefKey.ACCOUNT_ACCOUNT_ID, &#39;&#39;); 
+  } 
+ 
+  /** 当前登录显示昵称（未登录返回空字符串） */ 
+  static async getDisplayName(): Promise&lt;string&gt; { 
+    const state = await AppPreferences.getLoginState(); 
+    return state?.displayName ?? AppPreferences.get(PrefKey.ACCOUNT_DISPLAY_NAME, &#39;&#39;); 
+  } 
+ 
+  /** 当前登录头像 URI（未登录返回空字符串） */ 
+  static async getAvatarUri(): Promise&lt;string&gt; { 
+    const state = await AppPreferences.getLoginState(); 
+    return state?.avatarUri ?? AppPreferences.get(PrefKey.ACCOUNT_AVATAR_URI, &#39;&#39;); 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Mon Sep 07 2026 00:46:27 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/utils/AppPreferences.ets","hash":"21c1ccbd1e056867829653e8a3ff19470098fd43745bb7eb63e15d54ebe1c55e","lineCnt":331,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"get","count":0,"regions":[{"startLoc":{"line":17,"col":3},"endLoc":{"line":17,"col":83},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"put","count":0,"regions":[{"startLoc":{"line":18,"col":3},"endLoc":{"line":18,"col":62},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"flush","count":0,"regions":[{"startLoc":{"line":19,"col":3},"endLoc":{"line":19,"col":26},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":22,"col":36},"endLoc":{"line":22,"col":105},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":84,"col":62},"endLoc":{"line":90,"col":2},"count":0,"ignored":0},{"startLoc":{"line":88,"col":3},"endLoc":{"line":90,"col":2},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":4},{"name":"AppPreferences.generateDeviceUuid","count":6,"regions":[{"startLoc":{"line":108,"col":3},"endLoc":{"line":113,"col":4},"count":6,"ignored":0},{"startLoc":{"line":109,"col":5},"endLoc":{"line":113,"col":4},"count":6,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"anonymous_2","count":48,"regions":[{"startLoc":{"line":109,"col":21},"endLoc":{"line":111,"col":6},"count":48,"ignored":0},{"startLoc":{"line":110,"col":7},"endLoc":{"line":111,"col":6},"count":48,"ignored":0}],"branches":[],"ignored":0,"index":6},{"name":"AppPreferences.setStoreLoaderForTesting","count":89,"regions":[{"startLoc":{"line":115,"col":3},"endLoc":{"line":119,"col":4},"count":89,"ignored":0},{"startLoc":{"line":116,"col":5},"endLoc":{"line":119,"col":4},"count":89,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"AppPreferences.resetForTesting","count":80,"regions":[{"startLoc":{"line":121,"col":3},"endLoc":{"line":124,"col":4},"count":80,"ignored":0},{"startLoc":{"line":122,"col":5},"endLoc":{"line":124,"col":4},"count":80,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"AppPreferences.init","count":49,"regions":[{"startLoc":{"line":127,"col":3},"endLoc":{"line":147,"col":4},"count":49,"ignored":0},{"startLoc":{"line":134,"col":5},"endLoc":{"line":147,"col":4},"count":49,"ignored":0},{"startLoc":{"line":128,"col":40},"endLoc":{"line":130,"col":6},"count":0,"ignored":0},{"startLoc":{"line":131,"col":46},"endLoc":{"line":133,"col":6},"count":0,"ignored":0},{"startLoc":{"line":140,"col":9},"endLoc":{"line":142,"col":8},"count":0,"ignored":0},{"startLoc":{"line":137,"col":9},"endLoc":{"line":138,"col":8},"count":49,"ignored":0}],"branches":[{"startLoc":{"line":128,"col":9},"endLoc":{"line":128,"col":38},"trueCount":0,"falseCount":49,"group":[],"ignored":0},{"startLoc":{"line":131,"col":9},"endLoc":{"line":131,"col":44},"trueCount":0,"falseCount":49,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"anonymous_3","count":49,"regions":[{"startLoc":{"line":134,"col":35},"endLoc":{"line":145,"col":6},"count":49,"ignored":0},{"startLoc":{"line":138,"col":9},"endLoc":{"line":142,"col":8},"count":0,"ignored":0},{"startLoc":{"line":135,"col":11},"endLoc":{"line":138,"col":8},"count":49,"ignored":0},{"startLoc":{"line":142,"col":17},"endLoc":{"line":144,"col":8},"count":49,"ignored":0}],"branches":[],"ignored":0,"index":10},{"name":"AppPreferences.waitForStore","count":116,"regions":[{"startLoc":{"line":149,"col":3},"endLoc":{"line":162,"col":4},"count":116,"ignored":0},{"startLoc":{"line":153,"col":46},"endLoc":{"line":160,"col":6},"count":2,"ignored":0},{"startLoc":{"line":150,"col":40},"endLoc":{"line":152,"col":6},"count":87,"ignored":0},{"startLoc":{"line":154,"col":11},"endLoc":{"line":156,"col":8},"count":2,"ignored":0},{"startLoc":{"line":156,"col":9},"endLoc":{"line":158,"col":8},"count":0,"ignored":0},{"startLoc":{"line":161,"col":5},"endLoc":{"line":162,"col":4},"count":27,"ignored":0},{"startLoc":{"line":159,"col":7},"endLoc":{"line":160,"col":6},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":150,"col":9},"endLoc":{"line":150,"col":38},"trueCount":87,"falseCount":29,"group":[],"ignored":0},{"startLoc":{"line":153,"col":9},"endLoc":{"line":153,"col":44},"trueCount":2,"falseCount":27,"group":[],"ignored":0}],"ignored":0,"index":11},{"name":"AppPreferences.get","count":79,"regions":[{"startLoc":{"line":165,"col":3},"endLoc":{"line":177,"col":4},"count":79,"ignored":0},{"startLoc":{"line":167,"col":17},"endLoc":{"line":170,"col":6},"count":14,"ignored":0},{"startLoc":{"line":171,"col":9},"endLoc":{"line":174,"col":6},"count":65,"ignored":0},{"startLoc":{"line":174,"col":7},"endLoc":{"line":176,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":167,"col":9},"endLoc":{"line":167,"col":15},"trueCount":14,"falseCount":65,"group":[],"ignored":0}],"ignored":0,"index":12},{"name":"AppPreferences.getNumber","count":12,"regions":[{"startLoc":{"line":180,"col":3},"endLoc":{"line":192,"col":4},"count":12,"ignored":0},{"startLoc":{"line":182,"col":17},"endLoc":{"line":185,"col":6},"count":12,"ignored":0},{"startLoc":{"line":186,"col":9},"endLoc":{"line":189,"col":6},"count":0,"ignored":0},{"startLoc":{"line":189,"col":7},"endLoc":{"line":191,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":182,"col":9},"endLoc":{"line":182,"col":15},"trueCount":12,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"AppPreferences.set","count":25,"regions":[{"startLoc":{"line":195,"col":3},"endLoc":{"line":209,"col":4},"count":25,"ignored":0},{"startLoc":{"line":201,"col":9},"endLoc":{"line":205,"col":6},"count":24,"ignored":0},{"startLoc":{"line":197,"col":17},"endLoc":{"line":200,"col":6},"count":1,"ignored":0},{"startLoc":{"line":205,"col":7},"endLoc":{"line":208,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":197,"col":9},"endLoc":{"line":197,"col":15},"trueCount":1,"falseCount":24,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"AppPreferences.getOrCreateDeviceId","count":6,"regions":[{"startLoc":{"line":215,"col":3},"endLoc":{"line":224,"col":4},"count":6,"ignored":0},{"startLoc":{"line":220,"col":5},"endLoc":{"line":224,"col":4},"count":4,"ignored":0},{"startLoc":{"line":217,"col":30},"endLoc":{"line":219,"col":6},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":217,"col":9},"endLoc":{"line":217,"col":28},"trueCount":2,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":223,"col":12},"endLoc":{"line":223,"col":50},"trueCount":4,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":15},{"name":"AppPreferences.getOrCreateDeviceUuid","count":9,"regions":[{"startLoc":{"line":226,"col":3},"endLoc":{"line":235,"col":4},"count":9,"ignored":0},{"startLoc":{"line":231,"col":5},"endLoc":{"line":235,"col":4},"count":2,"ignored":0},{"startLoc":{"line":228,"col":34},"endLoc":{"line":230,"col":6},"count":7,"ignored":0}],"branches":[{"startLoc":{"line":228,"col":9},"endLoc":{"line":228,"col":32},"trueCount":7,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":234,"col":12},"endLoc":{"line":234,"col":47},"trueCount":2,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"AppPreferences.setLoginState","count":0,"regions":[{"startLoc":{"line":245,"col":3},"endLoc":{"line":261,"col":4},"count":0,"ignored":0},{"startLoc":{"line":252,"col":5},"endLoc":{"line":261,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":17},{"name":"AppPreferences.clearLoginState","count":0,"regions":[{"startLoc":{"line":264,"col":3},"endLoc":{"line":274,"col":4},"count":0,"ignored":0},{"startLoc":{"line":265,"col":5},"endLoc":{"line":274,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"AppPreferences.writeLoginState","count":0,"regions":[{"startLoc":{"line":276,"col":3},"endLoc":{"line":283,"col":4},"count":0,"ignored":0},{"startLoc":{"line":278,"col":25},"endLoc":{"line":280,"col":6},"count":0,"ignored":0},{"startLoc":{"line":281,"col":5},"endLoc":{"line":283,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":278,"col":9},"endLoc":{"line":278,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":19},{"name":"AppPreferences.getLoginState","count":0,"regions":[{"startLoc":{"line":285,"col":3},"endLoc":{"line":295,"col":4},"count":0,"ignored":0},{"startLoc":{"line":287,"col":34},"endLoc":{"line":289,"col":6},"count":0,"ignored":0},{"startLoc":{"line":290,"col":9},"endLoc":{"line":292,"col":6},"count":0,"ignored":0},{"startLoc":{"line":292,"col":7},"endLoc":{"line":294,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":287,"col":9},"endLoc":{"line":287,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":20},{"name":"AppPreferences.isLogged","count":0,"regions":[{"startLoc":{"line":298,"col":3},"endLoc":{"line":305,"col":4},"count":0,"ignored":0},{"startLoc":{"line":300,"col":25},"endLoc":{"line":302,"col":6},"count":0,"ignored":0},{"startLoc":{"line":303,"col":5},"endLoc":{"line":305,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":300,"col":9},"endLoc":{"line":300,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":21},{"name":"AppPreferences.getCurrentProviderId","count":0,"regions":[{"startLoc":{"line":308,"col":3},"endLoc":{"line":311,"col":4},"count":0,"ignored":0},{"startLoc":{"line":309,"col":5},"endLoc":{"line":311,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":22},{"name":"AppPreferences.getAccountId","count":0,"regions":[{"startLoc":{"line":314,"col":3},"endLoc":{"line":317,"col":4},"count":0,"ignored":0},{"startLoc":{"line":315,"col":5},"endLoc":{"line":317,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":23},{"name":"AppPreferences.getDisplayName","count":0,"regions":[{"startLoc":{"line":320,"col":3},"endLoc":{"line":323,"col":4},"count":0,"ignored":0},{"startLoc":{"line":321,"col":5},"endLoc":{"line":323,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":24},{"name":"AppPreferences.getAvatarUri","count":0,"regions":[{"startLoc":{"line":326,"col":3},"endLoc":{"line":329,"col":4},"count":0,"ignored":0},{"startLoc":{"line":327,"col":5},"endLoc":{"line":329,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":25}],"exeLine":{"0":1,"1":2,"2":3,"3":5,"4":7,"5":8,"6":9,"7":10,"8":11,"9":12,"10":13,"11":16,"12":17,"13":18,"14":19,"15":22,"16":28,"17":30,"18":32,"19":34,"20":39,"21":41,"22":43,"23":45,"24":47,"25":49,"26":51,"27":53,"28":55,"29":57,"30":59,"31":61,"32":63,"33":65,"34":67,"35":69,"36":71,"37":73,"38":75,"39":82,"40":84,"41":85,"42":86,"43":87,"44":88,"45":89,"46":103,"47":104,"48":105,"49":106,"50":108,"51":109,"52":110,"53":112,"54":115,"55":116,"56":117,"57":118,"58":121,"59":122,"60":123,"61":127,"62":128,"63":129,"64":131,"65":132,"66":134,"67":135,"68":136,"69":137,"70":138,"71":139,"72":140,"73":141,"74":142,"75":143,"76":146,"77":149,"78":150,"79":151,"80":153,"81":154,"82":155,"83":156,"84":157,"85":159,"86":161,"87":165,"88":166,"89":167,"90":168,"91":169,"92":171,"93":172,"94":173,"95":174,"96":175,"97":180,"98":181,"99":182,"100":183,"101":184,"102":186,"103":187,"104":188,"105":189,"106":190,"107":195,"108":196,"109":197,"110":198,"111":199,"112":201,"113":202,"114":203,"115":204,"116":205,"117":206,"118":207,"119":215,"120":216,"121":217,"122":218,"123":220,"124":221,"125":222,"126":223,"127":226,"128":227,"129":228,"130":229,"131":231,"132":232,"133":233,"134":234,"135":245,"136":246,"137":247,"138":248,"139":249,"140":250,"141":251,"142":252,"143":253,"144":254,"145":255,"146":256,"147":257,"148":258,"149":260,"150":264,"151":265,"152":266,"153":267,"154":268,"155":269,"156":270,"157":271,"158":273,"159":276,"160":277,"161":278,"162":279,"163":281,"164":282,"165":285,"166":286,"167":287,"168":288,"169":290,"170":291,"171":292,"172":293,"173":298,"174":299,"175":300,"176":301,"177":303,"178":304,"179":308,"180":309,"181":310,"182":314,"183":315,"184":316,"185":320,"186":321,"187":322,"188":326,"189":327,"190":328},"summary":{"lines":{"total":151,"covered":68,"pct":45.03,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,-1,-1,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6,48,48,-1,6,-1,-1,89,89,89,89,-1,-1,80,80,80,-1,-1,-1,49,49,0,-1,49,0,-1,49,49,49,49,49,0,0,0,49,49,-1,-1,49,-1,-1,116,116,87,-1,29,2,2,0,0,-1,2,-1,27,-1,-1,-1,79,79,79,14,14,-1,65,65,65,0,0,-1,-1,-1,-1,12,12,12,12,12,-1,0,0,0,0,0,-1,-1,-1,-1,25,25,25,1,1,-1,24,24,24,24,0,0,0,-1,-1,-1,-1,-1,-1,-1,6,6,6,2,-1,4,4,4,4,-1,-1,9,9,9,7,-1,2,2,2,2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,0,-1,-1,0,0,0,0,-1,0,0,0,0,-1,-1,-1,-1,0,0,0,0,-1,0,0,-1,-1,-1,0,0,0,-1,-1,-1,0,0,0,-1,-1,-1,0,0,0,-1,-1,-1,0,0,0,-1,-1,-1]},"functions":{"total":26,"covered":12,"pct":46.15},"branches":{"total":28,"covered":17,"pct":60.71}}},"title":"AppPreferences.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
