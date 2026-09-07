@@ -1729,6 +1729,8 @@ async function runSearchChainChecks() {
   const sourceText = fs.readFileSync(path.join(root,
     'entry/src/main/ets/pages/search/SearchWorkspacePage.ets'), 'utf8');
   const failures = [];
+  assert.match(sourceText, /this\.buildHistory\(\)\s*}\s*this\.buildSearchResults\(\)/,
+    'page routes both capabilities through shared result builder');
 
   async function runCase(name, scenario, allowLocal = false) {
     console.log(`[search-chain] ${name}: START`);
@@ -1745,6 +1747,7 @@ async function runSearchChainChecks() {
     const source = SourceSwitchModel.getState();
     const model = new VideoServerModel();
     const requests = [], searches = [], responses = [], pushes = [], toasts = [], localCalls = [];
+    const localResponses = [];
     let deletes = 0;
     let page;
     try {
@@ -1782,6 +1785,7 @@ async function runSearchChainChecks() {
       const localDb = {
         searchMediaItems: async (keyword) => {
           localCalls.push(`search:${keyword}`);
+          if (localResponses.length > 0) return await localResponses.shift()();
           return [{ id: 317, title: '本地片名', movieId: 317 }];
         },
         getSearchHistory: async () => { localCalls.push('history'); return []; },
@@ -1808,9 +1812,37 @@ async function runSearchChainChecks() {
       for (const method of ['currentContext', 'resumeSearch', 'refreshSource', 'invalidateSearch',
         'leaveSearch', 'invalidateHistoryRequests', 'invalidateHistorySource', 'loadHistory',
         'scheduleSearch', 'executeServerSearch', 'serverErrorText', 'clearSearch',
-        'executeSearchWithHistory']) {
+        'executeSearchWithHistory', 'resultStatus', 'resultErrorText', 'retrySearch']) {
         page[method] = loadMethod(sourceText, `private ${method}(`, [], dependencies);
       }
+      // Execute the real builder's conditions/Text/ActionKey callbacks; only ArkUI layout is stubbed.
+      const rendered = [], retryActions = [];
+      const textStyle = { fontSize() { return this; }, fontColor() { return this; } };
+      const renderBody = extractMethodBody(sourceText, '  buildSearchResults()')
+        .replace('Column({ space: 20 }) {', '{').replace('Row() {', '{')
+        .replace('}.width(180)', '}')
+        .replace(".width('100%')", '').replace('.alignItems(HorizontalAlign.Start)', '');
+      const renderSource = ts.transpileModule(`function render() {${renderBody}}`, {
+        compilerOptions: { target: ts.ScriptTarget.ES2021 }
+      }).outputText;
+      page.renderResults = new Function('Text', 'ActionKey', 'getSearchCapabilities',
+        'C_TEXT_BODY', 'C_SECONDARY', `${renderSource}; return render;`)(
+        text => { rendered.push(text); return textStyle; },
+        options => { rendered.push(options.label); retryActions.push(options.onPress); },
+        scopes.getSearchCapabilities, '', '');
+      page.buildResultsPreview = () => rendered.push('local-cards');
+      page.buildServerResults = () => rendered.push('server-cards');
+      const render = () => {
+        rendered.length = 0;
+        retryActions.length = 0;
+        page.renderResults();
+        return rendered.slice();
+      };
+      const retry = () => {
+        render();
+        assert.equal(retryActions.length, 1, 'error builder exposes exactly one retry');
+        return retryActions[0];
+      };
       page.submitInput = loadMethod(sourceText, '.onSubmit(() =>', [], dependencies);
       page.backButton = loadMethod(sourceText.slice(sourceText.indexOf('  buildBackRow()')),
         '.onClick(() =>', [], dependencies);
@@ -1840,7 +1872,7 @@ async function runSearchChainChecks() {
         return page.serverResult.items[0];
       };
       await scenario({ check, timers, source, model, servers, requests, searches, responses,
-        pushes, toasts, page, response, enqueue, tick, success, localCalls, scopes,
+        pushes, toasts, page, response, enqueue, tick, success, localCalls, localResponses, scopes, render, retry,
         deleteCount: () => deletes });
       if (!allowLocal) check('no local DB, search or history access', localCalls, []);
       check('all queued transport responses consumed', responses.length, 0);
@@ -1863,6 +1895,119 @@ async function runSearchChainChecks() {
       timers.restore();
     }
   }
+
+  await runCase('本地真实拒绝必须呈现错误而非空白', async h => {
+    await h.source.setFileSource();
+    const pending = createDeferred();
+    h.localResponses.push(() => pending.promise);
+    h.page.resumeSearch();
+    await h.tick();
+    h.check('real local method awaits DB', h.page.isSearching, true);
+    pending.reject(new Error('synthetic-private-db-path-and-token'));
+    await flushMicrotasks();
+    console.log(`[search-state] rejected DB observations: ${JSON.stringify({
+      isSearching: h.page.isSearching, results: h.page.searchResults,
+      localStatus: h.page.localStatus, serverResult: h.page.serverResult })}`);
+    h.check('DB rejection is error, not silent empty results', h.page.localStatus, 'error');
+  }, true);
+
+  await runCase('本地状态渲染重试清空换源离页连续链', async h => {
+    await h.source.setFileSource();
+    h.page.searchText = '   ';
+    h.page.resumeSearch();
+    h.check('blank initial query renders idle', h.render(), ['输入片名搜索本地媒体库']);
+    h.check('idle does not schedule search', h.timers.pendingCount(), 0);
+    h.page.searchText = 'film';
+    const failed = createDeferred();
+    h.localResponses.push(() => failed.promise);
+    h.page.scheduleSearch();
+    h.check('debounce renders loading', h.render(), ['正在搜索…']);
+    await h.tick();
+    h.check('pending database renders loading', h.render(), ['正在搜索…']);
+    failed.reject(new Error('synthetic-private-db-path-and-token'));
+    await flushMicrotasks();
+    h.check('rejection renders sanitized error and retry', h.render(), ['本地搜索失败，请重试', '重试']);
+    const retry = h.retry();
+    const empty = createDeferred();
+    h.localResponses.push(() => empty.promise);
+    retry();
+    retry();
+    h.check('double retry runs exactly one new search', h.localCalls.filter(c => c.startsWith('search:')).length, 2);
+    h.check('retry has no debounce remainder', h.timers.pendingCount(), 0);
+    h.check('retry renders loading', h.render(), ['正在搜索…']);
+    empty.resolve([]);
+    await flushMicrotasks();
+    h.check('valid zero matches renders empty, not idle', h.render(), ['本地媒体库未找到匹配内容']);
+    retry();
+    h.check('stale retry action on empty is inert', h.localCalls.filter(c => c.startsWith('search:')).length, 2);
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('success renders local cards only', h.render(), ['local-cards']);
+    h.check('success state comes from real database method', h.page.localStatus, 'success');
+    h.page.clearSearch();
+    h.check('clear removes success and restores idle', [h.page.searchResults, h.render()], [[], ['输入片名搜索本地媒体库']]);
+
+    for (const boundary of ['clear', 'source', 'leave', 'input']) {
+      for (const rejection of [false, true]) {
+        h.page.searchText = 'film';
+        const late = createDeferred();
+        h.localResponses.push(() => late.promise);
+        h.page.scheduleSearch();
+        await h.tick();
+        if (boundary === 'clear') h.page.clearSearch();
+        if (boundary === 'source') await h.source.setVideoServer(h.servers[0]);
+        if (boundary === 'leave') h.page.willHide();
+        if (boundary === 'input') { h.page.searchText = 'new'; h.page.scheduleSearch(); }
+        const before = [h.page.localStatus, h.page.isSearching, h.render()];
+        if (rejection) late.reject(new Error('synthetic-sensitive-late-error'));
+        else late.resolve([{ id: 999, title: 'stale' }]);
+        await flushMicrotasks();
+        h.check(`${boundary}/${rejection}: old completion cannot publish state`,
+          [h.page.localStatus, h.page.isSearching, h.render()], before);
+        h.check(`${boundary}/${rejection}: stale cards absent`, h.page.searchResults, []);
+        h.page.clearSearch();
+        if (boundary === 'source') await h.source.setFileSource();
+        if (boundary === 'leave') h.page.shown();
+      }
+    }
+    h.check('retry/preview never write history', h.localCalls.filter(c => c.startsWith('write:')), []);
+    h.check('local chains never reach HTTP', h.requests, []);
+    h.page.searchText = 'film';
+    h.page.scheduleSearch();
+    await h.tick();
+    h.page.willHide();
+    h.check('leaving after success clears cards and state',
+      [h.page.searchResults, h.page.localStatus, h.page.isSearching], [[], 'idle', false]);
+    const before = h.localCalls.length;
+    await h.page.executeSearch();
+    retry();
+    h.check('hidden page cannot restart local query', h.localCalls.length, before);
+  }, true);
+
+  await runCase('服务器共享状态容器保留重试语义', async h => {
+    h.page.searchText = '';
+    h.page.resumeSearch();
+    h.check('server idle render', h.render(), ['输入片名搜索当前服务器']);
+    h.page.searchText = 'film';
+    h.page.scheduleSearch();
+    h.check('server debounce loading render', h.render(), ['正在搜索…']);
+    h.responses.push(async () => { throw new Error('synthetic-sensitive-network-error'); });
+    await h.tick();
+    h.check('server error keeps sanitized explanation', h.render(), ['无法连接服务器，请检查网络后重试', '重试']);
+    const retry = h.retry();
+    h.responses.push(async () => ({ statusCode: 200, body: JSON.stringify({ Items: [] }) }));
+    retry();
+    retry();
+    await flushMicrotasks();
+    h.check('server retry renders empty', h.render(), ['当前服务器未找到匹配内容']);
+    h.check('server retry is single request without timer', [h.searches.length, h.timers.pendingCount()], [2, 0]);
+    h.enqueue('server recovered');
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('server success uses existing cards', h.render(), ['server-cards']);
+    h.page.clearSearch();
+    h.check('server clear restores idle', h.render(), ['输入片名搜索当前服务器']);
+  });
 
   await runCase('本地服务器往返按真实能力分流且失效不回退', async h => {
     await h.source.setFileSource();

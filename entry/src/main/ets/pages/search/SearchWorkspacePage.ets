@@ -385,6 +385,7 @@ struct SearchWorkspacePage {
   @Local searchResults: MediaItem[] = [];
   @Local historyList: SearchHistoryEntry[] = [];
   @Local isSearching: boolean = false;
+  @Local localStatus: 'idle' | 'loading' | 'success' | 'empty' | 'error' = 'idle';
   @Local isSearchBarFocused: boolean = false;
 
   @Local serverResult: VideoServerSearchResult | null = null;
@@ -451,6 +452,8 @@ struct SearchWorkspacePage {
     this.searchGeneration++;
     this.serverSession.invalidate();
     this.serverResult = null;
+    this.searchResults = [];
+    this.localStatus = 'idle';
     this.isSearching = false;
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
@@ -531,15 +534,39 @@ struct SearchWorkspacePage {
     }
   }
 
+  private resultStatus(): string {
+    if (!this.pageActive || this.searchText.trim().length === 0) { return 'idle'; }
+    if (this.isSearching) { return 'loading'; }
+    return getSearchCapabilities(this.scope).localSearch
+      ? this.localStatus : this.serverResult?.status ?? 'idle';
+  }
+
+  private resultErrorText(): string {
+    return getSearchCapabilities(this.scope).localSearch
+      ? '本地搜索失败，请重试' : this.serverErrorText();
+  }
+
+  private retrySearch(): void {
+    if (!this.pageActive || this.resultStatus() !== 'error') { return; }
+    this.invalidateSearch();
+    if (getSearchCapabilities(this.scope).localSearch) {
+      this.executeSearch();
+    } else if (getSearchCapabilities(this.scope).serverSearch) {
+      this.executeServerSearch();
+    }
+  }
+
   /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
   private async executeSearch(): Promise<void> {
-    if (!getSearchCapabilities(this.scope).localSearch || this.db === null) { return; }
+    if (!getSearchCapabilities(this.scope).localSearch || this.db === null || !this.pageActive) { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) {
-      this.searchResults = [];
+      this.invalidateSearch();
       return;
     }
+    this.invalidateSearch();
     const generation = ++this.searchGeneration;
+    this.localStatus = 'loading';
     this.isSearching = true;
     try {
       const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 200 });
@@ -559,9 +586,11 @@ struct SearchWorkspacePage {
         }
       }
       this.searchResults = deduped;
+      this.localStatus = deduped.length > 0 ? 'success' : 'empty';
     } catch {
       if (generation !== this.searchGeneration) { return; }
       this.searchResults = [];
+      this.localStatus = 'error';
     } finally {
       if (generation === this.searchGeneration) {
         this.isSearching = false;
@@ -935,17 +964,38 @@ struct SearchWorkspacePage {
   }
 
   @Builder
+  buildSearchResults() {
+    Column({ space: 20 }) {
+      if (this.resultStatus() === 'loading') {
+        Text('正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
+      } else if (this.resultStatus() === 'error') {
+        Text(this.resultErrorText()).fontSize(22).fontColor(C_TEXT_BODY)
+        Row() {
+          ActionKey({ label: '重试', keyAspect: 3, onPress: () => this.retrySearch() })
+        }.width(180)
+      } else if (this.resultStatus() === 'empty') {
+        Text(getSearchCapabilities(this.scope).localSearch
+          ? '本地媒体库未找到匹配内容' : '当前服务器未找到匹配内容')
+          .fontSize(22).fontColor(C_TEXT_BODY)
+      } else if (this.resultStatus() === 'success') {
+        if (getSearchCapabilities(this.scope).localSearch) {
+          this.buildResultsPreview()
+        } else {
+          this.buildServerResults()
+        }
+      } else {
+        Text(getSearchCapabilities(this.scope).localSearch
+          ? '输入片名搜索本地媒体库' : '输入片名搜索当前服务器')
+          .fontSize(22).fontColor(C_SECONDARY)
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   buildServerResults() {
-    if (this.isSearching) {
-      Text('正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
-    } else if (this.serverResult?.status === 'error') {
-      Text(this.serverErrorText()).fontSize(22).fontColor(C_TEXT_BODY)
-      Row() {
-        ActionKey({ label: '重试', keyAspect: 3, onPress: () => this.executeServerSearch() })
-      }.width(180)
-    } else if (this.serverResult?.status === 'empty') {
-      Text('当前服务器未找到匹配内容').fontSize(22).fontColor(C_TEXT_BODY)
-    } else if (this.serverResult?.status === 'success') {
+    if (this.serverResult?.status === 'success') {
       Text('首批结果（最多 100 项，可能更少）')
         .fontSize(18).fontColor(C_SECONDARY)
       Flex({ wrap: FlexWrap.Wrap }) {
@@ -956,8 +1006,6 @@ struct SearchWorkspacePage {
           }).margin({ right: 20, bottom: 20 })
         }, (item: VideoServerSearchItem) => item.key)
       }.width('100%')
-    } else {
-      Text('输入片名搜索当前服务器').fontSize(22).fontColor(C_SECONDARY)
     }
   }
 
@@ -973,10 +1021,8 @@ struct SearchWorkspacePage {
             this.buildKeyboard()
             if (getSearchCapabilities(this.scope).localSearch) {
               this.buildHistory()
-              this.buildResultsPreview()
-            } else {
-              this.buildServerResults()
             }
+            this.buildSearchResults()
           }
         }
         .width('100%')
