@@ -973,17 +973,23 @@ struct SearchWorkspacePage {
 
   private resultItems(): WorkspaceSearchItem[] {
     if (getSearchCapabilities(this.scope).localSearch) {
-      return this.searchResults.map((item: MediaItem): WorkspaceSearchItem => ({
-        key: `${this.scope.key}:${item.id}`, scopeKey: this.scope.key,
-        title: item.title ?? '', poster: posterSrc(item), rating: item.rating,
-        label: item.tvSeriesId !== undefined ? '剧集' : '电影', localItem: item
-      }));
+      return this.searchResults.map((item: MediaItem): WorkspaceSearchItem => {
+        const result: WorkspaceSearchItem = {
+          key: `${this.scope.key}:${item.id}`, scopeKey: this.scope.key,
+          title: item.title ?? '', poster: posterSrc(item), rating: item.rating,
+          label: item.tvSeriesId !== undefined ? '剧集' : '电影', localItem: item
+        };
+        return result;
+      });
     }
-    return (this.serverResult?.items ?? []).map((item: VideoServerSearchItem): WorkspaceSearchItem => ({
-      key: item.key, scopeKey: item.scopeKey, title: item.media.title, poster: item.media.posterUrl,
-      label: item.selection.mediaType === 'movie' ? '电影' : item.selection.mediaType === 'series' ? '剧集' : '单集',
-      serverItem: item
-    }));
+    return (this.serverResult?.items ?? []).map((item: VideoServerSearchItem): WorkspaceSearchItem => {
+      const result: WorkspaceSearchItem = {
+        key: item.key, scopeKey: item.scopeKey, title: item.media.title, poster: item.media.posterUrl,
+        label: item.selection.mediaType === 'movie' ? '电影' : item.selection.mediaType === 'series' ? '剧集' : '单集',
+        serverItem: item
+      };
+      return result;
+    });
   }
 
   private openResult(item: WorkspaceSearchItem): void {
