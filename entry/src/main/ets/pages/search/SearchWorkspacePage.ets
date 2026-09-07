@@ -764,6 +764,9 @@ struct SearchWorkspacePage {
         .width(22)
         .height(22)
       TextInput({ text: this.searchText, placeholder: '输入片名' })
+        .id('search-workspace-input')
+        .enableKeyboardOnFocus(false)
+        .enterKeyType(EnterKeyType.Search)
         .fontSize(22)
         .fontColor(C_TEXT_TITLE)
         .placeholderColor(C_PLACEHOLDER)
@@ -781,6 +784,23 @@ struct SearchWorkspacePage {
             this.executeSearchWithHistory();
           }
         })
+      if (getSearchCapabilities(this.scope).inputModes.includes('text')) {
+        ActionKey({
+          label: '搜索',
+          onPress: () => { this.executeServerSearch(); }
+        })
+          .id('search-workspace-submit')
+          .width(100)
+        ActionKey({
+          label: '清空',
+          bgColor: C_CLEAR_BG,
+          keyBorderColor: C_CLEAR_BORDER,
+          labelColor: C_CLEAR_ICON,
+          onPress: () => { this.clearSearch(); }
+        })
+          .id('search-workspace-clear')
+          .width(100)
+      }
     }
     .width('70%')
     .height(56)
@@ -1016,9 +1036,11 @@ struct SearchWorkspacePage {
           this.buildBackRow()
           Text(this.scope.label).fontSize(24).fontColor(C_TEXT_TITLE)
           Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
-          if (getSearchCapabilities(this.scope).localSearch || getSearchCapabilities(this.scope).serverSearch) {
+          if (getSearchCapabilities(this.scope).inputModes.length > 0) {
             this.buildSearchBar()
-            this.buildKeyboard()
+            if (getSearchCapabilities(this.scope).inputModes.includes('pinyin')) {
+              this.buildKeyboard()
+            }
             if (getSearchCapabilities(this.scope).localSearch) {
               this.buildHistory()
             }

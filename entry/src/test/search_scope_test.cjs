@@ -1871,8 +1871,56 @@ async function runSearchChainChecks() {
         check('page loading released', page.isSearching, false);
         return page.serverResult.items[0];
       };
+      // Lower only ArkUI layout syntax; retain real capability branches and input callbacks.
+      const inputNodes = [], inputBranches = [];
+      const style = new Proxy({}, { get: () => () => style });
+      const node = (type, options) => {
+        const entry = { type, options, attributes: {} };
+        inputNodes.push(entry);
+        const attributes = new Proxy({}, { get: (_, name) => (...args) => {
+          entry.attributes[name] = args;
+          return attributes;
+        } });
+        return attributes;
+      };
+      const inputDependencies = { ...dependencies, style,
+        Text: () => style, TextInput: options => node('input', options),
+        ActionKey: options => node('action', options),
+        Color: { Transparent: '' }, ItemAlign: {}, HorizontalAlign: {}, VerticalAlign: {},
+        FlexAlign: {}, ScrollDirection: {}, Alignment: {}, BorderStyle: {}, Curve: {},
+        EnterKeyType: { Search: 'Search' } };
+      for (const match of sourceText.matchAll(/const (C_\w+|TRANSPARENT): string = '([^']*)';/g)) {
+        inputDependencies[match[1]] = match[2];
+      }
+      const loadBuilder = signature => {
+        const body = extractMethodBody(signature === '  build() {'
+          ? sourceText.slice(sourceText.lastIndexOf(signature)) : sourceText, signature)
+          .replace(/\b(?:NavDestination|Scroll|Column|Row)\((?:\{[^{}]*\})?\)\s*\{/g, '{')
+          .replace(/}\s*(?=\.)/g, '}\nstyle');
+        const compiled = ts.transpileModule(`function render() {${body}}`, {
+          compilerOptions: { target: ts.ScriptTarget.ES2021 }
+        }).outputText;
+        return new Function(...Object.keys(inputDependencies), `${compiled}; return render;`)(
+          ...Object.values(inputDependencies));
+      };
+      const inputPage = Object.create(page);
+      inputPage.buildSearchBar = loadBuilder('  buildSearchBar()');
+      const renderWorkspace = loadBuilder('  build() {');
+      for (const name of ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']) {
+        inputPage[name] = () => inputBranches.push(name);
+      }
+      const renderInput = () => {
+        inputNodes.length = 0;
+        inputBranches.length = 0;
+        // Bind to the actual page so callbacks mutate the same state as the session.
+        for (const name of ['buildSearchBar', 'buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']) {
+          page[name] = inputPage[name];
+        }
+        renderWorkspace.call(page);
+        return { nodes: inputNodes.slice(), branches: inputBranches.slice() };
+      };
       await scenario({ check, timers, source, model, servers, requests, searches, responses,
-        pushes, toasts, page, response, enqueue, tick, success, localCalls, localResponses, scopes, render, retry,
+        pushes, toasts, page, response, enqueue, tick, success, localCalls, localResponses, scopes, render, retry, renderInput,
         deleteCount: () => deletes });
       if (!allowLocal) check('no local DB, search or history access', localCalls, []);
       check('all queued transport responses consumed', responses.length, 0);
@@ -1895,6 +1943,79 @@ async function runSearchChainChecks() {
       timers.restore();
     }
   }
+
+  await runCase('输入能力真实切换与按钮IME连续链', async h => {
+    h.page.searchText = '';
+    await h.source.setFileSource();
+    h.page.resumeSearch();
+    const local = h.renderInput();
+    h.check('local exposes real input modes', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+      ['initials', 'pinyin', 'chinese']);
+    h.check('local renders keyboard and history', local.branches,
+      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']);
+    h.check('local retains only shared TextInput', local.nodes.map(n => n.type), ['input']);
+    const localInput = local.nodes[0];
+    localInput.attributes.onChange[0]('本地');
+    localInput.attributes.onSubmit[0]();
+    await flushMicrotasks();
+    h.check('local IME writes history once and searches once',
+      h.localCalls.filter(c => /^(write|search):/.test(c)), ['write:本地', 'search:本地']);
+    h.check('local submit drains debounce', h.timers.pendingCount(), 0);
+    h.page.clearSearch();
+
+    for (const type of ['jellyfin', 'emby', 'plex']) {
+      h.model.videoServers = [{ ...h.servers[0], type }];
+      await h.source.setVideoServer(h.model.videoServers[0]);
+      h.check(`${type}: real text capability`, h.scopes.getSearchCapabilities(h.page.scope).inputModes, ['text']);
+      const ui = h.renderInput();
+      h.check(`${type}: no custom keyboard or local history`, ui.branches,
+        ['buildBackRow', 'buildSearchResults']);
+      h.check(`${type}: input and two actions`, ui.nodes.map(n => n.type), ['input', 'action', 'action']);
+      h.check(`${type}: stable focus ids`, ui.nodes.map(n => n.attributes.id[0]),
+        ['search-workspace-input', 'search-workspace-submit', 'search-workspace-clear']);
+      h.check(`${type}: no focus-triggered IME and Search enter key`,
+        [ui.nodes[0].attributes.enableKeyboardOnFocus[0], ui.nodes[0].attributes.enterKeyType[0]], [false, 'Search']);
+      h.check(`${type}: actions labelled`, ui.nodes.slice(1).map(n => n.options.label), ['搜索', '清空']);
+    }
+    h.model.videoServers = h.servers;
+    await h.source.setVideoServer(h.servers[0]);
+    const ui = h.renderInput();
+    const input = ui.nodes[0];
+    const submit = ui.nodes[1].options.onPress;
+    const clear = ui.nodes[2].options.onPress;
+    for (const [label, callback] of [['button', submit], ['IME', input.attributes.onSubmit[0]]]) {
+      input.attributes.onChange[0](`film-${label}`);
+      h.check(`${label}: change schedules debounce`, h.timers.pendingCount(), 1);
+      const pending = createDeferred();
+      h.responses.push(() => pending.promise);
+      const before = h.searches.length;
+      callback();
+      await flushMicrotasks();
+      h.check(`${label}: one immediate request`, h.searches.length, before + 1);
+      h.check(`${label}: submit cancels debounce`, h.timers.pendingCount(), 0);
+      clear();
+      input.attributes.onChange[0]('');
+      input.attributes.onSubmit[0]();
+      clear();
+      pending.resolve(h.response('late cleared result'));
+      await flushMicrotasks();
+      h.check(`${label}: clear/empty IME leaves no extra request`, h.searches.length, before + 1);
+      h.check(`${label}: clear leaves no text, result or timer`,
+        [h.page.searchText, h.page.serverResult, h.page.searchResults, h.page.isSearching, h.timers.pendingCount()],
+        ['', null, [], false, 0]);
+      h.check(`${label}: shared results restored to idle`, h.render(), ['输入片名搜索当前服务器']);
+    }
+    input.attributes.onChange[0]('pending');
+    h.model.videoServers = [];
+    h.check('deleted source has no input modes', h.scopes.getSearchCapabilities(h.page.scope).inputModes, []);
+    h.check('unavailable renders no input or results', h.renderInput(),
+      { nodes: [], branches: ['buildBackRow'] });
+    h.check('unavailable cancels pending timer', h.timers.pendingCount(), 0);
+    await h.source.setFileSource();
+    h.check('return to local restores keyboard', h.renderInput().branches,
+      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']);
+    h.page.clearSearch();
+  }, true);
 
   await runCase('本地真实拒绝必须呈现错误而非空白', async h => {
     await h.source.setFileSource();
