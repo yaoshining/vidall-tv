@@ -253,20 +253,33 @@ struct ActionKey {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WorkspacePosterCard — card used in workspace hot-search / results preview
+// WorkspacePosterCard — shared local / server result card
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface WorkspaceSearchItem {
+  key: string;
+  scopeKey: string;
+  title: string;
+  poster: string;
+  label: string;
+  rating?: number;
+  localItem?: MediaItem;
+  serverItem?: VideoServerSearchItem;
+}
 
 @ComponentV2
 struct WorkspacePosterCard {
-  @Require @Param item: MediaItem;
+  @Require @Param item: WorkspaceSearchItem;
+  @Param focusId: string = '';
+  @Event onFocused: () => void = () => {};
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
 
   build() {
     Column({ space: 8 }) {
       Stack() {
-        if (posterSrc(this.item).length > 0) {
-          Image(posterSrc(this.item))
+        if (this.item.poster.length > 0) {
+          Image(this.item.poster)
             .width(180)
             .height(270)
             .objectFit(ImageFit.Cover)
@@ -304,6 +317,7 @@ struct WorkspacePosterCard {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width(180)
 
+      Text(this.item.label).fontSize(18).fontColor(C_SECONDARY)
       if (this.item.rating !== undefined && this.item.rating > 0) {
         Text(this.item.rating.toFixed(1))
           .fontSize(20)
@@ -313,58 +327,9 @@ struct WorkspacePosterCard {
     }
     .width(180)
     .alignItems(HorizontalAlign.Start)
+    .id(this.focusId)
     .focusable(true)
-    .onFocus(() => { this.isFocused = true; })
-    .onBlur(() => { this.isFocused = false; })
-    .onClick(() => { this.onPress(); })
-  }
-}
-
-@ComponentV2
-struct ServerSearchResultCard {
-  @Require @Param item: VideoServerSearchItem;
-  @Event onPress: () => void = () => {};
-  @Local isFocused: boolean = false;
-
-  private getMediaTypeLabel(): string {
-    switch (this.item.selection.mediaType) {
-      case 'movie': return '电影';
-      case 'series': return '剧集';
-      default: return '单集';
-    }
-  }
-
-  build() {
-    Column({ space: 8 }) {
-      if (this.item.media.posterUrl.length > 0) {
-        Image(this.item.media.posterUrl)
-          .width(180)
-          .height(270)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(8)
-      } else {
-        Text('暂无海报')
-          .width(180)
-          .height(270)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(C_COMPONENT_BG)
-          .fontColor(C_SECONDARY)
-      }
-      Text(this.item.media.title)
-        .fontSize(22)
-        .fontColor(C_TEXT_BODY)
-        .maxLines(2)
-      Text(this.getMediaTypeLabel())
-        .fontSize(18)
-        .fontColor(C_SECONDARY)
-    }
-    .width(180)
-    .padding(8)
-    .borderRadius(12)
-    .border({ width: this.isFocused ? 2 : 1, color: this.isFocused ? '#4A9FFF' : TRANSPARENT })
-    .backgroundColor(this.isFocused ? '#1AFFFFFF' : TRANSPARENT)
-    .focusable(true)
-    .onFocus(() => { this.isFocused = true; })
+    .onFocus(() => { this.isFocused = true; this.onFocused(); })
     .onBlur(() => { this.isFocused = false; })
     .onClick(() => { this.onPress(); })
   }
@@ -393,6 +358,10 @@ struct SearchWorkspacePage {
   private unsubscribeSource: () => void = () => {};
   private unsubscribeConfiguration: () => void = () => {};
   private pageActive: boolean = false;
+  private sourceBound: boolean = false;
+  private inputController: TextInputController = new TextInputController();
+  private isEditing: boolean = false;
+  private resultsFocused: boolean = false;
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
@@ -411,8 +380,8 @@ struct SearchWorkspacePage {
   private initializeRoute(param: SearchRouteParam | string | null | undefined): void {
     const servers = VideoServerStore.getState().videoServers;
     const route = resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers);
-    // 路由关键词可复用，但来源以顶部实时选择为准，旧路由快照不得覆盖当前实例。
-    this.searchText = route.keyword;
+    // 仅复用当前来源的路由关键词，旧来源的输入不得自动发往当前实例。
+    this.searchText = route.scope.key === this.currentContext().scope.key ? route.keyword : '';
     this.resumeSearch();
   }
 
@@ -438,7 +407,13 @@ struct SearchWorkspacePage {
   private refreshSource(): void {
     this.invalidateSearch();
     this.invalidateHistorySource();
-    this.scope = this.currentContext().scope;
+    const nextScope = this.currentContext().scope;
+    if (this.sourceBound && this.scope.key !== nextScope.key) {
+      this.searchText = '';
+      this.focusInput();
+    }
+    this.scope = nextScope;
+    this.sourceBound = true;
     this.searchResults = [];
     this.db = null;
     if (getSearchCapabilities(this.scope).localSearch) {
@@ -461,7 +436,27 @@ struct SearchWorkspacePage {
     }
   }
 
+  private focusInput(): void {
+    this.inputController.stopEditing();
+    this.isEditing = false;
+    this.resultsFocused = false;
+    this.getUIContext().getFocusController().requestFocus('search-workspace-input');
+  }
+
+  private handleBack(): boolean {
+    if (this.isEditing || this.resultsFocused) {
+      this.focusInput();
+      return true;
+    }
+    this.leaveSearch();
+    this.pageStack.pop();
+    return true;
+  }
+
   private leaveSearch(): void {
+    this.inputController.stopEditing();
+    this.isEditing = false;
+    this.resultsFocused = false;
     this.pageActive = false;
     this.invalidateSearch();
     this.invalidateHistorySource();
@@ -634,6 +629,7 @@ struct SearchWorkspacePage {
 
   private clearSearch(): void {
     this.searchText = '';
+    this.focusInput();
     this.searchResults = [];
     this.scheduleSearch();
   }
@@ -763,7 +759,7 @@ struct SearchWorkspacePage {
         .fontColor(C_ICON)
         .width(22)
         .height(22)
-      TextInput({ text: this.searchText, placeholder: '输入片名' })
+      TextInput({ text: this.searchText, placeholder: '输入片名', controller: this.inputController })
         .id('search-workspace-input')
         .enableKeyboardOnFocus(false)
         .enterKeyType(EnterKeyType.Search)
@@ -773,11 +769,15 @@ struct SearchWorkspacePage {
         .backgroundColor(Color.Transparent)
         .layoutWeight(1)
         .defaultFocus(true)
+        .onEditChange((editing: boolean) => { this.isEditing = editing; })
+        .onFocus(() => { this.resultsFocused = false; })
         .onChange((value: string) => {
           this.searchText = value;
           this.scheduleSearch();
         })
         .onSubmit(() => {
+          this.inputController.stopEditing();
+          this.isEditing = false;
           if (getSearchCapabilities(this.scope).serverSearch) {
             this.executeServerSearch();
           } else {
@@ -787,7 +787,11 @@ struct SearchWorkspacePage {
       if (getSearchCapabilities(this.scope).inputModes.includes('text')) {
         ActionKey({
           label: '搜索',
-          onPress: () => { this.executeServerSearch(); }
+          onPress: () => {
+            this.inputController.stopEditing();
+            this.isEditing = false;
+            this.executeServerSearch();
+          }
         })
           .id('search-workspace-submit')
           .width(100)
@@ -967,20 +971,46 @@ struct SearchWorkspacePage {
     }
   }
 
-  @Builder
-  buildResultsPreview() {
-    if (this.searchResults.length > 0) {
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-        ForEach(this.searchResults, (item: MediaItem) => {
-          WorkspacePosterCard({
-            item: item,
-            onPress: () => { this.navigateToDetail(item); }
-          })
-          .margin({ right: 20, bottom: 20 })
-        }, (item: MediaItem) => String(item.id))
-      }
-      .width('100%')
+  private resultItems(): WorkspaceSearchItem[] {
+    if (getSearchCapabilities(this.scope).localSearch) {
+      return this.searchResults.map((item: MediaItem): WorkspaceSearchItem => ({
+        key: `${this.scope.key}:${item.id}`, scopeKey: this.scope.key,
+        title: item.title ?? '', poster: posterSrc(item), rating: item.rating,
+        label: item.tvSeriesId !== undefined ? '剧集' : '电影', localItem: item
+      }));
     }
+    return (this.serverResult?.items ?? []).map((item: VideoServerSearchItem): WorkspaceSearchItem => ({
+      key: item.key, scopeKey: item.scopeKey, title: item.media.title, poster: item.media.posterUrl,
+      label: item.selection.mediaType === 'movie' ? '电影' : item.selection.mediaType === 'series' ? '剧集' : '单集',
+      serverItem: item
+    }));
+  }
+
+  private openResult(item: WorkspaceSearchItem): void {
+    if (!this.pageActive || item.scopeKey !== this.currentContext().scope.key) { return; }
+    if (item.serverItem !== undefined) {
+      this.openServerResultDetail(item.serverItem);
+    } else if (item.localItem !== undefined) {
+      this.navigateToDetail(item.localItem);
+    }
+  }
+
+  @Builder
+  buildResultList() {
+    if (getSearchCapabilities(this.scope).serverSearch) {
+      Text('首批结果（最多 100 项，可能更少）').fontSize(18).fontColor(C_SECONDARY)
+    }
+    Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+      ForEach(this.resultItems(), (item: WorkspaceSearchItem, index: number) => {
+        WorkspacePosterCard({
+          item: item,
+          focusId: `search-workspace-result-${index}`,
+          onFocused: () => { this.resultsFocused = true; },
+          onPress: () => { this.openResult(item); }
+        })
+          .margin({ right: 20, bottom: 20 })
+      }, (item: WorkspaceSearchItem) => item.key)
+    }.width('100%')
   }
 
   @Builder
@@ -998,11 +1028,7 @@ struct SearchWorkspacePage {
           ? '本地媒体库未找到匹配内容' : '当前服务器未找到匹配内容')
           .fontSize(22).fontColor(C_TEXT_BODY)
       } else if (this.resultStatus() === 'success') {
-        if (getSearchCapabilities(this.scope).localSearch) {
-          this.buildResultsPreview()
-        } else {
-          this.buildServerResults()
-        }
+        this.buildResultList()
       } else {
         Text(getSearchCapabilities(this.scope).localSearch
           ? '输入片名搜索本地媒体库' : '输入片名搜索当前服务器')
@@ -1011,22 +1037,6 @@ struct SearchWorkspacePage {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  buildServerResults() {
-    if (this.serverResult?.status === 'success') {
-      Text('首批结果（最多 100 项，可能更少）')
-        .fontSize(18).fontColor(C_SECONDARY)
-      Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(this.serverResult.items, (item: VideoServerSearchItem) => {
-          ServerSearchResultCard({
-            item: item,
-            onPress: () => { this.openServerResultDetail(item); }
-          }).margin({ right: 20, bottom: 20 })
-        }, (item: VideoServerSearchItem) => item.key)
-      }.width('100%')
-    }
   }
 
   build() {
@@ -1062,13 +1072,11 @@ struct SearchWorkspacePage {
     .onReady((context: NavDestinationContext) => {
       this.initializeRoute(context.pathInfo.param as SearchRouteParam | string | null | undefined);
     })
-    .onShown(() => { this.resumeSearch(); })
+    .onShown(() => { this.resumeSearch(); this.focusInput(); })
     .onWillHide(() => { this.leaveSearch(); })
     .hideTitleBar(true)
     .onBackPressed(() => {
-      this.leaveSearch();
-      this.pageStack.pop();
-      return true;
+      return this.handleBack();
     })
   }
 }
