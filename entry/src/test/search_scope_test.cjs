@@ -185,10 +185,10 @@ async function runHostIntegrationChecks() {
   assert.ok(workspaceSource.includes('subscribeSearchSource(() => this.refreshSource())'));
   assert.ok(workspaceSource.includes('subscribeSearchConfiguration(() => this.refreshSource())'));
   assert.ok(workspaceSource.includes('.onWillHide(() => { this.leaveSearch(); })'));
-  const preview = workspaceSource.slice(workspaceSource.indexOf('  buildServerResults()'),
+  const preview = workspaceSource.slice(workspaceSource.indexOf('  buildResultList()'),
     workspaceSource.indexOf('  build() \n    NavDestination()'));
-  assert.ok(preview.includes('ServerSearchResultCard'));
-  assert.ok(preview.includes('this.openServerResultDetail(item);'));
+  assert.ok(preview.includes('WorkspacePosterCard'));
+  assert.ok(preview.includes('this.openResult(item);'));
   assert.ok(!preview.includes('focusable(false)'));
   assert.ok(!preview.includes('暂不支持打开详情'));
   assert.ok(workspaceSource.includes('mediaId: item.selection.mediaId'));
@@ -575,6 +575,9 @@ async function runHostIntegrationChecks() {
     page.executeServerSearch = methods.executeServerSearch;
     page.openServerResultDetail = methods.openServerResultDetail;
     page.appendChar = methods.appendChar;
+    page.inputController = { stopEditing() {} };
+    page.getUIContext = () => ({ getFocusController: () => ({ requestFocus() {} }) });
+    page.focusInput = loadMethod(workspaceSource, 'private focusInput()', [], {});
     page.clearSearch = methods.clearSearch;
     page.leaveSearch = methods.leaveSearch;
     page.refreshSource = methods.refreshSource;
@@ -1729,8 +1732,10 @@ async function runSearchChainChecks() {
   const sourceText = fs.readFileSync(path.join(root,
     'entry/src/main/ets/pages/search/SearchWorkspacePage.ets'), 'utf8');
   const failures = [];
+  assert.match(sourceText, /this\.buildHistory\(\)\s*}\s*this\.buildSearchResults\(\)/,
+    'page routes both capabilities through shared result builder');
 
-  async function runCase(name, scenario) {
+  async function runCase(name, scenario, allowLocal = false) {
     console.log(`[search-chain] ${name}: START`);
     let assertions = 0;
     const check = (label, actual, expected) => {
@@ -1745,6 +1750,7 @@ async function runSearchChainChecks() {
     const source = SourceSwitchModel.getState();
     const model = new VideoServerModel();
     const requests = [], searches = [], responses = [], pushes = [], toasts = [], localCalls = [];
+    const localResponses = [];
     let deletes = 0;
     let page;
     try {
@@ -1780,11 +1786,17 @@ async function runSearchChainChecks() {
       };
       JsonHttpClient.post = async () => { throw new Error('unexpected HTTP POST'); };
       const localDb = {
-        searchMediaItems: async () => { localCalls.push('search'); return []; },
-        getSearchHistory: async () => { localCalls.push('history'); return []; }
+        searchMediaItems: async (keyword) => {
+          localCalls.push(`search:${keyword}`);
+          if (localResponses.length > 0) return await localResponses.shift()();
+          return [{ id: 317, title: '本地片名', movieId: 317 }];
+        },
+        getSearchHistory: async () => { localCalls.push('history'); return []; },
+        upsertSearchHistory: async keyword => { localCalls.push(`write:${keyword}`); }
       };
       const dependencies = {
         ...scopes, SourceSwitchModel,
+        posterSrc: loadMethod(sourceText, 'function posterSrc(', ['item'], {}),
         // Host accessor exposes the real model without the ArkUI StateStore runtime.
         VideoServerStore: { getState: () => model },
         FileSourceDatabase: { getInstance: () => { localCalls.push('database'); return localDb; } },
@@ -1793,20 +1805,61 @@ async function runSearchChainChecks() {
       page = {
         scope: scopes.createUnavailableSearchScope(), searchText: 'film', searchResults: [],
         historyList: [], isSearching: false, serverResult: null,
-        serverSession: new SearchWorkspaceSession(), pageActive: false, db: null,
+        serverSession: new SearchWorkspaceSession(), pageActive: false, sourceBound: false, db: null,
+        isEditing: false, resultsFocused: false, stoppedEditing: 0, focusRequests: [],
+        inputController: { stopEditing: () => { page.stoppedEditing++; } },
         searchDebounceTimer: -1, searchGeneration: 0, historyLoadGeneration: 0,
         historySourceGeneration: 0, unsubscribeSource: () => {}, unsubscribeConfiguration: () => {},
-        pageStack: { pushPathByName: (route, param) => pushes.push({ route, param }) },
-        getUIContext: () => ({ getPromptAction: () => ({ showToast: value => toasts.push(value.message) }) })
+        popCount: 0,
+        pageStack: { pushPathByName: (route, param) => pushes.push({ route, param }),
+          pop: () => { page.popCount++; } },
+        getUIContext: () => ({ getPromptAction: () => ({ showToast: value => toasts.push(value.message) }),
+          getFocusController: () => ({ requestFocus: id => { page.focusRequests.push(id); return true; } }) })
       };
       for (const method of ['currentContext', 'resumeSearch', 'refreshSource', 'invalidateSearch',
         'leaveSearch', 'invalidateHistoryRequests', 'invalidateHistorySource', 'loadHistory',
-        'scheduleSearch', 'executeServerSearch', 'serverErrorText']) {
+        'scheduleSearch', 'executeServerSearch', 'serverErrorText', 'clearSearch',
+        'executeSearchWithHistory', 'resultStatus', 'resultErrorText', 'retrySearch',
+        'focusInput', 'handleBack', 'resultItems']) {
         page[method] = loadMethod(sourceText, `private ${method}(`, [], dependencies);
       }
+      // Execute the real builder's conditions/Text/ActionKey callbacks; only ArkUI layout is stubbed.
+      const rendered = [], retryActions = [];
+      const textStyle = { fontSize() { return this; }, fontColor() { return this; } };
+      const renderBody = extractMethodBody(sourceText, '  buildSearchResults()')
+        .replace('Column({ space: 20 }) {', '{').replace('Row() {', '{')
+        .replace('}.width(180)', '}')
+        .replace(".width('100%')", '').replace('.alignItems(HorizontalAlign.Start)', '');
+      const renderSource = ts.transpileModule(`function render() {${renderBody}}`, {
+        compilerOptions: { target: ts.ScriptTarget.ES2021 }
+      }).outputText;
+      page.renderResults = new Function('Text', 'ActionKey', 'getSearchCapabilities',
+        'C_TEXT_BODY', 'C_SECONDARY', `${renderSource}; return render;`)(
+        text => { rendered.push(text); return textStyle; },
+        options => { rendered.push(options.label); retryActions.push(options.onPress); },
+        scopes.getSearchCapabilities, '', '');
+      page.buildResultList = () => rendered.push('shared-cards');
+      const render = () => {
+        rendered.length = 0;
+        retryActions.length = 0;
+        page.renderResults();
+        return rendered.slice();
+      };
+      const retry = () => {
+        render();
+        assert.equal(retryActions.length, 1, 'error builder exposes exactly one retry');
+        return retryActions[0];
+      };
+      page.submitInput = loadMethod(sourceText, '.onSubmit(() =>', [], dependencies);
+      page.backButton = loadMethod(sourceText.slice(sourceText.indexOf('  buildBackRow()')),
+        '.onClick(() =>', [], dependencies);
+      page.backPressed = loadMethod(sourceText, '.onBackPressed(() =>', [], dependencies);
+      page.shown = loadMethod(sourceText, '.onShown(() =>', [], dependencies);
+      page.willHide = loadMethod(sourceText, '.onWillHide(() =>', [], dependencies);
       page.initializeRoute = loadMethod(sourceText, 'private initializeRoute(', ['param'], dependencies);
       page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', [], dependencies, true);
       page.showToastSafe = loadMethod(sourceText, 'private showToastSafe(', ['message'], dependencies);
+      page.openResult = loadMethod(sourceText, 'private openResult(', ['item'], dependencies);
       page.openServerResultDetail = loadMethod(sourceText, 'private openServerResultDetail(', ['item'], dependencies);
       const response = title => ({ statusCode: 200, body: JSON.stringify({
         Items: [{ Id: 'shared-media', Name: title, Type: 'Movie' }]
@@ -1826,9 +1879,58 @@ async function runSearchChainChecks() {
         check('page loading released', page.isSearching, false);
         return page.serverResult.items[0];
       };
+      // Lower only ArkUI layout syntax; retain real capability branches and input callbacks.
+      const inputNodes = [], inputBranches = [];
+      const style = new Proxy({}, { get: () => () => style });
+      const node = (type, options) => {
+        const entry = { type, options, attributes: {} };
+        inputNodes.push(entry);
+        const attributes = new Proxy({}, { get: (_, name) => (...args) => {
+          entry.attributes[name] = args;
+          return attributes;
+        } });
+        return attributes;
+      };
+      const inputDependencies = { ...dependencies, style,
+        Text: () => style, TextInput: options => node('input', options),
+        ActionKey: options => node('action', options),
+        Color: { Transparent: '' }, ItemAlign: {}, HorizontalAlign: {}, VerticalAlign: {},
+        FlexAlign: {}, ScrollDirection: {}, Alignment: {}, BorderStyle: {}, Curve: {},
+        EnterKeyType: { Search: 'Search' } };
+      for (const match of sourceText.matchAll(/const (C_\w+|TRANSPARENT): string = '([^']*)';/g)) {
+        inputDependencies[match[1]] = match[2];
+      }
+      const loadBuilder = signature => {
+        const body = extractMethodBody(signature === '  build() {'
+          ? sourceText.slice(sourceText.lastIndexOf(signature)) : sourceText, signature)
+          .replace(/\b(?:NavDestination|Scroll|Column|Row)\((?:\{[^{}]*\})?\)\s*\{/g, '{')
+          .replace(/}\s*(?=\.)/g, '}\nstyle');
+        const compiled = ts.transpileModule(`function render() {${body}}`, {
+          compilerOptions: { target: ts.ScriptTarget.ES2021 }
+        }).outputText;
+        return new Function(...Object.keys(inputDependencies), `${compiled}; return render;`)(
+          ...Object.values(inputDependencies));
+      };
+      const inputPage = Object.create(page);
+      inputPage.buildSearchBar = loadBuilder('  buildSearchBar()');
+      const renderWorkspace = loadBuilder('  build() {');
+      for (const name of ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']) {
+        inputPage[name] = () => inputBranches.push(name);
+      }
+      const renderInput = () => {
+        inputNodes.length = 0;
+        inputBranches.length = 0;
+        // Bind to the actual page so callbacks mutate the same state as the session.
+        for (const name of ['buildSearchBar', 'buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']) {
+          page[name] = inputPage[name];
+        }
+        renderWorkspace.call(page);
+        return { nodes: inputNodes.slice(), branches: inputBranches.slice() };
+      };
       await scenario({ check, timers, source, model, servers, requests, searches, responses,
-        pushes, toasts, page, response, enqueue, tick, success, deleteCount: () => deletes });
-      check('no local DB, search or history access', localCalls, []);
+        pushes, toasts, page, response, enqueue, tick, success, localCalls, localResponses, scopes, render, retry, renderInput,
+        deleteCount: () => deletes });
+      if (!allowLocal) check('no local DB, search or history access', localCalls, []);
       check('all queued transport responses consumed', responses.length, 0);
       page.leaveSearch();
       await source.setVideoServer(servers[1]);
@@ -1850,28 +1952,384 @@ async function runSearchChainChecks() {
     }
   }
 
-  await runCase('旧显式路由不得覆盖顶部实时来源', async h => {
+  await runCase('输入能力真实切换与按钮IME连续链', async h => {
+    h.page.searchText = '';
+    await h.source.setFileSource();
+    h.page.resumeSearch();
+    const local = h.renderInput();
+    h.check('local exposes real input modes', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+      ['initials', 'pinyin', 'chinese']);
+    h.check('local renders keyboard and history', local.branches,
+      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']);
+    h.check('local retains only shared TextInput', local.nodes.map(n => n.type), ['input']);
+    const localInput = local.nodes[0];
+    localInput.attributes.onChange[0]('本地');
+    localInput.attributes.onSubmit[0]();
+    await flushMicrotasks();
+    h.check('local IME writes history once and searches once',
+      h.localCalls.filter(c => /^(write|search):/.test(c)), ['write:本地', 'search:本地']);
+    h.check('local submit drains debounce', h.timers.pendingCount(), 0);
+    h.page.clearSearch();
+
+    for (const type of ['jellyfin', 'emby', 'plex']) {
+      h.model.videoServers = [{ ...h.servers[0], type }];
+      await h.source.setVideoServer(h.model.videoServers[0]);
+      h.check(`${type}: real text capability`, h.scopes.getSearchCapabilities(h.page.scope).inputModes, ['text']);
+      const ui = h.renderInput();
+      h.check(`${type}: no custom keyboard or local history`, ui.branches,
+        ['buildBackRow', 'buildSearchResults']);
+      h.check(`${type}: input and two actions`, ui.nodes.map(n => n.type), ['input', 'action', 'action']);
+      h.check(`${type}: stable focus ids`, ui.nodes.map(n => n.attributes.id[0]),
+        ['search-workspace-input', 'search-workspace-submit', 'search-workspace-clear']);
+      h.check(`${type}: no focus-triggered IME and Search enter key`,
+        [ui.nodes[0].attributes.enableKeyboardOnFocus[0], ui.nodes[0].attributes.enterKeyType[0]], [false, 'Search']);
+      h.check(`${type}: actions labelled`, ui.nodes.slice(1).map(n => n.options.label), ['搜索', '清空']);
+    }
+    h.model.videoServers = h.servers;
+    await h.source.setVideoServer(h.servers[0]);
+    const ui = h.renderInput();
+    const input = ui.nodes[0];
+    const submit = ui.nodes[1].options.onPress;
+    const clear = ui.nodes[2].options.onPress;
+    for (const [label, callback] of [['button', submit], ['IME', input.attributes.onSubmit[0]]]) {
+      input.attributes.onChange[0](`film-${label}`);
+      h.check(`${label}: change schedules debounce`, h.timers.pendingCount(), 1);
+      const pending = createDeferred();
+      h.responses.push(() => pending.promise);
+      const before = h.searches.length;
+      callback();
+      await flushMicrotasks();
+      h.check(`${label}: one immediate request`, h.searches.length, before + 1);
+      h.check(`${label}: submit cancels debounce`, h.timers.pendingCount(), 0);
+      clear();
+      input.attributes.onChange[0]('');
+      input.attributes.onSubmit[0]();
+      clear();
+      pending.resolve(h.response('late cleared result'));
+      await flushMicrotasks();
+      h.check(`${label}: clear/empty IME leaves no extra request`, h.searches.length, before + 1);
+      h.check(`${label}: clear leaves no text, result or timer`,
+        [h.page.searchText, h.page.serverResult, h.page.searchResults, h.page.isSearching, h.timers.pendingCount()],
+        ['', null, [], false, 0]);
+      h.check(`${label}: shared results restored to idle`, h.render(), ['输入片名搜索当前服务器']);
+    }
+    input.attributes.onChange[0]('pending');
+    h.model.videoServers = [];
+    h.check('deleted source has no input modes', h.scopes.getSearchCapabilities(h.page.scope).inputModes, []);
+    h.check('unavailable renders no input or results', h.renderInput(),
+      { nodes: [], branches: ['buildBackRow'] });
+    h.check('unavailable cancels pending timer', h.timers.pendingCount(), 0);
+    await h.source.setFileSource();
+    h.check('return to local restores keyboard', h.renderInput().branches,
+      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']);
+    h.page.clearSearch();
+  }, true);
+
+  await runCase('本地真实拒绝必须呈现错误而非空白', async h => {
+    await h.source.setFileSource();
+    const pending = createDeferred();
+    h.localResponses.push(() => pending.promise);
+    h.page.resumeSearch();
+    await h.tick();
+    h.check('real local method awaits DB', h.page.isSearching, true);
+    pending.reject(new Error('synthetic-private-db-path-and-token'));
+    await flushMicrotasks();
+    console.log(`[search-state] rejected DB observations: ${JSON.stringify({
+      isSearching: h.page.isSearching, results: h.page.searchResults,
+      localStatus: h.page.localStatus, serverResult: h.page.serverResult })}`);
+    h.check('DB rejection is error, not silent empty results', h.page.localStatus, 'error');
+  }, true);
+
+  await runCase('本地状态渲染重试清空换源离页连续链', async h => {
+    await h.source.setFileSource();
+    h.page.searchText = '   ';
+    h.page.resumeSearch();
+    h.check('blank initial query renders idle', h.render(), ['输入片名搜索本地媒体库']);
+    h.check('idle does not schedule search', h.timers.pendingCount(), 0);
+    h.page.searchText = 'film';
+    const failed = createDeferred();
+    h.localResponses.push(() => failed.promise);
+    h.page.scheduleSearch();
+    h.check('debounce renders loading', h.render(), ['正在搜索…']);
+    await h.tick();
+    h.check('pending database renders loading', h.render(), ['正在搜索…']);
+    failed.reject(new Error('synthetic-private-db-path-and-token'));
+    await flushMicrotasks();
+    h.check('rejection renders sanitized error and retry', h.render(), ['本地搜索失败，请重试', '重试']);
+    const retry = h.retry();
+    const empty = createDeferred();
+    h.localResponses.push(() => empty.promise);
+    retry();
+    retry();
+    h.check('double retry runs exactly one new search', h.localCalls.filter(c => c.startsWith('search:')).length, 2);
+    h.check('retry has no debounce remainder', h.timers.pendingCount(), 0);
+    h.check('retry renders loading', h.render(), ['正在搜索…']);
+    empty.resolve([]);
+    await flushMicrotasks();
+    h.check('valid zero matches renders empty, not idle', h.render(), ['本地媒体库未找到匹配内容']);
+    retry();
+    h.check('stale retry action on empty is inert', h.localCalls.filter(c => c.startsWith('search:')).length, 2);
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('success renders local cards only', h.render(), ['shared-cards']);
+    h.check('success state comes from real database method', h.page.localStatus, 'success');
+    h.page.clearSearch();
+    h.check('clear removes success and restores idle', [h.page.searchResults, h.render()], [[], ['输入片名搜索本地媒体库']]);
+
+    for (const boundary of ['clear', 'source', 'leave', 'input']) {
+      for (const rejection of [false, true]) {
+        h.page.searchText = 'film';
+        const late = createDeferred();
+        h.localResponses.push(() => late.promise);
+        h.page.scheduleSearch();
+        await h.tick();
+        if (boundary === 'clear') h.page.clearSearch();
+        if (boundary === 'source') await h.source.setVideoServer(h.servers[0]);
+        if (boundary === 'leave') h.page.willHide();
+        if (boundary === 'input') { h.page.searchText = 'new'; h.page.scheduleSearch(); }
+        const before = [h.page.localStatus, h.page.isSearching, h.render()];
+        if (rejection) late.reject(new Error('synthetic-sensitive-late-error'));
+        else late.resolve([{ id: 999, title: 'stale' }]);
+        await flushMicrotasks();
+        h.check(`${boundary}/${rejection}: old completion cannot publish state`,
+          [h.page.localStatus, h.page.isSearching, h.render()], before);
+        h.check(`${boundary}/${rejection}: stale cards absent`, h.page.searchResults, []);
+        h.page.clearSearch();
+        if (boundary === 'source') await h.source.setFileSource();
+        if (boundary === 'leave') h.page.shown();
+      }
+    }
+    h.check('retry/preview never write history', h.localCalls.filter(c => c.startsWith('write:')), []);
+    h.check('local chains never reach HTTP', h.requests, []);
+    h.page.searchText = 'film';
+    h.page.scheduleSearch();
+    await h.tick();
+    h.page.willHide();
+    h.check('leaving after success clears cards and state',
+      [h.page.searchResults, h.page.localStatus, h.page.isSearching], [[], 'idle', false]);
+    const before = h.localCalls.length;
+    await h.page.executeSearch();
+    retry();
+    h.check('hidden page cannot restart local query', h.localCalls.length, before);
+  }, true);
+
+  await runCase('服务器共享状态容器保留重试语义', async h => {
+    h.page.searchText = '';
+    h.page.resumeSearch();
+    h.check('server idle render', h.render(), ['输入片名搜索当前服务器']);
+    h.page.searchText = 'film';
+    h.page.scheduleSearch();
+    h.check('server debounce loading render', h.render(), ['正在搜索…']);
+    h.responses.push(async () => { throw new Error('synthetic-sensitive-network-error'); });
+    await h.tick();
+    h.check('server error keeps sanitized explanation', h.render(), ['无法连接服务器，请检查网络后重试', '重试']);
+    const retry = h.retry();
+    h.responses.push(async () => ({ statusCode: 200, body: JSON.stringify({ Items: [] }) }));
+    retry();
+    retry();
+    await flushMicrotasks();
+    h.check('server retry renders empty', h.render(), ['当前服务器未找到匹配内容']);
+    h.check('server retry is single request without timer', [h.searches.length, h.timers.pendingCount()], [2, 0]);
+    h.enqueue('server recovered');
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('server success uses existing cards', h.render(), ['shared-cards']);
+    h.page.clearSearch();
+    h.check('server clear restores idle', h.render(), ['输入片名搜索当前服务器']);
+  });
+
+  await runCase('本地服务器往返按真实能力分流且失效不回退', async h => {
+    await h.source.setFileSource();
+    h.page.searchText = 'bdpm';
+    h.page.resumeSearch();
+    h.check('local input capabilities', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+      ['initials', 'pinyin', 'chinese']);
+    await h.tick();
+    h.check('local query reaches database with pinyin text', h.localCalls,
+      ['database', 'history', 'search:bdpm']);
+    h.check('local results published', h.page.searchResults.map(item => item.title), ['本地片名']);
+    h.check('local mode makes no HTTP requests', h.requests, []);
+
+    for (const server of h.servers) {
+      await h.source.setVideoServer(server);
+      h.check('server input is literal text only', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+        ['text']);
+      h.check('switch clears local results and database', [h.page.searchResults, h.page.db], [[], null]);
+      const before = h.localCalls.slice();
+      // Even an accidental direct invocation must respect the real capability guard.
+      await h.page.executeSearch();
+      h.page.searchText = '真实片名';
+      h.page.scheduleSearch();
+      h.enqueue(`服务器 ${server.id}`);
+      await h.tick();
+      h.success(`服务器 ${server.id}`, server.id);
+      h.check('server has no local database/index entry', h.localCalls, before);
+      h.check('literal query reaches selected instance', h.searches.at(-1), {
+        host: `chain-${server.id}.invalid`, keyword: '真实片名'
+      });
+    }
+
+    await h.source.setFileSource();
+    h.check('return restores local capabilities', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
+      ['initials', 'pinyin', 'chinese']);
+    h.check('return clears server result immediately', h.page.serverResult, null);
+    h.page.searchText = 'bdpm';
+    h.page.scheduleSearch();
+    await h.tick();
+    h.check('return publishes only local results', h.page.searchResults.map(item => item.title), ['本地片名']);
+    h.check('local return does not issue HTTP search', h.searches.length, 2);
+
+    await h.source.setVideoServer(h.servers[0]);
+    h.page.searchText = '删除前查询';
+    h.page.scheduleSearch();
+    h.enqueue('删除前结果');
+    await h.tick();
+    h.success('删除前结果');
+    const before = h.localCalls.slice();
+    await h.model.deleteVideoServerWithFallback(h.servers[0].id);
+    h.check('deleted source remains unavailable', h.page.scope.kind, 'unavailable');
+    h.check('unavailable has no input capability', h.scopes.getSearchCapabilities(h.page.scope).inputModes, []);
+    h.check('unavailable clears both result modes', [h.page.searchResults, h.page.serverResult], [[], null]);
+    h.page.scheduleSearch();
+    await h.page.executeSearch();
+    h.check('unavailable does not schedule fallback', h.timers.pendingCount(), 0);
+    h.check('unavailable never opens local index path', h.localCalls, before);
+  }, true);
+
+  for (const local of [true, false]) {
+    await runCase(`${local ? '本地' : '服务器'}提交清空退出重入连续链`, async h => {
+      if (local) await h.source.setFileSource();
+      h.page.searchText = '连续片名';
+      h.page.resumeSearch();
+      const searchCount = () => local
+        ? h.localCalls.filter(call => call.startsWith('search:')).length : h.searches.length;
+      const writeCount = () => h.localCalls.filter(call => call.startsWith('write:')).length;
+      h.check('before submit timer/search/history writes',
+        [h.timers.pendingCount(), searchCount(), writeCount()], [1, 0, 0]);
+      if (!local) h.enqueue('提交结果');
+      h.page.submitInput();
+      await flushMicrotasks();
+      const afterSubmit = [h.timers.pendingCount(), searchCount(), writeCount()];
+      // Drain any leftover debounce to reproduce duplicate work, rather than infer it from code.
+      if (h.timers.pendingCount() > 0) {
+        if (!local) h.enqueue('重复结果');
+        h.timers.runNext();
+        await flushMicrotasks();
+      }
+      console.log(`[search-chain] submit observations: ${JSON.stringify({ local, afterSubmit,
+        afterDrain: [h.timers.pendingCount(), searchCount(), writeCount()] })}`);
+      h.check('submit consumes debounce and searches/writes once',
+        [afterSubmit, searchCount(), writeCount()], [[0, 1, local ? 1 : 0], 1, local ? 1 : 0]);
+      h.check('submit releases loading', h.page.isSearching, false);
+      h.page.clearSearch();
+      h.check('clear resets input and both result modes',
+        [h.page.searchText, h.page.searchResults, h.page.serverResult, h.page.isSearching,
+          h.timers.pendingCount()], ['', [], null, false, 0]);
+      h.page.searchText = '纯防抖';
+      h.page.scheduleSearch();
+      if (!local) h.enqueue('防抖结果');
+      await h.tick();
+      h.check('debounce searches once without history submission',
+        [searchCount(), writeCount()], [2, local ? 1 : 0]);
+      h.page.searchText = '取消等待';
+      h.page.scheduleSearch();
+      h.page.backButton();
+      h.page.willHide();
+      h.check('back button pops exactly once despite hide callback', h.page.popCount, 1);
+      h.check('leaving cancels pending work',
+        [h.page.pageActive, h.page.isSearching, h.timers.pendingCount(), searchCount()],
+        [false, false, 0, 2]);
+      h.page.shown();
+      h.page.shown();
+      if (!local) h.enqueue('重入结果');
+      await h.tick();
+      h.check('reentry preserves text and searches exactly once',
+        [h.page.searchText, searchCount(), writeCount()], ['取消等待', 3, local ? 1 : 0]);
+      h.page.searchText = '返回取消';
+      h.page.scheduleSearch();
+      h.check('hardware back consumes event', h.page.backPressed(), true);
+      h.page.willHide();
+      h.check('hardware back cancels pending work and pops once',
+        [h.page.popCount, h.timers.pendingCount(), searchCount()], [2, 0, 3]);
+      h.page.clearSearch();
+      h.page.shown();
+      h.check('empty reentry stays idle',
+        [h.page.searchText, h.page.searchResults, h.page.serverResult, h.page.isSearching,
+          h.timers.pendingCount(), searchCount()], ['', [], null, false, 0, 3]);
+    }, local);
+  }
+
+  await runCase('跨来源关键词隔离和统一结果选择焦点', async h => {
+    await h.source.setFileSource();
+    h.page.searchText = '只用于本地';
+    h.page.resumeSearch();
+    await h.tick();
+    const local = h.page.resultItems()[0];
+    h.check('本地统一卡片内容', [local.title, local.label, local.scopeKey], ['本地片名', '电影', 'local-files']);
+    const localSelections = [];
+    h.page.navigateToDetail = item => localSelections.push(item);
+    h.page.openResult(local);
+    h.check('统一入口承接本地详情', localSelections, [local.localItem]);
+    await h.source.setVideoServer(h.servers[0]);
+    h.check('切服务器不自动转发本地关键词', [h.page.searchText, h.timers.pendingCount(), h.searches], ['', 0, []]);
+    h.page.openResult(local);
+    h.check('旧本地卡片不能进入详情', localSelections.length, 1);
+    h.page.searchText = '只用于 A';
+    h.page.scheduleSearch();
+    const late = createDeferred();
+    h.responses.push(() => late.promise);
+    await h.tick();
     await h.source.setVideoServer(h.servers[1]);
-    h.enqueue('当前来源 B');
+    h.check('A 到 B 清空待查词', [h.page.searchText, h.timers.pendingCount()], ['', 0]);
+    late.resolve(h.response('旧 A'));
+    await flushMicrotasks();
+    h.check('旧响应不能填回 B', h.page.serverResult, null);
+    h.page.searchText = 'B 明确输入';
+    h.enqueue('B 结果');
+    h.page.executeServerSearch();
+    await flushMicrotasks();
+    const server = h.page.resultItems()[0];
+    h.check('服务器统一卡片内容', [server.title, server.label], ['B 结果', '电影']);
+    h.page.openResult(server);
+    h.check('统一入口承接服务器详情', h.pushes[0].param.serverId, 2);
+    h.page.isEditing = true;
+    const stopped = h.page.stoppedEditing;
+    h.page.backPressed();
+    h.check('编辑中返回结束编辑而不退出', [h.page.isEditing, h.page.popCount, h.page.stoppedEditing], [false, 0, stopped + 1]);
+    h.page.resultsFocused = true;
+    h.page.backPressed();
+    h.check('结果返回输入不退出', [h.page.resultsFocused, h.page.popCount, h.page.focusRequests.at(-1)],
+      [false, 0, 'search-workspace-input']);
+    h.page.backPressed();
+    h.check('输入区再次返回才退出', h.page.popCount, 1);
+    h.page.shown();
+    // Same-source reentry schedules its current query, then switching local cancels it.
+    await h.source.setFileSource();
+    h.check('B 到本地也不复用关键词', [h.page.searchText, h.timers.pendingCount()], ['', 0]);
+    h.check('只有明确输入的 A/B 词进入传输', h.searches, [
+      { host: 'chain-1.invalid', keyword: '只用于 A' },
+      { host: 'chain-2.invalid', keyword: 'B 明确输入' }
+    ]);
+  }, true);
+
+  await runCase('旧显式路由与隐藏期间切源不得转发关键词', async h => {
+    await h.source.setVideoServer(h.servers[1]);
     h.page.initializeRoute({ scope: { kind: 'videoServer', serverId: 1, serverType: 'jellyfin' }, keyword: '路由词' });
-    h.check('初始化保留路由关键词', h.page.searchText, '路由词');
+    h.check('旧来源路由关键词清空', h.page.searchText, '');
     h.check('初始化采用当前 B 而非路由 A', h.page.scope.serverId, 2);
+    h.check('不发送旧路由关键词', [h.searches, h.timers.pendingCount()], [[], 0]);
+    h.page.searchText = 'B 新输入';
+    h.page.scheduleSearch();
+    h.enqueue('当前来源 B');
     await h.tick();
     const oldCard = h.success('当前来源 B', 2);
-    h.check('仅向当前来源发送路由关键词', h.searches, [{ host: 'chain-2.invalid', keyword: '路由词' }]);
     h.page.leaveSearch();
     await h.source.setVideoServer(h.servers[0]);
-    h.enqueue('返回后的来源 A');
     h.page.resumeSearch();
-    h.check('返回后跟随实时 A', h.page.scope.serverId, 1);
+    h.check('隐藏期间切源清空关键词', [h.page.searchText, h.timers.pendingCount()], ['', 0]);
     h.page.openServerResultDetail(oldCard);
     h.check('旧 B 卡片不得打开详情', h.pushes, []);
-    h.check('旧卡片触发身份变化提示', h.toasts.length, 1);
-    await h.tick();
-    h.success('返回后的来源 A');
-    h.check('返回后只新增 A 请求且保留关键词', h.searches, [
-      { host: 'chain-2.invalid', keyword: '路由词' }, { host: 'chain-1.invalid', keyword: '路由词' }
-    ]);
+    h.check('只执行明确输入的 B 查询', h.searches, [{ host: 'chain-2.invalid', keyword: 'B 新输入' }]);
   });
 
   await runCase('delete-success-return-same-word', async h => {
@@ -1894,7 +2352,7 @@ async function runSearchChainChecks() {
     h.page.resumeSearch();
     h.page.scheduleSearch();
     await flushMicrotasks();
-    h.check('return preserves keyword', h.page.searchText, 'film');
+    h.check('unavailable clears keyword', h.page.searchText, '');
     h.check('unavailable return schedules no timer', h.timers.pendingCount(), 0);
     h.check('no deleted or alternative instance HTTP after return', h.requests.length, before);
     h.check('only original instance searched', h.searches, [{ host: 'chain-1.invalid', keyword: 'film' }]);
@@ -1962,6 +2420,8 @@ async function runSearchChainChecks() {
     h.check('real source notification switches page to B', h.page.scope.serverId, 2);
     h.page.openServerResultDetail(cardA);
     h.check('A card cannot push while B active', h.pushes.length, 1);
+    h.page.searchText = 'film';
+    h.page.scheduleSearch();
     h.enqueue('B same media');
     await h.tick();
     const cardB = h.success('B same media', 2);
