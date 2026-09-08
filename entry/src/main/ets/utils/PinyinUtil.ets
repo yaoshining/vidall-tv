@@ -1,27 +1,43 @@
 import { pinyin } from 'pinyin-pro';
 
-/**
- * 汉字转全拼（无声调，小写，连续字符串）
- * 非汉字字符原样保留（ASCII 字母/数字）。
- * 示例："斗罗大陆" → "douluodalu"
- */
-export function toPinyinFull(text: string): string {
-  if (text.length === 0) {
-    return '';
-  }
-  // pattern: 'pinyin' 不带声调；type: 'array' 返回逐字数组
-  const parts: string[] = pinyin(text, { toneType: 'none', type: 'array' }) as string[];
-  return parts.join('').toLowerCase();
+/** Shared normalization for local title indexes and queries; ü / u: / v are equivalent. */
+export function normalizeSearchText(text: string): string {
+  return text.normalize('NFKC').toLowerCase().replace(/u:/g, 'v')
+    .replace(/[üǖǘǚǜ]/g, 'v').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s\-_'’·.,，。:：!?！？、()（）\[\]【】]/g, '');
 }
 
-/**
- * 汉字转首字母（小写）
- * 示例："斗罗大陆" → "dldl"
- */
-export function toPinyinInitials(text: string): string {
-  if (text.length === 0) {
-    return '';
+function titleParts(text: string): string[] {
+  // Phrase-level conversion preserves contextual readings (重庆、长安、音乐).
+  const parts = pinyin(text.normalize('NFKC').replace(/u:/gi, 'v'), { toneType: 'none', type: 'array', nonZh: 'consecutive' }) as string[];
+  const result: string[] = [];
+  for (const part of parts) {
+    for (const word of part.split(/[\s\-_'’·.,，。:：!?！？、()（）\[\]【】]+/)) {
+      const normalized = normalizeSearchText(word);
+      if (normalized.length > 0) { result.push(normalized); }
+    }
   }
-  const parts: string[] = pinyin(text, { pattern: 'initial', type: 'array', toneType: 'none' }) as string[];
-  return parts.join('').toLowerCase();
+  return result;
+}
+
+export function toPinyinFull(text: string): string {
+  return titleParts(text).join('');
+}
+
+export function toPinyinInitials(text: string): string {
+  // `initial` means 声母 (zh/ch/sh), whereas `first` means one initial per Han character.
+  const parts = pinyin(text.normalize('NFKC').replace(/u:/gi, 'v'), { pattern: 'first', type: 'array', toneType: 'none' }) as string[];
+  return normalizeSearchText(parts.join(''));
+}
+
+/** Suffixes start only at syllable/Latin-word boundaries, never inside a syllable.
+ * Bound auxiliary storage to 64 starts × 256 characters for pathological metadata.
+ */
+export function toPinyinSegments(text: string): string {
+  const parts = titleParts(text);
+  const suffixes: string[] = [];
+  for (let i = 1; i < Math.min(parts.length, 65); i++) {
+    suffixes.push(parts.slice(i).join('').slice(0, 256));
+  }
+  return '|' + suffixes.join('|') + '|';
 }
