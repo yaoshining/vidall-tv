@@ -11,6 +11,22 @@ import {
 import { FileSourceDbCore } from './FileSourceDbCore';
 import { countSeriesEpisodeRows } from './SeriesGroupCountUtil';
 
+/** 搜索模块自定义兜底码，不属于 HarmonyOS 平台错误码。 */
+export enum MediaSearchErrorCode {
+  DatabaseNotReady = -1,
+  QueryFailed = -2
+}
+
+export class MediaSearchError extends Error implements BusinessError {
+  code: number;
+
+  constructor(code: number, message: string) {
+    super(message);
+    this.name = 'MediaSearchError';
+    this.code = code;
+  }
+}
+
 /**
  * 媒体库聚合查询、搜索与流派查询。
  * 拆分自 FileSourceDatabase，保持原方法签名与行为不变。
@@ -918,7 +934,9 @@ export class MediaQueryDao {
    */
   async searchMediaItems(keyword: string, options?: SearchMediaOptions, propagateErrors: boolean = false): Promise<MediaItem[]> {
     if (!this.core.isReady()) {
-      if (propagateErrors) { throw new Error('搜索数据库尚未就绪'); }
+      if (propagateErrors) {
+        throw new MediaSearchError(MediaSearchErrorCode.DatabaseNotReady, '搜索数据库尚未就绪');
+      }
       return [];
     }
     const store = this.core.getStore();
@@ -1121,7 +1139,9 @@ export class MediaQueryDao {
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
-      if (propagateErrors) { throw new Error('搜索数据库查询失败'); }
+      if (propagateErrors) {
+        throw new MediaSearchError(err.code ?? MediaSearchErrorCode.QueryFailed, '搜索数据库查询失败');
+      }
       return [];
     } finally {
       try { rs?.close(); } catch { }

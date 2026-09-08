@@ -1,63 +1,56 @@
-# Search lifecycle and TV regression checks
+# 搜索生命周期与电视回归检查
 
-`SearchWorkspacePage` and `MediaResultPage` use `SearchSession<T>` for request
-ownership. The loader is a `() => Promise<T[]>` and contains all provider-specific
-work. 本地查询通过 FileSourceDatabase 显式传播失败；服务器搜索通过
+`SearchWorkspacePage` 和 `MediaResultPage` 使用 `SearchSession<T>` 管理请求归属。
+加载函数类型为 `() => Promise<T[]>`，封装所有数据源专属操作。
+本地查询通过 FileSourceDatabase 显式传播失败；服务器搜索通过
 SearchWorkspaceSession 校验来源、配置快照和请求代次。切换来源立即清空旧结果，
 不把旧关键词自动发送到新服务器；同来源刷新失败保留已接受的懒加载结果。
 本地请求有 15 秒生命周期超时，服务器错误由服务器搜索服务分类。
 
-## State transitions
+## 状态流转
 
-- Empty input / clear: `invalidate(true)` → `idle`, clearing results and timers.
-- Input intent: `prepare()` immediately increments the generation, then the
-  workspace debounces for 800 ms. History selection and retry cancel that timer
-  and execute immediately.
-- Request: `loading`, or `refreshing` while previous results remain visible.
-- Accepted success: `results` or `empty`; only accepted responses reload the grid.
-- Failure / 15-second timeout: `error`, with a generic visible message and a
-  focusable retry button. Provider exception text is never displayed. A timeout
-  invalidates the response; it does not cancel the underlying provider operation.
-- Navigation hide / disappearance / back: invalidate and cancel pending debounce.
-  Returning resumes a search interrupted by navigation, and restores the selected
-  result when returning from details.
+- 空输入或清空：`invalidate(true)` → `idle`，清空结果和定时器。
+- 输入意图变化：`prepare()` 立即递增代次，随后工作台执行 800 毫秒防抖。
+  选择历史或重试会取消防抖定时器并立即执行。
+- 请求开始：无旧结果时为 `loading`；保留旧结果时为 `refreshing`。
+- 接受成功响应：进入 `results` 或 `empty`；仅被接受的响应刷新网格。
+- 失败或 15 秒超时：进入 `error`，展示通用错误提示和可聚焦的重试按钮，
+  不展示数据源异常原文。超时使响应失效，并使 `run()` 返回 `false`，
+  但不会取消底层数据源操作；迟到成功被忽略，迟到异常被消费。
+- 输入变化、清空、来源切换或离页使请求失效时，也立即结束旧 `run()` 的等待，
+  返回 `false` 并清除其定时器；旧请求不能修改新代次的状态或定时器。
+- 导航隐藏、消失或返回：使请求失效并取消待执行防抖。
+  再次进入时恢复被导航中断的搜索，从详情返回时恢复选中结果。
 
-Results use fixed-height, six-column `Grid` + `LazyForEach`, with two cached rows,
-so offscreen posters are not all built at once. The existing 200-row query cap
-remains; this change does not add database pagination. The workspace exposes
-“浏览结果” and “返回输入”; Up from the first row returns to input. Back from a
-focused workspace result first returns to input; Back again leaves the page.
-工作台焦点 ID 使用结果索引，懒加载 key 包含来源身份。 The filtered result page restores the selected
-card and sends Up from the first row to the filter reset control.
+结果使用固定高度的六列 `Grid` + `LazyForEach`，缓存两行，避免一次创建所有屏外海报。
+保留现有 200 行查询上限，本次改动不引入数据库分页。工作台提供“浏览结果”和
+“返回输入”；首行按上返回输入区。结果聚焦时按返回先回到输入区，再按返回离页。
+工作台焦点 ID 使用结果索引，懒加载 key 包含来源身份。
+筛选结果页恢复选中卡片，首行按上转到重置筛选控件。
 
-## Automated validation
+## 自动化验证
 
-`entry/src/test/SearchSession.test.ets` is registered in `List.test.ets`. It covers
-intent-time invalidation, clear/source replacement/leave, late failures,
-refresh/error/empty/retry, and timeout followed by a late success.
+`entry/src/test/SearchSession.test.ets` 已在 `List.test.ets` 注册，覆盖输入意图即时失效、
+清空/来源替换/离页、迟到失败、刷新/错误/空结果/重试、超时后迟到成功，
+以及数据源始终未完成时释放等待、迟到拒绝被消费、旧超时不干扰重试。
 
-The same tests can run on the host:
+同一组测试可在主机执行：
 
 ```sh
 TYPESCRIPT_PATH=/path/to/typescript/lib/typescript.js node scripts/tests/search-session.cjs
 ```
 
-The host runner removes only ArkUI observation decorators and supplies Hypium
-assertions. It verifies the actual lifecycle logic, not ArkUI reactivity or focus.
-Run `devecocli build` for ArkTS compilation and `devecocli run --device <TV>` for
-runtime checks.
+主机执行器仅移除 ArkUI 观察装饰器并提供 Hypium 断言，验证真实生命周期逻辑，
+不验证 ArkUI 响应式行为或焦点。使用 `devecocli build` 检查 ArkTS 编译，
+使用 `devecocli run --device <TV>` 检查设备运行行为。
 
-## Device acceptance checklist
+## 真机验收清单
 
-- Rapidly type multiple queries, clear during a request, leave, and re-enter;
-  no old results may reappear.
-- Open a result, return, and verify the same card remains focused and visible.
-- Browse 200 results using D-pad; verify Up/Back escape routes and visible focus.
-- Inject provider rejection and a response delayed beyond 15 seconds; verify
-  generic error, retained previous results, and remote-control retry.
+- 快速连续输入多个关键词，请求中清空、离开后重新进入，旧结果不得重新出现。
+- 打开结果再返回，确认同一卡片保持聚焦且可见。
+- 使用方向键浏览 200 个结果，确认上键/返回键退出路径与焦点可见性。
+- 注入数据源拒绝与超过 15 秒的延迟响应，确认通用错误提示、旧结果保留及遥控器重试。
 - 执行 `entry/src/test/search_scope_test.cjs --integration`，覆盖服务器切换、配置变更、失败恢复与详情返回。
-- Measure first display and long-list scrolling on the target physical TV;
-  emulator startup and host tests do not establish device performance.
+- 在目标电视测量首次展示与长列表滚动；模拟器启动和主机测试不能证明真机性能。
 
-Physical-TV performance, device focus behavior, and human review remain release
-acceptance steps; no numerical performance claim is made by these tests.
+电视性能、设备焦点行为与人工评审仍属于发布验收步骤；本测试不声明数值性能结论。

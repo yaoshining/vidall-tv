@@ -10,6 +10,18 @@ class DeferredSearch {
   });
 }
 
+async function awaitSettled(pending: Promise<boolean>): Promise<boolean> {
+  let timer: number = -1;
+  const deadline = new Promise<boolean>((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('搜索等待未及时结束')), 200);
+  });
+  try {
+    return await Promise.race([pending, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default function searchSessionTest() {
   describe('SearchSession', () => {
     it('invalidates immediately before the next debounced request', 0, async () => {
@@ -65,11 +77,52 @@ export default function searchSessionTest() {
       const pending = session.run(() => slow.promise, 1);
       await new Promise<void>((resolve) => { setTimeout(resolve, 10); });
       expect(session.status).assertEqual('error');
+      expect(await awaitSettled(pending)).assertFalse();
       slow.resolve(['late']);
-      expect(await pending).assertFalse();
+      await Promise.resolve();
       expect(session.status).assertEqual('error');
       await session.run(() => Promise.resolve(['retry']));
       expect(session.results[0]).assertEqual('retry');
+    });
+    it('失效立即释放未完成调用，旧超时不影响重试', 0, async () => {
+      const session = new SearchSession<string>();
+      const old = new DeferredSearch();
+      const pending = session.run(() => old.promise, 10);
+      session.prepare();
+      expect(await awaitSettled(pending)).assertFalse();
+      const retry = new DeferredSearch();
+      const current = session.run(() => retry.promise, 1000);
+      await new Promise<void>((resolve) => { setTimeout(resolve, 30); });
+      expect(session.status).assertEqual('loading');
+      old.resolve(['旧结果']);
+      await Promise.resolve();
+      expect(session.results.length).assertEqual(0);
+      retry.resolve(['重试结果']);
+      expect(await awaitSettled(current)).assertTrue();
+      expect(session.results[0]).assertEqual('重试结果');
+    });
+    it('超时后迟到拒绝被消费且不影响新代次', 0, async () => {
+      const session = new SearchSession<string>();
+      const old = new DeferredSearch();
+      const pending = session.run(() => old.promise, 1);
+      expect(await awaitSettled(pending)).assertFalse();
+      expect(session.status).assertEqual('error');
+      const retry = new DeferredSearch();
+      const current = session.run(() => retry.promise, 1000);
+      old.reject(new Error('私有地址'));
+      await new Promise<void>((resolve) => { setTimeout(resolve, 10); });
+      expect(session.status).assertEqual('loading');
+      retry.resolve(['新结果']);
+      expect(await awaitSettled(current)).assertTrue();
+      expect(session.results[0]).assertEqual('新结果');
+    });
+    it('清空与离页不等待数据源完成', 0, async () => {
+      const session = new SearchSession<string>();
+      const old = new DeferredSearch();
+      const pending = session.run(() => old.promise);
+      session.invalidate(true);
+      expect(await awaitSettled(pending)).assertFalse();
+      expect(session.status).assertEqual('idle');
     });
   });
 }

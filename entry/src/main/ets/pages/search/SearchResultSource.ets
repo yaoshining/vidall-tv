@@ -1,4 +1,4 @@
-/** Lazy grid adapter. Replace atomically after an accepted search response. */
+/** 懒加载网格适配器；仅在搜索响应被接受后原子替换结果。 */
 export class SearchResultSource<T> implements IDataSource {
   private items: T[] = [];
   private listeners: DataChangeListener[] = [];
