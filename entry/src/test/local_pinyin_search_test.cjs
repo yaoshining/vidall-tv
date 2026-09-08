@@ -1,5 +1,5 @@
-// Executes production ArkTS query/write/migration code against real SQLite (Node >= 22.13).
-// TYPESCRIPT_PATH may point to DevEco's installed TypeScript module.
+// 使用真实 SQLite 执行生产 ArkTS 查询、写入及迁移代码（Node >= 22.13）。
+// TYPESCRIPT_PATH 可指向 DevEco 已安装的 TypeScript 模块。
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -124,31 +124,79 @@ async function main() {
   assert.deepEqual(await titles('cqsl'), await titles('cqsl'));
 
   assert.deepEqual(await titles('cq', { minRating: 10 }), []);
-  // All four production insertion/update paths keep search indexes in sync.
+  // 电影与电视剧的四条生产插入、更新路径均需同步搜索字段。
   for (const type of ['movie', 'tv']) {
     const { mediaId, entity } = await add('旧片名', type);
-    entity.title = '重庆森林新篇';
+    assert.equal(store.db.prepare(`SELECT title_normalized FROM ${type === 'movie' ? 'movies' : 'tv_series'} WHERE id = ?`).get(mediaId).title_normalized, '旧片名');
+    entity.title = '重庆·森林 新篇';
     if (type === 'movie') await content.upsertMovie(entity); else await content.upsertTvSeries(entity);
     const row = store.db.prepare(`SELECT * FROM ${type === 'movie' ? 'movies' : 'tv_series'} WHERE id = ?`).get(mediaId);
+    assert.equal(row.title_normalized, '重庆森林新篇');
     assert.equal(row.title_initials, 'cqslxp');
+    assert.ok((await titles('重庆森林新篇', { mediaType: type })).includes(entity.title));
     assert.ok(row.title_pinyin_segments.includes('|senlinxinpian|'));
   }
+  // 原始标题含分隔符时，两端规范化仍应保留真实汉字，不能召回同音标题。
+  for (const type of ['movie', 'tv']) {
+    await add('长安·三万里', type);
+    await add('常安·三万里', type);
+    for (const keyword of ['长安 三万里', '长安三万里', '长安·三万里']) {
+      assert.ok((await titles(keyword, { mediaType: type })).includes('长安·三万里'));
+      assert.ok(!(await titles(keyword, { mediaType: type })).includes('常安·三万里'));
+    }
+  }
   assert.equal(store.openCursors, 0);
-  // Upgrade a v12 database, backfill > one batch, and prove restart does no writes.
+  // 模拟已完成 v13 回填的完整数据库，验证新增列回填后真实搜索与重启行为。
+  const { DB_VERSION } = source('db/files/DbConstants.ets');
+  assert.equal(DB_VERSION, 14);
+  for (const table of ['movies', 'tv_series']) {
+    await store.executeSql(`ALTER TABLE ${table} DROP COLUMN title_normalized`);
+    assert.equal(store.db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE title_pinyin_segments IS NULL`).get().n, 0);
+  }
+  await core.onUpgrade(store, 13, DB_VERSION);
+  // 故障发生在新增字段回填期间，重启不得因 v13 拼音字段非空而漏掉未完成行。
+  const v13Execute = store.executeSql.bind(store);
+  let normalizedWrites = 0;
+  store.executeSql = async (sql, params) => {
+    if (sql.startsWith('UPDATE') && ++normalizedWrites === 3) throw new Error('v14 回填中断');
+    return v13Execute(sql, params);
+  };
+  await assert.rejects(core.backfillPinyinFields(store), /v14 回填中断/);
+  assert.ok(store.db.prepare('SELECT COUNT(*) n FROM movies WHERE title_normalized IS NULL').get().n > 0);
+  assert.equal(store.openCursors, 0);
+  store.executeSql = v13Execute;
+  await core.onUpgrade(store, 13, DB_VERSION);
+  await core.backfillPinyinFields(store);
+  for (const type of ['movie', 'tv']) {
+    const table = type === 'movie' ? 'movies' : 'tv_series';
+    assert.equal(store.db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE title_normalized IS NULL`).get().n, 0);
+    for (const keyword of ['长安 三万里', '长安三万里', '长安·三万里', '三万里', '长安 三万', '长安sanwanli']) {
+      const results = await titles(keyword, { mediaType: type });
+      assert.ok(results.includes('长安·三万里'));
+      if (keyword.startsWith('长安')) assert.ok(!results.includes('常安·三万里'));
+    }
+  }
+  for (const keyword of ['---', '（）']) assert.deepEqual(await titles(keyword), []);
+  store.calls = [];
+  await core.backfillPinyinFields(store);
+  assert.equal(store.calls.filter(sql => sql.startsWith('UPDATE')).length, 0);
+  assert.equal(store.openCursors, 0);
+  // v12 升级到 v14，跨批次回填，并验证重启不重复写入。
   const legacy = new Store();
   legacy.db.exec('CREATE TABLE movies (id INTEGER PRIMARY KEY, title TEXT, title_pinyin TEXT, title_initials TEXT); CREATE TABLE tv_series (id INTEGER PRIMARY KEY, title TEXT, title_pinyin TEXT, title_initials TEXT)');
   for (let id = 1; id <= 205; id++) legacy.db.prepare('INSERT INTO movies VALUES (?, ?, ?, ?)').run(id, '重庆森林', 'chongqingsenlin', 'chqsl');
   legacy.db.exec("INSERT INTO tv_series VALUES (1, '长安三万里', '', '')");
-  await core.onUpgrade(legacy, 12, 13);
+  await core.onUpgrade(legacy, 12, 14);
   await core.backfillPinyinFields(legacy);
-  assert.equal(legacy.db.prepare("SELECT COUNT(*) n FROM movies WHERE title_initials = 'cqsl' AND title_pinyin_segments IS NOT NULL").get().n, 205);
+  assert.equal(legacy.db.prepare("SELECT COUNT(*) n FROM movies WHERE title_initials = 'cqsl' AND title_pinyin_segments IS NOT NULL AND title_normalized = '重庆森林'").get().n, 205);
   assert.equal(legacy.db.prepare('SELECT title_initials FROM tv_series').get().title_initials, 'caswl');
+  assert.equal(legacy.db.prepare('SELECT title_normalized FROM tv_series').get().title_normalized, '长安三万里');
   legacy.calls = [];
   await core.backfillPinyinFields(legacy);
   assert.equal(legacy.calls.filter(sql => sql.startsWith('UPDATE')).length, 0);
   assert.equal(legacy.openCursors, 0);
-  await core.onUpgrade(legacy, 12, 13); // Idempotent schema recovery after interruption.
-  // Failed backfill is surfaced, retains NULL on unfinished rows, and resumes next time.
+  await core.onUpgrade(legacy, 12, 14); // 中断后的结构恢复必须幂等。
+  // 回填失败需向上传播，未完成行保留 NULL，下次启动继续回填。
   await legacy.executeSql('UPDATE movies SET title_pinyin_segments = NULL');
   const execute = legacy.executeSql.bind(legacy);
   let writes = 0;
@@ -162,7 +210,7 @@ async function main() {
   await core.backfillPinyinFields(legacy);
   assert.equal(legacy.db.prepare('SELECT COUNT(*) n FROM movies WHERE title_pinyin_segments IS NULL').get().n, 0);
   const missing = new Store();
-  await core.onUpgrade(missing, 12, 13);
+  await core.onUpgrade(missing, 12, 14);
   assert.ok(missing.db.prepare('PRAGMA table_info(movies)').all().some(c => c.name === 'title_pinyin_segments'));
   if (process.argv.includes('--benchmark')) {
     const oldLog = console.info;
@@ -181,6 +229,6 @@ async function main() {
     console.info = oldLog;
     console.log(JSON.stringify({ syntheticRows: 10000, indexingMs: Math.round(indexingMs), timings }));
   }
-  console.log('Local pinyin: utility, real SQLite search/ranking, insert/update, v12 migration and restart checks passed.');
+  console.log('本地搜索：工具函数、真实 SQLite 搜索排序、电影及电视剧插入更新、v12/v13 至 v14 迁移和中断恢复检查全部通过。');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

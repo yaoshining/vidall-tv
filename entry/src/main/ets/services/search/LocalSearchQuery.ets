@@ -37,7 +37,7 @@ function pinyinMatch(column: string, value: string, exact: boolean, hanParts: st
     params.push(value);
     // Keep actual Chinese text on the same row; mixed queries must not expand to homophones.
     for (const part of hanParts) {
-      constraints.push(`${alias}.title LIKE ? ESCAPE '\\'`);
+      constraints.push(`${alias}.title_normalized LIKE ? ESCAPE '\\'`);
       params.push('%' + escapeSearchLike(part) + '%');
     }
     alternatives.push('(' + constraints.join(' AND ') + ')');
@@ -74,6 +74,20 @@ export function buildLocalSearchQuery(keyword: string): LocalSearchQuery {
     titleMatch(columns, prefixes, false),
     titleMatch(columns, contains, false)
   ];
+  // 标题与查询采用相同规范化；只为含汉字的查询扩展，保留拉丁字面量及通配符语义。
+  if (normalized.length > 0 && /[\u3400-\u9fff]/.test(normalized)) {
+    const normalizedColumns: string[] = ['m.title_normalized', 'ts.title_normalized'];
+    const escaped = escapeSearchLike(normalized);
+    const normalizedMatches: SearchMatch[] = [
+      titleMatch(normalizedColumns, [normalized], true),
+      titleMatch(normalizedColumns, [escaped + '%'], false),
+      titleMatch(normalizedColumns, ['%' + escaped + '%'], false)
+    ];
+    for (let i = 0; i < normalizedMatches.length; i++) {
+      matches[i].sql = '(' + matches[i].sql + ' OR ' + normalizedMatches[i].sql + ')';
+      matches[i].params.push(...normalizedMatches[i].params);
+    }
+  }
   const hanParts: string[] = normalized.match(/[\u3400-\u9fff]+/g) ?? [];
   const hasLatin = /[a-z]/.test(normalized);
   // Pure Chinese queries use literal titles only. Punctuation-only input cannot become LIKE '%'.

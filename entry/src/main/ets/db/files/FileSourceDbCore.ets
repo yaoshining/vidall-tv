@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
-import { toPinyinFull, toPinyinInitials, toPinyinSegments } from '../../utils/PinyinUtil';
+import { normalizeSearchText, toPinyinFull, toPinyinInitials, toPinyinSegments } from '../../utils/PinyinUtil';
 import { BusinessError, emitter } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
@@ -156,7 +156,7 @@ export class FileSourceDbCore {
 
       // 回填历史数据 origin_country_json（await 确保 DATABASE_READY 前数据可用）
       await this.backfillOriginCountryFromRawJson();
-      // Missing v13 indexes are rebuilt before search becomes available; subsequent starts skip them.
+      // 在搜索可用前回填 v13 拼音及 v14 规范化标题；后续启动跳过已完成记录。
       await this.backfillPinyinFields(this.rdbStore);
       this.fullyReady = true;
       emitter.emit(DATABASE_READY);
@@ -345,6 +345,7 @@ export class FileSourceDbCore {
         origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
+        title_normalized TEXT,
         title_pinyin TEXT,
         title_pinyin_segments TEXT,
         title_initials TEXT,
@@ -376,6 +377,7 @@ export class FileSourceDbCore {
         origin_country_json TEXT,
         raw_json TEXT,
         scraped_at INTEGER NOT NULL,
+        title_normalized TEXT,
         title_pinyin TEXT,
         title_pinyin_segments TEXT,
         title_initials TEXT,
@@ -624,6 +626,23 @@ export class FileSourceDbCore {
           if (!tableExists) {
             await this.createMediaTablesV3(rdbStore);
           } else if (!exists) { await rdbStore.executeSql(`ALTER TABLE ${table} ADD COLUMN title_pinyin_segments TEXT`); }
+        }
+      }
+      // v14 独立迁移，确保已完成 v13 拼音回填的用户也能补齐规范化标题。
+      if (currentVersion < 14) {
+        for (const table of [TABLE_MOVIES, TABLE_TV_SERIES]) {
+          const columns = await rdbStore.querySql(`PRAGMA table_info(${table})`);
+          let exists = false;
+          let tableExists = false;
+          try {
+            while (columns.goToNextRow()) {
+              tableExists = true;
+              if (columns.getString(columns.getColumnIndex('name')) === 'title_normalized') { exists = true; }
+            }
+          } finally { columns.close(); }
+          if (!tableExists) {
+            await this.createMediaTablesV3(rdbStore);
+          } else if (!exists) { await rdbStore.executeSql(`ALTER TABLE ${table} ADD COLUMN title_normalized TEXT`); }
         }
       }
       console.info('FileSourceDatabase: Upgrade complete');
@@ -897,7 +916,7 @@ export class FileSourceDbCore {
         const rows: PinyinRow[] = [];
         const rs = await rdbStore.querySql(
           `SELECT id, title FROM ${table} WHERE id > ? AND title IS NOT NULL ` +
-          `AND title_pinyin_segments IS NULL ORDER BY id LIMIT 100`, [lastId]);
+          `AND (title_pinyin_segments IS NULL OR title_normalized IS NULL) ORDER BY id LIMIT 100`, [lastId]);
         try {
           while (rs.goToNextRow()) {
             const row: PinyinRow = { id: rs.getLong(rs.getColumnIndex('id')), title: rs.getString(rs.getColumnIndex('title')) };
@@ -908,9 +927,9 @@ export class FileSourceDbCore {
         // Close the cursor before writes; a failed/interrupted batch remains resumable via NULL.
         for (const row of rows) {
           await rdbStore.executeSql(
-            `UPDATE ${table} SET title_pinyin = ?, title_initials = ?, title_pinyin_segments = ? ` +
+            `UPDATE ${table} SET title_pinyin = ?, title_initials = ?, title_pinyin_segments = ?, title_normalized = ? ` +
             `WHERE id = ? AND title = ?`,
-            [toPinyinFull(row.title), toPinyinInitials(row.title), toPinyinSegments(row.title), row.id, row.title]);
+            [toPinyinFull(row.title), toPinyinInitials(row.title), toPinyinSegments(row.title), normalizeSearchText(row.title), row.id, row.title]);
           lastId = row.id;
         }
       }

@@ -1058,7 +1058,7 @@ export class MediaQueryDao {
         orderClause = ' ORDER BY COALESCE(m.rating, ts.rating) DESC';
       }
 
-      // Stable final tie-breakers prevent equal-score results from shuffling between requests.
+      // 追加稳定的排序兜底，避免同分结果在多次请求之间顺序变化。
       orderClause += ', COALESCE(m.title, ts.title, s.title) COLLATE NOCASE ASC, ' +
         'COALESCE(m.id, ts.id) ASC, v.id ASC';
 
