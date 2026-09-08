@@ -58,6 +58,20 @@ Module._load = function (request, parent, main) {
   return load.call(this, request, parent, main);
 };
 
+const { SearchSession } = require(path.join(root, 'entry/src/main/ets/services/search/SearchSession.ets'));
+const { SearchResultSource } = require(path.join(root, 'entry/src/main/ets/pages/search/SearchResultSource.ets'));
+function attachLocalSession(page) {
+  page.session = new SearchSession();
+  page.resultSource = new SearchResultSource();
+  page.focusedResult = 0;
+  page.restoreResult = false;
+  page.resultScroller = { scrollToIndex() {} };
+  Object.defineProperty(page, 'searchResults', { get: () => page.session.results });
+  Object.defineProperty(page, 'localStatus', {
+    get: () => page.session.status === 'results' ? 'success' : page.session.status
+  });
+}
+
 function extractMethodBody(source, signature) {
   const start = source.indexOf(signature);
   if (start === -1) {
@@ -115,22 +129,22 @@ function installFakeTimers() {
   const tasks = new Map();
   global.setTimeout = (callback, _delay) => {
     const id = nextId++;
-    tasks.set(id, callback);
+    tasks.set(id, { callback, delay: _delay });
     return id;
   };
   global.clearTimeout = (id) => {
     tasks.delete(id);
   };
   return {
-    pendingCount() { return tasks.size; },
+    pendingCount() { return [...tasks.values()].filter(task => task.delay === 800).length; },
     runNext() {
       const next = tasks.entries().next();
       if (next.done) {
         throw new Error('没有待执行的定时器');
       }
-      const [id, callback] = next.value;
+      const [id, task] = next.value;
       tasks.delete(id);
-      callback();
+      task.callback();
     },
     restore() {
       global.setTimeout = originalSetTimeout;
@@ -149,7 +163,38 @@ async function runHostIntegrationChecks() {
   const resultPath = path.join(root, results);
   const workspaceSource = fs.readFileSync(workspacePath, 'utf8');
   const resultSource = fs.readFileSync(resultPath, 'utf8');
+  // 结果区不再添加多余的焦点跳转按钮，保留首行向上返回输入的路径。
+  assert.doesNotMatch(workspaceSource, /Button\('(浏览结果|返回输入)'\)/);
+  assert.match(workspaceSource, /KEYCODE_DPAD_UP && index < 6\) \{\s*this\.focusInput\(\)/);
   const detailPageSource = fs.readFileSync(path.join(root, detailPage), 'utf8');
+  const adapterSource = fs.readFileSync(path.join(root,
+    'entry/src/main/ets/pages/search/SearchResultSource.ets'), 'utf8');
+  // 主机不运行 ArkUI，静态护栏确保首次挂载条件具有可观察的数量依赖。
+  assert.match(adapterSource, /@ObservedV2\s+export class SearchResultSource/);
+  assert.match(adapterSource, /@Trace private count: number/);
+  assert.match(adapterSource, /totalCount\(\): number \{ return this\.count; \}/);
+  const adapter = new SearchResultSource();
+  assert.equal(adapter.totalCount(), 0);
+  adapter.replace([{ id: 'local' }]);
+  assert.equal(adapter.totalCount(), 1);
+  let reloads = 0;
+  const listener = { onDataReloaded() {
+    reloads += 1;
+    assert.equal(adapter.totalCount(), expectedCount);
+  } };
+  let expectedCount = 1;
+  adapter.registerDataChangeListener(listener);
+  adapter.replace([{ id: 'server' }]);
+  assert.equal(adapter.getData(0).id, 'server');
+  expectedCount = 0;
+  adapter.replace([]);
+  assert.equal(adapter.totalCount(), 0);
+  assert.equal(reloads, 2);
+  adapter.unregisterDataChangeListener(listener);
+  adapter.replace([{ id: 'retry' }]);
+  assert.equal(adapter.totalCount(), 1);
+  assert.equal(reloads, 2);
+
   const { createLocalSearchScope, resolveSearchScope, getSearchCapabilities } =
     require(path.join(root, 'entry/src/main/ets/models/search/SearchScope.ets'));
   const { VideoServerType } = require(path.join(root, 'entry/src/main/ets/db/models/VideoServerEntity.ets'));
@@ -248,7 +293,7 @@ async function runHostIntegrationChecks() {
   const fileSourceDatabase = { FileSourceDatabase: { getInstance: () => localDbSlot.current } };
   const methodDeps = { getSearchCapabilities, FileSourceDatabase: fileSourceDatabase.FileSourceDatabase };
   const methods = {
-    invalidateSearch: loadMethod(workspaceSource, 'private invalidateSearch(): void', [], {}),
+    invalidateSearch: loadMethod(workspaceSource, 'private invalidateSearch(', ['clear = false'], {}),
     invalidateHistoryRequests: loadMethod(workspaceSource, 'private invalidateHistoryRequests(): void', [], {}),
     invalidateHistorySource: loadMethod(workspaceSource, 'private invalidateHistorySource(): void', [], {}),
     loadHistory: loadMethod(workspaceSource, 'private loadHistory(): void', [], { getSearchCapabilities }),
@@ -567,6 +612,8 @@ async function runHostIntegrationChecks() {
         }
       }
     };
+    attachLocalSession(page);
+    page.updateResultSource = () => {};
     page.invalidateSearch = methods.invalidateSearch;
     page.invalidateHistoryRequests = methods.invalidateHistoryRequests;
     page.invalidateHistorySource = methods.invalidateHistorySource;
@@ -1816,12 +1863,13 @@ async function runSearchChainChecks() {
         getUIContext: () => ({ getPromptAction: () => ({ showToast: value => toasts.push(value.message) }),
           getFocusController: () => ({ requestFocus: id => { page.focusRequests.push(id); return true; } }) })
       };
+      attachLocalSession(page);
       for (const method of ['currentContext', 'resumeSearch', 'refreshSource', 'invalidateSearch',
         'leaveSearch', 'invalidateHistoryRequests', 'invalidateHistorySource', 'loadHistory',
         'scheduleSearch', 'executeServerSearch', 'serverErrorText', 'clearSearch',
         'executeSearchWithHistory', 'resultStatus', 'resultErrorText', 'retrySearch',
-        'focusInput', 'handleBack', 'resultItems']) {
-        page[method] = loadMethod(sourceText, `private ${method}(`, [], dependencies);
+        'focusInput', 'handleBack', 'resultItems', 'updateResultSource', 'focusResults']) {
+        page[method] = loadMethod(sourceText, `private ${method}(`, method === 'invalidateSearch' ? ['clear = false'] : [], dependencies);
       }
       // Execute the real builder's conditions/Text/ActionKey callbacks; only ArkUI layout is stubbed.
       const rendered = [], retryActions = [];
@@ -1896,7 +1944,8 @@ async function runSearchChainChecks() {
         ActionKey: options => node('action', options),
         Color: { Transparent: '' }, ItemAlign: {}, HorizontalAlign: {}, VerticalAlign: {},
         FlexAlign: {}, ScrollDirection: {}, Alignment: {}, BorderStyle: {}, Curve: {},
-        EnterKeyType: { Search: 'Search' } };
+        EnterKeyType: { Search: 'Search' },
+        KeyType: { Down: 0, Up: 1 }, KeyCode: { KEYCODE_DPAD_CENTER: 23, KEYCODE_ENTER: 66 } };
       for (const match of sourceText.matchAll(/const (C_\w+|TRANSPARENT): string = '([^']*)';/g)) {
         inputDependencies[match[1]] = match[2];
       }
@@ -1950,6 +1999,92 @@ async function runSearchChainChecks() {
       AppPreferences.resetForTesting();
       timers.restore();
     }
+  }
+
+  for (const delayed of [false, true]) {
+    await runCase(`返回焦点编辑回调-${delayed ? '异步' : '同步'}`, async h => {
+      h.page.searchText = '';
+      h.page.resumeSearch();
+      const input = h.renderInput().nodes.find(n => n.type === 'input');
+      const events = input.attributes;
+      const pending = [];
+      const emit = editing => {
+        const callback = () => events.onEditChange[0](editing);
+        if (delayed) pending.push(callback); else callback();
+      };
+      const drain = () => { while (pending.length) pending.shift()(); };
+      h.page.inputController.stopEditing = () => {
+        h.page.stoppedEditing++;
+        events.onBlur[0]();
+        emit(false);
+      };
+      h.page.getUIContext = () => ({ getFocusController: () => ({ requestFocus: id => {
+        h.page.focusRequests.push(id);
+        if (id === 'search-workspace-input') {
+          events.onFocus[0]();
+          // enableKeyboardOnFocus(false) still permits caret editing / IME attachment.
+          emit(true);
+        }
+        return true;
+      } }) });
+      h.check('被动获焦不主动弹键盘', events.enableKeyboardOnFocus, [false]);
+      h.page.focusInput();
+      drain();
+      h.check('首次程序聚焦不新增编辑返回层', h.page.isEditing, false);
+      h.page.backPressed();
+      h.check('首次输入焦点返回直接退出', h.page.popCount, 1);
+      drain();
+      h.page.shown();
+      drain();
+      h.page.resultsFocused = true;
+      h.page.backPressed();
+      drain();
+      h.check('结果返回输入且不退出', [h.page.resultsFocused, h.page.isEditing, h.page.popCount],
+        [false, false, 1]);
+      h.page.backPressed();
+      h.check('结果回输入后再次返回退出', h.page.popCount, 2);
+      drain();
+      for (const activate of [
+        () => events.onClick[0](),
+        () => events.onKeyEvent[0]({ type: 0, keyCode: 23 }),
+        () => events.onKeyEvent[0]({ type: 0, keyCode: 66 }),
+        () => events.onChange[0]('typed')
+      ]) {
+        h.page.shown();
+        drain();
+        activate();
+        emit(true);
+        drain();
+        const pops = h.page.popCount;
+        const requests = h.page.focusRequests.length;
+        const stops = h.page.stoppedEditing;
+        h.page.backPressed();
+        // A late positive callback after stopEditing must not re-arm Back consumption.
+        emit(true);
+        drain();
+        h.check('主动编辑返回仅停止编辑、不重复聚焦',
+          [h.page.isEditing, h.page.popCount, h.page.focusRequests.length, h.page.stoppedEditing],
+          [false, pops, requests, stops + 1]);
+        h.page.backPressed();
+        h.check('编辑退出后再次返回离页', h.page.popCount, pops + 1);
+        drain();
+        h.page.searchText = '';
+      }
+      h.page.shown();
+      drain();
+      events.onClick[0]();
+      emit(false);
+      drain();
+      h.page.backPressed();
+      h.check('系统已结束编辑时不额外消费返回', h.page.pageActive, false);
+      h.page.shown();
+      // Back before queued focus callbacks arrive must also leave immediately.
+      const pops = h.page.popCount;
+      h.page.backPressed();
+      drain();
+      h.check('快速返回及离页后迟到回调不恢复编辑',
+        [h.page.popCount, h.page.pageActive, h.page.isEditing], [pops + 1, false, false]);
+    });
   }
 
   await runCase('输入能力真实切换与按钮IME连续链', async h => {
@@ -2031,7 +2166,7 @@ async function runSearchChainChecks() {
     h.localResponses.push(() => pending.promise);
     h.page.resumeSearch();
     await h.tick();
-    h.check('real local method awaits DB', h.page.isSearching, true);
+    h.check('real local method awaits DB', h.page.session.status, 'loading');
     pending.reject(new Error('synthetic-private-db-path-and-token'));
     await flushMicrotasks();
     console.log(`[search-state] rejected DB observations: ${JSON.stringify({
@@ -2343,6 +2478,7 @@ async function runSearchChainChecks() {
     h.check('active deleted identity preserved', h.source.getActiveServerId(), 1);
     h.check('real configuration notification refreshes to unavailable', h.page.scope.kind, 'unavailable');
     h.check('deletion clears cards', h.page.serverResult, null);
+    h.check('deletion clears lazy data source', h.page.resultSource.totalCount(), 0);
     h.page.openServerResultDetail(oldCard);
     h.check('old card cannot push after deletion', h.pushes, []);
     h.check('identity gate reports changed source', h.toasts.length, 1);
@@ -2368,12 +2504,13 @@ async function runSearchChainChecks() {
     h.responses.push(() => stale.promise);
     h.page.scheduleSearch();
     await h.tick();
-    h.check('pending request removes initial cards', [h.page.serverResult.status, h.page.serverResult.items], ['loading', []]);
+    h.check('pending response has no new cards', [h.page.serverResult.status, h.page.serverResult.items], ['loading', []]);
     h.responses.push(async () => { throw new Error('host transport disconnected'); });
     h.page.scheduleSearch();
     await h.tick();
     h.check('transport reject becomes page network error', [h.page.serverResult.status, h.page.serverResult.errorCode], ['error', 'network']);
-    h.check('error has no old cards', [h.page.serverResult.items, h.page.searchResults], [[], []]);
+    h.check('error response has no new cards', [h.page.serverResult.items, h.page.searchResults], [[], []]);
+    h.check('refresh failure retains accepted lazy cards', h.page.resultSource.getData(0).title, 'initial');
     h.check('error releases loading', h.page.isSearching, false);
     h.check('page exposes connection error text', h.page.serverErrorText(), '无法连接服务器，请检查网络后重试');
     const recovery = createDeferred();
@@ -2387,6 +2524,7 @@ async function runSearchChainChecks() {
     recovery.resolve(h.response('recovered'));
     await flushMicrotasks();
     h.success('recovered');
+    h.check('recovery replaces lazy cards', h.page.resultSource.getData(0).title, 'recovered');
     h.check('same-word recovery searches only original instance', h.searches,
       Array.from({ length: 4 }, () => ({ host: 'chain-1.invalid', keyword: 'film' })));
     h.check('all HTTP remains on original instance', h.requests.every(r => r.host === 'chain-1.invalid'), true);
@@ -2410,6 +2548,8 @@ async function runSearchChainChecks() {
     h.page.resumeSearch();
     await h.tick();
     h.success('A returned');
+    h.check('detail return restores card focus', h.page.focusRequests.at(-1), 'search-workspace-result-0');
+    h.check('restored card Back returns to input', [h.page.resultsFocused, h.page.handleBack(), h.page.popCount], [true, true, 0]);
     h.check('detail return triggers exactly one same-word re-search', h.searches,
       Array.from({ length: 2 }, () => ({ host: 'chain-1.invalid', keyword: 'film' })));
     const staleA = createDeferred();

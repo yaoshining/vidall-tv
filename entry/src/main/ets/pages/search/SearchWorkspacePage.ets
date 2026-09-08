@@ -1,3 +1,5 @@
+import { SearchSession } from '../../services/search/SearchSession';
+import { SearchResultSource } from './SearchResultSource';
 import { SearchWorkspaceSession, SearchWorkspaceContext } from '../../services/search/SearchWorkspaceSession';
 import { VideoServerSearchResult, VideoServerSearchItem } from '../../services/search/VideoServerSearchService';
 import { SearchScope, SearchRouteParam, createUnavailableSearchScope, resolveSearchRoute, getSearchCapabilities } from '../../models/search/SearchScope';
@@ -347,10 +349,13 @@ struct SearchWorkspacePage {
 
   @Local scope: SearchScope = createUnavailableSearchScope();
   @Local searchText: string = '';
-  @Local searchResults: MediaItem[] = [];
+  @Local session: SearchSession<MediaItem> = new SearchSession<MediaItem>();
+  private resultSource: SearchResultSource<WorkspaceSearchItem> = new SearchResultSource<WorkspaceSearchItem>();
+  private resultScroller: Scroller = new Scroller();
+  private focusedResult: number = 0;
+  private restoreResult: boolean = false;
   @Local historyList: SearchHistoryEntry[] = [];
   @Local isSearching: boolean = false;
-  @Local localStatus: 'idle' | 'loading' | 'success' | 'empty' | 'error' = 'idle';
   @Local isSearchBarFocused: boolean = false;
 
   @Local serverResult: VideoServerSearchResult | null = null;
@@ -360,19 +365,19 @@ struct SearchWorkspacePage {
   private pageActive: boolean = false;
   private sourceBound: boolean = false;
   private inputController: TextInputController = new TextInputController();
+  // 返回层级只记录用户主动编辑；程序获焦也可能异步上报 onEditChange(true)。
   private isEditing: boolean = false;
   private resultsFocused: boolean = false;
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
-  private searchGeneration: number = 0;
   private historyLoadGeneration: number = 0;
   private historySourceGeneration: number = 0;
 
   private showToastSafe(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -405,16 +410,19 @@ struct SearchWorkspacePage {
   }
 
   private refreshSource(): void {
-    this.invalidateSearch();
+    this.invalidateSearch(true);
     this.invalidateHistorySource();
     const nextScope = this.currentContext().scope;
     if (this.sourceBound && this.scope.key !== nextScope.key) {
       this.searchText = '';
+      this.restoreResult = false;
+      this.focusedResult = 0;
       this.focusInput();
     }
     this.scope = nextScope;
     this.sourceBound = true;
-    this.searchResults = [];
+    this.session.invalidate(true);
+    this.resultSource.replace([]);
     this.db = null;
     if (getSearchCapabilities(this.scope).localSearch) {
       this.db = FileSourceDatabase.getInstance();
@@ -423,12 +431,11 @@ struct SearchWorkspacePage {
     this.loadHistory();
   }
 
-  private invalidateSearch(): void {
-    this.searchGeneration++;
+  private invalidateSearch(clear: boolean = false): void {
+    this.session.invalidate(clear);
     this.serverSession.invalidate();
     this.serverResult = null;
-    this.searchResults = [];
-    this.localStatus = 'idle';
+    if (clear) { this.resultSource.replace([]); }
     this.isSearching = false;
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
@@ -437,28 +444,36 @@ struct SearchWorkspacePage {
   }
 
   private focusInput(): void {
-    this.inputController.stopEditing();
     this.isEditing = false;
+    this.inputController.stopEditing();
     this.resultsFocused = false;
     this.getUIContext().getFocusController().requestFocus('search-workspace-input');
   }
 
   private handleBack(): boolean {
-    if (this.isEditing || this.resultsFocused) {
+    if (this.resultsFocused) {
+      console.info('[SearchWorkspace] back: results -> input');
       this.focusInput();
       return true;
     }
+    if (this.isEditing) {
+      console.info('[SearchWorkspace] back: editing -> input');
+      this.isEditing = false;
+      this.inputController.stopEditing();
+      return true;
+    }
+    console.info('[SearchWorkspace] back: leave');
     this.leaveSearch();
     this.pageStack.pop();
     return true;
   }
 
   private leaveSearch(): void {
-    this.inputController.stopEditing();
     this.isEditing = false;
+    this.inputController.stopEditing();
     this.resultsFocused = false;
     this.pageActive = false;
-    this.invalidateSearch();
+    this.invalidateSearch(true);
     this.invalidateHistorySource();
     this.serverSession.dispose();
     this.unsubscribeSource();
@@ -494,11 +509,11 @@ struct SearchWorkspacePage {
 
 
   private scheduleSearch(): void {
-    this.invalidateSearch();
-    this.searchResults = [];
+    this.invalidateSearch(this.searchText.trim().length === 0);
     if (!this.pageActive || this.searchText.trim().length === 0) { return; }
     const capabilities = getSearchCapabilities(this.scope);
     if (!capabilities.localSearch && !capabilities.serverSearch) { return; }
+    if (capabilities.localSearch) { this.session.prepare(); }
     this.isSearching = true;
     this.searchDebounceTimer = setTimeout(() => {
       this.searchDebounceTimer = -1;
@@ -516,6 +531,7 @@ struct SearchWorkspacePage {
       (result: VideoServerSearchResult) => {
         this.serverResult = result;
         this.isSearching = result.status === 'loading';
+        if (result.status === 'success' || result.status === 'empty') { this.updateResultSource(); }
       });
   }
 
@@ -531,9 +547,11 @@ struct SearchWorkspacePage {
 
   private resultStatus(): string {
     if (!this.pageActive || this.searchText.trim().length === 0) { return 'idle'; }
+    if (getSearchCapabilities(this.scope).localSearch) {
+      return this.session.status === 'results' ? 'success' : this.session.status;
+    }
     if (this.isSearching) { return 'loading'; }
-    return getSearchCapabilities(this.scope).localSearch
-      ? this.localStatus : this.serverResult?.status ?? 'idle';
+    return this.serverResult?.status ?? 'idle';
   }
 
   private resultErrorText(): string {
@@ -560,37 +578,19 @@ struct SearchWorkspacePage {
       return;
     }
     this.invalidateSearch();
-    const generation = ++this.searchGeneration;
-    this.localStatus = 'loading';
-    this.isSearching = true;
-    try {
-      const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 200 });
-      if (generation !== this.searchGeneration) { return; }
-      // 按 (tvSeriesId, movieId) 去重：同一部剧/电影只保留第一条
+    const accepted = await this.session.run(async (): Promise<MediaItem[]> => {
+      if (this.db === null) { throw new Error('搜索数据库尚未就绪'); }
+      const items = await this.db.searchMediaItems(kw, { limit: 200 }, true);
       const seen: Set<string> = new Set<string>();
-      const deduped: MediaItem[] = [];
-      for (const item of items) {
-        const key: string = item.tvSeriesId !== undefined
-          ? `tv-${item.tvSeriesId}`
-          : item.movieId !== undefined
-            ? `mv-${item.movieId}`
-            : `v-${item.id}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduped.push(item);
-        }
-      }
-      this.searchResults = deduped;
-      this.localStatus = deduped.length > 0 ? 'success' : 'empty';
-    } catch {
-      if (generation !== this.searchGeneration) { return; }
-      this.searchResults = [];
-      this.localStatus = 'error';
-    } finally {
-      if (generation === this.searchGeneration) {
-        this.isSearching = false;
-      }
-    }
+      return items.filter((item: MediaItem) => {
+        const key = item.tvSeriesId !== undefined ? `tv-${item.tvSeriesId}` :
+          item.movieId !== undefined ? `mv-${item.movieId}` : `v-${item.id}`;
+        if (seen.has(key)) { return false; }
+        seen.add(key);
+        return true;
+      });
+    });
+    if (accepted) { this.updateResultSource(); }
   }
 
   /** 执行搜索并保存历史 */
@@ -630,7 +630,8 @@ struct SearchWorkspacePage {
   private clearSearch(): void {
     this.searchText = '';
     this.focusInput();
-    this.searchResults = [];
+    this.session.invalidate(true);
+    this.resultSource.replace([]);
     this.scheduleSearch();
   }
 
@@ -667,6 +668,7 @@ struct SearchWorkspacePage {
 
   private navigateToDetail(item: MediaItem): void {
     if (!getSearchCapabilities(this.scope).localDetail) { return; }
+    this.restoreResult = true;
     item.searchScope = this.scope;
     if (item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
@@ -707,6 +709,7 @@ struct SearchWorkspacePage {
       itemId: item.selection.detailItemId,
       title: item.media.title
     };
+    this.restoreResult = true;
     this.pageStack.pushPathByName(ServerMediaDetailPage.PAGE_NAME, param);
   }
 
@@ -769,9 +772,22 @@ struct SearchWorkspacePage {
         .backgroundColor(Color.Transparent)
         .layoutWeight(1)
         .defaultFocus(true)
-        .onEditChange((editing: boolean) => { this.isEditing = editing; })
+        .onEditChange((editing: boolean) => {
+          console.info(`[SearchWorkspace] edit callback=${editing}, userEditing=${this.isEditing}`);
+          // true 也可能来自 requestFocus / IME 延迟绑定，不能据此新增返回层级。
+          if (!editing) { this.isEditing = false; }
+        })
+        .onClick(() => { this.isEditing = true; })
+        .onKeyEvent((event: KeyEvent) => {
+          if (event.type === KeyType.Down &&
+            (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER)) {
+            this.isEditing = true;
+          }
+        })
+        .onBlur(() => { this.isEditing = false; })
         .onFocus(() => { this.resultsFocused = false; })
         .onChange((value: string) => {
+          this.isEditing = true;
           this.searchText = value;
           this.scheduleSearch();
         })
@@ -973,7 +989,7 @@ struct SearchWorkspacePage {
 
   private resultItems(): WorkspaceSearchItem[] {
     if (getSearchCapabilities(this.scope).localSearch) {
-      return this.searchResults.map((item: MediaItem): WorkspaceSearchItem => {
+      return this.session.results.map((item: MediaItem): WorkspaceSearchItem => {
         const result: WorkspaceSearchItem = {
           key: `${this.scope.key}:${item.id}`, scopeKey: this.scope.key,
           title: item.title ?? '', poster: posterSrc(item), rating: item.rating,
@@ -1001,29 +1017,56 @@ struct SearchWorkspacePage {
     }
   }
 
+  private updateResultSource(): void {
+    this.resultSource.replace(this.resultItems());
+    if (this.restoreResult && this.resultSource.totalCount() > 0) {
+      this.restoreResult = false;
+      this.focusResults();
+    }
+  }
+
+  private focusResults(): void {
+    if (this.resultSource.totalCount() === 0) { return; }
+    this.isEditing = false;
+    this.inputController.stopEditing();
+    this.resultsFocused = true;
+    this.focusedResult = Math.min(this.focusedResult, this.resultSource.totalCount() - 1);
+    this.resultScroller.scrollToIndex(this.focusedResult);
+    this.getUIContext().getFocusController().requestFocus(`search-workspace-result-${this.focusedResult}`);
+  }
+
   @Builder
   buildResultList() {
-    if (getSearchCapabilities(this.scope).serverSearch) {
-      Text('首批结果（最多 100 项，可能更少）').fontSize(18).fontColor(C_SECONDARY)
-    }
-    Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-      ForEach(this.resultItems(), (item: WorkspaceSearchItem, index: number) => {
-        WorkspacePosterCard({
-          item: item,
-          focusId: `search-workspace-result-${index}`,
-          onFocused: () => { this.resultsFocused = true; },
-          onPress: () => { this.openResult(item); }
+    Text(getSearchCapabilities(this.scope).serverSearch ? '首批结果（最多 100 项，可能更少）' : '最多显示 200 项')
+      .fontSize(18).fontColor(C_SECONDARY)
+    Grid(this.resultScroller) {
+      LazyForEach(this.resultSource, (item: WorkspaceSearchItem, index: number) => {
+        GridItem() {
+          WorkspacePosterCard({
+            item: item,
+            focusId: `search-workspace-result-${index}`,
+            onFocused: () => { this.focusedResult = index; this.resultsFocused = true; },
+            onPress: () => { this.openResult(item); }
+          })
+        }
+        .onKeyEvent((event: KeyEvent) => {
+          if (event.type === KeyType.Down && event.keyCode === KeyCode.KEYCODE_DPAD_UP && index < 6) {
+            this.focusInput();
+            event.stopPropagation();
+          }
         })
-          .margin({ right: 20, bottom: 20 })
       }, (item: WorkspaceSearchItem) => item.key)
-    }.width('100%')
+    }
+    .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr')
+    .columnsGap(20).rowsGap(20).cachedCount(2)
+    .width('100%').height(380)
   }
 
   @Builder
   buildSearchResults() {
     Column({ space: 20 }) {
-      if (this.resultStatus() === 'loading') {
-        Text('正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
+      if (this.resultStatus() === 'loading' || this.resultStatus() === 'refreshing') {
+        Text(this.resultSource.totalCount() > 0 ? '正在更新，以下为上次结果…' : '正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
       } else if (this.resultStatus() === 'error') {
         Text(this.resultErrorText()).fontSize(22).fontColor(C_TEXT_BODY)
         Row() {
@@ -1033,13 +1076,12 @@ struct SearchWorkspacePage {
         Text(getSearchCapabilities(this.scope).localSearch
           ? '本地媒体库未找到匹配内容' : '当前服务器未找到匹配内容')
           .fontSize(22).fontColor(C_TEXT_BODY)
-      } else if (this.resultStatus() === 'success') {
-        this.buildResultList()
-      } else {
+      } else if (this.resultStatus() === 'idle') {
         Text(getSearchCapabilities(this.scope).localSearch
           ? '输入片名搜索本地媒体库' : '输入片名搜索当前服务器')
           .fontSize(22).fontColor(C_SECONDARY)
       }
+      if (this.resultSource.totalCount() > 0) { this.buildResultList() }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)

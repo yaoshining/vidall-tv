@@ -1,3 +1,4 @@
+import searchSessionTest from './SearchSession.test';
 import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
 import videoServerSearchTest from './VideoServerSearch.test';
 import searchScopeTest from './SearchScope.test';
@@ -71,6 +72,7 @@ import directedScanStrategyTest from './DirectedScanStrategy.test';
 import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackContextUtilTest';
 
 export default function testsuite() {
+  searchSessionTest();
   timeUtilTest();
   playbackContextTest();
   serverEpisodePlaybackContextUtilTest();

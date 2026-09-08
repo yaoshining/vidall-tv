@@ -491,8 +491,8 @@ export class FileSourceDatabase {
     return this.mediaQueryDao.getRecentlyAddedList(limit);
   }
 
-  async searchMediaItems(keyword: string, options?: SearchMediaOptions): Promise<MediaItem[]> {
-    return this.mediaQueryDao.searchMediaItems(keyword, options);
+  async searchMediaItems(keyword: string, options?: SearchMediaOptions, propagateErrors: boolean = false): Promise<MediaItem[]> {
+    return this.mediaQueryDao.searchMediaItems(keyword, options, propagateErrors);
   }
 
   async getDistinctGenres(): Promise<string[]> {
