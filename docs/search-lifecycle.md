@@ -54,3 +54,21 @@ TYPESCRIPT_PATH=/path/to/typescript/lib/typescript.js node scripts/tests/search-
 - 在目标电视测量首次展示与长列表滚动；模拟器启动和主机测试不能证明真机性能。
 
 电视性能、设备焦点行为与人工评审仍属于发布验收步骤；本测试不声明数值性能结论。
+
+## 当前来源历史与建议词（#320）
+
+- 历史以统一 `SearchScope.key` 隔离：WebDAV/SMB 共用 `local-files`，每个影视服务器使用 `video-server:<type>:<id>`，不保存地址、令牌或连接配置。
+- v15 初始化 `scoped_search_history`，以 `(scope_key, keyword)` 唯一存储。旧 `search_history` 保留但不展示、不自动归入任何来源，因为旧数据没有可靠的来源身份。
+- 搜索按钮、输入法提交、历史和片名建议提交统一调用当前来源的搜索路径并保存历史；自动输入预览不写历史。每个范围保留最近 15 条，删除单条和清空只作用于当前来源。
+- 本地片名建议直接复用已接受的本地搜索结果，沿用相同的中文、拼音匹配与排序，去重后最多显示 6 条。输入变化时隐藏旧建议，来源变化或离页时立即清空并使旧请求失效。
+- 服务器使用来源内历史和明确标为示例的输入提示，不调用在线补全；示例不代表服务器已收录对应影片。没有外部热搜、AI 建议或跨来源推荐。
+- 建议词使用可聚焦按钮，OK 提交后回到输入框；返回键先从建议区域回输入，再沿既有搜索页返回路径退出。
+
+回归命令（Node >= 22.13，`TYPESCRIPT_PATH` 可指向 DevEco TypeScript）：
+
+```sh
+node entry/src/test/search_suggestions_test.cjs
+node entry/src/test/local_pinyin_search_test.cjs
+```
+
+真机验收：在本地、Jellyfin 实例和 Plex 实例分别提交关键词，往返切换检查历史隔离；删除/清空其中一个来源后确认其他来源不变；输入拼音并选择本地片名建议，确认结果一致；用 D-Pad、OK、返回检查建议词与输入框的焦点路径。

@@ -148,7 +148,7 @@ async function main() {
   assert.equal(store.openCursors, 0);
   // 模拟已完成 v13 回填的完整数据库，验证新增列回填后真实搜索与重启行为。
   const { DB_VERSION } = source('db/files/DbConstants.ets');
-  assert.equal(DB_VERSION, 14);
+  assert.ok(DB_VERSION >= 14);
   for (const table of ['movies', 'tv_series']) {
     await store.executeSql(`ALTER TABLE ${table} DROP COLUMN title_normalized`);
     assert.equal(store.db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE title_pinyin_segments IS NULL`).get().n, 0);

@@ -1,3 +1,4 @@
+import { titleSuggestions, searchInputExample } from '../../services/search/SearchSuggestions';
 import { SearchSession } from '../../services/search/SearchSession';
 import { SearchResultSource } from './SearchResultSource';
 import { SearchWorkspaceSession, SearchWorkspaceContext } from '../../services/search/SearchWorkspaceSession';
@@ -424,7 +425,7 @@ struct SearchWorkspacePage {
     this.session.invalidate(true);
     this.resultSource.replace([]);
     this.db = null;
-    if (getSearchCapabilities(this.scope).localSearch) {
+    if (this.scope.kind !== 'unavailable') {
       this.db = FileSourceDatabase.getInstance();
     }
     this.scheduleSearch();
@@ -495,14 +496,14 @@ struct SearchWorkspacePage {
   }
 
   private loadHistory(): void {
-    if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
+    if (this.scope.kind === 'unavailable' || this.db === null) { return; }
     const sourceGeneration = this.historySourceGeneration;
     const loadGeneration = ++this.historyLoadGeneration;
-    this.db.getSearchHistory(20)
+    this.db.getSearchHistory(this.scope.key, 20)
       .then((list: SearchHistoryEntry[]) => {
         if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
           loadGeneration === this.historyLoadGeneration &&
-          getSearchCapabilities(this.scope).localHistory) { this.historyList = list; }
+          this.scope.kind !== 'unavailable') { this.historyList = list; }
       })
       .catch(() => {});
   }
@@ -595,7 +596,7 @@ struct SearchWorkspacePage {
 
   /** 执行搜索并保存历史 */
   private executeSearchWithHistory(): void {
-    if (!getSearchCapabilities(this.scope).localHistory) { return; }
+    if (this.scope.kind === 'unavailable') { return; }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
     this.invalidateSearch();
@@ -603,7 +604,7 @@ struct SearchWorkspacePage {
       this.invalidateHistoryRequests();
       const sourceGeneration = this.historySourceGeneration;
       const updateGeneration = this.historyLoadGeneration;
-      this.db.upsertSearchHistory(kw)
+      this.db.upsertSearchHistory(this.scope.key, kw)
         .then(() => {
           if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
             updateGeneration === this.historyLoadGeneration) {
@@ -612,7 +613,11 @@ struct SearchWorkspacePage {
         })
         .catch(() => {});
     }
-    this.executeSearch();
+    if (getSearchCapabilities(this.scope).serverSearch) {
+      this.executeServerSearch();
+    } else {
+      this.executeSearch();
+    }
   }
 
   private appendChar(c: string): void {
@@ -636,11 +641,11 @@ struct SearchWorkspacePage {
   }
 
   private deleteHistory(keyword: string): void {
-    if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
+    if (this.scope.kind === 'unavailable' || this.db === null) { return; }
     this.invalidateHistoryRequests();
     const sourceGeneration = this.historySourceGeneration;
     const deleteGeneration = this.historyLoadGeneration;
-    this.db.deleteSearchHistory(keyword)
+    this.db.deleteSearchHistory(this.scope.key, keyword)
       .then(() => {
         if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
           deleteGeneration === this.historyLoadGeneration) {
@@ -651,15 +656,15 @@ struct SearchWorkspacePage {
   }
 
   private clearAllHistory(): void {
-    if (!getSearchCapabilities(this.scope).localHistory || this.db === null) { return; }
+    if (this.scope.kind === 'unavailable' || this.db === null) { return; }
     this.invalidateHistoryRequests();
     const sourceGeneration = this.historySourceGeneration;
     const clearGeneration = this.historyLoadGeneration;
-    this.db.clearSearchHistory()
+    this.db.clearSearchHistory(this.scope.key)
       .then(() => {
         if (this.pageActive && sourceGeneration === this.historySourceGeneration &&
           clearGeneration === this.historyLoadGeneration &&
-          getSearchCapabilities(this.scope).localHistory) {
+          this.scope.kind !== 'unavailable') {
           this.historyList = [];
         }
       })
@@ -794,19 +799,15 @@ struct SearchWorkspacePage {
         .onSubmit(() => {
           this.inputController.stopEditing();
           this.isEditing = false;
-          if (getSearchCapabilities(this.scope).serverSearch) {
-            this.executeServerSearch();
-          } else {
-            this.executeSearchWithHistory();
-          }
+          this.executeSearchWithHistory();
         })
-      if (getSearchCapabilities(this.scope).inputModes.includes('text')) {
+      if (this.scope.kind !== 'unavailable') {
         ActionKey({
           label: '搜索',
           onPress: () => {
             this.inputController.stopEditing();
             this.isEditing = false;
-            this.executeServerSearch();
+            this.executeSearchWithHistory();
           }
         })
           .id('search-workspace-submit')
@@ -939,6 +940,30 @@ struct SearchWorkspacePage {
   }
 
   @Builder
+  buildSuggestions() {
+    Column({ space: 10 }) {
+      Text(searchInputExample(this.scope))
+        .fontSize(16).fontColor(C_SECONDARY)
+      if (this.scope.kind === 'localFiles' && this.session.status === 'results') {
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(titleSuggestions(this.scope, this.session.results), (title: string) => {
+            Button(title)
+              .fontSize(16).fontColor(C_HIST_TEXT)
+              .backgroundColor(C_HIST_CHIP_BG)
+              .margin({ right: 10, bottom: 10 })
+              .onFocus(() => { this.resultsFocused = true; })
+              .onClick(() => {
+                this.searchText = title;
+                this.focusInput();
+                this.executeSearchWithHistory();
+              })
+          }, (title: string) => title)
+        }
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   buildHistory() {
     if (this.historyList.length > 0) {
       Flex({ wrap: FlexWrap.Wrap }) {
@@ -946,7 +971,9 @@ struct SearchWorkspacePage {
           // M2：拆成两个独立可聚焦节点，遥控器 D-pad 可分别聚焦到关键词和删除按钮
           Row({ space: 0 }) {
             // 左侧：关键词文字 — 聚焦后 OK 键触发搜索并跳转
-            Text(entry.keyword)
+            Button(entry.keyword)
+              .backgroundColor(C_HIST_CHIP_BG)
+              .onFocus(() => { this.resultsFocused = true; })
               .fontSize(16)
               .fontWeight(500)
               .fontColor(C_HIST_TEXT)
@@ -954,10 +981,13 @@ struct SearchWorkspacePage {
               .focusable(true)
               .onClick(() => {
                 this.searchText = entry.keyword;
+                this.focusInput();
                 this.executeSearchWithHistory();
               })
             // 右侧：× 删除按钮 — 聚焦后 OK 键触发删除
-            Text('\u00D7')
+            Button('\u00D7')
+              .backgroundColor(C_HIST_CHIP_BG)
+              .onFocus(() => { this.resultsFocused = true; })
               .fontSize(14)
               .fontColor(C_SECONDARY)
               .padding({ left: 6, right: 14, top: 8, bottom: 8 })
@@ -971,7 +1001,7 @@ struct SearchWorkspacePage {
         }, (entry: SearchHistoryEntry) => entry.keyword)
 
         // Clear-all button styled same as chip
-        Text('\u5220\u9664\u5386\u53f2')
+        Button('清空当前来源历史')
           .fontSize(16)
           .fontWeight(600)
           .fontColor('#D7DEE7')
@@ -1099,9 +1129,8 @@ struct SearchWorkspacePage {
             if (getSearchCapabilities(this.scope).inputModes.includes('pinyin')) {
               this.buildKeyboard()
             }
-            if (getSearchCapabilities(this.scope).localSearch) {
-              this.buildHistory()
-            }
+            this.buildHistory()
+            this.buildSuggestions()
             this.buildSearchResults()
           }
         }

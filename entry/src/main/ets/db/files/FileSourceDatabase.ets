@@ -507,19 +507,19 @@ export class FileSourceDatabase {
   // search_history
   // ─────────────────────────────────────────────
 
-  async upsertSearchHistory(keyword: string): Promise<void> {
-    await this.searchHistoryDao.upsertSearchHistory(keyword);
+  async upsertSearchHistory(scopeKey: string, keyword: string): Promise<void> {
+    await this.searchHistoryDao.upsertSearchHistory(scopeKey, keyword);
   }
 
-  async getSearchHistory(limit: number = 20): Promise<SearchHistoryEntry[]> {
-    return this.searchHistoryDao.getSearchHistory(limit);
+  async getSearchHistory(scopeKey: string, limit: number = 20): Promise<SearchHistoryEntry[]> {
+    return this.searchHistoryDao.getSearchHistory(scopeKey, limit);
   }
 
-  async deleteSearchHistory(keyword: string): Promise<void> {
-    await this.searchHistoryDao.deleteSearchHistory(keyword);
+  async deleteSearchHistory(scopeKey: string, keyword: string): Promise<void> {
+    await this.searchHistoryDao.deleteSearchHistory(scopeKey, keyword);
   }
 
-  async clearSearchHistory(): Promise<void> {
-    await this.searchHistoryDao.clearSearchHistory();
+  async clearSearchHistory(scopeKey: string): Promise<void> {
+    await this.searchHistoryDao.clearSearchHistory(scopeKey);
   }
 }
