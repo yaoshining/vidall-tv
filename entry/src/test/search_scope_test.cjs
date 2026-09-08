@@ -1944,7 +1944,8 @@ async function runSearchChainChecks() {
         ActionKey: options => node('action', options),
         Color: { Transparent: '' }, ItemAlign: {}, HorizontalAlign: {}, VerticalAlign: {},
         FlexAlign: {}, ScrollDirection: {}, Alignment: {}, BorderStyle: {}, Curve: {},
-        EnterKeyType: { Search: 'Search' } };
+        EnterKeyType: { Search: 'Search' },
+        KeyType: { Down: 0, Up: 1 }, KeyCode: { KEYCODE_DPAD_CENTER: 23, KEYCODE_ENTER: 66 } };
       for (const match of sourceText.matchAll(/const (C_\w+|TRANSPARENT): string = '([^']*)';/g)) {
         inputDependencies[match[1]] = match[2];
       }
@@ -1998,6 +1999,92 @@ async function runSearchChainChecks() {
       AppPreferences.resetForTesting();
       timers.restore();
     }
+  }
+
+  for (const delayed of [false, true]) {
+    await runCase(`返回焦点编辑回调-${delayed ? '异步' : '同步'}`, async h => {
+      h.page.searchText = '';
+      h.page.resumeSearch();
+      const input = h.renderInput().nodes.find(n => n.type === 'input');
+      const events = input.attributes;
+      const pending = [];
+      const emit = editing => {
+        const callback = () => events.onEditChange[0](editing);
+        if (delayed) pending.push(callback); else callback();
+      };
+      const drain = () => { while (pending.length) pending.shift()(); };
+      h.page.inputController.stopEditing = () => {
+        h.page.stoppedEditing++;
+        events.onBlur[0]();
+        emit(false);
+      };
+      h.page.getUIContext = () => ({ getFocusController: () => ({ requestFocus: id => {
+        h.page.focusRequests.push(id);
+        if (id === 'search-workspace-input') {
+          events.onFocus[0]();
+          // enableKeyboardOnFocus(false) still permits caret editing / IME attachment.
+          emit(true);
+        }
+        return true;
+      } }) });
+      h.check('被动获焦不主动弹键盘', events.enableKeyboardOnFocus, [false]);
+      h.page.focusInput();
+      drain();
+      h.check('首次程序聚焦不新增编辑返回层', h.page.isEditing, false);
+      h.page.backPressed();
+      h.check('首次输入焦点返回直接退出', h.page.popCount, 1);
+      drain();
+      h.page.shown();
+      drain();
+      h.page.resultsFocused = true;
+      h.page.backPressed();
+      drain();
+      h.check('结果返回输入且不退出', [h.page.resultsFocused, h.page.isEditing, h.page.popCount],
+        [false, false, 1]);
+      h.page.backPressed();
+      h.check('结果回输入后再次返回退出', h.page.popCount, 2);
+      drain();
+      for (const activate of [
+        () => events.onClick[0](),
+        () => events.onKeyEvent[0]({ type: 0, keyCode: 23 }),
+        () => events.onKeyEvent[0]({ type: 0, keyCode: 66 }),
+        () => events.onChange[0]('typed')
+      ]) {
+        h.page.shown();
+        drain();
+        activate();
+        emit(true);
+        drain();
+        const pops = h.page.popCount;
+        const requests = h.page.focusRequests.length;
+        const stops = h.page.stoppedEditing;
+        h.page.backPressed();
+        // A late positive callback after stopEditing must not re-arm Back consumption.
+        emit(true);
+        drain();
+        h.check('主动编辑返回仅停止编辑、不重复聚焦',
+          [h.page.isEditing, h.page.popCount, h.page.focusRequests.length, h.page.stoppedEditing],
+          [false, pops, requests, stops + 1]);
+        h.page.backPressed();
+        h.check('编辑退出后再次返回离页', h.page.popCount, pops + 1);
+        drain();
+        h.page.searchText = '';
+      }
+      h.page.shown();
+      drain();
+      events.onClick[0]();
+      emit(false);
+      drain();
+      h.page.backPressed();
+      h.check('系统已结束编辑时不额外消费返回', h.page.pageActive, false);
+      h.page.shown();
+      // Back before queued focus callbacks arrive must also leave immediately.
+      const pops = h.page.popCount;
+      h.page.backPressed();
+      drain();
+      h.check('快速返回及离页后迟到回调不恢复编辑',
+        [h.page.popCount, h.page.pageActive, h.page.isEditing], [pops + 1, false, false]);
+    });
   }
 
   await runCase('输入能力真实切换与按钮IME连续链', async h => {

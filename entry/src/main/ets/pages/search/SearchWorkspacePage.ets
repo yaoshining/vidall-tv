@@ -365,6 +365,7 @@ struct SearchWorkspacePage {
   private pageActive: boolean = false;
   private sourceBound: boolean = false;
   private inputController: TextInputController = new TextInputController();
+  // 返回层级只记录用户主动编辑；程序获焦也可能异步上报 onEditChange(true)。
   private isEditing: boolean = false;
   private resultsFocused: boolean = false;
   private db: FileSourceDatabase | null = null;
@@ -443,25 +444,33 @@ struct SearchWorkspacePage {
   }
 
   private focusInput(): void {
-    this.inputController.stopEditing();
     this.isEditing = false;
+    this.inputController.stopEditing();
     this.resultsFocused = false;
     this.getUIContext().getFocusController().requestFocus('search-workspace-input');
   }
 
   private handleBack(): boolean {
-    if (this.isEditing || this.resultsFocused) {
+    if (this.resultsFocused) {
+      console.info('[SearchWorkspace] back: results -> input');
       this.focusInput();
       return true;
     }
+    if (this.isEditing) {
+      console.info('[SearchWorkspace] back: editing -> input');
+      this.isEditing = false;
+      this.inputController.stopEditing();
+      return true;
+    }
+    console.info('[SearchWorkspace] back: leave');
     this.leaveSearch();
     this.pageStack.pop();
     return true;
   }
 
   private leaveSearch(): void {
-    this.inputController.stopEditing();
     this.isEditing = false;
+    this.inputController.stopEditing();
     this.resultsFocused = false;
     this.pageActive = false;
     this.invalidateSearch(true);
@@ -763,9 +772,22 @@ struct SearchWorkspacePage {
         .backgroundColor(Color.Transparent)
         .layoutWeight(1)
         .defaultFocus(true)
-        .onEditChange((editing: boolean) => { this.isEditing = editing; })
+        .onEditChange((editing: boolean) => {
+          console.info(`[SearchWorkspace] edit callback=${editing}, userEditing=${this.isEditing}`);
+          // true 也可能来自 requestFocus / IME 延迟绑定，不能据此新增返回层级。
+          if (!editing) { this.isEditing = false; }
+        })
+        .onClick(() => { this.isEditing = true; })
+        .onKeyEvent((event: KeyEvent) => {
+          if (event.type === KeyType.Down &&
+            (event.keyCode === KeyCode.KEYCODE_DPAD_CENTER || event.keyCode === KeyCode.KEYCODE_ENTER)) {
+            this.isEditing = true;
+          }
+        })
+        .onBlur(() => { this.isEditing = false; })
         .onFocus(() => { this.resultsFocused = false; })
         .onChange((value: string) => {
+          this.isEditing = true;
           this.searchText = value;
           this.scheduleSearch();
         })
@@ -1005,8 +1027,8 @@ struct SearchWorkspacePage {
 
   private focusResults(): void {
     if (this.resultSource.totalCount() === 0) { return; }
-    this.inputController.stopEditing();
     this.isEditing = false;
+    this.inputController.stopEditing();
     this.resultsFocused = true;
     this.focusedResult = Math.min(this.focusedResult, this.resultSource.totalCount() - 1);
     this.resultScroller.scrollToIndex(this.focusedResult);
