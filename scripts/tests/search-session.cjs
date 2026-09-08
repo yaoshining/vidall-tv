@@ -17,4 +17,19 @@ const suite = compile('entry/src/test/SearchSession.test.ets', name => name.incl
   expect: value => ({ assertTrue: () => assert.equal(value, true), assertFalse: () => assert.equal(value, false), assertEqual: expected => assert.equal(value, expected) })
 });
 suite.default();
+const { MediaQueryDao } = compile('entry/src/main/ets/db/files/MediaQueryDao.ets', () => ({}));
+tests.push({ name: '数据库未就绪和查询失败可进入错误状态，默认调用保持兼容', fn: async () => {
+  for (const ready of [false, true]) {
+    const dao = new MediaQueryDao({
+      isReady: () => ready,
+      getStore: () => ({ querySql: async () => { throw new Error('private-url'); } })
+    });
+    assert.equal((await dao.searchMediaItems('test')).length, 0);
+    const state = new session.SearchSession();
+    await state.run(() => Promise.resolve(['previous']));
+    assert.equal(await state.run(() => dao.searchMediaItems('test', undefined, true)), false);
+    assert.equal(state.status, 'error');
+    assert.equal(state.results[0], 'previous');
+  }
+} });
 (async () => { for (const t of tests) { await t.fn(); console.log('PASS ' + t.name); } })().catch(e => { console.error(e); process.exitCode = 1; });

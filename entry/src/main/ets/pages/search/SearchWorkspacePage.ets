@@ -418,7 +418,7 @@ struct SearchWorkspacePage {
     if (kw.length === 0) { this.session.invalidate(true); return; }
     const accepted = await this.session.run(async (): Promise<MediaItem[]> => {
       if (this.db === null) { throw new Error('Search unavailable'); }
-      const items = await this.db.searchMediaItems(kw, { limit: 200 });
+      const items = await this.db.searchMediaItems(kw, { limit: 200 }, true);
       const seen: Set<string> = new Set<string>();
       return items.filter((item: MediaItem) => {
         const key = item.tvSeriesId !== undefined ? `tv-${item.tvSeriesId}` :

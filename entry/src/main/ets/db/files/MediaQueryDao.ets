@@ -916,8 +916,9 @@ export class MediaQueryDao {
    * @param keyword  搜索关键词（标题 / 原始标题模糊匹配）
    * @param options  可选筛选与排序参数，缺省值见各字段注释
    */
-  async searchMediaItems(keyword: string, options?: SearchMediaOptions): Promise<MediaItem[]> {
+  async searchMediaItems(keyword: string, options?: SearchMediaOptions, propagateErrors: boolean = false): Promise<MediaItem[]> {
     if (!this.core.isReady()) {
+      if (propagateErrors) { throw new Error('搜索数据库尚未就绪'); }
       return [];
     }
     const store = this.core.getStore();
@@ -1120,6 +1121,7 @@ export class MediaQueryDao {
     } catch (e) {
       const err = e as BusinessError;
       console.error(`[DB][searchMediaItems] 异常 code=${err.code} msg=${err.message}`);
+      if (propagateErrors) { throw new Error('搜索数据库查询失败'); }
       return [];
     } finally {
       try { rs?.close(); } catch { }

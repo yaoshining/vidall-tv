@@ -359,7 +359,7 @@ export struct MediaResultPage {
         originCountry: this.filterRegion.length > 0 ? this.filterRegion : undefined,
       };
 
-      return this.db.searchMediaItems(this.keyword, options);
+      return this.db.searchMediaItems(this.keyword, options, true);
     });
     if (!accepted) { return; }
     this.resultSource.replace(this.session.results);
