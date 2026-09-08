@@ -1,3 +1,6 @@
+import { KeyCode } from '@kit.InputKit';
+import { SearchSession } from '../../services/search/SearchSession';
+import { SearchResultSource } from './SearchResultSource';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaItem, SeriesGroup, SearchMediaOptions } from '../../db/models/MediaEntity';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
@@ -156,10 +159,13 @@ function scoreText(r: number | undefined): string {
 @ComponentV2
 struct ResultPosterCard {
   @Require @Param item: MediaItem;
+  @Event onFocused: () => void = () => {};
+  @Event onOpen: () => void = () => {};
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
   @Local isFocused: boolean = false;
 
   private navigateToDetail(): void {
+    this.onOpen();
     if (this.item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
         title: itemTitle(this.item),
@@ -233,7 +239,8 @@ struct ResultPosterCard {
     .width(180)
     .alignItems(HorizontalAlign.Start)
     .focusable(true)
-    .onFocus(() => { this.isFocused = true; })
+    .id('media_result_' + this.item.id)
+    .onFocus(() => { this.isFocused = true; this.onFocused(); })
     .onBlur(() => { this.isFocused = false; })
     .onClick(() => { this.navigateToDetail(); })
   }
@@ -293,13 +300,17 @@ export struct MediaResultPage {
   @Local genreOptions: string[] = [];      // 从库中动态加载
 
   // ── Data state ────────────────────────────────────────────────────────────
-  @Local results: MediaItem[] = [];
-  @Local isLoading: boolean = false;
+  @Local session: SearchSession<MediaItem> = new SearchSession<MediaItem>();
+  private resultSource: SearchResultSource = new SearchResultSource();
+  private resultScroller: Scroller = new Scroller();
+  private focusedResult: number = 0;
+  private restoreResult: boolean = false;
+  private needsRefresh: boolean = false;
   @Local totalCount: number = 0;
 
   private db: FileSourceDatabase = FileSourceDatabase.getInstance();
   // 竞态保护：每次发起新请求时递增，回调中比对版本号，过期则丢弃
-  private searchGeneration: number = 0;
+  private genreGeneration: number = 0;
   // 路由初始参数，用于 resetAll() 恢复入口语义
   private initialMediaType: string = '';
   private initialGenre: string = '';
@@ -312,22 +323,11 @@ export struct MediaResultPage {
     return undefined;
   }
 
-  /** 计算 Grid 高度，用于 Scroll 内 Grid 无法使用 layoutWeight 时的替代方案 */
-  private calcGridHeight(): number {
-    if (this.results.length === 0) { return 300; }
-    const cols = 6;
-    const rows = Math.ceil(this.results.length / cols);
-    // ResultPosterCard: poster(270) + space(8) + title(~26) + score(~26) ≈ 330
-    // rowsGap: 30
-    return rows * (330 + 30) + 60;
-  }
-
   // ── Data operations ───────────────────────────────────────────────────────
 
   private async doSearch(): Promise<void> {
-    const generation = ++this.searchGeneration;
-    this.isLoading = true;
-    try {
+    this.needsRefresh = false;
+    const accepted = await this.session.run(async (): Promise<MediaItem[]> => {
       let mt: 'movie' | 'tv' | 'all' | undefined = undefined;
       if (this.filterMediaType === 'movie') { mt = 'movie'; }
       else if (this.filterMediaType === 'tv') { mt = 'tv'; }
@@ -359,29 +359,28 @@ export struct MediaResultPage {
         originCountry: this.filterRegion.length > 0 ? this.filterRegion : undefined,
       };
 
-      const items: MediaItem[] = await this.db.searchMediaItems(this.keyword, options);
-      if (generation !== this.searchGeneration) { return; } // 丢弃过期结果
-      this.results = items;
-      this.totalCount = items.length;
-    } catch {
-      if (generation !== this.searchGeneration) { return; }
-      this.results = [];
-      this.totalCount = 0;
-    } finally {
-      if (generation === this.searchGeneration) {
-        this.isLoading = false;
-      }
-    }
+      return this.db.searchMediaItems(this.keyword, options);
+    });
+    if (!accepted) { return; }
+    this.resultSource.replace(this.session.results);
+    this.totalCount = this.session.results.length;
+  }
+
+  aboutToDisappear(): void {
+    this.needsRefresh = this.needsRefresh || this.session.status === 'loading' || this.session.status === 'refreshing';
+    this.session.invalidate();
+    this.genreGeneration++;
   }
 
   // ── Filter option getters ─────────────────────────────────────────────────
 
   private async loadGenreOptions(): Promise<void> {
+    const generation = ++this.genreGeneration;
     let mt: 'movie' | 'tv' | undefined = undefined;
     if (this.filterMediaType === 'movie') { mt = 'movie'; }
     else if (this.filterMediaType === 'tv') { mt = 'tv'; }
     const names = await this.db.getDistinctGenreNames(mt);
-    this.genreOptions = names;
+    if (generation === this.genreGeneration) { this.genreOptions = names; }
   }
 
   private getGenreList(): string[] {
@@ -473,6 +472,7 @@ export struct MediaResultPage {
         .backgroundColor(C_ORANGE)
         .borderRadius(8)
         .focusable(true)
+        .id('media_filters')
         .onClick(() => { this.resetAll(); })
     }
     .width('100%')
@@ -718,39 +718,56 @@ export struct MediaResultPage {
 
   @Builder
   buildResultGrid() {
-    if (this.isLoading) {
+    if (this.session.status === 'loading' || this.session.status === 'refreshing') {
       Column() {
-        Text('\u52A0\u8F7D\u4E2D\u2026')
+        Text(this.session.status === 'refreshing' ? '正在更新，以下为上次结果…' : '正在搜索…')
           .fontSize(18)
           .fontColor(C_SECONDARY)
       }
       .width('100%')
-      .height(300)
+      .height(60)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-    } else if (this.results.length === 0) {
+    } else if (this.session.status === 'error') {
+      Column({ space: 12 }) {
+        Text('搜索失败，请检查连接后重试。').fontSize(18).fontColor(C_TEXT_BODY)
+        Button('重试').onClick(() => { this.doSearch(); })
+      }
+    } else if (this.session.status === 'empty') {
       Column() {
         Text('\u6682\u65E0\u7ED3\u679C')
           .fontSize(18)
           .fontColor(C_SECONDARY)
       }
       .width('100%')
-      .height(300)
+      .height(60)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-    } else {
-      Grid() {
-        ForEach(this.results, (item: MediaItem) => {
+    }
+    if (this.session.results.length > 0) {
+      Grid(this.resultScroller) {
+        LazyForEach(this.resultSource, (item: MediaItem, index: number) => {
           GridItem() {
-            ResultPosterCard({ item: item })
+            ResultPosterCard({
+              item: item,
+              onFocused: () => { this.focusedResult = index; },
+              onOpen: () => { this.restoreResult = true; this.aboutToDisappear(); }
+            })
           }
+          .onKeyEvent((event: KeyEvent) => {
+            if (event.type === KeyType.Down && event.keyCode === KeyCode.KEYCODE_DPAD_UP && index < 6) {
+              this.getUIContext().getFocusController().requestFocus('media_filters');
+              event.stopPropagation();
+            }
+          })
         }, (item: MediaItem) => String(item.id))
       }
       .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr')
       .columnsGap(30)
       .rowsGap(30)
       .width('100%')
-      .height(this.calcGridHeight())
+      .height(400)
+      .cachedCount(2)
       .nestedScroll({ scrollForward: NestedScrollMode.PARENT_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
     }
   }
@@ -795,8 +812,19 @@ export struct MediaResultPage {
       this.loadGenreOptions().catch((): void => {});
       this.doSearch().catch((): void => {});
     })
+    .onHidden(() => { this.aboutToDisappear(); })
+    .onShown(() => {
+      if (this.restoreResult && this.session.results.length > 0) {
+        this.restoreResult = false;
+        this.focusedResult = Math.min(this.focusedResult, this.session.results.length - 1);
+        this.resultScroller.scrollToIndex(this.focusedResult);
+        this.getUIContext().getFocusController().requestFocus('media_result_' + this.session.results[this.focusedResult].id);
+      }
+      if (this.needsRefresh || this.session.status === 'idle') { this.doSearch(); }
+    })
     .hideTitleBar(true)
     .onBackPressed(() => {
+      this.aboutToDisappear();
       this.pageStack.pop();
       return true;
     })

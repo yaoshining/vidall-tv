@@ -1,3 +1,4 @@
+import searchSessionTest from './SearchSession.test';
 import timeUtilTest from './TimeUtil.test';
 import playbackContextTest from './ets/PlaybackContextTest';
 import settingsControllerTest from './SettingsController.test';
@@ -68,6 +69,7 @@ import directedScanStrategyTest from './DirectedScanStrategy.test';
 import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackContextUtilTest';
 
 export default function testsuite() {
+  searchSessionTest();
   timeUtilTest();
   playbackContextTest();
   serverEpisodePlaybackContextUtilTest();

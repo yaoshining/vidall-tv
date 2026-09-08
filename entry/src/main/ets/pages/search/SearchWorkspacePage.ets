@@ -1,3 +1,5 @@
+import { SearchSession } from '../../services/search/SearchSession';
+import { SearchResultSource } from './SearchResultSource';
 import { MediaItem, SearchHistoryEntry, SeriesGroup } from '../../db/models/MediaEntity';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 
@@ -253,6 +255,9 @@ struct ActionKey {
 @ComponentV2
 struct WorkspacePosterCard {
   @Require @Param item: MediaItem;
+  @Param focusId: string = '';
+  @Event onFocused: () => void = () => {};
+  @Event onBlurred: () => void = () => {};
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
 
@@ -307,9 +312,10 @@ struct WorkspacePosterCard {
     }
     .width(180)
     .alignItems(HorizontalAlign.Start)
+    .id(this.focusId)
     .focusable(true)
-    .onFocus(() => { this.isFocused = true; })
-    .onBlur(() => { this.isFocused = false; })
+    .onFocus(() => { this.isFocused = true; this.onFocused(); })
+    .onBlur(() => { this.isFocused = false; this.onBlurred(); })
     .onClick(() => { this.onPress(); })
   }
 }
@@ -325,15 +331,20 @@ struct SearchWorkspacePage {
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
 
   @Local searchText: string = '';
-  @Local searchResults: MediaItem[] = [];
+  @Local session: SearchSession<MediaItem> = new SearchSession<MediaItem>();
+  private resultSource: SearchResultSource = new SearchResultSource();
+  private resultScroller: Scroller = new Scroller();
+  private focusedResult: number = 0;
+  private restoreResult: boolean = false;
+  private needsRefresh: boolean = false;
+  private resultsFocused: boolean = false;
   @Local historyList: SearchHistoryEntry[] = [];
-  @Local isSearching: boolean = false;
   @Local isSearchBarFocused: boolean = false;
 
   private db: FileSourceDatabase | null = null;
   @Local private searchDebounceTimer: number = -1;
   // 竞态保护：快速连续输入时，丢弃旧请求的返回结果
-  private searchGeneration: number = 0;
+
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -346,10 +357,31 @@ struct SearchWorkspacePage {
     }
   }
 
-  aboutToDisappear(): void {
+  aboutToDisappear(): void { this.suspendSearch(); }
+
+  private cancelDebounce(): void {
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = -1;
     }
+  }
+
+  private suspendSearch(): void {
+    this.needsRefresh = this.needsRefresh || this.session.status === 'loading' || this.session.status === 'refreshing';
+    this.cancelDebounce();
+    this.session.invalidate();
+  }
+
+  private focusInput(): void {
+    this.resultsFocused = false;
+    this.getUIContext().getFocusController().requestFocus('search_input');
+  }
+
+  private focusResults(): void {
+    if (this.session.results.length === 0) { return; }
+    this.focusedResult = Math.min(this.focusedResult, this.session.results.length - 1);
+    this.resultScroller.scrollToIndex(this.focusedResult);
+    this.getUIContext().getFocusController().requestFocus('search_result_' + this.session.results[this.focusedResult].id);
   }
 
   // ── Data helpers ──────────────────────────────────────────────────────────
@@ -365,55 +397,39 @@ struct SearchWorkspacePage {
 
 
   private scheduleSearch(): void {
-    if (this.searchDebounceTimer !== -1) {
-      clearTimeout(this.searchDebounceTimer);
-      this.searchDebounceTimer = -1;
-    }
+    this.cancelDebounce();
     if (this.searchText.trim().length === 0) {
-      this.searchResults = [];
+      this.session.invalidate(true);
+      this.resultSource.replace([]);
+      this.focusedResult = 0;
       return;
     }
+    this.session.prepare();
     this.searchDebounceTimer = setTimeout(() => {
       this.searchDebounceTimer = -1;
       this.executeSearch();
     }, 800);
   }
 
-  /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
   private async executeSearch(): Promise<void> {
-    const kw: string = this.searchText.trim();
-    if (kw.length === 0) {
-      this.searchResults = [];
-      return;
-    }
-    const generation = ++this.searchGeneration;
-    this.isSearching = true;
-    try {
-      const items: MediaItem[] = await this.db!.searchMediaItems(kw, { limit: 200 });
-      if (generation !== this.searchGeneration) { return; }
-      // 按 (tvSeriesId, movieId) 去重：同一部剧/电影只保留第一条
+    this.cancelDebounce();
+    this.needsRefresh = false;
+    const kw = this.searchText.trim();
+    if (kw.length === 0) { this.session.invalidate(true); return; }
+    const accepted = await this.session.run(async (): Promise<MediaItem[]> => {
+      if (this.db === null) { throw new Error('Search unavailable'); }
+      const items = await this.db.searchMediaItems(kw, { limit: 200 });
       const seen: Set<string> = new Set<string>();
-      const deduped: MediaItem[] = [];
-      for (const item of items) {
-        const key: string = item.tvSeriesId !== undefined
-          ? `tv-${item.tvSeriesId}`
-          : item.movieId !== undefined
-            ? `mv-${item.movieId}`
-            : `v-${item.id}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduped.push(item);
-        }
-      }
-      this.searchResults = deduped;
-    } catch {
-      if (generation !== this.searchGeneration) { return; }
-      this.searchResults = [];
-    } finally {
-      if (generation === this.searchGeneration) {
-        this.isSearching = false;
-      }
-    }
+      return items.filter((item: MediaItem) => {
+        const key = item.tvSeriesId !== undefined ? `tv-${item.tvSeriesId}` :
+          item.movieId !== undefined ? `mv-${item.movieId}` : `v-${item.id}`;
+        if (seen.has(key)) { return false; }
+        seen.add(key);
+        return true;
+      });
+    });
+    if (!accepted) { return; }
+    this.resultSource.replace(this.session.results);
   }
 
   /** 执行搜索并保存历史 */
@@ -442,7 +458,6 @@ struct SearchWorkspacePage {
 
   private clearSearch(): void {
     this.searchText = '';
-    this.searchResults = [];
     this.scheduleSearch();
   }
 
@@ -461,6 +476,8 @@ struct SearchWorkspacePage {
   }
 
   private navigateToDetail(item: MediaItem): void {
+    this.restoreResult = true;
+    this.suspendSearch();
     if (item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
         title: item.title ?? '',
@@ -556,6 +573,7 @@ struct SearchWorkspacePage {
     })
     .animation({ duration: 150, curve: Curve.EaseOut })
     .alignItems(VerticalAlign.Center)
+    .id('search_input')
     .defaultFocus(true)
     .focusable(true)
     .onFocus(() => { this.isSearchBarFocused = true; })
@@ -713,18 +731,47 @@ struct SearchWorkspacePage {
 
   @Builder
   buildResultsPreview() {
-    if (this.searchResults.length > 0) {
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-        ForEach(this.searchResults, (item: MediaItem) => {
-          WorkspacePosterCard({
-            item: item,
-            onPress: () => { this.navigateToDetail(item); }
-          })
-          .margin({ right: 20, bottom: 20 })
-        }, (item: MediaItem) => String(item.id))
+    Column({ space: 12 }) {
+      if (this.session.status === 'loading' || this.session.status === 'refreshing') {
+        Text(this.session.status === 'refreshing' ? '正在更新，以下为上次结果…' : '正在搜索…')
+          .fontSize(18).fontColor(C_TEXT_BODY)
+      } else if (this.session.status === 'error') {
+        Text('搜索失败，请检查连接后重试。').fontSize(18).fontColor(C_TEXT_BODY)
+        Button('重试').onClick(() => { this.executeSearch(); })
+      } else if (this.session.status === 'empty') {
+        Text('未找到相关内容，请尝试其他关键词。').fontSize(18).fontColor(C_TEXT_BODY)
       }
-      .width('100%')
+      if (this.session.results.length > 0) {
+        Row({ space: 16 }) {
+          Button('浏览结果').onClick(() => { this.focusResults(); })
+          Button('返回输入').onClick(() => { this.focusInput(); })
+          Text('最多显示 200 项，可继续输入缩小范围').fontColor(C_SECONDARY)
+        }
+        Grid(this.resultScroller) {
+          LazyForEach(this.resultSource, (item: MediaItem, index: number) => {
+            GridItem() {
+              WorkspacePosterCard({
+                item: item,
+                focusId: 'search_result_' + item.id,
+                onFocused: () => { this.focusedResult = index; this.resultsFocused = true; },
+                onBlurred: () => { this.resultsFocused = false; },
+                onPress: () => { this.navigateToDetail(item); }
+              })
+            }
+            .onKeyEvent((event: KeyEvent) => {
+              if (event.type === KeyType.Down && event.keyCode === KeyCode.KEYCODE_DPAD_UP && index < 6) {
+                this.focusInput();
+                event.stopPropagation();
+              }
+            })
+          }, (item: MediaItem) => String(item.id))
+        }
+        .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr')
+        .columnsGap(20).rowsGap(20).cachedCount(2)
+        .width('100%').height(380)
+      }
     }
+    .width('100%')
   }
 
   build() {
@@ -749,8 +796,20 @@ struct SearchWorkspacePage {
       .align(Alignment.TopStart)
       .backgroundColor(C_PAGE_BG)
     }
+    .onHidden(() => { this.suspendSearch(); })
+    .onShown(() => {
+      if (this.restoreResult) {
+        this.restoreResult = false;
+        this.focusResults();
+      }
+      if (this.searchText.trim().length > 0 && (this.needsRefresh || this.session.status === 'idle')) {
+        this.executeSearch();
+      }
+    })
     .hideTitleBar(true)
     .onBackPressed(() => {
+      if (this.resultsFocused) { this.focusInput(); return true; }
+      this.suspendSearch();
       this.pageStack.pop();
       return true;
     })
