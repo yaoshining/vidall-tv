@@ -2,10 +2,10 @@
 
 `SearchWorkspacePage` and `MediaResultPage` use `SearchSession<T>` for request
 ownership. The loader is a `() => Promise<T[]>` and contains all provider-specific
-work. The current pages query `FileSourceDatabase`; there is no server-search or
-source-picker integration in these pages yet. A future provider switch must call
-`prepare(true)` immediately, before starting or debouncing the new loader, to
-remove results belonging to the previous source.
+work. 本地查询通过 FileSourceDatabase 显式传播失败；服务器搜索通过
+SearchWorkspaceSession 校验来源、配置快照和请求代次。切换来源立即清空旧结果，
+不把旧关键词自动发送到新服务器；同来源刷新失败保留已接受的懒加载结果。
+本地请求有 15 秒生命周期超时，服务器错误由服务器搜索服务分类。
 
 ## State transitions
 
@@ -27,7 +27,7 @@ so offscreen posters are not all built at once. The existing 200-row query cap
 remains; this change does not add database pagination. The workspace exposes
 “浏览结果” and “返回输入”; Up from the first row returns to input. Back from a
 focused workspace result first returns to input; Back again leaves the page.
-Result IDs are based on media IDs. The filtered result page restores the selected
+工作台焦点 ID 使用结果索引，懒加载 key 包含来源身份。 The filtered result page restores the selected
 card and sends Up from the first row to the filter reset control.
 
 ## Automated validation
@@ -55,9 +55,9 @@ runtime checks.
 - Browse 200 results using D-pad; verify Up/Back escape routes and visible focus.
 - Inject provider rejection and a response delayed beyond 15 seconds; verify
   generic error, retained previous results, and remote-control retry.
-- Repeat the lifecycle suite with a server loader when server search is wired in.
+- 执行 `entry/src/test/search_scope_test.cjs --integration`，覆盖服务器切换、配置变更、失败恢复与详情返回。
 - Measure first display and long-list scrolling on the target physical TV;
   emulator startup and host tests do not establish device performance.
 
-Physical-TV performance, server integration, and human review remain release
+Physical-TV performance, device focus behavior, and human review remain release
 acceptance steps; no numerical performance claim is made by these tests.

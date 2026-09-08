@@ -1,6 +1,9 @@
 import { KeyCode } from '@kit.InputKit';
 import { SearchSession } from '../../services/search/SearchSession';
 import { SearchResultSource } from './SearchResultSource';
+import { SearchScope, SearchRouteParam, createUnavailableSearchScope, resolveSearchRoute, getSearchCapabilities } from '../../models/search/SearchScope';
+import { SourceSwitchModel } from '../../stores/media/SourceSwitchModel';
+import { VideoServerStore } from '../../stores/servers/VideoServerStore';
 import { FileSourceDatabase } from '../../db/files/FileSourceDatabase';
 import { MediaItem, SeriesGroup, SearchMediaOptions } from '../../db/models/MediaEntity';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
@@ -10,7 +13,7 @@ import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 // Page param interface (for external route navigation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface MediaResultPageParam {
+export interface MediaResultPageParam extends SearchRouteParam {
   keyword?: string;
   mediaType?: string;
   genre?: string;
@@ -161,13 +164,17 @@ struct ResultPosterCard {
   @Require @Param item: MediaItem;
   @Event onFocused: () => void = () => {};
   @Event onOpen: () => void = () => {};
+  @Require @Param scope: SearchScope;
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack();
   @Local isFocused: boolean = false;
 
   private navigateToDetail(): void {
+    if (!getSearchCapabilities(this.scope).localDetail) { return; }
+    this.item.searchScope = this.scope;
     this.onOpen();
     if (this.item.tvSeriesId !== undefined) {
       const group: SeriesGroup = {
+        searchScope: this.scope,
         title: itemTitle(this.item),
         tvSeriesId: this.item.tvSeriesId,
         posterUrl: this.item.posterUrl,
@@ -288,6 +295,7 @@ export struct MediaResultPage {
   // ── Page state ────────────────────────────────────────────────────────────
   @Local pageTitle: string = '\u641C\u7D22\u7ED3\u679C';
   @Local keyword: string = '';
+  @Local scope: SearchScope = createUnavailableSearchScope();
 
   // ── Filter state ──────────────────────────────────────────────────────────
   @Local filterMediaType: string = '';    // '' | 'movie' | 'tv'
@@ -301,19 +309,21 @@ export struct MediaResultPage {
 
   // ── Data state ────────────────────────────────────────────────────────────
   @Local session: SearchSession<MediaItem> = new SearchSession<MediaItem>();
-  private resultSource: SearchResultSource = new SearchResultSource();
+  private resultSource: SearchResultSource<MediaItem> = new SearchResultSource<MediaItem>();
   private resultScroller: Scroller = new Scroller();
   private focusedResult: number = 0;
   private restoreResult: boolean = false;
   private needsRefresh: boolean = false;
   @Local totalCount: number = 0;
 
-  private db: FileSourceDatabase = FileSourceDatabase.getInstance();
+  private db: FileSourceDatabase | null = null;
   // 竞态保护：每次发起新请求时递增，回调中比对版本号，过期则丢弃
   private genreGeneration: number = 0;
   // 路由初始参数，用于 resetAll() 恢复入口语义
   private initialMediaType: string = '';
   private initialGenre: string = '';
+  private initialRating: number = 0;
+  private initialYearLabel: string = '';
   private initialPageTitle: string = '搜索结果';
 
   private getWatchProgressFilter(): 'unseen' | 'partial' | 'done' | undefined {
@@ -326,6 +336,8 @@ export struct MediaResultPage {
   // ── Data operations ───────────────────────────────────────────────────────
 
   private async doSearch(): Promise<void> {
+    if (!getSearchCapabilities(this.scope).localSearch || this.db === null) { return; }
+    const db = this.db;
     this.needsRefresh = false;
     const accepted = await this.session.run(async (): Promise<MediaItem[]> => {
       let mt: 'movie' | 'tv' | 'all' | undefined = undefined;
@@ -359,7 +371,7 @@ export struct MediaResultPage {
         originCountry: this.filterRegion.length > 0 ? this.filterRegion : undefined,
       };
 
-      return this.db.searchMediaItems(this.keyword, options, true);
+      return db.searchMediaItems(this.keyword, options, true);
     });
     if (!accepted) { return; }
     this.resultSource.replace(this.session.results);
@@ -375,6 +387,7 @@ export struct MediaResultPage {
   // ── Filter option getters ─────────────────────────────────────────────────
 
   private async loadGenreOptions(): Promise<void> {
+    if (!getSearchCapabilities(this.scope).localSearch || this.db === null) { return; }
     const generation = ++this.genreGeneration;
     let mt: 'movie' | 'tv' | undefined = undefined;
     if (this.filterMediaType === 'movie') { mt = 'movie'; }
@@ -400,8 +413,8 @@ export struct MediaResultPage {
   private resetAll(): void {
     this.filterMediaType = this.initialMediaType;
     this.filterGenre = this.initialGenre;
-    this.filterYearLabel = '';
-    this.filterRating = 0;
+    this.filterYearLabel = this.initialYearLabel;
+    this.filterRating = this.initialRating;
     this.filterProgress = '';
     this.filterRegion = '';
     this.filterSort = 'composite';
@@ -749,7 +762,7 @@ export struct MediaResultPage {
         LazyForEach(this.resultSource, (item: MediaItem, index: number) => {
           GridItem() {
             ResultPosterCard({
-              item: item,
+              item: item, scope: this.scope,
               onFocused: () => { this.focusedResult = index; },
               onOpen: () => { this.restoreResult = true; this.aboutToDisappear(); }
             })
@@ -778,7 +791,12 @@ export struct MediaResultPage {
         Column({ space: 20 }) {
           // 标题栏随内容整体滚动
           this.buildHeader()
-          this.buildFilterPanel()
+          Text(this.scope.label).fontSize(24).fontColor(C_TEXT_TITLE)
+          if (getSearchCapabilities(this.scope).localSearch) {
+            this.buildFilterPanel()
+          } else {
+            Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
+          }
           // summary：有筛选条件时显示当前条件
           if (this.filterMediaType !== '' || this.filterGenre !== '' || this.filterYearLabel !== '' || this.filterRating > 0 || this.filterProgress !== '') {
             Text(this.summaryText())
@@ -786,7 +804,9 @@ export struct MediaResultPage {
               .fontColor(C_SECONDARY)
               .width('100%')
           }
-          this.buildResultGrid()
+          if (getSearchCapabilities(this.scope).localSearch) {
+            this.buildResultGrid()
+          }
         }
         .width('100%')
         .padding(20)
@@ -798,15 +818,27 @@ export struct MediaResultPage {
       .backgroundColor(C_PAGE_BG)
     }
     .onReady((context: NavDestinationContext) => {
-      const param = context.pathInfo.param as MediaResultPageParam;
-      if (param !== undefined && param !== null) {
+      const param = context.pathInfo.param as MediaResultPageParam | string | null | undefined;
+      const servers = VideoServerStore.getState().videoServers;
+      const route = resolveSearchRoute(param, SourceSwitchModel.getState().getSearchScope(servers), servers);
+      this.scope = route.scope;
+      this.keyword = route.keyword;
+      this.session.invalidate(true);
+      this.resultSource.replace([]);
+      this.genreOptions = [];
+      if (!getSearchCapabilities(this.scope).localSearch) { return; }
+      this.db = FileSourceDatabase.getInstance();
+      if (param !== undefined && param !== null && typeof param !== 'string') {
         this.pageTitle = param.pageTitle ?? '搜索结果';
-        this.keyword = param.keyword ?? '';
         this.filterMediaType = param.mediaType ?? '';
         this.filterGenre = param.genre ?? '';
+        this.filterRating = param.minRating ?? 0;
+        this.filterYearLabel = param.decadeYear ?? '';
         // 保存入口初始值，resetAll() 时恢复入口语义而非全部清空
         this.initialMediaType = this.filterMediaType;
         this.initialGenre = this.filterGenre;
+        this.initialRating = this.filterRating;
+        this.initialYearLabel = this.filterYearLabel;
         this.initialPageTitle = this.pageTitle;
       }
       this.loadGenreOptions().catch((): void => {});

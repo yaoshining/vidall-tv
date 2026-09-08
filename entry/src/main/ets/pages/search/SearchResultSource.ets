@@ -1,12 +1,10 @@
-import { MediaItem } from '../../db/models/MediaEntity';
-
 /** Lazy grid adapter. Replace atomically after an accepted search response. */
-export class SearchResultSource implements IDataSource {
-  private items: MediaItem[] = [];
+export class SearchResultSource<T> implements IDataSource {
+  private items: T[] = [];
   private listeners: DataChangeListener[] = [];
   totalCount(): number { return this.items.length; }
-  getData(index: number): MediaItem { return this.items[index]; }
-  replace(items: MediaItem[]): void {
+  getData(index: number): T { return this.items[index]; }
+  replace(items: T[]): void {
     this.items = items;
     this.listeners.forEach((listener: DataChangeListener) => listener.onDataReloaded());
   }

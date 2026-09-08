@@ -2,7 +2,6 @@ import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { VideoServer, VideoServerType } from "../../db/models/VideoServerEntity";
 import { BusinessError } from "@kit.BasicServicesKit";
 import SettingType from "../../pages/settings/SettingType";
-import { SourceSwitchModel } from "../media/SourceSwitchModel";
 
 /**
  * 影视服务器缓存管理类。
@@ -14,7 +13,55 @@ export class VideoServerModel {
   private static readonly CACHE_DURATION = 5 * 60 * 1000;
 
   // 影视服务器列表
-  @Trace videoServers: VideoServer[] = [];
+  @Trace private servers: VideoServer[] = [];
+  private searchListeners: Set<() => void> = new Set<() => void>();
+
+  // 独立的变更意图通知保留现有监听器仅在数据发布时触发的契约。
+  private revisionListeners: Set<() => void> = new Set<() => void>();
+  private configurationRevision: number = 0;
+  private pendingConfigurationWrites: number = 0;
+
+  get searchConfigurationRevision(): number { return this.configurationRevision; }
+
+  subscribeSearchConfigurationRevision(listener: () => void): () => void {
+    this.revisionListeners.add(listener);
+    return () => { this.revisionListeners.delete(listener); };
+  }
+
+  private notifyConfigurationRevision(): void {
+    this.revisionListeners.forEach((listener: () => void) => listener());
+  }
+
+  private beginConfigurationWrite(): void {
+    this.pendingConfigurationWrites++;
+    this.configurationRevision++;
+    this.invalidateCache();
+    this.notifyConfigurationRevision();
+  }
+
+  private finishConfigurationWrite(): void {
+    this.pendingConfigurationWrites--;
+    this.configurationRevision++;
+    this.invalidateCache();
+    this.notifyConfigurationRevision();
+  }
+
+  get videoServers(): VideoServer[] { return this.servers; }
+  set videoServers(value: VideoServer[]) {
+    this.configurationRevision++;
+    this.servers = value;
+    this.notifyConfigurationRevision();
+    this.notifySearchConfiguration();
+  }
+
+  subscribeSearchConfiguration(listener: () => void): () => void {
+    this.searchListeners.add(listener);
+    return () => { this.searchListeners.delete(listener); };
+  }
+
+  private notifySearchConfiguration(): void {
+    this.searchListeners.forEach((listener: () => void) => listener());
+  }
 
   // 是否已加载
   @Trace isLoaded: boolean = false;
@@ -30,6 +77,9 @@ export class VideoServerModel {
    * @param forceReload 是否强制重新加载
    */
   async loadVideoServers(forceReload: boolean = false): Promise<void> {
+    if (this.pendingConfigurationWrites > 0) {
+      throw new Error('Server configuration write in progress');
+    }
     const now = Date.now();
 
     if (!forceReload && this.isLoaded && (now - this.lastUpdateTime) < VideoServerModel.CACHE_DURATION) {
@@ -49,12 +99,19 @@ export class VideoServerModel {
   }
 
   private async doLoad(now: number): Promise<void> {
+    const revision = this.configurationRevision;
     try {
       console.info('VideoServerModel: Loading video servers from database');
       const database = FileSourceDatabase.getInstance();
       // 等待数据库就绪，避免冷启动时 getStore 抛「Database not initialized」导致列表为空
       await FileSourceDatabase.whenDatabaseReady();
-      this.videoServers = await database.getAllVideoServers();
+      const servers = await database.getAllVideoServers();
+      // Never publish a read that overlaps a write, including a failed write.
+      if (revision !== this.configurationRevision || this.pendingConfigurationWrites > 0) {
+        throw new Error('Server configuration changed during load');
+      }
+      this.servers = servers;
+      this.notifySearchConfiguration();
       this.isLoaded = true;
       this.lastUpdateTime = now;
       console.info(`VideoServerModel: Loaded ${this.videoServers.length} video server(s)`);
@@ -69,12 +126,13 @@ export class VideoServerModel {
    * 添加影视服务器
    */
   async addVideoServer(server: VideoServer): Promise<number> {
+    this.beginConfigurationWrite();
     try {
       const database = FileSourceDatabase.getInstance();
       const rowId = await database.insertVideoServer(server);
 
       server.id = rowId;
-      this.videoServers.push(server);
+      this.videoServers = this.videoServers.concat([server]);
       this.lastUpdateTime = Date.now();
 
       console.info(`VideoServerModel: Added video server with id ${rowId}`);
@@ -83,6 +141,8 @@ export class VideoServerModel {
       const msg = (error as BusinessError).message ?? String(error);
       console.error('VideoServerModel: Failed to add video server', msg);
       throw new Error('Failed to add video server: ' + msg);
+    } finally {
+      this.finishConfigurationWrite();
     }
   }
 
@@ -94,6 +154,7 @@ export class VideoServerModel {
       throw new Error('Video server id is required for update');
     }
 
+    this.beginConfigurationWrite();
     try {
       const database = FileSourceDatabase.getInstance();
       await database.updateVideoServer(server);
@@ -105,6 +166,8 @@ export class VideoServerModel {
       const msg = (error as BusinessError).message ?? String(error);
       console.error('VideoServerModel: Failed to update video server', msg);
       throw new Error('Failed to update video server: ' + msg);
+    } finally {
+      this.finishConfigurationWrite();
     }
   }
 
@@ -112,38 +175,32 @@ export class VideoServerModel {
    * 删除影视服务器
    */
   async deleteVideoServer(id: number): Promise<void> {
+    this.beginConfigurationWrite();
     try {
       const database = FileSourceDatabase.getInstance();
       await database.deleteVideoServer(id);
 
       const index = this.videoServers.findIndex(item => item.id === id);
       if (index !== -1) {
-        this.videoServers.splice(index, 1);
+        this.videoServers = this.videoServers.filter((server: VideoServer) => server.id !== id);
       }
       this.lastUpdateTime = Date.now();
     } catch (error) {
       const msg = (error as BusinessError).message ?? String(error);
       console.error('VideoServerModel: Failed to delete video server', msg);
       throw new Error('Failed to delete video server: ' + msg);
+    } finally {
+      this.finishConfigurationWrite();
     }
   }
 
   /**
-   * 删除影视服务器并处理当前源回退（统一删除流程）。
-   * 若被删除的服务器恰好是当前激活源，自动回退到文件源。
-   * 源回退的持久化失败不中断删除流程（服务器已删除不可恢复，
-   * 残余的无效源引用会在下次 load() 时自动回退）。
+   * 统一删除入口，保留原方法名以兼容调用方。
+   * 保留当前源及持久化身份：已删除服务器由范围解析判为不可用，
+   * 只有用户主动选择文件源才允许本地搜索；删除非当前源不改变选择。
    */
   async deleteVideoServerWithFallback(id: number): Promise<void> {
     await this.deleteVideoServer(id);
-    const sourceSwitch = SourceSwitchModel.getState();
-    if (sourceSwitch.getActiveServerId() === id) {
-      try {
-        await sourceSwitch.setFileSource();
-      } catch (e) {
-        console.warn('VideoServerModel: 源回退持久化失败，将在下次加载时自动恢复', (e as BusinessError).message ?? String(e));
-      }
-    }
   }
 
   /**

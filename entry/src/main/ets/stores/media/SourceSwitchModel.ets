@@ -1,5 +1,6 @@
+import { SearchScopeIdentity, SearchScope, resolveSearchScope, createUnavailableSearchScope } from '../../models/search/SearchScope';
 import { AppPreferences, PrefKey } from '../../utils/AppPreferences';
-import { VideoServer } from '../../db/models/VideoServerEntity';
+import { VideoServer, VideoServerType } from '../../db/models/VideoServerEntity';
 
 /**
  * 媒体库当前数据源描述。
@@ -9,6 +10,7 @@ import { VideoServer } from '../../db/models/VideoServerEntity';
 export interface ActiveMediaSource {
   kind: 'fileSource' | 'videoServer';
   serverId?: number;
+  serverType?: VideoServerType;
   name?: string;
 }
 
@@ -27,7 +29,21 @@ export class SourceSwitchModel {
     return SourceSwitchModel.instance;
   }
 
-  @Trace activeSource: ActiveMediaSource = { kind: 'fileSource' };
+  @Trace private sourceLoaded: boolean = false;
+
+  @Trace private selectedSource: ActiveMediaSource = { kind: 'fileSource' };
+  private searchListeners: Set<() => void> = new Set<() => void>();
+
+  get activeSource(): ActiveMediaSource { return this.selectedSource; }
+  set activeSource(value: ActiveMediaSource) {
+    this.selectedSource = value;
+    this.searchListeners.forEach((listener: () => void) => listener());
+  }
+
+  subscribeSearchSource(listener: () => void): () => void {
+    this.searchListeners.add(listener);
+    return () => { this.searchListeners.delete(listener); };
+  }
 
   /** 数据源切换弹窗是否可见（供返回键拦截） */
   @Trace sourceSwitchDialogVisible: boolean = false;
@@ -49,6 +65,7 @@ export class SourceSwitchModel {
   }
 
   async setFileSource(): Promise<void> {
+    this.sourceLoaded = true;
     this.activeSource = { kind: 'fileSource' };
     await this.persist();
   }
@@ -57,7 +74,8 @@ export class SourceSwitchModel {
     if (server.id === undefined) {
       return;
     }
-    this.activeSource = { kind: 'videoServer', serverId: server.id, name: server.name };
+    this.sourceLoaded = true;
+    this.activeSource = { kind: 'videoServer', serverId: server.id, serverType: server.type, name: server.name };
     await this.persist();
   }
 
@@ -66,16 +84,16 @@ export class SourceSwitchModel {
    */
   async syncServerName(server: VideoServer): Promise<void> {
     if (this.activeSource.kind === 'videoServer' && this.activeSource.serverId === server.id) {
-      this.activeSource = { kind: 'videoServer', serverId: server.id, name: server.name };
+      this.activeSource = { kind: 'videoServer', serverId: server.id, serverType: server.type, name: server.name };
       await this.persist();
     }
   }
 
   /**
-   * 从偏好加载当前源。若指向的服务器已不存在则回退到文件源。
-   * @param existingServerIds 当前已加载的服务器 ID 集合
+   * 从偏好加载当前源。从已加载配置恢复类型；删除的服务器保留为不可用身份。
+   * @param servers 当前已加载的服务器配置
    */
-  async load(existingServerIds: number[]): Promise<void> {
+  async load(servers: VideoServer[]): Promise<void> {
     try {
       const raw = await AppPreferences.get(PrefKey.ACTIVE_MEDIA_SOURCE, '');
       if (raw.length === 0) {
@@ -85,19 +103,34 @@ export class SourceSwitchModel {
       const parsed = JSON.parse(raw) as ActiveMediaSource;
       if (parsed.kind === 'videoServer') {
         const serverId = parsed.serverId;
-        if (serverId !== undefined && existingServerIds.includes(serverId)) {
-          this.activeSource = parsed;
+        const server = servers.find((item: VideoServer) => item.id === serverId);
+        if (server !== undefined && (parsed.serverType === undefined || parsed.serverType === server.type)) {
+          this.activeSource = { kind: 'videoServer', serverId: server.id,
+            serverType: server.type, name: server.name };
           return;
         }
-        // 服务器已删除，回退文件源
-        this.activeSource = { kind: 'fileSource' };
-        await this.persist();
+        // 保留无效身份，禁止搜索静默回退本地数据。
+        this.activeSource = { kind: 'videoServer', serverId, serverType: parsed.serverType, name: '来源不可用' };
         return;
       }
-      this.activeSource = { kind: 'fileSource' };
-    } catch {
-      this.activeSource = { kind: 'fileSource' };
+      this.activeSource = parsed.kind === 'fileSource' ? { kind: 'fileSource' } :
+        { kind: 'videoServer', name: '来源不可用' };
+    } catch (e) {
+      this.activeSource = { kind: 'videoServer', name: '来源不可用' };
+    } finally {
+      this.sourceLoaded = true;
+      this.searchListeners.forEach((listener: () => void) => listener());
     }
+  }
+
+  getSearchScope(servers: VideoServer[]): SearchScope {
+    if (!this.sourceLoaded) { return createUnavailableSearchScope(); }
+    const identity: SearchScopeIdentity = {
+      kind: this.activeSource.kind,
+      serverId: this.activeSource.serverId,
+      serverType: this.activeSource.serverType
+    };
+    return resolveSearchScope(identity, servers);
   }
 
   private async persist(): Promise<void> {
