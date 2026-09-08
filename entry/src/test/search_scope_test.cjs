@@ -164,6 +164,34 @@ async function runHostIntegrationChecks() {
   const workspaceSource = fs.readFileSync(workspacePath, 'utf8');
   const resultSource = fs.readFileSync(resultPath, 'utf8');
   const detailPageSource = fs.readFileSync(path.join(root, detailPage), 'utf8');
+  const adapterSource = fs.readFileSync(path.join(root,
+    'entry/src/main/ets/pages/search/SearchResultSource.ets'), 'utf8');
+  // 主机不运行 ArkUI，静态护栏确保首次挂载条件具有可观察的数量依赖。
+  assert.match(adapterSource, /@ObservedV2\s+export class SearchResultSource/);
+  assert.match(adapterSource, /@Trace private count: number/);
+  assert.match(adapterSource, /totalCount\(\): number \{ return this\.count; \}/);
+  const adapter = new SearchResultSource();
+  assert.equal(adapter.totalCount(), 0);
+  adapter.replace([{ id: 'local' }]);
+  assert.equal(adapter.totalCount(), 1);
+  let reloads = 0;
+  const listener = { onDataReloaded() {
+    reloads += 1;
+    assert.equal(adapter.totalCount(), expectedCount);
+  } };
+  let expectedCount = 1;
+  adapter.registerDataChangeListener(listener);
+  adapter.replace([{ id: 'server' }]);
+  assert.equal(adapter.getData(0).id, 'server');
+  expectedCount = 0;
+  adapter.replace([]);
+  assert.equal(adapter.totalCount(), 0);
+  assert.equal(reloads, 2);
+  adapter.unregisterDataChangeListener(listener);
+  adapter.replace([{ id: 'retry' }]);
+  assert.equal(adapter.totalCount(), 1);
+  assert.equal(reloads, 2);
+
   const { createLocalSearchScope, resolveSearchScope, getSearchCapabilities } =
     require(path.join(root, 'entry/src/main/ets/models/search/SearchScope.ets'));
   const { VideoServerType } = require(path.join(root, 'entry/src/main/ets/db/models/VideoServerEntity.ets'));
