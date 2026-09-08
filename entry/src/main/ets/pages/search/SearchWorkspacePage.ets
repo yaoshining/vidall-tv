@@ -376,7 +376,7 @@ struct SearchWorkspacePage {
   private showToastSafe(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
-    } catch (_e) {}
+    } catch (e) {}
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
