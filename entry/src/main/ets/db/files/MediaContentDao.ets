@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import { MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from '../models/MediaEntity';
-import { toPinyinFull, toPinyinInitials } from '../../utils/PinyinUtil';
+import { normalizeSearchText, toPinyinFull, toPinyinInitials, toPinyinSegments } from '../../utils/PinyinUtil';
 import { BusinessError } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TABLE_MOVIES, TABLE_TV_SERIES, TABLE_TV_SEASONS, TABLE_TV_EPISODES } from './DbConstants';
@@ -177,7 +177,9 @@ export class MediaContentDao {
         runtime: e.runtime ?? null, original_language: e.originalLanguage ?? null,
         origin_country_json: e.originCountryJson ?? null,
         raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt,
+        title_normalized: normalizeSearchText(e.title),
         title_pinyin: toPinyinFull(e.title),
+        title_pinyin_segments: toPinyinSegments(e.title),
         title_initials: toPinyinInitials(e.title)
       };
       const pred = new relationalStore.RdbPredicates(TABLE_MOVIES);
@@ -260,8 +262,12 @@ export class MediaContentDao {
       columns.push('raw_json');
       args.push(e.rawJson);
     }
+    columns.push('title_normalized');
+    args.push(normalizeSearchText(e.title));
     columns.push('title_pinyin');
     args.push(toPinyinFull(e.title));
+    columns.push('title_pinyin_segments');
+    args.push(toPinyinSegments(e.title));
     columns.push('title_initials');
     args.push(toPinyinInitials(e.title));
     const placeholders = columns.map(() => '?').join(', ');
@@ -348,7 +354,9 @@ export class MediaContentDao {
         original_language: e.originalLanguage ?? null, origin_country_json: e.originCountryJson ?? null,
         raw_json: e.rawJson ?? null,
         scraped_at: e.scrapedAt,
+        title_normalized: normalizeSearchText(e.title),
         title_pinyin: toPinyinFull(e.title),
+        title_pinyin_segments: toPinyinSegments(e.title),
         title_initials: toPinyinInitials(e.title)
       };
       const pred = new relationalStore.RdbPredicates(TABLE_TV_SERIES);
@@ -378,7 +386,9 @@ export class MediaContentDao {
       origin_country_json: e.originCountryJson ?? null,
       raw_json: e.rawJson ?? null,
       scraped_at: e.scrapedAt,
+      title_normalized: normalizeSearchText(e.title),
       title_pinyin: toPinyinFull(e.title),
+      title_pinyin_segments: toPinyinSegments(e.title),
       title_initials: toPinyinInitials(e.title)
     };
     let insertedRowId = -1;
