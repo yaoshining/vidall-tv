@@ -163,6 +163,9 @@ async function runHostIntegrationChecks() {
   const resultPath = path.join(root, results);
   const workspaceSource = fs.readFileSync(workspacePath, 'utf8');
   const resultSource = fs.readFileSync(resultPath, 'utf8');
+  // 结果区不再添加多余的焦点跳转按钮，保留首行向上返回输入的路径。
+  assert.doesNotMatch(workspaceSource, /Button\('(浏览结果|返回输入)'\)/);
+  assert.match(workspaceSource, /KEYCODE_DPAD_UP && index < 6\) \{\s*this\.focusInput\(\)/);
   const detailPageSource = fs.readFileSync(path.join(root, detailPage), 'utf8');
   const adapterSource = fs.readFileSync(path.join(root,
     'entry/src/main/ets/pages/search/SearchResultSource.ets'), 'utf8');

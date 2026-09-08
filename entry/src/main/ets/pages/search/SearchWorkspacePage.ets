@@ -1015,12 +1015,8 @@ struct SearchWorkspacePage {
 
   @Builder
   buildResultList() {
-    Row({ space: 16 }) {
-      Button('浏览结果').onClick(() => { this.focusResults(); })
-      Button('返回输入').onClick(() => { this.focusInput(); })
-      Text(getSearchCapabilities(this.scope).serverSearch ? '首批结果（最多 100 项，可能更少）' : '最多显示 200 项')
-        .fontSize(18).fontColor(C_SECONDARY)
-    }
+    Text(getSearchCapabilities(this.scope).serverSearch ? '首批结果（最多 100 项，可能更少）' : '最多显示 200 项')
+      .fontSize(18).fontColor(C_SECONDARY)
     Grid(this.resultScroller) {
       LazyForEach(this.resultSource, (item: WorkspaceSearchItem, index: number) => {
         GridItem() {
