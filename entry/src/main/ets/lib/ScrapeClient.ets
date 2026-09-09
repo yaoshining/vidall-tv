@@ -240,17 +240,44 @@ export function resolveMovieSearchTerms(parsed: ParsedFileName, overrideTitle?: 
   let year = parsed.year;
   if (overrideTitle !== undefined && overrideTitle.trim().length > 0) {
     const normalizedOverrideTitle = overrideTitle.trim();
-    const overridden = parseFileName(normalizedOverrideTitle);
+    const overridden = parseFileName(`${normalizedOverrideTitle}.mkv`);
     title = overridden.title.length > 0 ? overridden.title : normalizedOverrideTitle;
-    // parseFileName 会把无扩展名标题末尾的 ".2021" 当扩展名截断导致年份丢失，
-    // 此时改用 extractSearchYear 从原始兜底标题直接提取年份（如 "Dune.2021" → 2021）。
+    // 目录名没有扩展名，补虚拟扩展名保护点分标题，并单独处理末尾年份。
     const overrideYear = overridden.year ?? extractSearchYear(normalizedOverrideTitle);
     if (overrideYear !== undefined) {
       year = overrideYear;
+      title = removeSearchYear(title);
     }
   }
   const terms: MovieSearchTerms = { title, year };
   return terms;
+}
+
+/** 自动关联仅接受规范化后相同的标题/原名；年份冲突和同名歧义留给人工确认。 */
+export function selectMovieSearchResult(
+  results: MovieScrapeResult[], title: string, year?: number
+): MovieScrapeResult | null {
+  const normalize = (value: string): string => value.toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]/g, '');
+  const query = normalize(title);
+  if (query.length === 0) { return null; }
+  let selected: MovieScrapeResult | null = null;
+  let bestScore = -1;
+  let ambiguous = false;
+  for (const result of results) {
+    if (normalize(result.title) !== query && normalize(result.originalTitle ?? '') !== query) { continue; }
+    const resultYear = extractSearchYear(result.releaseDate ?? '');
+    if (year !== undefined && resultYear !== undefined && resultYear !== year) { continue; }
+    const score = year !== undefined && resultYear === year ? 2 : 1;
+    if (score > bestScore) {
+      selected = result;
+      bestScore = score;
+      ambiguous = false;
+    } else if (score === bestScore && selected !== null &&
+      (selected.provider !== result.provider || selected.providerId !== result.providerId)) {
+      ambiguous = true;
+    }
+  }
+  return ambiguous ? null : selected;
 }
 
 /**
@@ -957,7 +984,7 @@ export class ScrapeClient {
     }
   }
 
-  /** 搜索电影，返回第一个命中的详情
+  /** 搜索电影，返回标题和年份校验通过的唯一候选详情
    * @param overrideTitle 可选，兜底搜索标题。弱语义文件名（如"4K.mp4"）场景下由分类器提供的父目录片名，
    * 传入后以该标题（可含年份）替代文件名解析结果发起 TMDB 搜索。
    */
@@ -971,9 +998,11 @@ export class ScrapeClient {
           const searchTitles = buildSearchTitles(searchTerms.title);
           for (const candidate of searchTitles) {
             const results = await provider.searchMovie(candidate, searchTerms.year, 'zh-CN');
-            if (results.length > 0) {
-              console.info(`[ScrapeClient] autoScrapeMovie 命中候选标题="${candidate}" providerId=${results[0].providerId}`);
-              return await provider.fetchMovieDetail(results[0].providerId, 'zh-CN');
+            const selected = selectMovieSearchResult(results, candidate, searchTerms.year);
+            if (selected !== null) {
+              console.info(`[ScrapeClient] autoScrapeMovie 命中候选标题="${candidate}" providerId=${selected.providerId}`);
+              const detail = await provider.fetchMovieDetail(selected.providerId, 'zh-CN');
+              if (detail !== null) { return detail; }
             }
           }
         } catch (e) {

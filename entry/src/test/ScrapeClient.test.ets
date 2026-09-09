@@ -1,5 +1,5 @@
 import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
-import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName, MovieScrapeResult } from '../main/ets/lib/ScrapeClient';
+import { ScrapeClient, TmdbProvider, parseFileName, buildSearchTitles, ParsedFileName, MovieScrapeResult, selectMovieSearchResult } from '../main/ets/lib/ScrapeClient';
 import {
   ScriptedFakeScrapeProvider,
   createDeferred,
@@ -17,6 +17,35 @@ async function flushMicrotasksUntil(predicate: () => boolean, rounds: number = 1
 
 export default function scrapeClientTest() {
   describe('ScrapeClient', () => {
+    it('should reject unrelated and conflicting movie results and select exact original title', 0, () => {
+      const wrong: MovieScrapeResult = { provider: 'fake', providerId: 'wrong',
+        title: 'Where Are You, Dear General?', releaseDate: '2025-01-01' };
+      const right: MovieScrapeResult = { provider: 'fake', providerId: 'right',
+        title: '给阿嬷的情书', originalTitle: 'Dear You', releaseDate: '2026-01-01' };
+      expect(selectMovieSearchResult([wrong], 'Dear You', 2026)).assertEqual(null);
+      expect(selectMovieSearchResult([wrong], 'Dear You', 2025)).assertEqual(null);
+      expect(selectMovieSearchResult([wrong, right], 'Dear.You', 2026)?.providerId).assertEqual('right');
+      expect(selectMovieSearchResult([right], '给阿嬷的情书', 2025)).assertEqual(null);
+      const duplicate: MovieScrapeResult = { provider: 'fake', providerId: 'duplicate',
+        title: '给阿嬷的情书', releaseDate: '2026-02-01' };
+      expect(selectMovieSearchResult([right, duplicate], '给阿嬷的情书', 2026)).assertEqual(null);
+    });
+
+    it('should fetch the validated movie instead of the first search result', 0, async () => {
+      const fake = new ScriptedFakeScrapeProvider('movie-match');
+      const right = createMovieScrapeResult('movie-match', '给阿嬷的情书', 'right');
+      fake.enqueueSearchMovieResults([
+        createMovieScrapeResult('movie-match', 'Where Are You, Dear General?', 'wrong'), right
+      ]);
+      fake.enqueueFetchMovieDetailResult(right);
+      const client = new ScrapeClient({ scrapeConcurrency: 1 });
+      client.registerProvider(fake);
+      expect((await client.autoScrapeMovie('Dear.You.2026.1080p.H264.mkv', '给阿嬷的情书'))?.providerId).assertEqual('right');
+      expect(fake.getLastCall('searchMovie')?.title).assertEqual('给阿嬷的情书');
+      expect(fake.getLastCall('searchMovie')?.year).assertEqual(2026);
+      expect(fake.getLastCall('fetchMovieDetail')?.providerId).assertEqual('right');
+    });
+
     /**
      * 测试用例 1：测试文件名解析功能 - 电影格式
      */
@@ -229,7 +258,7 @@ export default function scrapeClientTest() {
       expect(fake.getCallCount('searchMovie')).assertEqual(2);
       expect(fake.getCallCount('fetchMovieDetail')).assertEqual(0);
 
-      deferred1.resolve([createMovieScrapeResult('fake-concurrency', 'First Movie Result', 'movie-1')]);
+      deferred1.resolve([createMovieScrapeResult('fake-concurrency', 'First Movie', 'movie-1')]);
       const result1 = await p1;
       expect(result1 !== null).assertTrue();
       if (result1 !== null) {
@@ -248,8 +277,8 @@ export default function scrapeClientTest() {
         expect(thirdSearchCall.language).assertEqual('zh-CN');
       }
 
-      deferred2.resolve([createMovieScrapeResult('fake-concurrency', 'Second Movie Result', 'movie-2')]);
-      deferred3.resolve([createMovieScrapeResult('fake-concurrency', 'Third Movie Result', 'movie-3')]);
+      deferred2.resolve([createMovieScrapeResult('fake-concurrency', 'Second Movie', 'movie-2')]);
+      deferred3.resolve([createMovieScrapeResult('fake-concurrency', 'Third Movie', 'movie-3')]);
 
       const results = await Promise.all([p1, p2, p3]);
       expect(results.length).assertEqual(3);

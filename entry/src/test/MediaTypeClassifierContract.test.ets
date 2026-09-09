@@ -55,6 +55,20 @@ const weakSemanticRegressionSamples: WeakSemanticRegressionSample[] = [
 
 export default function mediaTypeClassifierContractTest() {
   describe('MediaTypeClassifier contract', () => {
+    it('should prefer a localized movie directory over the English release name', 0, () => {
+      const fileName = 'Dear.You.2026.1080p.H264.mkv';
+      const result = classifyVideoScrapeTarget(fileName, `/volume1/Videos/Movies/给阿嬷的情书/${fileName}`);
+      expect(result.mediaType).assertEqual('movie');
+      expect(result.fallbackTitle).assertEqual('给阿嬷的情书');
+      const terms = resolveMovieSearchTerms(parseFileName(fileName), result.fallbackTitle);
+      expect(terms.title).assertEqual('给阿嬷的情书');
+      expect(terms.year).assertEqual(2026);
+      for (const directory of ['Movies', '电影合集', '我的收藏']) {
+        expect(classifyVideoScrapeTarget(fileName, `/Movies/${directory}/${fileName}`).fallbackTitle).assertUndefined();
+      }
+      expect(resolveMovieSearchTerms(parseFileName(fileName), 'Dear.You').title).assertEqual('Dear You');
+    });
+
     it('should capture filename and ancestor path context for classification input', 0, () => {
       const fileNameInfo: FileNameSemanticInfo = {
         title: '19',

@@ -591,6 +591,21 @@ export function classifyMediaType(input: MediaTypeClassificationInput): MediaTyp
     return createMediaTypeClassificationResult('tv', signals, 'path-tv-semantics');
   }
 
+  // 英文发行名与中文目录名并存时，优先用中文目录片名；排除合集、季目录和通用目录。
+  if (movieScore > tvScore && !hasWeakSemanticTitle &&
+    !/[\u3400-\u9fff]/.test(fileNameInfo?.title ?? '')) {
+    const pathSignalValues = new Set<string>();
+    pathMatches.forEach((match: PathSemanticSignalMatch) => pathSignalValues.add(match.signal.value));
+    const parentTitle = resolveParentDirectoryFallbackTitle(input, pathSignalValues);
+    if (parentTitle !== undefined && /[\u3400-\u9fff]/.test(parentTitle) &&
+      !/合集|系列|收藏|精选/.test(parentTitle)) {
+      appendSignal(signals, 'parent-directory', parentTitle, 'localized-movie-title', 60);
+      const result = createMediaTypeClassificationResult('movie', signals, 'localized-parent-directory-title');
+      result.fallbackTitle = parentTitle;
+      return result;
+    }
+  }
+
   if (movieScore >= 70 && movieScore > tvScore && !hasWeakSemanticTitle) {
     return createMediaTypeClassificationResult('movie', signals, 'movie-title-or-path');
   }

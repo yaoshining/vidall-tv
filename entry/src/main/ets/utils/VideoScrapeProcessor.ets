@@ -224,7 +224,7 @@ export async function processVideoScrape(
   if (classification.mediaType === 'movie') {
     try {
       if (classification.fallbackTitle !== undefined) {
-        console.info(`${logPrefix} 文件名弱语义，使用父目录片名兜底搜索 fallbackTitle="${classification.fallbackTitle}"`);
+        console.info(`${logPrefix} 使用父目录片名搜索 fallbackTitle="${classification.fallbackTitle}"`);
       }
       const movie = await scrapeClient.autoScrapeMovie(fileName, classification.fallbackTitle);
       if (!movie) {
