@@ -211,8 +211,27 @@ async function runHostIntegrationChecks() {
     assert.ok(body.startsWith(`if (!getSearchCapabilities(this.scope).${capability}`), method);
   }
 
-  for (const method of ['private loadHistory()', 'private deleteHistory(', 'private clearAllHistory()',
-    'private executeSearchWithHistory()']) checkGuard(workspace, method, 'localHistory');
+  function checkHistoryGuard(source, method, operation) {
+    const body = extractMethodBody(source, method).trimStart();
+    assert.match(body, /^if \(this\.scope\.kind === 'unavailable'(?: \|\| this\.db === null)?\) \{ return; \}/, method);
+    assert.ok(body.includes(`this.db.${operation}(this.scope.key${operation === 'clearSearchHistory' ? ')' : ','}`), `${method}: current scope history`);
+  }
+  for (const [method, operation] of [
+    ['private loadHistory()', 'getSearchHistory'],
+    ['private deleteHistory(', 'deleteSearchHistory'],
+    ['private clearAllHistory()', 'clearSearchHistory'],
+    ['private executeSearchWithHistory()', 'upsertSearchHistory']
+  ]) {
+    checkHistoryGuard(workspaceSource, method, operation);
+    for (const key of ["'local-files'", "'video-server:jellyfin:999'"]) {
+      const mutant = workspaceSource.replace(`this.db.${operation}(this.scope.key`, `this.db.${operation}(${key}`);
+      assert.notEqual(mutant, workspaceSource);
+      assert.throws(() => checkHistoryGuard(mutant, method, operation), assert.AssertionError);
+    }
+    const body = extractMethodBody(workspaceSource, method);
+    const mutant = workspaceSource.replace(body, body.replace("this.scope.kind === 'unavailable'", 'false'));
+    assert.throws(() => checkHistoryGuard(mutant, method, operation), assert.AssertionError);
+  }
   checkGuard(workspace, 'private async executeSearch()', 'localSearch');
   checkGuard(workspace, 'private navigateToDetail(', 'localDetail');
   checkGuard(results, 'private async doSearch()', 'localSearch');
@@ -636,7 +655,11 @@ async function runHostIntegrationChecks() {
     try {
       const deferred = createDeferred();
       const page = createPageHarness(localScope, {
-        getSearchHistory() { return deferred.promise; }
+        getSearchHistory(scopeKey, limit) {
+          assert.equal(scopeKey, localScope.key);
+          assert.equal(limit, 20);
+          return deferred.promise;
+        }
       });
       page.loadHistory();
       page.appendChar('A');
@@ -655,7 +678,11 @@ async function runHostIntegrationChecks() {
   {
     const deferred = createDeferred();
     const page = createPageHarness(localScope, {
-      getSearchHistory() { return deferred.promise; }
+      getSearchHistory(scopeKey, limit) {
+        assert.equal(scopeKey, localScope.key);
+        assert.equal(limit, 20);
+        return deferred.promise;
+      }
     });
     page.loadHistory();
     page.leaveSearch();
@@ -667,8 +694,13 @@ async function runHostIntegrationChecks() {
 
   {
     const deferred = createDeferred();
+    const historyScopes = [];
     const page = createPageHarness(localScope, {
-      getSearchHistory() { return deferred.promise; }
+      getSearchHistory(scopeKey, limit) {
+        historyScopes.push(scopeKey);
+        assert.equal(limit, 20);
+        return scopeKey === localScope.key ? deferred.promise : Promise.resolve([]);
+      }
     });
     const serverContext = createServerContext(9);
     page.currentContext = () => serverContext;
@@ -679,7 +711,8 @@ async function runHostIntegrationChecks() {
     await flushMicrotasks();
     assert.equal(page.scope.key, serverContext.scope.key);
     assert.equal(page.historyList.length, 0);
-    assert.equal(page.db, null);
+    assert.equal(page.db, localDbSlot.current);
+    assert.deepEqual(historyScopes, [localScope.key, serverContext.scope.key]);
   }
 
   {
@@ -717,7 +750,7 @@ async function runHostIntegrationChecks() {
       page.refreshSource();
       assert.equal(page.scope.key, 'video-server:jellyfin:3');
       assert.equal(page.searchResults.length, 0);
-      assert.equal(page.db, null);
+      assert.equal(page.db, localDbSlot.current);
       assert.equal(timers.pendingCount(), 1);
     } finally {
       timers.restore();
@@ -1779,8 +1812,16 @@ async function runSearchChainChecks() {
   const sourceText = fs.readFileSync(path.join(root,
     'entry/src/main/ets/pages/search/SearchWorkspacePage.ets'), 'utf8');
   const failures = [];
-  assert.match(sourceText, /this\.buildHistory\(\)\s*}\s*this\.buildSearchResults\(\)/,
-    'page routes both capabilities through shared result builder');
+  const checkSharedBuilders = source => assert.match(
+    extractMethodBody(source.slice(source.lastIndexOf('  build() {')), '  build() {'),
+    /this\.buildKeyboard\(\)\s*}\s*this\.buildHistory\(\)\s*this\.buildSuggestions\(\)\s*this\.buildSearchResults\(\)/,
+    'history, suggestions and results stay shared outside the local keyboard branch');
+  checkSharedBuilders(sourceText);
+  for (const name of ['buildHistory', 'buildSuggestions', 'buildSearchResults']) {
+    const mutant = sourceText.replace(`this.${name}()`, '');
+    assert.notEqual(mutant, sourceText);
+    assert.throws(() => checkSharedBuilders(mutant), assert.AssertionError);
+  }
 
   async function runCase(name, scenario, allowLocal = false) {
     console.log(`[search-chain] ${name}: START`);
@@ -1798,6 +1839,7 @@ async function runSearchChainChecks() {
     const model = new VideoServerModel();
     const requests = [], searches = [], responses = [], pushes = [], toasts = [], localCalls = [];
     const localResponses = [];
+    const historyCalls = [], databaseScopes = [], historyByScope = new Map(), accessViolations = [];
     let deletes = 0;
     let page;
     try {
@@ -1834,19 +1876,52 @@ async function runSearchChainChecks() {
       JsonHttpClient.post = async () => { throw new Error('unexpected HTTP POST'); };
       const localDb = {
         searchMediaItems: async (keyword) => {
+          if (page.scope.kind !== 'localFiles') accessViolations.push('nonlocal media query');
+          assert.equal(page.scope.kind, 'localFiles', 'server/unavailable must not query local media or pinyin');
           localCalls.push(`search:${keyword}`);
           if (localResponses.length > 0) return await localResponses.shift()();
           return [{ id: 317, title: '本地片名', movieId: 317 }];
         },
-        getSearchHistory: async () => { localCalls.push('history'); return []; },
-        upsertSearchHistory: async keyword => { localCalls.push(`write:${keyword}`); }
+        getSearchHistory: async (scopeKey, limit) => {
+          recordHistory('read', scopeKey);
+          if (limit !== 20) accessViolations.push('unexpected history limit');
+          assert.equal(limit, 20);
+          return (historyByScope.get(scopeKey) || []).map(entry => ({ ...entry }));
+        },
+        upsertSearchHistory: async (scopeKey, keyword) => {
+          recordHistory('write', scopeKey, keyword);
+          historyByScope.set(scopeKey, [{ keyword, updatedAt: 1 },
+            ...(historyByScope.get(scopeKey) || []).filter(entry => entry.keyword !== keyword)]);
+        },
+        deleteSearchHistory: async (scopeKey, keyword) => {
+          recordHistory('delete', scopeKey, keyword);
+          historyByScope.set(scopeKey, (historyByScope.get(scopeKey) || []).filter(entry => entry.keyword !== keyword));
+        },
+        clearSearchHistory: async scopeKey => {
+          recordHistory('clear', scopeKey);
+          historyByScope.set(scopeKey, []);
+        }
       };
+      // Production catches DB rejections; retain violations for the scenario-level assertion.
+      function recordHistory(operation, scopeKey, keyword) {
+        if (page.scope.kind === 'unavailable' || scopeKey !== page.scope.key) {
+          accessViolations.push({ operation, scopeKey, currentScope: page.scope.key });
+        }
+        assert.notEqual(page.scope.kind, 'unavailable', 'unavailable must not access history');
+        assert.equal(scopeKey, page.scope.key, 'history must use the exact current scope');
+        historyCalls.push({ operation, scopeKey, ...(keyword === undefined ? {} : { keyword }) });
+      }
       const dependencies = {
         ...scopes, SourceSwitchModel,
         posterSrc: loadMethod(sourceText, 'function posterSrc(', ['item'], {}),
         // Host accessor exposes the real model without the ArkUI StateStore runtime.
         VideoServerStore: { getState: () => model },
-        FileSourceDatabase: { getInstance: () => { localCalls.push('database'); return localDb; } },
+        FileSourceDatabase: { getInstance: () => {
+          if (page.scope.kind === 'unavailable') accessViolations.push('unavailable database access');
+          assert.notEqual(page.scope.kind, 'unavailable', 'unavailable must not open database');
+          databaseScopes.push(page.scope.key);
+          return localDb;
+        } },
         ServerMediaDetailPage: { PAGE_NAME: 'serverMediaDetail' }
       };
       page = {
@@ -1867,7 +1942,7 @@ async function runSearchChainChecks() {
       for (const method of ['currentContext', 'resumeSearch', 'refreshSource', 'invalidateSearch',
         'leaveSearch', 'invalidateHistoryRequests', 'invalidateHistorySource', 'loadHistory',
         'scheduleSearch', 'executeServerSearch', 'serverErrorText', 'clearSearch',
-        'executeSearchWithHistory', 'resultStatus', 'resultErrorText', 'retrySearch',
+        'executeSearchWithHistory', 'clearAllHistory', 'resultStatus', 'resultErrorText', 'retrySearch',
         'focusInput', 'handleBack', 'resultItems', 'updateResultSource', 'focusResults']) {
         page[method] = loadMethod(sourceText, `private ${method}(`, method === 'invalidateSearch' ? ['clear = false'] : [], dependencies);
       }
@@ -1906,6 +1981,7 @@ async function runSearchChainChecks() {
       page.willHide = loadMethod(sourceText, '.onWillHide(() =>', [], dependencies);
       page.initializeRoute = loadMethod(sourceText, 'private initializeRoute(', ['param'], dependencies);
       page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', [], dependencies, true);
+      page.deleteHistory = loadMethod(sourceText, 'private deleteHistory(', ['keyword'], dependencies);
       page.showToastSafe = loadMethod(sourceText, 'private showToastSafe(', ['message'], dependencies);
       page.openResult = loadMethod(sourceText, 'private openResult(', ['item'], dependencies);
       page.openServerResultDetail = loadMethod(sourceText, 'private openServerResultDetail(', ['item'], dependencies);
@@ -1963,23 +2039,25 @@ async function runSearchChainChecks() {
       const inputPage = Object.create(page);
       inputPage.buildSearchBar = loadBuilder('  buildSearchBar()');
       const renderWorkspace = loadBuilder('  build() {');
-      for (const name of ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']) {
+      for (const name of ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSuggestions', 'buildSearchResults']) {
         inputPage[name] = () => inputBranches.push(name);
       }
       const renderInput = () => {
         inputNodes.length = 0;
         inputBranches.length = 0;
         // Bind to the actual page so callbacks mutate the same state as the session.
-        for (const name of ['buildSearchBar', 'buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']) {
+        for (const name of ['buildSearchBar', 'buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSuggestions', 'buildSearchResults']) {
           page[name] = inputPage[name];
         }
         renderWorkspace.call(page);
         return { nodes: inputNodes.slice(), branches: inputBranches.slice() };
       };
       await scenario({ check, timers, source, model, servers, requests, searches, responses,
-        pushes, toasts, page, response, enqueue, tick, success, localCalls, localResponses, scopes, render, retry, renderInput,
+        pushes, toasts, page, response, enqueue, tick, success, localCalls, localResponses,
+        historyCalls, historyByScope, databaseScopes, localDb, scopes, render, retry, renderInput,
         deleteCount: () => deletes });
-      if (!allowLocal) check('no local DB, search or history access', localCalls, []);
+      if (!allowLocal) check('no local media or pinyin/index queries', localCalls, []);
+      check('no swallowed scope/media access violations', accessViolations, []);
       check('all queued transport responses consumed', responses.length, 0);
       page.leaveSearch();
       await source.setVideoServer(servers[1]);
@@ -2000,6 +2078,66 @@ async function runSearchChainChecks() {
       timers.restore();
     }
   }
+
+  await runCase('三来源历史读写删清隔离及不可用负例', async h => {
+    h.page.searchText = '';
+    h.page.resumeSearch();
+    const select = async server => {
+      if (server) await h.source.setVideoServer(server);
+      else await h.source.setFileSource();
+      await flushMicrotasks();
+    };
+    const scopeKeys = [];
+    for (const server of [null, ...h.servers]) {
+      await select(server);
+      const scopeKey = h.page.scope.key;
+      scopeKeys.push(scopeKey);
+      h.check('new scope cannot see another source history', h.page.historyList, []);
+      h.page.searchText = 'shared-keyword';
+      if (server) h.enqueue('history submission');
+      h.page.executeSearchWithHistory();
+      await flushMicrotasks();
+      h.check('submission writes exact scope and keyword', h.historyCalls.filter(c => c.operation === 'write').at(-1),
+        { operation: 'write', scopeKey, keyword: 'shared-keyword' });
+      h.check('submission reloads only its own history', h.page.historyList,
+        [{ keyword: 'shared-keyword', updatedAt: 1 }]);
+      h.page.clearSearch();
+    }
+    h.check('three independent history partitions', [...h.historyByScope.keys()], scopeKeys);
+    await select(h.servers[0]);
+    h.page.deleteHistory('shared-keyword');
+    await flushMicrotasks();
+    h.check('delete reloads current scope only', h.page.historyList, []);
+    h.check('delete preserves local and server B rows', scopeKeys.map(key => h.historyByScope.get(key).length), [1, 0, 1]);
+    await select(h.servers[1]);
+    h.check('server B history survives server A deletion', h.page.historyList,
+      [{ keyword: 'shared-keyword', updatedAt: 1 }]);
+    h.page.clearAllHistory();
+    await flushMicrotasks();
+    h.check('clear affects only server B', scopeKeys.map(key => h.historyByScope.get(key).length), [1, 0, 0]);
+    h.check('clear resets displayed history', h.page.historyList, []);
+    await select(null);
+    h.check('local history survives both server mutations', h.page.historyList,
+      [{ keyword: 'shared-keyword', updatedAt: 1 }]);
+    await select(h.servers[0]);
+    h.model.videoServers = [];
+    await flushMicrotasks();
+    h.check('deleted source remains unavailable with no database',
+      [h.page.scope.kind, h.page.db, h.page.historyList], ['unavailable', null, []]);
+    const before = [h.historyCalls.slice(), h.databaseScopes.slice(), h.localCalls.slice(), h.searches.slice()];
+    // Retain a DB reference to prove the unavailable guard, not db === null, blocks access.
+    h.page.db = h.localDb;
+    h.page.searchText = 'blocked';
+    h.page.loadHistory();
+    h.page.deleteHistory('shared-keyword');
+    h.page.clearAllHistory();
+    h.page.executeSearchWithHistory();
+    await h.page.executeSearch();
+    await flushMicrotasks();
+    h.check('unavailable blocks every history operation and both search paths',
+      [h.historyCalls, h.databaseScopes, h.localCalls, h.searches], before);
+    h.check('unavailable does not schedule work', h.timers.pendingCount(), 0);
+  }, true);
 
   for (const delayed of [false, true]) {
     await runCase(`返回焦点编辑回调-${delayed ? '异步' : '同步'}`, async h => {
@@ -2095,14 +2233,17 @@ async function runSearchChainChecks() {
     h.check('local exposes real input modes', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
       ['initials', 'pinyin', 'chinese']);
     h.check('local renders keyboard and history', local.branches,
-      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']);
-    h.check('local retains only shared TextInput', local.nodes.map(n => n.type), ['input']);
+      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSuggestions', 'buildSearchResults']);
+    h.check('local shares TextInput and submit/clear actions', local.nodes.map(n => n.type),
+      ['input', 'action', 'action']);
     const localInput = local.nodes[0];
     localInput.attributes.onChange[0]('本地');
     localInput.attributes.onSubmit[0]();
     await flushMicrotasks();
-    h.check('local IME writes history once and searches once',
-      h.localCalls.filter(c => /^(write|search):/.test(c)), ['write:本地', 'search:本地']);
+    h.check('local IME searches once', h.localCalls, ['search:本地']);
+    h.check('local IME writes current scope history once',
+      h.historyCalls.filter(c => c.operation === 'write'),
+      [{ operation: 'write', scopeKey: h.page.scope.key, keyword: '本地' }]);
     h.check('local submit drains debounce', h.timers.pendingCount(), 0);
     h.page.clearSearch();
 
@@ -2111,8 +2252,8 @@ async function runSearchChainChecks() {
       await h.source.setVideoServer(h.model.videoServers[0]);
       h.check(`${type}: real text capability`, h.scopes.getSearchCapabilities(h.page.scope).inputModes, ['text']);
       const ui = h.renderInput();
-      h.check(`${type}: no custom keyboard or local history`, ui.branches,
-        ['buildBackRow', 'buildSearchResults']);
+      h.check(`${type}: shared history/suggestions/results without custom keyboard`, ui.branches,
+        ['buildBackRow', 'buildHistory', 'buildSuggestions', 'buildSearchResults']);
       h.check(`${type}: input and two actions`, ui.nodes.map(n => n.type), ['input', 'action', 'action']);
       h.check(`${type}: stable focus ids`, ui.nodes.map(n => n.attributes.id[0]),
         ['search-workspace-input', 'search-workspace-submit', 'search-workspace-clear']);
@@ -2156,7 +2297,7 @@ async function runSearchChainChecks() {
     h.check('unavailable cancels pending timer', h.timers.pendingCount(), 0);
     await h.source.setFileSource();
     h.check('return to local restores keyboard', h.renderInput().branches,
-      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSearchResults']);
+      ['buildBackRow', 'buildKeyboard', 'buildHistory', 'buildSuggestions', 'buildSearchResults']);
     h.page.clearSearch();
   }, true);
 
@@ -2234,7 +2375,7 @@ async function runSearchChainChecks() {
         if (boundary === 'leave') h.page.shown();
       }
     }
-    h.check('retry/preview never write history', h.localCalls.filter(c => c.startsWith('write:')), []);
+    h.check('retry/preview never write history', h.historyCalls.filter(c => c.operation === 'write'), []);
     h.check('local chains never reach HTTP', h.requests, []);
     h.page.searchText = 'film';
     h.page.scheduleSearch();
@@ -2281,7 +2422,9 @@ async function runSearchChainChecks() {
       ['initials', 'pinyin', 'chinese']);
     await h.tick();
     h.check('local query reaches database with pinyin text', h.localCalls,
-      ['database', 'history', 'search:bdpm']);
+      ['search:bdpm']);
+    h.check('local opens history database for exact scope', h.databaseScopes, [h.page.scope.key]);
+    h.check('local reads scoped history', h.historyCalls, [{ operation: 'read', scopeKey: h.page.scope.key }]);
     h.check('local results published', h.page.searchResults.map(item => item.title), ['本地片名']);
     h.check('local mode makes no HTTP requests', h.requests, []);
 
@@ -2289,7 +2432,10 @@ async function runSearchChainChecks() {
       await h.source.setVideoServer(server);
       h.check('server input is literal text only', h.scopes.getSearchCapabilities(h.page.scope).inputModes,
         ['text']);
-      h.check('switch clears local results and database', [h.page.searchResults, h.page.db], [[], null]);
+      h.check('switch clears local results but retains scoped history database',
+        [h.page.searchResults, h.page.db === h.localDb], [[], true]);
+      h.check('server reads only selected scope history', h.historyCalls.at(-1),
+        { operation: 'read', scopeKey: h.page.scope.key });
       const before = h.localCalls.slice();
       // Even an accidental direct invocation must respect the real capability guard.
       await h.page.executeSearch();
@@ -2298,7 +2444,7 @@ async function runSearchChainChecks() {
       h.enqueue(`服务器 ${server.id}`);
       await h.tick();
       h.success(`服务器 ${server.id}`, server.id);
-      h.check('server has no local database/index entry', h.localCalls, before);
+      h.check('server has no local media/index entry', h.localCalls, before);
       h.check('literal query reaches selected instance', h.searches.at(-1), {
         host: `chain-${server.id}.invalid`, keyword: '真实片名'
       });
@@ -2338,7 +2484,7 @@ async function runSearchChainChecks() {
       h.page.resumeSearch();
       const searchCount = () => local
         ? h.localCalls.filter(call => call.startsWith('search:')).length : h.searches.length;
-      const writeCount = () => h.localCalls.filter(call => call.startsWith('write:')).length;
+      const writeCount = () => h.historyCalls.filter(call => call.operation === 'write').length;
       h.check('before submit timer/search/history writes',
         [h.timers.pendingCount(), searchCount(), writeCount()], [1, 0, 0]);
       if (!local) h.enqueue('提交结果');
@@ -2354,7 +2500,7 @@ async function runSearchChainChecks() {
       console.log(`[search-chain] submit observations: ${JSON.stringify({ local, afterSubmit,
         afterDrain: [h.timers.pendingCount(), searchCount(), writeCount()] })}`);
       h.check('submit consumes debounce and searches/writes once',
-        [afterSubmit, searchCount(), writeCount()], [[0, 1, local ? 1 : 0], 1, local ? 1 : 0]);
+        [afterSubmit, searchCount(), writeCount()], [[0, 1, 1], 1, 1]);
       h.check('submit releases loading', h.page.isSearching, false);
       h.page.clearSearch();
       h.check('clear resets input and both result modes',
@@ -2365,7 +2511,7 @@ async function runSearchChainChecks() {
       if (!local) h.enqueue('防抖结果');
       await h.tick();
       h.check('debounce searches once without history submission',
-        [searchCount(), writeCount()], [2, local ? 1 : 0]);
+        [searchCount(), writeCount()], [2, 1]);
       h.page.searchText = '取消等待';
       h.page.scheduleSearch();
       h.page.backButton();
@@ -2379,7 +2525,7 @@ async function runSearchChainChecks() {
       if (!local) h.enqueue('重入结果');
       await h.tick();
       h.check('reentry preserves text and searches exactly once',
-        [h.page.searchText, searchCount(), writeCount()], ['取消等待', 3, local ? 1 : 0]);
+        [h.page.searchText, searchCount(), writeCount()], ['取消等待', 3, 1]);
       h.page.searchText = '返回取消';
       h.page.scheduleSearch();
       h.check('hardware back consumes event', h.page.backPressed(), true);
