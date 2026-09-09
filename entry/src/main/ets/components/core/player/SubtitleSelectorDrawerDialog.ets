@@ -475,7 +475,8 @@ export struct SubtitleSelectorDrawerDialog {
             .fontSize(34)
             .fontColor('#F3F6FB')
             .fontWeight(FontWeight.Bold)
-            .maxLines(1)
+            .maxLines(this.panelExpanded ? undefined : 1)
+            .wordBreak(WordBreak.BREAK_ALL)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
 
@@ -500,7 +501,8 @@ export struct SubtitleSelectorDrawerDialog {
             this.togglePanelExpand()
           })
         }
-        .height(48)
+        .height(this.panelExpanded ? undefined : 48)
+        .constraintSize({ minHeight: 48 })
         .width('100%')
         .alignItems(VerticalAlign.Center)
 
@@ -529,7 +531,8 @@ export struct SubtitleSelectorDrawerDialog {
             Text(this.getCurrentSubtitleName())
               .fontSize(18)
               .fontColor('#FBFDFF')
-              .maxLines(1)
+              .maxLines(this.panelExpanded ? undefined : 1)
+              .wordBreak(WordBreak.BREAK_ALL)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .layoutWeight(1)
 
@@ -540,8 +543,9 @@ export struct SubtitleSelectorDrawerDialog {
             }
           }
           .width('100%')
-          .height(68)
-          .padding({ left: 16, right: 16 })
+          .height(this.panelExpanded ? undefined : 68)
+          .constraintSize({ minHeight: 68 })
+          .padding({ top: 12, bottom: 12, left: 16, right: 16 })
           .justifyContent(FlexAlign.SpaceBetween)
           .alignItems(VerticalAlign.Center)
           .backgroundColor('rgba(255, 255, 255, 0.12)')
@@ -614,7 +618,8 @@ export struct SubtitleSelectorDrawerDialog {
                       Text(item.displayName)
                         .fontSize(17)
                         .fontColor('#EAF0F7')
-                        .maxLines(1)
+                        .maxLines(this.panelExpanded ? undefined : 1)
+                        .wordBreak(WordBreak.BREAK_ALL)
                         .textOverflow({ overflow: TextOverflow.Ellipsis })
                         .layoutWeight(1)
 
@@ -625,7 +630,8 @@ export struct SubtitleSelectorDrawerDialog {
                       }
                     }
                     .width('100%')
-                    .height(62)
+                    .height(this.panelExpanded ? undefined : 62)
+                    .constraintSize({ minHeight: 62 })
                     .padding({ top: 12, bottom: 12, left: 14, right: 14 })
                     .alignItems(VerticalAlign.Center)
                     .backgroundColor('rgba(255, 255, 255, 0.05)')
@@ -757,7 +763,8 @@ export struct SubtitleSelectorDrawerDialog {
                         Text(result.fileName)
                           .fontSize(16)
                           .fontColor('#EAF0F7')
-                          .maxLines(1)
+                          .maxLines(this.panelExpanded ? undefined : 1)
+                          .wordBreak(WordBreak.BREAK_ALL)
                           .textOverflow({ overflow: TextOverflow.Ellipsis })
                           .width('100%')
                         Text(`${result.languageCode}  ↓ ${this.formatDownloadCount(result.downloadCount)}`)
