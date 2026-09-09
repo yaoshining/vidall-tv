@@ -56,7 +56,7 @@ async function main() {
   await dao.upsertSearchHistory(plex.key, "O'Brien ? %");
   assert.equal((await dao.getSearchHistory(plex.key)).length, 2);
   assert.equal(cursors, 0);
-  console.log('PASS schema upgrade, legacy exclusion, scope isolation, per-scope pruning/upsert/delete/clear, bound SQL');
+  console.log('通过: 数据库升级、排除旧历史、来源隔离、按来源裁剪/插入更新/删除/清空及 SQL 参数绑定');
   const items = [{ title: 'Dune' }, { title: 'dune' }, { title: '' }, { title: '流浪地球' }];
   assert.equal(titleSuggestions(local, items).join(','), 'Dune,流浪地球');
   assert.equal(titleSuggestions(local, Array.from({length: 20}, (_, i) => ({title: `title${i}`}))).length, 6);
@@ -64,7 +64,7 @@ async function main() {
   assert.ok(searchInputExample(jelly).includes('不代表已收录'));
   assert.ok(searchInputExample(local).includes('lldq'));
   assert.equal(searchInputExample({kind: 'unavailable'}), '');
-  console.log('PASS source-specific title completion, stable ranking, deduplication and honest input examples');
+  console.log('通过: 当前来源片名补全、稳定排序、去重及准确的输入示例');
 
   // Execute the real page's non-render methods; native UI/IO are substituted.
   const pageSource = read('pages/search/SearchWorkspacePage.ets');
@@ -94,6 +94,6 @@ async function main() {
   }
   assert.equal(writes.map(w => w[0]).join(','), [local,jelly,plex].map(s => s.key).join(','));
   assert.equal(searches.join(','), 'local,server,server');
-  console.log('PASS late history suppression and suggestion submission stays in current source');
+  console.log('通过: 忽略迟到的历史响应，建议词提交保持在当前来源');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
