@@ -1,0 +1,1 @@
+{"id":"185f6279d44330e9d1a39b0577a1f405","fullName":"LocalFreeEntitlementService#getUserTier 应在 10ms 内完成（快速响应）","name":"getUserTier 应在 10ms 内完成（快速响应）","status":"passed","testResultsByEnv":{"default":"a2e6a805ce58d613cfdc355544320e69"}}
