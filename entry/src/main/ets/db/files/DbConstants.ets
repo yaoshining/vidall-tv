@@ -2,7 +2,7 @@
  * 数据库共享常量：表名、版本号、事件名。
  * 拆分自 FileSourceDatabase.ets 的私有静态常量，供 DbCore 与各 DAO 共用。
  */
-export const DB_VERSION: number = 14;
+export const DB_VERSION: number = 15;
 export const DEFAULT_DB_NAME: string = 'FILE_SOURCES_DB';
 export const DATABASE_READY: string = 'FILE_SOURCES_DB_READY';
 
@@ -18,3 +18,5 @@ export const TABLE_TV_EPISODES: string = 'tv_episodes';
 export const TABLE_PLAY_PROGRESS: string = 'play_progress';
 export const TABLE_MEDIA_PROGRESS: string = 'media_progress';
 export const TABLE_SEARCH_HISTORY: string = 'search_history';
+
+export const TABLE_SCOPED_SEARCH_HISTORY: string = 'scoped_search_history';

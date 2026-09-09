@@ -1,3 +1,4 @@
+import { TABLE_SCOPED_SEARCH_HISTORY } from './DbConstants';
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { normalizeSearchText, toPinyinFull, toPinyinInitials, toPinyinSegments } from '../../utils/PinyinUtil';
@@ -131,6 +132,8 @@ export class FileSourceDbCore {
         // 版本一致，但仍做防御性 schema 补全（应对手动降级/异常情况）
         await this.ensureScrapeInfoSchema(this.rdbStore);
       }
+
+      await this.ensureScopedSearchHistory(this.rdbStore);
 
       // 版本不一致时（含旧版和全新安装）也做一次 schema 补全
       if (currentVersion !== DB_VERSION) {
@@ -515,6 +518,17 @@ export class FileSourceDbCore {
    * 版本升级入口：按 currentVersion 逐步执行各版本迁移步骤，
    * 确保从任意旧版本升级都能经过所有中间版本的 DDL 变更。
    */
+  /** v15：旧全局历史保留但不推测归属，所有新历史必须显式携带来源键。 */
+  private async ensureScopedSearchHistory(store: relationalStore.RdbStore): Promise<void> {
+    await store.executeSql(`CREATE TABLE IF NOT EXISTS ${TABLE_SCOPED_SEARCH_HISTORY} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scope_key TEXT NOT NULL,
+      keyword TEXT NOT NULL,
+      searched_at INTEGER NOT NULL,
+      UNIQUE(scope_key, keyword)
+    )`);
+  }
+
   private async onUpgrade(rdbStore: relationalStore.RdbStore, oldVersion: number, newVersion: number): Promise<void> {
     console.info(`FileSourceDatabase: Upgrading ${oldVersion} → ${newVersion}`);
     // 用 currentVersion 追踪迁移进度，避免 oldVersion 固定导致跳步
