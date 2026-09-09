@@ -34,7 +34,61 @@ const store = {
       getString: col => rows[index][columns[col]], getLong: col => rows[index][columns[col]], close: () => cursors-- };
   }
 };
+async function verifyHistoryCreationFailures(ensure = FileSourceDbCore.prototype.ensureScopedSearchHistory) {
+  const migrationDb = new DatabaseSync(':memory:');
+  const legacyRows = () => migrationDb.prepare('SELECT keyword, searched_at FROM search_history ORDER BY keyword').all();
+  const scopedExists = () => migrationDb.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(constants.TABLE_SCOPED_SEARCH_HISTORY).count;
+  let failAfterWrite = false;
+  let attempts = 0;
+  const migrationStore = {
+    executeSql: async (sql, args = []) => {
+      attempts++;
+      const result = migrationDb.prepare(sql).run(...args);
+      if (failAfterWrite) throw new Error('injected acknowledgement failure');
+      return result;
+    }
+  };
+  try {
+    migrationDb.exec("CREATE TABLE search_history (keyword TEXT UNIQUE, searched_at INTEGER); " +
+      "INSERT INTO search_history VALUES ('legacy', 1), ('旧历史', 42), ('same keyword', 99)");
+    const original = legacyRows();
+    // SQLite itself rejects the DDL; the test does not add a transaction absent in production.
+    migrationDb.exec('PRAGMA query_only = ON');
+    await assert.rejects(() => ensure(migrationStore), /readonly/i);
+    assert.equal(attempts, 1);
+    assert.equal(scopedExists(), 0, 'failed DDL must not leave a partial source table');
+    assert.deepEqual(legacyRows(), original, 'failed DDL must preserve every legacy row');
+    migrationDb.exec('PRAGMA query_only = OFF');
+    failAfterWrite = true;
+    await assert.rejects(() => ensure(migrationStore), /injected acknowledgement failure/);
+    assert.equal(scopedExists(), 1, 'DDL completed before its acknowledgement failed');
+    assert.deepEqual(legacyRows(), original);
+    assert.equal(migrationDb.prepare(`SELECT COUNT(*) AS count FROM ${constants.TABLE_SCOPED_SEARCH_HISTORY}`).get().count, 0,
+      'unattributed legacy history must not enter source history');
+    migrationDb.prepare(`INSERT INTO ${constants.TABLE_SCOPED_SEARCH_HISTORY} (scope_key, keyword, searched_at) VALUES (?, ?, ?)`)
+      .run(local.key, 'retry sentinel', 123);
+    failAfterWrite = false;
+    await ensure(migrationStore);
+    await ensure(migrationStore);
+    assert.equal(attempts, 4, 'both recovery attempts must execute the production DDL');
+    assert.deepEqual(legacyRows(), original, 'retries must preserve legacy timestamps and keywords');
+    const scoped = migrationDb.prepare(`SELECT scope_key, keyword, searched_at FROM ${constants.TABLE_SCOPED_SEARCH_HISTORY}`).all();
+    assert.deepEqual(scoped.map(row => [row.scope_key, row.keyword, row.searched_at]), [[local.key, 'retry sentinel', 123]],
+      'retries must neither duplicate nor remove existing source history');
+    assert.throws(() => migrationDb.prepare(`INSERT INTO ${constants.TABLE_SCOPED_SEARCH_HISTORY} (scope_key, keyword, searched_at) VALUES (?, ?, ?)`)
+      .run(local.key, 'retry sentinel', 456), /UNIQUE constraint failed/);
+  } finally {
+    migrationDb.close();
+  }
+}
 async function main() {
+  await verifyHistoryCreationFailures();
+  // Negative control: swallowing migration failures must fail the same assertions.
+  await assert.rejects(() => verifyHistoryCreationFailures(async store => {
+    try { await FileSourceDbCore.prototype.ensureScopedSearchHistory(store); } catch {}
+  }), /Missing expected rejection/);
+  console.log('通过: 真实 SQLite DDL 失败、写入后应答失败、旧历史保留及幂等重试；吞错负例被拒绝');
   db.exec("CREATE TABLE search_history (keyword TEXT UNIQUE, searched_at INTEGER); INSERT INTO search_history VALUES ('legacy', 1)");
   await FileSourceDbCore.prototype.ensureScopedSearchHistory(store);
   await FileSourceDbCore.prototype.ensureScopedSearchHistory(store);
