@@ -1,8 +1,10 @@
+# Source Scoped Search
+
 ## Purpose
 
 定义电视端按当前来源搜索的统一行为契约，覆盖来源隔离、服务器检索与详情、能力输入、异步响应、遥控器焦点及来源内历史建议，确保多个协议和本地库不会相互污染。
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 当前来源是唯一搜索范围
 
