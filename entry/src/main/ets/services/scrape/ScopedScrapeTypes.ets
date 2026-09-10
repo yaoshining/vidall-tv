@@ -213,7 +213,13 @@ export interface DirectoriesSavedEvent {
 }
 
 /** 定向扫描重试上下文：记录原始新增目录与失败目录，供失败/部分失败任务专用重试使用。 */
+export interface DirectedScanFailure {
+  directoryPath: string;
+  message: string;
+}
+
 export interface DirectedScanRetryContext {
+  failures?: DirectedScanFailure[];
   sourceId: number;
   /** 原始全部新增目录路径（规范化后）。 */
   originalDirectoryPaths: string[];

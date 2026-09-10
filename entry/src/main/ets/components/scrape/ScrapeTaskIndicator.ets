@@ -1,3 +1,4 @@
+import { DirectedScanFailure } from '../../services/scrape/ScopedScrapeTypes';
 import { KeyCode } from '@kit.InputKit';
 import { ScrapeTaskQueue } from '../../services/scrape/ScrapeTaskQueue';
 import { AutoScrapeRetryExecutor } from '../../services/scrape/AutoScrapeRetryExecutor';
@@ -138,6 +139,12 @@ export struct ScrapeTaskIndicator {
         Text(this.scanContextLine2(task))
           .fontSize(12).fontColor('#8A9BB5').maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+      }
+      if (task.result?.directedScanContext?.failures !== undefined) {
+        ForEach(task.result.directedScanContext.failures, (failure: DirectedScanFailure) => {
+          Text(`${failure.directoryPath}: ${failure.message}`)
+            .fontSize(12).fontColor('#F1C56A').width('100%')
+        })
       }
       this.ProgressRing(task)
       Row() {

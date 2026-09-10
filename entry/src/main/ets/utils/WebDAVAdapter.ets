@@ -14,9 +14,13 @@ export class WebDAVAdapter implements ISourceAdapter {
   private basePath: string;
   private scrapeClient?: ScrapeClient;
   private upsertStrategy?: VideoUpsertStrategy;
+  private directoryScanErrors: string[] = [];
+  private directoryLister?: (path: string) => Promise<WebDAVResource[]>;
 
-  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy) {
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy,
+    directoryLister?: (path: string) => Promise<WebDAVResource[]>) {
     this.fileSource = fileSource;
+    this.directoryLister = directoryLister;
     this.scrapeClient = scrapeClient;
     this.upsertStrategy = upsertStrategy;
 
@@ -53,12 +57,20 @@ export class WebDAVAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath);
+    this.directoryScanErrors = [];
+    try {
+      await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath);
+    } catch (error) {
+      this.directoryScanErrors.push(String(error));
+    }
     // 等待所有 ffprobe + 视频入库任务完成，确保 scan() 返回时 DB 已有数据
     if (processingTasks.length > 0) {
       console.info(`[VideoScanner][WebDAV] 等待 ${processingTasks.length} 个视频处理任务完成...`);
       await Promise.all(processingTasks);
       console.info(`[VideoScanner][WebDAV] 所有视频处理任务完成`);
+    }
+    if (this.directoryScanErrors.length > 0) {
+      throw new Error(this.directoryScanErrors.join('; '));
     }
     return results;
   }
@@ -80,11 +92,17 @@ export class WebDAVAdapter implements ISourceAdapter {
 
     let resources: WebDAVResource[] = [];
     try {
-      resources = await this.client.listDirectory(currentPath);
+      resources = this.directoryLister !== undefined
+        ? await this.directoryLister(currentPath) : await this.client.listDirectory(currentPath);
     } catch (err) {
       const errMsg = (err as Error).message ?? String(err);
       console.error(`[VideoScanner][ERROR] 列举目录失败: ${currentPath}，原因: ${errMsg}`);
-      // 根目录（depth===0）失败时向上抛出，让调用方可以写 dir_status；子目录失败继续跳过
+      // 定向扫描必须报告子目录失败；等待已启动的入库任务后统一返回失败。
+      if (this.upsertStrategy !== undefined) {
+        this.directoryScanErrors.push(`${currentPath}: ${errMsg}`);
+        return;
+      }
+      // 全局扫描保持原有根目录抛错、子目录跳过语义。
       if (depth === 0) {
         throw new Error(errMsg);
       }

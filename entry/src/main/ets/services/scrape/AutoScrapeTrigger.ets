@@ -4,6 +4,7 @@ import { ScrapeTaskQueue } from './ScrapeTaskQueue';
 import { ScrapeTaskStore } from './ScrapeTaskStore';
 import {
   DirectoriesSavedEvent,
+  DirectedScanFailure,
   DirectedScanRetryContext,
   FolderScrapeScope,
   ScrapeProgress,
@@ -22,7 +23,22 @@ import { FileSourceTypeLabels } from '../../db/models/FileSourceEntity';
  * 按扫描结果三路推进任务状态。AutoScrapeRetryExecutor 的重试复用本编排，
  * 保证扫描-入队-进度-完成逻辑单一来源。
  */
+export type DirectedScanRunner = (context: common.Context, sourceId: number,
+  paths: string[], options?: Partial<ScanOptions>) => Promise<DirectedScanResult>;
+
 export class AutoScrapeTrigger {
+  private testQueue: ScrapeTaskQueue | undefined;
+  private testScanner: DirectedScanRunner | undefined;
+
+  /** 测试仅替换外部扫描和队列依赖，生产入口不调用。 */
+  setTestDependencies(queue?: ScrapeTaskQueue, scanner?: DirectedScanRunner): void {
+    this.testQueue = queue;
+    this.testScanner = scanner;
+  }
+
+  private getQueue(): ScrapeTaskQueue {
+    return this.testQueue ?? ScrapeTaskQueue.getInstance();
+  }
   private static instance: AutoScrapeTrigger | null = null;
 
   static getInstance(): AutoScrapeTrigger {
@@ -86,7 +102,7 @@ export class AutoScrapeTrigger {
     for (const p of directoryPaths) {
       paths.push(normalizeScrapeDirectoryPath(p));
     }
-    const queue = ScrapeTaskQueue.getInstance();
+    const queue = this.getQueue();
     const scope: FolderScrapeScope = {
       kind: 'folder',
       sourceId: sourceId,
@@ -107,7 +123,7 @@ export class AutoScrapeTrigger {
           this.handleScanProgress(taskId, completed, total, scanContext);
         }
       };
-      const result: DirectedScanResult = await VideoScannerUtil.scanDirectories(context, sourceId, paths, scanOptions);
+      const result: DirectedScanResult = await (this.testScanner ?? VideoScannerUtil.scanDirectories)(context, sourceId, paths, scanOptions);
       this.handleScanComplete(taskId, sourceId, paths, result);
     } catch (e) {
       const error = e as BusinessError;
@@ -127,10 +143,12 @@ export class AutoScrapeTrigger {
       // 已取消任务不再推进状态，后续扫描结果整体丢弃
       return;
     }
-    const queue = ScrapeTaskQueue.getInstance();
+    const queue = this.getQueue();
     const failedPaths: string[] = [];
+    const failures: DirectedScanFailure[] = [];
     for (const failed of result.failedDirectories) {
       failedPaths.push(failed.directoryPath);
+      failures.push({ directoryPath: failed.directoryPath, message: failed.error.message });
     }
     if (failedPaths.length === 0) {
       queue.setScanVideoIds(taskId, result.newlyInsertedVideoIds);
@@ -140,9 +158,10 @@ export class AutoScrapeTrigger {
     const retryContext: DirectedScanRetryContext = {
       sourceId: sourceId,
       originalDirectoryPaths: scannedPaths.slice(),
-      failedDirectoryPaths: failedPaths
+      failedDirectoryPaths: failedPaths,
+      failures: failures
     };
-    if (result.succeededDirectories.length > 0) {
+    if (result.succeededDirectories.length > 0 || result.newlyInsertedVideoIds.length > 0) {
       queue.setScanVideoIds(taskId, result.newlyInsertedVideoIds);
       queue.markTaskReady(taskId, retryContext);
       return;
@@ -158,10 +177,11 @@ export class AutoScrapeTrigger {
     const retryContext: DirectedScanRetryContext = {
       sourceId: sourceId,
       originalDirectoryPaths: scannedPaths.slice(),
-      failedDirectoryPaths: scannedPaths.slice()
+      failedDirectoryPaths: scannedPaths.slice(),
+      failures: scannedPaths.map((path: string): DirectedScanFailure => ({ directoryPath: path, message: message }))
     };
     console.error(`[AutoScrapeTrigger] 扫描整体失败 taskId=${taskId}: ${message}`);
-    ScrapeTaskQueue.getInstance().markTaskFailed(taskId, retryContext);
+    this.getQueue().markTaskFailed(taskId, retryContext);
   }
 
   private handleScanProgress(taskId: string, completed: number, total: number, scanContext?: ScanContextInfo): void {
@@ -186,7 +206,7 @@ export class AutoScrapeTrigger {
       };
       mappedContext = ctx;
     }
-    ScrapeTaskQueue.getInstance().updateScanProgress(taskId, progress, mappedContext);
+    this.getQueue().updateScanProgress(taskId, progress, mappedContext);
   }
 
   private isTaskCancelled(taskId: string): boolean {

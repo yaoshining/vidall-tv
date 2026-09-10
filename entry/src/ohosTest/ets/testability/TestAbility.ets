@@ -1,3 +1,4 @@
+import { TestContext } from '../test/TestContext';
 import AbilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import { Hypium } from '@ohos/hypium';
 import testsuite from '../test/List.test';
@@ -8,6 +9,7 @@ import type window from '@ohos.window';
 
 export default class TestAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    TestContext.current = this.context;
     console.info('TestAbility onCreate')
     const abilityDelegator = AbilityDelegatorRegistry.getAbilityDelegator()
     const abilityDelegatorArguments = AbilityDelegatorRegistry.getArguments()

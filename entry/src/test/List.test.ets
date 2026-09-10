@@ -1,3 +1,4 @@
+import directedAdapterErrorsTest from './DirectedAdapterErrors.test';
 import searchSessionTest from './SearchSession.test';
 import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
 import videoServerSearchTest from './VideoServerSearch.test';
@@ -142,4 +143,5 @@ export default function testsuite() {
   directoryPathDiffTest();
   videoUpsertResultTest();
   directedScanStrategyTest();
+  directedAdapterErrorsTest();
 }

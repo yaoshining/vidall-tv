@@ -1,5 +1,5 @@
 import { FileSource, SMBSourceConfig } from '../db/models/FileSourceEntity';
-import { SMBClient } from '../lib/SMBClient';
+import { SMBClient, SmbListDirectoryResult } from '../lib/SMBClient';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { FfprobeUtil } from './FfprobeUtil';
 import { ScrapeClient } from '../lib/ScrapeClient';
@@ -14,9 +14,13 @@ export class SMBAdapter implements ISourceAdapter {
   private config: SMBSourceConfig;
   private scrapeClient?: ScrapeClient;
   private upsertStrategy?: VideoUpsertStrategy;
+  private directoryScanErrors: string[] = [];
+  private directoryLister?: (path: string) => Promise<SmbListDirectoryResult>;
 
-  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy) {
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy,
+    directoryLister?: (path: string) => Promise<SmbListDirectoryResult>) {
     this.fileSource = fileSource;
+    this.directoryLister = directoryLister;
     this.config = JSON.parse(fileSource.configJson) as SMBSourceConfig;
     this.client = SMBClient.fromSourceConfig(this.config);
     this.scrapeClient = scrapeClient;
@@ -72,8 +76,16 @@ export class SMBAdapter implements ISourceAdapter {
     console.info(`[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`);
     const results: VideoFileInfo[] = [];
     const processingTasks: Promise<void>[] = [];
-    await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath);
+    this.directoryScanErrors = [];
+    try {
+      await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath);
+    } catch (error) {
+      this.directoryScanErrors.push(String(error));
+    }
     await Promise.allSettled(processingTasks);
+    if (this.directoryScanErrors.length > 0) {
+      throw new Error(this.directoryScanErrors.join('; '));
+    }
     return results;
   }
 
@@ -95,10 +107,14 @@ export class SMBAdapter implements ISourceAdapter {
       onCurrentPath(dirPath);
     }
 
-    const listResult = await this.client.listDirectory(dirPath);
+    const listResult = this.directoryLister !== undefined
+      ? await this.directoryLister(dirPath) : await this.client.listDirectory(dirPath);
 
     if (listResult.error) {
       console.warn(`[SMBAdapter] 跳过目录: ${listResult.error} (path=${dirPath})`);
+      if (this.upsertStrategy !== undefined) {
+        this.directoryScanErrors.push(`${dirPath}: ${listResult.error}`);
+      }
       return;
     }
 
