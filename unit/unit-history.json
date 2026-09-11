@@ -1,15 +1,5 @@
 [
   {
-    "run_number": 511,
-    "timestamp": "2026-09-07T17:44:55Z",
-    "status": "pass",
-    "passed": 0,
-    "failed": 0,
-    "total": 0,
-    "compiled_count": 75,
-    "report_href": "unit/runs/run-511/index.html"
-  },
-  {
     "run_number": 512,
     "timestamp": "2026-09-08T13:24:13Z",
     "status": "pass",
@@ -311,5 +301,16 @@
     "compiled_count": 0,
     "report_href": "unit/runs/run-540/index.html",
     "coverage_href": "unit/runs/run-540/coverage/index.html"
+  },
+  {
+    "run_number": 542,
+    "timestamp": "2026-09-11T08:11:48Z",
+    "status": "pass",
+    "passed": 795,
+    "failed": 0,
+    "total": 795,
+    "compiled_count": 0,
+    "report_href": "unit/runs/run-542/index.html",
+    "coverage_href": "unit/runs/run-542/coverage/index.html"
   }
 ]
