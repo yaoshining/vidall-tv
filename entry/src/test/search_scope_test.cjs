@@ -2106,7 +2106,7 @@ async function runSearchChainChecks() {
         { operation: 'write', scopeKey, keyword: server ? 'shared-keyword' : '本地片名' });
       h.check('submission reloads only its own history', h.page.historyList,
         server ? [{ keyword: 'shared-keyword', updatedAt: 1 }] :
-          [{ keyword: '本地片名', updatedAt: 1 }, { keyword: 'shared-keyword', updatedAt: 1 }]);
+          [{ keyword: '本地片名', updatedAt: 1 }]);
       h.page.clearSearch();
     }
     h.check('three independent history partitions', [...h.historyByScope.keys()], scopeKeys);
@@ -2114,17 +2114,17 @@ async function runSearchChainChecks() {
     h.page.deleteHistory('shared-keyword');
     await flushMicrotasks();
     h.check('delete reloads current scope only', h.page.historyList, []);
-    h.check('delete preserves local and server B rows', scopeKeys.map(key => h.historyByScope.get(key).length), [2, 0, 1]);
+    h.check('delete preserves local and server B rows', scopeKeys.map(key => h.historyByScope.get(key).length), [1, 0, 1]);
     await select(h.servers[1]);
     h.check('server B history survives server A deletion', h.page.historyList,
       [{ keyword: 'shared-keyword', updatedAt: 1 }]);
     h.page.clearAllHistory();
     await flushMicrotasks();
-    h.check('clear affects only server B', scopeKeys.map(key => h.historyByScope.get(key).length), [2, 0, 0]);
+    h.check('clear affects only server B', scopeKeys.map(key => h.historyByScope.get(key).length), [1, 0, 0]);
     h.check('clear resets displayed history', h.page.historyList, []);
     await select(null);
     h.check('local history survives both server mutations', h.page.historyList,
-      [{ keyword: '本地片名', updatedAt: 1 }, { keyword: 'shared-keyword', updatedAt: 1 }]);
+      [{ keyword: '本地片名', updatedAt: 1 }]);
     await select(h.servers[0]);
     h.model.videoServers = [];
     await flushMicrotasks();
@@ -2249,8 +2249,7 @@ async function runSearchChainChecks() {
     h.check('local IME searches candidates then first title', h.localCalls, ['search:本地', 'search:本地片名']);
     h.check('local IME writes current scope history once',
       h.historyCalls.filter(c => c.operation === 'write'),
-      [{ operation: 'write', scopeKey: h.page.scope.key, keyword: '本地' },
-       { operation: 'write', scopeKey: h.page.scope.key, keyword: '本地片名' }]);
+      [{ operation: 'write', scopeKey: h.page.scope.key, keyword: '本地片名' }]);
     h.check('local submit drains debounce', h.timers.pendingCount(), 0);
     h.page.clearSearch();
 
@@ -2511,7 +2510,7 @@ async function runSearchChainChecks() {
       console.log(`[search-chain] submit observations: ${JSON.stringify({ local, afterSubmit,
         afterDrain: [h.timers.pendingCount(), searchCount(), writeCount()] })}`);
       h.check('submit consumes debounce and searches/writes once',
-        [afterSubmit, searchCount(), writeCount()], [[0, local ? 2 : 1, local ? 2 : 1], local ? 2 : 1, local ? 2 : 1]);
+        [afterSubmit, searchCount(), writeCount()], [[0, local ? 2 : 1, 1], local ? 2 : 1, 1]);
       h.check('submit releases loading', h.page.isSearching, false);
       h.page.clearSearch();
       h.check('clear resets input and both result modes',
@@ -2522,7 +2521,7 @@ async function runSearchChainChecks() {
       if (!local) h.enqueue('防抖结果');
       await h.tick();
       h.check('debounce searches once without history submission',
-        [searchCount(), writeCount()], [local ? 4 : 2, local ? 3 : 1]);
+        [searchCount(), writeCount()], [local ? 4 : 2, local ? 2 : 1]);
       h.page.searchText = '取消等待';
       h.page.scheduleSearch();
       h.page.backButton();
@@ -2536,7 +2535,7 @@ async function runSearchChainChecks() {
       if (!local) h.enqueue('重入结果');
       await h.tick();
       h.check('reentry preserves text and searches exactly once',
-        [h.page.searchText, searchCount(), writeCount()], ['取消等待', local ? 6 : 3, local ? 4 : 1]);
+        [h.page.searchText, searchCount(), writeCount()], ['取消等待', local ? 6 : 3, local ? 3 : 1]);
       h.page.searchText = '返回取消';
       h.page.scheduleSearch();
       h.check('hardware back consumes event', h.page.backPressed(), true);

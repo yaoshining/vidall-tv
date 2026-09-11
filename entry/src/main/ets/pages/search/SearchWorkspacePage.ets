@@ -577,7 +577,11 @@ struct SearchWorkspacePage {
 
 
   private scheduleSearch(): void {
-    this.invalidateSearch(this.scope.kind === 'localFiles' || this.searchText.trim().length === 0);
+    this.invalidateSearch(this.searchText.trim().length === 0);
+    if (this.scope.kind === 'localFiles') {
+      this.suggestions = [];
+      this.selectedSuggestion = '';
+    }
     if (!this.pageActive || this.searchText.trim().length === 0) { return; }
     const capabilities = getSearchCapabilities(this.scope);
     if (!capabilities.localSearch && !capabilities.serverSearch) { return; }
@@ -680,8 +684,8 @@ struct SearchWorkspacePage {
     }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
-    this.saveSearchHistory(kw);
     if (getSearchCapabilities(this.scope).serverSearch) {
+      this.saveSearchHistory(kw);
       this.executeServerSearch();
     } else {
       this.executeSearch();

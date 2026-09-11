@@ -150,14 +150,15 @@ async function main() {
   for (const scope of [local, jelly, plex]) {
     page.scope = scope; page.searchText = 'Dune'; page.executeSearchWithHistory();
   }
-  assert.equal(writes.map(w => w[0]).join(','), [local,jelly,plex].map(s => s.key).join(','));
+  assert.equal(writes.map(w => w[0]).join(','), [jelly,plex].map(s => s.key).join(','));
   assert.equal(searches.join(','), 'local,server,server');
   console.log('通过: 忽略迟到的历史响应，建议词提交保持在当前来源');
 
   const preview = new Page();
   preview.pageActive = true; preview.scope = local; preview.searchText = 'H';
   preview.serverSession = { invalidate() {} };
-  preview.resultSource = { replace() {} };
+  let displayed = [];
+  preview.resultSource = { replace(items) { displayed = items; } };
   const calls = [], history = [];
   const first = { id: 1, movieId: 1, title: '花开锦绣' };
   const second = { id: 2, movieId: 2, title: '花儿与少年' };
@@ -165,7 +166,7 @@ async function main() {
     searchMediaItems: async kw => { calls.push(kw); return kw === 'H' ? [first, second] : kw === first.title ? [first] : [second]; },
     upsertSearchHistory: async (...args) => history.push(args), getSearchHistory: async () => []
   };
-  preview.updateResultSource = () => {};
+  preview.updateResultSource = () => preview.resultSource.replace(preview.session.results);
   await preview.executeSearch();
   assert.equal(calls.join(','), `H,${first.title}`);
   assert.equal(preview.searchText, 'H');
@@ -182,15 +183,37 @@ async function main() {
   assert.equal(history[1].join(','), `${local.key},${second.title}`);
   preview.executeSearchWithHistory(); await settle();
   assert.equal(history[2][1], second.title, 'submit confirms selected title, not initials');
+  // Submit before debounce resolves: write only the accepted title, never raw initials.
+  preview.selectedSuggestion = ''; preview.suggestions = []; preview.searchText = 'HKJX';
+  const beforeImmediate = history.length;
+  preview.db.searchMediaItems = async () => [first];
+  preview.scheduleSearch(); preview.executeSearchWithHistory(); await settle();
+  assert.equal(history.length, beforeImmediate + 1);
+  assert.equal(history.at(-1)[1], first.title);
+  assert.ok(!history.some(row => row[1] === 'HKJX'));
+  preview.searchText = 'ZZZ'; preview.selectedSuggestion = ''; preview.suggestions = [];
+  preview.db.searchMediaItems = async () => [];
+  preview.executeSearchWithHistory(); await settle();
+  assert.equal(history.length, beforeImmediate + 1, 'no candidates must not save raw input');
+  preview.searchText = 'H'; preview.db.searchMediaItems = async () => [second];
+  await preview.executeSearch();
   // A result request must become stale immediately, including inside debounce.
   let resolveOld;
+  preview.suggestions = [first.title, second.title];
   preview.db.searchMediaItems = () => new Promise(resolve => { resolveOld = resolve; });
   preview.selectSuggestion(first.title);
   preview.searchText = 'HX'; preview.scheduleSearch();
   assert.equal(preview.suggestions.length, 0);
+  assert.equal(preview.selectedSuggestion, '');
+  assert.equal(preview.session.status, 'refreshing');
+  assert.equal(displayed[0].title, second.title, 'keep the last displayed grid during debounce');
   resolveOld([first]); await settle();
+  assert.equal(preview.session.results[0].title, second.title, 'stale response cannot replace retained results');
+  assert.equal(displayed[0].title, second.title);
+  preview.searchText = ''; preview.scheduleSearch();
+  assert.equal(displayed.length, 0, 'empty input clears the grid');
   assert.equal(preview.session.results.length, 0);
-  preview.invalidateSearch(true);
+  preview.searchText = 'HX';
   // Candidate completion after clear must not launch a second query.
   const writesBeforeStale = history.length;
   const pending = preview.executeSearch();
