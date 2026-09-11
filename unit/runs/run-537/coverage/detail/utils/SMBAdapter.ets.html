@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { FileSource, SMBSourceConfig } from &#39;../db/models/FileSourceEntity&#39;; 
+import { SMBClient, SmbListDirectoryResult } from &#39;../lib/SMBClient&#39;; 
+import { FileSourceDatabase } from &#39;../db/files/FileSourceDatabase&#39;; 
+import { FfprobeUtil } from &#39;./FfprobeUtil&#39;; 
+import { ScrapeClient } from &#39;../lib/ScrapeClient&#39;; 
+import { VideoEntity } from &#39;../db/models/MediaEntity&#39;; 
+import { ISourceAdapter, VideoFileInfo, ScanOptions, ScanMode, VideoUpsertStrategy } from &#39;./VideoScannerTypes&#39;; 
+import { createVideoScrapeContext, hasSeasonSiblingDirectory, isVideoFile, hasCompleteScrapeAssociation, shouldRepairIncompleteTvEpisode } from &#39;./VideoScannerHelpers&#39;; 
+import { processVideoScrape } from &#39;./VideoScrapeProcessor&#39;; 
+ 
+export class SMBAdapter implements ISourceAdapter { 
+  private client: SMBClient; 
+  private fileSource: FileSource; 
+  private config: SMBSourceConfig; 
+  private scrapeClient?: ScrapeClient; 
+  private upsertStrategy?: VideoUpsertStrategy; 
+  private directoryScanErrors: string[] = []; 
+  private directoryLister?: (path: string) =&gt; Promise&lt;SmbListDirectoryResult&gt;; 
+ 
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy, 
+    directoryLister?: (path: string) =&gt; Promise&lt;SmbListDirectoryResult&gt;) { 
+    this.fileSource = fileSource; 
+    this.directoryLister = directoryLister; 
+    this.config = JSON.parse(fileSource.configJson) as SMBSourceConfig; 
+    this.client = SMBClient.fromSourceConfig(this.config); 
+    this.scrapeClient = scrapeClient; 
+    this.upsertStrategy = upsertStrategy; 
+  } 
+ 
+  /** 构建完整 smb:// 播放 URL（凭据内嵌，路径段编码，用于 FFmpeg 播放与刮削） */ 
+  private buildSmbUrl(filePath: string): string { 
+    const port = this.config.port ?? 445; 
+    const user = encodeURIComponent(this.config.username); 
+    const pass = encodeURIComponent(this.config.password); 
+    // filePath 形如 /Videos/TV Series/xxx/yyy.mkv，对每段路径做 URI 编码（保留斜杠） 
+    const encodedPath = filePath.split(&#39;/&#39;).map((seg: string): string =&gt; { 
+      if (seg.length === 0) { return &#39;&#39;; } 
+      let decoded: string = seg; 
+      try { decoded = decodeURIComponent(seg); } catch { decoded = seg; } 
+      return encodeURIComponent(decoded); 
+    }).join(&#39;/&#39;); 
+    return `smb://${user}:${pass}@${this.config.host}:${port}${encodedPath}`; 
+  } 
+ 
+  /** 日志脱敏：smb://user:pass@host → smb://***@host */ 
+  private maskUrl(url: string): string { 
+    const atIdx = url.indexOf(&#39;@&#39;); 
+    if (atIdx &lt; 0) { 
+      return url; 
+    } 
+    const protoEnd = url.indexOf(&#39;://&#39;); 
+    if (protoEnd &lt; 0) { 
+      return url; 
+    } 
+    return `${url.substring(0, protoEnd + 3)}***${url.substring(atIdx)}`; 
+  } 
+ 
+  /** 增量跳过判断（对照 WebDAVAdapter.canSkipIncrementalProcessing） */ 
+  private canSkip(existing: VideoEntity | null, info: VideoFileInfo): boolean { 
+    if (!existing) { 
+      return false; 
+    } 
+    // 优先用 lastModified 比较；SMB 源 lastModifiedMs=0 时 lastModified 为 undefined，降级用文件大小 
+    if (existing.lastModified &amp;&amp; info.lastModified) { 
+      return existing.lastModified === info.lastModified; 
+    } 
+    // lastModified 不可用（SMB 库未返回有效时间戳），用文件大小作为变化检测后备 
+    if (existing.fileSize !== undefined &amp;&amp; info.fileSize !== undefined) { 
+      return existing.fileSize === info.fileSize; 
+    } 
+    return false; 
+  } 
+ 
+  async scan(directoryPath: string, options: ScanOptions): Promise&lt;VideoFileInfo[]&gt; { 
+    const rootPath = (directoryPath.trim().length === 0 || directoryPath.trim() === &#39;/&#39;) ? &#39;/&#39; : directoryPath; 
+    console.info(`[VideoScanner][SMB] 开始扫描: ${rootPath} 最大深度: ${options.maxDepth}`); 
+    const results: VideoFileInfo[] = []; 
+    const processingTasks: Promise&lt;void&gt;[] = []; 
+    this.directoryScanErrors = []; 
+    try { 
+      await this.scanDir(rootPath, rootPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath); 
+    } catch (error) { 
+      this.directoryScanErrors.push(String(error)); 
+    } 
+    await Promise.allSettled(processingTasks); 
+    if (this.directoryScanErrors.length &gt; 0) { 
+      throw new Error(this.directoryScanErrors.join(&#39;; &#39;)); 
+    } 
+    return results; 
+  } 
+ 
+  private async scanDir( 
+    rootPath: string, 
+    dirPath: string, 
+    currentDepth: number, 
+    maxDepth: number, 
+    mode: ScanMode, 
+    results: VideoFileInfo[], 
+    processingTasks: Promise&lt;void&gt;[], 
+    onCurrentPath?: (currentPath: string) =&gt; void 
+  ): Promise&lt;void&gt; { 
+    if (currentDepth &gt; maxDepth) { 
+      return; 
+    } 
+ 
+    if (onCurrentPath !== undefined) { 
+      onCurrentPath(dirPath); 
+    } 
+ 
+    const listResult = this.directoryLister !== undefined 
+      ? await this.directoryLister(dirPath) : await this.client.listDirectory(dirPath); 
+ 
+    if (listResult.error) { 
+      console.warn(`[SMBAdapter] 跳过目录: ${listResult.error} (path=${dirPath})`); 
+      if (this.upsertStrategy !== undefined) { 
+        this.directoryScanErrors.push(`${dirPath}: ${listResult.error}`); 
+      } 
+      return; 
+    } 
+ 
+    const childDirectoryNames: string[] = []; 
+    listResult.files.forEach((file) =&gt; { 
+      if (file.isDirectory) { 
+        childDirectoryNames.push(file.name); 
+      } 
+    }); 
+    const videoScrapeContext = createVideoScrapeContext( 
+      rootPath, 
+      currentDepth, 
+      hasSeasonSiblingDirectory(childDirectoryNames) 
+    ); 
+ 
+    for (const file of listResult.files) { 
+      if (file.isDirectory) { 
+        await this.scanDir(rootPath, file.path, currentDepth + 1, maxDepth, mode, results, processingTasks, onCurrentPath); 
+      } else if (isVideoFile(file.name)) { 
+        if (onCurrentPath !== undefined) { 
+          onCurrentPath(file.path); 
+        } 
+        const info: VideoFileInfo = { 
+          sourceId: this.fileSource.id ?? 0, 
+          sourceName: this.fileSource.name, 
+          sourceType: this.fileSource.type, 
+          directoryPath: this.extractParentPath(file.path), 
+          filePath: file.path, 
+          fileName: file.name, 
+          fileSize: file.size, 
+          lastModified: file.lastModifiedMs &gt; 0 ? new Date(file.lastModifiedMs).toISOString() : undefined, 
+          wasProcessed: true, 
+          seasonSiblingDetected: videoScrapeContext.seasonSiblingDetected, 
+          seriesHint: videoScrapeContext.seriesHint 
+        }; 
+        console.info( 
+          `[VideoScanner][SMB] 文件源=${this.fileSource.name} | 路径=${file.path} | 文件名=${file.name} | 大小=${file.size} bytes` 
+        ); 
+        results.push(info); 
+ 
+        // 增量跳过：文件未变化则仅更新 updated_at，不重新处理 
+        if (mode === &#39;incremental&#39;) { 
+          let existing: VideoEntity | null = null; 
+          try { 
+            existing = await FileSourceDatabase.getInstance().getVideoByPath(file.path); 
+          } catch { 
+            // 查询失败视为新文件 
+          } 
+          if (this.canSkip(existing, info)) { 
+            info.wasProcessed = false; 
+            try { 
+              await FileSourceDatabase.getInstance().markVideoUpdatedByPath(file.path); 
+            } catch { 
+              // 标记失败不阻断扫描 
+            } 
+            // 文件未变化，但若从未成功刮削过，仍需补刮削 
+            if (existing?.id !== undefined &amp;&amp; this.scrapeClient) { 
+              try { 
+                const existingScrape = 
+                  await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existing.id); 
+                if (!existingScrape) { 
+                  // #191 第三轮修复：如果无 scrape_info 但检测到季目录兄弟，应重新完整处理（分类+刮削） 
+                  if (videoScrapeContext.seasonSiblingDetected) { 
+                    console.info( 
+                      `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录且检测到季目录兄弟，` + 
+                      `重新处理: ${file.name}` 
+                    ); 
+                    // 不 continue，继续执行后续的完整处理流程 
+                  } else { 
+                    console.info( 
+                      `[VideoScanner][SMB][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${file.name}` 
+                    ); 
+                    const capturedVideoId = existing.id; 
+                    const capturedScrapeClientR = this.scrapeClient; 
+                    const capturedModeR = mode; 
+                    const retryTask: Promise&lt;void&gt; = 
+                      this.doScrapeOnly(capturedVideoId, file.name, 
+                        capturedScrapeClientR, capturedModeR, info).catch(() =&gt; {}); 
+                    processingTasks.push(retryTask); 
+                    continue; 
+                  } 
+                } else if (!hasCompleteScrapeAssociation(existingScrape)) { 
+                  console.info( 
+                    `[VideoScanner][SMB][INCREMENTAL] 文件未变化但元数据关联缺失，触发补刮削: ${file.name}` 
+                  ); 
+                  const capturedVideoId = existing.id; 
+                  const capturedScrapeClientR = this.scrapeClient; 
+                  const capturedModeR = mode; 
+                  const retryTask: Promise&lt;void&gt; = 
+                    this.doScrapeOnly(capturedVideoId, file.name, 
+                      capturedScrapeClientR, capturedModeR, info).catch(() =&gt; {}); 
+                  processingTasks.push(retryTask); 
+                  continue; 
+                } else if (existingScrape.mediaType === &#39;unknown&#39; &amp;&amp; videoScrapeContext.seasonSiblingDetected) { 
+                  // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理 
+                  console.info( 
+                    `[VideoScanner][SMB][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` + 
+                    `重新处理之前的 unknown 文件: ${file.name}` 
+                  ); 
+                  // 清理旧的 unknown scrape_info 记录，以便后续重新刮削 
+                  try { 
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existing.id); 
+                    console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理旧 unknown 标记: ${file.name}`); 
+                  } catch { 
+                    console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理旧 unknown 标记失败: ${file.name}`); 
+                  } 
+                  // 不 continue，继续执行后续的完整处理流程 
+                } else if (shouldRepairIncompleteTvEpisode(existingScrape, file.name)) { 
+                  // #191 第四轮修复：检测到 tv + title 非空但 episodeId 为空，且文件名可提取 episode number 
+                  console.info( 
+                    `[VideoScanner][SMB][INCREMENTAL] 检测到不完整的 TV 剧集关联（tv + title 但无 episodeId），` + 
+                    `重新处理: ${file.name} | title=${existingScrape.title}` 
+                  ); 
+                  // 清理旧的不完整 scrape_info 记录，以便后续重新刮削 
+                  try { 
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existing.id); 
+                    console.info(`[VideoScanner][SMB][INCREMENTAL] 已清理不完整 TV 关联: ${file.name}`); 
+                  } catch { 
+                    console.warn(`[VideoScanner][SMB][INCREMENTAL] 清理不完整 TV 关联失败: ${file.name}`); 
+                  } 
+                  // 不 continue，继续执行后续的完整处理流程 
+                } else { 
+                  console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`); 
+                  continue; 
+                } 
+              } catch { 
+                // 查询失败，正常跳过 
+                console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`); 
+                continue; 
+              } 
+            } else { 
+              console.info(`[VideoScanner][SMB][INCREMENTAL] 跳过未变化文件: ${file.name}`); 
+              continue; 
+            } 
+          } 
+        } 
+ 
+        // 异步处理：媒体信息抓取 + 入库 + 刮削 
+        const capturedInfo = info; 
+        const capturedScrapeClient = this.scrapeClient; 
+        const capturedMode = mode; 
+        const capturedFilePath = file.path; 
+        const smbUrl = this.buildSmbUrl(file.path); 
+        const maskedUrl = this.maskUrl(smbUrl); 
+        const onProbeStart = (): void =&gt; { 
+          if (onCurrentPath !== undefined) { 
+            onCurrentPath(capturedFilePath); 
+          } 
+        }; 
+ 
+        const task: Promise&lt;void&gt; = FfprobeUtil.probe(smbUrl, undefined, 20000, onProbeStart).then(async (videoInfo) =&gt; { 
+          if (videoInfo.success) { 
+            const mainVideo = videoInfo.videoTracks.length &gt; 0 ? videoInfo.videoTracks[0] : undefined; 
+            console.info( 
+              `[VideoScanner][SMB][MEDIA] ${capturedInfo.fileName} | ` + 
+              `时长=${videoInfo.durationText} | ` + 
+              `分辨率=${mainVideo?.width ?? &#39;?&#39;}x${mainVideo?.height ?? &#39;?&#39;} | ` + 
+              `编码=${mainVideo?.codecName ?? &#39;?&#39;}` 
+            ); 
+          } else { 
+            console.warn(`[VideoScanner][SMB][MEDIA] 媒体信息抓取失败（将无媒体元数据入库）: ${capturedInfo.fileName} — ${videoInfo.errorMessage ?? &#39;&#39;}`); 
+          } 
+ 
+          const mainVideo = videoInfo.success &amp;&amp; videoInfo.videoTracks.length &gt; 0 
+            ? videoInfo.videoTracks[0] : undefined; 
+ 
+          const videoEntity: VideoEntity = { 
+            sourceId: capturedInfo.sourceId, 
+            directoryPath: capturedInfo.directoryPath, 
+            filePath: capturedInfo.filePath, 
+            fileName: capturedInfo.fileName, 
+            fileSize: capturedInfo.fileSize, 
+            lastModified: capturedInfo.lastModified, 
+            contentType: undefined, 
+            durationMs: videoInfo.success ? videoInfo.durationMs : undefined, 
+            width: videoInfo.success ? mainVideo?.width : undefined, 
+            height: videoInfo.success ? mainVideo?.height : undefined, 
+            frameRate: videoInfo.success ? mainVideo?.frameRate : undefined, 
+            videoCodec: videoInfo.success ? mainVideo?.codecName : undefined, 
+            audioTracksJson: videoInfo.success ? JSON.stringify(videoInfo.audioTracks) : undefined, 
+            subtitleTracksJson: videoInfo.success ? JSON.stringify(videoInfo.subtitleTracks) : undefined, 
+            scannedAt: Date.now() 
+          }; 
+ 
+          let videoId: number = -1; 
+          try { 
+            if (this.upsertStrategy !== undefined) { 
+              videoId = await this.upsertStrategy.upsert(videoEntity); 
+            } else { 
+              videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity); 
+            } 
+            console.info(`[VideoScanner][SMB][DB] 落库成功 videoId=${videoId} fileName=${capturedInfo.fileName} url=${maskedUrl}`); 
+          } catch (dbErr) { 
+            console.warn(`[VideoScanner][SMB][DB] 落库失败 fileName=${capturedInfo.fileName}: ${JSON.stringify(dbErr)}`); 
+            return; 
+          } 
+ 
+          if (capturedScrapeClient) { 
+            await this.doScrapeOnly(videoId, capturedInfo.fileName, 
+              capturedScrapeClient, capturedMode, capturedInfo); 
+          } 
+        }).catch(() =&gt; { 
+          console.warn(`[VideoScanner][SMB][TASK] 未处理异常 fileName=${capturedInfo.fileName}`); 
+        }); 
+        processingTasks.push(task); 
+      } 
+    } 
+  } 
+ 
+  private async doScrapeOnly( 
+    videoId: number, 
+    fileName: string, 
+    scrapeClient: ScrapeClient, 
+    mode: ScanMode, 
+    info: VideoFileInfo 
+  ): Promise&lt;void&gt; { 
+    await processVideoScrape(videoId, fileName, scrapeClient, mode, info, &#39;[VideoScanner][SMB][SCRAPE]&#39;); 
+  } 
+ 
+  private extractParentPath(path: string): string { 
+    const normalized = path.replace(/\/$/, &#39;&#39;); 
+    const lastSlash = normalized.lastIndexOf(&#39;/&#39;); 
+    if (lastSlash &lt;= 0) { 
+      return &#39;/&#39;; 
+    } 
+    return normalized.substring(0, lastSlash); 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Fri Sep 11 2026 12:53:12 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/utils/SMBAdapter.ets","hash":"c32ac461a70fccefae5cbbd87fe28c54899e9493cff89c8a88782f2ef9839d8f","lineCnt":346,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":18,"col":29},"endLoc":{"line":18,"col":78},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"SMBAdapter.constructor","count":2,"regions":[{"startLoc":{"line":20,"col":3},"endLoc":{"line":28,"col":4},"count":2,"ignored":0},{"startLoc":{"line":22,"col":5},"endLoc":{"line":28,"col":4},"count":2,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":21,"col":23},"endLoc":{"line":21,"col":72},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"SMBAdapter.buildSmbUrl","count":0,"regions":[{"startLoc":{"line":31,"col":3},"endLoc":{"line":43,"col":4},"count":0,"ignored":0},{"startLoc":{"line":32,"col":5},"endLoc":{"line":43,"col":4},"count":0,"ignored":0},{"startLoc":{"line":40,"col":7},"endLoc":{"line":41,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":3},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":36,"col":49},"endLoc":{"line":41,"col":6},"count":0,"ignored":0},{"startLoc":{"line":37,"col":29},"endLoc":{"line":37,"col":43},"count":0,"ignored":0},{"startLoc":{"line":39,"col":11},"endLoc":{"line":39,"col":49},"count":0,"ignored":0},{"startLoc":{"line":39,"col":50},"endLoc":{"line":39,"col":74},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":37,"col":11},"endLoc":{"line":37,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"SMBAdapter.maskUrl","count":0,"regions":[{"startLoc":{"line":46,"col":3},"endLoc":{"line":56,"col":4},"count":0,"ignored":0},{"startLoc":{"line":48,"col":20},"endLoc":{"line":50,"col":6},"count":0,"ignored":0},{"startLoc":{"line":52,"col":23},"endLoc":{"line":54,"col":6},"count":0,"ignored":0},{"startLoc":{"line":55,"col":5},"endLoc":{"line":56,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":48,"col":9},"endLoc":{"line":48,"col":18},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":52,"col":9},"endLoc":{"line":52,"col":21},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"SMBAdapter.canSkip","count":0,"regions":[{"startLoc":{"line":59,"col":3},"endLoc":{"line":72,"col":4},"count":0,"ignored":0},{"startLoc":{"line":60,"col":20},"endLoc":{"line":62,"col":6},"count":0,"ignored":0},{"startLoc":{"line":64,"col":53},"endLoc":{"line":66,"col":6},"count":0,"ignored":0},{"startLoc":{"line":68,"col":73},"endLoc":{"line":70,"col":6},"count":0,"ignored":0},{"startLoc":{"line":71,"col":5},"endLoc":{"line":72,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":60,"col":9},"endLoc":{"line":60,"col":18},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":64,"col":9},"endLoc":{"line":64,"col":51},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":68,"col":9},"endLoc":{"line":68,"col":71},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"SMBAdapter.scan","count":2,"regions":[{"startLoc":{"line":74,"col":3},"endLoc":{"line":90,"col":4},"count":2,"ignored":0},{"startLoc":{"line":80,"col":9},"endLoc":{"line":82,"col":6},"count":2,"ignored":0},{"startLoc":{"line":82,"col":7},"endLoc":{"line":84,"col":6},"count":0,"ignored":0},{"startLoc":{"line":86,"col":46},"endLoc":{"line":88,"col":6},"count":2,"ignored":0},{"startLoc":{"line":89,"col":5},"endLoc":{"line":90,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":75,"col":22},"endLoc":{"line":75,"col":111},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":86,"col":9},"endLoc":{"line":86,"col":44},"trueCount":2,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"SMBAdapter.scanDir","count":3,"regions":[{"startLoc":{"line":92,"col":3},"endLoc":{"line":325,"col":4},"count":3,"ignored":0},{"startLoc":{"line":133,"col":5},"endLoc":{"line":324,"col":6},"count":1,"ignored":0},{"startLoc":{"line":136,"col":14},"endLoc":{"line":323,"col":8},"count":0,"ignored":0},{"startLoc":{"line":136,"col":42},"endLoc":{"line":323,"col":8},"count":0,"ignored":0},{"startLoc":{"line":159,"col":37},"endLoc":{"line":253,"col":10},"count":0,"ignored":0},{"startLoc":{"line":166,"col":45},"endLoc":{"line":252,"col":12},"count":0,"ignored":0},{"startLoc":{"line":174,"col":66},"endLoc":{"line":248,"col":14},"count":0,"ignored":0},{"startLoc":{"line":175,"col":19},"endLoc":{"line":243,"col":16},"count":0,"ignored":0},{"startLoc":{"line":256,"col":9},"endLoc":{"line":323,"col":8},"count":0,"ignored":0},{"startLoc":{"line":199,"col":24},"endLoc":{"line":242,"col":18},"count":0,"ignored":0},{"startLoc":{"line":211,"col":24},"endLoc":{"line":242,"col":18},"count":0,"ignored":0},{"startLoc":{"line":178,"col":38},"endLoc":{"line":199,"col":18},"count":0,"ignored":0},{"startLoc":{"line":225,"col":24},"endLoc":{"line":242,"col":18},"count":0,"ignored":0},{"startLoc":{"line":211,"col":112},"endLoc":{"line":225,"col":18},"count":0,"ignored":0},{"startLoc":{"line":225,"col":88},"endLoc":{"line":239,"col":18},"count":0,"ignored":0},{"startLoc":{"line":186,"col":26},"endLoc":{"line":198,"col":20},"count":0,"ignored":0},{"startLoc":{"line":199,"col":75},"endLoc":{"line":211,"col":18},"count":0,"ignored":0},{"startLoc":{"line":113,"col":27},"endLoc":{"line":119,"col":6},"count":2,"ignored":0},{"startLoc":{"line":180,"col":65},"endLoc":{"line":186,"col":20},"count":0,"ignored":0},{"startLoc":{"line":271,"col":13},"endLoc":{"line":277,"col":12},"count":0,"ignored":0},{"startLoc":{"line":243,"col":17},"endLoc":{"line":247,"col":16},"count":0,"ignored":0},{"startLoc":{"line":248,"col":20},"endLoc":{"line":251,"col":14},"count":0,"ignored":0},{"startLoc":{"line":218,"col":23},"endLoc":{"line":221,"col":20},"count":0,"ignored":0},{"startLoc":{"line":239,"col":24},"endLoc":{"line":242,"col":18},"count":0,"ignored":0},{"startLoc":{"line":232,"col":23},"endLoc":{"line":235,"col":20},"count":0,"ignored":0},{"startLoc":{"line":102,"col":34},"endLoc":{"line":104,"col":6},"count":0,"ignored":0},{"startLoc":{"line":106,"col":38},"endLoc":{"line":108,"col":6},"count":0,"ignored":0},{"startLoc":{"line":115,"col":46},"endLoc":{"line":117,"col":8},"count":2,"ignored":0},{"startLoc":{"line":134,"col":29},"endLoc":{"line":136,"col":8},"count":1,"ignored":0},{"startLoc":{"line":137,"col":42},"endLoc":{"line":139,"col":10},"count":0,"ignored":0},{"startLoc":{"line":161,"col":15},"endLoc":{"line":163,"col":12},"count":0,"ignored":0},{"startLoc":{"line":163,"col":13},"endLoc":{"line":165,"col":12},"count":0,"ignored":0},{"startLoc":{"line":168,"col":17},"endLoc":{"line":170,"col":14},"count":0,"ignored":0},{"startLoc":{"line":170,"col":15},"endLoc":{"line":172,"col":14},"count":0,"ignored":0},{"startLoc":{"line":221,"col":21},"endLoc":{"line":223,"col":20},"count":0,"ignored":0},{"startLoc":{"line":235,"col":21},"endLoc":{"line":237,"col":20},"count":0,"ignored":0},{"startLoc":{"line":118,"col":7},"endLoc":{"line":119,"col":6},"count":2,"ignored":0},{"startLoc":{"line":309,"col":13},"endLoc":{"line":310,"col":12},"count":0,"ignored":0},{"startLoc":{"line":312,"col":13},"endLoc":{"line":313,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":102,"col":9},"endLoc":{"line":102,"col":32},"trueCount":0,"falseCount":3,"group":[],"ignored":0},{"startLoc":{"line":106,"col":9},"endLoc":{"line":106,"col":36},"trueCount":0,"falseCount":3,"group":[],"ignored":0},{"startLoc":{"line":110,"col":24},"endLoc":{"line":111,"col":87},"trueCount":3,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":113,"col":9},"endLoc":{"line":113,"col":25},"trueCount":2,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":115,"col":11},"endLoc":{"line":115,"col":44},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":134,"col":11},"endLoc":{"line":134,"col":27},"trueCount":1,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":136,"col":18},"endLoc":{"line":136,"col":40},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":137,"col":13},"endLoc":{"line":137,"col":40},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":148,"col":25},"endLoc":{"line":148,"col":106},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":159,"col":13},"endLoc":{"line":159,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":166,"col":15},"endLoc":{"line":166,"col":43},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":174,"col":17},"endLoc":{"line":174,"col":64},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":178,"col":21},"endLoc":{"line":178,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":180,"col":23},"endLoc":{"line":180,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":199,"col":28},"endLoc":{"line":199,"col":73},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":211,"col":28},"endLoc":{"line":211,"col":110},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":225,"col":28},"endLoc":{"line":225,"col":86},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":8},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":100,"col":21},"endLoc":{"line":100,"col":50},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"anonymous_4","count":1,"regions":[{"startLoc":{"line":122,"col":30},"endLoc":{"line":126,"col":6},"count":1,"ignored":0},{"startLoc":{"line":123,"col":29},"endLoc":{"line":125,"col":8},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":123,"col":11},"endLoc":{"line":123,"col":27},"trueCount":1,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":195,"col":75},"endLoc":{"line":195,"col":83},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":11},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":208,"col":73},"endLoc":{"line":208,"col":81},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"anonymous_7","count":0,"regions":[{"startLoc":{"line":262,"col":30},"endLoc":{"line":266,"col":10},"count":0,"ignored":0},{"startLoc":{"line":263,"col":44},"endLoc":{"line":265,"col":12},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":263,"col":15},"endLoc":{"line":263,"col":42},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"anonymous_8","count":0,"regions":[{"startLoc":{"line":268,"col":100},"endLoc":{"line":319,"col":10},"count":0,"ignored":0},{"startLoc":{"line":269,"col":34},"endLoc":{"line":277,"col":12},"count":0,"ignored":0},{"startLoc":{"line":303,"col":15},"endLoc":{"line":310,"col":12},"count":0,"ignored":0},{"startLoc":{"line":310,"col":13},"endLoc":{"line":313,"col":12},"count":0,"ignored":0},{"startLoc":{"line":315,"col":37},"endLoc":{"line":318,"col":12},"count":0,"ignored":0},{"startLoc":{"line":277,"col":18},"endLoc":{"line":279,"col":12},"count":0,"ignored":0},{"startLoc":{"line":304,"col":52},"endLoc":{"line":306,"col":14},"count":0,"ignored":0},{"startLoc":{"line":306,"col":20},"endLoc":{"line":308,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":269,"col":15},"endLoc":{"line":269,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":270,"col":31},"endLoc":{"line":270,"col":102},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":281,"col":29},"endLoc":{"line":282,"col":51},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":292,"col":25},"endLoc":{"line":292,"col":77},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":293,"col":20},"endLoc":{"line":293,"col":68},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":294,"col":21},"endLoc":{"line":294,"col":70},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":295,"col":24},"endLoc":{"line":295,"col":76},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":296,"col":25},"endLoc":{"line":296,"col":77},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":297,"col":30},"endLoc":{"line":297,"col":99},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":298,"col":33},"endLoc":{"line":298,"col":105},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":304,"col":17},"endLoc":{"line":304,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":315,"col":15},"endLoc":{"line":315,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"anonymous_9","count":0,"regions":[{"startLoc":{"line":319,"col":18},"endLoc":{"line":321,"col":10},"count":0,"ignored":0},{"startLoc":{"line":320,"col":11},"endLoc":{"line":321,"col":10},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"SMBAdapter.doScrapeOnly","count":0,"regions":[{"startLoc":{"line":327,"col":3},"endLoc":{"line":335,"col":4},"count":0,"ignored":0},{"startLoc":{"line":334,"col":5},"endLoc":{"line":335,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":16},{"name":"SMBAdapter.extractParentPath","count":0,"regions":[{"startLoc":{"line":337,"col":3},"endLoc":{"line":344,"col":4},"count":0,"ignored":0},{"startLoc":{"line":340,"col":25},"endLoc":{"line":342,"col":6},"count":0,"ignored":0},{"startLoc":{"line":343,"col":5},"endLoc":{"line":344,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":340,"col":9},"endLoc":{"line":340,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":17}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":7,"7":8,"8":9,"9":11,"10":12,"11":13,"12":14,"13":15,"14":16,"15":17,"16":18,"17":20,"18":21,"19":22,"20":23,"21":24,"22":25,"23":26,"24":27,"25":31,"26":32,"27":33,"28":34,"29":36,"30":37,"31":38,"32":39,"33":40,"34":41,"35":42,"36":46,"37":47,"38":48,"39":49,"40":51,"41":52,"42":53,"43":55,"44":59,"45":60,"46":61,"47":64,"48":65,"49":68,"50":69,"51":71,"52":74,"53":75,"54":76,"55":77,"56":78,"57":79,"58":80,"59":81,"60":82,"61":83,"62":85,"63":86,"64":87,"65":89,"66":92,"67":93,"68":94,"69":95,"70":96,"71":97,"72":98,"73":99,"74":100,"75":101,"76":102,"77":103,"78":106,"79":107,"80":110,"81":111,"82":113,"83":114,"84":115,"85":116,"86":118,"87":121,"88":122,"89":123,"90":124,"91":127,"92":128,"93":129,"94":130,"95":133,"96":134,"97":135,"98":136,"99":137,"100":138,"101":140,"102":141,"103":142,"104":143,"105":144,"106":145,"107":146,"108":147,"109":148,"110":149,"111":150,"112":151,"113":153,"114":154,"115":156,"116":159,"117":160,"118":161,"119":162,"120":163,"121":166,"122":167,"123":168,"124":169,"125":170,"126":174,"127":175,"128":176,"129":177,"130":178,"131":180,"132":181,"133":182,"134":183,"135":186,"136":187,"137":188,"138":190,"139":191,"140":192,"141":193,"142":194,"143":195,"144":196,"145":197,"146":199,"147":200,"148":201,"149":203,"150":204,"151":205,"152":206,"153":207,"154":208,"155":209,"156":210,"157":211,"158":213,"159":214,"160":215,"161":218,"162":219,"163":220,"164":221,"165":222,"166":225,"167":227,"168":228,"169":229,"170":232,"171":233,"172":234,"173":235,"174":236,"175":239,"176":240,"177":241,"178":243,"179":245,"180":246,"181":248,"182":249,"183":250,"184":256,"185":257,"186":258,"187":259,"188":260,"189":261,"190":262,"191":263,"192":264,"193":268,"194":269,"195":270,"196":271,"197":272,"198":273,"199":274,"200":275,"201":277,"202":278,"203":281,"204":282,"205":284,"206":285,"207":286,"208":287,"209":288,"210":289,"211":290,"212":291,"213":292,"214":293,"215":294,"216":295,"217":296,"218":297,"219":298,"220":299,"221":302,"222":303,"223":304,"224":305,"225":306,"226":307,"227":309,"228":310,"229":311,"230":312,"231":315,"232":316,"233":317,"234":319,"235":320,"236":322,"237":327,"238":328,"239":329,"240":330,"241":331,"242":332,"243":333,"244":334,"245":337,"246":338,"247":339,"248":340,"249":341,"250":343},"summary":{"lines":{"total":235,"covered":47,"pct":20,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,-1,2,0,2,2,2,2,2,2,-1,-1,-1,0,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,-1,0,0,0,-1,0,-1,-1,-1,0,0,0,-1,-1,0,0,-1,-1,0,0,-1,0,-1,-1,2,2,2,2,2,2,2,2,0,0,-1,2,2,2,-1,0,-1,-1,3,3,3,3,3,3,3,3,0,3,3,0,-1,-1,3,0,-1,-1,3,3,-1,3,2,2,2,-1,2,-1,-1,3,1,1,1,-1,-1,3,3,3,3,-1,-1,1,1,1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,-1,0,-1,0,0,-1,0,0,0,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,-1,-1,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,-1,0,0,-1,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,0,-1,-1,-1]},"functions":{"total":18,"covered":4,"pct":22.22},"branches":{"total":80,"covered":10,"pct":12.5}}},"title":"SMBAdapter.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
