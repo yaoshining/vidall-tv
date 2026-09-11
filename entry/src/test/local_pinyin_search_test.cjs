@@ -94,6 +94,9 @@ async function main() {
     '阿Q正传', '重启之极海听雷', '楚乔传', '重庆', '森林', '挪威的森林', '虫情森林',
     '爱', '爱在黎明破晓前', '100% Love', '1000 Love', 'A_B', 'AXB', 'Back\\Slash', "O'Connor"];
   for (const title of fixtures) await add(title);
+  await add('花开锦绣');
+  await add('花儿与少年', 'tv');
+  await add('上海故事');
   await add('庆余年', 'tv');
   await add('庆余年第二季', 'tv');
   await add('千与千寻', 'movie', 9, 'Spirited Away');
@@ -102,14 +105,15 @@ async function main() {
   const excludes = async (kw, unwanted) => assert.ok(!(await titles(kw)).includes(unwanted), `${kw} must not match ${unwanted}`);
   for (const [kw, title] of [
     ['重 庆', '重庆森林'], ['长安·三万里', '长安三万里'], ['重庆', '重庆森林'], ['chongqing', '重庆森林'], ['ＣＨÓＮＧ ＱＩＮＧ', '重庆森林'],
-    ['cqsl', '重庆森林'], ['cq', '重庆森林'], ['senlin', '重庆森林'],
+    ['H', '花开锦绣'], ['h', '花儿与少年'], ['hkjx', '花开锦绣'],
+    ['c', '重庆森林'], ['C', '重庆森林'], ['cqsl', '重庆森林'], ['cq', '重庆森林'], ['senlin', '重庆森林'],
     ['changjinhu', '长津湖'], ['cjh', '长津湖'], ['caswl', '长安三万里'],
     ['yinyue', '音乐之声'], ['yyzs', '音乐之声'], ['lǜ pi shu', '绿皮书'], ['lu: pi shu', '绿皮书'],
     ['奇幻piaoliu', '少年派的奇幻漂流'], ['重庆senlin', '重庆森林'], ['chongqing森林', '重庆森林'],
     ['重庆sl', '重庆森林'], ['aqzz', '阿Q正传'], ['qyn', '庆余年'], ['Spirited', '千与千寻'],
     ['Ｓｐｉｒｉｔｅｄ', '千与千寻'], ['100%', '100% Love'], ['A_B', 'A_B'], ['Back\\', 'Back\\Slash'], ["O'Connor", "O'Connor"]
   ]) await includes(kw, title);
-  for (const [kw, title] of [['c', '重庆森林'], ['qsl', '重庆森林'], ['ongqing', '重庆森林'],
+  for (const [kw, title] of [['h', '上海故事'], ['q', '重庆森林'], ['qsl', '重庆森林'], ['ongqing', '重庆森林'],
     ['重庆', '虫情森林'], ['重庆senlin', '虫情森林'], ['100%', '1000 Love'],
     ['A_B', 'AXB'], ["' OR 1=1 --", '重庆森林'], ['\\', '重庆森林']]) await excludes(kw, title);
   assert.deepEqual((await titles('森林')).slice(0, 1), ['森林']);

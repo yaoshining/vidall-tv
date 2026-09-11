@@ -1,4 +1,4 @@
-import { titleSuggestions, searchInputExample } from '../../services/search/SearchSuggestions';
+import { titleSuggestions } from '../../services/search/SearchSuggestions';
 import { SearchSession } from '../../services/search/SearchSession';
 import { SearchResultSource } from './SearchResultSource';
 import { SearchWorkspaceSession, SearchWorkspaceContext } from '../../services/search/SearchWorkspaceSession';
@@ -12,7 +12,6 @@ import { ServerMediaDetailPage, ServerMediaDetailPageParam } from '../detail/Ser
 
 import { SeriesDetailPage } from '../detail/SeriesDetailPage';
 import { MovieDetailPage } from '../detail/MovieDetailPage';
-import { LengthMetrics } from '@kit.ArkUI';
 import { KeyCode } from '@kit.InputKit';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +78,7 @@ function posterSrc(item: MediaItem): string {
 struct KeyButton {
   @Param label: string = '';
   @Param kbg: string = C_LETTER_KEY_BG;
+  @Event onFocused: () => void = () => {};
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
   @Local isHovered: boolean = false;
@@ -119,14 +119,15 @@ struct KeyButton {
       .fontColor('#FFFFFF')
       .textAlign(TextAlign.Center)
       .width('100%')
-      .aspectRatio(112 / 60)
+      .height(36)
+      .id(`search-key-${this.label}`)
       .borderRadius(10)
       .backgroundColor(this.getBgColor())
       .border({ width: this.getBorderWidth(), color: this.getBorderColor() })
       .scale({ x: this.getScale(), y: this.getScale() })
       .animation({ duration: 100, curve: Curve.EaseOut })
       .focusable(true)
-      .onFocus(() => { this.isFocused = true; })
+      .onFocus(() => { this.isFocused = true; this.onFocused(); })
       .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
       .onHover((isHover: boolean) => { this.isHovered = isHover; })
       .onTouch((event: TouchEvent) => {
@@ -167,6 +168,8 @@ struct ActionKey {
   @Param sublabel: string = '';
   @Param sublabelFontSize: number = 16;
   @Param keyAspect: number = 112 / 60;
+  @Param focusId: string = '';
+  @Event onFocused: () => void = () => {};
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
   @Local isHovered: boolean = false;
@@ -228,14 +231,15 @@ struct ActionKey {
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     .width('100%')
-    .aspectRatio(this.keyAspect)
+    .height(36)
+    .id(this.focusId)
     .borderRadius(10)
     .backgroundColor(this.getBgColor())
     .border({ width: this.getBorderWidth(), color: this.getBorderColor() })
     .scale({ x: this.getScale(), y: this.getScale() })
     .animation({ duration: 100, curve: Curve.EaseOut })
     .focusable(true)
-    .onFocus(() => { this.isFocused = true; })
+    .onFocus(() => { this.isFocused = true; this.onFocused(); })
     .onBlur(() => { this.isFocused = false; this.isHovered = false; this.isPressed = false; })
     .onHover((isHover: boolean) => { this.isHovered = isHover; })
     .onTouch((event: TouchEvent) => {
@@ -252,6 +256,56 @@ struct ActionKey {
       }
     })
     .onClick(() => { this.onPress(); })
+  }
+}
+
+// 联想词与历史共用一行；长标题聚焦时滚动，不缩小字号。
+@ComponentV2
+struct SearchWordChip {
+  @Param title: string = '';
+  @Param focusId: string = '';
+  @Param selected: boolean = false;
+  @Param removable: boolean = false;
+  @Event onPress: () => void = () => {};
+  @Event onDelete: () => void = () => {};
+  @Event onFocused: () => void = () => {};
+  @Event onNavigate: (event: KeyEvent) => void = () => {};
+  @Local focused: boolean = false;
+  @Local deleteFocused: boolean = false;
+
+  build() {
+    Row({ space: 0 }) {
+      Button({ type: ButtonType.Normal }) {
+        Text(this.title)
+          .fontSize(18).fontColor(C_HIST_TEXT)
+          .maxLines(1)
+          .textOverflow({ overflow: this.focused || this.deleteFocused ? TextOverflow.MARQUEE : TextOverflow.Ellipsis })
+          .constraintSize({ maxWidth: this.removable ? 188 : 220 })
+      }
+      .id(this.focusId).height(40)
+      .padding({ left: 14, right: 14 })
+      .backgroundColor(this.focused ? C_SEL_BLUE : Color.Transparent)
+      .borderRadius(20)
+      .focusable(true)
+      .onFocus(() => { this.focused = true; this.onFocused(); })
+      .onBlur(() => { this.focused = false; })
+      .onClick(() => this.onPress())
+      if (this.removable) {
+        Button('×')
+          .id(this.focusId + '-delete').width(30).height(40)
+          .fontSize(18).fontColor(C_HIST_TEXT)
+          .backgroundColor(this.deleteFocused ? C_SEL_BLUE : Color.Transparent)
+          .focusable(true)
+          .onFocus(() => { this.deleteFocused = true; this.onFocused(); })
+          .onBlur(() => { this.deleteFocused = false; })
+          .onClick(() => this.onDelete())
+      }
+    }
+    .height(42).borderRadius(22)
+    .backgroundColor(C_HIST_CHIP_BG)
+    .border({ width: this.selected || this.focused || this.deleteFocused ? 2 : 1,
+      color: this.focused || this.deleteFocused ? '#4A9FFF' : this.selected ? C_TEXT_TITLE : C_HIST_BORDER })
+    .onKeyEvent((event: KeyEvent) => this.onNavigate(event))
   }
 }
 
@@ -274,6 +328,7 @@ interface WorkspaceSearchItem {
 struct WorkspacePosterCard {
   @Require @Param item: WorkspaceSearchItem;
   @Param focusId: string = '';
+  @Param cardWidth: number = 180;
   @Event onFocused: () => void = () => {};
   @Event onPress: () => void = () => {};
   @Local isFocused: boolean = false;
@@ -283,8 +338,8 @@ struct WorkspacePosterCard {
       Stack() {
         if (this.item.poster.length > 0) {
           Image(this.item.poster)
-            .width(180)
-            .height(270)
+            .width(this.cardWidth)
+            .height(this.cardWidth * 1.5)
             .objectFit(ImageFit.Cover)
         } else {
           Column() {
@@ -292,15 +347,15 @@ struct WorkspacePosterCard {
               .fontSize(36)
               .opacity(0.4)
           }
-          .width(180)
-          .height(270)
+          .width(this.cardWidth)
+          .height(this.cardWidth * 1.5)
           .backgroundColor(C_COMPONENT_BG)
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
         }
       }
-      .width(180)
-      .height(270)
+      .width(this.cardWidth)
+      .height(this.cardWidth * 1.5)
       .clip(true)
       .borderRadius(8)
       .border({ width: this.isFocused ? 2 : 0, color: '#FF3B77D4' })
@@ -314,21 +369,20 @@ struct WorkspacePosterCard {
       .animation({ duration: 140, curve: Curve.EaseInOut })
 
       Text(this.item.title ?? '')
-        .fontSize(22)
+        .fontSize(18)
         .fontColor('#E3E7ED')
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .width(180)
+        .width(this.cardWidth)
 
-      Text(this.item.label).fontSize(18).fontColor(C_SECONDARY)
-      if (this.item.rating !== undefined && this.item.rating > 0) {
-        Text(this.item.rating.toFixed(1))
-          .fontSize(20)
-          .fontWeight(600)
-          .fontColor(scoreColor(this.item.rating))
-      }
+      Row() {
+        Text(this.item.label).fontSize(16).fontColor(C_SECONDARY).layoutWeight(1)
+        if (this.item.rating !== undefined && this.item.rating > 0) {
+          Text(this.item.rating.toFixed(1)).fontSize(16).fontColor(scoreColor(this.item.rating))
+        }
+      }.width('100%')
     }
-    .width(180)
+    .width(this.cardWidth)
     .alignItems(HorizontalAlign.Start)
     .id(this.focusId)
     .focusable(true)
@@ -355,6 +409,14 @@ struct SearchWorkspacePage {
   private resultScroller: Scroller = new Scroller();
   private focusedResult: number = 0;
   private restoreResult: boolean = false;
+  @Local suggestions: string[] = [];
+  @Local selectedSuggestion: string = '';
+  private suggestionScroller: Scroller = new Scroller();
+  private historyScroller: Scroller = new Scroller();
+  private lastKeyboardKey: string = 'search-key-Z';
+  private focusedHistoryIndex: number = 0;
+  @Local resultViewportWidth: number = 1200;
+  @Local resultViewportHeight: number = 380;
   @Local historyList: SearchHistoryEntry[] = [];
   @Local isSearching: boolean = false;
   @Local isSearchBarFocused: boolean = false;
@@ -436,7 +498,11 @@ struct SearchWorkspacePage {
     this.session.invalidate(clear);
     this.serverSession.invalidate();
     this.serverResult = null;
-    if (clear) { this.resultSource.replace([]); }
+    if (clear) {
+      this.resultSource.replace([]);
+      this.suggestions = [];
+      this.selectedSuggestion = '';
+    }
     this.isSearching = false;
     if (this.searchDebounceTimer !== -1) {
       clearTimeout(this.searchDebounceTimer);
@@ -490,6 +556,7 @@ struct SearchWorkspacePage {
   }
 
   private invalidateHistorySource(): void {
+    this.focusedHistoryIndex = 0;
     this.historySourceGeneration++;
     this.invalidateHistoryRequests();
     this.historyList = [];
@@ -510,7 +577,7 @@ struct SearchWorkspacePage {
 
 
   private scheduleSearch(): void {
-    this.invalidateSearch(this.searchText.trim().length === 0);
+    this.invalidateSearch(this.scope.kind === 'localFiles' || this.searchText.trim().length === 0);
     if (!this.pageActive || this.searchText.trim().length === 0) { return; }
     const capabilities = getSearchCapabilities(this.scope);
     if (!capabilities.localSearch && !capabilities.serverSearch) { return; }
@@ -523,7 +590,7 @@ struct SearchWorkspacePage {
       } else {
         this.executeSearch();
       }
-    }, 800);
+    }, capabilities.localSearch ? 250 : 800);
   }
 
   private executeServerSearch(): void {
@@ -564,18 +631,18 @@ struct SearchWorkspacePage {
     if (!this.pageActive || this.resultStatus() !== 'error') { return; }
     this.invalidateSearch();
     if (getSearchCapabilities(this.scope).localSearch) {
-      this.executeSearch();
+      this.executeSearch(this.selectedSuggestion || this.searchText.trim(), this.selectedSuggestion.length === 0);
     } else if (getSearchCapabilities(this.scope).serverSearch) {
       this.executeServerSearch();
     }
   }
 
-  /** 本地预览搜索（仅实时展示结果，不保存历史、不跳转） */
-  private async executeSearch(): Promise<void> {
+  /** 本地联想搜索：自动选中首项时保存片名历史，不跳转。 */
+  private async executeSearch(keyword: string = this.searchText.trim(), suggest: boolean = true): Promise<void> {
     if (!getSearchCapabilities(this.scope).localSearch || this.db === null || !this.pageActive) { return; }
-    const kw: string = this.searchText.trim();
+    const kw: string = keyword;
     if (kw.length === 0) {
-      this.invalidateSearch();
+      this.invalidateSearch(true);
       return;
     }
     this.invalidateSearch();
@@ -591,15 +658,45 @@ struct SearchWorkspacePage {
         return true;
       });
     });
-    if (accepted) { this.updateResultSource(); }
+    if (!accepted) { return; }
+    if (suggest) {
+      this.suggestions = titleSuggestions(this.scope, this.session.results);
+      this.selectedSuggestion = this.suggestions[0] ?? '';
+      if (this.selectedSuggestion.length > 0) {
+        this.saveSearchHistory(this.selectedSuggestion);
+        await this.executeSearch(this.selectedSuggestion, false);
+        return;
+      }
+    }
+    this.updateResultSource();
   }
 
   /** 执行搜索并保存历史 */
   private executeSearchWithHistory(): void {
     if (this.scope.kind === 'unavailable') { return; }
+    if (this.scope.kind === 'localFiles' && this.selectedSuggestion.length > 0) {
+      this.selectSuggestion(this.selectedSuggestion);
+      return;
+    }
     const kw: string = this.searchText.trim();
     if (kw.length === 0) { return; }
-    this.invalidateSearch();
+    this.saveSearchHistory(kw);
+    if (getSearchCapabilities(this.scope).serverSearch) {
+      this.executeServerSearch();
+    } else {
+      this.executeSearch();
+    }
+  }
+
+  private selectSuggestion(title: string): void {
+    if (!this.pageActive || this.scope.kind !== 'localFiles' || !this.suggestions.includes(title)) { return; }
+    this.selectedSuggestion = title;
+    this.saveSearchHistory(title);
+    this.executeSearch(title, false);
+  }
+
+  private saveSearchHistory(kw: string): void {
+    if (this.scope.kind === 'unavailable' || !this.pageActive) { return; }
     if (this.db !== null) {
       this.invalidateHistoryRequests();
       const sourceGeneration = this.historySourceGeneration;
@@ -612,11 +709,6 @@ struct SearchWorkspacePage {
           }
         })
         .catch(() => {});
-    }
-    if (getSearchCapabilities(this.scope).serverSearch) {
-      this.executeServerSearch();
-    } else {
-      this.executeSearch();
     }
   }
 
@@ -718,45 +810,78 @@ struct SearchWorkspacePage {
     this.pageStack.pushPathByName(ServerMediaDetailPage.PAGE_NAME, param);
   }
 
+  private historyVisible(): boolean {
+    return this.historyList.length > 0 && (this.scope.kind !== 'localFiles' || this.searchText.trim().length === 0);
+  }
+
+  private rememberKeyboardKey(id: string): void {
+    this.lastKeyboardKey = id;
+    this.resultsFocused = false;
+  }
+
+  private focusKeyboard(): void {
+    if (getSearchCapabilities(this.scope).localSearch) {
+      this.resultsFocused = false;
+      this.getUIContext().getFocusController().requestFocus(this.lastKeyboardKey);
+    } else {
+      this.focusInput();
+    }
+  }
+
+  private focusWordRow(fromKeyboard: boolean = false): void {
+    if (this.scope.kind === 'localFiles' && this.suggestions.length > 0) {
+      const index = Math.max(0, this.suggestions.indexOf(this.selectedSuggestion));
+      this.suggestionScroller.scrollToIndex(index);
+      this.getUIContext().getFocusController().requestFocus(`search-suggestion-${index}`);
+    } else if (this.historyVisible()) {
+      const index = Math.min(this.focusedHistoryIndex, this.historyList.length);
+      this.historyScroller.scrollToIndex(index);
+      this.getUIContext().getFocusController().requestFocus(index === 0 ? 'search-history-clear' : `search-history-${index - 1}`);
+    } else if (fromKeyboard && this.resultSource.totalCount() > 0) {
+      this.focusResults();
+    } else if (fromKeyboard) {
+      this.focusInput();
+    } else {
+      this.focusKeyboard();
+    }
+  }
+
+  private handleKeyboardNavigation(event: KeyEvent): void {
+    if (event.type !== KeyType.Down) { return; }
+    const bottomKeys: string[] = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', '9', '0', 'backspace'];
+    if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN &&
+      bottomKeys.some((key: string) => this.lastKeyboardKey === `search-key-${key}`)) {
+      this.focusWordRow(true);
+      event.stopPropagation();
+    }
+  }
+
+  private handleWordNavigation(event: KeyEvent): void {
+    if (event.type !== KeyType.Down) { return; }
+    if (event.keyCode === KeyCode.KEYCODE_DPAD_UP) {
+      this.focusKeyboard();
+      event.stopPropagation();
+    } else if (event.keyCode === KeyCode.KEYCODE_DPAD_DOWN && this.resultSource.totalCount() > 0) {
+      this.focusResults();
+      event.stopPropagation();
+    }
+  }
+
+  private posterWidth(): number {
+    // 为焦点外框、标题和元数据预留空间，首排不被底部裁切。
+    return Math.max(60, Math.min((this.resultViewportWidth - 96) / 6, (this.resultViewportHeight - 76) / 1.5));
+  }
+
   // ── @Builder sections ─────────────────────────────────────────────────────
 
   @Builder
   buildBackRow() {
-    Row() {
-      Row() {
-        Text('\u{2039}')
-          .fontSize(22)
-          .fontColor(C_TEXT_BODY)
-      }
-      .width(48)
-      .height(48)
-      .borderRadius(24)
+    Button('‹')
+      .fontSize(26).fontColor(C_TEXT_BODY)
+      .width(40).height(40).borderRadius(20)
       .backgroundColor(C_COMPONENT_BG)
-      .border({ width: 1, color: C_BORDER })
-      .justifyContent(FlexAlign.Center)
-      .alignItems(VerticalAlign.Center)
       .focusable(true)
       .onClick(() => { this.leaveSearch(); this.pageStack.pop(); })
-    }
-    .width('100%')
-    .height(48)
-    .alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
-  buildTitleArea() {
-    Column({ space: 8 }) {
-      Text('\u641c\u7d22')
-        .fontSize(34)
-        .fontWeight(700)
-        .fontColor(C_TEXT_TITLE)
-      Text('\u652f\u6301\u9996\u5b57\u6bcd\u3001\u5168\u62fc\u3001\u4e2d\u6587\u7247\u540d\u641c\u7d22')
-        .fontSize(18)
-        .fontWeight(500)
-        .fontColor(C_SECONDARY)
-    }
-    .alignItems(HorizontalAlign.Start)
-    .width('100%')
   }
 
   @Builder
@@ -767,14 +892,16 @@ struct SearchWorkspacePage {
         .fontColor(C_ICON)
         .width(22)
         .height(22)
-      TextInput({ text: this.searchText, placeholder: '输入片名', controller: this.inputController })
+      TextInput({ text: this.searchText, placeholder: this.scope.kind === 'localFiles' ? '首字母 / 全拼 / 中文' : '输入片名，如 Dune', controller: this.inputController })
         .id('search-workspace-input')
         .enableKeyboardOnFocus(false)
         .enterKeyType(EnterKeyType.Search)
-        .fontSize(22)
+        .fontSize(20)
         .fontColor(C_TEXT_TITLE)
         .placeholderColor(C_PLACEHOLDER)
-        .backgroundColor(Color.Transparent)
+        .backgroundColor(C_COMPONENT_BG)
+        .height(44)
+        .borderRadius(10)
         .layoutWeight(1)
         .defaultFocus(true)
         .onEditChange((editing: boolean) => {
@@ -811,7 +938,7 @@ struct SearchWorkspacePage {
           }
         })
           .id('search-workspace-submit')
-          .width(100)
+          .width(72)
         ActionKey({
           label: '清空',
           bgColor: C_CLEAR_BG,
@@ -820,20 +947,11 @@ struct SearchWorkspacePage {
           onPress: () => { this.clearSearch(); }
         })
           .id('search-workspace-clear')
-          .width(100)
+          .width(72)
       }
     }
-    .width('70%')
-    .height(56)
-    .padding({ left: 16, right: 16, bottom: 4 })
-    .backgroundColor('transparent')
-    .alignSelf(ItemAlign.Center)
-    .border({
-      width: { bottom: this.isSearchBarFocused ? 2 : 1 },
-      color: { bottom: this.isSearchBarFocused ? '#4A9FFF' : C_BORDER },
-      style: { bottom: BorderStyle.Solid }
-    })
-    .animation({ duration: 150, curve: Curve.EaseOut })
+    .layoutWeight(1)
+    .height(48)
     .alignItems(VerticalAlign.Center)
     .onFocus(() => { this.isSearchBarFocused = true; })
     .onBlur(() => { this.isSearchBarFocused = false; })
@@ -844,19 +962,23 @@ struct SearchWorkspacePage {
     Grid() {
       ForEach(KBD_R1_L, (key: string) => {
         GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+          KeyButton({ label: key, onFocused: () => this.rememberKeyboardKey(`search-key-${key}`),
+            onPress: () => { this.appendChar(key); } })
         }
       }, (key: string) => key)
 
       ForEach(KBD_R2_L, (key: string) => {
         GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+          KeyButton({ label: key, onFocused: () => this.rememberKeyboardKey(`search-key-${key}`),
+            onPress: () => { this.appendChar(key); } })
         }
       }, (key: string) => key)
 
       GridItem() {
         ActionKey({
-          label: '\uD83D\uDDD1',
+          label: '清空',
+          focusId: 'search-key-clear',
+          onFocused: () => this.rememberKeyboardKey('search-key-clear'),
           bgColor: '#3A2525',
           focusBgColor: '#356DAE',
           focusPressBgColor: '#2C5C96',
@@ -874,7 +996,8 @@ struct SearchWorkspacePage {
 
       ForEach(KBD_R3_L, (key: string) => {
         GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+          KeyButton({ label: key, onFocused: () => this.rememberKeyboardKey(`search-key-${key}`),
+            onPress: () => { this.appendChar(key); } })
         }
       }, (key: string) => key)
 
@@ -882,6 +1005,8 @@ struct SearchWorkspacePage {
         ActionKey({
           label: '\u232B',
           sublabel: '退格',
+          focusId: 'search-key-backspace',
+          onFocused: () => this.rememberKeyboardKey('search-key-backspace'),
           keyAspect: 352 / 60,
           onPress: () => { this.deleteLastChar(); }
         })
@@ -892,6 +1017,8 @@ struct SearchWorkspacePage {
     .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr')
     .columnsGap(8)
     .rowsGap(8)
+    .rowsTemplate('1fr 1fr 1fr')
+    .height(124).layoutWeight(10)
   }
 
   @Builder
@@ -899,17 +1026,20 @@ struct SearchWorkspacePage {
     Grid() {
       ForEach([...KBD_R1_R, ...KBD_R2_R], (key: string) => {
         GridItem() {
-          KeyButton({ label: key, onPress: () => { this.appendChar(key); } })
+          KeyButton({ label: key, onFocused: () => this.rememberKeyboardKey(`search-key-${key}`),
+            onPress: () => { this.appendChar(key); } })
         }
       })
 
       GridItem() {
-        KeyButton({ label: '9', onPress: () => { this.appendChar('9'); } })
+        KeyButton({ label: '9', onFocused: () => this.rememberKeyboardKey('search-key-9'), onPress: () => { this.appendChar('9'); } })
       }
 
       GridItem() {
         ActionKey({
           label: '0',
+          focusId: 'search-key-0',
+          onFocused: () => this.rememberKeyboardKey('search-key-0'),
           keyAspect: 352 / 60,
           onPress: () => { this.appendChar('0'); }
         })
@@ -920,100 +1050,83 @@ struct SearchWorkspacePage {
     .columnsTemplate('1fr 1fr 1fr 1fr')
     .columnsGap(8)
     .rowsGap(8)
-    .width("40%")
+    .rowsTemplate('1fr 1fr 1fr')
+    .height(124).layoutWeight(4)
   }
 
   @Builder
   buildKeyboard() {
-    Flex({ space: {
-      main: LengthMetrics.vp(50)
-    } }) {
+    Row({ space: 24 }) {
       this.buildAlphabetKbd()
       this.buildNumericKbd()
-      // 防抖 800ms 自动触发搜索
     }
-    .alignSelf(ItemAlign.Center)
-    .width('90%')
-    .backgroundColor(C_KBD_BG)
-    .borderRadius(14)
-    .padding(14)
+    .width('100%').height(124)
+    .onKeyEvent((event: KeyEvent) => this.handleKeyboardNavigation(event))
   }
 
   @Builder
   buildSuggestions() {
-    Column({ space: 10 }) {
-      Text(searchInputExample(this.scope))
-        .fontSize(16).fontColor(C_SECONDARY)
-      if (this.scope.kind === 'localFiles' && this.session.status === 'results') {
-        Flex({ wrap: FlexWrap.Wrap }) {
-          ForEach(titleSuggestions(this.scope, this.session.results), (title: string) => {
-            Button(title)
-              .fontSize(16).fontColor(C_HIST_TEXT)
-              .backgroundColor(C_HIST_CHIP_BG)
-              .margin({ right: 10, bottom: 10 })
-              .onFocus(() => { this.resultsFocused = true; })
-              .onClick(() => {
-                this.searchText = title;
-                this.focusInput();
-                this.executeSearchWithHistory();
+    if (this.scope.kind === 'localFiles' && this.suggestions.length > 0) {
+      Row({ space: 8 }) {
+        List({ space: 8, scroller: this.suggestionScroller }) {
+          ForEach(this.suggestions, (title: string, index: number) => {
+            ListItem() {
+              SearchWordChip({ title, focusId: `search-suggestion-${index}`,
+                selected: this.selectedSuggestion === title,
+                onFocused: () => {
+                  this.resultsFocused = true;
+                  this.suggestionScroller.scrollToIndex(index);
+                },
+                onPress: () => this.selectSuggestion(title),
+                onNavigate: (event: KeyEvent) => this.handleWordNavigation(event)
               })
+            }
           }, (title: string) => title)
         }
-      }
-    }.width('100%').alignItems(HorizontalAlign.Start)
+        .listDirection(Axis.Horizontal).height(48).layoutWeight(1)
+        .scrollBar(BarState.Off)
+        if (this.suggestions.length > 6) { Text('›').fontSize(24).fontColor(C_SECONDARY) }
+      }.width('100%').height(48)
+    }
   }
 
   @Builder
   buildHistory() {
-    if (this.historyList.length > 0) {
-      Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(this.historyList, (entry: SearchHistoryEntry) => {
-          // M2：拆成两个独立可聚焦节点，遥控器 D-pad 可分别聚焦到关键词和删除按钮
-          Row({ space: 0 }) {
-            // 左侧：关键词文字 — 聚焦后 OK 键触发搜索并跳转
-            Button(entry.keyword)
-              .backgroundColor(C_HIST_CHIP_BG)
-              .onFocus(() => { this.resultsFocused = true; })
-              .fontSize(16)
-              .fontWeight(500)
-              .fontColor(C_HIST_TEXT)
-              .padding({ left: 14, right: 6, top: 8, bottom: 8 })
-              .focusable(true)
-              .onClick(() => {
-                this.searchText = entry.keyword;
-                this.focusInput();
-                this.executeSearchWithHistory();
-              })
-            // 右侧：× 删除按钮 — 聚焦后 OK 键触发删除
-            Button('\u00D7')
-              .backgroundColor(C_HIST_CHIP_BG)
-              .onFocus(() => { this.resultsFocused = true; })
-              .fontSize(14)
-              .fontColor(C_SECONDARY)
-              .padding({ left: 6, right: 14, top: 8, bottom: 8 })
-              .focusable(true)
-              .onClick(() => { this.deleteHistory(entry.keyword); })
+    if (this.historyVisible()) {
+      Row({ space: 8 }) {
+        List({ space: 8, scroller: this.historyScroller }) {
+          ListItem() {
+            SearchWordChip({ title: '清空当前来源历史', focusId: 'search-history-clear',
+              onFocused: () => { this.resultsFocused = true; this.focusedHistoryIndex = 0; this.historyScroller.scrollToIndex(0); },
+              onPress: () => { this.clearAllHistory(); this.focusKeyboard(); },
+              onNavigate: (event: KeyEvent) => this.handleWordNavigation(event)
+            })
           }
-          .backgroundColor(C_HIST_CHIP_BG)
-          .borderRadius(999)
-          .border({ width: 1, color: C_HIST_BORDER })
-          .margin({ right: 10, bottom: 10 })
-        }, (entry: SearchHistoryEntry) => entry.keyword)
-
-        // Clear-all button styled same as chip
-        Button('清空当前来源历史')
-          .fontSize(16)
-          .fontWeight(600)
-          .fontColor('#D7DEE7')
-          .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-          .backgroundColor(C_HIST_CHIP_BG)
-          .borderRadius(999)
-          .border({ width: 1, color: C_HIST_BORDER })
-          .margin({ right: 10, bottom: 10 })
-          .focusable(true)
-          .onClick(() => { this.clearAllHistory(); })
-      }
-      .width('100%')
+          ForEach(this.historyList, (entry: SearchHistoryEntry, index: number) => {
+            ListItem() {
+              SearchWordChip({ title: entry.keyword, focusId: `search-history-${index}`, removable: true,
+                onFocused: () => {
+                  this.resultsFocused = true;
+                  this.focusedHistoryIndex = index + 1;
+                  this.historyScroller.scrollToIndex(index + 1);
+                },
+                onPress: () => {
+                  this.suggestions = [];
+                  this.selectedSuggestion = '';
+                  this.searchText = entry.keyword;
+                  this.focusInput();
+                  this.executeSearchWithHistory();
+                },
+                onDelete: () => { this.deleteHistory(entry.keyword); this.focusKeyboard(); },
+                onNavigate: (event: KeyEvent) => this.handleWordNavigation(event)
+              })
+            }
+          }, (entry: SearchHistoryEntry) => entry.keyword)
+        }
+        .listDirection(Axis.Horizontal).height(48).layoutWeight(1)
+        .scrollBar(BarState.Off)
+        if (this.historyList.length > 5) { Text('›').fontSize(24).fontColor(C_SECONDARY) }
+      }.width('100%').height(48)
     }
   }
 
@@ -1067,13 +1180,18 @@ struct SearchWorkspacePage {
 
   @Builder
   buildResultList() {
-    Text(getSearchCapabilities(this.scope).serverSearch ? '首批结果（最多 100 项，可能更少）' : '最多显示 200 项')
-      .fontSize(18).fontColor(C_SECONDARY)
+    Row({ space: 12 }) {
+      Text(this.selectedSuggestion || '搜索结果').fontSize(22).fontColor(C_TEXT_TITLE)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+      Text(getSearchCapabilities(this.scope).serverSearch ? '首批最多 100 项' : '最多 200 项')
+        .fontSize(14).fontColor(C_SECONDARY)
+    }.height(30).width('100%')
     Grid(this.resultScroller) {
       LazyForEach(this.resultSource, (item: WorkspaceSearchItem, index: number) => {
         GridItem() {
           WorkspacePosterCard({
             item: item,
+            cardWidth: this.posterWidth(),
             focusId: `search-workspace-result-${index}`,
             onFocused: () => { this.focusedResult = index; this.resultsFocused = true; },
             onPress: () => { this.openResult(item); }
@@ -1081,20 +1199,25 @@ struct SearchWorkspacePage {
         }
         .onKeyEvent((event: KeyEvent) => {
           if (event.type === KeyType.Down && event.keyCode === KeyCode.KEYCODE_DPAD_UP && index < 6) {
-            this.focusInput();
+            this.focusWordRow();
             event.stopPropagation();
           }
         })
       }, (item: WorkspaceSearchItem) => item.key)
     }
     .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr')
-    .columnsGap(20).rowsGap(20).cachedCount(2)
-    .width('100%').height(380)
+    .columnsGap(16).rowsGap(16).cachedCount(2)
+    .padding(8)
+    .width('100%').layoutWeight(1)
+    .onAreaChange((_old: Area, area: Area) => {
+      this.resultViewportWidth = Number(area.width);
+      this.resultViewportHeight = Number(area.height);
+    })
   }
 
   @Builder
   buildSearchResults() {
-    Column({ space: 20 }) {
+    Column({ space: 8 }) {
       if (this.resultStatus() === 'loading' || this.resultStatus() === 'refreshing') {
         Text(this.resultSource.totalCount() > 0 ? '正在更新，以下为上次结果…' : '正在搜索…').fontSize(22).fontColor(C_TEXT_BODY)
       } else if (this.resultStatus() === 'error') {
@@ -1113,37 +1236,37 @@ struct SearchWorkspacePage {
       }
       if (this.resultSource.totalCount() > 0) { this.buildResultList() }
     }
-    .width('100%')
+    .width('100%').layoutWeight(1)
     .alignItems(HorizontalAlign.Start)
   }
 
   build() {
     NavDestination() {
-      Scroll() {
-        Column({ space: 20 }) {
+      Column({ space: 12 }) {
+        Row({ space: 12 }) {
           this.buildBackRow()
-          Text(this.scope.label).fontSize(24).fontColor(C_TEXT_TITLE)
-          Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
+          Text('搜索').fontSize(26).fontWeight(700).fontColor(C_TEXT_TITLE)
+          Text(this.scope.label).fontSize(16).fontColor(C_TEXT_BODY)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .constraintSize({ maxWidth: 160 })
           if (getSearchCapabilities(this.scope).inputModes.length > 0) {
             this.buildSearchBar()
-            if (getSearchCapabilities(this.scope).inputModes.includes('pinyin')) {
-              this.buildKeyboard()
-            }
-            this.buildHistory()
-            this.buildSuggestions()
-            this.buildSearchResults()
           }
+        }.width('100%').height(48)
+        if (getSearchCapabilities(this.scope).inputModes.length > 0) {
+          if (getSearchCapabilities(this.scope).inputModes.includes('pinyin')) {
+            this.buildKeyboard()
+          }
+          this.buildHistory()
+          this.buildSuggestions()
+          this.buildSearchResults()
+        } else {
+          Text(getSearchCapabilities(this.scope).hint).fontSize(18).fontColor(C_SECONDARY)
         }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .justifyContent(FlexAlign.Start)
-        .padding(20)
-        .backgroundColor(C_PAGE_BG)
       }
-      .scrollable(ScrollDirection.Vertical)
-      .width('100%')
-      .height('100%')
-      .align(Alignment.TopStart)
+      .width('100%').height('100%')
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: 24, right: 24, top: 16, bottom: 16 })
       .backgroundColor(C_PAGE_BG)
     }
     .onReady((context: NavDestinationContext) => {

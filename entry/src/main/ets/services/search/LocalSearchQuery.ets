@@ -103,9 +103,8 @@ export function buildLocalSearchQuery(keyword: string): LocalSearchQuery {
     }
     if (/^[a-z0-9]+$/.test(initials)) {
       matches.push(pinyinMatch('title_initials', initials, true, hanParts));
-      if (initials.length > 1) {
-        matches.push(pinyinMatch('title_initials', escapeSearchLike(initials) + '%', false, hanParts));
-      }
+      // 单首字母也支持片名前缀，供 TV 键盘联想使用；不扩展任意中段。
+      matches.push(pinyinMatch('title_initials', escapeSearchLike(initials) + '%', false, hanParts));
     }
   }
   const where: string[] = [];

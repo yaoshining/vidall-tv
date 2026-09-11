@@ -11,7 +11,7 @@ export function titleSuggestions(scope: SearchScope, items: MediaItem[]): string
     if (title.length === 0 || seen.has(title.toLowerCase())) { continue; }
     seen.add(title.toLowerCase());
     titles.push(title);
-    if (titles.length === 6) { break; }
+    if (titles.length === 20) { break; }
   }
   return titles;
 }
