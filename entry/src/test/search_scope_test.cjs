@@ -63,6 +63,8 @@ const { SearchResultSource } = require(path.join(root, 'entry/src/main/ets/pages
 function attachLocalSession(page) {
   page.session = new SearchSession();
   page.resultSource = new SearchResultSource();
+  page.suggestions = [];
+  page.selectedSuggestion = '';
   page.focusedResult = 0;
   page.restoreResult = false;
   page.resultScroller = { scrollToIndex() {} };
@@ -136,7 +138,7 @@ function installFakeTimers() {
     tasks.delete(id);
   };
   return {
-    pendingCount() { return [...tasks.values()].filter(task => task.delay === 800).length; },
+    pendingCount() { return [...tasks.values()].filter(task => (task.delay === 800 || task.delay === 250)).length; },
     runNext() {
       const next = tasks.entries().next();
       if (next.done) {
@@ -165,7 +167,7 @@ async function runHostIntegrationChecks() {
   const resultSource = fs.readFileSync(resultPath, 'utf8');
   // 结果区不再添加多余的焦点跳转按钮，保留首行向上返回输入的路径。
   assert.doesNotMatch(workspaceSource, /Button\('(浏览结果|返回输入)'\)/);
-  assert.match(workspaceSource, /KEYCODE_DPAD_UP && index < 6\) \{\s*this\.focusInput\(\)/);
+  assert.match(workspaceSource, /KEYCODE_DPAD_UP && index < 6\) \{\s*this\.focusWordRow\(\)/);
   const detailPageSource = fs.readFileSync(path.join(root, detailPage), 'utf8');
   const adapterSource = fs.readFileSync(path.join(root,
     'entry/src/main/ets/pages/search/SearchResultSource.ets'), 'utf8');
@@ -213,14 +215,14 @@ async function runHostIntegrationChecks() {
 
   function checkHistoryGuard(source, method, operation) {
     const body = extractMethodBody(source, method).trimStart();
-    assert.match(body, /^if \(this\.scope\.kind === 'unavailable'(?: \|\| this\.db === null)?\) \{ return; \}/, method);
+    assert.match(body, /^if \(this\.scope\.kind === 'unavailable'(?: \|\| this\.db === null| \|\| !this\.pageActive)?\) \{ return; \}/, method);
     assert.ok(body.includes(`this.db.${operation}(this.scope.key${operation === 'clearSearchHistory' ? ')' : ','}`), `${method}: current scope history`);
   }
   for (const [method, operation] of [
     ['private loadHistory()', 'getSearchHistory'],
     ['private deleteHistory(', 'deleteSearchHistory'],
     ['private clearAllHistory()', 'clearSearchHistory'],
-    ['private executeSearchWithHistory()', 'upsertSearchHistory']
+    ['private saveSearchHistory(', 'upsertSearchHistory']
   ]) {
     checkHistoryGuard(workspaceSource, method, operation);
     for (const key of ["'local-files'", "'video-server:jellyfin:999'"]) {
@@ -232,7 +234,7 @@ async function runHostIntegrationChecks() {
     const mutant = workspaceSource.replace(body, body.replace("this.scope.kind === 'unavailable'", 'false'));
     assert.throws(() => checkHistoryGuard(mutant, method, operation), assert.AssertionError);
   }
-  checkGuard(workspace, 'private async executeSearch()', 'localSearch');
+  checkGuard(workspace, 'private async executeSearch(', 'localSearch');
   checkGuard(workspace, 'private navigateToDetail(', 'localDetail');
   checkGuard(results, 'private async doSearch()', 'localSearch');
   checkGuard(results, 'private async loadGenreOptions()', 'localSearch');
@@ -1913,6 +1915,7 @@ async function runSearchChainChecks() {
       }
       const dependencies = {
         ...scopes, SourceSwitchModel,
+        titleSuggestions: require(path.join(root, 'entry/src/main/ets/services/search/SearchSuggestions.ets')).titleSuggestions,
         posterSrc: loadMethod(sourceText, 'function posterSrc(', ['item'], {}),
         // Host accessor exposes the real model without the ArkUI StateStore runtime.
         VideoServerStore: { getState: () => model },
@@ -1950,9 +1953,9 @@ async function runSearchChainChecks() {
       const rendered = [], retryActions = [];
       const textStyle = { fontSize() { return this; }, fontColor() { return this; } };
       const renderBody = extractMethodBody(sourceText, '  buildSearchResults()')
-        .replace('Column({ space: 20 }) {', '{').replace('Row() {', '{')
+        .replace(/Column\(\{ space: \d+ \}\) \{/, '{').replace('Row() {', '{')
         .replace('}.width(180)', '}')
-        .replace(".width('100%')", '').replace('.alignItems(HorizontalAlign.Start)', '');
+        .replace(".width('100%')", '').replace('.layoutWeight(1)', '').replace('.alignItems(HorizontalAlign.Start)', '');
       const renderSource = ts.transpileModule(`function render() {${renderBody}}`, {
         compilerOptions: { target: ts.ScriptTarget.ES2021 }
       }).outputText;
@@ -1980,7 +1983,9 @@ async function runSearchChainChecks() {
       page.shown = loadMethod(sourceText, '.onShown(() =>', [], dependencies);
       page.willHide = loadMethod(sourceText, '.onWillHide(() =>', [], dependencies);
       page.initializeRoute = loadMethod(sourceText, 'private initializeRoute(', ['param'], dependencies);
-      page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', [], dependencies, true);
+      page.executeSearch = loadMethod(sourceText, 'private async executeSearch(', ['keyword = this.searchText.trim()', 'suggest = true'], dependencies, true);
+      page.saveSearchHistory = loadMethod(sourceText, 'private saveSearchHistory(', ['kw'], dependencies);
+      page.selectSuggestion = loadMethod(sourceText, 'private selectSuggestion(', ['title'], dependencies);
       page.deleteHistory = loadMethod(sourceText, 'private deleteHistory(', ['keyword'], dependencies);
       page.showToastSafe = loadMethod(sourceText, 'private showToastSafe(', ['message'], dependencies);
       page.openResult = loadMethod(sourceText, 'private openResult(', ['item'], dependencies);
@@ -2019,7 +2024,7 @@ async function runSearchChainChecks() {
         Text: () => style, TextInput: options => node('input', options),
         ActionKey: options => node('action', options),
         Color: { Transparent: '' }, ItemAlign: {}, HorizontalAlign: {}, VerticalAlign: {},
-        FlexAlign: {}, ScrollDirection: {}, Alignment: {}, BorderStyle: {}, Curve: {},
+        FlexAlign: {}, ScrollDirection: {}, Alignment: {}, BorderStyle: {}, Curve: {}, TextOverflow: {},
         EnterKeyType: { Search: 'Search' },
         KeyType: { Down: 0, Up: 1 }, KeyCode: { KEYCODE_DPAD_CENTER: 23, KEYCODE_ENTER: 66 } };
       for (const match of sourceText.matchAll(/const (C_\w+|TRANSPARENT): string = '([^']*)';/g)) {
@@ -2098,9 +2103,10 @@ async function runSearchChainChecks() {
       h.page.executeSearchWithHistory();
       await flushMicrotasks();
       h.check('submission writes exact scope and keyword', h.historyCalls.filter(c => c.operation === 'write').at(-1),
-        { operation: 'write', scopeKey, keyword: 'shared-keyword' });
+        { operation: 'write', scopeKey, keyword: server ? 'shared-keyword' : '本地片名' });
       h.check('submission reloads only its own history', h.page.historyList,
-        [{ keyword: 'shared-keyword', updatedAt: 1 }]);
+        server ? [{ keyword: 'shared-keyword', updatedAt: 1 }] :
+          [{ keyword: '本地片名', updatedAt: 1 }]);
       h.page.clearSearch();
     }
     h.check('three independent history partitions', [...h.historyByScope.keys()], scopeKeys);
@@ -2118,7 +2124,7 @@ async function runSearchChainChecks() {
     h.check('clear resets displayed history', h.page.historyList, []);
     await select(null);
     h.check('local history survives both server mutations', h.page.historyList,
-      [{ keyword: 'shared-keyword', updatedAt: 1 }]);
+      [{ keyword: '本地片名', updatedAt: 1 }]);
     await select(h.servers[0]);
     h.model.videoServers = [];
     await flushMicrotasks();
@@ -2240,10 +2246,10 @@ async function runSearchChainChecks() {
     localInput.attributes.onChange[0]('本地');
     localInput.attributes.onSubmit[0]();
     await flushMicrotasks();
-    h.check('local IME searches once', h.localCalls, ['search:本地']);
+    h.check('local IME searches candidates then first title', h.localCalls, ['search:本地', 'search:本地片名']);
     h.check('local IME writes current scope history once',
       h.historyCalls.filter(c => c.operation === 'write'),
-      [{ operation: 'write', scopeKey: h.page.scope.key, keyword: '本地' }]);
+      [{ operation: 'write', scopeKey: h.page.scope.key, keyword: '本地片名' }]);
     h.check('local submit drains debounce', h.timers.pendingCount(), 0);
     h.page.clearSearch();
 
@@ -2375,7 +2381,8 @@ async function runSearchChainChecks() {
         if (boundary === 'leave') h.page.shown();
       }
     }
-    h.check('retry/preview never write history', h.historyCalls.filter(c => c.operation === 'write'), []);
+    h.check('only accepted first suggestion writes history', h.historyCalls.filter(c => c.operation === 'write'),
+      [{ operation: 'write', scopeKey: h.page.scope.key, keyword: '本地片名' }]);
     h.check('local chains never reach HTTP', h.requests, []);
     h.page.searchText = 'film';
     h.page.scheduleSearch();
@@ -2422,9 +2429,12 @@ async function runSearchChainChecks() {
       ['initials', 'pinyin', 'chinese']);
     await h.tick();
     h.check('local query reaches database with pinyin text', h.localCalls,
-      ['search:bdpm']);
+      ['search:bdpm', 'search:本地片名']);
     h.check('local opens history database for exact scope', h.databaseScopes, [h.page.scope.key]);
-    h.check('local reads scoped history', h.historyCalls, [{ operation: 'read', scopeKey: h.page.scope.key }]);
+    h.check('local reads and updates scoped history', h.historyCalls, [
+      { operation: 'read', scopeKey: h.page.scope.key },
+      { operation: 'write', scopeKey: h.page.scope.key, keyword: '本地片名' },
+      { operation: 'read', scopeKey: h.page.scope.key }]);
     h.check('local results published', h.page.searchResults.map(item => item.title), ['本地片名']);
     h.check('local mode makes no HTTP requests', h.requests, []);
 
@@ -2500,7 +2510,7 @@ async function runSearchChainChecks() {
       console.log(`[search-chain] submit observations: ${JSON.stringify({ local, afterSubmit,
         afterDrain: [h.timers.pendingCount(), searchCount(), writeCount()] })}`);
       h.check('submit consumes debounce and searches/writes once',
-        [afterSubmit, searchCount(), writeCount()], [[0, 1, 1], 1, 1]);
+        [afterSubmit, searchCount(), writeCount()], [[0, local ? 2 : 1, 1], local ? 2 : 1, 1]);
       h.check('submit releases loading', h.page.isSearching, false);
       h.page.clearSearch();
       h.check('clear resets input and both result modes',
@@ -2511,7 +2521,7 @@ async function runSearchChainChecks() {
       if (!local) h.enqueue('防抖结果');
       await h.tick();
       h.check('debounce searches once without history submission',
-        [searchCount(), writeCount()], [2, 1]);
+        [searchCount(), writeCount()], [local ? 4 : 2, local ? 2 : 1]);
       h.page.searchText = '取消等待';
       h.page.scheduleSearch();
       h.page.backButton();
@@ -2519,24 +2529,24 @@ async function runSearchChainChecks() {
       h.check('back button pops exactly once despite hide callback', h.page.popCount, 1);
       h.check('leaving cancels pending work',
         [h.page.pageActive, h.page.isSearching, h.timers.pendingCount(), searchCount()],
-        [false, false, 0, 2]);
+        [false, false, 0, local ? 4 : 2]);
       h.page.shown();
       h.page.shown();
       if (!local) h.enqueue('重入结果');
       await h.tick();
       h.check('reentry preserves text and searches exactly once',
-        [h.page.searchText, searchCount(), writeCount()], ['取消等待', 3, 1]);
+        [h.page.searchText, searchCount(), writeCount()], ['取消等待', local ? 6 : 3, local ? 3 : 1]);
       h.page.searchText = '返回取消';
       h.page.scheduleSearch();
       h.check('hardware back consumes event', h.page.backPressed(), true);
       h.page.willHide();
       h.check('hardware back cancels pending work and pops once',
-        [h.page.popCount, h.timers.pendingCount(), searchCount()], [2, 0, 3]);
+        [h.page.popCount, h.timers.pendingCount(), searchCount()], [2, 0, local ? 6 : 3]);
       h.page.clearSearch();
       h.page.shown();
       h.check('empty reentry stays idle',
         [h.page.searchText, h.page.searchResults, h.page.serverResult, h.page.isSearching,
-          h.timers.pendingCount(), searchCount()], ['', [], null, false, 0, 3]);
+          h.timers.pendingCount(), searchCount()], ['', [], null, false, 0, local ? 6 : 3]);
     }, local);
   }
 

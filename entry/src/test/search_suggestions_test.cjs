@@ -113,7 +113,7 @@ async function main() {
   console.log('通过: 数据库升级、排除旧历史、来源隔离、按来源裁剪/插入更新/删除/清空及 SQL 参数绑定');
   const items = [{ title: 'Dune' }, { title: 'dune' }, { title: '' }, { title: '流浪地球' }];
   assert.equal(titleSuggestions(local, items).join(','), 'Dune,流浪地球');
-  assert.equal(titleSuggestions(local, Array.from({length: 20}, (_, i) => ({title: `title${i}`}))).length, 6);
+  assert.equal(titleSuggestions(local, Array.from({length: 20}, (_, i) => ({title: `title${i}`}))).length, 20);
   for (const scope of [jelly, plex, {kind: 'unavailable'}]) assert.equal(titleSuggestions(scope, items).length, 0);
   assert.ok(searchInputExample(jelly).includes('不代表已收录'));
   assert.ok(searchInputExample(local).includes('lldq'));
@@ -125,9 +125,13 @@ async function main() {
   const start = pageSource.indexOf('struct SearchWorkspacePage {');
   const end = pageSource.indexOf('  @Builder', start);
   const body = pageSource.slice(start, end).replace('struct SearchWorkspacePage', 'export class Page')
-    .replace(/@Consumer\([^)]*\)\s*/g, '').replace(/@Local\s*/g, '') + '}';
+    .replace(/@Consumer\([^)]*\)\s*/g, '').replace(/@Local\s*/g, '') +
+    pageSource.slice(pageSource.indexOf('  private focusResults()'),
+      pageSource.indexOf('  @Builder', pageSource.indexOf('  private focusResults()'))) + '}';
   class Empty {}
-  const { Page } = compile(body, {}, { NavPathStack: Empty, SearchSession: Empty,
+  const { SearchSession } = compile(read('services/search/SearchSession.ets').replace(/@ObservedV2\s*/g, '').replace(/@Trace\s*/g, ''));
+  const { Page } = compile(body, {}, { NavPathStack: Empty, SearchSession, titleSuggestions,
+    KeyType: { Down: 0, Up: 1 }, KeyCode: { KEYCODE_DPAD_UP: 19, KEYCODE_DPAD_DOWN: 20 },
     SearchResultSource: Empty, Scroller: Empty, SearchWorkspaceSession: Empty, TextInputController: Empty,
     createUnavailableSearchScope: () => ({kind:'unavailable'}), getSearchCapabilities });
   const page = new Page();
@@ -146,8 +150,153 @@ async function main() {
   for (const scope of [local, jelly, plex]) {
     page.scope = scope; page.searchText = 'Dune'; page.executeSearchWithHistory();
   }
-  assert.equal(writes.map(w => w[0]).join(','), [local,jelly,plex].map(s => s.key).join(','));
+  assert.equal(writes.map(w => w[0]).join(','), [jelly,plex].map(s => s.key).join(','));
   assert.equal(searches.join(','), 'local,server,server');
   console.log('通过: 忽略迟到的历史响应，建议词提交保持在当前来源');
+
+  const preview = new Page();
+  preview.pageActive = true; preview.scope = local; preview.searchText = 'H';
+  preview.serverSession = { invalidate() {} };
+  let displayed = [];
+  preview.resultSource = { replace(items) { displayed = items; } };
+  const calls = [], history = [];
+  const first = { id: 1, movieId: 1, title: '花开锦绣' };
+  const second = { id: 2, movieId: 2, title: '花儿与少年' };
+  preview.db = {
+    searchMediaItems: async kw => { calls.push(kw); return kw === 'H' ? [first, second] : kw === first.title ? [first] : [second]; },
+    upsertSearchHistory: async (...args) => history.push(args), getSearchHistory: async () => []
+  };
+  preview.updateResultSource = () => preview.resultSource.replace(preview.session.results);
+  await preview.executeSearch();
+  assert.equal(calls.join(','), `H,${first.title}`);
+  assert.equal(preview.searchText, 'H');
+  assert.equal(preview.suggestions.join(','), `${first.title},${second.title}`);
+  assert.equal(preview.selectedSuggestion, first.title);
+  assert.equal(preview.session.results[0].title, first.title);
+  assert.equal(history.length, 1, 'automatic first suggestion must write history');
+  assert.equal(history[0].join(','), `${local.key},${first.title}`);
+  const settle = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
+  preview.selectSuggestion(second.title); await settle();
+  assert.equal(preview.searchText, 'H');
+  assert.equal(preview.suggestions.length, 2);
+  assert.equal(preview.session.results[0].title, second.title);
+  assert.equal(history[1].join(','), `${local.key},${second.title}`);
+  preview.executeSearchWithHistory(); await settle();
+  assert.equal(history[2][1], second.title, 'submit confirms selected title, not initials');
+  // Submit before debounce resolves: write only the accepted title, never raw initials.
+  preview.selectedSuggestion = ''; preview.suggestions = []; preview.searchText = 'HKJX';
+  const beforeImmediate = history.length;
+  preview.db.searchMediaItems = async () => [first];
+  preview.scheduleSearch(); preview.executeSearchWithHistory(); await settle();
+  assert.equal(history.length, beforeImmediate + 1);
+  assert.equal(history.at(-1)[1], first.title);
+  assert.ok(!history.some(row => row[1] === 'HKJX'));
+  preview.searchText = 'ZZZ'; preview.selectedSuggestion = ''; preview.suggestions = [];
+  preview.db.searchMediaItems = async () => [];
+  preview.executeSearchWithHistory(); await settle();
+  assert.equal(history.length, beforeImmediate + 1, 'no candidates must not save raw input');
+  preview.searchText = 'H'; preview.db.searchMediaItems = async () => [second];
+  await preview.executeSearch();
+  // A result request must become stale immediately, including inside debounce.
+  let resolveOld;
+  preview.suggestions = [first.title, second.title];
+  preview.db.searchMediaItems = () => new Promise(resolve => { resolveOld = resolve; });
+  preview.selectSuggestion(first.title);
+  preview.searchText = 'HX'; preview.scheduleSearch();
+  assert.equal(preview.suggestions.length, 0);
+  assert.equal(preview.selectedSuggestion, '');
+  assert.equal(preview.session.status, 'refreshing');
+  assert.equal(displayed[0].title, second.title, 'keep the last displayed grid during debounce');
+  resolveOld([first]); await settle();
+  assert.equal(preview.session.results[0].title, second.title, 'stale response cannot replace retained results');
+  assert.equal(displayed[0].title, second.title);
+  preview.searchText = ''; preview.scheduleSearch();
+  assert.equal(displayed.length, 0, 'empty input clears the grid');
+  assert.equal(preview.session.results.length, 0);
+  preview.searchText = 'HX';
+  // Candidate completion after clear must not launch a second query.
+  const writesBeforeStale = history.length;
+  const pending = preview.executeSearch();
+  preview.searchText = ''; preview.invalidateSearch(true);
+  resolveOld([first, second]); await pending;
+  assert.equal(preview.suggestions.length, 0);
+  assert.equal(preview.selectedSuggestion, '');
+  assert.equal(history.length, writesBeforeStale, 'stale candidates must not write history');
+  // Empty, errors, and retries are distinct and retain the selected query.
+  preview.searchText = 'H'; preview.db.searchMediaItems = async () => [];
+  await preview.executeSearch();
+  assert.equal(preview.session.status, 'empty');
+  assert.equal(preview.suggestions.length, 0);
+  preview.suggestions = [first.title]; preview.selectedSuggestion = first.title;
+  preview.db.searchMediaItems = async () => { throw new Error('failure'); };
+  await preview.executeSearch(first.title, false);
+  assert.equal(preview.session.status, 'error');
+  preview.db.searchMediaItems = async kw => { assert.equal(kw, first.title); return [first]; };
+  preview.retrySearch(); await settle();
+  assert.equal(preview.session.status, 'results');
+  assert.equal(preview.suggestions[0], first.title);
+  // Leaving / switching source invalidates both stages, even for A -> B -> A.
+  preview.db.searchMediaItems = () => new Promise(resolve => { resolveOld = resolve; });
+  const stale = preview.executeSearch();
+  preview.invalidateSearch(true); preview.scope = jelly; preview.scope = local;
+  resolveOld([first]); await stale;
+  assert.equal(preview.suggestions.length, 0);
+  assert.equal(preview.session.results.length, 0);
+  console.log('通过: 首项自动预览、保留输入与候选、主动选择历史、清空及换源乱序、错误重试');
+
+  // Execute actual navigation methods, not a duplicate focus model.
+  const nav = new Page(); nav.pageActive = true; nav.scope = local;
+  const focus = [], suggestionScroll = [], historyScroll = [];
+  nav.getUIContext = () => ({ getFocusController: () => ({ requestFocus: id => focus.push(id) }) });
+  nav.inputController = { stopEditing() {} };
+  nav.suggestionScroller = { scrollToIndex: index => suggestionScroll.push(index) };
+  nav.historyScroller = { scrollToIndex: index => historyScroll.push(index) };
+  nav.resultScroller = { scrollToIndex() {} };
+  let resultCount = 6;
+  nav.resultSource = { totalCount: () => resultCount };
+  nav.suggestions = Array.from({length: 20}, (_, i) => `候选${i}`);
+  nav.selectedSuggestion = '候选19';
+  let stopped = 0;
+  const key = (code, type = 0) => ({ keyCode: code, type, stopPropagation() { stopped++; } });
+  for (const id of ['Z', 'X', 'C', 'V', 'B', 'N', 'M', '9', '0', 'backspace']) {
+    nav.rememberKeyboardKey(`search-key-${id}`);
+    nav.handleKeyboardNavigation(key(20));
+    assert.equal(focus.at(-1), 'search-suggestion-19');
+    assert.equal(suggestionScroll.at(-1), 19);
+    nav.handleWordNavigation(key(19));
+    assert.equal(focus.at(-1), `search-key-${id}`);
+  }
+  const focusCount = focus.length;
+  nav.rememberKeyboardKey('search-key-Q'); nav.handleKeyboardNavigation(key(20));
+  nav.rememberKeyboardKey('search-key-Z'); nav.handleKeyboardNavigation(key(20, 1));
+  assert.equal(focus.length, focusCount, 'upper rows and key-up keep native keyboard navigation');
+  nav.handleWordNavigation(key(20));
+  assert.equal(focus.at(-1), 'search-workspace-result-0');
+  nav.focusWordRow(); assert.equal(focus.at(-1), 'search-suggestion-19');
+  nav.suggestions = []; nav.searchText = 'NO MATCH'; nav.historyList = [{keyword:'旧词'}];
+  assert.equal(nav.historyVisible(), false);
+  nav.focusWordRow(true); assert.equal(focus.at(-1), 'search-workspace-result-0');
+  resultCount = 0;
+  nav.focusWordRow(true); assert.equal(focus.at(-1), 'search-workspace-input');
+  nav.searchText = ''; nav.historyList = Array.from({length:15}, (_, i) => ({keyword:`历史${i}`}));
+  nav.focusedHistoryIndex = 0; nav.focusWordRow(true);
+  assert.equal(focus.at(-1), 'search-history-clear');
+  nav.focusedHistoryIndex = 15; nav.historyList = [{keyword:'剩余词'}]; nav.focusWordRow(true);
+  assert.equal(focus.at(-1), 'search-history-0', 'deleted history clamps focus to existing item');
+  assert.equal(historyScroll.at(-1), 1);
+  nav.scope = jelly; nav.searchText = 'server text'; nav.suggestions = ['stale local'];
+  assert.equal(nav.historyVisible(), true);
+  nav.focusWordRow(); assert.equal(focus.at(-1), 'search-history-0', 'server never focuses local candidates');
+  nav.handleWordNavigation(key(19)); assert.equal(focus.at(-1), 'search-workspace-input');
+  nav.invalidateHistorySource(); nav.focusWordRow();
+  assert.equal(focus.at(-1), 'search-workspace-input');
+  assert.equal(nav.focusedHistoryIndex, 0);
+  for (const [width, height] of [[912, 234], [1232, 432], [1872, 720]]) {
+    nav.resultViewportWidth = width; nav.resultViewportHeight = height;
+    const cardWidth = nav.posterWidth();
+    assert.ok(cardWidth * 6 + 96 <= width + 0.001, 'six columns fit available width');
+    assert.ok(cardWidth * 1.5 + 76 <= height + 0.001, 'poster, caption, metadata and padding fit first viewport');
+  }
+  console.log('通过: 键盘底行到候选、20项横向焦点、15条历史和删除回退、服务器隔离及首排几何边界');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
