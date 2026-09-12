@@ -199,7 +199,20 @@ jobs:
             echo "- SDK: $OHOS_SDK_HOME"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: 安装数据库冒烟完整依赖
+        if: ${{ inputs.mediaLibraryHomeSmoke }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # 与单元CI相同的官方安装器，同时解析根目录npm包及entry模块本地HAR。
+          /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm install
+          test -d oh_modules/pinyin-pro
+          test -d entry/oh_modules/@vidall/player
+          test -d entry/oh_modules/@hw-agconnect/auth
+
       - name: Restore Harmony dependencies
+        if: ${{ !inputs.mediaLibraryHomeSmoke }}
         shell: bash
         run: |
           set -euo pipefail
