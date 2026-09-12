@@ -1,3 +1,6 @@
+import { FileExplorerToastState } from '../../components/core/file/FileExplorerToast';
+import { FileExplorerRecovery, isExplorerMissingError } from '../../components/core/file/FileExplorerRecovery';
+import { FileExplorerResource } from '../../components/core/file/FileExplorerController';
 import { IBestToast } from "@ibestservices/ibest-ui";
 import { WebDavFileExplorerAdapter } from "../../components/core/file/FileExplorerAdapter";
 import { FileExplorer } from "../../components/core/file/FileExplorer";
@@ -46,6 +49,9 @@ const config: WebDAVConfig = {
 @ComponentV2
 export struct FileExplorerPage {
   static PAGE_NAME = "fileExplorerPage"
+  private directoryRequest: number = 0;
+  @Local private toastState: FileExplorerToastState = new FileExplorerToastState();
+  private recovery: FileExplorerRecovery = new FileExplorerRecovery();
   client: WebDAVClient = new WebDAVClient(config)
   private fileExplorerAdapter: WebDavFileExplorerAdapter = new WebDavFileExplorerAdapter(
     (path: string): Promise<WebDAVResource[]> => this.client.listDirectory(path)
@@ -81,14 +87,48 @@ export struct FileExplorerPage {
     }
   }
 
+  private async loadThumbnail(resource: FileExplorerResource): Promise<string> {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const target = context.tempDir + '/thumb-' + util.generateRandomUUID(true);
+    return new Promise<string>((resolve, reject) => {
+      this.client.downloadFileStream(resource.path, target, {
+        onComplete: (saved: string) => { resolve('file://' + saved); },
+        onError: (error: Error) => { reject(error); }
+      });
+    });
+  }
+  private promptMissing(path: string, directory: boolean): void {
+    this.recovery.prompt(this.fileExplorerAdapter, path, directory, this.cachedSourceId,
+      normalizeScrapeDirectoryPath((this.cachedDirectoryPath === '/' ? '' : this.cachedDirectoryPath) + path), (message, confirm, cancel) => {
+        this.getUIContext().showAlertDialog({
+          title: directory ? '目录不存在' : '文件不存在', message, autoCancel: true,
+          primaryButton: { value: '取消', action: cancel },
+          secondaryButton: { value: '清除记录', action: confirm }, cancel
+        });
+      }, (message) => { IBestToast.show(message); }, () => {
+        if (directory && path === this.fileExplorerController.rootPath) { this.pageStack.pop(true); }
+        else { this.changePath(directory ? this.fileExplorerController.parentPath : this.fileExplorerController.currentPath); }
+      });
+  }
+
+  private async canOpen(path: string): Promise<boolean> {
+    if (await this.recovery.isMissing(this.fileExplorerAdapter, path, false)) {
+      this.promptMissing(path, false);
+      return false;
+    }
+    return true;
+  }
+
   @Builder
   FolderScrapeToolbarAction() {
-    Button('刮削此文件夹')
+    Button('刮削此文件夹', { type: ButtonType.Normal })
       .height(40)
       .fontSize(16)
-      .fontColor('#D7E8FF')
-      .backgroundColor('#243F66')
-      .margin({ right: 10 })
+      .fontColor('#F0F2F5')
+      .backgroundColor('#307BF6')
+      .borderRadius(8)
+      .border({ width: 1, color: '#307BF6' })
+      .padding({ left: 18, right: 18 })
       .focusable(true)
       .enabled(this.cachedSourceId > 0 && !this.isLoading)
       .onClick(() => { this.openFolderScrape(); })
@@ -146,15 +186,18 @@ export struct FileExplorerPage {
         FileExplorer({
           controller: this.fileExplorerController,
           isLoading: this.isLoading,
+          toastState: this.toastState,
+          thumbnailLoader: (resource: FileExplorerResource) => this.loadThumbnail(resource),
           errorMessage: this.errorMessage,
           toolbarActionsBuilder: () => { this.FolderScrapeToolbarAction(); },
           onFileClick: event => {
             const displayName = event.resource.name
             if (isVideoFile(displayName)) {
               this.playVideo(event.fullPath, displayName)
-            }
-            if (this.isImageFile(displayName)) {
+            } else if (this.isImageFile(displayName)) {
               this.previewImage(event.fullPath, displayName)
+            } else {
+              this.toastState.show('暂不支持打开此类型的文件')
             }
           }
         })
@@ -290,10 +333,7 @@ export struct FileExplorerPage {
       this.cachedDirId = param.dirId ?? 0
       this.cachedSourceId = param.sourceId ?? 0
       this.cachedDirectoryPath = param.directoryPath ?? ''
-      if (param.dirStatus === 'missing') {
-        this.showMissingDirDialog = true
-        return
-      }
+      // 即使缓存标记缺失，也重新核验服务器状态。
       this.changePath(this.fileExplorerController.currentPath)
     })
     .onBackPressed(() => {
@@ -339,7 +379,8 @@ export struct FileExplorerPage {
       })
   }
 
-  private previewImage(path: string, displayName: string) {
+  private async previewImage(path: string, displayName: string) {
+    if (!await this.canOpen(path)) { return; }
     const authHeader = this.client.getAuthHeaderPublic()
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const tempPath = context.tempDir + "/" + displayName
@@ -383,6 +424,7 @@ export struct FileExplorerPage {
   }
 
   private async playVideo(path: string, displayName: string) {
+    if (!await this.canOpen(path)) { return; }
     const url = this.client.getFullUrl(path);
     const authHeader = this.client.getAuthHeaderPublic();
     const httpHeader = buildWebDavHttpHeader(authHeader);
@@ -530,16 +572,22 @@ export struct FileExplorerPage {
   }
 
   private changePath(newPath: string = '/') {
+    const request = ++this.directoryRequest;
     this.isLoading = true
     this.errorMessage = ''
     this.fileExplorerAdapter.list(newPath).then((result) => {
+      if (request !== this.directoryRequest) { return; }
       this.fileExplorerController.currentPath = newPath
       this.fileExplorerController.resources = result.resources
       const errMsg = result.errorMessage ?? ''
       this.errorMessage = errMsg
       this.isLoading = false
-      this.handleNotFound(errMsg, newPath)
+      if (isExplorerMissingError(errMsg)) {
+        this.errorMessage = '此目录在服务器上已不存在';
+        this.promptMissing(newPath, true);
+      }
     }).catch(() => {
+      if (request !== this.directoryRequest) { return; }
       this.fileExplorerController.resources = []
       this.isLoading = false
       this.errorMessage = '加载目录失败'

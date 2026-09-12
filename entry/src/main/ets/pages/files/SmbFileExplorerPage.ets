@@ -1,3 +1,8 @@
+import { FileExplorerToastState } from '../../components/core/file/FileExplorerToast';
+import { util } from '@kit.ArkTS';
+import { IBestToast } from '@ibestservices/ibest-ui';
+import { FileExplorerRecovery, isExplorerMissingError } from '../../components/core/file/FileExplorerRecovery';
+import { FileExplorerResource } from '../../components/core/file/FileExplorerController';
 import { common } from '@kit.AbilityKit'
 import { FileExplorer } from '../../components/core/file/FileExplorer'
 import { SmbFileExplorerAdapter } from '../../components/core/file/FileExplorerAdapter'
@@ -85,6 +90,9 @@ export struct SmbFileExplorerPage {
 
   private config: SMBSourceConfig = DEFAULT_SMB_CONFIG
   private sourceId: number = 0
+  private directoryRequest: number = 0;
+  @Local private toastState: FileExplorerToastState = new FileExplorerToastState();
+  private recovery: FileExplorerRecovery = new FileExplorerRecovery();
   private client: SMBClient = SMBClient.fromSourceConfig(DEFAULT_SMB_CONFIG)
   private imagePreviewSessionController: ImagePreviewSessionController = new ImagePreviewSessionController()
   private fileExplorerAdapter: SmbFileExplorerAdapter = new SmbFileExplorerAdapter(
@@ -175,16 +183,23 @@ export struct SmbFileExplorerPage {
   // ── 列举目录 ────────────────────────────────────────────────────────────────
 
   private loadDirectory(path: string): void {
+    const request = ++this.directoryRequest;
     console.info('[SmbExplorer] loadDirectory path=' + path)
     this.isLoading = true
     this.errorMessage = ''
     this.fileExplorerAdapter.list(path).then((result) => {
+      if (request !== this.directoryRequest) { return; }
       this.isLoading = false
       this.errorMessage = result.errorMessage ?? ''
       this.fileExplorerController.resources = result.resources
       this.fileExplorerController.currentPath = path
       this.currentPath = path
+      if (isExplorerMissingError(this.errorMessage)) {
+        this.errorMessage = '此目录在服务器上已不存在';
+        this.promptMissing(path, true);
+      }
     }).catch(() => {
+      if (request !== this.directoryRequest) { return; }
       this.isLoading = false
       this.fileExplorerController.resources = []
       this.errorMessage = '加载目录失败'
@@ -231,10 +246,13 @@ export struct SmbFileExplorerPage {
       this.playVideo(file)
     } else if (this.isImageFile(file.name)) {
       this.previewImage(file.path, file.name)
+    } else {
+      this.toastState.show('暂不支持打开此类型的文件')
     }
   }
 
-  private previewImage(filePath: string, displayName: string): void {
+  private async previewImage(filePath: string, displayName: string): Promise<void> {
+    if (!await this.canOpen(filePath)) { return; }
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext
     const tempPath = context.tempDir + '/' + displayName
     this.client.downloadFileToLocal(filePath, tempPath).then((savedPath: string) => {
@@ -265,6 +283,7 @@ export struct SmbFileExplorerPage {
   }
 
   private async playVideo(file: SmbFileInfo): Promise<void> {
+    if (!await this.canOpen(file.path)) { return; }
     const url = this.buildPlaybackUrl(file.path)
     const playbackHeaders = this.buildPlaybackHeaders()
     console.info('[SmbExplorer] 播放视频: ' + this.maskSmbUrl(url))
@@ -428,14 +447,43 @@ export struct SmbFileExplorerPage {
     return this.taskStore.getProgressText(scope);
   }
 
+  private async loadThumbnail(resource: FileExplorerResource): Promise<string> {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const target = context.tempDir + '/thumb-' + util.generateRandomUUID(true);
+    return 'file://' + await this.client.downloadFileToLocal(resource.path, target);
+  }
+  private promptMissing(path: string, directory: boolean): void {
+    this.recovery.prompt(this.fileExplorerAdapter, path, directory, this.sourceId,
+      path, (message, confirm, cancel) => {
+        this.getUIContext().showAlertDialog({
+          title: directory ? '目录不存在' : '文件不存在', message, autoCancel: true,
+          primaryButton: { value: '取消', action: cancel },
+          secondaryButton: { value: '清除记录', action: confirm }, cancel
+        });
+      }, (message) => { IBestToast.show(message); }, () => {
+        if (directory && path === this.fileExplorerController.rootPath) { this.pageStack.pop(true); }
+        else { this.loadDirectory(directory ? this.fileExplorerController.parentPath : this.fileExplorerController.currentPath); }
+      });
+  }
+
+  private async canOpen(path: string): Promise<boolean> {
+    if (await this.recovery.isMissing(this.fileExplorerAdapter, path, false)) {
+      this.promptMissing(path, false);
+      return false;
+    }
+    return true;
+  }
+
   @Builder
   FolderScrapeToolbarAction() {
-    Button(this.isFolderScraping() ? `刮削中 ${this.folderProgressText()}` : '刮削此文件夹')
+    Button(this.isFolderScraping() ? `刮削中 ${this.folderProgressText()}` : '刮削此文件夹', { type: ButtonType.Normal })
       .height(40)
       .fontSize(16)
-      .fontColor(this.isFolderScraping() ? '#9AA0A8' : '#D7E8FF')
-      .backgroundColor('#243F66')
-      .margin({ right: 10 })
+      .fontColor(this.isFolderScraping() ? '#ADB3BC' : '#F0F2F5')
+      .backgroundColor('#307BF6')
+      .borderRadius(8)
+      .border({ width: 1, color: '#307BF6' })
+      .padding({ left: 18, right: 18 })
       .focusable(true)
       .enabled(this.sourceId > 0 && !this.isLoading && !this.isFolderScraping())
       .opacity(this.isFolderScraping() ? 0.6 : 1)
@@ -484,6 +532,8 @@ export struct SmbFileExplorerPage {
         FileExplorer({
           controller: this.fileExplorerController,
           isLoading: this.isLoading,
+          toastState: this.toastState,
+          thumbnailLoader: (resource: FileExplorerResource) => this.loadThumbnail(resource),
           errorMessage: this.errorMessage,
           toolbarActionsBuilder: () => { this.FolderScrapeToolbarAction(); },
           onFileClick: (event) => {
@@ -498,6 +548,8 @@ export struct SmbFileExplorerPage {
               this.playVideo(fileInfo)
             } else if (this.isImageFile(event.resource.name)) {
               this.previewImage(event.resource.path, event.resource.name)
+            } else {
+              this.toastState.show('暂不支持打开此类型的文件')
             }
           }
         })
