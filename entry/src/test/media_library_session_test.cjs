@@ -32,18 +32,18 @@ function fixture() {
   }, { filename });
   return { env, errors, model: new exports.MediaLibraryModel() };
 }
-const queries = ['getAllMediaItems', 'getMediaItemsByType', 'getMediaItemsByRating',
+const queries = ['getHomeMovies', 'getHomeMediaCounts',
   'getDistinctReleaseYears', 'getMediaStats', 'getDistinctTvSeriesGroups',
-  'getLatestScanTime', 'getRecentlyAddedList', 'searchMediaItems'];
+  'getLatestScanTime', 'getRecentlyAddedList', 'getHomeUnwatched'];
 function database(id, hold) {
   const item = { id, providerId: String(id), mediaType: 'movie', fileName: `电影${id}`,
     sourceId: 1, filePath: `/${id}`, scannedAt: id, rating: 8.5 };
-  const values = [[item], [item], [item], ['2020'], { total: id, movies: id, tv: 0, other: 0 },
+  const values = [[item], { movieCount: id, ratingCounts: [0, 0, 0, 1, 0] }, ['2020'], { total: id, movies: id, tv: 0, other: 0 },
     [], id, [{ kind: 'video', video: item, sortTs: id }], [item]];
   const gate = deferred();
   const entered = deferred();
   const calls = [];
-  const db = { getAllMediaProgress: async () => [], item, gate, entered, calls };
+  const db = { getAllMediaProgress: async () => [], getContinueWatchingMedia: async () => item, item, gate, entered, calls };
   queries.forEach((name, index) => {
     db[name] = async () => {
       calls.push(name);
@@ -58,8 +58,8 @@ function start(f, db, method = 'reload') {
   return f.model[method]();
 }
 function snapshot(m) {
-  return JSON.stringify([m.recentlyAdded, m.movies, m.byRating, m.stats, m.seriesGroups,
-    m.latestScanTime, m.unwatched, m.recentlyAddedList, m.unwatchedList,
+  return JSON.stringify([m.movies, m.movieCount, m.stats, m.seriesGroups,
+    m.latestScanTime, m.recentlyAddedList, m.unwatchedList,
     m.ratingLabels, m.decadeGroups, m.continueWatchingList, [...m.movieProgressMap]]);
 }
 function progress(id, ratio = 0.2) {
@@ -143,7 +143,7 @@ test('首次加载失败后 loading 结束，后续重试成功', async () => {
   await pending;
   assert.equal(f.model.isLoaded, false);
   assert.equal(f.model.isLoading, false);
-  assert.equal(f.model.recentlyAdded.length, 0);
+  assert.equal(f.model.movies.length, 0);
   await start(f, database(2));
   assert.equal(f.model.isLoaded, true);
   assert.equal(f.model.stats.total, 2);
@@ -157,6 +157,7 @@ test('旧继续观看晚到，不覆盖新主库及其继续观看', async () =>
   const latest = database(2);
   latest.getAllMediaProgress = async () => progress(2);
   await start(f, latest);
+  await f.model.loadContinueWatching();
   gate.resolve(progress(1));
   await old;
   assert.equal(f.model.continueWatchingList[0].videoId, 2);
@@ -173,6 +174,7 @@ test('主库加载中进度事件使用旧元数据，主库提交后必须重�
   latest.getAllMediaProgress = async () => progress(2, 0.4);
   latest.gate.resolve();
   await pending;
+  await f.model.loadContinueWatching();
   eventGate.resolve(progress(1));
   await event;
   assert.equal(f.model.continueWatchingList[0].videoId, 2);
@@ -195,6 +197,7 @@ test('继续观看当前失败保留列表与进度映射，后续可重试', as
   const f = fixture(), db = database(1);
   db.getAllMediaProgress = async () => progress(1);
   await start(f, db);
+  await f.model.loadContinueWatching();
   const previous = snapshot(f.model);
   db.getAllMediaProgress = async () => { throw new Error('进度失败'); };
   await f.model.loadContinueWatching();
@@ -205,12 +208,12 @@ test('继续观看当前失败保留列表与进度映射，后续可重试', as
   assert.equal(f.model.getMovieProgress('1'), 0.5);
 });
 for (const kind of ['episode', 'series']) {
-  for (const query of ['getTvSeriesByProviderId', 'getTvEpisode']) {
+  for (const query of ['getTvSeriesByProviderId', 'getContinueWatchingMedia', 'getTvEpisode']) {
     test(`${kind} 的 ${query} 晚到，列表及电影进度必须一起丢弃`, async () => {
       const f = fixture(), db = database(1), gate = deferred(), entered = deferred();
       await start(f, db);
-      f.model.recentlyAdded.push({ ...db.item, id: 10, mediaType: 'episode',
-        tvSeriesId: 10, seasonNumber: 1, episodeNumber: 1 });
+      db.getContinueWatchingMedia = async (providerId, seriesId) => seriesId
+        ? { ...db.item, id: 10, mediaType: 'episode', tvSeriesId: 10, seasonNumber: 1, episodeNumber: 1 } : db.item;
       db.getAllMediaProgress = async () => [...progress(1, 0.3), {
         ...progress(1)[0], mediaKey: kind === 'episode'
           ? 'media_progress_episode_tmdb_10_s1_e1' : 'media_progress_series_tmdb_10',
@@ -220,6 +223,13 @@ for (const kind of ['episode', 'series']) {
         db[name] = async () => {
           if (query === name) { entered.resolve(); await gate.promise; }
           return { id: 10, title: '剧集' };
+        };
+      }
+      if (query === 'getContinueWatchingMedia') {
+        const lookup = db.getContinueWatchingMedia;
+        db.getContinueWatchingMedia = async (...args) => {
+          if (args[1]) { entered.resolve(); await gate.promise; }
+          return lookup(...args);
         };
       }
       const old = f.model.loadContinueWatching();
@@ -233,3 +243,33 @@ for (const kind of ['episode', 'series']) {
     });
   }
 }
+
+test('继续观看仅查询原前20条候选，缺失媒体不递补，电影进度映射仍覆盖全部进度', async () => {
+  const f = fixture(), db = database(1), lookups = [];
+  await start(f, db);
+  db.getAllMediaProgress = async () => Array.from({ length: 25 }, (_, i) => progress(i + 1)[0]);
+  db.getContinueWatchingMedia = async id => {
+    lookups.push(id);
+    return id === '1' ? undefined : { ...db.item, id: Number(id), providerId: id };
+  };
+  await f.model.loadContinueWatching();
+  assert.equal(lookups.length, 20);
+  assert.equal(f.model.continueWatchingList.length, 19);
+  assert.equal(f.model.continueWatchingList[18].videoId, 20);
+  assert.equal(f.model.getMovieProgress('25'), 0.2);
+});
+test('继续观看元数据查询失败保留旧列表和完整电影进度映射，可重试', async () => {
+  const f = fixture(), db = database(1);
+  await start(f, db);
+  db.getAllMediaProgress = async () => progress(1);
+  await f.model.loadContinueWatching();
+  const previous = snapshot(f.model);
+  db.getContinueWatchingMedia = async () => { throw new Error('元数据查询失败'); };
+  db.getAllMediaProgress = async () => progress(1, 0.6);
+  await f.model.loadContinueWatching();
+  assert.equal(snapshot(f.model), previous);
+  assert.equal(f.errors.length, 1);
+  db.getContinueWatchingMedia = async () => db.item;
+  await f.model.loadContinueWatching();
+  assert.equal(f.model.getMovieProgress('1'), 0.6);
+});

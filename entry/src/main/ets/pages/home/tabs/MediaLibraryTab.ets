@@ -818,31 +818,7 @@ export struct MediaLibraryTab {
 
   aboutToAppear(): void {
     FileSourceDatabase.onReady(() => {
-      this.model.reload().then(() => {
-        console.info(`[MediaLibraryTab][DIAG] reload完成:`
-          + ` isLoaded=${this.model.isLoaded}`
-          + ` recentlyAdded=${this.model.recentlyAdded.length}`
-          + ` movies=${this.model.movies.length}`
-          + ` seriesGroups=${this.model.seriesGroups.length}`
-          + ` recentlyAddedList=${this.model.recentlyAddedList.length}`
-          + ` ratingLabels=${this.model.ratingLabels.length}`
-          + ` decadeGroups=${this.model.decadeGroups.length}`
-        );
-        // 诊断 build() 分支判断条件
-        console.info(`[MediaLibraryTab][DIAG] build分支: isLoading=${this.model.isLoading}`
-          + ` isLoaded=${this.model.isLoaded}`
-          + ` hasDisplayableMedia=${this.hasDisplayableMedia()}`
-          + ` → 显示${this.model.isLoading ? 'Loading' : (!this.model.isLoaded || !this.hasDisplayableMedia()) ? 'Empty' : '内容'}`
-        );
-        if (this.model.seriesGroups.length > 0) {
-          const sg = this.model.seriesGroups[0];
-          console.info(`[MediaLibraryTab][DIAG] 第一个SeriesGroup: title="${sg.title}" episodeCount=${sg.episodeCount} posterUrl=${sg.posterUrl ?? 'null'} rating=${sg.rating ?? 'null'}`);
-        }
-        if (this.model.movies.length > 0) {
-          const mv = this.model.movies[0];
-          console.info(`[MediaLibraryTab][DIAG] 第一个Movie: title="${mv.title ?? 'null'}" posterUrl=${mv.posterUrl ?? 'null'} rating=${mv.rating ?? 'null'}`);
-        }
-      });
+      this.model.reload();
     });
     // 播放器退出时刷新继续播放栏
     emitter.on(PlayerEvents.MEDIA_PROGRESS_SAVED, () => {
@@ -1514,7 +1490,7 @@ export struct MediaLibraryTab {
   }
 
   private hasDisplayableMedia(): boolean {
-    return this.model.recentlyAdded.length > 0 ||
+    return this.model.stats.total > 0 ||
       this.model.movies.length > 0 ||
       this.model.seriesGroups.length > 0 ||
       this.model.recentlyAddedList.length > 0;
@@ -1611,7 +1587,7 @@ export struct MediaLibraryTab {
   RecentlyAddedSection() {
     if (this.model.recentlyAddedList.length > 0) {
       SectionRow({ title: '最近添加' }) {
-        ForEach(this.model.recentlyAddedList.slice(0, 20), (listItem: MediaListItem) => {
+        ForEach(this.model.recentlyAddedList, (listItem: MediaListItem) => {
           MixedCard({ listItem, itemProgress: this.movieProgress(listItem) })
         })
       }
@@ -1622,7 +1598,7 @@ export struct MediaLibraryTab {
   MoviesSection() {
     if (this.model.movies.length > 0) {
       SectionRow({
-        title: `电影片库  (${this.model.movies.length})`,
+        title: `电影片库  (${this.model.movieCount})`,
         showAction: true,
         actionLabel: '查看全部 >',
         onAction: () => {
@@ -1630,7 +1606,7 @@ export struct MediaLibraryTab {
           this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
         }
       }) {
-        ForEach(this.model.movies.slice(0, 30), (item: MediaItem) => {
+        ForEach(this.model.movies, (item: MediaItem) => {
           PosterCard({ item, progress: this.model.getMovieProgress(item.providerId) })
         })
       }
@@ -1649,7 +1625,7 @@ export struct MediaLibraryTab {
           this.pageStack.pushPathByName(MediaResultPage.PAGE_NAME, param);
         }
       }) {
-        ForEach(this.model.seriesGroups.slice(0, 30), (group: SeriesGroup) => {
+        ForEach(this.model.seriesGroups, (group: SeriesGroup) => {
           SeriesCard({ group })
         })
       }
@@ -1660,7 +1636,7 @@ export struct MediaLibraryTab {
   UnwatchedSection() {
     if (this.model.unwatchedList.length > 0) {
       SectionRow({ title: '未观看' }) {
-        ForEach(this.model.unwatchedList.slice(0, 20), (listItem: MediaListItem) => {
+        ForEach(this.model.unwatchedList, (listItem: MediaListItem) => {
           MixedCard({ listItem, itemProgress: this.movieProgress(listItem) })
         })
       }
