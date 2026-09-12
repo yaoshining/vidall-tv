@@ -9,4 +9,4 @@
 
 历史成功集成运行 25383382116 的 GitHub 日志已返回 HTTP 410，本地也没有 aa-test.log。真实集成输出兼容性尚未验收，仅有可控协议样例，未为获取日志操作设备。
 
-`unit-success-795.txt` 来自本 PR 的真实运行 [34704387512](https://github.com/yaoshining/vidall-tv/actions/runs/34704387512)，artifact `unit-test-results-550/test_result.txt`。795 个结果均成功，但旧解析器拒绝了一对重复 test 行：第一行被插入 hilog 时间/PID/TID，第二行是相同名称的完整重发。本样例脱敏名称，保留此重复及附加字段、所有 result 与汇总，用于验证兼容性。原始 SHA-256：`957c1348202a197758a4af7873d23d4cf7dfa00b2b25510dfb1b9a7b145afc44`。
+`unit-success-795.txt` 来自本 PR 的真实运行 [34704387512](https://github.com/yaoshining/vidall-tv/actions/runs/34704387512)，artifact `unit-test-results-550/test_result.txt`。795 个结果均成功，但旧解析器拒绝了一对重复 test 行：第一行被插入 hilog 时间/PID/TID，第二行是相同名称的完整重发。本样例脱敏名称并去除行尾空格，保留此重复及附加字段、所有 result 与汇总，用于验证兼容性。原始 SHA-256：`957c1348202a197758a4af7873d23d4cf7dfa00b2b25510dfb1b9a7b145afc44`。
