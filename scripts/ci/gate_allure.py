@@ -29,6 +29,19 @@ def generate(status_path, output):
     (directory / 'gate-status.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
-if __name__ == '__main__':
-    generate(*sys.argv[1:])
+def publish_latest(status_path, output):
+    """外部 Allure 发布失败时，直接 latest 入口也必须指向本次结论。"""
+    data = json.loads(Path(status_path).read_text(encoding='utf-8'))
+    directory = Path(output)
+    directory.mkdir(parents=True, exist_ok=True)
+    href = 'runs/run-' + str(data['run_number']) + '/index.html'
+    summary = '<meta charset="utf-8"><h1>本次必需测试门禁：' + ('通过' if data['gate_passed'] else '失败') + '</h1><pre>' + html.escape(json.dumps({k: v for k, v in data.items() if k != 'cases'}, ensure_ascii=False, indent=2)) + '</pre>'
+    (directory / 'index.html').write_text(summary + '<a href="' + html.escape(href, quote=True) + '">本次报告与诊断</a>', encoding='utf-8')
+    (directory / 'gate-status.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
 
+
+if __name__ == '__main__':
+    if sys.argv[1:2] == ['--latest']:
+        publish_latest(*sys.argv[2:])
+    else:
+        generate(*sys.argv[1:])

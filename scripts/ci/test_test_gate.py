@@ -50,6 +50,25 @@ class GateTests(unittest.TestCase):
             self.assertIn(reason, data['reason'])
         return data
 
+    def test_historical_unit_output_compatibility(self):
+        # 实际历史工具输出，脱敏名称；不将旧文件喂给正式门禁充当本次证据。
+        text = (ROOT / 'fixtures/unit-success-612.txt').read_text()
+        passed, failed, errors, cases = gate.unit_cases(text)
+        self.assertEqual((passed, failed, errors, len(cases)), (612, 0, 0, 612))
+
+    def test_latest_report_replaces_old_green_on_report_failure(self):
+        self.metadata(reason='device_unavailable', started=False)
+        data = self.check()
+        output = self.root / 'integration'
+        output.mkdir()
+        (output / 'index.html').write_text('STALE ALL PASSED')
+        subprocess.run([sys.executable, str(ROOT / 'gate_allure.py'), '--latest', str(self.status), str(output)], check=True)
+        page = (output / 'index.html').read_text()
+        self.assertNotIn('STALE ALL PASSED', page)
+        self.assertIn('本次必需测试门禁：失败', page)
+        self.assertIn('设备不可用', page)
+        self.assertEqual(json.loads((output / 'gate-status.json').read_text()), data)
+
     def test_normal_summary_and_details(self):
         self.check(passed=True)
         self.check('test=one\nresult=Success\nTests run: 1, Failure: 0, Error: 0, Pass: 1', passed=True)

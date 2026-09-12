@@ -141,6 +141,9 @@ jobs:
           RESULT_TXT=entry/.test/default/intermediates/test/coverage_data/test_result.txt
           if [ -f "$RESULT_TXT" ]; then cp -p "$RESULT_TXT" "$GATE_DIR/test_result.txt"; fi
           if [ -d entry/.test/default/outputs/test/reports ]; then cp -R entry/.test/default/outputs/test/reports "$GATE_DIR/coverage-reports"; fi
+          if [ -f "$GATE_DIR/execution.json" ] && [ -d entry/.test/default/outputs/test/reports ]; then
+            cp -R entry/.test/default/outputs/test/reports "$GATE_DIR/reports"
+          fi
           python3 scripts/ci/test_gate.py evaluate --suite unit --build "$BUILD_OUTCOME" \
             --execution "$GATE_DIR/execution.json" --log "$GATE_DIR/test.log" \
             --result "$GATE_DIR/test_result.txt" --output "$GATE_DIR/status.json"

@@ -623,6 +623,9 @@ jobs:
           PYREPORT
           fi
 
+          # 即使 Allure 生成/发布失败，直接 latest 入口也显示本次结论。
+          python3 scripts/ci/gate_allure.py --latest "$GITHUB_WORKSPACE/.ci/integration/status.json" "$SITE_DIR/integration"
+
           # 清理旧的集成 runs，保留最近 10 次
           if [ -d "$SITE_DIR/integration/runs" ]; then
             INTG_KEEP=10
@@ -853,7 +856,7 @@ jobs:
           cd "$SITE_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add integration-status.json integration/integration-history.json integration/history-list/index.html integration/runs/ index.html 404.html _headers vendor/ || true
+          git add integration-status.json integration/index.html integration/gate-status.json integration/integration-history.json integration/history-list/index.html integration/runs/ index.html 404.html _headers vendor/ || true
           git commit -m "更新: 集成测试报告状态 #${GITHUB_RUN_NUMBER}" || echo "No portal changes to commit"
           git push "$REPO_URL" HEAD:"$REPORTS_BRANCH"
           rm -rf "$SITE_DIR/.git"
