@@ -136,6 +136,12 @@ class GateTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.check(text, suite='integration')
 
+    def test_real_795_output_with_repeated_transport_line(self):
+        text = (ROOT / 'fixtures/unit-success-795.txt').read_text()
+        passed, failed, errors, cases = gate.unit_cases(text)
+        self.assertEqual((passed, failed, errors, len(cases)), (795, 0, 0, 795))
+        self.check('test=lost\ntest=next\nresult=Success\nTests run: 1, Failure: 0, Error: 0, Pass: 1', reason='缺少结果')
+
     def test_targeted_connection_matrix(self):
         device = '192.168.3.85:5555'
         def response(output, code=0):

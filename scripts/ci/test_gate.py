@@ -137,9 +137,14 @@ def unit_cases(text):
         if line.startswith('class='):
             suite = line[6:].strip()
         elif line.startswith('test='):
+            next_name = line[5:].strip()
             if name is not None:
-                raise ValueError('用例缺少结果')
-            name = line[5:].strip()
+                # hvigor 真实输出可能在重复的 test 行尾插入 hilog 时间/PID/TID。
+                # 只接受相同名称的重复，不忽略不同用例或任何结果状态。
+                transport_tail = r'\d{1,2} \d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s*'
+                if name != next_name and not re.fullmatch(re.escape(next_name) + transport_tail, name):
+                    raise ValueError('用例缺少结果')
+            name = next_name
         elif line.startswith('result='):
             status = {'Success': 'passed', 'Failure': 'failed', 'Error': 'broken'}.get(line[7:].strip())
             if not name or not status:
