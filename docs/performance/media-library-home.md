@@ -74,4 +74,7 @@ devecocli build
 - 测试门禁样例：15项通过，未修改#333设备门禁判定或放宽检查。
 - CI保留Node20模型回归，新增Node22的真实SQLite回归job。
 - deveco-cli构建通过（default/debug assembleHap）；依赖和已有ArkUI警告保留。
-- 真机/模拟器数据库窗口函数兼容性、界面遥控器回归、设备1000/10000条冷/热加载及持续内存占用尚未验证。设备CI结论以对应运行结果为准，主机测试不替代设备测试。
+- 平台数据库冒烟：`MediaLibraryHomeDatabase.test.ets` 的3个用例已注册到 `entry/src/test/List.test.ets` 的实际UnitTestBuild入口，直接在真实relationalStore上执行四个新增接口；覆盖空库、重复电影/评分10端点/两季分组，以及已观看标记、0%下一集与继续观看查找。平台运行结果以当前提交的设备CI为准。
+- 每个冒烟用例使用 `VIDALL_HOME_QUERY_SMOKE_<timestamp>_<seq>.db` 的独立store与独立Core，不使用生产门面单例、不切换全局数据库名，finally关闭并删除该专用测试库。最小schema仅包含生产查询使用的列，测试不清空用户媒体库。
+- deveco-cli未暴露UnitTestBuild目标，因此测试包编译另用同一DevEco工具链及仓库CI的UnitTestBuild原命令，设备执行与门禁保持原工作流。
+- 设备/模拟器端到端界面与遥控器回归、设备1000/10000条冷/热加载及持续内存占用尚未验证；平台冒烟和主机性能测试均不替代这些验证。

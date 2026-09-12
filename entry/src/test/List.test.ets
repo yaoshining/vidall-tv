@@ -1,3 +1,4 @@
+import mediaLibraryHomeDatabaseTest from './MediaLibraryHomeDatabase.test';
 import directedAdapterErrorsTest from './DirectedAdapterErrors.test';
 import searchSessionTest from './SearchSession.test';
 import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
@@ -106,6 +107,7 @@ export default function testsuite() {
   localFreeEntitlementServiceTest();
   entryAbilityLifecycleTest();
   fileSourceDatabaseTest();
+  mediaLibraryHomeDatabaseTest();
   videoScannerTest();
   directoryProviderInterfaceTest();
   smbDirectoryProviderTest();
