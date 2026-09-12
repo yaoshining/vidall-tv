@@ -1,0 +1,1723 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../../index.css" />
+  <link rel="stylesheet" href="../../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../../index.full.min.js"></script>
+  <script src="../../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import relationalStore from &#39;@ohos.data.relationalStore&#39;; 
+import { MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity } from &#39;../models/MediaEntity&#39;; 
+import { normalizeSearchText, toPinyinFull, toPinyinInitials, toPinyinSegments } from &#39;../../utils/PinyinUtil&#39;; 
+import { BusinessError } from &quot;@kit.BasicServicesKit&quot;; 
+import { hilog } from &#39;@kit.PerformanceAnalysisKit&#39;; 
+import { TABLE_MOVIES, TABLE_TV_SERIES, TABLE_TV_SEASONS, TABLE_TV_EPISODES } from &#39;./DbConstants&#39;; 
+import { FileSourceDbCore } from &#39;./FileSourceDbCore&#39;; 
+ 
+/** 
+ * movies / tv_series / tv_seasons / tv_episodes 表的数据访问， 
+ * 含从投影行映射实体与查询的辅助方法。 
+ * 拆分自 FileSourceDatabase，保持原方法签名与行为不变。 
+ */ 
+export class MediaContentDao { 
+  private core: FileSourceDbCore; 
+ 
+  constructor(core: FileSourceDbCore) { 
+    this.core = core; 
+  } 
+ 
+  private buildMovieSelectSql(suffix: string = &#39;&#39;): string { 
+    return `SELECT id, provider, provider_id, title, original_title, overview, release_date, rating, vote_count, poster_path, backdrop_path, poster_url, backdrop_url, poster_local_path, backdrop_local_path, genres_json, cast_json, directors_json, runtime, original_language, origin_country_json, raw_json, scraped_at FROM ${TABLE_MOVIES}${suffix}`; 
+  } 
+ 
+  private buildTvSeriesSelectSql(suffix: string = &#39;&#39;): string { 
+    return `SELECT id, provider, provider_id, title, original_title, overview, first_air_date, rating, vote_count, poster_path, backdrop_path, poster_url, backdrop_url, poster_local_path, backdrop_local_path, genres_json, cast_json, number_of_seasons, original_language, origin_country_json, raw_json, scraped_at FROM ${TABLE_TV_SERIES}${suffix}`; 
+  } 
+ 
+  private mapMovieEntityFromProjectedRow(rs: relationalStore.ResultSet): MovieEntity { 
+    try { 
+      const entity: MovieEntity = { 
+        id: rs.getLong(0), 
+        provider: rs.getString(1), 
+        providerId: rs.getString(2), 
+        title: rs.getString(3), 
+        originalTitle: this.core.nullableString(rs, 4), 
+        overview: this.core.nullableString(rs, 5), 
+        releaseDate: this.core.nullableString(rs, 6), 
+        rating: this.core.nullableDouble(rs, 7), 
+        voteCount: this.core.nullableLong(rs, 8), 
+        posterPath: this.core.nullableString(rs, 9), 
+        backdropPath: this.core.nullableString(rs, 10), 
+        posterUrl: this.core.nullableString(rs, 11), 
+        backdropUrl: this.core.nullableString(rs, 12), 
+        posterLocalPath: this.core.nullableString(rs, 13), 
+        backdropLocalPath: this.core.nullableString(rs, 14), 
+        genresJson: this.core.nullableString(rs, 15), 
+        castJson: this.core.nullableString(rs, 16), 
+        directorsJson: this.core.nullableString(rs, 17), 
+        runtime: this.core.nullableLong(rs, 18), 
+        originalLanguage: this.core.nullableString(rs, 19), 
+        originCountryJson: this.core.nullableString(rs, 20), 
+        rawJson: this.core.nullableString(rs, 21), 
+        scrapedAt: rs.getLong(22) 
+      }; 
+      return entity; 
+    } catch (e) { 
+      throw new Error(`mapMovieEntityFromProjectedRow failed: ${e instanceof Error ? e.message : String(e)}`); 
+    } 
+  } 
+ 
+  private mapTvSeriesEntityFromProjectedRow(rs: relationalStore.ResultSet): TvSeriesEntity { 
+    let entity: TvSeriesEntity | null = null; 
+    try { 
+      entity = { 
+        id: rs.getLong(0), 
+        provider: rs.getString(1), 
+        providerId: rs.getString(2), 
+        title: rs.getString(3), 
+        originalTitle: this.core.nullableString(rs, 4), 
+        overview: this.core.nullableString(rs, 5), 
+        firstAirDate: this.core.nullableString(rs, 6), 
+        rating: this.core.nullableDouble(rs, 7), 
+        voteCount: this.core.nullableLong(rs, 8), 
+        posterPath: this.core.nullableString(rs, 9), 
+        backdropPath: this.core.nullableString(rs, 10), 
+        posterUrl: this.core.nullableString(rs, 11), 
+        backdropUrl: this.core.nullableString(rs, 12), 
+        posterLocalPath: this.core.nullableString(rs, 13), 
+        backdropLocalPath: this.core.nullableString(rs, 14), 
+        genresJson: this.core.nullableString(rs, 15), 
+        castJson: this.core.nullableString(rs, 16), 
+        numberOfSeasons: this.core.nullableLong(rs, 17), 
+        originalLanguage: this.core.nullableString(rs, 18), 
+        originCountryJson: this.core.nullableString(rs, 19), 
+        rawJson: this.core.nullableString(rs, 20), 
+        scrapedAt: rs.getLong(21) 
+      }; 
+    } catch (e) { 
+      throw new Error(`mapTvSeriesEntityFromProjectedRow failed: ${e instanceof Error ? e.message : String(e)}`); 
+    } 
+    return entity!; 
+  } 
+ 
+  private async queryMovies(sql: string, args: relationalStore.ValueType[]): Promise&lt;MovieEntity[]&gt; { 
+    if (!this.core.isReady()) { return []; } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql(sql, args); 
+      const items: MovieEntity[] = []; 
+      if (!rs.goToFirstRow()) { 
+        return items; 
+      } 
+      do { 
+        items.push(this.mapMovieEntityFromProjectedRow(rs)); 
+      } while (rs.goToNextRow()); 
+      return items; 
+    } catch (e) { 
+      console.error(`[DB][queryMovies] sql=${sql} args=${JSON.stringify(args)} error=${JSON.stringify(e)}`); 
+      return []; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  private async queryTvSeries(sql: string, args: relationalStore.ValueType[]): Promise&lt;TvSeriesEntity[]&gt; { 
+    if (!this.core.isReady()) { return []; } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql(sql, args); 
+      const items: TvSeriesEntity[] = []; 
+      if (!rs.goToFirstRow()) { 
+        return items; 
+      } 
+      do { 
+        items.push(this.mapTvSeriesEntityFromProjectedRow(rs)); 
+      } while (rs.goToNextRow()); 
+      return items; 
+    } catch (e) { 
+      console.error(`[DB][queryTvSeries] sql=${sql} args=${JSON.stringify(args)} error=${JSON.stringify(e)}`); 
+      return []; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 按 provider+providerId 查询电影，存在则返回，不存在返回 null */ 
+  async getMovieByProviderId(provider: string, providerId: string): Promise&lt;MovieEntity | null&gt; { 
+    const items = await this.queryMovies( 
+      this.buildMovieSelectSql(&#39; WHERE provider = ? AND provider_id = ? LIMIT 1&#39;), 
+      [provider, providerId] 
+    ); 
+    return items.length &gt; 0 ? items[0] : null; 
+  } 
+ 
+  async getMovieById(id: number): Promise&lt;MovieEntity | null&gt; { 
+    const items = await this.queryMovies( 
+      this.buildMovieSelectSql(&#39; WHERE id = ? LIMIT 1&#39;), 
+      [id] 
+    ); 
+    return items.length &gt; 0 ? items[0] : null; 
+  } 
+ 
+  /** 批量获取所有电影，供播放历史等场景一次性加载 */ 
+  async getAllMovies(): Promise&lt;MovieEntity[]&gt; { 
+    return this.queryMovies(this.buildMovieSelectSql(), []); 
+  } 
+ 
+  /** 插入或更新电影（以 provider+provider_id 唯一），返回 id */ 
+  async upsertMovie(e: MovieEntity): Promise&lt;number&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+    // 先查，有则 UPDATE，无则 INSERT OR IGNORE 保证并发安全 
+    const existing = await this.getMovieByProviderId(e.provider, e.providerId); 
+    if (existing &amp;&amp; existing.id !== undefined) { 
+      const bucket: relationalStore.ValuesBucket = { 
+        provider: e.provider, provider_id: e.providerId, title: e.title, 
+        original_title: e.originalTitle ?? null, overview: e.overview ?? null, 
+        release_date: e.releaseDate ?? null, rating: e.rating ?? null, 
+        vote_count: e.voteCount ?? null, poster_path: e.posterPath ?? null, 
+        backdrop_path: e.backdropPath ?? null, poster_url: e.posterUrl ?? null, 
+        backdrop_url: e.backdropUrl ?? null, poster_local_path: e.posterLocalPath ?? null, 
+        backdrop_local_path: e.backdropLocalPath ?? null, genres_json: e.genresJson ?? null, 
+        cast_json: e.castJson ?? null, directors_json: e.directorsJson ?? null, 
+        runtime: e.runtime ?? null, original_language: e.originalLanguage ?? null, 
+        origin_country_json: e.originCountryJson ?? null, 
+        raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt, 
+        title_normalized: normalizeSearchText(e.title), 
+        title_pinyin: toPinyinFull(e.title), 
+        title_pinyin_segments: toPinyinSegments(e.title), 
+        title_initials: toPinyinInitials(e.title) 
+      }; 
+      const pred = new relationalStore.RdbPredicates(TABLE_MOVIES); 
+      pred.equalTo(&#39;id&#39;, existing.id); 
+      await store.update(bucket, pred); 
+      console.info(`[DB][upsertMovie] UPDATE id=${existing.id} title=&quot;${e.title}&quot; posterUrl=${e.posterUrl ? e.posterUrl.substring(0, 40) : &#39;null&#39;}`); 
+      return existing.id; 
+    } 
+    const columns: string[] = [&#39;provider&#39;, &#39;provider_id&#39;, &#39;title&#39;, &#39;scraped_at&#39;]; 
+    const args: relationalStore.ValueType[] = [e.provider, e.providerId, e.title, e.scrapedAt]; 
+    if (e.originalTitle !== undefined) { 
+      columns.push(&#39;original_title&#39;); 
+      args.push(e.originalTitle); 
+    } 
+    if (e.overview !== undefined) { 
+      columns.push(&#39;overview&#39;); 
+      args.push(e.overview); 
+    } 
+    if (e.releaseDate !== undefined) { 
+      columns.push(&#39;release_date&#39;); 
+      args.push(e.releaseDate); 
+    } 
+    if (e.rating !== undefined) { 
+      columns.push(&#39;rating&#39;); 
+      args.push(e.rating); 
+    } 
+    if (e.voteCount !== undefined) { 
+      columns.push(&#39;vote_count&#39;); 
+      args.push(e.voteCount); 
+    } 
+    if (e.posterPath !== undefined) { 
+      columns.push(&#39;poster_path&#39;); 
+      args.push(e.posterPath); 
+    } 
+    if (e.backdropPath !== undefined) { 
+      columns.push(&#39;backdrop_path&#39;); 
+      args.push(e.backdropPath); 
+    } 
+    if (e.posterUrl !== undefined) { 
+      columns.push(&#39;poster_url&#39;); 
+      args.push(e.posterUrl); 
+    } 
+    if (e.backdropUrl !== undefined) { 
+      columns.push(&#39;backdrop_url&#39;); 
+      args.push(e.backdropUrl); 
+    } 
+    if (e.posterLocalPath !== undefined) { 
+      columns.push(&#39;poster_local_path&#39;); 
+      args.push(e.posterLocalPath); 
+    } 
+    if (e.backdropLocalPath !== undefined) { 
+      columns.push(&#39;backdrop_local_path&#39;); 
+      args.push(e.backdropLocalPath); 
+    } 
+    if (e.genresJson !== undefined) { 
+      columns.push(&#39;genres_json&#39;); 
+      args.push(e.genresJson); 
+    } 
+    if (e.castJson !== undefined) { 
+      columns.push(&#39;cast_json&#39;); 
+      args.push(e.castJson); 
+    } 
+    if (e.directorsJson !== undefined) { 
+      columns.push(&#39;directors_json&#39;); 
+      args.push(e.directorsJson); 
+    } 
+    if (e.runtime !== undefined) { 
+      columns.push(&#39;runtime&#39;); 
+      args.push(e.runtime); 
+    } 
+    if (e.originalLanguage !== undefined) { 
+      columns.push(&#39;original_language&#39;); 
+      args.push(e.originalLanguage); 
+    } 
+    if (e.originCountryJson !== undefined) { 
+      columns.push(&#39;origin_country_json&#39;); 
+      args.push(e.originCountryJson); 
+    } 
+    if (e.rawJson !== undefined) { 
+      columns.push(&#39;raw_json&#39;); 
+      args.push(e.rawJson); 
+    } 
+    columns.push(&#39;title_normalized&#39;); 
+    args.push(normalizeSearchText(e.title)); 
+    columns.push(&#39;title_pinyin&#39;); 
+    args.push(toPinyinFull(e.title)); 
+    columns.push(&#39;title_pinyin_segments&#39;); 
+    args.push(toPinyinSegments(e.title)); 
+    columns.push(&#39;title_initials&#39;); 
+    args.push(toPinyinInitials(e.title)); 
+    const placeholders = columns.map(() =&gt; &#39;?&#39;).join(&#39;, &#39;); 
+    const sql = `INSERT INTO ${TABLE_MOVIES} (${columns.join(&#39;, &#39;)}) VALUES (${placeholders})`; 
+    await store.executeSql(sql, args); 
+    // 查回刚插入的 id 
+    const inserted = await this.getMovieByProviderId(e.provider, e.providerId); 
+    const newId = inserted?.id ?? -1; 
+    if (newId &lt;= 0) { 
+      const visibleMovies = await this.getAllMovies(); 
+      const totalMovieCount = await this.core.querySingleIdValue( 
+        `SELECT COUNT(*) AS id FROM ${TABLE_MOVIES}`, 
+        [] 
+      ); 
+      const movieTableExists = await this.core.querySingleIdValue( 
+        `SELECT COUNT(*) AS id FROM sqlite_master WHERE type = &#39;table&#39; AND name = &#39;${TABLE_MOVIES}&#39;`, 
+        [] 
+      ); 
+      throw new Error(`upsertMovie unresolved id dbName=${FileSourceDbCore.getDatabaseName()} provider=${e.provider} providerId=${e.providerId} visibleMoviesCount=${visibleMovies.length} totalMovieCount=${totalMovieCount} movieTableExists=${movieTableExists}`); 
+    } 
+    console.info(`[DB][upsertMovie] INSERT id=${newId} title=&quot;${e.title}&quot; posterUrl=${e.posterUrl ? e.posterUrl.substring(0, 40) : &#39;null&#39;}`); 
+    return newId; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `upsertMovie 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  private parseMovieEntity(rs: relationalStore.ResultSet): MovieEntity { 
+    try { 
+    const str = (col: string): string | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); }; 
+    const num = (col: string): number | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); }; 
+    const dbl = (col: string): number | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getDouble(i); }; 
+    return { 
+      id: rs.getLong(rs.getColumnIndex(&#39;id&#39;)), 
+      provider: rs.getString(rs.getColumnIndex(&#39;provider&#39;)), 
+      providerId: rs.getString(rs.getColumnIndex(&#39;provider_id&#39;)), 
+      title: rs.getString(rs.getColumnIndex(&#39;title&#39;)), 
+      originalTitle: str(&#39;original_title&#39;), overview: str(&#39;overview&#39;), 
+      releaseDate: str(&#39;release_date&#39;), rating: dbl(&#39;rating&#39;), voteCount: num(&#39;vote_count&#39;), 
+      posterPath: str(&#39;poster_path&#39;), backdropPath: str(&#39;backdrop_path&#39;), 
+      posterUrl: str(&#39;poster_url&#39;), backdropUrl: str(&#39;backdrop_url&#39;), 
+      posterLocalPath: str(&#39;poster_local_path&#39;), backdropLocalPath: str(&#39;backdrop_local_path&#39;), 
+      genresJson: str(&#39;genres_json&#39;), castJson: str(&#39;cast_json&#39;), directorsJson: str(&#39;directors_json&#39;), 
+      runtime: num(&#39;runtime&#39;), originalLanguage: str(&#39;original_language&#39;), 
+      originCountryJson: str(&#39;origin_country_json&#39;), 
+      rawJson: str(&#39;raw_json&#39;), scrapedAt: rs.getLong(rs.getColumnIndex(&#39;scraped_at&#39;)) 
+    }; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `parseMovieEntity 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  async getTvSeriesByProviderId(provider: string, providerId: string): Promise&lt;TvSeriesEntity | null&gt; { 
+    const items = await this.queryTvSeries( 
+      this.buildTvSeriesSelectSql(&#39; WHERE provider = ? AND provider_id = ? LIMIT 1&#39;), 
+      [provider, providerId] 
+    ); 
+    return items.length &gt; 0 ? items[0] : null; 
+  } 
+ 
+  /** 批量获取所有剧集，供播放历史等场景一次性加载 */ 
+  async getAllTvSeries(): Promise&lt;TvSeriesEntity[]&gt; { 
+    return this.queryTvSeries(this.buildTvSeriesSelectSql(), []); 
+  } 
+ 
+  async upsertTvSeries(e: TvSeriesEntity): Promise&lt;number&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+    const existing = await this.getTvSeriesByProviderId(e.provider, e.providerId); 
+    if (existing &amp;&amp; existing.id !== undefined) { 
+      const bucket: relationalStore.ValuesBucket = { 
+        provider: e.provider, provider_id: e.providerId, title: e.title, 
+        original_title: e.originalTitle ?? null, overview: e.overview ?? null, 
+        first_air_date: e.firstAirDate ?? null, rating: e.rating ?? null, 
+        vote_count: e.voteCount ?? null, poster_path: e.posterPath ?? null, 
+        backdrop_path: e.backdropPath ?? null, poster_url: e.posterUrl ?? null, 
+        backdrop_url: e.backdropUrl ?? null, poster_local_path: e.posterLocalPath ?? null, 
+        backdrop_local_path: e.backdropLocalPath ?? null, genres_json: e.genresJson ?? null, 
+        cast_json: e.castJson ?? null, number_of_seasons: e.numberOfSeasons ?? null, 
+        original_language: e.originalLanguage ?? null, origin_country_json: e.originCountryJson ?? null, 
+        raw_json: e.rawJson ?? null, 
+        scraped_at: e.scrapedAt, 
+        title_normalized: normalizeSearchText(e.title), 
+        title_pinyin: toPinyinFull(e.title), 
+        title_pinyin_segments: toPinyinSegments(e.title), 
+        title_initials: toPinyinInitials(e.title) 
+      }; 
+      const pred = new relationalStore.RdbPredicates(TABLE_TV_SERIES); 
+      pred.equalTo(&#39;id&#39;, existing.id); 
+      await store.update(bucket, pred); 
+      return existing.id; 
+    } 
+    const insertBucket: relationalStore.ValuesBucket = { 
+      provider: e.provider, 
+      provider_id: e.providerId, 
+      title: e.title, 
+      original_title: e.originalTitle ?? null, 
+      overview: e.overview ?? null, 
+      first_air_date: e.firstAirDate ?? null, 
+      rating: e.rating ?? null, 
+      vote_count: e.voteCount ?? null, 
+      poster_path: e.posterPath ?? null, 
+      backdrop_path: e.backdropPath ?? null, 
+      poster_url: e.posterUrl ?? null, 
+      backdrop_url: e.backdropUrl ?? null, 
+      poster_local_path: e.posterLocalPath ?? null, 
+      backdrop_local_path: e.backdropLocalPath ?? null, 
+      genres_json: e.genresJson ?? null, 
+      cast_json: e.castJson ?? null, 
+      number_of_seasons: e.numberOfSeasons ?? null, 
+      original_language: e.originalLanguage ?? null, 
+      origin_country_json: e.originCountryJson ?? null, 
+      raw_json: e.rawJson ?? null, 
+      scraped_at: e.scrapedAt, 
+      title_normalized: normalizeSearchText(e.title), 
+      title_pinyin: toPinyinFull(e.title), 
+      title_pinyin_segments: toPinyinSegments(e.title), 
+      title_initials: toPinyinInitials(e.title) 
+    }; 
+    let insertedRowId = -1; 
+    try { 
+      insertedRowId = await store.insert(TABLE_TV_SERIES, insertBucket); 
+    } catch (insertError) { 
+      const recovered = await this.getTvSeriesByProviderId(e.provider, e.providerId); 
+      if (recovered &amp;&amp; recovered.id !== undefined) { 
+        return recovered.id; 
+      } 
+      const insertErr = insertError as BusinessError; 
+      throw new Error(insertErr.message); 
+    } 
+    const inserted = await this.getTvSeriesByProviderId(e.provider, e.providerId); 
+    const fallbackId = await this.core.querySingleIdValue( 
+      `SELECT id FROM ${TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ? LIMIT 1`, 
+      [e.provider, e.providerId] 
+    ); 
+    const lastInsertedId = await this.core.lastInsertedRowId(); 
+    const resolvedId = inserted?.id ?? (insertedRowId &gt; 0 ? insertedRowId : (fallbackId &gt; 0 ? fallbackId : lastInsertedId)); 
+    if (resolvedId &lt;= 0) { 
+      const totalSeriesCount = await this.core.querySingleIdValue( 
+        `SELECT COUNT(*) AS id FROM ${TABLE_TV_SERIES}`, 
+        [] 
+      ); 
+      const matchedSeriesCount = await this.core.querySingleIdValue( 
+        `SELECT COUNT(*) AS id FROM ${TABLE_TV_SERIES} WHERE provider = ? AND provider_id = ?`, 
+        [e.provider, e.providerId] 
+      ); 
+      const visibleSeries = await this.getAllTvSeries(); 
+      throw new Error( 
+        `upsertTvSeries unresolved id dbName=${FileSourceDbCore.getDatabaseName()} provider=${e.provider} providerId=${e.providerId} fallbackId=${fallbackId} lastInsertedId=${lastInsertedId} totalSeriesCount=${totalSeriesCount} matchedSeriesCount=${matchedSeriesCount} visibleSeriesCount=${visibleSeries.length}` 
+      ); 
+    } 
+    return resolvedId; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `upsertTvSeries 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  private parseTvSeriesEntity(rs: relationalStore.ResultSet): TvSeriesEntity { 
+    try { 
+    const optionalIndex = (col: string): number =&gt; { 
+      try { 
+        return rs.getColumnIndex(col); 
+      } catch { 
+        return -1; 
+      } 
+    }; 
+    const str = (col: string): string | undefined =&gt; { 
+      const i = optionalIndex(col); 
+      return i &lt; 0 || rs.isColumnNull(i) ? undefined : rs.getString(i); 
+    }; 
+    const num = (col: string): number | undefined =&gt; { 
+      const i = optionalIndex(col); 
+      return i &lt; 0 || rs.isColumnNull(i) ? undefined : rs.getLong(i); 
+    }; 
+    const dbl = (col: string): number | undefined =&gt; { 
+      const i = optionalIndex(col); 
+      return i &lt; 0 || rs.isColumnNull(i) ? undefined : rs.getDouble(i); 
+    }; 
+    return { 
+      id: rs.getLong(rs.getColumnIndex(&#39;id&#39;)), 
+      provider: rs.getString(rs.getColumnIndex(&#39;provider&#39;)), 
+      providerId: rs.getString(rs.getColumnIndex(&#39;provider_id&#39;)), 
+      title: rs.getString(rs.getColumnIndex(&#39;title&#39;)), 
+      originalTitle: str(&#39;original_title&#39;), overview: str(&#39;overview&#39;), 
+      firstAirDate: str(&#39;first_air_date&#39;), rating: dbl(&#39;rating&#39;), voteCount: num(&#39;vote_count&#39;), 
+      posterPath: str(&#39;poster_path&#39;), backdropPath: str(&#39;backdrop_path&#39;), 
+      posterUrl: str(&#39;poster_url&#39;), backdropUrl: str(&#39;backdrop_url&#39;), 
+      posterLocalPath: str(&#39;poster_local_path&#39;), backdropLocalPath: str(&#39;backdrop_local_path&#39;), 
+      genresJson: str(&#39;genres_json&#39;), castJson: str(&#39;cast_json&#39;), 
+      numberOfSeasons: num(&#39;number_of_seasons&#39;), originalLanguage: str(&#39;original_language&#39;), 
+      originCountryJson: str(&#39;origin_country_json&#39;), 
+      rawJson: str(&#39;raw_json&#39;), scrapedAt: rs.getLong(rs.getColumnIndex(&#39;scraped_at&#39;)) 
+    }; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `parseTvSeriesEntity 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  async getTvSeason(seriesId: number, seasonNumber: number): Promise&lt;TvSeasonEntity | null&gt; { 
+    if (!this.core.isReady()) { return null; } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql( 
+        `SELECT * FROM ${TABLE_TV_SEASONS} WHERE series_id = ? AND season_number = ? LIMIT 1`, 
+        [seriesId, seasonNumber] 
+      ); 
+      if (rs.goToFirstRow()) { return this.parseTvSeasonEntity(rs); } 
+      return null; 
+    } catch { return null; } finally { try { rs?.close(); } catch { } } 
+  } 
+ 
+  async upsertTvSeason(e: TvSeasonEntity): Promise&lt;number&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+    const existing = await this.getTvSeason(e.seriesId, e.seasonNumber); 
+    if (existing &amp;&amp; existing.id !== undefined) { 
+      const bucket: relationalStore.ValuesBucket = { 
+        series_id: e.seriesId, provider: e.provider, provider_id: e.providerId, 
+        season_number: e.seasonNumber, title: e.title ?? null, overview: e.overview ?? null, 
+        air_date: e.airDate ?? null, episode_count: e.episodeCount ?? null, 
+        poster_path: e.posterPath ?? null, poster_url: e.posterUrl ?? null, 
+        poster_local_path: e.posterLocalPath ?? null, raw_json: e.rawJson ?? null, 
+        scraped_at: e.scrapedAt 
+      }; 
+      const pred = new relationalStore.RdbPredicates(TABLE_TV_SEASONS); 
+      pred.equalTo(&#39;id&#39;, existing.id); 
+      await store.update(bucket, pred); 
+      return existing.id; 
+    } 
+    const sql = ` 
+      INSERT OR IGNORE INTO ${TABLE_TV_SEASONS} 
+        (series_id, provider, provider_id, season_number, title, overview, 
+         air_date, episode_count, poster_path, poster_url, poster_local_path, raw_json, scraped_at) 
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) 
+    `; 
+    const args: relationalStore.ValueType[] = [ 
+      e.seriesId, e.provider, e.providerId, e.seasonNumber, 
+      e.title ?? null, e.overview ?? null, e.airDate ?? null, 
+      e.episodeCount !== undefined ? e.episodeCount : null, 
+      e.posterPath ?? null, e.posterUrl ?? null, e.posterLocalPath ?? null, 
+      e.rawJson ?? null, e.scrapedAt 
+    ]; 
+    await store.executeSql(sql, args); 
+    const inserted = await this.getTvSeason(e.seriesId, e.seasonNumber); 
+    const fallbackId = await this.core.querySingleIdValue( 
+      `SELECT id FROM ${TABLE_TV_SEASONS} WHERE series_id = ? AND season_number = ? LIMIT 1`, 
+      [e.seriesId, e.seasonNumber] 
+    ); 
+    return inserted?.id ?? (fallbackId &gt; 0 ? fallbackId : await this.core.lastInsertedRowId()); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `upsertTvSeason 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  private parseTvSeasonEntity(rs: relationalStore.ResultSet): TvSeasonEntity { 
+    try { 
+    const str = (col: string): string | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); }; 
+    const num = (col: string): number | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); }; 
+    return { 
+      id: rs.getLong(rs.getColumnIndex(&#39;id&#39;)), 
+      seriesId: rs.getLong(rs.getColumnIndex(&#39;series_id&#39;)), 
+      provider: rs.getString(rs.getColumnIndex(&#39;provider&#39;)), 
+      providerId: rs.getString(rs.getColumnIndex(&#39;provider_id&#39;)), 
+      seasonNumber: rs.getLong(rs.getColumnIndex(&#39;season_number&#39;)), 
+      title: str(&#39;title&#39;), overview: str(&#39;overview&#39;), airDate: str(&#39;air_date&#39;), 
+      episodeCount: num(&#39;episode_count&#39;), posterPath: str(&#39;poster_path&#39;), 
+      posterUrl: str(&#39;poster_url&#39;), posterLocalPath: str(&#39;poster_local_path&#39;), 
+      rawJson: str(&#39;raw_json&#39;), scrapedAt: rs.getLong(rs.getColumnIndex(&#39;scraped_at&#39;)) 
+    }; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `parseTvSeasonEntity 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  async getTvEpisode(seriesId: number, seasonNumber: number, episodeNumber: number): Promise&lt;TvEpisodeEntity | null&gt; { 
+    if (!this.core.isReady()) { return null; } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      rs = await store.querySql( 
+        `SELECT * FROM ${TABLE_TV_EPISODES} ` + 
+        `WHERE series_id = ? AND season_number = ? AND episode_number = ? LIMIT 1`, 
+        [seriesId, seasonNumber, episodeNumber] 
+      ); 
+      if (rs.goToFirstRow()) { return this.parseTvEpisodeEntity(rs); } 
+      return null; 
+    } catch { return null; } finally { try { rs?.close(); } catch { } } 
+  } 
+ 
+  /** 获取某部剧某季的全部集（按 episode_number 升序），用于季详情页集列表展示 */ 
+  async getEpisodesBySeriesAndSeason(seriesId: number, seasonNumber: number): Promise&lt;TvEpisodeEntity[]&gt; { 
+    if (!this.core.isReady()) { return []; } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      const sql = `SELECT * FROM ${TABLE_TV_EPISODES} 
+        WHERE series_id = ? AND season_number = ? 
+        ORDER BY episode_number ASC`; 
+      rs = await store.querySql(sql, [seriesId, seasonNumber]); 
+      const items: TvEpisodeEntity[] = []; 
+      while (rs.goToNextRow()) { items.push(this.parseTvEpisodeEntity(rs)); } 
+      return items; 
+    } catch (e) { 
+      console.error(&#39;[DB][getEpisodesBySeriesAndSeason]&#39;, JSON.stringify(e)); 
+      return []; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 获取剧集中 season_number &gt; 0 的最小季、最小集号的第一集（用于续播卡片默认展示） */ 
+  async getFirstTvEpisode(seriesId: number): Promise&lt;TvEpisodeEntity | null&gt; { 
+    if (!this.core.isReady()) { return null; } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | null = null; 
+    try { 
+      const sql = `SELECT * FROM ${TABLE_TV_EPISODES} 
+        WHERE series_id = ? AND season_number &gt; 0 
+        ORDER BY season_number ASC, episode_number ASC 
+        LIMIT 1`; 
+      rs = await store.querySql(sql, [seriesId]); 
+      if (rs.goToFirstRow()) { return this.parseTvEpisodeEntity(rs); } 
+      return null; 
+    } catch { return null; } finally { try { rs?.close(); } catch { } } 
+  } 
+ 
+  async upsertTvEpisode(e: TvEpisodeEntity): Promise&lt;number&gt; { 
+    const store = this.core.getStore(); 
+    try { 
+    const existing = await this.getTvEpisode(e.seriesId, e.seasonNumber, e.episodeNumber); 
+    if (existing &amp;&amp; existing.id !== undefined) { 
+      const bucket: relationalStore.ValuesBucket = { 
+        series_id: e.seriesId, season_id: e.seasonId !== undefined ? e.seasonId : null, 
+        provider: e.provider, provider_id: e.providerId, 
+        season_number: e.seasonNumber, episode_number: e.episodeNumber, 
+        title: e.title ?? null, overview: e.overview ?? null, air_date: e.airDate ?? null, 
+        runtime: e.runtime !== undefined ? e.runtime : null, 
+        rating: e.rating !== undefined ? e.rating : null, 
+        still_path: e.stillPath ?? null, still_url: e.stillUrl ?? null, 
+        raw_json: e.rawJson ?? null, scraped_at: e.scrapedAt 
+      }; 
+      const pred = new relationalStore.RdbPredicates(TABLE_TV_EPISODES); 
+      pred.equalTo(&#39;id&#39;, existing.id); 
+      await store.update(bucket, pred); 
+      return existing.id; 
+    } 
+    const sql = ` 
+      INSERT OR IGNORE INTO ${TABLE_TV_EPISODES} 
+        (series_id, season_id, provider, provider_id, season_number, episode_number, 
+         title, overview, air_date, runtime, rating, still_path, still_url, raw_json, scraped_at) 
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) 
+    `; 
+    const args: relationalStore.ValueType[] = [ 
+      e.seriesId, e.seasonId !== undefined ? e.seasonId : null, 
+      e.provider, e.providerId, e.seasonNumber, e.episodeNumber, 
+      e.title ?? null, e.overview ?? null, e.airDate ?? null, 
+      e.runtime !== undefined ? e.runtime : null, 
+      e.rating !== undefined ? e.rating : null, 
+      e.stillPath ?? null, e.stillUrl ?? null, 
+      e.rawJson ?? null, e.scrapedAt 
+    ]; 
+    await store.executeSql(sql, args); 
+    const inserted = await this.getTvEpisode(e.seriesId, e.seasonNumber, e.episodeNumber); 
+    const fallbackId = await this.core.querySingleIdValue( 
+      `SELECT id FROM ${TABLE_TV_EPISODES} ` + 
+      `WHERE series_id = ? AND season_number = ? AND episode_number = ? LIMIT 1`, 
+      [e.seriesId, e.seasonNumber, e.episodeNumber] 
+    ); 
+    return inserted?.id ?? (fallbackId &gt; 0 ? fallbackId : await this.core.lastInsertedRowId()); 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `upsertTvEpisode 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  private parseTvEpisodeEntity(rs: relationalStore.ResultSet): TvEpisodeEntity { 
+    try { 
+    const str = (col: string): string | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getString(i); }; 
+    const num = (col: string): number | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getLong(i); }; 
+    const dbl = (col: string): number | undefined =&gt; { const i = rs.getColumnIndex(col); return rs.isColumnNull(i) ? undefined : rs.getDouble(i); }; 
+    return { 
+      id: rs.getLong(rs.getColumnIndex(&#39;id&#39;)), 
+      seriesId: rs.getLong(rs.getColumnIndex(&#39;series_id&#39;)), 
+      seasonId: num(&#39;season_id&#39;), 
+      provider: rs.getString(rs.getColumnIndex(&#39;provider&#39;)), 
+      providerId: rs.getString(rs.getColumnIndex(&#39;provider_id&#39;)), 
+      seasonNumber: rs.getLong(rs.getColumnIndex(&#39;season_number&#39;)), 
+      episodeNumber: rs.getLong(rs.getColumnIndex(&#39;episode_number&#39;)), 
+      title: str(&#39;title&#39;), overview: str(&#39;overview&#39;), airDate: str(&#39;air_date&#39;), 
+      runtime: num(&#39;runtime&#39;), rating: dbl(&#39;rating&#39;), 
+      stillPath: str(&#39;still_path&#39;), stillUrl: str(&#39;still_url&#39;), 
+      rawJson: str(&#39;raw_json&#39;), scrapedAt: rs.getLong(rs.getColumnIndex(&#39;scraped_at&#39;)) 
+    }; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      hilog.error(0x0000, &#39;FileSourceDatabase&#39;, `parseTvEpisodeEntity 失败: ${err.message}`); 
+      throw new Error(err.message); 
+    } 
+  } 
+ 
+  /** 
+   * 按主键查询 tv_series 行（用于剧集详情页显示简介/类别/演员等） 
+   */ 
+  async getTvSeriesById(id: number): Promise&lt;TvSeriesEntity | null&gt; { 
+    const items = await this.queryTvSeries( 
+      this.buildTvSeriesSelectSql(&#39; WHERE id = ? LIMIT 1&#39;), 
+      [id] 
+    ); 
+    return items.length &gt; 0 ? items[0] : null; 
+  } 
+ 
+  /** 
+   * 检查指定 movie 是否已有 origin_country_json。 
+   */ 
+  async hasMovieOriginCountry(movieId: number): Promise&lt;boolean&gt; { 
+    if (!this.core.isReady()) { 
+      return false; 
+    } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | undefined; 
+    try { 
+      rs = await store.querySql(&#39;SELECT origin_country_json FROM movies WHERE id = ?&#39;, [movieId]); 
+      if (rs.goToNextRow()) { 
+        const idx = rs.getColumnIndex(&#39;origin_country_json&#39;); 
+        const isNull = rs.isColumnNull(idx); 
+        return !isNull; 
+      } 
+      return false; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      console.warn(`[DB][hasMovieOriginCountry] 失败 code=${err.code} msg=${err.message}`); 
+      return false; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+ 
+  /** 
+   * 检查指定 tv_series 是否已有 origin_country_json。 
+   */ 
+  async hasTvSeriesOriginCountry(seriesId: number): Promise&lt;boolean&gt; { 
+    if (!this.core.isReady()) { 
+      return false; 
+    } 
+    const store = this.core.getStore(); 
+    let rs: relationalStore.ResultSet | undefined; 
+    try { 
+      rs = await store.querySql(&#39;SELECT origin_country_json FROM tv_series WHERE id = ?&#39;, [seriesId]); 
+      if (rs.goToNextRow()) { 
+        const idx = rs.getColumnIndex(&#39;origin_country_json&#39;); 
+        const isNull = rs.isColumnNull(idx); 
+        return !isNull; 
+      } 
+      return false; 
+    } catch (e) { 
+      const err = e as BusinessError; 
+      console.warn(`[DB][hasTvSeriesOriginCountry] 失败 code=${err.code} msg=${err.message}`); 
+      return false; 
+    } finally { 
+      try { rs?.close(); } catch { } 
+    } 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sat Sep 12 2026 15:30:15 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/db/files/MediaContentDao.ets","hash":"c0e5c490b7c0a47d38826e8cddf62011351cbbada6c394fc013fce4cbf07844a","lineCnt":748,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"MediaContentDao.constructor","count":4,"regions":[{"startLoc":{"line":17,"col":3},"endLoc":{"line":19,"col":4},"count":4,"ignored":0},{"startLoc":{"line":18,"col":5},"endLoc":{"line":19,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"MediaContentDao.buildMovieSelectSql","count":0,"regions":[{"startLoc":{"line":21,"col":3},"endLoc":{"line":23,"col":4},"count":0,"ignored":0},{"startLoc":{"line":22,"col":5},"endLoc":{"line":23,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":1},{"name":"MediaContentDao.buildTvSeriesSelectSql","count":0,"regions":[{"startLoc":{"line":25,"col":3},"endLoc":{"line":27,"col":4},"count":0,"ignored":0},{"startLoc":{"line":26,"col":5},"endLoc":{"line":27,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"MediaContentDao.mapMovieEntityFromProjectedRow","count":0,"regions":[{"startLoc":{"line":29,"col":3},"endLoc":{"line":60,"col":4},"count":0,"ignored":0},{"startLoc":{"line":30,"col":9},"endLoc":{"line":57,"col":6},"count":0,"ignored":0},{"startLoc":{"line":57,"col":7},"endLoc":{"line":59,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":58,"col":65},"endLoc":{"line":58,"col":107},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"MediaContentDao.mapTvSeriesEntityFromProjectedRow","count":0,"regions":[{"startLoc":{"line":62,"col":3},"endLoc":{"line":93,"col":4},"count":0,"ignored":0},{"startLoc":{"line":64,"col":9},"endLoc":{"line":89,"col":6},"count":0,"ignored":0},{"startLoc":{"line":89,"col":7},"endLoc":{"line":91,"col":6},"count":0,"ignored":0},{"startLoc":{"line":92,"col":5},"endLoc":{"line":93,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":90,"col":68},"endLoc":{"line":90,"col":110},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"MediaContentDao.queryMovies","count":0,"regions":[{"startLoc":{"line":95,"col":3},"endLoc":{"line":115,"col":4},"count":0,"ignored":0},{"startLoc":{"line":99,"col":9},"endLoc":{"line":109,"col":6},"count":0,"ignored":0},{"startLoc":{"line":109,"col":7},"endLoc":{"line":112,"col":6},"count":0,"ignored":0},{"startLoc":{"line":112,"col":15},"endLoc":{"line":114,"col":6},"count":0,"ignored":0},{"startLoc":{"line":102,"col":31},"endLoc":{"line":104,"col":8},"count":0,"ignored":0},{"startLoc":{"line":105,"col":7},"endLoc":{"line":107,"col":34},"count":0,"ignored":0},{"startLoc":{"line":108,"col":7},"endLoc":{"line":109,"col":6},"count":0,"ignored":0},{"startLoc":{"line":96,"col":31},"endLoc":{"line":96,"col":45},"count":0,"ignored":0},{"startLoc":{"line":113,"col":11},"endLoc":{"line":113,"col":27},"count":0,"ignored":0},{"startLoc":{"line":113,"col":28},"endLoc":{"line":113,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":96,"col":9},"endLoc":{"line":96,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":102,"col":11},"endLoc":{"line":102,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":5},{"name":"MediaContentDao.queryTvSeries","count":0,"regions":[{"startLoc":{"line":117,"col":3},"endLoc":{"line":137,"col":4},"count":0,"ignored":0},{"startLoc":{"line":121,"col":9},"endLoc":{"line":131,"col":6},"count":0,"ignored":0},{"startLoc":{"line":131,"col":7},"endLoc":{"line":134,"col":6},"count":0,"ignored":0},{"startLoc":{"line":134,"col":15},"endLoc":{"line":136,"col":6},"count":0,"ignored":0},{"startLoc":{"line":124,"col":31},"endLoc":{"line":126,"col":8},"count":0,"ignored":0},{"startLoc":{"line":127,"col":7},"endLoc":{"line":129,"col":34},"count":0,"ignored":0},{"startLoc":{"line":130,"col":7},"endLoc":{"line":131,"col":6},"count":0,"ignored":0},{"startLoc":{"line":118,"col":31},"endLoc":{"line":118,"col":45},"count":0,"ignored":0},{"startLoc":{"line":135,"col":11},"endLoc":{"line":135,"col":27},"count":0,"ignored":0},{"startLoc":{"line":135,"col":28},"endLoc":{"line":135,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":118,"col":9},"endLoc":{"line":118,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":124,"col":11},"endLoc":{"line":124,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"MediaContentDao.getMovieByProviderId","count":0,"regions":[{"startLoc":{"line":140,"col":3},"endLoc":{"line":146,"col":4},"count":0,"ignored":0},{"startLoc":{"line":141,"col":5},"endLoc":{"line":146,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":145,"col":12},"endLoc":{"line":145,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":7},{"name":"MediaContentDao.getMovieById","count":0,"regions":[{"startLoc":{"line":148,"col":3},"endLoc":{"line":154,"col":4},"count":0,"ignored":0},{"startLoc":{"line":149,"col":5},"endLoc":{"line":154,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":153,"col":12},"endLoc":{"line":153,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":8},{"name":"MediaContentDao.getAllMovies","count":0,"regions":[{"startLoc":{"line":157,"col":3},"endLoc":{"line":159,"col":4},"count":0,"ignored":0},{"startLoc":{"line":158,"col":5},"endLoc":{"line":159,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":9},{"name":"MediaContentDao.upsertMovie","count":0,"regions":[{"startLoc":{"line":162,"col":3},"endLoc":{"line":298,"col":4},"count":0,"ignored":0},{"startLoc":{"line":164,"col":9},"endLoc":{"line":293,"col":6},"count":0,"ignored":0},{"startLoc":{"line":167,"col":48},"endLoc":{"line":190,"col":6},"count":0,"ignored":0},{"startLoc":{"line":279,"col":21},"endLoc":{"line":290,"col":6},"count":0,"ignored":0},{"startLoc":{"line":293,"col":7},"endLoc":{"line":297,"col":6},"count":0,"ignored":0},{"startLoc":{"line":193,"col":40},"endLoc":{"line":196,"col":6},"count":0,"ignored":0},{"startLoc":{"line":197,"col":35},"endLoc":{"line":200,"col":6},"count":0,"ignored":0},{"startLoc":{"line":201,"col":38},"endLoc":{"line":204,"col":6},"count":0,"ignored":0},{"startLoc":{"line":205,"col":33},"endLoc":{"line":208,"col":6},"count":0,"ignored":0},{"startLoc":{"line":209,"col":36},"endLoc":{"line":212,"col":6},"count":0,"ignored":0},{"startLoc":{"line":213,"col":37},"endLoc":{"line":216,"col":6},"count":0,"ignored":0},{"startLoc":{"line":217,"col":39},"endLoc":{"line":220,"col":6},"count":0,"ignored":0},{"startLoc":{"line":221,"col":36},"endLoc":{"line":224,"col":6},"count":0,"ignored":0},{"startLoc":{"line":225,"col":38},"endLoc":{"line":228,"col":6},"count":0,"ignored":0},{"startLoc":{"line":229,"col":42},"endLoc":{"line":232,"col":6},"count":0,"ignored":0},{"startLoc":{"line":233,"col":44},"endLoc":{"line":236,"col":6},"count":0,"ignored":0},{"startLoc":{"line":237,"col":37},"endLoc":{"line":240,"col":6},"count":0,"ignored":0},{"startLoc":{"line":241,"col":35},"endLoc":{"line":244,"col":6},"count":0,"ignored":0},{"startLoc":{"line":245,"col":40},"endLoc":{"line":248,"col":6},"count":0,"ignored":0},{"startLoc":{"line":249,"col":34},"endLoc":{"line":252,"col":6},"count":0,"ignored":0},{"startLoc":{"line":253,"col":43},"endLoc":{"line":256,"col":6},"count":0,"ignored":0},{"startLoc":{"line":257,"col":44},"endLoc":{"line":260,"col":6},"count":0,"ignored":0},{"startLoc":{"line":261,"col":34},"endLoc":{"line":264,"col":6},"count":0,"ignored":0},{"startLoc":{"line":291,"col":5},"endLoc":{"line":293,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":167,"col":9},"endLoc":{"line":167,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":188,"col":95},"endLoc":{"line":188,"col":146},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":193,"col":9},"endLoc":{"line":193,"col":38},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":197,"col":9},"endLoc":{"line":197,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":201,"col":9},"endLoc":{"line":201,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":205,"col":9},"endLoc":{"line":205,"col":31},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":209,"col":9},"endLoc":{"line":209,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":213,"col":9},"endLoc":{"line":213,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":217,"col":9},"endLoc":{"line":217,"col":37},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":221,"col":9},"endLoc":{"line":221,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":225,"col":9},"endLoc":{"line":225,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":229,"col":9},"endLoc":{"line":229,"col":40},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":233,"col":9},"endLoc":{"line":233,"col":42},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":237,"col":9},"endLoc":{"line":237,"col":35},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":241,"col":9},"endLoc":{"line":241,"col":33},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":245,"col":9},"endLoc":{"line":245,"col":38},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":249,"col":9},"endLoc":{"line":249,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":253,"col":9},"endLoc":{"line":253,"col":41},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":257,"col":9},"endLoc":{"line":257,"col":42},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":261,"col":9},"endLoc":{"line":261,"col":32},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":279,"col":9},"endLoc":{"line":279,"col":19},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":291,"col":87},"endLoc":{"line":291,"col":138},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":273,"col":38},"endLoc":{"line":273,"col":47},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":11},{"name":"MediaContentDao.parseMovieEntity","count":0,"regions":[{"startLoc":{"line":300,"col":3},"endLoc":{"line":325,"col":4},"count":0,"ignored":0},{"startLoc":{"line":301,"col":9},"endLoc":{"line":320,"col":6},"count":0,"ignored":0},{"startLoc":{"line":320,"col":7},"endLoc":{"line":324,"col":6},"count":0,"ignored":0},{"startLoc":{"line":302,"col":90},"endLoc":{"line":302,"col":148},"count":0,"ignored":0},{"startLoc":{"line":303,"col":90},"endLoc":{"line":303,"col":146},"count":0,"ignored":0},{"startLoc":{"line":304,"col":90},"endLoc":{"line":304,"col":148},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":302,"col":17},"endLoc":{"line":302,"col":148},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":302,"col":97},"endLoc":{"line":302,"col":145},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":13},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":303,"col":17},"endLoc":{"line":303,"col":146},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":303,"col":97},"endLoc":{"line":303,"col":143},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":14},{"name":"anonymous_3","count":0,"regions":[{"startLoc":{"line":304,"col":17},"endLoc":{"line":304,"col":148},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":304,"col":97},"endLoc":{"line":304,"col":145},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":15},{"name":"MediaContentDao.getTvSeriesByProviderId","count":0,"regions":[{"startLoc":{"line":327,"col":3},"endLoc":{"line":333,"col":4},"count":0,"ignored":0},{"startLoc":{"line":328,"col":5},"endLoc":{"line":333,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":332,"col":12},"endLoc":{"line":332,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"MediaContentDao.getAllTvSeries","count":0,"regions":[{"startLoc":{"line":336,"col":3},"endLoc":{"line":338,"col":4},"count":0,"ignored":0},{"startLoc":{"line":337,"col":5},"endLoc":{"line":338,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":17},{"name":"MediaContentDao.upsertTvSeries","count":0,"regions":[{"startLoc":{"line":340,"col":3},"endLoc":{"line":432,"col":4},"count":0,"ignored":0},{"startLoc":{"line":342,"col":9},"endLoc":{"line":427,"col":6},"count":0,"ignored":0},{"startLoc":{"line":344,"col":48},"endLoc":{"line":366,"col":6},"count":0,"ignored":0},{"startLoc":{"line":412,"col":26},"endLoc":{"line":425,"col":6},"count":0,"ignored":0},{"startLoc":{"line":397,"col":7},"endLoc":{"line":404,"col":6},"count":0,"ignored":0},{"startLoc":{"line":427,"col":7},"endLoc":{"line":431,"col":6},"count":0,"ignored":0},{"startLoc":{"line":395,"col":9},"endLoc":{"line":397,"col":6},"count":0,"ignored":0},{"startLoc":{"line":399,"col":52},"endLoc":{"line":401,"col":8},"count":0,"ignored":0},{"startLoc":{"line":402,"col":7},"endLoc":{"line":404,"col":6},"count":0,"ignored":0},{"startLoc":{"line":426,"col":5},"endLoc":{"line":427,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":344,"col":9},"endLoc":{"line":344,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":399,"col":11},"endLoc":{"line":399,"col":50},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":411,"col":41},"endLoc":{"line":411,"col":123},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":411,"col":78},"endLoc":{"line":411,"col":122},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":412,"col":9},"endLoc":{"line":412,"col":24},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":18},{"name":"MediaContentDao.parseTvSeriesEntity","count":0,"regions":[{"startLoc":{"line":434,"col":3},"endLoc":{"line":475,"col":4},"count":0,"ignored":0},{"startLoc":{"line":435,"col":9},"endLoc":{"line":470,"col":6},"count":0,"ignored":0},{"startLoc":{"line":470,"col":7},"endLoc":{"line":474,"col":6},"count":0,"ignored":0},{"startLoc":{"line":445,"col":7},"endLoc":{"line":446,"col":6},"count":0,"ignored":0},{"startLoc":{"line":449,"col":7},"endLoc":{"line":450,"col":6},"count":0,"ignored":0},{"startLoc":{"line":453,"col":7},"endLoc":{"line":454,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":19},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":436,"col":27},"endLoc":{"line":442,"col":6},"count":0,"ignored":0},{"startLoc":{"line":437,"col":11},"endLoc":{"line":439,"col":8},"count":0,"ignored":0},{"startLoc":{"line":439,"col":9},"endLoc":{"line":441,"col":8},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":20},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":443,"col":17},"endLoc":{"line":446,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":445,"col":14},"endLoc":{"line":445,"col":71},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":21},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":447,"col":17},"endLoc":{"line":450,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":449,"col":14},"endLoc":{"line":449,"col":69},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":22},{"name":"anonymous_7","count":0,"regions":[{"startLoc":{"line":451,"col":17},"endLoc":{"line":454,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":453,"col":14},"endLoc":{"line":453,"col":71},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":23},{"name":"MediaContentDao.getTvSeason","count":0,"regions":[{"startLoc":{"line":477,"col":3},"endLoc":{"line":489,"col":4},"count":0,"ignored":0},{"startLoc":{"line":481,"col":9},"endLoc":{"line":488,"col":6},"count":0,"ignored":0},{"startLoc":{"line":487,"col":7},"endLoc":{"line":488,"col":6},"count":0,"ignored":0},{"startLoc":{"line":478,"col":31},"endLoc":{"line":478,"col":47},"count":0,"ignored":0},{"startLoc":{"line":488,"col":7},"endLoc":{"line":488,"col":29},"count":0,"ignored":0},{"startLoc":{"line":488,"col":38},"endLoc":{"line":488,"col":72},"count":0,"ignored":0},{"startLoc":{"line":486,"col":30},"endLoc":{"line":486,"col":70},"count":0,"ignored":0},{"startLoc":{"line":488,"col":44},"endLoc":{"line":488,"col":60},"count":0,"ignored":0},{"startLoc":{"line":488,"col":61},"endLoc":{"line":488,"col":70},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":478,"col":9},"endLoc":{"line":478,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":486,"col":11},"endLoc":{"line":486,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":24},{"name":"MediaContentDao.upsertTvSeason","count":0,"regions":[{"startLoc":{"line":491,"col":3},"endLoc":{"line":534,"col":4},"count":0,"ignored":0},{"startLoc":{"line":493,"col":9},"endLoc":{"line":529,"col":6},"count":0,"ignored":0},{"startLoc":{"line":509,"col":5},"endLoc":{"line":529,"col":6},"count":0,"ignored":0},{"startLoc":{"line":495,"col":48},"endLoc":{"line":508,"col":6},"count":0,"ignored":0},{"startLoc":{"line":529,"col":7},"endLoc":{"line":533,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":495,"col":9},"endLoc":{"line":495,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":518,"col":7},"endLoc":{"line":518,"col":59},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":528,"col":29},"endLoc":{"line":528,"col":94},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":25},{"name":"MediaContentDao.parseTvSeasonEntity","count":0,"regions":[{"startLoc":{"line":536,"col":3},"endLoc":{"line":556,"col":4},"count":0,"ignored":0},{"startLoc":{"line":537,"col":9},"endLoc":{"line":551,"col":6},"count":0,"ignored":0},{"startLoc":{"line":551,"col":7},"endLoc":{"line":555,"col":6},"count":0,"ignored":0},{"startLoc":{"line":538,"col":90},"endLoc":{"line":538,"col":148},"count":0,"ignored":0},{"startLoc":{"line":539,"col":90},"endLoc":{"line":539,"col":146},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":26},{"name":"anonymous_8","count":0,"regions":[{"startLoc":{"line":538,"col":17},"endLoc":{"line":538,"col":148},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":538,"col":97},"endLoc":{"line":538,"col":145},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":27},{"name":"anonymous_9","count":0,"regions":[{"startLoc":{"line":539,"col":17},"endLoc":{"line":539,"col":146},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":539,"col":97},"endLoc":{"line":539,"col":143},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":28},{"name":"MediaContentDao.getTvEpisode","count":0,"regions":[{"startLoc":{"line":558,"col":3},"endLoc":{"line":571,"col":4},"count":0,"ignored":0},{"startLoc":{"line":562,"col":9},"endLoc":{"line":570,"col":6},"count":0,"ignored":0},{"startLoc":{"line":569,"col":7},"endLoc":{"line":570,"col":6},"count":0,"ignored":0},{"startLoc":{"line":559,"col":31},"endLoc":{"line":559,"col":47},"count":0,"ignored":0},{"startLoc":{"line":570,"col":7},"endLoc":{"line":570,"col":29},"count":0,"ignored":0},{"startLoc":{"line":570,"col":38},"endLoc":{"line":570,"col":72},"count":0,"ignored":0},{"startLoc":{"line":568,"col":30},"endLoc":{"line":568,"col":71},"count":0,"ignored":0},{"startLoc":{"line":570,"col":44},"endLoc":{"line":570,"col":60},"count":0,"ignored":0},{"startLoc":{"line":570,"col":61},"endLoc":{"line":570,"col":70},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":559,"col":9},"endLoc":{"line":559,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":568,"col":11},"endLoc":{"line":568,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":29},{"name":"MediaContentDao.getEpisodesBySeriesAndSeason","count":0,"regions":[{"startLoc":{"line":574,"col":3},"endLoc":{"line":592,"col":4},"count":0,"ignored":0},{"startLoc":{"line":578,"col":9},"endLoc":{"line":586,"col":6},"count":0,"ignored":0},{"startLoc":{"line":586,"col":7},"endLoc":{"line":589,"col":6},"count":0,"ignored":0},{"startLoc":{"line":589,"col":15},"endLoc":{"line":591,"col":6},"count":0,"ignored":0},{"startLoc":{"line":585,"col":7},"endLoc":{"line":586,"col":6},"count":0,"ignored":0},{"startLoc":{"line":575,"col":31},"endLoc":{"line":575,"col":45},"count":0,"ignored":0},{"startLoc":{"line":584,"col":7},"endLoc":{"line":584,"col":78},"count":0,"ignored":0},{"startLoc":{"line":590,"col":11},"endLoc":{"line":590,"col":27},"count":0,"ignored":0},{"startLoc":{"line":590,"col":28},"endLoc":{"line":590,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":575,"col":9},"endLoc":{"line":575,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":30},{"name":"MediaContentDao.getFirstTvEpisode","count":0,"regions":[{"startLoc":{"line":595,"col":3},"endLoc":{"line":608,"col":4},"count":0,"ignored":0},{"startLoc":{"line":599,"col":9},"endLoc":{"line":607,"col":6},"count":0,"ignored":0},{"startLoc":{"line":606,"col":7},"endLoc":{"line":607,"col":6},"count":0,"ignored":0},{"startLoc":{"line":596,"col":31},"endLoc":{"line":596,"col":47},"count":0,"ignored":0},{"startLoc":{"line":607,"col":7},"endLoc":{"line":607,"col":29},"count":0,"ignored":0},{"startLoc":{"line":607,"col":38},"endLoc":{"line":607,"col":72},"count":0,"ignored":0},{"startLoc":{"line":605,"col":30},"endLoc":{"line":605,"col":71},"count":0,"ignored":0},{"startLoc":{"line":607,"col":44},"endLoc":{"line":607,"col":60},"count":0,"ignored":0},{"startLoc":{"line":607,"col":61},"endLoc":{"line":607,"col":70},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":596,"col":9},"endLoc":{"line":596,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":605,"col":11},"endLoc":{"line":605,"col":28},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":31},{"name":"MediaContentDao.upsertTvEpisode","count":0,"regions":[{"startLoc":{"line":610,"col":3},"endLoc":{"line":658,"col":4},"count":0,"ignored":0},{"startLoc":{"line":612,"col":9},"endLoc":{"line":653,"col":6},"count":0,"ignored":0},{"startLoc":{"line":630,"col":5},"endLoc":{"line":653,"col":6},"count":0,"ignored":0},{"startLoc":{"line":614,"col":48},"endLoc":{"line":629,"col":6},"count":0,"ignored":0},{"startLoc":{"line":653,"col":7},"endLoc":{"line":657,"col":6},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":614,"col":9},"endLoc":{"line":614,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":616,"col":43},"endLoc":{"line":616,"col":87},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":620,"col":18},"endLoc":{"line":620,"col":60},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":621,"col":17},"endLoc":{"line":621,"col":57},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":637,"col":19},"endLoc":{"line":637,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":640,"col":7},"endLoc":{"line":640,"col":49},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":641,"col":7},"endLoc":{"line":641,"col":47},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":652,"col":29},"endLoc":{"line":652,"col":94},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":32},{"name":"MediaContentDao.parseTvEpisodeEntity","count":0,"regions":[{"startLoc":{"line":660,"col":3},"endLoc":{"line":683,"col":4},"count":0,"ignored":0},{"startLoc":{"line":661,"col":9},"endLoc":{"line":678,"col":6},"count":0,"ignored":0},{"startLoc":{"line":678,"col":7},"endLoc":{"line":682,"col":6},"count":0,"ignored":0},{"startLoc":{"line":662,"col":90},"endLoc":{"line":662,"col":148},"count":0,"ignored":0},{"startLoc":{"line":663,"col":90},"endLoc":{"line":663,"col":146},"count":0,"ignored":0},{"startLoc":{"line":664,"col":90},"endLoc":{"line":664,"col":148},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":33},{"name":"anonymous_10","count":0,"regions":[{"startLoc":{"line":662,"col":17},"endLoc":{"line":662,"col":148},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":662,"col":97},"endLoc":{"line":662,"col":145},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":34},{"name":"anonymous_11","count":0,"regions":[{"startLoc":{"line":663,"col":17},"endLoc":{"line":663,"col":146},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":663,"col":97},"endLoc":{"line":663,"col":143},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":35},{"name":"anonymous_12","count":0,"regions":[{"startLoc":{"line":664,"col":17},"endLoc":{"line":664,"col":148},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":664,"col":97},"endLoc":{"line":664,"col":145},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":36},{"name":"MediaContentDao.getTvSeriesById","count":0,"regions":[{"startLoc":{"line":688,"col":3},"endLoc":{"line":694,"col":4},"count":0,"ignored":0},{"startLoc":{"line":689,"col":5},"endLoc":{"line":694,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":693,"col":12},"endLoc":{"line":693,"col":46},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":37},{"name":"MediaContentDao.hasMovieOriginCountry","count":0,"regions":[{"startLoc":{"line":699,"col":3},"endLoc":{"line":720,"col":4},"count":0,"ignored":0},{"startLoc":{"line":705,"col":9},"endLoc":{"line":713,"col":6},"count":0,"ignored":0},{"startLoc":{"line":713,"col":7},"endLoc":{"line":717,"col":6},"count":0,"ignored":0},{"startLoc":{"line":707,"col":29},"endLoc":{"line":711,"col":8},"count":0,"ignored":0},{"startLoc":{"line":700,"col":31},"endLoc":{"line":702,"col":6},"count":0,"ignored":0},{"startLoc":{"line":717,"col":15},"endLoc":{"line":719,"col":6},"count":0,"ignored":0},{"startLoc":{"line":712,"col":7},"endLoc":{"line":713,"col":6},"count":0,"ignored":0},{"startLoc":{"line":718,"col":11},"endLoc":{"line":718,"col":27},"count":0,"ignored":0},{"startLoc":{"line":718,"col":28},"endLoc":{"line":718,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":700,"col":9},"endLoc":{"line":700,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":707,"col":11},"endLoc":{"line":707,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":38},{"name":"MediaContentDao.hasTvSeriesOriginCountry","count":0,"regions":[{"startLoc":{"line":725,"col":3},"endLoc":{"line":746,"col":4},"count":0,"ignored":0},{"startLoc":{"line":731,"col":9},"endLoc":{"line":739,"col":6},"count":0,"ignored":0},{"startLoc":{"line":739,"col":7},"endLoc":{"line":743,"col":6},"count":0,"ignored":0},{"startLoc":{"line":733,"col":29},"endLoc":{"line":737,"col":8},"count":0,"ignored":0},{"startLoc":{"line":726,"col":31},"endLoc":{"line":728,"col":6},"count":0,"ignored":0},{"startLoc":{"line":743,"col":15},"endLoc":{"line":745,"col":6},"count":0,"ignored":0},{"startLoc":{"line":738,"col":7},"endLoc":{"line":739,"col":6},"count":0,"ignored":0},{"startLoc":{"line":744,"col":11},"endLoc":{"line":744,"col":27},"count":0,"ignored":0},{"startLoc":{"line":744,"col":28},"endLoc":{"line":744,"col":37},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":726,"col":9},"endLoc":{"line":726,"col":29},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":733,"col":11},"endLoc":{"line":733,"col":27},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":39}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":7,"7":14,"8":15,"9":17,"10":18,"11":21,"12":22,"13":25,"14":26,"15":29,"16":30,"17":31,"18":32,"19":33,"20":34,"21":35,"22":36,"23":37,"24":38,"25":39,"26":40,"27":41,"28":42,"29":43,"30":44,"31":45,"32":46,"33":47,"34":48,"35":49,"36":50,"37":51,"38":52,"39":53,"40":54,"41":56,"42":57,"43":58,"44":62,"45":63,"46":64,"47":65,"48":66,"49":67,"50":68,"51":69,"52":70,"53":71,"54":72,"55":73,"56":74,"57":75,"58":76,"59":77,"60":78,"61":79,"62":80,"63":81,"64":82,"65":83,"66":84,"67":85,"68":86,"69":87,"70":89,"71":90,"72":92,"73":95,"74":96,"75":97,"76":98,"77":99,"78":100,"79":101,"80":102,"81":103,"82":105,"83":106,"84":107,"85":108,"86":109,"87":110,"88":111,"89":112,"90":113,"91":117,"92":118,"93":119,"94":120,"95":121,"96":122,"97":123,"98":124,"99":125,"100":127,"101":128,"102":129,"103":130,"104":131,"105":132,"106":133,"107":134,"108":135,"109":140,"110":141,"111":142,"112":143,"113":145,"114":148,"115":149,"116":150,"117":151,"118":153,"119":157,"120":158,"121":162,"122":163,"123":164,"124":166,"125":167,"126":168,"127":169,"128":170,"129":171,"130":172,"131":173,"132":174,"133":175,"134":176,"135":177,"136":178,"137":179,"138":180,"139":181,"140":182,"141":183,"142":185,"143":186,"144":187,"145":188,"146":189,"147":191,"148":192,"149":193,"150":194,"151":195,"152":197,"153":198,"154":199,"155":201,"156":202,"157":203,"158":205,"159":206,"160":207,"161":209,"162":210,"163":211,"164":213,"165":214,"166":215,"167":217,"168":218,"169":219,"170":221,"171":222,"172":223,"173":225,"174":226,"175":227,"176":229,"177":230,"178":231,"179":233,"180":234,"181":235,"182":237,"183":238,"184":239,"185":241,"186":242,"187":243,"188":245,"189":246,"190":247,"191":249,"192":250,"193":251,"194":253,"195":254,"196":255,"197":257,"198":258,"199":259,"200":261,"201":262,"202":263,"203":265,"204":266,"205":267,"206":268,"207":269,"208":270,"209":271,"210":272,"211":273,"212":274,"213":275,"214":277,"215":278,"216":279,"217":280,"218":281,"219":282,"220":283,"221":285,"222":286,"223":287,"224":289,"225":291,"226":292,"227":293,"228":294,"229":295,"230":296,"231":300,"232":301,"233":302,"234":303,"235":304,"236":305,"237":306,"238":307,"239":308,"240":309,"241":310,"242":311,"243":312,"244":313,"245":314,"246":315,"247":316,"248":317,"249":318,"250":320,"251":321,"252":322,"253":323,"254":327,"255":328,"256":329,"257":330,"258":332,"259":336,"260":337,"261":340,"262":341,"263":342,"264":343,"265":344,"266":345,"267":346,"268":347,"269":348,"270":349,"271":350,"272":351,"273":352,"274":353,"275":354,"276":355,"277":356,"278":357,"279":358,"280":359,"281":360,"282":362,"283":363,"284":364,"285":365,"286":367,"287":368,"288":369,"289":370,"290":371,"291":372,"292":373,"293":374,"294":375,"295":376,"296":377,"297":378,"298":379,"299":380,"300":381,"301":382,"302":383,"303":384,"304":385,"305":386,"306":387,"307":388,"308":389,"309":390,"310":391,"311":392,"312":394,"313":395,"314":396,"315":397,"316":398,"317":399,"318":400,"319":402,"320":403,"321":405,"322":406,"323":407,"324":408,"325":410,"326":411,"327":412,"328":413,"329":414,"330":415,"331":417,"332":418,"333":419,"334":421,"335":422,"336":423,"337":426,"338":427,"339":428,"340":429,"341":430,"342":434,"343":435,"344":436,"345":437,"346":438,"347":439,"348":440,"349":443,"350":444,"351":445,"352":447,"353":448,"354":449,"355":451,"356":452,"357":453,"358":455,"359":456,"360":457,"361":458,"362":459,"363":460,"364":461,"365":462,"366":463,"367":464,"368":465,"369":466,"370":467,"371":468,"372":470,"373":471,"374":472,"375":473,"376":477,"377":478,"378":479,"379":480,"380":481,"381":482,"382":483,"383":484,"384":486,"385":487,"386":488,"387":491,"388":492,"389":493,"390":494,"391":495,"392":496,"393":497,"394":498,"395":499,"396":500,"397":501,"398":502,"399":504,"400":505,"401":506,"402":507,"403":509,"404":510,"405":515,"406":516,"407":517,"408":518,"409":519,"410":520,"411":522,"412":523,"413":524,"414":525,"415":526,"416":528,"417":529,"418":530,"419":531,"420":532,"421":536,"422":537,"423":538,"424":539,"425":540,"426":541,"427":542,"428":543,"429":544,"430":545,"431":546,"432":547,"433":548,"434":549,"435":551,"436":552,"437":553,"438":554,"439":558,"440":559,"441":560,"442":561,"443":562,"444":563,"445":564,"446":565,"447":566,"448":568,"449":569,"450":570,"451":574,"452":575,"453":576,"454":577,"455":578,"456":579,"457":582,"458":583,"459":584,"460":585,"461":586,"462":587,"463":588,"464":589,"465":590,"466":595,"467":596,"468":597,"469":598,"470":599,"471":600,"472":604,"473":605,"474":606,"475":607,"476":610,"477":611,"478":612,"479":613,"480":614,"481":615,"482":616,"483":617,"484":618,"485":619,"486":620,"487":621,"488":622,"489":623,"490":625,"491":626,"492":627,"493":628,"494":630,"495":631,"496":636,"497":637,"498":638,"499":639,"500":640,"501":641,"502":642,"503":643,"504":645,"505":646,"506":647,"507":648,"508":649,"509":650,"510":652,"511":653,"512":654,"513":655,"514":656,"515":660,"516":661,"517":662,"518":663,"519":664,"520":665,"521":666,"522":667,"523":668,"524":669,"525":670,"526":671,"527":672,"528":673,"529":674,"530":675,"531":676,"532":678,"533":679,"534":680,"535":681,"536":688,"537":689,"538":690,"539":691,"540":693,"541":699,"542":700,"543":701,"544":703,"545":704,"546":705,"547":706,"548":707,"549":708,"550":709,"551":710,"552":712,"553":713,"554":714,"555":715,"556":716,"557":717,"558":718,"559":725,"560":726,"561":727,"562":729,"563":730,"564":731,"565":732,"566":733,"567":734,"568":735,"569":736,"570":738,"571":739,"572":740,"573":741,"574":742,"575":743,"576":744},"summary":{"lines":{"total":568,"covered":2,"pct":0.3521,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,4,4,-1,-1,0,0,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,-1,0,-1,-1,0,0,0,0,-1,0,-1,-1,-1,0,0,-1,-1,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,0,0,-1,0,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,0,0,0,0,-1,0,-1,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,0,0,-1,0,0,0,0,-1,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,-1,-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,-1,-1,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,-1,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,0,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,-1,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,-1,0,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,-1,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,-1,-1,-1,-1]},"functions":{"total":40,"covered":1,"pct":2.5},"branches":{"total":140,"covered":0,"pct":0}}},"title":"MediaContentDao.ets.html","relativeHome":"../../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
