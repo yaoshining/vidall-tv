@@ -1,6 +1,6 @@
 {
   "suite": "unit",
-  "run_id": "34710304989-1",
+  "run_id": "34710304989-2",
   "status": "failed",
   "gate_passed": false,
   "build_status": "success",
@@ -12,6 +12,6 @@
   "cases": [],
   "run_number": "561",
   "commit_sha": "d1e8afde9fcf44ff31ac3faf7dc0284287b250f5",
-  "timestamp": "2026-09-12T18:11:06.971542+00:00",
+  "timestamp": "2026-09-12T18:20:24.721441+00:00",
   "run_url": "https://github.com/yaoshining/vidall-tv/actions/runs/34710304989"
 }
