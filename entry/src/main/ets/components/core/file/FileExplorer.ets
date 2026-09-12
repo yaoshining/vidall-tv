@@ -1,3 +1,5 @@
+import { FileExplorerToast, FileExplorerToastState } from './FileExplorerToast';
+import { FileThumbnail } from './FileThumbnail';
 import { FileExplorerController, FileExplorerPathItem, FileExplorerResource } from "./FileExplorerController";
 
 /**
@@ -24,6 +26,8 @@ interface ColorsInterface {
 @ComponentV2
 export struct FileExplorer {
   @Param @Require controller: FileExplorerController
+  @Param thumbnailLoader: (resource: FileExplorerResource) => Promise<string> = () => Promise.resolve('')
+  @Param toastState: FileExplorerToastState = new FileExplorerToastState()
   @Param isLoading: boolean = false
   @Param errorMessage: string = ''
   @Param emptyText: string = '此文件夹为空'
@@ -39,18 +43,14 @@ export struct FileExplorer {
   @BuilderParam extraBottomBuilder?: () => void
   @BuilderParam overlayBuilder?: () => void
 
-  // 深色主题颜色定义
+  @Local focusedKey: string = ''
+  @Local hoveredKey: string = ''
+  @Local focusedControl: string = ''
+
   private readonly COLORS: ColorsInterface = {
-    background: '#000000',           // 主背景色
-    surface: '#1C1C1E',             // 表面色
-    surfaceVariant: '#2C2C2E',      // 表面变体色
-    primaryText: '#FFFFFF',         // 主文本色
-    secondaryText: '#EBEBF5',       // 次要文本色
-    tertiaryText: '#98989D',        // 三级文本色
-    accent: '#0A84FF',              // 强调色（蓝色）
-    divider: '#38383A',             // 分割线色
-    hover: '#3A3A3C',               // 悬停色
-    button: '#48484A'               // 按钮色
+    background: '#191A1C', surface: '#303133', surfaceVariant: '#303133',
+    primaryText: '#F0F2F5', secondaryText: '#ADB3BC', tertiaryText: '#ADB3BC',
+    accent: '#307BF6', divider: '#35383D', hover: '#202F46', button: '#303133'
   };
 
   private changeSortField(field: 'name' | 'size' | 'date'): void {
@@ -105,334 +105,257 @@ export struct FileExplorer {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
+    return `${year}-${month}-${day}`;
   }
 
-  private getFileIcon(resource: FileExplorerResource): string {
-    if (resource.isDirectory) {
-      return '📁';
-    }
+  private extension(resource: FileExplorerResource): string {
+    const dot = resource.name.lastIndexOf('.');
+    return dot > 0 ? resource.name.substring(dot + 1).toLowerCase() : '';
+  }
 
-    const fileName = resource.name.toLowerCase();
+  private isVideo(resource: FileExplorerResource): boolean {
+    return !resource.isDirectory && ['mp4', 'mkv', 'avi', 'mov', 'm4v', 'ts', 'm2ts', 'wmv', 'webm'].includes(this.extension(resource));
+  }
 
-    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') ||
-    fileName.endsWith('.png') || fileName.endsWith('.gif') ||
-    fileName.endsWith('.bmp') || fileName.endsWith('.webp')) {
-      return '🖼️';
-    }
+  private isImage(resource: FileExplorerResource): boolean {
+    return !resource.isDirectory && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff'].includes(this.extension(resource));
+  }
 
-    if (fileName.endsWith('.mp4') || fileName.endsWith('.avi') ||
-    fileName.endsWith('.mkv') || fileName.endsWith('.mov')) {
-      return '🎬';
-    }
+  private isSubtitle(resource: FileExplorerResource): boolean {
+    return !resource.isDirectory && ['srt', 'ass', 'ssa', 'vtt', 'sub'].includes(this.extension(resource));
+  }
 
-    if (fileName.endsWith('.mp3') || fileName.endsWith('.wav') ||
-    fileName.endsWith('.flac') || fileName.endsWith('.aac')) {
-      return '🎵';
-    }
+  private fileTypeColor(resource: FileExplorerResource): string {
+    if (resource.isDirectory) { return '#F3CB3B'; }
+    if (this.isVideo(resource)) { return '#6AA7FF'; }
+    if (this.isSubtitle(resource)) { return '#65C9BD'; }
+    return this.COLORS.secondaryText;
+  }
 
-    if (fileName.endsWith('.pdf')) {
-      return '📕';
-    }
-
-    if (fileName.endsWith('.doc') || fileName.endsWith('.docx') ||
-    fileName.endsWith('.txt') || fileName.endsWith('.md')) {
-      return '📄';
-    }
-
-    if (fileName.endsWith('.xls') || fileName.endsWith('.xlsx') ||
-    fileName.endsWith('.csv')) {
-      return '📊';
-    }
-
-    if (fileName.endsWith('.zip') || fileName.endsWith('.rar') ||
-    fileName.endsWith('.7z') || fileName.endsWith('.tar')) {
-      return '📦';
-    }
-
-    return '📄';
+  private getFileIcon(resource: FileExplorerResource): Resource {
+    if (resource.isDirectory) { return $r('app.media.explorer_folder'); }
+    if (this.isVideo(resource)) { return $r('app.media.explorer_video'); }
+    if (this.isSubtitle(resource)) { return $r('app.media.explorer_subtitle'); }
+    return $r('app.media.explorer_document');
   }
 
   private getResourceSecondaryText(resource: FileExplorerResource): string {
-    return this.resourceSecondaryText(resource);
+    const custom = this.resourceSecondaryText(resource);
+    if (custom.length > 0) { return custom; }
+    if (resource.isDirectory) { return '文件夹'; }
+    const ext = this.extension(resource);
+    let type = '文件';
+    if (this.isVideo(resource)) { type = '视频'; }
+    else if (['srt', 'ass', 'ssa', 'vtt', 'sub'].includes(ext)) { type = '字幕'; }
+    else if (['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) { type = '音频'; }
+    else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) { type = '图片'; }
+    return ext.length > 0 ? `${type} · ${ext.toUpperCase()}` : type;
+  }
+
+  private isHighlighted(key: string): boolean {
+    return key === (this.hoveredKey || this.focusedKey);
+  }
+
+  private positionText(): string {
+    const resources = this.controller.sortedResources;
+    const index = resources.findIndex((resource: FileExplorerResource) => resource.key === (this.hoveredKey || this.focusedKey));
+    return index >= 0 ? `${index + 1} / ${resources.length}` : `${resources.length} 个项目`;
+  }
+
+  @Builder
+  ToolbarButton(label: string, key: string, action: () => void) {
+    Button(label, { type: ButtonType.Normal })
+      .height(40)
+      .fontSize(16)
+      .fontColor(this.COLORS.primaryText)
+      .backgroundColor(this.focusedControl === key ? this.COLORS.hover : this.COLORS.button)
+      .borderRadius(8)
+      .border({ width: 1.5, color: this.focusedControl === key ? this.COLORS.accent : '#48535F' })
+      .padding({ left: 18, right: 18 })
+      .onFocus(() => { this.focusedControl = key; })
+      .onBlur(() => { this.focusedControl = ''; })
+      .onClick(action)
+  }
+
+  @Builder
+  SortButton(label: string, field: 'name' | 'size' | 'date') {
+    Button(label + ' ' + this.getSortIcon(field), { type: ButtonType.Normal })
+      .fontSize(15)
+      .fontColor(this.controller.sortField === field ? '#6AA7FF' : this.COLORS.secondaryText)
+      .backgroundColor(this.focusedControl === field ? this.COLORS.hover : Color.Transparent)
+      .borderRadius(6)
+      .border({ width: 1.5, color: this.focusedControl === field ? this.COLORS.accent : Color.Transparent })
+      .height(36)
+      .padding({ left: 8, right: 8 })
+      .onFocus(() => { this.focusedControl = field; })
+      .onBlur(() => { this.focusedControl = ''; })
+      .onClick(() => { this.changeSortField(field); })
+  }
+
+  @Builder
+  KeyHint(key: string, label: string) {
+    Row({ space: 8 }) {
+      Text(key).fontSize(14).fontColor(this.COLORS.primaryText)
+        .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+        .backgroundColor(key === 'OK' ? this.COLORS.accent : this.COLORS.surface).borderRadius(6)
+        .border({ width: 1, color: '#48535F' })
+      Text(label).fontSize(14).fontColor(this.COLORS.secondaryText)
+    }
   }
 
   build() {
     Stack() {
       Column() {
-        // 顶部工具栏
-        Row() {
-          Button('返回')
-            .fontSize(16)
-            .height(40)
-            .backgroundColor(this.COLORS.button)
-            .fontColor(this.COLORS.accent)
-            .onClick(() => {
-              this.controller.handleBack();
-            })
-            .margin({ right: 10 })
-
-          Button(this.controller.showHiddenFiles ? '隐藏隐藏文件' : '显示隐藏文件')
-            .fontSize(16)
-            .height(40)
-            .backgroundColor(this.COLORS.button)
-            .fontColor(this.controller.showHiddenFiles ? this.COLORS.accent : this.COLORS.secondaryText)
-            .onClick(() => {
-              this.controller.showHiddenFiles = !this.controller.showHiddenFiles;
-            })
-            .margin({ right: 10 })
-
-          Text(`文件：${this.controller.sortedResources.length}`)
-            .fontSize(14)
-            .fontColor(this.COLORS.tertiaryText)
-            .layoutWeight(1)
-
-          if (this.toolbarActionsBuilder) {
-            this.toolbarActionsBuilder()
-          }
-
+        Row({ space: 16 }) {
+          this.ToolbarButton('‹  返回', 'back', () => { this.controller.handleBack(); })
+          Text('文件浏览').fontSize(28).fontWeight(FontWeight.Bold)
+            .fontColor(this.COLORS.primaryText).layoutWeight(1)
+          this.ToolbarButton(this.controller.showHiddenFiles ? '隐藏文件：已显示' : '显示隐藏文件',
+            'hidden', () => { this.controller.showHiddenFiles = !this.controller.showHiddenFiles; })
+          if (this.toolbarActionsBuilder) { this.toolbarActionsBuilder() }
           if (this.isLoading) {
-            LoadingProgress()
-              .width(24)
-              .height(24)
-              .color(this.COLORS.accent)
+            LoadingProgress().width(24).height(24).color(this.COLORS.accent)
           }
         }
-        .width('100%')
-        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-        .backgroundColor(this.COLORS.surface)
+        .width('100%').padding({ top: 24, bottom: 18 })
 
-        // 路径导航
-        Scroll() {
-          Row() {
-            ForEach(this.controller.pathItems, (item: FileExplorerPathItem, index: number) => {
-              Row() {
-                Text(item.name)
-                  .fontSize(14)
-                  .fontColor(index === this.controller.pathItems.length - 1
-                    ? this.COLORS.primaryText
-                    : this.COLORS.accent)
-                  .fontWeight(index === this.controller.pathItems.length - 1
-                    ? FontWeight.Bold
-                    : FontWeight.Normal)
-                  .onClick(() => {
-                    if (index !== this.controller.pathItems.length - 1) {
-                      this.handlePathClick(item.path);
-                    }
-                  })
-
-                if (index < this.controller.pathItems.length - 1) {
-                  Text(' / ')
-                    .fontSize(14)
-                    .fontColor(this.COLORS.tertiaryText)
-                    .margin({ left: 4, right: 4 })
+        Row({ space: 16 }) {
+          Image($r('app.media.explorer_folder')).width(30).height(30).objectFit(ImageFit.Contain)
+          Scroll() {
+            Row({ space: 8 }) {
+              ForEach(this.controller.pathItems, (item: FileExplorerPathItem, index: number) => {
+                if (index > 0) {
+                  Text('/').fontSize(18).fontColor(this.COLORS.tertiaryText)
                 }
-              }
-            }, (item: FileExplorerPathItem) => item.path)
+                Button(item.name, { type: ButtonType.Normal })
+                  .fontSize(18)
+                  .fontWeight(index === this.controller.pathItems.length - 1 ? FontWeight.Bold : FontWeight.Normal)
+                  .fontColor(index === this.controller.pathItems.length - 1 ? this.COLORS.primaryText : '#6AA7FF')
+                  .backgroundColor(this.focusedControl === 'path:' + item.path ? this.COLORS.hover : Color.Transparent)
+                  .borderRadius(6)
+                  .border({ width: 1.5, color: this.focusedControl === 'path:' + item.path ? this.COLORS.accent : Color.Transparent })
+                  .padding({ left: 4, right: 4 }).height(36)
+                  .focusable(index < this.controller.pathItems.length - 1)
+                  .onFocus(() => { this.focusedControl = 'path:' + item.path; })
+                  .onBlur(() => { this.focusedControl = ''; })
+                  .onClick(() => { this.handlePathClick(item.path); })
+              }, (item: FileExplorerPathItem) => item.path)
+            }
           }
-          .padding({ left: 16, right: 16 })
+          .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+          .align(Alignment.Start).layoutWeight(1)
+          Text(`${this.controller.sortedResources.length} 个项目`)
+            .fontSize(16).fontColor(this.COLORS.secondaryText)
         }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .width('100%')
-        .height(40)
-        .backgroundColor(this.COLORS.surfaceVariant)
+        .width('100%').padding({ bottom: 16 })
+        Divider().color(this.COLORS.divider)
+        if (this.extraTopBuilder) { this.extraTopBuilder() }
 
-        Divider()
-          .color(this.COLORS.divider)
-
-        if (this.extraTopBuilder) {
-          this.extraTopBuilder()
-        }
-
-        // 排序栏
         if (this.showDetailColumns) {
           Row() {
-            Row() {
-              Text('名称 ' + this.getSortIcon('name'))
-                .fontSize(13)
-                .fontColor(this.controller.sortField === 'name'
-                  ? this.COLORS.accent
-                  : this.COLORS.tertiaryText)
-                .fontWeight(this.controller.sortField === 'name'
-                  ? FontWeight.Medium
-                  : FontWeight.Normal)
-                .onClick(() => {
-                  this.changeSortField('name');
-                })
-            }
-            .layoutWeight(3)
-
-            Row() {
-              Text('大小 ' + this.getSortIcon('size'))
-                .fontSize(13)
-                .fontColor(this.controller.sortField === 'size'
-                  ? this.COLORS.accent
-                  : this.COLORS.tertiaryText)
-                .fontWeight(this.controller.sortField === 'size'
-                  ? FontWeight.Medium
-                  : FontWeight.Normal)
-                .onClick(() => {
-                  this.changeSortField('size');
-                })
-            }
-            .layoutWeight(2)
-            .justifyContent(FlexAlign.End)
-
-            Row() {
-              Text('修改日期 ' + this.getSortIcon('date'))
-                .fontSize(13)
-                .fontColor(this.controller.sortField === 'date'
-                  ? this.COLORS.accent
-                  : this.COLORS.tertiaryText)
-                .fontWeight(this.controller.sortField === 'date'
-                  ? FontWeight.Medium
-                  : FontWeight.Normal)
-                .onClick(() => {
-                  this.changeSortField('date');
-                })
-            }
-            .layoutWeight(2)
-            .justifyContent(FlexAlign.End)
+            Row() { this.SortButton('名称', 'name') }.layoutWeight(1)
+            Row() { this.SortButton('大小', 'size') }.width(110).justifyContent(FlexAlign.End)
+            Row() { this.SortButton('修改日期', 'date') }.width(170).justifyContent(FlexAlign.End)
           }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-          .backgroundColor(this.COLORS.surface)
-
-          Divider()
-            .color(this.COLORS.divider)
+          .width('100%').padding({ left: 12, right: 20, top: 8, bottom: 4 })
         }
-
         if (this.errorMessage.length > 0) {
-          Row() {
-            Text('⚠️  ' + this.errorMessage)
-              .fontSize(14)
-              .fontColor('#FF6B6B')
-              .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-          }
-          .width('100%')
-          .backgroundColor(this.COLORS.surface)
+          Text(this.errorMessage).fontSize(16).fontColor('#F1A6A6')
+            .width('100%').padding(12).backgroundColor(this.COLORS.surface)
         }
 
-        // 文件列表
-        if (this.controller.sortedResources.length === 0 && !this.isLoading) {
-          Column() {
-            Text('📂')
-              .fontSize(48)
-              .margin({ bottom: 12 })
-
-            Text(this.emptyText)
-              .fontSize(16)
-              .fontColor(this.COLORS.tertiaryText)
+        if (this.controller.sortedResources.length === 0) {
+          Column({ space: 16 }) {
+            if (this.isLoading) {
+              LoadingProgress().width(40).height(40).color(this.COLORS.accent)
+              Text('正在读取文件…').fontSize(18).fontColor(this.COLORS.secondaryText)
+            } else {
+              Image($r('app.media.explorer_folder')).width(48).height(48)
+              Text(this.errorMessage.length > 0 ? '暂时无法显示文件' : this.emptyText)
+                .fontSize(18).fontColor(this.COLORS.secondaryText)
+            }
           }
-          .width('100%')
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-          .backgroundColor(this.COLORS.background)
+          .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
         } else {
-          List({ space: 0 }) {
-            ForEach(this.controller.sortedResources, (resource: FileExplorerResource, index: number) => {
+          List({ space: 2 }) {
+            ForEach(this.controller.sortedResources, (resource: FileExplorerResource) => {
               ListItem() {
-                Row() {
-                  // 图标和名称
-                  Row({ space: 12 }) {
-                    Text(this.getFileIcon(resource))
-                      .fontSize($r('app.float.font_h6_title_large'))
-
-                    Column() {
-                      Text(resource.name)
-                        .fontSize($r('app.float.font_h7_title_small'))
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.MARQUEE })
-                        .fontColor(resource.isDirectory
-                          ? this.COLORS.accent
-                          : this.COLORS.primaryText)
-                        .width('100%')
-
-                      if (this.getResourceSecondaryText(resource).length > 0) {
-                        Text(this.getResourceSecondaryText(resource))
-                          .fontSize(12)
-                          .fontColor(this.COLORS.tertiaryText)
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          .width('100%')
-                          .margin({ top: 4 })
-                      }
+                Row({ space: 0 }) {
+                  Row({ space: 20 }) {
+                    if (this.isImage(resource)) {
+                      FileThumbnail({ resource: resource, loader: this.thumbnailLoader })
+                    } else {
+                      Image(this.getFileIcon(resource)).width(32).height(36).objectFit(ImageFit.Contain)
                     }
-                    .alignItems(HorizontalAlign.Start)
-                    .layoutWeight(1)
+                    Column({ space: 5 }) {
+                      Text(resource.name).fontSize(20).fontWeight(FontWeight.Medium)
+                        .fontColor(this.COLORS.primaryText).maxLines(1)
+                        .textOverflow({ overflow: this.isHighlighted(resource.key) ? TextOverflow.MARQUEE : TextOverflow.Ellipsis })
+                        .width('100%')
+                      Text() {
+                        if (this.resourceSecondaryText(resource).length > 0 || resource.isDirectory || this.extension(resource).length === 0) {
+                          Span(this.getResourceSecondaryText(resource))
+                        } else {
+                          Span(this.getResourceSecondaryText(resource).split(' · ')[0] + ' · ')
+                          Span(this.extension(resource).toUpperCase()).fontColor(this.fileTypeColor(resource))
+                        }
+                      }.fontSize(14)
+                        .fontColor(this.COLORS.secondaryText).maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                    }
+                    .alignItems(HorizontalAlign.Start).layoutWeight(1)
                   }
-                  .layoutWeight(this.showDetailColumns ? 3 : 1)
-                  .alignItems(VerticalAlign.Center)
-
+                  .layoutWeight(1)
                   if (this.showDetailColumns) {
-                    // 文件大小
-                    Text(resource.isDirectory ? '-' : this.formatFileSize(resource.size))
-                      .fontSize($r('app.float.font_subtitle_1'))
-                      .fontColor(this.COLORS.tertiaryText)
-                      .layoutWeight(2)
-                      .textAlign(TextAlign.End)
-                      .maxLines(1)
-
-                    // 修改日期
+                    Text(resource.isDirectory ? '—' : this.formatFileSize(resource.size))
+                      .fontSize(17).fontColor(this.COLORS.secondaryText).width(110)
+                      .textAlign(TextAlign.End).maxLines(1)
                     Text(this.formatDate(resource.lastModifiedMs))
-                      .fontSize(13)
-                      .fontColor(this.COLORS.tertiaryText)
-                      .layoutWeight(2)
-                      .textAlign(TextAlign.End)
-                      .maxLines(1)
+                      .fontSize(16).fontColor(this.COLORS.secondaryText).width(170)
+                      .textAlign(TextAlign.End).maxLines(1)
                   }
-
                   if (this.showResourceSelection(resource)) {
-                    Checkbox()
-                      .select(this.isResourceSelected(resource))
-                      .selectedColor(this.COLORS.accent)
+                    Checkbox().select(this.isResourceSelected(resource)).selectedColor(this.COLORS.accent)
                       .margin({ left: 12 })
-                      .onChange(() => {
-                        this.onResourceSelectionToggle(resource)
-                      })
+                      .onChange(() => { this.onResourceSelectionToggle(resource); })
                   }
                 }
-                .width('100%')
-                .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-                .backgroundColor(index % 2 === 0
-                  ? this.COLORS.background
-                  : this.COLORS.surface)
+                .width('100%').height(72).padding({ left: 20, right: 20 })
                 .opacity(this.disableResourceClick(resource) ? 0.5 : 1)
               }
-              .onClick(() => {
-                this.handleResourceClick(resource);
+              .borderRadius(8)
+              .backgroundColor(this.isHighlighted(resource.key) ? this.COLORS.hover : Color.Transparent)
+              .border({ width: 1.5, color: this.isHighlighted(resource.key) ? this.COLORS.accent : Color.Transparent })
+              .focusable(!this.disableResourceClick(resource))
+              .onHover((hovered: boolean) => {
+                if (hovered && !this.disableResourceClick(resource)) { this.hoveredKey = resource.key; }
+                else if (this.hoveredKey === resource.key) { this.hoveredKey = ''; }
               })
+              .onFocus(() => { this.hoveredKey = ''; this.focusedKey = resource.key; })
+              .onBlur(() => { if (this.focusedKey === resource.key) { this.focusedKey = ''; } })
+              .onClick(() => { this.handleResourceClick(resource); })
             }, (resource: FileExplorerResource) => resource.key)
           }
-          .width('100%')
-          .layoutWeight(1)
-          .backgroundColor(this.COLORS.background)
-          .divider({
-            strokeWidth: 0.5,
-            color: this.COLORS.divider,
-            startMargin: 16,
-            endMargin: 16
-          })
+          .width('100%').layoutWeight(1).scrollBar(BarState.Auto)
+          .divider({ strokeWidth: 0.5, color: this.COLORS.divider, startMargin: 12, endMargin: 12 })
         }
-
-        if (this.extraBottomBuilder) {
-          this.extraBottomBuilder()
+        if (this.extraBottomBuilder) { this.extraBottomBuilder() }
+        Divider().color(this.COLORS.divider).margin({ top: 10 })
+        Row({ space: 22 }) {
+          this.KeyHint('↑ ↓', '选择')
+          this.KeyHint('OK', '打开')
+          this.KeyHint('返回', this.controller.currentPath === this.controller.rootPath ? '退出' : '上一级')
+          Blank()
+          Text(this.positionText()).fontSize(14).fontColor(this.COLORS.secondaryText)
         }
+        .width('100%').padding({ top: 14, bottom: 20 })
       }
-      .width('100%')
-      .height('100%')
+      .width('100%').height('100%').padding({ left: 40, right: 40 })
       .backgroundColor(this.COLORS.background)
-
-      if (this.overlayBuilder) {
-        this.overlayBuilder()
-      }
+      FileExplorerToast({ state: this.toastState })
+        .align(Alignment.BottomEnd).margin({ right: 40, bottom: 80 })
+      if (this.overlayBuilder) { this.overlayBuilder() }
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.COLORS.background)
+    .width('100%').height('100%').backgroundColor(this.COLORS.background)
   }
 }

@@ -1,3 +1,6 @@
+import { FileExplorerToastState } from '../../components/core/file/FileExplorerToast';
+import { FileExplorerRecovery, isExplorerMissingError } from '../../components/core/file/FileExplorerRecovery';
+import { FileExplorerResource } from '../../components/core/file/FileExplorerController';
 import { IBestToast } from "@ibestservices/ibest-ui";
 import { WebDavFileExplorerAdapter } from "../../components/core/file/FileExplorerAdapter";
 import { FileExplorer } from "../../components/core/file/FileExplorer";
@@ -13,7 +16,6 @@ import { FfprobeUtil, FfprobeTrack } from "../../utils/FfprobeUtil";
 import { PresetAudioTrack, PresetSubtitleTrack } from "../../components/core/player/VideoData";
 import { FileSourceDatabase } from "../../db/files/FileSourceDatabase";
 import { DirStatus } from "../../db/models/FileSourceEntity";
-import { FileSourceStore } from "../../stores/files/FileSourceStore";
 import { FileExplorerContext } from "../../components/core/player/PlaybackContext";
 import { isVideoFile } from "../../utils/VideoFileUtil";
 import { UmamiAnalyticsService } from "../../services/analytics/UmamiAnalyticsService";
@@ -27,13 +29,13 @@ import { normalizeScrapeDirectoryPath } from '../../services/scrape/ScrapeScopeR
  */
 export interface FileExplorerPageParam {
   config: WebDAVConfig;
-  /** file_source_directories 主键，清理时必填 */
+  /** 兼容旧调用方的目录主键；清理时按 sourceId 与路径重新查询 */
   dirId?: number;
   /** 所属文件源 id，清理时必填 */
   sourceId?: number;
   /** 目录路径，用于 DB 清理 */
   directoryPath?: string;
-  /** 目录可达性状态，'missing' 时触发清理 Dialog */
+  /** 缓存的目录可达性状态；进入页面后仍以服务器核验结果为准 */
   dirStatus?: DirStatus;
 }
 
@@ -46,6 +48,9 @@ const config: WebDAVConfig = {
 @ComponentV2
 export struct FileExplorerPage {
   static PAGE_NAME = "fileExplorerPage"
+  private directoryRequest: number = 0;
+  @Local private toastState: FileExplorerToastState = new FileExplorerToastState();
+  private recovery: FileExplorerRecovery = new FileExplorerRecovery();
   client: WebDAVClient = new WebDAVClient(config)
   private fileExplorerAdapter: WebDavFileExplorerAdapter = new WebDavFileExplorerAdapter(
     (path: string): Promise<WebDAVResource[]> => this.client.listDirectory(path)
@@ -53,13 +58,8 @@ export struct FileExplorerPage {
   @Local imagePath: string = ''
   @Local isLoading: boolean = false
   @Local errorMessage: string = ''
-  @Local showMissingDirDialog: boolean = false
-  @Local isCleaningUp: boolean = false
-  @Local showMissingSourceDialog: boolean = false
-  @Local isDeletingSource: boolean = false
   @Local scrapePanelVisible: boolean = false
   @Local scrapeScope: ScrapeScope | undefined = undefined
-  private cachedDirId: number = 0
   private cachedSourceId: number = 0
   private cachedDirectoryPath: string = ''
   @Consumer('pageStack') pageStack: NavPathStack = new NavPathStack()
@@ -81,14 +81,48 @@ export struct FileExplorerPage {
     }
   }
 
+  private async loadThumbnail(resource: FileExplorerResource): Promise<string> {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const target = context.tempDir + '/thumb-' + util.generateRandomUUID(true);
+    return new Promise<string>((resolve, reject) => {
+      this.client.downloadFileStream(resource.path, target, {
+        onComplete: (saved: string) => { resolve('file://' + saved); },
+        onError: (error: Error) => { reject(error); }
+      });
+    });
+  }
+  private promptMissing(path: string, directory: boolean): void {
+    this.recovery.prompt(this.fileExplorerAdapter, path, directory, this.cachedSourceId,
+      normalizeScrapeDirectoryPath((this.cachedDirectoryPath === '/' ? '' : this.cachedDirectoryPath) + path), (message, confirm, cancel) => {
+        this.getUIContext().showAlertDialog({
+          title: directory ? '目录不存在' : '文件不存在', message, autoCancel: true,
+          primaryButton: { value: '取消', action: cancel },
+          secondaryButton: { value: '清除记录', action: confirm }, cancel
+        });
+      }, (message) => { IBestToast.show(message); }, () => {
+        if (directory && path === this.fileExplorerController.rootPath) { this.pageStack.pop(true); }
+        else { this.changePath(directory ? this.fileExplorerController.parentPath : this.fileExplorerController.currentPath); }
+      });
+  }
+
+  private async canOpen(path: string): Promise<boolean> {
+    if (await this.recovery.isMissing(this.fileExplorerAdapter, path, false)) {
+      this.promptMissing(path, false);
+      return false;
+    }
+    return true;
+  }
+
   @Builder
   FolderScrapeToolbarAction() {
-    Button('刮削此文件夹')
+    Button('刮削此文件夹', { type: ButtonType.Normal })
       .height(40)
       .fontSize(16)
-      .fontColor('#D7E8FF')
-      .backgroundColor('#243F66')
-      .margin({ right: 10 })
+      .fontColor('#F0F2F5')
+      .backgroundColor('#307BF6')
+      .borderRadius(8)
+      .border({ width: 1, color: '#307BF6' })
+      .padding({ left: 18, right: 18 })
       .focusable(true)
       .enabled(this.cachedSourceId > 0 && !this.isLoading)
       .onClick(() => { this.openFolderScrape(); })
@@ -146,15 +180,18 @@ export struct FileExplorerPage {
         FileExplorer({
           controller: this.fileExplorerController,
           isLoading: this.isLoading,
+          toastState: this.toastState,
+          thumbnailLoader: (resource: FileExplorerResource) => this.loadThumbnail(resource),
           errorMessage: this.errorMessage,
           toolbarActionsBuilder: () => { this.FolderScrapeToolbarAction(); },
           onFileClick: event => {
             const displayName = event.resource.name
             if (isVideoFile(displayName)) {
               this.playVideo(event.fullPath, displayName)
-            }
-            if (this.isImageFile(displayName)) {
+            } else if (this.isImageFile(displayName)) {
               this.previewImage(event.fullPath, displayName)
+            } else {
+              this.toastState.show('暂不支持打开此类型的文件')
             }
           }
         })
@@ -165,113 +202,6 @@ export struct FileExplorerPage {
           onClose: () => { this.closeScrapePanel(); }
         })
 
-        // ── 已删除目录提示 Dialog ──────────────────────────────
-        if (this.showMissingDirDialog) {
-          Column() {
-            Column() {
-              Text('目录不存在')
-                .fontSize(24)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#FFFFFF')
-              Text('此目录在服务器上已不存在，是否立即清理相关数据？')
-                .fontSize(18)
-                .fontColor('#CCCCCC')
-                .margin({ top: 16 })
-                .textAlign(TextAlign.Center)
-              Row({ space: 24 }) {
-                Button('取消')
-                  .fontSize(18)
-                  .fontColor('#FFFFFF')
-                  .backgroundColor('#555555')
-                  .borderRadius(8)
-                  .width(120)
-                  .height(48)
-                  .enabled(!this.isCleaningUp)
-                  .onClick(() => {
-                    this.showMissingDirDialog = false
-                  })
-                Button(this.isCleaningUp ? '清理中...' : '清理')
-                  .fontSize(18)
-                  .fontColor('#FFFFFF')
-                  .backgroundColor('#E53935')
-                  .borderRadius(8)
-                  .width(120)
-                  .height(48)
-                  .enabled(!this.isCleaningUp)
-                  .onClick(() => {
-                    this.confirmCleanup()
-                  })
-              }
-              .margin({ top: 24 })
-            }
-            .padding(32)
-            .borderRadius(12)
-            .backgroundColor('#2C2C2C')
-            .width(460)
-          }
-          .width('100%')
-          .height('100%')
-          .backgroundColor('#80000000')
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center)
-          .onClick(() => {
-            // 拦截蒙层点击穿透
-          })
-        }
-
-        // ── 文件源不存在提示 Dialog ────────────────────────────
-        if (this.showMissingSourceDialog) {
-          Column() {
-            Column() {
-              Text('文件源不存在')
-                .fontSize(24)
-                .fontWeight(FontWeight.Bold)
-                .fontColor('#FFFFFF')
-              Text('此文件源在服务器上已不存在，是否立即删除该文件源及其全部数据？')
-                .fontSize(18)
-                .fontColor('#CCCCCC')
-                .margin({ top: 16 })
-                .textAlign(TextAlign.Center)
-              Row({ space: 24 }) {
-                Button('取消')
-                  .fontSize(18)
-                  .fontColor('#FFFFFF')
-                  .backgroundColor('#555555')
-                  .borderRadius(8)
-                  .width(120)
-                  .height(48)
-                  .enabled(!this.isDeletingSource)
-                  .onClick(() => {
-                    this.showMissingSourceDialog = false
-                  })
-                Button(this.isDeletingSource ? '删除中...' : '删除')
-                  .fontSize(18)
-                  .fontColor('#FFFFFF')
-                  .backgroundColor('#E53935')
-                  .borderRadius(8)
-                  .width(120)
-                  .height(48)
-                  .enabled(!this.isDeletingSource)
-                  .onClick(() => {
-                    this.confirmDeleteSource()
-                  })
-              }
-              .margin({ top: 24 })
-            }
-            .padding(32)
-            .borderRadius(12)
-            .backgroundColor('#2C2C2C')
-            .width(460)
-          }
-          .width('100%')
-          .height('100%')
-          .backgroundColor('#80000000')
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center)
-          .onClick(() => {
-            // 拦截蒙层点击穿透
-          })
-        }
       }
       .width('100%')
       .height('100%')
@@ -287,13 +217,9 @@ export struct FileExplorerPage {
       this.fileExplorerAdapter = new WebDavFileExplorerAdapter(
         (path: string): Promise<WebDAVResource[]> => this.client.listDirectory(path)
       )
-      this.cachedDirId = param.dirId ?? 0
       this.cachedSourceId = param.sourceId ?? 0
       this.cachedDirectoryPath = param.directoryPath ?? ''
-      if (param.dirStatus === 'missing') {
-        this.showMissingDirDialog = true
-        return
-      }
+      // 即使缓存标记缺失，也重新核验服务器状态。
       this.changePath(this.fileExplorerController.currentPath)
     })
     .onBackPressed(() => {
@@ -313,33 +239,8 @@ export struct FileExplorerPage {
     .hideTitleBar(true)
   }
 
-  /**
-   * 确认清理已删除目录：更新 FileSourceModel 缓存并返回上一页
-   */
-  private confirmCleanup(): void {
-    // 必填字段校验，防止误删
-    if (this.cachedDirId <= 0 || this.cachedSourceId <= 0 || this.cachedDirectoryPath.length === 0) {
-      console.error('[FileExplorerPage][confirmCleanup] 参数不完整，中止清理')
-      IBestToast.show('目录信息不完整，无法清理')
-      return
-    }
-    this.isCleaningUp = true
-    const dirId = this.cachedDirId
-    const sourceId = this.cachedSourceId
-    const directoryPath = this.cachedDirectoryPath
-    FileSourceStore.getState().clearMissingDirectory(dirId, sourceId, directoryPath)
-      .then((): void => {
-        this.pageStack.pop(true)
-      })
-      .catch((): void => {
-        console.error('[FileExplorerPage][confirmCleanup] 清理失败')
-        IBestToast.show('清理失败，请重试')
-        // 保持 Dialog 打开，允许用户重试
-        this.isCleaningUp = false
-      })
-  }
-
-  private previewImage(path: string, displayName: string) {
+  private async previewImage(path: string, displayName: string) {
+    if (!await this.canOpen(path)) { return; }
     const authHeader = this.client.getAuthHeaderPublic()
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const tempPath = context.tempDir + "/" + displayName
@@ -383,6 +284,7 @@ export struct FileExplorerPage {
   }
 
   private async playVideo(path: string, displayName: string) {
+    if (!await this.canOpen(path)) { return; }
     const url = this.client.getFullUrl(path);
     const authHeader = this.client.getAuthHeaderPublic();
     const httpHeader = buildWebDavHttpHeader(authHeader);
@@ -530,78 +432,26 @@ export struct FileExplorerPage {
   }
 
   private changePath(newPath: string = '/') {
+    const request = ++this.directoryRequest;
     this.isLoading = true
     this.errorMessage = ''
     this.fileExplorerAdapter.list(newPath).then((result) => {
+      if (request !== this.directoryRequest) { return; }
       this.fileExplorerController.currentPath = newPath
       this.fileExplorerController.resources = result.resources
       const errMsg = result.errorMessage ?? ''
       this.errorMessage = errMsg
       this.isLoading = false
-      this.handleNotFound(errMsg, newPath)
+      if (isExplorerMissingError(errMsg)) {
+        this.errorMessage = '此目录在服务器上已不存在';
+        this.promptMissing(newPath, true);
+      }
     }).catch(() => {
+      if (request !== this.directoryRequest) { return; }
       this.fileExplorerController.resources = []
       this.isLoading = false
       this.errorMessage = '加载目录失败'
     })
-  }
-
-  /**
-   * 判断错误信息是否为「资源不存在」（HTTP 404）。
-   */
-  private isNotFoundMessage(message: string): boolean {
-    if (message.length === 0) { return false; }
-    return message.includes('404') || message.toLowerCase().includes('not found')
-  }
-
-  /**
-   * 处理目录/文件源 404：仅在根路径（对应 DB 配置的目录或文件源根）时触发清理提示。
-   * 子目录 404 仅显示错误信息，不触发清理。
-   */
-  private handleNotFound(errMsg: string, newPath: string): void {
-    if (!this.isNotFoundMessage(errMsg)) { return; }
-    if (newPath !== '/') { return; }
-    if (this.isSourceRoot()) {
-      // 文件源根目录 404：仅在有有效 sourceId 时才能删除整个文件源
-      if (this.cachedSourceId > 0) {
-        this.showMissingSourceDialog = true
-      } else {
-        // 旧调用方仅传 config 时 cachedSourceId 为 0，无法删除文件源，降级为目录清理提示
-        this.showMissingDirDialog = true
-      }
-    } else {
-      this.showMissingDirDialog = true
-    }
-  }
-
-  /**
-   * 判断当前打开的是否为文件源根目录（无目录配置前缀）。
-   */
-  private isSourceRoot(): boolean {
-    return this.cachedDirectoryPath.length === 0 || this.cachedDirectoryPath === '/'
-  }
-
-  /**
-   * 确认删除已失效的文件源：删除文件源及其全部关联数据，返回上一页。
-   */
-  private confirmDeleteSource(): void {
-    if (this.cachedSourceId <= 0) {
-      console.error('[FileExplorerPage][confirmDeleteSource] 参数不完整，中止删除')
-      IBestToast.show('文件源信息不完整，无法删除')
-      return
-    }
-    this.isDeletingSource = true
-    const sourceId = this.cachedSourceId
-    FileSourceStore.getState().deleteFileSourceWithData(sourceId)
-      .then((): void => {
-        this.pageStack.pop(true)
-      })
-      .catch((): void => {
-        console.error('[FileExplorerPage][confirmDeleteSource] 删除失败')
-        IBestToast.show('删除失败，请重试')
-        // 保持 Dialog 打开，允许用户重试
-        this.isDeletingSource = false
-      })
   }
 
   private isImageFile(fileName: string): boolean {
