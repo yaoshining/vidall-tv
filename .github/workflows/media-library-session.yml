@@ -1,0 +1,27 @@
+name: 媒体库加载竞态回归
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  session-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 安装主机转译依赖
+        run: npm install --prefix "$RUNNER_TEMP/media-library-test" --no-package-lock --ignore-scripts typescript@5.6.3
+      - name: 执行真实媒体库模型的可控 Promise 回归
+        env:
+          TYPESCRIPT_PATH: ${{ runner.temp }}/media-library-test/node_modules/typescript
+        run: node --test entry/src/test/media_library_session_test.cjs
