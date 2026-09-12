@@ -56,72 +56,63 @@ export class MediaLibraryModel {
   /** 电影播放进度（providerId → 0~1 进行中比例），用于文件源卡片底部进度条 */
   @Trace movieProgressMap: Map<string, number> = new Map();
 
+  // 每次请求都执行；过期查询可以结束，但无权提交状态。
+  private loadVersion: number = 0;
+  private continueWatchingVersion: number = 0;
+
   async load(): Promise<void> {
-    if (this.isLoading) {
-      return;
-    }
+    const version = ++this.loadVersion;
+    ++this.continueWatchingVersion;
     this.isLoading = true;
-    this.isLoaded = false;
     console.info('[MediaLibraryModel] 开始加载媒体库数据');
     try {
       const db = FileSourceDatabase.getInstance();
 
       const all: MediaItem[] = await db.getAllMediaItems();
+      if (version !== this.loadVersion) { return; }
       console.info(`[MediaLibraryModel][DIAG] getAllMediaItems=${all.length}`);
 
       const movies: MediaItem[] = await db.getMediaItemsByType('movie');
+      if (version !== this.loadVersion) { return; }
       console.info(`[MediaLibraryModel][DIAG] getMediaItemsByType(movie)=${movies.length}`);
 
       const byRating: MediaItem[] = await db.getMediaItemsByRating();
+      if (version !== this.loadVersion) { return; }
       console.info(`[MediaLibraryModel][DIAG] getMediaItemsByRating=${byRating.length}`);
 
       const years: string[] = await db.getDistinctReleaseYears();
+      if (version !== this.loadVersion) { return; }
       console.info(`[MediaLibraryModel][DIAG] getDistinctReleaseYears=${years.length} → ${JSON.stringify(years)}`);
 
       const stats: MediaStats = await db.getMediaStats();
+      if (version !== this.loadVersion) { return; }
       console.info(`[MediaLibraryModel][DIAG] stats=${JSON.stringify(stats)}`);
 
       const seriesGroups: SeriesGroup[] = await db.getDistinctTvSeriesGroups();
+      if (version !== this.loadVersion) { return; }
       console.info(`[MediaLibraryModel][DIAG] getDistinctTvSeriesGroups=${seriesGroups.length} 部`);
 
       const latestScanTime: number = await db.getLatestScanTime();
+      if (version !== this.loadVersion) { return; }
 
-      this.recentlyAdded = all;
-      this.movies = movies;
-      this.byRating = byRating;
-      this.stats = stats;
-      this.seriesGroups = seriesGroups;
-      this.latestScanTime = latestScanTime;
-      this.unwatched = all;
-
-      // 构建已已最近添加列表：直接用 DB 查询（电视剧按季分组 + 电影，按 scraped_at 倒序）
-      this.recentlyAddedList = await db.getRecentlyAddedList();
-      const seriesInList = this.recentlyAddedList.filter((i: MediaListItem) => i.kind === 'series').length;
-      const videoInList = this.recentlyAddedList.filter((i: MediaListItem) => i.kind === 'video').length;
-      console.info(`[MediaLibraryModel][DIAG] recentlyAddedList=${this.recentlyAddedList.length} (series=${seriesInList} video=${videoInList})`);
-      this.unwatchedList = this.recentlyAddedList; // 播放历史未实现时，未观看 = 全部
-
-      // 未观看列表：通过 searchMediaItems 查询真实未看内容（is_watched=0 且无播放进度）
-      try {
-        const unwatchedItems: MediaItem[] = await db.searchMediaItems('', {
-          watchProgress: 'unseen',
-          limit: 20
-        });
-        const unwatchedMixed: MediaListItem[] = [];
-        for (const item of unwatchedItems) {
-          const listItem: MediaListItem = {
-            kind: 'video',
-            video: item,
-            sortTs: item.scannedAt
-          };
-          unwatchedMixed.push(listItem);
-        }
-        unwatchedMixed.sort((a: MediaListItem, b: MediaListItem): number => b.sortTs - a.sortTs);
-        this.unwatchedList = unwatchedMixed;
-        console.info(`[MediaLibraryModel][DIAG] unwatchedList=${this.unwatchedList.length}`);
-      } catch (e) {
-        console.warn('[MediaLibraryModel] unwatchedList 查询失败，回退到 recentlyAddedList');
+      // 所有查询先暂存；任一查询失败均保留上次完整、有效的快照。
+      const recentlyAddedList: MediaListItem[] = await db.getRecentlyAddedList();
+      if (version !== this.loadVersion) { return; }
+      const unwatchedItems: MediaItem[] = await db.searchMediaItems('', {
+        watchProgress: 'unseen',
+        limit: 20
+      });
+      if (version !== this.loadVersion) { return; }
+      const unwatchedMixed: MediaListItem[] = [];
+      for (const item of unwatchedItems) {
+        const listItem: MediaListItem = {
+          kind: 'video',
+          video: item,
+          sortTs: item.scannedAt
+        };
+        unwatchedMixed.push(listItem);
       }
+      unwatchedMixed.sort((a: MediaListItem, b: MediaListItem): number => b.sortTs - a.sortTs);
 
       // 评分标签（10→5 逆序，有数量的才显示）
       const ratingBands: RatingLabel[] = [];
@@ -144,31 +135,42 @@ export class MediaLibraryModel {
           ratingBands.push(label);
         }
       }
+      // 以下同步提交之间没有 await，不会暴露混合版本的快照。
+      this.recentlyAdded = all;
+      this.movies = movies;
+      this.byRating = byRating;
+      this.stats = stats;
+      this.seriesGroups = seriesGroups;
+      this.latestScanTime = latestScanTime;
+      this.unwatched = all;
+      this.recentlyAddedList = recentlyAddedList;
+      this.unwatchedList = unwatchedMixed;
       this.ratingLabels = ratingBands;
 
       // 年代分组
       this.decadeGroups = buildDecadeGroups(years);
 
       this.isLoaded = true;
+      // 新元数据提交后重新读取进度，也使加载期间使用旧元数据的请求失效。
+      this.loadContinueWatching().catch(() => {});
       console.info(
         `[MediaLibraryModel] 加载完成 | 全部=${all.length} 电影=${movies.length} ` +
         `电视剧=${seriesGroups.length} 年代组=${this.decadeGroups.length}`
       );
 
     } catch (e) {
+      if (version !== this.loadVersion) { return; }
       const err = e as Error;
       console.error(`[MediaLibraryModel] 加载失败: ${err.message}`);
     } finally {
-      this.isLoading = false;
+      if (version === this.loadVersion) {
+        this.isLoading = false;
+      }
     }
-    // 继续播放栏：在主库加载流程结束后 fire-and-forget，彻底不阻塞主库 isLoading 状态
-    this.loadContinueWatching().catch(() => {});
   }
 
   async reload(): Promise<void> {
-    // 强制重置状态，确保 load() 不会因 isLoading 保护而跳过
-    this.isLoading = false;
-    this.isLoaded = false;
+    // 与 load 使用同一会话入口，连续刷新不会因 isLoading 丢失。
     console.info('[MediaLibraryModel] reload 触发');
     await this.load();
   }
@@ -190,9 +192,13 @@ export class MediaLibraryModel {
    * 构建 ContinueWatchingItem 列表写入 continueWatchingList。
    */
   async loadContinueWatching(): Promise<void> {
+    const version = ++this.continueWatchingVersion;
+    const libraryVersion = this.loadVersion;
+    const mediaItems = this.recentlyAdded;
     try {
       const db = FileSourceDatabase.getInstance();
       const allEntries: MediaProgressEntry[] = await db.getAllMediaProgress();
+      if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
 
       // 构建电影播放进度映射（providerId → 进行中比例），供文件源卡片底部进度条使用。
       // 仅记录「进行中」（0 < 比例 且未到完播阈值，与 MediaProgressStore.isNearEnd 保持一致，
@@ -214,7 +220,6 @@ export class MediaLibraryModel {
           movieProgressMap.set(providerId, ratio);
         }
       }
-      this.movieProgressMap = movieProgressMap;
 
       // getAllMediaProgress() 已按最近播放倒序返回，直接过滤取前 20 条
       const top20: MediaProgressEntry[] = [];
@@ -236,7 +241,7 @@ export class MediaLibraryModel {
       // episodeMap: `${tvSeriesId}_S${season}E${ep}` → MediaItem
       const episodeMap = new Map<string, MediaItem>();
 
-      for (const item of this.recentlyAdded) {
+      for (const item of mediaItems) {
         const pid = item.providerId;
         if (item.mediaType === 'movie' && pid !== undefined && pid.length > 0) {
           movieMap.set(pid, item);
@@ -313,6 +318,7 @@ export class MediaLibraryModel {
           if (!seriesIdCache.has(seriesProviderId)) {
             const seriesEntity: TvSeriesEntity | null =
               await db.getTvSeriesByProviderId('tmdb', seriesProviderId);
+            if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
             if (seriesEntity !== null && seriesEntity.id !== undefined) {
               seriesIdCache.set(seriesProviderId, seriesEntity.id);
             } else {
@@ -331,6 +337,7 @@ export class MediaLibraryModel {
             const ratio: number = entry.positionMs / entry.durationMs;
             const epEntity: TvEpisodeEntity | null =
               await db.getTvEpisode(tvSeriesDbId, entry.seasonNumber, entry.episodeNumber);
+            if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
             const cwi: ContinueWatchingItem = {
               mediaKey: key,
               title: mi.title ?? mi.fileName,
@@ -371,6 +378,7 @@ export class MediaLibraryModel {
           if (!seriesIdCache.has(seriesProviderId)) {
             const seriesEntity: TvSeriesEntity | null =
               await db.getTvSeriesByProviderId('tmdb', seriesProviderId);
+            if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
             if (seriesEntity !== null && seriesEntity.id !== undefined) {
               seriesIdCache.set(seriesProviderId, seriesEntity.id);
             } else {
@@ -389,6 +397,7 @@ export class MediaLibraryModel {
             const ratio: number = entry.positionMs / entry.durationMs;
             const epEntity: TvEpisodeEntity | null =
               await db.getTvEpisode(tvSeriesDbId, entry.seasonNumber, entry.episodeNumber);
+            if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
             const cwi: ContinueWatchingItem = {
               mediaKey: key,
               title: mi.title ?? mi.fileName,
@@ -418,12 +427,17 @@ export class MediaLibraryModel {
         // 其他 key 格式（'video' 类）暂不支持，跳过
       }
 
+      if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
+      this.movieProgressMap = movieProgressMap;
       this.continueWatchingList = result;
       console.info(`[MediaLibraryModel] loadContinueWatching 完成，共 ${result.length} 条`);
     } catch (e) {
+      if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
       console.warn('[MediaLibraryModel] loadContinueWatching 失败', JSON.stringify(e));
-      this.continueWatchingList = [];
     }
+  }
+  private isCurrentContinueWatching(version: number, libraryVersion: number): boolean {
+    return version === this.continueWatchingVersion && libraryVersion === this.loadVersion;
   }
 }
 
