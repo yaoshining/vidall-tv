@@ -139,12 +139,16 @@ def unit_cases(text):
         elif line.startswith('test='):
             next_name = line[5:].strip()
             if name is not None:
-                # hvigor 真实输出可能在重复的 test 行尾插入 hilog 时间/PID/TID。
-                # 只接受相同名称的重复，不忽略不同用例或任何结果状态。
-                transport_tail = r'\d{1,2} \d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s*'
-                if name != next_name and not re.fullmatch(re.escape(next_name) + transport_tail, name):
+                # Previewer 的 hilog 会粘到开始/结束报告的用例名后；SDK 按
+                # 整行名称去重，因而把同一用例再次写成 test=。仅合并完整名称
+                # 相同且另一行只多出已观测时间尾部的相邻报告，不丢弃结果。
+                transport_tail = r'(?:\d{1,2} \d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s*|[0-5]\d:[0-5]\d\.)'
+                if name == next_name or re.fullmatch(re.escape(next_name) + transport_tail, name):
+                    name = next_name
+                elif not re.fullmatch(re.escape(name) + transport_tail, next_name):
                     raise ValueError('用例缺少结果')
-            name = next_name
+            else:
+                name = next_name
         elif line.startswith('result='):
             status = {'Success': 'passed', 'Failure': 'failed', 'Error': 'broken'}.get(line[7:].strip())
             if not name or not status:

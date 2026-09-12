@@ -143,6 +143,33 @@ class GateTests(unittest.TestCase):
         self.assertEqual((passed, failed, errors, len(cases)), (795, 0, 0, 795))
         self.check('test=lost\ntest=next\nresult=Success\nTests run: 1, Failure: 0, Error: 0, Pass: 1', reason='缺少结果')
 
+    def test_repeated_name_with_truncated_previewer_timestamp(self):
+        # run 34710304989 attempt 2 的原始片段，开始名称完整、结束名称被粘连。
+        name = '用户取消后当前集不再自动切换，直到当前播放项发生变化'
+        summary = '\nTests run: 1, Failure: 0, Error: 0, Pass: 1, Ignore: 0'
+        for first, second in ((name, name + '20:22.'), (name + '20:22.', name)):
+            text = f'test={first}\ntest={second}\nresult=Success' + summary
+            with self.subTest(first=first):
+                self.check(text, passed=True)
+                self.assertEqual(gate.unit_cases(text)[3][0]['name'], name)
+        # 不相同的名称、未知尾部和缺失/重复结果仍不能通过；失败不能被去重吞掉。
+        for text in (
+            f'test={name}\ntest=另一用例20:22.\nresult=Success',
+            f'test={name}\ntest={name}20:22.extra\nresult=Success',
+            f'test={name}\ntest={name}20:22.',
+            f'test={name}\ntest={name}20:22.\nresult=Success\nresult=Success',
+            f'test={name}\ntest={name}20:22.\nresult=Failure',
+            f'test={name}\ntest={name}20:22.\nresult=Error',
+        ):
+            with self.subTest(text=text):
+                self.check(text + summary)
+        for result, counts in (('Failure', 'Failure: 1, Error: 0, Pass: 0'),
+                               ('Error', 'Failure: 0, Error: 1, Pass: 0')):
+            self.check(f'test={name}\ntest={name}20:22.\nresult={result}\n'
+                       f'Tests run: 1, {counts}')
+        self.check(f'test={name}\ntest={name}20:22.\nresult=Success\n'
+                   'Tests run: 2, Failure: 0, Error: 0, Pass: 2', reason='不一致')
+
     def test_workflow_probe_failure_preserves_original_reason(self):
         workflow = (ROOT.parents[1] / '.github/workflows/integration-test.yml').read_text()
         start = workflow.index('          if python3 scripts/ci/test_gate.py run --timeout 15 --phase device_probe')
