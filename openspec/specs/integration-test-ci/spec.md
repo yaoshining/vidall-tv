@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Spec: integration-test-ci
+
+## Purpose
+
+定义集成测试在自托管设备上的构建、安装、执行与报告要求，明确只有有效的本次逐例执行证据才能让必需门禁通过，并要求失败或未执行时保留可追踪的诊断结果。
+
+## Requirements
 
 ### Requirement: 使用原始 bundle name 构建和安装 HAP
 CI 流水线 SHALL 使用 `com.yao.vidalltv` 作为 bundleName 构建 app HAP 和 ohosTest HAP，不得在 CI 中修改 `app.json5` 的 bundleName。
@@ -52,7 +58,7 @@ CI 流水线 SHALL 优先使用固定预期路径定位 app HAP（`entry/build/d
 CI 流水线 SHALL 在 `aa test` 执行完成后，生成 Allure HTML 报告并发布到 `gh-pages` 分支的 `integration/` 子目录；workflow 须配置 `contents: write` 权限以支持 gh-pages push。
 
 #### Scenario: 测试通过时生成报告
-- **WHEN** `TestFinished-ResultCode: 0`
+- **WHEN** 本次命令正常退出，存在有效且大于 0 的逐例执行结果，所有用例通过且 `TestFinished-ResultCode: 0`
 - **THEN** Allure HTML 报告已发布到 gh-pages，`integration/index.html` 可访问
 
 #### Scenario: 测试失败时仍生成报告
@@ -65,12 +71,12 @@ CI 流水线 SHALL 在 `aa test` 执行完成后，生成 Allure HTML 报告并�
 workflow SHALL 在 `$GITHUB_STEP_SUMMARY` 中写入集成测试的 pass/fail 汇总行。
 
 #### Scenario: 测试全部通过
-- **WHEN** `aa-test.log` 包含 `TestFinished-ResultCode: 0`
+- **WHEN** 本次命令正常退出，存在有效且大于 0 的逐例执行结果，所有用例通过且 `TestFinished-ResultCode: 0`
 - **THEN** Summary 显示 `集成测试通过`
 
 #### Scenario: 测试失败
-- **WHEN** `aa-test.log` 不包含 `TestFinished-ResultCode: 0`
-- **THEN** Summary 显示失败信息，并附加最近 50 行 hilog 内容
+- **WHEN** 命令超时或失败、完成码非零、结果缺失或损坏、执行数为 0，或存在失败/错误用例
+- **THEN** Summary 显示失败或未执行及具体原因，门禁失败，诊断产物保留本次日志
 
 ---
 
@@ -88,11 +94,15 @@ workflow SHALL 在 `$GITHUB_STEP_SUMMARY` 中写入集成测试的 pass/fail 汇
 ---
 
 ### Requirement: integration-ci-status-json-push
-集成测试 workflow（`integration-test.yml`）SHALL 在 Allure 报告发布步骤完成后，额外生成并推送 `integration-status.json` 到 `gh-pages/` 根目录。
+集成测试工作流（`integration-test.yml`）必须（SHALL）在门禁判定后先持久化本地状态和产物，独立推送 `integration-status.json` 及本次摘要至 `gh-pages`，再执行 Allure 发布和 Portal 更新。后置步骤只能复用状态，不能重新推导或回滚结论。
 
 #### Scenario: 集成测试运行完成
-- **WHEN** Allure 报告成功推送到 `gh-pages/integration/`
-- **THEN** `integration-status.json` 被写入 `gh-pages/` 根目录，内容符合 integration-status-json spec 的字段定义
+- **WHEN** 门禁完成判定，即使测试失败或未执行
+- **THEN** 报告发布前独立保存并推送本次状态；后续 Allure 或 Portal 失败不影响已写入状态
+
+#### Scenario: 远端状态无法写入
+- **WHEN** 状态推送因网络或权限失败
+- **THEN** 明确报告推送失败，保留本地结果及产物，不将远端旧运行记录宣称为本次结果
 
 ---
 
