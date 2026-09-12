@@ -29,9 +29,11 @@
 
 ## 本次本地校验
 
-- `python3 -m unittest discover -s scripts/ci -p 'test_test_gate.py' -v`：11 个测试方法通过，包含多个正常/异常子样例；实际启动假命令验证超时、退出码和缺设备，并制造报告输出失败验证原始状态不变。
+- `python3 -m unittest discover -s scripts/ci -p 'test_test_gate.py' -v`：12 个测试方法通过，包含多个正常/异常子样例；实际启动假命令验证超时、退出码和缺设备，并制造报告输出失败验证原始状态不变。
 - `actionlint`：3 个相关工作流通过（仅忽略已有自定义 runner 标签 `harmonyos-tv-test`）。内嵌 Bash 和 Python heredoc 语法均通过。
 - 5 份修改的 OpenSpec 规范均通过 `openspec validate <name> --type spec --strict`。全量规范校验仍有既存问题，不作为本次通过声明。
 - 未在本地连接或运行设备测试；设备结果以 PR 对应提交的 GitHub Actions 记录为准。
 
 补充：使用历史 612 个成功用例的脱敏原始结果验证解析兼容性（来源及 SHA-256 见 `scripts/ci/fixtures/README.md`）。真实集成日志已过期不可获取，此项兼容性仍待验收。报告发布失败时，Portal 更新还会重写 `integration/index.html` 为本次摘要；远端不可写时仍以 Actions 的当前运行结论为准。
+
+TCP 设备连接：在明确指定目标时，先查询已有连接；缺少目标则有界执行一次 `hdc tconn`，再核对目标确实出现在列表。已连接设备不重复连接，USB 不执行 tconn。连接超时、失败或连接后仍无目标都保留失败结论，不重启 hdc。

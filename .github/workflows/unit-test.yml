@@ -124,7 +124,7 @@ jobs:
           rm -rf entry/.test/default/outputs/test/reports
           python3 scripts/ci/test_gate.py run \
             --execution "$GATE_DIR/execution.json" --log "$GATE_DIR/test.log" \
-            --hdc "$OHOS_SDK_HOME/toolchains/hdc" --device 192.168.3.85:5555 --timeout 90 -- \
+            --hdc "$OHOS_SDK_HOME/toolchains/hdc" --device 192.168.3.85:5555 --connect --timeout 90 -- \
             "$NODE_BIN" "$HVIGOR_WRAPPER" --mode module -p module=entry@default \
             test --no-daemon -p coverage=true --analyze=normal --parallel --incremental
 

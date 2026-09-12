@@ -1,5 +1,7 @@
 """可控回归：不连接 SDK、真机或共享 hdc。"""
 import importlib.util
+import io
+from unittest.mock import patch
 import json
 import os
 from pathlib import Path
@@ -133,6 +135,30 @@ class GateTests(unittest.TestCase):
                      'OHOS_REPORT_STATUS: test=x\nOHOS_REPORT_STATUS_CODE: 0\n[fail] x\nTestFinished-ResultCode: 0'):
             with self.subTest(text=text):
                 self.check(text, suite='integration')
+
+    def test_targeted_connection_matrix(self):
+        device = '192.168.3.85:5555'
+        def response(output, code=0):
+            return subprocess.CompletedProcess([], code, output)
+        cases = [
+            ([response(device + '\n')], None, 1),
+            ([response('[Empty]\n'), response('Connect OK\n'), response(device + '\n')], None, 3),
+            ([response('[Empty]\n'), response('failed', 1)], 'device_connect_failed', 2),
+            ([response('[Empty]\n'), subprocess.TimeoutExpired('tconn', .05)], 'device_connect_timeout', 2),
+            ([response('[Empty]\n'), response('Connect OK'), response('[Empty]\n')], 'device_unavailable', 3),
+            ([response('[Empty]\n'), response('Connect OK'), response('192.168.3.86:5555\n')], 'device_unavailable', 3),
+            ([subprocess.TimeoutExpired('list', .05)], 'device_probe_timeout', 1),
+        ]
+        for outputs, expected, count in cases:
+            with self.subTest(expected=expected, count=count), patch.object(gate.subprocess, 'run', side_effect=outputs) as run:
+                self.assertEqual(gate.ensure_device('hdc', device, io.StringIO(), timeout=.05, connect=True), expected)
+                commands = [call.args[0][1:] for call in run.call_args_list]
+                self.assertEqual(len(commands), count)
+                self.assertTrue(all(command in (['list', 'targets'], ['tconn', device]) for command in commands))
+                self.assertTrue(all(call.kwargs['timeout'] == .05 for call in run.call_args_list))
+        with patch.object(gate.subprocess, 'run', return_value=response('[Empty]')) as run:
+            self.assertEqual(gate.ensure_device('hdc', 'usb-serial', io.StringIO(), connect=True), 'device_unavailable')
+            self.assertEqual(run.call_count, 1)
 
     def test_actual_runner_timeout_exit_and_device(self):
         command = [sys.executable, str(ROOT / 'test_gate.py'), 'run', '--execution', str(self.execution), '--log', str(self.log), '--timeout', '.05']

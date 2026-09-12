@@ -50,6 +50,42 @@ def stop_owned_process(process):
         process.wait()
 
 
+def ensure_device(hdc, device, log, timeout=15, connect=False):
+    """只连接明确指定的 TCP 设备，不重启服务、不改动其他连接。"""
+    def query(arguments):
+        log.write('hdc ' + ' '.join(arguments) + '\n')
+        log.flush()
+        result = subprocess.run([hdc, *arguments], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, timeout=timeout, text=True)
+        log.write(result.stdout)
+        log.flush()
+        return result
+
+    try:
+        targets = query(['list', 'targets'])
+    except subprocess.TimeoutExpired:
+        return 'device_probe_timeout'
+    if targets.returncode:
+        return 'device_unavailable'
+    if device in targets.stdout.splitlines():
+        return None
+    if not connect or not re.fullmatch(r'[^\s:]+:[0-9]+', device or ''):
+        return 'device_unavailable'
+    try:
+        connected = query(['tconn', device])
+    except subprocess.TimeoutExpired:
+        return 'device_connect_timeout'
+    if connected.returncode:
+        return 'device_connect_failed'
+    try:
+        targets = query(['list', 'targets'])
+    except subprocess.TimeoutExpired:
+        return 'device_probe_timeout'
+    if targets.returncode or device not in targets.stdout.splitlines():
+        return 'device_unavailable'
+    return None
+
+
 def execute(args):
     data = {'run_id': identity(), 'started': False, 'exit_code': None, 'reason': 'not_started'}
     save(args.execution, data)
@@ -57,12 +93,9 @@ def execute(args):
     with open(args.log, 'w', encoding='utf-8') as log:
         try:
             if args.hdc:
-                targets = subprocess.run([args.hdc, 'list', 'targets'], stdout=subprocess.PIPE,
-                                         stderr=subprocess.STDOUT, timeout=15, text=True)
-                log.write(targets.stdout)
-                log.flush()
-                if targets.returncode or args.device not in targets.stdout.splitlines():
-                    data['reason'] = 'device_unavailable'
+                failure = ensure_device(args.hdc, args.device, log, args.device_timeout, args.connect)
+                if failure:
+                    data['reason'] = failure
                     return 1
             data.update(started=True, reason='running', started_at=time.time())
             save(args.execution, data)
@@ -188,6 +221,7 @@ def evaluate(args):
         if reason != 'completed':
             result['status'] = 'failed' if execution['started'] else 'not_run'
             result['reason'] = {'device_unavailable': '设备不可用，测试未执行', 'device_probe_timeout': '设备探测超时，测试未执行',
+                                'device_connect_timeout': '指定设备连接超时，测试未执行', 'device_connect_failed': '指定设备连接失败，测试未执行',
                                 'timeout': '测试执行超时', 'running': '测试中断，未完成', 'launch_error': '测试进程启动失败'}.get(reason, '测试未执行')
         else:
             result['status'] = 'failed'
@@ -234,6 +268,8 @@ def main():
     run.add_argument('--timeout', type=float, default=90)
     run.add_argument('--hdc')
     run.add_argument('--device')
+    run.add_argument('--connect', action='store_true')
+    run.add_argument('--device-timeout', type=float, default=15)
     run.add_argument('command', nargs=argparse.REMAINDER)
     check = commands.add_parser('evaluate')
     for key in ('suite', 'build', 'execution', 'log', 'result', 'output'):

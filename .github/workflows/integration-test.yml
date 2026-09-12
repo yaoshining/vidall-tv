@@ -302,17 +302,27 @@ jobs:
         shell: bash
         env:
           DEVICE_IP: ${{ secrets.DEVICE_IP }}
+          TARGET_INPUT: ${{ inputs.deviceSerial }}
         run: |
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          # 只读探测且有界；不能通过重启共享 hdc 恢复连接。
+          # 已指定 TCP 目标时恢复连接；USB 或未指定目标仍只查列表。
+          if [[ -z "$TARGET_INPUT" && -n "${DEVICE_IP:-}" ]]; then
+            TARGET_INPUT="${DEVICE_IP}:5555"
+          fi
+          if [[ -n "$TARGET_INPUT" ]]; then
+            python3 scripts/ci/test_gate.py run --timeout 15 \
+              --execution "$LOG_DIR/execution.json" --log "$LOG_DIR/device-connect.log" \
+              --hdc "$HDC_BIN" --device "$TARGET_INPUT" --connect -- /usr/bin/true
+          fi
+
+          # 探测有界，不能通过重启共享 hdc 恢复连接。
           python3 -c 'import json,os; json.dump({"run_id":os.environ["GITHUB_RUN_ID"]+"-"+os.environ["GITHUB_RUN_ATTEMPT"],"started":False,"reason":"device_unavailable","exit_code":None},open(".ci/integration/execution.json","w"))'
           python3 scripts/ci/test_gate.py run --timeout 15 \
             --execution "$LOG_DIR/probe.json" --log "$LOG_DIR/hdc-targets.log" -- "$HDC_BIN" list targets
           cat "$LOG_DIR/hdc-targets.log"
 
-          TARGET_INPUT='${{ inputs.deviceSerial }}'
           # 过滤掉 hdc 的占位行（[Empty]、空行），只保留真实设备串号
           AVAILABLE_TARGETS=$(cat "$LOG_DIR/hdc-targets.log" | grep -v '^\[' | awk 'NF {print $1}')
           if [[ -z "$AVAILABLE_TARGETS" ]]; then
