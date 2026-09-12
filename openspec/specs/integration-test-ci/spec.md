@@ -94,11 +94,15 @@ workflow SHALL 在 `$GITHUB_STEP_SUMMARY` 中写入集成测试的 pass/fail 汇
 ---
 
 ### Requirement: integration-ci-status-json-push
-集成测试 workflow（`integration-test.yml`）SHALL 在 Allure 报告发布步骤完成后，额外生成并推送 `integration-status.json` 到 `gh-pages/` 根目录。
+集成测试工作流（`integration-test.yml`）必须（SHALL）在门禁判定后先持久化本地状态和产物，独立推送 `integration-status.json` 及本次摘要至 `gh-pages`，再执行 Allure 发布和 Portal 更新。后置步骤只能复用状态，不能重新推导或回滚结论。
 
 #### Scenario: 集成测试运行完成
-- **WHEN** Allure 报告成功推送到 `gh-pages/integration/`
-- **THEN** `integration-status.json` 被写入 `gh-pages/` 根目录，内容符合 integration-status-json spec 的字段定义
+- **WHEN** 门禁完成判定，即使测试失败或未执行
+- **THEN** 报告发布前独立保存并推送本次状态；后续 Allure 或 Portal 失败不影响已写入状态
+
+#### Scenario: 远端状态无法写入
+- **WHEN** 状态推送因网络或权限失败
+- **THEN** 明确报告推送失败，保留本地结果及产物，不将远端旧运行记录宣称为本次结果
 
 ---
 

@@ -15,7 +15,7 @@
 - **THEN** `build_status` 可为 `success`，但 `status` 不得为 `passed`，`gate_passed` 必须为 false
 
 ### Requirement: integration-status-json-timing
-workflow SHALL 在外部报告发布前保存本次判定，作为 Summary、状态 JSON、历史记录及最终门禁的唯一来源。发布失败单独记录，不改写测试结论；展示产物不可用时仍保留诊断结果。
+工作流必须（SHALL）先在本地生成并持久化本次门禁状态，保存为 Actions 产物，并通过独立步骤推送远端状态 JSON 及本次摘要；随后独立发布 Allure 报告、更新 Portal。Summary、历史记录和最终门禁均复用该结果，后置步骤失败不得改写或回滚已发布状态。若远端不可写，明确报告状态发布失败，依据运行标识区分旧远端记录，本地结果和产物仍为本次权威证据。
 
 #### Scenario: 报告生成或发布失败
 - **WHEN** 外部报告无法生成或发布

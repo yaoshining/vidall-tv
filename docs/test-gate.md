@@ -29,7 +29,7 @@
 
 ## 本次本地校验
 
-- `python3 -m unittest discover -s scripts/ci -p 'test_test_gate.py' -v`：13 个测试方法通过，包含多个正常/异常子样例；实际启动假命令验证超时、退出码和缺设备，并制造报告输出失败验证原始状态不变。
+- `python3 -m unittest discover -s scripts/ci -p 'test_test_gate.py' -v`：15 个测试方法通过，包含多个正常/异常子样例；实际启动假命令验证超时、退出码和缺设备，并制造报告输出失败验证原始状态不变。
 - `actionlint`：3 个相关工作流通过（仅忽略已有自定义 runner 标签 `harmonyos-tv-test`）。内嵌 Bash 和 Python heredoc 语法均通过。
 - 5 份修改的 OpenSpec 规范均通过 `openspec validate <name> --type spec --strict`。全量规范校验仍有既存问题，不作为本次通过声明。
 - 未在本地连接或运行设备测试；设备结果以 PR 对应提交的 GitHub Actions 记录为准。
@@ -39,3 +39,5 @@
 TCP 设备连接：在明确指定目标时，先查询已有连接；缺少目标则有界执行一次 `hdc tconn`，再核对目标确实出现在列表。已连接设备不重复连接，USB 不执行 tconn。连接超时、失败或连接后仍无目标都保留失败结论，不重启 hdc。
 
 真实运行 34704387512 的 795 条成功结果补充为脱敏样例，覆盖同名 test 行被 hilog 时间字段插入后重发的格式；只容忍同名重复，不忽略不同用例的缺失结果，逐例计数仍须与汇总完全一致。
+
+集成测试先保存门禁状态产物，并独立推送状态 JSON 及当前摘要，再生成/发布 Allure 和更新 Portal。后续失败不会回滚提前发布的状态；若远端状态推送本身失败，明确报告该异常，本次 Actions 产物仍为权威证据。设备探测失败先复制原始执行记录再退出，以保留超时或命令退出码。

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parent
@@ -141,6 +142,56 @@ class GateTests(unittest.TestCase):
         passed, failed, errors, cases = gate.unit_cases(text)
         self.assertEqual((passed, failed, errors, len(cases)), (795, 0, 0, 795))
         self.check('test=lost\ntest=next\nresult=Success\nTests run: 1, Failure: 0, Error: 0, Pass: 1', reason='缺少结果')
+
+    def test_workflow_probe_failure_preserves_original_reason(self):
+        workflow = (ROOT.parents[1] / '.github/workflows/integration-test.yml').read_text()
+        start = workflow.index('          if python3 scripts/ci/test_gate.py run --timeout 15 --phase device_probe')
+        end = workflow.index('          cat "$LOG_DIR/hdc-targets.log"', start)
+        script = 'set -e\n' + textwrap.dedent(workflow[start:end]).replace('--timeout 15', '--timeout .3')
+        fake = self.root / 'probe-hdc'
+        for content, reason, code in [('sleep 3', '设备探测超时', 124), ('exit 7', '退出码 7', 7)]:
+            with self.subTest(reason=reason):
+                self.metadata(reason='device_unavailable', started=False)
+                fake.write_text('#!/bin/sh\n' + content + '\n')
+                fake.chmod(0o755)
+                env = dict(os.environ, LOG_DIR=str(self.root), HDC_BIN=str(fake))
+                proc = subprocess.run(['bash', '-c', script], cwd=ROOT.parents[1], env=env, capture_output=True)
+                self.assertEqual(proc.returncode, 1)
+                self.assertEqual(self.execution.read_bytes(), (self.root / 'probe.json').read_bytes())
+                self.assertEqual(json.loads(self.execution.read_text())['exit_code'], code)
+                self.check(None, suite='integration', build='skipped', reason=reason)
+
+    def test_remote_state_precedes_reports_and_survives_later_failure(self):
+        workflow = (ROOT.parents[1] / '.github/workflows/integration-test.yml').read_text()
+        self.assertLess(workflow.index('独立发布本次门禁状态'), workflow.index('Generate Allure Results'))
+        def git(*args):
+            return subprocess.run(['git', '-c', 'core.fsmonitor=false', *map(str, args)], check=True, capture_output=True, text=True)
+        remote, seed = self.root / 'remote.git', self.root / 'seed'
+        git('init', '--bare', remote)
+        git('init', '-b', 'gh-pages', seed)
+        git('-C', seed, 'config', 'user.name', '测试')
+        git('-C', seed, 'config', 'user.email', 'test@example.invalid')
+        (seed / 'integration-status.json').write_text('{"status":"passed","run_id":"old"}')
+        git('-C', seed, 'add', '.')
+        git('-C', seed, 'commit', '-m', '旧状态')
+        git('-C', seed, 'push', remote, 'gh-pages')
+        self.metadata(reason='device_unavailable', started=False)
+        current = self.check()
+        original = self.status.read_bytes()
+        env = dict(os.environ, REPO_URL=str(remote))
+        command = ['bash', str(ROOT / 'publish_gate_state.sh'), str(self.status), str(self.root / 'state-site')]
+        subprocess.run(command, env=env, check=True, capture_output=True)
+        self.assertEqual(self.status.read_bytes(), original)
+        # Allure/Portal 随后失败，远端仍为提前持久化的当前状态。
+        subprocess.run(['bash', '-c', 'exit 1'], check=False)
+        stored = json.loads(git('--git-dir', remote, 'show', 'gh-pages:integration-status.json').stdout)
+        self.assertEqual(stored, current)
+        latest = git('--git-dir', remote, 'show', 'gh-pages:integration/index.html').stdout
+        self.assertIn('设备不可用', latest)
+        env['REPO_URL'] = str(self.root / 'unavailable.git')
+        command[-1] = str(self.root / 'failed-site')
+        self.assertNotEqual(subprocess.run(command, env=env, capture_output=True).returncode, 0)
+        self.assertEqual(self.status.read_bytes(), original)
 
     def test_targeted_connection_matrix(self):
         device = '192.168.3.85:5555'

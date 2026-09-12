@@ -87,7 +87,7 @@ def ensure_device(hdc, device, log, timeout=15, connect=False):
 
 
 def execute(args):
-    data = {'run_id': identity(), 'started': False, 'exit_code': None, 'reason': 'not_started'}
+    data = {'run_id': identity(), 'started': False, 'exit_code': None, 'reason': 'not_started', 'phase': args.phase}
     save(args.execution, data)
     Path(args.log).parent.mkdir(parents=True, exist_ok=True)
     with open(args.log, 'w', encoding='utf-8') as log:
@@ -221,11 +221,15 @@ def evaluate(args):
         if type(execution['started']) is not bool or not isinstance(execution['reason'], str):
             raise ValueError('执行记录字段类型错误')
         reason = execution['reason']
+        if execution.get('phase') == 'device_probe':
+            reason = 'device_probe_timeout' if reason == 'timeout' else 'device_probe_failed'
+            execution['started'] = False
         if reason == 'completed' and (execution['started'] is not True or type(execution['exit_code']) is not int or type(execution.get('started_at')) not in (int, float)):
             raise ValueError('执行完成记录缺失或损坏')
         if reason != 'completed':
             result['status'] = 'failed' if execution['started'] else 'not_run'
             result['reason'] = {'device_unavailable': '设备不可用，测试未执行', 'device_probe_timeout': '设备探测超时，测试未执行',
+                                'device_probe_failed': f"设备探测失败（退出码 {execution.get('exit_code')}），测试未执行",
                                 'device_connect_timeout': '指定设备连接超时，测试未执行', 'device_connect_failed': '指定设备连接失败，测试未执行',
                                 'timeout': '测试执行超时', 'running': '测试中断，未完成', 'launch_error': '测试进程启动失败'}.get(reason, '测试未执行')
         else:
@@ -271,6 +275,7 @@ def main():
     for key in ('execution', 'log'):
         run.add_argument('--' + key, required=True)
     run.add_argument('--timeout', type=float, default=90)
+    run.add_argument('--phase', choices=['test', 'device_probe'], default='test')
     run.add_argument('--hdc')
     run.add_argument('--device')
     run.add_argument('--connect', action='store_true')
