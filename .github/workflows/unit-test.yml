@@ -43,6 +43,7 @@ jobs:
 
     steps:
       - name: 同步最新代码（git pull）
+        id: sync
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,12 +55,10 @@ jobs:
           # macOS LibreSSL 下 GitHub HTTP/2 偶发 RPC 中断（curl 92 / early EOF），
           # 改用 HTTP/1.1 并带重试，避免瞬态网络错误导致 CI 假失败；
           # lowSpeed 限制让卡死的 fetch 在 ~20s 内快速失败，而不是挂满整段 job 时间预算。
-          git config --global http.version HTTP/1.1
-          git config --global http.lowSpeedLimit 1000
-          git config --global http.lowSpeedTime 20
+          # 仅对当前命令禁用 runner 遗留的 Git 代理，不修改宿主机全局配置。
           FETCHED=false
           for attempt in 1 2 3; do
-            if git fetch --no-tags "$REPO_URL" "$TARGET_SHA"; then
+            if git -c http.proxy= -c http.version=HTTP/1.1 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 fetch --no-tags "$REPO_URL" "$TARGET_SHA"; then
               echo "git fetch 成功（第 $attempt 次尝试）"
               FETCHED=true
               break
@@ -74,6 +73,8 @@ jobs:
           git checkout --force --detach FETCH_HEAD
           git clean -fdx
           echo "checked out sha: $(git rev-parse HEAD)"
+          rm -f "$RUNNER_TEMP/unit-test-build.log" "$RUNNER_TEMP/unit-test.log"
+          rm -rf "$RUNNER_TEMP/allure-results" "$RUNNER_TEMP/allure-report"
 
       - name: 恢复 Harmony 依赖
         shell: bash
@@ -235,7 +236,7 @@ jobs:
           fi
 
       - name: 发布报告到 gh-pages
-        if: always()
+        if: ${{ always() && steps.sync.outcome == 'success' }}
         shell: bash
         env:
           RUNNER_TEMP: ${{ runner.temp }}
@@ -287,7 +288,7 @@ jobs:
           rm -rf "$SITE_DIR"
           CLONED=false
           for attempt in 1 2 3; do
-            if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
+            if git -c http.proxy= -c http.version=HTTP/1.1 clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR"; then
               echo "已加载现有 gh-pages 分支（第 $attempt 次尝试）"
               CLONED=true
               break
@@ -296,7 +297,16 @@ jobs:
             sleep $((attempt * 10))
           done
           if [ "$CLONED" = "false" ]; then
-            echo "gh-pages 分支不存在，初始化新分支"
+            # 网络或认证失败不能当成分支不存在，否则会覆盖历史报告。
+            if ! REMOTE_REF=$(git -c http.proxy= ls-remote --heads "$REPO_URL" "refs/heads/$REPORTS_BRANCH"); then
+              echo "无法核验报告分支，停止发布以保护现有历史"
+              exit 1
+            fi
+            if [ -n "$REMOTE_REF" ]; then
+              echo "报告分支存在但克隆失败，停止发布"
+              exit 1
+            fi
+            echo "已确认报告分支不存在，初始化新分支"
             mkdir -p "$SITE_DIR" && cd "$SITE_DIR"
             git init && git checkout -b "$REPORTS_BRANCH"
           fi
@@ -397,7 +407,7 @@ jobs:
             # 清除旧 Allure 2 history，避免污染
             rm -rf "$SITE_DIR/unit/history"
             # 尝试从最近一次 run 的报告中恢复 history（修复 history 丢失后的死循环问题）
-            LATEST_RUN_DIR=$(ls -1d "$SITE_DIR"/unit/runs/run-* 2>/dev/null | sort -t- -k3 -n | tail -1)
+            LATEST_RUN_DIR=$(find "$SITE_DIR/unit/runs" -maxdepth 1 -type d -name 'run-*' 2>/dev/null | sort -t- -k3 -n | tail -1 || true)
             if [[ -n "$LATEST_RUN_DIR" ]] && [[ -d "$LATEST_RUN_DIR/history" ]] && [[ -f "$LATEST_RUN_DIR/history/history-trend.json" ]]; then
               echo "从 $LATEST_RUN_DIR 恢复 history..."
               cp -R "$LATEST_RUN_DIR/history" "$ALLURE_RESULTS_DIR/history"
@@ -887,14 +897,20 @@ jobs:
           git config http.postBuffer 524288000
           git add .
           git commit -m "单元测试报告 #${GITHUB_RUN_NUMBER} (${STATUS}: ${PASSED}/${TOTAL})" || echo "无变更"
+          PUSHED=false
           for attempt in 1 2 3; do
-            if git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" --force; then
+            if git -c http.proxy= push "$REPO_URL" HEAD:"$REPORTS_BRANCH"; then
+              PUSHED=true
               echo "gh-pages 推送成功（第 $attempt 次尝试）"
               break
             fi
             echo "push 第 $attempt 次失败，${attempt}0 秒后重试..."
             sleep $((attempt * 10))
           done
+          if [ "$PUSHED" != "true" ]; then
+            echo "报告推送失败"
+            exit 1
+          fi
 
       - name: 上传测试产物
         if: always()
