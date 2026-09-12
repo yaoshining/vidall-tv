@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Import style -->
+  <link rel="stylesheet" href="../index.css" />
+  <link rel="stylesheet" href="../prettify.css" />
+  <!-- Import Vue 3 -->
+  <script src="../vue.global.prod.js"></script>
+  <!-- Import component library -->
+  <script src="../index.full.min.js"></script>
+  <script src="../prettify.js"></script>
+  <meta charset="UTF-8">
+  <title>Coverage</title>
+</head>
+
+<body>
+  <div id="app" class="common-layout">
+    <el-container>
+      <el-header>
+        <el-row :gutter="10">
+          <el-col :span="5">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <el-link type="primary" :href="relativeHome">
+                    <h2>&lt;</h2>
+                  </el-link>
+                </el-text></div>
+              <div><el-text class="mx-1 "><h2>{{title}}</h2></el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info"></el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.functions.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Functions</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.functions.covered}}/{{file.summary.functions.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.branches.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Branches</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.branches.covered}}/{{file.summary.branches.total}}</el-text></div>
+            </el-space>
+          </el-col>
+          <el-col :span="3">
+            <el-space :size="size" spacer="">
+              <div><el-text class="mx-1 ">
+                  <h2>{{file.summary.lines.pct}}%</h2>
+                </el-text></div>
+              <div><el-text class="mx-1 ">Lines</el-text></div>
+              <div><el-text class="mx-1 "
+                  type="info">{{file.summary.lines.covered}}/{{file.summary.lines.total}}</el-text></div>
+            </el-space>
+          </el-col>
+        </el-row>
+        <el-divider />
+      </el-header>
+      <el-main>
+        <el-row>
+        </el-row>
+        <pre>
+          <table class="coverage">
+            <tr>
+              <td class="line-count quiet">
+                <pre class="prettyprint lang-js">
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+                </pre>
+        </td>
+        <td class="text">
+          <pre class="prettyprint linenums lang-js">
+import { FileSource } from &#39;../db/models/FileSourceEntity&#39;; 
+import { FileSourceDatabase } from &#39;../db/files/FileSourceDatabase&#39;; 
+import { WebDAVClient, WebDAVConfig, WebDAVResource } from &#39;../lib/WebDAVClient&#39;; 
+import { FfprobeUtil, FfprobeTrack } from &#39;./FfprobeUtil&#39;; 
+import { ScrapeClient } from &#39;../lib/ScrapeClient&#39;; 
+import { VideoEntity } from &#39;../db/models/MediaEntity&#39;; 
+import { ISourceAdapter, VideoFileInfo, ScanOptions, ScanMode, VideoUpsertStrategy } from &#39;./VideoScannerTypes&#39;; 
+import { createVideoScrapeContext, hasSeasonSiblingDirectory, isVideoFile, hasCompleteScrapeAssociation, shouldRepairIncompleteTvEpisode } from &#39;./VideoScannerHelpers&#39;; 
+import { processVideoScrape } from &#39;./VideoScrapeProcessor&#39;; 
+ 
+export class WebDAVAdapter implements ISourceAdapter { 
+  private client: WebDAVClient; 
+  private fileSource: FileSource; 
+  private basePath: string; 
+  private scrapeClient?: ScrapeClient; 
+  private upsertStrategy?: VideoUpsertStrategy; 
+  private directoryScanErrors: string[] = []; 
+  private directoryLister?: (path: string) =&gt; Promise&lt;WebDAVResource[]&gt;; 
+ 
+  constructor(fileSource: FileSource, scrapeClient?: ScrapeClient, upsertStrategy?: VideoUpsertStrategy, 
+    directoryLister?: (path: string) =&gt; Promise&lt;WebDAVResource[]&gt;) { 
+    this.fileSource = fileSource; 
+    this.directoryLister = directoryLister; 
+    this.scrapeClient = scrapeClient; 
+    this.upsertStrategy = upsertStrategy; 
+ 
+    const config = JSON.parse(fileSource.configJson) as Record&lt;string, string&gt;; 
+    const protocol = config[&#39;protocol&#39;] ?? &#39;http&#39;; 
+    const host = config[&#39;url&#39;] ?? &#39;&#39;; 
+    const port = config[&#39;port&#39;] ?? (protocol === &#39;https&#39; ? &#39;443&#39; : &#39;80&#39;); 
+    const rootPath = config[&#39;rootPath&#39;] ?? &#39;&#39;; 
+    const normalizedRoot = rootPath &amp;&amp; !rootPath.startsWith(&#39;/&#39;) ? &#39;/&#39; + rootPath : rootPath; 
+    this.basePath = normalizedRoot.replace(/\/$/, &#39;&#39;); 
+    const baseUrl = `${protocol}://${host}:${port}${normalizedRoot}`; 
+ 
+    console.info( 
+      `[VideoScanner][WebDAV] 解析配置 — url=&quot;${host}&quot; username=&quot;${config[&#39;username&#39;] ?? &#39;&#39;}&quot; rootPath=&quot;${normalizedRoot}&quot;` 
+    ); 
+    const webdavConfig: WebDAVConfig = { 
+      baseUrl: baseUrl, 
+      username: config[&#39;username&#39;] ?? &#39;&#39;, 
+      password: config[&#39;password&#39;] ?? &#39;&#39;, 
+      timeout: 30000, 
+      tlsCertPolicy: config[&#39;tlsCertPolicy&#39;] === &#39;strict&#39; ? &#39;strict&#39; : &#39;allow_self_signed&#39; 
+    }; 
+    try { 
+      this.client = new WebDAVClient(webdavConfig); 
+      console.info(`[VideoScanner][WebDAV] WebDAVClient 构造成功`); 
+    } catch (err) { 
+      const msg = `WebDAVClient 构造失败: ${JSON.stringify(err)}`; 
+      console.error(`[VideoScanner][ERROR] ${msg}`); 
+      throw new Error(msg); 
+    } 
+  } 
+ 
+  async scan(directoryPath: string, options: ScanOptions): Promise&lt;VideoFileInfo[]&gt; { 
+    console.info(`[VideoScanner][WebDAV] 开始扫描目录: ${directoryPath} 最大深度: ${options.maxDepth}`); 
+    const results: VideoFileInfo[] = []; 
+    const processingTasks: Promise&lt;void&gt;[] = []; 
+    this.directoryScanErrors = []; 
+    try { 
+      await this.scanDir(directoryPath, directoryPath, 0, options.maxDepth, options.mode, results, processingTasks, options.onCurrentPath); 
+    } catch (error) { 
+      this.directoryScanErrors.push(String(error)); 
+    } 
+    // 等待所有 ffprobe + 视频入库任务完成，确保 scan() 返回时 DB 已有数据 
+    if (processingTasks.length &gt; 0) { 
+      console.info(`[VideoScanner][WebDAV] 等待 ${processingTasks.length} 个视频处理任务完成...`); 
+      await Promise.all(processingTasks); 
+      console.info(`[VideoScanner][WebDAV] 所有视频处理任务完成`); 
+    } 
+    if (this.directoryScanErrors.length &gt; 0) { 
+      throw new Error(this.directoryScanErrors.join(&#39;; &#39;)); 
+    } 
+    return results; 
+  } 
+ 
+  private async scanDir( 
+    rootPath: string, 
+    currentPath: string, 
+    depth: number, 
+    maxDepth: number, 
+    mode: ScanMode, 
+    results: VideoFileInfo[], 
+    processingTasks: Promise&lt;void&gt;[], 
+    onCurrentPath?: (currentPath: string) =&gt; void 
+  ): Promise&lt;void&gt; { 
+    console.info(`[VideoScanner][WebDAV] 进入目录: ${currentPath}（相对配置目录深度 ${depth}/${maxDepth}）`); 
+    if (onCurrentPath !== undefined) { 
+      onCurrentPath(currentPath); 
+    } 
+ 
+    let resources: WebDAVResource[] = []; 
+    try { 
+      resources = this.directoryLister !== undefined 
+        ? await this.directoryLister(currentPath) : await this.client.listDirectory(currentPath); 
+    } catch (err) { 
+      const errMsg = (err as Error).message ?? String(err); 
+      console.error(`[VideoScanner][ERROR] 列举目录失败: ${currentPath}，原因: ${errMsg}`); 
+      // 定向扫描必须报告子目录失败；等待已启动的入库任务后统一返回失败。 
+      if (this.upsertStrategy !== undefined) { 
+        this.directoryScanErrors.push(`${currentPath}: ${errMsg}`); 
+        return; 
+      } 
+      // 全局扫描保持原有根目录抛错、子目录跳过语义。 
+      if (depth === 0) { 
+        throw new Error(errMsg); 
+      } 
+      return; 
+    } 
+ 
+    const childDirectoryNames: string[] = []; 
+    resources.forEach((resource: WebDAVResource) =&gt; { 
+      if (resource.isCollection) { 
+        const decodedHref = this.decodePath(resource.href); 
+        const relativePath = this.toRelativePath(decodedHref); 
+        if (this.isSamePath(relativePath, currentPath)) { 
+          return; 
+        } 
+        childDirectoryNames.push(resource.displayName || this.extractFileName(decodedHref)); 
+      } 
+    }); 
+    const videoScrapeContext = createVideoScrapeContext( 
+      rootPath, 
+      depth, 
+      hasSeasonSiblingDirectory(childDirectoryNames) 
+    ); 
+ 
+    for (const resource of resources) { 
+      const decodedHref = this.decodePath(resource.href); 
+      const relativePath = this.toRelativePath(decodedHref); 
+ 
+      if (this.isSamePath(relativePath, currentPath)) { 
+        continue; 
+      } 
+ 
+      if (resource.isCollection) { 
+        if (depth &gt;= maxDepth) { 
+          console.info(`[VideoScanner][MAX_DEPTH] 已达最大深度 ${maxDepth}，跳过子目录: ${relativePath}`); 
+          continue; 
+        } 
+        await this.scanDir(rootPath, relativePath, depth + 1, maxDepth, mode, results, processingTasks, onCurrentPath); 
+      } else { 
+        const fileName = resource.displayName || this.extractFileName(decodedHref); 
+        if (isVideoFile(fileName, resource.contentType)) { 
+          if (onCurrentPath !== undefined) { 
+            onCurrentPath(relativePath); 
+          } 
+          const info: VideoFileInfo = { 
+            sourceId: this.fileSource.id ?? 0, 
+            sourceName: this.fileSource.name, 
+            sourceType: this.fileSource.type, 
+            directoryPath: this.extractParentPath(relativePath), 
+            filePath: relativePath, 
+            fileName: fileName, 
+            fileSize: resource.size, 
+            lastModified: resource.lastModified, 
+            contentType: resource.contentType, 
+            wasProcessed: true, 
+            seasonSiblingDetected: videoScrapeContext.seasonSiblingDetected, 
+            seriesHint: videoScrapeContext.seriesHint 
+          }; 
+ 
+          console.info( 
+            `[VideoScanner][VIDEO] ` + 
+            `文件源=${this.fileSource.name} | 路径=${decodedHref} | 文件名=${fileName} | ` + 
+            `大小=${resource.size !== undefined ? resource.size + &#39; bytes&#39; : &#39;未知&#39;} | ` + 
+            `修改时间=${resource.lastModified ?? &#39;未知&#39;} | 类型=${resource.contentType ?? &#39;未知&#39;}` 
+          ); 
+ 
+          results.push(info); 
+ 
+          const existingVideo = (mode === &#39;incremental&#39;) 
+            ? await FileSourceDatabase.getInstance().getVideoByPath(relativePath) 
+            : null; 
+          if (mode === &#39;incremental&#39; &amp;&amp; this.canSkipIncrementalProcessing(existingVideo, info)) { 
+            info.wasProcessed = false; 
+            await FileSourceDatabase.getInstance().markVideoUpdatedByPath(relativePath); 
+            // 文件未变化，但若从未成功刮削过，仍需补刮削 
+            if (existingVideo?.id !== undefined &amp;&amp; this.scrapeClient) { 
+              try { 
+                const existingScrape = 
+                  await FileSourceDatabase.getInstance().getScrapeInfoByVideoId(existingVideo.id); 
+                if (!existingScrape) { 
+                  // #191 第三轮修复：如果无 scrape_info 但检测到季目录兄弟，应重新完整处理（分类+刮削） 
+                  if (videoScrapeContext.seasonSiblingDetected) { 
+                    console.info( 
+                      `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录且检测到季目录兄弟，` + 
+                      `重新处理: ${fileName}` 
+                    ); 
+                    // 不 continue，继续执行后续的完整处理流程 
+                  } else { 
+                    console.info( 
+                      `[VideoScanner][INCREMENTAL] 文件未变化但无刮削记录，触发补刮削: ${fileName}` 
+                    ); 
+                    const capturedVideoId = existingVideo.id; 
+                    const capturedFileName = fileName; 
+                    const capturedDirPath = info.directoryPath; 
+                    const capturedScrapeClient = this.scrapeClient; 
+                    const capturedMode = mode; 
+                    const retryTask: Promise&lt;void&gt; = 
+                      this.doScrapeOnly(capturedVideoId, capturedFileName, 
+                        capturedScrapeClient, capturedMode, info).catch(() =&gt; {}); 
+                    processingTasks.push(retryTask); 
+                    continue; 
+                  } 
+                } else if (!hasCompleteScrapeAssociation(existingScrape)) { 
+                  console.info( 
+                    `[VideoScanner][INCREMENTAL] 文件未变化但元数据关联缺失，触发补刮削: ${fileName}` 
+                  ); 
+                  const capturedVideoId = existingVideo.id; 
+                  const capturedFileName = fileName; 
+                  const capturedScrapeClient = this.scrapeClient; 
+                  const capturedMode = mode; 
+                  const retryTask: Promise&lt;void&gt; = 
+                    this.doScrapeOnly(capturedVideoId, capturedFileName, 
+                      capturedScrapeClient, capturedMode, info).catch(() =&gt; {}); 
+                  processingTasks.push(retryTask); 
+                  continue; 
+                } else if (existingScrape.mediaType === &#39;unknown&#39; &amp;&amp; videoScrapeContext.seasonSiblingDetected) { 
+                  // #191 修复：文件之前分类为 unknown，但现在扫描上下文变化（检测到季目录兄弟），应重新处理 
+                  console.info( 
+                    `[VideoScanner][INCREMENTAL] 检测到扫描上下文变化（seasonSiblingDetected=true），` + 
+                    `重新处理之前的 unknown 文件: ${fileName}` 
+                  ); 
+                  // 清理旧的 unknown scrape_info 记录，以便后续重新刮削 
+                  try { 
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existingVideo.id); 
+                    console.info(`[VideoScanner][INCREMENTAL] 已清理旧 unknown 标记: ${fileName}`); 
+                  } catch { 
+                    console.warn(`[VideoScanner][INCREMENTAL] 清理旧 unknown 标记失败: ${fileName}`); 
+                  } 
+                  // 不 continue，继续执行后续的完整处理流程 
+                } else if (shouldRepairIncompleteTvEpisode(existingScrape, fileName)) { 
+                  // #191 第四轮修复：检测到 tv + title 非空但 episodeId 为空，且文件名可提取 episode number 
+                  console.info( 
+                    `[VideoScanner][INCREMENTAL] 检测到不完整的 TV 剧集关联（tv + title 但无 episodeId），` + 
+                    `重新处理: ${fileName} | title=${existingScrape.title}` 
+                  ); 
+                  // 清理旧的不完整 scrape_info 记录，以便后续重新刮削 
+                  try { 
+                    await FileSourceDatabase.getInstance().clearScrapeInfoForVideo(existingVideo.id); 
+                    console.info(`[VideoScanner][INCREMENTAL] 已清理不完整 TV 关联: ${fileName}`); 
+                  } catch { 
+                    console.warn(`[VideoScanner][INCREMENTAL] 清理不完整 TV 关联失败: ${fileName}`); 
+                  } 
+                  // 不 continue，继续执行后续的完整处理流程 
+                } else { 
+                  console.info( 
+                    `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` + 
+                    `lastModified=${info.lastModified ?? &#39;未知&#39;}` 
+                  ); 
+                  continue; 
+                } 
+              } catch { 
+                // 查询失败，按已有刮削记录处理，正常跳过 
+                console.info( 
+                  `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` + 
+                  `lastModified=${info.lastModified ?? &#39;未知&#39;}` 
+                ); 
+                continue; 
+              } 
+            } else { 
+              console.info( 
+                `[VideoScanner][INCREMENTAL] 跳过未变化文件: ${fileName} | ` + 
+                `lastModified=${info.lastModified ?? &#39;未知&#39;}` 
+              ); 
+              continue; 
+            } 
+          } 
+ 
+          // ── 落库 + 刮削：加入跟踪列表，确保 scan() 返回前所有视频已入库 ── 
+          const authHeader = this.client.getAuthHeaderPublic(); 
+          const httpHeader: Record&lt;string, string&gt; = authHeader ? { &#39;Authorization&#39;: authHeader } : {}; 
+          const fullUrl = this.client.getFullUrl(relativePath); 
+          const capturedInfo = info; 
+          const capturedScrapeClient = this.scrapeClient; 
+          const capturedMode = mode; 
+          const capturedRelativePath = relativePath; 
+          const onProbeStart = (): void =&gt; { 
+            if (onCurrentPath !== undefined) { 
+              onCurrentPath(capturedRelativePath); 
+            } 
+          }; 
+ 
+          const processingTask: Promise&lt;void&gt; = FfprobeUtil.probe(fullUrl, httpHeader, 20000, onProbeStart).then(async (videoInfo) =&gt; { 
+            if (videoInfo.success) { 
+              const mainVideo = videoInfo.videoTracks.length &gt; 0 ? videoInfo.videoTracks[0] : undefined; 
+              console.info( 
+                `[VideoScanner][MEDIA] ${fileName} | ` + 
+                `时长=${videoInfo.durationText} | ` + 
+                `分辨率=${mainVideo?.width ?? &#39;?&#39;}x${mainVideo?.height ?? &#39;?&#39;} | ` + 
+                `编码=${mainVideo?.codecName ?? &#39;?&#39;} | ` + 
+                `帧率=${mainVideo?.frameRate ?? &#39;?&#39;}fps | ` + 
+                `音轨=${videoInfo.audioTracks.length} 字幕轨=${videoInfo.subtitleTracks.length}` 
+              ); 
+              videoInfo.audioTracks.forEach((t: FfprobeTrack, i: number) =&gt; { 
+                console.info(`[VideoScanner][MEDIA]   音轨[${i}] codec=${t.codecName} ${t.sampleRate ?? &#39;?&#39;}Hz ${t.channels ?? &#39;?&#39;}ch 语言=${t.language || &#39;(未知)&#39;}`); 
+              }); 
+              videoInfo.subtitleTracks.forEach((t: FfprobeTrack, i: number) =&gt; { 
+                console.info(`[VideoScanner][MEDIA]   字幕轨[${i}] codec=${t.codecName} 语言=${t.language || &#39;(未知)&#39;}`); 
+              }); 
+            } else { 
+              console.warn(`[VideoScanner][MEDIA] 媒体信息抓取失败: ${fileName} — ${videoInfo.errorMessage ?? &#39;&#39;}`); 
+            } 
+ 
+            const mainVideo = videoInfo.success &amp;&amp; videoInfo.videoTracks.length &gt; 0 
+              ? videoInfo.videoTracks[0] : undefined; 
+ 
+            // 落库 
+            const videoEntity: VideoEntity = { 
+              sourceId: capturedInfo.sourceId, 
+              directoryPath: capturedInfo.directoryPath, 
+              filePath: capturedInfo.filePath, 
+              fileName: capturedInfo.fileName, 
+              fileSize: capturedInfo.fileSize, 
+              lastModified: capturedInfo.lastModified, 
+              contentType: capturedInfo.contentType, 
+              durationMs: videoInfo.success ? videoInfo.durationMs : undefined, 
+              width: videoInfo.success ? mainVideo?.width : undefined, 
+              height: videoInfo.success ? mainVideo?.height : undefined, 
+              frameRate: videoInfo.success ? mainVideo?.frameRate : undefined, 
+              videoCodec: videoInfo.success ? mainVideo?.codecName : undefined, 
+              audioTracksJson: videoInfo.success ? JSON.stringify(videoInfo.audioTracks) : undefined, 
+              subtitleTracksJson: videoInfo.success ? JSON.stringify(videoInfo.subtitleTracks) : undefined, 
+              scannedAt: Date.now() 
+            }; 
+ 
+            let videoId: number = -1; 
+            try { 
+              if (this.upsertStrategy !== undefined) { 
+                videoId = await this.upsertStrategy.upsert(videoEntity); 
+              } else { 
+                videoId = await FileSourceDatabase.getInstance().upsertVideo(videoEntity); 
+              } 
+              console.info(`[VideoScanner][DB] 落库成功 videoId=${videoId} fileName=${fileName}`); 
+            } catch (dbErr) { 
+              console.warn(`[VideoScanner][DB] 落库失败 fileName=${fileName}: ${JSON.stringify(dbErr)}`); 
+              return; 
+            } 
+ 
+            if (capturedScrapeClient) { 
+              await this.doScrapeOnly(videoId, fileName, 
+                capturedScrapeClient, capturedMode, capturedInfo); 
+            } 
+          }).catch(() =&gt; { 
+            console.warn(`[VideoScanner][PROCESS] 视频处理异常 ${fileName}`); 
+          }); 
+          processingTasks.push(processingTask); 
+        } 
+      } 
+    } 
+  } 
+ 
+  private decodePath(href: string): string { 
+    try { 
+      return decodeURIComponent(href); 
+    } catch { 
+      return href; 
+    } 
+  } 
+ 
+  private async doScrapeOnly( 
+    videoId: number, 
+    fileName: string, 
+    scrapeClient: ScrapeClient, 
+    mode: ScanMode, 
+    info: VideoFileInfo 
+  ): Promise&lt;void&gt; { 
+    await processVideoScrape(videoId, fileName, scrapeClient, mode, info, &#39;[VideoScanner][SCRAPE]&#39;); 
+  } 
+ 
+  private canSkipIncrementalProcessing(existingVideo: VideoEntity | null, currentInfo: VideoFileInfo): boolean { 
+    if (!existingVideo) { 
+      return false; 
+    } 
+    // 优先用 lastModified 比较 
+    if (existingVideo.lastModified &amp;&amp; currentInfo.lastModified) { 
+      return existingVideo.lastModified === currentInfo.lastModified; 
+    } 
+    // lastModified 不可用时（部分 WebDAV 服务器不返回 Last-Modified），用文件大小兜底 
+    if (existingVideo.fileSize !== undefined &amp;&amp; currentInfo.fileSize !== undefined) { 
+      return existingVideo.fileSize === currentInfo.fileSize; 
+    } 
+    return false; 
+  } 
+ 
+  private toRelativePath(fullPath: string): string { 
+    if (this.basePath &amp;&amp; fullPath.startsWith(this.basePath)) { 
+      const rel = fullPath.substring(this.basePath.length); 
+      return rel.startsWith(&#39;/&#39;) ? rel : &#39;/&#39; + rel; 
+    } 
+    return fullPath; 
+  } 
+ 
+  private isSamePath(a: string, b: string): boolean { 
+    return a.replace(/\/$/, &#39;&#39;) === b.replace(/\/$/, &#39;&#39;); 
+  } 
+ 
+  private extractFileName(path: string): string { 
+    const parts = path.replace(/\/$/, &#39;&#39;).split(&#39;/&#39;); 
+    return parts[parts.length - 1] ?? path; 
+  } 
+ 
+  private extractParentPath(path: string): string { 
+    const normalized = path.replace(/\/$/, &#39;&#39;); 
+    const lastSlash = normalized.lastIndexOf(&#39;/&#39;); 
+    if (lastSlash &lt;= 0) { 
+      return &#39;/&#39;; 
+    } 
+    return normalized.substring(0, lastSlash); 
+  } 
+} 
+
+              </pre>
+        </td>
+        </tr>
+        </table>
+        </pre>
+      </el-main>
+      <el-footer align="middle" class="footer">
+        Code coverage generated by <el-link href="https://github.com/SMAT-Lab/bjc" type="primary"
+          target="_blank">bjc</el-link> at {{date}}
+      </el-footer>
+    </el-container>
+  </div>
+</body>
+
+<script>
+  const App = {
+    data() {
+      return {"date":"Sun Sep 13 2026 00:25:15 GMT+0800 (China Standard Time)","file":{"version":"bjc v1.0.0","versionCode":10000,"path":"/Users/shiningyao/DevecostudioProjects/vidall-tv/entry/src/main/ets/utils/WebDAVAdapter.ets","hash":"8038bb0e26646f5f4ebd99518c2b677e625bd3d13d59d3fc5c6373f3b2f4818a","lineCnt":414,"count":0,"projectPath":"/Users/shiningyao/DevecostudioProjects/vidall-tv","functions":[{"name":"anonymous_0","count":0,"regions":[{"startLoc":{"line":18,"col":29},"endLoc":{"line":18,"col":72},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":0},{"name":"WebDAVAdapter.constructor","count":2,"regions":[{"startLoc":{"line":20,"col":3},"endLoc":{"line":54,"col":4},"count":2,"ignored":0},{"startLoc":{"line":49,"col":7},"endLoc":{"line":53,"col":6},"count":0,"ignored":0},{"startLoc":{"line":46,"col":9},"endLoc":{"line":49,"col":6},"count":2,"ignored":0}],"branches":[{"startLoc":{"line":30,"col":37},"endLoc":{"line":30,"col":72},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":32,"col":28},"endLoc":{"line":32,"col":93},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":44,"col":22},"endLoc":{"line":44,"col":91},"trueCount":0,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":1},{"name":"anonymous_1","count":0,"regions":[{"startLoc":{"line":21,"col":23},"endLoc":{"line":21,"col":66},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":2},{"name":"WebDAVAdapter.scan","count":2,"regions":[{"startLoc":{"line":56,"col":3},"endLoc":{"line":76,"col":4},"count":2,"ignored":0},{"startLoc":{"line":67,"col":37},"endLoc":{"line":71,"col":6},"count":0,"ignored":0},{"startLoc":{"line":61,"col":9},"endLoc":{"line":63,"col":6},"count":2,"ignored":0},{"startLoc":{"line":63,"col":7},"endLoc":{"line":65,"col":6},"count":0,"ignored":0},{"startLoc":{"line":72,"col":46},"endLoc":{"line":74,"col":6},"count":1,"ignored":0},{"startLoc":{"line":75,"col":5},"endLoc":{"line":76,"col":4},"count":1,"ignored":0}],"branches":[{"startLoc":{"line":67,"col":9},"endLoc":{"line":67,"col":35},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":72,"col":9},"endLoc":{"line":72,"col":44},"trueCount":1,"falseCount":1,"group":[],"ignored":0}],"ignored":0,"index":3},{"name":"WebDAVAdapter.scanDir","count":4,"regions":[{"startLoc":{"line":78,"col":3},"endLoc":{"line":353,"col":4},"count":4,"ignored":0},{"startLoc":{"line":129,"col":5},"endLoc":{"line":352,"col":6},"count":2,"ignored":0},{"startLoc":{"line":143,"col":14},"endLoc":{"line":351,"col":8},"count":0,"ignored":0},{"startLoc":{"line":145,"col":58},"endLoc":{"line":350,"col":10},"count":0,"ignored":0},{"startLoc":{"line":176,"col":97},"endLoc":{"line":270,"col":12},"count":0,"ignored":0},{"startLoc":{"line":180,"col":71},"endLoc":{"line":263,"col":14},"count":0,"ignored":0},{"startLoc":{"line":273,"col":11},"endLoc":{"line":350,"col":10},"count":0,"ignored":0},{"startLoc":{"line":181,"col":19},"endLoc":{"line":255,"col":16},"count":0,"ignored":0},{"startLoc":{"line":207,"col":24},"endLoc":{"line":254,"col":18},"count":0,"ignored":0},{"startLoc":{"line":220,"col":24},"endLoc":{"line":254,"col":18},"count":0,"ignored":0},{"startLoc":{"line":184,"col":38},"endLoc":{"line":207,"col":18},"count":0,"ignored":0},{"startLoc":{"line":234,"col":24},"endLoc":{"line":254,"col":18},"count":0,"ignored":0},{"startLoc":{"line":192,"col":26},"endLoc":{"line":206,"col":20},"count":0,"ignored":0},{"startLoc":{"line":220,"col":112},"endLoc":{"line":234,"col":18},"count":0,"ignored":0},{"startLoc":{"line":234,"col":87},"endLoc":{"line":248,"col":18},"count":0,"ignored":0},{"startLoc":{"line":289,"col":15},"endLoc":{"line":303,"col":14},"count":0,"ignored":0},{"startLoc":{"line":97,"col":7},"endLoc":{"line":110,"col":6},"count":2,"ignored":0},{"startLoc":{"line":207,"col":75},"endLoc":{"line":220,"col":18},"count":0,"ignored":0},{"startLoc":{"line":255,"col":17},"endLoc":{"line":262,"col":16},"count":0,"ignored":0},{"startLoc":{"line":137,"col":34},"endLoc":{"line":143,"col":8},"count":2,"ignored":0},{"startLoc":{"line":263,"col":20},"endLoc":{"line":269,"col":14},"count":0,"ignored":0},{"startLoc":{"line":186,"col":65},"endLoc":{"line":192,"col":20},"count":0,"ignored":0},{"startLoc":{"line":248,"col":24},"endLoc":{"line":254,"col":18},"count":0,"ignored":0},{"startLoc":{"line":94,"col":9},"endLoc":{"line":97,"col":6},"count":4,"ignored":0},{"startLoc":{"line":101,"col":46},"endLoc":{"line":104,"col":8},"count":1,"ignored":0},{"startLoc":{"line":138,"col":32},"endLoc":{"line":141,"col":10},"count":0,"ignored":0},{"startLoc":{"line":227,"col":23},"endLoc":{"line":230,"col":20},"count":0,"ignored":0},{"startLoc":{"line":241,"col":23},"endLoc":{"line":244,"col":20},"count":0,"ignored":0},{"startLoc":{"line":89,"col":38},"endLoc":{"line":91,"col":6},"count":0,"ignored":0},{"startLoc":{"line":106,"col":24},"endLoc":{"line":108,"col":8},"count":0,"ignored":0},{"startLoc":{"line":133,"col":55},"endLoc":{"line":135,"col":8},"count":0,"ignored":0},{"startLoc":{"line":146,"col":44},"endLoc":{"line":148,"col":12},"count":0,"ignored":0},{"startLoc":{"line":230,"col":21},"endLoc":{"line":232,"col":20},"count":0,"ignored":0},{"startLoc":{"line":244,"col":21},"endLoc":{"line":246,"col":20},"count":0,"ignored":0},{"startLoc":{"line":109,"col":7},"endLoc":{"line":110,"col":6},"count":1,"ignored":0},{"startLoc":{"line":120,"col":9},"endLoc":{"line":121,"col":8},"count":2,"ignored":0},{"startLoc":{"line":142,"col":9},"endLoc":{"line":143,"col":8},"count":2,"ignored":0},{"startLoc":{"line":336,"col":15},"endLoc":{"line":337,"col":14},"count":0,"ignored":0},{"startLoc":{"line":339,"col":15},"endLoc":{"line":340,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":89,"col":9},"endLoc":{"line":89,"col":36},"trueCount":0,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":95,"col":19},"endLoc":{"line":96,"col":97},"trueCount":4,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":101,"col":11},"endLoc":{"line":101,"col":44},"trueCount":1,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":106,"col":11},"endLoc":{"line":106,"col":22},"trueCount":0,"falseCount":1,"group":[],"ignored":0},{"startLoc":{"line":133,"col":11},"endLoc":{"line":133,"col":53},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":137,"col":11},"endLoc":{"line":137,"col":32},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":138,"col":13},"endLoc":{"line":138,"col":30},"trueCount":0,"falseCount":2,"group":[],"ignored":0},{"startLoc":{"line":145,"col":13},"endLoc":{"line":145,"col":56},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":146,"col":15},"endLoc":{"line":146,"col":42},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":167,"col":19},"endLoc":{"line":167,"col":80},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":173,"col":33},"endLoc":{"line":175,"col":19},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":176,"col":15},"endLoc":{"line":176,"col":95},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":180,"col":17},"endLoc":{"line":180,"col":69},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":184,"col":21},"endLoc":{"line":184,"col":36},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":186,"col":23},"endLoc":{"line":186,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":207,"col":28},"endLoc":{"line":207,"col":73},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":220,"col":28},"endLoc":{"line":220,"col":110},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":234,"col":28},"endLoc":{"line":234,"col":85},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":274,"col":54},"endLoc":{"line":274,"col":103},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":4},{"name":"anonymous_2","count":0,"regions":[{"startLoc":{"line":86,"col":21},"endLoc":{"line":86,"col":50},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":5},{"name":"anonymous_3","count":2,"regions":[{"startLoc":{"line":113,"col":23},"endLoc":{"line":122,"col":6},"count":2,"ignored":0},{"startLoc":{"line":114,"col":34},"endLoc":{"line":121,"col":8},"count":2,"ignored":0},{"startLoc":{"line":117,"col":57},"endLoc":{"line":119,"col":10},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":114,"col":11},"endLoc":{"line":114,"col":32},"trueCount":2,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":117,"col":13},"endLoc":{"line":117,"col":55},"trueCount":0,"falseCount":2,"group":[],"ignored":0}],"ignored":0,"index":6},{"name":"anonymous_4","count":0,"regions":[{"startLoc":{"line":203,"col":73},"endLoc":{"line":203,"col":81},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":7},{"name":"anonymous_5","count":0,"regions":[{"startLoc":{"line":217,"col":71},"endLoc":{"line":217,"col":79},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":8},{"name":"anonymous_6","count":0,"regions":[{"startLoc":{"line":280,"col":32},"endLoc":{"line":284,"col":12},"count":0,"ignored":0},{"startLoc":{"line":281,"col":46},"endLoc":{"line":283,"col":14},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":281,"col":17},"endLoc":{"line":281,"col":44},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":9},{"name":"anonymous_7","count":0,"regions":[{"startLoc":{"line":286,"col":114},"endLoc":{"line":346,"col":12},"count":0,"ignored":0},{"startLoc":{"line":287,"col":36},"endLoc":{"line":303,"col":14},"count":0,"ignored":0},{"startLoc":{"line":330,"col":17},"endLoc":{"line":337,"col":14},"count":0,"ignored":0},{"startLoc":{"line":337,"col":15},"endLoc":{"line":340,"col":14},"count":0,"ignored":0},{"startLoc":{"line":342,"col":39},"endLoc":{"line":345,"col":14},"count":0,"ignored":0},{"startLoc":{"line":303,"col":20},"endLoc":{"line":305,"col":14},"count":0,"ignored":0},{"startLoc":{"line":331,"col":54},"endLoc":{"line":333,"col":16},"count":0,"ignored":0},{"startLoc":{"line":333,"col":22},"endLoc":{"line":335,"col":16},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":287,"col":17},"endLoc":{"line":287,"col":34},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":288,"col":33},"endLoc":{"line":288,"col":104},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":307,"col":31},"endLoc":{"line":308,"col":53},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":319,"col":27},"endLoc":{"line":319,"col":79},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":320,"col":22},"endLoc":{"line":320,"col":70},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":321,"col":23},"endLoc":{"line":321,"col":72},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":322,"col":26},"endLoc":{"line":322,"col":78},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":323,"col":27},"endLoc":{"line":323,"col":79},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":324,"col":32},"endLoc":{"line":324,"col":101},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":325,"col":35},"endLoc":{"line":325,"col":107},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":331,"col":19},"endLoc":{"line":331,"col":52},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":342,"col":17},"endLoc":{"line":342,"col":37},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":10},{"name":"anonymous_8","count":0,"regions":[{"startLoc":{"line":297,"col":45},"endLoc":{"line":299,"col":16},"count":0,"ignored":0},{"startLoc":{"line":298,"col":17},"endLoc":{"line":299,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":11},{"name":"anonymous_9","count":0,"regions":[{"startLoc":{"line":300,"col":48},"endLoc":{"line":302,"col":16},"count":0,"ignored":0},{"startLoc":{"line":301,"col":17},"endLoc":{"line":302,"col":16},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":12},{"name":"anonymous_10","count":0,"regions":[{"startLoc":{"line":346,"col":20},"endLoc":{"line":348,"col":12},"count":0,"ignored":0},{"startLoc":{"line":347,"col":13},"endLoc":{"line":348,"col":12},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":13},{"name":"WebDAVAdapter.decodePath","count":4,"regions":[{"startLoc":{"line":355,"col":3},"endLoc":{"line":361,"col":4},"count":4,"ignored":0},{"startLoc":{"line":356,"col":9},"endLoc":{"line":358,"col":6},"count":4,"ignored":0},{"startLoc":{"line":358,"col":7},"endLoc":{"line":360,"col":6},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":14},{"name":"WebDAVAdapter.doScrapeOnly","count":0,"regions":[{"startLoc":{"line":363,"col":3},"endLoc":{"line":371,"col":4},"count":0,"ignored":0},{"startLoc":{"line":370,"col":5},"endLoc":{"line":371,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":15},{"name":"WebDAVAdapter.canSkipIncrementalProcessing","count":0,"regions":[{"startLoc":{"line":373,"col":3},"endLoc":{"line":386,"col":4},"count":0,"ignored":0},{"startLoc":{"line":374,"col":25},"endLoc":{"line":376,"col":6},"count":0,"ignored":0},{"startLoc":{"line":378,"col":65},"endLoc":{"line":380,"col":6},"count":0,"ignored":0},{"startLoc":{"line":382,"col":85},"endLoc":{"line":384,"col":6},"count":0,"ignored":0},{"startLoc":{"line":385,"col":5},"endLoc":{"line":386,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":374,"col":9},"endLoc":{"line":374,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":378,"col":9},"endLoc":{"line":378,"col":63},"trueCount":0,"falseCount":0,"group":[],"ignored":0},{"startLoc":{"line":382,"col":9},"endLoc":{"line":382,"col":83},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":16},{"name":"WebDAVAdapter.toRelativePath","count":4,"regions":[{"startLoc":{"line":388,"col":3},"endLoc":{"line":394,"col":4},"count":4,"ignored":0},{"startLoc":{"line":389,"col":62},"endLoc":{"line":392,"col":6},"count":0,"ignored":0},{"startLoc":{"line":393,"col":5},"endLoc":{"line":394,"col":4},"count":4,"ignored":0}],"branches":[{"startLoc":{"line":389,"col":9},"endLoc":{"line":389,"col":60},"trueCount":0,"falseCount":4,"group":[],"ignored":0},{"startLoc":{"line":391,"col":14},"endLoc":{"line":391,"col":51},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":17},{"name":"WebDAVAdapter.isSamePath","count":4,"regions":[{"startLoc":{"line":396,"col":3},"endLoc":{"line":398,"col":4},"count":4,"ignored":0},{"startLoc":{"line":397,"col":5},"endLoc":{"line":398,"col":4},"count":4,"ignored":0}],"branches":[],"ignored":0,"index":18},{"name":"WebDAVAdapter.extractFileName","count":0,"regions":[{"startLoc":{"line":400,"col":3},"endLoc":{"line":403,"col":4},"count":0,"ignored":0},{"startLoc":{"line":401,"col":5},"endLoc":{"line":403,"col":4},"count":0,"ignored":0}],"branches":[],"ignored":0,"index":19},{"name":"WebDAVAdapter.extractParentPath","count":0,"regions":[{"startLoc":{"line":405,"col":3},"endLoc":{"line":412,"col":4},"count":0,"ignored":0},{"startLoc":{"line":408,"col":25},"endLoc":{"line":410,"col":6},"count":0,"ignored":0},{"startLoc":{"line":411,"col":5},"endLoc":{"line":412,"col":4},"count":0,"ignored":0}],"branches":[{"startLoc":{"line":408,"col":9},"endLoc":{"line":408,"col":23},"trueCount":0,"falseCount":0,"group":[],"ignored":0}],"ignored":0,"index":20}],"exeLine":{"0":1,"1":2,"2":3,"3":4,"4":5,"5":6,"6":7,"7":8,"8":9,"9":11,"10":12,"11":13,"12":14,"13":15,"14":16,"15":17,"16":18,"17":20,"18":21,"19":22,"20":23,"21":24,"22":25,"23":27,"24":28,"25":29,"26":30,"27":31,"28":32,"29":33,"30":34,"31":36,"32":37,"33":39,"34":40,"35":41,"36":42,"37":43,"38":44,"39":46,"40":47,"41":48,"42":49,"43":50,"44":51,"45":52,"46":56,"47":57,"48":58,"49":59,"50":60,"51":61,"52":62,"53":63,"54":64,"55":67,"56":68,"57":69,"58":70,"59":72,"60":73,"61":75,"62":78,"63":79,"64":80,"65":81,"66":82,"67":83,"68":84,"69":85,"70":86,"71":87,"72":88,"73":89,"74":90,"75":93,"76":94,"77":95,"78":96,"79":97,"80":98,"81":99,"82":101,"83":102,"84":103,"85":106,"86":107,"87":109,"88":112,"89":113,"90":114,"91":115,"92":116,"93":117,"94":118,"95":120,"96":123,"97":124,"98":125,"99":126,"100":129,"101":130,"102":131,"103":133,"104":134,"105":137,"106":138,"107":139,"108":140,"109":142,"110":143,"111":144,"112":145,"113":146,"114":147,"115":149,"116":150,"117":151,"118":152,"119":153,"120":154,"121":155,"122":156,"123":157,"124":158,"125":159,"126":160,"127":161,"128":164,"129":165,"130":166,"131":167,"132":168,"133":171,"134":173,"135":174,"136":175,"137":176,"138":177,"139":178,"140":180,"141":181,"142":182,"143":183,"144":184,"145":186,"146":187,"147":188,"148":189,"149":192,"150":193,"151":194,"152":196,"153":197,"154":198,"155":199,"156":200,"157":201,"158":202,"159":203,"160":204,"161":205,"162":207,"163":208,"164":209,"165":211,"166":212,"167":213,"168":214,"169":215,"170":216,"171":217,"172":218,"173":219,"174":220,"175":222,"176":223,"177":224,"178":227,"179":228,"180":229,"181":230,"182":231,"183":234,"184":236,"185":237,"186":238,"187":241,"188":242,"189":243,"190":244,"191":245,"192":248,"193":249,"194":250,"195":251,"196":253,"197":255,"198":257,"199":258,"200":259,"201":261,"202":263,"203":264,"204":265,"205":266,"206":268,"207":273,"208":274,"209":275,"210":276,"211":277,"212":278,"213":279,"214":280,"215":281,"216":282,"217":286,"218":287,"219":288,"220":289,"221":290,"222":291,"223":292,"224":293,"225":294,"226":295,"227":297,"228":298,"229":300,"230":301,"231":303,"232":304,"233":307,"234":308,"235":311,"236":312,"237":313,"238":314,"239":315,"240":316,"241":317,"242":318,"243":319,"244":320,"245":321,"246":322,"247":323,"248":324,"249":325,"250":326,"251":329,"252":330,"253":331,"254":332,"255":333,"256":334,"257":336,"258":337,"259":338,"260":339,"261":342,"262":343,"263":344,"264":346,"265":347,"266":349,"267":355,"268":356,"269":357,"270":358,"271":359,"272":363,"273":364,"274":365,"275":366,"276":367,"277":368,"278":369,"279":370,"280":373,"281":374,"282":375,"283":378,"284":379,"285":382,"286":383,"287":385,"288":388,"289":389,"290":390,"291":391,"292":393,"293":396,"294":397,"295":400,"296":401,"297":402,"298":405,"299":406,"300":407,"301":408,"302":409,"303":411},"summary":{"lines":{"total":288,"covered":86,"pct":29.86,"executedLineCount":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,-1,2,0,2,2,2,2,-1,2,2,2,2,2,2,2,2,-1,2,2,-1,2,2,2,2,2,2,-1,2,2,2,2,0,0,0,-1,-1,-1,2,2,2,2,2,2,2,0,0,-1,-1,2,0,0,0,-1,2,1,-1,1,-1,-1,4,4,4,4,4,4,4,4,0,4,4,4,0,-1,-1,4,4,4,4,4,2,2,-1,2,1,1,-1,-1,1,0,-1,1,-1,-1,4,2,2,2,2,2,0,-1,2,-1,-1,4,4,4,4,-1,-1,2,2,2,-1,2,0,-1,-1,2,2,0,0,-1,2,2,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,-1,0,0,0,0,0,0,-1,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,-1,0,0,0,-1,-1,0,0,0,0,0,-1,-1,0,0,0,0,-1,0,-1,0,-1,0,0,0,-1,0,-1,0,0,0,0,-1,0,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,-1,0,0,-1,0,0,-1,-1,0,0,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,0,0,0,0,0,0,-1,0,0,0,0,-1,-1,0,0,0,-1,0,0,-1,0,-1,-1,-1,-1,-1,4,4,4,0,0,-1,-1,-1,0,0,0,0,0,0,0,0,-1,-1,0,0,0,-1,-1,0,0,-1,-1,0,0,-1,0,-1,-1,4,4,0,0,-1,4,-1,-1,4,4,-1,-1,0,0,0,-1,-1,0,0,0,0,0,-1,0,-1,-1,-1]},"functions":{"total":21,"covered":7,"pct":33.33},"branches":{"total":90,"covered":17,"pct":18.89}}},"title":"WebDAVAdapter.ets.html","relativeHome":"../index.html"};
+    }
+  };
+
+  const app = Vue.createApp(App);
+  app.use(ElementPlus);
+  app.mount("#app");
+
+  window.onload = function () {
+    prettyPrint();
+  }
+</script>
+
+<style scoped>
+  table.coverage {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 0 0;
+    padding: 0;
+  }
+
+  table.coverage td {
+    margin: 0;
+    padding: 0;
+    vertical-align: top;
+  }
+
+  table.coverage td.line-count {
+    width: 12%;
+    text-align: right;
+    padding: 0 5px 0 20px;
+  }
+
+  table.coverage td.line-coverage {
+    text-align: right;
+    padding-right: 10px;
+    min-width: 20px;
+  }
+
+  table.coverage td span.cline-any {
+    display: inline-block;
+    padding: 0 5px;
+    width: 100%;
+    height: 18px;
+  }
+
+  .low,
+  .cline-no {
+    background: #FCE1E5
+  }
+
+  .high,
+  .cline-yes {
+    background: rgb(230, 245, 208)
+  }
+
+  span.cline-neutral {
+    background: #eaeaea;
+  }
+
+  pre.prettyprint {
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .el-main {
+    box-sizing: border-box;
+    display: block;
+    flex: 1;
+    flex-basis: auto;
+    overflow: auto;
+    padding: var(--el-main-padding)
+  }
+
+  .el-container {
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  .footer {
+    font-size: small;
+  }
+
+  .el-row {
+    margin-bottom: 20px;
+  }
+
+  .el-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .el-col {
+    border-radius: 4px;
+  }
+
+  .green {
+    color: var(--el-color-success);
+  }
+
+  .red {
+    color: var(--el-color-error);
+  }
+
+  .linenums li {
+    height: 18px;
+    line-height: 18px;
+  }
+
+  li.L0,
+  li.L1,
+  li.L2,
+  li.L3,
+  li.L5,
+  li.L6,
+  li.L7,
+  li.L8 {
+    list-style-type: decimal
+  }
+
+  .el-col-5 {
+    max-width: 100%;
+  }
+
+  .el-col-3 {
+    max-width: 100%;
+  }
+
+</style>
+
+</html>
