@@ -74,7 +74,8 @@ devecocli build
 - 测试门禁样例：15项通过，未修改#333设备门禁判定或放宽检查。
 - CI保留Node20模型回归，新增Node22的真实SQLite回归job。
 - deveco-cli构建通过（default/debug assembleHap）；依赖和已有ArkUI警告保留。
-- 平台数据库冒烟：`MediaLibraryHomeDatabase.test.ets` 的3个用例已注册到 `entry/src/test/List.test.ets` 的实际UnitTestBuild入口，直接在真实relationalStore上执行四个新增接口；覆盖空库、重复电影/评分10端点/两季分组，以及已观看标记、0%下一集与继续观看查找。平台运行结果以当前提交的设备CI为准。
+- 平台数据库冒烟：`MediaLibraryHomeDatabase.test.ets` 的3个用例已注册到 `entry/src/ohosTest/ets/test/List.test.ets` 的真实集成入口，直接在真实relationalStore上执行四个新增接口；覆盖空库、重复电影/评分10端点/两季分组，以及已观看标记、0%下一集与继续观看查找。通过 `MEDIA_LIBRARY_HOME_SMOKE=true` 在注册旧UI/扫描用例前返回，只运行这3条；平台运行结果以当前提交的集成CI为准。
 - 每个冒烟用例使用 `VIDALL_HOME_QUERY_SMOKE_<timestamp>_<seq>.db` 的独立store与独立Core，不使用生产门面单例、不切换全局数据库名，finally关闭并删除该专用测试库。最小schema仅包含生产查询使用的列，测试不清空用户媒体库。
-- deveco-cli未暴露UnitTestBuild目标，因此测试包编译另用同一DevEco工具链及仓库CI的UnitTestBuild原命令，设备执行与门禁保持原工作流。
+- 先前UnitTestBuild运行实际为796通过/2失败：有数据两例返回空，未放宽门禁。迁移后使用仓库TestContext.require提供的TestAbility UIAbilityContext（含模块信息），并在seed后回读断言videos=5、scrape_info=5，防止把未写入样例当查询验证；关闭和删除专用库均await并记录日志。导入链仅包含DAO、Core、纯工具及平台API，无生产库初始化调用。
+- 使用 `devecocli build --modules entry@ohosTest` 构建真实集成测试HAP；集成工作流增加默认false的专用冒烟开关，保留原编译、执行、门禁和设备互斥。
 - 设备/模拟器端到端界面与遥控器回归、设备1000/10000条冷/热加载及持续内存占用尚未验证；平台冒烟和主机性能测试均不替代这些验证。

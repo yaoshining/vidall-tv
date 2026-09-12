@@ -1,5 +1,4 @@
 import { describe, it, expect } from '@ohos/hypium';
-import abilityDelegatorRegistry from '@ohos.app.ability.abilityDelegatorRegistry';
 import relationalStore from '@ohos.data.relationalStore';
 import { Context } from '@ohos.abilityAccessCtrl';
 import { FileSourceDbCore } from '../main/ets/db/files/FileSourceDbCore';
@@ -21,9 +20,9 @@ class HomeQueryTestCore extends FileSourceDbCore {
 let databaseSequence: number = 0;
 
 async function withHomeDatabase(
+  context: Context,
   verify: (dao: MediaQueryDao, store: relationalStore.RdbStore) => Promise<void>
 ): Promise<void> {
-  const context = abilityDelegatorRegistry.getAbilityDelegator().getAppContext() as Context;
   const name = `VIDALL_HOME_QUERY_SMOKE_${Date.now()}_${++databaseSequence}.db`;
   const config: relationalStore.StoreConfig = { name, securityLevel: relationalStore.SecurityLevel.S1 };
   const store = await relationalStore.getRdbStore(context, config);
@@ -52,6 +51,7 @@ async function withHomeDatabase(
     try { await store.close(); } finally {
       // name仅来自上面的专用前缀，绝不删除生产库。
       await relationalStore.deleteRdbStore(context, name);
+      console.info(`[HomeQuerySmoke] closed and deleted isolated database: ${name}`);
     }
   }
 }
@@ -78,12 +78,20 @@ async function seedHomeDatabase(store: relationalStore.RdbStore): Promise<void> 
       season_number, episode_number, scraped_at)
     VALUES (4, 'tmdb', '4', 'episode', '两季剧', 10, 4, 1, 1, 40),
       (5, 'tmdb', '5', 'episode', '两季剧', 10, 5, 2, 1, 50)`);
+  const rows = await store.querySql('SELECT (SELECT COUNT(*) FROM videos) AS videos, ' +
+    '(SELECT COUNT(*) FROM scrape_info) AS scrape_info');
+  try {
+    expect(rows.goToFirstRow()).assertTrue();
+    expect(rows.getLong(rows.getColumnIndex('videos'))).assertEqual(5);
+    expect(rows.getLong(rows.getColumnIndex('scrape_info'))).assertEqual(5);
+    console.info('[HomeQuerySmoke] seed verified: videos=5 scrape_info=5');
+  } finally { rows.close(); }
 }
 
-export default function mediaLibraryHomeDatabaseTest(): void {
+export default function mediaLibraryHomeDatabaseTest(context: Context): void {
   describe('MediaLibraryHome_relationalStore_smoke', () => {
     it('empty_database_executes_all_home_queries', 0, async () => {
-      await withHomeDatabase(async (dao: MediaQueryDao, _store: relationalStore.RdbStore): Promise<void> => {
+      await withHomeDatabase(context, async (dao: MediaQueryDao, _store: relationalStore.RdbStore): Promise<void> => {
         expect((await dao.getHomeMovies()).length).assertEqual(0);
         const counts = await dao.getHomeMediaCounts();
         expect(counts.movieCount).assertEqual(0);
@@ -94,7 +102,7 @@ export default function mediaLibraryHomeDatabaseTest(): void {
     });
 
     it('mixed_movies_seasons_counts_and_window_query_match_contract', 0, async () => {
-      await withHomeDatabase(async (dao: MediaQueryDao, store: relationalStore.RdbStore): Promise<void> => {
+      await withHomeDatabase(context, async (dao: MediaQueryDao, store: relationalStore.RdbStore): Promise<void> => {
         await seedHomeDatabase(store);
         const movies = await dao.getHomeMovies();
         expect(movies.map(item => item.id).join(',')).assertEqual('3,2,1');
@@ -115,7 +123,7 @@ export default function mediaLibraryHomeDatabaseTest(): void {
     });
 
     it('progress_filters_movies_and_whole_series_but_keeps_zero_position', 0, async () => {
-      await withHomeDatabase(async (dao: MediaQueryDao, store: relationalStore.RdbStore): Promise<void> => {
+      await withHomeDatabase(context, async (dao: MediaQueryDao, store: relationalStore.RdbStore): Promise<void> => {
         await seedHomeDatabase(store);
         await store.executeSql(`INSERT INTO media_progress VALUES
           ('media_progress_movie_1', 0, 1000000, 1, 1),

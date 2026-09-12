@@ -3,6 +3,11 @@ name: 集成测试
 on:
   workflow_dispatch:
     inputs:
+      mediaLibraryHomeSmoke:
+        description: 仅运行媒体库首页隔离数据库冒烟
+        required: false
+        type: boolean
+        default: false
       deviceSerial:
         description: 指定设备序列号；留空则自动选择首个在线设备
         required: false
@@ -453,6 +458,7 @@ jobs:
       - name: Run device integration tests
         shell: bash
         env:
+          MEDIA_LIBRARY_HOME_SMOKE: ${{ inputs.mediaLibraryHomeSmoke }}
           WEBDAV_HOST: ${{ secrets.WEBDAV_HOST }}
           WEBDAV_USERNAME: ${{ secrets.WEBDAV_USERNAME }}
           WEBDAV_PASSWORD: ${{ secrets.WEBDAV_PASSWORD }}
@@ -461,6 +467,9 @@ jobs:
           set -o pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
           TEST_CMD="aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner"
+          if [ "$MEDIA_LIBRARY_HOME_SMOKE" = "true" ]; then
+            TEST_CMD="$TEST_CMD -s MEDIA_LIBRARY_HOME_SMOKE true"
+          fi
           TEST_CMD="$TEST_CMD -s WEBDAV_HOST '${WEBDAV_HOST:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
