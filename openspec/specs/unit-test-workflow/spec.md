@@ -2,110 +2,68 @@
 
 ## Purpose
 
-定义 `unit-test.yml` GitHub Actions workflow 的行为规范，包括在 iMac self-hosted runner 上执行 `UnitTestBuild`、代码同步、退出码采集、日志上传及 concurrency 防冲突等要求。
-
----
+定义单元测试编译、设备执行、权威门禁状态及诊断报告的可信度要求。
+本规范将编译状态与设备测试执行结果分别记录，并确保必需检查、报告与历史记录基于同一次运行证据保持一致，防止未执行、执行异常或缺少结果时产生虚假的成功结论。
 
 ## Requirements
 
-### Requirement: unit-test workflow 在 iMac self-hosted runner 上执行两阶段测试
-`unit-test.yml` SHALL 在打有 `harmonyos-tv-test` 标签的 iMac self-hosted runner 上执行两阶段策略：第一阶段为 `UnitTestBuild` 编译门禁（必须通过），第二阶段为可选的设备端测试（`continue-on-error: true`）。
+### Requirement: 编译与设备测试分别判定
+`unit-test.yml` SHALL 在 iMac self-hosted runner 上执行 `UnitTestBuild` 和必需的设备测试。编译成功只表示编译步骤通过，不能替代设备测试通过。
 
-#### Scenario: UnitTestBuild 编译门禁成功
-- **WHEN** `UnitTestBuild` 执行成功，hvigor 退出码为 0
-- **THEN** 编译步骤通过，继续执行设备端测试步骤
-- **AND** 即使设备端测试失败或超时，CI job 仍为 `success`
+#### Scenario: 编译成功但测试未执行
+- **WHEN** 编译成功，但设备不可用、测试步骤被跳过或实际执行用例数为 0
+- **THEN** 报告标识测试未执行及具体原因，必需测试门禁失败
 
-#### Scenario: UnitTestBuild 编译门禁失败
-- **WHEN** 测试文件编译错误导致 hvigor 退出码非 0
-- **THEN** 编译步骤失败，job 状态为 `failure`，PR check 显示失败
-- **AND** 不执行设备端测试步骤
+#### Scenario: 编译失败
+- **WHEN** `UnitTestBuild` 非零退出
+- **THEN** 编译步骤及 job 失败，不启动设备测试，仍保留编译日志
 
-#### Scenario: 设备端测试成功
-- **WHEN** 设备已连接且 hvigor `test` 命令在超时时间内完成
-- **THEN** 测试结果被解析并写入报告
-- **AND** CI job 状态为 `success`
+#### Scenario: 正常设备测试通过
+- **WHEN** 本次测试在期限内正常结束，结果有效且实际执行用例数大于 0，全部执行用例通过
+- **THEN** 测试状态与必需门禁均通过
 
-#### Scenario: 设备端测试超时或失败
-- **WHEN** 设备端测试因 hdc daemon 卡死而超时（5 分钟上限）或 hvigor 退出码非零
-- **THEN** 系统 SHALL 终止卡死进程并清理残留 hdc 进程
-- **AND** 该步骤标记为 `continue-on-error`，不阻塞 CI job
-- **AND** CI job 仍为 `success`（仅编译通过）
+### Requirement: 异常执行须使门禁失败
+workflow SHALL 保留测试命令真实退出码，检测 `Failed to resolve OhmUrl` / `10311002`，对超时、非零退出、失败或错误用例输出具体原因并使门禁失败。
 
-#### Scenario: workflow_dispatch 手动触发时成功构建
-- **WHEN** 在 GitHub Actions 页面手动触发 `unit-test.yml`（workflow_dispatch）
-- **THEN** iMac runner 执行 `UnitTestBuild`，hvigor 退出码为 0
+#### Scenario: OhmUrl 解析失败
+- **WHEN** 本次执行日志包含 OhmUrl 错误，即使命令返回 0
+- **THEN** 门禁失败，报告明确标识 OhmUrl 错误，保留原日志
 
----
+#### Scenario: 超时
+- **WHEN** 测试命令超过限定执行时间
+- **THEN** 只终止本次启动的测试进程，记录超时并使门禁失败；不得重启或杀死全局 hdc
 
-### Requirement: 设备端 test 步骤正确采集退出码并防御性检测 OhmUrl 冲突
-`unit-test.yml` 的「执行设备端单测（test）」步骤 SHALL 通过 `set +e; wait "$TEST_PID"; HVIGOR_EXIT=$?; set -e` 采集 hvigor 真实退出码（不得用 `wait ... || true` 吞掉），并在日志命中 `Failed to resolve OhmUrl` 或 `10311002` 时输出引用 issue #262 的 `::warning::` 注解与「显式跳过」日志、以退出码 0 结束（不阻塞 CI）。
+#### Scenario: 用例失败或错误
+- **WHEN** 有效结果中的失败数或错误数大于 0
+- **THEN** 门禁和报告均失败，不以部分用例通过代替整体通过
 
-#### Scenario: 命中 OhmUrl 冲突时显式跳过
-- **WHEN** `hvigor test` 以非零退出码结束且日志含 `Failed to resolve OhmUrl` 或 `10311002`（issue #262 曾报告 `@ohos/hypium` 与字节码 HAR 的归一化 OhmUrl 冲突）
-- **THEN** 步骤输出 `::warning title=issue-262::` 注解与「显式跳过设备端测试」日志
-- **AND** 步骤以退出码 0 结束，CI job 仍为 `success`
+### Requirement: 本次有效结果是唯一判定依据
+workflow SHALL 在执行前清理旧测试结果，并严格验证当前结果文件；日志中的汇总、编译成功文字或历史报告不能替代结果文件。
 
-#### Scenario: 非 OhmUrl 的编译/运行失败仍按非阻塞处理
-- **WHEN** `hvigor test` 退出码非零但日志未命中 OhmUrl 特征
-- **THEN** 步骤输出「hvigor test 退出码非零，但不阻塞 CI」并退出码 0
+#### Scenario: 结果文件缺失、损坏或过期
+- **WHEN** 结果缺失、无法解析、字段缺失、计数矛盾或属于旧运行
+- **THEN** 门禁失败并记录具体原因，不回退到旧报告或默认 0 个失败
 
-#### Scenario: 设备端测试超时保护
-- **WHEN** 设备端 `test` 在 `MAX_WAIT=480` 秒内未完成（CI 冷构建 + 打包 + 部署 + 跑用例耗时超过原 180s）
-- **THEN** 步骤终止测试进程树、清理 hdc 进程，输出「设备端测试未在规定时间内完成」并退出码 0（不阻塞 CI）
+### Requirement: 按触发提交执行
+workflow SHALL 同步触发运行对应的准确提交；同步失败须停止构建和设备测试。
 
----
+#### Scenario: PR 测试
+- **WHEN** PR 触发测试
+- **THEN** 使用 PR head SHA，并在诊断结果中关联运行标识
 
-### Requirement: 工程代码在构建前通过 git pull 同步至最新
-`unit-test.yml` SHALL 在执行 `UnitTestBuild` 前，在 iMac 工程路径执行 `git pull`，确保构建使用触发 CI 的最新提交代码。
+### Requirement: 日志与报告不改变原始测试结论
+workflow SHALL 将权威门禁结果用于 Summary、状态 JSON 和历史报告，并在成功、失败或未执行时保留本次日志与诊断产物。报告生成、发布、上传失败 SHALL 单独显示，不改写或掩盖原始测试结论。
 
-#### Scenario: git pull 成功后执行构建
-- **WHEN** workflow 触发，iMac 网络正常
-- **THEN** `git pull` 返回 0，随后执行 `UnitTestBuild`
+#### Scenario: 发布失败
+- **WHEN** 报告发布失败
+- **THEN** 显式记录发布失败，仍执行最终门禁；已失败或未执行的测试不能变为通过
 
-#### Scenario: git pull 失败时 job 中止
-- **WHEN** `git pull` 返回非零退出码（如网络异常、冲突）
-- **THEN** job 以失败状态中止，不执行后续 `UnitTestBuild`
+### Requirement: 设备工作流互斥且不主动中断运行
+设备测试 workflow SHALL 使用共享 concurrency group，关闭 `cancel-in-progress`，避免单测与集成测试同时使用设备或主动中断已有运行。
 
----
-
-### Requirement: 退出码使用 PIPESTATUS 精确采集
-`unit-test.yml` SHALL 使用 `PIPESTATUS[0]`（或不走管道直接取 `$?`）采集 hvigor 真实退出码，不得以管道末端命令（如 `tee`）的退出码替代。
-
-#### Scenario: hvigor 失败但管道末端命令成功
-- **WHEN** hvigor 以非零退出码结束，输出通过管道传给 `tee`
-- **THEN** CI 采集到 hvigor 的非零退出码，job 正确标记为失败
-
-#### Scenario: test 步骤经后台进程采集真实退出码
-- **WHEN** 设备端 `test` 步骤以 `> "$UNIT_TEST_LOG" 2>&1 &` 后台启动 hvigor（不经管道/`tee`）
-- **THEN** `$!` 指向 hvigor 真实进程，`set +e; wait "$TEST_PID"; HVIGOR_EXIT=$?; set -e` 返回 hvigor 真实退出码
-- **AND** 不得使用 `wait "$TEST_PID" || true`（会令 `$?` 恒为 0），也不得以未定义变量（`HVIGOR_CMD`/`UNIT_TEST_LOG`）启动第二份测试命令或依赖 macOS 不存在的 `setsid`
-
----
-
-### Requirement: 构建日志上传为 GitHub Actions artifact
-`unit-test.yml` SHALL 在构建完成后（无论成功或失败，`if: always()`），将 `UnitTestBuild` 编译日志和设备端测试日志上传为 Actions artifact，供事后排查。
-
-#### Scenario: 构建成功时日志可下载
-- **WHEN** `UnitTestBuild` 成功
-- **THEN** Actions artifact 包含编译日志和设备端测试日志，保留至少 7 天
-
-#### Scenario: 构建失败时日志可下载
-- **WHEN** `UnitTestBuild` 失败
-- **THEN** Actions artifact 仍上传编译日志，包含编译错误详情
-
----
-
-### Requirement: unit-test workflow 通过 concurrency 防止与 integration-test 冲突
-`unit-test.yml` SHALL 设置独立的 `concurrency` group（`harmonyos-unit-test`），与 `integration-test.yml` 的 `harmonyos-device-integration-test` group 互相独立，不互相阻塞。
-
-#### Scenario: unit-test 与 integration-test 同时触发
-- **WHEN** `unit-test.yml` 和 `integration-test.yml` 同时在 iMac runner 上排队
-- **THEN** 两者各自排队在各自 concurrency group 内，互不取消对方
-
-#### Scenario: 同一 concurrency group 内重复触发
-- **WHEN** 短时间内多次触发 `unit-test.yml`（如连续推送）
-- **THEN** 后触发的 run 取消前一个等待中的 run（`cancel-in-progress: true`）
+#### Scenario: 同时触发
+- **WHEN** 单测和集成测试同时触发
+- **THEN** 运行串行化，不取消正在执行的设备任务
 
 ---
 

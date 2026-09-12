@@ -30,7 +30,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: harmonyos-device-integration-test
+  group: harmonyos-device-tests
   cancel-in-progress: false
 
 jobs:
@@ -56,6 +56,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: 清理本次测试和展示产物
+        shell: bash
+        run: |
+          rm -rf .ci/integration .ci/allure-results .ci/artifacts allure-history
+          mkdir -p .ci/integration
 
       - name: Restore signing certificates
         shell: bash
@@ -300,22 +306,15 @@ jobs:
           set -euo pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
 
-          # 启动 hdc 服务端（幂等：已运行时无副作用）
-          "$HDC_BIN" start || true
-          sleep 2
-
-          # 通过 TCP/IP 连接设备（连接在 hdc server 重启后会丢失，每次需重建）
-          if [[ -n "${DEVICE_IP:-}" ]]; then
-            echo "尝试 tconn: ${DEVICE_IP}:5555"
-            "$HDC_BIN" tconn "${DEVICE_IP}:5555" || true
-            sleep 2
-          fi
-
-          "$HDC_BIN" list targets | tee "$LOG_DIR/hdc-targets.log"
+          # 只读探测且有界；不能通过重启共享 hdc 恢复连接。
+          python3 -c 'import json,os; json.dump({"run_id":os.environ["GITHUB_RUN_ID"]+"-"+os.environ["GITHUB_RUN_ATTEMPT"],"started":False,"reason":"device_unavailable","exit_code":None},open(".ci/integration/execution.json","w"))'
+          python3 scripts/ci/test_gate.py run --timeout 15 \
+            --execution "$LOG_DIR/probe.json" --log "$LOG_DIR/hdc-targets.log" -- "$HDC_BIN" list targets
+          cat "$LOG_DIR/hdc-targets.log"
 
           TARGET_INPUT='${{ inputs.deviceSerial }}'
           # 过滤掉 hdc 的占位行（[Empty]、空行），只保留真实设备串号
-          AVAILABLE_TARGETS=$("$HDC_BIN" list targets | grep -v '^\[' | awk 'NF {print $1}')
+          AVAILABLE_TARGETS=$(cat "$LOG_DIR/hdc-targets.log" | grep -v '^\[' | awk 'NF {print $1}')
           if [[ -z "$AVAILABLE_TARGETS" ]]; then
             echo "未检测到可用 HarmonyOS TV 真机，请先连接测试设备。"
             exit 1
@@ -331,6 +330,7 @@ jobs:
             DEVICE_SERIAL=$(printf '%s\n' "$AVAILABLE_TARGETS" | head -n 1)
           fi
 
+          rm -f "$LOG_DIR/execution.json"
           echo "DEVICE_SERIAL=$DEVICE_SERIAL" >> "$GITHUB_ENV"
           echo "- Device: $DEVICE_SERIAL" >> "$GITHUB_STEP_SUMMARY"
 
@@ -374,6 +374,7 @@ jobs:
           fi
 
       - name: Build ohosTest HAP
+        id: build
         shell: bash
         run: |
           set -o pipefail
@@ -457,56 +458,32 @@ jobs:
           TEST_CMD="$TEST_CMD -s SKIP_SCAN_TESTS true"
           TEST_CMD="$TEST_CMD -s SKIP_PLAYER_TESTS true"
 
-          # 验证设备连接是否仍然有效（hdc install 后 hidumper 可能导致连接失效）
-          echo "验证设备连接: $DEVICE_SERIAL"
-          if ! "$HDC_BIN" -t "$DEVICE_SERIAL" shell "echo __hdc_ok__" 2>/dev/null | grep -q "__hdc_ok__"; then
-            echo "设备连接失效，重启 hdc 守护进程..."
-            "$HDC_BIN" kill || true
-            sleep 3
-            "$HDC_BIN" start || true
-            sleep 3
-            # 重建后重新探测真实设备串号（过滤 hdc 占位行 [Empty]）
-            NEW_SERIAL=$("$HDC_BIN" list targets | grep -v '^\[' | awk 'NF {print $1}' | head -n 1)
-            if [[ -n "$NEW_SERIAL" ]]; then
-              echo "重新检测到设备: $NEW_SERIAL（原 DEVICE_SERIAL=$DEVICE_SERIAL）"
-              DEVICE_SERIAL="$NEW_SERIAL"
-            fi
-            if ! "$HDC_BIN" -t "$DEVICE_SERIAL" shell "echo __hdc_ok__" 2>/dev/null | grep -q "__hdc_ok__"; then
-              echo "重连失败，当前可用设备："
-              "$HDC_BIN" list targets
-              exit 1
-            fi
-            echo "设备重连成功: $DEVICE_SERIAL"
-          fi
+          # 主测试命令有独立超时；不重启 hdc，也不切换到其他设备。
 
           # hilog 采集在安装完成、hidumper 噪音消散之后再启动，确保采集到 aa test 的完整日志
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -b ${{ inputs.logLevel }}" || true
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog -r" || true
           nohup "$HDC_BIN" -t "$DEVICE_SERIAL" shell "hilog" > "$LOG_DIR/device.hilog" 2>&1 &
           HILOG_PID=$!
           sleep 2
 
           echo "执行命令: aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner [+env params]" | tee "$LOG_DIR/test-command.log"
-          "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD" 2>&1 | tee "$LOG_DIR/aa-test.log" || true
+          trap 'kill "$HILOG_PID" >/dev/null 2>&1 || true' EXIT
+          python3 scripts/ci/test_gate.py run --timeout 300 \
+            --execution "$LOG_DIR/execution.json" --log "$LOG_DIR/aa-test.log" -- \
+            "$HDC_BIN" -t "$DEVICE_SERIAL" shell "$TEST_CMD"
 
-          # 等待崩溃日志写入缓冲区后再停止 hilog
-          sleep 3
-          kill "$HILOG_PID" >/dev/null 2>&1 || true
-
-          if grep -q 'TestFinished-ResultCode: 0' "$LOG_DIR/aa-test.log"; then
-            echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
-            echo "- ✅ 集成测试通过，ResultCode=0" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## 集成测试结果" >> "$GITHUB_STEP_SUMMARY"
-            echo "- ❌ 集成测试失败，TestFinished-ResultCode 非 0" >> "$GITHUB_STEP_SUMMARY"
-            echo '### 最近设备日志（末 100 行）' >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -100 "$LOG_DIR/device.hilog" >> "$GITHUB_STEP_SUMMARY" || true
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+      - name: 判定必需集成测试门禁
+        id: gate
+        if: always()
+        shell: bash
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          python3 scripts/ci/test_gate.py evaluate --suite integration --build "$BUILD_OUTCOME" \
+            --execution .ci/integration/execution.json --log .ci/integration/aa-test.log \
+            --result .ci/integration/aa-test.log --output .ci/integration/status.json
 
       - name: Generate Allure Results
+        continue-on-error: true
         if: always()
         shell: bash
         run: |
@@ -515,85 +492,7 @@ jobs:
           ALLURE_RESULTS="$GITHUB_WORKSPACE/.ci/allure-results"
           mkdir -p "$ALLURE_RESULTS"
 
-          python3 - <<'PY'
-          import json, os, re, uuid
-          from pathlib import Path
-          from datetime import datetime, timezone
-
-          log_dir = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'integration'
-          results_dir = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'allure-results'
-          results_dir.mkdir(parents=True, exist_ok=True)
-
-          aa_log = log_dir / 'aa-test.log'
-          log_text = aa_log.read_text(encoding='utf-8', errors='replace') if aa_log.exists() else ''
-
-          now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-
-          labels = [
-            {'name': 'suite',        'value': 'Integration Tests'},
-            {'name': 'parentSuite',  'value': 'Device Tests'},
-            {'name': 'tag',          'value': 'integration'},
-          ]
-
-          # Parse hypium / OpenHarmonyTestRunner output
-          # Pattern 1: "[pass] testCaseName" / "[fail] testCaseName" (hypium text, may have prefix)
-          # Pattern 2: OHOS_REPORT_STATUS: test=xxx + OHOS_REPORT_STATUS_CODE: 0/-2
-          cases = []
-
-          # Pattern 1: [pass]/[fail] lines; use re.search to handle prefixes like "[Hypium] "
-          for line in log_text.splitlines():
-            m_pass = re.search(r'\[pass\]\s+(\S+)', line)
-            m_fail = re.search(r'\[fail\]\s+(\S+)', line)
-            if m_pass:
-              cases.append({'name': m_pass.group(1), 'status': 'passed', 'message': ''})
-            elif m_fail:
-              msg = line[m_fail.end():].strip()
-              cases.append({'name': m_fail.group(1), 'status': 'failed', 'message': msg})
-
-          # Pattern 2: OHOS_REPORT style (OpenHarmonyTestRunner per-test result)
-          # OHOS_REPORT_STATUS_CODE: 1 = test started (skip), 0 = passed, -2 = failed
-          if not cases:
-            test_name = None
-            for line in log_text.splitlines():
-              m = re.match(r'OHOS_REPORT_STATUS:\s+test=(.+)', line)
-              if m:
-                test_name = m.group(1).strip()
-              rc = re.match(r'OHOS_REPORT_STATUS_CODE:\s+(-?\d+)', line)
-              if rc and test_name:
-                code = int(rc.group(1))
-                if code != 1:  # 1 = started event, not a final result
-                  status = 'passed' if code == 0 else 'failed'
-                  cases.append({'name': test_name, 'status': status, 'message': ''})
-                  test_name = None
-
-          # Fallback: one summary result based on overall ResultCode
-          if not cases:
-            overall_pass = 'TestFinished-ResultCode: 0' in log_text
-            status = 'passed' if overall_pass else 'failed'
-            msg = '' if overall_pass else (
-              next((l for l in log_text.splitlines() if 'TestFinished-ResultMsg' in l), 'Unknown failure')
-            )
-            cases.append({'name': 'IntegrationTestSuite', 'status': status, 'message': msg})
-
-          for i, case in enumerate(cases):
-            result_uuid = str(uuid.uuid4())
-            result = {
-              'uuid': result_uuid,
-              'historyId': str(uuid.uuid5(uuid.NAMESPACE_DNS, case['name'])),
-              'name': case['name'],
-              'status': case['status'],
-              'start': now_ms + i,
-              'stop': now_ms + i + 1,
-              'labels': labels,
-            }
-            if case['status'] == 'failed' and case['message']:
-              result['statusDetails'] = {'message': case['message']}
-            (results_dir / f'{result_uuid}-result.json').write_text(
-              json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8'
-            )
-
-          print(f"Generated {len(cases)} Allure result(s) in {results_dir}")
-          PY
+          python3 scripts/ci/gate_allure.py "$LOG_DIR/status.json" "$ALLURE_RESULTS"
 
           # environment.properties
           cat > "$ALLURE_RESULTS/environment.properties" <<EOF
@@ -626,6 +525,9 @@ jobs:
           path: gh-pages
 
       - name: Generate Allure Report
+        id: report
+        timeout-minutes: 4
+        continue-on-error: true
         if: always()
         shell: bash
         env:
@@ -650,11 +552,18 @@ jobs:
           NPX_BIN="$(dirname "$NODE_BIN")/npx"
           echo "生成 Allure 3 HTML 报告（allure@${ALLURE_VERSION}）..."
           "$NPX_BIN" --yes "allure@${ALLURE_VERSION}" generate "$ALLURE_RESULTS" --output "$ALLURE_REPORT"
+          mv "$ALLURE_REPORT/index.html" "$ALLURE_REPORT/allure.html"
+          cp .ci/integration/gate-summary.html "$ALLURE_REPORT/index.html"
+          cp .ci/integration/status.json "$ALLURE_REPORT/gate-status.json"
+          echo '<a href="allure.html">Allure 用例详情（含门禁诊断条目）</a>' >> "$ALLURE_REPORT/index.html"
           echo "Report generated at $ALLURE_REPORT"
 
       - name: Publish integration report to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
-        if: always()
+        id: publish
+        timeout-minutes: 4
+        continue-on-error: true
+        uses: peaceiris/actions-gh-pages@v4
+        if: ${{ always() && steps.report.outcome == 'success' }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
@@ -663,10 +572,14 @@ jobs:
           keep_files: true
 
       - name: Update integration-status.json and portal
+        id: portal
+        timeout-minutes: 4
+        continue-on-error: true
         if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPORT_OUTCOME: ${{ steps.report.outcome }}
         run: |
           set -euo pipefail
           ALLURE_REPORT="$GITHUB_WORKSPACE/allure-history"
@@ -678,8 +591,8 @@ jobs:
           if git clone --depth 1 --branch "$REPORTS_BRANCH" "$REPO_URL" "$SITE_DIR" 2>/dev/null; then
             echo "Re-cloned gh-pages for portal update"
           else
-            mkdir -p "$SITE_DIR"
-            cd "$SITE_DIR" && git init && git checkout -b "$REPORTS_BRANCH"
+            echo "无法读取 gh-pages，停止发布以免覆盖历史"
+            exit 1
           fi
 
           export ALLURE_REPORT_DIR_ENV="$ALLURE_REPORT"
@@ -688,13 +601,26 @@ jobs:
           export GITHUB_RUN_URL_ENV="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           # 将当前集成测试报告归档到 integration/runs/run-N/（用于历史追溯）
-          INTG_SRC="$SITE_DIR/integration"
+          INTG_SRC="$ALLURE_REPORT"
           INTG_RUN_DIR="$SITE_DIR/integration/runs/run-${GITHUB_RUN_NUMBER}"
-          if [ -d "$INTG_SRC" ]; then
+          rm -rf "$INTG_RUN_DIR"
+          mkdir -p "$INTG_RUN_DIR"
+          if [ "$REPORT_OUTCOME" = success ] && [ -f "$INTG_SRC/index.html" ]; then
             mkdir -p "$INTG_RUN_DIR"
             # 复制所有内容，但排除 runs/ 子目录（避免嵌套膨胀）
             rsync -a --exclude='runs/' "$INTG_SRC/" "$INTG_RUN_DIR/"
             echo "已将集成报告归档至 $INTG_RUN_DIR"
+          fi
+
+          cp "$GITHUB_WORKSPACE/.ci/integration/status.json" "$INTG_RUN_DIR/gate-status.json"
+          if [ ! -f "$INTG_RUN_DIR/index.html" ]; then
+            python3 - "$INTG_RUN_DIR" <<'PYREPORT'
+          import html, json, sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          data = json.loads((root / 'gate-status.json').read_text())
+          (root / 'index.html').write_text('<meta charset="utf-8"><h1>必需集成测试门禁</h1><pre>' + html.escape(json.dumps(data, ensure_ascii=False, indent=2)) + '</pre>')
+          PYREPORT
           fi
 
           # 清理旧的集成 runs，保留最近 10 次
@@ -719,54 +645,10 @@ jobs:
           allure_report_dir = Path(os.environ['ALLURE_REPORT_DIR_ENV'])
           run_url = os.environ['GITHUB_RUN_URL_ENV']
 
-          # ── integration-status.json ───────────────────────────────────────
-          # 直接从 allure-results *-result.json 计数（兼容 Allure 2/3，无需 widgets/summary.json）
-          passed, failed, total = 0, 0, 0
-          allure_results_dir = Path(os.environ['GITHUB_WORKSPACE']) / '.ci' / 'allure-results'
-          for result_file in allure_results_dir.glob('*-result.json'):
-            try:
-              data = json.loads(result_file.read_text(encoding='utf-8'))
-              status = data.get('status', '')
-              total += 1
-              if status == 'passed':
-                passed += 1
-              elif status in ('failed', 'broken'):
-                failed += 1
-            except Exception:
-              pass
-          # 兜底：如果 allure-results 目录不存在或为空，尝试旧的 widgets/summary.json（Allure 2）
-          if total == 0:
-            summary_path = allure_report_dir / 'widgets' / 'summary.json'
-            if summary_path.exists():
-              try:
-                summary = json.loads(summary_path.read_text(encoding='utf-8'))
-                stat = summary.get('statistic', {})
-                passed = int(stat.get('passed', 0))
-                failed = int(stat.get('failed', 0)) + int(stat.get('broken', 0))
-                total  = int(stat.get('total', 0))
-              except Exception:
-                pass
-          print(f'统计结果: passed={passed}, failed={failed}, total={total}')
-
-          if failed == 0 and total > 0:
-            suite_status = 'passed'
-          elif failed > 0 and passed > 0:
-            suite_status = 'partial'
-          elif total == 0:
-            suite_status = 'passed'
-          else:
-            suite_status = 'failed'
-
-          intg_status_data = {
-            'suite': 'integration',
-            'status': suite_status,
-            'passed': passed,
-            'failed': failed,
-            'total': total,
-            'run_number': current_run_number,
-            'run_url': run_url,
-            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-          }
+          # 只使用门禁判定；禁止从旧页面兜底，禁止将空结果判定通过。
+          intg_status_data = json.loads((Path(os.environ['GITHUB_WORKSPACE']) / '.ci/integration/status.json').read_text(encoding='utf-8'))
+          suite_status = intg_status_data['status']
+          passed, failed, total = (intg_status_data[k] for k in ('passed', 'failed', 'total'))
           (site / 'integration-status.json').write_text(
             json.dumps(intg_status_data, ensure_ascii=False, indent=2), encoding='utf-8'
           )
@@ -806,6 +688,8 @@ jobs:
             st = s.get('status', 'unknown')
             if st == 'passed':
               return '✅', '#3fb950', '全部通过'
+            elif st == 'not_run':
+              return '❌', '#f85149', '必需测试未执行'
             elif st == 'partial':
               return '⚠️', '#d29922', '部分失败'
             else:
@@ -971,10 +855,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add integration-status.json integration/integration-history.json integration/history-list/index.html integration/runs/ index.html 404.html _headers vendor/ || true
           git commit -m "更新: 集成测试报告状态 #${GITHUB_RUN_NUMBER}" || echo "No portal changes to commit"
-          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH" || echo "Portal push skipped"
+          git push "$REPO_URL" HEAD:"$REPORTS_BRANCH"
           rm -rf "$SITE_DIR/.git"
 
       - name: Package integration artifacts
+        continue-on-error: true
         if: always()
         shell: bash
         run: |
@@ -1008,11 +893,15 @@ jobs:
           path: ${{ env.ARCHIVE_PATH }}
           if-no-files-found: warn
 
+      - name: 报告发布诊断
+        if: ${{ always() && (steps.report.outcome == 'failure' || steps.publish.outcome == 'failure' || steps.portal.outcome == 'failure') }}
+        run: echo "::warning::报告生成或发布失败；原始测试结论见必需门禁步骤及 status.json。"
+
       - name: Cleanup peaceiris/actions-gh-pages temp dirs
         if: always()
         shell: bash
         run: |
-          # peaceiris/actions-gh-pages@v3 在 self-hosted runner 的 $HOME 下
+          # peaceiris/actions-gh-pages@v4 在 self-hosted runner 的 $HOME 下
           # 遗留 actions_github_pages_<run_id> 临时目录，需手动清理
-          find "$HOME" -maxdepth 1 -type d -name "actions_github_pages_*" -exec rm -rf {} + 2>/dev/null || true
+          rm -rf "$HOME/actions_github_pages_${GITHUB_RUN_ID}"
           echo "Cleaned up actions_github_pages_* temp dirs"

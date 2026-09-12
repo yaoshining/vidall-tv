@@ -1,0 +1,38 @@
+name: 测试门禁样例回归
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-regression:
+    name: 必需测试门禁样例
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 验证正常、异常和报告一致性（无需设备）
+        run: python3 -m unittest discover -s scripts/ci -p 'test_test_gate.py' -v
+      - name: 创建可控发布样例
+        run: |
+          mkdir -p "$RUNNER_TEMP/gate-publish"
+          printf '%s\n' '{"gate_passed":false,"status":"not_run","total":0,"reason":"样例：设备不可用"}' > "$RUNNER_TEMP/gate-publish/status.json"
+          cp "$RUNNER_TEMP/gate-publish/status.json" "$RUNNER_TEMP/gate-publish/expected.json"
+      - name: 模拟报告发布失败
+        id: simulated_publish
+        continue-on-error: true
+        run: |
+          echo '预期样例：报告发布服务不可用'
+          exit 1
+      - name: 核验发布失败不改写测试结论
+        if: always()
+        env:
+          PUBLISH_OUTCOME: ${{ steps.simulated_publish.outcome }}
+        run: |
+          test "$PUBLISH_OUTCOME" = failure
+          cmp "$RUNNER_TEMP/gate-publish/status.json" "$RUNNER_TEMP/gate-publish/expected.json"

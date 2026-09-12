@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: harmonyos-unit-test
-  cancel-in-progress: true
+  group: harmonyos-device-tests
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -42,6 +42,14 @@ jobs:
       WORK_DIR: /Users/shiningyao/DevecostudioProjects/vidall-tv
 
     steps:
+      - name: 初始化本次门禁产物
+        shell: bash
+        run: |
+          GATE_DIR="$RUNNER_TEMP/unit-gate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "GATE_DIR=$GATE_DIR" >> "$GITHUB_ENV"
+          rm -rf "$GATE_DIR"
+          mkdir -p "$GATE_DIR"
+
       - name: 同步最新代码（git pull）
         id: sync
         shell: bash
@@ -73,7 +81,7 @@ jobs:
           git checkout --force --detach FETCH_HEAD
           git clean -fdx
           echo "checked out sha: $(git rev-parse HEAD)"
-          rm -f "$RUNNER_TEMP/unit-test-build.log" "$RUNNER_TEMP/unit-test.log"
+          rm -f "$GATE_DIR/build.log" "$RUNNER_TEMP/unit-test.log"
           rm -rf "$RUNNER_TEMP/allure-results" "$RUNNER_TEMP/allure-report"
 
       - name: 恢复 Harmony 依赖
@@ -85,6 +93,7 @@ jobs:
           test -d "$WORK_DIR/oh_modules/@ibestservices/ibest-ui"
 
       - name: 编译单元测试（UnitTestBuild）
+        id: build
         shell: bash
         env:
           RUNNER_TEMP: ${{ runner.temp }}
@@ -96,7 +105,7 @@ jobs:
             --mode module -p module=entry@default \
             UnitTestBuild --no-daemon \
             --analyze=normal --parallel --incremental \
-            2>&1 | tee "$RUNNER_TEMP/unit-test-build.log"
+            2>&1 | tee "$GATE_DIR/build.log"
           HVIGOR_EXIT=${PIPESTATUS[0]}
           if [ "$HVIGOR_EXIT" -ne 0 ]; then
             echo "错误：UnitTestBuild 编译失败（退出码 $HVIGOR_EXIT）"
@@ -105,137 +114,41 @@ jobs:
           echo "UnitTestBuild 编译成功 ✅"
 
       - name: 执行设备端单测（test）
+        id: execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$WORK_DIR"
+          # 编译可能生成或留下结果；必须在真正运行前删除，不能用旧结果证明本次执行。
+          rm -f entry/.test/default/intermediates/test/coverage_data/test_result.txt
+          rm -rf entry/.test/default/outputs/test/reports
+          python3 scripts/ci/test_gate.py run \
+            --execution "$GATE_DIR/execution.json" --log "$GATE_DIR/test.log" \
+            --hdc "$OHOS_SDK_HOME/toolchains/hdc" --device 192.168.3.85:5555 --timeout 90 -- \
+            "$NODE_BIN" "$HVIGOR_WRAPPER" --mode module -p module=entry@default \
+            test --no-daemon -p coverage=true --analyze=normal --parallel --incremental
+
+      - name: 判定必需单测门禁（编译成功不等于测试通过）
+        id: gate
+        if: ${{ always() && steps.sync.outcome == 'success' }}
         shell: bash
         env:
-          RUNNER_TEMP: ${{ runner.temp }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          TESTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          set -eo pipefail
+          set -euo pipefail
           cd "$WORK_DIR"
-
-          # ── 彻底清理所有残留 hdc 进程 ──
-          # 避免残留 daemon 与 hvigor test 内部启动的 hdc daemon 端口冲突导致卡死
-          HDC_BIN="$OHOS_SDK_HOME/toolchains/hdc"
-          "$HDC_BIN" kill 2>/dev/null || true
-          sleep 1
-          # 强制杀掉所有 hdc 相关进程（daemon 可能不响应 kill 命令）
-          ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
-          sleep 2
-
-          # 验证设备可达（不启动长期 daemon）
-          "$HDC_BIN" tconn 192.168.3.85:5555 2>/dev/null || true
-          sleep 2
-          TARGETS=$("$HDC_BIN" list targets 2>&1 || echo "")
-          if ! echo "$TARGETS" | grep -q "192.168.3.85"; then
-            echo "⚠️ 设备未连接，跳过设备端测试"
-            exit 0
-          fi
-          echo "设备已连接: $TARGETS"
-
-          # 关键：不要在这里 kill hdc daemon。电视是 TCP 设备（tconn 192.168.3.85:5555），
-          # tconn 状态只存在于当前 daemon 内存中；一旦 kill，hvigor test 内部新起的 daemon
-          # 不会重新 tconn，导致「找不到设备 → test 卡死在 Darwin 之后」。上面已 kill 过残留
-          # daemon 并重新 tconn，这个 daemon 是干净的，直接留给 hvigor test 用即可。
-
-          # 执行设备端测试，带超时保护
-          RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
-          UNIT_TEST_LOG="$RUNNER_TEMP/unit-test.log"
-          # 单次启动并直接重定向到日志文件（不用 tee），使 $! 指向 hvigor 真实进程，
-          # 从而能正确采集退出码并做超时终止；macOS 无 setsid，改用 kill + pgrep 递归清理进程树。
-          # 与 UnitTestBuild 步骤保持一致加 --incremental --parallel：否则 `test` 会忽略上一步的
-          # 增量缓存做全量重建（native C++ + 全量 ArkTS），在 CI 冷缓存机器上远超 480s。
-          "$NODE_BIN" "$HVIGOR_WRAPPER" \
-            --mode module -p module=entry@default \
-            test --no-daemon -p coverage=true \
-            --analyze=normal --parallel --incremental \
-            > "$UNIT_TEST_LOG" 2>&1 &
-          TEST_PID=$!
-          # 真机用例实测 ~18-40s（UnitTestArkTS ~37s + 部署 + 跑用例）。若 hvigor test 找不到设备
-          # 会回退本地 Previewer 永久卡死，等 480s 纯属浪费；90s 足以覆盖正常完成，卡死时快速止损。
-          # job 仍有 timeout-minutes: 20 兜底。
-          MAX_WAIT=90
-          ELAPSED=0
-          while kill -0 "$TEST_PID" 2>/dev/null && [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-            # 每 30s 打印一次进度与 hvigor test 日志尾部：`test` 输出重定向到文件后，
-            # 前台静默会让 UI 误判为卡死；这里直接透出当前卡在哪个阶段（构建/部署/跑用例）。
-            if [ $((ELAPSED % 30)) -eq 0 ]; then
-              echo "⏳ 设备端测试已等待 ${ELAPSED}s / ${MAX_WAIT}s"
-              tail -n 3 "$UNIT_TEST_LOG" 2>/dev/null || true
-            fi
-          done
-          # 递归收集指定 PID 的全部后代（后序遍历：最深后代先输出）。
-          # 必须先收集再杀：若先杀父进程，macOS 会把其后代重托管给 launchd，pgrep -P 就再也找不到它们。
-          collect_descendants() {
-            local pid="$1" child
-            for child in $(pgrep -P "$pid" 2>/dev/null || true); do
-              collect_descendants "$child"
-              printf '%s\n' "$child"
-            done
-          }
-
-          if kill -0 "$TEST_PID" 2>/dev/null; then
-            echo "❌ 设备端测试超时（${MAX_WAIT}s），终止进程树"
-            DESC_PIDS=$(collect_descendants "$TEST_PID")
-            # 先 SIGTERM：从最深后代 → 父进程，等待 5 秒
-            for pid in $DESC_PIDS; do kill "$pid" 2>/dev/null || true; done
-            kill "$TEST_PID" 2>/dev/null || true
-            sleep 5
-            # 再 SIGKILL：从最深后代 → 父进程
-            for pid in $DESC_PIDS; do kill -9 "$pid" 2>/dev/null || true; done
-            kill -9 "$TEST_PID" 2>/dev/null || true
-            wait "$TEST_PID" 2>/dev/null || true
-            # 清理可能残留的卡死 hdc 进程
-            ps aux | grep -E '[h]dc' | awk '{print $2}' | xargs kill -9 2>/dev/null || true
-            echo "❌ 设备端测试超时（${MAX_WAIT}s）"
-            exit 1
-          fi
-          # 注意：不能用 `wait ... || true`，否则 `$?` 恒为 0，hvigor 真实退出码被吞掉
-          set +e
-          wait "$TEST_PID"
-          HVIGOR_EXIT=$?
-          set -e
-
-          # 输出测试日志尾部便于排查（无论成功失败都打印，hvigor 失败时能看到真实错误）
-          tail -n 40 "$UNIT_TEST_LOG" || true
-
-          if [ "$HVIGOR_EXIT" -ne 0 ]; then
-            # 防御性检测（issue #262 曾在部分环境出现）：@ohos/hypium 与字节码 HAR 的归一化 OhmUrl
-            # 冲突会以「Failed to resolve OhmUrl（10311002）」呈现；命中即显式告警跳过，避免静默。
-            if grep -qE 'Failed to resolve OhmUrl|10311002' "$UNIT_TEST_LOG"; then
-              echo "::warning title=issue-262::设备端单测因 OhmUrl 归一化冲突被跳过（@ohos/hypium 与字节码 HAR 互斥），详见 issue #262"
-              echo "⚠️ 检测到 OhmUrl 解析失败（issue #262），显式跳过设备端测试"
-              exit 0
-            fi
-            echo "❌ hvigor test 退出码非零（$HVIGOR_EXIT），测试失败"
-            exit "$HVIGOR_EXIT"
-          fi
-
-          if [ -f "$RESULT_TXT" ]; then
-            TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1 || true)
-            if [ -z "$TESTS_LINE" ]; then
-              echo "❌ test_result.txt 缺少 Tests run 汇总行（文件为空或已损坏）"
-              exit 1
-            fi
-            TOTAL=$(echo "$TESTS_LINE" | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            ERRORS=$(echo "$TESTS_LINE" | grep -oE 'Error: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            echo "📊 设备端测试结果：$TESTS_LINE"
-            if [ "$TOTAL" -le 0 ]; then
-              echo "❌ test_result.txt 未包含有效用例数（Tests run: 0 或解析失败）"
-              exit 1
-            fi
-            if [ "$FAILED" != "0" ] || [ "$ERRORS" != "0" ]; then
-              echo "❌ 存在 ${FAILED} 个失败 + ${ERRORS} 个错误"
-              exit 1
-            fi
-            echo "✅ 所有测试通过"
-          else
-            echo "❌ test_result.txt 未找到"
-            exit 1
-          fi
+          RESULT_TXT=entry/.test/default/intermediates/test/coverage_data/test_result.txt
+          if [ -f "$RESULT_TXT" ]; then cp -p "$RESULT_TXT" "$GATE_DIR/test_result.txt"; fi
+          if [ -d entry/.test/default/outputs/test/reports ]; then cp -R entry/.test/default/outputs/test/reports "$GATE_DIR/coverage-reports"; fi
+          python3 scripts/ci/test_gate.py evaluate --suite unit --build "$BUILD_OUTCOME" \
+            --execution "$GATE_DIR/execution.json" --log "$GATE_DIR/test.log" \
+            --result "$GATE_DIR/test_result.txt" --output "$GATE_DIR/status.json"
 
       - name: 发布报告到 gh-pages
+        id: publish
+        timeout-minutes: 5
+        continue-on-error: true
         if: ${{ always() && steps.sync.outcome == 'success' }}
         shell: bash
         env:
@@ -251,37 +164,10 @@ jobs:
           ALLURE_REPORT_DIR="$RUNNER_TEMP/allure-report"
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          # 解析测试结果（优先从 test_result.txt 读取，其次从日志解析）
-          RESULT_TXT="$WORK_DIR/entry/.test/default/intermediates/test/coverage_data/test_result.txt"
-          BUILD_LOG="$RUNNER_TEMP/unit-test-build.log"
-          if [ -f "$RESULT_TXT" ]; then
-            TESTS_LINE=$(grep "Tests run:" "$RESULT_TXT" | tail -1)
-            PASSED=$(echo "$TESTS_LINE" | grep -oE 'Pass: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            ERRORS=$(echo "$TESTS_LINE" | grep -oE 'Error: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            TOTAL=$(echo "$TESTS_LINE"  | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-          elif [ -f "$TEST_LOG" ]; then
-            echo "警告：test_result.txt 未找到，回退到日志解析"
-            TESTS_LINE=$(grep "Tests run:" "$TEST_LOG" 2>/dev/null | tail -1 || echo "")
-            PASSED=$(echo "$TESTS_LINE" | grep -oE 'Pass: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            FAILED=$(echo "$TESTS_LINE" | grep -oE 'Failure: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            ERRORS=$(echo "$TESTS_LINE" | grep -oE 'Error: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-            TOTAL=$(echo "$TESTS_LINE"  | grep -oE 'Tests run: [0-9]+' | grep -oE '[0-9]+' || echo "0")
-          else
-            echo "警告：test_result.txt 和日志均未找到，仅编译检查通过"
-            PASSED=0; FAILED=0; ERRORS=0; TOTAL=0
-          fi
-          if [ "$FAILED" = "0" ] && [ "$ERRORS" = "0" ] && [ "$TOTAL" != "0" ]; then STATUS="passed"
-          elif ([ "$FAILED" != "0" ] || [ "$ERRORS" != "0" ]) && [ "$TOTAL" != "0" ]; then STATUS="partial"
-          elif [ "$TOTAL" = "0" ] && grep -q "BUILD SUCCESSFUL" "$BUILD_LOG" 2>/dev/null; then STATUS="build_only"
-          else STATUS="failed"; fi
-
-          # build_only 模式：从测试源目录统计编译通过的测试文件数作为补充信息
+          # 展示层只能读取本次权威判定；禁止日志/旧 Allure/编译成功兜底。
+          RESULT_TXT="$GATE_DIR/test_result.txt"
+          read -r STATUS PASSED FAILED ERRORS TOTAL < <(python3 -c 'import json,os; d=json.load(open(os.environ["GATE_DIR"]+"/status.json")); print(d["status"],d["passed"],d["failed"],d["errors"],d["total"])')
           COMPILED_COUNT=0
-          if [ "$STATUS" = "build_only" ]; then
-            COMPILED_COUNT=$(find "$WORK_DIR/entry/src/test" -name '*.test.ets' -type f 2>/dev/null | wc -l | awk '{print $1}')
-            echo "📊 编译通过 ${COMPILED_COUNT} 个测试文件（设备端测试未执行）"
-          fi
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # clone gh-pages（最多重试 3 次，规避 macOS LibreSSL 偶发 SSL 握手失败）
@@ -326,74 +212,8 @@ jobs:
             curl -fsSL "https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js" -o vendor/echarts.min.js
           fi
 
-          # 写 unit-status.json
-          cat > unit-status.json <<JSON
-          {
-            "status": "${STATUS}",
-            "passed": ${PASSED},
-            "failed": ${FAILED},
-            "total": ${TOTAL},
-            "compiled_count": ${COMPILED_COUNT},
-            "run_number": "${GITHUB_RUN_NUMBER}",
-            "timestamp": "${TIMESTAMP}",
-            "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          }
-          JSON
-
-          # 生成 allure-results JSON（逐条解析 test_result.txt）
-          mkdir -p "$ALLURE_RESULTS_DIR"
-          export RESULT_TXT ALLURE_RESULTS_DIR GITHUB_RUN_NUMBER GITHUB_REPOSITORY GITHUB_RUN_ID
-          python3 - <<'PY'
-          import json, os, uuid
-          from pathlib import Path
-          from datetime import datetime, timezone
-          result_txt  = Path(os.environ['RESULT_TXT'])
-          allure_dir  = Path(os.environ['ALLURE_RESULTS_DIR'])
-          run_number  = os.environ['GITHUB_RUN_NUMBER']
-          repo        = os.environ['GITHUB_REPOSITORY']
-          run_id      = os.environ['GITHUB_RUN_ID']
-          now_ms      = int(datetime.now(timezone.utc).timestamp() * 1000)
-          current_suite = 'unit'
-          pending: dict = {}
-          test_cases: list = []
-          if result_txt.exists():
-            for line in result_txt.read_text(encoding='utf-8').splitlines():
-              if line.startswith('class='):
-                current_suite = line[6:].strip()
-              elif line.startswith('test='):
-                pending = {'suite': current_suite, 'name': line[5:].strip(), 'status': 'broken'}
-              elif line.startswith('result=') and pending:
-                r = line[7:].strip()
-                if r == 'Success':  pending['status'] = 'passed'
-                elif r == 'Failure': pending['status'] = 'failed'
-                else:                pending['status'] = 'broken'
-                test_cases.append(pending)
-                pending = {}
-          for tc in test_cases:
-            hid = f"{tc['suite']}#{tc['name']}"
-            res: dict = {
-              'uuid': str(uuid.uuid4()),
-              'historyId': hid, 'testCaseId': hid,
-              'name': tc['name'],
-              'fullName': f"{tc['suite']}#{tc['name']}",
-              'status': tc['status'],
-              'stage': 'finished',
-              'start': now_ms, 'stop': now_ms,
-              'labels': [
-                {'name': 'suite',      'value': tc['suite']},
-                {'name': 'framework',  'value': 'hvigorw / hypium'},
-                {'name': 'host',       'value': 'iMac self-hosted runner'},
-              ],
-              'links': [
-                {'name': f'Actions #{run_number}',
-                 'url':  f'https://github.com/{repo}/actions/runs/{run_id}',
-                 'type': 'link'},
-              ],
-            }
-            (allure_dir / f"{res['uuid']}-result.json").write_text(
-              json.dumps(res, ensure_ascii=False), encoding='utf-8')
-          print(f"已生成 {len(test_cases)} 条 allure-results JSON")
-          PY
+          cp "$GATE_DIR/status.json" unit-status.json
+          python3 "$WORK_DIR/scripts/ci/gate_allure.py" "$GATE_DIR/status.json" "$ALLURE_RESULTS_DIR"
 
           # 复制 Allure history（Allure 3 格式；跳过旧 Allure 2 history 避免不兼容）
           # Allure 3 history 文件包含 history-trend.json，Allure 2 格式不含此文件
@@ -420,10 +240,19 @@ jobs:
           # 生成 Allure 3 HTML 报告
           echo "生成 Allure 3 HTML 报告（allure@${ALLURE_VERSION}）..."
           rm -rf "$ALLURE_REPORT_DIR"
-          npx --yes "allure@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --output "$ALLURE_REPORT_DIR"
+          if ! npx --yes "allure@${ALLURE_VERSION}" generate "$ALLURE_RESULTS_DIR" --output "$ALLURE_REPORT_DIR"; then
+            echo "::warning::Allure 生成失败，发布权威门禁摘要"
+            rm -rf "$ALLURE_REPORT_DIR"
+            mkdir -p "$ALLURE_REPORT_DIR"
+          fi
+          if [ -f "$ALLURE_REPORT_DIR/index.html" ]; then mv "$ALLURE_REPORT_DIR/index.html" "$ALLURE_REPORT_DIR/allure.html"; fi
+          cp "$GATE_DIR/gate-summary.html" "$ALLURE_REPORT_DIR/index.html"
+          cp "$GATE_DIR/status.json" "$ALLURE_REPORT_DIR/gate-status.json"
+          if [ -f "$ALLURE_REPORT_DIR/allure.html" ]; then echo '<a href="allure.html">Allure 用例详情（含门禁诊断条目）</a>' >> "$ALLURE_REPORT_DIR/index.html"; fi
 
           # 复制 Allure 报告到 unit/runs/run-N/
           RUN_REPORT_DIR="unit/runs/run-${GITHUB_RUN_NUMBER}"
+          rm -rf "$RUN_REPORT_DIR"
           mkdir -p "$RUN_REPORT_DIR"
           cp -R "$ALLURE_REPORT_DIR/." "$RUN_REPORT_DIR/"
           echo "Allure 报告已复制到 $RUN_REPORT_DIR"
@@ -491,7 +320,7 @@ jobs:
           entry: dict = {
               'run_number':  run_number,
               'timestamp':   run_ts,
-              'status':      'pass' if run_status in ('passed', 'build_only') else 'fail',
+              'status':      'pass' if run_status == 'passed' else 'fail',
               'passed':      run_passed,
               'failed':      run_failed,
               'total':       run_total,
@@ -774,6 +603,7 @@ jobs:
             if s is None: return '🔄', '#8b949e', '尚未运行'
             st = s.get('status', 'unknown')
             if st == 'passed': return '✅', '#3fb950', '全部通过'
+            elif st == 'not_run': return '❌', '#f85149', '必需测试未执行'
             elif st == 'build_only': return '🔧', '#58a6ff', '仅编译通过'
             elif st == 'partial': return '⚠️', '#d29922', '部分失败'
             else: return '❌', '#f85149', '存在失败'
@@ -914,11 +744,15 @@ jobs:
 
       - name: 上传测试产物
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-results-${{ github.run_number }}
           path: |
-            ${{ runner.temp }}/unit-test-build.log
-            ${{ runner.temp }}/unit-test.log
+            ${{ env.GATE_DIR }}/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: 报告发布诊断
+        if: ${{ always() && steps.publish.outcome == 'failure' }}
+        run: echo "::warning::报告发布失败；原始测试结论见必需门禁步骤与本次 status.json，发布失败不会改写测试结果。"

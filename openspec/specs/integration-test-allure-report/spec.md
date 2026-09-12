@@ -19,9 +19,13 @@
 - **WHEN** `aa-test.log` 包含 `[fail] <testCaseName>` 行
 - **THEN** 对应 result JSON 的 `status` 为 `failed`，`statusDetails.message` 包含失败信息
 
-#### Scenario: 无法解析日志但整体通过
-- **WHEN** `aa-test.log` 无 `[pass]`/`[fail]` 行，且 `TestFinished-ResultCode: 0`
-- **THEN** 生成单条 `passed` result，name 为 `IntegrationTestSuite`，防止 Allure 报告为空
+#### Scenario: 完成码为零但没有逐例结果
+- **WHEN** `aa-test.log` 没有有效的逐例结果，即使包含 `TestFinished-ResultCode: 0`
+- **THEN** 门禁失败且状态为测试未执行，不得虚构 `IntegrationTestSuite` 通过用例
+
+#### Scenario: 报告使用权威结论
+- **WHEN** 测试存在超时、非零退出或失败、错误用例
+- **THEN** 报告 SHALL 复用门禁结果，不能只统计部分通过记录后宣告通过；诊断条目须与真实测试用例分开
 
 ---
 
