@@ -1,8 +1,14 @@
 name: 集成测试
+run-name: ${{ inputs.mediaLibraryHomeSmoke && '媒体库首页数据库冒烟（仅3项）' || '集成测试' }}
 
 on:
   workflow_dispatch:
     inputs:
+      mediaLibraryHomeSmoke:
+        description: 仅运行媒体库首页隔离数据库冒烟
+        required: false
+        type: boolean
+        default: false
       deviceSerial:
         description: 指定设备序列号；留空则自动选择首个在线设备
         required: false
@@ -62,6 +68,19 @@ jobs:
         run: |
           rm -rf .ci/integration .ci/allure-results .ci/artifacts allure-history
           mkdir -p .ci/integration
+
+      - name: 记录本次测试范围
+        if: always()
+        env:
+          HOME_SMOKE: ${{ inputs.mediaLibraryHomeSmoke }}
+        run: |
+          mkdir -p .ci/integration
+          if [ "$HOME_SMOKE" = "true" ]; then
+            echo "MEDIA_LIBRARY_HOME_SMOKE：仅3项隔离数据库冒烟，不代表全部集成测试；不覆盖全量集成报告latest。" > .ci/integration/scope.txt
+          else
+            echo "默认集成测试入口（各环境开关见执行命令）。" > .ci/integration/scope.txt
+          fi
+          cat .ci/integration/scope.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore signing certificates
         shell: bash
@@ -180,7 +199,20 @@ jobs:
             echo "- SDK: $OHOS_SDK_HOME"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: 安装数据库冒烟完整依赖
+        if: ${{ inputs.mediaLibraryHomeSmoke }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # 与单元CI相同的官方安装器，同时解析根目录npm包及entry模块本地HAR。
+          /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm install
+          test -d oh_modules/pinyin-pro
+          test -d entry/oh_modules/@vidall/player
+          test -d entry/oh_modules/@hw-agconnect/auth
+
       - name: Restore Harmony dependencies
+        if: ${{ !inputs.mediaLibraryHomeSmoke }}
         shell: bash
         run: |
           set -euo pipefail
@@ -453,6 +485,7 @@ jobs:
       - name: Run device integration tests
         shell: bash
         env:
+          MEDIA_LIBRARY_HOME_SMOKE: ${{ inputs.mediaLibraryHomeSmoke }}
           WEBDAV_HOST: ${{ secrets.WEBDAV_HOST }}
           WEBDAV_USERNAME: ${{ secrets.WEBDAV_USERNAME }}
           WEBDAV_PASSWORD: ${{ secrets.WEBDAV_PASSWORD }}
@@ -461,6 +494,9 @@ jobs:
           set -o pipefail
           LOG_DIR="$GITHUB_WORKSPACE/.ci/integration"
           TEST_CMD="aa test -b $BUNDLE_NAME -m $TEST_MODULE -s unittest OpenHarmonyTestRunner"
+          if [ "$MEDIA_LIBRARY_HOME_SMOKE" = "true" ]; then
+            TEST_CMD="$TEST_CMD -s MEDIA_LIBRARY_HOME_SMOKE true"
+          fi
           TEST_CMD="$TEST_CMD -s WEBDAV_HOST '${WEBDAV_HOST:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_USERNAME '${WEBDAV_USERNAME:-}'"
           TEST_CMD="$TEST_CMD -s WEBDAV_PASSWORD '${WEBDAV_PASSWORD:-}'"
@@ -509,7 +545,7 @@ jobs:
 
       - name: 独立发布本次门禁状态
         id: state_publish
-        if: always()
+        if: ${{ always() && !inputs.mediaLibraryHomeSmoke }}
         continue-on-error: true
         timeout-minutes: 3
         shell: bash
@@ -521,7 +557,7 @@ jobs:
 
       - name: Generate Allure Results
         continue-on-error: true
-        if: always()
+        if: ${{ always() && !inputs.mediaLibraryHomeSmoke }}
         shell: bash
         run: |
           set -euo pipefail
@@ -555,7 +591,7 @@ jobs:
 
       - name: Load Allure history
         uses: actions/checkout@v4
-        if: always()
+        if: ${{ always() && !inputs.mediaLibraryHomeSmoke }}
         continue-on-error: true
         with:
           ref: gh-pages
@@ -565,7 +601,7 @@ jobs:
         id: report
         timeout-minutes: 4
         continue-on-error: true
-        if: always()
+        if: ${{ always() && !inputs.mediaLibraryHomeSmoke }}
         shell: bash
         env:
           ALLURE_VERSION: "3.6.0"
@@ -600,7 +636,7 @@ jobs:
         timeout-minutes: 4
         continue-on-error: true
         uses: peaceiris/actions-gh-pages@v4
-        if: ${{ always() && steps.report.outcome == 'success' }}
+        if: ${{ always() && !inputs.mediaLibraryHomeSmoke && steps.report.outcome == 'success' }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
@@ -612,7 +648,7 @@ jobs:
         id: portal
         timeout-minutes: 4
         continue-on-error: true
-        if: always()
+        if: ${{ always() && !inputs.mediaLibraryHomeSmoke }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

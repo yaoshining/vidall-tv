@@ -507,8 +507,9 @@ export class VideoDao {
    * 获取最近一次扫描时间（videos 表中最大 scanned_at）
    * 返回 0 表示未扫描
    */
-  async getLatestScanTime(): Promise<number> {
+  async getLatestScanTime(propagateErrors: boolean = false): Promise<number> {
     if (!this.core.isReady()) {
+      if (propagateErrors) { throw new Error('媒体库数据库尚未就绪'); }
       return 0;
     }
     const store = this.core.getStore();
@@ -522,7 +523,8 @@ export class VideoDao {
         return rs.isColumnNull(idx) ? 0 : rs.getLong(idx);
       }
       return 0;
-    } catch {
+    } catch (e) {
+      if (propagateErrors) { throw new Error((e as Error).message); }
       return 0;
     } finally {
       try { rs?.close(); } catch { }

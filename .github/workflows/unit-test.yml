@@ -120,7 +120,8 @@ jobs:
           set -euo pipefail
           cd "$WORK_DIR"
           # 编译可能生成或留下结果；必须在真正运行前删除，不能用旧结果证明本次执行。
-          rm -f entry/.test/default/intermediates/test/coverage_data/test_result.txt
+          rm -f entry/.test/default/intermediates/test/coverage_data/test_result.txt \
+            entry/.test/default/intermediates/test/coverage_data/coverage.log
           rm -rf entry/.test/default/outputs/test/reports
           python3 scripts/ci/test_gate.py run \
             --execution "$GATE_DIR/execution.json" --log "$GATE_DIR/test.log" \
@@ -139,6 +140,9 @@ jobs:
           set -euo pipefail
           cd "$WORK_DIR"
           RESULT_TXT=entry/.test/default/intermediates/test/coverage_data/test_result.txt
+          COVERAGE_LOG=entry/.test/default/intermediates/test/coverage_data/coverage.log
+          # 保留 SDK 解析前的原始协议，便于核对日志粘连；不参与门禁兜底。
+          if [ -f "$COVERAGE_LOG" ]; then cp -p "$COVERAGE_LOG" "$GATE_DIR/coverage.log"; fi
           if [ -f "$RESULT_TXT" ]; then cp -p "$RESULT_TXT" "$GATE_DIR/test_result.txt"; fi
           if [ -d entry/.test/default/outputs/test/reports ]; then cp -R entry/.test/default/outputs/test/reports "$GATE_DIR/coverage-reports"; fi
           if [ -f "$GATE_DIR/execution.json" ] && [ -d entry/.test/default/outputs/test/reports ]; then

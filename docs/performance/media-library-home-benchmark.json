@@ -1,0 +1,142 @@
+{
+  "baseline": "b57ad6d7fbc588d38229fb5f9d48250a88170755",
+  "measuredAt": "2026-09-12T17:42:19.537Z",
+  "environment": {
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M1 Max",
+    "node": "v26.4.0",
+    "database": "SQLite :memory:",
+    "logging": "console disabled for both; diagnostic queries retained in baseline",
+    "warmupPairs": 2,
+    "measuredPairs": 7,
+    "gcBeforeSample": true,
+    "sqlite": "3.53.3"
+  },
+  "datasets": [
+    {
+      "videos": 1000,
+      "movies": 400,
+      "episodes": 500,
+      "unscraped": 100,
+      "episodesPerSeries": 20,
+      "seasonsPerSeries": 2,
+      "progressRows": 0,
+      "before": {
+        "elapsedMedianMs": 14.21404199999995,
+        "queryMedianMs": 10.623749999999859,
+        "queryCount": 16,
+        "returnedRows": 2719,
+        "mediaItemObjects": 2490,
+        "seriesGroupObjects": 45,
+        "elapsedSamplesMs": [
+          14.456416999999988,
+          13.712875000000054,
+          13.830458000000021,
+          14.041083000000071,
+          14.302625000000035,
+          14.47625000000005,
+          14.21404199999995
+        ],
+        "querySamplesMs": [
+          10.80899799999986,
+          10.216665000000262,
+          10.409832000000051,
+          10.429123000000232,
+          10.623749999999859,
+          11.077166000000034,
+          10.749959999999987
+        ]
+      },
+      "after": {
+        "elapsedMedianMs": 5.412708000000066,
+        "queryMedianMs": 5.087416000000076,
+        "queryCount": 12,
+        "returnedRows": 198,
+        "mediaItemObjects": 70,
+        "seriesGroupObjects": 45,
+        "elapsedSamplesMs": [
+          5.256750000000011,
+          4.9597499999999854,
+          5.412708000000066,
+          5.403792000000067,
+          5.478417000000036,
+          5.652207999999973,
+          5.909250000000043
+        ],
+        "querySamplesMs": [
+          4.909915999999839,
+          4.67720700000018,
+          5.087416000000076,
+          5.055084999999963,
+          5.100455999999781,
+          5.333624999999643,
+          5.451204999999732
+        ]
+      },
+      "visibleResultsEqual": true
+    },
+    {
+      "videos": 10000,
+      "movies": 4000,
+      "episodes": 5000,
+      "unscraped": 1000,
+      "episodesPerSeries": 20,
+      "seasonsPerSeries": 2,
+      "progressRows": 0,
+      "before": {
+        "elapsedMedianMs": 122.95308299999988,
+        "queryMedianMs": 95.5382910000003,
+        "queryCount": 16,
+        "returnedRows": 24046,
+        "mediaItemObjects": 22912,
+        "seriesGroupObjects": 50,
+        "elapsedSamplesMs": [
+          122.55600000000004,
+          123.09124999999995,
+          124.95608299999981,
+          122.95308299999988,
+          121.544625,
+          125.98058300000002,
+          122.68925000000036
+        ],
+        "querySamplesMs": [
+          93.69104299999935,
+          95.6676680000005,
+          97.60429599999793,
+          95.39708500000006,
+          94.57987500000036,
+          96.91837299999952,
+          95.5382910000003
+        ]
+      },
+      "after": {
+        "elapsedMedianMs": 40.23179200000004,
+        "queryMedianMs": 39.86962500000004,
+        "queryCount": 12,
+        "returnedRows": 203,
+        "mediaItemObjects": 70,
+        "seriesGroupObjects": 50,
+        "elapsedSamplesMs": [
+          40.22979099999998,
+          40.23179200000004,
+          39.656582999999955,
+          49.972999999999956,
+          39.46616600000016,
+          40.59574999999995,
+          40.318874999999935
+        ],
+        "querySamplesMs": [
+          39.82983300000001,
+          39.86962500000004,
+          39.26154299999962,
+          49.52783100000079,
+          39.08378999999968,
+          40.19362500000034,
+          39.90999800000009
+        ]
+      },
+      "visibleResultsEqual": true
+    }
+  ]
+}

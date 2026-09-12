@@ -34,12 +34,10 @@ export class MediaLibraryModel {
   @Trace isLoading: boolean = false;
   @Trace isLoaded: boolean = false;
 
-  @Trace recentlyAdded: MediaItem[] = [];
   @Trace movies: MediaItem[] = [];
+  @Trace movieCount: number = 0;
   /** 电视剧合集（多集归并后的组） */
   @Trace seriesGroups: SeriesGroup[] = [];
-  @Trace unwatched: MediaItem[] = [];
-  @Trace byRating: MediaItem[] = [];
   /** 最近添加混合列表（合集+单独视频，按时间倒序） */
   @Trace recentlyAddedList: MediaListItem[] = [];
   /** 未观看混合列表（合集+单独视频，按时间倒序） */
@@ -64,44 +62,31 @@ export class MediaLibraryModel {
     const version = ++this.loadVersion;
     ++this.continueWatchingVersion;
     this.isLoading = true;
-    console.info('[MediaLibraryModel] 开始加载媒体库数据');
+    const startedAt = Date.now();
     try {
       const db = FileSourceDatabase.getInstance();
 
-      const all: MediaItem[] = await db.getAllMediaItems();
+      const movies: MediaItem[] = await db.getHomeMovies();
       if (version !== this.loadVersion) { return; }
-      console.info(`[MediaLibraryModel][DIAG] getAllMediaItems=${all.length}`);
-
-      const movies: MediaItem[] = await db.getMediaItemsByType('movie');
+      const counts = await db.getHomeMediaCounts();
       if (version !== this.loadVersion) { return; }
-      console.info(`[MediaLibraryModel][DIAG] getMediaItemsByType(movie)=${movies.length}`);
 
-      const byRating: MediaItem[] = await db.getMediaItemsByRating();
+      const years: string[] = await db.getDistinctReleaseYears(true);
       if (version !== this.loadVersion) { return; }
-      console.info(`[MediaLibraryModel][DIAG] getMediaItemsByRating=${byRating.length}`);
 
-      const years: string[] = await db.getDistinctReleaseYears();
+      const stats: MediaStats = await db.getMediaStats(true);
       if (version !== this.loadVersion) { return; }
-      console.info(`[MediaLibraryModel][DIAG] getDistinctReleaseYears=${years.length} → ${JSON.stringify(years)}`);
 
-      const stats: MediaStats = await db.getMediaStats();
+      const seriesGroups: SeriesGroup[] = await db.getDistinctTvSeriesGroups(30, true);
       if (version !== this.loadVersion) { return; }
-      console.info(`[MediaLibraryModel][DIAG] stats=${JSON.stringify(stats)}`);
 
-      const seriesGroups: SeriesGroup[] = await db.getDistinctTvSeriesGroups();
-      if (version !== this.loadVersion) { return; }
-      console.info(`[MediaLibraryModel][DIAG] getDistinctTvSeriesGroups=${seriesGroups.length} 部`);
-
-      const latestScanTime: number = await db.getLatestScanTime();
+      const latestScanTime: number = await db.getLatestScanTime(true);
       if (version !== this.loadVersion) { return; }
 
       // 所有查询先暂存；任一查询失败均保留上次完整、有效的快照。
-      const recentlyAddedList: MediaListItem[] = await db.getRecentlyAddedList();
+      const recentlyAddedList: MediaListItem[] = await db.getRecentlyAddedList(20, true);
       if (version !== this.loadVersion) { return; }
-      const unwatchedItems: MediaItem[] = await db.searchMediaItems('', {
-        watchProgress: 'unseen',
-        limit: 20
-      });
+      const unwatchedItems: MediaItem[] = await db.getHomeUnwatched();
       if (version !== this.loadVersion) { return; }
       const unwatchedMixed: MediaListItem[] = [];
       for (const item of unwatchedItems) {
@@ -118,13 +103,7 @@ export class MediaLibraryModel {
       const ratingBands: RatingLabel[] = [];
       const bands: number[] = [9, 8, 7, 6, 5];
       for (const floor of bands) {
-        let count = 0;
-        for (const item of byRating) {
-          const r = item.rating;
-          if (r !== undefined && r >= floor && r < floor + 1) {
-            count++;
-          }
-        }
+        const count = counts.ratingCounts[floor - 5];
         if (count > 0) {
           const label: RatingLabel = {
             label: `${floor}分+`,
@@ -136,13 +115,11 @@ export class MediaLibraryModel {
         }
       }
       // 以下同步提交之间没有 await，不会暴露混合版本的快照。
-      this.recentlyAdded = all;
       this.movies = movies;
-      this.byRating = byRating;
+      this.movieCount = counts.movieCount;
       this.stats = stats;
       this.seriesGroups = seriesGroups;
       this.latestScanTime = latestScanTime;
-      this.unwatched = all;
       this.recentlyAddedList = recentlyAddedList;
       this.unwatchedList = unwatchedMixed;
       this.ratingLabels = ratingBands;
@@ -154,8 +131,8 @@ export class MediaLibraryModel {
       // 新元数据提交后重新读取进度，也使加载期间使用旧元数据的请求失效。
       this.loadContinueWatching().catch(() => {});
       console.info(
-        `[MediaLibraryModel] 加载完成 | 全部=${all.length} 电影=${movies.length} ` +
-        `电视剧=${seriesGroups.length} 年代组=${this.decadeGroups.length}`
+        `[MediaLibraryModel] 加载完成 | 全部=${stats.total} 电影=${movies.length} ` +
+        `电视剧=${seriesGroups.length} 年代组=${this.decadeGroups.length} 耗时=${Date.now() - startedAt}ms`
       );
 
     } catch (e) {
@@ -188,13 +165,12 @@ export class MediaLibraryModel {
 
   /**
    * 加载「继续播放」栏数据。
-   * 从 media_progress 表读取进度，过滤完播项，匹配 recentlyAdded 元数据，
+   * 从 media_progress 表读取进度，过滤完播项，按键查询全库元数据，
    * 构建 ContinueWatchingItem 列表写入 continueWatchingList。
    */
   async loadContinueWatching(): Promise<void> {
     const version = ++this.continueWatchingVersion;
     const libraryVersion = this.loadVersion;
-    const mediaItems = this.recentlyAdded;
     try {
       const db = FileSourceDatabase.getInstance();
       const allEntries: MediaProgressEntry[] = await db.getAllMediaProgress();
@@ -235,28 +211,6 @@ export class MediaLibraryModel {
         top20.push(entry);
       }
 
-      // 从已加载的 recentlyAdded 构建两张查找 Map
-      // movieMap: movie.providerId → MediaItem
-      const movieMap = new Map<string, MediaItem>();
-      // episodeMap: `${tvSeriesId}_S${season}E${ep}` → MediaItem
-      const episodeMap = new Map<string, MediaItem>();
-
-      for (const item of mediaItems) {
-        const pid = item.providerId;
-        if (item.mediaType === 'movie' && pid !== undefined && pid.length > 0) {
-          movieMap.set(pid, item);
-        } else if (
-          item.mediaType === 'episode' &&
-          item.tvSeriesId !== undefined &&
-          item.seasonNumber !== undefined &&
-          item.episodeNumber !== undefined
-        ) {
-          const epKey =
-            `${item.tvSeriesId}_S${item.seasonNumber}E${item.episodeNumber}`;
-          episodeMap.set(epKey, item);
-        }
-      }
-
       // 剧集：seriesProviderId → tv_series DB id（缓存，避免重复查询）
       const seriesIdCache = new Map<string, number>();
 
@@ -270,7 +224,8 @@ export class MediaLibraryModel {
         if (key.startsWith('media_progress_movie_')) {
           // ── 电影 ──
           const providerId = key.slice('media_progress_movie_'.length);
-          const mi: MediaItem | undefined = movieMap.get(providerId);
+          const mi = await db.getContinueWatchingMedia(providerId);
+          if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
           if (mi !== undefined) {
             const ratio: number = entry.positionMs / entry.durationMs;
             const cwi: ContinueWatchingItem = {
@@ -330,9 +285,8 @@ export class MediaLibraryModel {
             continue;
           }
 
-          const epKey =
-            `${tvSeriesDbId}_S${entry.seasonNumber}E${entry.episodeNumber}`;
-          const mi: MediaItem | undefined = episodeMap.get(epKey);
+          const mi = await db.getContinueWatchingMedia('', tvSeriesDbId, entry.seasonNumber, entry.episodeNumber);
+          if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
           if (mi !== undefined) {
             const ratio: number = entry.positionMs / entry.durationMs;
             const epEntity: TvEpisodeEntity | null =
@@ -390,9 +344,8 @@ export class MediaLibraryModel {
             continue;
           }
 
-          const epKey =
-            `${tvSeriesDbId}_S${entry.seasonNumber}E${entry.episodeNumber}`;
-          const mi: MediaItem | undefined = episodeMap.get(epKey);
+          const mi = await db.getContinueWatchingMedia('', tvSeriesDbId, entry.seasonNumber, entry.episodeNumber);
+          if (!this.isCurrentContinueWatching(version, libraryVersion)) { return; }
           if (mi !== undefined) {
             const ratio: number = entry.positionMs / entry.durationMs;
             const epEntity: TvEpisodeEntity | null =
@@ -439,54 +392,6 @@ export class MediaLibraryModel {
   private isCurrentContinueWatching(version: number, libraryVersion: number): boolean {
     return version === this.continueWatchingVersion && libraryVersion === this.loadVersion;
   }
-}
-
-// ─────────────────────────────────────────────
-// 混合列表构建工具函数
-// ─────────────────────────────────────────────
-
-/**
- * 把平铺的视频列表与合集归并，生成混合列表
- * - 属于某个合集的视频：用合集代替（同一合集只出现一次，取最新 scannedAt）
- * - 不属于任何合集的视频：直接作为单独视频
- * 最终按 sortTs 倒序排列
- */
-function buildMixedList(allVideos: MediaItem[], seriesGroups: SeriesGroup[]): MediaListItem[] {
-  // 收集所有属于合集的 filePath 集合
-  const seriesFilePathSet = new Set<string>();
-  for (const sg of seriesGroups) {
-    for (const ep of sg.episodes) {
-      seriesFilePathSet.add(ep.filePath);
-    }
-  }
-
-  const result: MediaListItem[] = [];
-
-  // 添加合集（每个合集只添加一次）
-  for (const sg of seriesGroups) {
-    const item: MediaListItem = {
-      kind: 'series',
-      series: sg,
-      sortTs: sg.latestScannedAt
-    };
-    result.push(item);
-  }
-
-  // 添加不属于任何合集的单独视频
-  for (const video of allVideos) {
-    if (!seriesFilePathSet.has(video.filePath)) {
-      const item: MediaListItem = {
-        kind: 'video',
-        video: video,
-        sortTs: video.scannedAt
-      };
-      result.push(item);
-    }
-  }
-
-  // 按 sortTs 倒序
-  result.sort((a: MediaListItem, b: MediaListItem) => b.sortTs - a.sortTs);
-  return result;
 }
 
 // ─────────────────────────────────────────────
