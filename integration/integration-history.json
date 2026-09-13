@@ -7,5 +7,14 @@
     "failed": 1,
     "total": 48,
     "report_href": "integration/runs/run-45/index.html"
+  },
+  {
+    "run_number": "46",
+    "timestamp": "2026-09-13T08:43:03.326066+00:00",
+    "status": "pass",
+    "passed": 48,
+    "failed": 0,
+    "total": 48,
+    "report_href": "integration/runs/run-46/index.html"
   }
 ]
