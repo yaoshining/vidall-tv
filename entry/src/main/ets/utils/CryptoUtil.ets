@@ -52,8 +52,8 @@ export class CredentialCipher {
       const result = await huks.finishSession(session.handle, { properties, inData: data });
       if (result.outData === undefined) { throw new Error('凭据加解密失败'); }
       return result.outData;
-    } catch {
-      try { await huks.abortSession(session.handle, { properties: [] }); } catch { }
+    } catch (e) {
+      try { await huks.abortSession(session.handle, { properties: [] }); } catch (e) { }
       throw new Error('凭据加解密失败');
     }
   }
@@ -64,7 +64,7 @@ export class CredentialCipher {
       const nonce = cryptoFramework.createRandom().generateRandomSync(12).data;
       const out = await this.crypt(new Uint8Array(buffer.from('1' + value, 'utf-8').buffer), nonce, scope, true);
       return 'v2:' + buffer.from(nonce).toString('base64') + ':' + buffer.from(out).toString('base64');
-    } catch { throw new Error('凭据保护失败，请重试；原数据未修改'); }
+    } catch (e) { throw new Error('凭据保护失败，请重试；原数据未修改'); }
   }
 
   async decrypt(value: string, scope: string): Promise<string> {
@@ -81,7 +81,7 @@ export class CredentialCipher {
       const decoded = buffer.from(out).toString('utf-8');
       if (!decoded.startsWith('1')) { throw new Error('凭据内容格式错误'); }
       return decoded.slice(1);
-    } catch { throw new Error('凭据无法读取，请重试或在设置中重新输入；原凭据已保留'); }
+    } catch (e) { throw new Error('凭据无法读取，请重试或在设置中重新输入；原凭据已保留'); }
   }
 
   private decode(value: string): Uint8Array {

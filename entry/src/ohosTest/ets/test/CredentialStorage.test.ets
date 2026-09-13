@@ -137,6 +137,35 @@ export default function credentialStorageTest(context: Context) {
       });
     });
     for (const table of ['file_sources', 'video_servers']) {
+      it(table + '_version_like_plaintext_roundtrips', 0, async () => {
+        await isolated(context, async (f: Fixture) => {
+          const values: string[] = [
+            'v2:example', 'v9:example', 'v2:bad:format',
+            'v2:AAAAAAAAAAAAAAAA:AA==',
+            'v2:AAAAAAAAAAAAAAAA:!!!!!!!!!!!!!!!!!!!!!!!!',
+            'v2:AAAAAAAAAAAAAAA=:AAAAAAAAAAAAAAAAAAAAAAA=',
+            'AAAAAAAAAAAAAAAAAAAAAA==:AA=='
+          ];
+          for (const value of values) {
+            const id = await f.insert(table, JSON.stringify({ password: value }));
+            expect((JSON.parse(await f.read(table, id)) as Record<string, string>).password).assertEqual(value);
+            await f.save(table, id, JSON.stringify({ password: value }));
+            expect((JSON.parse(await f.read(table, id)) as Record<string, string>).password).assertEqual(value);
+          }
+        });
+      });
+      it(table + '_complete_ciphertext_import_rejected_without_overwrite', 0, async () => {
+        await isolated(context, async (f: Fixture) => {
+          const id = await f.insert(table, JSON.stringify({ password: FIXTURE }));
+          const raw = await f.raw(table, id);
+          const modern = (JSON.parse(raw) as Record<string, string>).password;
+          for (const value of [LEGACY, modern]) {
+            await rejects(async () => { await f.insert(table, JSON.stringify({ password: value })); });
+            await rejects(async () => { await f.save(table, id, JSON.stringify({ password: value })); });
+            expect(await f.raw(table, id)).assertEqual(raw);
+          }
+        });
+      });
       it(table + '_real_crud_and_delete_retains_shared_key', 0, async () => {
         await isolated(context, async (f: Fixture, alias: string) => {
           const id = await f.insert(table, JSON.stringify({ password: FIXTURE }));

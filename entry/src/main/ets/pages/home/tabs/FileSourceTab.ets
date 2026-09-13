@@ -1,4 +1,4 @@
-import { parseCredentialConfig } from '../../../utils/CredentialConfig';
+import { parseCredentialConfig, CREDENTIAL_RECOVERY_MESSAGE } from '../../../utils/CredentialConfig';
 import { LengthMetrics } from "@kit.ArkUI"
 import { BusinessError } from '@kit.BasicServicesKit'
 import { WebDAVConfig } from "../../../lib/WebDAVClient"
@@ -102,6 +102,7 @@ export struct FileSourceTab {
     } catch (error) {
       const err = error as BusinessError
       console.error('FileSourceTab', `构造 WebDAV 配置失败: code=${err.code} msg=${err.message}`)
+      this.showToastSafe(err.message === CREDENTIAL_RECOVERY_MESSAGE ? CREDENTIAL_RECOVERY_MESSAGE : '构造 WebDAV 配置失败')
       return null
     }
   }
@@ -180,11 +181,7 @@ export struct FileSourceTab {
       } catch (e) {
         const err = e as BusinessError
         console.error('FileSourceTab', `解析 SMB 配置失败: code=${err.code} msg=${err.message}`)
-        try {
-          this.getUIContext().getPromptAction().showToast({
-            message: '解析 SMB 配置失败'
-          } as promptAction.ShowToastOptions)
-        } catch (_toastErr) {}
+        this.showToastSafe(err.message === CREDENTIAL_RECOVERY_MESSAGE ? CREDENTIAL_RECOVERY_MESSAGE : '解析 SMB 配置失败')
       }
     } else {
       console.warn('FileSourceTab: Unsupported file source type', item.fileSource.type)

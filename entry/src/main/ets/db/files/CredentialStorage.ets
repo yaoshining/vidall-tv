@@ -1,3 +1,4 @@
+import buffer from '@ohos.buffer';
 import relationalStore from '@ohos.data.relationalStore';
 import { CryptoUtil } from '../../utils/CryptoUtil';
 import { CREDENTIAL_FAILURE } from '../../utils/CredentialConfig';
@@ -16,6 +17,27 @@ class SystemCredentialCodec implements CredentialCodec {
 export class CredentialStorage {
   private codec: CredentialCodec;
   constructor(codec: CredentialCodec = new SystemCredentialCodec()) { this.codec = codec; }
+
+  /** 只保留本应用已定义的完整密文格式；v2:example 等普通密码仍可使用。 */
+  private isStoredCiphertext(value: string): boolean {
+    const parts = value.split(':');
+    if (parts.length === 3 && parts[0] === 'v2') {
+      // 12 字节 nonce；至少 1 字节内部格式前缀和 16 字节认证标签。
+      return this.base64Length(parts[1]) === 12 && this.base64Length(parts[2]) >= 17;
+    }
+    if (parts.length === 2) {
+      const ciphertextLength = this.base64Length(parts[1]);
+      return this.base64Length(parts[0]) === 16 && ciphertextLength > 0 && ciphertextLength % 16 === 0;
+    }
+    return false;
+  }
+
+  private base64Length(value: string): number {
+    try {
+      const decoded = buffer.from(value, 'base64');
+      return decoded.toString('base64') === value ? decoded.length : -1;
+    } catch (e) { return -1; }
+  }
 
   private parse(json: string): Record<string, Object> {
     const input = JSON.parse(json) as Record<string, Object>;
@@ -39,7 +61,7 @@ export class CredentialStorage {
         if (typeof value !== 'string') { throw new Error('格式错误'); }
         plain[key] = await this.codec.decrypt(value, table + ':' + key);
         if (!value.startsWith('v2:')) { needsMigration = true; }
-      } catch {
+      } catch (e) {
         plain[key] = '';
         failures.push(key);
       }
@@ -56,7 +78,7 @@ export class CredentialStorage {
         }
         const predicates = this.compare(table, id, raw);
         await store.update({ config_json: JSON.stringify(migrated) }, predicates);
-      } catch {
+      } catch (e) {
         // 加密或数据库失败保留原值；下一次读取重试。成功解密的值仍可使用。
         console.warn('CredentialStorage: migration deferred');
       }
@@ -94,14 +116,14 @@ export class CredentialStorage {
         if (typeof old === 'string' && !old.startsWith('v2:')) {
           let recovered: string;
           try { recovered = await this.codec.decrypt(old, table + ':' + key); }
-          catch { continue; }
+          catch (e) { continue; }
           config[key] = await this.codec.encrypt(recovered, table + ':' + key);
         }
         continue;
       }
       if (typeof value === 'string' && value !== '') {
         // DAO 接收明文编辑数据；直接传入加密备份必须拒绝，不能二次加密。
-        if (/^v[0-9]+:/.test(value) || /^[A-Za-z0-9+/]{22}==:[A-Za-z0-9+/]+=*$/.test(value)) {
+        if (this.isStoredCiphertext(value)) {
           throw new Error('不能将设备密文作为新凭据导入，请重新输入');
         }
         config[key] = await this.codec.encrypt(value, table + ':' + key);
