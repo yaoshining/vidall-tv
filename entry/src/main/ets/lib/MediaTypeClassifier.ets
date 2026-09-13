@@ -292,7 +292,7 @@ export function isWeakSemanticTitleText(title: string): boolean {
   }, normalizedTitle);
 
   const cleanedTitle = reducedTitle.replace(/\s+/g, ' ').trim();
-  return cleanedTitle.length === 0 || cleanedTitle.length === 1;
+  return cleanedTitle.length <= 1 || cleanedTitle.replace(/\d+/g, '').trim().length === 0;
 }
 
 function hasStrongTvSignal(fileNameInfo?: FileNameSemanticInfo): boolean {
