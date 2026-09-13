@@ -85,67 +85,12 @@ jobs:
       - name: Restore signing certificates
         shell: bash
         env:
-          SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
-          SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
-          SIGNING_PROFILE_BASE64: ${{ secrets.SIGNING_PROFILE_BASE64 }}
-          SIGNING_MATERIAL_BASE64: ${{ secrets.SIGNING_MATERIAL_BASE64 }}
-          RUNNER_TEMP: ${{ runner.temp }}
+          SIGNING_BUNDLE_BASE64: ${{ secrets.SIGNING_BUNDLE_BASE64 }}
         run: |
           set -euo pipefail
-          # 证书写入 runner 可写目录，同时还原 material/ 目录，再 patch build-profile.json5 的路径
-          python3 - <<'PY'
-          import re, json, base64, os, sys, tarfile, io
-          from pathlib import Path
-
-          cert_dir = Path(os.environ['RUNNER_TEMP']) / 'signing'
-          cert_dir.mkdir(parents=True, exist_ok=True)
-
-          secrets = {
-              'certpath':  ('SIGNING_CERT_BASE64',    'default.cer'),
-              'storeFile': ('SIGNING_P12_BASE64',     'default.p12'),
-              'profile':   ('SIGNING_PROFILE_BASE64', 'default.p7b'),
-          }
-
-          missing_secrets = []
-          new_paths = {}
-          for key, (env_var, filename) in secrets.items():
-              b64 = os.environ.get(env_var, '').strip()
-              if not b64:
-                  missing_secrets.append(env_var)
-                  continue
-              dest = cert_dir / filename
-              dest.write_bytes(base64.b64decode(b64))
-              dest.chmod(0o600)
-              new_paths[key] = str(dest)
-              print(f'还原证书: {key} -> {dest}')
-
-          # 还原 material/ 目录（hvigor 签名工具必需）
-          material_b64 = os.environ.get('SIGNING_MATERIAL_BASE64', '').strip()
-          if material_b64:
-              tar_bytes = base64.b64decode(material_b64)
-              with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode='r:gz') as tf:
-                  tf.extractall(cert_dir)
-              print(f'还原 material 目录 -> {cert_dir}/material')
-          else:
-              missing_secrets.append('SIGNING_MATERIAL_BASE64')
-
-          if missing_secrets:
-              print(f'WARNING: 以下 Secret 未配置，跳过还原: {missing_secrets}')
-              print('若签名证书已预装在 runner 上，可忽略此警告')
-              sys.exit(0)
-
-          # 将 build-profile.json5 中 default signing config 的路径替换为新路径
-          bp_path = Path('build-profile.json5')
-          content = bp_path.read_text(encoding='utf-8')
-          for key, new_path in new_paths.items():
-              content = re.sub(
-                  rf'("{key}"\s*:\s*)"[^"]*"',
-                  rf'\1"{new_path}"',
-                  content
-              )
-          bp_path.write_text(content, encoding='utf-8')
-          print('build-profile.json5 证书路径已更新')
-          PY
+          SIGNING_DIR="$RUNNER_TEMP/vidall-signing-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "SIGNING_DIR=$SIGNING_DIR" >> "$GITHUB_ENV"
+          python3 scripts/ci/restore_signing.py "$SIGNING_DIR" build-profile.json5
 
       - name: Verify self-hosted runner environment
         shell: bash
@@ -216,119 +161,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          python3 - <<'PY'
-          import json
-          import shutil
-          import ssl
-          import tarfile
-          import time
-          import urllib.request
-          from pathlib import Path
-          from urllib.error import HTTPError, URLError
-          from urllib.parse import urlparse
-
-          def download_with_retry(url: str, archive_path: Path) -> None:
-            last_error = None
-            parsed = urlparse(url)
-            ssl_context = None
-            if parsed.netloc.endswith('repo.harmonyos.com'):
-              ssl_context = ssl._create_unverified_context()
-              print(f'Use relaxed SSL context for {parsed.netloc}')
-
-            for attempt in range(1, 6):
-              try:
-                print(f'Downloading {url} (attempt {attempt}/5)')
-                with urllib.request.urlopen(url, timeout=90, context=ssl_context) as response:
-                  archive_path.write_bytes(response.read())
-                if archive_path.exists() and archive_path.stat().st_size > 0:
-                  return
-              except (HTTPError, URLError, TimeoutError, ConnectionResetError, ssl.SSLError) as err:
-                last_error = err
-                if archive_path.exists():
-                  archive_path.unlink()
-                print(f'Download failed: {err}')
-                if attempt < 5:
-                  time.sleep(attempt * 5)
-            raise RuntimeError(f'Failed to download {url}: {last_error}')
-
-          def safe_extract_archive(archive_path: Path, dest_dir: Path) -> None:
-            root = dest_dir.resolve()
-            with tarfile.open(archive_path, 'r:gz') as tar:
-              for member in tar.getmembers():
-                member_path = Path(member.name)
-                if member.issym() or member.islnk() or member_path.is_absolute() or '..' in member_path.parts:
-                  raise RuntimeError(f'Unsafe archive member: {member.name}')
-
-                target_path = (root / member.name).resolve()
-                try:
-                  target_path.relative_to(root)
-                except ValueError as err:
-                  raise RuntimeError(f'Unsafe archive member: {member.name}') from err
-
-                if member.isdir():
-                  target_path.mkdir(parents=True, exist_ok=True)
-                  continue
-
-                if not member.isfile():
-                  continue
-
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                source = tar.extractfile(member)
-                if source is None:
-                  continue
-                with source, open(target_path, 'wb') as out_file:
-                  shutil.copyfileobj(source, out_file)
-
-          root = Path('.')
-          lock = json.loads((root / 'oh-package-lock.json5').read_text(encoding='utf-8'))
-          packages = lock.get('packages', {})
-          specifiers = lock.get('specifiers', {})
-
-          oh_modules_dir = root / 'oh_modules'
-          cache_dir = Path.home() / '.vidall-ohpm-cache'
-          extract_dir = cache_dir / 'extract'
-          oh_modules_dir.mkdir(parents=True, exist_ok=True)
-          cache_dir.mkdir(parents=True, exist_ok=True)
-          extract_dir.mkdir(parents=True, exist_ok=True)
-
-          for resolved_key in specifiers.values():
-            package_meta = packages.get(resolved_key)
-            if not package_meta:
-              continue
-            package_name = package_meta.get('name', '')
-            resolved = package_meta.get('resolved', '')
-            if len(package_name) == 0 or not resolved.endswith('.har'):
-              continue
-
-            if resolved.startswith('http://') or resolved.startswith('https://'):
-              archive_name = resolved.split('/')[-1]
-              archive_path = cache_dir / archive_name
-              if not archive_path.exists():
-                download_with_retry(resolved, archive_path)
-            else:
-              archive_path = (root / resolved).resolve()
-
-            if not archive_path.exists():
-              raise FileNotFoundError(f'Archive not found for {package_name}: {archive_path}')
-
-            target_dir = oh_modules_dir / package_name
-            temp_dir = extract_dir / package_name.replace('/', '__')
-            if target_dir.exists():
-              shutil.rmtree(target_dir)
-            if temp_dir.exists():
-              shutil.rmtree(temp_dir)
-            temp_dir.mkdir(parents=True, exist_ok=True)
-
-            safe_extract_archive(archive_path, temp_dir)
-            source_dir = temp_dir / 'package'
-            if not source_dir.exists():
-              source_dir = temp_dir
-            shutil.copytree(source_dir, target_dir)
-            print(f'Restored {package_name} -> {target_dir}')
-          PY
-
-          find "$GITHUB_WORKSPACE/oh_modules" -maxdepth 2 -mindepth 1 | head -50
+          /Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm install
+          test -d oh_modules/@ibestservices/ibest-ui
+          test -d oh_modules/pinyin-pro
 
       - name: Detect target device
         shell: bash
@@ -981,3 +816,9 @@ jobs:
           # 遗留 actions_github_pages_<run_id> 临时目录，需手动清理
           rm -rf "$HOME/actions_github_pages_${GITHUB_RUN_ID}"
           echo "Cleaned up actions_github_pages_* temp dirs"
+
+      - name: 清理本次签名材料
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [ -n "${SIGNING_DIR:-}" ]; then rm -rf "$SIGNING_DIR"; fi

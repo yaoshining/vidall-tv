@@ -39,11 +39,11 @@ class GateTests(unittest.TestCase):
         data.update(changes)
         self.execution.write_text(json.dumps(data))
 
-    def check(self, text='Tests run: 1, Failure: 0, Error: 0, Pass: 1, Ignore: 0', *, suite='unit', build='success', passed=False, reason=None):
+    def check(self, text='Tests run: 1, Failure: 0, Error: 0, Pass: 1, Ignore: 0', *, suite='unit', build='success', passed=False, reason=None, unit_format='legacy'):
         if text is not None:
             self.result.write_text(text)
         command = [sys.executable, str(ROOT / 'test_gate.py'), 'evaluate', '--suite', suite, '--build', build,
-                   '--execution', str(self.execution), '--log', str(self.log), '--result', str(self.result), '--output', str(self.status)]
+                   '--unit-format', unit_format, '--execution', str(self.execution), '--log', str(self.log), '--result', str(self.result), '--output', str(self.status)]
         proc = subprocess.run(command, capture_output=True, text=True)
         data = json.loads(self.status.read_text())
         self.assertEqual(proc.returncode, 0 if passed else 1, proc.stderr + proc.stdout)
@@ -88,6 +88,63 @@ class GateTests(unittest.TestCase):
         for text, reason in cases:
             with self.subTest(text=text):
                 self.check(text, reason=reason)
+
+    def structured_report(self):
+        return dict(schema=1, runtime='Previewer', complete=True, run_id=gate.identity(),
+                    commit_sha='current-sha', execution_started_at=self.started,
+                    started_at=int(self.started * 1000), finished_at=int(time.time() * 1000),
+                    expected=1, summary=dict(total=1, passed=1, failed=0, errors=0, ignored=0),
+                    cases=[dict(id=1, name='名称20:22.55', suite='suite', status='passed')], hook_errors=[])
+
+    def test_structured_unit_report_fails_closed(self):
+        with patch.dict(os.environ, TESTED_SHA='current-sha'):
+            data = self.structured_report()
+            self.check(json.dumps(data), unit_format='structured', passed=True)
+            mutations = [
+                lambda d: d.update(complete=False), lambda d: d.update(schema=True),
+                lambda d: d.update(summary=[]), lambda d: d.update(cases=[None]), lambda d: d.update(run_id='old'),
+                lambda d: d.update(commit_sha='old'), lambda d: d.update(execution_started_at=1),
+                lambda d: d.update(finished_at=1), lambda d: d.update(expected=2),
+                lambda d: d.update(cases=[]), lambda d: d.update(hook_errors=['afterAll failed']),
+                lambda d: d['cases'][0].update(id=2), lambda d: d['cases'][0].update(status='skipped'),
+                lambda d: d['cases'][0].update(status='failed'), lambda d: d['cases'][0].update(suite=''),
+                lambda d: d['summary'].update(ignored=1), lambda d: d['summary'].update(passed=True),
+                lambda d: d.update(cases=d['cases'] * 2),
+            ]
+            for mutate in mutations:
+                data = self.structured_report(); mutate(data)
+                with self.subTest(data=data):
+                    self.check(json.dumps(data), unit_format='structured')
+            for status, count in [('failed', 'failed'), ('broken', 'errors')]:
+                data = self.structured_report()
+                data['cases'][0]['status'] = status
+                data['summary'].update(passed=0); data['summary'][count] = 1
+                self.check(json.dumps(data), unit_format='structured', reason='存在')
+            self.check('{', unit_format='structured', reason='损坏')
+            self.check('[]', unit_format='structured', reason='不是对象')
+            data = self.structured_report(); data.update(expected=0, cases=[])
+            data['summary'].update(total=0, passed=0)
+            self.check(json.dumps(data), unit_format='structured', reason='0')
+            self.result.write_text(json.dumps(self.structured_report()))
+            os.utime(self.result, (1, 1))
+            self.check(None, unit_format='structured', reason='旧报告')
+            self.result.unlink()
+            self.check(None, unit_format='structured', reason='缺失')
+
+    def test_unit_context_is_written_for_this_execution(self):
+        context = self.root / 'coverage/gate-context.json'
+        context.parent.mkdir()
+        result = context.with_name('gate-results.json'); result.write_text('old')
+        with patch.dict(os.environ, TESTED_SHA='current-sha'):
+            proc = subprocess.run([sys.executable, str(ROOT / 'test_gate.py'), 'run',
+                '--execution', str(self.execution), '--log', str(self.log), '--unit-context', str(context),
+                '--', sys.executable, '-c', 'pass'], capture_output=True)
+        self.assertEqual(proc.returncode, 0)
+        data = json.loads(context.read_text()); execution = json.loads(self.execution.read_text())
+        self.assertEqual(data['run_id'], execution['run_id'])
+        self.assertEqual(data['started_at'], execution['started_at'])
+        self.assertEqual(data['commit_sha'], 'current-sha')
+        self.assertFalse(result.exists())
 
     def test_missing_corrupt_and_stale(self):
         self.check(None, reason='缺失')
@@ -142,33 +199,6 @@ class GateTests(unittest.TestCase):
         passed, failed, errors, cases = gate.unit_cases(text)
         self.assertEqual((passed, failed, errors, len(cases)), (795, 0, 0, 795))
         self.check('test=lost\ntest=next\nresult=Success\nTests run: 1, Failure: 0, Error: 0, Pass: 1', reason='缺少结果')
-
-    def test_repeated_name_with_truncated_previewer_timestamp(self):
-        # run 34710304989 attempt 2 的原始片段，开始名称完整、结束名称被粘连。
-        name = '用户取消后当前集不再自动切换，直到当前播放项发生变化'
-        summary = '\nTests run: 1, Failure: 0, Error: 0, Pass: 1, Ignore: 0'
-        for first, second in ((name, name + '20:22.'), (name + '20:22.', name)):
-            text = f'test={first}\ntest={second}\nresult=Success' + summary
-            with self.subTest(first=first):
-                self.check(text, passed=True)
-                self.assertEqual(gate.unit_cases(text)[3][0]['name'], name)
-        # 不相同的名称、未知尾部和缺失/重复结果仍不能通过；失败不能被去重吞掉。
-        for text in (
-            f'test={name}\ntest=另一用例20:22.\nresult=Success',
-            f'test={name}\ntest={name}20:22.extra\nresult=Success',
-            f'test={name}\ntest={name}20:22.',
-            f'test={name}\ntest={name}20:22.\nresult=Success\nresult=Success',
-            f'test={name}\ntest={name}20:22.\nresult=Failure',
-            f'test={name}\ntest={name}20:22.\nresult=Error',
-        ):
-            with self.subTest(text=text):
-                self.check(text + summary)
-        for result, counts in (('Failure', 'Failure: 1, Error: 0, Pass: 0'),
-                               ('Error', 'Failure: 0, Error: 1, Pass: 0')):
-            self.check(f'test={name}\ntest={name}20:22.\nresult={result}\n'
-                       f'Tests run: 1, {counts}')
-        self.check(f'test={name}\ntest={name}20:22.\nresult=Success\n'
-                   'Tests run: 2, Failure: 0, Error: 0, Pass: 2', reason='不一致')
 
     def test_workflow_probe_failure_preserves_original_reason(self):
         workflow = (ROOT.parents[1] / '.github/workflows/integration-test.yml').read_text()

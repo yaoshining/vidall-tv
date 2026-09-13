@@ -36,3 +36,7 @@ jobs:
         run: |
           test "$PUBLISH_OUTCOME" = failure
           cmp "$RUNNER_TEMP/gate-publish/status.json" "$RUNNER_TEMP/gate-publish/expected.json"
+      - name: 结构化报告回归
+        run: node --test scripts/ci/structured_report.test.cjs
+      - name: 签名材料恢复回归
+        run: python3 -m unittest discover -s scripts/ci -p 'test_restore_signing.py' -v

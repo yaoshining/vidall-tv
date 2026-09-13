@@ -100,6 +100,12 @@ def execute(args):
             data.update(started=True, reason='running', started_at=time.time())
             save(args.execution, data)
             command = args.command[1:] if args.command[:1] == ['--'] else args.command
+            if args.unit_context:
+                context_path = Path(args.unit_context)
+                context_path.parent.mkdir(parents=True, exist_ok=True)
+                context_path.with_name('gate-results.json').unlink(missing_ok=True)
+                save(context_path, {'run_id': identity(), 'started_at': data['started_at'],
+                                    'commit_sha': os.environ.get('TESTED_SHA', os.environ.get('GITHUB_SHA', ''))})
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
             try:
                 code = process.wait(timeout=args.timeout)
@@ -139,16 +145,12 @@ def unit_cases(text):
         elif line.startswith('test='):
             next_name = line[5:].strip()
             if name is not None:
-                # Previewer 的 hilog 会粘到开始/结束报告的用例名后；SDK 按
-                # 整行名称去重，因而把同一用例再次写成 test=。仅合并完整名称
-                # 相同且另一行只多出已观测时间尾部的相邻报告，不丢弃结果。
-                transport_tail = r'(?:\d{1,2} \d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s*|[0-5]\d:[0-5]\d\.)'
-                if name == next_name or re.fullmatch(re.escape(next_name) + transport_tail, name):
-                    name = next_name
-                elif not re.fullmatch(re.escape(name) + transport_tail, next_name):
+                # hvigor 真实输出可能在重复的 test 行尾插入 hilog 时间/PID/TID。
+                # 只接受相同名称的重复，不忽略不同用例或任何结果状态。
+                transport_tail = r'\d{1,2} \d{2}:\d{2}:\d{2}\.\d{3}\s+\d+\s+\d+\s*'
+                if name != next_name and not re.fullmatch(re.escape(next_name) + transport_tail, name):
                     raise ValueError('用例缺少结果')
-            else:
-                name = next_name
+            name = next_name
         elif line.startswith('result='):
             status = {'Success': 'passed', 'Failure': 'failed', 'Error': 'broken'}.get(line[7:].strip())
             if not name or not status:
@@ -164,6 +166,45 @@ def unit_cases(text):
                   sum(c['status'] == 'broken' for c in cases) != counts['Error']):
         raise ValueError('逐例结果与汇总不一致')
     return counts['Pass'], counts['Failure'], counts['Error'], cases
+
+
+def structured_unit_cases(text, execution):
+    report = json.loads(text)
+    if not isinstance(report, dict):
+        raise ValueError('结构化报告不是对象')
+    if type(report.get('schema')) is not int or report.get('schema') != 1 or report.get('runtime') != 'Previewer' or report.get('complete') is not True:
+        raise ValueError('结构化报告版本、运行环境或完成标记损坏')
+    if report.get('run_id') != identity():
+        raise ValueError('结构化报告属于旧运行')
+    sha = os.environ.get('TESTED_SHA', os.environ.get('GITHUB_SHA', ''))
+    if not sha or report.get('commit_sha') != sha or report.get('execution_started_at') != execution['started_at']:
+        raise ValueError('结构化报告提交或执行身份不匹配')
+    started, finished = report.get('started_at'), report.get('finished_at')
+    if type(started) is not int or type(finished) is not int or not execution['started_at'] * 1000 - 1000 <= started <= finished <= time.time() * 1000 + 1000:
+        raise ValueError('结构化报告时间不合法')
+    summary, cases = report['summary'], report['cases']
+    if not isinstance(summary, dict):
+        raise ValueError('结构化汇总不是对象')
+    for key in ('total', 'passed', 'failed', 'errors', 'ignored'):
+        if type(summary[key]) is not int or summary[key] < 0:
+            raise ValueError('结构化报告计数损坏')
+    if type(report['expected']) is not int or report['expected'] != summary['total'] or not isinstance(cases, list) or len(cases) != summary['total']:
+        raise ValueError('注册数量、完成数量和汇总不一致')
+    if report.get('hook_errors') != [] or summary['ignored'] != 0:
+        raise ValueError('存在 hook 错误或未执行用例')
+    for index, case in enumerate(cases, 1):
+        if not isinstance(case, dict):
+            raise ValueError('逐例记录不是对象')
+        if type(case.get('id')) is not int or case['id'] != index:
+            raise ValueError('逐例编号缺失、重复或不连续')
+        if any(not isinstance(case.get(key), str) or not case[key].strip() for key in ('name', 'suite')):
+            raise ValueError('逐例名称或套件缺失')
+        if case.get('status') not in ('passed', 'failed', 'broken'):
+            raise ValueError('逐例状态缺失、跳过或未知')
+    for key, status in (('passed', 'passed'), ('failed', 'failed'), ('errors', 'broken')):
+        if sum(case['status'] == status for case in cases) != summary[key]:
+            raise ValueError('逐例状态与汇总不一致')
+    return summary['passed'], summary['failed'], summary['errors'], cases
 
 
 def integration_cases(text):
@@ -241,7 +282,10 @@ def evaluate(args):
             if Path(args.result).stat().st_mtime + 1 < execution['started_at']:
                 raise ValueError('结果文件早于本次测试启动，拒绝旧报告')
             text = Path(args.result).read_text(encoding='utf-8')
-            passed, failed, errors, cases = (unit_cases if args.suite == 'unit' else integration_cases)(text)
+            if args.suite == 'unit' and args.unit_format == 'structured':
+                passed, failed, errors, cases = structured_unit_cases(text, execution)
+            else:
+                passed, failed, errors, cases = (unit_cases if args.suite == 'unit' else integration_cases)(text)
             result.update(passed=passed, failed=failed, errors=errors, total=passed + failed + errors, cases=cases)
             result['reason'] = '测试全部通过'
             if not result['total']:
@@ -280,6 +324,7 @@ def main():
         run.add_argument('--' + key, required=True)
     run.add_argument('--timeout', type=float, default=90)
     run.add_argument('--phase', choices=['test', 'device_probe'], default='test')
+    run.add_argument('--unit-context')
     run.add_argument('--hdc')
     run.add_argument('--device')
     run.add_argument('--connect', action='store_true')
@@ -288,6 +333,7 @@ def main():
     check = commands.add_parser('evaluate')
     for key in ('suite', 'build', 'execution', 'log', 'result', 'output'):
         check.add_argument('--' + key, required=True)
+    check.add_argument('--unit-format', choices=['legacy', 'structured'], default='legacy')
     args = parser.parse_args()
     return execute(args) if args.mode == 'run' else evaluate(args)
 
