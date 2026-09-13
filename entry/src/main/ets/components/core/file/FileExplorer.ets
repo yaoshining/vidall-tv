@@ -1,3 +1,6 @@
+import { util } from '@kit.ArkTS';
+import { KeyCode } from '@kit.InputKit';
+import { FileThumbnailLease } from './FileThumbnailLease';
 import { FileExplorerToast, FileExplorerToastState } from './FileExplorerToast';
 import { FileThumbnail } from './FileThumbnail';
 import { FileExplorerController, FileExplorerPathItem, FileExplorerResource } from "./FileExplorerController";
@@ -26,7 +29,7 @@ interface ColorsInterface {
 @ComponentV2
 export struct FileExplorer {
   @Param @Require controller: FileExplorerController
-  @Param thumbnailLoader: (resource: FileExplorerResource) => Promise<string> = () => Promise.resolve('')
+  @Param thumbnailLoader: (resource: FileExplorerResource) => Promise<FileThumbnailLease> = () => Promise.resolve(new FileThumbnailLease(''))
   @Param toastState: FileExplorerToastState = new FileExplorerToastState()
   @Param isLoading: boolean = false
   @Param errorMessage: string = ''
@@ -46,6 +49,95 @@ export struct FileExplorer {
   @Local focusedKey: string = ''
   @Local hoveredKey: string = ''
   @Local focusedControl: string = ''
+
+
+  private readonly focusPrefix: string = util.generateRandomUUID(true);
+  private scroller: Scroller = new Scroller();
+  private anchorKey: string = '';
+  private anchorIndex: number = 0;
+  private directory: string = '';
+  private pendingKey: string = '';
+  private focusTimer: number = -1;
+  private focusAttempts: number = 0;
+
+  private rowId(key: string): string { return 'explorer-row:' + this.focusPrefix + ':' + key; }
+
+  private controlId(key: string): string { return 'explorer-' + this.focusPrefix + ':' + key; }
+
+  aboutToAppear(): void { this.directory = this.controller.currentPath; }
+  aboutToDisappear(): void { this.cancelFocus(); }
+
+  private cancelFocus(): void {
+    if (this.focusTimer !== -1) { clearTimeout(this.focusTimer); }
+    this.focusTimer = -1;
+    this.pendingKey = '';
+  }
+
+  private requestRow(index: number): void {
+    const resource = this.controller.sortedResources[index];
+    if (!resource) { return; }
+    this.cancelFocus();
+    this.anchorKey = resource.key;
+    this.anchorIndex = index;
+    this.pendingKey = resource.key;
+    this.focusAttempts = 0;
+    this.scroller.scrollToIndex(index, false, ScrollAlign.AUTO);
+    this.finishFocus();
+  }
+
+  private finishFocus(): void {
+    if (!this.pendingKey || this.focusTimer !== -1) { return; }
+    // 布局完成后按 key 请求；长按只保留最新目标，绝不积累焦点队列。
+    this.focusTimer = setTimeout(() => {
+      this.focusTimer = -1;
+      if (!this.pendingKey) { return; }
+      try {
+        this.getUIContext().getFocusController().requestFocus(this.rowId(this.pendingKey));
+        this.pendingKey = '';
+      } catch {
+        if (++this.focusAttempts < 8) { this.finishFocus(); }
+        // 保留唯一目标，较慢设备后续 onScrollIndex 到达时仍可恢复；不无限轮询。
+      }
+    }, 16);
+  }
+
+  private navigate(event: KeyEvent): boolean {
+    this.hoveredKey = '';
+    if (event.type !== KeyType.Down ||
+      (event.keyCode !== KeyCode.KEYCODE_DPAD_DOWN && event.keyCode !== KeyCode.KEYCODE_DPAD_UP)) { return false; }
+    const resources = this.controller.sortedResources;
+    const delta = event.keyCode === KeyCode.KEYCODE_DPAD_DOWN ? 1 : -1;
+    let index = resources.findIndex((item: FileExplorerResource) => item.key === (this.pendingKey || this.focusedKey));
+    if (index < 0) { index = this.anchorIndex; }
+    for (index += delta; index >= 0 && index < resources.length; index += delta) {
+      if (!this.disableResourceClick(resources[index])) { this.requestRow(index); return true; }
+    }
+    // 向上允许回到工具栏；末尾向下保持最后一个条目。
+    return delta > 0;
+  }
+
+  @Monitor('controller.sortedResources', 'controller.currentPath')
+  private reconcileFocus(): void {
+    const resources = this.controller.sortedResources;
+    const oldDirectory = this.directory;
+    const changedDirectory = oldDirectory !== this.controller.currentPath;
+    const restore = changedDirectory || this.focusedKey.length > 0 || this.pendingKey.length > 0;
+    this.directory = this.controller.currentPath;
+    this.hoveredKey = '';
+    this.cancelFocus();
+    if (!restore) { return; }
+    let index = changedDirectory
+      ? resources.findIndex((item: FileExplorerResource) => item.path === oldDirectory)
+      : resources.findIndex((item: FileExplorerResource) => item.key === this.anchorKey);
+    if (index < 0) { index = changedDirectory ? 0 : Math.min(this.anchorIndex, resources.length - 1); }
+    while (index < resources.length && index >= 0 && this.disableResourceClick(resources[index])) { index++; }
+    if (index >= resources.length) {
+      index = resources.length - 1;
+      while (index >= 0 && this.disableResourceClick(resources[index])) { index--; }
+    }
+    if (index >= 0) { this.requestRow(index); }
+    else { this.focusedKey = ''; this.getUIContext().getFocusController().requestFocus(this.controlId('back')); }
+  }
 
   private readonly COLORS: ColorsInterface = {
     background: '#191A1C', surface: '#303133', surfaceVariant: '#303133',
@@ -165,6 +257,7 @@ export struct FileExplorer {
   @Builder
   ToolbarButton(label: string, key: string, action: () => void) {
     Button(label, { type: ButtonType.Normal })
+      .id(this.controlId(key))
       .height(40)
       .fontSize(16)
       .fontColor(this.COLORS.primaryText)
@@ -172,7 +265,7 @@ export struct FileExplorer {
       .borderRadius(8)
       .border({ width: 1.5, color: this.focusedControl === key ? this.COLORS.accent : '#48535F' })
       .padding({ left: 18, right: 18 })
-      .onFocus(() => { this.focusedControl = key; })
+      .onFocus(() => { this.hoveredKey = ''; this.cancelFocus(); this.focusedControl = key; })
       .onBlur(() => { this.focusedControl = ''; })
       .onClick(action)
   }
@@ -187,7 +280,7 @@ export struct FileExplorer {
       .border({ width: 1.5, color: this.focusedControl === field ? this.COLORS.accent : Color.Transparent })
       .height(36)
       .padding({ left: 8, right: 8 })
-      .onFocus(() => { this.focusedControl = field; })
+      .onFocus(() => { this.hoveredKey = ''; this.cancelFocus(); this.focusedControl = field; })
       .onBlur(() => { this.focusedControl = ''; })
       .onClick(() => { this.changeSortField(field); })
   }
@@ -236,7 +329,7 @@ export struct FileExplorer {
                   .border({ width: 1.5, color: this.focusedControl === 'path:' + item.path ? this.COLORS.accent : Color.Transparent })
                   .padding({ left: 4, right: 4 }).height(36)
                   .focusable(index < this.controller.pathItems.length - 1)
-                  .onFocus(() => { this.focusedControl = 'path:' + item.path; })
+                  .onFocus(() => { this.hoveredKey = ''; this.cancelFocus(); this.focusedControl = 'path:' + item.path; })
                   .onBlur(() => { this.focusedControl = ''; })
                   .onClick(() => { this.handlePathClick(item.path); })
               }, (item: FileExplorerPathItem) => item.path)
@@ -277,27 +370,37 @@ export struct FileExplorer {
           }
           .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
         } else {
-          List({ space: 2 }) {
-            ForEach(this.controller.sortedResources, (resource: FileExplorerResource) => {
+          List({ space: 2, scroller: this.scroller }) {
+            Repeat<FileExplorerResource>(this.controller.sortedResources)
+              .each((item: RepeatItem<FileExplorerResource>) => {
               ListItem() {
                 Row({ space: 0 }) {
                   Row({ space: 20 }) {
-                    if (this.isImage(resource)) {
-                      FileThumbnail({ resource: resource, loader: this.thumbnailLoader })
+                    if (this.isImage(item.item)) {
+                      FileThumbnail({ resource: item.item, loader: this.thumbnailLoader })
                     } else {
-                      Image(this.getFileIcon(resource)).width(32).height(36).objectFit(ImageFit.Contain)
+                      Image(this.getFileIcon(item.item)).width(32).height(36).objectFit(ImageFit.Contain)
                     }
                     Column({ space: 5 }) {
-                      Text(resource.name).fontSize(20).fontWeight(FontWeight.Medium)
+                      Text(item.item.name).fontSize(20).fontWeight(FontWeight.Medium)
+                        .id(this.rowId(item.item.key))
+                        .focusable(!this.disableResourceClick(item.item))
+                        .onKeyEvent((event: KeyEvent) => {
+                          if (event.type === KeyType.Down && (event.keyCode === KeyCode.KEYCODE_ENTER ||
+                            event.keyCode === KeyCode.KEYCODE_DPAD_CENTER)) {
+                            this.handleResourceClick(item.item); return true;
+                          }
+                          return false;
+                        })
                         .fontColor(this.COLORS.primaryText).maxLines(1)
-                        .textOverflow({ overflow: this.isHighlighted(resource.key) ? TextOverflow.MARQUEE : TextOverflow.Ellipsis })
+                        .textOverflow({ overflow: this.isHighlighted(item.item.key) ? TextOverflow.MARQUEE : TextOverflow.Ellipsis })
                         .width('100%')
                       Text() {
-                        if (this.resourceSecondaryText(resource).length > 0 || resource.isDirectory || this.extension(resource).length === 0) {
-                          Span(this.getResourceSecondaryText(resource))
+                        if (this.resourceSecondaryText(item.item).length > 0 || item.item.isDirectory || this.extension(item.item).length === 0) {
+                          Span(this.getResourceSecondaryText(item.item))
                         } else {
-                          Span(this.getResourceSecondaryText(resource).split(' · ')[0] + ' · ')
-                          Span(this.extension(resource).toUpperCase()).fontColor(this.fileTypeColor(resource))
+                          Span(this.getResourceSecondaryText(item.item).split(' · ')[0] + ' · ')
+                          Span(this.extension(item.item).toUpperCase()).fontColor(this.fileTypeColor(item.item))
                         }
                       }.fontSize(14)
                         .fontColor(this.COLORS.secondaryText).maxLines(1)
@@ -307,35 +410,41 @@ export struct FileExplorer {
                   }
                   .layoutWeight(1)
                   if (this.showDetailColumns) {
-                    Text(resource.isDirectory ? '—' : this.formatFileSize(resource.size))
+                    Text(item.item.isDirectory ? '—' : this.formatFileSize(item.item.size))
                       .fontSize(17).fontColor(this.COLORS.secondaryText).width(110)
                       .textAlign(TextAlign.End).maxLines(1)
-                    Text(this.formatDate(resource.lastModifiedMs))
+                    Text(this.formatDate(item.item.lastModifiedMs))
                       .fontSize(16).fontColor(this.COLORS.secondaryText).width(170)
                       .textAlign(TextAlign.End).maxLines(1)
                   }
-                  if (this.showResourceSelection(resource)) {
-                    Checkbox().select(this.isResourceSelected(resource)).selectedColor(this.COLORS.accent)
+                  if (this.showResourceSelection(item.item)) {
+                    Checkbox().select(this.isResourceSelected(item.item)).selectedColor(this.COLORS.accent)
                       .margin({ left: 12 })
-                      .onChange(() => { this.onResourceSelectionToggle(resource); })
+                      .onChange(() => { this.onResourceSelectionToggle(item.item); })
                   }
                 }
                 .width('100%').height(72).padding({ left: 20, right: 20 })
-                .opacity(this.disableResourceClick(resource) ? 0.5 : 1)
+                .opacity(this.disableResourceClick(item.item) ? 0.5 : 1)
               }
               .borderRadius(8)
-              .backgroundColor(this.isHighlighted(resource.key) ? this.COLORS.hover : Color.Transparent)
-              .border({ width: 1.5, color: this.isHighlighted(resource.key) ? this.COLORS.accent : Color.Transparent })
-              .focusable(!this.disableResourceClick(resource))
+              .backgroundColor(this.isHighlighted(item.item.key) ? this.COLORS.hover : Color.Transparent)
+              .border({ width: 1.5, color: this.isHighlighted(item.item.key) ? this.COLORS.accent : Color.Transparent })
+              .focusable(!this.disableResourceClick(item.item))
               .onHover((hovered: boolean) => {
-                if (hovered && !this.disableResourceClick(resource)) { this.hoveredKey = resource.key; }
-                else if (this.hoveredKey === resource.key) { this.hoveredKey = ''; }
+                if (hovered && !this.disableResourceClick(item.item)) { this.hoveredKey = item.item.key; }
+                else if (this.hoveredKey === item.item.key) { this.hoveredKey = ''; }
               })
-              .onFocus(() => { this.hoveredKey = ''; this.focusedKey = resource.key; })
-              .onBlur(() => { if (this.focusedKey === resource.key) { this.focusedKey = ''; } })
-              .onClick(() => { this.handleResourceClick(resource); })
-            }, (resource: FileExplorerResource) => resource.key)
+              .onFocus(() => { this.hoveredKey = ''; this.focusedKey = item.item.key; this.anchorKey = item.item.key; this.anchorIndex = item.index; })
+              .onBlur(() => { if (this.focusedKey === item.item.key) { this.focusedKey = ''; } })
+              .onKeyEvent((event: KeyEvent) => this.navigate(event))
+              .onClick(() => { this.handleResourceClick(item.item); })
+            })
+              .key((resource: FileExplorerResource) => resource.key)
+              .virtualScroll({ reusable: false })
           }
+          .cachedCount(2)
+          .onScrollIndex(() => { this.finishFocus(); })
+          .onScrollStart(() => { this.hoveredKey = ''; })
           .width('100%').layoutWeight(1).scrollBar(BarState.Auto)
           .divider({ strokeWidth: 0.5, color: this.COLORS.divider, startMargin: 12, endMargin: 12 })
         }

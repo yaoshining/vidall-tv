@@ -1,0 +1,14 @@
+{
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "model": "MacBookPro18,4",
+  "simulator": "Huawei_TV_6_1_1",
+  "serial": "127.0.0.1:5555",
+  "os": "HarmonyOS 6.1.1(24) Beta1",
+  "display": "3840x2160",
+  "product": "default/debug",
+  "targetApi": 22,
+  "minimumApi": 19,
+  "baseline": "32f967c9ba2387aac0e4ac129ec508f7b475c743",
+  "measurement": "ListItem onAppear/onDisAppear/onVisibleAreaChange; one sample per size; includes generated data and computed sorting; excludes network; not frame presentation or FPS"
+}

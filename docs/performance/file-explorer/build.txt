@@ -1,0 +1,875 @@
+Ensure the project source is trustworthy before proceeding.
+
+[ohpm install] Running...
+install completed in 0s 69ms
+
+[hvigor sync] Skipped (configurations unchanged)
+
+[hvigor build] Running...
+[build-env-inject-plugin] 已注入 SUBHUB_API_KEY（来自 local.properties）
+[build-env-inject-plugin] 已注入 SUBHUB_API_KEY（来自 local.properties）
+> hvigor Finished :entry:default@PreBuild... after 15 ms
+> hvigor Finished :entry:default@CreateModuleInfo... after 1 ms
+> hvigor UP-TO-DATE :entry:default@GenerateMetadata...
+> hvigor Finished :entry:default@ConfigureCmake... after 16 ms
+> hvigor UP-TO-DATE :entry:default@MergeProfile...
+> hvigor UP-TO-DATE :entry:default@CreateBuildProfile...
+> hvigor Finished :entry:default@PreCheckSyscap... after 1 ms
+> hvigor Finished :entry:default@GeneratePkgSdkInfo... after 2 ms
+> hvigor Finished :entry:default@ProcessIntegratedHsp... after 1 ms
+> hvigor Finished :entry:default@BuildNativeWithCmake... after 7 ms
+> hvigor UP-TO-DATE :entry:default@MakePackInfo...
+> hvigor Finished :entry:default@SyscapTransform... after 1 ms
+> hvigor UP-TO-DATE :entry:default@GeneratePkgContextInfo...
+> hvigor UP-TO-DATE :entry:default@ProcessProfile...
+> hvigor UP-TO-DATE :entry:default@ProcessRouterMap...
+> hvigor UP-TO-DATE :entry:default@ProcessShareConfig...
+> hvigor Finished :entry:default@ProcessStartupConfig... after 2 ms
+> hvigor UP-TO-DATE :entry:default@ProcessResource...
+> hvigor UP-TO-DATE :entry:default@GenerateLoaderJson...
+> hvigor Finished :entry:default@BuildNativeWithNinja... after 14 ms
+> hvigor UP-TO-DATE :entry:default@ProcessLibs...
+> hvigor UP-TO-DATE :entry:default@DoNativeStrip...
+> hvigor UP-TO-DATE :entry:default@CacheNativeLibs...
+> hvigor WARN: Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/lucide@1.1.0/oh_modules/lucide/src/main/resources/base/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hview+dayjs@1.11.11/oh_modules/@hview/dayjs/src/main/resources/base/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/en_US/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hview+dayjs@1.11.11/oh_modules/@hview/dayjs/src/main/resources/en_US/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/zh_CN/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hview+dayjs@1.11.11/oh_modules/@hview/dayjs/src/main/resources/zh_CN/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/lunar@1.0.0/oh_modules/lunar/src/main/resources/base/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/en_US/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/lunar@1.0.0/oh_modules/lunar/src/main/resources/en_US/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/zh_CN/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/lunar@1.0.0/oh_modules/lunar/src/main/resources/zh_CN/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+area-data@0.0.6/oh_modules/@ibestservices/area-data/src/main/resources/base/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/en_US/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+area-data@0.0.6/oh_modules/@ibestservices/area-data/src/main/resources/en_US/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/zh_CN/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+area-data@0.0.6/oh_modules/@ibestservices/area-data/src/main/resources/zh_CN/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/en_US/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en_US/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/zh_CN/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/zh_CN/element/string.json
+Warning: 'page_show' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/resources/zz_ZX/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/zz_ZX/element/string.json
+Warning: 'ibest_calendar_clocked' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_clocked' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_friday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_friday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_monday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_monday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_saturday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_saturday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_sunday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_sunday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_thursday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_thursday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_tuesday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_tuesday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_unclock' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_unclock' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_calendar_wednesday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_calendar_wednesday' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_custom_select' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_custom_select' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_day' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_day' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_guide_complete' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_guide_complete' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_guide_next' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_guide_next' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_guide_previous' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_guide_previous' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_hour' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_hour' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_maximum_limit' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_maximum_limit' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_minute' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_minute' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_month' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_month' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_please_select' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_please_select' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_second' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_second' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_cancel' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_cancel' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_clear' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_clear' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_collapse' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_collapse' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_complete' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_complete' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_confirm' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_confirm' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_detailed_address' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_detailed_address' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_detailed_address_description' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_detailed_address_description' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_expand' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_expand' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_identify' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_identify' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_input_correct_content' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_input_correct_content' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_input_name' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_input_name' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_input_phone' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_input_phone' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_input_postal_code' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_input_postal_code' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_loading' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_loading' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_loosing' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_loosing' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_name' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_name' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_phone_number' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_phone_number' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_postal_code' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_postal_code' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_province_city_district' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_province_city_district' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_pulling' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_pulling' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_select_region' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_select_region' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_select_region2' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_select_region2' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_slidingUp' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_slidingUp' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_text_sum' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_text_sum' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_upload_failed' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_upload_failed' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_uploading' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_uploading' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+Warning: 'ibest_year' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/base/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/base/element/string.json
+Warning: 'ibest_year' conflict, first declared.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/resources/en/element/string.json
+but declared again.
+at /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/build/default/intermediates/res/default/resource_str/en/element/string.json
+
+> hvigor Finished :entry:default@CompileResource... after 640 ms
+> hvigor Finished :entry:default@BuildJS... after 1 ms
+> hvigor WARN: WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/p2/q2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/g/t1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/g/h.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/f.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/r2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/m/y3.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/j1/v2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/j1/u2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/j1/k1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/y2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/z2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/h1/i1/w2/x2.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/j.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/k/q1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/s/o3.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/s/p3.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/q/w.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/i/q/i4.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/r1/s1.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/k/x4.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/k/l.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/src/main/ets/e.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hw-agconnect+auth@1.0.5/oh_modules/@hw-agconnect/auth/Index.d.ets:2:1
+ Switching off type checks with in-place comments is not allowed (arkts-strict-typing-required)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hadss+state_store@1.0.1/oh_modules/@hadss/state_store/src/main/ets/types/Actions.d.ets:11:36
+ Type notation using "this" is not supported (arkts-no-typing-with-this)
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@hadss+state_store@1.0.1/oh_modules/@hadss/state_store/src/main/ets/types/Actions.d.ets:22:42
+ Type notation using "this" is not supported (arkts-no-typing-with-this)
+
+WARN: ArkTS:WARN: For details about ArkTS syntax errors, see FAQs
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:33:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:33:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.> hvigor Finished :entry:default@CompileArkTS... after 4 s 839 ms
+> hvigor Finished :entry:default@GeneratePkgModuleJson... after 2 ms
+> hvigor Finished :entry:default@ProcessCompiledResources... after 1 ms
+ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:106:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:112:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/globalStore.ets:115:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/utils/utils.ets:250:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestToast.ets:153:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestToast.ets:159:15
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestToast.ets:211:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestActionSheet.ets:410:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestActionSheet.ets:454:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestActionSheet.ets:471:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestImagePreview.ets:389:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestImagePreview.ets:395:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestImagePreview.ets:411:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestDialog.ets:395:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestDialog.ets:408:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestDialog.ets:451:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestNotify.ets:140:19
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestNotify.ets:144:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/apis/IBestNotify.ets:186:10
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/popup/index.ets:391:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/popup/index.ets:418:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/calendar/index.ets:644:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/field/index.ets:881:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:152:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:165:15
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:166:15
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/uploader/index.ets:175:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/dialog/index.ets:322:4
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/dialog/index.ets:380:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/dropdownMenu/index.ets:202:9
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/guide/index.type.ets:229:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/guide/index.type.ets:230:66
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/waterMark/index.ets:171:38
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/waterMark/index.ets:171:59
+ 'getMediaContentBase64Sync' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/canvasDrawer/index.ets:92:38
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/canvasDrawer/index.ets:144:61
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/canvasDrawer/index.ets:144:82
+ 'getStringSync' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:157:22
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:166:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:173:16
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:174:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:177:24
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:243:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:244:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/oh_modules/.ohpm/@ibestservices+ibest-ui@2.2.0/oh_modules/@ibestservices/ibest-ui/src/main/ets/components/imageCropper/index.ets:245:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:506:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:523:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:931:26
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:935:18
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:42
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:53
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:86
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:936:99
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:939:21
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDbCore.ets:943:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:389:23
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:390:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:391:23
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:391:39
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:402:13
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:410:13
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/FileSourceDao.ets:418:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/VideoDao.ets:64:25
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/VideoDao.ets:93:11
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/VideoDao.ets:348:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:95:18
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:103:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:106:21
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:107:21
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:107:48
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:109:24
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:110:28
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:110:60
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:111:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:180:18
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:182:14
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/db/files/MediaQueryDao.ets:184:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/account/repo/CloudAccountRepository.ets:13:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/account/repo/CloudAccountRepository.ets:20:42
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/account/repo/CloudBindingRepository.ets:29:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/account/AgcCloudAuthService.ets:35:36
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/account/AgcCloudAuthService.ets:36:32
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/account/providers/HuaweiAuthProvider.ets:102:67
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/components/core/file/FileExplorer.ets:139:34
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/subtitle/SubtitleCacheManager.ets:209:17
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/subtitle/SubtitleDownloader.ets:146:22
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/subtitle/SubtitleDownloader.ets:150:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/subtitle/SubtitleDownloader.ets:154:3
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/lib/SubHubClient.ets:186:12
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/services/subtitleAcquisition/providers/OpenSubtitlesSubtitleProvider.ets:57:34
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:517:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:829:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:839:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:843:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/search/SearchWorkspacePage.ets:1182:5
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/scrape/LogTextViewerPage.ets:15:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/scrape/LogTextViewerPage.ets:24:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/components/scrape/ScrapeTaskIndicator.ets:60:24
+ 'showToast' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/components/scrape/ScrapeTaskIndicator.ets:64:22
+ 'showToast' has been deprecated.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1209:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1214:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1219:7
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/d12e/VidAll_TV/entry/src/main/ets/pages/home/tabs/MediaLibraryTab.ets:1262:7
+ Function may throw exceptions. Special handling is required.
+
+WARN:  ArkTS:WARN Property 'sourceMapsPath' not found in '@hw-agconnect/auth'.
+WARN:  ArkTS:WARN Property 'sourceMapsPath' not found in '@hadss/state_store'.
+
+> hvigor Finished :entry:default@PackageHap... after 802 ms
+> hvigor Finished :entry:default@PackingCheck... after 12 ms
+> hvigor Finished :entry:default@SignHap... after 728 ms
+> hvigor Finished :entry:default@CollectDebugSymbol... after 1 ms
+> hvigor Finished :entry:assembleHap... after 1 ms
+> hvigor BUILD SUCCESSFUL in 7 s 405 ms
+
+Merged central compile_commands.json for C++ language server.
+
+Build completed successfully

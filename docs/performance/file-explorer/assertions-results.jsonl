@@ -1,0 +1,22 @@
+{"name": "before100", "status": "before-100 created=100 live=100 peak=100 firstVisibleMs=47 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "", "focus": ""}
+{"name": "after100", "status": "after-100 created=7 live=7 peak=7 firstVisibleMs=31 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "", "focus": ""}
+{"name": "before1000", "status": "before-1000 created=1000 live=1000 peak=1000 firstVisibleMs=170 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "", "focus": ""}
+{"name": "after1000", "status": "after-1000 created=7 live=7 peak=7 firstVisibleMs=78 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "", "focus": ""}
+{"name": "before10000", "status": "before-10000 created=10000 live=10000 peak=10000 firstVisibleMs=2016 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "", "focus": ""}
+{"name": "after10000", "status": "after-10000 created=7 live=7 peak=7 firstVisibleMs=671 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "", "focus": ""}
+{"name": "hold1000", "status": "after-1000 created=50 live=9 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "48 / 1000", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-893"}
+{"name": "sort", "status": "after-1000 created=59 live=9 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "6 / 1000", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-893"}
+{"name": "hidden", "status": "after-1000 created=59 live=9 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "6 / 956", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-893"}
+{"name": "delete-focused", "status": "after-1000 created=60 live=9 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "6 / 955", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-855"}
+{"name": "refresh", "status": "after-1000 created=60 live=9 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "6 / 955", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-855"}
+{"name": "end", "status": "after-1000 created=67 live=7 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "955 / 955", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-1"}
+{"name": "end-hold", "status": "after-1000 created=67 live=7 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "955 / 955", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-1"}
+{"name": "reverse-hold", "status": "after-1000 created=109 live=9 peak=9 firstVisibleMs=79 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "909 / 955", "focus": "explorer-row:6bbcb2bc-11e4-4296-8046-2d09b7f7a1e8:/item-51"}
+{"name": "enter-folder", "status": "after-100 created=14 live=7 peak=7 firstVisibleMs=19 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "1 / 100", "focus": "explorer-row:2b034711-3cd9-4392-9d64-11e92f16fae5:/item-0/item-0"}
+{"name": "return-folder", "status": "after-100 created=21 live=7 peak=7 firstVisibleMs=19 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "1 / 100", "focus": "explorer-row:2b034711-3cd9-4392-9d64-11e92f16fae5:/item-0"}
+{"name": "confirm-folder", "status": "after-100 created=28 live=7 peak=7 firstVisibleMs=19 images=36/36 pending=0 peak=4 failed=12 files=0", "footer": "1 / 100", "focus": "explorer-row:2b034711-3cd9-4392-9d64-11e92f16fae5:/item-0/item-0"}
+{"name": "images-first", "status": "after-100 created=7 live=7 peak=7 firstVisibleMs=24 images=39/36 pending=0 peak=4 failed=13 files=3", "footer": "", "focus": ""}
+{"name": "images-scroll", "status": "after-100 created=50 live=9 peak=9 firstVisibleMs=24 images=54/52 pending=2 peak=4 failed=21 files=2", "footer": "48 / 100", "focus": "explorer-row:bb8cad10-98ac-49ca-aee9-90ade80ba09c:/item-44"}
+{"name": "images-released", "status": "after-100 created=7 live=7 peak=7 firstVisibleMs=30 images=56/56 pending=0 peak=4 failed=21 files=0", "footer": "", "focus": ""}
+{"name": "images-reenter", "status": "after-100 created=7 live=7 peak=7 firstVisibleMs=21 images=59/56 pending=0 peak=4 failed=22 files=3", "footer": "", "focus": ""}
+{"name": "images-final-clean", "status": "after-100 created=7 live=7 peak=7 firstVisibleMs=18 images=59/59 pending=0 peak=4 failed=22 files=0", "footer": "", "focus": ""}
