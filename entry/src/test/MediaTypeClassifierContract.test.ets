@@ -10,7 +10,8 @@ import {
   extractSeriesHintFromFilePath,
   extractSeasonNumberFromDirectoryName,
   stripSeasonSuffixFromDirectoryName,
-  isSeasonDirectorySegment
+  isSeasonDirectorySegment,
+  isWeakSemanticTitleText
 } from '../main/ets/lib/MediaTypeClassifier';
 import { parseFileName, resolveMovieSearchTerms } from '../main/ets/lib/ScrapeClient';
 import { classifyVideoScrapeTarget } from '../main/ets/utils/VideoScannerHelpers';
@@ -55,6 +56,18 @@ const weakSemanticRegressionSamples: WeakSemanticRegressionSample[] = [
 
 export default function mediaTypeClassifierContractTest() {
   describe('MediaTypeClassifier contract', () => {
+    it('质量词移除后纯数字标题仍为弱语义', 0, () => {
+      ['19 4K', '20 4K', '22 HDR', '19 2160p', '19 4K HDR', '  19   4k  ', '19', '4K', ''].forEach((title: string) => {
+        expect(isWeakSemanticTitleText(title)).assertTrue();
+      });
+    });
+
+    it('质量词移除后保留实际片名和嵌入式数字词', 0, () => {
+      ['1917 战争 4K', '阿凡达 4K', 'Apollo 13 HDR', '19th 4K', 'HDRip 19'].forEach((title: string) => {
+        expect(isWeakSemanticTitleText(title)).assertFalse();
+      });
+    });
+
     it('should prefer a localized movie directory over the English release name', 0, () => {
       const fileName = 'Dear.You.2026.1080p.H264.mkv';
       const result = classifyVideoScrapeTarget(fileName, `/volume1/Videos/Movies/给阿嬷的情书/${fileName}`);
