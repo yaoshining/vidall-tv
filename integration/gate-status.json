@@ -1,12 +1,12 @@
 {
   "suite": "integration",
-  "run_id": "34745012023-1",
-  "status": "failed",
-  "gate_passed": false,
+  "run_id": "34748142895-1",
+  "status": "passed",
+  "gate_passed": true,
   "build_status": "success",
-  "reason": "存在 1 个失败、0 个错误",
-  "passed": 47,
-  "failed": 1,
+  "reason": "测试全部通过",
+  "passed": 48,
+  "failed": 0,
   "errors": 0,
   "total": 48,
   "cases": [
@@ -188,7 +188,7 @@
     },
     {
       "name": "真实文件名带质量后缀时纯数字前缀应被识别为弱语义 (#191 第三轮真机失败)",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "name": "真实文件名带质量后缀时有季目录兄弟应分类为tv (#191 第三轮真机失败)",
@@ -203,8 +203,8 @@
       "status": "passed"
     }
   ],
-  "run_number": "45",
-  "commit_sha": "538ed5807f6e2d1b4da1881b040a7500a1100284",
-  "timestamp": "2026-09-13T07:23:32.955753+00:00",
-  "run_url": "https://github.com/yaoshining/vidall-tv/actions/runs/34745012023"
+  "run_number": "46",
+  "commit_sha": "44e4b9a828fb071690fe345296c015be5d70486e",
+  "timestamp": "2026-09-13T08:43:03.326066+00:00",
+  "run_url": "https://github.com/yaoshining/vidall-tv/actions/runs/34748142895"
 }
