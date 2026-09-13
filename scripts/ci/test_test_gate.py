@@ -101,7 +101,8 @@ class GateTests(unittest.TestCase):
             data = self.structured_report()
             self.check(json.dumps(data), unit_format='structured', passed=True)
             mutations = [
-                lambda d: d.update(complete=False), lambda d: d.update(run_id='old'),
+                lambda d: d.update(complete=False), lambda d: d.update(schema=True),
+                lambda d: d.update(summary=[]), lambda d: d.update(cases=[None]), lambda d: d.update(run_id='old'),
                 lambda d: d.update(commit_sha='old'), lambda d: d.update(execution_started_at=1),
                 lambda d: d.update(finished_at=1), lambda d: d.update(expected=2),
                 lambda d: d.update(cases=[]), lambda d: d.update(hook_errors=['afterAll failed']),
@@ -120,6 +121,7 @@ class GateTests(unittest.TestCase):
                 data['summary'].update(passed=0); data['summary'][count] = 1
                 self.check(json.dumps(data), unit_format='structured', reason='存在')
             self.check('{', unit_format='structured', reason='损坏')
+            self.check('[]', unit_format='structured', reason='不是对象')
             data = self.structured_report(); data.update(expected=0, cases=[])
             data['summary'].update(total=0, passed=0)
             self.check(json.dumps(data), unit_format='structured', reason='0')

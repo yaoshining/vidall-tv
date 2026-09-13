@@ -170,7 +170,9 @@ def unit_cases(text):
 
 def structured_unit_cases(text, execution):
     report = json.loads(text)
-    if report.get('schema') != 1 or report.get('runtime') != 'Previewer' or report.get('complete') is not True:
+    if not isinstance(report, dict):
+        raise ValueError('结构化报告不是对象')
+    if type(report.get('schema')) is not int or report.get('schema') != 1 or report.get('runtime') != 'Previewer' or report.get('complete') is not True:
         raise ValueError('结构化报告版本、运行环境或完成标记损坏')
     if report.get('run_id') != identity():
         raise ValueError('结构化报告属于旧运行')
@@ -181,6 +183,8 @@ def structured_unit_cases(text, execution):
     if type(started) is not int or type(finished) is not int or not execution['started_at'] * 1000 - 1000 <= started <= finished <= time.time() * 1000 + 1000:
         raise ValueError('结构化报告时间不合法')
     summary, cases = report['summary'], report['cases']
+    if not isinstance(summary, dict):
+        raise ValueError('结构化汇总不是对象')
     for key in ('total', 'passed', 'failed', 'errors', 'ignored'):
         if type(summary[key]) is not int or summary[key] < 0:
             raise ValueError('结构化报告计数损坏')
@@ -189,6 +193,8 @@ def structured_unit_cases(text, execution):
     if report.get('hook_errors') != [] or summary['ignored'] != 0:
         raise ValueError('存在 hook 错误或未执行用例')
     for index, case in enumerate(cases, 1):
+        if not isinstance(case, dict):
+            raise ValueError('逐例记录不是对象')
         if type(case.get('id')) is not int or case['id'] != index:
             raise ValueError('逐例编号缺失、重复或不连续')
         if any(not isinstance(case.get(key), str) or not case[key].strip() for key in ('name', 'suite')):
