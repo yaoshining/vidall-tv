@@ -1,0 +1,210 @@
+{
+  "suite": "integration",
+  "run_id": "34745012023-1",
+  "status": "failed",
+  "gate_passed": false,
+  "build_status": "success",
+  "reason": "存在 1 个失败、0 个错误",
+  "passed": 47,
+  "failed": 1,
+  "errors": 0,
+  "total": 48,
+  "cases": [
+    {
+      "name": "assertContain",
+      "status": "passed"
+    },
+    {
+      "name": "http_propfind_returns_valid_status",
+      "status": "passed"
+    },
+    {
+      "name": "http_propfind_wrong_password_returns_401",
+      "status": "passed"
+    },
+    {
+      "name": "https_connect_pikpak_options",
+      "status": "passed"
+    },
+    {
+      "name": "basic_auth_encoding_correct",
+      "status": "passed"
+    },
+    {
+      "name": "url_construction_http",
+      "status": "passed"
+    },
+    {
+      "name": "url_construction_https",
+      "status": "passed"
+    },
+    {
+      "name": "导航至设置页文件源菜单可见",
+      "status": "passed"
+    },
+    {
+      "name": "添加文件源弹层显示协议选项",
+      "status": "passed"
+    },
+    {
+      "name": "WebDAV配置表单字段全部可见",
+      "status": "passed"
+    },
+    {
+      "name": "填写WebDAV表单并触发测试连接出现响应",
+      "status": "passed"
+    },
+    {
+      "name": "保存WebDAV文件源后列表出现新卡片",
+      "status": "passed"
+    },
+    {
+      "name": "文件源更多菜单可打开",
+      "status": "passed"
+    },
+    {
+      "name": "首页文件源卡片提供删除入口",
+      "status": "passed"
+    },
+    {
+      "name": "SMB添加弹层可打开",
+      "status": "passed"
+    },
+    {
+      "name": "目录选择器弹层可打开显示内容",
+      "status": "passed"
+    },
+    {
+      "name": "首页媒体库Tab可见",
+      "status": "passed"
+    },
+    {
+      "name": "切换至文件源Tab",
+      "status": "passed"
+    },
+    {
+      "name": "切回媒体库Tab内容可见",
+      "status": "passed"
+    },
+    {
+      "name": "点击查看全部跳转播放历史页",
+      "status": "passed"
+    },
+    {
+      "name": "播放历史列表记录可见",
+      "status": "passed"
+    },
+    {
+      "name": "删除播放历史记录",
+      "status": "passed"
+    },
+    {
+      "name": "从播放历史页返回首页",
+      "status": "passed"
+    },
+    {
+      "name": "播放器测试前置条件检查",
+      "status": "passed"
+    },
+    {
+      "name": "播放中设置按钮可见",
+      "status": "passed"
+    },
+    {
+      "name": "点击设置按钮面板可打开",
+      "status": "passed"
+    },
+    {
+      "name": "画面比例切换至填充模式",
+      "status": "passed"
+    },
+    {
+      "name": "画面比例切换回适应模式",
+      "status": "passed"
+    },
+    {
+      "name": "字幕管理入口可打开",
+      "status": "passed"
+    },
+    {
+      "name": "扫描按钮或空状态提示可见",
+      "status": "passed"
+    },
+    {
+      "name": "触发扫描后显示扫描中状态",
+      "status": "passed"
+    },
+    {
+      "name": "扫描完成后统计文本可见",
+      "status": "passed"
+    },
+    {
+      "name": "纯数字文件名为弱语义",
+      "status": "passed"
+    },
+    {
+      "name": "isSeasonDirectorySegment应识别基础季目录名",
+      "status": "passed"
+    },
+    {
+      "name": "isSeasonDirectorySegment应识别带质量后缀的真实季目录名 (#191 QA证据)",
+      "status": "passed"
+    },
+    {
+      "name": "isSeasonDirectorySegment应拒绝非季目录名",
+      "status": "passed"
+    },
+    {
+      "name": "检测到季目录兄弟时应返回true",
+      "status": "passed"
+    },
+    {
+      "name": "检测到带质量后缀的季目录兄弟时应返回true (#191 QA证据)",
+      "status": "passed"
+    },
+    {
+      "name": "无季目录兄弟时应返回false",
+      "status": "passed"
+    },
+    {
+      "name": "无季目录兄弟时纯数字文件应分类为unknown",
+      "status": "passed"
+    },
+    {
+      "name": "有季目录兄弟时纯数字文件应分类为tv",
+      "status": "passed"
+    },
+    {
+      "name": "扫描上下文应正确传递seasonSiblingDetected",
+      "status": "passed"
+    },
+    {
+      "name": "深度>0时不应设置seriesHint",
+      "status": "passed"
+    },
+    {
+      "name": "真实场景模拟：扫描上下文变化前后的分类结果应不同",
+      "status": "passed"
+    },
+    {
+      "name": "真实文件名带质量后缀时纯数字前缀应被识别为弱语义 (#191 第三轮真机失败)",
+      "status": "failed"
+    },
+    {
+      "name": "真实文件名带质量后缀时有季目录兄弟应分类为tv (#191 第三轮真机失败)",
+      "status": "passed"
+    },
+    {
+      "name": "真实文件名带质量后缀时无季目录兄弟应分类为unknown (#191 第三轮真机失败)",
+      "status": "passed"
+    },
+    {
+      "name": "增量扫描时已存在video file但无scrape_info的弱语义文件在季目录兄弟出现后应重新处理 (#191 第三轮真机失败根因)",
+      "status": "passed"
+    }
+  ],
+  "run_number": "45",
+  "commit_sha": "538ed5807f6e2d1b4da1881b040a7500a1100284",
+  "timestamp": "2026-09-13T07:23:32.955753+00:00",
+  "run_url": "https://github.com/yaoshining/vidall-tv/actions/runs/34745012023"
+}
