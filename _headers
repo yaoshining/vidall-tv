@@ -1,0 +1,5 @@
+# EdgeOne Pages / Netlify 兼容的 HTTP 响应头配置
+# 所有页面不缓存（Allure 静态资源无 content hash，Portal/JSON 随 CI 变化）
+/*
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache

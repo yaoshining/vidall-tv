@@ -1,0 +1,11 @@
+[
+  {
+    "run_number": "45",
+    "timestamp": "2026-09-13T07:23:32.955753+00:00",
+    "status": "fail",
+    "passed": 47,
+    "failed": 1,
+    "total": 48,
+    "report_href": "integration/runs/run-45/index.html"
+  }
+]
