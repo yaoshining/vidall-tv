@@ -47,7 +47,7 @@
 - 进入 `/item-0`、返回根目录定位 `/item-0`、确认键再进入均通过，没有重复打开导致多进入一级。
 - 图片可控成功、部分文件写入后失败、2500ms 迟到、快速长按滚动、切目录、重新进入均执行。第一轮离开时成功资源 18/18 全部释放，pending=0，**应用 tempDir 中实际 `thumb-probe-*` 文件数为 0**；重新进入后再次成功显示。完整自动化复跑最终为 59/59 释放、pending=0、files=0，见 [simulator-assertions.log](../docs/performance/file-explorer/simulator-assertions.log)，所有模拟器断言通过。
 - [hover-active.png](../docs/performance/file-explorer/hover-active.png) 显示鼠标悬停第二行、长文件名正在移动；[keyboard-after-hover.png](../docs/performance/file-explorer/keyboard-after-hover.png) 显示切到方向键后只有当前行高亮。奇数资源为红图、偶数为绿图，指定失败资源保留图标；截图中资源与颜色一致。
-- 主机测试 **31/31 通过**：[host-tests.txt](../docs/performance/file-explorer/host-tests.txt)。包含已有恢复测试，及直接执行真实焦点/缩略图状态机、两个页面真实 loader 方法的受控测试，覆盖失败清理、同步异常、旧成功/失败、离屏再入和并发四个上限。主机测试不等同设备测试。
+- 主机测试 **32/32 通过**：[host-tests.txt](../docs/performance/file-explorer/host-tests.txt)。包含已有恢复测试，及直接执行真实焦点/缩略图状态机、两个页面真实 loader 方法的受控测试，覆盖失败清理、同步异常、旧成功/失败、离屏再入和并发四个上限。主机测试不等同设备测试。
 - 正式入口已恢复，deveco-cli build 退出码 0 且 `BUILD SUCCESSFUL`，记录见 [build.txt](../docs/performance/file-explorer/build.txt)。临时测试页、测量钩子、额外页面注册及 EntryAbility 改动不会进入正式提交。
 
 ## 复跑
@@ -63,7 +63,7 @@ python3 scripts/tests/file-explorer-probe.py restore
 devecocli build
 ```
 
-即使测试中断也应执行 restore；备份不会覆盖已有备份。模拟器脚本对挂树数量、同 key 排序恢复、删除/刷新、末尾、目录往返、实际临时文件归零做断言。F1/F2/F3/F4/F5/F6 是仅测试页提供的排序、过滤、删除当前项、跳尾、返回、刷新入口，用于在保持实际行焦点时模拟数据更新；目录进入、上下导航和确认通过真实输入完成。
+即使测试中断也应执行 restore；备份不会覆盖已有备份。备份 owner.json 记录创建它的 worktree，restore 会拒绝从其他 checkout 恢复；实际跨 worktree 拒绝测试通过，原备份保持不变。模拟器脚本对挂树数量、同 key 排序恢复、删除/刷新、末尾、目录往返、实际临时文件归零做断言。F1/F2/F3/F4/F5/F6 是仅测试页提供的排序、过滤、删除当前项、跳尾、返回、刷新入口，用于在保持实际行焦点时模拟数据更新；目录进入、上下导航和确认通过真实输入完成。
 
 ## 验收边界
 
@@ -71,3 +71,19 @@ devecocli build
 - API 19 TV 运行、物理设备帧率/内存、真实 SMB/WebDAV 网络慢响应和解码器全部图片格式尚未做设备端穷举；现有网络适配器未修改。
 - 选择状态及各 Builder/回调接口保留；两个当前页面均采用默认非选择模式，带 Checkbox 的自定义使用方式未作模拟器专项验收。
 - CI 使用原有工作流，结果按最终提交的 GitHub Checks 报告；不更改或放宽测试门禁。PR 保持草稿，等待独立验收，不自动合并。
+
+## 独立验收补充：真实生产控件的遥控器路径
+
+原先 F1/F2/F5 测试覆盖行保持焦点时的数据更新，不能替代离开行、移到生产按钮并按 OK 的路径。补充 `--phase controls`，完整日志和逐步原始焦点树在 [controls/run.log](../docs/performance/file-explorer/controls/run.log) 及同目录。
+
+实测发现系统 Button 默认响应 Enter(2054)，不响应 DPAD_CENTER(2016)。最小补丁只在文件浏览器工具栏、排序和面包屑对 DPAD_CENTER Down 映射一次动作，返回 true 消费事件；Up 不处理，Enter 留给系统。没有改变布局、列表虚拟化或缩略图机制。上表性能证据取主体优化提交 d31a373，按独立验收意见未为这个确认键补丁重跑性能。
+
+两种确认键均使用真实 `uitest uiInput keyEvent` 注入完整 Down/Up，模拟器断言全部通过：
+
+- 从列表首项向上到生产名称排序按钮，2016 使 ↑→↓ 一次；2054 分别使 ↓→↑、↑→↓ 各一次；向下重新进入列表正确定位 `/item-95`。
+- 方向键移到生产隐藏按钮，2016 使 100→95 项；2054 分别使 95→100、100→95 项各一次。再次向下进入同一目录的正确文件行。
+- 使用 2016 进入子目录，再经生产返回按钮用 2016 返回：目录动作计数恰为 2，根目录退出计数为 0，焦点回到 `/item-95`。
+- 使用 2054 再进入和返回：累计目录动作恰为 4，根目录退出计数仍为 0；防止“返回两次但最终路径看起来一样”的假通过。
+- 返回后再长按方向下 3 秒，到达 51/95，挂树峰值 9 项。生产控件路径没有焦点丢失、跳错目录或重复打开。
+
+最终恢复阶段显式检查：FileExplorer 无 Metrics/Probe 引用、activateControl 方法及三处接线保留、EntryAbility 恢复 `pages/Index`。正式构建日志见 [controls-build.txt](../docs/performance/file-explorer/controls-build.txt)。

@@ -11,7 +11,8 @@ import { FileExplorerProbeMetrics as Metrics } from '../components/core/file/Fil
 @ComponentV2
 struct FileExplorerProbe {
   @Local controller: FileExplorerController = new FileExplorerController({ resources: [], currentPath: '/',
-    onFolderChange: (path: string) => { this.directory(path); } });
+    onFolderChange: (path: string) => { this.directory(path); },
+    onBack: () => { this.exitCalls++; return true; } });
   @Local eager: boolean = false;
   @Local visible: boolean = false;
   @Local status: string = '选择测试目录';
@@ -60,6 +61,8 @@ struct FileExplorerProbe {
     else { return false; }
     return true;
   }
+  private folderCalls: number = 0;
+  private exitCalls: number = 0;
   private timer: number = -1;
 
   private resources(path: string, count: number): FileExplorerResource[] {
@@ -73,6 +76,7 @@ struct FileExplorerProbe {
   }
 
   private directory(path: string): void {
+    this.folderCalls++;
     this.controller.currentPath = path;
     this.controller.resources = this.resources(path === '/' ? '/' : path + '/', this.count);
   }
@@ -81,14 +85,14 @@ struct FileExplorerProbe {
     this.visible = false;
     if (this.timer !== -1) { clearInterval(this.timer); }
     setTimeout(() => {
-      this.count = count; this.eager = eager; this.images = images;
+      this.count = count; this.eager = eager; this.images = images; this.folderCalls = 0; this.exitCalls = 0;
       Metrics.reset(`${eager ? 'before' : 'after'}-${count}`);
       this.controller.currentPath = '/';
       this.controller.showHiddenFiles = true;
       this.controller.sortField = 'name'; this.controller.sortAscending = true;
       this.controller.resources = this.resources('/', count);
       this.visible = true;
-      this.timer = setInterval(() => { this.status = Metrics.report() + ` images=${this.imageLoaded}/${this.imageReleased} pending=${this.imagePending} peak=${this.imagePeak} failed=${this.imageFailed} files=${fileIo.listFileSync(this.getUIContext().getHostContext()!.tempDir).filter((name: string) => name.startsWith('thumb-probe-')).length}`; console.info('[ExplorerProbe] ' + this.status); }, 1000);
+      this.timer = setInterval(() => { this.status = Metrics.report() + ` images=${this.imageLoaded}/${this.imageReleased} pending=${this.imagePending} peak=${this.imagePeak} failed=${this.imageFailed} files=${fileIo.listFileSync(this.getUIContext().getHostContext()!.tempDir).filter((name: string) => name.startsWith('thumb-probe-')).length} folderCalls=${this.folderCalls} exitCalls=${this.exitCalls}`; console.info('[ExplorerProbe] ' + this.status); }, 1000);
     }, 100);
   }
   aboutToDisappear(): void { if (this.timer !== -1) { clearInterval(this.timer); } }

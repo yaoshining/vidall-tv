@@ -37,7 +37,7 @@ let component = readFileSync(new URL('FileExplorer.ets', root), 'utf8');
 component = component.slice(0, component.indexOf('  @Builder\n  ToolbarButton')) + '\n}';
 component = component.replace(/^import .*\n/gm, '').replace('@ComponentV2\nexport struct FileExplorer', 'class FileExplorer')
  .replace(/@Monitor\([^\n]*\)\n/g, '').replace(/@(Param|Require|Event|Local|BuilderParam)\s*/g, '');
-const KeyCode = { KEYCODE_DPAD_DOWN: 2013, KEYCODE_DPAD_UP: 2012 };
+const KeyCode = { KEYCODE_DPAD_DOWN: 2013, KEYCODE_DPAD_UP: 2012, KEYCODE_DPAD_CENTER: 2016, KEYCODE_ENTER: 2054 };
 function harness(n = 100) {
  const timers = new Map(); let seq = 0; const scrolled = [], focused = [];
  class Scroller { scrollToIndex(index) { scrolled.push(index); } }
@@ -140,3 +140,11 @@ for (const page of ['index.ets', 'SmbFileExplorerPage.ets']) {
     lease.release(); lease.release(); assert.deepEqual(unlinked, [target]);
   });
 }
+
+test('工具栏 DPAD_CENTER 只执行一次，Enter 留给系统 Button，松键不重复', () => {
+ const h=harness(); let clicks=0; const action=()=>clicks++;
+ assert.equal(h.c.activateControl({type:0,keyCode:2016},action),true);
+ assert.equal(h.c.activateControl({type:1,keyCode:2016},action),false);
+ assert.equal(h.c.activateControl({type:0,keyCode:2054},action),false);
+ assert.equal(clicks,1);
+});

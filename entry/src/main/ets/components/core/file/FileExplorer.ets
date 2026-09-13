@@ -145,6 +145,16 @@ export struct FileExplorer {
     accent: '#307BF6', divider: '#35383D', hover: '#202F46', button: '#303133'
   };
 
+  private activateControl(event: KeyEvent, action: () => void): boolean {
+    // 系统 Button 处理 Enter；部分遥控器发送 DPAD_CENTER，需要显式映射一次。
+    if (event.type === KeyType.Down && event.keyCode === KeyCode.KEYCODE_DPAD_CENTER) {
+      this.hoveredKey = '';
+      action();
+      return true;
+    }
+    return false;
+  }
+
   private changeSortField(field: 'name' | 'size' | 'date'): void {
     if (this.controller.sortField === field) {
       this.controller.sortAscending = !this.controller.sortAscending;
@@ -267,6 +277,7 @@ export struct FileExplorer {
       .padding({ left: 18, right: 18 })
       .onFocus(() => { this.hoveredKey = ''; this.cancelFocus(); this.focusedControl = key; })
       .onBlur(() => { this.focusedControl = ''; })
+      .onKeyEvent((event: KeyEvent) => this.activateControl(event, action))
       .onClick(action)
   }
 
@@ -282,6 +293,7 @@ export struct FileExplorer {
       .padding({ left: 8, right: 8 })
       .onFocus(() => { this.hoveredKey = ''; this.cancelFocus(); this.focusedControl = field; })
       .onBlur(() => { this.focusedControl = ''; })
+      .onKeyEvent((event: KeyEvent) => this.activateControl(event, () => { this.changeSortField(field); }))
       .onClick(() => { this.changeSortField(field); })
   }
 
@@ -331,6 +343,7 @@ export struct FileExplorer {
                   .focusable(index < this.controller.pathItems.length - 1)
                   .onFocus(() => { this.hoveredKey = ''; this.cancelFocus(); this.focusedControl = 'path:' + item.path; })
                   .onBlur(() => { this.focusedControl = ''; })
+                  .onKeyEvent((event: KeyEvent) => this.activateControl(event, () => { this.handlePathClick(item.path); }))
                   .onClick(() => { this.handlePathClick(item.path); })
               }, (item: FileExplorerPathItem) => item.path)
             }

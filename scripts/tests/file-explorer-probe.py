@@ -11,6 +11,9 @@ fixture = root / 'scripts/tests/fixtures'
 paths = [core/'FileExplorer.ets', Path('entry/src/main/ets/entryability/EntryAbility.ets'), Path('entry/src/main/resources/base/profile/main_pages.json')]
 created = [core/'FileExplorerEager.ets', core/'FileExplorerProbeMetrics.ets', Path('entry/src/main/ets/pages/FileExplorerProbe.ets')]
 if sys.argv[1] == 'restore':
+    manifest = state / 'owner.json'
+    if not manifest.exists() or json.loads(manifest.read_text()).get('worktree') != str(root):
+        raise SystemExit('备份不属于当前 worktree，拒绝恢复；请回到创建备份的目录操作')
     for p in paths:
         (root/p).write_bytes((state/p).read_bytes())
     for p in created:
@@ -20,6 +23,8 @@ if sys.argv[1] == 'restore':
     sys.exit()
 if state.exists():
     raise SystemExit('已有备份，请先 restore，避免覆盖')
+state.mkdir(parents=True)
+(state/'owner.json').write_text(json.dumps({'worktree': str(root)}, ensure_ascii=False))
 for p in paths:
     (state/p).parent.mkdir(parents=True, exist_ok=True)
     (state/p).write_bytes((root/p).read_bytes())
