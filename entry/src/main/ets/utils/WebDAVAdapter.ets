@@ -1,3 +1,4 @@
+import { parseCredentialConfig } from './CredentialConfig';
 import { FileSource } from '../db/models/FileSourceEntity';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
 import { WebDAVClient, WebDAVConfig, WebDAVResource } from '../lib/WebDAVClient';
@@ -24,7 +25,7 @@ export class WebDAVAdapter implements ISourceAdapter {
     this.scrapeClient = scrapeClient;
     this.upsertStrategy = upsertStrategy;
 
-    const config = JSON.parse(fileSource.configJson) as Record<string, string>;
+    const config = parseCredentialConfig(fileSource.configJson) as Record<string, string>;
     const protocol = config['protocol'] ?? 'http';
     const host = config['url'] ?? '';
     const port = config['port'] ?? (protocol === 'https' ? '443' : '80');

@@ -1,3 +1,4 @@
+import { CREDENTIAL_FAILURE, CREDENTIAL_RECOVERY_MESSAGE } from '../../../utils/CredentialConfig';
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
 import { IBestButton } from "@ibestservices/ibest-ui"
@@ -34,6 +35,7 @@ struct SMBConfigBuilderComponent {
   @Local currentFocusIndex: number = 0
 
   // 编辑模式
+  @Local credentialWarning: string = '';
   private isEditMode: boolean = false
   private editingFileSourceId: number | undefined = undefined
 
@@ -57,10 +59,14 @@ struct SMBConfigBuilderComponent {
     this.loadingText = '加载中...'
     try {
       const store: FileSourceModel = FileSourceStore.getState()
-      await store.loadFileSources()
+      await store.loadFileSources(true)
       const fileSource: FileSource | null = store.getFileSourceById(this.editingFileSourceId)
       if (fileSource) {
         const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
+        if ((JSON.parse(fileSource.configJson) as Record<string, Object>)[CREDENTIAL_FAILURE]) {
+          this.credentialWarning = CREDENTIAL_RECOVERY_MESSAGE + ' 失败字段：' +
+            ((JSON.parse(fileSource.configJson) as Record<string, Object>)[CREDENTIAL_FAILURE] as string[]).join('、');
+        }
         this.serverName = fileSource.name
         this.host = config.host
         this.username = config.username
@@ -95,6 +101,10 @@ struct SMBConfigBuilderComponent {
   }
 
   private async handleTestConnection(): Promise<void> {
+    if (this.credentialWarning && !this.password) {
+      this.showToastSafe(CREDENTIAL_RECOVERY_MESSAGE, 4000);
+      return;
+    }
     const nameResult = ValidationUtil.validateNotEmpty(this.serverName, '名称')
     if (!nameResult.valid) {
       this.showToastSafe(nameResult.message)
@@ -260,6 +270,9 @@ struct SMBConfigBuilderComponent {
       title: this.isEditMode ? '编辑 SMB 源' : '添加 SMB 源'
     }) {
       Column({ space: 20 }) {
+        if (this.credentialWarning) {
+          Text(this.credentialWarning).fontSize(18).fontColor('#FFB74D').width('100%')
+        }
         // 名称（必填）
         TextInput({ text: this.serverName, placeholder: '名称（必填）' })
           .height(40)

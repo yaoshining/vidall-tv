@@ -1,3 +1,4 @@
+import { parseCredentialConfig } from '../../utils/CredentialConfig';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { FileSource, FileSourceType, SMBSourceConfig, WebDAVSourceConfig } from '../../db/models/FileSourceEntity';
 import { SMBClient, SmbListDirectoryResult } from '../../lib/SMBClient';
@@ -74,7 +75,7 @@ export class MissingMediaVerifier {
     group: MissingMediaDirectoryGroup
   ): Promise<MissingMediaVerificationResult[]> {
     try {
-      const config = JSON.parse(source.configJson) as WebDAVSourceConfig;
+      const config = parseCredentialConfig(source.configJson) as WebDAVSourceConfig;
       const protocol = config.protocol ?? 'http';
       const port = config.port ?? (protocol === 'https' ? 443 : 80);
       const rootPath = config.rootPath ?? '';
@@ -116,7 +117,7 @@ export class MissingMediaVerifier {
     group: MissingMediaDirectoryGroup
   ): Promise<MissingMediaVerificationResult[]> {
     try {
-      const config = JSON.parse(source.configJson) as SMBSourceConfig;
+      const config = parseCredentialConfig(source.configJson) as SMBSourceConfig;
       const result: SmbListDirectoryResult = await SMBClient.fromSourceConfig(config)
         .listDirectory(group.directoryPath);
       if (result.error !== undefined && result.error.length > 0) {

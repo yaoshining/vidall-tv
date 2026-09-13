@@ -1,3 +1,4 @@
+import { parseCredentialConfig } from '../../../utils/CredentialConfig';
 import { TabBarModel, TabItem } from "../../../stores/tabbar/TabBarModel"
 import { TabBarStore } from "../../../stores/tabbar/TabBarStore"
 import { ScanMode, ScanContextInfo } from "../../../utils/VideoScannerTypes"
@@ -1388,7 +1389,7 @@ export struct MediaLibraryTab {
           return null;
         }
 
-        const config = JSON.parse(source.configJson) as Record<string, string>;
+        const config = parseCredentialConfig(source.configJson) as Record<string, string>;
         const protocol = config['protocol'] ?? 'http';
         const host = config['url'] ?? '';
         const port = config['port'] ?? (protocol === 'https' ? '443' : '80');

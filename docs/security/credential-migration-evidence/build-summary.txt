@@ -1,0 +1,9 @@
+build-app-final.log
+WARN: ArkTS:WARN File: /Users/yaoshining/.codex/worktrees/8e70/VidAll_TV/oh_modules/.> hvigor Finished :entry:default@CompileArkTS... after 5 s 344 ms 
+> hvigor Finished :entry:default@SignHap... after 746 ms 
+> hvigor BUILD SUCCESSFUL in 7 s 569 ms 
+
+build-test-final.log
+ Function may throw exceptions. Special handling is re> hvigor Finished :entry:ohosTest@OhosTestCompileArkTS... after 2 s 276 ms 
+> hvigor Finished :entry:ohosTest@SignHap... after 701 ms 
+> hvigor BUILD SUCCESSFUL in 4 s 778 ms 

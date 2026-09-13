@@ -1,0 +1,102 @@
+{
+  "suite": "integration",
+  "run_id": "credentials-20260913-final-1",
+  "status": "passed",
+  "gate_passed": true,
+  "build_status": "success",
+  "reason": "测试全部通过",
+  "passed": 21,
+  "failed": 0,
+  "errors": 0,
+  "total": 21,
+  "cases": [
+    {
+      "name": "huks_roundtrip_randomness_unicode_empty_reuse",
+      "status": "passed"
+    },
+    {
+      "name": "huks_tamper_scope_wrong_key_missing_key_no_recreate",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_real_crud_and_delete_retains_shared_key",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_legacy_migration_retry_and_idempotence",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_migration_database_failure_preserves_and_retry",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_blank_edit_preserves_even_after_key_recovers",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_failed_read_save_preserves_and_reentry_recovers",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_migration_does_not_overwrite_concurrent_save",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_concurrent_saves_conflict_and_encrypt_failure_preserves",
+      "status": "passed"
+    },
+    {
+      "name": "file_sources_missing_key_restore_keeps_ciphertext_and_import_rejected",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_real_crud_and_delete_retains_shared_key",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_legacy_migration_retry_and_idempotence",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_migration_database_failure_preserves_and_retry",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_blank_edit_preserves_even_after_key_recovers",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_failed_read_save_preserves_and_reentry_recovers",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_migration_does_not_overwrite_concurrent_save",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_concurrent_saves_conflict_and_encrypt_failure_preserves",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_missing_key_restore_keeps_ciphertext_and_import_rejected",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_partial_field_failure_preserves_entire_migration",
+      "status": "passed"
+    },
+    {
+      "name": "video_servers_all_sensitive_fields_migrate_and_read_back",
+      "status": "passed"
+    },
+    {
+      "name": "no_credentials_is_distinct_from_read_failure",
+      "status": "passed"
+    }
+  ],
+  "run_number": "local",
+  "commit_sha": "",
+  "timestamp": "2026-09-13T15:00:27.521022+00:00",
+  "run_url": "https://github.com//actions/runs/credentials-20260913-final"
+}

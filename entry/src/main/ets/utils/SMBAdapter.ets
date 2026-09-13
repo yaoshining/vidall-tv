@@ -1,3 +1,4 @@
+import { parseCredentialConfig } from './CredentialConfig';
 import { FileSource, SMBSourceConfig } from '../db/models/FileSourceEntity';
 import { SMBClient, SmbListDirectoryResult } from '../lib/SMBClient';
 import { FileSourceDatabase } from '../db/files/FileSourceDatabase';
@@ -21,7 +22,7 @@ export class SMBAdapter implements ISourceAdapter {
     directoryLister?: (path: string) => Promise<SmbListDirectoryResult>) {
     this.fileSource = fileSource;
     this.directoryLister = directoryLister;
-    this.config = JSON.parse(fileSource.configJson) as SMBSourceConfig;
+    this.config = parseCredentialConfig(fileSource.configJson) as SMBSourceConfig;
     this.client = SMBClient.fromSourceConfig(this.config);
     this.scrapeClient = scrapeClient;
     this.upsertStrategy = upsertStrategy;

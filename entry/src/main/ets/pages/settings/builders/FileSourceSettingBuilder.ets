@@ -1,3 +1,4 @@
+import { parseCredentialConfig, CREDENTIAL_RECOVERY_MESSAGE } from '../../../utils/CredentialConfig';
 import { SettingListItem } from "../SettingListItem";
 import { SettingListItemGroup } from "../SettingListItemGroup";
 import { SettingContainer } from "../SettingContainer";
@@ -218,21 +219,21 @@ struct FileSourceSettingBuilderComponent {
 
     if (fileSource.type === FileSourceType.WEBDAV) {
       try {
-        const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig
+        const config = parseCredentialConfig(fileSource.configJson) as WebDAVSourceConfig
         const routeParams = buildWebDavDirectorySelectorRouteParams(fileSource.id, config)
         this.controller.pushType(SettingType.DIRECTORY_SELECTOR, routeParams)
       } catch (error) {
         console.error('FileSourceSettingBuilder: Failed to parse config', JSON.stringify(error))
-        this.showToastSafe('解析配置失败')
+        this.showToastSafe(CREDENTIAL_RECOVERY_MESSAGE)
       }
     } else if (fileSource.type === FileSourceType.SMB) {
       try {
-        const config = JSON.parse(fileSource.configJson) as SMBSourceConfig
+        const config = parseCredentialConfig(fileSource.configJson) as SMBSourceConfig
         const routeParams = buildSmbDirectorySelectorRouteParams(fileSource.id, config)
         this.controller.pushType(SettingType.DIRECTORY_SELECTOR, routeParams)
       } catch (e) {
         console.error('FileSourceSettingBuilder: Failed to parse SMB config', JSON.stringify(e))
-        this.showToastSafe('解析 SMB 配置失败')
+        this.showToastSafe(CREDENTIAL_RECOVERY_MESSAGE)
       }
     } else {
       this.showToastSafe('该类型暂不支持文件夹管理')

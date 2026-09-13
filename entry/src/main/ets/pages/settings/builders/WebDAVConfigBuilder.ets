@@ -1,3 +1,4 @@
+import { CREDENTIAL_FAILURE, CREDENTIAL_RECOVERY_MESSAGE } from '../../../utils/CredentialConfig';
 import { SettingContainer } from "../SettingContainer"
 import { SettingsController } from "../SettingsController"
 import SettingType from "../SettingType"
@@ -40,6 +41,7 @@ struct WebDAVConfigBuilderComponent {
     }, 300)
 
   // 是否为编辑模式
+  @Local credentialWarning: string = '';
   private isEditMode: boolean = false
   private editingFileSourceId: number | undefined = undefined
 
@@ -86,12 +88,16 @@ struct WebDAVConfigBuilderComponent {
     try {
       // 确保缓存已加载
       const store: FileSourceModel = FileSourceStore.getState()
-      await store.loadFileSources()
+      await store.loadFileSources(true)
 
       const fileSource: FileSource | null = store.getFileSourceById(this.editingFileSourceId)
 
       if (fileSource) {
         const config = JSON.parse(fileSource.configJson) as WebDAVSourceConfig
+        if ((JSON.parse(fileSource.configJson) as Record<string, Object>)[CREDENTIAL_FAILURE]) {
+          this.credentialWarning = CREDENTIAL_RECOVERY_MESSAGE + ' 失败字段：' +
+            ((JSON.parse(fileSource.configJson) as Record<string, Object>)[CREDENTIAL_FAILURE] as string[]).join('、');
+        }
         this.serverName = fileSource.name
         this.serverUrl = config.url
         this.username = config.username
@@ -365,6 +371,9 @@ struct WebDAVConfigBuilderComponent {
       title: this.isEditMode ? "编辑 WebDAV" : "添加 WebDAV"
     }) {
       Column({ space: 20 }) {
+        if (this.credentialWarning) {
+          Text(this.credentialWarning).fontSize(18).fontColor('#FFB74D').width('100%')
+        }
         // 服务器名称
         TextInput({ text: this.serverName, placeholder: "服务器名称" })
           .height(40)

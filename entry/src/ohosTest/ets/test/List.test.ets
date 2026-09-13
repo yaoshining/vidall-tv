@@ -1,3 +1,4 @@
+import credentialStorageTest from './CredentialStorage.test';
 import { TestContext } from './TestContext';
 import mediaLibraryHomeDatabaseTest from '../../../test/MediaLibraryHomeDatabase.test';
 import directedAdapterErrorsTest from '../../../test/DirectedAdapterErrors.test';
@@ -15,6 +16,10 @@ import directoryPathDiffTest from '../../../test/DirectoryPathDiff.test';
 import directedScanStrategyTest from '../../../test/DirectedScanStrategy.test';
 
 export default function testsuite() {
+  if (getTestParameter('CREDENTIAL_STORAGE_SMOKE', 'false') === 'true') {
+    credentialStorageTest(TestContext.require());
+    return;
+  }
   // 仅运行隔离数据库冒烟，避免混入页面导航、扫描或播放器测试。
   if (getTestParameter('MEDIA_LIBRARY_HOME_SMOKE', 'false') === 'true') {
     mediaLibraryHomeDatabaseTest(TestContext.require());
@@ -28,6 +33,7 @@ export default function testsuite() {
     autoScrapeFlowTest();
     return;
   }
+  credentialStorageTest(TestContext.require());
   mediaLibraryHomeDatabaseTest(TestContext.require());
   abilityTest();
   webdavTest();

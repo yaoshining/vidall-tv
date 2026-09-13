@@ -1,3 +1,4 @@
+import { parseCredentialConfig } from '../../utils/CredentialConfig';
 // filepath: entry/src/main/ets/services/sourceAdapter/SourceAdapterService.ets
 //
 // SourceAdapterService - 统一播放源解析与稳定 identity 收口服务。
@@ -213,7 +214,7 @@ export class SourceAdapterService {
   ): AssembledSource | null {
     let config: WebDAVSourceConfig;
     try {
-      config = JSON.parse(configJson) as WebDAVSourceConfig;
+      config = parseCredentialConfig(configJson) as WebDAVSourceConfig;
     } catch {
       return null;
     }
@@ -256,7 +257,7 @@ export class SourceAdapterService {
   ): AssembledSource | null {
     let config: SMBSourceConfig;
     try {
-      config = JSON.parse(configJson) as SMBSourceConfig;
+      config = parseCredentialConfig(configJson) as SMBSourceConfig;
     } catch {
       return null;
     }
