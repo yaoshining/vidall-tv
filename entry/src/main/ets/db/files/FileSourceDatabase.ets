@@ -4,7 +4,7 @@ import { FileSource, FileSourceDirectory, DirStatus } from '../models/FileSource
 import { VideoServer } from '../models/VideoServerEntity';
 import {
   VideoEntity, ScrapeInfoEntity, MovieEntity, TvSeriesEntity, TvSeasonEntity, TvEpisodeEntity,
-  MediaItem, MediaStats, SeriesGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry,
+  HomeMediaCounts, MediaItem, MediaStats, SeriesGroup, MediaListItem, PlayProgressEntity, MediaProgressEntry,
   SearchHistoryEntry, SearchMediaOptions, VideoUpsertResult
 } from '../models/MediaEntity';
 import { DATABASE_READY } from './DbConstants';
@@ -269,8 +269,8 @@ export class FileSourceDatabase {
     await this.scrapeInfoDao.cleanupOrphanScrapeMedia();
   }
 
-  async getLatestScanTime(): Promise<number> {
-    return this.videoDao.getLatestScanTime();
+  async getLatestScanTime(propagateErrors: boolean = false): Promise<number> {
+    return this.videoDao.getLatestScanTime(propagateErrors);
   }
 
   // ─────────────────────────────────────────────
@@ -451,6 +451,23 @@ export class FileSourceDatabase {
     return this.mediaQueryDao.getMediaItemByVideoId(videoId);
   }
 
+  async getHomeMovies(): Promise<MediaItem[]> {
+    return this.mediaQueryDao.getHomeMovies();
+  }
+
+  async getHomeMediaCounts(): Promise<HomeMediaCounts> {
+    return this.mediaQueryDao.getHomeMediaCounts();
+  }
+
+  async getHomeUnwatched(): Promise<MediaItem[]> {
+    return this.mediaQueryDao.getHomeUnwatched();
+  }
+
+  async getContinueWatchingMedia(providerId: string, seriesId: number = 0,
+    seasonNumber: number = 0, episodeNumber: number = 0): Promise<MediaItem | undefined> {
+    return this.mediaQueryDao.getContinueWatchingMedia(providerId, seriesId, seasonNumber, episodeNumber);
+  }
+
   async getAllMediaItems(): Promise<MediaItem[]> {
     return this.mediaQueryDao.getAllMediaItems();
   }
@@ -463,16 +480,16 @@ export class FileSourceDatabase {
     return this.mediaQueryDao.getMediaItemsByRating();
   }
 
-  async getDistinctReleaseYears(): Promise<string[]> {
-    return this.mediaQueryDao.getDistinctReleaseYears();
+  async getDistinctReleaseYears(propagateErrors: boolean = false): Promise<string[]> {
+    return this.mediaQueryDao.getDistinctReleaseYears(propagateErrors);
   }
 
   async getMediaItemsByYear(year: string): Promise<MediaItem[]> {
     return this.mediaQueryDao.getMediaItemsByYear(year);
   }
 
-  async getMediaStats(): Promise<MediaStats> {
-    return this.mediaQueryDao.getMediaStats();
+  async getMediaStats(propagateErrors: boolean = false): Promise<MediaStats> {
+    return this.mediaQueryDao.getMediaStats(propagateErrors);
   }
 
   async getMediaItemsByTvSeriesId(seriesId: number): Promise<MediaItem[]> {
@@ -483,12 +500,12 @@ export class FileSourceDatabase {
     return this.mediaQueryDao.getSeriesGroups();
   }
 
-  async getDistinctTvSeriesGroups(limit: number = 30): Promise<SeriesGroup[]> {
-    return this.mediaQueryDao.getDistinctTvSeriesGroups(limit);
+  async getDistinctTvSeriesGroups(limit: number = 30, propagateErrors: boolean = false): Promise<SeriesGroup[]> {
+    return this.mediaQueryDao.getDistinctTvSeriesGroups(limit, propagateErrors);
   }
 
-  async getRecentlyAddedList(limit: number = 20): Promise<MediaListItem[]> {
-    return this.mediaQueryDao.getRecentlyAddedList(limit);
+  async getRecentlyAddedList(limit: number = 20, propagateErrors: boolean = false): Promise<MediaListItem[]> {
+    return this.mediaQueryDao.getRecentlyAddedList(limit, propagateErrors);
   }
 
   async searchMediaItems(keyword: string, options?: SearchMediaOptions, propagateErrors: boolean = false): Promise<MediaItem[]> {

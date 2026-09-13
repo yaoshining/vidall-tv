@@ -25,3 +25,21 @@ jobs:
         env:
           TYPESCRIPT_PATH: ${{ runner.temp }}/media-library-test/node_modules/typescript
         run: node --test entry/src/test/media_library_session_test.cjs
+
+  home-query-regression:
+    name: 首页查询结果与全库边界回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 安装主机转译依赖
+        run: npm install --prefix "$RUNNER_TEMP/media-library-test" --no-package-lock --ignore-scripts typescript@5.6.3
+      - name: 执行真实 DAO SQLite 回归
+        env:
+          TYPESCRIPT_PATH: ${{ runner.temp }}/media-library-test/node_modules/typescript
+        run: node --test entry/src/test/media_library_home_test.cjs

@@ -1,6 +1,6 @@
 import relationalStore from '@ohos.data.relationalStore';
 import {
-  MediaItem, MediaStats, SeriesGroup, MediaListItem, SearchMediaOptions
+  MediaItem, MediaStats, SeriesGroup, MediaListItem, SearchMediaOptions, HomeMediaCounts
 } from '../models/MediaEntity';
 import { BusinessError } from "@kit.BasicServicesKit";
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -81,6 +81,109 @@ export class MediaQueryDao {
     }
   }
 
+  /** 首页电影栏只物化最终展示的 30 个文件，保留原 scanned_at 排序。 */
+  async getHomeMovies(): Promise<MediaItem[]> {
+    return this.queryHomeItems(this.mediaItemSql +
+      " WHERE s.media_type = 'movie' ORDER BY v.scanned_at DESC LIMIT 30");
+  }
+
+  /** 全库聚合；不按电影或电视剧去重，保持原评分列表逐视频计数的口径。 */
+  async getHomeMediaCounts(): Promise<HomeMediaCounts> {
+    if (!this.core.isReady()) { throw new Error('媒体库数据库尚未就绪'); }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.core.getStore().querySql(`
+        SELECT SUM(CASE WHEN media_type = 'movie' THEN 1 ELSE 0 END) AS movie_count,
+          SUM(CASE WHEN rating >= 5 AND rating < 6 THEN 1 ELSE 0 END) AS r5,
+          SUM(CASE WHEN rating >= 6 AND rating < 7 THEN 1 ELSE 0 END) AS r6,
+          SUM(CASE WHEN rating >= 7 AND rating < 8 THEN 1 ELSE 0 END) AS r7,
+          SUM(CASE WHEN rating >= 8 AND rating < 9 THEN 1 ELSE 0 END) AS r8,
+          SUM(CASE WHEN rating >= 9 AND rating < 10 THEN 1 ELSE 0 END) AS r9
+        FROM (${this.mediaItemSql})`);
+      rs.goToFirstRow();
+      const counts: number[] = [];
+      for (let floor = 5; floor <= 9; floor++) {
+        const col = rs.getColumnIndex(`r${floor}`);
+        counts.push(rs.isColumnNull(col) ? 0 : rs.getLong(col));
+      }
+      const movieCol = rs.getColumnIndex('movie_count');
+      return { movieCount: rs.isColumnNull(movieCol) ? 0 : rs.getLong(movieCol), ratingCounts: counts };
+    } finally { rs?.close(); }
+  }
+
+  /**
+   * 未观看先按搜索原排序选代表文件，再按剧/电影去重、取 20 项。
+   * 保留搜索的展示有效性过滤顺序；最终按 scannedAt 重排由模型完成。
+   * SQL 只返回展示对象，不再物化搜索的 200 个候选完整对象。
+   */
+  async getHomeUnwatched(): Promise<MediaItem[]> {
+    const sql = `WITH candidates AS (
+      SELECT v.id, s.tv_series_id, s.movie_id,
+        COALESCE(m.rating, ts.rating) AS rating,
+        COALESCE(m.title, ts.title, s.title) AS scrape_title,
+        COALESCE(m.id, ts.id) AS sort_entity_id
+      FROM ${TABLE_VIDEOS} v
+      LEFT JOIN ${TABLE_SCRAPE_INFO} s ON v.id = s.video_id
+      LEFT JOIN ${TABLE_MOVIES} m ON s.movie_id = m.id
+      LEFT JOIN ${TABLE_TV_SERIES} ts ON s.tv_series_id = ts.id
+      WHERE ((s.media_type = 'movie' AND NOT EXISTS (
+        SELECT 1 FROM ${TABLE_MEDIA_PROGRESS} mp2
+        WHERE mp2.media_key = 'media_progress_movie_' || s.provider_id
+          AND (mp2.position_ms > 0 OR mp2.is_watched = 1)
+      )) OR (s.media_type IN ('tv', 'episode') AND ts.provider_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM ${TABLE_MEDIA_PROGRESS} mp2
+        WHERE mp2.media_key LIKE 'media_progress_episode_tmdb_' || ts.provider_id || '_s%'
+          AND (mp2.position_ms > 0 OR mp2.is_watched = 1)
+      )))
+    ), ranked AS (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY CASE WHEN tv_series_id IS NOT NULL THEN 'tv-' || tv_series_id
+          WHEN movie_id IS NOT NULL THEN 'mv-' || movie_id ELSE 'vid-' || id END
+        ORDER BY rating DESC, scrape_title COLLATE NOCASE ASC,
+          sort_entity_id ASC, id ASC
+      ) AS item_rank FROM candidates
+    ), selected AS (
+      SELECT * FROM ranked WHERE item_rank = 1
+      ORDER BY rating DESC, scrape_title COLLATE NOCASE ASC,
+        sort_entity_id ASC, id ASC LIMIT 20
+    )
+    SELECT item.* FROM (${this.mediaItemSql}) item
+    JOIN selected chosen ON chosen.id = item.id
+    WHERE CASE WHEN item.media_type IN ('tv', 'episode')
+      THEN item.tv_series_id IS NOT NULL AND item.scrape_title IS NOT NULL
+      ELSE item.scrape_title IS NOT NULL OR item.poster_url IS NOT NULL OR item.poster_local_path IS NOT NULL END
+    ORDER BY chosen.rating DESC, chosen.scrape_title COLLATE NOCASE ASC,
+      chosen.sort_entity_id ASC, chosen.id ASC`;
+    return this.queryHomeItems(sql);
+  }
+
+  /**
+   * 继续观看按键查找，覆盖全库而不依赖首页窗口。
+   * 原全库 scanned_at DESC 遍历 Map 时后写覆盖，故取 scanned_at ASC 的首项。
+   */
+  async getContinueWatchingMedia(providerId: string, seriesId: number = 0,
+    seasonNumber: number = 0, episodeNumber: number = 0): Promise<MediaItem | undefined> {
+    if (seriesId <= 0 && providerId.length === 0) { return undefined; }
+    const where = seriesId > 0
+      ? " WHERE s.media_type = 'episode' AND s.tv_series_id = ? AND s.season_number = ? AND s.episode_number = ?"
+      : " WHERE s.media_type = 'movie' AND s.provider_id = ?";
+    const params: relationalStore.ValueType[] = seriesId > 0
+      ? [seriesId, seasonNumber, episodeNumber] : [providerId];
+    const items = await this.queryHomeItems(this.mediaItemSql + where + ' ORDER BY v.scanned_at ASC, v.id DESC LIMIT 1', params);
+    return items.length > 0 ? items[0] : undefined;
+  }
+
+  private async queryHomeItems(sql: string, params: relationalStore.ValueType[] = []): Promise<MediaItem[]> {
+    if (!this.core.isReady()) { throw new Error('媒体库数据库尚未就绪'); }
+    let rs: relationalStore.ResultSet | null = null;
+    try {
+      rs = await this.core.getStore().querySql(sql, params);
+      const items: MediaItem[] = [];
+      while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
+      return items;
+    } finally { rs?.close(); }
+  }
+
   async getAllMediaItems(): Promise<MediaItem[]> {
     if (!this.core.isReady()) { return []; }
     const store = this.core.getStore();
@@ -89,15 +192,6 @@ export class MediaQueryDao {
       rs = await store.querySql(this.mediaItemSql + ' ORDER BY v.scanned_at DESC');
       const items: MediaItem[] = [];
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
-      // ── 诊断日志 ──
-      const withTitle = items.filter(i => i.title !== undefined).length;
-      const withPoster = items.filter(i => i.posterUrl !== undefined || i.posterLocalPath !== undefined).length;
-      const withRating = items.filter(i => i.rating !== undefined).length;
-      const sample = items.slice(0, 3).map(i =>
-        `{id=${i.id} type=${i.mediaType ?? 'null'} title=${i.title ?? 'null'} tvSid=${i.tvSeriesId ?? 'null'} movieId=${i.movieId ?? 'null'} rating=${i.rating ?? 'null'} poster=${i.posterUrl ? 'Y' : 'N'}}`
-      ).join(', ');
-      console.info(`[DB][getAllMediaItems] 总数=${items.length} 有标题=${withTitle} 有海报=${withPoster} 有评分=${withRating}`);
-      console.info(`[DB][getAllMediaItems] 采样(前3): ${sample}`);
       return items;
     } catch (e) {
       console.error('[FileSourceDatabase] getAllMediaItems', JSON.stringify(e));
@@ -116,12 +210,6 @@ export class MediaQueryDao {
       rs = await store.querySql(sql, [mediaType]);
       const items: MediaItem[] = [];
       while (rs.goToNextRow()) { items.push(this.parseMediaItem(rs)); }
-      // ── 诊断日志 ──
-      const withPoster = items.filter(i => i.posterUrl !== undefined || i.posterLocalPath !== undefined).length;
-      const sample = items.slice(0, 2).map(i =>
-        `{id=${i.id} tvSid=${i.tvSeriesId ?? 'null'} title=${i.title ?? 'null'} poster=${i.posterUrl ? 'Y' : 'N'}}`
-      ).join(', ');
-      console.info(`[DB][getMediaItemsByType('${mediaType}')] 数量=${items.length} 有海报=${withPoster} 采样: ${sample}`);
       return items;
     } catch (e) { console.error('[FileSourceDatabase] getMediaItemsByType', JSON.stringify(e)); return []; } finally { try { rs?.close(); } catch { } }
   }
@@ -140,43 +228,11 @@ export class MediaQueryDao {
     } catch (e) { console.error('[FileSourceDatabase] getMediaItemsByRating', JSON.stringify(e)); return []; } finally { try { rs?.close(); } catch { } }
   }
 
-  async getDistinctReleaseYears(): Promise<string[]> {
-    if (!this.core.isReady()) { return []; }
+  async getDistinctReleaseYears(propagateErrors: boolean = false): Promise<string[]> {
+    if (!this.core.isReady()) {
+      if (propagateErrors) { throw new Error('媒体库数据库尚未就绪'); } return []; }
     const store = this.core.getStore();
     try {
-      // ── 先诊断 scrape_info / movies / tv_series 的基本数量 ──
-      const diagRs = await store.querySql(`SELECT
-        (SELECT COUNT(*) FROM ${TABLE_SCRAPE_INFO}) AS si_cnt,
-        (SELECT COUNT(*) FROM ${TABLE_MOVIES}) AS m_cnt,
-        (SELECT COUNT(*) FROM ${TABLE_TV_SERIES}) AS ts_cnt,
-        (SELECT COUNT(*) FROM ${TABLE_TV_SERIES} WHERE first_air_date IS NOT NULL) AS ts_date_cnt,
-        (SELECT COUNT(*) FROM ${TABLE_MOVIES} WHERE release_date IS NOT NULL) AS m_date_cnt`);
-      if (diagRs.goToFirstRow()) {
-        const siCnt = diagRs.getLong(diagRs.getColumnIndex('si_cnt'));
-        const mCnt = diagRs.getLong(diagRs.getColumnIndex('m_cnt'));
-        const tsCnt = diagRs.getLong(diagRs.getColumnIndex('ts_cnt'));
-        const tsDateCnt = diagRs.getLong(diagRs.getColumnIndex('ts_date_cnt'));
-        const mDateCnt = diagRs.getLong(diagRs.getColumnIndex('m_date_cnt'));
-        console.info(`[DB][诊断] scrape_info=${siCnt} movies=${mCnt}(有日期=${mDateCnt}) tv_series=${tsCnt}(有日期=${tsDateCnt})`);
-      }
-      diagRs.close();
-
-      // ── 诊断 scrape_info 中 movie_id / tv_series_id 的分布 ──
-      const joinRs = await store.querySql(`SELECT
-        COUNT(*) AS total,
-        SUM(CASE WHEN movie_id IS NOT NULL THEN 1 ELSE 0 END) AS has_movie_id,
-        SUM(CASE WHEN tv_series_id IS NOT NULL THEN 1 ELSE 0 END) AS has_tv_series_id,
-        SUM(CASE WHEN movie_id IS NULL AND tv_series_id IS NULL THEN 1 ELSE 0 END) AS no_fk
-        FROM ${TABLE_SCRAPE_INFO}`);
-      if (joinRs.goToFirstRow()) {
-        const total = joinRs.getLong(joinRs.getColumnIndex('total'));
-        const hasMov = joinRs.getLong(joinRs.getColumnIndex('has_movie_id'));
-        const hasTv = joinRs.getLong(joinRs.getColumnIndex('has_tv_series_id'));
-        const noFk = joinRs.getLong(joinRs.getColumnIndex('no_fk'));
-        console.info(`[DB][诊断] scrape_info: 总=${total} 有movie_id=${hasMov} 有tv_series_id=${hasTv} 无FK=${noFk}`);
-      }
-      joinRs.close();
-
       const sql = `
         SELECT DISTINCT substr(COALESCE(m.release_date, ts.first_air_date), 1, 4) AS year
         FROM ${TABLE_SCRAPE_INFO} s
@@ -195,7 +251,7 @@ export class MediaQueryDao {
       } finally {
         rs?.close();
       }
-    } catch (e) { console.error('[DB][getDistinctReleaseYears] 异常', JSON.stringify(e)); return []; }
+    } catch (e) { console.error('[DB][getDistinctReleaseYears] 异常', JSON.stringify(e)); if (propagateErrors) { throw new Error((e as Error).message); } return []; }
   }
 
   async getMediaItemsByYear(year: string): Promise<MediaItem[]> {
@@ -211,8 +267,9 @@ export class MediaQueryDao {
     } catch { return []; } finally { try { rs?.close(); } catch { } }
   }
 
-  async getMediaStats(): Promise<MediaStats> {
-    if (!this.core.isReady()) { return { total: 0, movies: 0, tv: 0, other: 0 }; }
+  async getMediaStats(propagateErrors: boolean = false): Promise<MediaStats> {
+    if (!this.core.isReady()) {
+      if (propagateErrors) { throw new Error('媒体库数据库尚未就绪'); } return { total: 0, movies: 0, tv: 0, other: 0 }; }
     const store = this.core.getStore();
     try {
       const q = async (sql: string): Promise<number> => {
@@ -231,31 +288,8 @@ export class MediaQueryDao {
       const scraped = await q(`SELECT COUNT(DISTINCT video_id) AS cnt FROM ${TABLE_SCRAPE_INFO}`);
       const other = total - scraped;
 
-      // 诊断：打印无刮削记录的文件列表（source_id + file_name）
-      if (other > 0) {
-        let diagRs: relationalStore.ResultSet | undefined;
-        try {
-          diagRs = await store.querySql(
-            `SELECT v.source_id, v.file_name, v.file_path FROM ${TABLE_VIDEOS} v
-             WHERE NOT EXISTS (SELECT 1 FROM ${TABLE_SCRAPE_INFO} s WHERE s.video_id = v.id)
-             ORDER BY v.source_id, v.file_name`
-          );
-          const unscrapedFiles: string[] = [];
-          while (diagRs.goToNextRow()) {
-            const sid = diagRs.getLong(diagRs.getColumnIndex('source_id'));
-            const name = diagRs.getString(diagRs.getColumnIndex('file_name'));
-            unscrapedFiles.push(`[src=${sid}] ${name}`);
-          }
-          console.info(`[DB][getMediaStats] 未刮削文件(${other}个):\n${unscrapedFiles.join('\n')}`);
-        } catch {
-          // 诊断失败不影响主流程
-        } finally {
-          diagRs?.close();
-        }
-      }
-
       return { total, movies, tv, other };
-    } catch { return { total: 0, movies: 0, tv: 0, other: 0 }; }
+    } catch (e) { if (propagateErrors) { throw new Error((e as Error).message); } return { total: 0, movies: 0, tv: 0, other: 0 }; }
   }
 
   private parseMediaItem(rs: relationalStore.ResultSet): MediaItem {
@@ -596,8 +630,9 @@ export class MediaQueryDao {
    * 电视剧栏：从 scrape_info 按 tv_series_id GROUP BY，
    * 取去重后的每部剧（联 tv_series 拿海报、评分），按最新刮削时间倒序。
    */
-  async getDistinctTvSeriesGroups(limit: number = 30): Promise<SeriesGroup[]> {
-    if (!this.core.isReady()) { return []; }
+  async getDistinctTvSeriesGroups(limit: number = 30, propagateErrors: boolean = false): Promise<SeriesGroup[]> {
+    if (!this.core.isReady()) {
+      if (propagateErrors) { throw new Error('媒体库数据库尚未就绪'); } return []; }
     const store = this.core.getStore();
     let rs: relationalStore.ResultSet | null = null;
     try {
@@ -647,7 +682,7 @@ export class MediaQueryDao {
       return groups;
     } catch (e) {
       console.error('[DB][getDistinctTvSeriesGroups] 查询失败', JSON.stringify(e));
-      return [];
+      if (propagateErrors) { throw new Error((e as Error).message); } return [];
     } finally {
       try { rs?.close(); } catch { }
     }
@@ -659,8 +694,9 @@ export class MediaQueryDao {
    * - 电影按 scraped_at 倒序
    * - 两者合并后按 sortTs 倒序，取前 limit 条
    */
-  async getRecentlyAddedList(limit: number = 20): Promise<MediaListItem[]> {
-    if (!this.core.isReady()) { return []; }
+  async getRecentlyAddedList(limit: number = 20, propagateErrors: boolean = false): Promise<MediaListItem[]> {
+    if (!this.core.isReady()) {
+      if (propagateErrors) { throw new Error('媒体库数据库尚未就绪'); } return []; }
     const store = this.core.getStore();
     let tvRs: relationalStore.ResultSet | null = null;
     let movieRs: relationalStore.ResultSet | null = null;
@@ -793,7 +829,7 @@ export class MediaQueryDao {
       return result;
     } catch (e) {
       console.error('[DB][getRecentlyAddedList] 查询失败', JSON.stringify(e));
-      return [];
+      if (propagateErrors) { throw new Error((e as Error).message); } return [];
     } finally {
       try { tvRs?.close(); } catch { }
       try { movieRs?.close(); } catch { }

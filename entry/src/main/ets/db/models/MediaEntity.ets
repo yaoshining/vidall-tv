@@ -387,3 +387,10 @@ export interface SearchMediaOptions {
   originCountry?: string;
 }
 
+
+/** 首页计数：评分按视频 JOIN 行计数；电影栏数量保留 media_type=movie 的文件口径。 */
+export interface HomeMediaCounts {
+  movieCount: number;
+  /** 下标 0~4 对应 [5,6)、[6,7)、[7,8)、[8,9)、[9,10)。 */
+  ratingCounts: number[];
+}
