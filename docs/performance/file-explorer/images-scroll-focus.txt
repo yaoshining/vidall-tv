@@ -1,0 +1,168 @@
+
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------WindowManagerService----------------------------------
+WindowName: vidalltv0
+DisplayId: 0
+WinId: 28
+Pid: 310
+Type: 1
+Mode: 1
+Flag: 0
+Orientation: 0
+FirstFrameCallbackCalled: 1
+IsVisible: true
+isRSVisible: true
+Focusable: true
+DecoStatus: false
+isPrivacyMode: false
+WindowRect: [ 0, 0, 3840, 2160 ]
+scaleX: 1
+scaleY: 1
+Offset: [ 0, 0 ]
+Scale: [ 1, 1, 0.5, 0.5 ]
+ParentWindowId: 0
+bundleName:com.yao.vidalltv
+moduleName:entry
+ LastRequestVsyncTime: 1689592064930
+ transactionFlags: [310,2134]
+ last vsyncId: 26032
+ finishCount:[ ]
+ UINodeCount:254
+  |-> root(Scope*) id:0 childSize:1
+    |-> page(Scope*) id:2 childSize:1
+      |-> Column(Scope*) id:5 childSize:4
+        |-> Row(Scope) id:6 childSize:7
+          |-> Button(Node) id:7 idstr:before100 childSize:0
+          |-> Button(Node) id:9 idstr:before1000 childSize:0
+          |-> Button(Node) id:11 idstr:before10000 childSize:0
+          |-> Button(Node) id:13 idstr:after100 childSize:0
+          |-> Button(Node) id:15 idstr:after1000 childSize:0
+          |-> Button(Node) id:17 idstr:after10000 childSize:0
+          |-> Button(Node) id:19 idstr:delete childSize:0
+        |-> Button(Node) id:21 idstr:images100 childSize:0
+        |-> (-)Text(Node) id:23 idstr:probe-status Focusable:false childSize:0
+        |-> Stack(Scope*) id:26166 childSize:1
+          |-> Column(Scope*) id:26167 childSize:7
+            |-> Row(Scope) id:26168 childSize:3
+              |-> Button(Node) id:26169 idstr:explorer-4db974e8-5b89-4247-bb8b-139e31c83e12:back childSize:0
+              |-> (-)Text(Node) id:26171 Focusable:false childSize:0
+              |-> Button(Node) id:26172 idstr:explorer-4db974e8-5b89-4247-bb8b-139e31c83e12:hidden childSize:0
+            |-> (-)Row(Scope) id:26176 childSize:3
+              |-> (-)Image(Node) id:26177 Focusable:false childSize:0
+              |-> (-)Scroll(Scope) id:26178 childSize:1
+                |-> (-)Row(Scope) id:26179 childSize:1
+                  |-> (-)Button(Node) id:26183 Focusable:false childSize:0
+              |-> (-)Text(Node) id:26185 Focusable:false childSize:0
+            |-> (-)Divider(Node) id:26186 Focusable:false childSize:0
+            |-> Row(Scope) id:26189 childSize:3
+              |-> Row(Scope) id:26190 childSize:1
+                |-> Button(Node) id:26191 childSize:0
+              |-> Row(Scope) id:26193 childSize:1
+                |-> Button(Node) id:26194 childSize:0
+              |-> Row(Scope) id:26196 childSize:1
+                |-> Button(Node) id:26197 childSize:0
+            |-> List(Scope*) id:26201 childSize:9
+              |-> ListItem(Scope) id:27144 childSize:1
+                |-> Row(Scope) id:27145 childSize:3
+                  |-> Row(Scope) id:27146 childSize:2
+                    |-> (-)Stack(Scope) id:27161 childSize:1
+                      |-> (-)Image(Node) id:27164 Focusable:false childSize:0
+                    |-> Column(Scope) id:27149 childSize:2
+                      |-> Text(Node) id:27150 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-39 childSize:0
+                      |-> (-)Text(Node) id:27151 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27158 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27159 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27165 childSize:1
+                |-> Row(Scope) id:27166 childSize:3
+                  |-> Row(Scope) id:27167 childSize:2
+                    |-> (-)Stack(Scope) id:27182 childSize:1
+                      |-> (-)Image(Node) id:27185 Focusable:false childSize:0
+                    |-> Column(Scope) id:27170 childSize:2
+                      |-> Text(Node) id:27171 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-40 childSize:0
+                      |-> (-)Text(Node) id:27172 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27179 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27180 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27186 childSize:1
+                |-> Row(Scope) id:27187 childSize:3
+                  |-> Row(Scope) id:27188 childSize:2
+                    |-> (-)Stack(Scope) id:27203 childSize:1
+                      |-> (-)Image(Node) id:27206 Focusable:false childSize:0
+                    |-> Column(Scope) id:27191 childSize:2
+                      |-> Text(Node) id:27192 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-41 childSize:0
+                      |-> (-)Text(Node) id:27193 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27200 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27201 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27207 childSize:1
+                |-> Row(Scope) id:27208 childSize:3
+                  |-> Row(Scope) id:27209 childSize:2
+                    |-> (-)Stack(Scope) id:27224 childSize:1
+                      |-> (-)Image(Node) id:27227 Focusable:false childSize:0
+                    |-> Column(Scope) id:27212 childSize:2
+                      |-> Text(Node) id:27213 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-42 childSize:0
+                      |-> (-)Text(Node) id:27214 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27221 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27222 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27228 childSize:1
+                |-> Row(Scope) id:27229 childSize:3
+                  |-> Row(Scope) id:27230 childSize:2
+                    |-> (-)Stack(Scope) id:27245 childSize:1
+                      |-> (-)Image(Node) id:27334 Focusable:false childSize:0
+                    |-> Column(Scope) id:27233 childSize:2
+                      |-> Text(Node) id:27234 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-43 childSize:0
+                      |-> (-)Text(Node) id:27235 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27242 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27243 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27249 childSize:1
+                |-> Row(Scope) id:27250 childSize:3
+                  |-> Row(Scope) id:27251 childSize:2
+                    |-> (-)Stack(Scope) id:27266 childSize:1
+                      |-> (-)Image(Node) id:27336 Focusable:false childSize:0
+                    |-> Column(Scope) id:27254 childSize:2
+                      |-> Text(Node) id:27255 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-44 childSize:0
+                      |-> (-)Text(Node) id:27256 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27263 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27264 Focusable:false childSize:0
+              |-> ListItem(Scope*) id:27270 childSize:1
+                |-> Row(Scope*) id:27271 childSize:3
+                  |-> Row(Scope*) id:27272 childSize:2
+                    |-> (-)Stack(Scope) id:27287 childSize:1
+                      |-> (-)Image(Node) id:27338 Focusable:false childSize:0
+                    |-> Column(Scope*) id:27275 childSize:2
+                      |-> Text(Node*) id:27276 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-45 [Painted] childSize:0
+                      |-> (-)Text(Node) id:27277 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27284 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27285 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27291 childSize:1
+                |-> Row(Scope) id:27292 childSize:3
+                  |-> Row(Scope) id:27293 childSize:2
+                    |-> (-)Stack(Scope) id:27308 childSize:1
+                      |-> (-)Image(Node) id:27311 Focusable:false childSize:0
+                    |-> Column(Scope) id:27296 childSize:2
+                      |-> Text(Node) id:27297 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-47 childSize:0
+                      |-> (-)Text(Node) id:27298 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27305 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27306 Focusable:false childSize:0
+              |-> ListItem(Scope) id:27312 childSize:1
+                |-> Row(Scope) id:27313 childSize:3
+                  |-> Row(Scope) id:27314 childSize:2
+                    |-> (-)Stack(Scope) id:27329 childSize:1
+                      |-> (-)Image(Node) id:27332 Focusable:false childSize:0
+                    |-> Column(Scope) id:27317 childSize:2
+                      |-> Text(Node) id:27318 idstr:explorer-row:4db974e8-5b89-4247-bb8b-139e31c83e12:/item-48 childSize:0
+                      |-> (-)Text(Node) id:27319 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27326 Focusable:false childSize:0
+                  |-> (-)Text(Node) id:27327 Focusable:false childSize:0
+            |-> (-)Divider(Node) id:26205 Focusable:false childSize:0
+            |-> (-)Row(Scope) id:26206 childSize:4
+              |-> (-)Row(Scope) id:26207 childSize:2
+                |-> (-)Text(Node) id:26208 Focusable:false childSize:0
+                |-> (-)Text(Node) id:26209 Focusable:false childSize:0
+              |-> (-)Row(Scope) id:26210 childSize:2
+                |-> (-)Text(Node) id:26211 Focusable:false childSize:0
+                |-> (-)Text(Node) id:26212 Focusable:false childSize:0
+              |-> (-)Row(Scope) id:26213 childSize:2
+                |-> (-)Text(Node) id:26214 Focusable:false childSize:0
+                |-> (-)Text(Node) id:26215 Focusable:false childSize:0
+              |-> (-)Text(Node) id:26217 Focusable:false childSize:0

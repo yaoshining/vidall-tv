@@ -1,3 +1,5 @@
+import { fileIo } from '@kit.CoreFileKit';
+import { FileThumbnailLease } from '../../components/core/file/FileThumbnailLease';
 import { FileExplorerToastState } from '../../components/core/file/FileExplorerToast';
 import { util } from '@kit.ArkTS';
 import { IBestToast } from '@ibestservices/ibest-ui';
@@ -447,10 +449,16 @@ export struct SmbFileExplorerPage {
     return this.taskStore.getProgressText(scope);
   }
 
-  private async loadThumbnail(resource: FileExplorerResource): Promise<string> {
+  private async loadThumbnail(resource: FileExplorerResource): Promise<FileThumbnailLease> {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const target = context.tempDir + '/thumb-' + util.generateRandomUUID(true);
-    return 'file://' + await this.client.downloadFileToLocal(resource.path, target);
+    try {
+      await this.client.downloadFileToLocal(resource.path, target);
+      return new FileThumbnailLease('file://' + target, () => { fileIo.unlink(target).catch(() => {}); });
+    } catch (error) {
+      await fileIo.unlink(target).catch(() => {});
+      throw new Error((error as Error).message);
+    }
   }
   private promptMissing(path: string, directory: boolean): void {
     this.recovery.prompt(this.fileExplorerAdapter, path, directory, this.sourceId,

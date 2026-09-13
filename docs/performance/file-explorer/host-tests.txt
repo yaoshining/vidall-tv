@@ -1,0 +1,44 @@
+(node:39593) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 独占 lease 只释放一次，不影响相同文件名的其他 lease (1.091208ms)
+✔ 离屏、再入和迟到成功：旧请求释放，当前图片保留 (0.511834ms)
+✔ 切目录/参数变化及卸载使所有旧请求失效 (0.144792ms)
+✔ 并发严格限制四个，迟到请求结算前不能重新占用，没有队列 (0.669292ms)
+✔ 100/1000/10000 项长按只保留一个焦点任务，末尾不越界 (499.3805ms)
+✔ 排序按 key 恢复；删除焦点项选择邻近项；隐藏过滤跳过禁用项 (1.165833ms)
+✔ 进入和返回目录定位刚离开的子目录；空目录回到返回按钮 (0.815792ms)
+✔ 方向键清除悬停，离开组件取消未完成焦点任务 (0.9675ms)
+✔ 真实缩略图组件：旧失败不擦除新成功，旧成功释放，离屏重入重新加载 (1.210041ms)
+✔ 真实缩略图组件：同步异常归还槽位；离屏取消唯一的重试定时器 (1.061584ms)
+✔ 较慢布局不丢弃唯一目标，后续滚动布局事件可恢复焦点 (1.124625ms)
+✔ index.ets 实际 loader：失败清理部分文件，成功移交唯一文件所有权 (1.519958ms)
+✔ SmbFileExplorerPage.ets 实际 loader：失败清理部分文件，成功移交唯一文件所有权 (0.482708ms)
+✔ 工具栏 DPAD_CENTER 只执行一次，Enter 留给系统 Button，松键不重复 (0.916334ms)
+(node:39594) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 识别明确缺失：STATUS_OBJECT_NAME_NOT_FOUND (0.679875ms)
+✔ 识别明确缺失：NT_STATUS_OBJECT_PATH_NOT_FOUND (0.116792ms)
+✔ 识别明确缺失：OpEN (0xc0000034) (0.046167ms)
+✔ 识别明确缺失：HTTP 404 (0.044083ms)
+✔ 识别明确缺失：no such file or directory (0.449042ms)
+✔ 不误清理：HTTP 401 (0.076458ms)
+✔ 不误清理：HTTP 403 (0.059583ms)
+✔ 不误清理：HTTP 500 (0.044375ms)
+✔ 不误清理：timeout (0.051459ms)
+✔ 不误清理：STATUS_ACCESS_DENIED (0.085291ms)
+✔ 不误清理：host not found (0.047375ms)
+✔ 不误清理：port 4040 unavailable (0.053542ms)
+✔ 目录边界不匹配同名前缀 (0.096459ms)
+✔ 文件缺失通过父目录列表核验，网络错误不算缺失 (0.128458ms)
+✔ 取消不写数据库 (0.91ms)
+✔ 确认后再次核验，路径恢复时不删除 (0.455334ms)
+✔ 清理仅针对目标文件源及目录树 (0.649167ms)
+✔ 单文件清理不影响同目录其他文件或目录配置 (0.40575ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 610.446291

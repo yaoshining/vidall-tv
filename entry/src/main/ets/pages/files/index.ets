@@ -1,3 +1,4 @@
+import { FileThumbnailLease } from '../../components/core/file/FileThumbnailLease';
 import { FileExplorerToastState } from '../../components/core/file/FileExplorerToast';
 import { FileExplorerRecovery, isExplorerMissingError } from '../../components/core/file/FileExplorerRecovery';
 import { FileExplorerResource } from '../../components/core/file/FileExplorerController';
@@ -81,15 +82,16 @@ export struct FileExplorerPage {
     }
   }
 
-  private async loadThumbnail(resource: FileExplorerResource): Promise<string> {
+  private async loadThumbnail(resource: FileExplorerResource): Promise<FileThumbnailLease> {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const target = context.tempDir + '/thumb-' + util.generateRandomUUID(true);
-    return new Promise<string>((resolve, reject) => {
-      this.client.downloadFileStream(resource.path, target, {
-        onComplete: (saved: string) => { resolve('file://' + saved); },
-        onError: (error: Error) => { reject(error); }
-      });
-    });
+    try {
+      await this.client.downloadFileStream(resource.path, target);
+      return new FileThumbnailLease('file://' + target, () => { fileIo.unlink(target).catch(() => {}); });
+    } catch (error) {
+      await fileIo.unlink(target).catch(() => {});
+      throw new Error((error as Error).message);
+    }
   }
   private promptMissing(path: string, directory: boolean): void {
     this.recovery.prompt(this.fileExplorerAdapter, path, directory, this.cachedSourceId,
