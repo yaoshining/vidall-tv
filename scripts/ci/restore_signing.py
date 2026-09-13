@@ -47,7 +47,9 @@ def package_bundle(source, profile_text):
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
         for name, data in sorted(content.items()):
-            member = tarfile.TarInfo(name); member.size = len(data); member.mode = 0o600
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            member.mode = 0o600
             archive.addfile(member, io.BytesIO(data))
     encoded = base64.b64encode(buffer.getvalue()).decode()
     unpack_bundle(encoded, profile_text)

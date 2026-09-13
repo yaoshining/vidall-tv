@@ -27,7 +27,8 @@ def bundle(transform=lambda files: files, member_transform=lambda m: m):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode='w:gz') as archive:
         for name, data in files.items():
-            member = tarfile.TarInfo(name); member.size = len(data)
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
             archive.addfile(member_transform(member), io.BytesIO(data))
     return base64.b64encode(output.getvalue()).decode()
 
@@ -35,7 +36,9 @@ def bundle(transform=lambda files: files, member_transform=lambda m: m):
 class SigningTests(unittest.TestCase):
     def test_matching_bundle_restores_only_private_files_and_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); profile = root / 'build-profile.json5'; profile.write_text(PROFILE)
+            root = Path(tmp)
+            profile = root / 'build-profile.json5'
+            profile.write_text(PROFILE)
             with patch.object(signing.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)):
                 signing.restore(bundle(), root / 'signing', profile)
             self.assertEqual(signing.signing_values(profile.read_text()), signing.signing_values(PROFILE))
@@ -55,12 +58,16 @@ class SigningTests(unittest.TestCase):
 
     @staticmethod
     def make_link(member):
-        member.type = tarfile.SYMTYPE; member.linkname = '/tmp/unsafe'; member.size = 0
+        member.type = tarfile.SYMTYPE
+        member.linkname = '/tmp/unsafe'
+        member.size = 0
         return member
 
     def test_expired_certificate_does_not_write_or_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); profile = root / 'build-profile.json5'; profile.write_text(PROFILE)
+            root = Path(tmp)
+            profile = root / 'build-profile.json5'
+            profile.write_text(PROFILE)
             with patch.object(signing.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1)):
                 with self.assertRaisesRegex(ValueError, '过期'):
                     signing.restore(bundle(), root / 'signing', profile)
