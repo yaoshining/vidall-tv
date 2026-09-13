@@ -1,3 +1,4 @@
+import { installStructuredReport } from './ci/StructuredReport';
 import directedAdapterErrorsTest from './DirectedAdapterErrors.test';
 import searchSessionTest from './SearchSession.test';
 import searchWorkspaceSessionTest from './SearchWorkspaceSession.test';
@@ -71,6 +72,8 @@ import directoryPathDiffTest from './DirectoryPathDiff.test';
 import videoUpsertResultTest from './VideoUpsertResult.test';
 import directedScanStrategyTest from './DirectedScanStrategy.test';
 import serverEpisodePlaybackContextUtilTest from './ets/ServerEpisodePlaybackContextUtilTest';
+
+installStructuredReport();
 
 export default function testsuite() {
   searchSessionTest();
