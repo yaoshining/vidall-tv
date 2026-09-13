@@ -100,6 +100,12 @@ def execute(args):
             data.update(started=True, reason='running', started_at=time.time())
             save(args.execution, data)
             command = args.command[1:] if args.command[:1] == ['--'] else args.command
+            if args.unit_context:
+                context_path = Path(args.unit_context)
+                context_path.parent.mkdir(parents=True, exist_ok=True)
+                context_path.with_name('gate-results.json').unlink(missing_ok=True)
+                save(context_path, {'run_id': identity(), 'started_at': data['started_at'],
+                                    'commit_sha': os.environ.get('TESTED_SHA', os.environ.get('GITHUB_SHA', ''))})
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
             try:
                 code = process.wait(timeout=args.timeout)
@@ -160,6 +166,39 @@ def unit_cases(text):
                   sum(c['status'] == 'broken' for c in cases) != counts['Error']):
         raise ValueError('逐例结果与汇总不一致')
     return counts['Pass'], counts['Failure'], counts['Error'], cases
+
+
+def structured_unit_cases(text, execution):
+    report = json.loads(text)
+    if report.get('schema') != 1 or report.get('runtime') != 'Previewer' or report.get('complete') is not True:
+        raise ValueError('结构化报告版本、运行环境或完成标记损坏')
+    if report.get('run_id') != identity():
+        raise ValueError('结构化报告属于旧运行')
+    sha = os.environ.get('TESTED_SHA', os.environ.get('GITHUB_SHA', ''))
+    if not sha or report.get('commit_sha') != sha or report.get('execution_started_at') != execution['started_at']:
+        raise ValueError('结构化报告提交或执行身份不匹配')
+    started, finished = report.get('started_at'), report.get('finished_at')
+    if type(started) is not int or type(finished) is not int or not execution['started_at'] * 1000 - 1000 <= started <= finished <= time.time() * 1000 + 1000:
+        raise ValueError('结构化报告时间不合法')
+    summary, cases = report['summary'], report['cases']
+    for key in ('total', 'passed', 'failed', 'errors', 'ignored'):
+        if type(summary[key]) is not int or summary[key] < 0:
+            raise ValueError('结构化报告计数损坏')
+    if type(report['expected']) is not int or report['expected'] != summary['total'] or not isinstance(cases, list) or len(cases) != summary['total']:
+        raise ValueError('注册数量、完成数量和汇总不一致')
+    if report.get('hook_errors') != [] or summary['ignored'] != 0:
+        raise ValueError('存在 hook 错误或未执行用例')
+    for index, case in enumerate(cases, 1):
+        if type(case.get('id')) is not int or case['id'] != index:
+            raise ValueError('逐例编号缺失、重复或不连续')
+        if any(not isinstance(case.get(key), str) or not case[key].strip() for key in ('name', 'suite')):
+            raise ValueError('逐例名称或套件缺失')
+        if case.get('status') not in ('passed', 'failed', 'broken'):
+            raise ValueError('逐例状态缺失、跳过或未知')
+    for key, status in (('passed', 'passed'), ('failed', 'failed'), ('errors', 'broken')):
+        if sum(case['status'] == status for case in cases) != summary[key]:
+            raise ValueError('逐例状态与汇总不一致')
+    return summary['passed'], summary['failed'], summary['errors'], cases
 
 
 def integration_cases(text):
@@ -237,7 +276,10 @@ def evaluate(args):
             if Path(args.result).stat().st_mtime + 1 < execution['started_at']:
                 raise ValueError('结果文件早于本次测试启动，拒绝旧报告')
             text = Path(args.result).read_text(encoding='utf-8')
-            passed, failed, errors, cases = (unit_cases if args.suite == 'unit' else integration_cases)(text)
+            if args.suite == 'unit' and args.unit_format == 'structured':
+                passed, failed, errors, cases = structured_unit_cases(text, execution)
+            else:
+                passed, failed, errors, cases = (unit_cases if args.suite == 'unit' else integration_cases)(text)
             result.update(passed=passed, failed=failed, errors=errors, total=passed + failed + errors, cases=cases)
             result['reason'] = '测试全部通过'
             if not result['total']:
@@ -276,6 +318,7 @@ def main():
         run.add_argument('--' + key, required=True)
     run.add_argument('--timeout', type=float, default=90)
     run.add_argument('--phase', choices=['test', 'device_probe'], default='test')
+    run.add_argument('--unit-context')
     run.add_argument('--hdc')
     run.add_argument('--device')
     run.add_argument('--connect', action='store_true')
@@ -284,6 +327,7 @@ def main():
     check = commands.add_parser('evaluate')
     for key in ('suite', 'build', 'execution', 'log', 'result', 'output'):
         check.add_argument('--' + key, required=True)
+    check.add_argument('--unit-format', choices=['legacy', 'structured'], default='legacy')
     args = parser.parse_args()
     return execute(args) if args.mode == 'run' else evaluate(args)
 
